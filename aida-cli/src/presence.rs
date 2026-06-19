@@ -314,15 +314,24 @@ pub(crate) fn current_solo(now: DateTime<Utc>) -> bool {
     }
 }
 
+/// PURE: build the compact solo marker from a resolved glyph + effective-solo
+/// bool. `None` when solo is off (the quiet default, matching the away segment).
+/// Split out from `statusline_solo_marker` so the rendered marker string is
+/// unit-testable without touching `~/.aida/solo.toml` or the glyph registry.
+/// trace:TASK-880 | ai:claude
+pub(crate) fn solo_marker_label(solo_glyph: &str, active: bool) -> Option<String> {
+    active.then(|| format!("{solo_glyph} solo"))
+}
+
 /// Compact statusline marker when solo is active, else `None` (off is the quiet
-/// default, matching the away-segment contract). trace:STORY-624
+/// default, matching the away-segment contract). trace:STORY-624 trace:TASK-880
 pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
     // trace:TASK-840 | ai:claude — route the solo marker through the registry.
     let solo = crate::glyphs::get(
         crate::glyphs::Glyph::Solo,
         crate::find_project_root().ok().as_deref(),
     );
-    current_solo(now).then(|| format!("{solo} solo"))
+    solo_marker_label(&solo, current_solo(now))
 }
 
 // ---------------------------------------------------------------------------
@@ -991,6 +1000,38 @@ mod tests {
         );
         // Stored state is still away after the read.
         assert_eq!(file.stored_state(), Presence::Away);
+    }
+
+    // --- TASK-880: statusline solo marker renders when solo is active --------
+
+    /// When solo is active the statusline gets a compact `<glyph> solo` segment;
+    /// when it's off the marker is `None` (the segment stays quiet). The glyph is
+    /// resolved through the registry (no raw literal) so the assertion matches the
+    /// same `Glyph::Solo` the real `statusline_solo_marker` renders. trace:TASK-880
+    #[test]
+    fn solo_marker_present_when_active_absent_when_off() {
+        let solo = crate::glyphs::get(crate::glyphs::Glyph::Solo, None);
+        // Active → a non-empty marker carrying both the glyph and the word.
+        let marker = solo_marker_label(solo, true).expect("active solo renders a marker");
+        assert!(
+            marker.contains("solo"),
+            "marker names the solo state: {marker}"
+        );
+        assert!(
+            marker.contains(solo),
+            "marker includes the registry glyph: {marker}"
+        );
+        assert_eq!(marker, format!("{solo} solo"));
+
+        // Off → no segment at all (matches the quiet-default away contract).
+        assert_eq!(solo_marker_label(solo, false), None);
+    }
+
+    /// The marker honors whatever glyph the registry resolves (ascii fallback,
+    /// custom override, …) — the label is glyph-agnostic. trace:TASK-880
+    #[test]
+    fn solo_marker_uses_the_supplied_glyph() {
+        assert_eq!(solo_marker_label("*", true), Some("* solo".to_string()));
     }
 
     // --- STORY-561: `[presence]` consumer policy + drain-mode resolver ------

@@ -100,6 +100,24 @@ Three cross-cutting truths the tree assumes:
 
 ---
 
+### `aida solo`
+
+**One line** — run your project solo: one leave-it-running command that grooms → implements → integrates the safe backlog end-to-end.
+
+**Mental model.** Solo is the single-operator drain. With no team and no concurrent advisor, *you* are the advisor and the integrator both — `aida solo run` takes that role for you: it works the **safe backlog** on a cadence (garden → assess/queue → implement → integrate → repeat) with maximum discretion, while **parking keystone / architecture-class work** for you to look at rather than shipping it unattended. Bare `aida solo` (no action) just sets the visible work-state flag — a timestamped `~/.aida/solo.toml` with a 24h safety TTL that the statusline surfaces — without starting the loop; `aida solo run` starts the loop; `aida solo stop` ends it; `aida solo status` reports whether either is active.
+
+**Reach for it when** — you're working alone and want the backlog drained without babysitting each spec: kick off `aida solo run` and let it cycle. Use bare `aida solo` when you only want to *mark* yourself as the solo operator (lighting the statusline marker) so other surfaces know maximum-discretion mode is in effect.
+
+**Don't reach for it when** — you have a concurrent advisor or want a parallel worktree-isolated fan-out (that's `/aida-burndown`); or the work is keystone/architecture-class (solo deliberately parks it for you).
+
+**Gotchas.** The solo flag carries a 24h TTL by default so it can't silently linger forever — override with `--ttl 8h` (etc.). `aida solo run --dry-run` runs ONE tick that *prints* the cycle it would execute, then exits — verify the loop without a live drain. `--interval <SECS>` tunes the cadence between cycles (default 300). Ctrl-C, `aida solo stop`, or the TTL all stop a running loop.
+
+**Chains with** — bare `aida solo` lights the statusline marker → `aida solo run` works the safe backlog → `aida solo status` checks it → `aida solo stop` ends it; the parked-keystone items surface via `aida human`.
+
+<!-- doc-intent: TASK-879 TASK-880 -->
+
+---
+
 ### `aida drain`
 
 **One line** — inspect the `--auto-complete` drain that's currently running.
