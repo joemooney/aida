@@ -3,12 +3,12 @@ spec_id: TASK-880
 agreed_id: TASK-880
 title: Confirm + ensure the solo statusline marker renders when the (warm) solo loop is active
 description: presence::statusline_solo_marker() exists (compact marker when solo active, keyed off ~/.aida/solo.toml). VERIFY it is actually wired into the rendered statusline output (the statusline script/handler calls it) and that entering solo via the /aida-solo skill (which runs 'aida solo') lights it up. If the warm-session-driving state is worth distinguishing from the bare mode-flag (e.g. SOLO-vs-SOLO-LOOP), add that; otherwise just confirm the marker shows. Statusline runs under /bin/sh (dash) - keep it POSIX. trace:EPIC-43 STORY-624
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T07:06:50.453803769Z
-modified_at: 2026-06-19T07:22:58.035533849Z
+modified_at: 2026-06-19T07:30:54.087875208Z
 req_type: Task
 tags:
 - aida:solo
@@ -21,3 +21,21 @@ comments:
   content: Commit 66a00f3a8 references this requirement
   created_at: 2026-06-19T07:22:58.035533849Z
   modified_at: 2026-06-19T07:22:58.035533849Z
+history:
+- id: 019edeca-3403-74e2-b81c-2f51ff5e2518
+  author: aida-auto-bump
+  timestamp: 2026-06-19T07:30:54.083254085Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edeca-3407-7fc0-8b90-69542ae6b7bb
+  timestamp: 2026-06-19T07:30:54.087874769Z
+  agent: aida
+  commit_sha: 1d2c3ca188db9463936c62f3a021347a5d77338c
+  summary: Completed via merge 1d2c3ca1
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T07:30:53.914995787Z
+  completion_sha: 1d2c3ca188db9463936c62f3a021347a5d77338c
