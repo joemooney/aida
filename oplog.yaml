@@ -19235,5 +19235,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1894
+- id: 019edeb4-2fdd-7453-a276-b2bb42e2b1bb
+  target_id: 019edeb4-2cd5-7093-a399-b959f76cdd06
+  author: aida
+  node_id: '1'
+  lamport: 1895
+  timestamp: 2026-06-19T07:06:51.229143911Z
+  kind: !Create
+    title: Confirm + ensure the solo statusline marker renders when the (warm) solo loop is active
+    description: presence::statusline_solo_marker() exists (compact marker when solo active, keyed off ~/.aida/solo.toml). VERIFY it is actually wired into the rendered statusline output (the statusline script/handler calls it) and that entering solo via the /aida-solo skill (which runs 'aida solo') lights it up. If the warm-session-driving state is worth distinguishing from the bare mode-flag (e.g. SOLO-vs-SOLO-LOOP), add that; otherwise just confirm the marker shows. Statusline runs under /bin/sh (dash) - keep it POSIX. trace:EPIC-43 STORY-624
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1895
 node_id: '1'
