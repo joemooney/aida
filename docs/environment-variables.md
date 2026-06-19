@@ -375,18 +375,26 @@ use shell `${VAR:-default}` defaulting.
 <!-- trace:TASK-867 -->
 
 The OS-level agent sandbox (bubblewrap, the `os_wrap` mechanism) and its
-egress/read posture are configured under `[contained]` in `.aida/config.toml` —
-there are **no `AIDA_*` env vars** for them. The only bwrap-related environment
-variable is `AIDA_REQUIRE_BWRAP_LIVE` (CI/test-only, documented above).
+egress/read posture are configured under `[contained]` in `.aida/config.toml`.
+The one env var that drives the sandbox directly is **`AIDA_OS_WRAP`** (TASK-876,
+below) — a per-host override of the `os_wrap` master switch; the other
+bwrap-related variable is `AIDA_REQUIRE_BWRAP_LIVE` (CI/test-only, documented
+above).
 
-These knobs default OFF (the OS boundary is strictly opt-in), and today they
-apply only to the **headless drain** paths — not the interactive `aida agent new`
-launch. `aida config show` renders the resolved `[contained]` posture, and
+These knobs default OFF (the OS boundary is strictly opt-in). As of TASK-864 they
+apply to **both** the headless drain paths **and** the interactive
+`aida agent new claude` launch — when enabled, an interactive session is wrapped
+in the same `bwrap` confinement (fail-closed if bwrap is missing / userns is
+blocked). `aida config show` renders the resolved `[contained]` posture, and
 `aida doctor` reports whether `bwrap` is available on this host.
+
+| Variable | What it does | Default |
+|---|---|---|
+| `AIDA_OS_WRAP` | **Per-host override of `[contained] os_wrap`** (TASK-876). Takes **precedence** over the config value, so an operator can enable AIDA's bubblewrap sandbox on one machine via `export AIDA_OS_WRAP=1` (e.g. in `.bashrc`) with no change to the tracked `.aida/config.toml` — important because bwrap availability is a per-*machine* property and committing `os_wrap = true` would fail-closed every clone whose host lacks working bwrap (macOS, un-`sysctl`-ed Ubuntu). Accepts `1`/`true`/`yes` (on) and `0`/`false`/`no` (off), case-insensitive; an unrecognized value is ignored and the config value applies. Read at `aida-cli/src/session.rs` (`os_wrap_enabled`). | unset (config value applies) |
 
 | Knob | What it does | Default |
 |---|---|---|
-| `[contained] os_wrap` | Master switch for AIDA's bubblewrap OS sandbox. When `true`, headless `claude` launches are wrapped in `bwrap` with a read-only root and a small read-write set (worktree + `.aida-store` + cargo/npm/`~/.claude` caches). Fail-closed: errors rather than launching unconfined if `bwrap` is missing or unprivileged user namespaces are blocked. Distinct from `enable`. | `false` |
+| `[contained] os_wrap` | Master switch for AIDA's bubblewrap OS sandbox. When `true`, `claude` launches (headless **and** the interactive `aida agent new` path) are wrapped in `bwrap` with a read-only root and a small read-write set (worktree + `.aida-store` + cargo/npm/`~/.claude` caches). Fail-closed: errors rather than launching unconfined if `bwrap` is missing or unprivileged user namespaces are blocked. Distinct from `enable`. Per-host override: `AIDA_OS_WRAP` (above). | `false` |
 | `[contained] read_allowlist` | Strict read-confinement: a list of extra absolute paths bound read-only. When **non-empty**, replaces the broad read-only root with an enumerated set (essential toolchain paths + this allowlist + the worktree) so host secrets outside it are simply absent. Empty = no read confinement. Requires `os_wrap = true`. | `[]` |
 | `[contained] allowed_hosts` | Network-egress allowlist injected into the contained `--settings` (`sandbox.network.allowedDomains`). Empty = **no** restriction (full egress), **not** deny-all. Non-empty restricts egress to those hosts (wildcards like `*.crates.io` work). | `[]` |
 | `[contained] managed_domains_only` | Hard default-deny egress (block without prompt) for the headless path, delivered via the managed-settings tier inside the bwrap namespace. Requires `os_wrap = true`. | `false` |
