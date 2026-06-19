@@ -1,0 +1,19 @@
+id: 019eddc4-d685-70a3-bc9b-af54ed6cd472
+spec_id: TASK-871
+agreed_id: TASK-871
+title: 'Roll-your-own friction benchmark: markdown+git+grep vs AIDA at fleet scale'
+description: 'MOVE 5. Two-arm demonstration on N cross-referencing specs: (i) plain markdown+git+grep, (ii) AIDA. Measure: "whats blocked across this epic?" query latency+correctness, rename-a-requirement blast radius, "is this code still traced?" detection rate. WHY: attacks the verdicts biggest open question (P2b: whether the rich layer pays over markdown+git+grep is unproven + operator-confounded). The grep arm degrades visibly at scale (text not records; rename rots string-matches; drift undetected). EVIDENCE: friction table at 50/200/500 specs. Honest cap: single-operator, measures capability-friction not team-adoption; cant fully escape the section-10 confound. Size M (the AIDA arm exists; a fair non-strawman grep arm is the hard part).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:45:25.253575009Z
+modified_at: 2026-06-19T02:45:25.253575009Z
+req_type: Task
+tags:
+- benchmark
+- evidence
+- from-discovery-0619
+- niche
+- parent:EPIC-50
+- tilt-verdict
