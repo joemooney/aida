@@ -4,7 +4,7 @@
 //! built on. It owns the data model ([`Requirement`], [`RequirementsStore`]),
 //! the storage backends (git-canonical [`CachedGitBackend`], the [`Cache`]
 //! read-projection, legacy [`SqliteBackend`]/[`YamlBackend`]), the distributed
-//! ID system ([`node`]/[`dispenser`]/[`hlc`]), the cross-spec graph queries
+//! ID system ([`node`]/[`dispenser`]), the cross-spec graph queries
 //! ([`graph_walk`], [`pickability`]), and the supporting subsystems (AI
 //! evaluation, integrations, scaffolding, telemetry, …).
 //!
@@ -38,7 +38,6 @@
 //! - [`pickability`] — "is this spec workable now?" given blocked-by edges.
 //! - [`node`], [`dispenser`] — the distributed ID system (block allocation +
 //!   counters) that lets multiple machines mint unique spec IDs offline.
-//! - [`hlc`] — the hybrid logical clock underpinning conflict-free ordering.
 //!
 //! ### The `native` surface (default feature, filesystem + git)
 //!
@@ -86,7 +85,6 @@ pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod graph_walk;
-pub mod hlc;
 pub mod import;
 pub mod integrations;
 // trace:TASK-737 | ai:claude
@@ -145,7 +143,6 @@ pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 #[cfg(feature = "native")]
 pub use dispenser::{FileDispenser, SqliteDispenser};
 pub use fs_atomic::{read_atomic, write_atomic};
-pub use hlc::{Hlc, HlcTimestamp};
 pub use import::{
     create_backup, execute_import, validate_import_content, validate_import_file, ImportConfig,
     ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
