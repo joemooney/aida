@@ -510,6 +510,14 @@ pub(crate) struct OpenFacts {
     /// human-only bucket — which reads the same `req.human_only` — showed it.
     /// trace:BUG-564 | ai:claude
     pub human_only: bool,
+    /// TASK-884: for an EPIC, whether ANY child is actually in motion
+    /// (Completed / Done / InProgress). An epic with children that are all still
+    /// Draft/Approved/Planned (or shelved) is NOT self-driving "in progress" —
+    /// nothing is being worked, so it needs decomposition/grooming attention and
+    /// must surface in the advisor's `decompose` lane rather than vanishing into
+    /// the (invisible-to-both-worklists) `InProgress` bucket. `false` for
+    /// non-epics and childless epics. trace:TASK-884
+    pub epic_children_in_motion: bool,
 }
 
 /// TASK-723: prefix marking a comment as a non-derivable residual openness
@@ -673,9 +681,21 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
         // (InProgress is not a needs_human bucket). Rollup-complete is the
         // ReadyToClose case handled above. trace:TASK-808 | ai:claude
         return match f.epic_rollup {
-            Some((_, total)) if total > 0 => (
+            // TASK-884: an epic with children IN MOTION (a child Completed / Done
+            // / InProgress) is genuinely self-driving — nothing for a worklist
+            // until the children finish. But an epic whose children are ALL still
+            // un-started (Draft/Approved/Planned) or shelved is NOT in progress;
+            // it needs decomposition/grooming attention and must land in the
+            // advisor's `decompose` lane rather than the invisible InProgress
+            // bucket (the dogfood gap: a draft epic with draft children appeared
+            // in NO section). trace:TASK-884
+            Some((_, total)) if total > 0 && f.epic_children_in_motion => (
                 OpenBucket::InProgress,
                 "epic in progress — driven by its children; nothing for you until they all finish (then it shows as ready to close)".to_string(),
+            ),
+            Some((_, total)) if total > 0 => (
+                OpenBucket::Umbrella,
+                "an epic whose children are all still un-started — drive them forward or refine the breakdown (`aida graph --tree <id>`, then groom/queue the children)".to_string(),
             ),
             _ => (
                 OpenBucket::Umbrella,
@@ -1962,6 +1982,7 @@ mod tests {
             residual_notes: Vec::new(),
             epic_rollup: None,
             human_only: false,
+            epic_children_in_motion: false,
         }
     }
 
@@ -2149,9 +2170,11 @@ mod tests {
             "ready-to-close needs operator confirm"
         );
 
-        // TASK-808: a child still open → epic is SELF-DRIVING → InProgress, and
-        // it must NOT need a human (it drops out of `aida human`).
+        // TASK-808: a child still open AND something IN MOTION → epic is
+        // SELF-DRIVING → InProgress, and it must NOT need a human (it drops out
+        // of `aida human`). TASK-884: "in motion" is now an explicit signal.
         f.epic_rollup = Some((3, 4));
+        f.epic_children_in_motion = true;
         assert_eq!(explain_open(&f).0, OpenBucket::InProgress);
         assert!(
             !explain_open(&f).0.needs_human(),
@@ -2170,6 +2193,35 @@ mod tests {
         // A zero-total rollup (no children) is the same childless case → Umbrella.
         f.epic_rollup = Some((0, 0));
         assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
+    }
+
+    // TASK-884: a draft epic WITH children that are all still un-started (nothing
+    // in motion) must surface in the advisor's `decompose` lane (Umbrella), not
+    // vanish into the invisible-to-both-worklists InProgress bucket. This was the
+    // dogfood gap: EPIC-6 appeared in NO advisor section.
+    #[test]
+    fn explain_open_draft_epic_with_unstarted_children_is_umbrella() {
+        let mut f = open("epic", "draft", &[], false, false, false);
+        f.id = "EPIC-6".to_string();
+        // Children exist (total > 0) but none are Completed/Done/InProgress.
+        f.epic_rollup = Some((0, 3));
+        f.epic_children_in_motion = false;
+
+        let (bucket, reason) = explain_open(&f);
+        assert_eq!(
+            bucket,
+            OpenBucket::Umbrella,
+            "an epic whose children are all un-started belongs in the decompose lane"
+        );
+        assert!(
+            bucket.advisor_seat(),
+            "the decompose lane is an advisor-seat bucket — it must be visible on `aida advisor`"
+        );
+        assert!(reason.contains("un-started"), "{reason}");
+
+        // The moment a single child starts moving, it flips to self-driving.
+        f.epic_children_in_motion = true;
+        assert_eq!(explain_open(&f).0, OpenBucket::InProgress);
     }
 
     /// TASK-744: the split `needs-human` umbrella routes to distinct buckets —
