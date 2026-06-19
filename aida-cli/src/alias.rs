@@ -160,6 +160,14 @@ pub fn registry() -> Vec<AliasGroup> {
             "aida agent new <args>",
             "bare `aida agent` defaults to the launcher (git-style)",
         ),
+        // TASK-881: bare `aida queue` defaults to the read view (argv rewrite
+        // in main.rs: `rewrite_queue_default_list`), matching `aida list` /
+        // `aida status` ergonomics.
+        row(
+            "aida queue <args>",
+            "aida queue list <args>",
+            "bare `aida queue` defaults to the queue read view",
+        ),
         row(
             "aida help --all",
             "aida help-all",
@@ -318,6 +326,7 @@ mod tests {
             "aida intake",
             "aida advisor assess",
             "aida agent <args>",
+            "aida queue <args>",
             "aida mylist",
             "aida myqueue",
         ] {
@@ -345,6 +354,11 @@ mod tests {
         assert_eq!(
             crate::rewrite_agent_default_new(&s(&["aida", "agent"])),
             s(&["aida", "agent", "new"]),
+        );
+        // TASK-881: bare `aida queue` -> `aida queue list`
+        assert_eq!(
+            crate::rewrite_queue_default_list(&s(&["aida", "queue"])),
+            s(&["aida", "queue", "list"]),
         );
         // clap `intake` alias reaches the Assess command
         assert!(matches!(
