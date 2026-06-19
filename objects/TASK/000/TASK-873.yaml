@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:37.497637879Z
-modified_at: 2026-06-19T02:45:37.497637879Z
+modified_at: 2026-06-19T08:33:05.944679441Z
 req_type: Task
 tags:
 - demo
@@ -17,3 +17,9 @@ tags:
 - niche
 - parent:EPIC-50
 - tilt-verdict
+comments:
+- id: 019edf03-2598-7692-bfa4-b8a3996260da
+  author: joe
+  content: Commit 0e7a538b7 references this requirement
+  created_at: 2026-06-19T08:33:05.944679441Z
+  modified_at: 2026-06-19T08:33:05.944679441Z
