@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:14:43.589196772Z
-modified_at: 2026-06-14T20:13:16.926675600Z
+modified_at: 2026-06-19T03:14:49.648680600Z
 req_type: Epic
 tags:
 - collaboration-layer
@@ -75,3 +75,8 @@ comments:
   content: 'Status correction (advisor, 2026-06-14): EPIC-35 is marked Completed for the forge ABSTRACTION it shipped (Forge trait + GitHub/GitLab/PureGit providers), but the call-site MIGRATION it deferred was never finished — ~20-25 gh spawns still bypass the trait, so GitLab breaks on the forge layer. The remaining wiring is tracked in STORY-621 (inventory: docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md, TASK-820). Leaving EPIC-35 Completed (abstraction delivered) and carrying the wiring forward in STORY-621 rather than status-thrashing a closed epic. trace:STORY-621'
   created_at: 2026-06-14T20:13:16.926675600Z
   modified_at: 2026-06-14T20:13:16.926675600Z
+- id: 019edddf-c2b0-79f3-b608-8c57756b6834
+  author: joe
+  content: Commit 79cad43db references this requirement
+  created_at: 2026-06-19T03:14:49.648680600Z
+  modified_at: 2026-06-19T03:14:49.648680600Z
