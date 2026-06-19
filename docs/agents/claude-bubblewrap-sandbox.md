@@ -74,18 +74,179 @@ either failure:
 
 `bwrap` needs the kernel to permit **unprivileged user namespaces**. On recent
 Ubuntu (23.10+/24.04) AppArmor restricts this by default, so even with `bwrap`
-installed the self-test fails and `os_wrap` fails-closed. Remediate with **one**
-of:
+installed the self-test fails and `os_wrap` fails-closed. There are **two ways**
+to grant it, and they are *not* equivalent in blast radius:
 
-```bash
-# Host-wide (persist under /etc/sysctl.d/):
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+- **A per-binary AppArmor profile** that allows only `bwrap` to create user
+  namespaces — **recommended on any managed or shared host.** The host-wide
+  restriction stays on for everything else.
+- **The host-wide sysctl** `kernel.apparmor_restrict_unprivileged_userns=0` —
+  quick, fine on a personal dev box, but it **turns the restriction off for the
+  whole machine** and is the change a security-conscious IT team will object to.
 
-# Or install an AppArmor profile granting bwrap userns (see /etc/apparmor.d).
-```
+Both are detailed in [Permitting unprivileged user
+namespaces](#permitting-unprivileged-user-namespaces-the-apparmor-profile-vs-the-sysctl)
+below — including the profile to install and *why it is the defensible ask in a
+controlled environment*.
 
 Until userns is permitted, enabling `os_wrap` will (correctly) refuse to launch
 drains rather than run them unconfined.
+
+## Permitting unprivileged user namespaces: the AppArmor profile vs the sysctl
+
+`bwrap` confines the agent by putting it in a fresh **user namespace** (that is
+how an unprivileged process drops privileges and remaps mounts). On Ubuntu
+23.10+/24.04 the kernel ships with that capability **restricted by default**
+(`kernel.apparmor_restrict_unprivileged_userns=1`) — a deliberate hardening,
+because unprivileged user namespaces have historically been a rich source of
+local-privilege-escalation (LPE) kernel CVEs. To run `os_wrap` you must re-grant
+the capability. *How* you grant it is the whole question.
+
+### Recommended: a per-binary AppArmor profile (managed / shared hosts)
+
+Grant the `userns` capability to **only** the bubblewrap binary, leaving the
+host-wide restriction on for every other process:
+
+```
+# /etc/apparmor.d/bwrap
+# Allow ONLY bubblewrap to create unprivileged user namespaces. The host-wide
+# restriction (kernel.apparmor_restrict_unprivileged_userns=1) stays ON; every
+# other unprivileged process is still blocked.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+```
+
+Install and load it (it auto-loads on every boot thereafter):
+
+```bash
+# Confirm the path first — the profile's attachment path must match the binary:
+which bwrap                                  # e.g. /usr/bin/bwrap
+
+sudo tee /etc/apparmor.d/bwrap >/dev/null <<'EOF'
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+EOF
+
+sudo apparmor_parser -r /etc/apparmor.d/bwrap   # load now; persists across reboots
+```
+
+Verify with the non-sudo self-test (`aida doctor --fix-sandbox`, or
+`bwrap --ro-bind / / true` should now exit 0), and **leave**
+`kernel.apparmor_restrict_unprivileged_userns=1`.
+
+> **On `flags=(unconfined)`.** This profile does *not* otherwise confine
+> `bwrap` — it exists solely to grant the `userns` capability. That is correct
+> here: `bwrap` is itself the confinement mechanism (it builds the agent's
+> sandbox), and wrapping it in a *restrictive* AppArmor profile tends to break
+> the sandboxes it sets up. A site that wants AppArmor to additionally mediate
+> `bwrap`'s own accesses needs a much larger, carefully-tested profile — out of
+> scope here.
+
+### Why the per-binary profile is acceptable in a reasonably well-controlled environment
+
+The sysctl and the profile both let bubblewrap create a user namespace, but a
+security review should *prefer* the profile, for six reasons:
+
+1. **Least privilege / scoped exception.** The sysctl re-enables unprivileged
+   user namespaces for *every* process run by *every* user on the host. The
+   profile grants the capability to exactly one named binary at one path. Every
+   other unprivileged process stays blocked — the LPE attack surface the Ubuntu
+   restriction was added to close **remains closed for the general case.** You
+   narrow the exception from "the whole machine" to "one audited tool."
+
+2. **It is the vendor-designed mechanism, not a workaround.** Canonical built
+   the restriction *specifically* to be paired with per-binary AppArmor profiles
+   that grant `userns` to programs that legitimately need it (Ubuntu ships
+   exactly such profiles for browsers and other sandboxes). The intended end
+   state is **"restriction enabled + an explicit, listed allow-profile,"** not
+   "restriction defeated." A reviewer sees hardening *on* with a named,
+   enumerated exception — the posture a CIS/STIG-style baseline actually wants.
+
+3. **Auditable and declarative.** The exception is a single text file in
+   `/etc/apparmor.d/` naming one path and one permission. It is diffable,
+   reviewable, version-controllable, and removable, and endpoint/compliance
+   tooling can enumerate AppArmor profiles to see exactly what was granted to
+   what. That is far easier to assess and sign off than a loosened kernel
+   sysctl, which presents only as "a hardening default was turned off" — with no
+   indication of why, for whom, or how to scope it back.
+
+4. **You already trust the binary.** In a controlled environment `bwrap` arrives
+   through a known channel — a distro package from a signed repo, or a managed
+   golden image. Granting a capability to a specific, integrity-checked binary is
+   a *bounded, named* trust decision, the same kind already made for any
+   privileged helper on the box. It is categorically different from "let any
+   unprivileged code on the host reach this kernel feature."
+
+5. **The capability is granted to a tool whose *purpose* is to increase
+   isolation.** The user namespace bubblewrap creates is precisely what lets it
+   drop the agent into a write-confined, reduced-privilege sandbox. So the net
+   effect of the profile is **more** confinement of the agent, not less
+   protection of the host. You are not weakening the security model to run
+   untrusted code faster; you are paying a narrow, named cost to *gain* a
+   sandbox — a framing security teams generally accept.
+
+6. **Reversible and self-limiting.** Delete the profile, reload AppArmor, and
+   the exception is gone — no lingering kernel state, nothing else silently
+   depending on a loosened global. The change cannot drift into a broader
+   posture the way a forgotten sysctl drop-in can.
+
+**The honest caveat.** Even scoped to one binary, unprivileged user namespaces
+do expand the kernel surface *that binary* (and code it execs inside the
+namespace) can reach — so the residual risk is "a vulnerability in bubblewrap,
+or in how the agent drives it." That risk is bounded to a single audited tool
+and is the *same* risk every Flatpak and Chrome sandbox on the machine already
+accepts. For a security team, **"grant `userns` to the distro's bubblewrap, keep
+the host-wide restriction on"** is a routine, defensible exception; **"turn the
+host-wide restriction off"** is the one that fails a baseline review.
+
+### The host-wide sysctl (personal dev boxes only)
+
+```bash
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0           # this boot
+echo 'kernel.apparmor_restrict_unprivileged_userns=0' | \
+  sudo tee /etc/sysctl.d/99-aida-bwrap-userns.conf                      # persist
+```
+
+Fine on a personal machine you fully control. On a managed, shared, or
+compliance-bound host **expect IT to say no** — it reverses an Ubuntu hardening
+default for the entire system, persistently, and reads to an endpoint/compliance
+scan as removing a control. Prefer the per-binary profile above.
+
+### Other options if neither is allowed
+
+- **setuid `bwrap`.** A setuid-root bubblewrap sets up the namespace via its
+  setuid bit and needs *no* unprivileged-userns grant at all — sidestepping the
+  sysctl/profile entirely. The trade-off: a new setuid-root binary is its own
+  review item, and some baselines forbid adding setuid binaries. (Ubuntu's
+  package is non-setuid + userns by default; this is distro/packaging-dependent.)
+- **Run the agent inside a VM or a managed container** the host already trusts,
+  with the container/VM as the isolation boundary (and `os_wrap` off, or used
+  inside it). This touches **no host kernel hardening at all** and is often the
+  *preferred* answer on locked-down endpoints — the boundary IT already manages
+  does the confining.
+
+### What to take to IT
+
+> *"Please allow a **per-binary AppArmor `userns` exception** for
+> `/usr/bin/bwrap`, keeping `kernel.apparmor_restrict_unprivileged_userns=1`
+> host-wide. bubblewrap is a sandboxing tool (the engine under Flatpak); the
+> exception is Canonical's designed mechanism for this; it is scoped to one
+> signed binary, auditable, and reversible; and it enables more confinement of
+> the agent process, not less protection of the host. Profile attached for
+> review."*
+
+Hand them the profile file from the recommended section. That is a routine
+exception to approve; the host-wide sysctl is not.
 
 ## Enabling the OS sandbox on a new machine
 
@@ -116,19 +277,29 @@ non-sudo self-test smoke as the final check. It never runs sudo for you.
 
 On recent Ubuntu (23.10+/24.04) AppArmor blocks unprivileged userns by default,
 so even with `bwrap` installed the confinement self-test fails and `os_wrap`
-fails-closed. Run **both** of these (the first applies it for the current boot,
-the second persists it across reboots):
+fails-closed. Grant it with **one** of these — see [Permitting unprivileged user
+namespaces](#permitting-unprivileged-user-namespaces-the-apparmor-profile-vs-the-sysctl)
+for the full rationale, the trade-offs, and the IT framing:
 
 ```bash
-# Apply now (this boot only):
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+# RECOMMENDED on any managed / shared host — a scoped per-binary AppArmor
+# profile that leaves the host-wide restriction ON for everything else:
+sudo tee /etc/apparmor.d/bwrap >/dev/null <<'EOF'
+abi <abi/4.0>,
+include <tunables/global>
 
-# Persist across reboots (drop-in under /etc/sysctl.d/):
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+EOF
+sudo apparmor_parser -r /etc/apparmor.d/bwrap
+
+# OR — personal dev box ONLY — flip the host-wide restriction off (a managed/
+# compliance-bound IT will object to this; prefer the profile above):
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/99-aida-bwrap-userns.conf
 ```
-
-(Alternatively, install an AppArmor profile granting `bwrap` userns — see
-`/etc/apparmor.d`.)
 
 ### Step 2 — opt in
 
