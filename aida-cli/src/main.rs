@@ -1083,6 +1083,19 @@ fn run() -> Result<()> {
         // help (a deliberate escape hatch to the raw flag-level usage).
         let is_help_verb = first == Some("help") && rest.iter().all(|a| a == "--all" || a == "-a");
         let is_bare = raw_args.len() == 1;
+        // `aida help <topic>` — the middle granularity between bare `help`
+        // (group names) and `help --all` (everything): expand one group. A
+        // single non-flag positional after `help` is a topic name.
+        // trace:TASK-861 | ai:claude
+        let help_topic: Option<&str> =
+            if first == Some("help") && rest.len() == 1 && !rest[0].starts_with('-') {
+                Some(rest[0].as_str())
+            } else {
+                None
+            };
+        if let Some(topic) = help_topic {
+            return print_help_topic(topic);
+        }
         if is_help_verb || is_bare {
             let want_all = rest.iter().any(|a| a == "--all" || a == "-a");
             if want_all {
@@ -76992,9 +77005,77 @@ fn print_help_all() {
         "Bare `aida` / `aida help` shows the curated Getting-started view. {}",
         "Tip:".bold()
     );
+    println!("  - `aida help <topic>` expands a single group (e.g. `aida help queue`)");
     println!("  - `aida <topic> --help` works for any command, even hidden ones");
     println!("  - `aida status` is the best entry point for \"what's going on here?\"");
     println!("  - `aida dev shell-init --install` to wire up the `aida` shell wrapper");
+}
+
+/// Resolve a user-supplied `<topic>` to one command group. Matches a group name
+/// case-insensitively; falls back to a unique case-insensitive prefix so
+/// `aida help git` resolves "Git & lifecycle". Returns `Err(Vec)` (the valid
+/// topic names) when nothing matches or the prefix is ambiguous.
+/// trace:TASK-861 | ai:claude
+#[allow(clippy::type_complexity)]
+fn resolve_help_topic(
+    topic: &str,
+) -> Result<(&'static str, &'static [(&'static str, &'static str)]), Vec<&'static str>> {
+    let groups = command_groups();
+    let needle = topic.trim().to_lowercase();
+
+    // Exact (case-insensitive) name match wins outright.
+    if let Some((g, cmds)) = groups.iter().find(|(g, _)| g.to_lowercase() == needle) {
+        return Ok((*g, *cmds));
+    }
+
+    // Otherwise accept a UNIQUE case-insensitive prefix.
+    let matches: Vec<&(&str, &[(&str, &str)])> = groups
+        .iter()
+        .filter(|(g, _)| g.to_lowercase().starts_with(&needle))
+        .collect();
+    if matches.len() == 1 {
+        let (g, cmds) = matches[0];
+        return Ok((*g, *cmds));
+    }
+
+    Err(groups.iter().map(|(g, _)| *g).collect())
+}
+
+/// `aida help <topic>`: expand one command group — its commands + descriptions —
+/// the middle granularity between bare `aida help` (group names only) and
+/// `aida help --all` (every group). An unknown/ambiguous topic errors with the
+/// list of valid topic names rather than silently falling through.
+/// trace:TASK-861 | ai:claude
+fn print_help_topic(topic: &str) -> Result<()> {
+    match resolve_help_topic(topic) {
+        Ok((group, cmds)) => {
+            println!("{}", group.cyan().bold());
+            for (name, desc) in cmds {
+                println!("  {:<14} {}", name.green(), desc);
+            }
+            println!();
+            println!(
+                "Run {} for one command's options, or {} for every group.",
+                "`aida <command> --help`".bold(),
+                "`aida help --all`".bold()
+            );
+            Ok(())
+        }
+        Err(valid) => {
+            eprintln!("Unknown help topic: {}", topic.bold());
+            eprintln!();
+            eprintln!("Valid topics (try `aida help <topic>`):");
+            for name in valid {
+                eprintln!("  {}", name.green());
+            }
+            eprintln!();
+            eprintln!(
+                "Or `aida help` for the curated view, {} for everything.",
+                "`aida help --all`".bold()
+            );
+            anyhow::bail!("unknown help topic: {topic}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -77074,6 +77155,38 @@ mod help_grouping_tests {
         for (name, desc) in GETTING_STARTED {
             assert!(!leak(name) && !leak(desc));
         }
+    }
+
+    // trace:TASK-861 | ai:claude — `aida help <topic>` resolves a group by exact
+    // (case-insensitive) name.
+    #[test]
+    fn help_topic_resolves_exact_name_case_insensitive() {
+        let (g, cmds) = resolve_help_topic("Planning").expect("exact match");
+        assert_eq!(g, "Planning");
+        assert!(cmds.iter().any(|(n, _)| *n == "ultraplan"));
+
+        let (g2, _) = resolve_help_topic("planning").expect("lowercased match");
+        assert_eq!(g2, "Planning");
+    }
+
+    // trace:TASK-861 | ai:claude — a unique case-insensitive prefix resolves.
+    #[test]
+    fn help_topic_resolves_unique_prefix() {
+        let (g, _) = resolve_help_topic("git").expect("unique prefix");
+        assert_eq!(g, "Git & lifecycle");
+        let (g2, _) = resolve_help_topic("report").expect("unique prefix");
+        assert_eq!(g2, "Reporting");
+    }
+
+    // trace:TASK-861 | ai:claude — unknown topics error with the full topic list.
+    #[test]
+    fn help_topic_unknown_errors_with_topic_list() {
+        let err = resolve_help_topic("bogus").expect_err("unknown topic");
+        assert!(err.contains(&"Getting started"));
+        assert!(err.contains(&"Planning"));
+        // The error list is exactly the group names.
+        let names: Vec<&str> = command_groups().iter().map(|(g, _)| *g).collect();
+        assert_eq!(err, names);
     }
 }
 
