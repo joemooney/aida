@@ -1,0 +1,21 @@
+id: 019ee0ee-0b56-7081-87b9-06842a0d08b9
+spec_id: TASK-887
+agreed_id: TASK-887
+title: aida rel add --type <typo> silently creates a Custom relationship (no warning / did-you-mean for standard-type typos)
+description: |-
+  Reproduce (in-repo target/release/aida): aida rel add STORY-1 --type bogusrel BUG-2 SUCCEEDS silently: "Added relationship: STORY-1 --[Custom("bogusrel")]--> BUG-2" (exit 0). A user who typos a standard relationship type (e.g. "blockedby" for "blocked-by", "depends" for "depends-on") gets a silently-created Custom relationship rather than an error or a did-you-mean hint. This is the silent-no-op / typo-acceptance class: the graph queries (--blocked-by, --blocks, --tree, --impact) won't traverse the typo'd custom edge, so the relationship looks created but does nothing useful.
+
+  Note: --type accepting arbitrary strings may be intentional for genuine custom relationships, so the fix is a warning, not a hard reject — e.g. when the value doesn't match a known relationship type, print "Warning: 'bogusrel' is not a standard relationship type (blocks, blocked-by, depends-on, parent-of, ...); created as a custom relationship. Did you mean <nearest>?" so a typo is visible.
+
+  This is the one finding in the rel family worth surfacing; the rest of rel's error handling is clean (missing --type, nonexistent target, missing args all error correctly).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T17:29:17.398938668Z
+modified_at: 2026-06-19T17:29:17.398938668Z
+req_type: Task
+tags:
+- error-paths
+- from-dogfood
+- ux
