@@ -10,14 +10,32 @@ description: |-
   By contrast aida show NOPE-999 (well-formed but absent) correctly says "Requirement not found ... Hint: check the spec ID (try aida list ...)". Only the MALFORMED-FORMAT path hits the version-mismatch hint. Same misleading text fires for aida edit BADID --status done (shorter variant).
 
   Fix: when the failure is parsing a USER-SUPPLIED id argument (not a file on disk), emit a format hint instead — e.g. "Invalid spec ID: not-a-real-id. Expected TYPE-SEQ (e.g. STORY-1) or TYPE-NODE-SEQ. Check the ID with aida list / aida search." Reserve parse_failure_hint for actual on-disk read_object failures. This is the highest-impact error-path finding from the dogfood sweep.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T17:28:20.813107733Z
-modified_at: 2026-06-19T17:28:20.813107733Z
+modified_at: 2026-06-19T17:53:28.534025330Z
 req_type: Bug
 tags:
 - error-paths
 - from-dogfood
 - ux
+history:
+- id: 019ee104-2fd1-7753-82be-532260789a6c
+  author: aida-auto-bump
+  timestamp: 2026-06-19T17:53:28.529166927Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee104-2fd6-72f2-9a8b-1414182e3906
+  timestamp: 2026-06-19T17:53:28.534024593Z
+  agent: aida
+  commit_sha: 85519faeec8bccef8bcf8de0823ee5f75a9c8f6f
+  summary: Completed via merge 85519fae
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T17:53:28.363214951Z
+  completion_sha: 85519faeec8bccef8bcf8de0823ee5f75a9c8f6f

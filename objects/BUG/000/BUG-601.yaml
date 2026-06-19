@@ -12,14 +12,32 @@ description: |-
   This guidance is WRONG: the store IS present and attached (aida graph STORY-1 works fine from the very same cwd, and ls shows .aida/config.toml + .aida-store). The "no store found / cd into project root" branch is being taken for a simply-nonexistent spec. Every sibling command (show / defer / archive / done / comment add / rel add) prints the CORRECT not-found message for the same condition: "Searched in: <abs>/.aida-store, Mode: distributed git-canonical, Hint: check the spec ID (try aida list ...)".
 
   Impact: misleading guidance (BUG-585 class) sends the user chasing a non-problem (wrong directory) when they just typo'd an ID. Fix: route aida graph's not-found through the same shared not-found message as show/defer/archive (distinguish "store missing" from "spec missing within an existing store").
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T17:28:57.017559774Z
-modified_at: 2026-06-19T17:28:57.017559774Z
+modified_at: 2026-06-19T17:53:28.543605458Z
 req_type: Bug
 tags:
 - error-paths
 - from-dogfood
 - ux
+history:
+- id: 019ee104-2fda-7560-afbf-037066388340
+  author: aida-auto-bump
+  timestamp: 2026-06-19T17:53:28.538858129Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee104-2fdf-7810-9271-5bb9120b2184
+  timestamp: 2026-06-19T17:53:28.543604672Z
+  agent: aida
+  commit_sha: 85519faeec8bccef8bcf8de0823ee5f75a9c8f6f
+  summary: Completed via merge 85519fae
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T17:53:28.363214951Z
+  completion_sha: 85519faeec8bccef8bcf8de0823ee5f75a9c8f6f
