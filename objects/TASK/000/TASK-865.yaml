@@ -3,12 +3,12 @@ spec_id: TASK-865
 agreed_id: TASK-865
 title: 'aida init + aida doctor: detect bwrap availability (on PATH + userns preflight) and report'
 description: 'aida init (handle_init_command, aida-cli/src/main.rs:8944) does NOT probe for bwrap, and aida doctor (handle_doctor_command :30875; DoctorCommand::Check) has no bwrap check. There is already a reusable preflight in code: which_on_path("bwrap") and bwrap_preflight() (aida-cli/src/session.rs:1341,1307) — the latter runs a trivial "bwrap ... true" to prove the kernel allows an unprivileged user namespace (catches the Ubuntu 23.10+/24.04 AppArmor apparmor_restrict_unprivileged_userns restriction). Smallest slice: add a bwrap row to aida doctor check (and optionally a one-line note in init) that reports: bwrap on PATH? userns preflight passes? — reusing which_on_path + bwrap_preflight (make them pub(crate) or expose a small wrapper). Acceptance: aida doctor prints a bwrap line: OK / not-installed / installed-but-userns-blocked with the remediation hint that bwrap_preflight already carries. Read-only diagnostic — no behavior change to launches.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:40:18.824356178Z
-modified_at: 2026-06-19T02:40:18.824356178Z
+modified_at: 2026-06-19T03:04:38.637277400Z
 req_type: Task
 tags:
 - aida:init
@@ -16,3 +16,21 @@ tags:
 - from-spike
 - parent:SPIKE-68
 - reliability
+history:
+- id: 019eddd6-6fe8-7373-9ddc-de6ae179c8da
+  author: aida-auto-bump
+  timestamp: 2026-06-19T03:04:38.632668960Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019eddd6-6fed-7ef1-aeb4-158d7dc6ca92
+  timestamp: 2026-06-19T03:04:38.637276534Z
+  agent: aida
+  commit_sha: 84adad06a06aed2adb98b3490ec307ceb63c3d76
+  summary: Completed via merge 84adad06
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T03:04:38.476551776Z
+  completion_sha: 84adad06a06aed2adb98b3490ec307ceb63c3d76
