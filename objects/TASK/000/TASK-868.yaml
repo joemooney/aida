@@ -3,12 +3,12 @@ spec_id: TASK-868
 agreed_id: TASK-868
 title: Trace-rot detector + machine-checkable trace-coverage gate (aida trace check)
 description: 'MOVE 1 (highest confidence). aida trace check: scan source for // trace:SPEC-ID, resolve each against the store, flag dangling/renumbered/deleted-target traces + report coverage; wire as a hard CI gate. WHY IT TILTS: neutralizes the papers sharpest self-undercut (P2b, section 3/11) - "trace comments rot invisibly, so the separate model is LESS self-healing than code". A working detector makes traces as self-healing as types (stale -> red), hardening the one uncontested Tier-1 wedge. EVIDENCE: trace-rot incidence run over AIDAs own history (catches the provenance-stealing renumbering the paper admits, #804) - self-test via dogfood on the precise admitted flaw. Size S (store/cache already resolve ids).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:13.109354966Z
-modified_at: 2026-06-19T03:03:54.794251643Z
+modified_at: 2026-06-19T03:07:56.248977306Z
 req_type: Task
 tags:
 - evidence
@@ -23,3 +23,21 @@ comments:
   content: 'EVIDENCE (verdict-tilt move 1): aida trace check on AIDAs own codebase found 442 dead trace links (6.52% hard rot) out of 6777 inline traces — 415 unknown (deleted/renumbered targets), 27 rejected; plus 3068 pointing at archived specs (soft signal). This is the concrete proof the papers self-undercut ("traces rot invisibly") was REAL — 6.52% rot existed undetected — and is now catchable by a gate. Follow-up: a chunk of the 415 unknown are deliberate EXAMPLE spec-ids in docs/skill templates (FR-0042 etc.), not real code traces — a refinement should exclude doc/template paths from the hard-rot denominator for an honest code-only rate.'
   created_at: 2026-06-19T03:03:54.794251643Z
   modified_at: 2026-06-19T03:03:54.794251643Z
+history:
+- id: 019eddd9-73d3-7481-b618-ddc3dcd7e25b
+  author: aida-auto-bump
+  timestamp: 2026-06-19T03:07:56.243883273Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019eddd9-73d8-7de2-b3d8-5038959ceed2
+  timestamp: 2026-06-19T03:07:56.248976228Z
+  agent: aida
+  commit_sha: 6f7950df301c7e2de2d17ad217784028dbfe97c0
+  summary: Completed via merge 6f7950df
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T03:07:56.067771683Z
+  completion_sha: 6f7950df301c7e2de2d17ad217784028dbfe97c0
