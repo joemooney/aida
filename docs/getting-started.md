@@ -1,5 +1,7 @@
 # Getting Started with AIDA
 
+<!-- trace:TASK-886 -->
+
 Add AI-native requirements tracking to any project in under 5 minutes.
 
 ---
@@ -189,8 +191,8 @@ aida search "authentication"
 # Edit any field
 aida edit TASK-1 --status approved --owner alice
 
-# Add a comment
-aida comment add TASK-1 --content "Needs OAuth2 support"
+# Add a comment (content is a positional argument — there is no --content flag)
+aida comment add TASK-1 "Needs OAuth2 support"
 
 # Add a relationship
 aida rel add --from TASK-2 --to TASK-1 --type references
@@ -281,7 +283,7 @@ aida github labels --create-missing
 | `aida show TASK-1` | Show details + how its code links back |
 | `aida edit TASK-1 --status approved` | Update any field |
 | `aida search "keyword"` | Cache-backed FTS5 search |
-| `aida comment add FR-1-001 --content "..."` | Add a comment |
+| `aida comment add FR-1-001 "..."` | Add a comment (content is positional) |
 | `aida rel add --from FR-1-002 --to FR-1-001 --type references` | Add relationship |
 | `aida del FR-1-001 --yes` | Delete a requirement |
 | `aida cache status` | Compare cache HEAD vs git HEAD |
