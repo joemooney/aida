@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:33:45.987752827Z
-modified_at: 2026-06-19T02:33:45.987752827Z
+modified_at: 2026-06-19T02:42:58.700333210Z
 req_type: Task
 tags:
 - aida:help
 - batch:operator-asks-0619
 - from-operator
 - legibility
+comments:
+- id: 019eddc2-9a0c-7743-aacd-342ece32d3c5
+  author: joe
+  content: Commit 85bf7250f references this requirement
+  created_at: 2026-06-19T02:42:58.700333210Z
+  modified_at: 2026-06-19T02:42:58.700333210Z
