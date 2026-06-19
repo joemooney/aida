@@ -3,12 +3,12 @@ spec_id: TASK-879
 agreed_id: TASK-879
 title: 'aida solo discoverability: surface it in getting-started + help (the command exists but is hidden)'
 description: The operator asked 'should we have a solo command?' - we DO (aida solo / aida solo run, STORY-625), which means it is under-surfaced. Add solo to the GETTING_STARTED set (main.rs ~78110) and/or a prominent line in print_tiered_help so a new user discovers 'run my project solo end-to-end'. Mention it where the autonomy story is told (aida help group, the user-walkthrough deck). Keep it tasteful (one entry). trace:EPIC-43
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T07:06:40.019478587Z
-modified_at: 2026-06-19T07:22:56.829032234Z
+modified_at: 2026-06-19T07:30:54.083245645Z
 req_type: Task
 tags:
 - aida:solo
@@ -22,3 +22,21 @@ comments:
   content: Commit 66a00f3a8 references this requirement
   created_at: 2026-06-19T07:22:56.829032234Z
   modified_at: 2026-06-19T07:22:56.829032234Z
+history:
+- id: 019edeca-33fe-7d51-a579-9ef8d6ff3bf0
+  author: aida-auto-bump
+  timestamp: 2026-06-19T07:30:54.078519278Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edeca-3403-74e2-b81c-2f450efacf8a
+  timestamp: 2026-06-19T07:30:54.083244949Z
+  agent: aida
+  commit_sha: 1d2c3ca188db9463936c62f3a021347a5d77338c
+  summary: Completed via merge 1d2c3ca1
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T07:30:53.914995787Z
+  completion_sha: 1d2c3ca188db9463936c62f3a021347a5d77338c
