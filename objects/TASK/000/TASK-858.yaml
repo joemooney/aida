@@ -3,15 +3,33 @@ spec_id: TASK-858
 agreed_id: TASK-858
 title: aida agent (bare) should alias to aida agent new
 description: aida agent is a parent command (new/ls/list-roles); bare aida agent currently errors (clap requires a subcommand). Make bare aida agent default to aida agent new (git-style default subcommand), forwarding all flags to new. Keep aida agent ls / new / list-roles working. Small UX convenience.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:32:51.512409369Z
-modified_at: 2026-06-19T02:32:51.512409369Z
+modified_at: 2026-06-19T02:50:20.892605626Z
 req_type: Task
 tags:
 - aida:agent
 - batch:operator-asks-0619
 - from-operator
 - ux
+history:
+- id: 019eddc9-5951-7641-8d12-79a1f46b0ff5
+  author: aida-auto-bump
+  timestamp: 2026-06-19T02:50:20.881338504Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019eddc9-595c-7340-b7ac-68a5d4b890e3
+  timestamp: 2026-06-19T02:50:20.892604249Z
+  agent: aida
+  commit_sha: dbfbc1721b8be46d50852ecdd6fd2a31a2c5ca93
+  summary: Completed via merge dbfbc172
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T02:50:20.589952578Z
+  completion_sha: dbfbc1721b8be46d50852ecdd6fd2a31a2c5ca93
