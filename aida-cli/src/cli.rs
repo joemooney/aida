@@ -6804,6 +6804,15 @@ pub enum Command {
         // `--help` output (TASK-268).
         #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern"])]
         health: bool,
+        /// Trace-read-rate audit: classify logged commands into graph READS
+        /// (list/show/search/graph/why/history/queue list/…) vs graph WRITES
+        /// (add/edit/comment add/rel add/queue add/defer/archive/…) and report
+        /// the read:write ratio over the window — evidence for whether the
+        /// intent graph is consulted, not just written.
+        // trace:TASK-872 | ai:claude — plain `//` so the SPEC-ID stays out of
+        // `--help` output (TASK-268).
+        #[clap(long = "read-write", conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health"])]
+        read_write: bool,
     },
 
     /// Dogfood agent-lift metrics over the recorded telemetry substrate.

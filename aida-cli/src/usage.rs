@@ -185,6 +185,83 @@ fn is_subcommand_token(tok: &str) -> bool {
         .all(|b| b.is_ascii_lowercase() || *b == b'-' || b.is_ascii_digit())
 }
 
+/// How a logged command shape relates to the requirement/intent graph.
+///
+/// The trace-read-rate audit (TASK-872) asks the cheap internal falsifier
+/// for P2b: is AIDA's rich intent graph CONSULTED (read) or merely WRITTEN?
+/// A high read:write ratio is evidence the typed layer earns its keep; a
+/// written-but-near-zero-read shape would falsify P2b cleanly.
+///
+/// trace:TASK-872 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphAccess {
+    /// Consults the intent graph (list/show/search/graph/why/history/…).
+    Read,
+    /// Mutates the intent graph (add/edit/comment/rel/queue add/defer/…).
+    Write,
+    /// Neither — machinery, sync, dev tooling, statusline, telemetry, etc.
+    /// Excluded from the ratio so plumbing noise doesn't drown the signal.
+    Neither,
+}
+
+/// Classify a logged command shape (e.g. `"queue list"`, `"rel add"`) as a
+/// graph READ, a graph WRITE, or NEITHER.
+///
+/// Matching is on the command shape string `usage::derive_cmd_shape`
+/// produces — the first one or two subcommand tokens, never arg values.
+/// We classify on the two-token shape first (so `queue list` ≠ `queue add`),
+/// then fall back to the single leading token.
+///
+/// READ = the command's job is to consult the graph: read a spec, walk
+/// relationships, search, or render history/status derived from specs.
+/// WRITE = the command's job is to mutate the graph: file/edit a spec,
+/// comment, add a relationship, queue/defer/archive a spec.
+/// NEITHER = git sync, dev shell, statusline, telemetry, init, etc. — these
+/// touch the *store plumbing* but aren't graph consultation or authorship,
+/// so counting them would muddy the read:write signal.
+pub fn classify_access(cmd: &str) -> GraphAccess {
+    let cmd = cmd.trim();
+    // Two-token shapes that need disambiguation from their sibling verbs.
+    match cmd {
+        // queue: `list`/`next`/`progress` read the routed graph; `add` writes
+        // a routing edge; `done`/`move`/`remove`/`rework`/`work` mutate state.
+        "queue list" | "queue next" | "queue progress" => return GraphAccess::Read,
+        "queue add" | "queue done" | "queue move" | "queue remove" | "queue rework"
+        | "queue work" => return GraphAccess::Write,
+        // findings: `list`/`calibration` read; `add`/`triage` write.
+        "findings list" | "findings calibration" => return GraphAccess::Read,
+        "findings add" | "findings triage" => return GraphAccess::Write,
+        // relationships: `rel add`/`rel rm` mutate graph edges; `rel list`/
+        // `rel show` consult them (a graph READ — walking typed edges is the
+        // canonical "is the graph consulted" signal).
+        "rel add" | "rel rm" | "rel remove" => return GraphAccess::Write,
+        "rel list" | "rel show" => return GraphAccess::Read,
+        // comments: `comment add` authors graph content.
+        "comment add" => return GraphAccess::Write,
+        // doc: `doc add` authors a Doc node + edge; `doc list`/`doc show` read.
+        "doc add" => return GraphAccess::Write,
+        "doc list" | "doc show" => return GraphAccess::Read,
+        // db: sync/merge-gate/reconcile are plumbing, not graph consultation.
+        _ => {}
+    }
+    // Single leading-token shapes.
+    let head = cmd.split_whitespace().next().unwrap_or("");
+    match head {
+        // READ — consult the graph.
+        "list" | "show" | "search" | "graph" | "why" | "history" | "tree" | "find" | "intent"
+        | "status" | "lint" => GraphAccess::Read,
+        // WRITE — mutate the graph. (`rel`/`comment`/`queue`/`findings`/`doc`
+        // are deliberately absent: their read-vs-write split is decided by the
+        // two-token match above, so a bare leading token alone is ambiguous
+        // and classed NEITHER rather than guessed.)
+        "add" | "edit" | "defer" | "undefer" | "archive" | "unarchive" | "decompose" | "import" => {
+            GraphAccess::Write
+        }
+        // NEITHER — plumbing / machinery / dev tooling.
+        _ => GraphAccess::Neither,
+    }
+}
+
 /// Count args (excluding the program name) for the event's
 /// `args_count`. Counts every argv element after argv[0], so flags
 /// and positional values both contribute. This is a coarse signal —
@@ -285,6 +362,90 @@ enabled = true
     fn count_args_excludes_program_name() {
         let argv = vec!["aida".to_string(), "queue".to_string(), "list".to_string()];
         assert_eq!(count_args(&argv), 2);
+    }
+
+    #[test]
+    fn classify_access_reads() {
+        // trace:TASK-872 | ai:claude
+        for cmd in [
+            "list",
+            "show",
+            "search",
+            "graph",
+            "why",
+            "history",
+            "queue list",
+            "queue next",
+            "queue progress",
+            "findings list",
+            "doc show",
+            "rel list",
+            "rel show",
+        ] {
+            assert_eq!(
+                classify_access(cmd),
+                GraphAccess::Read,
+                "{cmd} should be READ"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_access_writes() {
+        // trace:TASK-872 | ai:claude
+        for cmd in [
+            "add",
+            "edit",
+            "comment add",
+            "rel add",
+            "rel rm",
+            "defer",
+            "archive",
+            "queue add",
+            "queue done",
+            "findings add",
+            "doc add",
+        ] {
+            assert_eq!(
+                classify_access(cmd),
+                GraphAccess::Write,
+                "{cmd} should be WRITE"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_access_neither() {
+        // Plumbing / machinery / dev tooling must NOT count toward the
+        // read:write ratio. trace:TASK-872 | ai:claude
+        for cmd in [
+            "pull",
+            "push",
+            "fetch",
+            "db sync",
+            "db merge-gate",
+            "cache status",
+            "statusline",
+            "usage",
+            "init",
+            "dev activate",
+            "session start",
+            "<root>",
+        ] {
+            assert_eq!(
+                classify_access(cmd),
+                GraphAccess::Neither,
+                "{cmd} should be NEITHER"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_access_queue_verbs_split_read_vs_write() {
+        // The two-token disambiguation is the load-bearing case: `queue list`
+        // is a graph read, `queue add` is a graph write. trace:TASK-872
+        assert_eq!(classify_access("queue list"), GraphAccess::Read);
+        assert_eq!(classify_access("queue add"), GraphAccess::Write);
     }
 
     #[test]
