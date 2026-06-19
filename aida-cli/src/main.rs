@@ -17194,6 +17194,7 @@ fn create_agent_brief(
         .with_context(|| format!("failed to create {}", brief_dir.display()))?;
     let path = brief_dir.join(format!("{spec_id}-{generated_at}.md"));
     let body = render_agent_brief(
+        project_root,
         agent,
         spec_id,
         req,
@@ -17301,6 +17302,7 @@ fn validate_brief_agent(agent: &str) -> Result<&str> {
 }
 
 fn render_agent_brief(
+    project_root: &std::path::Path,
     agent: &str,
     spec_id: &str,
     req: &Requirement,
@@ -17369,18 +17371,35 @@ fn render_agent_brief(
     ));
 
     let branch = spec_id.to_ascii_lowercase();
+    // BUG-583: the Setup block must reference the TARGET PROJECT's location
+    // (resolved at runtime from the invocation's project root), never the AIDA
+    // binary's compiled-in source-repo path. A cold vendor agent following these
+    // steps literally must stay inside its own project, not `cd` into wherever
+    // aida happened to be built. The sibling worktree is derived from the
+    // project root's basename + its parent dir; both are anchored to the project
+    // being briefed, not the binary. trace:BUG-583
+    let project_name = project_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("project");
+    let worktree_dir = project_root
+        .parent()
+        .map(|parent| parent.join(format!("{project_name}-{branch}")))
+        .unwrap_or_else(|| project_root.join(format!("../{project_name}-{branch}")));
+    let project_root_display = project_root.display();
+    let worktree_display = worktree_dir.display();
     out.push_str("## Setup\n\n");
     out.push_str("```bash\n");
-    out.push_str("cd /home/joe/ai/aida\n");
+    out.push_str(&format!("cd {project_root_display}\n"));
     out.push_str("git fetch origin main\n");
     out.push_str(&format!(
-        "git worktree add /home/joe/ai/aida-{branch} -b {branch} origin/main\n"
+        "git worktree add {worktree_display} -b {branch} origin/main\n"
     ));
-    out.push_str(&format!("cd /home/joe/ai/aida-{branch}\n"));
+    out.push_str(&format!("cd {worktree_display}\n"));
     // BUG-331: no `.aida-store` symlink needed — sibling worktrees now resolve
     // the canonical store at the main worktree via git-common-dir. trace:BUG-331
     out.push_str(&format!(
-        "aida session start --owns {spec_id} --branch {branch} --path /home/joe/ai/aida-{branch} --reuse-branch\n"
+        "aida session start --owns {spec_id} --branch {branch} --path {worktree_display} --reuse-branch\n"
     ));
     out.push_str("```\n\n");
 
@@ -18740,6 +18759,47 @@ mod task_492_brief_tests {
         assert!(body.contains("aida session start --owns TASK-492"));
         assert!(body.contains("## Trailer reminder"));
         assert!(body.contains("(TASK-492)"));
+    }
+
+    // BUG-583: the Setup block must reference the TARGET PROJECT's location
+    // (the invocation's project root, here the throwaway temp dir), never the
+    // AIDA binary's compiled-in source-repo path. A cold vendor agent following
+    // the Setup steps literally must stay inside its own project. This test
+    // fails against the old code (which hardcoded `/home/joe/ai/aida`) and
+    // passes with the runtime-resolved path. trace:BUG-583
+    #[test]
+    fn setup_block_references_target_project_not_binary_repo() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+
+        // Isolate the Setup fenced block so later sections can't mask a leak.
+        let setup_idx = body.find("## Setup").expect("brief has a Setup section");
+        let setup_block = &body[setup_idx..];
+
+        // The Setup block must point at the project root we briefed for.
+        let project_root = temp.path().display().to_string();
+        assert!(
+            setup_block.contains(&format!("cd {project_root}")),
+            "Setup block must `cd` into the target project root, got:\n{setup_block}"
+        );
+        assert!(
+            setup_block.contains("--path "),
+            "Setup block must pass a runtime-resolved worktree --path, got:\n{setup_block}"
+        );
+
+        // The Setup block must NEVER emit the aida source-repo path or any
+        // CARGO_MANIFEST_DIR-style compiled-in path.
+        assert!(
+            !setup_block.contains("/home/joe/ai/aida"),
+            "Setup block leaks the aida binary's source-repo path:\n{setup_block}"
+        );
+        assert!(
+            !setup_block.contains(env!("CARGO_MANIFEST_DIR")),
+            "Setup block leaks the compiled-in CARGO_MANIFEST_DIR path:\n{setup_block}"
+        );
     }
 
     #[test]
