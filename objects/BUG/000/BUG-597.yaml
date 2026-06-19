@@ -20,12 +20,12 @@ description: |
      So README step 1's claim "STORY-1 is now Approved" is false, and first-project step 5's "aida queue add STORY-1 --for implementer" fails with exit 1 ("queuing work for execution needs advisor authority"). Neither doc tells the reader they need advisor authority or an interactive TTY session. The whole walkthrough chain breaks for a newcomer in a plain shell.
 
   Fix: update the shown output to the real `Added: SPEC-N - <title>` form; and either (a) add an upfront note that setting approved / queueing needs advisor authority (or an interactive session), or (b) rewrite the walkthrough to file as draft then approve via the appropriate path. Verified against /home/joe/ai/aida/target/release/aida 0.14.0 in a throwaway store.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:49:06.981122698Z
-modified_at: 2026-06-19T15:58:18.833172709Z
+modified_at: 2026-06-19T16:05:36.185015561Z
 req_type: Bug
 tags:
 - docs
@@ -37,3 +37,21 @@ comments:
   content: Commit f3242eeba references this requirement
   created_at: 2026-06-19T15:58:18.833172709Z
   modified_at: 2026-06-19T15:58:18.833172709Z
+history:
+- id: 019ee0a1-6d34-78f1-b643-42a88ffea9b8
+  author: aida-auto-bump
+  timestamp: 2026-06-19T16:05:36.180145126Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee0a1-6d39-7101-a12e-542792da2107
+  timestamp: 2026-06-19T16:05:36.185014755Z
+  agent: aida
+  commit_sha: 2d660a0cdab04524e2a3ee10a2c83f61f007c4d0
+  summary: Completed via merge 2d660a0c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T16:05:36.016644584Z
+  completion_sha: 2d660a0cdab04524e2a3ee10a2c83f61f007c4d0

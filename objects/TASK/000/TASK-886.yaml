@@ -12,12 +12,12 @@ description: |
   - The "Add Your First Requirement" example `aida add --title ... --status draft` works for any role, but note (cf. BUG-597) `--status approved` would downgrade for the default implementer role; getting-started avoids approved here so it's fine - flagging only for consistency with the onboarding-authority fix.
 
   Verified against /home/joe/ai/aida/target/release/aida 0.14.0.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:50:03.327254680Z
-modified_at: 2026-06-19T15:58:19.983505691Z
+modified_at: 2026-06-19T16:05:36.189829806Z
 req_type: Task
 tags:
 - docs
@@ -29,3 +29,21 @@ comments:
   content: Commit f3242eeba references this requirement
   created_at: 2026-06-19T15:58:19.983505691Z
   modified_at: 2026-06-19T15:58:19.983505691Z
+history:
+- id: 019ee0a1-6d39-7101-a12e-5432270842a3
+  author: aida-auto-bump
+  timestamp: 2026-06-19T16:05:36.185048504Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee0a1-6d3d-79c1-95ff-5335ed64e90d
+  timestamp: 2026-06-19T16:05:36.189828867Z
+  agent: aida
+  commit_sha: 2d660a0cdab04524e2a3ee10a2c83f61f007c4d0
+  summary: Completed via merge 2d660a0c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T16:05:36.016644584Z
+  completion_sha: 2d660a0cdab04524e2a3ee10a2c83f61f007c4d0
