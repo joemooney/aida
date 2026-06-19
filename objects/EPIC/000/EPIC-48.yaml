@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:19:35.838635342Z
-modified_at: 2026-06-18T16:00:30.732207507Z
+modified_at: 2026-06-19T01:42:04.926561242Z
 req_type: Epic
 tags:
 - competitive
@@ -66,3 +66,8 @@ comments:
   content: 'Gate-vs-rule pilot (STORY-655): P1 WEAKENED for simple/immediate rules (rule-only 100%, gate 0 saves). Pivotal synthesis with the bake-off: the variable is ATTENTION-DISTANCE not rule-vs-gate — capable models honor immediate/explicit invariants, drop buried/deferred ones (the Codex --ai-gate miss). Restated P1: gate selectively (high attention-distance / unattended / safety), trust the model on point-of-action rules. Doc: docs/research/ablations/2026-06-18-gate-vs-rule-pilot.md. Next: I2 semantic invariant.'
   created_at: 2026-06-18T16:00:30.732207507Z
   modified_at: 2026-06-18T16:00:30.732207507Z
+- id: 019edd8a-d97e-7ad3-ae7a-f475b4459f1d
+  author: joe
+  content: Commit a8712cfe9 references this requirement
+  created_at: 2026-06-19T01:42:04.926561242Z
+  modified_at: 2026-06-19T01:42:04.926561242Z
