@@ -18927,5 +18927,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 1868
+- id: 019eddbf-de62-7082-a141-c30ff9aa84b5
+  target_id: 019eddbf-d31c-7e82-95fa-9365abce5dd1
+  author: aida
+  node_id: '1'
+  lamport: 1869
+  timestamp: 2026-06-19T02:39:59.586743382Z
+  kind: !Create
+    title: Wire bwrap os_wrap into the interactive agent-launch path (aida agent new), not just headless drains
+    description: 'Today the bwrap OS-wrapper (claude_program_and_args / os_wrap_enabled in aida-cli/src/session.rs:1111,1229) is applied ONLY on the three HEADLESS claude -p spawn paths (spawn_claude_headless :792, exec_claude_headless :1386, spawn_claude_headless_resume :1479). The interactive launcher aida agent new (agent_new_claude -> agent_new_with_config -> run_tracked_agent in aida-cli/src/main.rs:36550,36744) spawns claude DIRECTLY with no bwrap wrap — it only applies Claude-Code-native contained flags (tool_contained_flags), never the OS boundary. Slice: route the interactive foreground claude launch through claude_program_and_args (or an equivalent wrap step) when [contained] os_wrap=true, with the same fail-closed bwrap-on-PATH + preflight checks. Acceptance: an interactive aida agent new with os_wrap=true execs bwrap-wrapped claude; bwrap absent -> fail-closed error, never silent unconfined launch. Verify against the actual spawn site, not docs.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 1869
 node_id: '1'
