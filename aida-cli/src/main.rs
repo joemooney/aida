@@ -2525,6 +2525,7 @@ fn run() -> Result<()> {
             failures,
             pattern,
             health,
+            read_write,
         } => {
             // TASK-266: only the `--auto-complete` view needs the store
             // (to resolve drafted-BUG statuses) — keep plain `aida usage`
@@ -2545,6 +2546,7 @@ fn run() -> Result<()> {
                 *failures,
                 *pattern,
                 *health,
+                *read_write,
                 store.as_ref(),
             )?;
         }
@@ -12744,6 +12746,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             failures,
             pattern,
             health,
+            read_write,
         } => {
             // TASK-266: load the store only for the `--auto-complete` view,
             // which resolves drafted-BUG statuses; plain usage stays cheap.
@@ -12763,6 +12766,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *failures,
                 *pattern,
                 *health,
+                *read_write,
                 store.as_ref(),
             );
         }
@@ -84753,8 +84757,16 @@ fn handle_usage_command(
     failures: bool,
     pattern: bool,
     health: bool,
+    read_write: bool,
     store: Option<&RequirementsStore>,
 ) -> Result<()> {
+    // TASK-872: `--read-write` runs the trace-read-rate audit — classify the
+    // logged command shapes into graph reads vs writes and report the ratio.
+    // Its own source-shape (the usage log, classified), so its own handler.
+    if read_write {
+        return handle_usage_read_write(since_raw, json_out, limit);
+    }
+
     // STORY-530: `--health` renders the deterministic Tier-1 health catalog
     // (six pure metrics over the telemetry logs + the spec graph). It reads
     // its own sources, so it gets its own handler.
@@ -84943,6 +84955,164 @@ fn handle_usage_command(
             (rows.len() - limit).to_string().dimmed()
         );
     }
+
+    Ok(())
+}
+
+// ----------------------------------------------------------------------------
+// `aida usage --read-write` — trace-read-rate audit (TASK-872).
+//
+// The cheap INTERNAL falsifier for P2b: is AIDA's typed intent graph
+// CONSULTED (read) or merely WRITTEN? Classify every logged command shape
+// into graph READS vs WRITES vs NEITHER (plumbing), then report total reads,
+// total writes, and the read:write ratio over the window. A high ratio is
+// direct evidence the rich layer earns its keep; written-but-near-zero-read
+// would falsify P2b cleanly.
+//
+// Honest cap (spec section 10 confound): a high read rate could be operator
+// discipline rather than the graph paying its way — but the asymmetry means
+// even a positive result is informative, and a *negative* (writes ≫ reads)
+// is a clean falsification regardless of the confound.
+//
+// Measures CLI telemetry only. MCP read tools (show_requirement / query_graph
+// / list_requirements) are not in usage.jsonl today; an MCP read counter is a
+// follow-up (see the spec's "add an MCP read counter" note), not this slice.
+// ----------------------------------------------------------------------------
+
+/// Aggregated graph reads vs writes over a telemetry window.
+/// trace:TASK-872 | ai:claude
+struct ReadWriteTally {
+    reads: u64,
+    writes: u64,
+    read_by_cmd: std::collections::HashMap<String, u64>,
+    write_by_cmd: std::collections::HashMap<String, u64>,
+}
+
+impl ReadWriteTally {
+    fn ratio(&self) -> Option<f64> {
+        if self.writes == 0 {
+            None
+        } else {
+            Some(self.reads as f64 / self.writes as f64)
+        }
+    }
+}
+
+/// Walk windowed events, classify each command shape, and tally reads/writes.
+/// Pure over its inputs so it can be unit-tested. trace:TASK-872 | ai:claude
+fn tally_read_write(
+    events: &[usage::UsageEvent],
+    since: chrono::DateTime<chrono::Utc>,
+) -> ReadWriteTally {
+    let mut tally = ReadWriteTally {
+        reads: 0,
+        writes: 0,
+        read_by_cmd: std::collections::HashMap::new(),
+        write_by_cmd: std::collections::HashMap::new(),
+    };
+    for ev in events {
+        let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) else {
+            continue;
+        };
+        if ts.with_timezone(&chrono::Utc) < since {
+            continue;
+        }
+        match usage::classify_access(&ev.cmd) {
+            usage::GraphAccess::Read => {
+                tally.reads += 1;
+                *tally.read_by_cmd.entry(ev.cmd.clone()).or_insert(0) += 1;
+            }
+            usage::GraphAccess::Write => {
+                tally.writes += 1;
+                *tally.write_by_cmd.entry(ev.cmd.clone()).or_insert(0) += 1;
+            }
+            usage::GraphAccess::Neither => {}
+        }
+    }
+    tally
+}
+
+fn handle_usage_read_write(since_raw: &str, json_out: bool, limit: usize) -> Result<()> {
+    let now = chrono::Utc::now();
+    let since = now - parse_days_arg(since_raw)?;
+    let events = usage::read_events();
+
+    let tally = tally_read_write(&events, since);
+    let ratio = tally.ratio();
+
+    if json_out {
+        let top = |m: &std::collections::HashMap<String, u64>| -> Vec<serde_json::Value> {
+            let mut rows: Vec<(String, u64)> = m.iter().map(|(k, v)| (k.clone(), *v)).collect();
+            rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            rows.into_iter()
+                .take(limit)
+                .map(|(cmd, count)| serde_json::json!({ "cmd": cmd, "count": count }))
+                .collect()
+        };
+        let obj = serde_json::json!({
+            "window": since_raw,
+            "reads": tally.reads,
+            "writes": tally.writes,
+            "read_write_ratio": ratio,
+            "top_reads": top(&tally.read_by_cmd),
+            "top_writes": top(&tally.write_by_cmd),
+            "note": "CLI telemetry only; MCP read tools (show_requirement/query_graph/list_requirements) are not logged in usage.jsonl — an MCP read counter is a follow-up.",
+        });
+        println!("{}", serde_json::to_string_pretty(&obj)?);
+        return Ok(());
+    }
+
+    println!(
+        "{} trace-read-rate audit over the last {}",
+        "Usage:".bold(),
+        since_raw.cyan()
+    );
+    println!(
+        "  {} is the intent graph consulted, or just written?",
+        "Question:".dimmed()
+    );
+    println!();
+    println!("  {:<14} {:>10}", "graph reads".dimmed(), tally.reads);
+    println!("  {:<14} {:>10}", "graph writes".dimmed(), tally.writes);
+    let ratio_cell = match ratio {
+        Some(r) => format!("{:.2} : 1", r).bold().to_string(),
+        None if tally.reads > 0 => "∞ (no writes in window)".bold().to_string(),
+        None => "n/a (no graph activity in window)".dimmed().to_string(),
+    };
+    println!("  {:<14} {:>10}", "read:write".dimmed(), ratio_cell);
+
+    if let Some(r) = ratio {
+        let verdict = if r >= 1.0 {
+            "reads ≥ writes — evidence the typed graph is consulted, not just written".green()
+        } else {
+            "writes > reads — the graph may be written more than read (watch P2b)".yellow()
+        };
+        println!("  {} {}", "→".dimmed(), verdict);
+    }
+
+    let print_top = |label: &str, m: &std::collections::HashMap<String, u64>| {
+        if m.is_empty() {
+            return;
+        }
+        let mut rows: Vec<(&String, &u64)> = m.iter().collect();
+        rows.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        println!();
+        println!("  {}", label.dimmed());
+        for (cmd, count) in rows.into_iter().take(limit.min(10)) {
+            println!("    {:<24} {:>6}", cmd.bold(), count);
+        }
+    };
+    print_top("top reads", &tally.read_by_cmd);
+    print_top("top writes", &tally.write_by_cmd);
+
+    println!();
+    println!(
+        "  {} CLI telemetry only. MCP read tools (show_requirement / query_graph /",
+        "Note:".dimmed()
+    );
+    println!(
+        "        list_requirements) aren't in usage.jsonl yet — an MCP read counter is a follow-up."
+    );
 
     Ok(())
 }
@@ -126549,5 +126719,83 @@ mod bug_533_config_show_tests {
                 s.section
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod task_872_read_write_audit_tests {
+    use super::*;
+    use crate::usage::UsageEvent;
+
+    fn ev(cmd: &str, ts: &str) -> UsageEvent {
+        UsageEvent {
+            ts: ts.to_string(),
+            cmd: cmd.to_string(),
+            args_count: 1,
+            exit_code: 0,
+            duration_ms: 5,
+            binary_sha: None,
+            role: None,
+            scope: None,
+        }
+    }
+
+    #[test]
+    fn tally_counts_reads_writes_and_skips_neither() {
+        // trace:TASK-872 | ai:claude
+        let since = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let events = vec![
+            ev("list", "2026-02-01T00:00:00+00:00"),
+            ev("show", "2026-02-01T00:00:00+00:00"),
+            ev("queue list", "2026-02-01T00:00:00+00:00"),
+            ev("add", "2026-02-01T00:00:00+00:00"),
+            ev("pull", "2026-02-01T00:00:00+00:00"), // NEITHER — excluded
+            ev("statusline", "2026-02-01T00:00:00+00:00"), // NEITHER — excluded
+        ];
+        let tally = tally_read_write(&events, since);
+        assert_eq!(tally.reads, 3);
+        assert_eq!(tally.writes, 1);
+        assert_eq!(tally.ratio(), Some(3.0));
+    }
+
+    #[test]
+    fn tally_windows_out_old_events() {
+        // trace:TASK-872 | ai:claude
+        let since = chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let events = vec![
+            ev("list", "2026-01-01T00:00:00+00:00"), // before window — dropped
+            ev("add", "2026-07-01T00:00:00+00:00"),  // in window
+        ];
+        let tally = tally_read_write(&events, since);
+        assert_eq!(tally.reads, 0);
+        assert_eq!(tally.writes, 1);
+        assert_eq!(tally.ratio(), Some(0.0));
+    }
+
+    #[test]
+    fn tally_ratio_is_none_when_no_writes() {
+        // trace:TASK-872 | ai:claude
+        let since = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let events = vec![ev("list", "2026-02-01T00:00:00+00:00")];
+        let tally = tally_read_write(&events, since);
+        assert_eq!(tally.reads, 1);
+        assert_eq!(tally.writes, 0);
+        assert_eq!(tally.ratio(), None);
+    }
+
+    #[test]
+    fn tally_empty_log_is_graceful() {
+        // trace:TASK-872 | ai:claude
+        let since = chrono::Utc::now() - chrono::Duration::days(30);
+        let tally = tally_read_write(&[], since);
+        assert_eq!(tally.reads, 0);
+        assert_eq!(tally.writes, 0);
+        assert_eq!(tally.ratio(), None);
     }
 }
