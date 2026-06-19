@@ -3,12 +3,12 @@ spec_id: TASK-862
 agreed_id: TASK-862
 title: 'Personal-view shortcuts: aida mylist / aida myqueue (and the aida list default-scope question)'
 description: 'Add aida mylist (= aida list me) and aida myqueue (= the current-user queue view) as discoverable personal-view shortcuts, complementing the global aida list / aida queue. OPEN QUESTION FOR OPERATOR (recorded 2026-06-19, do not block): the operator asked whether aida list should default to the current user. Verified: aida list (requirements) already shows ALL, not me-scoped - only the QUEUE is user-scoped (BUG-89). So no default needs changing for list; the actionable piece is the mylist/myqueue shortcuts + the me/user: filter (separate spec). If the operator instead wants the QUEUE views renamed/clarified (queue = mine vs a global queue view), that is a follow-up - revisit on their input.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:33:58.195470519Z
-modified_at: 2026-06-19T08:18:56.336186819Z
+modified_at: 2026-06-19T08:26:22.495556977Z
 req_type: Task
 tags:
 - aida:list
@@ -23,3 +23,21 @@ comments:
   content: Commit 8ae4ea130 references this requirement
   created_at: 2026-06-19T08:18:56.336186819Z
   modified_at: 2026-06-19T08:18:56.336186819Z
+history:
+- id: 019edefc-fd9a-7471-b4b6-89df2159d0df
+  author: aida-auto-bump
+  timestamp: 2026-06-19T08:26:22.490679780Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edefc-fd9f-72b3-aee0-8d8e45d6da10
+  timestamp: 2026-06-19T08:26:22.495556365Z
+  agent: aida
+  commit_sha: 08258769ca6f21e4cfa245445c6f3a8821d58012
+  summary: Completed via merge 08258769
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T08:26:22.332082754Z
+  completion_sha: 08258769ca6f21e4cfa245445c6f3a8821d58012
