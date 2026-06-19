@@ -140,7 +140,8 @@ impl SpecEdit {
 pub fn questions_for(readiness: &Readiness, ai: Option<&AiReport>) -> Vec<InterviewQuestion> {
     let mut out = Vec::new();
     for d in readiness.dimensions.iter().filter(|d| !d.pass) {
-        match d.name.as_str() {
+        match d.name {
+            // trace:TASK-849 | ai:claude — dryrun dimension names are `&'static str`.
             "description" => out.push(InterviewQuestion {
                 dimension: "description".to_string(),
                 kind: QuestionKind::Acceptance,

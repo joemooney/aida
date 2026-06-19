@@ -81767,16 +81767,10 @@ fn handle_spec_dryrun(id: &str, ai: bool, json: bool) -> Result<()> {
         )
     })?;
 
-    let want = id.trim().to_ascii_uppercase();
+    // trace:TASK-849 | ai:claude — reuse the canonical case-insensitive resolver
+    // (matches spec_id + agreed_id) instead of hand-rolling the same match here.
     let req = store
-        .requirements
-        .iter()
-        .find(|r| {
-            [r.agreed_id.as_deref(), r.spec_id.as_deref()]
-                .into_iter()
-                .flatten()
-                .any(|s| s.eq_ignore_ascii_case(&want))
-        })
+        .get_requirement_by_spec_id(id.trim())
         .cloned()
         .ok_or_else(|| {
             anyhow::anyhow!("no spec found matching `{id}` — check the ID with `aida list`.")
@@ -81855,7 +81849,8 @@ fn print_dryrun_human(
         );
     } else {
         println!();
-        let names: Vec<String> = failing.iter().map(|d| d.name.clone()).collect();
+        // trace:TASK-849 | ai:claude — dimension names are now `&'static str`.
+        let names: Vec<&str> = failing.iter().map(|d| d.name).collect();
         println!(
             "  {} fix before queuing: {}",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
