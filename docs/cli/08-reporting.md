@@ -125,7 +125,8 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 **Key options (rationale only).**
 - `--unused <Nd>` vs `--errors` — the two deprecation/UX signals, mutually exclusive because they answer opposite questions ("never used" vs "used and failing"). Both feed the `/aida-insights` review cadence.
 - `--auto-complete` — the mode-switch to drain telemetry. Without it you're in CLI-usage mode; the `--failures`/`--pattern`/`--health` sub-flags only mean anything *with* it.
-- `--json` — machine consumption (`{cmd, count, errors, avg_ms}` per command).
+- `--read-write` — the *trace-read-rate audit*: classify the logged command shapes into graph **reads** (`list`/`show`/`search`/`graph`/`why`/`history`/`queue list`/`rel list`/…) vs graph **writes** (`add`/`edit`/`comment add`/`rel add`/`queue add`/`defer`/`archive`/…), skip plumbing (sync/dev/statusline), and report the read:write ratio over the window. The question it answers: *is the intent graph consulted, or just written?* A ratio ≥ 1 is evidence the typed layer earns its keep; writes ≫ reads would suggest the typing is dead weight. Measures CLI telemetry only — MCP read tools aren't in `usage.jsonl` yet (an MCP read counter is a follow-up).
+- `--json` — machine consumption (`{cmd, count, errors, avg_ms}` per command; `{reads, writes, read_write_ratio, top_reads, top_writes}` under `--read-write`).
 
 **Gotchas.** `--failures`, `--pattern`, and `--health` are no-ops without `--auto-complete` — they qualify the drain-telemetry mode, not the default usage view. Telemetry is opt-out (`AIDA_TELEMETRY=0` or `[telemetry] enabled = false`); if the log is empty, telemetry was disabled — the command isn't broken.
 
