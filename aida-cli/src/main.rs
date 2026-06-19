@@ -1836,6 +1836,15 @@ fn run() -> Result<()> {
         return handle_tui_command(scope.clone(), *no_recover, *launcher, *intent_fd);
     }
 
+    // `aida config menu` is a navigable TUI view over the resolved config
+    // surface (STORY-661). Like `aida tui` it holds no storage handle — the
+    // policy registry it renders resolves from `.aida/config.toml` + the
+    // global files + env directly — so it dispatches before storage init.
+    // trace:STORY-661 | ai:claude
+    if let Command::Config(ConfigCommand::Menu) = &cli.command {
+        return handle_config_menu_command();
+    }
+
     // Roles + statusline dispatch before storage init — roles are TOML
     // files at .aida/roles/, statusline reads the cache directly.
     if let Command::Role(role_cmd) = &cli.command {
@@ -24199,6 +24208,12 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
         ConfigCommand::Glyph(_) => {
             unreachable!("`aida config glyph` is dispatched before handle_config_command")
         }
+        // STORY-661: `aida config menu` is intercepted before storage init in
+        // the early-dispatch block, so it never reaches this generic handler.
+        // trace:STORY-661 | ai:claude
+        ConfigCommand::Menu => {
+            unreachable!("`aida config menu` is dispatched before handle_config_command")
+        }
     }
 
     Ok(())
@@ -24228,6 +24243,18 @@ impl PolicySource {
             PolicySource::GlobalAgents => "~/.aida/agents.toml".dimmed().to_string(),
             PolicySource::GlobalConfig => "~/.aida/config.toml".dimmed().to_string(),
             PolicySource::Env(name) => format!("{name} (env)").yellow().to_string(),
+        }
+    }
+
+    /// Color-free scope label for the `aida config menu` TUI, which does its
+    /// own styling. trace:STORY-661 | ai:claude
+    fn plain_label(&self) -> String {
+        match self {
+            PolicySource::Default => "default".to_string(),
+            PolicySource::ProjectConfig => ".aida/config.toml".to_string(),
+            PolicySource::GlobalAgents => "~/.aida/agents.toml".to_string(),
+            PolicySource::GlobalConfig => "~/.aida/config.toml".to_string(),
+            PolicySource::Env(name) => format!("{name} (env)"),
         }
     }
 }
@@ -24992,6 +25019,170 @@ fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// A one-line explanation + built-in default for a config knob, keyed by
+/// `(section, key)`. Sourced from `docs/environment-variables.md` and the
+/// `aida config show` rationale so the TUI carries the same human framing the
+/// docs do. Knobs not listed fall back to a generic "no description" + a
+/// default derived from the resolved row. trace:STORY-661 | ai:claude
+fn config_knob_doc(section: &str, key: &str) -> (&'static str, &'static str) {
+    match (section, key) {
+        ("agents", "bypass") => (
+            "Agent permission posture: native = Claude prompts (faithful launcher); bypass = agents skip permission prompts.",
+            "native",
+        ),
+        ("contained", "enable") => (
+            "Sandbox posture: run agents under Claude Code's native --settings sandbox.",
+            "disabled",
+        ),
+        ("contained", "allowed_hosts") => (
+            "Egress allowlist for sandboxed agents; empty means no egress restriction.",
+            "(none)",
+        ),
+        ("contained", "os_wrap") => (
+            "The bwrap OS-sandbox master switch (distinct from `enable`); strictly opt-in.",
+            "false",
+        ),
+        ("contained", "read_allowlist") => (
+            "Strict read-confinement paths under os_wrap; empty binds the host root read-only.",
+            "(none)",
+        ),
+        ("contained", "managed_domains_only") => (
+            "Hard egress deny (managed set + allowed_hosts only), no approval prompt.",
+            "false",
+        ),
+        ("mailbox", "act_on_mail") => (
+            "How a session reacts to unread mail: surface-and-recommend, or escalate-per-cascade.",
+            "surface-and-recommend",
+        ),
+        ("mailbox", "autosync") => (
+            "Auto-publish the local mailbox on the pull/push store legs (env: AIDA_MAILBOX_AUTOSYNC).",
+            "true",
+        ),
+        ("advisor", "calibration_mode") => (
+            "When on, every advisor punt emits two verdicts to mine substrate gaps (cost: both runs fire).",
+            "off",
+        ),
+        ("archive", "auto_after_days") => (
+            "Auto-sweep completed/rejected specs older than N days on `aida pull` (clamped >=7; env: AIDA_AUTO_ARCHIVE).",
+            "disabled",
+        ),
+        ("telemetry", "enabled") => (
+            "Local usage telemetry at ~/.aida/usage.jsonl (env: AIDA_TELEMETRY; never phoned home).",
+            "enabled",
+        ),
+        ("intake", "disposition_bias") => (
+            "Headless advisor INTAKE pass bias when proposing approve/reject/park/queue per open spec.",
+            "(built-in)",
+        ),
+        ("intake", "on_apply") => (
+            "What an `aida intake --apply` pass executes for each proposed disposition.",
+            "(built-in)",
+        ),
+        ("intake", "do_not_approve_classes") => (
+            "Spec classes the INTAKE pass will never auto-approve.",
+            "(built-in)",
+        ),
+        ("presence", "consumers") => (
+            "Whether presence-aware consumers act on the away/home signal.",
+            "on",
+        ),
+        ("presence", "away_drain") => (
+            "Drain mode used while you are away (e.g. headless-both).",
+            "headless-both",
+        ),
+        ("presence", "home_offer") => (
+            "What presence offers when you return home.",
+            "surface",
+        ),
+        ("hints", "workflow_hints") => (
+            "Inline state-transition hints (queue drained -> open PR, etc.); env: AIDA_HINTS overrides per-shell.",
+            "enabled",
+        ),
+        ("ui", "glyphs") => (
+            "Active glyph profile (unicode / ascii / ...); env: AIDA_GLYPHS overrides.",
+            "unicode",
+        ),
+        ("ui", "theme") => (
+            "Named glyph theme applied on top of the profile.",
+            "(none)",
+        ),
+        ("seats", _) => (
+            "Which seat (operator `aida human` vs advisor `aida advisor`) this configurable bucket shows on.",
+            "(per-key default)",
+        ),
+        ("team", "strict") => (
+            "RBAC guardrail strict mode (NOT security): non-rostered = least-privilege, refusals roster-authoritative.",
+            "false",
+        ),
+        ("team", "protected_tags") => (
+            "Tags whose specs require the protected role to modify (guardrail, not access control).",
+            "(none)",
+        ),
+        ("team", "protected_role") => (
+            "Minimum role required to modify a protected-tag spec.",
+            "(default)",
+        ),
+        ("team", _) => (
+            "Per-operation minimum role in the RBAC guardrail permission map.",
+            "(default)",
+        ),
+        _ => ("(no description available)", "(see config show)"),
+    }
+}
+
+/// `aida config menu` — assemble the configurable-item rows from the live
+/// policy registry (the same source `aida config show` walks) and launch the
+/// navigable TUI. Read + navigate only for this slice; inline editing is a
+/// follow-up. The registry resolves every knob's value + source directly from
+/// `.aida/config.toml`, the global files, and the `AIDA_*` env knobs, so this
+/// is a view over the real readers — never a parallel re-derivation.
+///
+/// No-TTY degrades gracefully: prints a pointer to `aida config show` and
+/// exits 0, mirroring how `aida tui` / `aida --asciinema` handle a missing
+/// terminal. trace:STORY-661 | ai:claude
+#[cfg(feature = "tui")]
+fn handle_config_menu_command() -> Result<()> {
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        println!("config menu needs a TTY; use `aida config show` to view config from here.");
+        return Ok(());
+    }
+
+    let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let items = build_config_menu_items(&project_root);
+    aida_tui::run_config_menu(items)
+}
+
+/// Stub for binaries built without the `tui` feature — `aida config menu`
+/// points the user at `aida config show` rather than half-running.
+/// trace:STORY-661 | ai:claude
+#[cfg(not(feature = "tui"))]
+fn handle_config_menu_command() -> Result<()> {
+    println!("config menu requires a build with the TUI enabled; use `aida config show`.");
+    Ok(())
+}
+
+/// Project the policy registry into plain-text [`aida_tui::ConfigMenuItem`]
+/// rows: strip ANSI from the resolved value, flatten the source to a plain
+/// scope label, and attach the per-knob default + explanation. trace:STORY-661
+#[cfg(feature = "tui")]
+fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::ConfigMenuItem> {
+    let mut items = Vec::new();
+    for section in policy_registry(project_root) {
+        for row in &section.rows {
+            let (explanation, default) = config_knob_doc(section.section, row.key);
+            items.push(aida_tui::ConfigMenuItem {
+                section: section.section.to_string(),
+                name: row.key.to_string(),
+                value: strip_ansi_color(&row.value),
+                default: default.to_string(),
+                scope: row.source.plain_label(),
+                explanation: explanation.to_string(),
+            });
+        }
+    }
+    items
 }
 
 /// Handle `aida config glyph ...` — the CLI surface over the glyph registry,
