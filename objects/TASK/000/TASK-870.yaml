@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:21.165056350Z
-modified_at: 2026-06-19T02:45:21.165056350Z
+modified_at: 2026-06-19T09:39:02.373402528Z
 req_type: Task
 tags:
 - cross-vendor
@@ -17,3 +17,9 @@ tags:
 - niche
 - parent:EPIC-50
 - tilt-verdict
+comments:
+- id: 019edf3f-8465-7ff3-85a3-21997a8b613f
+  author: joe
+  content: Commit d7d324ece references this requirement
+  created_at: 2026-06-19T09:39:02.373402528Z
+  modified_at: 2026-06-19T09:39:02.373402528Z
