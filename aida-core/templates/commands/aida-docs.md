@@ -1,3 +1,6 @@
+---
+description: "Keep guides, reports, and reference docs in sync with code and requirements."
+---
 # Manage Project Documentation
 
 Keep guides, reports, and reference docs in sync with code and requirements.

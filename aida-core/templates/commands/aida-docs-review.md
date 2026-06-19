@@ -1,3 +1,6 @@
+---
+description: "Exhaustive documentation quality review — finds stale, inconsistent, unprofessional, and hyped content."
+---
 # AIDA Documentation Review
 
 Exhaustive documentation quality review — finds stale, inconsistent, unprofessional, and hyped content.

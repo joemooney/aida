@@ -1,3 +1,6 @@
+---
+description: "Sync AIDA templates and scaffolding across projects."
+---
 # AIDA Sync
 
 Sync AIDA templates and scaffolding across projects.

@@ -1,3 +1,6 @@
+---
+description: "Produce the plain-terms WHY-comprehension of a spec — read the spec plus its immediate graph neighborhood (parents, children, blockers, referenced specs, decisions, key comments) and distil its reason-for-being into two registers (layman prose + an LLM-dense brief). Distinct from `aida why` (the deterministic state classifier): this is a cached, drift-stamped LLM synthesis."
+---
 # AIDA Intent
 
 Produce the plain-terms WHY-comprehension of a spec — read the spec plus its

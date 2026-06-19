@@ -1,3 +1,6 @@
+---
+description: "Review conversation and capture any missed requirements."
+---
 # Capture Session Requirements
 
 Review conversation and capture any missed requirements.

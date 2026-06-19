@@ -1,3 +1,6 @@
+---
+description: "Headless advisor tier for the `--no-human=both` drain — judge a design-fork a headless implementer punted on: resolve it from recorded principle/preference, or escalate it to a human."
+---
 # AIDA Advise
 
 Headless advisor tier for the `--no-human=both` drain — judge a design-fork a

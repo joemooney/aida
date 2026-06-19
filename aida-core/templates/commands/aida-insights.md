@@ -1,3 +1,6 @@
+---
+description: "Monthly usage-pattern review: most-used commands, drain success rate, advisor calibration agreement %, and the deprecation / UX-gap / substrate-gap follow-ups they suggest. Pass `--health` (or `--deep`) for the on-demand health fact-finding mode."
+---
 # AIDA Insights
 
 Monthly usage-pattern review: most-used commands, drain success rate,

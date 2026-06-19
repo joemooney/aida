@@ -1,3 +1,6 @@
+---
+description: "Break a large requirement into independently deliverable vertical-slice children."
+---
 # Decompose Requirement Into Vertical Slices
 
 Break a large requirement into independently deliverable vertical-slice children.

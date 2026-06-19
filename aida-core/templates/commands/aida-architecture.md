@@ -1,3 +1,6 @@
+---
+description: "Audit structural health and propose improvements aligned with requirements."
+---
 # Review Codebase Architecture
 
 Audit structural health and propose improvements aligned with requirements.

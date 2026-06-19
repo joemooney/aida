@@ -1,3 +1,6 @@
+---
+description: "Capture the WHY behind recently-touched specs as `Doc` requirements."
+---
 # Capture Living Documentation
 
 Capture the WHY behind recently-touched specs as `Doc` requirements.

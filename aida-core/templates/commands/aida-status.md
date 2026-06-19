@@ -1,3 +1,6 @@
+---
+description: "One-shot snapshot of the project: requirement breakdown, cache freshness, sync state, recent activity."
+---
 # Project Status
 
 One-shot snapshot of the project: requirement breakdown, cache

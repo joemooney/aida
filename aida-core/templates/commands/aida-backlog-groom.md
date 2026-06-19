@@ -1,3 +1,6 @@
+---
+description: "Guided burndown-prep: one advisor pass from approvable drafts and Approved-but-not-queued specs to a blessed, drain-ready queue."
+---
 # Groom the Backlog
 
 Guided burndown-prep: one advisor pass from approvable drafts and Approved-but-not-queued specs to a blessed, drain-ready queue.

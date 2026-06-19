@@ -1,3 +1,6 @@
+---
+description: "Build the ubiquitous language dictionary by scanning reqs and code for domain terms."
+---
 # Maintain Project Glossary
 
 Build the ubiquitous language dictionary by scanning reqs and code for domain terms.
