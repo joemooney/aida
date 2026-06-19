@@ -8573,6 +8573,37 @@ pub enum Command {
     /// Stock and local skill tooling.
     #[clap(subcommand)]
     Skill(SkillCommand),
+
+    /// Discoverable registry of AIDA's built-in shortcuts.
+    ///
+    /// One place that enumerates every accreted shortcut — the `aida list`
+    /// status lenses (open/closed) + status-token shortcuts, the `aida list
+    /// <lens>` argv rewrites (queue/why/human/inflight/me/user:<name>), and the
+    /// command aliases (intake, advisor assess, bare `aida agent`) — grouped by
+    /// surface, each with its canonical expansion + a one-line meaning. Bare
+    /// `aida alias` behaves like `aida alias list`. Built-in shortcuts only.
+    // trace:STORY-667 | ai:claude
+    Alias {
+        /// Emit the registry as JSON for machine consumers.
+        #[clap(long)]
+        json: bool,
+        #[clap(subcommand)]
+        command: Option<AliasCommand>,
+    },
+}
+
+/// The `aida alias` verbs. Today there is only `list` (the default), so bare
+/// `aida alias` and `aida alias list` print the same registry. User-defined
+/// aliases (`aida alias add`) are a separate, deferred question.
+// trace:STORY-667 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum AliasCommand {
+    /// List the built-in-shortcut registry (the default for bare `aida alias`).
+    List {
+        /// Emit the registry as JSON for machine consumers.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// The `aida human` role-vector: the human-tier attention verbs. `unblock` is
