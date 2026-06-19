@@ -1,0 +1,19 @@
+id: 019ede58-a4ce-7d91-bc71-3eee11bfcc62
+spec_id: STORY-666
+agreed_id: STORY-666
+title: 'Autonomous doctor --heal: destructive fixes require sign-off (never blind -y); safe fixes proceed'
+description: 'Safety rail for unattended healing. TODAY: interactive aida doctor --heal prompts per-category (the -y flag SKIPS those) and destructive fixes (branch deletion) need --force. So the interactive path is already human-gated. THE GAP: when --heal runs non-interactively (no TTY, or -y, or inside an autonomous drain), the per-category prompts are skipped and nothing adjudicates a CONSEQUENTIAL fix - a destructive heal could run with no one to make the check-before-delete judgment. Worked example: the 2026-06-19 stale-lease cleanup required verifying the worktree carried no unmerged work BEFORE deleting (clean != no work); under -y there is no such check. INVARIANT TO ADD (fail-closed): in a non-interactive/autonomous context, DESTRUCTIVE heals (the --force tier: branch/worktree deletion, anything hard-to-reverse) must NOT execute silently. They must either (a) route to advisor sign-off via the existing punt/escalation path (resolve-or-escalate, like a drain punt), or (b) park as a NeedsAttention finding for human triage, or at minimum (c) be REFUSED + reported with the exact interactive command to run. SAFE, reversible heals proceed (the safe classification IS the bouncer) - show the plan + record an audit trail for legibility. Scope: gate ONLY the destructive subset, NOT the whole doctor scan (over-gating routine reversible fixes is the anti-pattern the gate-vs-rule terminus + gate-audit warned against - gate by consequence). Detect autonomous context (no TTY / -y / the AIDA_AUTO_COMPLETE orchestrator token) to decide gating. This matches the autonomous-drain model: the advisor adjudicates what the unattended actor cannot safely decide.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T05:26:51.854420455Z
+modified_at: 2026-06-19T05:26:51.854420455Z
+req_type: Story
+tags:
+- aida:doctor
+- autonomy
+- from-operator
+- governance
+- safety
+- substrate-as-bouncer
