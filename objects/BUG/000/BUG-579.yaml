@@ -1,0 +1,18 @@
+id: 019eddac-413e-7a10-99a6-015208d0463e
+spec_id: BUG-579
+agreed_id: BUG-579
+title: aida human counts AwaitingDecision specs (no posed question) in the total but renders no bucket for them — phantom "1 item needs a human"
+description: 'Operator hit the recurring confusion: aida human says "1 open item needs a decision/review/triage" but renders NO bucket — nothing to act on. Root cause (main.rs ~81011 + ~81115): total = classified.len() + routed_only + pending_decisions + awaiting_review + open_findings counts EVERY classified bucket, but the render order array is only [ReadyToClose, HeldForReview, BuildSupervised, Ungroomed, Umbrella]. A spec classified AwaitingDecision (e.g. a Spike needing a decision) WITHOUT a formal DecisionRequest falls through both renders: the decisions-awaiting bucket (line ~81027) only lists specs that have a real DecisionRequest, and the order loop deliberately excludes AwaitingDecision (line ~81103 comment). So it is counted but invisible. Caught via SPIKE-67 (a deferred-pending spike). FIX: make the render EXHAUSTIVE over classified — any classified bucket not in the explicit order must still render in a catch-all at the end so count always equals render; and for AwaitingDecision-without-a-posed-question specifically, render a helpful line ("needs a decision — no question posed yet; pose with aida questions sweep / aida clarify, or groom"). Count==render is the invariant. Add a regression test: a classified AwaitingDecision spec with no DecisionRequest must appear in aida human output (not just the count).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:18:34.174271621Z
+modified_at: 2026-06-19T02:18:34.174271621Z
+req_type: Bug
+tags:
+- aida:human
+- bug
+- legibility
+- operator-caught
+- papercut
