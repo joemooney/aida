@@ -1,0 +1,20 @@
+id: 019ede35-f320-7973-9b5e-500515e136ca
+spec_id: STORY-665
+agreed_id: STORY-665
+title: 'Guided bwrap sandbox setup: doctor surfaces the exact remediation + a repeatable install path for new machines'
+description: 'Operator needs to bring bwrap confinement up on OTHER machines repeatably. Today aida doctor DETECTS the userns-blocked state (TASK-865) and the docs describe the sysctl (TASK-867), but there is no actionable guided path. Build: (1) aida doctor prints the EXACT remediation command when userns is blocked (sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 + the persist drop-in to /etc/sysctl.d/99-aida-bwrap-userns.conf), not just a one-line hint; (2) an optional aida doctor --fix-sandbox (or aida sandbox setup) that prints/offers the full sequence: persist the sysctl, set [contained] os_wrap = true, and verify with a live confinement smoke — copy-paste-able, sudo steps clearly marked for the operator to run; (3) an install/setup doc section ("Enabling the OS sandbox on a new machine") with the prerequisites (Linux, bwrap package, unprivileged userns), the persist step, the config knob, and the verification command. Make it the single place a new machine is brought to a working-confinement state. Cross-link from init.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T04:48:58.144803743Z
+modified_at: 2026-06-19T04:48:58.144803743Z
+req_type: Story
+tags:
+- aida:doctor
+- aida:init
+- bubblewrap
+- from-operator
+- onboarding
+- parent:SPIKE-68
+- sandbox
