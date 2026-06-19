@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T20:24:04.813514736Z
-modified_at: 2026-06-07T21:53:49.178193741Z
+modified_at: 2026-06-19T04:06:17.698537588Z
 req_type: Task
 tags:
 - agents-config
@@ -52,6 +52,12 @@ tags:
 - onboarding-flow
 - parent:STORY-495
 - permission-posture
+comments:
+- id: 019ede0e-e162-7f21-98d9-782b30c6f6f1
+  author: joe
+  content: Commit 0d4f1fffd references this requirement
+  created_at: 2026-06-19T04:06:17.698537588Z
+  modified_at: 2026-06-19T04:06:17.698537588Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-07T21:53:49.178193741Z
