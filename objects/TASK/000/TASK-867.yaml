@@ -3,12 +3,12 @@ spec_id: TASK-867
 agreed_id: TASK-867
 title: Document the bwrap os_wrap knobs in docs/environment-variables.md + a real config reference; reconcile the untracked bubblewrap doc
 description: 'Doc/code drift verified: docs/environment-variables.md has ZERO mention of os_wrap or any bwrap knob (the only bwrap env var, AIDA_REQUIRE_BWRAP_LIVE, is CI-test-only — session.rs:3121 — and also undocumented). The untracked docs/agents/claude-bubblewrap-sandbox.md is GENERIC prose about Claude Codes OWN bubblewrap sandbox, NOT AIDAs os_wrap mechanism — it does not document [contained] os_wrap / read_allowlist / managed_domains_only / allowed_hosts or the headless-only scope. Slice: (1) add a [contained] config-knob reference (os_wrap, allowed_hosts, read_allowlist, managed_domains_only — all config-file-only, default off/empty, headless-paths-only today) to the appropriate reference doc; (2) note AIDA_REQUIRE_BWRAP_LIVE as a CI/test-only var; (3) rewrite or replace the untracked claude-bubblewrap-sandbox.md so it describes AIDAs actual mechanism (bwrap write-confinement, ro-bind / /, rw worktree+store+caches, shared net, fail-closed) and its CURRENT scope (headless drains only), or delete it if redundant. Acceptance: a reader can find every bwrap knob, its default, and that it applies only to headless paths today, grounded in the code.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:41:03.229302845Z
-modified_at: 2026-06-19T04:23:31.324111503Z
+modified_at: 2026-06-19T04:30:19.774671371Z
 req_type: Task
 tags:
 - bubblewrap
@@ -26,3 +26,21 @@ comments:
   content: Commit 775a402bc references this requirement
   created_at: 2026-06-19T04:23:31.324111503Z
   modified_at: 2026-06-19T04:23:31.324111503Z
+history:
+- id: 019ede24-e27a-7f61-804d-60edb86191f8
+  author: aida-auto-bump
+  timestamp: 2026-06-19T04:30:19.770107763Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ede24-e27e-7b42-9e9e-c34981fd095c
+  timestamp: 2026-06-19T04:30:19.774670803Z
+  agent: aida
+  commit_sha: 040565d9c86edaa89a522cffad120ae3ca733a71
+  summary: Completed via merge 040565d9
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T04:30:19.613220686Z
+  completion_sha: 040565d9c86edaa89a522cffad120ae3ca733a71
