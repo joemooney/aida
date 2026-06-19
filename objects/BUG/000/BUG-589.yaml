@@ -20,12 +20,12 @@ description: |-
   With mcp-serve launched under AIDA_SESSION_ROLE=advisor: same update_requirement call -> "Updated TASK-009: status: Draft -> Approved".
 
   Verified-by-me on this dogfood run (debug build sha fdb0a69fc).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T14:28:16.281141386Z
-modified_at: 2026-06-19T14:45:04.964674316Z
+modified_at: 2026-06-19T14:52:55.506727750Z
 req_type: Bug
 tags:
 - from-dogfood
@@ -37,3 +37,21 @@ comments:
   content: Commit 243c9eabc references this requirement
   created_at: 2026-06-19T14:45:04.964674316Z
   modified_at: 2026-06-19T14:45:04.964674316Z
+history:
+- id: 019ee05e-e34d-7be0-a77a-513a4c9ae255
+  author: aida-auto-bump
+  timestamp: 2026-06-19T14:52:55.501893753Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee05e-e352-7ef1-a5c5-15b079f5c427
+  timestamp: 2026-06-19T14:52:55.506726827Z
+  agent: aida
+  commit_sha: ca4ed5012c12033671065248d897998af05d845a
+  summary: Completed via merge ca4ed501
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T14:52:55.338204993Z
+  completion_sha: ca4ed5012c12033671065248d897998af05d845a

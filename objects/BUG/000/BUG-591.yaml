@@ -18,12 +18,12 @@ description: |-
   Fix: route list_requirements + search_requirements through the same archive/deferred view predicate the CLI uses (default = hide both tiers), and add archived/deferred/all boolean filters to the list_requirements (and search where applicable) inputSchema + handler, mirroring aida list. Source: compare aida list --help (--all/--archived/--deferred) and the CLI list/search view-tier filtering against the list_requirements/search_requirements handlers in aida-cli/src/mcp.rs.
 
   Verified-by-me on this dogfood run (debug build sha fdb0a69fc), JSON repro captured.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T14:30:36.392208865Z
-modified_at: 2026-06-19T14:45:08.769024313Z
+modified_at: 2026-06-19T14:52:55.516306040Z
 req_type: Bug
 tags:
 - from-dogfood
@@ -35,3 +35,21 @@ comments:
   content: Commit 243c9eabc references this requirement
   created_at: 2026-06-19T14:45:08.769024313Z
   modified_at: 2026-06-19T14:45:08.769024313Z
+history:
+- id: 019ee05e-e357-7f73-a189-c1e48ab4869e
+  author: aida-auto-bump
+  timestamp: 2026-06-19T14:52:55.511550353Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee05e-e35c-7223-8548-7091b52da9d6
+  timestamp: 2026-06-19T14:52:55.516305373Z
+  agent: aida
+  commit_sha: ca4ed5012c12033671065248d897998af05d845a
+  summary: Completed via merge ca4ed501
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T14:52:55.338204993Z
+  completion_sha: ca4ed5012c12033671065248d897998af05d845a
