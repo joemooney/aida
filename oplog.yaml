@@ -19429,5 +19429,20 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1903
+- id: 019ee048-afa7-7350-829e-e26cd07705b6
+  target_id: 019ee048-a609-7430-ab4b-c92fb032d902
+  author: aida
+  node_id: '1'
+  lamport: 1904
+  timestamp: 2026-06-19T14:28:40.487565659Z
+  kind: !Create
+    title: MCP triage_finding dismiss returns malformed 'dismissd' (missing 'e') in agent-facing success text
+    description: |-
+      Dogfooding the MCP server: triage_finding with action=dismiss returns the success string "Finding SPEC-011 dismissd" (note: "dismissd", missing the e). Source: aida-cli/src/mcp.rs:2744 builds the message as format!("Finding {} {}d", id, action.to_ascii_lowercase()), blindly appending "d" to the raw action verb. That happens to read OK for "promote"->"promoted" but yields "dismiss"->"dismissd" for the other (and only non-gated) action. Since promote is advisor-gated and refused via MCP, dismiss is the one action that actually reaches this success line for an MCP client - so the malformed form is what agents see in practice. Low severity (cosmetic agent-facing text), trivial fix: emit a proper past tense per action ("dismissed"/"promoted") instead of suffixing "d".
+
+      Repro (MCP stdio): tools/call triage_finding {"id":"SPEC-011","action":"dismiss","reason":"x"} -> content text "Finding SPEC-011 dismissd". Verified-by-me on this dogfood run (debug build sha fdb0a69fc).
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1904
 node_id: '1'
