@@ -1,0 +1,33 @@
+id: 019ee092-5525-7901-bab5-7c884d454213
+spec_id: BUG-597
+agreed_id: BUG-597
+title: Onboarding walkthroughs show wrong 'aida add' output AND tell newcomers to use --status approved that silently downgrades for the default role
+description: |
+  Dogfood of user-facing onboarding docs (2026-06-19) against actual CLI v0.14.0 found two load-bearing drifts that trip a literal newcomer in README.md "Getting started in 5 minutes" and docs/first-project.md:
+
+  1) WRONG aida add OUTPUT (every occurrence). Docs show:
+      Requirement added successfully!
+      UUID: 019e3220-...
+      ID: STORY-1
+     Actual output is a single line:  Added: STORY-1 - <title>
+     No "Requirement added successfully!", no UUID line, no "ID:" line; no verbose flag produces that format. Affects README.md lines ~260-265 (step 1) and docs/first-project.md steps 1/2/3 (lines ~84-87, 102-119, 143-144). first-project also omits the "Linked: EPIC-4 -> parent of STORY-5" line that --parent actually emits.
+
+  2) --status approved SILENTLY DOWNGRADES TO DRAFT for the default (implementer) role, and queue add is hard-rejected. A fresh user has no advisor role. Running the documented:
+      aida add --title "..." --type story --status approved
+     produces:
+      Added: STORY-1 - ...
+      i filed as draft (requested approved needs advisor authority) - queued for advisor triage.
+     So README step 1's claim "STORY-1 is now Approved" is false, and first-project step 5's "aida queue add STORY-1 --for implementer" fails with exit 1 ("queuing work for execution needs advisor authority"). Neither doc tells the reader they need advisor authority or an interactive TTY session. The whole walkthrough chain breaks for a newcomer in a plain shell.
+
+  Fix: update the shown output to the real `Added: SPEC-N - <title>` form; and either (a) add an upfront note that setting approved / queueing needs advisor authority (or an interactive session), or (b) rewrite the walkthrough to file as draft then approve via the appropriate path. Verified against /home/joe/ai/aida/target/release/aida 0.14.0 in a throwaway store.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T15:49:06.981122698Z
+modified_at: 2026-06-19T15:49:06.981122698Z
+req_type: Bug
+tags:
+- docs
+- drift
+- from-dogfood
