@@ -161,6 +161,7 @@ doesn't match.
 | `AIDA_GITLAB_TOKEN` | GitLab PAT; checked first in the GitLab token resolution. | unset = `None`. | user | process env |
 | `AIDA_JIRA_TOKEN` | Jira API token. Cascade: `AIDA_JIRA_TOKEN` → `JIRA_API_KEY` → `JIRA_API_TOKEN`. | unset = `None`. | user | process env |
 | `AIDA_PUSH_DEFAULT` | Default scope for `aida push` when neither `--code-only` nor `--store-only` is given. | unset = both legs. Values: `code`/`code-only` or `store`/`store-only`. | user | process env |
+| `AIDA_PUSH_QUIET` | Suppress the non-blocking "N uncommitted change(s) not included in this push" notice (same effect as `aida push --no-notice`). | unset = notice shown when the code tree is dirty. Truthy values suppress; `0`/`false`/`no`/empty do not. | user | process env |
 | `AIDA_BG_FETCH` | Enables the background store fetcher. | enabled. Opt-out with `false`/`0`/`no`/`off`. | user / test | process env |
 | `AIDA_BG_FETCH_INTERVAL_SECS` | Skip a background fetch if the last attempt was within this window (seconds). | `300`. | user / test | process env |
 | `AIDA_FETCH_FRESHNESS_SECS` | Staleness threshold (seconds) for rendering `cache:fresh\|behind` in status. | `300`. | user / test | process env |
