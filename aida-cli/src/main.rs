@@ -10716,6 +10716,27 @@ fn complete_init_scaffolding(
         println!();
     }
 
+    // TASK-860: report the forge CLI (`gh`/`glab`) availability so a new user
+    // learns up front whether PR/review automation will work — instead of the
+    // "silent until you hit a `pr` command" failure (`aida pr auto-queue-review`
+    // fails hard when `gh` is absent). The forge kind is the one already written
+    // to `.aida/config.toml` (origin-host auto-detect / explicit override), so we
+    // only ever name `glab` to a GitLab project, never nag a GitHub user about
+    // it. Informational only — never a prompt, never blocks init.
+    // trace:TASK-860 | ai:claude
+    {
+        let (kind, msg) = crate::forge::forge_cli_status(root);
+        let glyph = if kind == crate::forge::ForgeKind::None {
+            crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+        } else if kind.cli_on_path() {
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        } else {
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        };
+        println!("  {} {}", glyph, msg);
+        println!();
+    }
+
     // TASK-631: commit init's OWN scaffolding now that every scaffolded path
     // is on disk — auto when non-interactive, prompt default-Y on a TTY,
     // scoped to init-created paths (never `git add .`). This dissolves the
@@ -32486,7 +32507,33 @@ fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
     println!();
     println!("{}", "─── Environment ───".bold());
     render_doctor_bwrap_row();
+    render_doctor_forge_row();
     Ok(())
+}
+
+/// Render the forge-CLI availability row in `aida doctor`'s environment section.
+/// `aida pr auto-queue-review` (and the rest of the PR/CI lifecycle) fails hard
+/// when the project's forge CLI (`gh` for GitHub, `glab` for GitLab) is not on
+/// PATH, so surface it here — OK / missing-with-install-hint / none-needed
+/// (pure-git) — rather than letting it stay silent until the first `pr` command.
+/// Colourised to match the doctor-check output style. trace:TASK-860 | ai:claude
+fn render_doctor_forge_row() {
+    let project_root = match find_project_root() {
+        Ok(root) => main_worktree_root_from(&root),
+        // No project context (e.g. run outside a repo) — fall back to CWD so the
+        // row still reports something useful rather than panicking.
+        Err(_) => std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+    };
+    let (kind, msg) = crate::forge::forge_cli_status(&project_root);
+    let glyph = if kind == crate::forge::ForgeKind::None {
+        // Pure-git needs no forge CLI — informational, not a warning.
+        crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+    } else if kind.cli_on_path() {
+        crate::glyph(crate::glyphs::Glyph::Check).green()
+    } else {
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+    };
+    println!("  {} {}", glyph, msg);
 }
 
 /// One-line bubblewrap (`bwrap`) OS-sandbox availability status, shared by
