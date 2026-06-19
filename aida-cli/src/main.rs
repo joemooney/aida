@@ -12927,6 +12927,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             sort,
             mine,
             assigned,
+            user,
             ..
         } => {
             // STORY-562: `aida list human` (positional alias) and `aida list
@@ -12953,6 +12954,49 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 return handle_list_human(*short, &backend);
             }
+            // STORY-662: resolve the owner-or-assignee `--user` filter. The
+            // positional `me` / `user:<name>` token is an alternate spelling of
+            // `--user me` / `--user <name>` — peel it off BEFORE the status
+            // shortcut expansion so it isn't rejected as an unknown status. `me`
+            // resolves to the shell identity via `current_user_id` (the same
+            // resolution the queue keys off — $AIDA_USER / $USER). `aida list`
+            // does NOT default to the current user; this is an opt-in filter.
+            // trace:STORY-662 | ai:claude
+            let positional_user: Option<String> = shortcut.as_deref().and_then(|s| {
+                if s.eq_ignore_ascii_case("me") {
+                    Some("me".to_string())
+                } else {
+                    s.strip_prefix("user:")
+                        .filter(|rest| !rest.is_empty())
+                        .map(|rest| rest.to_string())
+                }
+            });
+            let raw_user: Option<String> = match (positional_user, user.clone()) {
+                (Some(_), Some(_)) => {
+                    anyhow::bail!(
+                        "Pass the user filter once: either the positional \
+                         `aida list me` / `aida list user:<name>` or `--user <name>`, \
+                         not both."
+                    );
+                }
+                (Some(u), None) | (None, Some(u)) => Some(u),
+                (None, None) => None,
+            };
+            // `me` → the shell identity; any other value is a literal handle.
+            let user_filter: Option<String> =
+                raw_user.map(|u| resolve_list_user_filter(&u, &current_user_id(None)));
+            // The positional `me` / `user:<name>` token was consumed as a user
+            // filter, so it must not also flow into the status-shortcut path.
+            let shortcut: Option<String> = if user_filter.is_some()
+                && shortcut
+                    .as_deref()
+                    .map(|s| s.eq_ignore_ascii_case("me") || s.starts_with("user:"))
+                    .unwrap_or(false)
+            {
+                None
+            } else {
+                shortcut.clone()
+            };
             // TASK-0415: resolve the optional positional status shortcut.
             // `aida list approved` == `aida list --status approved`; the
             // positional and `--status` are two spellings of the same axis,
@@ -13094,6 +13138,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 defer,
                 sort: sort_order,
                 assignee: assignee_filter,
+                // trace:STORY-662 | ai:claude — `--user` / `me` / `user:<name>`.
+                owner_or_assignee: user_filter.clone(),
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
@@ -62304,6 +62350,19 @@ mod bug_231_findings_promote_tests {
         assert_eq!(current_user_id(Some("alice")), "alice");
     }
 
+    /// STORY-662: `aida list --user me` (and the positional `me`) resolves to
+    /// the current shell identity; any other value is a literal handle, casing
+    /// of the `me` token is ignored. trace:STORY-662 | ai:claude
+    #[test]
+    fn resolve_list_user_filter_maps_me_to_current_user() {
+        assert_eq!(resolve_list_user_filter("me", "joe"), "joe");
+        assert_eq!(resolve_list_user_filter("ME", "joe"), "joe");
+        assert_eq!(resolve_list_user_filter("Me", "joe"), "joe");
+        // A real handle passes through unchanged — even one that contains "me".
+        assert_eq!(resolve_list_user_filter("alice", "joe"), "alice");
+        assert_eq!(resolve_list_user_filter("mehmet", "joe"), "mehmet");
+    }
+
     // ── STORY-644: assignment + mention notifications ────────────────────────
 
     /// The @mention parser extracts the right handles and conservatively
@@ -105631,6 +105690,19 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
             .or_else(|_| std::env::var("USERNAME"))
             .unwrap_or_else(|_| "default".to_string())
     })
+}
+
+/// Resolve the `aida list --user <raw>` value into a concrete handle: the
+/// special token `me` (any casing) maps to `current_user`; every other value is
+/// a literal handle passed through unchanged. Pure so the `me` → current-user
+/// substitution is unit-testable without touching env vars.
+/// trace:STORY-662 | ai:claude
+fn resolve_list_user_filter(raw: &str, current_user: &str) -> String {
+    if raw.eq_ignore_ascii_case("me") {
+        current_user.to_string()
+    } else {
+        raw.to_string()
+    }
 }
 
 /// Resolve the friendly node name to record at registration (STORY-652).

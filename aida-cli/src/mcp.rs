@@ -1238,6 +1238,9 @@ impl<'a> McpServer<'a> {
         // STORY-639: assignee filter — exact match, mirroring `aida list
         // --assigned <user>`. trace:STORY-639 | ai:claude
         let assignee_filter = args.get("assignee").and_then(|v| v.as_str());
+        // STORY-662: owner-or-assignee filter — exact match on EITHER, mirroring
+        // `aida list --user <name>`. trace:STORY-662 | ai:claude
+        let user_filter = args.get("user").and_then(|v| v.as_str());
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
 
         // STORY-82: tags filter — CSV, AND-match (a row must carry ALL of them),
@@ -1336,6 +1339,14 @@ impl<'a> McpServer<'a> {
                 // STORY-639: exact assignee match. trace:STORY-639 | ai:claude
                 if let Some(assignee) = assignee_filter {
                     if r.assignee.as_deref() != Some(assignee) {
+                        return false;
+                    }
+                }
+                // STORY-662: owner OR assignee match. trace:STORY-662 | ai:claude
+                if let Some(user) = user_filter {
+                    let owns = r.owner == user;
+                    let assigned = r.assignee.as_deref() == Some(user);
+                    if !owns && !assigned {
                         return false;
                     }
                 }
@@ -5816,6 +5827,11 @@ pub fn tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Filter to specs assigned to this team member (exact match on the assignee handle). Mirrors `aida list --assigned <user>`.",
                         "example": "alice"
+                    },
+                    "user": {
+                        "type": "string",
+                        "description": "Filter to specs whose OWNER or ASSIGNEE is this handle (exact match on either). Broader than `assignee`. Mirrors `aida list --user <name>`.",
+                        "example": "joe"
                     },
                     "tags": {
                         "type": "string",
