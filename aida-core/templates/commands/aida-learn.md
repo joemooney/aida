@@ -1,3 +1,6 @@
+---
+description: "Capture a rule, lesson, or convention from a mistake — substrate-aware \"update CLAUDE.md so you don't repeat this\"."
+---
 # Capture a Rule from a Mistake
 
 Capture a rule, lesson, or convention from a mistake — substrate-aware "update CLAUDE.md so you don't repeat this".

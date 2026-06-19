@@ -1,3 +1,6 @@
+---
+description: "Decompose and design an approved requirement before coding begins."
+---
 # Plan Requirement Implementation
 
 Decompose and design an approved requirement before coding begins.

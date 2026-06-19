@@ -1,3 +1,6 @@
+---
+description: "Search across requirements and code simultaneously."
+---
 # Unified Search
 
 Search across requirements and code simultaneously.

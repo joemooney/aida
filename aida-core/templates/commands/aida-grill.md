@@ -1,3 +1,6 @@
+---
+description: "Interrogate a requirement or design decision by walking every branch of the tree."
+---
 # Grill A Requirement
 
 Interrogate a requirement or design decision by walking every branch of the tree.

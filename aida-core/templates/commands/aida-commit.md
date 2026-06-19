@@ -1,3 +1,6 @@
+---
+description: "Commit staged changes with automatic requirement linking."
+---
 # AIDA Commit
 
 Commit staged changes with automatic requirement linking.

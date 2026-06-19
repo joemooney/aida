@@ -1,3 +1,6 @@
+---
+description: "Bump version, generate changelog, and tag a release tied to AIDA requirements."
+---
 # Manage Release
 
 Bump version, generate changelog, and tag a release tied to AIDA requirements.

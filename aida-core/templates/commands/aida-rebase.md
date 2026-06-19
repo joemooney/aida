@@ -1,3 +1,6 @@
+---
+description: "Detect, classify, and (optionally) execute a rebase of the current branch onto its upstream."
+---
 # AIDA Rebase
 
 Detect, classify, and (optionally) execute a rebase of the current

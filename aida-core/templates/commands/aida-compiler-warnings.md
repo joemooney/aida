@@ -1,3 +1,6 @@
+---
+description: "Categorize workspace warnings by risk and produce a prioritized cleanup plan."
+---
 # Analyze Compiler Warnings
 
 Categorize workspace warnings by risk and produce a prioritized cleanup plan.

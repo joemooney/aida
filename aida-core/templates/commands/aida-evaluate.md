@@ -1,3 +1,6 @@
+---
+description: "Evaluate a requirement's quality using AI analysis."
+---
 # Evaluate AIDA Requirement
 
 Evaluate a requirement's quality using AI analysis.

@@ -1,3 +1,6 @@
+---
+description: "Interactive onboarding for new team members."
+---
 # Project Onboarding
 
 Interactive onboarding for new team members.

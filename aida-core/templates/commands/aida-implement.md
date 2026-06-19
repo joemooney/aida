@@ -1,3 +1,6 @@
+---
+description: "Implement a requirement with full traceability."
+---
 # Implement AIDA Requirement
 
 Implement a requirement with full traceability.

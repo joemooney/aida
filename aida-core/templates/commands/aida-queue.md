@@ -1,3 +1,6 @@
+---
+description: "Show what's queued for the active role — read-only counterpart to `/aida-pickup`."
+---
 # View Queue Contents
 
 Show what's queued for the active role — read-only counterpart to `/aida-pickup`.

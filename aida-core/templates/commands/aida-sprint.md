@@ -1,3 +1,6 @@
+---
+description: "Plan a development sprint from approved requirements."
+---
 # Sprint Planning
 
 Plan a development sprint from approved requirements.

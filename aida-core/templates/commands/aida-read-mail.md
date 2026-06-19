@@ -1,3 +1,6 @@
+---
+description: "Read the unread messages in your mailbox and decide what to do with each — the on-demand companion to the per-turn unread-mail notice."
+---
 # Read Your Agent Mail
 
 Read the unread messages in your mailbox and decide what to do with each — the

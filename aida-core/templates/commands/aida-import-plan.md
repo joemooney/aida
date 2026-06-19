@@ -1,3 +1,6 @@
+---
+description: "Turn a free-floating plan file (e.g. saved from `/ultraplan`'s teleport-back) into first-class AIDA state."
+---
 # Import a Saved Plan into AIDA
 
 Turn a free-floating plan file (e.g. saved from `/ultraplan`'s teleport-back)

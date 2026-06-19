@@ -1,3 +1,6 @@
+---
+description: "Exhaustive code quality review with a structured report and before/after diffs."
+---
 # Code Review
 
 Exhaustive code quality review with a structured report and before/after diffs.

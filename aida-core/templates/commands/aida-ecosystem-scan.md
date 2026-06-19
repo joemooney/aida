@@ -1,3 +1,6 @@
+---
+description: "Systematically scan the competitor landscape, log capability changes, update positioning, and file backlog tasks."
+---
 # AIDA Ecosystem Scan
 
 Systematically scan the competitor landscape, log capability changes, update positioning, and file backlog tasks.

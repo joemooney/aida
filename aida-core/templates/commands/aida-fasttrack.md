@@ -1,3 +1,6 @@
+---
+description: "File, implement, and merge a genuinely trivial change (doc tweak, one-line papercut, string fix) with no human-review ceremony — CI is the only gate."
+---
 # Fasttrack a trivial change
 
 File, implement, and merge a genuinely trivial change (doc tweak, one-line
