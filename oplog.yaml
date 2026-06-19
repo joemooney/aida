@@ -18987,5 +18987,17 @@ operations:
     req_type: Epic
     status: Draft
     priority: High
-clock: 1873
+- id: 019eddc4-aa33-79a3-bd9d-bef6711a8de1
+  target_id: 019eddc4-a715-7f73-a042-0f9b6d8b7848
+  author: aida
+  node_id: '1'
+  lamport: 1874
+  timestamp: 2026-06-19T02:45:13.907521783Z
+  kind: !Create
+    title: Trace-rot detector + machine-checkable trace-coverage gate (aida trace check)
+    description: 'MOVE 1 (highest confidence). aida trace check: scan source for // trace:SPEC-ID, resolve each against the store, flag dangling/renumbered/deleted-target traces + report coverage; wire as a hard CI gate. WHY IT TILTS: neutralizes the papers sharpest self-undercut (P2b, section 3/11) - "trace comments rot invisibly, so the separate model is LESS self-healing than code". A working detector makes traces as self-healing as types (stale -> red), hardening the one uncontested Tier-1 wedge. EVIDENCE: trace-rot incidence run over AIDAs own history (catches the provenance-stealing renumbering the paper admits, #804) - self-test via dogfood on the precise admitted flaw. Size S (store/cache already resolve ids).'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 1874
 node_id: '1'
