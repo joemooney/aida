@@ -3,12 +3,12 @@ spec_id: BUG-578
 agreed_id: BUG-578
 title: 'HLC is dead code: scalar merge uses wall-clock LWW with ours-wins tie-break (non-deterministic across clones), not the HLC the docs claim'
 description: 'Red-team of P4 (TASK-846), verified directly against code: hlc.rs implements a hybrid logical clock but has ZERO non-test call sites (only a pub use re-export in lib.rs:148); Requirement carries no HLC field. The real scalar merge (conflict.rs:199) is ours.modified_at >= theirs.modified_at — raw wall-clock LWW, ties resolve to ours. Consequences: (1) cross-clone merges are NON-DETERMINISTIC — two clones merging the same pair of concurrent same-field edits in opposite roles pick opposite winners (last-puller-wins), since the tie-break is ours not a data-function; (2) under clock skew the wall-clock-later edit wins over the causally-later one — the exact failure the HLC was built to prevent; (3) genuine ms-collision ties resolve order-dependently. The append-union/G-Set half (union_history/comments/processing_records by UUID) is sound and unaffected. Options: (a) WIRE the HLC into the scalar comparator + add HlcTimestamp to the model + a cross-clone-skew determinism test; or (b) if HLC is not worth wiring, REMOVE the dead module and make the tie-break deterministic by a data-function (e.g. node-id, not ours). Low real-world frequency (partition-friendly workload) but a latent correctness issue + dead code + a paper/doc/code-comment claim that is false. Also fix the doc comments in conflict.rs and the theory paper P4 section that credit the HLC.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T23:45:55.810277478Z
-modified_at: 2026-06-18T23:45:55.810277478Z
+modified_at: 2026-06-19T00:17:30.887876975Z
 req_type: Bug
 tags:
 - bug
@@ -16,3 +16,21 @@ tags:
 - from-red-team
 - parent:EPIC-48
 - verify-lore-vs-code
+history:
+- id: 019edd3d-6d03-7793-be81-46177de9696a
+  author: aida-auto-bump
+  timestamp: 2026-06-19T00:17:30.883322157Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edd3d-6d07-7211-b4fe-a3d603917962
+  timestamp: 2026-06-19T00:17:30.887876504Z
+  agent: aida
+  commit_sha: e0856c56e71d81fcd3dd8716507def161dd7cafc
+  summary: Completed via merge e0856c56
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T00:17:30.725291205Z
+  completion_sha: e0856c56e71d81fcd3dd8716507def161dd7cafc
