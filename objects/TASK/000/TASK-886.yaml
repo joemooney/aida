@@ -17,9 +17,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:50:03.327254680Z
-modified_at: 2026-06-19T15:50:03.327254680Z
+modified_at: 2026-06-19T15:58:19.983505691Z
 req_type: Task
 tags:
 - docs
 - drift
 - from-dogfood
+comments:
+- id: 019ee09a-c54f-7280-8236-33ec67d1692f
+  author: joe
+  content: Commit f3242eeba references this requirement
+  created_at: 2026-06-19T15:58:19.983505691Z
+  modified_at: 2026-06-19T15:58:19.983505691Z
