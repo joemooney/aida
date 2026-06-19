@@ -13,12 +13,12 @@ description: |-
   Expected: advisor groom worklist and the advisor-status draft/intake count exclude meta/folder (and the other standing types) exactly like aida status does.
 
   Repro: git init + aida init; AIDA_SESSION_ROLE=advisor aida advisor; aida advisor status.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:03:15.739826119Z
-modified_at: 2026-06-19T15:34:03.064053150Z
+modified_at: 2026-06-19T15:41:49.795898278Z
 req_type: Bug
 tags:
 - advisor
@@ -30,3 +30,21 @@ comments:
   content: Commit 34cd41054 references this requirement
   created_at: 2026-06-19T15:34:03.064053150Z
   modified_at: 2026-06-19T15:34:03.064053150Z
+history:
+- id: 019ee08b-a95f-7c22-8582-053654d0dc3e
+  author: aida-auto-bump
+  timestamp: 2026-06-19T15:41:49.791052453Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee08b-a963-7300-840a-ef93bb70b99e
+  timestamp: 2026-06-19T15:41:49.795897564Z
+  agent: aida
+  commit_sha: 37a2ff5270f7fc51b59d2eee73ea42a21f2f468f
+  summary: Completed via merge 37a2ff52
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T15:41:49.617236944Z
+  completion_sha: 37a2ff5270f7fc51b59d2eee73ea42a21f2f468f
