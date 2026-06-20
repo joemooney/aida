@@ -8,9 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:08.981883198Z
-modified_at: 2026-06-19T02:45:08.981883198Z
+modified_at: 2026-06-20T18:09:32.391388340Z
 req_type: Epic
 tags:
 - parent:EPIC-48
 - probe
 - tilt-verdict
+comments:
+- id: 019ee639-40e7-7c61-98b2-587902ca511b
+  author: joe
+  content: 'GROOMING RECONCILE (advisor pass, 2026-06-20, grounded in origin/main git log). The loop has executed most of this EPIC by filing+shipping children while the parent sat in Draft. SHIPPED and laddering here: trace-rot detector aida trace check (TASK-868); trace-read-rate audit (TASK-872); compete --judge-vendor removes the self-eval caveat (TASK-869); aida compete competitive-eval feature (STORY-659/660); RYO-friction + cross-vendor portability evidence (TASK-870/871); compete-as-QA n=3 (TASK-874); open-brief bake-off (SPIKE-64); the gate-vs-rule ablation series to its terminus (STORY-655 — five cells, one ceiling). GENUINELY-LIVE REMAINDER: field instrumentation — the ablation terminus itself concluded this is the ONLY open P1 path (a clean ablation can''t reproduce rule-dropping; only real-fleet instrumentation can answer ''when does a gate beat a rule''). Recommend: this EPIC is ~80% delivered — file field-instrumentation as the one live child, then move EPIC-50 out of Draft (it is not ungroomed, it is nearly done).'
+  created_at: 2026-06-20T18:09:32.391388340Z
+  modified_at: 2026-06-20T18:09:32.391388340Z
