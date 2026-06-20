@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:28:18.420024972Z
-modified_at: 2026-06-18T18:22:48.569395934Z
+modified_at: 2026-06-20T18:09:33.005217981Z
 req_type: Epic
 tags:
 - from-advisor
@@ -22,3 +22,8 @@ comments:
   content: Commit 85d48f923 references this requirement
   created_at: 2026-06-18T18:22:48.569395934Z
   modified_at: 2026-06-18T18:22:48.569395934Z
+- id: 019ee639-434d-7540-8322-a55a51fdc1fa
+  author: joe
+  content: 'GROOMING RECONCILE (advisor pass, 2026-06-20, grounded in origin/main git log). Like EPIC-50, executed-by-doing while parked in Draft. SHIPPED, laddering to the workstreams: W2 streamline — hid rare top-level commands + cut orphaned zero-call verbs + collapsed presence/identity verbs (TASK-850/851/852), hid the deprecated intake alias; W3 sharpen-niche — aida compete shipped (STORY-659/660), --judge-vendor (TASK-869); W5 legibility — OVERVIEW ''the niche, concretely'' doc (c2533e5c5), onboarding front-door fix (BUG-597/TASK-886). GENUINELY-LIVE REMAINDER: more W2 (a usage-grounded second streamlining pass via aida usage --unused), and W5 first-run experience + the TUI quiet-depth reveal. Recommend: move EPIC-49 out of Draft (it is active, not ungroomed) and let the loop keep picking highest-leverage W2/W5 moves per the north-star.'
+  created_at: 2026-06-20T18:09:33.005217981Z
+  modified_at: 2026-06-20T18:09:33.005217981Z
