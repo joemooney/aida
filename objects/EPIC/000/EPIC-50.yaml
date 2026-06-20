@@ -3,12 +3,12 @@ spec_id: EPIC-50
 agreed_id: EPIC-50
 title: 'Tilt the verdict: 10 evidence-producing moves toward AIDAs defensible niche'
 description: 'The probe verdict tilts away from AIDA-the-artifact ("a useful instrument that taught us the problem"). This epic collects 10 concrete, IMPLEMENTABLE moves that produce EVIDENCE (the probes currency) making AIDAs value over roll-your-own harder to dismiss - biased to the defensible niche (cross-vendor substrate, code-to-spec traces, aida compete) over commodity. Sourced from a structured discovery pass (2026-06-19) over the verdict, the propositions, the ablations, and the competitive analysis. Honest ceiling: none of these makes AIDA "the thing to bet on" (the distribution gap + incumbent-capture hole are not engineering problems); they make the NICHE real and the evidence credible - the most the probe can honestly claim. Two highest-confidence: trace-rot detector (S, neutralizes the papers own sharpest self-undercut) and field instrumentation (the only open P1 path the paper names). See docs/research/ for the verdict context.'
-status: Draft
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:08.981883198Z
-modified_at: 2026-06-20T18:09:32.391388340Z
+modified_at: 2026-06-20T19:29:32.601353380Z
 req_type: Epic
 tags:
 - parent:EPIC-48
