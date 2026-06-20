@@ -8,11 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T01:36:45.413199316Z
-modified_at: 2026-06-20T19:29:33.672098876Z
+modified_at: 2026-06-20T19:29:44.499989884Z
 req_type: Spike
 tags:
 - field-study
 - from-i4-terminus
 - parent:EPIC-50
 - tilt-verdict
+comments:
+- id: 019ee682-ae34-72b2-bbce-bcbadee3bc7a
+  author: joe
+  content: 'Operator green-lit the field study (2026-06-20) — the revisit trigger is satisfied. Undeferred + queued to implementer as EPIC-50s one live child. Build slice: the observe-only rule-adherence logger (records when a stated-rule check WOULD have blocked, without blocking; reuses existing checks + ~/.aida telemetry, honors the privacy floor). This is plant-sensor-now / harvest-over-weeks, not an afternoon experiment.'
+  created_at: 2026-06-20T19:29:44.499989884Z
+  modified_at: 2026-06-20T19:29:44.499989884Z
 human_only: true
