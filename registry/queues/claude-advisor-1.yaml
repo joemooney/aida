@@ -1,0 +1,7 @@
+- user_id: claude-advisor-1
+  requirement_id: 019edd85-f965-76e0-90bf-ce458f1de256
+  position: 1000
+  added_by: claude-advisor-1
+  added_at: 2026-06-20T19:29:40.556445327Z
+  for_role: implementer
+  added_by_machine: imac
