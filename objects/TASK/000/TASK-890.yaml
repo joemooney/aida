@@ -3,12 +3,12 @@ spec_id: TASK-890
 agreed_id: TASK-890
 title: 'SPIKE-67 slice 1: git-log-as-sensor rule-adherence field study (aida field-study scan + report)'
 description: 'Slice 1 of SPIKE-67. The git log is the planted sensor: aida field-study scan recomputes the stated-rule verdicts (commit_format via commit::validate_message, trace_presence) over recent commits into a local-only ~/.aida/field-study.jsonl; aida field-study report aggregates bucketed by task span. Opt-in (AIDA_FIELD_STUDY / [field_study] enabled), default OFF, honors AIDA_TELEMETRY=0, privacy floor (no message/paths/content). Deliberately avoids the keystone orchestrator and a universal commit-msg hook. New module aida-cli/src/field_study.rs + hidden aida field-study command. Docs: docs/research/ablations/2026-06-20-field-instrumentation-spike-67.md + environment-variables.md row.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:22:15.305290306Z
-modified_at: 2026-06-21T06:30:18.534940798Z
+modified_at: 2026-06-21T06:37:56.852048449Z
 req_type: Task
 tags:
 - field-study
@@ -25,3 +25,21 @@ comments:
   content: Commit 26370c631 references this requirement
   created_at: 2026-06-21T06:30:18.534940798Z
   modified_at: 2026-06-21T06:30:18.534940798Z
+history:
+- id: 019ee8e6-70a5-7973-9b73-5ed0723a09e6
+  author: aida-auto-bump
+  timestamp: 2026-06-21T06:37:56.773006932Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019ee8e6-70f4-7ae0-8d40-6e4da68f54cb
+  timestamp: 2026-06-21T06:37:56.852043066Z
+  agent: aida
+  commit_sha: c5923017b2e0aea55a36d495bd41dc62c9ba44f9
+  summary: Completed via merge c5923017
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-21T06:37:55.758934048Z
+  completion_sha: c5923017b2e0aea55a36d495bd41dc62c9ba44f9
