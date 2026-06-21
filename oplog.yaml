@@ -19871,5 +19871,17 @@ operations:
   timestamp: 2026-06-20T19:29:32.731666352Z
   kind: !SetStatus
     status: In Progress
-clock: 1926
+- id: 019ee8d8-1d03-7de0-be87-6dd904e3f71e
+  target_id: 019ee8d8-1309-79b1-a90f-2ddfce3f2861
+  author: aida
+  node_id: '1'
+  lamport: 1927
+  timestamp: 2026-06-21T06:22:17.859383158Z
+  kind: !Create
+    title: 'SPIKE-67 slice 1: git-log-as-sensor rule-adherence field study (aida field-study scan + report)'
+    description: 'Slice 1 of SPIKE-67. The git log is the planted sensor: aida field-study scan recomputes the stated-rule verdicts (commit_format via commit::validate_message, trace_presence) over recent commits into a local-only ~/.aida/field-study.jsonl; aida field-study report aggregates bucketed by task span. Opt-in (AIDA_FIELD_STUDY / [field_study] enabled), default OFF, honors AIDA_TELEMETRY=0, privacy floor (no message/paths/content). Deliberately avoids the keystone orchestrator and a universal commit-msg hook. New module aida-cli/src/field_study.rs + hidden aida field-study command. Docs: docs/research/ablations/2026-06-20-field-instrumentation-spike-67.md + environment-variables.md row.'
+    req_type: Task
+    status: In Progress
+    priority: High
+clock: 1927
 node_id: '1'
