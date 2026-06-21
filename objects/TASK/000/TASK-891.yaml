@@ -1,0 +1,16 @@
+id: 019ee8d8-6c7e-7771-bb53-2081ff9705c9
+spec_id: TASK-891
+agreed_id: TASK-891
+title: 'SPIKE-67 follow-up: drain-vs-interactive + headless attribution for field-study observations'
+description: 'Slice 2 of SPIKE-67. The field-study scan records per-commit rule verdicts but cannot yet tag a commit as drain-produced vs interactive, or headless vs supervised — the very axes the hypothesis most wants (context pressure, not just task span). Join field-study observations against ~/.aida/auto-complete.jsonl run windows (spec + timestamps) to attribute each commit. Also: disentangle commit-type from span in the report (control for feat/fix, which the strict rule applies to disproportionately in big commits). These turn slice-1 span data into an actual context-pressure signal.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-21T06:22:38.206478165Z
+modified_at: 2026-06-21T06:22:38.206478165Z
+req_type: Task
+tags:
+- field-study
+- parent:SPIKE-67
+- tilt-verdict
