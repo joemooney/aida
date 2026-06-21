@@ -205,6 +205,7 @@ overrides user.
 | Variable | What it does | Default | Who sets it | Scope |
 | --- | --- | --- | --- | --- |
 | `AIDA_TELEMETRY` | Kill-switch for local usage telemetry (`~/.aida/usage.jsonl`). | enabled. Opt-out with `0`/`false`/`no`/`off`. | user | process env |
+| `AIDA_FIELD_STUDY` | Opt-IN switch for the SPIKE-67 observe-only rule-adherence field study (`~/.aida/field-study.jsonl`, written by `aida field-study scan`). | OFF. Opt-in with `1`/`true`/`yes`/`on` (or `[field_study] enabled = true`). Forced off when `AIDA_TELEMETRY=0`. | user | process env |
 | `AIDA_EXIT_GRACE_MS` | Grace window between SIGTERM and SIGKILL during an orchestrated exit. | `2000`. | launch-path / ops | process env |
 | `AIDA_EXIT_POLL_MS` | Poll interval for the sentinel-file/child-process check during graceful exit. | `100` (min 1). | launch-path / ops | process env |
 
