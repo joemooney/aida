@@ -26,6 +26,7 @@ mod deep_link;
 mod digest;
 mod docs;
 mod drain_lock;
+mod field_study;
 // trace:STORY-656 | ai:claude
 mod drain_resume;
 mod drain_state;
@@ -2838,6 +2839,11 @@ fn run() -> Result<()> {
             // trace:STORY-477 | ai:claude — reporting layer over the local
             // telemetry logs; backend-agnostic.
             handle_metrics_command(cmd)?;
+        }
+        Command::FieldStudy { cmd } => {
+            // trace:SPIKE-67 | ai:claude — observe-only rule-adherence study
+            // over the git log; opt-in, local-only.
+            handle_field_study_command(cmd)?;
         }
         Command::Push { .. } => {
             anyhow::bail!(
@@ -13271,6 +13277,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // trace:STORY-477 | ai:claude — reporting layer over the local
             // telemetry logs; no store load required.
             return handle_metrics_command(cmd);
+        }
+        Command::FieldStudy { cmd } => {
+            // trace:SPIKE-67 | ai:claude — observe-only rule-adherence study
+            // over the git log; opt-in, local-only, no store load required.
+            return handle_field_study_command(cmd);
         }
         Command::Digest {
             since,
@@ -86710,6 +86721,108 @@ fn aggregate_events(
 // ----------------------------------------------------------------------------
 
 /// Dispatch the `aida metrics` subcommands. trace:STORY-477 | ai:claude
+/// SPIKE-67 field-study command dispatch. `scan` harvests verdicts from the git
+/// log into the local study log; `report` aggregates it. trace:SPIKE-67
+fn handle_field_study_command(cmd: &crate::cli::FieldStudyCommand) -> Result<()> {
+    let root =
+        crate::find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    match cmd {
+        crate::cli::FieldStudyCommand::Scan { since, limit } => {
+            if !field_study::is_enabled(Some(&root)) {
+                println!(
+                    "Field study is off (nothing recorded). Opt in to plant the sensor:\n  \
+                     export AIDA_FIELD_STUDY=1\n  \
+                     (or add an `enabled = true` line under a `[field_study]` section in .aida/config.toml)\n\
+                     Then re-run `aida field-study scan`. Local-only; honors AIDA_TELEMETRY=0."
+                );
+                return Ok(());
+            }
+            let outcome = field_study::scan(&root, since.as_deref(), *limit);
+            println!(
+                "{} scanned {} commit(s) → {} new observation(s) recorded ({} already on file).",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                outcome.commits_scanned,
+                outcome.observations_added,
+                outcome.already_recorded
+            );
+            if outcome.observations_added > 0 {
+                println!("Review with `aida field-study report`.");
+            }
+            Ok(())
+        }
+        crate::cli::FieldStudyCommand::Report { json } => {
+            let obs = field_study::read_observations();
+            let summaries = field_study::summarize(&obs);
+            if *json {
+                let payload = serde_json::json!({
+                    "observations": obs.len(),
+                    "rules": summaries.iter().map(|s| {
+                        serde_json::json!({
+                            "rule": s.rule,
+                            "total": s.total,
+                            "would_block": s.would_block,
+                            "would_block_rate": rate(s.would_block, s.total),
+                            "by_span": s.by_span.iter().map(|(b, t, wb)| serde_json::json!({
+                                "span": b,
+                                "total": t,
+                                "would_block": wb,
+                                "would_block_rate": rate(*wb, *t),
+                            })).collect::<Vec<_>>(),
+                        })
+                    }).collect::<Vec<_>>(),
+                });
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+                return Ok(());
+            }
+            if obs.is_empty() {
+                println!(
+                    "No field-study observations yet. Run `aida field-study scan` (opt-in) to harvest the git log."
+                );
+                return Ok(());
+            }
+            println!(
+                "{} Field study — {} observation(s) over {} rule(s)",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                obs.len(),
+                summaries.len()
+            );
+            for s in &summaries {
+                println!(
+                    "\n  {} — would-block {}/{} ({:.0}%)",
+                    s.rule.bold(),
+                    s.would_block,
+                    s.total,
+                    rate(s.would_block, s.total) * 100.0
+                );
+                println!("    by task span (code files changed):");
+                for (bucket, total, wb) in &s.by_span {
+                    println!(
+                        "      {:>4} files: {:>3}/{:<3} would-block ({:.0}%)",
+                        bucket,
+                        wb,
+                        total,
+                        rate(*wb, *total) * 100.0
+                    );
+                }
+            }
+            println!(
+                "\n  Hypothesis lens: a rising would-block rate as span grows is the field signal \
+                 the controlled ablations could not reach (SPIKE-67)."
+            );
+            Ok(())
+        }
+    }
+}
+
+/// Safe ratio that returns 0.0 for an empty denominator.
+fn rate(num: usize, den: usize) -> f64 {
+    if den == 0 {
+        0.0
+    } else {
+        num as f64 / den as f64
+    }
+}
+
 fn handle_metrics_command(cmd: &crate::cli::MetricsCommand) -> Result<()> {
     match cmd {
         crate::cli::MetricsCommand::AgentLift {
