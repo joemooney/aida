@@ -3,12 +3,12 @@ spec_id: SPIKE-67
 agreed_id: SPIKE-67
 title: Field instrumentation of stated-rule violations in real drains — the only remaining gate-vs-rule evidence path
 description: 'The gate-vs-rule ablation program reached its terminus (STORY-655): five controlled cells (I1-I4 + cross-vendor I2), all 100% rule-only / 0 gate-saves — every single-variable conjecture (rules-fail, attention-distance, vendor, invariant-type, complexity) falsified. The definitive conclusion is methodological: a CLEAN ABLATION CANNOT reproduce rule-dropping at all; the lone observed drop (the bake-off, n=1) lives in a regime controlled designs cannot reach (large real codebase, long-horizon autonomy). The ONLY remaining instrument is FIELD telemetry. Smallest-valuable-slice: an OBSERVE-ONLY rule-adherence logger that, during real aida queue work --auto-complete drains, records when an existing stated-rule check (trace-comment presence, commit-format) WOULD have blocked — without blocking — plus context (repo size, task span/spec, headless?). Reuses the existing checks + the existing ~/.aida telemetry; honors the telemetry privacy floor (no content/paths/values). Query via an aida usage-style surface. The DATA harvests over weeks of real use (plant-the-sensor-now, harvest-later) — this is why it is a multi-week study, not an afternoon experiment. Revisit-trigger to actually BUILD: operator green-lights the field study (it is a new research thread + a product observability feature with design choices, distinct from the now-complete ablation program). Hypothesis it would test: do stated-rule violations rise with repo size / task span / context pressure — the unmeasured residual the ablations could not reach.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T01:36:45.413199316Z
-modified_at: 2026-06-21T06:23:03.371029038Z
+modified_at: 2026-06-21T06:37:56.772966845Z
 req_type: Spike
 tags:
 - field-study
@@ -26,4 +26,22 @@ comments:
   content: 'Slice 1 shipped (TASK-890): the git-log-as-sensor field study — aida field-study scan/report, opt-in, privacy-floor-preserving, no orchestrator/hook edits. First harvest (150 commits): commit_format would-block rate rises monotonically with task span (8%/68%/87%/95%) — the residual the controlled ablations could not reach. Caveats: span confounds with commit-type; window includes pre-discipline history; no drain/headless attribution yet (the highest-value follow-up = TASK-890s sibling, slice 2). SPIKE-67 stays In Progress: the multi-week harvest + slice-2 attribution remain. See docs/research/ablations/2026-06-20-field-instrumentation-spike-67.md.'
   created_at: 2026-06-21T06:22:47.160074135Z
   modified_at: 2026-06-21T06:22:47.160074135Z
+history:
+- id: 019ee8e6-7056-7060-a322-d12d1c60a12b
+  author: aida-auto-bump
+  timestamp: 2026-06-21T06:37:56.694588921Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019ee8e6-70a4-71e2-a47f-79d4106862b9
+  timestamp: 2026-06-21T06:37:56.772960571Z
+  agent: aida
+  commit_sha: c5923017b2e0aea55a36d495bd41dc62c9ba44f9
+  summary: Completed via merge c5923017
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-21T06:37:55.758934048Z
+  completion_sha: c5923017b2e0aea55a36d495bd41dc62c9ba44f9
 human_only: true
