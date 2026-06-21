@@ -1,0 +1,18 @@
+id: 019ee8e7-8b43-7673-bde6-04450b58e203
+spec_id: BUG-603
+agreed_id: BUG-603
+title: aida pull auto-bump over-promotes an umbrella spec from a child's trace mention
+description: 'Observed 2026-06-21 shipping TASK-890 (SPIKE-67 slice 1). The merge commit was deliberately trailered with the CHILD (TASK-890) to keep the umbrella spike SPIKE-67 open for its multi-week harvest + slice-2 follow-up. But aida pulls Done/InProgress->Completed auto-bump scans the commit for ANY spec reference (trace:SPIKE-67 comments + a body mention), not just the (REQ-ID) trailer, so it promoted SPIKE-67 to Completed anyway. Had to aida edit --force it back to In Progress. Effect: a parent/umbrella spec referenced by a childs trace comments cannot stay open across a merge under current behavior, defeating the trailer-a-child-to-keep-the-parent-open discipline. Possible fix: restrict the InProgress->Completed promotion to the commits (REQ-ID) TRAILER (and/or only promote from Done, not In Progress), letting trace mentions inform linkage without forcing completion. Low priority; workaround (edit --force) is cheap.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-21T06:39:09.123289683Z
+modified_at: 2026-06-21T06:39:09.123289683Z
+req_type: Bug
+tags:
+- auto-bump
+- from-advisor
+- kind:observation
+- lifecycle
+- papercut
