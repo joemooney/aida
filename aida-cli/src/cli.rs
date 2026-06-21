@@ -295,6 +295,41 @@ pub enum MetricsCommand {
     },
 }
 
+/// Observe-only rule-adherence field study.
+///
+/// The git log is the planted sensor: every commit records its message + diff.
+/// `scan` recomputes the stated-rule verdicts (commit-format, trace-presence)
+/// over recent commits into a local-only log; `report` aggregates it. Opt-in —
+/// nothing is recorded until `AIDA_FIELD_STUDY=1` or `[field_study] enabled =
+/// true`.
+// trace:SPIKE-67 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum FieldStudyCommand {
+    /// Harvest rule-adherence verdicts from recent commits into the local
+    /// field-study log. Idempotent — a commit already recorded is skipped.
+    // trace:SPIKE-67 | ai:claude
+    Scan {
+        /// Git revision range to scan (e.g. `HEAD~200`, a tag, `--since`-style
+        /// rev). Default: the most recent commits up to `--limit`.
+        // trace:SPIKE-67 | ai:claude
+        #[clap(long, value_name = "REV")]
+        since: Option<String>,
+        /// Cap how many commits are inspected. Default 200.
+        // trace:SPIKE-67 | ai:claude
+        #[clap(long, default_value = "200")]
+        limit: usize,
+    },
+    /// Report adherence rates from the local field-study log, bucketed by task
+    /// span — the "does the would-block rate rise with span?" lens.
+    // trace:SPIKE-67 | ai:claude
+    Report {
+        /// Emit a JSON object for machine consumers.
+        // trace:SPIKE-67 | ai:claude
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// Starter-memory-pack substrate-drift discovery.
 ///
 /// The opt-in memory pack (`aida init --with-memories`) ships generic
@@ -6829,6 +6864,16 @@ pub enum Command {
     Metrics {
         #[clap(subcommand)]
         cmd: crate::cli::MetricsCommand,
+    },
+
+    /// Observe-only rule-adherence field study: harvest stated-rule verdicts
+    /// from the git log and report adherence vs task span. Opt-in, local-only.
+    /// A research/power surface — hidden from top-level --help.
+    // trace:SPIKE-67 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(name = "field-study", hide = true)]
+    FieldStudy {
+        #[clap(subcommand)]
+        cmd: crate::cli::FieldStudyCommand,
     },
 
     /// Generate a curated narrative work digest — Released / Major progress /
