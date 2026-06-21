@@ -295,7 +295,7 @@ pub enum MetricsCommand {
     },
 }
 
-/// SPIKE-67 observe-only rule-adherence field study.
+/// Observe-only rule-adherence field study.
 ///
 /// The git log is the planted sensor: every commit records its message + diff.
 /// `scan` recomputes the stated-rule verdicts (commit-format, trace-presence)
@@ -6866,9 +6866,9 @@ pub enum Command {
         cmd: crate::cli::MetricsCommand,
     },
 
-    /// SPIKE-67 observe-only rule-adherence field study: harvest stated-rule
-    /// verdicts from the git log and report adherence vs task span. Opt-in,
-    /// local-only. A research/power surface — hidden from top-level --help.
+    /// Observe-only rule-adherence field study: harvest stated-rule verdicts
+    /// from the git log and report adherence vs task span. Opt-in, local-only.
+    /// A research/power surface — hidden from top-level --help.
     // trace:SPIKE-67 | ai:claude — hidden from top-level --help (still runs).
     #[clap(name = "field-study", hide = true)]
     FieldStudy {
