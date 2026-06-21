@@ -19923,5 +19923,22 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 1931
+- id: 019eebc7-ae2a-72c0-9496-c77c89a6119d
+  target_id: 019ee8d8-6c7e-7771-bb53-2081ff9705c9
+  author: aida
+  node_id: '1'
+  lamport: 1932
+  timestamp: 2026-06-21T20:03:12.554759410Z
+  kind: !SetDescription
+    description: |-
+      Slice 2 of SPIKE-67. The field-study scan records per-commit rule verdicts but cannot yet tag a commit along the axes the hypothesis most wants. Three attributions, in priority order:
+
+      1. VENDOR (highest value for the multi-vendor paper, EPIC-48): record the AI vendor per commit and compute the span->violation curve PER VENDOR. If adherence-vs-load differs by vendor (Claude vs Codex vs Gemini), then prose rules do not port across vendors and only a vendor-neutral substrate gate enforces an invariant uniformly — a measured motivation for the papers central thesis. CHEAP: the vendor is already in the git log as the [AI:tool] commit-subject tag, harvestable retroactively from history already scanned. No new instrumentation, just a parse of the subject prefix.
+
+      2. DRAIN-vs-INTERACTIVE + HEADLESS-vs-SUPERVISED: join field-study observations against ~/.aida/auto-complete.jsonl run windows (spec + timestamps) to mark each commit as drain-produced/headless. This is the context-pressure axis (autonomy load), distinct from raw task span.
+
+      3. TYPE-vs-SPAN DISENTANGLEMENT in the report: control for feat/fix (which the strict rule applies to disproportionately in big commits), so commit-type stops masquerading as span. Without this, the slice-1 8->95% curve is half artifact.
+
+      Acceptance: report can break the would-block rate down by (a) vendor, (b) drain-vs-interactive, (c) within-feat/fix-only; and the research note states whether a span/load effect SURVIVES each control. A null result (effect washes out under controls) is a valid, reportable outcome — it would say lab and field agree that prose rules do not measurably fail, which is itself probe data.
+clock: 1932
 node_id: '1'

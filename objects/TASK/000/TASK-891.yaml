@@ -2,13 +2,22 @@ id: 019ee8d8-6c7e-7771-bb53-2081ff9705c9
 spec_id: TASK-891
 agreed_id: TASK-891
 title: 'SPIKE-67 follow-up: drain-vs-interactive + headless attribution for field-study observations'
-description: 'Slice 2 of SPIKE-67. The field-study scan records per-commit rule verdicts but cannot yet tag a commit as drain-produced vs interactive, or headless vs supervised — the very axes the hypothesis most wants (context pressure, not just task span). Join field-study observations against ~/.aida/auto-complete.jsonl run windows (spec + timestamps) to attribute each commit. Also: disentangle commit-type from span in the report (control for feat/fix, which the strict rule applies to disproportionately in big commits). These turn slice-1 span data into an actual context-pressure signal.'
+description: |-
+  Slice 2 of SPIKE-67. The field-study scan records per-commit rule verdicts but cannot yet tag a commit along the axes the hypothesis most wants. Three attributions, in priority order:
+
+  1. VENDOR (highest value for the multi-vendor paper, EPIC-48): record the AI vendor per commit and compute the span->violation curve PER VENDOR. If adherence-vs-load differs by vendor (Claude vs Codex vs Gemini), then prose rules do not port across vendors and only a vendor-neutral substrate gate enforces an invariant uniformly — a measured motivation for the papers central thesis. CHEAP: the vendor is already in the git log as the [AI:tool] commit-subject tag, harvestable retroactively from history already scanned. No new instrumentation, just a parse of the subject prefix.
+
+  2. DRAIN-vs-INTERACTIVE + HEADLESS-vs-SUPERVISED: join field-study observations against ~/.aida/auto-complete.jsonl run windows (spec + timestamps) to mark each commit as drain-produced/headless. This is the context-pressure axis (autonomy load), distinct from raw task span.
+
+  3. TYPE-vs-SPAN DISENTANGLEMENT in the report: control for feat/fix (which the strict rule applies to disproportionately in big commits), so commit-type stops masquerading as span. Without this, the slice-1 8->95% curve is half artifact.
+
+  Acceptance: report can break the would-block rate down by (a) vendor, (b) drain-vs-interactive, (c) within-feat/fix-only; and the research note states whether a span/load effect SURVIVES each control. A null result (effect washes out under controls) is a valid, reportable outcome — it would say lab and field agree that prose rules do not measurably fail, which is itself probe data.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:22:38.206478165Z
-modified_at: 2026-06-21T06:22:38.206478165Z
+modified_at: 2026-06-21T20:03:12.423723725Z
 req_type: Task
 tags:
 - field-study
