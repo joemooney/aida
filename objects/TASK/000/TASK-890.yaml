@@ -8,9 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:22:15.305290306Z
-modified_at: 2026-06-21T06:22:15.305290306Z
+modified_at: 2026-06-21T06:23:30.166905805Z
 req_type: Task
 tags:
 - field-study
 - parent:SPIKE-67
 - tilt-verdict
+comments:
+- id: 019ee8d9-3776-7261-bb35-c3020ca84df2
+  author: joe
+  content: Commit 3789c0687 references this requirement
+  created_at: 2026-06-21T06:23:30.166905805Z
+  modified_at: 2026-06-21T06:23:30.166905805Z
