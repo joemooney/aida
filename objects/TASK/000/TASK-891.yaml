@@ -17,9 +17,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:22:38.206478165Z
-modified_at: 2026-06-21T20:03:12.423723725Z
+modified_at: 2026-06-21T20:03:13.570735904Z
 req_type: Task
 tags:
 - field-study
 - parent:SPIKE-67
 - tilt-verdict
+comments:
+- id: 019eebc7-b222-7e42-a808-e49a4ad64cb4
+  author: joe
+  content: 'Reprioritized after the slice-1 finding discussion (2026-06-21): VENDOR attribution promoted to the #1 cut because it is the sharpest MULTI-VENDOR-paper-specific implication (vendor-dependent adherence -> vendor-neutral-substrate motivation) AND the cheapest (the [AI:tool] tag is already in every commit subject). The generic drain/headless + type-control cuts remain but are secondary to the cross-vendor comparison for EPIC-48s purposes.'
+  created_at: 2026-06-21T20:03:13.570735904Z
+  modified_at: 2026-06-21T20:03:13.570735904Z
