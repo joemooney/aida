@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:39:09.123289683Z
-modified_at: 2026-06-21T20:08:58.406465516Z
+modified_at: 2026-06-21T20:08:59.736579888Z
 req_type: Bug
 tags:
 - auto-bump
@@ -16,3 +16,9 @@ tags:
 - kind:observation
 - lifecycle
 - papercut
+comments:
+- id: 019eebcc-fa58-78f2-87c1-a9f595fc9c82
+  author: joe
+  content: 'REJECTED after verifying against code (not inference — the original filing was an inferred mechanism, which was wrong). The Done/InProgress->Completed auto-bump (auto_bump_done_to_completed, main.rs) scans the commit MESSAGE subject via push_paren_spec_ids_from_line — it NEVER reads the diff or trace: comments. Root cause: my squash-merge subject was the PR title "...rule-adherence study (SPIKE-67 slice 1) (#1078)". By BUG-546s DELIBERATE design, a paren group that LEADS with a spec-id is a completion trailer even with trailing prose (the canonical example in the BUG-546 comment is literally "(TASK-800 / STORY-610 slice 1a)"); the parser walks right-to-left, skips the (#1078) PR-number group, and harvests SPIKE-67 from (SPIKE-67 slice 1). So the system did exactly what AIDAs trailer convention says: that paren MEANS "this PR completes SPIKE-67." This is operator error (a known PR-title-paren vector already in CLAUDE.md discipline + advisor memory), not a code defect. No narrowing is defensible — it would regress BUG-546s multi-spec+prose trailers. Prevention: keep a non-completing umbrella id OUT of PR-title parens; if you must name the slice, write it as bare prose ("SPIKE-67 slice 1") or parenthesize only the completing child (TASK-890).'
+  created_at: 2026-06-21T20:08:59.736579888Z
+  modified_at: 2026-06-21T20:08:59.736579888Z
