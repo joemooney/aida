@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T01:36:45.413199316Z
-modified_at: 2026-06-21T06:37:56.772966845Z
+modified_at: 2026-06-21T06:38:31.325035275Z
 req_type: Spike
 tags:
 - field-study
@@ -26,6 +26,11 @@ comments:
   content: 'Slice 1 shipped (TASK-890): the git-log-as-sensor field study — aida field-study scan/report, opt-in, privacy-floor-preserving, no orchestrator/hook edits. First harvest (150 commits): commit_format would-block rate rises monotonically with task span (8%/68%/87%/95%) — the residual the controlled ablations could not reach. Caveats: span confounds with commit-type; window includes pre-discipline history; no drain/headless attribution yet (the highest-value follow-up = TASK-890s sibling, slice 2). SPIKE-67 stays In Progress: the multi-week harvest + slice-2 attribution remain. See docs/research/ablations/2026-06-20-field-instrumentation-spike-67.md.'
   created_at: 2026-06-21T06:22:47.160074135Z
   modified_at: 2026-06-21T06:22:47.160074135Z
+- id: 019ee8e6-f79d-7a23-9a09-f1ee3e406d85
+  author: joe
+  content: 'Re-opened to In Progress after aida pull auto-bumped it to Completed: the merge commit carried trace:SPIKE-67 comments + a body mention, and the Done/InProgress→Completed auto-bump promotes on ANY spec reference, not just the (REQ-ID) trailer. I deliberately trailered the child TASK-890 (slice 1) precisely to keep this umbrella spike open for the multi-week harvest + slice-2 attribution (TASK-891) — but a parent referenced by a childs trace comments cannot stay open under the current auto-bump. Captured as a finding (auto-bump over-promotes an umbrella spec from a childs trace mention).'
+  created_at: 2026-06-21T06:38:31.325035275Z
+  modified_at: 2026-06-21T06:38:31.325035275Z
 history:
 - id: 019ee8e6-7056-7060-a322-d12d1c60a12b
   author: aida-auto-bump
