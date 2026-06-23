@@ -2,13 +2,26 @@ id: 019ef2bf-7266-74f2-9996-375b8f7f4003
 spec_id: STORY-669
 agreed_id: STORY-669
 title: 'aida config menu: in-place toggle/edit (write-through to config.toml)'
-description: 'aida config menu (STORY-661) is browse-only — it shows every knob (value/default/scope/explanation) but cannot change anything; the help says "Read-only for now (edit knobs with the matching config subcommand or your config.toml)." Operator-surfaced friction (2026-06-22): the natural expectation on a navigable knob list is to toggle/edit in place. Today most knobs ([telemetry] enabled, [advisor] calibration_mode, [archive] auto_after_days, [field_study] enabled, ...) have NO config subcommand at all — the only way to change them is hand-editing TOML, yet the menu shows them. Smallest-valuable-slice: in the TUI, Enter/Space on a boolean knob toggles it; on a simple scalar opens an inline edit; write through to the correct file (project .aida/config.toml, or ~/.aida/config.toml when the knob is user-scoped) PRESERVING the rest of the file. Reuse the existing rest-of-file-preserving TOML writer that aida config glyph already uses (--user routing + section-preserving write). Out of scope for the slice: knobs that have a dedicated migration/side-effect path (config format/numbering/digits/migrate) — keep routing those to their subcommand. Acceptance: from the menu I can flip [field_study] enabled and [hints] workflow_hints and see the value + scope update on the same screen, with the rest of config.toml untouched; non-TTY still falls back to config show.'
+description: |-
+  aida config menu (STORY-661) is browse-only — it shows every knob (value/default/scope/explanation) but cannot change anything. Operator-surfaced friction (2026-06-22): the natural expectation on a navigable knob list is to toggle in place. Today most knobs (telemetry.enabled, advisor.calibration_mode, archive.auto_after_days, field_study.enabled, ...) have NO config subcommand — the only way to change them is hand-editing TOML, yet the menu shows them.
+
+  Implementation plan: docs/plans/2026-06-22-config-menu-inplace-edit.md (read it first — it maps the registry, the toml_edit writer to generalize from glyph_config, and the cross-crate callback seam).
+
+  MVP scope: BOOLEAN knobs toggle in place; everything else stays read-only with a clear reason. Reuse glyph_configs section-preserving toml_edit writer (generalize to set_kv). Env-shadowed knobs are never editable. Out of MVP: scalar/enum edit, agents/contained (separate agents.toml + side effects), in-TUI user/project scope toggle.
+
+  ## Acceptance
+  1. In the menu, Enter/Space on a boolean knob (field_study.enabled, hints.workflow_hints, telemetry.enabled, mailbox.autosync) flips its value AND the scope column updates to the written file (.aida/config.toml for project), live, without restarting the menu.
+  2. The write preserves the rest of config.toml — other keys, comments, and key order untouched (verified by git diff and by a set_kv preservation unit test).
+  3. A knob whose value currently comes from an env var (PolicySource::Env) is NOT editable; pressing Enter shows a footer reason naming the var, and writes nothing.
+  4. Non-boolean knobs (scalars/enums/agents/contained) are clearly marked read-only with a pointer to the right edit path; pressing Enter is a no-op with an explanatory footer, never a silent dead key.
+  5. Non-TTY still falls back to aida config show (unchanged).
+  6. The 7 existing glyph_config writer tests stay green after the writer is generalized; an anti-drift test asserts every Bool editability entry names a knob policy_registry actually emits.
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:31:33.478395114Z
-modified_at: 2026-06-23T04:31:33.478395114Z
+modified_at: 2026-06-23T04:39:27.188646522Z
 req_type: Story
 tags:
 - aida:config:menu
