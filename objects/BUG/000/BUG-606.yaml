@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T06:21:07.212307964Z
-modified_at: 2026-06-23T07:09:09.896392539Z
+modified_at: 2026-06-23T07:18:10.122211624Z
 req_type: Bug
 tags:
 - aida:doctor
@@ -23,3 +23,8 @@ comments:
   content: Commit 318745f1e references this requirement
   created_at: 2026-06-23T07:09:09.896392539Z
   modified_at: 2026-06-23T07:09:09.896392539Z
+- id: 019ef357-fbca-7860-9aa1-f5abf33bc98e
+  author: joe
+  content: Commit c6335d9fc references this requirement
+  created_at: 2026-06-23T07:18:10.122211624Z
+  modified_at: 2026-06-23T07:18:10.122211624Z
