@@ -6,12 +6,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-advisor-1
-  requirement_id: 019ee8d8-6c7e-7771-bb53-2081ff9705c9
-  position: 2000
-  added_by: claude-advisor-1
-  added_at: 2026-06-23T04:55:32.175501701Z
-  for_role: advisor
-- user_id: claude-advisor-1
   requirement_id: 019ef2bf-7266-74f2-9996-375b8f7f4003
   position: 3000
   added_by: claude-advisor-1
