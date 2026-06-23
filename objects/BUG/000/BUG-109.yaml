@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:03:23.325463299Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-06-23T07:09:07.466460832Z
 req_type: Bug
 tags:
 - default-on
@@ -67,6 +67,11 @@ comments:
     Follow-up: TASK-255 (mission-control empty state) filed — overlaps STORY-241, dedupe pending
   created_at: 2026-05-16T01:04:16.626152321Z
   modified_at: 2026-05-16T01:04:16.626152321Z
+- id: 019ef34f-b40a-7a01-afa0-baea5ab64e9e
+  author: joe
+  content: Commit 318745f1e references this requirement
+  created_at: 2026-06-23T07:09:07.466460832Z
+  modified_at: 2026-06-23T07:09:07.466460832Z
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
