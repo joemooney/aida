@@ -21,10 +21,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:31:33.478395114Z
-modified_at: 2026-06-23T04:39:28.185550544Z
+modified_at: 2026-06-23T04:55:35.782768582Z
 req_type: Story
 tags:
 - aida:config:menu
+- batch:groom-0622
 - config
 - from-advisor
 - papercut
