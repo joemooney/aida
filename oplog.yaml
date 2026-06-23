@@ -20081,5 +20081,26 @@ operations:
   timestamp: 2026-06-23T05:04:58.186002615Z
   kind: !AddTag
     tag: batch:fasttrack
-clock: 1943
+- id: 019ef2e9-425e-77a0-8823-1b751d435031
+  target_id: 019ef2e9-389a-7072-a3b2-548f6ce303e9
+  author: aida
+  node_id: '1'
+  lamport: 1944
+  timestamp: 2026-06-23T05:17:13.694653842Z
+  kind: !Create
+    title: aida backlog groom queues under the grooming session's identity/role — groomed work invisible to the human's drain shell
+    description: |-
+      Hit live 2026-06-22 running /aida-backlog-groom. An advisor AGENT (stable-name identity claude-advisor-1, role advisor) ran aida backlog groom --specs TASK-891,STORY-669 --batch groom-0622. The items landed in the claude-advisor-1 / role:advisor queue. When the human (shell identity joe) then looked / tried to run aida queue work --batch groom-0622 from their own shell, the batch was EMPTY.
+
+      Root cause: the queue is scoped by (user_id, role) (BUG-89, by design), and aida backlog groom queues blessed items into the GROOMING SESSIONs own queue (current identity + current role) rather than routing them --for the doer role under a handoff-able identity. So when the groomer is an agent with a distinct stable-name identity (claude-advisor-1) and the drainer is the human (joe) or an implementer, the groomed work is invisible to them. This SILENTLY BREAKS the entire /aida-backlog-groom value proposition (advisor grooms -> human/implementer drains) whenever the groomer and drainer have different queue identities — which is the NORMAL case when an advisor agent does the grooming.
+
+      Workaround used: aida queue remove from the advisor queue, then AIDA_USER=joe AIDA_SESSION_ROLE=advisor aida queue add <ids> --for implementer to re-route under the humans identity for the implementer role.
+
+      Proposed fix: aida backlog groom should (a) route blessed items --for <doer-role> (default implementer) instead of into the grooming sessions own role queue, and (b) queue under a handoff-able identity — the project/human identity, not the agents PID/stable-name identity — OR at minimum PRINT exactly who/which-role/which-identity the items were queued for, so the drain command is unambiguous (today it just says "Drain with: aida queue work --batch NAME" with no identity, which is wrong from any other shell). Relates to BUG-89 (queue identity scoping) and the advisor-grooms-then-routes pattern.
+
+      Acceptance: after aida backlog groom from an advisor-agent session, a human running the printed drain command from their own shell sees and can drain the blessed batch; groom output names the target role + identity.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 1944
 node_id: '1'
