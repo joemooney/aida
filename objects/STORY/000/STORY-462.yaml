@@ -95,7 +95,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T18:09:33.894802381Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-06-23T07:18:12.180933719Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -133,6 +133,11 @@ comments:
   content: 'Composes with STORY-463 (SQLite cache lock retry + observability + stale-lock heal). Doctor gains 11th category ''stale-locks'' — orphan .aida/cache.db.lock-info file with dead PID. Heal: remove the lock-info file (OS already released the SQLite lock when PID died; only the metadata file lingers). STORY-463 ships the lock-info writer; doctor consumes it for stale detection.'
   created_at: 2026-05-24T19:35:09.578940059Z
   modified_at: 2026-05-24T19:35:09.578940059Z
+- id: 019ef358-03d4-7aa2-8fe3-f186ad0c803d
+  author: joe
+  content: Commit c6335d9fc references this requirement
+  created_at: 2026-06-23T07:18:12.180933719Z
+  modified_at: 2026-06-23T07:18:12.180933719Z
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
