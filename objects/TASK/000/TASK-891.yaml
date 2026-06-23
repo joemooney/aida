@@ -12,12 +12,12 @@ description: |-
   3. TYPE-vs-SPAN DISENTANGLEMENT in the report: control for feat/fix (which the strict rule applies to disproportionately in big commits), so commit-type stops masquerading as span. Without this, the slice-1 8->95% curve is half artifact.
 
   Acceptance: report can break the would-block rate down by (a) vendor, (b) drain-vs-interactive, (c) within-feat/fix-only; and the research note states whether a span/load effect SURVIVES each control. A null result (effect washes out under controls) is a valid, reportable outcome — it would say lab and field agree that prose rules do not measurably fail, which is itself probe data.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:22:38.206478165Z
-modified_at: 2026-06-23T04:55:33.205066257Z
+modified_at: 2026-06-23T05:18:16.380995748Z
 req_type: Task
 tags:
 - batch:groom-0622
