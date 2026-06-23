@@ -8,12 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T05:03:17.758377368Z
-modified_at: 2026-06-23T05:03:17.758377368Z
+modified_at: 2026-06-23T05:04:57.723723644Z
 req_type: Bug
 tags:
 - aida:init
+- batch:fasttrack
 - first-user-papercut
 - from-operator
+- lifecycle:no-review
 - onboarding-flow
 - severity:cosmetic
 - user-facing-text
