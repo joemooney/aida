@@ -3,12 +3,12 @@ spec_id: BUG-604
 agreed_id: BUG-604
 title: 'aida init git-init success line is a double-verb: "Created initialized a git repository here"'
 description: 'In aida init on a fresh non-git dir, after accepting the "initialize one with git init?" prompt, the success line reads "  Created initialized a git repository here" — a double verb ("Created" + "initialized"). Source: aida-cli/src/main.rs, the git-init branch: println!("  {} initialized a git repository here", "Created".green()); — the green "Created" token is prepended to a string that already starts with "initialized". Fix: pick one verb. Either "  {} a git repository here" with "Created".green() (-> "Created a git repository here"), or drop the token and use "Initialized a git repository here" (matches git init semantics). First-run onboarding path, so it is the very first output a new user sees — worth the polish. Cosmetic only; init proceeds normally. (The "Invalid node name" error in the original report was an operator-keystroke false alarm, NOT filed.)'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T05:03:17.758377368Z
-modified_at: 2026-06-23T05:06:23.255422428Z
+modified_at: 2026-06-23T05:14:09.589136458Z
 req_type: Bug
 tags:
 - aida:init
@@ -25,3 +25,21 @@ comments:
   content: Commit 259e5560b references this requirement
   created_at: 2026-06-23T05:06:23.255422428Z
   modified_at: 2026-06-23T05:06:23.255422428Z
+history:
+- id: 019ef2e6-7289-7a73-93a4-7c83ac2833c6
+  author: aida-auto-bump
+  timestamp: 2026-06-23T05:14:09.417075200Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ef2e6-7335-7f83-b0ba-d950035f4732
+  timestamp: 2026-06-23T05:14:09.589117647Z
+  agent: aida
+  commit_sha: e4307d4f82b7be0210e29e3034aaa189ac948266
+  summary: Completed via merge e4307d4f
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-23T05:14:08.470793049Z
+  completion_sha: e4307d4f82b7be0210e29e3034aaa189ac948266
