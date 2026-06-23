@@ -21455,7 +21455,7 @@ fn handle_init_distributed_worktree(
 
         if do_init {
             git_ops::init(&cwd)?;
-            println!("  {} initialized a git repository here", "Created".green());
+            println!("  {} a git repository here", "Created".green());
         } else {
             anyhow::bail!(
                 "Not a git repository. Run 'git init' first (or pass --git-init), or use --sibling for a separate repo."
