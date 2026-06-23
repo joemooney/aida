@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:41:15.776689931Z
-modified_at: 2026-06-23T05:08:39.344630130Z
+modified_at: 2026-06-23T05:38:49.222953704Z
 req_type: Story
 tags:
 - from-advisor
@@ -32,3 +32,8 @@ comments:
   content: 'LIVE REPRODUCTION (2026-06-22, operator out-of-box test in a fresh dummy project). Operator ran `aida agent` -> Claude -> role:advisor, launched in ~/ai/dummy. First prompt "write a hello world program" -> the advisor agent immediately Write-created hello.py and ran it (python3 hello.py -> Hello, world!), THEN offered to track it. It led with the code, not the role. The launch context.md said role:advisor (prose) and the agent coded anyway — textbook gate-vs-rule (prose does not bind a confident LLM). Operator directive: "out of the gate we should be more role aware." Two implications sharpening this spec: (1) the gate must be SCAFFOLDED BY DEFAULT on aida init (not opt-in) so a fresh project is role-aware out of the box — "out of the gate" literally. (2) Calibrate by triviality: a literal hello-world should NOT trigger full AIDA ceremony (Trojan-horse / dont-surface-complexity) — the right behavior is the agent LEADS with role-awareness (a one-line "I am in the advisor seat; want me to route this to an implementer, or shall I just do it?") rather than silently coding. So the gate is warn-and-offer-to-route, not a hard block, but it must fire on the FIRST Edit/Write, before the code lands. This incident is the strongest evidence yet that the role boundary has to be substrate-enforced, not context-prose.'
   created_at: 2026-06-23T05:08:39.344630130Z
   modified_at: 2026-06-23T05:08:39.344630130Z
+- id: 019ef2fd-0706-7362-80e6-c590ae8b0a22
+  author: joe
+  content: Commit c1190c5a6 references this requirement
+  created_at: 2026-06-23T05:38:49.222953704Z
+  modified_at: 2026-06-23T05:38:49.222953704Z
