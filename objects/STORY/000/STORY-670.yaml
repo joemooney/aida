@@ -1,0 +1,28 @@
+id: 019ef2c8-5500-7610-8d7e-16c18198b6e9
+spec_id: STORY-670
+agreed_id: STORY-670
+title: 'Substrate gate: PreToolUse hook makes advisor-edits-code loud (symmetric to TASK-647''s queue gate)'
+description: |-
+  Operator observation (2026-06-22): out of the box, a fresh advisor (or any agent) is NOT inclined to actually use AIDA — it treats the discipline (advisor=specs-not-code, spec-first, capture-habit) as prose to skim, then writes code anyway. This is AIDAs own gate-vs-rule finding (SPIKE-67) playing out on AIDA itself: prose rules in CLAUDE.md do not bind a confident LLM under load. Improving CLAUDE.md is the wrong lever (still prose). The fix is a programmatic gate.
+
+  Asymmetry that motivates this: TASK-647 ALREADY gates the reverse direction — a non-advisor session is programmatically refused queue add / add --status approved. There is no symmetric gate stopping an ADVISOR session from editing code.
+
+  Proposal: a PreToolUse hook (settings.json, scaffolded by init) on Edit|Write|MultiEdit that, when AIDA_SESSION_ROLE=advisor AND no sanctioned coding context is active (solo mode marker, or an implementer/reviewer role), emits a loud warning routing the agent to switch role (aida role enter implementer) or route the work (aida queue add --for implementer). Decide warn-vs-block by consequence: default warn (permissionDecision none + visible message); a config knob ([seats]/[agents]) can harden to block for teams that want it. Must NOT fire during /aida-solo (the sanctioned advisor+integrator mode — check the solo marker) or during burndown-spawned implementers.
+
+  This is reliability-critical onboarding substrate + keystone-adjacent (it governs every agent session), so it ships at the keyboard supervised, not via unsupervised drain. Smallest-valuable-slice: warn-only on Edit/Write for advisor sessions, solo-marker-aware, scaffolded into the template settings.json. Followups: spec-first nudge at first Edit of a new theme; cross-repo MCP store-root-vs-cwd mismatch guard (the tqx/tq footgun the operator hit); a session-end capture nudge.
+
+  Honest ceiling: a hook can warn/block Edit, but it cannot force GOOD spec hygiene — it converts the loudest, most-common violation (advisor silently coding) from fine print into a tripwire. That is the high-leverage 80%.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-23T04:41:15.776689931Z
+modified_at: 2026-06-23T04:41:15.776689931Z
+req_type: Story
+tags:
+- from-advisor
+- gate-vs-rule
+- hooks
+- onboarding
+- role-enforcement
+- substrate-as-bouncer
