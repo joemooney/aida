@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:31:33.478395114Z
-modified_at: 2026-06-23T04:39:27.188646522Z
+modified_at: 2026-06-23T04:39:28.185550544Z
 req_type: Story
 tags:
 - aida:config:menu
@@ -29,3 +29,9 @@ tags:
 - from-advisor
 - papercut
 - tui
+comments:
+- id: 019ef2c6-b0b9-7af1-b626-be7ad0ae52c8
+  author: joe
+  content: 'Specced for implementation (2026-06-22, advisor): plan at docs/plans/2026-06-22-config-menu-inplace-edit.md + acceptance criteria added to the description. Verified the load-bearing reuse against code: glyph_config.rs already has the toml_edit load_doc/save_doc/table_mut + Scope{Project,User} + config_path_for machinery to generalize; PolicySource already maps each knob to its write-target file (Env => read-only); neither PolicyRow nor ConfigMenuItem carries type info (the editability-metadata gap the plan fills via a config_knob_editability table mirroring config_knob_doc). Left Approved/low — NOT implemented here (advisor seat); route to an implementer via queue add --for implementer when prioritized.'
+  created_at: 2026-06-23T04:39:28.185550544Z
+  modified_at: 2026-06-23T04:39:28.185550544Z
