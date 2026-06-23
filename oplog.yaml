@@ -20053,5 +20053,17 @@ operations:
       4. Alias -> alias cycles are detected and refused (no infinite expansion).
       5. HARD: with AIDA_AGENT_TYPE/AIDA_HEADLESS set, via the MCP server, or non-TTY, the aliased name is NOT expanded (canonical-only); a test asserts an agent-context invocation of a user alias does not run the expansion. aida alias list STILL lists user aliases in that context.
       6. Precedence (project vs personal vs built-in) is documented and tested.
-clock: 1940
+- id: 019ef2dc-8b3c-7a82-80e6-69f1e2fa1268
+  target_id: 019ef2dc-80fe-76b1-8ba8-587dc5773bd0
+  author: aida
+  node_id: '1'
+  lamport: 1941
+  timestamp: 2026-06-23T05:03:20.380271114Z
+  kind: !Create
+    title: 'aida init git-init success line is a double-verb: "Created initialized a git repository here"'
+    description: 'In aida init on a fresh non-git dir, after accepting the "initialize one with git init?" prompt, the success line reads "  Created initialized a git repository here" — a double verb ("Created" + "initialized"). Source: aida-cli/src/main.rs, the git-init branch: println!("  {} initialized a git repository here", "Created".green()); — the green "Created" token is prepended to a string that already starts with "initialized". Fix: pick one verb. Either "  {} a git repository here" with "Created".green() (-> "Created a git repository here"), or drop the token and use "Initialized a git repository here" (matches git init semantics). First-run onboarding path, so it is the very first output a new user sees — worth the polish. Cosmetic only; init proceeds normally. (The "Invalid node name" error in the original report was an operator-keystroke false alarm, NOT filed.)'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 1941
 node_id: '1'

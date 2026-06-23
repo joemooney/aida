@@ -1,0 +1,19 @@
+id: 019ef2dc-80fe-76b1-8ba8-587dc5773bd0
+spec_id: BUG-604
+agreed_id: BUG-604
+title: 'aida init git-init success line is a double-verb: "Created initialized a git repository here"'
+description: 'In aida init on a fresh non-git dir, after accepting the "initialize one with git init?" prompt, the success line reads "  Created initialized a git repository here" — a double verb ("Created" + "initialized"). Source: aida-cli/src/main.rs, the git-init branch: println!("  {} initialized a git repository here", "Created".green()); — the green "Created" token is prepended to a string that already starts with "initialized". Fix: pick one verb. Either "  {} a git repository here" with "Created".green() (-> "Created a git repository here"), or drop the token and use "Initialized a git repository here" (matches git init semantics). First-run onboarding path, so it is the very first output a new user sees — worth the polish. Cosmetic only; init proceeds normally. (The "Invalid node name" error in the original report was an operator-keystroke false alarm, NOT filed.)'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-23T05:03:17.758377368Z
+modified_at: 2026-06-23T05:03:17.758377368Z
+req_type: Bug
+tags:
+- aida:init
+- first-user-papercut
+- from-operator
+- onboarding-flow
+- severity:cosmetic
+- user-facing-text
