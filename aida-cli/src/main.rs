@@ -33130,8 +33130,13 @@ fn referenced_spec_ids_from_messages<'a>(
     // prefers over a missed reference. Anchored to UPPERCASE 2+-letter prefixes
     // so lowercase prose ("step-1") doesn't pollute; coincidental tokens like
     // `UTF-8` are harmless (no spec collides). trace:BUG-606 | ai:claude
-    let re = regex::Regex::new(r"\b[A-Z]{2,}-[0-9]+(?:-[0-9]+)?\b")
-        .expect("valid spec-id token regex");
+    let re =
+        regex::Regex::new(r"\b[A-Z]{2,}-[0-9]+(?:-[0-9]+)?\b").expect("valid spec-id token regex");
+    // A bare `update SPEC-ID` subject is the `aida edit` orphan-store
+    // bookkeeping commit — it exists for EVERY edited spec, so counting it as
+    // corroboration would mask every violation (STORY-462). trace:BUG-606
+    let bookkeeping_re = regex::Regex::new(r"(?i)^update\s+[A-Za-z]+-[0-9]+(?:-[0-9]+)?$")
+        .expect("valid bookkeeping-subject regex");
     let mut referenced = std::collections::HashSet::new();
     for message in messages {
         let subject = message
@@ -33139,9 +33144,11 @@ fn referenced_spec_ids_from_messages<'a>(
             .find(|l| !l.trim().is_empty())
             .unwrap_or("")
             .trim();
-        // Plan commits name PLANNED, not shipped, specs (BUG-426) — skip them so
-        // a plan-only reference never corroborates a completion.
-        if subject.is_empty() || is_plan_commit_subject(subject) {
+        // Plan commits name PLANNED, not shipped, specs (BUG-426); bare
+        // `update SPEC-ID` is store bookkeeping (STORY-462) — neither
+        // corroborates a completion.
+        if subject.is_empty() || is_plan_commit_subject(subject) || bookkeeping_re.is_match(subject)
+        {
             continue;
         }
         for m in re.find_iter(message) {
@@ -63125,7 +63132,10 @@ reason = "reserved by docs build"
     #[test]
     fn corroboration_scan_still_finds_subject_trailer() {
         let refs = referenced_spec_ids_from_messages(["[AI:claude] fix(z): thing (BUG-89)"]);
-        assert!(refs.contains("BUG-89"), "subject trailer still works: {refs:?}");
+        assert!(
+            refs.contains("BUG-89"),
+            "subject trailer still works: {refs:?}"
+        );
     }
 
     /// BUG-606: prose / punctuated / mid-line paren mentions must also
@@ -63139,7 +63149,10 @@ reason = "reserved by docs build"
             advisor-authority-gated (ADR-3 / TASK-647), so it cannot drain.\n";
         let refs = referenced_spec_ids_from_messages([msg]);
         for id in ["BUG-109", "ADR-3", "TASK-647"] {
-            assert!(refs.contains(id), "{id} must corroborate from prose: {refs:?}");
+            assert!(
+                refs.contains(id),
+                "{id} must corroborate from prose: {refs:?}"
+            );
         }
     }
 
@@ -63147,10 +63160,30 @@ reason = "reserved by docs build"
     /// corroborate a completion. trace:BUG-606 | ai:claude
     #[test]
     fn corroboration_scan_skips_plan_commits() {
-        let refs = referenced_spec_ids_from_messages(["docs(plans): plan for the thing (STORY-999)"]);
+        let refs =
+            referenced_spec_ids_from_messages(["docs(plans): plan for the thing (STORY-999)"]);
         assert!(
             !refs.contains("STORY-999"),
             "plan-commit references are not completion evidence: {refs:?}"
+        );
+    }
+
+    /// A bare `update SPEC-ID` subject is `aida edit` store bookkeeping — it
+    /// exists for every edited spec and must not corroborate (STORY-462),
+    /// else the liberal token match would mask every violation.
+    /// trace:BUG-606 | ai:claude
+    #[test]
+    fn corroboration_scan_skips_store_bookkeeping_commits() {
+        assert!(
+            !referenced_spec_ids_from_messages(["update TASK-400"]).contains("TASK-400"),
+            "bare 'update SPEC-ID' is store bookkeeping, not corroboration"
+        );
+        // But a real commit that merely starts with 'update' AND carries a
+        // trailer still corroborates.
+        assert!(
+            referenced_spec_ids_from_messages(["update the parser (TASK-401)"])
+                .contains("TASK-401"),
+            "a real commit with a trailer must still corroborate"
         );
     }
 
