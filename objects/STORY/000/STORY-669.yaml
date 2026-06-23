@@ -1,0 +1,18 @@
+id: 019ef2bf-7266-74f2-9996-375b8f7f4003
+spec_id: STORY-669
+agreed_id: STORY-669
+title: 'aida config menu: in-place toggle/edit (write-through to config.toml)'
+description: 'aida config menu (STORY-661) is browse-only — it shows every knob (value/default/scope/explanation) but cannot change anything; the help says "Read-only for now (edit knobs with the matching config subcommand or your config.toml)." Operator-surfaced friction (2026-06-22): the natural expectation on a navigable knob list is to toggle/edit in place. Today most knobs ([telemetry] enabled, [advisor] calibration_mode, [archive] auto_after_days, [field_study] enabled, ...) have NO config subcommand at all — the only way to change them is hand-editing TOML, yet the menu shows them. Smallest-valuable-slice: in the TUI, Enter/Space on a boolean knob toggles it; on a simple scalar opens an inline edit; write through to the correct file (project .aida/config.toml, or ~/.aida/config.toml when the knob is user-scoped) PRESERVING the rest of the file. Reuse the existing rest-of-file-preserving TOML writer that aida config glyph already uses (--user routing + section-preserving write). Out of scope for the slice: knobs that have a dedicated migration/side-effect path (config format/numbering/digits/migrate) — keep routing those to their subcommand. Acceptance: from the menu I can flip [field_study] enabled and [hints] workflow_hints and see the value + scope update on the same screen, with the rest of config.toml untouched; non-TTY still falls back to config show.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-23T04:31:33.478395114Z
+modified_at: 2026-06-23T04:31:33.478395114Z
+req_type: Story
+tags:
+- aida:config:menu
+- config
+- from-advisor
+- papercut
+- tui
