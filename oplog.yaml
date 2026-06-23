@@ -19981,5 +19981,26 @@ operations:
       4. Non-boolean knobs (scalars/enums/agents/contained) are clearly marked read-only with a pointer to the right edit path; pressing Enter is a no-op with an explanatory footer, never a silent dead key.
       5. Non-TTY still falls back to aida config show (unchanged).
       6. The 7 existing glyph_config writer tests stay green after the writer is generalized; an anti-drift test asserts every Bool editability entry names a knob policy_registry actually emits.
-clock: 1935
+- id: 019ef2c8-5eee-7262-b3c0-c8660db9a823
+  target_id: 019ef2c8-5500-7610-8d7e-16c18198b6e9
+  author: aida
+  node_id: '1'
+  lamport: 1936
+  timestamp: 2026-06-23T04:41:18.318093343Z
+  kind: !Create
+    title: 'Substrate gate: PreToolUse hook makes advisor-edits-code loud (symmetric to TASK-647''s queue gate)'
+    description: |-
+      Operator observation (2026-06-22): out of the box, a fresh advisor (or any agent) is NOT inclined to actually use AIDA — it treats the discipline (advisor=specs-not-code, spec-first, capture-habit) as prose to skim, then writes code anyway. This is AIDAs own gate-vs-rule finding (SPIKE-67) playing out on AIDA itself: prose rules in CLAUDE.md do not bind a confident LLM under load. Improving CLAUDE.md is the wrong lever (still prose). The fix is a programmatic gate.
+
+      Asymmetry that motivates this: TASK-647 ALREADY gates the reverse direction — a non-advisor session is programmatically refused queue add / add --status approved. There is no symmetric gate stopping an ADVISOR session from editing code.
+
+      Proposal: a PreToolUse hook (settings.json, scaffolded by init) on Edit|Write|MultiEdit that, when AIDA_SESSION_ROLE=advisor AND no sanctioned coding context is active (solo mode marker, or an implementer/reviewer role), emits a loud warning routing the agent to switch role (aida role enter implementer) or route the work (aida queue add --for implementer). Decide warn-vs-block by consequence: default warn (permissionDecision none + visible message); a config knob ([seats]/[agents]) can harden to block for teams that want it. Must NOT fire during /aida-solo (the sanctioned advisor+integrator mode — check the solo marker) or during burndown-spawned implementers.
+
+      This is reliability-critical onboarding substrate + keystone-adjacent (it governs every agent session), so it ships at the keyboard supervised, not via unsupervised drain. Smallest-valuable-slice: warn-only on Edit/Write for advisor sessions, solo-marker-aware, scaffolded into the template settings.json. Followups: spec-first nudge at first Edit of a new theme; cross-repo MCP store-root-vs-cwd mismatch guard (the tqx/tq footgun the operator hit); a session-end capture nudge.
+
+      Honest ceiling: a hook can warn/block Edit, but it cannot force GOOD spec hygiene — it converts the loudest, most-common violation (advisor silently coding) from fine print into a tripwire. That is the high-leverage 80%.
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 1936
 node_id: '1'
