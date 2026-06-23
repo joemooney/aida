@@ -59,6 +59,20 @@ pub struct RuleObservation {
     /// Repo-size bucket at scan time (`small`/`medium`/`large`/`huge`). Lets a
     /// later cross-repo harvest correlate adherence with repo size.
     pub repo_bucket: String,
+    /// The AI vendor that authored the commit, parsed from the `[AI:tool]`
+    /// subject tag (`claude`, `codex`, `antigravity+claude`, …); `None` for an
+    /// untagged / human commit. A structural identifier (the same token already
+    /// public in the commit subject), never message content. The axis that asks
+    /// "do prose rules port across vendors?" (EPIC-48). trace:TASK-891 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+    /// The conventional-commit type, parsed from the subject (`feat`, `fix`,
+    /// `docs`, …); `None` if the subject isn't conventional. A structural label
+    /// (a category, like `repo_bucket`), never message content. Lets the report
+    /// control for commit type so span stops masquerading as the cause.
+    /// trace:TASK-891 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_type: Option<String>,
 }
 
 /// The two stated rules the sensor evaluates per commit.
@@ -232,6 +246,77 @@ fn single_spec(specs: &BTreeSet<String>) -> Option<String> {
     }
 }
 
+/// Parse the AI vendor from a commit subject's leading `[AI:tool]` tag.
+///
+/// Handles the documented forms: `[AI:claude]`, `[AI:claude:med]` (trailing
+/// confidence stripped), and `[AI:antigravity+claude]` / `[AI:tool1+tool2:med]`
+/// (multi-agent authorship kept whole). Returns the lowercased tool token(s),
+/// or `None` when the subject carries no `[AI:…]` tag (an untagged/human
+/// commit). Pure — used at scan time. trace:TASK-891 | ai:claude
+pub fn parse_vendor(subject: &str) -> Option<String> {
+    let s = subject.trim_start();
+    let rest = s.strip_prefix("[AI:").or_else(|| s.strip_prefix("[ai:"))?;
+    let inner = rest.split(']').next()?; // text between `[AI:` and `]`
+                                         // `<tools>[:confidence]` — tools never contain ':', so the first
+                                         // colon-delimited segment is the vendor list.
+    let tools = inner.split(':').next()?.trim().to_ascii_lowercase();
+    if tools.is_empty() {
+        None
+    } else {
+        Some(tools)
+    }
+}
+
+/// Parse the conventional-commit type from a subject, skipping any leading
+/// `[AI:tool]` tag. `feat(scope): …` / `fix!: …` / `docs: …` → `feat`/`fix`/
+/// `docs`. Returns the lowercased type word, or `None` when the subject isn't
+/// conventional (no `type:` / `type(scope):` prefix). Pure — used at scan time.
+/// trace:TASK-891 | ai:claude
+pub fn parse_commit_type(subject: &str) -> Option<String> {
+    let mut s = subject.trim_start();
+    // Skip a leading [AI:...] tag if present.
+    if let Some(rest) = s.strip_prefix('[') {
+        if let Some(after) = rest.split_once(']') {
+            s = after.1.trim_start();
+        }
+    }
+    // Take the run of ascii-alpha up to `(` (scope), `!` (breaking), or `:`.
+    let end = s.find(['(', '!', ':']).filter(|_| s.contains(':'))?;
+    let word = s[..end].trim().to_ascii_lowercase();
+    if !word.is_empty() && word.chars().all(|c| c.is_ascii_alphabetic()) {
+        Some(word)
+    } else {
+        None
+    }
+}
+
+/// Strip a trailing ` (#1234)` GitHub squash-merge PR-number suffix from a
+/// commit subject.
+///
+/// A squash-merge appends `(#NNNN)` to the subject, which pushes any
+/// authoring-time `(REQ-ID)` out of end-of-line position. The commit-format
+/// validator anchors the REQ-ID at `$`, so a squash-merged `feat`/`fix` that
+/// the agent authored *correctly* (ending in `(REQ-ID)`, passing the local
+/// commit-msg hook pre-squash) reads as a false "missing-(REQ-ID)" miss when
+/// the sensor re-evaluates the rewritten subject off `main`. Removing the PR
+/// suffix reconstructs the subject the agent actually wrote, so the sensor
+/// measures rule-adherence at authoring time rather than GitHub's rewrite — and
+/// it never masks a real miss (a genuinely REQ-ID-less subject still fails after
+/// the strip). The real hook is untouched; this normalization is study-local.
+/// trace:TASK-891 | ai:claude
+pub fn strip_pr_suffix(subject: &str) -> String {
+    let trimmed = subject.trim_end();
+    if let Some(open) = trimmed.rfind("(#") {
+        let tail = &trimmed[open..];
+        if let Some(digits) = tail.strip_prefix("(#").and_then(|t| t.strip_suffix(')')) {
+            if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+                return trimmed[..open].trim_end().to_string();
+            }
+        }
+    }
+    trimmed.to_string()
+}
+
 /// True when a changed path's extension is a code extension.
 pub fn is_code_path(path: &str) -> bool {
     let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
@@ -283,6 +368,10 @@ pub fn scan(root: &Path, since: Option<&str>, limit: usize) -> ScanOutcome {
         let Some(facts) = commit_facts(root, &sha) else {
             continue;
         };
+        // Vendor + commit-type are derived once per commit from the subject
+        // (structural identifiers already public in the log, not message text).
+        let vendor = parse_vendor(&facts.subject);
+        let commit_type = parse_commit_type(&facts.subject);
         for (rule, would_block, spec) in evaluate_commit(&facts) {
             if seen.contains(&(sha.clone(), rule.clone())) {
                 already += 1;
@@ -296,6 +385,8 @@ pub fn scan(root: &Path, since: Option<&str>, limit: usize) -> ScanOutcome {
                 spec,
                 span_code_files: facts.changed_code_files,
                 repo_bucket: bucket.clone(),
+                vendor: vendor.clone(),
+                commit_type: commit_type.clone(),
             });
         }
     }
@@ -311,9 +402,12 @@ pub fn scan(root: &Path, since: Option<&str>, limit: usize) -> ScanOutcome {
 
 /// Gather the per-commit facts from git. `None` if the commit can't be read.
 fn commit_facts(root: &Path, sha: &str) -> Option<CommitFacts> {
-    let subject = git_stdout(root, &["show", "-s", "--format=%s", sha])?
+    let raw_subject = git_stdout(root, &["show", "-s", "--format=%s", sha])?
         .trim()
         .to_string();
+    // Reconstruct the authoring-time subject: a squash-merge `(#NNNN)` suffix
+    // shadows any trailing `(REQ-ID)` and would read as a false format miss.
+    let subject = strip_pr_suffix(&raw_subject);
     let diff = git_stdout(root, &["show", "--format=", "--unified=0", sha]).unwrap_or_default();
     let names = git_stdout(root, &["show", "--name-only", "--format=", sha]).unwrap_or_default();
 
@@ -412,6 +506,82 @@ fn span_bucket(n: usize) -> &'static str {
 
 const SPAN_BUCKETS: &[&str] = &["0", "1", "2-3", "4-9", "10+"];
 
+/// Safe ratio; 0.0 for an empty denominator. Local mirror of `main::rate` so the
+/// analysis layer is self-contained and unit-testable.
+fn rate(num: usize, den: usize) -> f64 {
+    if den == 0 {
+        0.0
+    } else {
+        num as f64 / den as f64
+    }
+}
+
+/// Build the (span-bucket, total, would_block) curve over an arbitrary row
+/// slice, dropping empty buckets. The shared kernel behind every span lens —
+/// overall, per-vendor, and feat/fix-only. trace:TASK-891 | ai:claude
+pub fn span_curve(rows: &[&RuleObservation]) -> Vec<(&'static str, usize, usize)> {
+    SPAN_BUCKETS
+        .iter()
+        .map(|&b| {
+            let in_bucket: Vec<&&RuleObservation> = rows
+                .iter()
+                .filter(|o| span_bucket(o.span_code_files) == b)
+                .collect();
+            let t = in_bucket.len();
+            let wb = in_bucket.iter().filter(|o| o.would_block).count();
+            (b, t, wb)
+        })
+        .filter(|(_, t, _)| *t > 0)
+        .collect()
+}
+
+/// The smallest-span vs largest-span endpoints of a span curve — the cheap,
+/// mechanical "does the would-block rate rise with span?" read that lets the
+/// report state, per control, whether the span/load effect SURVIVES.
+pub struct SpanTrend {
+    pub first_bucket: &'static str,
+    pub first_rate: f64,
+    pub last_bucket: &'static str,
+    pub last_rate: f64,
+}
+
+impl SpanTrend {
+    /// last-bucket rate minus first-bucket rate.
+    pub fn delta(&self) -> f64 {
+        self.last_rate - self.first_rate
+    }
+    /// Coarse verdict: a ≥15-point swing reads as rises/falls; otherwise flat.
+    /// "flat" is the null result SPIKE-67 treats as a valid, reportable outcome.
+    pub fn verdict(&self) -> &'static str {
+        let d = self.delta();
+        if d >= 0.15 {
+            "rises"
+        } else if d <= -0.15 {
+            "falls"
+        } else {
+            "flat"
+        }
+    }
+}
+
+/// Endpoint trend of a span curve. `None` when fewer than two buckets are
+/// populated (no curve to read).
+pub fn span_trend(curve: &[(&'static str, usize, usize)]) -> Option<SpanTrend> {
+    let populated: Vec<&(&'static str, usize, usize)> =
+        curve.iter().filter(|(_, t, _)| *t > 0).collect();
+    if populated.len() < 2 {
+        return None;
+    }
+    let first = populated.first().unwrap();
+    let last = populated.last().unwrap();
+    Some(SpanTrend {
+        first_bucket: first.0,
+        first_rate: rate(first.2, first.1),
+        last_bucket: last.0,
+        last_rate: rate(last.2, last.1),
+    })
+}
+
 /// Aggregate the log into one summary per rule.
 pub fn summarize(obs: &[RuleObservation]) -> Vec<RuleSummary> {
     let mut rules: Vec<String> = obs.iter().map(|o| o.rule.clone()).collect();
@@ -424,19 +594,7 @@ pub fn summarize(obs: &[RuleObservation]) -> Vec<RuleSummary> {
             let rows: Vec<&RuleObservation> = obs.iter().filter(|o| o.rule == rule).collect();
             let total = rows.len();
             let would_block = rows.iter().filter(|o| o.would_block).count();
-            let by_span = SPAN_BUCKETS
-                .iter()
-                .map(|&b| {
-                    let in_bucket: Vec<&&RuleObservation> = rows
-                        .iter()
-                        .filter(|o| span_bucket(o.span_code_files) == b)
-                        .collect();
-                    let t = in_bucket.len();
-                    let wb = in_bucket.iter().filter(|o| o.would_block).count();
-                    (b, t, wb)
-                })
-                .filter(|(_, t, _)| *t > 0)
-                .collect();
+            let by_span = span_curve(&rows);
             RuleSummary {
                 rule,
                 total,
@@ -445,6 +603,171 @@ pub fn summarize(obs: &[RuleObservation]) -> Vec<RuleSummary> {
             }
         })
         .collect()
+}
+
+/// Resolve `~/.aida/auto-complete.jsonl` — the autonomous-drain run log the
+/// drain-vs-interactive join reads. `None` when the home dir is unknown.
+pub fn auto_complete_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
+}
+
+/// The set of SPEC-IDs that appear as a drained spec in `auto-complete.jsonl`
+/// (uppercased for case-insensitive join). Best-effort: a missing/garbled log
+/// yields an empty set (every commit then classifies `interactive`). This is
+/// **spec-level** attribution — the spec was driven by an `--auto-complete`
+/// orchestrator at some point — not commit-level session attribution.
+/// trace:TASK-891 | ai:claude
+pub fn drain_spec_set() -> BTreeSet<String> {
+    let Some(path) = auto_complete_path() else {
+        return BTreeSet::new();
+    };
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return BTreeSet::new();
+    };
+    content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter_map(|v| {
+            v.get("spec_id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_ascii_uppercase())
+        })
+        .collect()
+}
+
+/// One vendor's adherence for a rule, with its span trend (the per-vendor
+/// "does adherence degrade under load for THIS vendor?" read — EPIC-48).
+pub struct VendorCut {
+    pub vendor: String,
+    pub total: usize,
+    pub would_block: usize,
+    pub trend: Option<SpanTrend>,
+}
+
+/// The drain-vs-interactive split. `headless`/`supervised` is NOT separable
+/// from `auto-complete.jsonl` (it records no human-mode flag), so this axis
+/// stops at drain-vs-interactive; the report says so rather than fabricating it.
+pub struct DrainCut {
+    pub drain_total: usize,
+    pub drain_block: usize,
+    pub interactive_total: usize,
+    pub interactive_block: usize,
+    /// Observations with no inferred SPEC-ID — can't be joined either way.
+    pub unattributed_total: usize,
+    pub unattributed_block: usize,
+}
+
+/// The type control: the span trend over all commits vs over feat/fix-only
+/// commits. If the all-types curve `rises` but the feat/fix-only curve goes
+/// `flat`, the span effect was commit-type masquerading as span.
+pub struct TypeControl {
+    pub all_trend: Option<SpanTrend>,
+    pub featfix_total: usize,
+    pub featfix_block: usize,
+    pub featfix_curve: Vec<(&'static str, usize, usize)>,
+    pub featfix_trend: Option<SpanTrend>,
+}
+
+/// All three slice-2 controls computed for one rule. Paired positionally with
+/// the matching [`RuleSummary`] by the report, so the rule name lives there.
+pub struct RuleControls {
+    pub vendors: Vec<VendorCut>,
+    pub drain: DrainCut,
+    pub type_control: TypeControl,
+}
+
+/// Label an observation's vendor for grouping — `None` becomes `untagged` so
+/// human/untagged commits are still accounted for in the vendor breakdown.
+fn vendor_label(o: &RuleObservation) -> String {
+    o.vendor.clone().unwrap_or_else(|| "untagged".to_string())
+}
+
+/// True when an observation is a feat/fix commit (the types the strict
+/// commit-format rule disproportionately applies to).
+fn is_feat_or_fix(o: &RuleObservation) -> bool {
+    matches!(o.commit_type.as_deref(), Some("feat") | Some("fix"))
+}
+
+/// Compute the three slice-2 controls for one rule. `drain_specs` is the join
+/// set from [`drain_spec_set`]; passed in so the analysis is pure/testable.
+/// trace:TASK-891 | ai:claude
+pub fn controls_for(
+    obs: &[RuleObservation],
+    rule: &str,
+    drain_specs: &BTreeSet<String>,
+) -> RuleControls {
+    let rows: Vec<&RuleObservation> = obs.iter().filter(|o| o.rule == rule).collect();
+
+    // (a) vendor
+    let mut names: Vec<String> = rows.iter().map(|o| vendor_label(o)).collect();
+    names.sort();
+    names.dedup();
+    let vendors = names
+        .into_iter()
+        .map(|v| {
+            let vrows: Vec<&RuleObservation> = rows
+                .iter()
+                .filter(|o| vendor_label(o) == v)
+                .copied()
+                .collect();
+            let total = vrows.len();
+            let would_block = vrows.iter().filter(|o| o.would_block).count();
+            let trend = span_trend(&span_curve(&vrows));
+            VendorCut {
+                vendor: v,
+                total,
+                would_block,
+                trend,
+            }
+        })
+        .collect();
+
+    // (b) drain-vs-interactive
+    let mut drain = DrainCut {
+        drain_total: 0,
+        drain_block: 0,
+        interactive_total: 0,
+        interactive_block: 0,
+        unattributed_total: 0,
+        unattributed_block: 0,
+    };
+    for o in &rows {
+        match &o.spec {
+            Some(s) if drain_specs.contains(&s.to_ascii_uppercase()) => {
+                drain.drain_total += 1;
+                drain.drain_block += o.would_block as usize;
+            }
+            Some(_) => {
+                drain.interactive_total += 1;
+                drain.interactive_block += o.would_block as usize;
+            }
+            None => {
+                drain.unattributed_total += 1;
+                drain.unattributed_block += o.would_block as usize;
+            }
+        }
+    }
+
+    // (c) type control: all-types trend vs feat/fix-only trend
+    let all_trend = span_trend(&span_curve(&rows));
+    let ff: Vec<&RuleObservation> = rows.iter().filter(|o| is_feat_or_fix(o)).copied().collect();
+    let featfix_total = ff.len();
+    let featfix_block = ff.iter().filter(|o| o.would_block).count();
+    let featfix_curve = span_curve(&ff);
+    let featfix_trend = span_trend(&featfix_curve);
+
+    RuleControls {
+        vendors,
+        drain,
+        type_control: TypeControl {
+            all_trend,
+            featfix_total,
+            featfix_block,
+            featfix_curve,
+            featfix_trend,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -522,14 +845,196 @@ mod tests {
             spec: Some("TASK-9".to_string()),
             span_code_files: 4,
             repo_bucket: "large".to_string(),
+            vendor: Some("claude".to_string()),
+            commit_type: Some("feat".to_string()),
         };
         let json = serde_json::to_string(&o).unwrap();
         assert!(json.contains("\"sha\":\"deadbee\""));
         assert!(json.contains("\"would_block\":true"));
+        // vendor/commit_type are structural labels, not message text or paths.
+        assert!(json.contains("\"vendor\":\"claude\""));
+        assert!(json.contains("\"commit_type\":\"feat\""));
         // Round-trips cleanly.
         let back: RuleObservation = serde_json::from_str(&json).unwrap();
         assert_eq!(back.sha, "deadbee");
         assert_eq!(back.span_code_files, 4);
+        assert_eq!(back.vendor.as_deref(), Some("claude"));
+    }
+
+    #[test]
+    fn legacy_observation_without_new_fields_deserializes() {
+        // A pre-slice-2 log line has no vendor/commit_type — serde defaults them
+        // to None so old logs read cleanly (rescan to backfill the attribution).
+        let line = r#"{"ts":"t","sha":"abc","rule":"commit_format","would_block":false,"span_code_files":1,"repo_bucket":"small"}"#;
+        let o: RuleObservation = serde_json::from_str(line).unwrap();
+        assert!(o.vendor.is_none());
+        assert!(o.commit_type.is_none());
+    }
+
+    #[test]
+    fn parse_vendor_handles_documented_forms() {
+        assert_eq!(
+            parse_vendor("[AI:claude] feat(x): y (TASK-1)").as_deref(),
+            Some("claude")
+        );
+        // Trailing confidence stripped.
+        assert_eq!(
+            parse_vendor("[AI:claude:med] fix(x): y").as_deref(),
+            Some("claude")
+        );
+        // Multi-agent authorship kept whole.
+        assert_eq!(
+            parse_vendor("[AI:antigravity+claude] test(x): y").as_deref(),
+            Some("antigravity+claude")
+        );
+        assert_eq!(
+            parse_vendor("[AI:tool1+tool2:med] feat(x): y").as_deref(),
+            Some("tool1+tool2")
+        );
+        // Untagged / human commit.
+        assert_eq!(parse_vendor("docs: update readme"), None);
+    }
+
+    #[test]
+    fn strip_pr_suffix_recovers_authoring_subject() {
+        // Squash suffix shadows the trailing (REQ-ID): stripping recovers it.
+        assert_eq!(
+            strip_pr_suffix("[AI:claude] fix(init): x (BUG-604) (#1079)"),
+            "[AI:claude] fix(init): x (BUG-604)"
+        );
+        // No PR suffix → unchanged.
+        assert_eq!(
+            strip_pr_suffix("[AI:claude] feat(x): y (TASK-1)"),
+            "[AI:claude] feat(x): y (TASK-1)"
+        );
+        // A trailing non-numeric paren (a real REQ-ID) is NOT stripped.
+        assert_eq!(
+            strip_pr_suffix("feat(x): y (TASK-9)"),
+            "feat(x): y (TASK-9)"
+        );
+
+        // End-to-end: the squash subject would falsely block; the strip fixes it.
+        let squash = facts(
+            "[AI:claude] feat(x): y (TASK-1) (#1078)",
+            &["TASK-1"],
+            true,
+            2,
+        );
+        // Pre-strip the squash subject DOES trip the validator…
+        assert!(crate::commit::validate_message(&squash.subject, true).is_err());
+        // …but the scanner strips it first, so evaluate sees the clean subject.
+        let cleaned = facts(&strip_pr_suffix(&squash.subject), &["TASK-1"], true, 2);
+        let format = out_for(&evaluate_commit(&cleaned), RULE_COMMIT_FORMAT);
+        assert!(
+            !format,
+            "stripped squash subject should adhere to commit_format"
+        );
+    }
+
+    #[test]
+    fn parse_commit_type_skips_ai_tag_and_scope() {
+        assert_eq!(
+            parse_commit_type("[AI:claude] feat(field-study): y (TASK-1)").as_deref(),
+            Some("feat")
+        );
+        assert_eq!(parse_commit_type("fix: a bug").as_deref(), Some("fix"));
+        assert_eq!(
+            parse_commit_type("docs(readme): tidy").as_deref(),
+            Some("docs")
+        );
+        assert_eq!(
+            parse_commit_type("feat!: breaking").as_deref(),
+            Some("feat")
+        );
+        // Non-conventional subject → None.
+        assert_eq!(parse_commit_type("wip random stuff"), None);
+        assert_eq!(parse_commit_type("Merge branch 'x'"), None);
+    }
+
+    #[test]
+    fn span_trend_reads_endpoints_and_verdict() {
+        // Rising curve: 8% at the small end, 95% at the large end.
+        let curve = vec![("0", 100, 8), ("1", 50, 34), ("4-9", 20, 19)];
+        let t = span_trend(&curve).unwrap();
+        assert_eq!(t.first_bucket, "0");
+        assert_eq!(t.last_bucket, "4-9");
+        assert!(t.delta() > 0.8);
+        assert_eq!(t.verdict(), "rises");
+        // Flat curve → null result.
+        let flat = vec![("0", 10, 5), ("4-9", 10, 5)];
+        assert_eq!(span_trend(&flat).unwrap().verdict(), "flat");
+        // Single populated bucket → no trend.
+        assert!(span_trend(&[("1", 10, 1)]).is_none());
+    }
+
+    #[test]
+    fn controls_split_vendor_drain_and_type() {
+        let mk = |sha: &str,
+                  wb: bool,
+                  span: usize,
+                  spec: Option<&str>,
+                  vendor: Option<&str>,
+                  ctype: Option<&str>| RuleObservation {
+            ts: "t".into(),
+            sha: sha.into(),
+            rule: RULE_COMMIT_FORMAT.into(),
+            would_block: wb,
+            spec: spec.map(|s| s.into()),
+            span_code_files: span,
+            repo_bucket: "small".into(),
+            vendor: vendor.map(|v| v.into()),
+            commit_type: ctype.map(|c| c.into()),
+        };
+        let obs = vec![
+            // claude, drained spec, feat, small span, adheres
+            mk("a", false, 1, Some("TASK-1"), Some("claude"), Some("feat")),
+            // claude, drained spec, feat, big span, would-block
+            mk("b", true, 9, Some("TASK-1"), Some("claude"), Some("feat")),
+            // codex, interactive spec, docs, would-block
+            mk("c", true, 2, Some("TASK-2"), Some("codex"), Some("docs")),
+            // untagged, no spec, big span, would-block
+            mk("d", true, 12, None, None, None),
+        ];
+        let drain: BTreeSet<String> = ["TASK-1".to_string()].into_iter().collect();
+        let c = controls_for(&obs, RULE_COMMIT_FORMAT, &drain);
+
+        // Vendor breakdown: claude, codex, untagged.
+        let claude = c.vendors.iter().find(|v| v.vendor == "claude").unwrap();
+        assert_eq!(claude.total, 2);
+        assert_eq!(claude.would_block, 1);
+        assert!(c.vendors.iter().any(|v| v.vendor == "untagged"));
+
+        // Drain split: TASK-1 (2 rows) drain; TASK-2 interactive; untagged none.
+        assert_eq!(c.drain.drain_total, 2);
+        assert_eq!(c.drain.drain_block, 1);
+        assert_eq!(c.drain.interactive_total, 1);
+        assert_eq!(c.drain.unattributed_total, 1);
+
+        // Type control: only the two feat rows are in the feat/fix cut.
+        assert_eq!(c.type_control.featfix_total, 2);
+        assert_eq!(c.type_control.featfix_block, 1);
+    }
+
+    #[test]
+    fn drain_class_empty_log_marks_everything_interactive() {
+        // With an empty drain set, a spec'd row is interactive, an unspec'd row
+        // is unattributed — never falsely "drain".
+        let mk = |spec: Option<&str>| RuleObservation {
+            ts: "t".into(),
+            sha: "s".into(),
+            rule: RULE_COMMIT_FORMAT.into(),
+            would_block: false,
+            spec: spec.map(|s| s.into()),
+            span_code_files: 1,
+            repo_bucket: "small".into(),
+            vendor: None,
+            commit_type: None,
+        };
+        let obs = vec![mk(Some("TASK-9")), mk(None)];
+        let c = controls_for(&obs, RULE_COMMIT_FORMAT, &BTreeSet::new());
+        assert_eq!(c.drain.drain_total, 0);
+        assert_eq!(c.drain.interactive_total, 1);
+        assert_eq!(c.drain.unattributed_total, 1);
     }
 
     #[test]
@@ -573,6 +1078,8 @@ mod tests {
             spec: None,
             span_code_files: span,
             repo_bucket: "small".into(),
+            vendor: None,
+            commit_type: None,
         };
         let obs = vec![
             mk(RULE_TRACE_PRESENCE, false, 1),
