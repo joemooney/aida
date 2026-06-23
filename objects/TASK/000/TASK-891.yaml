@@ -12,12 +12,12 @@ description: |-
   3. TYPE-vs-SPAN DISENTANGLEMENT in the report: control for feat/fix (which the strict rule applies to disproportionately in big commits), so commit-type stops masquerading as span. Without this, the slice-1 8->95% curve is half artifact.
 
   Acceptance: report can break the would-block rate down by (a) vendor, (b) drain-vs-interactive, (c) within-feat/fix-only; and the research note states whether a span/load effect SURVIVES each control. A null result (effect washes out under controls) is a valid, reportable outcome — it would say lab and field agree that prose rules do not measurably fail, which is itself probe data.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:22:38.206478165Z
-modified_at: 2026-06-23T05:40:49.058016079Z
+modified_at: 2026-06-23T06:15:40.939438379Z
 req_type: Task
 tags:
 - batch:groom-0622
@@ -30,7 +30,23 @@ comments:
   content: 'Reprioritized after the slice-1 finding discussion (2026-06-21): VENDOR attribution promoted to the #1 cut because it is the sharpest MULTI-VENDOR-paper-specific implication (vendor-dependent adherence -> vendor-neutral-substrate motivation) AND the cheapest (the [AI:tool] tag is already in every commit subject). The generic drain/headless + type-control cuts remain but are secondary to the cross-vendor comparison for EPIC-48s purposes.'
   created_at: 2026-06-21T20:03:13.570735904Z
   modified_at: 2026-06-21T20:03:13.570735904Z
+history:
+- id: 019ef31e-c639-78c1-b674-cb2373a7fa9d
+  author: aida-auto-bump
+  timestamp: 2026-06-23T06:15:40.857662864Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ef31e-c68b-7ad2-a840-c6cdaa4319b0
+  timestamp: 2026-06-23T06:15:40.939431675Z
+  agent: implementer
+  commit_sha: a3d2ce93b91b493974828feab2c771224e4a133f
+  summary: Completed via merge a3d2ce93
 implementation_info:
   implemented: true
   implemented_at: 2026-06-23T05:40:49.058016079Z
   implemented_by: joe
+  completed_at: 2026-06-23T06:15:39.902116437Z
+  completion_sha: a3d2ce93b91b493974828feab2c771224e4a133f
