@@ -20010,5 +20010,21 @@ operations:
   timestamp: 2026-06-23T05:01:37.406030233Z
   kind: !SetTitle
     title: User/project-defined aliases (aida alias add/list/remove) — full personal+project (decided 2026-06-22)
-clock: 1937
+- id: 019ef2db-01d5-78a3-8e3a-e57f86e37d63
+  target_id: 019ede69-d218-70a1-b82d-37aa3843e8d5
+  author: aida
+  node_id: '1'
+  lamport: 1938
+  timestamp: 2026-06-23T05:01:39.669031373Z
+  kind: !AddTag
+    tag: decided
+- id: 019ef2db-0318-75a0-bbbc-325d6ba2c8c2
+  target_id: 019ede69-d218-70a1-b82d-37aa3843e8d5
+  author: aida
+  node_id: '1'
+  lamport: 1939
+  timestamp: 2026-06-23T05:01:39.992535300Z
+  kind: !RemoveTag
+    tag: has-open-question
+clock: 1939
 node_id: '1'
