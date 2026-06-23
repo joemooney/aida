@@ -2,13 +2,32 @@ id: 019ede69-d218-70a1-b82d-37aa3843e8d5
 spec_id: TASK-877
 agreed_id: TASK-877
 title: User/project-defined aliases (aida alias add/list/remove) — full personal+project (decided 2026-06-22)
-description: 'OPEN QUESTION FOR OPERATOR (recorded 2026-06-19, do not build yet). Idea: aida alias add <name> "<expansion>" for custom aliases. Advisor pushback to resolve first: (1) the PERSONAL case is already solved by shell aliases/functions (alias al=''aida list'') - an in-aida personal-alias system just duplicates bash/zsh for no gain; (2) the ONLY differentiated form is a PROJECT-LEVEL git-tracked [alias] (like git''s .gitconfig [alias]) - shareable across a team, available where shell aliases are not (CI, fresh clones); (3) BUT that adds an expansion layer (shadowing real commands, recursion guards, parsing) AND a real concern: AGENTS should use canonical commands, not a human''s idiosyncratic aliases - custom aliases could HURT agent legibility (the substrate''s value is a stable canonical surface). RECOMMENDATION: ship the built-in alias registry (the companion STORY) first; revisit user/project aliases only if the built-in list proves insufficient, and if so limit to PROJECT-level (not personal, which is the shell''s job) and EXCLUDE alias expansion for agent/headless/MCP callers (canonical-only for agents). Decide scope on operator input.'
+description: |-
+  DECIDED 2026-06-22 (operator, over advisor recommendation-to-not-build): build FULL user-defined aliases — both personal and project scope. Operator chose maximal flexibility knowingly; advisor case for not-building (personal=shells job; project taxes the canonical-surface moat) is on record and overruled.
+
+  Scope:
+  - PERSONAL aliases: stored user-level (~/.aida/aliases.toml or [alias] in ~/.aida/config.toml). Convenience parity with shell aliases, but available in AIDA contexts where shell rc is not loaded.
+  - PROJECT aliases: git-tracked [alias] in .aida/config.toml (like gits .gitconfig [alias]) — shareable across a team, available in CI / fresh clones / sandboxes.
+  - Precedence when a name is defined in both: project overrides personal overrides built-in (or pick the inverse — settle in the plan; document it).
+  - CRUD verbs: aida alias add <name> "<expansion>" [--user|--project], aida alias remove <name>, and integrate into the existing aida alias / aida alias list registry (STORY-667) so user aliases show alongside built-ins, clearly marked by source.
+
+  HARD INVARIANT (advisor-held, flag to override): alias EXPANSION applies ONLY to interactive human shells. Agent / headless / MCP callers (AIDA_AGENT_TYPE set, AIDA_HEADLESS=1, the MCP server path, or non-TTY) MUST resolve canonical commands and NEVER expand a user alias. The substrates value is a stable canonical surface legible to every vendor; letting agents expand idiosyncratic aliases is the one change that corrodes that moat, and it costs nothing in human ergonomics to wall off. aida alias list still SHOWS user aliases to an agent (discoverability), but the dispatcher never expands them for a non-human caller.
+
+  Implementation notes: the expansion layer needs command-shadowing rules (a user alias must NOT be able to shadow/redefine a real subcommand — reject or namespace), a recursion guard (alias -> alias cycles), and argv splicing. Resolve aliases at the dispatch boundary, AFTER the human-caller check. Reuse the STORY-667 registry resolvers as the single source of truth so user + built-in aliases dont drift.
+
+  ## Acceptance
+  1. aida alias add <name> "aida list --status approved" --project writes a git-tracked [alias] entry in .aida/config.toml (preserving the rest of the file); --user writes the personal store.
+  2. In an interactive human shell, typing the aliased name runs the expansion; aida alias list shows it, grouped/marked by source (built-in / personal / project).
+  3. A user alias CANNOT shadow a real subcommand (attempting `aida alias add list ...` is refused with a clear message).
+  4. Alias -> alias cycles are detected and refused (no infinite expansion).
+  5. HARD: with AIDA_AGENT_TYPE/AIDA_HEADLESS set, via the MCP server, or non-TTY, the aliased name is NOT expanded (canonical-only); a test asserts an agent-context invocation of a user alias does not run the expansion. aida alias list STILL lists user aliases in that context.
+  6. Precedence (project vs personal vs built-in) is documented and tested.
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T05:45:37.560541547Z
-modified_at: 2026-06-23T05:01:39.537185264Z
+modified_at: 2026-06-23T05:01:42.300558508Z
 req_type: Task
 tags:
 - aida:alias
