@@ -33085,6 +33085,72 @@ fn scan_completed_without_commit(
     scan_completed_without_commit_with_options(project_root, store, since, false).findings
 }
 
+/// Build the corroboration set: every spec-id any commit message references.
+/// Scans the FULL message (subject + body) of each commit — a squash-merge
+/// concatenates each child commit's `(SPEC-ID)` trailer into the BODY, so a
+/// subject-only scan false-flags every squash-merged spec (BUG-606). Unions the
+/// subject-trailer extractor (`(SPEC-ID)` / leading `SPEC-ID:`) with the
+/// body-trailer extractor (skips code-like lines per BUG-412). Plan commits are
+/// skipped — they name PLANNED, not shipped, specs (BUG-426). Pure + testable.
+/// trace:BUG-606 | ai:claude
+/// Full-history corroboration set for the default branch: every spec-id any
+/// commit message references (subject + body, squash-body-aware). The
+/// completed-without-commit and claimed-done-divergence detectors both rely on
+/// this being COMPLETE — an incomplete set false-flags shipped specs.
+/// trace:BUG-606 | ai:claude
+fn referenced_spec_ids_on_default_branch(
+    project_root: &std::path::Path,
+) -> std::collections::HashSet<String> {
+    let Some(default) = detect_default_branch_ref(project_root) else {
+        return std::collections::HashSet::new();
+    };
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-z", "--pretty=format:%B", &default])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            referenced_spec_ids_from_messages(text.split('\0'))
+        }
+        _ => std::collections::HashSet::new(),
+    }
+}
+
+fn referenced_spec_ids_from_messages<'a>(
+    messages: impl IntoIterator<Item = &'a str>,
+) -> std::collections::HashSet<String> {
+    // Liberal token match: a spec-id can appear ANYWHERE in the message — a
+    // clean `(TASK-1)` trailer, a squash body `… (BUG-110) (#144)`, a
+    // punctuated `(BUG-109).`, or mid-prose `(ADR-3 / TASK-647), so …`. For a
+    // CORROBORATION check ("is there ANY git evidence this spec exists"),
+    // matching the id token anywhere is correct and conservative — a benign
+    // over-match just means we don't false-flag, which the check explicitly
+    // prefers over a missed reference. Anchored to UPPERCASE 2+-letter prefixes
+    // so lowercase prose ("step-1") doesn't pollute; coincidental tokens like
+    // `UTF-8` are harmless (no spec collides). trace:BUG-606 | ai:claude
+    let re = regex::Regex::new(r"\b[A-Z]{2,}-[0-9]+(?:-[0-9]+)?\b")
+        .expect("valid spec-id token regex");
+    let mut referenced = std::collections::HashSet::new();
+    for message in messages {
+        let subject = message
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("")
+            .trim();
+        // Plan commits name PLANNED, not shipped, specs (BUG-426) — skip them so
+        // a plan-only reference never corroborates a completion.
+        if subject.is_empty() || is_plan_commit_subject(subject) {
+            continue;
+        }
+        for m in re.find_iter(message) {
+            referenced.insert(m.as_str().to_ascii_uppercase());
+        }
+    }
+    referenced
+}
+
 fn scan_completed_without_commit_with_options(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -33124,18 +33190,18 @@ fn scan_completed_without_commit_with_options(
     // ---- Reference set: spec ids named by commits on the default branch. ----
     // Full history (no --max-count) so an old corroborating commit is never
     // missed — the `since` cutoff bounds *flagging*, not the reference scan.
-    let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
-    if let Some(log) = git(&["log", "--pretty=format:%s", &default_ref]) {
-        for subject in log.lines() {
-            let subject = subject.trim();
-            if subject.is_empty() || is_plan_commit_subject(subject) {
-                continue;
-            }
-            for id in extract_spec_ids_from_commit(subject) {
-                referenced.insert(id.to_ascii_uppercase());
-            }
-        }
-    }
+    // BUG-606: scan the FULL message (%B), not just the subject (%s). A
+    // squash-merge keeps only the PR title as its subject and concatenates each
+    // child commit's `(SPEC-ID)` trailer into the BODY, so a subject-only scan
+    // false-flagged every squash-merged Completed spec (observed: ~1464 false
+    // positives — specs with 10+ body-referencing commits reported as
+    // "no commit referencing it"). `-z` NUL-delimits commits so multi-line
+    // bodies parse unambiguously. trace:BUG-606 | ai:claude
+    let mut referenced: std::collections::HashSet<String> =
+        match git(&["log", "-z", "--pretty=format:%B", &default_ref]) {
+            Some(log) => referenced_spec_ids_from_messages(log.split('\0')),
+            None => std::collections::HashSet::new(),
+        };
 
     // ---- Reference set, second source: `// trace:SPEC-ID` in tracked files. ----
     // `git grep <ref>` scans only tracked blobs at the default branch tree —
@@ -63034,6 +63100,57 @@ reason = "reserved by docs build"
         assert!(
             extract_pr_number_from_commit_subject(non_squash).is_none(),
             "non-squash subject must not parse a (#N) PR number"
+        );
+    }
+
+    /// BUG-606: the completed-without-commit corroboration scan must read FULL
+    /// messages, not subjects. A squash-merge keeps only the PR title as its
+    /// subject (no spec id) and folds each child's `(SPEC-ID)` trailer into the
+    /// body — a subject-only scan false-flagged every squash-merged Completed
+    /// spec (~1464 false positives on this repo). trace:BUG-606 | ai:claude
+    #[test]
+    fn corroboration_scan_finds_squash_body_trailer() {
+        // The exact shape that broke: subject is the PR title with NO spec id;
+        // the corroborating `(TASK-216)` lives only in the concatenated body.
+        let squash = "[AI:claude] feat(review): own-PR handling (#1042)\n\n\
+            * [AI:claude] fix(aida-review): detect own-PR before request-changes API call (TASK-216)\n\n\
+            mirroring the existing skip.\n";
+        let refs = referenced_spec_ids_from_messages([squash]);
+        assert!(
+            refs.contains("TASK-216"),
+            "body trailer must corroborate (no false 'no commit' flag): {refs:?}"
+        );
+    }
+
+    #[test]
+    fn corroboration_scan_still_finds_subject_trailer() {
+        let refs = referenced_spec_ids_from_messages(["[AI:claude] fix(z): thing (BUG-89)"]);
+        assert!(refs.contains("BUG-89"), "subject trailer still works: {refs:?}");
+    }
+
+    /// BUG-606: prose / punctuated / mid-line paren mentions must also
+    /// corroborate — `(BUG-109).` (trailing period) and `(ADR-3 / TASK-647),`
+    /// (mid-line, prose after) are real references a trailing-trailer-only
+    /// extractor missed. trace:BUG-606 | ai:claude
+    #[test]
+    fn corroboration_scan_finds_prose_and_punctuated_mentions() {
+        let msg = "feat(tui): shell (#144)\n\n\
+            The empty shell previously showed only keybindings (BUG-109).\n\
+            advisor-authority-gated (ADR-3 / TASK-647), so it cannot drain.\n";
+        let refs = referenced_spec_ids_from_messages([msg]);
+        for id in ["BUG-109", "ADR-3", "TASK-647"] {
+            assert!(refs.contains(id), "{id} must corroborate from prose: {refs:?}");
+        }
+    }
+
+    /// Plan commits name PLANNED, not shipped, specs (BUG-426) — they must not
+    /// corroborate a completion. trace:BUG-606 | ai:claude
+    #[test]
+    fn corroboration_scan_skips_plan_commits() {
+        let refs = referenced_spec_ids_from_messages(["docs(plans): plan for the thing (STORY-999)"]);
+        assert!(
+            !refs.contains("STORY-999"),
+            "plan-commit references are not completion evidence: {refs:?}"
         );
     }
 
@@ -97003,11 +97120,14 @@ fn collect_cleanup_report(
     // a dirty worktree (uncommitted work despite Done), (2) no commit references
     // the spec AND no PR exists. We build a filesystem-derived input row per
     // Done/Completed spec, then the pure detector decides. trace:STORY-469
-    let landed_spec_ids: std::collections::HashSet<String> =
-        scan_default_branch_for_spec_landings(project_root, 200)
-            .into_iter()
-            .map(|(id, _)| id.to_ascii_uppercase())
-            .collect();
+    // BUG-606: full-history, body-aware corroboration set. The prior call here
+    // capped at 200 commits AND read subjects only, so every Done/Completed spec
+    // older than ~200 commits — or referenced only in a squash-merge BODY — was
+    // falsely reported as "no commit references it" (~1464 false positives on
+    // this repo). The missed-auto-bump detector above keeps the recent-window
+    // landing scan (it needs the landing sha and only cares about recent Done
+    // specs). trace:BUG-606 | ai:claude
+    let landed_spec_ids = referenced_spec_ids_on_default_branch(project_root);
     // Map a spec's active-lease worktree (Live/Dormant) to its dirty count.
     let mut claimed_done_inputs = Vec::new();
     for req in &store.requirements {
@@ -97040,7 +97160,15 @@ fn collect_cleanup_report(
             None => (false, None, 0, 0),
         };
         let branch_name = spec_id.to_ascii_lowercase();
-        let has_commit = landed_spec_ids.contains(&spec_id.to_ascii_uppercase());
+        // BUG-606: corroborate by spec_id OR agreed_id — a commit may reference
+        // the short display id (TASK-216) while the spec is stored under its
+        // node-aware id, or vice versa.
+        let has_commit = landed_spec_ids.contains(&spec_id.to_ascii_uppercase())
+            || req
+                .agreed_id
+                .as_deref()
+                .map(|a| landed_spec_ids.contains(&a.to_ascii_uppercase()))
+                .unwrap_or(false);
         let has_pr =
             open_pr_branches.contains(&branch_name) || ever_pr_branches.contains(&branch_name);
         claimed_done_inputs.push(status_cleanup::ClaimedDoneInput {
