@@ -8,12 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T05:45:37.560541547Z
-modified_at: 2026-06-23T05:01:37.274872533Z
+modified_at: 2026-06-23T05:01:39.537185264Z
 req_type: Task
 tags:
 - aida:alias
+- decided
 - from-operator
-- has-open-question
 - ux
 comments:
 - id: 019ede7e-3e1c-7251-af26-41d125c57970
