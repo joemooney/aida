@@ -12,12 +12,12 @@ description: |-
   This is reliability-critical onboarding substrate + keystone-adjacent (it governs every agent session), so it ships at the keyboard supervised, not via unsupervised drain. Smallest-valuable-slice: warn-only on Edit/Write for advisor sessions, solo-marker-aware, scaffolded into the template settings.json. Followups: spec-first nudge at first Edit of a new theme; cross-repo MCP store-root-vs-cwd mismatch guard (the tqx/tq footgun the operator hit); a session-end capture nudge.
 
   Honest ceiling: a hook can warn/block Edit, but it cannot force GOOD spec hygiene — it converts the loudest, most-common violation (advisor silently coding) from fine print into a tripwire. That is the high-leverage 80%.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:41:15.776689931Z
-modified_at: 2026-06-23T05:38:49.222953704Z
+modified_at: 2026-06-23T05:46:33.595468791Z
 req_type: Story
 tags:
 - from-advisor
@@ -37,3 +37,21 @@ comments:
   content: Commit c1190c5a6 references this requirement
   created_at: 2026-06-23T05:38:49.222953704Z
   modified_at: 2026-06-23T05:38:49.222953704Z
+history:
+- id: 019ef304-1caa-71c2-8f59-614adc0cdf17
+  author: aida-auto-bump
+  timestamp: 2026-06-23T05:46:33.514753212Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ef304-1cfb-71b1-9ab4-f462734d1d1a
+  timestamp: 2026-06-23T05:46:33.595462676Z
+  agent: aida
+  commit_sha: 6470d59e59223ab881fc2a3e37e8f72420c5bc16
+  summary: Completed via merge 6470d59e
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-23T05:46:32.570598267Z
+  completion_sha: 6470d59e59223ab881fc2a3e37e8f72420c5bc16
