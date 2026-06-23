@@ -20002,5 +20002,13 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1936
+- id: 019ef2da-f8fe-70e3-b655-cc7dba78168b
+  target_id: 019ede69-d218-70a1-b82d-37aa3843e8d5
+  author: aida
+  node_id: '1'
+  lamport: 1937
+  timestamp: 2026-06-23T05:01:37.406030233Z
+  kind: !SetTitle
+    title: User/project-defined aliases (aida alias add/list/remove) — full personal+project (decided 2026-06-22)
+clock: 1937
 node_id: '1'
