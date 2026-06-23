@@ -995,10 +995,17 @@ pub(crate) fn detect_claimed_done_divergence(
             });
             continue;
         }
-        // Contradiction 2: no commit + no PR. The Done claim has no substrate
-        // evidence at all (a `Completed` spec is merge-driven so it always has
-        // a commit — this realistically only fires for `Done`).
-        if !input.has_commit && !input.has_pr {
+        // Contradiction 2: no commit + no PR — DONE only. A `Done` spec claims
+        // "work finished on a branch" with nothing to show (no commit, no PR) —
+        // the genuine divergence. A `Completed` spec is either merge-driven (it
+        // has a commit) OR a legacy spec that predates the `(SPEC-ID)` trailer
+        // convention, where "no commit" is expected and NOT a reopen-worthy
+        // divergence. Firing on legacy completeds drowned the real signal in
+        // hundreds of false "reopen" prompts; the separate completed-without-
+        // commit doctor category (with its legacy cutoff) covers Completed.
+        // trace:BUG-606 | ai:claude
+        let is_done = input.status.eq_ignore_ascii_case("done");
+        if is_done && !input.has_commit && !input.has_pr {
             out.push(ClaimedDoneDivergedItem {
                 spec_id: input.spec_id.clone(),
                 title: input.title.clone(),
@@ -1476,17 +1483,43 @@ mod tests {
         assert!(out.is_empty(), "non-Done spec should be skipped: {out:?}");
     }
 
+    /// A `Completed` spec still qualifies for the DIRTY-WORKTREE contradiction
+    /// (uncommitted work despite Completed) — but NOT for no-commit-no-pr: a
+    /// Completed spec with no commit is legacy (predates the `(SPEC-ID)` trailer
+    /// convention) or merge-driven, never a reopen-worthy divergence. Firing on
+    /// legacy completeds produced ~1464 false positives (BUG-606); the separate
+    /// completed-without-commit doctor category covers Completed.
+    /// trace:BUG-606 | ai:claude
     #[test]
-    fn guard3_completed_status_also_qualifies() {
-        let inputs = vec![ClaimedDoneInput {
+    fn guard3_completed_qualifies_for_dirty_worktree_not_no_commit() {
+        // Dirty worktree on a Completed spec → flagged (contradiction 1).
+        let dirty = vec![ClaimedDoneInput {
+            status: "Completed".to_string(),
+            has_active_lease: true,
+            branch: Some("task-4".to_string()),
+            modified_files: 2,
+            age_hours: 3,
+            ..done_input("TASK-4")
+        }];
+        let out = detect_claimed_done_divergence(&dirty);
+        assert_eq!(
+            out.len(),
+            1,
+            "dirty worktree on Completed must flag: {out:?}"
+        );
+        assert_eq!(out[0].claimed_status, "Completed");
+
+        // No commit + no PR on a Completed spec → NOT flagged (legacy/merge-driven).
+        let no_evidence = vec![ClaimedDoneInput {
             status: "Completed".to_string(),
             has_commit: false,
             has_pr: false,
-            ..done_input("TASK-4")
+            ..done_input("TASK-5")
         }];
-        let out = detect_claimed_done_divergence(&inputs);
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].claimed_status, "Completed");
+        assert!(
+            detect_claimed_done_divergence(&no_evidence).is_empty(),
+            "Completed + no-commit is legacy, not a reopen-worthy divergence"
+        );
     }
 
     #[test]
