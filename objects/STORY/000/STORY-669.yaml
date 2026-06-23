@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:31:33.478395114Z
-modified_at: 2026-06-23T04:55:35.782768582Z
+modified_at: 2026-06-23T06:04:21.746533278Z
 req_type: Story
 tags:
 - aida:config:menu
@@ -36,3 +36,8 @@ comments:
   content: 'Specced for implementation (2026-06-22, advisor): plan at docs/plans/2026-06-22-config-menu-inplace-edit.md + acceptance criteria added to the description. Verified the load-bearing reuse against code: glyph_config.rs already has the toml_edit load_doc/save_doc/table_mut + Scope{Project,User} + config_path_for machinery to generalize; PolicySource already maps each knob to its write-target file (Env => read-only); neither PolicyRow nor ConfigMenuItem carries type info (the editability-metadata gap the plan fills via a config_knob_editability table mirroring config_knob_doc). Left Approved/low — NOT implemented here (advisor seat); route to an implementer via queue add --for implementer when prioritized.'
   created_at: 2026-06-23T04:39:28.185550544Z
   modified_at: 2026-06-23T04:39:28.185550544Z
+- id: 019ef314-6972-7171-b3ea-e3e866a18b8d
+  author: joe
+  content: 'Coupling note (2026-06-22): STORY-671 (central policy registry, BUG-533 slice 2) will subsume this storys editability metadata — its acceptance #5 hangs bool/scalar/enum + writable-scope off the single registry. Build order is fine either way: STORY-669 can ship first with the minimal config_knob_editability table the plan describes, and STORY-671 absorbs it later; OR if STORY-671 lands first, hang editability directly off the registry instead of a parallel table. Implementer: keep the editability table SMALL/mirrorable (do not deeply entangle it with the menu) so STORY-671 can fold it in cleanly.'
+  created_at: 2026-06-23T06:04:21.746533278Z
+  modified_at: 2026-06-23T06:04:21.746533278Z
