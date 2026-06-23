@@ -1502,7 +1502,11 @@ mod tests {
             ..done_input("TASK-4")
         }];
         let out = detect_claimed_done_divergence(&dirty);
-        assert_eq!(out.len(), 1, "dirty worktree on Completed must flag: {out:?}");
+        assert_eq!(
+            out.len(),
+            1,
+            "dirty worktree on Completed must flag: {out:?}"
+        );
         assert_eq!(out[0].claimed_status, "Completed");
 
         // No commit + no PR on a Completed spec → NOT flagged (legacy/merge-driven).
