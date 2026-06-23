@@ -46,20 +46,41 @@ impl Scaffolder {
           }"#,
             );
         }
+        // PreToolUse holds one or more matcher objects: the Bash matcher
+        // (validate-commit + git-guardrails) and, separately, the
+        // Write|Edit|MultiEdit advisor-code-guard. trace:STORY-670 | ai:claude
+        let mut pre_matchers: Vec<String> = Vec::new();
         if !pre_entries.is_empty() {
             let entries = pre_entries.join(",\n");
-            // Owned String — Vec<&str> can't borrow it directly, so we leak
-            // through a Box::leak-free path by collecting into String later.
-            hooks.push(format!(
-                r#"    "PreToolUse": [
-      {{
+            pre_matchers.push(format!(
+                r#"      {{
         "matcher": "Bash",
         "hooks": [
 {entries}
         ]
-      }}
-    ]"#,
+      }}"#,
                 entries = entries
+            ));
+        }
+        if self.config.include_advisor_code_guard_hook {
+            pre_matchers.push(
+                r#"      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-advisor-code-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }"#
+                .to_string(),
+            );
+        }
+        if !pre_matchers.is_empty() {
+            hooks.push(format!(
+                "    \"PreToolUse\": [\n{}\n    ]",
+                pre_matchers.join(",\n")
             ));
         }
 
@@ -321,5 +342,40 @@ mod tests {
             .collect();
         assert!(cmds.iter().any(|c| c.ends_with("/aida-validate-commit.sh")));
         assert!(cmds.iter().any(|c| c.ends_with("/aida-git-guardrails.sh")));
+    }
+
+    /// The advisor-code-guard rides as its own PreToolUse matcher
+    /// (Write|Edit|MultiEdit), default-on. trace:STORY-670 | ai:claude
+    #[test]
+    fn pre_tool_use_includes_advisor_code_guard_by_default() {
+        let json = build(ScaffoldConfig::default());
+        let v = parse_json(&json);
+        let matchers = v["hooks"]["PreToolUse"]
+            .as_array()
+            .expect("PreToolUse array");
+        let guard = matchers
+            .iter()
+            .find(|m| m["matcher"] == "Write|Edit|MultiEdit")
+            .expect("advisor-code-guard matcher present");
+        let cmd = guard["hooks"][0]["command"].as_str().unwrap();
+        assert!(cmd.ends_with("/aida-advisor-code-guard.sh"));
+    }
+
+    /// `--no-hooks`-style opt-out drops the advisor-code-guard matcher.
+    /// trace:STORY-670 | ai:claude
+    #[test]
+    fn pre_tool_use_omits_advisor_code_guard_when_disabled() {
+        let cfg = ScaffoldConfig {
+            include_advisor_code_guard_hook: false,
+            ..ScaffoldConfig::default()
+        };
+        let json = build(cfg);
+        let v = parse_json(&json);
+        let matchers = v["hooks"]["PreToolUse"]
+            .as_array()
+            .expect("PreToolUse array");
+        assert!(matchers
+            .iter()
+            .all(|m| m["matcher"] != "Write|Edit|MultiEdit"));
     }
 }
