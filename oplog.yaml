@@ -20102,5 +20102,33 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 1944
+- id: 019ef313-95f7-7342-a24a-20571f42d85b
+  target_id: 019ef313-8be0-7c21-bf88-3cd1efb2cd60
+  author: aida
+  node_id: '1'
+  lamport: 1945
+  timestamp: 2026-06-23T06:03:27.607202162Z
+  kind: !Create
+    title: 'Central policy registry: config knobs self-register so config show/menu/edit + anti-drift test derive from one source (BUG-533 slice 2)'
+    description: |-
+      BUG-533 shipped slice 1 (aida config show MVP rendering); slice 2 — the durable central registry so new knobs auto-appear and config show stops silently falling behind — was deferred by the implementer and NEVER FILED (flagged in the 2026-06-13 burndown handoff). This files it.
+
+      What exists today: TASK-793 added KNOWN_CONFIG_SECTIONS + the policy_registry_covers_* tests as a SECTION-level bouncer. But it is a HARDCODED list — it only checks consistency between that hand-maintained list and policy_registry. A brand-new section that nobody adds to the list is invisible to the check, and the per-knob doc/type/default still live in a separate hand-maintained config_knob_doc table. So adding one knob today means ~4 manual edits across: the read site, policy_registry, config_knob_doc, and KNOWN_CONFIG_SECTIONS. Miss any and the knob silently vanishes from config show/menu.
+
+      LIVE PROOF (2026-06-22): the [field_study] enabled knob + AIDA_FIELD_STUDY (added this session, SPIKE-67) is NOT in policy_registry, NOT in KNOWN_CONFIG_SECTIONS, and does NOT appear in aida config show — it drifted, and the existing anti-drift test did NOT catch it because field_study was never added to the hardcoded list. The bouncer cannot catch what it was not told about.
+
+      Stakes just rose: STORY-669 makes config menu knobs EDITABLE. A knob that drifts out of the registry is no longer merely invisible in config show — it is also un-editable in the menu. The registry becomes load-bearing for THREE surfaces (show, menu, edit), tripling the cost of every drift.
+
+      The fix: a single source of truth where each config knob/section DECLARES itself once (section, key, type [bool/scalar/enum], default, scope [project/user], explanation), and config show, config menu, the editability table (STORY-669), AND the anti-drift CI test all DERIVE from it. Adding a knob = one declaration, not four scattered edits. The anti-drift test becomes real auto-discovery (a config read in code with no declaration fails CI) rather than a hand-maintained allow-list.
+
+      ## Acceptance
+      1. Adding a new config knob in ONE declaration site makes it appear automatically in both aida config show and aida config menu (no separate policy_registry / config_knob_doc / KNOWN_CONFIG_SECTIONS edits).
+      2. A config section/knob read in code but not declared fails CI (true auto-discovery, not a hardcoded list).
+      3. The currently-drifted [field_study] enabled knob appears in aida config show after the migration (regression-guarded).
+      4. config_knob_doc + KNOWN_CONFIG_SECTIONS + policy_registry are collapsed into / derived from the single registry; no duplicated knob metadata.
+      5. STORY-669 editability metadata (bool/scalar/enum + writable scope) hangs off the same declaration.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 1945
 node_id: '1'
