@@ -1,0 +1,19 @@
+id: 019ef323-c10c-7ec3-95df-cce6fd3e9bb7
+spec_id: BUG-606
+agreed_id: BUG-606
+title: aida doctor completed-without-commit scan false-positives en masse (1464 reported; specs DO have commits)
+description: 'aida status --cleanup / aida doctor reports 1464 specs "Claimed Done but substrate disagrees — no commit references it and no PR exists", and 398 "Completed specs with no corroborating commit", each with the recommendation to reopen (aida edit <ID> --status in-progress). VERIFIED FALSE 2026-06-22: spot-checked the named specs against git history — TASK-216 has 13 commits referencing it, CR-2 has 1, TASK-891 has 13, STORY-670 has 6. They all shipped; the corroboration scan simply fails to find commits that demonstrably exist (git log --all --grep=<spec> finds them). So the detector under-matches massively — likely scanning only a narrow window / only (SPEC-ID) subject trailers / not resolving agreed-id vs spec-id / not handling squash-merge subjects (the squash (#NNNN) suffix issue TASK-891 just fixed for the field-study scanner is the SAME class of bug — the (#NNNN) suffix or the spec being in the body not the trailer defeats the match). DANGER: the recommended remediation (reopen 1464 completed specs) would CORRUPT the whole completed history. Acceptance: the completed-without-commit scan matches any commit that references the spec id (trailer OR body OR trace comment, spec_id OR agreed_id), across full reachable history, accounting for squash (#NNNN) suffixes; the count drops to near-zero on this repo; and the reopen recommendation never fires for a spec that has ANY referencing commit. Until fixed, operators must IGNORE this category.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-23T06:21:07.212307964Z
+modified_at: 2026-06-23T06:21:07.212307964Z
+req_type: Bug
+tags:
+- aida:doctor
+- aida:status
+- data-integrity-scare
+- false-positive
+- from-operator
+- severity:major
