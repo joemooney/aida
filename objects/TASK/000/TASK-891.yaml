@@ -17,9 +17,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-21T06:22:38.206478165Z
-modified_at: 2026-06-21T20:03:13.570735904Z
+modified_at: 2026-06-23T04:55:33.205066257Z
 req_type: Task
 tags:
+- batch:groom-0622
 - field-study
 - parent:SPIKE-67
 - tilt-verdict
