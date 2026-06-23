@@ -100,6 +100,10 @@ jobs:
       - name: Run MCP doc-consistency test
         run: bash tests/test_mcp_doc_consistency.sh
 
+      # STORY-670: advisor-code-guard PreToolUse hook decision matrix.
+      - name: Run advisor-code-guard hook test
+        run: bash tests/test_advisor_code_guard.sh
+
       # STORY-498: CI spec-id validity gate (MVP slice of EPIC-34). Walk the
       # commits this PR adds, resolve every `(SPEC-ID)` subject trailer against
       # the live requirement graph, and FAIL the PR when a trailer references a

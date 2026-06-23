@@ -1,0 +1,1 @@
+../../aida-core/templates/hooks/aida-advisor-code-guard.sh

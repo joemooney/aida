@@ -426,4 +426,14 @@ exit 0
             .unwrap_or("")
             .to_string()
     }
+
+    /// Advisor-code-guard PreToolUse hook (Write|Edit|MultiEdit) — soft-blocks
+    /// the first code edit in an advisor session. trace:STORY-670 | ai:claude
+    pub(super) fn generate_advisor_code_guard_hook(&self) -> String {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-advisor-code-guard.sh")
+            .copied()
+            .unwrap_or("")
+            .to_string()
+    }
 }
