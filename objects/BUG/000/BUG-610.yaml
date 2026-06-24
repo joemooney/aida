@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:10:57.315893693Z
-modified_at: 2026-06-24T04:14:44.002460952Z
+modified_at: 2026-06-24T04:34:45.651149094Z
 req_type: Bug
 tags:
 - aida:init
@@ -39,3 +39,8 @@ comments:
   content: 'Fix scope clarified: BUG-610 = the DATA-LOSS fix (aida init --sibling now REFUSES to overwrite a populated store without --force, with a clear message). The multi-repo AUTO-ATTACH (second repo joins the store, sees its specs, gets a distinct node id) is split out as STORY-674 — that is the feature; this is the safety guard that stops the silent wipe.'
   created_at: 2026-06-24T04:14:44.002460952Z
   modified_at: 2026-06-24T04:14:44.002460952Z
+- id: 019ef7e8-bd13-72b1-916c-e41ac7ec1221
+  author: joe
+  content: Commit 11e299353 references this requirement
+  created_at: 2026-06-24T04:34:45.651149094Z
+  modified_at: 2026-06-24T04:34:45.651149094Z
