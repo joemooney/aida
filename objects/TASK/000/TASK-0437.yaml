@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:52.568667667Z
-modified_at: 2026-06-24T03:21:52.568667667Z
+modified_at: 2026-06-24T03:36:20.426070787Z
 req_type: Task
 tags:
 - advisor-autopilot
@@ -26,3 +26,6 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a5-ba00-76c2-a81f-8fd1bde9e5aa
   created_at: 2026-06-24T03:21:52.568705914Z
+deferred: true
+deferred_at: 2026-06-24T03:36:20.426070787Z
+deferred_until: stabilization complete AND the single-master-advisor model demonstrably strains (SPIKE-10 greenlit)
