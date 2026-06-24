@@ -1,0 +1,28 @@
+id: 019ef7a6-02b8-7c81-92ce-247494b0c73a
+spec_id: TASK-0437
+title: Define cross-subsystem arbitration and master advisor authority
+description: |-
+  Define how AIDA handles decisions that span subsystem boundaries or exceed a subsystem advisor's authority.
+
+  Acceptance:
+  - Define when a subsystem advisor can decide locally versus when it must escalate.
+  - Define cross-subsystem conflict handling and master advisor arbitration.
+  - Define keystone/security/architecture/autonomy machinery defaults as master-advisor or human-gated unless explicitly delegated.
+  - Clarify how advisor autopilot authority envelopes narrow under subsystem scope.
+  - Include examples: MCP contract touching CLI output, TUI workflow changing queue semantics, security change affecting all agents.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:21:52.568667667Z
+modified_at: 2026-06-24T03:21:52.568667667Z
+req_type: Task
+tags:
+- advisor-autopilot
+- arbitration
+- role:advisor
+- subsystem
+relationships:
+- rel_type: Child
+  target_id: 019ef7a5-ba00-76c2-a81f-8fd1bde9e5aa
+  created_at: 2026-06-24T03:21:52.568705914Z
