@@ -9,12 +9,12 @@ description: |-
   - Classify each item as observation, guidance, enforcement, mutation, approval, session control, or UX.
   - For each load-bearing item, identify the intended replacement: Codex config/hook, AGENTS.md, project script, AIDA CLI/MCP, git hook, CI, orchestrator, or explicit no-equivalent gap.
   - Produce a migration table that can be checked into docs or attached as a spec comment.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:04.022726496Z
-modified_at: 2026-06-24T02:53:04.022726496Z
+modified_at: 2026-06-24T03:44:16.529472966Z
 req_type: Task
 tags:
 - audit
