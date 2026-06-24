@@ -14,6 +14,10 @@ and safe default write-tool posture, see
 `docs/agents/aida-mcp-install-matrix.md`. Keep that matrix updated whenever a
 major agent client changes its MCP config path or marketplace model.
 
+For a deeper Claude Code to Codex CLI migration analysis, including hook
+capability gaps and how to respond if a vendor-standardization policy requires
+moving off Claude Code, see `docs/agents/porting-claude-code-to-codex.md`.
+
 ## What AIDA is
 
 AIDA (AI Design Assistant) is a **spec-graph-backed agent-collaboration layer**. The visible surface is a Rust CLI (`aida`) and a small TUI; the actual product is the substrate underneath:
