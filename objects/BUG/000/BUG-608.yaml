@@ -15,12 +15,12 @@ description: |-
   Impact (HIGH, defeats the feature): a second repo at ~/ai/sib/repo-b cannot share this store via store_path=../aida-store (that path doesnt exist). It would need ../repo-a/aida-store, which couples repo-b to repo-as name + nesting, and means the shared requirements store lives INSIDE one code repo (deleting/moving repo-a takes the store). The flagship multi-repo mode does not produce a shareable store out of the box.
 
   Fix: create the store at cwd.parent()/aida-store (a true sibling) and write store_path = "../aida-store", so config + message + location agree and a sibling repo can share it. Acceptance: after aida init --sibling in repo-a, the store is at <parent>/aida-store (a sibling of repo-a, NOT nested), config store_path = "../aida-store", and a second repo-b with the same store_path resolves to the SAME store. Add a regression test asserting the store dir is the parent-level sibling, not nested.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:01:46.256210443Z
-modified_at: 2026-06-24T04:34:43.282750594Z
+modified_at: 2026-06-24T05:06:52.970109917Z
 req_type: Bug
 tags:
 - aida:init
@@ -36,3 +36,21 @@ comments:
   content: Commit 11e299353 references this requirement
   created_at: 2026-06-24T04:34:43.282750594Z
   modified_at: 2026-06-24T04:34:43.282750594Z
+history:
+- id: 019ef806-2559-7ce0-9195-12f3ce2faa05
+  author: aida-auto-bump
+  timestamp: 2026-06-24T05:06:52.889048495Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ef806-25aa-7e40-b1d9-d7fc6daa1243
+  timestamp: 2026-06-24T05:06:52.970103450Z
+  agent: aida
+  commit_sha: 8b9c8b87fb9bac4d85ae08c5cc35003cb3a8cb84
+  summary: Completed via merge 8b9c8b87
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-24T05:06:51.913446496Z
+  completion_sha: 8b9c8b87fb9bac4d85ae08c5cc35003cb3a8cb84
