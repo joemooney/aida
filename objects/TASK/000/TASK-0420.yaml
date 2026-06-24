@@ -1,0 +1,27 @@
+id: 019ef78b-9e9c-7fe2-8133-f5d0af2a94fe
+spec_id: TASK-0420
+title: Review Claude-to-Codex migration guidance for accuracy and tone
+description: |-
+  Review docs/agents/porting-claude-code-to-codex.md and the cross-link added to docs/agents/cross-agent-onboarding.md.
+
+  Acceptance:
+  - Verify the doc accurately represents current Claude Code and Codex CLI hook, sandbox, MCP, non-interactive, and skill/plugin capabilities.
+  - Confirm the AIDA section is understandable to a reader who has never used AIDA.
+  - Confirm AIDA is described as a work-in-progress without underselling the depth of the substrate.
+  - Check that claims about migration risk, lost capabilities, and future capability risk are fair and sourced by referenced docs.
+  - File follow-up specs or findings for any inaccurate or over-broad statements.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T02:53:03.004224420Z
+modified_at: 2026-06-24T02:53:03.004224420Z
+req_type: Task
+tags:
+- docs-review
+- migration:claude-to-codex
+- role:reviewer
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-06-24T02:53:03.005959702Z
