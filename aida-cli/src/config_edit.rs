@@ -72,7 +72,10 @@ mod tests {
         .unwrap();
         set_kv(&p, "telemetry", "enabled", Value::from(false)).unwrap();
         let body = std::fs::read_to_string(&p).unwrap();
-        assert!(body.contains("# top comment"), "top comment preserved: {body}");
+        assert!(
+            body.contains("# top comment"),
+            "top comment preserved: {body}"
+        );
         assert!(body.contains("enabled = false"), "value flipped: {body}");
         assert!(
             body.contains("[other]") && body.contains("keep = 1"),

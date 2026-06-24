@@ -496,7 +496,10 @@ mod tests {
         });
         assert_eq!(items[0].value, "false");
         assert_eq!(items[0].scope, ".aida/config.toml");
-        assert!(msg.contains('✓') && msg.contains("false"), "feedback: {msg}");
+        assert!(
+            msg.contains('✓') && msg.contains("false"),
+            "feedback: {msg}"
+        );
     }
 
     /// STORY-669: a Blocked outcome (e.g. env-shadowed) leaves the row unchanged

@@ -25943,7 +25943,11 @@ fn cli_edit_config_knob(
 
     // Env-shadowed: writing config.toml wouldn't change the effective value.
     if item.scope.contains("(env)") {
-        let var = item.scope.split_whitespace().next().unwrap_or("the env var");
+        let var = item
+            .scope
+            .split_whitespace()
+            .next()
+            .unwrap_or("the env var");
         return EditOutcome::Blocked(format!("overridden by {var} — unset it to edit"));
     }
     let Some(knob) = config_knob_bool(&item.section, &item.name) else {
