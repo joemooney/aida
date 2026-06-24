@@ -36,6 +36,30 @@ use ratatui::widgets::{
 use ratatui::{Frame, Terminal};
 use std::time::Duration;
 
+/// How a knob may be edited from the menu (STORY-669). Plain data set by the
+/// caller; this crate only uses it to decide whether Enter/Space acts.
+/// trace:STORY-669 | ai:claude
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum EditKind {
+    /// A boolean knob — Enter/Space toggles it in place.
+    Bool,
+    /// Not editable from the menu in this slice (scalars, enums, env-shadowed,
+    /// separate-file knobs). Enter explains where to edit it instead.
+    #[default]
+    ReadOnly,
+}
+
+/// The result of a caller-side edit attempt, returned from the `on_edit`
+/// callback so the menu can update the row or explain why it didn't.
+/// trace:STORY-669 | ai:claude
+pub enum EditOutcome {
+    /// The knob was written; the re-resolved value + scope to display now.
+    Updated { value: String, scope: String },
+    /// The edit was not performed; the reason to flash in the footer
+    /// (e.g. "overridden by AIDA_TELEMETRY — unset it to edit").
+    Blocked(String),
+}
+
 /// One configurable item rendered in the menu. Plain data — the caller
 /// (`aida-cli`) resolves these from the live config registry; this crate only
 /// presents them. trace:STORY-661 | ai:claude
@@ -55,6 +79,8 @@ pub struct ConfigMenuItem {
     pub scope: String,
     /// A one-line explanation of what the knob does.
     pub explanation: String,
+    /// Whether (and how) this knob can be edited from the menu (STORY-669).
+    pub edit: EditKind,
 }
 
 /// A flattened, navigable row: either a section header or a knob row that
@@ -71,7 +97,10 @@ enum DisplayRow {
 /// The caller is responsible for the no-TTY check — this enters raw mode and
 /// the alternate screen via [`TermGuard`], which fails outside a real
 /// terminal. trace:STORY-661 | ai:claude
-pub fn run(items: Vec<ConfigMenuItem>) -> Result<()> {
+pub fn run(
+    mut items: Vec<ConfigMenuItem>,
+    mut on_edit: impl FnMut(&ConfigMenuItem) -> EditOutcome,
+) -> Result<()> {
     install_panic_hook();
     // Best-effort: a missing signal handler must not block the menu.
     let _ = install_signal_handler();
@@ -81,6 +110,8 @@ pub fn run(items: Vec<ConfigMenuItem>) -> Result<()> {
 
     // Flatten items into display rows grouped by section header. The selectable
     // cursor only ever lands on Item rows; headers are skipped on navigation.
+    // Editing only mutates a row's value/scope in place — never the row
+    // structure — so this stays valid for the menu's lifetime.
     let rows = build_display_rows(&items);
     let selectable: Vec<usize> = rows
         .iter()
@@ -89,12 +120,13 @@ pub fn run(items: Vec<ConfigMenuItem>) -> Result<()> {
         .collect();
 
     let mut cursor: usize = 0; // index into `selectable`
+    let mut flash: Option<String> = None; // transient feedback line in the footer
     loop {
         let table_state_selected = selectable.get(cursor).copied();
-        term.draw(|f| draw(f, &items, &rows, table_state_selected))?;
+        term.draw(|f| draw(f, &items, &rows, table_state_selected, flash.as_deref()))?;
 
         // Poll so a resize repaints without a key press; 200ms is plenty
-        // responsive for a static read-only view.
+        // responsive for a navigable view.
         if !event::poll(Duration::from_millis(200))? {
             continue;
         }
@@ -105,26 +137,73 @@ pub fn run(items: Vec<ConfigMenuItem>) -> Result<()> {
                 continue;
             }
             let last = selectable.len().saturating_sub(1);
+            // Any navigation key clears a stale flash; the edit keys set a new one.
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => break,
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
                 KeyCode::Down | KeyCode::Char('j') => {
+                    flash = None;
                     if cursor < last {
                         cursor += 1;
                     }
                 }
                 KeyCode::Up | KeyCode::Char('k') => {
+                    flash = None;
                     cursor = cursor.saturating_sub(1);
                 }
-                KeyCode::PageDown => cursor = (cursor + 10).min(last),
-                KeyCode::PageUp => cursor = cursor.saturating_sub(10),
-                KeyCode::Home | KeyCode::Char('g') => cursor = 0,
-                KeyCode::End | KeyCode::Char('G') => cursor = last,
+                KeyCode::PageDown => {
+                    flash = None;
+                    cursor = (cursor + 10).min(last);
+                }
+                KeyCode::PageUp => {
+                    flash = None;
+                    cursor = cursor.saturating_sub(10);
+                }
+                KeyCode::Home | KeyCode::Char('g') => {
+                    flash = None;
+                    cursor = 0;
+                }
+                KeyCode::End | KeyCode::Char('G') => {
+                    flash = None;
+                    cursor = last;
+                }
+                // STORY-669: Enter/Space edits the selected knob in place.
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    if let Some(DisplayRow::Item(i)) =
+                        table_state_selected.and_then(|d| rows.get(d))
+                    {
+                        flash = Some(edit_selected(&mut items, *i, &mut on_edit));
+                    }
+                }
                 _ => {}
             }
         }
     }
     Ok(())
+}
+
+/// Apply an in-place edit to `items[i]` via the caller callback, returning the
+/// footer feedback line. Read-only knobs explain where to edit instead.
+/// trace:STORY-669 | ai:claude
+fn edit_selected(
+    items: &mut [ConfigMenuItem],
+    i: usize,
+    on_edit: &mut impl FnMut(&ConfigMenuItem) -> EditOutcome,
+) -> String {
+    match items[i].edit {
+        EditKind::Bool => match on_edit(&items[i]) {
+            EditOutcome::Updated { value, scope } => {
+                items[i].value = value.clone();
+                items[i].scope = scope.clone();
+                format!("✓ {} = {}  (written to {})", items[i].name, value, scope)
+            }
+            EditOutcome::Blocked(reason) => reason,
+        },
+        EditKind::ReadOnly => format!(
+            "{} is read-only here — edit it in config.toml or via `aida config <set>`",
+            items[i].name
+        ),
+    }
 }
 
 /// Flatten `items` into header + item display rows, one header per section in
@@ -149,6 +228,7 @@ fn draw(
     items: &[ConfigMenuItem],
     rows: &[DisplayRow],
     selected_display_idx: Option<usize>,
+    flash: Option<&str>,
 ) {
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -161,7 +241,7 @@ fn draw(
     draw_title(f, chunks[0]);
     draw_table(f, chunks[1], items, rows, selected_display_idx);
     draw_explanation(f, chunks[2], items, rows, selected_display_idx);
-    draw_footer(f, chunks[3]);
+    draw_footer(f, chunks[3], flash);
 }
 
 fn draw_title(f: &mut Frame, area: Rect) {
@@ -303,20 +383,30 @@ fn draw_explanation(
     f.render_widget(para, area);
 }
 
-fn draw_footer(f: &mut Frame, area: Rect) {
+fn draw_footer(f: &mut Frame, area: Rect, flash: Option<&str>) {
+    // A transient edit-feedback line takes over the footer when present;
+    // otherwise show the key hints.
+    if let Some(msg) = flash {
+        let footer = Paragraph::new(Line::from(Span::styled(
+            msg.to_string(),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )));
+        f.render_widget(footer, area);
+        return;
+    }
     let footer = Paragraph::new(Line::from(vec![
         Span::styled("↑/↓ j/k", Style::default().fg(Color::Cyan)),
         Span::raw(" move  "),
+        Span::styled("Enter/Space", Style::default().fg(Color::Cyan)),
+        Span::raw(" toggle  "),
         Span::styled("PgUp/PgDn", Style::default().fg(Color::Cyan)),
         Span::raw(" page  "),
         Span::styled("g/G", Style::default().fg(Color::Cyan)),
         Span::raw(" top/bottom  "),
         Span::styled("q/Esc", Style::default().fg(Color::Cyan)),
-        Span::raw(" quit   "),
-        Span::styled(
-            "(read-only — edit with `aida config <set>` or your config.toml)",
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::raw(" quit"),
     ]));
     f.render_widget(footer, area);
 }
@@ -333,6 +423,7 @@ mod tests {
             default: "d".to_string(),
             scope: "default".to_string(),
             explanation: "x".to_string(),
+            edit: EditKind::ReadOnly,
         }
     }
 
@@ -374,5 +465,50 @@ mod tests {
     fn empty_items_produce_no_rows() {
         let rows = build_display_rows(&[]);
         assert!(rows.is_empty());
+    }
+
+    /// STORY-669: Enter on a read-only row never calls the edit callback and
+    /// explains where to edit instead.
+    #[test]
+    fn edit_on_readonly_row_is_noop() {
+        let mut items = vec![item("telemetry", "enabled")]; // edit: ReadOnly
+        let mut called = false;
+        let msg = edit_selected(&mut items, 0, &mut |_| {
+            called = true;
+            EditOutcome::Updated {
+                value: "x".into(),
+                scope: "y".into(),
+            }
+        });
+        assert!(!called, "callback must not fire for a read-only knob");
+        assert!(msg.contains("read-only"), "explains read-only: {msg}");
+        assert_eq!(items[0].value, "v", "value untouched");
+    }
+
+    /// STORY-669: Enter on a Bool row applies the callback's result in place.
+    #[test]
+    fn edit_on_bool_row_updates_value_and_scope() {
+        let mut items = vec![item("telemetry", "enabled")];
+        items[0].edit = EditKind::Bool;
+        let msg = edit_selected(&mut items, 0, &mut |_| EditOutcome::Updated {
+            value: "false".into(),
+            scope: ".aida/config.toml".into(),
+        });
+        assert_eq!(items[0].value, "false");
+        assert_eq!(items[0].scope, ".aida/config.toml");
+        assert!(msg.contains('✓') && msg.contains("false"), "feedback: {msg}");
+    }
+
+    /// STORY-669: a Blocked outcome (e.g. env-shadowed) leaves the row unchanged
+    /// and surfaces the reason.
+    #[test]
+    fn edit_blocked_leaves_row_unchanged() {
+        let mut items = vec![item("telemetry", "enabled")];
+        items[0].edit = EditKind::Bool;
+        let msg = edit_selected(&mut items, 0, &mut |_| {
+            EditOutcome::Blocked("overridden by AIDA_TELEMETRY".into())
+        });
+        assert_eq!(items[0].value, "v", "value untouched when blocked");
+        assert!(msg.contains("overridden"), "reason surfaced: {msg}");
     }
 }

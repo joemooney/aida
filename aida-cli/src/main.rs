@@ -21,6 +21,7 @@ mod client;
 mod commit;
 mod compete;
 mod complexity_calibration;
+mod config_edit;
 mod coordination;
 mod deep_link;
 mod digest;
@@ -25841,7 +25842,10 @@ fn handle_config_menu_command() -> Result<()> {
 
     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let items = build_config_menu_items(&project_root);
-    aida_tui::run_config_menu(items)
+    // STORY-669: the edit callback lives cli-side (the tui crate stays free of
+    // an aida-cli dependency) — it writes through `config_edit::set_kv` and
+    // re-resolves the row from the live registry.
+    aida_tui::run_config_menu(items, |item| cli_edit_config_knob(&project_root, item))
 }
 
 /// Stub for binaries built without the `tui` feature — `aida config menu`
@@ -25862,6 +25866,11 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
     for section in policy_registry(project_root) {
         for row in &section.rows {
             let (explanation, default) = config_knob_doc(section.section, row.key);
+            let edit = if config_knob_bool(section.section, row.key).is_some() {
+                aida_tui::EditKind::Bool
+            } else {
+                aida_tui::EditKind::ReadOnly
+            };
             items.push(aida_tui::ConfigMenuItem {
                 section: section.section.to_string(),
                 name: row.key.to_string(),
@@ -25869,10 +25878,116 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
                 default: default.to_string(),
                 scope: row.source.plain_label(),
                 explanation: explanation.to_string(),
+                edit,
             });
         }
     }
     items
+}
+
+/// A boolean config knob editable from the menu (STORY-669), with its built-in
+/// default. MVP set: real-boolean keys with a known default. Decorated
+/// composites (`agents.bypass`), scalars, enums, and separate-file knobs stay
+/// read-only this slice. Kept in lockstep with `policy_registry` /
+/// `config_knob_doc`; STORY-671 folds this into the central registry.
+/// trace:STORY-669 | ai:claude
+#[cfg(feature = "tui")]
+struct BoolKnob {
+    default: bool,
+}
+
+#[cfg(feature = "tui")]
+fn config_knob_bool(section: &str, key: &str) -> Option<BoolKnob> {
+    let default = match (section, key) {
+        ("telemetry", "enabled") => true,
+        ("hints", "workflow_hints") => true,
+        ("field_study", "enabled") => false,
+        _ => return None,
+    };
+    Some(BoolKnob { default })
+}
+
+/// Re-resolve one knob's (value, scope) strings from the live registry, exactly
+/// as `build_config_menu_items` does — so a freshly-written value shows live in
+/// the menu. trace:STORY-669 | ai:claude
+#[cfg(feature = "tui")]
+fn resolve_config_menu_row(
+    project_root: &std::path::Path,
+    section: &str,
+    key: &str,
+) -> Option<(String, String)> {
+    for s in policy_registry(project_root) {
+        if s.section != section {
+            continue;
+        }
+        for row in &s.rows {
+            if row.key == key {
+                return Some((strip_ansi_color(&row.value), row.source.plain_label()));
+            }
+        }
+    }
+    None
+}
+
+/// The cli-side edit callback the config menu invokes on Enter/Space over a
+/// `Bool` row (STORY-669). Toggles the knob's stored value, writes through the
+/// section-preserving writer to the file the value currently lives in, and
+/// re-resolves the row. Env-shadowed knobs are refused (the var still wins).
+/// trace:STORY-669 | ai:claude
+#[cfg(feature = "tui")]
+fn cli_edit_config_knob(
+    project_root: &std::path::Path,
+    item: &aida_tui::ConfigMenuItem,
+) -> aida_tui::EditOutcome {
+    use aida_tui::EditOutcome;
+
+    // Env-shadowed: writing config.toml wouldn't change the effective value.
+    if item.scope.contains("(env)") {
+        let var = item.scope.split_whitespace().next().unwrap_or("the env var");
+        return EditOutcome::Blocked(format!("overridden by {var} — unset it to edit"));
+    }
+    let Some(knob) = config_knob_bool(&item.section, &item.name) else {
+        return EditOutcome::Blocked(format!("{} is not editable here", item.name));
+    };
+
+    // Write to the file the value currently lives in: user-scoped → the global
+    // config; project or unset → the project config.
+    let scope = if item.scope.starts_with("~/.aida") {
+        crate::glyph_config::Scope::User
+    } else {
+        crate::glyph_config::Scope::Project
+    };
+    let path = match crate::glyph_config::config_path_for(scope) {
+        Ok(p) => p,
+        Err(e) => return EditOutcome::Blocked(format!("cannot resolve config path: {e}")),
+    };
+
+    // Current value from THAT file; absent → the built-in default. Read back from
+    // disk (not the rendered row) so a partial/failed write surfaces honestly.
+    let current = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| toml::from_str::<toml::Value>(&s).ok())
+        .and_then(|cfg| {
+            config_lookup(Some(&cfg), &item.section, &item.name).and_then(|v| v.as_bool())
+        })
+        .unwrap_or(knob.default);
+
+    if let Err(e) = crate::config_edit::set_kv(
+        &path,
+        &item.section,
+        &item.name,
+        toml_edit::Value::from(!current),
+    ) {
+        return EditOutcome::Blocked(format!("write failed: {e}"));
+    }
+
+    match resolve_config_menu_row(project_root, &item.section, &item.name) {
+        Some((value, scope)) => EditOutcome::Updated { value, scope },
+        None => EditOutcome::Updated {
+            value: (!current).to_string(),
+            scope: path.display().to_string(),
+        },
+    }
 }
 
 /// Handle `aida config glyph ...` — the CLI surface over the glyph registry,
