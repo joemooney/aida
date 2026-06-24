@@ -18,11 +18,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:14:01.561270548Z
-modified_at: 2026-06-24T04:14:01.561270548Z
+modified_at: 2026-06-24T04:48:22.649360105Z
 req_type: Story
 tags:
 - aida:init
 - from-operator
 - multi-repo
 - out-of-box
+- parent:EPIC-22,distributed,multi-machine
 - sibling
