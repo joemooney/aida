@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:14:01.561270548Z
-modified_at: 2026-06-24T04:48:23.705340083Z
+modified_at: 2026-06-24T04:48:24.853467218Z
 req_type: Story
 tags:
 - aida:init
@@ -27,6 +27,11 @@ tags:
 - out-of-box
 - parent:EPIC-22,distributed,multi-machine
 - sibling
+relationships:
+- rel_type: Child
+  target_id: 019e10a7-78a6-7750-bfc7-d1a34532da4d
+  created_at: 2026-06-24T04:48:24.853461722Z
+  created_by: joe
 comments:
 - id: 019ef7f5-3899-77e1-a7c7-6a0763b7a5c3
   author: joe
