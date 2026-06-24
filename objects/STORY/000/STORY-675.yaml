@@ -1,0 +1,29 @@
+id: 019ef7f4-87f2-7ab2-9188-e2505a413e7f
+spec_id: STORY-675
+agreed_id: STORY-675
+title: 'aida init: detect a shared/known store and prompt to JOIN (vs create new) + auto-register the project into ~/.aida/projects.toml'
+description: |-
+  Operator-requested direction (2026-06-23): make distributed/multi-machine onboarding first-class. Today aida init always CREATES a fresh store; joining an existing shared one is manual. And ~/.aida/projects.toml is a hand-maintained registry that aida does NOT consume (its own header says so, pending EPIC-22).
+
+  This story wires the discovery + prompt:
+  1. On aida init (and --sibling/--store-path), DETECT an existing store: (a) a store at the resolved store_path / a sibling ../aida-store, and/or (b) entries in ~/.aida/projects.toml (known projects + their stores on this machine).
+  2. If one is found, PROMPT: "Join existing store <X> (the multi-repo case) or create a new one?" Joining routes through the STORY-674 attach path (config + node acquire + cache rebuild, no re-seed). Creating proceeds as today.
+  3. AUTO-REGISTER the project into ~/.aida/projects.toml (name, path, repo, store_path) so the registry fills itself instead of staying hand-maintained — the missing half that makes the registry useful.
+  Non-interactive/scripted init: default to create (current behavior) unless --attach/--join given.
+
+  Acceptance: in a workspace with an existing sibling store, aida init OFFERS to join it (and joining attaches via STORY-674 so the new repo immediately sees the shared specs); the new project appears in ~/.aida/projects.toml automatically; a fresh machine with a populated projects.toml can list/join known stores. Composes with STORY-674 (mechanism) and EPIC-22 (registry).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-24T04:47:38.482966072Z
+modified_at: 2026-06-24T04:47:38.482966072Z
+req_type: Story
+tags:
+- aida:init
+- distributed
+- from-operator
+- multi-machine
+- onboarding
+- parent:EPIC-22
+- registry
