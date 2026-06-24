@@ -10,12 +10,12 @@ description: |-
   - Verify the same state is visible through the AIDA CLI after MCP writes.
   - Include negative-path checks for blocked approval/session communication and sandbox posture assumptions.
   - Capture gaps as follow-up specs rather than unresolved notes.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.259874534Z
-modified_at: 2026-06-24T02:53:29.259874534Z
+modified_at: 2026-06-24T03:44:19.097887028Z
 req_type: Task
 tags:
 - dogfood
