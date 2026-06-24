@@ -22346,7 +22346,15 @@ fn handle_init_distributed_sibling(
 
     let cwd = std::env::current_dir()?;
     let aida_dir = cwd.join(".aida");
-    let store_dir = cwd.join("aida-store");
+    // BUG-608: the store must be a TRUE SIBLING of the code repo (one level up),
+    // not nested inside it — `--sibling`'s whole purpose is for multiple code
+    // repos to share one store, and a store nested in repo-a can't be reached by
+    // repo-b via `../aida-store`. Create it at the parent (`../aida-store`).
+    // trace:BUG-608 | ai:claude
+    let store_dir = cwd
+        .parent()
+        .unwrap_or(cwd.as_path())
+        .join("aida-store");
 
     // Check if already initialized
     if aida_dir.join("node.toml").exists() && !force {
@@ -22370,6 +22378,46 @@ fn handle_init_distributed_sibling(
         }
     }
 
+    // BUG-610: a populated store that this is NOT a --force re-init of is almost
+    // certainly a SHARED sibling store another repo already created — the whole
+    // point of `--sibling`. The fresh-init path below re-seeds META and
+    // `backend.save()`s a new store, which DELETES the other repo's requirements
+    // (silent data loss, verified: a second repo's init wiped the first's spec).
+    // Refuse rather than destroy. (Auto-attaching a second repo to the existing
+    // store is the STORY-674 feature; `--force` is the deliberate wipe.)
+    // trace:BUG-610 | ai:claude
+    if !force {
+        if let Some(count) = count_requirements_in_store(&store_dir) {
+            if count > 0 {
+                eprintln!(
+                    "{} A store already exists at {} with {} requirement(s).",
+                    "!".yellow(),
+                    store_dir.display(),
+                    count
+                );
+                eprintln!(
+                    "  Re-initializing would DELETE them — this is almost certainly a shared"
+                );
+                eprintln!(
+                    "  sibling store another repo created. Refusing to overwrite it."
+                );
+                eprintln!(
+                    "  • To WIPE and re-initialize the store: re-run with {}.",
+                    "--force".bold()
+                );
+                eprintln!(
+                    "  • To ATTACH this repo to the existing store (multi-repo): tracked as STORY-674."
+                );
+                // Abort the WHOLE init (non-zero exit, no telemetry/config-menu
+                // post-setup) — a refusal must not look like success. trace:BUG-610
+                anyhow::bail!(
+                    "refused to re-initialize the existing store at {} (pass --force to wipe)",
+                    store_dir.display()
+                );
+            }
+        }
+    }
+
     println!("{}", "Initializing AIDA in distributed mode...".bold());
     println!();
 
@@ -22384,7 +22432,7 @@ fn handle_init_distributed_sibling(
         println!(
             "  {} git repository in {}",
             "Created".green(),
-            "aida-store/".white().bold()
+            "../aida-store/".white().bold()
         );
     }
 
@@ -22434,12 +22482,12 @@ fn handle_init_distributed_sibling(
     println!(
         "  {} {}",
         "Created".green(),
-        "aida-store/metadata.yaml".white().bold()
+        "../aida-store/metadata.yaml".white().bold()
     );
     println!(
         "  {} {}",
         "Created".green(),
-        "aida-store/objects/".white().bold()
+        "../aida-store/objects/".white().bold()
     );
 
     // Create initial commit
@@ -22474,7 +22522,7 @@ fn handle_init_distributed_sibling(
             Err(e) => {
                 eprintln!("  {} Failed to push to remote: {}", "Warning:".yellow(), e);
                 eprintln!(
-                    "  You can push later with: cd aida-store && git push -u origin {}",
+                    "  You can push later with: cd ../aida-store && git push -u origin {}",
                     branch
                 );
             }
@@ -22503,7 +22551,7 @@ fn handle_init_distributed_sibling(
         println!();
         println!("  {} No --registry-remote specified.", "Note:".yellow());
         println!("  The store is local-only until you add a remote:");
-        println!("    cd aida-store && git remote add origin <url>");
+        println!("    cd ../aida-store && git remote add origin <url>");
         println!("    aida init --distributed --registry-remote <url>");
     }
 
@@ -22512,7 +22560,10 @@ fn handle_init_distributed_sibling(
     let config_content = "# AIDA distributed mode configuration\n\
          [deployment]\n\
          mode = \"distributed\"\n\
-         store_path = \"aida-store\"\n\
+         # BUG-608: a true sibling store (one level up), shareable by multiple\n\
+         # code repos. Resolved relative to the project root (this .aida's parent).\n\
+         store_path = \"../aida-store\"\n\
+         store_type = \"sibling\"\n\
          \n\
          [store.sync]\n\
          # Auto-push store commits after local writes. Values: manual,\n\
@@ -22551,7 +22602,7 @@ fn handle_init_distributed_sibling(
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
         "{}{}Git-canonical store (sibling repo at ../aida-store/)",
-        "aida-store/".white().bold(),
+        "../aida-store/".white().bold(),
         " ".repeat(20)
     );
     complete_init_scaffolding(
