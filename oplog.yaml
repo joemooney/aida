@@ -20274,5 +20274,40 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 1955
+- id: 019ef7cf-c18d-75c1-9035-fc58cf0e2ee1
+  target_id: 019ef7cb-df45-78f1-a7d1-87ba0c4bdbff
+  author: aida
+  node_id: '1'
+  lamport: 1956
+  timestamp: 2026-06-24T04:07:28.397545255Z
+  kind: !SetTitle
+    title: 'Fleet-state hygiene: aida status counts dead-PID agent corpses + lists abandoned worktrees (reap/hide by default)'
+- id: 019ef7cf-c1b5-77a1-b709-cb4588a124c0
+  target_id: 019ef7cb-df45-78f1-a7d1-87ba0c4bdbff
+  author: aida
+  node_id: '1'
+  lamport: 1957
+  timestamp: 2026-06-24T04:07:28.437543232Z
+  kind: !SetDescription
+    description: |-
+      SYMPTOM: aida status fleet-state hygiene is unusable by default. (a) "Active agents (N)" counts dead-PID corpses — observed 2026-06-23: headline "Active agents (89)" where ~80 are stale 8-16 days (abandoned antigravity#* / other#* registrations); only ~9 live. (b) Worktrees section lists ~45, many abandoned worktree-agent-* with no lease, never cleaned up. The fleet roster — the coordination view that should be the crown jewel — is noise.
+
+      ROOT CAUSE (acknowledged in code): main.rs:32752 / STORY-496 — "the aida status 'Active agents' headline counts these corpses, and no existing command cleans them up." STORY-496 added a dead-PID reaper, but it only fires as an aida doctor heal action; aida status renders the raw roster (including corpses) and counts them as active. Worktree sprawl is the same shape: fanned-out agent worktrees accumulate with no default reaping.
+
+      EXPECTED: aida status reflects LIVE reality by default; abandoned fleet state is reaped or hidden.
+
+      ACCEPTANCE:
+      - "Active agents (N)" headline counts only LIVE agents (apply the STORY-496 pid-liveness probe before counting), OR default-hide stale/dead with a footer count; --all/--stale reveals them.
+      - Worktrees: abandoned worktree-agent-* with no lease and no unmerged work are reaped by doctor heal (conservative: leave dirty / unmerged / leased worktrees alone), and the status default summarizes the count rather than listing all 45.
+      - No change to STORY-496 reaper semantics (conservative pid-liveness; reused-pid left alone).
+      - On a host with K dead-PID registrations + M abandoned worktrees, the status headline drops by K and the worktree list collapses to a count by default; doctor heal removes the reapable ones.
+- id: 019ef7cf-c26f-7280-8aa3-78a95680d8b4
+  target_id: 019ef7cb-df45-78f1-a7d1-87ba0c4bdbff
+  author: aida
+  node_id: '1'
+  lamport: 1958
+  timestamp: 2026-06-24T04:07:28.623022043Z
+  kind: !AddTag
+    tag: worktrees
+clock: 1958
 node_id: '1'
