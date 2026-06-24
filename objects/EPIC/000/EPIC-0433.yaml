@@ -1,0 +1,31 @@
+id: 019ef7a5-ba00-76c2-a81f-8fd1bde9e5aa
+spec_id: EPIC-0433
+title: First-class subsystems and specialized advisor routing
+description: |-
+  Introduce first-class subsystem support so AIDA can route work, context, memories, and advisor/autopilot authority by durable project slice rather than one project-wide advisor context.
+
+  Working concept:
+  A subsystem is a durable project slice with scope, memory focus, role routing, and authority policy. Specialized advisors operate inside that slice; a master advisor arbitrates cross-subsystem and keystone decisions.
+
+  Motivation:
+  AIDA currently has tags, feature categories, scopes, roles, and subsystem-scoped memories, but no durable subsystem entity or advisor routing contract. As the project grows, one advisor context becomes a bottleneck and broad memory/context loading creates noise. Specialized advisors and advisor autopilot become safer when authority is bounded to a subsystem.
+
+  Acceptance:
+  - Define the subsystem object or equivalent durable representation.
+  - Define how specs/files/memories/queues/roles map to subsystems.
+  - Define specialized advisor routing and escalation to master advisor/operator.
+  - Clarify how subsystem authority composes with advisor autopilot.
+  - Preserve cross-subsystem coherence and avoid disconnected mini-advisors.
+  - Update docs/multi-advisor-coordination.md and autonomy/advisor docs after design review.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:21:33.952938868Z
+modified_at: 2026-06-24T03:21:33.952938868Z
+req_type: Epic
+tags:
+- advisor-autopilot
+- multi-advisor
+- role:advisor
+- subsystem
