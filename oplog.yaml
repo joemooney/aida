@@ -20205,5 +20205,29 @@ operations:
   timestamp: 2026-06-24T03:44:19.232058883Z
   kind: !SetStatus
     status: Approved
-clock: 1952
+- id: 019ef7ca-a66f-7b41-888b-08bd59b6faab
+  target_id: 019ef7ca-8910-7333-a396-f6e3ee54814e
+  author: aida
+  node_id: '1'
+  lamport: 1953
+  timestamp: 2026-06-24T04:01:53.775182615Z
+  kind: !Create
+    title: aida init --sibling creates a NESTED store (repo/aida-store), not a true sibling (../aida-store) — defeats multi-repo sharing + contradicts its own message
+    description: |-
+      Verified live 2026-06-23 (dogfood). aida init --sibling from ~/ai/sib/repo-a created the store at repo-a/aida-store/ (NESTED inside the code repo), NOT at the sibling ~/ai/sib/aida-store. Confirmed: find ~/ai/sib -name metadata.yaml -> /home/joe/ai/sib/repo-a/aida-store/metadata.yaml; ls ~/ai/sib shows ONLY repo-a (no aida-store sibling).
+
+      Three-way contradiction out of the box:
+      - The --sibling help says "Use a sibling repo... multiple code repos share one store."
+      - The success message says "Storage: aida-store/ ... (sibling repo at ../aida-store/)".
+      - But the config writes store_path = "aida-store" and the store is created at <repo>/aida-store.
+
+      Root cause (main.rs handle_init_distributed_sibling, ~line 22349): let store_dir = cwd.join("aida-store"); — joins to the repo dir (cwd) instead of cwd.parent(). So the store is nested, store_path is "aida-store", and the "../aida-store" in the message is fiction.
+
+      Impact (HIGH, defeats the feature): a second repo at ~/ai/sib/repo-b cannot share this store via store_path=../aida-store (that path doesnt exist). It would need ../repo-a/aida-store, which couples repo-b to repo-as name + nesting, and means the shared requirements store lives INSIDE one code repo (deleting/moving repo-a takes the store). The flagship multi-repo mode does not produce a shareable store out of the box.
+
+      Fix: create the store at cwd.parent()/aida-store (a true sibling) and write store_path = "../aida-store", so config + message + location agree and a sibling repo can share it. Acceptance: after aida init --sibling in repo-a, the store is at <parent>/aida-store (a sibling of repo-a, NOT nested), config store_path = "../aida-store", and a second repo-b with the same store_path resolves to the SAME store. Add a regression test asserting the store dir is the parent-level sibling, not nested.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 1953
 node_id: '1'
