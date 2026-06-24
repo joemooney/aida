@@ -1,0 +1,28 @@
+id: 019ef7f4-b07d-7701-a9b8-fe2a594c6287
+spec_id: STORY-676
+agreed_id: STORY-676
+title: Explicit --store-path <PATH> flag for aida init; --sibling becomes sugar; document the store-location model
+description: |-
+  Operator clarity finding (2026-06-23): --sibling names the IMPLEMENTATION (a sibling directory) not the PURPOSE (a shared/external store), so "sibling of what?" is unanswerable from the flag. The store RESOLVER is already path-general (detect_distributed_store_from just joins store_path to the project root — handles ../aida-store, a nested/submodule dir, and absolute paths). So only the FLAG hardcodes a layout.
+
+  Expose the generality:
+  1. Add --store-path <PATH> as the explicit primary flag — the user states exactly where the store lives/goes (sibling, submodule, or absolute). --sibling becomes sugar for --store-path ../aida-store (kept for back-compat).
+  2. Rewrite the --sibling/--store-path help + the init success message to state the layout explicitly ("a separate store repo at <path>, shared by code repos under the same parent"), and emit a small ASCII layout diagram on first run.
+  3. Add a short docs/ "where does the store live?" note covering the three layouts (sibling dir / submodule / absolute) and the live-vs-pinned sharing trade-off: a shared working dir (sibling/absolute) shares LIVE on one machine; a submodule pins a commit (good for vendoring a snapshot or sharing across machines via the store remote, heavier for live local sharing).
+
+  Acceptance: aida init --store-path <PATH> creates/points the store at PATH; --sibling still works (= ../aida-store); help + success message + the docs note make the store location unambiguous; an absolute and a submodule store_path both resolve.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-24T04:47:48.861851420Z
+modified_at: 2026-06-24T04:47:48.861851420Z
+req_type: Story
+tags:
+- aida:init
+- clarity
+- distributed
+- from-operator
+- out-of-box
+- parent:EPIC-22
+- store-path
