@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:52:42.309154932Z
-modified_at: 2026-06-24T02:52:42.309154932Z
+modified_at: 2026-06-24T02:53:37.884068600Z
 req_type: Epic
 tags:
 - migration:claude-to-codex
@@ -45,3 +45,9 @@ relationships:
 - rel_type: Parent
   target_id: 019ef78c-08a6-7880-a246-22cdc479b8c6
   created_at: 2026-06-24T02:53:30.150452084Z
+comments:
+- id: 019ef78c-26dc-7ce3-902b-936c7d921caa
+  author: mcp
+  content: 'Opened from the Claude Code to Codex CLI migration discussion. Primary generated docs to review: docs/agents/porting-claude-code-to-codex.md and the cross-link added to docs/agents/cross-agent-onboarding.md. Related docs that shaped the scope: docs/agents/session-communication.md, docs/agents/claude-bubblewrap-sandbox.md, docs/agents/per-agent-config.md, docs/agents/codex-mcp-setup.md, and docs/aida/discipline/agent-agnostic-vs-claude-specific.md.'
+  created_at: 2026-06-24T02:53:37.884064668Z
+  modified_at: 2026-06-24T02:53:37.884064668Z
