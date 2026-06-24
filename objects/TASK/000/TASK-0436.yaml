@@ -1,0 +1,28 @@
+id: 019ef7a6-00fc-7e62-92b9-8759c6a4d4a1
+spec_id: TASK-0436
+title: Connect subsystem focus to memories docs and context loading
+description: |-
+  Extend the existing subsystem-scoped memory concept into a broader context-loading model for specialized advisors and agents.
+
+  Acceptance:
+  - Review current subsystem memory support and docs/multi-advisor-coordination.md Track A.
+  - Define how subsystem focus affects memories, docs, plans, graph context, helper discovery, and role prompt addenda.
+  - Keep universal memories/docs always available while reducing cross-subsystem noise.
+  - Define CLI/TUI/status indicators for active subsystem focus.
+  - Specify how agents request or infer focus from spec, queue item, worktree, or session scope.
+status: Draft
+priority: Medium
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:21:52.124259780Z
+modified_at: 2026-06-24T03:21:52.124259780Z
+req_type: Task
+tags:
+- context
+- memory
+- role:implementer
+- subsystem
+relationships:
+- rel_type: Child
+  target_id: 019ef7a5-ba00-76c2-a81f-8fd1bde9e5aa
+  created_at: 2026-06-24T03:21:52.124307656Z
