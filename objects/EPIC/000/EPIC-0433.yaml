@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:33.952938868Z
-modified_at: 2026-06-24T03:21:33.952938868Z
+modified_at: 2026-06-24T03:21:59.680993055Z
 req_type: Epic
 tags:
 - advisor-autopilot
@@ -45,3 +45,9 @@ relationships:
 - rel_type: References
   target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
   created_at: 2026-06-24T03:21:59.263721043Z
+comments:
+- id: 019ef7a6-1e80-71a3-ab03-0bcde18bfb40
+  author: mcp
+  content: 'Opened from discussion that advisor autopilot becomes safer and more useful if bounded by subsystem. Current AIDA has tags, feature categories, scopes, roles, and subsystem-scoped memories, but no first-class subsystem object or routing contract. Desired direction: subsystem = durable project slice with scope, memory focus, role routing, and authority policy; specialized advisors operate inside it while master advisor arbitrates cross-subsystem/keystone calls.'
+  created_at: 2026-06-24T03:21:59.680989197Z
+  modified_at: 2026-06-24T03:21:59.680989197Z
