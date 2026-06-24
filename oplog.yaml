@@ -20229,5 +20229,26 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 1953
+- id: 019ef7cb-cddd-7b01-b566-e2f5b6dc0698
+  target_id: 019ef7cb-caa7-7993-86a0-46c68f89efde
+  author: aida
+  node_id: '1'
+  lamport: 1954
+  timestamp: 2026-06-24T04:03:09.405434500Z
+  kind: !Create
+    title: 'Fleet-wide queue view: opt-in aida queue list --all-users (coordination bird''s-eye)'
+    description: |-
+      GAP: there is no fleet-wide view of queued work. aida queue list is keyed to current_user_id() AND the active role (BUG-89); aida status' Queue block shows only the active role's queue. To see another user you pass --user one at a time; --all broadens roles but not users. The coordinator/advisor/operator seat has no single "what is the whole fleet queued on, across all users and roles" view — which is core to the cross-vendor fleet-coordination niche.
+
+      SCOPE (smallest valuable slice — opt-in, NOT a default change): the per-identity default is correct for the pull model and must stay. Add an opt-in aggregate.
+
+      ACCEPTANCE:
+      - New opt-in: aida queue list --all-users (compose with --all for all roles) aggregates queued items across every user and role, grouped by user then role, read-only. Default behavior (your user + active role) unchanged.
+      - aida status Queue block gains a one-line fleet summary (e.g. "fleet: N queued across M roles/users") OR a hint pointing at the all-users view, so the bird's-eye is discoverable from status.
+      - Legibility: the default queue list footer hints how to see the fleet view (the question that prompted this — the per-identity scoping was not obvious).
+      - Verify against the primary caller: an implementer drain still sees only its own queue; only the explicit flag widens it.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 1954
 node_id: '1'
