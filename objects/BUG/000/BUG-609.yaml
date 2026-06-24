@@ -1,0 +1,30 @@
+id: 019ef7cb-df45-78f1-a7d1-87ba0c4bdbff
+spec_id: BUG-609
+agreed_id: BUG-609
+title: aida status Active-agents roster counts dead-PID corpses (89 shown, ~9 live) — hide/reap stale by default
+description: |-
+  SYMPTOM: aida status "Active agents (N)" counts dead-PID corpses. Observed 2026-06-23: headline "Active agents (89)" where ~80 are stale 8-16 days (abandoned antigravity#* / other#* registrations); only ~9 are live (idle <3d). The fleet roster — the coordination view that should be the crown jewel — is unusable noise by default.
+
+  ROOT CAUSE (acknowledged in code): main.rs:32752 / STORY-496 — "the aida status 'Active agents' headline counts these corpses, and no existing command cleans them up." STORY-496 added a dead-PID reaper, but it only fires as an aida doctor FIX; aida status renders the raw roster (including corpses) and counts them as active. Staleness IS computed (recent <1h / mid / stale >=1d) but stale/dead entries are neither hidden nor reaped before the status display.
+
+  EXPECTED: aida status reflects LIVE reality by default.
+
+  ACCEPTANCE:
+  - The "Active agents (N)" headline counts only LIVE agents (apply the STORY-496 pid-liveness probe before counting), OR default-hide stale/dead entries with a footer count (mirroring how the queue view footers terminal items).
+  - A flag (--all or --stale) reveals the hidden stale/dead entries for forensics.
+  - No change to the STORY-496 doctor reaper semantics (conservative pid-liveness; reused-pid left alone).
+  - On a host with K dead-PID registrations, the status headline drops by K and the roster shows only live agents by default.
+  - Related (note, not in scope): worktree sprawl — ~45 worktrees, many abandoned worktree-agent-* with no lease; consider a sibling cleanup pass.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-24T04:03:13.861603135Z
+modified_at: 2026-06-24T04:03:13.861603135Z
+req_type: Bug
+tags:
+- fleet-coordination
+- hygiene
+- legibility
+- papercut
+- status
