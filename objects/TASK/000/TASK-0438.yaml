@@ -1,0 +1,36 @@
+id: 019ef7ac-c54f-78a3-870a-0b2a485e5806
+spec_id: TASK-0438
+title: Design reliable fasttrack intake-to-implementation lane
+description: |-
+  Design a fasttrack mechanism for simple human-requested bugs/features where the operator can trust that the advisor will review/reject the request quickly and, if accepted, implementation will proceed without getting stranded in the backlog.
+
+  Problem:
+  AIDA already has `aida fasttrack` / `/aida-fasttrack` for genuinely trivial work: it files Approved, queues to implementer, tags `batch:fasttrack`, and uses `lifecycle:no-review` so CI is the only gate. That is useful but too narrow. The operator wants an intake lane for easy bug fixes or small features that still receive advisor disposition and then reliably move to implementation automatically, rather than becoming another backlog item requiring manual nudging.
+
+  Acceptance:
+  - Define the user-facing concept and command/flow, e.g. fasttrack request, express lane, or advisor autopilot fasttrack.
+  - Distinguish existing trivial fasttrack (`lifecycle:no-review`) from a broader quick-fix lane that may still use normal review.
+  - Include advisor disposition: accept/reject/dedupe/clarify/escalate, with reasons.
+  - If accepted, ensure the item is queued/routed/drained promptly according to policy, not merely filed as draft.
+  - Define safety exclusions: architecture, security, autonomy machinery, cross-cutting lifecycle, high-risk, ambiguous, multi-file/high-blast-radius, or irreversible changes.
+  - Define a visible SLA/status surface: requested, accepted, queued, running, blocked, punted, shipped, rejected.
+  - Define what happens when the item turns out non-trivial during implementation: punt out of fasttrack and park/escalate rather than silently proceed.
+  - Clarify how this composes with advisor autopilot, solo mode, intake, `aida fasttrack`, `batch:fasttrack`, and lifecycle tags.
+  - Include auditability and rework/revert path for misclassified items.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:29:15.599437866Z
+modified_at: 2026-06-24T03:29:15.599437866Z
+req_type: Task
+tags:
+- advisor-autopilot
+- autonomy
+- fasttrack
+- intake
+- role:advisor
+relationships:
+- rel_type: Child
+  target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
+  created_at: 2026-06-24T03:29:15.599477428Z
