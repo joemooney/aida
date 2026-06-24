@@ -1,0 +1,26 @@
+id: 019ef78b-a296-7883-87f5-d3d33c73872e
+spec_id: TASK-0421
+title: Inventory Claude-specific workflow surfaces that need Codex replacements
+description: |-
+  Create an inventory of Claude Code-specific project surfaces that may be load-bearing during a migration to Codex CLI.
+
+  Acceptance:
+  - Inventory .claude/settings.json, .claude/hooks, .claude/commands, .claude/skills, CLAUDE.md imports, statusLine usage, and any Claude-only launch flags or workflows.
+  - Classify each item as observation, guidance, enforcement, mutation, approval, session control, or UX.
+  - For each load-bearing item, identify the intended replacement: Codex config/hook, AGENTS.md, project script, AIDA CLI/MCP, git hook, CI, orchestrator, or explicit no-equivalent gap.
+  - Produce a migration table that can be checked into docs or attached as a spec comment.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T02:53:04.022726496Z
+modified_at: 2026-06-24T02:53:04.022726496Z
+req_type: Task
+tags:
+- audit
+- migration:claude-to-codex
+- role:implementer
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-06-24T02:53:04.022777493Z
