@@ -1,0 +1,28 @@
+id: 019ef78c-036e-7a91-a764-8f8d0481d2b9
+spec_id: TASK-0424
+title: Update Codex MCP setup and project templates for migration readiness
+description: |-
+  Ensure AIDA's Codex setup guidance and scaffolding support a team migrating from Claude Code to Codex CLI.
+
+  Acceptance:
+  - Review docs/agents/codex-mcp-setup.md, docs/agents/codex-brief-pickup.md, docs/agents/cross-agent-onboarding.md, and AGENTS.md for migration completeness.
+  - Confirm Codex MCP registration instructions, /mcp verification, status footer guidance, launcher guidance, and tool-discovery expectations are current.
+  - Identify whether aida init or AIDA templates should scaffold any Codex-specific config, docs, or prompts beyond current AGENTS.md guidance.
+  - File implementation child specs for any template/scaffold changes needed.
+  - Keep Claude-specific guidance separate from agent-neutral discipline.
+status: Draft
+priority: Medium
+owner: ''
+feature: agents
+created_at: 2026-06-24T02:53:28.814412397Z
+modified_at: 2026-06-24T02:53:28.814412397Z
+req_type: Task
+tags:
+- mcp
+- migration:claude-to-codex
+- role:implementer
+- templates
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-06-24T02:53:28.814459900Z
