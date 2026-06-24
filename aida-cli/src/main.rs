@@ -22397,11 +22397,13 @@ fn handle_init_distributed_sibling(
                 );
                 eprintln!("  sibling store another repo created. Refusing to overwrite it.");
                 eprintln!(
-                    "  • To WIPE and re-initialize the store: re-run with {}.",
+                    "  {} To WIPE and re-initialize the store: re-run with {}.",
+                    crate::glyph(crate::glyphs::Glyph::Bullet),
                     "--force".bold()
                 );
                 eprintln!(
-                    "  • To ATTACH this repo to the existing store (multi-repo): tracked as STORY-674."
+                    "  {} To ATTACH this repo to the existing store (multi-repo): tracked as STORY-674.",
+                    crate::glyph(crate::glyphs::Glyph::Bullet)
                 );
                 // Abort the WHOLE init (non-zero exit, no telemetry/config-menu
                 // post-setup) — a refusal must not look like success. trace:BUG-610
