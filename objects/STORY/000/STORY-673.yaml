@@ -1,0 +1,28 @@
+id: 019ef7cf-c44e-7330-a0ec-803d6cff06a0
+spec_id: STORY-673
+agreed_id: STORY-673
+title: 'aida status default output is overwhelming — terse default + opt-in detail (Trojan-horse: quiet depth, not a wall)'
+description: |-
+  SYMPTOM (operator, 2026-06-23): "The entire output of aida status is overwhelming." It dumps ~15 sections by default, including the full Active-agents roster (89 lines) and the full Worktrees list (45 lines) — burying the answer to "where am I / what do I do next" under a fleet dump. This is the Trojan-horse anti-pattern (surface complexity) in the tool's FLAGSHIP orientation command: the one command meant to answer STORY-127's "where am I / what should I do" makes the user parse a wall.
+
+  EXPECTED: terse, scannable default; depth on demand.
+
+  ACCEPTANCE:
+  - Default aida status fits roughly one screen: lead with the answer (session / branch / PR / queue / inbox / next-action) at the TOP, unburied.
+  - Big sections collapse to a one-line summary by default: e.g. "Active agents: 9 live (80 stale — aida status --agents)", "Worktrees: 45 (--worktrees)", "Open PRs: 1". Opt-in flags (--agents / --worktrees / --full) expand them.
+  - The summarized counts are honest (pairs with BUG-609 live-vs-corpse counting — do not headline corpses as live).
+  - A --full / --all flag reproduces today's exhaustive dump for those who want it.
+  - Verify against the primary caller: a human running aida status to orient gets the next action in the first few lines, not after scrolling past 130 lines of fleet/worktree state.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-24T04:07:29.102015542Z
+modified_at: 2026-06-24T04:07:29.102015542Z
+req_type: Story
+tags:
+- legibility
+- parent:EPIC-49
+- product
+- status
+- streamlining
