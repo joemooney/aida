@@ -1,0 +1,27 @@
+id: 019ef78c-08a6-7880-a246-22cdc479b8c6
+spec_id: TASK-0427
+title: Define migration decision matrix for Claude Code versus Codex CLI versus AIDA substrate
+description: |-
+  Create a concise decision matrix that helps advanced users decide what to keep in Claude Code, what to move to Codex CLI, and what to move into vendor-neutral project infrastructure such as AIDA, scripts, CI, git hooks, or MCP servers.
+
+  Acceptance:
+  - Cover core axes: hooks, approval/defer semantics, sandboxing, status/observability, slash commands, skills/plugins, MCP, subagents, non-interactive automation, and workflow state.
+  - Distinguish convenience features from load-bearing enforcement.
+  - Include future-capability and lock-in tradeoffs for Claude Code and Codex CLI.
+  - Provide a default recommendation for reversible migrations: keep invariants outside vendor-specific agent runtimes.
+  - Link or fold the result into docs/agents/porting-claude-code-to-codex.md after review.
+status: Draft
+priority: Medium
+owner: ''
+feature: agents
+created_at: 2026-06-24T02:53:30.150413674Z
+modified_at: 2026-06-24T02:53:30.150413674Z
+req_type: Task
+tags:
+- decision-guide
+- migration:claude-to-codex
+- role:advisor
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-06-24T02:53:30.150452084Z
