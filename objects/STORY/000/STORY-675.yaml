@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:47:38.482966072Z
-modified_at: 2026-06-24T04:47:38.482966072Z
+modified_at: 2026-06-24T04:48:25.967885190Z
 req_type: Story
 tags:
 - aida:init
@@ -27,3 +27,8 @@ tags:
 - onboarding
 - parent:EPIC-22
 - registry
+relationships:
+- rel_type: Child
+  target_id: 019e10a7-78a6-7750-bfc7-d1a34532da4d
+  created_at: 2026-06-24T04:48:25.967871177Z
+  created_by: joe
