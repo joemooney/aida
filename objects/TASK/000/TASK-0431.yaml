@@ -1,0 +1,27 @@
+id: 019ef7a2-24df-7c43-ae5f-d5f89fb3325b
+spec_id: TASK-0431
+title: Integrate product-role recommendations with advisor autopilot
+description: |-
+  Define how the product role can feed advisor autopilot without bypassing advisor authority.
+
+  Acceptance:
+  - Product role may propose draft specs, rationale, acceptance criteria, priority, risk flags, and recommended disposition.
+  - Advisor autopilot treats product output as evidence/recommendation, not authority.
+  - Autopilot can act on product recommendations only when policy envelope allows and evidence is sufficient.
+  - Architecture/cross-cutting calls still converge on the operator or supervised advisor path.
+  - Document the handoff pattern from product conversation to autopilot disposition.
+status: Draft
+priority: Medium
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:17:39.167328282Z
+modified_at: 2026-06-24T03:17:39.167328282Z
+req_type: Task
+tags:
+- advisor-autopilot
+- product-role
+- role:advisor
+relationships:
+- rel_type: Child
+  target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
+  created_at: 2026-06-24T03:17:39.167368150Z
