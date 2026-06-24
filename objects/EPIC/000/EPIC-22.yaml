@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:11.398984315Z
-modified_at: 2026-06-24T04:48:25.544080234Z
+modified_at: 2026-06-24T04:48:26.850318198Z
 req_type: Epic
 tags:
 - ready-to-implement
@@ -65,6 +65,10 @@ relationships:
 - rel_type: Parent
   target_id: 019ef7f4-87f2-7ab2-9188-e2505a413e7f
   created_at: 2026-06-24T04:48:25.544073263Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 019ef7f4-b07d-7701-a9b8-fe2a594c6287
+  created_at: 2026-06-24T04:48:26.850310702Z
   created_by: joe
 comments:
 - id: 019e9c13-6edd-7403-9faf-761b772fd2b2
