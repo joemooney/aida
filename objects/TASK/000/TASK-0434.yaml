@@ -1,0 +1,27 @@
+id: 019ef7a5-fb7e-7793-9b37-c324d7c867b8
+spec_id: TASK-0434
+title: Design first-class subsystem representation
+description: |-
+  Design the durable representation for project subsystems.
+
+  Acceptance:
+  - Decide whether subsystems are new storable objects, feature-category extensions, structured tags, config entries, or another representation.
+  - Define fields such as name, description, owner/advisor role, scope globs, matching tags/features, memory focus, queue routing, risk policy, and escalation policy.
+  - Define how subsystem membership is computed for specs and files.
+  - Define migration from current tags/features/subsystem-scoped memories.
+  - Include examples for likely AIDA subsystems: autonomy, orchestrator, mcp-server, cli, tui, docs, product, security.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:21:50.718128858Z
+modified_at: 2026-06-24T03:21:50.718128858Z
+req_type: Task
+tags:
+- role:advisor
+- schema
+- subsystem
+relationships:
+- rel_type: Child
+  target_id: 019ef7a5-ba00-76c2-a81f-8fd1bde9e5aa
+  created_at: 2026-06-24T03:21:50.718167001Z
