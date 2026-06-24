@@ -1,0 +1,31 @@
+id: 019ef75a-16b9-76a1-bb23-cc3c4a53aadb
+spec_id: BUG-607
+agreed_id: BUG-607
+title: Stale drain-state.json from a killed/crashed drain makes a fresh burndown falsely hold (no orchestrator_pid liveness gate on the read)
+description: |-
+  Hit live 2026-06-23. Sequence: an earlier batch drain (pid 10837, batch groom-0622) was killed mid-run (operator ended its lease after its first member TASK-891 had already merged). aida session end cleared the LEASE but NOT .aida/drain-state.json. The file persisted, still saying drain.running / members:[TASK-891 in-phase-1, STORY-669 queued], orchestrator_pid: 10837.
+
+  Later the operator ran aida burndown run. The wrapper correctly RECLAIMED the stale LOCK ("reclaiming a stale drain lock (pid 10837 — not running)"), then launched the headless /aida-burndown agent. That agent READ the stale drain-state.json, concluded a LIVE drain already owns STORY-669 (the only ready spec), and HELD — doing nothing. (It even reported a bogus live "pid 265281"; ground truth: 10837 and 265281 are both dead, no claude/burndown process running, STORY-669 has no lease/branch/PR.) Net: the burndown silently no-ops and the spec never drains.
+
+  Two root causes:
+  1. The drain-state file OUTLIVES its process. Killing a drain (aida session end on its lease) and reclaiming its lock do NOT clear/invalidate .aida/drain-state.json. So a killed or crashed drain leaves a tombstone that deadlocks every future burndown of that set until someone manually rm-s the file.
+  2. The liveness decision is left to the AGENTs prose reasoning, not a programmatic gate. orchestrator.rs already has run_is_live() (validates the drain-state run_uuid + process_probe::pid_is_alive(orchestrator_pid)) for the AIDA_AUTO_COMPLETE token path — but the /aida-burndown skills "is a drain already running?" read does not apply that guard, so the agent guessed (wrong).
+
+  Fixes: (a) clearing/reclaiming a drain (session end of the orchestrator lease, and the lock-reclaim path in aida burndown run) must also clear or stamp-stale .aida/drain-state.json; (b) ANY reader of drain-state.json (the burndown skill included) must treat it as NOT live when process_probe::pid_is_alive(orchestrator_pid) is false — ideally via a single programmatic helper (is_drain_live() -> bool) the skill calls instead of reasoning from raw JSON. Workaround until fixed: rm .aida/drain-state.json after killing a drain.
+
+  Acceptance: after a drain is killed/crashes, a fresh aida burndown run fans out the ready set instead of holding; a drain-state whose orchestrator_pid is dead is never honored as live; the burndown skill calls a programmatic liveness helper, not raw-JSON inference.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-24T01:58:56.953168211Z
+modified_at: 2026-06-24T01:58:56.953168211Z
+req_type: Bug
+tags:
+- aida:burndown
+- coordination
+- drain
+- from-operator
+- reliability
+- severity:major
+- stale-state
