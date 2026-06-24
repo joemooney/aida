@@ -1,0 +1,27 @@
+id: 019ef78b-a452-7812-bf76-2aaf06484b13
+spec_id: TASK-0422
+title: Design Codex replacement for Claude defer and session-communication flows
+description: |-
+  Define how AIDA should handle workflows that currently rely on Claude Code hook semantics such as ask, continue:false, defer, and resume.
+
+  Acceptance:
+  - Review docs/agents/session-communication.md against current Claude and Codex behavior.
+  - Identify every AIDA path that assumes Claude-style hook defer/resume semantics.
+  - Specify the Codex-compatible replacement using durable AIDA state: punts, findings, directives, briefs, queue state, needs-attention, or explicit external orchestration.
+  - Document notification behavior as a side effect of the component that stops the run.
+  - Add or update specs for implementation work if the replacement needs CLI/MCP/orchestrator changes.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T02:53:04.466968544Z
+modified_at: 2026-06-24T02:53:04.466968544Z
+req_type: Task
+tags:
+- migration:claude-to-codex
+- role:advisor
+- session-communication
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-06-24T02:53:04.467007117Z
