@@ -1,0 +1,27 @@
+id: 019ef7a2-20e2-7090-a019-58f0f267ee52
+spec_id: TASK-0429
+title: Define advisor autopilot policy envelope
+description: |-
+  Define the explicit authority envelope for advisor autopilot.
+
+  Acceptance:
+  - Specify which advisor actions autopilot may take: approve, reject, dedupe, tag, queue, park, route, comment, or ask.
+  - Specify hard exclusions: architecture, security, autonomy machinery, high-risk, irreversible, cross-cutting lifecycle changes, keystone work, and anything tagged supervised/review:draft-only/risk:high/blast-radius:high unless explicitly allowed.
+  - Define default bias when uncertain: park/escalate rather than approve.
+  - Define how project config can narrow or widen the envelope.
+  - Document examples of in-envelope and out-of-envelope decisions.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:17:38.146829409Z
+modified_at: 2026-06-24T03:17:38.146829409Z
+req_type: Task
+tags:
+- advisor-autopilot
+- policy
+- role:advisor
+relationships:
+- rel_type: Child
+  target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
+  created_at: 2026-06-24T03:17:38.146867480Z
