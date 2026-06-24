@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:11.398984315Z
-modified_at: 2026-06-24T04:48:26.850318198Z
+modified_at: 2026-06-24T04:48:27.912177055Z
 req_type: Epic
 tags:
 - ready-to-implement
@@ -92,5 +92,10 @@ comments:
   content: 'Moved to Draft (advisor, 2026-06-07): all children are deferred, not delivered — STORY-74 (registry) archived, STORY-75/76/77 tagged deferred:multi-repo. AIDA is single-repo today; cross-project primitives have no concrete consumer. Draft is the honest state (deferred, not done). Promote back to Approved + revive STORY-74 as the foundation when a real multi-repo workspace need arises.'
   created_at: 2026-06-08T06:36:21.783251149Z
   modified_at: 2026-06-08T06:36:21.783251149Z
+- id: 019ef7f5-4908-7552-8a2c-1c9186541ed9
+  author: joe
+  content: 'PROMOTED to active near-term direction (operator, 2026-06-23): build distributed/multi-machine onboarding soon. It is the foundation under the Codex cross-repo/cross-machine substrate (the captured-market migration vehicle). Near-term ONBOARDING slice + build order: (1) STORY-674 attach mechanism + local-store node acquisition honoring preferred_node_id [foundational — without it, join has nothing to attach]; (2) STORY-675 init detect-and-offer-to-join + auto-register projects.toml [the UX, rides STORY-674]; (3) STORY-676 explicit --store-path + store-location docs [clarity]. Cross-project queue + cross-project relationships (the rest of EPIC-22) stay deferred behind the onboarding slice. Note: epics cant be Approved (class rule), so this stays Draft as a container; the children carry the active status.'
+  created_at: 2026-06-24T04:48:27.912177055Z
+  modified_at: 2026-06-24T04:48:27.912177055Z
 archived: true
 archived_at: 2026-06-10T06:40:38.822516029Z
