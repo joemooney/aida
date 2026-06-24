@@ -22351,10 +22351,7 @@ fn handle_init_distributed_sibling(
     // repos to share one store, and a store nested in repo-a can't be reached by
     // repo-b via `../aida-store`. Create it at the parent (`../aida-store`).
     // trace:BUG-608 | ai:claude
-    let store_dir = cwd
-        .parent()
-        .unwrap_or(cwd.as_path())
-        .join("aida-store");
+    let store_dir = cwd.parent().unwrap_or(cwd.as_path()).join("aida-store");
 
     // Check if already initialized
     if aida_dir.join("node.toml").exists() && !force {
@@ -22398,9 +22395,7 @@ fn handle_init_distributed_sibling(
                 eprintln!(
                     "  Re-initializing would DELETE them — this is almost certainly a shared"
                 );
-                eprintln!(
-                    "  sibling store another repo created. Refusing to overwrite it."
-                );
+                eprintln!("  sibling store another repo created. Refusing to overwrite it.");
                 eprintln!(
                     "  • To WIPE and re-initialize the store: re-run with {}.",
                     "--force".bold()
