@@ -1,0 +1,35 @@
+id: 019ef7d2-f1a3-7f52-a118-263a31f2a7c7
+spec_id: BUG-610
+agreed_id: BUG-610
+title: aida init --sibling against an EXISTING shared store destructively re-initializes it (deletes other repos' specs, re-seeds META) with NO reset prompt — silent data loss; needs an attach path
+description: |-
+  Verified live 2026-06-23 (dogfood, immediately after the BUG-608 fix). Setup: repo-a aida init --sibling -> creates ~/ai/sib/aida-store (true sibling, BUG-608 fixed) + files TASK-1-001. Then repo-b aida init --sibling (same sibling store).
+
+  OBSERVED: repo-b printed "Created ../aida-store/metadata.yaml" + "Created ../aida-store/objects/" (re-init), with NO reset/wipe prompt. The store git log proves the destruction:
+    940f7d9 chore: update 6 requirements, delete 1   <- repo-b init DELETED TASK-1-001
+    ab25eb3 add TASK-1-001 — filed from repo-a
+    ab3fcbc chore: initialize AIDA distributed store
+  After: repo-a aida list -> "No requirements found" (TASK-1-001 gone); repo-b sees only the 6 re-seeded META specs. repo-as filed work was silently destroyed by initializing a second repo against the shared store.
+
+  So the multi-repo promise actively LOSES DATA: adding a second code repo to a shared sibling store deletes the first repos requirements and re-seeds META (would also clobber any customized META prompts).
+
+  Root cause (to confirm): handle_init_distributed_sibling treats an existing non-empty store as a fresh init to re-seed, and the destructive-reset guard (count_requirements_in_store -> confirm_destructive_reset) did NOT fire interactively (no prompt shown), so the re-seed + delete proceeded unguarded.
+
+  Correct behavior — an ATTACH path: when aida init --sibling finds an EXISTING store at store_path, it must ATTACH, not re-init: (1) write the local .aida/config.toml pointing at the store, (2) acquire a fresh NODE id for this clone (so it allocates non-colliding ids — the dispenser already supports N writers), (3) rebuild the local .aida/cache.db from the store, and (4) NOT re-seed META, NOT delete or rewrite any existing objects. Destructive re-init stays behind an explicit --force with the confirm prompt.
+
+  Acceptance: after repo-a init+file TASK-1, repo-b aida init --sibling against the same store leaves the store UNTOUCHED (no delete, no META re-seed — git log unchanged except possibly a node registration), repo-b aida list SHOWS TASK-1, and both repos can add specs with non-colliding ids. A regression test seeds a store, runs the sibling-attach, and asserts the pre-existing spec survives + is visible from the second repo.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-24T04:10:57.315893693Z
+modified_at: 2026-06-24T04:10:57.315893693Z
+req_type: Bug
+tags:
+- aida:init
+- data-loss
+- from-operator
+- multi-repo
+- out-of-box
+- severity:critical
+- sibling
