@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:31:33.478395114Z
-modified_at: 2026-06-23T06:04:21.746533278Z
+modified_at: 2026-06-24T02:18:04.745434644Z
 req_type: Story
 tags:
 - aida:config:menu
@@ -41,3 +41,8 @@ comments:
   content: 'Coupling note (2026-06-22): STORY-671 (central policy registry, BUG-533 slice 2) will subsume this storys editability metadata — its acceptance #5 hangs bool/scalar/enum + writable-scope off the single registry. Build order is fine either way: STORY-669 can ship first with the minimal config_knob_editability table the plan describes, and STORY-671 absorbs it later; OR if STORY-671 lands first, hang editability directly off the registry instead of a parallel table. Implementer: keep the editability table SMALL/mirrorable (do not deeply entangle it with the menu) so STORY-671 can fold it in cleanly.'
   created_at: 2026-06-23T06:04:21.746533278Z
   modified_at: 2026-06-23T06:04:21.746533278Z
+- id: 019ef76b-9a49-7723-a72b-2c3e1391a9aa
+  author: joe
+  content: Commit 115c853c8 references this requirement
+  created_at: 2026-06-24T02:18:04.745434644Z
+  modified_at: 2026-06-24T02:18:04.745434644Z
