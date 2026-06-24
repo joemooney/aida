@@ -40,7 +40,7 @@ mod welcome;
 
 pub use app::{App, ExitKind};
 pub use config::{TuiConfig, TuiMode};
-pub use config_menu::{run as run_config_menu, ConfigMenuItem};
+pub use config_menu::{run as run_config_menu, ConfigMenuItem, EditKind, EditOutcome};
 pub use launcher::LauncherOptions;
 pub use theme::{Theme, ThemeName};
 
