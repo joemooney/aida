@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:01:46.256210443Z
-modified_at: 2026-06-24T04:01:46.256210443Z
+modified_at: 2026-06-24T04:34:43.282750594Z
 req_type: Bug
 tags:
 - aida:init
@@ -30,3 +30,9 @@ tags:
 - out-of-box
 - severity:major
 - sibling
+comments:
+- id: 019ef7e8-b3d2-7dc3-94e1-5f00158155a7
+  author: joe
+  content: Commit 11e299353 references this requirement
+  created_at: 2026-06-24T04:34:43.282750594Z
+  modified_at: 2026-06-24T04:34:43.282750594Z
