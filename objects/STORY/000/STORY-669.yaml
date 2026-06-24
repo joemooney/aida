@@ -16,12 +16,12 @@ description: |-
   4. Non-boolean knobs (scalars/enums/agents/contained) are clearly marked read-only with a pointer to the right edit path; pressing Enter is a no-op with an explanatory footer, never a silent dead key.
   5. Non-TTY still falls back to aida config show (unchanged).
   6. The 7 existing glyph_config writer tests stay green after the writer is generalized; an anti-drift test asserts every Bool editability entry names a knob policy_registry actually emits.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T04:31:33.478395114Z
-modified_at: 2026-06-24T02:18:04.745434644Z
+modified_at: 2026-06-24T02:33:47.983461723Z
 req_type: Story
 tags:
 - aida:config:menu
@@ -46,3 +46,21 @@ comments:
   content: Commit 115c853c8 references this requirement
   created_at: 2026-06-24T02:18:04.745434644Z
   modified_at: 2026-06-24T02:18:04.745434644Z
+history:
+- id: 019ef779-fe80-7730-9ae8-42e3c3bb055d
+  author: aida-auto-bump
+  timestamp: 2026-06-24T02:33:47.904413013Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ef779-fecf-75f3-9890-879e4d4e29b4
+  timestamp: 2026-06-24T02:33:47.983456133Z
+  agent: aida
+  commit_sha: c07f9915b8dac40c3d6cfd05da8262781646bcb3
+  summary: Completed via merge c07f9915
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-24T02:33:46.950328635Z
+  completion_sha: c07f9915b8dac40c3d6cfd05da8262781646bcb3
