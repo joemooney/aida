@@ -1,0 +1,28 @@
+id: 019ef7d5-c159-7580-86d1-1e88629d060e
+spec_id: STORY-674
+agreed_id: STORY-674
+title: 'aida init --sibling: auto-attach a second repo to an EXISTING shared store (write config + acquire node id + rebuild cache, no re-seed)'
+description: |-
+  The multi-repo onboarding feature, separated from the BUG-610 data-loss fix. After BUG-610, aida init --sibling REFUSES to overwrite an existing populated store (good — no more data loss). But that means a second code repo cannot yet auto-join a shared sibling store; the user has to manually write config + acquire a node. This story builds the attach path.
+
+  When aida init --sibling finds an existing populated store at store_path (and not --force), ATTACH instead of refuse:
+  1. Write the local .aida/config.toml (mode=distributed, store_path=../aida-store, store_type=sibling) — same content the fresh path writes, but DO NOT touch the store.
+  2. Acquire a DISTINCT node id for this clone (reuse the aida node acquire logic) so this repo allocates non-colliding ids (the dispenser already supports N writers; repo-a=node 1, repo-b=node 2, ...). For a local-only store, pick the next free node from the store metadata.
+  3. Rebuild the local .aida/cache.db from the store (so aida list immediately shows the shared specs).
+  4. Print an "Attached to existing store (node N)" message, NOT the fresh-init "Created metadata.yaml" messaging.
+  Skip seed_meta + backend.save + the initialize commit entirely.
+
+  Acceptance: repo-a init+file TASK-1; repo-b aida init --sibling against the same store ATTACHES (store git log unchanged except a node registration), repo-b aida list immediately SHOWS TASK-1, and both repos can add specs with non-colliding node-namespaced ids (repo-a -> TASK-1-xxx, repo-b -> TASK-2-xxx). Regression test: seed a store, run sibling-attach from a second repo, assert the pre-existing spec survives + is visible + the second repo gets a distinct node id.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-24T04:14:01.561270548Z
+modified_at: 2026-06-24T04:14:01.561270548Z
+req_type: Story
+tags:
+- aida:init
+- from-operator
+- multi-repo
+- out-of-box
+- sibling
