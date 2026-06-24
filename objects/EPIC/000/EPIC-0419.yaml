@@ -1,0 +1,22 @@
+id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+spec_id: EPIC-0419
+title: Claude Code to Codex CLI migration readiness
+description: |-
+  Track the work needed to make a Claude Code to Codex CLI migration explicit, reviewable, and safe. Scope includes the new migration guidance in docs/agents/porting-claude-code-to-codex.md, cross-agent onboarding links, review against current Claude/Codex capabilities, AIDA-specific migration gaps, and any implementation work needed so Codex can serve as a credible replacement or complementary worker.
+
+  Acceptance:
+  - Migration guidance is reviewed for technical accuracy, fairness, and non-overclaiming.
+  - Claude-specific capabilities that do not port directly to Codex are inventoried with replacement paths.
+  - AIDA-specific gaps are represented as child specs rather than hidden TODOs in docs.
+  - A migration validation path exists for a real Codex session using AIDA MCP, specs, leases, and queue/brief state.
+  - Work remains agent-agnostic where possible and does not assume AIDA is already known by external readers.
+status: Draft
+priority: Medium
+owner: ''
+feature: agents
+created_at: 2026-06-24T02:52:42.309154932Z
+modified_at: 2026-06-24T02:52:42.309154932Z
+req_type: Epic
+tags:
+- migration:claude-to-codex
+- role:advisor
