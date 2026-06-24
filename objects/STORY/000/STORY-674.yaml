@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:14:01.561270548Z
-modified_at: 2026-06-24T04:48:22.649360105Z
+modified_at: 2026-06-24T04:48:23.705340083Z
 req_type: Story
 tags:
 - aida:init
@@ -27,3 +27,9 @@ tags:
 - out-of-box
 - parent:EPIC-22,distributed,multi-machine
 - sibling
+comments:
+- id: 019ef7f5-3899-77e1-a7c7-6a0763b7a5c3
+  author: joe
+  content: 'Scope addition (finding #5, 2026-06-23): the attach node-acquisition must also fix the LOCAL-only path. Verified: sibling init only registers a node when registry_remote.is_some(), so a local-only store defaults to node 1 and IGNORES ~/.aida/preferences.toml preferred_node_id (repo-a got TASK-1-001, not TASK-JM-001). For multi-clone LOCAL sharing this means every clone defaults to node 1 and their ids COLLIDE. Attach (and a fresh local init) must acquire a DISTINCT node id honoring preferred_node_id, for local-only stores too — not just the remote path.'
+  created_at: 2026-06-24T04:48:23.705340083Z
+  modified_at: 2026-06-24T04:48:23.705340083Z
