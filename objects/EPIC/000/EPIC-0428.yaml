@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:18.954962222Z
-modified_at: 2026-06-24T03:17:46.110296485Z
+modified_at: 2026-06-24T03:36:21.104428783Z
 req_type: Epic
 tags:
 - advisor-autopilot
@@ -50,3 +50,6 @@ comments:
   content: 'Opened from operator feedback that the advisor role is currently a bottleneck: product role can shape and draft ideas, solo mode can work safe backlog, and zen reduces mechanical prompts during drains, but there is no distinct bounded-discretion mode for advisor disposition itself. Working name endorsed in discussion: "advisor autopilot".'
   created_at: 2026-06-24T03:17:46.110292317Z
   modified_at: 2026-06-24T03:17:46.110292317Z
+deferred: true
+deferred_at: 2026-06-24T03:36:21.104428783Z
+deferred_until: stabilization complete AND aida intake --apply proves insufficient for bounded disposition
