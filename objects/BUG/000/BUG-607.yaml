@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T01:58:56.953168211Z
-modified_at: 2026-06-24T01:58:56.953168211Z
+modified_at: 2026-06-24T02:07:47.766190729Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -29,3 +29,9 @@ tags:
 - reliability
 - severity:major
 - stale-state
+comments:
+- id: 019ef762-3036-7900-9b9b-1aab4981a2da
+  author: joe
+  content: 'SHARPENED 2026-06-23 (second live repro, this time with NO stale file): operator re-ran aida burndown run after the tombstone was cleared. The spawned /aida-burndown agent STILL held, citing a "live aida burndown run pid 268015 with STORY-669 scheduled". Ground truth: 268015 is the agents OWN PARENT wrapper (the aida burndown run that spawned it), alive for ~21s. So the PRIMARY failure is not stale-state-from-a-killed-drain — it is a SELF-DEADLOCK: aida burndown run writes a drain-state with the ready spec scheduled, then spawns the /aida-burndown agent, which reads that (genuinely live) drain-state, cannot tell "this is my own orchestrator" from "a competitor", and refuses to double-drive. Net: aida burndown run can NEVER drain a spec, because the agent always detects itself. Required fix: the wrapper must pass its run_uuid / AIDA_AUTO_COMPLETE_TOKEN to the agent, and the agents in-flight check must IGNORE a drain-state whose run_uuid matches its own (mine, not a competitor) — only a DIFFERENT live run_uuid is a real competitor. (The stale-tombstone cause from the first repro still stands as a secondary bug.) Operator chose to drive STORY-669 manually in a separate session instead.'
+  created_at: 2026-06-24T02:07:47.766190729Z
+  modified_at: 2026-06-24T02:07:47.766190729Z
