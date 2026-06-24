@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:52:42.309154932Z
-modified_at: 2026-06-24T02:53:37.884068600Z
+modified_at: 2026-06-24T03:44:25.213117338Z
 req_type: Epic
 tags:
 - migration:claude-to-codex
@@ -51,3 +51,8 @@ comments:
   content: 'Opened from the Claude Code to Codex CLI migration discussion. Primary generated docs to review: docs/agents/porting-claude-code-to-codex.md and the cross-link added to docs/agents/cross-agent-onboarding.md. Related docs that shaped the scope: docs/agents/session-communication.md, docs/agents/claude-bubblewrap-sandbox.md, docs/agents/per-agent-config.md, docs/agents/codex-mcp-setup.md, and docs/aida/discipline/agent-agnostic-vs-claude-specific.md.'
   created_at: 2026-06-24T02:53:37.884064668Z
   modified_at: 2026-06-24T02:53:37.884064668Z
+- id: 019ef7ba-a67d-72c3-b318-9494e08b68db
+  author: joe
+  content: 'Operator confirmed (2026-06-23) this is a near-term direction, not speculative. Approved the foundational slice (TASK-0420 review the existing porting guide / TASK-0421 inventory Claude-specific surfaces / TASK-0425 validation runbook); deferred the implementation follow-on (0422-0427) until the slice confirms the approach. Cross-vendor portability is AIDAs defensible niche, so this is defensible investment even mid-stabilization. PUBLIC-REPO RULE: all Codex specs/docs stay framed as generic cross-vendor migration — no employer/workplace identifiers, ever.'
+  created_at: 2026-06-24T03:44:25.213117338Z
+  modified_at: 2026-06-24T03:44:25.213117338Z
