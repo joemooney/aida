@@ -13,6 +13,10 @@ jobs:
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # BUG-611: a flaky hang in the test step used to run to GitHub's 6h default,
+    # blocking the single runner (and every PR queued behind it) for hours. Fail
+    # fast instead — a normal run is ~7 min. trace:BUG-611 | ai:claude
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
