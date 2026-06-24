@@ -20421,5 +20421,13 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 1963
+- id: 019ef7f5-3502-77c3-bf4a-3f280d85de87
+  target_id: 019ef7d5-c159-7580-86d1-1e88629d060e
+  author: aida
+  node_id: '1'
+  lamport: 1964
+  timestamp: 2026-06-24T04:48:22.786964423Z
+  kind: !AddTag
+    tag: parent:EPIC-22,distributed,multi-machine
+clock: 1964
 node_id: '1'
