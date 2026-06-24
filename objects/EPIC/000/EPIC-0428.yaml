@@ -1,0 +1,30 @@
+id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
+spec_id: EPIC-0428
+title: Advisor autopilot bounded disposition mode
+description: |-
+  Introduce an "advisor autopilot" mode: a bounded advisor-disposition posture that reduces the live advisor bottleneck without removing the advisor seat. Autopilot may approve, reject, dedupe, tag, queue, park, or route ordinary low-risk advisor work inside an explicit policy envelope, while escalating keystone, strategic, ambiguous, irreversible, or high-blast-radius decisions.
+
+  Working definition:
+  - default mode: advisor is driving and confirms disposition work live.
+  - zen mode: advisor is on standby during work execution; mechanical confirmations auto-resolve, design forks surface.
+  - solo mode: safe backlog can be worked end-to-end, while keystone is parked.
+  - advisor autopilot: advisor disposition itself is partially autonomous inside a governed authority envelope.
+
+  Acceptance:
+  - Define the advisor autopilot authority envelope and excluded classes.
+  - Preserve advisor auditability: every autopilot disposition leaves a durable trail.
+  - Ensure product-role outputs can feed recommendations without gaining approval/queue authority directly.
+  - Provide a way to inspect, undo/rework, or challenge autopilot decisions.
+  - Keep architecture, security, autonomy machinery, high-risk, irreversible, and cross-cutting lifecycle decisions human-gated by default.
+  - Clarify how autopilot composes with intake, solo mode, zen mode, queues, punts, findings, and role routing.
+status: Draft
+priority: High
+owner: ''
+feature: agents
+created_at: 2026-06-24T03:17:18.954962222Z
+modified_at: 2026-06-24T03:17:18.954962222Z
+req_type: Epic
+tags:
+- advisor-autopilot
+- autonomy
+- role:advisor
