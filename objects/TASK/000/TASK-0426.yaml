@@ -1,0 +1,28 @@
+id: 019ef78c-06e8-7663-b405-511443cd2641
+spec_id: TASK-0426
+title: Refine external-facing AIDA positioning for agent migration audiences
+description: |-
+  Refine the message for readers who are evaluating Claude Code, Codex CLI, and the broader AI coding-agent landscape, but do not already know AIDA.
+
+  Acceptance:
+  - Review the AIDA section in docs/agents/porting-claude-code-to-codex.md for clarity to a cold reader.
+  - Explain AIDA as a work-in-progress infrastructure project without overclaiming maturity.
+  - Clarify when AIDA is useful, when it is too much machinery, and how someone can help own, shape, and steer the project.
+  - Align the wording with OVERVIEW.md and docs/aida/discipline/agent-agnostic-vs-claude-specific.md.
+  - File follow-up docs tasks for any broader website/README/positioning updates needed.
+status: Draft
+priority: Medium
+owner: ''
+feature: agents
+created_at: 2026-06-24T02:53:29.704172938Z
+modified_at: 2026-06-24T02:53:29.704172938Z
+req_type: Task
+tags:
+- docs-review
+- migration:claude-to-codex
+- positioning
+- role:advisor
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-06-24T02:53:29.704211421Z
