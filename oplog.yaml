@@ -20429,5 +20429,24 @@ operations:
   timestamp: 2026-06-24T04:48:22.786964423Z
   kind: !AddTag
     tag: parent:EPIC-22,distributed,multi-machine
-clock: 1964
+- id: 019ef942-4a81-70b3-bef2-0517416b6e05
+  target_id: 019ef942-4044-7861-87f3-c9e0bd3d53e9
+  author: aida
+  node_id: '1'
+  lamport: 1965
+  timestamp: 2026-06-24T10:52:11.777869509Z
+  kind: !Create
+    title: CI 'Run tests' step intermittently hangs to the 6h timeout (flaky hanging test) — blocks merges on the single runner
+    description: |-
+      Observed 2026-06-24: PR #1084 (BUG-605/607) had its CI Build step SUCCEED but the "Run tests" step HANG to GitHubs 6-hour job timeout (cancelled), twice in a row (original run + a fresh re-trigger). Meanwhile #1082/#1083/#1085 ran the same test step fine in ~6-7 min on the same single ubuntu-latest runner, and #1084s full suite passes LOCALLY (env -u AIDA_SESSION_ROLE cargo test -p aida-cli -> 2919 passed). So it is not a deterministic failure in #1084s code — it is an intermittent hang in the test step.
+
+      Likely a flaky/hanging test: one that under CI conditions occasionally deadlocks or spawns a child process / waits on something that never returns (candidates: env-var tests sharing a global guard; tests that spawn claude/gh/git subprocesses; the drain/orchestrator tests). The single Linux runner means one hung "Run tests" also BLOCKS every other PR queued behind it (observed: #1084s first hung run blocked #1085 for 90 min until cancelled).
+
+      Impact: merges stall for hours; the queue head-of-lines. This is the #1 dev-experience reliability issue right now.
+
+      Acceptance: identify the hanging test(s) and either fix the hang or add a per-test timeout / mark serial; add a job-level timeout-minutes to the CI workflow (e.g. 20m) so a hang fails fast instead of blocking the runner for 6h; consider a test-level timeout harness. Reproduce by running the suite under CI-like conditions (no TTY, restricted env) in a loop until it hangs.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 1965
 node_id: '1'
