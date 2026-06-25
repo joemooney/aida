@@ -29,3 +29,10 @@ chrono = { workspace = true }
 # Signal handler that restores the terminal before exit on SIGTERM/SIGINT
 # (Unix) and CTRL_C_EVENT/CTRL_BREAK_EVENT (Windows). BUG-110.
 ctrlc = { workspace = true }
+
+# POSIX SIGSTOP/SIGCONT for `prefix p` pause/resume of the hosted child's
+# process group (STORY-678). Unix-only — the signal calls are `#[cfg(unix)]`
+# gated, so the dep is scoped to unix targets to stay unused-warning-clean on
+# Windows. Mirrors the `libc = "0.2"` declaration in aida-cli/aida-core.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

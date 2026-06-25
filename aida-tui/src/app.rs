@@ -60,6 +60,12 @@ pub enum Mode {
     /// modals the focused child's PTY output is buffered until it
     /// closes. trace:BUG-109 | ai:claude
     Help,
+    /// The `prefix p` pause overlay is up — the focused child's process
+    /// group is `SIGSTOP`ped, its PTY output is buffered (not blitted, and
+    /// near-silent anyway since the frozen child emits nothing), and ANY
+    /// keystroke drives the resume (`SIGCONT` + repaint), never the child.
+    /// Semantically a modal like `Overlay` / `Help`. trace:STORY-678
+    Paused,
 }
 
 /// The outcome of routing one keystroke through [`App::route_key`].
@@ -108,6 +114,12 @@ pub enum Routing {
     CloseHelp,
     /// A cheatsheet keystroke with no binding — an idempotent redraw.
     HelpRedraw,
+    /// `prefix p` — pause the focused child (`SIGSTOP` its process group)
+    /// and show the paused overlay. trace:STORY-678
+    Pause,
+    /// Any key while paused — resume the focused child (`SIGCONT`) and
+    /// repaint it from its snapshot. trace:STORY-678
+    Resume,
 }
 
 /// How a new tab's hosted `aida queue work` child should launch.
@@ -284,6 +296,13 @@ impl App {
                         self.mode = Mode::Help;
                         Routing::OpenHelp
                     }
+                    KeyCode::Char('p') => {
+                        // `prefix p` — pause the focused child. The mode
+                        // flip + SIGSTOP + overlay paint happen in
+                        // `handle_routing`. trace:STORY-678
+                        self.mode = Mode::Paused;
+                        Routing::Pause
+                    }
                     KeyCode::Char('[') => Routing::PrevTab,
                     KeyCode::Char(']') => Routing::NextTab,
                     KeyCode::Char(c @ '1'..='9') => Routing::SwitchTab(c as usize - '1' as usize),
@@ -293,6 +312,12 @@ impl App {
             Mode::Overlay => self.route_overlay_key(key),
             Mode::Picker => self.route_picker_key(key),
             Mode::Help => self.route_help_key(key),
+            // Paused: any keystroke resumes the conversation — none reach
+            // the frozen child. trace:STORY-678
+            Mode::Paused => {
+                self.mode = Mode::Focused;
+                Routing::Resume
+            }
         }
     }
 
@@ -626,6 +651,17 @@ impl App {
             // child, or the welcome panel in the empty shell.
             Routing::CloseHelp => self.full_repaint(out)?,
             Routing::HelpRedraw => self.draw_help()?,
+            Routing::Pause => self.open_paused()?,
+            Routing::Resume => {
+                // Mirror the `CloseOverlay` close path exactly: SIGCONT the
+                // child first, then repaint it from its `vt100` snapshot +
+                // restore the real cursor + repaint the status strip (all
+                // inside `full_repaint` / `paint_strip`). trace:STORY-678
+                if let Some(tab) = self.tabs.focused() {
+                    tab.pty.resume();
+                }
+                self.full_repaint(out)?;
+            }
         }
         Ok(None)
     }
@@ -634,7 +670,10 @@ impl App {
     /// owns the screen — when true, hosted children's PTY output is
     /// buffered.
     fn is_modal(&self) -> bool {
-        matches!(self.mode, Mode::Overlay | Mode::Picker | Mode::Help)
+        matches!(
+            self.mode,
+            Mode::Overlay | Mode::Picker | Mode::Help | Mode::Paused
+        )
     }
 
     /// Repaint whatever owns the screen for the current mode — the active
@@ -645,6 +684,7 @@ impl App {
             Mode::Overlay => self.draw_overlay(),
             Mode::Picker => self.draw_picker(),
             Mode::Help => self.draw_help(),
+            Mode::Paused => self.draw_paused(),
             Mode::Focused | Mode::Command => self.full_repaint(out),
         }
     }
@@ -729,6 +769,55 @@ impl App {
             .as_mut()
             .expect("ratatui terminal initialized above");
         term.draw(|frame| help::render(frame, &prefix))?;
+        Ok(())
+    }
+
+    /// Open the `prefix p` pause overlay (STORY-678): `SIGSTOP` the
+    /// focused child's process group, then paint a minimal centered
+    /// "paused" strip. `clear()` forces a full redraw over the frozen
+    /// child's screen. No-op (just a repaint) when no session is focused.
+    /// trace:STORY-678 | ai:claude
+    fn open_paused(&mut self) -> Result<()> {
+        if let Some(tab) = self.tabs.focused() {
+            tab.pty.suspend();
+        }
+        self.ensure_ratatui_term()?;
+        if let Some(term) = self.ratatui_term.as_mut() {
+            term.clear()?;
+            term.hide_cursor()?;
+        }
+        self.draw_paused()
+    }
+
+    /// Draw the minimal paused overlay into the `ratatui` terminal — a
+    /// single centered line. ASCII-only so it bypasses no glyph registry
+    /// (`scripts/glyph-lint.sh`). trace:STORY-678 | ai:claude
+    fn draw_paused(&mut self) -> Result<()> {
+        use ratatui::layout::{Alignment, Constraint, Layout};
+        use ratatui::style::{Modifier, Style};
+        use ratatui::text::{Line, Span};
+        use ratatui::widgets::Paragraph;
+
+        self.ensure_ratatui_term()?;
+        let term = self
+            .ratatui_term
+            .as_mut()
+            .expect("ratatui terminal initialized above");
+        term.draw(|frame| {
+            let area = frame.area();
+            // Vertically center a single-row strip.
+            let rows = Layout::vertical([
+                Constraint::Fill(1),
+                Constraint::Length(1),
+                Constraint::Fill(1),
+            ])
+            .split(area);
+            let line = Line::from(vec![Span::styled(
+                "[paused] AIDA-side -- press any key to resume the conversation",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]);
+            frame.render_widget(Paragraph::new(line).alignment(Alignment::Center), rows[1]);
+        })?;
         Ok(())
     }
 
@@ -971,15 +1060,17 @@ impl App {
             // A rotating discovery hint (BUG-109) — advanced by `Tick`.
             Mode::Focused => rotating_hint(self.config.prefix_key, self.hint_index),
             Mode::Command => {
-                "command: n new · o overlay · ? help · d detach · q quit · [ ] tab".to_string()
+                "command: n new · o overlay · p pause · ? help · d detach · q quit · [ ] tab"
+                    .to_string()
             }
-            // The overlay, picker and help modals paint their own
+            // The overlay, picker, help and paused modals paint their own
             // full-screen chrome; the strip is only ever drawn in
             // Focused / Command, but the arms are needed for the match
             // to stay exhaustive.
             Mode::Overlay => "overlay open".to_string(),
             Mode::Picker => "picker open".to_string(),
             Mode::Help => "help open".to_string(),
+            Mode::Paused => "paused".to_string(),
         };
         statusbar::render(
             out,
@@ -1262,6 +1353,40 @@ mod tests {
 
         app.route_key(prefix);
         assert!(matches!(app.route_key(plain('[')), Routing::PrevTab));
+    }
+
+    #[test]
+    fn prefix_p_routes_pause_and_any_key_resumes() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+
+        // `prefix p` enters Paused mode and routes a Pause.
+        app.route_key(prefix);
+        assert!(matches!(app.route_key(plain('p')), Routing::Pause));
+        assert_eq!(app.mode, Mode::Paused);
+
+        // ANY key while paused resumes and returns to Focused.
+        match app.route_key(plain('x')) {
+            Routing::Resume => {}
+            other => panic!("expected Resume, got {:?}", other),
+        }
+        assert_eq!(app.mode, Mode::Focused);
+    }
+
+    #[test]
+    fn paused_resumes_on_non_char_keys_too() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+
+        app.route_key(prefix);
+        app.route_key(plain('p'));
+        assert_eq!(app.mode, Mode::Paused);
+
+        // Even Enter / Esc / the prefix itself resume — nothing reaches
+        // the frozen child. trace:STORY-678
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(matches!(app.route_key(esc), Routing::Resume));
+        assert_eq!(app.mode, Mode::Focused);
     }
 
     fn enter() -> KeyEvent {
