@@ -57,18 +57,39 @@ pub const RECENT_JSONL_WINDOW: Duration = Duration::from_secs(60);
 /// Returns an empty vec on platforms where sysinfo can't read process info
 /// (Windows pre-Vista, restricted procfs). Never panics — degrades to mtime-
 /// only callers without crashing.
+///
+/// BUG-613: the full `sysinfo` process refresh is expensive — on Linux it
+/// enumerates every process AND every thread under `/proc/<pid>/task/...`
+/// (tens of thousands of `openat`/`read` on a busy host). A single `aida
+/// status` calls this from several sections (agent classify, worktree rows,
+/// the cross-substrate Claude Code view), so the raw walk used to fire 3+
+/// times per invocation. Process liveness does not meaningfully change within
+/// one short-lived CLI run, so we memoize the first result for the lifetime of
+/// the process and hand every later caller a cheap clone. The uncached walk is
+/// still available as [`probe_live_claude_sessions_uncached`] for the rare
+/// caller that must observe fresh state. trace:BUG-613 | ai:claude
 pub fn probe_live_claude_sessions() -> Vec<LiveSession> {
-    let mut sys = System::new_with_specifics(
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<Vec<LiveSession>> = OnceLock::new();
+    CACHE
+        .get_or_init(probe_live_claude_sessions_uncached)
+        .clone()
+}
+
+/// BUG-613: the uncached single-walk probe. Prefer [`probe_live_claude_sessions`]
+/// (process-lifetime memoized) on the read-mostly status/listing paths; reach
+/// for this only when fresh liveness is required mid-process. trace:BUG-613
+pub fn probe_live_claude_sessions_uncached() -> Vec<LiveSession> {
+    // One refresh, not two: `new_with_specifics` already performs the initial
+    // process walk for the given `RefreshKind`, so the previous extra
+    // `refresh_processes_specifics` call doubled the `/proc` scan for no gain.
+    // trace:BUG-613 | ai:claude
+    let sys = System::new_with_specifics(
         RefreshKind::new().with_processes(
             ProcessRefreshKind::new()
                 .with_cwd(sysinfo::UpdateKind::Always)
                 .with_cmd(sysinfo::UpdateKind::Always),
         ),
-    );
-    sys.refresh_processes_specifics(
-        ProcessRefreshKind::new()
-            .with_cwd(sysinfo::UpdateKind::Always)
-            .with_cmd(sysinfo::UpdateKind::Always),
     );
 
     let mut out = Vec::new();
@@ -232,11 +253,50 @@ pub fn walk_ancestor_pids(start: u32) -> Vec<u32> {
 /// can't be read — corroboration fails safe (treat as not-orchestrated).
 /// trace:BUG-233 | ai:claude
 pub fn pid_is_alive(pid: u32) -> bool {
-    use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
-    let mut sys =
-        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
-    sys.refresh_processes_specifics(ProcessRefreshKind::new());
-    sys.process(Pid::from_u32(pid)).is_some()
+    pid_is_alive_impl(pid)
+}
+
+/// BUG-613: liveness must be O(1), not a full process-table walk. The old
+/// implementation built a fresh `sysinfo::System` and refreshed EVERY process
+/// (and, on Linux, every thread via `/proc/<pid>/task/<tid>/...`) just to test
+/// whether a single pid exists. Callers like `agent_registry::list_agent_views`
+/// invoke this once per registered agent/session record, so on a long-lived
+/// machine with many accumulated session manifests `aida status` fanned out to
+/// hundreds of full `/proc` scans (~182 on the reporter's host → ~13s of
+/// system time, dominated by `/proc/*/task/*` recursion). A single-pid probe
+/// removes the whole hotspot.
+///
+/// Unix: `kill(pid, 0)` sends no signal but performs the existence + permission
+/// check. `0` → alive and signalable; `EPERM` → the pid exists but is owned by
+/// another user (still alive); `ESRCH` → no such process. Any other errno is
+/// treated as not-alive (fail-safe, matching the prior platform-degrade
+/// contract). `pid == 0` is rejected up front — `kill(0, …)` addresses the
+/// caller's whole process group on Unix, which is never the intent here.
+/// trace:BUG-613 | ai:claude
+#[cfg(unix)]
+fn pid_is_alive_impl(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    // SAFETY: `kill` with signal 0 only probes; it never delivers a signal.
+    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+    if rc == 0 {
+        return true;
+    }
+    // errno == EPERM means the process exists but we may not signal it.
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+/// Non-Unix fallback: refresh ONLY the target pid rather than the whole table.
+/// `refresh_pids_specifics` (sysinfo 0.30) scopes the scan to the single pid,
+/// so this stays O(1) on Windows too. trace:BUG-613 | ai:claude
+#[cfg(not(unix))]
+fn pid_is_alive_impl(pid: u32) -> bool {
+    use sysinfo::{Pid, ProcessRefreshKind, System};
+    let target = Pid::from_u32(pid);
+    let mut sys = System::new();
+    sys.refresh_pids_specifics(&[target], ProcessRefreshKind::new());
+    sys.process(target).is_some()
 }
 
 #[cfg(test)]
@@ -318,5 +378,27 @@ mod tests {
         // A PID near u32::MAX is astronomically unlikely to be in use — well
         // above any real `pid_max` (Linux caps at ~4M, far below this).
         assert!(!pid_is_alive(u32::MAX - 1));
+    }
+
+    // BUG-613: pid 0 must never read as alive. On Unix `kill(0, …)` targets the
+    // caller's whole process group, so the existence probe must special-case it
+    // rather than let it report "alive". trace:BUG-613 | ai:claude
+    #[test]
+    fn pid_is_alive_false_for_pid_zero() {
+        assert!(!pid_is_alive(0));
+    }
+
+    // BUG-613: a reaped child is dead. Spawn `true`, wait for it, then probe —
+    // the pid must read not-alive (covers the `ESRCH` path). Unix-only because
+    // the spawn-and-reap timing is deterministic via `wait`. trace:BUG-613
+    #[cfg(unix)]
+    #[test]
+    fn pid_is_alive_false_after_child_reaped() {
+        let mut child = std::process::Command::new("true")
+            .spawn()
+            .expect("spawn `true`");
+        let pid = child.id();
+        child.wait().expect("reap child");
+        assert!(!pid_is_alive(pid));
     }
 }

@@ -97076,6 +97076,36 @@ struct OpenPrSnapshot {
 }
 
 fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
+    // BUG-613: one `aida status` resolves the open-PR snapshot from three
+    // sections (the JSON `open_prs` block, the worktree-rows PR merge, and the
+    // awaiting-you mergeable filter), each previously firing its own
+    // `gh pr list` — ~0.4s of network latency apiece. PR state does not change
+    // within a single short-lived `status` run, so memoize the snapshot for the
+    // process lifetime, keyed by the canonicalized repo root (so the rare
+    // cross-repo caller still gets the right answer). trace:BUG-613 | ai:claude
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<Mutex<std::collections::HashMap<std::path::PathBuf, OpenPrSnapshot>>> =
+        OnceLock::new();
+    let key = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let cache = CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(hit) = guard.get(&key) {
+            return hit.clone();
+        }
+    }
+    let snapshot = collect_open_prs_uncached(project_root);
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(key, snapshot.clone());
+    }
+    snapshot
+}
+
+/// BUG-613: the uncached single-`gh pr list` snapshot fetch behind the
+/// process-lifetime memo in [`collect_open_prs`]. trace:BUG-613 | ai:claude
+fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
     // TASK-833: mirror the `collect_pr_facts` forge-aware degrade (BUG-560) — on
     // a non-GitHub forge `gh` errors with a raw "not a known GitHub host" auth
     // message; skip the spawn entirely and degrade to an empty snapshot so every
