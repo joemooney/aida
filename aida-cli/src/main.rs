@@ -10761,6 +10761,10 @@ fn complete_init_scaffolding(
         "claude" => {
             config.generate_agents_md = false;
             config.generate_codex_skills = false;
+            // A Claude-only project needs no Codex MCP registration; the
+            // .codex/config.toml is the Codex-side parallel to .mcp.json and
+            // is skipped here alongside the Codex skills. trace:TASK-0424 | ai:claude
+            config.generate_codex_config = false;
             // .antigravity/ mirrors the non-Claude .codex/ dir; the
             // Claude-only profile skips both. trace:TASK-457 | ai:claude
             config.generate_antigravity_skills = false;
