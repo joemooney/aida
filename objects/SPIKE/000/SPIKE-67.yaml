@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T01:36:45.413199316Z
-modified_at: 2026-06-21T20:09:09.135001132Z
+modified_at: 2026-06-25T07:51:01.506709975Z
 req_type: Spike
 tags:
 - field-study
@@ -36,6 +36,11 @@ comments:
   content: 'Correction to my earlier re-open comment: I mis-stated the mechanism. The auto-bump did NOT promote this from the diffs trace:SPIKE-67 comments — verified in code, it scans only the commit MESSAGE subject. The real cause was my PR title "(SPIKE-67 slice 1)", which is a completion trailer for SPIKE-67 under BUG-546s convention (leading id + decorative prose). So SPIKE-67 was completed because the merge subject said it completed it. The --force reopen to In Progress stands and is correct (the spike continues); BUG-603 (which I filed on the wrong mechanism) is rejected as working-as-designed/operator-error.'
   created_at: 2026-06-21T20:09:09.135001132Z
   modified_at: 2026-06-21T20:09:09.135001132Z
+- id: 019efdc2-c882-7360-a8e4-577424dc986f
+  author: joe
+  content: Commit d650df35b references this requirement
+  created_at: 2026-06-25T07:51:01.506709975Z
+  modified_at: 2026-06-25T07:51:01.506709975Z
 history:
 - id: 019ee8e6-7056-7060-a322-d12d1c60a12b
   author: aida-auto-bump
