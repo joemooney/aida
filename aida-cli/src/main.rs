@@ -97,6 +97,8 @@ mod test_env;
 // trace:TASK-661 | ai:claude
 mod triage_lease;
 mod usage;
+// trace:TASK-877 | ai:claude — user/project-defined `aida` command aliases.
+mod user_alias;
 mod worker;
 mod workflow_hints;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
@@ -1472,9 +1474,17 @@ fn run() -> Result<()> {
     // before the list-lens / advisor-assess passes so `mylist` reaches the same
     // `list me` path the lens resolvers feed.
     // trace:TASK-881 | ai:claude — bare `aida queue` -> `aida queue list`.
+    // TASK-877: user/project-defined aliases expand FIRST (outermost), so an
+    // alias's stored expansion (e.g. `list draft`) then flows through the
+    // built-in personal-view / list-lens / queue-default passes. The expansion
+    // is gated on an interactive HUMAN caller inside `user_alias::expand` — an
+    // agent / headless / MCP / non-TTY caller gets argv back unchanged, so the
+    // canonical surface every vendor sees is never reshaped by a user alias.
+    // trace:TASK-877 | ai:claude
+    let expanded = user_alias::expand(&raw_args);
     let mut cli = Cli::parse_from(rewrite_queue_default_list(&rewrite_agent_default_new(
         &rewrite_list_alias(&rewrite_advisor_assess(&rewrite_personal_view_alias(
-            &raw_args,
+            &expanded,
         ))),
     )));
 
@@ -1945,16 +1955,36 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    // `aida alias` / `aida alias list` is a static, built-in-shortcut registry —
-    // it reads no store and needs no storage handle, so dispatch it early like
-    // help-all. Bare `aida alias` defaults to `list`. The top-level `--json`
-    // and the `list --json` spelling are equivalent. trace:STORY-667 | ai:claude
+    // `aida alias` / `aida alias list` is a built-in-shortcut registry (now also
+    // surfacing user-defined aliases) — it reads no requirement store and needs
+    // no storage handle, so dispatch it early like help-all. Bare `aida alias`
+    // defaults to `list`. `add` / `remove` manage user aliases under the chosen
+    // scope. trace:STORY-667 | ai:claude
+    // trace:TASK-877 | ai:claude — user-alias CRUD dispatch.
     if let Command::Alias { json, command } = &cli.command {
-        let want_json = match command {
-            Some(crate::cli::AliasCommand::List { json: sub_json }) => *json || *sub_json,
-            None => *json,
-        };
-        return alias::run(want_json);
+        match command {
+            Some(crate::cli::AliasCommand::Add {
+                name,
+                command: cmd_tokens,
+                global,
+                project,
+            }) => {
+                let scope = user_alias::resolve_scope(*project, *global)?;
+                return user_alias::add(scope, name, cmd_tokens);
+            }
+            Some(crate::cli::AliasCommand::Remove {
+                name,
+                global,
+                project,
+            }) => {
+                let scope = user_alias::resolve_scope(*project, *global)?;
+                return user_alias::remove(scope, name);
+            }
+            Some(crate::cli::AliasCommand::List { json: sub_json }) => {
+                return alias::run(*json || *sub_json);
+            }
+            None => return alias::run(*json),
+        }
     }
 
     // Plan tooling is self-contained: `verify` reads a markdown file +
@@ -10347,10 +10377,11 @@ fn print_status_memory_drift_section() {
 /// - `<worktree_dir>/` (+ bare symlink form) — the orphan-branch worktree
 ///   (`.aida-store/` by default). Bare-name pattern needed because session
 ///   worktrees link to the canonical store. trace:EPIC-21 | ai:claude
-/// - `.aida/*` deny-by-default + `!.aida/config.toml` allow-list — covers
-///   every per-clone runtime file under `.aida/` (sessions, roles, cache,
-///   session-env, server data, review prompts, future runtime additions)
-///   without per-file whack-a-mole. trace:BUG-73 | ai:claude
+/// - `.aida/*` deny-by-default + `!.aida/config.toml` + `!.aida/aliases.toml`
+///   allow-list — covers every per-clone runtime file under `.aida/` (sessions,
+///   roles, cache, session-env, server data, review prompts, future runtime
+///   additions) without per-file whack-a-mole, while keeping team-shareable
+///   project config tracked. trace:BUG-73 trace:TASK-877 | ai:claude
 ///
 /// Migration: when invoked against a `.gitignore` from an older AIDA scaffold
 /// (which listed each runtime path individually), the deny block is appended.
@@ -10376,6 +10407,10 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          \n\
          # Tracked exceptions: project-level config that lives in the repo.\n\
          !.aida/config.toml\n\
+         \n\
+         # Project-level command aliases are shareable across the team.\n\
+         # trace:TASK-877 | ai:claude\n\
+         !.aida/aliases.toml\n\
          \n\
          # Per-project skill extensions are tracked project assets, not\n\
          # runtime state — they live under .claude/ which is tracked by\n\

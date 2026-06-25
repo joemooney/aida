@@ -18,10 +18,15 @@
 //! `rewrite_agent_default_new`, and clap parsing of the status shortcuts) so
 //! the catalog can't drift from the surface it documents.
 //!
-//! Scope: built-in shortcuts ONLY. User-defined aliases are a separate,
-//! deferred question (TASK-877) — `aida alias add` is intentionally not here.
+//! User-defined aliases (TASK-877) are layered on top: `aida alias add/remove`
+//! manage them (see `user_alias`), and the registry appends a "User aliases"
+//! group sourced from `user_alias::effective_user_aliases()` so personal +
+//! project aliases show alongside built-ins, marked by source. They are shown
+//! to every caller (discoverability) but EXPANDED only for an interactive human
+//! shell.
 //!
 //! trace:STORY-667 | ai:claude
+//! trace:TASK-877 | ai:claude
 
 use anyhow::Result;
 use colored::Colorize;
@@ -187,7 +192,7 @@ pub fn registry() -> Vec<AliasGroup> {
         ),
     ];
 
-    vec![
+    let mut groups = vec![
         AliasGroup {
             surface: "Status lenses".to_string(),
             about: "positional status shortcut on `aida list` (== `--status <x>`)".to_string(),
@@ -203,7 +208,35 @@ pub fn registry() -> Vec<AliasGroup> {
             about: "alternate spellings that reach the same command".to_string(),
             rows: command_rows,
         },
-    ]
+    ];
+
+    // User-defined aliases (TASK-877), grouped by source. Shown to EVERY caller
+    // (including agents — discoverability), even though only an interactive
+    // human shell ever has them EXPANDED at the dispatch boundary. Each row is
+    // marked with its scope so the source is unambiguous.
+    // trace:TASK-877 | ai:claude
+    let user_aliases = crate::user_alias::effective_user_aliases();
+    if !user_aliases.is_empty() {
+        let rows = user_aliases
+            .iter()
+            .map(|a| {
+                row(
+                    &format!("aida {}", a.name),
+                    &format!("aida {}", a.expansion),
+                    &format!("[{}] user-defined", a.scope.label()),
+                )
+            })
+            .collect();
+        groups.push(AliasGroup {
+            surface: "User aliases".to_string(),
+            about: "your personal/project aliases (project overrides personal); \
+                    expanded only for an interactive human shell"
+                .to_string(),
+            rows,
+        });
+    }
+
+    groups
 }
 
 /// Run `aida alias` / `aida alias list`. Prints the grouped registry of
@@ -244,8 +277,9 @@ pub fn run(json: bool) -> Result<()> {
         println!();
     }
     println!(
-        "{} user-defined aliases are a separate question; this lists built-ins only.",
-        "Note:".dimmed()
+        "{} define your own with `aida alias add <name> <command...>` \
+         (--global personal, --project shareable).",
+        "Tip:".dimmed()
     );
     Ok(())
 }
