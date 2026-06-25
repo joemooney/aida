@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T06:03:25.024083321Z
-modified_at: 2026-06-23T06:03:25.024083321Z
+modified_at: 2026-06-25T07:51:03.946333878Z
 req_type: Story
 tags:
 - anti-drift
@@ -33,3 +33,9 @@ tags:
 - parent:BUG-533
 - refactor
 - severity:minor
+comments:
+- id: 019efdc2-d20a-7e61-b9f5-0a4471e21f6b
+  author: joe
+  content: Commit d650df35b references this requirement
+  created_at: 2026-06-25T07:51:03.946333878Z
+  modified_at: 2026-06-25T07:51:03.946333878Z
