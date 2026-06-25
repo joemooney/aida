@@ -11,12 +11,12 @@ description: |-
   3. Add a short docs/ "where does the store live?" note covering the three layouts (sibling dir / submodule / absolute) and the live-vs-pinned sharing trade-off: a shared working dir (sibling/absolute) shares LIVE on one machine; a submodule pins a commit (good for vendoring a snapshot or sharing across machines via the store remote, heavier for live local sharing).
 
   Acceptance: aida init --store-path <PATH> creates/points the store at PATH; --sibling still works (= ../aida-store); help + success message + the docs note make the store location unambiguous; an absolute and a submodule store_path both resolve.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:47:48.861851420Z
-modified_at: 2026-06-25T05:03:46.427055343Z
+modified_at: 2026-06-25T05:20:21.650405991Z
 req_type: Story
 tags:
 - aida:init
@@ -37,3 +37,21 @@ comments:
   content: Commit cf16682b8 references this requirement
   created_at: 2026-06-25T05:03:46.427055343Z
   modified_at: 2026-06-25T05:03:46.427055343Z
+history:
+- id: 019efd38-d843-7150-9794-c55058aa9084
+  author: aida-auto-bump
+  timestamp: 2026-06-25T05:20:21.571125622Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efd38-d892-7cf0-a15d-49226e0112b4
+  timestamp: 2026-06-25T05:20:21.650400303Z
+  agent: aida
+  commit_sha: 9d874ea58bfc9a58a6310a571eebe85f8c01b0d7
+  summary: Completed via merge 9d874ea5
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T05:20:20.522844174Z
+  completion_sha: 9d874ea58bfc9a58a6310a571eebe85f8c01b0d7

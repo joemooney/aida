@@ -12,12 +12,12 @@ description: |-
   Non-interactive/scripted init: default to create (current behavior) unless --attach/--join given.
 
   Acceptance: in a workspace with an existing sibling store, aida init OFFERS to join it (and joining attaches via STORY-674 so the new repo immediately sees the shared specs); the new project appears in ~/.aida/projects.toml automatically; a fresh machine with a populated projects.toml can list/join known stores. Composes with STORY-674 (mechanism) and EPIC-22 (registry).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:47:38.482966072Z
-modified_at: 2026-06-25T05:10:45.156639817Z
+modified_at: 2026-06-25T05:20:21.570856505Z
 req_type: Story
 tags:
 - aida:init
@@ -38,3 +38,21 @@ comments:
   content: Commit fa1569b65 references this requirement
   created_at: 2026-06-25T05:10:45.156639817Z
   modified_at: 2026-06-25T05:10:45.156639817Z
+history:
+- id: 019efd38-d7f3-7592-9c21-300708be290b
+  author: aida-auto-bump
+  timestamp: 2026-06-25T05:20:21.491193685Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efd38-d842-7a93-8adb-249d5956925a
+  timestamp: 2026-06-25T05:20:21.570845095Z
+  agent: aida
+  commit_sha: 9d874ea58bfc9a58a6310a571eebe85f8c01b0d7
+  summary: Completed via merge 9d874ea5
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T05:20:20.522844174Z
+  completion_sha: 9d874ea58bfc9a58a6310a571eebe85f8c01b0d7
