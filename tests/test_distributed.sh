@@ -69,7 +69,7 @@ info "Test 2: Add multiple requirements and list them"
 $AIDA --file "$STORE" add --title "Second requirement" --description "Another one" --type bug --status draft 2>/dev/null
 $AIDA --file "$STORE" add --title "Third requirement" --description "And another" --type story --status approved 2>/dev/null
 
-COUNT=$($AIDA --file "$STORE" list 2>/dev/null | grep -cE "^(FR-|BUG-|STORY-|NFR-|TASK-|EPIC-|SPIKE-|REQ-)" || true)
+COUNT=$($AIDA --file "$STORE" list 2>/dev/null | grep -cE "^[[:space:]]*(FR-|BUG-|STORY-|NFR-|TASK-|EPIC-|SPIKE-|REQ-)" || true)
 [ "$COUNT" -ge 3 ] || fail "Expected at least 3 requirements, got $COUNT"
 pass "Multiple requirements stored and listed ($COUNT rows)"
 
@@ -170,6 +170,50 @@ pass "aida init --distributed creates worktree layout"
 # Verify it's a git worktree (not a standalone repo)
 git worktree list 2>/dev/null | grep -q "aida-store" || fail "aida-store branch not in worktree list"
 pass ".aida-store/ is a git worktree on orphan branch"
+
+cd "$PROJECT_ROOT"
+
+# ============================================================================
+# Test: sibling-store multi-repo (BUG-608 true sibling / BUG-610 no data loss /
+#       STORY-674 --attach). Two code repos under one parent share one store.
+# ============================================================================
+info "Sibling-store multi-repo: true sibling, refuse-not-wipe, --attach join"
+WS="$TEST_DIR/ws"
+mkdir -p "$WS/repo-a" "$WS/repo-b"
+git_init() { ( cd "$1" && git init -q -b main && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init ); }
+git_init "$WS/repo-a"
+git_init "$WS/repo-b"
+
+# repo-a: --sibling creates a TRUE sibling store (BUG-608), not nested
+( cd "$WS/repo-a" && "$AIDA" init --sibling --no-skills --no-hooks >/dev/null 2>&1 ) || fail "repo-a init --sibling failed"
+[ -f "$WS/aida-store/metadata.yaml" ] || fail "BUG-608: store not created as sibling ../aida-store"
+[ ! -e "$WS/repo-a/aida-store" ] || fail "BUG-608: store nested inside repo-a"
+grep -q 'store_path = "../aida-store"' "$WS/repo-a/.aida/config.toml" || fail "BUG-608: store_path != ../aida-store"
+pass "BUG-608: --sibling creates a true sibling store (../aida-store)"
+
+# file a spec from repo-a
+( cd "$WS/repo-a" && AIDA_SESSION_ROLE=advisor "$AIDA" add --title "from repo-a" --type task --status approved >/dev/null 2>&1 ) || fail "repo-a add failed"
+SPEC_A=$( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null | grep -oE 'TASK-[0-9A-Za-z]+-[0-9]+' | head -1 )
+[ -n "$SPEC_A" ] || fail "repo-a did not file a spec"
+
+# repo-b: --sibling WITHOUT --attach must REFUSE (BUG-610) and leave the store intact
+if ( cd "$WS/repo-b" && "$AIDA" init --sibling --no-skills --no-hooks >/dev/null 2>&1 ); then
+  fail "BUG-610: init --sibling on a populated store must refuse (nonzero exit)"
+fi
+( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null | grep -q "$SPEC_A" ) || fail "BUG-610: refusal destroyed repo-a's spec"
+pass "BUG-610: --sibling refuses to overwrite a populated store, store intact"
+
+# repo-b: --attach JOINS the store and sees the shared spec (STORY-674)
+( cd "$WS/repo-b" && "$AIDA" init --sibling --attach --no-skills --no-hooks >/dev/null 2>&1 ) || fail "STORY-674: --attach failed"
+( cd "$WS/repo-b" && "$AIDA" list 2>/dev/null | grep -q "$SPEC_A" ) || fail "STORY-674: repo-b can't see shared spec after attach"
+pass "STORY-674: --attach lets repo-b see the shared spec ($SPEC_A)"
+
+# collision-free allocation across both repos (shared dispenser)
+( cd "$WS/repo-b" && AIDA_SESSION_ROLE=advisor "$AIDA" add --title "from repo-b" --type task --status approved >/dev/null 2>&1 ) || fail "repo-b add failed"
+( cd "$WS/repo-a" && AIDA_SESSION_ROLE=advisor "$AIDA" add --title "from repo-a 2" --type task --status approved >/dev/null 2>&1 ) || fail "repo-a add 2 failed"
+DUPES=$( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null | grep -oE 'TASK-[0-9A-Za-z]+-[0-9]+' | sort | uniq -d )
+[ -z "$DUPES" ] || fail "STORY-674: id collision across repos: $DUPES"
+pass "STORY-674: shared dispenser allocates collision-free across repos"
 
 cd "$PROJECT_ROOT"
 

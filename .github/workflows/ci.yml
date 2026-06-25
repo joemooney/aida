@@ -108,6 +108,11 @@ jobs:
       - name: Run advisor-code-guard hook test
         run: bash tests/test_advisor_code_guard.sh
 
+      # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
+      # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
+      - name: Run distributed / sibling-store integration tests
+        run: bash tests/test_distributed.sh
+
       # STORY-498: CI spec-id validity gate (MVP slice of EPIC-34). Walk the
       # commits this PR adds, resolve every `(SPEC-ID)` subject trailer against
       # the live requirement graph, and FAIL the PR when a trailer references a
