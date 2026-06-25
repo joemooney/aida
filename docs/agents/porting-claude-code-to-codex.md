@@ -1,24 +1,47 @@
 # Porting From Claude Code To Codex CLI
 
-Status: operational comparison from 2026-06-24. Refresh this document before
-making binding architecture decisions, because both agent CLIs are moving
-quickly.
+Status: operational comparison, last fact-checked against current Codex docs on
+2026-06-24. Refresh this document before making binding architecture decisions,
+because both agent CLIs are moving quickly — the 2026 deltas below show how fast
+the gap moves.
 
 This document is for advanced users and AIDA operators deciding whether Codex
 CLI can replace Claude Code for local development, autonomous drains, or
 cross-agent workflow. It focuses on hooks and tooling that affect workflow
 correctness, not model quality.
 
+> **What changed recently (verified 2026-06-24).** Several gaps this document
+> originally described have narrowed — verify against your own Codex version
+> before relying on the older framing:
+>
+> - **Codex now has subagents** (`.codex/agents/*.toml`, built-ins
+>   `default`/`worker`/`explorer`, `max_threads`/`max_depth`, plus
+>   `SubagentStart`/`SubagentStop` hook events). "Subagent/team workflows are
+>   Claude-only" is no longer true.
+> - **Codex hooks can now mutate tool I/O**: `PreToolUse` can rewrite a call via
+>   `updatedInput`, `PostToolUse` can replace results, and several events accept
+>   a `systemMessage` for context injection.
+> - **A native migration skill exists** — `codex --skill migrate-to-codex`
+>   imports `CLAUDE.md`, settings, skills/slash-commands, hooks, MCP servers,
+>   subagents, and recent sessions. Hand-porting is no longer the only path.
+> - **A narrow continuation primitive exists** on the `Stop` event
+>   (`{ decision: "block", reason: … }` auto-continues). The genuine remaining
+>   gap is *pending-tool-call* `defer`/resume, not continuation in general.
+
 ## Short Answer
 
 Codex CLI can replace Claude Code for local repo work, MCP-backed
-coordination, sandboxed command execution, reviews, and scripted `codex exec`
-automation.
+coordination, sandboxed command execution, reviews, scripted `codex exec`
+automation, and — as of 2026 — parallel subagent fan-out and tool-I/O-mutating
+hooks.
 
-Codex CLI is not a drop-in replacement when the workflow depends on Claude
-Code's richer lifecycle hook model, Claude-specific `defer` and resume
-semantics, command-backed status lines, `.claude/commands`, or Claude
-subagent/team UX.
+The genuine remaining gaps are narrower than they were. Codex CLI is still not a
+drop-in replacement when a workflow depends on Claude Code's **pending-tool-call
+`defer`/resume** semantics (pause a specific tool call, let an external authority
+decide, resume the same call), **command-backed status lines**, or muscle memory
+around `.claude/commands`. Most other 2025-era gaps (subagents, hook mutation,
+import tooling) have since closed or narrowed — see "What changed" above and the
+updated hook table.
 
 For AIDA, the right migration target is:
 
@@ -34,13 +57,18 @@ model-backed terminal. Its advantage is most visible when a workflow depends on
 runtime control:
 
 - broad lifecycle hooks;
-- hook decisions that can ask, deny, or defer tool use;
+- hook decisions that can ask, deny, or **defer** a pending tool call (the
+  `defer`/resume primitive is still the clearest Claude-only hook capability);
 - headless pause/resume patterns;
 - command-backed status lines;
 - `.claude/commands` and Claude-shaped workflow shortcuts;
-- SDK-level hook mutation/control paths;
-- subagent/team workflows;
 - a large and fast-moving Claude Code ecosystem.
+
+Note (2026): several items that were Claude-only when this section was first
+written have since landed in Codex — subagents and hook-level tool-I/O mutation
+in particular (see "What changed" above and the hook table). Claude's edge has
+narrowed to the `defer`/resume continuation model, command-backed status lines,
+and ecosystem maturity rather than a categorical runtime-feature gap.
 
 Codex CLI's current strength is a clean OpenAI-native execution environment
 with strong local controls and automation surfaces:
@@ -60,12 +88,19 @@ danger is losing implicit workflow guarantees that were accidentally provided by
 Claude Code-specific surfaces. Common losses include:
 
 - a hook no longer blocks the same event;
-- a stopped run no longer has a resumable pending tool call;
+- a stopped run no longer has a resumable pending tool call (the real `defer`
+  gap — Codex's `Stop`-event `{decision:"block"}` continuation is *not* the same
+  thing as resuming a specific paused tool call);
 - a command-backed status line disappears;
 - a Claude slash command had no real script behind it;
 - a Claude sandbox covered a different surface than Codex's sandbox;
-- a hook-mutated prompt/tool input becomes plain best-effort instruction text;
-- a subagent/team workflow becomes a single-agent workflow unless rebuilt.
+- a hook-mutated prompt/tool input is assumed lost — *verify first*: Codex now
+  supports `PreToolUse` `updatedInput` rewriting and `PostToolUse` result
+  replacement, so many mutation hooks port directly (a `PostToolUse` rewrite
+  still cannot undo already-executed side effects, so re-check those);
+- a subagent/team workflow is assumed to collapse to single-agent — *also verify
+  first*: Codex subagents (`.codex/agents/*.toml`) cover the fan-out/delegation
+  case; what does *not* port one-to-one is a persistent named-team UX.
 
 There is also a future-capability risk. Claude Code and Codex CLI are both
 shipping quickly, but not in identical directions. Betting exclusively on
@@ -183,24 +218,108 @@ that survives vendors," consider AIDA.
 
 | Capability | Claude Code | Codex CLI |
 |---|---|---|
-| Hook config location | `~/.claude/settings.json`, `.claude/settings.json`, `.claude/settings.local.json`, managed policy, plugins, skills/agents | `~/.codex/hooks.json`, `~/.codex/config.toml`, project `.codex/hooks.json`, project `.codex/config.toml`, plugins |
+| Hook config location | `~/.claude/settings.json`, `.claude/settings.json`, `.claude/settings.local.json`, managed policy, plugins, skills/agents | `~/.codex/hooks.json`, `~/.codex/config.toml`, project `.codex/hooks.json`, project `.codex/config.toml`, plugin-bundled `hooks/hooks.json`, and enterprise-managed `requirements.toml` `[hooks]` (managed hooks bypass `/hooks` trust) |
 | Handler types | command, HTTP, MCP tool, prompt, agent | documented current runtime: command only; `prompt` and `agent` are parsed but skipped |
 | Event coverage | broad lifecycle surface including `PreToolUse`, `PostToolUse`, tool failure/denial, notification, session, file/config/cwd changes, compaction, worktree, and message display events | narrower: `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `UserPromptSubmit`, `SessionStart`, `Stop`, `SubagentStart`, `SubagentStop` |
 | Blocking mechanics | hook exit code and JSON can block or steer selected events | hook events exist, but current public Codex docs emphasize command execution/trust and do not expose the same broad Claude hook-control matrix |
-| Tool permission decisions | `allow`, `deny`, `ask`, `defer` in Claude's hook model | no documented Claude-equivalent hook-level `defer` primitive |
-| Tool input/output rewriting | Claude SDK hook docs describe input/output/context mutation paths | no equivalent documented in current Codex hook docs |
+| Tool permission decisions | `allow`, `deny`, `ask`, `defer` in Claude's hook model | `allow`/`deny` documented; **no** pending-tool-call `defer` (can't pause one tool call and resume it). A narrow continuation exists on `Stop`: returning `{decision:"block", reason:…}` auto-creates a continuation prompt — a turn-level loop, not a tool-call resume |
+| Tool input/output rewriting | Claude SDK hook docs describe input/output/context mutation paths | **now supported** (changed in 2026): `PreToolUse` returns `permissionDecision:"allow"` + `updatedInput` to rewrite a call; `PostToolUse` can replace results; multiple events accept `systemMessage` for context injection. Caveat: a `PostToolUse` rewrite can't undo already-executed side effects |
 | Hook trust | managed policy hooks plus project/user settings | non-managed command hooks require review/trust by hash; `/hooks` can inspect, trust, or disable them |
 | Async hooks | supported in Claude SDK-style hooks | `async` is parsed but skipped for Codex command hooks today |
 
-The most important migration gap is `defer`. In Claude Code headless flows, a
-hook can defer a pending tool call, let an external authority decide, and then
-resume the Claude session. Codex CLI does not currently document an equivalent
-hook-level continuation primitive. For Codex, use external orchestration:
-record the pending decision in AIDA, stop or fail closed, and start/resume a
-new Codex/AIDA run after approval.
+The most important migration gap is the **pending-tool-call `defer`**. In Claude
+Code headless flows, a hook can defer a *specific pending tool call*, let an
+external authority decide, and then resume the Claude session at that call. Codex
+does have a *turn-level* continuation (the `Stop`-event `{decision:"block"}`
+auto-continuation), but that is not the same primitive — it does not resume a
+paused tool call. So the gap is narrower than "no continuation at all," but real:
+for the deferred-approval pattern on Codex, use external orchestration — record
+the pending decision in AIDA, stop or fail closed, and start/resume a new
+Codex/AIDA run after approval.
 
 See `docs/agents/session-communication.md` for the durable AIDA reference on
 Claude `ask`, `continue: false`, and `defer` semantics.
+
+## The `defer`/Resume Primitive, And What AIDA Actually Depends On
+
+This section makes the `defer` gap concrete and — importantly — checks it
+against what AIDA *actually* relies on, rather than what it could in principle
+use. The conclusion matters for migration planning: AIDA loses far less than the
+headline gap suggests, because it deliberately kept its invariants in the
+substrate rather than in Claude's hook primitives.
+
+### What `defer` is, concretely
+
+In headless `claude -p` mode, a `PreToolUse` hook can return
+`{"permissionDecision": "defer"}`. Claude exits with `stop_reason:
+"tool_deferred"` and **preserves the pending tool call in session state**. An
+external caller then:
+
+1. reads the deferred tool-use payload;
+2. asks an external authority (web UI, approval service, advisor, or human);
+3. resumes the *same session at the same pending call* via
+   `claude -p --resume <session-id>`;
+4. ensures the hook now returns `allow` or `deny` per that decision.
+
+The defining constraint: it only works for a **single** pending tool call — if
+the model emitted several parallel calls, defer is ignored, because resume can
+replay exactly one. Concretely, the capability lets you build a headless gate
+that pauses *one specific action* — "block this `git push` until an advisor
+approves, then continue the very same run from the very same push" — with no
+re-run.
+
+### What losing it would mean
+
+If AIDA had built its approval gates on `defer`, the Codex migration would cost:
+
+- a paused-and-resumed run becomes a stopped run plus a *fresh* run — the
+  original turn's in-context reasoning is gone, replaced by a cold-boot resume
+  (the same substrate-bounded-autonomy cost documented elsewhere in AIDA);
+- "approve this exact tool call and continue" degrades to "park the work, decide
+  out of band, start a new run with the decision in context";
+- the approval can no longer be a momentary pause *inside* one agent turn.
+
+### Why AIDA barely feels this (verified against the shipped hooks)
+
+AIDA does **not** depend on `defer`. None of AIDA's shipped hooks emit
+`permissionDecision`, `defer`, or `continue: false` — the `defer` pattern lives
+in `session-communication.md` as a *reference for what Claude can do*, not as a
+load-bearing AIDA path. AIDA's real escalation is substrate-based and already
+portable: a headless implementer that hits a decision it cannot safely make
+**punts** (parks the spec `NeedsAttention`, files a finding/punt), the
+orchestrator routes that to a headless advisor tier or a human, and work resumes
+as a *fresh* run carrying the recorded decision — exactly the "park, decide out
+of band, resume with context" shape above. That is the agent-agnostic version of
+`defer`, and it behaves identically under Claude, Codex, Antigravity, CI, or a
+human at a keyboard.
+
+So the honest verdict on `defer` is: **AIDA loses a capability it deliberately
+never used.** A project that *did* couple its approval gates to `defer` would
+have real migration work here; AIDA does not — which is the opening principle of
+this document (keep the invariant in the substrate; treat the agent primitive as
+an optional accelerator) paying off at exactly the moment a vendor switch tests
+it.
+
+### AIDA's actual Claude-Code dependency surface
+
+Mapping what AIDA touches against verified Codex coverage (2026-06-24):
+
+| Claude-Code capability AIDA uses | Depends on it for correctness? | Codex port status |
+|---|---|---|
+| Hook events: `PreToolUse`, `PostToolUse`, `SessionStart`, `Stop`, `UserPromptSubmit`, `SubagentStart`, `SubagentStop` | yes (observation/guidance hooks) | **all seven exist in Codex** (incl. SubagentStart/Stop) — port directly |
+| Command-type (`.sh`) hook handlers | yes | Codex supports command hooks — port |
+| `permissionDecision` / `defer` / `continue:false` | **no** (not emitted by any shipped hook) | n/a — nothing to port |
+| `.claude/skills` + `.claude/commands` | no (convenience; real workflows live in AIDA CLI/MCP) | Codex skills, or AIDA CLI verbs |
+| Command-backed status line (`statusLine.command = aida statusline`) | no (observability, not correctness) | **no Codex equivalent yet** (open FR #20043/#20244) — the one genuine gap |
+| Starter memory pack under `~/.claude/projects/<slug>/memory/` | no (guidance) | lives Claude-side; mirror key rules into `AGENTS.md` |
+| `os_wrap` around `claude -p` | only when outer OS confinement is required | Claude-launch-specific — needs a deliberate Codex wrapper (see the bubblewrap section) |
+
+The pattern is consistent: **the only hard Claude-Code dependency AIDA carries is
+the command-backed status line, and that is observability, not correctness.**
+Everything load-bearing — the gates, the escalation, the lifecycle, the trace
+graph — already lives in AIDA, git, and MCP. Until Codex ships a command-backed
+status line, rebuild the at-a-glance surface with the AIDA TUI, a shell-prompt or
+tmux integration, or `aida status` polling instead of the Claude footer.
 
 ## Tooling Comparison
 
@@ -210,9 +329,10 @@ Claude Code is stronger today for a deeply instrumented agent runtime:
 - richer hook handler types;
 - Claude-native slash commands and `.claude/commands`;
 - Claude skill and plugin integration;
-- SDK-level hook control;
+- SDK-level hook control and the pending-tool-call `defer`/resume primitive;
 - command-backed status line support;
-- subagent and team-oriented UX.
+- persistent named-team UX (Codex now has subagents for the fan-out/delegation
+  case — see "What changed" — so this is a UX-maturity edge, not a capability gap).
 
 Codex CLI is strong for OpenAI-native local execution:
 
@@ -264,13 +384,21 @@ semantics.
 
 Claude hook-based approval workflows often encode local policy in scripts.
 Codex has first-class approval and sandbox configuration, so prefer those for
-baseline safety:
+baseline safety. Note these are **two orthogonal knobs**, not one — set them
+independently:
 
-- use read-only mode for analysis;
-- use workspace-write with `on-request` approvals for normal repo edits;
-- use `danger-full-access` only inside an externally isolated environment;
-- use permission profiles for durable filesystem and network boundaries;
-- use MCP per-server and per-tool approval settings for connected tools.
+- **Sandbox mode** (what the filesystem/network boundary is): `read-only`,
+  `workspace-write`, or `danger-full-access`.
+- **Approval mode** (`--ask-for-approval`: when Codex pauses to ask): `untrusted`,
+  `on-request`, or `never` (`on-failure` is deprecated).
+
+Typical combinations:
+
+- `read-only` for analysis;
+- `workspace-write` + `on-request` approvals for normal repo edits;
+- `danger-full-access` only inside an externally isolated environment;
+- permission profiles for durable filesystem and network boundaries;
+- MCP per-server and per-tool approval settings for connected tools.
 
 The practical shift is that Codex policy should start with sandbox and approval
 configuration, then add hooks for project-specific checks. Avoid using hooks as
@@ -379,6 +507,15 @@ For advanced automation, `codex exec --json` is often more useful than trying
 to infer state from terminal text. It gives a structured stream of thread,
 turn, tool, and error events.
 
+Two notes on the Codex `[tui] status_line`: its **default** is
+`["spinner", "project"]` (set to `null` to disable), and the field set is richer
+than the four-item example shown later in this document — e.g. `five-hour-limit`,
+`weekly-limit`, `context-window-size`, and token counters. What Codex does *not*
+yet have is Claude's **command-backed** status line (a script that emits the
+line); that is an open feature request (codex issues #20043, #20244) and a
+near-term watch item — so for now `aida statusline` cannot drive the Codex
+footer the way it drives Claude's `statusLine.command`.
+
 ### Plan for non-interactive differences
 
 Claude headless workflows that rely on hook-mediated `ask` or `defer` need a
@@ -417,14 +554,22 @@ across Codex, Claude, Antigravity, CI, and human-operated scripts.
 
 ### Expect import to help, not finish the migration
 
-Codex has an import path for Claude Code setup, but advanced users should treat
-it as a bootstrap. After importing, audit:
+Codex has a native migration skill for Claude Code setup —
+`codex --skill migrate-to-codex` (useful flags: `--scan-only`, `--plan`,
+`--doctor`, `--dry-run`). It imports `CLAUDE.md` → `AGENTS.md`,
+`settings.json` → `config.toml`, skills/slash-commands → Codex skills, MCP
+servers, hooks → `.codex/hooks/`, subagents → `.codex/agents/*.toml`, and recent
+(~30-day) sessions → Codex threads. Advanced users should still treat it as a
+**bootstrap**, not the finish line. Run `--scan-only`/`--plan` first to preview,
+then after importing, audit:
 
 - which instructions landed in Codex-readable surfaces;
 - which hooks were imported, trusted, skipped, or need replacement;
 - which slash-command workflows need project scripts or skills;
 - which MCP servers need Codex-specific approval settings;
-- which Claude-only semantics have no Codex equivalent.
+- which subagents imported, and whether their sandbox/model settings are right;
+- which Claude-only semantics (pending-tool-call `defer`, command-backed status
+  line) still have no Codex equivalent.
 
 The final migration step is not "the files imported"; it is "the old workflow
 can be run, observed, interrupted, and recovered under Codex semantics."
@@ -447,6 +592,8 @@ can be run, observed, interrupted, and recovered under Codex semantics."
 9. Verify with one real task: inspect, edit, test, review diff, recover from a
    blocked action, and resume work.
 
+Appendix A has the concrete before/after syntax for each of these surfaces.
+
 ## AIDA Migration Rules
 
 Keep these vendor-neutral and load-bearing:
@@ -468,7 +615,7 @@ Translate Claude-specific surfaces selectively:
 | `CLAUDE.md` | `AGENTS.md` plus `docs/aida/discipline/` |
 | `.mcp.json` | `.codex/config.toml` or `codex mcp add aida -- aida mcp-serve` |
 | `.claude/skills` | Codex skills only where reusable; otherwise AIDA docs and CLI verbs |
-| `.claude/commands` | AIDA CLI verbs, MCP tools, or Codex slash commands where equivalent |
+| `.claude/commands` | AIDA CLI verbs / MCP tools for state-changing work; a Codex **skill** for a reusable prompt/workflow (Codex has no custom-slash-command files — `migrate-to-codex` converts Claude slash-commands into skills); a **built-in** Codex slash command only where a direct equivalent exists |
 | `.claude/hooks` | Codex command hooks only for simple checks; otherwise AIDA gates |
 | Claude command-backed status line | shell/tmux `aida statusline` plus Codex built-in footer fields |
 | Claude `defer` approval loop | AIDA punt/finding/brief plus external orchestration and a later Codex run |
@@ -515,107 +662,41 @@ The portable lesson from `os_wrap` is:
 ## If There Is A Mandate To Stop Using Claude
 
 A hard "no Claude Code" mandate is manageable only if AIDA treats Claude as one
-adapter, not as the source of truth. The response should be deliberate:
+adapter, not the source of truth. The *mechanics* are the same as any migration
+— follow the **Practical universal migration checklist** above, the **AIDA
+Migration Rules** translation table, and the worked before/after examples in
+**Appendix A** (launch flow, MCP, hooks, status line, `defer` → punt, headless).
+What a mandate adds is posture, not new steps:
 
-1. Freeze new Claude-specific surface area.
-   - Do not add new `.claude/commands`, `.claude/hooks`, or Claude-only skills
-     unless they are needed only for a temporary transition.
-   - Any new discipline must first land in AIDA docs, CLI/MCP, git hooks, CI,
-     or reviewer gates.
+1. **Freeze new Claude-specific surface.** Stop adding `.claude/commands`,
+   `.claude/hooks`, or Claude-only skills except for a temporary transition. Any
+   new discipline lands first in AIDA docs, CLI/MCP, git hooks, CI, or reviewer
+   gates.
 
-2. Classify existing Claude dependencies.
-   - Load-bearing: anything that prevents unsafe work, enforces lifecycle, gates
-     merges, or routes human approval.
-   - Convenience: shortcuts, prompts, status display, onboarding, command
-     aliases, and UX sugar.
-   - Retire convenience items after equivalents exist; reimplement load-bearing
-     items in AIDA itself.
+2. **Classify before you cut.** Split every Claude dependency into *load-bearing*
+   (prevents unsafe work, enforces lifecycle, gates merges, routes approval) vs
+   *convenience* (shortcuts, prompts, status display, UX sugar). Retire
+   convenience once an equivalent exists; reimplement load-bearing in AIDA
+   itself — never re-emulate it with prompt text.
 
-3. Replace launch and session flow.
-   - Use `aida agent new codex --role <role>` for normal Codex sessions.
-   - Use `aida agent new codex --spec <SPEC> --role implementer` for direct
-     assigned work.
-   - Keep sibling worktrees, leases, trace comments, and commit trailers
-     unchanged.
+3. **Switch the launch path.** `aida agent new codex --role <role>` for normal
+   sessions, `aida agent new codex --spec <SPEC> --role implementer` for assigned
+   work. Worktrees, leases, trace comments, and commit trailers are unchanged.
 
-4. Replace MCP setup.
-   - Register AIDA with Codex:
+4. **Keep an explicit exception path.** If a workflow still genuinely needs a
+   Claude-only primitive (pending-tool-call `defer`, command-backed status line),
+   either keep that one workflow blocked until AIDA owns the invariant, or file a
+   task to rebuild it outside Claude. Do not silently emulate Claude-only
+   semantics with prompt instructions.
 
-     ```bash
-     codex mcp add aida -- aida mcp-serve
-     ```
+Then run the transition verification pass: fresh Codex session through AIDA →
+read a spec via MCP → claim it → make a small traced edit → run targeted tests →
+mark done or punt via MCP → confirm the same state through the CLI.
 
-   - Verify from a Codex session with `/mcp`.
-   - Keep `tools/list` as canonical for tool names and schemas.
-
-5. Replace Claude hook gates with substrate gates.
-   - Pre-tool warnings become Codex command hooks only when best-effort is
-     acceptable.
-   - Required stop/approval behavior becomes an AIDA CLI/orchestrator gate,
-     a git hook, CI, or a reviewer check.
-   - Claude `defer` flows become durable AIDA state: punt, finding, directive,
-     brief, queue state, or needs-attention status.
-
-6. Replace Claude sandbox assumptions.
-   - Use Codex-native sandbox/approval settings for interactive and
-     non-interactive Codex sessions.
-   - Do not rely on `[contained] os_wrap` for Codex until AIDA explicitly wraps
-     Codex launches.
-   - If outer OS confinement is mandatory, block the migration path or add a
-     Codex-capable wrapper with fail-closed behavior before permitting
-     unattended Codex work.
-
-7. Replace session communication.
-   - Convert Claude `ask`/`defer`/resume workflows into durable AIDA state and
-     explicit follow-up runs.
-   - Notifications should be emitted by the component that stops the run.
-   - Do not rely on a later post-tool hook after a blocked pre-tool decision.
-
-8. Replace operator visibility.
-   - Use `aida status`, `aida statusline`, `aida session leases`, and the AIDA
-     TUI/status overlay where available.
-   - Configure Codex's built-in footer for complementary local state:
-
-     ```toml
-     [tui]
-     status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
-     ```
-
-9. Replace headless automation.
-   - Use `codex exec` for non-interactive Codex runs.
-   - Use `--json` when an orchestrator needs event streams.
-   - Use output schemas only for final structured results, not for live tool
-     approval semantics.
-   - Do not assume a stopped Codex hook leaves a resumable pending tool call in
-     the Claude `defer` sense.
-
-10. Update docs and templates.
-   - Make `AGENTS.md` the primary non-Claude instruction path.
-   - Keep `CLAUDE.md` only as legacy or optional Claude support if policy
-     allows checked-in Claude docs.
-   - Ensure `docs/agents/codex-mcp-setup.md`,
-     `docs/agents/codex-brief-pickup.md`, and this document are linked from
-     cross-agent onboarding.
-
-11. Run a transition verification pass.
-   - Start a fresh Codex session through AIDA.
-   - Read a spec through MCP.
-   - Claim it through MCP.
-   - Make a small traced edit.
-   - Run targeted tests.
-   - Mark the queue item done or punt through MCP.
-   - Verify the same state through the CLI.
-
-12. Keep an explicit exception path.
-    - If a workflow still requires Claude-only `defer`, hook mutation, or
-      status-line behavior, either keep that workflow blocked until AIDA owns
-      the invariant or file a task to reimplement it outside Claude.
-    - Do not silently emulate Claude-only semantics with prompt instructions.
-
-The strategic version: a stop-Claude mandate should accelerate AIDA's
+The strategic version: a stop-Claude mandate should *accelerate* AIDA's
 agent-agnostic architecture, not trigger a rushed reimplementation of Claude
-inside Codex. The more invariants move into AIDA's substrate, the less any
-future vendor mandate matters.
+inside Codex. The more invariants live in AIDA's substrate, the less any future
+vendor mandate matters.
 
 ## Current Practical Recommendation
 
@@ -631,6 +712,169 @@ Keep Claude Code only for workflows that still depend on Claude-specific
 hook-mediated pause/resume, rich lifecycle automation, or Claude-hosted TUI
 behavior. If Claude must be removed, treat those workflows as migration tasks,
 not as already-covered Codex behavior.
+
+## Appendix A: Worked Migration Examples
+
+Concrete before/after pairs for the surfaces a migration actually trips on.
+Syntax verified against current Codex docs (2026-06-24); both CLIs move fast, so
+re-check field names against your installed version.
+
+### A.1 Custom slash command → Codex skill (or AIDA CLI verb)
+
+Codex has **no** custom-slash-command files. A prompt-only Claude command becomes
+a Codex *skill*; a state-changing one should be a real CLI verb both humans and
+agents can run.
+
+**Claude** — `.claude/commands/aida-review.md`:
+
+```markdown
+---
+description: Review the current diff against its spec
+allowed-tools: Bash
+---
+Review the staged diff for $ARGUMENTS and check it satisfies the spec.
+```
+
+**Codex** — `.agents/skills/aida-review/SKILL.md` (a skill is a *directory* with a
+required `SKILL.md`; invoke with `/skills` or `$aida-review`):
+
+```markdown
+---
+name: aida-review
+description: Review the current diff against its spec. Trigger on review requests.
+---
+Review the staged diff and check it satisfies the spec.
+```
+
+For anything that changes state, skip both and use the CLI verb — most AIDA
+commands already are one (`/aida-commit` → `aida commit`, `/aida-pr` →
+`aida pr ship`).
+
+### A.2 Tool guardrail hook → Codex hook (nearly mechanical)
+
+Codex modeled its hook schema closely on Claude's — same `matcher` / `hooks` /
+`hookSpecificOutput` / `permissionDecision` shape — so most command hooks port
+with a path change.
+
+**Claude** — `.claude/settings.json`:
+
+```json
+{ "hooks": { "PreToolUse": [ { "matcher": "Bash",
+  "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh" } ] } ] } }
+```
+
+**Codex** — `~/.codex/hooks.json` (or project `.codex/hooks.json`):
+
+```json
+{ "hooks": { "PreToolUse": [ { "matcher": "Bash",
+  "hooks": [ { "type": "command", "command": "$(git rev-parse --show-toplevel)/.codex/hooks/guard.sh", "timeout": 30 } ] } ] } }
+```
+
+The deny/allow output is also near-identical — a Codex `PreToolUse` script prints:
+
+```json
+{ "hookSpecificOutput": { "hookEventName": "PreToolUse",
+  "permissionDecision": "deny", "permissionDecisionReason": "Destructive command blocked." } }
+```
+
+…and can now rewrite the call with `"permissionDecision": "allow"` plus
+`"updatedInput": { … }` (the 2026 mutation capability).
+
+### A.3 Repo instructions: `CLAUDE.md` → `AGENTS.md`
+
+Move agent-neutral repo conventions to `AGENTS.md` (the cross-vendor standard
+Codex reads natively). Keep `CLAUDE.md` only as optional Claude-specific support.
+
+### A.4 MCP registration: `.mcp.json` → `codex mcp add`
+
+**Claude** — `.mcp.json`:
+
+```json
+{ "mcpServers": { "aida": { "command": "aida", "args": ["mcp-serve"] } } }
+```
+
+**Codex** — one command (writes `[mcp_servers.aida]` into `config.toml`); verify
+from a session with `/mcp`:
+
+```bash
+codex mcp add aida -- aida mcp-serve
+```
+
+### A.5 Status line — the one genuine gap
+
+**Claude** — `.claude/settings.json` drives a live, command-backed footer:
+
+```json
+{ "statusLine": { "command": "aida statusline --color=always" } }
+```
+
+**Codex** — no command-backed status line yet (open FR #20043/#20244). The TUI
+footer takes built-in fields only:
+
+```toml
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+```
+
+So the live role/queue/lease readout can't live in the Codex footer today —
+surface it with the AIDA TUI, a shell-prompt/tmux integration, or `aida status`
+polling instead. AIDA already scaffolds this fallback: see
+`docs/agents/codex-mcp-setup.md` for the built-in `[tui] status_line` snippet and
+the opt-in `aida statusline` bootstrap. Native command-backed wiring is gated on
+the upstream FR and tracked as a deferred watch-item under EPIC-0419.
+
+### A.6 Headless approval gate: Claude `defer` → AIDA punt (portable)
+
+**Claude** — `PreToolUse` hook pauses *this* tool call and resumes the same run:
+
+```json
+{ "permissionDecision": "defer" }
+```
+
+```bash
+# caller reads the deferred payload, gets a decision, then:
+claude -p --resume <session-id>
+```
+
+**Codex/AIDA** — no pending-tool-call defer; use the substrate (this is what AIDA
+already does, so it ports unchanged):
+
+```bash
+# the gate parks the work instead of pausing a tool call:
+aida punt <SPEC> --note "needs advisor approval before <action>"   # → NeedsAttention + finding
+# advisor/human decides out of band, then a FRESH run resumes with the decision in context.
+```
+
+### A.7 Headless automation: `claude -p` → `codex exec`
+
+```bash
+# Claude:
+claude -p "implement SPEC-123"
+
+# Codex (structured event stream + optional final-output schema + explicit safety):
+codex exec "implement SPEC-123" --json --output-schema result.schema.json \
+  --sandbox workspace-write --ask-for-approval on-request
+```
+
+Note the two orthogonal safety knobs: `--sandbox`
+(`read-only`/`workspace-write`/`danger-full-access`) and `--ask-for-approval`
+(`untrusted`/`on-request`/`never`).
+
+### A.8 Subagent → `.codex/agents/*.toml`
+
+Codex subagents (2026) cover the fan-out/delegation case. A custom agent is TOML:
+
+```toml
+# .codex/agents/reviewer.toml
+name = "reviewer"
+description = "Reviews a diff against its spec and reports findings."
+developer_instructions = "Read the spec via the aida MCP tools; review the diff; report."
+# optional: model, sandbox_mode, mcp_servers
+```
+
+Built-ins: `default`, `worker`, `explorer`; globals `max_threads` (default 6) and
+`max_depth` (default 1). What does *not* port one-to-one is a persistent
+named-team UX — Codex subagents are spawned-on-request fan-out, not a standing team.
 
 ## References
 
@@ -648,3 +892,7 @@ not as already-covered Codex behavior.
 - Codex MCP: `https://developers.openai.com/codex/mcp`
 - Codex non-interactive mode: `https://developers.openai.com/codex/noninteractive`
 - Codex slash commands: `https://developers.openai.com/codex/cli/slash-commands`
+- Codex subagents: `https://developers.openai.com/codex/subagents`
+- Codex config reference (sandbox, approval, `tui.status_line`): `https://developers.openai.com/codex/config-reference`
+- Codex migration skill: `codex --skill migrate-to-codex` (see `https://developers.openai.com/codex/cli`)
+- `AGENTS.md` guide: `https://developers.openai.com/codex/guides/agents-md`
