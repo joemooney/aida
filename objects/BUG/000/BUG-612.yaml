@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:36:18.004606013Z
-modified_at: 2026-06-25T07:36:18.004606013Z
+modified_at: 2026-06-25T07:38:19.776076952Z
 req_type: Bug
 tags:
 - aida:tui
 - from-operator
 - out-of-box
 - parent:EPIC-52
+comments:
+- id: 019efdb7-2900-7e31-89b5-90d1bf6351f9
+  author: joe
+  content: Commit 4781bd7b1 references this requirement
+  created_at: 2026-06-25T07:38:19.776076952Z
+  modified_at: 2026-06-25T07:38:19.776076952Z
