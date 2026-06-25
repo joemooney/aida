@@ -89,6 +89,21 @@ pub enum RowKind {
     Action,
 }
 
+/// Which of the two panes currently owns the keyboard. Up/Down act on the
+/// focused pane (Nav: section selection; List: row selection); Enter/Left
+/// move focus Nav→List, Right/Esc move it List→Nav. The renderer paints the
+/// focused pane's selected row with the accent fill and dims the Nav
+/// selection once focus has moved into the list, so which pane is active is
+/// always visually obvious. trace:STORY-685 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Pane {
+    /// The left section selector (Backlog / History / PRs / Sessions / …).
+    #[default]
+    Nav,
+    /// The middle row list for the selected section.
+    List,
+}
+
 /// Read-only state for the bottom status strip.
 #[derive(Debug, Clone, Default)]
 pub struct AmbientState {
@@ -102,6 +117,10 @@ pub struct AmbientState {
 pub struct DashboardModel {
     pub role: RoleTab,
     pub nav: NavState,
+    /// Which pane has keyboard focus. Defaults to [`Pane::Nav`]: Up/Down
+    /// move the section selection until the user presses Enter/Left to
+    /// drop into the list. trace:STORY-685 | ai:claude
+    pub focus: Pane,
     pub rows: Vec<ListRow>,
     pub selected: usize,
     pub ambient: AmbientState,
@@ -500,7 +519,7 @@ pub fn render(frame: &mut Frame, model: &DashboardModel) {
     ])
     .split(rows[1]);
 
-    nav::render(frame, body[0], &model.nav, &model.theme);
+    nav::render(frame, body[0], &model.nav, &model.theme, model.focus);
     render_list(frame, body[1], model);
     render_preview(frame, body[2], model);
     render_hint_row(frame, rows[2], model);
@@ -554,11 +573,22 @@ fn render_list(frame: &mut Frame, area: Rect, model: &DashboardModel) {
         let marker = if i == model.selected { "▸ " } else { "  " };
         let text = format!("{marker}{}  {}  [{}]", row.id, row.title, row.status);
         let clipped: String = text.chars().take(inner_w.max(4)).collect();
+        // The active-pane row gets the full accent fill; when focus is in
+        // the Nav pane the list's own selection shows as a quieter
+        // accent-foreground underline so the cursor position is still
+        // visible without competing with the focused Nav highlight.
+        // trace:STORY-685 | ai:claude
         let style = if i == model.selected {
-            Style::default()
-                .fg(theme.on_accent)
-                .bg(theme.accent)
-                .add_modifier(Modifier::BOLD)
+            if model.focus == Pane::List {
+                Style::default()
+                    .fg(theme.on_accent)
+                    .bg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::UNDERLINED)
+            }
         } else {
             Style::default().fg(theme.fg)
         };
@@ -611,9 +641,19 @@ fn render_preview(frame: &mut Frame, area: Rect, model: &DashboardModel) {
 }
 
 fn render_hint_row(frame: &mut Frame, area: Rect, model: &DashboardModel) {
+    // trace:STORY-685 | ai:claude — surface the focus-aware nav map and the
+    // current pane so the two-pane model is discoverable.
+    let pane = match model.focus {
+        Pane::Nav => "nav",
+        Pane::List => "list",
+    };
+    let move_hint = match model.focus {
+        Pane::Nav => "↑↓ section · enter/← list",
+        Pane::List => "↑↓ row · enter act · →/esc nav",
+    };
     let text = format!(
-        "role:{} · queue:{} · dialog:{}    enter act · q/b/h/p/s nav · r role · g refresh · : palette · ? help",
-        model.ambient.role, model.ambient.queue_depth, model.ambient.dialog_state
+        "role:{} · queue:{} · dialog:{} · focus:{}    {} · tab role · g refresh · : palette · ? help · q quit",
+        model.ambient.role, model.ambient.queue_depth, model.ambient.dialog_state, pane, move_hint
     );
     frame.render_widget(
         Paragraph::new(Span::styled(text, Style::default().fg(model.theme.dim))),

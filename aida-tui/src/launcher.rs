@@ -14,7 +14,7 @@
 //!
 //! trace:STORY-244 | ai:claude
 
-use crate::dashboard::{self, DashboardModel, RoleTab, RowKind};
+use crate::dashboard::{self, DashboardModel, Pane, RoleTab, RowKind};
 use crate::intent::{self, Intent};
 use crate::nav::NavSection;
 use crate::state::{self, TuiState};
@@ -50,17 +50,46 @@ pub enum LauncherAction {
     Help,
     /// User opened the command palette — handled by the loop.
     EnterPalette,
+    /// Move the *focused pane*'s selection one step toward the top.
+    /// Nav-focused → previous section (+ refetch its rows); List-focused →
+    /// previous row. trace:STORY-685 | ai:claude
+    SelectPrev,
+    /// Move the focused pane's selection one step toward the bottom.
+    /// trace:STORY-685 | ai:claude
+    SelectNext,
+    /// Move keyboard focus from the Nav pane into the list pane (Enter /
+    /// Left). trace:STORY-685 | ai:claude
+    FocusList,
+    /// Move keyboard focus from the list pane back to the Nav pane (Right /
+    /// Esc). trace:STORY-685 | ai:claude
+    FocusNav,
 }
 
 /// Pure routing for a single keystroke. Doesn't touch the model; the
 /// caller mutates the model after dispatch so this stays unit-testable.
+///
+/// Two-pane focus model (STORY-685): Up/Down act on whichever pane holds
+/// focus (`model.focus`) — the Nav sections when [`Pane::Nav`], the list
+/// rows when [`Pane::List`]. Enter/Left move focus Nav→List (Enter on a
+/// *row* while already in the list still launches it); Right/Esc move
+/// focus List→Nav. Esc from the Nav pane quits, so a quit path is always
+/// reachable (alongside `q` / `Q` / Ctrl-C). Tab/BackTab keep their role
+/// cycle. `b`/`h`/`p`/`s` stay as additive direct section jumps.
+/// trace:STORY-685 | ai:claude
 pub fn route_key(key: KeyEvent, model: &DashboardModel) -> LauncherAction {
-    // Esc / Ctrl-C always quit. (Routing happens before any palette
-    // mode, which the loop drives separately.)
-    if key.code == KeyCode::Esc
-        || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
-    {
+    // Ctrl-C always quits, regardless of pane.
+    if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
         return LauncherAction::Emit(Intent::Quit);
+    }
+
+    // Esc: in the list pane it returns focus to Nav; in the Nav pane it
+    // quits (the always-reachable quit path the operator's "Right/Esc
+    // returns to Nav" model implies). trace:STORY-685 | ai:claude
+    if key.code == KeyCode::Esc {
+        return match model.focus {
+            Pane::List => LauncherAction::FocusNav,
+            Pane::Nav => LauncherAction::Emit(Intent::Quit),
+        };
     }
 
     // Ctrl-A <key> chord — alternate path for muscle memory (the spec
@@ -87,39 +116,60 @@ pub fn route_key(key: KeyEvent, model: &DashboardModel) -> LauncherAction {
         KeyCode::Char(':') => LauncherAction::EnterPalette,
         KeyCode::Tab => LauncherAction::Redraw, // role cycle handled in loop
         KeyCode::BackTab => LauncherAction::Redraw,
-        KeyCode::Up | KeyCode::Char('k') => LauncherAction::Redraw,
-        KeyCode::Down | KeyCode::Char('j') => LauncherAction::Redraw,
-        KeyCode::Enter | KeyCode::Char(' ') => match model.current_row() {
-            Some(row) => LauncherAction::Emit(act_on_row(row, model.role, model.nav.current())),
-            None => match model.nav.current() {
-                NavSection::ActionDrain => {
-                    LauncherAction::Emit(Intent::Launch("aida queue work --auto-complete".into()))
-                }
-                NavSection::ActionNewSession => match model.role {
-                    RoleTab::Implementer => LauncherAction::Emit(Intent::Launch(
-                        "aida queue work --role implementer".into(),
-                    )),
-                    RoleTab::Reviewer => LauncherAction::Emit(Intent::Launch(
-                        "aida queue work --role reviewer".into(),
-                    )),
-                    RoleTab::Dialog => {
-                        LauncherAction::Emit(Intent::Launch("aida queue work --role dialog".into()))
-                    }
-                },
-                NavSection::ActionSwitchRole => LauncherAction::Redraw,
-                _ => LauncherAction::Redraw,
-            },
+        // Up/Down (and k/j) move the focused pane's selection.
+        KeyCode::Up | KeyCode::Char('k') => LauncherAction::SelectPrev,
+        KeyCode::Down | KeyCode::Char('j') => LauncherAction::SelectNext,
+        // Right always returns focus to the Nav pane (no-op there).
+        KeyCode::Right => LauncherAction::FocusNav,
+        // Left enters the list from Nav; inside the list it's a no-op.
+        KeyCode::Left => match model.focus {
+            Pane::Nav => LauncherAction::FocusList,
+            Pane::List => LauncherAction::Redraw,
         },
+        KeyCode::Enter | KeyCode::Char(' ') => route_enter(model),
         // `q` direct-key is also bound, but we also accept the
         // configured nav direct-key 'Q' uppercase.
         KeyCode::Char('Q') => LauncherAction::Emit(Intent::Quit),
         KeyCode::Char(c) => {
-            // Other characters: `n` for new session, etc. Keep the
-            // surface tiny for now — direct keys are q/b/h/p/s/r/g/?/:/Q.
+            // Other characters: keep the surface tiny — direct keys are
+            // q/b/h/p/s/r/g/?/:/Q.
             let _ = c;
             LauncherAction::Redraw
         }
         _ => LauncherAction::Redraw,
+    }
+}
+
+/// Enter / Space routing, focus-aware. In the Nav pane, Enter drops focus
+/// into the list (so the operator can then arrow over rows) — unless the
+/// selected nav row is an *action verb* (Drain / New session / Switch
+/// role), which has no list and fires its intent directly. In the list
+/// pane, Enter launches the highlighted row. trace:STORY-685 | ai:claude
+fn route_enter(model: &DashboardModel) -> LauncherAction {
+    match model.focus {
+        Pane::Nav => match model.nav.current() {
+            NavSection::ActionDrain => {
+                LauncherAction::Emit(Intent::Launch("aida queue work --auto-complete".into()))
+            }
+            NavSection::ActionNewSession => match model.role {
+                RoleTab::Implementer => LauncherAction::Emit(Intent::Launch(
+                    "aida queue work --role implementer".into(),
+                )),
+                RoleTab::Reviewer => {
+                    LauncherAction::Emit(Intent::Launch("aida queue work --role reviewer".into()))
+                }
+                RoleTab::Dialog => {
+                    LauncherAction::Emit(Intent::Launch("aida queue work --role dialog".into()))
+                }
+            },
+            NavSection::ActionSwitchRole => LauncherAction::Redraw,
+            // A list section: Enter drops focus into the list pane.
+            _ => LauncherAction::FocusList,
+        },
+        Pane::List => match model.current_row() {
+            Some(row) => LauncherAction::Emit(act_on_row(row, model.role, model.nav.current())),
+            None => LauncherAction::Redraw,
+        },
     }
 }
 
@@ -289,22 +339,30 @@ fn event_loop(
             paint(terminal, &model)?;
             continue;
         }
-        // Up/Down move the middle-list selection.
-        if matches!(key.code, KeyCode::Up | KeyCode::Char('k')) {
-            model.select_prev();
-            dashboard::ensure_preview(&mut model);
-            paint(terminal, &model)?;
-            continue;
-        }
-        if matches!(key.code, KeyCode::Down | KeyCode::Char('j')) {
-            model.select_next();
-            dashboard::ensure_preview(&mut model);
-            paint(terminal, &model)?;
-            continue;
-        }
-        // Now the pure router for the rest.
+        // Now the pure router. Up/Down, focus moves, Enter, etc. all flow
+        // through it so the focus state machine stays unit-testable.
+        // trace:STORY-685 | ai:claude
         match route_key(key, &model) {
             LauncherAction::Redraw => paint(terminal, &model)?,
+            LauncherAction::SelectPrev => {
+                select_prev_focused(&mut model, launch_scope, dialog_id);
+                dashboard::ensure_preview(&mut model);
+                paint(terminal, &model)?;
+            }
+            LauncherAction::SelectNext => {
+                select_next_focused(&mut model, launch_scope, dialog_id);
+                dashboard::ensure_preview(&mut model);
+                paint(terminal, &model)?;
+            }
+            LauncherAction::FocusList => {
+                model.focus = Pane::List;
+                dashboard::ensure_preview(&mut model);
+                paint(terminal, &model)?;
+            }
+            LauncherAction::FocusNav => {
+                model.focus = Pane::Nav;
+                paint(terminal, &model)?;
+            }
             LauncherAction::Refetch => {
                 dashboard::refetch_rows(&mut model, launch_scope, dialog_id);
                 dashboard::ensure_preview(&mut model);
@@ -313,7 +371,8 @@ fn event_loop(
             LauncherAction::Emit(intent) => return Ok(intent),
             LauncherAction::Help => {
                 // Help overlay is followups; for now flip the hint row.
-                model.notice = Some("Help: q quit · b backlog · h history · p PRs · s sessions · r role · g refresh".into());
+                // trace:STORY-685 | ai:claude
+                model.notice = Some("Help: ↑↓ nav sections · enter/← into list · ↑↓ rows · enter run · →/esc back to nav · tab role · g refresh · q quit".into());
                 paint(terminal, &model)?;
             }
             LauncherAction::EnterPalette => {
@@ -323,6 +382,39 @@ fn event_loop(
                 paint(terminal, &model)?;
             }
         }
+    }
+}
+
+/// Move the focused pane's selection one step up. Nav-focused: select the
+/// previous section and refetch its rows so the list pane tracks it.
+/// List-focused: move the row cursor. trace:STORY-685 | ai:claude
+fn select_prev_focused(
+    model: &mut DashboardModel,
+    launch_scope: Option<&str>,
+    dialog_id: Option<&str>,
+) {
+    match model.focus {
+        Pane::Nav => {
+            model.nav.select_prev();
+            dashboard::refetch_rows(model, launch_scope, dialog_id);
+        }
+        Pane::List => model.select_prev(),
+    }
+}
+
+/// Move the focused pane's selection one step down (companion to
+/// [`select_prev_focused`]). trace:STORY-685 | ai:claude
+fn select_next_focused(
+    model: &mut DashboardModel,
+    launch_scope: Option<&str>,
+    dialog_id: Option<&str>,
+) {
+    match model.focus {
+        Pane::Nav => {
+            model.nav.select_next();
+            dashboard::refetch_rows(model, launch_scope, dialog_id);
+        }
+        Pane::List => model.select_next(),
     }
 }
 
@@ -416,10 +508,33 @@ mod tests {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
     }
 
+    fn code(c: KeyCode) -> KeyEvent {
+        KeyEvent::new(c, KeyModifiers::NONE)
+    }
+
     fn fixture(rows: Vec<ListRow>) -> DashboardModel {
         DashboardModel {
             rows,
             ..DashboardModel::default()
+        }
+    }
+
+    /// A model with focus forced into a given pane — the focus state
+    /// machine routes Up/Down/Enter/Esc differently per pane.
+    fn fixture_focus(rows: Vec<ListRow>, focus: Pane) -> DashboardModel {
+        DashboardModel {
+            rows,
+            focus,
+            ..DashboardModel::default()
+        }
+    }
+
+    fn queued_row(id: &str) -> ListRow {
+        ListRow {
+            id: id.into(),
+            title: "row".into(),
+            status: "Approved".into(),
+            kind: RowKind::Queued,
         }
     }
 
@@ -433,10 +548,23 @@ mod tests {
     }
 
     #[test]
-    fn route_key_esc_emits_quit() {
-        let model = fixture(vec![]);
-        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-        assert_eq!(route_key(key, &model), LauncherAction::Emit(Intent::Quit));
+    fn route_key_esc_from_nav_emits_quit() {
+        // Esc in the Nav pane (the default focus) is the quit path.
+        let model = fixture_focus(vec![], Pane::Nav);
+        assert_eq!(
+            route_key(code(KeyCode::Esc), &model),
+            LauncherAction::Emit(Intent::Quit)
+        );
+    }
+
+    #[test]
+    fn route_key_esc_from_list_returns_to_nav() {
+        // Esc in the List pane returns focus to Nav (does NOT quit).
+        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::List);
+        assert_eq!(
+            route_key(code(KeyCode::Esc), &model),
+            LauncherAction::FocusNav
+        );
     }
 
     #[test]
@@ -470,6 +598,154 @@ mod tests {
     fn route_key_help_opens_help() {
         let model = fixture(vec![]);
         assert_eq!(route_key(plain('?'), &model), LauncherAction::Help);
+    }
+
+    // --- STORY-685 two-pane focus state machine ---------------------------
+
+    #[test]
+    fn focus_defaults_to_nav() {
+        assert_eq!(DashboardModel::default().focus, Pane::Nav);
+        assert_eq!(Pane::default(), Pane::Nav);
+    }
+
+    #[test]
+    fn up_down_select_in_either_pane() {
+        // Up/Down route to SelectPrev/SelectNext regardless of pane — the
+        // loop applies them to whichever pane is focused.
+        for focus in [Pane::Nav, Pane::List] {
+            let model = fixture_focus(vec![queued_row("STORY-1")], focus);
+            assert_eq!(
+                route_key(code(KeyCode::Up), &model),
+                LauncherAction::SelectPrev,
+                "Up in {focus:?}"
+            );
+            assert_eq!(
+                route_key(code(KeyCode::Down), &model),
+                LauncherAction::SelectNext,
+                "Down in {focus:?}"
+            );
+            // k/j mirror Up/Down.
+            assert_eq!(route_key(plain('k'), &model), LauncherAction::SelectPrev);
+            assert_eq!(route_key(plain('j'), &model), LauncherAction::SelectNext);
+        }
+    }
+
+    #[test]
+    fn enter_from_nav_on_list_section_focuses_list() {
+        // Default nav section is Queue (a list section), so Enter drops
+        // focus into the list rather than launching anything.
+        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::Nav);
+        assert_eq!(
+            route_key(code(KeyCode::Enter), &model),
+            LauncherAction::FocusList
+        );
+        assert_eq!(route_key(plain(' '), &model), LauncherAction::FocusList);
+    }
+
+    #[test]
+    fn left_from_nav_focuses_list() {
+        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::Nav);
+        assert_eq!(
+            route_key(code(KeyCode::Left), &model),
+            LauncherAction::FocusList
+        );
+    }
+
+    #[test]
+    fn enter_from_list_launches_the_row() {
+        // Once focus is in the list, Enter on a row emits its intent.
+        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::List);
+        assert_eq!(
+            route_key(code(KeyCode::Enter), &model),
+            LauncherAction::Emit(Intent::Launch("aida queue work STORY-1".into()))
+        );
+    }
+
+    #[test]
+    fn right_returns_focus_to_nav_from_list() {
+        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::List);
+        assert_eq!(
+            route_key(code(KeyCode::Right), &model),
+            LauncherAction::FocusNav
+        );
+    }
+
+    #[test]
+    fn right_from_nav_is_noop_focus_nav() {
+        // Right in the Nav pane is harmless — still resolves to Nav focus.
+        let model = fixture_focus(vec![], Pane::Nav);
+        assert_eq!(
+            route_key(code(KeyCode::Right), &model),
+            LauncherAction::FocusNav
+        );
+    }
+
+    #[test]
+    fn left_in_list_is_noop_redraw() {
+        // Left only enters the list from Nav; inside the list it's inert.
+        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::List);
+        assert_eq!(
+            route_key(code(KeyCode::Left), &model),
+            LauncherAction::Redraw
+        );
+    }
+
+    #[test]
+    fn tab_and_backtab_unchanged_under_focus() {
+        // Tab/BackTab stay role-cycle redraws in the pure router in both
+        // panes (the loop applies the cycle). They are NOT repurposed.
+        for focus in [Pane::Nav, Pane::List] {
+            let model = fixture_focus(vec![queued_row("STORY-1")], focus);
+            assert_eq!(
+                route_key(code(KeyCode::Tab), &model),
+                LauncherAction::Redraw
+            );
+            assert_eq!(
+                route_key(code(KeyCode::BackTab), &model),
+                LauncherAction::Redraw
+            );
+        }
+    }
+
+    #[test]
+    fn enter_from_nav_on_action_drain_emits_intent() {
+        // Action verbs have no list — Enter fires their intent directly
+        // even though focus is in Nav.
+        let mut model = fixture_focus(vec![], Pane::Nav);
+        model.nav.select(NavSection::ActionDrain);
+        assert_eq!(
+            route_key(code(KeyCode::Enter), &model),
+            LauncherAction::Emit(Intent::Launch("aida queue work --auto-complete".into()))
+        );
+    }
+
+    #[test]
+    fn select_helpers_move_list_cursor_when_list_focused() {
+        // List-focused: the row cursor moves (pure — no store shell-out),
+        // the section stays put.
+        let mut m = fixture_focus(vec![queued_row("A"), queued_row("B")], Pane::List);
+        let start_section = m.nav.current();
+        assert_eq!(m.selected, 0);
+        select_next_focused(&mut m, None, None);
+        assert_eq!(m.selected, 1);
+        select_prev_focused(&mut m, None, None);
+        assert_eq!(m.selected, 0);
+        // The Nav selection is untouched while focus is in the list.
+        assert_eq!(m.nav.current(), start_section);
+    }
+
+    #[test]
+    fn nav_section_move_is_pure_in_navstate() {
+        // The Nav-pane move delegates to NavState::select_{next,prev}; we
+        // assert that pure step here (the loop pairs it with a row
+        // refetch). Keeping the assertion off `select_*_focused` avoids a
+        // live `aida` shell-out inside the unit test.
+        let mut nav = crate::nav::NavState::default();
+        let start = nav.current();
+        nav.select_next();
+        assert_ne!(nav.current(), start);
+        nav.select_prev();
+        assert_eq!(nav.current(), start);
     }
 
     #[test]
