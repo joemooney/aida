@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:14:01.561270548Z
-modified_at: 2026-06-24T04:48:24.853467218Z
+modified_at: 2026-06-25T04:36:36.562188880Z
 req_type: Story
 tags:
 - aida:init
@@ -38,3 +38,16 @@ comments:
   content: 'Scope addition (finding #5, 2026-06-23): the attach node-acquisition must also fix the LOCAL-only path. Verified: sibling init only registers a node when registry_remote.is_some(), so a local-only store defaults to node 1 and IGNORES ~/.aida/preferences.toml preferred_node_id (repo-a got TASK-1-001, not TASK-JM-001). For multi-clone LOCAL sharing this means every clone defaults to node 1 and their ids COLLIDE. Attach (and a fresh local init) must acquire a DISTINCT node id honoring preferred_node_id, for local-only stores too — not just the remote path.'
   created_at: 2026-06-24T04:48:23.705340083Z
   modified_at: 2026-06-24T04:48:23.705340083Z
+- id: 019efd10-ca52-7eb2-b332-51ae4ce6283c
+  author: joe
+  content: |-
+    SCOPE CORRECTED by code-grounding + live proof (2026-06-24). The approved sketch assumed a second sibling repo needs a DISTINCT node id (acquire machinery, D1-D5). That premise is WRONG for the same-machine sibling case: load_node_id + load_dispenser both read from the STORE (store/.aida/node.toml, store/.aida/dispenser.toml), so two code repos sharing one store dir share one dispenser, which serializes allocation atomically. PROVEN live: manual attach (config + cache rebuild, NO node id) -> repo-b sees repo-as TASK-1-001; then repo-b/repo-a/repo-b adds -> TASK-1-002/003/004, ZERO collisions.
+
+    Corrected scope (much smaller, strictly safer):
+    - Sibling attach = write <repo>/.aida/config.toml (mode, store_path, store_type) + rebuild <repo>/.aida/cache.db. No seed, no save, no node acquisition, no store-git touch.
+    - Entry point: a --attach (alias --join) flag on aida init; the BUG-610 refuse message points at it. Plain init on an existing store still refuses (no silent overwrite).
+    - Node acquisition (preferred_node_id, suggest_free_node_id, hijack) stays the DISTRIBUTED multi-machine concern, already owned by aida node acquire — NOT this story.
+    - Finding #5 (sibling init uses node 1 not preferred JM) is downgraded to cosmetic: the sibling shared-dispenser case does not need a distinct node, so node 1 is harmless. The distributed-acquire path already honors preferred_node_id. Drop from this story.
+    Tests: seed a store, attach from a second repo, assert the pre-existing spec is visible AND both repos add without id collision (the live repro above, as a test).
+  created_at: 2026-06-25T04:36:36.562188880Z
+  modified_at: 2026-06-25T04:36:36.562188880Z
