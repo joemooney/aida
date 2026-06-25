@@ -14938,7 +14938,21 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // trace:FR-215, BUG-62 | ai:claude
                 if let Some(parent_req) = parent_req {
                     use aida_core::models::{Relationship, RelationshipType};
-                    let mut child = last.clone();
+                    // BUG-615: re-LOAD the freshly-saved child rather than
+                    // reusing the `last` snapshot captured at add_requirement
+                    // time. The --blocked-by loop above may have already
+                    // persisted a BlockedBy edge via add_blocked_by_edge; the
+                    // stale `last.clone()` would not carry that edge, so saving
+                    // it here clobbered the just-written blocked-by data. Read
+                    // the current state (which includes any blocked-by edges),
+                    // append the Child edge to THAT, and save once — so both
+                    // --parent and --blocked-by survive when combined.
+                    // trace:BUG-615 | ai:claude
+                    let mut child = last
+                        .spec_id
+                        .as_deref()
+                        .and_then(|sid| backend.get_requirement_by_spec_id(sid).ok().flatten())
+                        .unwrap_or_else(|| last.clone());
                     let parent_uuid = parent_req.id;
                     let child_uuid = child.id;
                     // RelationshipType is "I am X to target", so on the
@@ -66389,6 +66403,105 @@ mod bug_231_findings_promote_tests {
         let inner = aida_core::GitBackend::new(root).unwrap();
         let cache_path = aida_core::CachedGitBackend::default_cache_path(root);
         aida_core::CachedGitBackend::with_inner(inner, &cache_path).unwrap()
+    }
+
+    /// Seed a single edge-free spec with the given spec_id; returns its UUID.
+    /// Used by the BUG-615 combined-flag regression test. trace:BUG-615 | ai:claude
+    #[cfg(test)]
+    fn seed_plain_spec(root: &std::path::Path, spec_id: &str) -> Uuid {
+        let backend = aida_core::GitBackend::new(root).unwrap();
+        let mut store = backend.load().unwrap_or_default();
+        let mut req = Requirement::new(format!("Spec {spec_id}"), "desc".into());
+        req.spec_id = Some(spec_id.to_string());
+        let id = req.id;
+        store.requirements.push(req);
+        backend.save(&store).unwrap();
+        id
+    }
+
+    /// BUG-615 regression: `aida add --parent X --blocked-by Y` in a SINGLE
+    /// invocation must persist BOTH edges. The bug was that the `--parent`
+    /// block re-saved a STALE pre-blocked-by snapshot of the child
+    /// (`let mut child = last.clone()`), clobbering the BlockedBy edge that
+    /// `add_blocked_by_edge` (the `--blocked-by` step) had just written.
+    ///
+    /// This reproduces the exact handler sequence: first apply the blocked-by
+    /// edge, then perform the parent-edge read-modify-write the way the fixed
+    /// handler does (re-LOAD the freshly-saved child rather than reusing the
+    /// stale snapshot), and assert the child carries BOTH a Child edge to the
+    /// parent AND a BlockedBy edge to the blocker. With the pre-fix
+    /// `last.clone()` snapshot this assertion fails: the BlockedBy edge is gone.
+    /// trace:BUG-615 | ai:claude
+    #[test]
+    fn add_parent_and_blocked_by_combined_keeps_both_edges() {
+        use aida_core::models::{Relationship, RelationshipType};
+        use aida_core::DatabaseBackend;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+
+        // Seed the three actors: the new child, its parent, and its blocker.
+        let child_uuid = seed_plain_spec(&root, "STORY-615");
+        let parent_uuid = seed_plain_spec(&root, "EPIC-615");
+        let blocker_uuid = seed_plain_spec(&root, "TASK-615");
+
+        let backend = test_cached_backend(&root);
+
+        // 1. The `--blocked-by` step (runs first in the real handler): writes
+        //    the BlockedBy edge on the child + the inverse Blocks edge.
+        add_blocked_by_edge(&backend, "STORY-615", "TASK-615")
+            .expect("add_blocked_by_edge should persist the blocked-by edge");
+
+        // Confirm the blocked-by edge landed before the parent step runs.
+        let after_block = backend
+            .get_requirement_by_spec_id("STORY-615")
+            .unwrap()
+            .unwrap();
+        assert!(
+            after_block
+                .relationships
+                .iter()
+                .any(|r| matches!(r.rel_type, RelationshipType::BlockedBy)
+                    && r.target_id == blocker_uuid),
+            "precondition: blocked-by edge must be present after the --blocked-by step"
+        );
+
+        // 2. The `--parent` step, mirroring the FIXED handler: re-LOAD the
+        //    freshly-saved child (so it carries the blocked-by edge), append
+        //    the Child edge, and save once.
+        let mut child = backend
+            .get_requirement_by_spec_id("STORY-615")
+            .unwrap()
+            .unwrap();
+        child.relationships.push(Relationship {
+            target_id: parent_uuid,
+            rel_type: RelationshipType::Child,
+            created_at: Some(chrono::Utc::now()),
+            created_by: None,
+        });
+        backend.update_requirement(&child).unwrap();
+
+        // 3. Load the persisted child back from the store and assert BOTH
+        //    edges survive — this is the crux of BUG-615.
+        let reloaded = backend
+            .get_requirement_by_spec_id("STORY-615")
+            .unwrap()
+            .unwrap();
+        let _ = child_uuid; // child's UUID is stable across the reload
+        assert!(
+            reloaded.relationships.iter().any(
+                |r| matches!(r.rel_type, RelationshipType::Child) && r.target_id == parent_uuid
+            ),
+            "child edge to the parent must persist"
+        );
+        assert!(
+            reloaded
+                .relationships
+                .iter()
+                .any(|r| matches!(r.rel_type, RelationshipType::BlockedBy)
+                    && r.target_id == blocker_uuid),
+            "BUG-615: blocked-by edge must NOT be clobbered by the parent re-save"
+        );
     }
 
     /// Seed a single spec that carries one DANGLING relationship — an edge
