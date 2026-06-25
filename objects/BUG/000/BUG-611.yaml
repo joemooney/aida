@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T10:52:09.156659620Z
-modified_at: 2026-06-25T04:53:55.731797197Z
+modified_at: 2026-06-25T04:54:19.342736451Z
 req_type: Bug
 tags:
 - ci
@@ -29,3 +29,8 @@ comments:
   content: Commit 89b695cc8 references this requirement
   created_at: 2026-06-25T04:53:55.731797197Z
   modified_at: 2026-06-25T04:53:55.731797197Z
+- id: 019efd21-01ce-73c2-99de-23c87fbf0ab1
+  author: joe
+  content: 'ROOT CAUSE FOUND + FIXED (2026-06-24). The "flaky hanging test" was not flaky and not pre-existing — it was a DETERMINISTIC deadlock in the BUG-605 test drain_queue_user_id_skips_aida_user_for_shell_user, which created TWO EnvVarGuard::set guards. EnvVarGuard holds the global ENV_LOCK for its whole lifetime, so the second set() blocked on the lock the first held → hang. CI hung 3 times (orig 6h, re-trigger 6h, re-trigger 25m once the timeout-minutes mitigation landed). Fix: use EnvVarsGuard (one lock, several keys — the documented TASK-818 path). Verified: test now finishes in 0.00s. Fix rides PR #1084 (trailered BUG-611). The job-level timeout-minutes:25 (already on main) stays as defense-in-depth for any FUTURE hang — that mitigation is the durable value of this bug.'
+  created_at: 2026-06-25T04:54:19.342736451Z
+  modified_at: 2026-06-25T04:54:19.342736451Z
