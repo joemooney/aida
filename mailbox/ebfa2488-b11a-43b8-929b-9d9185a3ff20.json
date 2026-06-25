@@ -1,0 +1,15 @@
+{
+  "id": "ebfa2488-b11a-43b8-929b-9d9185a3ff20",
+  "thread_id": "ebfa2488-b11a-43b8-929b-9d9185a3ff20",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "main.rs"
+  },
+  "timestamp": 1782403185694,
+  "body": "You were mentioned on BUG-613 by joe: ROOT CAUSE pinned (strace, 2026-06-25): the dominant cost is `git status --porce…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
