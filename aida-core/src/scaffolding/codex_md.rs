@@ -64,6 +64,18 @@ notes file. Use MCP tools for spec graph and coordination operations
 when available; use shell commands for build, test, git inspection, and
 cross-surface verification.
 
+### MCP Server Registration
+
+`aida init` scaffolds `.codex/config.toml` with an `[mcp_servers.aida]`
+block that registers AIDA's MCP server (`aida mcp-serve`) for this
+project — the Codex-side parallel to the `.mcp.json` Claude Code uses. A
+Codex session started from the project root therefore discovers AIDA's
+tools out of the box; you do not need to run `codex mcp add aida -- aida
+mcp-serve` by hand. If `aida` is not on `PATH`, edit the scaffolded
+`command` to the absolute binary path. See
+`docs/agents/codex-mcp-setup.md` for verification (`codex mcp list`,
+`/mcp`).
+
 ### Requirements Management
 
 Before implementing, make sure a requirement exists and read it with
@@ -195,11 +207,79 @@ project convention.
 "#
         )
     }
+
+    /// Generate a project-local `.codex/config.toml` that registers AIDA's
+    /// MCP server with Codex CLI, so a project that uses Codex instead of
+    /// Claude Code is MCP-ready out of the box — the Codex-side parallel to
+    /// the `.mcp.json` that makes a project Claude-ready on `aida init`.
+    ///
+    /// Codex CLI reads MCP servers from `[mcp_servers.<name>]` blocks in
+    /// `config.toml`; a project-local `.codex/config.toml` is merged over the
+    /// user's `~/.codex/config.toml`. Registering `aida -- aida mcp-serve`
+    /// here means a Codex session started from the project root discovers the
+    /// AIDA tool surface without anyone running `codex mcp add aida ...` by
+    /// hand. The `project_trust_level = "trusted"` line opts the project into
+    /// Codex's trusted-workspace posture so the local MCP server is allowed to
+    /// run without a per-session prompt (the Codex analog of the
+    /// `enabledMcpjsonServers: ["aida"]` pre-approval AIDA writes for Claude).
+    ///
+    /// The content is generated inline rather than loaded from an embedded
+    /// template file — same pattern as the `.mcp.json` block in
+    /// `Scaffolder::preview`, the file this is the Codex parallel to.
+    /// trace:TASK-0424 | ai:claude
+    pub(super) fn generate_codex_config(&self) -> String {
+        r#"# AIDA Codex CLI configuration.
+#
+# This file registers AIDA's MCP server with Codex CLI so a Codex session
+# started from this project root discovers AIDA's spec graph + coordination
+# tools out of the box — the Codex-side parallel to the project's `.mcp.json`
+# (which makes the same project MCP-ready for Claude Code).
+#
+# Codex merges this project-local config over your `~/.codex/config.toml`.
+# Personal preferences (model, footer, etc.) belong in the user-level file;
+# keep this one limited to the project's AIDA integration.
+
+# Trust this project's local MCP server without a per-session prompt. This is
+# the Codex analog of the `enabledMcpjsonServers: ["aida"]` pre-approval AIDA
+# writes for Claude Code. Remove it if your team prefers an explicit prompt.
+project_trust_level = "trusted"
+
+# AIDA MCP server: spec graph + cross-agent coordination surface.
+# If `aida` is not on PATH, replace `command` with the absolute binary path.
+[mcp_servers.aida]
+command = "aida"
+args = ["mcp-serve"]
+"#
+        .to_string()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generated_codex_config_registers_mcp_server() {
+        let scaffolder = Scaffolder::new(
+            std::path::PathBuf::from("/tmp/aida-task-0424-test"),
+            ScaffoldConfig::default(),
+        );
+        let toml = scaffolder.generate_codex_config();
+
+        // Registers the AIDA MCP server in Codex's native config form.
+        assert!(toml.contains("[mcp_servers.aida]"));
+        assert!(toml.contains("command = \"aida\""));
+        assert!(toml.contains("args = [\"mcp-serve\"]"));
+        // Baseline trusted-project posture so the local server runs without a
+        // per-session prompt (parallel to the Claude pre-approval).
+        assert!(toml.contains("project_trust_level = \"trusted\""));
+        // Valid TOML that round-trips.
+        let parsed: toml::Value = toml::from_str(&toml).expect("codex config.toml must parse");
+        assert_eq!(
+            parsed["mcp_servers"]["aida"]["command"].as_str(),
+            Some("aida")
+        );
+    }
 
     #[test]
     fn generated_agents_md_has_codex_operating_sections() {

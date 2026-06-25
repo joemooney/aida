@@ -26,7 +26,16 @@ codex mcp add <name> -- <command>...
 
 ## Register AIDA as a Codex MCP Server
 
-From the AIDA project root:
+`aida init` scaffolds a project-local `.codex/config.toml` with an
+`[mcp_servers.aida]` block that registers `aida mcp-serve` for this project —
+the Codex-side parallel to the `.mcp.json` AIDA writes for Claude Code. A Codex
+session started from the project root picks it up automatically, so the manual
+`codex mcp add` below is only needed for a project that predates the scaffold
+or for a personal `~/.codex/config.toml` registration. If `aida` is not on
+`PATH`, edit the scaffolded `command` to the absolute binary path.
+
+To register manually (or to verify the scaffolded shape) from the AIDA project
+root:
 
 ```bash
 codex mcp add aida -- aida mcp-serve
@@ -265,7 +274,7 @@ Before relying on the wrapper in a new environment, read the five-bug arc that h
 - Error bodies carry both a text envelope and a structured `structuredError` object (STORY-401).
 - `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
-- Project-local automatic Codex registration is not scaffolded by `aida init` yet. Manual `codex mcp add aida -- aida mcp-serve` is the working path.
+- Project-local Codex registration IS scaffolded by `aida init` (a `.codex/config.toml` with an `[mcp_servers.aida]` block, plus a baseline `project_trust_level = "trusted"`). Manual `codex mcp add aida -- aida mcp-serve` remains available for pre-scaffold projects or a personal `~/.codex/config.toml`. trace:TASK-0424
 - `aida mcp-serve` self-respawns after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA. If MCP still appears stale, kill that agent's server process and let the client respawn it.
 - Headless drains have the same binary-staleness caveat. If an existing `target/debug/aida` or `target/release/aida` binary predates a merged orchestrator reliability fix, that running binary will not enforce the new behavior. Rebuild/relaunch and use `aida dev status` when runtime behavior disagrees with current source.
 
