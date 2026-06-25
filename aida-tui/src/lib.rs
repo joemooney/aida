@@ -20,6 +20,10 @@
 
 mod actions;
 mod app;
+/// Pure fuzzy command-palette core (STORY-682): clap-surface enumeration plus a
+/// dependency-free subsequence fuzzy matcher. No TUI wiring lives here — the
+/// rendering/launcher integration is a separate slice.
+pub mod cmd_palette;
 mod config;
 mod config_menu;
 mod dashboard;
@@ -39,6 +43,7 @@ mod theme;
 mod welcome;
 
 pub use app::{App, ExitKind};
+pub use cmd_palette::{enumerate, fuzzy_score, rank, CommandEntry, Scored, COMMON_ACTIONS};
 pub use config::{TuiConfig, TuiMode};
 pub use config_menu::{run as run_config_menu, ConfigMenuItem, EditKind, EditOutcome};
 pub use launcher::LauncherOptions;
