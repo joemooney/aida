@@ -25198,29 +25198,364 @@ impl PolicySection {
     }
 }
 
-/// Every config section `aida config show` is expected to render. This is the
-/// drift tripwire: each `[section]` AIDA reads from `.aida/config.toml`,
-/// `~/.aida/agents.toml`, or `~/.aida/config.toml` must appear here AND be
-/// emitted by [`policy_registry`]. A new knob in a brand-new section that
-/// forgets the registry trips `policy_registry_covers_known_sections`. Keep this
-/// list and the registry in lockstep. trace:TASK-793 | ai:claude
-const KNOWN_CONFIG_SECTIONS: &[&str] = &[
-    "agents",
-    "contained",
-    "mailbox",
-    "advisor",
-    "archive",
-    "telemetry",
-    "intake",
-    "ultraplan",
-    "presence",
-    "hints",
-    "ui",
-    "seats",
-    // STORY-647: team RBAC guardrail knobs (permission map / protected specs /
-    // strict mode). trace:STORY-647 | ai:claude
-    "team",
+/// How a config knob may be edited from `aida config menu`, declared once per
+/// knob in [`CONFIG_KNOBS`] (STORY-671 — the single source the editor, the
+/// menu's `EditKind`, and the doc default all derive from). The value-type
+/// carries the parse target the editor needs; [`EditSafety::ReadOnly`] knobs
+/// (`id_format.*`, `deployment.*`, `agents.bypass`, `contained.*`, …) declare
+/// *why* they are not live-editable so the menu can explain it.
+///
+/// This collapses the former hand-maintained `config_knob_meta` /
+/// `config_knob_edit_kind` tables into the registry: an editable knob's type +
+/// allowed set + range live with its doc + default in one declaration.
+/// trace:STORY-671 | ai:claude
+#[derive(Clone, Copy)]
+enum EditSafety {
+    /// A boolean knob — the menu toggles it. Carries the built-in default.
+    Bool { default: bool },
+    /// An enum knob over a fixed allowed set — the menu cycles it. The first
+    /// value is the built-in default.
+    Enum { allowed: &'static [&'static str] },
+    /// An integer knob over an inclusive `[min, max]` range — the menu prompts.
+    Integer { min: i64, max: i64 },
+    /// Not live-editable from the menu. `reason` is the short why shown on Enter
+    /// (env-shadowed knobs are detected at resolve time and override this).
+    ReadOnly { reason: &'static str },
+}
+
+/// One config knob, declared once. This is the **single source of truth**
+/// STORY-671 consolidates to: `aida config show`'s rows, `aida config menu`'s
+/// `EditKind`, the menu's per-knob default + explanation, `aida config edit`'s
+/// validation, AND the anti-drift test all derive from this table. Adding a
+/// knob is one entry here (plus its resolution branch in [`policy_registry`],
+/// which renders the live value) — no separate `config_knob_doc` /
+/// `config_knob_meta` / `KNOWN_CONFIG_SECTIONS` edits to forget.
+/// trace:STORY-671 | ai:claude
+struct KnobSpec {
+    /// The bare `[section]` name (no brackets).
+    section: &'static str,
+    /// The knob's bare key, or `"*"` for a section-wildcard entry whose doc +
+    /// edit-safety apply to every key the resolver emits under that section
+    /// (used where the key set is data-driven, e.g. `[seats]`, the `[team]`
+    /// permission map). A concrete `(section, key)` entry always wins over the
+    /// section wildcard.
+    key: &'static str,
+    /// One-line explanation (the framing `docs/environment-variables.md` uses).
+    doc: &'static str,
+    /// The built-in default shown in the menu (what you get with no config + no
+    /// env override). String form so it renders uniformly across types.
+    default: &'static str,
+    /// Value-type + edit-safety: the one declaration the menu's `EditKind`, the
+    /// editor's validation, and the read-only reason all derive from.
+    edit: EditSafety,
+}
+
+/// The central config-knob registry — STORY-671's single source of truth. Each
+/// knob declares its section/key, doc, default, and value-type + edit-safety
+/// once. Every config surface derives from this table:
+/// - `config show` rows are rendered by [`policy_registry`], whose section set
+///   the anti-drift test asserts equals this table's sections;
+/// - `config menu` rows take their default + explanation + `EditKind` from here
+///   ([`config_knob_doc`], [`config_knob_edit_kind`]);
+/// - `config edit` validation derives from the same [`EditSafety`]
+///   ([`config_knob_meta`]).
+///
+/// A `key: "*"` entry is a section wildcard: its doc + edit-safety cover every
+/// key the resolver emits under that section whose `(section, key)` is not
+/// otherwise declared (used where the key set is data-driven). A concrete
+/// `(section, key)` entry always takes precedence.
+/// trace:STORY-671 | ai:claude
+const CONFIG_KNOBS: &[KnobSpec] = &[
+    // --- [agents] — agent permission posture (read-only: security-relevant). ---
+    KnobSpec {
+        section: "agents",
+        key: "bypass",
+        doc: "Agent permission posture: native = Claude prompts (faithful launcher); bypass = agents skip permission prompts.",
+        default: "native",
+        edit: EditSafety::ReadOnly {
+            reason: "security-relevant — edit ~/.aida/agents.toml deliberately",
+        },
+    },
+    // --- [contained] — sandbox + egress posture (read-only: security-relevant). ---
+    KnobSpec {
+        section: "contained",
+        key: "enable",
+        doc: "Sandbox posture: run agents under Claude Code's native --settings sandbox.",
+        default: "disabled",
+        edit: EditSafety::ReadOnly {
+            reason: "sandbox posture — edit .aida/config.toml deliberately",
+        },
+    },
+    KnobSpec {
+        section: "contained",
+        key: "allowed_hosts",
+        doc: "Egress allowlist for sandboxed agents; empty means no egress restriction.",
+        default: "(none)",
+        edit: EditSafety::ReadOnly {
+            reason: "egress allowlist — edit .aida/config.toml deliberately",
+        },
+    },
+    KnobSpec {
+        section: "contained",
+        key: "os_wrap",
+        doc: "The bwrap OS-sandbox master switch (distinct from `enable`); strictly opt-in.",
+        default: "false",
+        edit: EditSafety::ReadOnly {
+            reason: "OS-sandbox switch — edit .aida/config.toml deliberately",
+        },
+    },
+    KnobSpec {
+        section: "contained",
+        key: "read_allowlist",
+        doc: "Strict read-confinement paths under os_wrap; empty binds the host root read-only.",
+        default: "(none)",
+        edit: EditSafety::ReadOnly {
+            reason: "read confinement — edit .aida/config.toml deliberately",
+        },
+    },
+    KnobSpec {
+        section: "contained",
+        key: "managed_domains_only",
+        doc: "Hard egress deny (managed set + allowed_hosts only), no approval prompt.",
+        default: "false",
+        edit: EditSafety::ReadOnly {
+            reason: "egress deny — edit .aida/config.toml deliberately",
+        },
+    },
+    // --- [mailbox]. ---
+    KnobSpec {
+        section: "mailbox",
+        key: "act_on_mail",
+        doc: "How a session reacts to unread mail: surface-and-recommend, or escalate-per-cascade.",
+        default: "surface-and-recommend",
+        edit: EditSafety::Enum {
+            allowed: &["surface-and-recommend", "escalate-per-cascade"],
+        },
+    },
+    KnobSpec {
+        section: "mailbox",
+        key: "autosync",
+        doc: "Auto-publish the local mailbox on the pull/push store legs (env: AIDA_MAILBOX_AUTOSYNC).",
+        default: "true",
+        edit: EditSafety::ReadOnly {
+            reason: "resolution involves AIDA_MAILBOX_AUTOSYNC — set via config.toml or env",
+        },
+    },
+    // --- [advisor]. ---
+    KnobSpec {
+        section: "advisor",
+        key: "calibration_mode",
+        doc: "When on, every advisor punt emits two verdicts to mine substrate gaps (cost: both runs fire).",
+        default: "off",
+        edit: EditSafety::ReadOnly {
+            reason: "doubles drain cost — set deliberately in .aida/config.toml",
+        },
+    },
+    // --- [archive]. ---
+    KnobSpec {
+        section: "archive",
+        key: "auto_after_days",
+        doc: "Auto-sweep completed/rejected specs older than N days on `aida pull` (clamped >=7; env: AIDA_AUTO_ARCHIVE).",
+        default: "disabled",
+        edit: EditSafety::Integer { min: 7, max: 365 },
+    },
+    // --- [telemetry]. ---
+    KnobSpec {
+        section: "telemetry",
+        key: "enabled",
+        doc: "Local usage telemetry at ~/.aida/usage.jsonl (env: AIDA_TELEMETRY; never phoned home).",
+        default: "enabled",
+        edit: EditSafety::Bool { default: true },
+    },
+    // --- [field_study] (SPIKE-67) — the formerly-drifted knob (STORY-671 #3). ---
+    KnobSpec {
+        section: "field_study",
+        key: "enabled",
+        doc: "Observe-only rule-adherence field study log at .aida (env: AIDA_FIELD_STUDY; honors AIDA_TELEMETRY=0).",
+        default: "disabled",
+        edit: EditSafety::Bool { default: false },
+    },
+    // --- [intake]. ---
+    KnobSpec {
+        section: "intake",
+        key: "disposition_bias",
+        doc: "Headless advisor INTAKE pass bias when proposing approve/reject/park/queue per open spec.",
+        default: "(built-in)",
+        edit: EditSafety::ReadOnly {
+            reason: "INTAKE policy — set deliberately in .aida/config.toml",
+        },
+    },
+    KnobSpec {
+        section: "intake",
+        key: "on_apply",
+        doc: "What an `aida intake --apply` pass executes for each proposed disposition.",
+        default: "(built-in)",
+        edit: EditSafety::ReadOnly {
+            reason: "INTAKE policy — set deliberately in .aida/config.toml",
+        },
+    },
+    KnobSpec {
+        section: "intake",
+        key: "do_not_approve_classes",
+        doc: "Spec classes the INTAKE pass will never auto-approve.",
+        default: "(built-in)",
+        edit: EditSafety::ReadOnly {
+            reason: "INTAKE policy — set deliberately in .aida/config.toml",
+        },
+    },
+    // --- [ultraplan]. ---
+    KnobSpec {
+        section: "ultraplan",
+        key: "mode",
+        doc: "Whether AIDA proactively suggests `aida ultraplan <SPEC>`: never / on-demand / suggested.",
+        default: "on-demand",
+        edit: EditSafety::Enum {
+            allowed: &["never", "on-demand", "suggested"],
+        },
+    },
+    // --- [presence] (STORY-561). ---
+    KnobSpec {
+        section: "presence",
+        key: "consumers",
+        doc: "Whether presence-aware consumers act on the away/home signal.",
+        default: "on",
+        edit: EditSafety::ReadOnly {
+            reason: "presence wiring — set deliberately in .aida/config.toml",
+        },
+    },
+    KnobSpec {
+        section: "presence",
+        key: "away_drain",
+        doc: "Drain mode used while you are away (e.g. headless-both).",
+        default: "headless-both",
+        edit: EditSafety::Enum {
+            allowed: &[
+                "headless-both",
+                "headless-escalate-defaults",
+                "headless-park",
+            ],
+        },
+    },
+    KnobSpec {
+        section: "presence",
+        key: "home_offer",
+        doc: "What presence offers when you return home.",
+        default: "surface",
+        edit: EditSafety::Enum {
+            allowed: &["surface", "dont-block"],
+        },
+    },
+    // --- [hints]. ---
+    KnobSpec {
+        section: "hints",
+        key: "workflow_hints",
+        doc: "Inline state-transition hints (queue drained -> open PR, etc.); env: AIDA_HINTS overrides per-shell.",
+        default: "enabled",
+        edit: EditSafety::Bool { default: true },
+    },
+    // --- [ui] — glyph profile + theme. ---
+    KnobSpec {
+        section: "ui",
+        key: "glyphs",
+        doc: "Active glyph profile (unicode / ascii / ...); env: AIDA_GLYPHS overrides.",
+        default: "unicode",
+        edit: EditSafety::ReadOnly {
+            reason: "use `aida config glyph` to change the glyph profile",
+        },
+    },
+    KnobSpec {
+        section: "ui",
+        key: "theme",
+        doc: "Named glyph theme applied on top of the profile.",
+        default: "(none)",
+        edit: EditSafety::ReadOnly {
+            reason: "use `aida config glyph` to change the theme",
+        },
+    },
+    // --- [seats] (STORY-620) — data-driven key set; section wildcard. ---
+    KnobSpec {
+        section: "seats",
+        key: "*",
+        doc: "Which seat (operator `aida human` vs advisor `aida advisor`) this configurable bucket shows on.",
+        default: "(per-key default)",
+        edit: EditSafety::ReadOnly {
+            reason: "seat routing — set deliberately in .aida/config.toml",
+        },
+    },
+    // --- [team] (STORY-647) — RBAC guardrail; concrete rows + permission-map wildcard. ---
+    KnobSpec {
+        section: "team",
+        key: "strict",
+        doc: "RBAC guardrail strict mode (NOT security): non-rostered = least-privilege, refusals roster-authoritative.",
+        default: "false",
+        edit: EditSafety::ReadOnly {
+            reason: "RBAC guardrail — set deliberately in .aida/config.toml",
+        },
+    },
+    KnobSpec {
+        section: "team",
+        key: "protected_tags",
+        doc: "Tags whose specs require the protected role to modify (guardrail, not access control).",
+        default: "(none)",
+        edit: EditSafety::ReadOnly {
+            reason: "RBAC guardrail — set deliberately in .aida/config.toml",
+        },
+    },
+    KnobSpec {
+        section: "team",
+        key: "protected_role",
+        doc: "Minimum role required to modify a protected-tag spec.",
+        default: "(default)",
+        edit: EditSafety::ReadOnly {
+            reason: "RBAC guardrail — set deliberately in .aida/config.toml",
+        },
+    },
+    KnobSpec {
+        section: "team",
+        key: "*",
+        doc: "Per-operation minimum role in the RBAC guardrail permission map.",
+        default: "(default)",
+        edit: EditSafety::ReadOnly {
+            reason: "RBAC guardrail — set deliberately in .aida/config.toml",
+        },
+    },
 ];
+
+/// Look up a knob's declaration in [`CONFIG_KNOBS`]: an exact `(section, key)`
+/// match wins; failing that, the `(section, "*")` section-wildcard entry covers
+/// data-driven key sets. `None` when the section is undeclared entirely.
+/// trace:STORY-671 | ai:claude
+fn config_knob_spec(section: &str, key: &str) -> Option<&'static KnobSpec> {
+    CONFIG_KNOBS
+        .iter()
+        .find(|k| k.section == section && k.key == key)
+        .or_else(|| {
+            CONFIG_KNOBS
+                .iter()
+                .find(|k| k.section == section && k.key == "*")
+        })
+}
+
+/// Every config section `aida config show` is expected to render — DERIVED from
+/// [`CONFIG_KNOBS`] (STORY-671), not a hand-maintained list. This is the drift
+/// tripwire's known-section set: each `[section]` AIDA reads from
+/// `.aida/config.toml`, `~/.aida/agents.toml`, or `~/.aida/config.toml` is
+/// declared by at least one [`KnobSpec`], and the anti-drift test asserts
+/// [`policy_registry`] emits exactly these. A new knob in a brand-new section
+/// shows up here automatically the moment its `KnobSpec` is declared — there is
+/// no separate list to forget. Consumed by the anti-drift tests (the only
+/// caller; `policy_registry` enumerates the resolvers directly).
+/// trace:STORY-671 trace:TASK-793 | ai:claude
+#[cfg(test)]
+fn known_config_sections() -> Vec<&'static str> {
+    let mut seen = Vec::new();
+    for knob in CONFIG_KNOBS {
+        if !seen.contains(&knob.section) {
+            seen.push(knob.section);
+        }
+    }
+    seen
+}
 
 /// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
 /// when absent / unparseable (so a missing file just means "all defaults").
@@ -25586,6 +25921,57 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         }
     });
 
+    // --- Field study (SPIKE-67): observe-only rule-adherence study. This is the
+    // formerly-DRIFTED knob STORY-671 closes — it was declared nowhere and never
+    // appeared in `config show`. Resolution reuses `field_study::is_enabled` (the
+    // real reader) for the effective value; the source mirrors telemetry's env >
+    // config > default precedence, with the AIDA_TELEMETRY=0 kill-switch noted.
+    // trace:STORY-671 trace:SPIKE-67 (env: AIDA_FIELD_STUDY) | ai:claude ---
+    sections.push({
+        let env_on = std::env::var("AIDA_FIELD_STUDY")
+            .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+            .unwrap_or(false);
+        let configured = crate::field_study::parse_field_study_enabled(
+            &std::fs::read_to_string(config_path_for_project(project_root)).unwrap_or_default(),
+        );
+        let effective = crate::field_study::is_enabled(Some(project_root));
+        // The global telemetry kill-switch forces the study off regardless of
+        // the field's own opt-in — surface that so the value reads honestly.
+        let telemetry_off = !crate::usage::is_enabled(Some(project_root));
+        let (value, source) = if telemetry_off {
+            (
+                "disabled (AIDA_TELEMETRY kill-switch)".to_string(),
+                PolicySource::Env("AIDA_TELEMETRY"),
+            )
+        } else if env_on {
+            ("enabled".to_string(), PolicySource::Env("AIDA_FIELD_STUDY"))
+        } else if let Some(b) = configured {
+            (
+                if b { "enabled" } else { "disabled" }.to_string(),
+                PolicySource::ProjectConfig,
+            )
+        } else {
+            (
+                if effective {
+                    "enabled"
+                } else {
+                    "disabled (unset)"
+                }
+                .to_string(),
+                PolicySource::Default,
+            )
+        };
+        PolicySection {
+            section: "field_study",
+            header: "[field_study] — observe-only rule-adherence study".to_string(),
+            rows: vec![PolicyRow {
+                key: "enabled",
+                value,
+                source,
+            }],
+        }
+    });
+
     // --- Intake policy. trace:STORY-560 ---
     sections.push({
         let intake = crate::intake::IntakeConfig::load(project_root);
@@ -25941,117 +26327,15 @@ fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
 }
 
 /// A one-line explanation + built-in default for a config knob, keyed by
-/// `(section, key)`. Sourced from `docs/environment-variables.md` and the
-/// `aida config show` rationale so the TUI carries the same human framing the
-/// docs do. Knobs not listed fall back to a generic "no description" + a
-/// default derived from the resolved row. trace:STORY-661 | ai:claude
+/// `(section, key)` — DERIVED from the central [`CONFIG_KNOBS`] registry
+/// (STORY-671). The framing matches `docs/environment-variables.md` and the
+/// `aida config show` rationale so the TUI carries the same human story the docs
+/// do. Knobs with no declaration fall back to a generic placeholder.
+/// trace:STORY-671 trace:STORY-661 | ai:claude
 fn config_knob_doc(section: &str, key: &str) -> (&'static str, &'static str) {
-    match (section, key) {
-        ("agents", "bypass") => (
-            "Agent permission posture: native = Claude prompts (faithful launcher); bypass = agents skip permission prompts.",
-            "native",
-        ),
-        ("contained", "enable") => (
-            "Sandbox posture: run agents under Claude Code's native --settings sandbox.",
-            "disabled",
-        ),
-        ("contained", "allowed_hosts") => (
-            "Egress allowlist for sandboxed agents; empty means no egress restriction.",
-            "(none)",
-        ),
-        ("contained", "os_wrap") => (
-            "The bwrap OS-sandbox master switch (distinct from `enable`); strictly opt-in.",
-            "false",
-        ),
-        ("contained", "read_allowlist") => (
-            "Strict read-confinement paths under os_wrap; empty binds the host root read-only.",
-            "(none)",
-        ),
-        ("contained", "managed_domains_only") => (
-            "Hard egress deny (managed set + allowed_hosts only), no approval prompt.",
-            "false",
-        ),
-        ("mailbox", "act_on_mail") => (
-            "How a session reacts to unread mail: surface-and-recommend, or escalate-per-cascade.",
-            "surface-and-recommend",
-        ),
-        ("mailbox", "autosync") => (
-            "Auto-publish the local mailbox on the pull/push store legs (env: AIDA_MAILBOX_AUTOSYNC).",
-            "true",
-        ),
-        ("advisor", "calibration_mode") => (
-            "When on, every advisor punt emits two verdicts to mine substrate gaps (cost: both runs fire).",
-            "off",
-        ),
-        ("archive", "auto_after_days") => (
-            "Auto-sweep completed/rejected specs older than N days on `aida pull` (clamped >=7; env: AIDA_AUTO_ARCHIVE).",
-            "disabled",
-        ),
-        ("telemetry", "enabled") => (
-            "Local usage telemetry at ~/.aida/usage.jsonl (env: AIDA_TELEMETRY; never phoned home).",
-            "enabled",
-        ),
-        ("intake", "disposition_bias") => (
-            "Headless advisor INTAKE pass bias when proposing approve/reject/park/queue per open spec.",
-            "(built-in)",
-        ),
-        ("intake", "on_apply") => (
-            "What an `aida intake --apply` pass executes for each proposed disposition.",
-            "(built-in)",
-        ),
-        ("intake", "do_not_approve_classes") => (
-            "Spec classes the INTAKE pass will never auto-approve.",
-            "(built-in)",
-        ),
-        ("ultraplan", "mode") => (
-            "Whether AIDA proactively suggests `aida ultraplan <SPEC>`: never / on-demand / suggested.",
-            "on-demand",
-        ),
-        ("presence", "consumers") => (
-            "Whether presence-aware consumers act on the away/home signal.",
-            "on",
-        ),
-        ("presence", "away_drain") => (
-            "Drain mode used while you are away (e.g. headless-both).",
-            "headless-both",
-        ),
-        ("presence", "home_offer") => (
-            "What presence offers when you return home.",
-            "surface",
-        ),
-        ("hints", "workflow_hints") => (
-            "Inline state-transition hints (queue drained -> open PR, etc.); env: AIDA_HINTS overrides per-shell.",
-            "enabled",
-        ),
-        ("ui", "glyphs") => (
-            "Active glyph profile (unicode / ascii / ...); env: AIDA_GLYPHS overrides.",
-            "unicode",
-        ),
-        ("ui", "theme") => (
-            "Named glyph theme applied on top of the profile.",
-            "(none)",
-        ),
-        ("seats", _) => (
-            "Which seat (operator `aida human` vs advisor `aida advisor`) this configurable bucket shows on.",
-            "(per-key default)",
-        ),
-        ("team", "strict") => (
-            "RBAC guardrail strict mode (NOT security): non-rostered = least-privilege, refusals roster-authoritative.",
-            "false",
-        ),
-        ("team", "protected_tags") => (
-            "Tags whose specs require the protected role to modify (guardrail, not access control).",
-            "(none)",
-        ),
-        ("team", "protected_role") => (
-            "Minimum role required to modify a protected-tag spec.",
-            "(default)",
-        ),
-        ("team", _) => (
-            "Per-operation minimum role in the RBAC guardrail permission map.",
-            "(default)",
-        ),
-        _ => ("(no description available)", "(see config show)"),
+    match config_knob_spec(section, key) {
+        Some(spec) => (spec.doc, spec.default),
+        None => ("(no description available)", "(see config show)"),
     }
 }
 
@@ -26115,72 +26399,35 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
     items
 }
 
-/// How a config knob is editable from the `aida config menu` TUI (STORY-669,
-/// extended STORY-677). Carries the per-knob metadata the editor needs: the
-/// edit type plus, for the typed kinds, the parse target the caller writes.
-/// Knobs not present in [`config_knob_meta`] are read-only.
-///
-/// Kept in lockstep with `policy_registry` / `config_knob_doc`; STORY-671 folds
-/// this into the central registry. trace:STORY-669 trace:STORY-677 | ai:claude
+/// The edit metadata the menu's write-back path needs for a config knob, keyed
+/// by `(section, key)` — DERIVED from the central [`CONFIG_KNOBS`] registry
+/// (STORY-671). Returns the editable [`EditSafety`] variants (`Bool` / `Enum` /
+/// `Integer`) only; a `ReadOnly` declaration or an undeclared knob yields `None`
+/// so the editor refuses it. This replaces the former hand-maintained
+/// `config_knob_meta` table — the SAFE set is now whatever the registry declares
+/// editable. trace:STORY-671 trace:STORY-669 trace:STORY-677 | ai:claude
 #[cfg(feature = "tui")]
-enum KnobMeta {
-    /// A boolean knob with its built-in default (the menu toggles it).
-    Bool { default: bool },
-    /// An enum knob over a fixed allowed set (the menu cycles it). The first
-    /// value is the built-in default.
-    Enum { allowed: &'static [&'static str] },
-    /// An integer knob over an inclusive `[min, max]` range (the menu prompts).
-    Integer { min: i64, max: i64 },
+fn config_knob_meta(section: &str, key: &str) -> Option<EditSafety> {
+    match config_knob_spec(section, key)?.edit {
+        edit @ (EditSafety::Bool { .. } | EditSafety::Enum { .. } | EditSafety::Integer { .. }) => {
+            Some(edit)
+        }
+        EditSafety::ReadOnly { .. } => None,
+    }
 }
 
-/// The edit metadata for a config knob, keyed by `(section, key)`. The SAFE set
-/// only — knobs whose live edit is benign. Dangerous-live knobs
-/// (`id_format.*`, `deployment.*`, `agents.bypass`, `contained.*`) are
-/// deliberately absent so they render read-only with a reason-on-Enter.
-/// trace:STORY-669 trace:STORY-677 | ai:claude
-#[cfg(feature = "tui")]
-fn config_knob_meta(section: &str, key: &str) -> Option<KnobMeta> {
-    Some(match (section, key) {
-        // --- Booleans (STORY-669). ---
-        ("telemetry", "enabled") => KnobMeta::Bool { default: true },
-        ("hints", "workflow_hints") => KnobMeta::Bool { default: true },
-        ("field_study", "enabled") => KnobMeta::Bool { default: false },
-        // --- Enums (STORY-677). Allowed sets read from the real parsers:
-        // ActOnMail::parse, UltraplanMode::from_token, AwayDrain/HomeOffer
-        // ::from_config_str. ---
-        ("mailbox", "act_on_mail") => KnobMeta::Enum {
-            allowed: &["surface-and-recommend", "escalate-per-cascade"],
-        },
-        ("ultraplan", "mode") => KnobMeta::Enum {
-            allowed: &["never", "on-demand", "suggested"],
-        },
-        ("presence", "away_drain") => KnobMeta::Enum {
-            allowed: &[
-                "headless-both",
-                "headless-escalate-defaults",
-                "headless-park",
-            ],
-        },
-        ("presence", "home_offer") => KnobMeta::Enum {
-            allowed: &["surface", "dont-block"],
-        },
-        // --- Integers (STORY-677). ---
-        ("archive", "auto_after_days") => KnobMeta::Integer { min: 7, max: 365 },
-        _ => return None,
-    })
-}
-
-/// Project a knob's edit metadata into the TUI [`aida_tui::EditKind`]. Absent →
-/// `ReadOnly`. trace:STORY-677 | ai:claude
+/// Project a knob's registry edit-safety into the TUI [`aida_tui::EditKind`].
+/// A `ReadOnly` declaration or an undeclared knob → `ReadOnly`.
+/// trace:STORY-671 trace:STORY-677 | ai:claude
 #[cfg(feature = "tui")]
 fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
-    match config_knob_meta(section, key) {
-        Some(KnobMeta::Bool { .. }) => aida_tui::EditKind::Bool,
-        Some(KnobMeta::Enum { allowed }) => {
+    match config_knob_spec(section, key).map(|s| s.edit) {
+        Some(EditSafety::Bool { .. }) => aida_tui::EditKind::Bool,
+        Some(EditSafety::Enum { allowed }) => {
             aida_tui::EditKind::Enum(allowed.iter().map(|s| s.to_string()).collect())
         }
-        Some(KnobMeta::Integer { min, max }) => aida_tui::EditKind::Integer { min, max },
-        None => aida_tui::EditKind::ReadOnly,
+        Some(EditSafety::Integer { min, max }) => aida_tui::EditKind::Integer { min, max },
+        Some(EditSafety::ReadOnly { .. }) | None => aida_tui::EditKind::ReadOnly,
     }
 }
 
@@ -26250,7 +26497,7 @@ fn cli_edit_config_knob(
     // stored value (read back from disk, not the rendered row, so a failed
     // write surfaces honestly); enum/integer write the TUI-supplied value.
     let new_value: toml_edit::Value = match meta {
-        KnobMeta::Bool { default } => {
+        EditSafety::Bool { default } => {
             let current = std::fs::read_to_string(&path)
                 .ok()
                 .and_then(|s| toml::from_str::<toml::Value>(&s).ok())
@@ -26260,7 +26507,7 @@ fn cli_edit_config_knob(
                 .unwrap_or(default);
             toml_edit::Value::from(!current)
         }
-        KnobMeta::Enum { allowed } => {
+        EditSafety::Enum { allowed } => {
             let Some(v) = requested else {
                 return EditOutcome::Blocked(format!("no value supplied for {}", item.name));
             };
@@ -26272,7 +26519,7 @@ fn cli_edit_config_knob(
             }
             toml_edit::Value::from(v)
         }
-        KnobMeta::Integer { min, max } => {
+        EditSafety::Integer { min, max } => {
             let Some(v) = requested else {
                 return EditOutcome::Blocked(format!("no value supplied for {}", item.name));
             };
@@ -26283,6 +26530,11 @@ fn cli_edit_config_knob(
                 return EditOutcome::Blocked(format!("{n} is out of range [{min}, {max}]"));
             }
             toml_edit::Value::from(n)
+        }
+        // `config_knob_meta` filters ReadOnly out above, so this is unreachable —
+        // but matched explicitly so a new EditSafety variant trips the compiler.
+        EditSafety::ReadOnly { reason } => {
+            return EditOutcome::Blocked(format!("{} is read-only: {reason}", item.name));
         }
     };
 
@@ -129951,16 +130203,18 @@ mod bug_533_config_show_tests {
             .contains("AIDA_TELEMETRY"));
     }
 
-    // TASK-793 anti-drift tests: the central policy registry is the single
-    // source of truth `aida config show` consumes. These assert it stays in
-    // lockstep with `KNOWN_CONFIG_SECTIONS` so a knob added to a brand-new
-    // config section without registering it fails CI instead of going silently
-    // invisible (the exact failure that produced BUG-533). trace:TASK-793
+    // STORY-671 / TASK-793 anti-drift tests: `CONFIG_KNOBS` is the single source
+    // of truth. `config show` (via policy_registry), `config menu` (default +
+    // explanation + EditKind), and `config edit` validation all derive from it.
+    // These assert the live-rendered registry stays in lockstep with the
+    // declared knob table, so a knob added in code without a declaration — or a
+    // declaration with no resolver — fails CI instead of silently vanishing (the
+    // exact failure that produced BUG-533). trace:STORY-671 trace:TASK-793
 
-    /// Every section in `KNOWN_CONFIG_SECTIONS` must be emitted by
-    /// `policy_registry` — i.e. `aida config show` covers every section AIDA
-    /// reads. A new `[section]` added to the const but forgotten in the registry
-    /// trips here.
+    /// Every section a [`KnobSpec`] declares must be emitted by
+    /// `policy_registry` — i.e. `aida config show` renders a live row for every
+    /// declared section. A new section declared in `CONFIG_KNOBS` but with no
+    /// resolution branch in the registry trips here.
     #[test]
     fn policy_registry_covers_known_sections() {
         let dir = tempfile::tempdir().unwrap();
@@ -129968,40 +130222,42 @@ mod bug_533_config_show_tests {
             .iter()
             .map(|s| s.section)
             .collect();
-        for &section in KNOWN_CONFIG_SECTIONS {
+        for section in known_config_sections() {
             assert!(
                 rendered.contains(section),
-                "config section `[{section}]` is in KNOWN_CONFIG_SECTIONS but \
-                 `policy_registry` does not emit it — add it to the registry so \
-                 `aida config show` renders it (anti-drift, TASK-793)"
+                "config section `[{section}]` is declared in CONFIG_KNOBS but \
+                 `policy_registry` does not emit it — add its resolution branch so \
+                 `aida config show` renders it (anti-drift, STORY-671)"
             );
         }
     }
 
-    /// The reverse guard: every section the registry emits must be a known
-    /// section (no stray/typo'd section name) AND the two lists must be the same
-    /// size, so the const can't quietly drift out of sync with the registry.
+    /// The reverse guard: every section the registry emits must be declared in
+    /// `CONFIG_KNOBS` (no stray/typo'd section name) AND the two section sets
+    /// must be the same size, so neither can quietly drift out of sync. This is
+    /// the true auto-discovery: a `[section]` resolved in `policy_registry` with
+    /// no `KnobSpec` declaration fails CI.
     #[test]
     fn policy_registry_emits_only_known_sections() {
         let dir = tempfile::tempdir().unwrap();
         let sections = policy_registry(dir.path());
         let known: std::collections::HashSet<&'static str> =
-            KNOWN_CONFIG_SECTIONS.iter().copied().collect();
+            known_config_sections().into_iter().collect();
         for s in &sections {
             assert!(
                 known.contains(s.section),
-                "`policy_registry` emits section `[{}]` which is not in \
-                 KNOWN_CONFIG_SECTIONS — register it there too (anti-drift, TASK-793)",
+                "`policy_registry` emits section `[{}]` which is not declared in \
+                 CONFIG_KNOBS — add a KnobSpec for it (anti-drift, STORY-671)",
                 s.section
             );
         }
         // Each registered section appears exactly once and the counts match, so
-        // neither list can carry an entry the other lacks.
+        // neither set can carry an entry the other lacks.
         assert_eq!(
             sections.len(),
-            KNOWN_CONFIG_SECTIONS.len(),
-            "policy_registry section count != KNOWN_CONFIG_SECTIONS count — \
-             the registry and the drift tripwire have diverged (TASK-793)"
+            known.len(),
+            "policy_registry section count != CONFIG_KNOBS section count — \
+             the registry and the declared knob table have diverged (STORY-671)"
         );
     }
 
@@ -130018,6 +130274,135 @@ mod bug_533_config_show_tests {
                 s.section
             );
         }
+    }
+
+    /// Per-knob anti-drift (STORY-671): every concrete row `policy_registry`
+    /// renders must resolve to a `KnobSpec` declaration — directly or via the
+    /// section wildcard. A knob rendered in `config show` (and therefore offered
+    /// in `config menu`) with no declaration would carry no doc/default/edit
+    /// metadata, which is exactly the per-knob drift STORY-671 closes.
+    #[test]
+    fn every_rendered_knob_has_a_declaration() {
+        let dir = tempfile::tempdir().unwrap();
+        for s in policy_registry(dir.path()) {
+            for row in &s.rows {
+                assert!(
+                    config_knob_spec(s.section, row.key).is_some(),
+                    "config knob `[{}] {}` is rendered by policy_registry but has \
+                     no KnobSpec declaration — declare it in CONFIG_KNOBS so its \
+                     doc/default/edit-kind are not generic placeholders (STORY-671)",
+                    s.section,
+                    row.key
+                );
+            }
+        }
+    }
+
+    /// The formerly-drifted `[field_study] enabled` knob (SPIKE-67) must now
+    /// appear in `aida config show` — regression guard for STORY-671 acceptance
+    /// criterion 3. It was invisible before because it was never added to the
+    /// old hand-maintained lists. trace:STORY-671
+    #[test]
+    fn field_study_enabled_appears_in_config_show() {
+        let dir = tempfile::tempdir().unwrap();
+        let found = policy_registry(dir.path())
+            .iter()
+            .any(|s| s.section == "field_study" && s.rows.iter().any(|r| r.key == "enabled"));
+        assert!(
+            found,
+            "`[field_study] enabled` is declared in CONFIG_KNOBS but not rendered \
+             by policy_registry — the SPIKE-67 knob regressed back to invisible \
+             (STORY-671 acceptance #3)"
+        );
+    }
+
+    /// The doc table is now a view over the registry (STORY-671): a declared
+    /// knob's `(doc, default)` come straight from its `KnobSpec`, never the
+    /// generic fallback. Spot-checks the consolidation kept the framing.
+    #[test]
+    fn config_knob_doc_derives_from_registry() {
+        // A declared knob returns its own doc + default, not the placeholder.
+        let (doc, default) = config_knob_doc("telemetry", "enabled");
+        assert!(doc.contains("telemetry"), "doc should describe telemetry");
+        assert_eq!(default, "enabled");
+        // The section wildcard covers a data-driven key.
+        let (seats_doc, _) = config_knob_doc("seats", "anything_at_all");
+        assert!(seats_doc.contains("seat"), "seats.* wildcard should apply");
+        // An undeclared section falls back to the placeholder.
+        let (fallback, _) = config_knob_doc("no_such_section", "no_such_key");
+        assert_eq!(fallback, "(no description available)");
+    }
+}
+
+/// STORY-671: the menu/edit surfaces derive their editability from `CONFIG_KNOBS`
+/// too — these guards live in a `tui`-gated module so they compile only with the
+/// editor present.
+#[cfg(all(test, feature = "tui"))]
+mod story_671_edit_kind_tests {
+    use super::*;
+
+    /// `config_knob_edit_kind` must derive from the registry: every editable
+    /// `EditSafety` variant maps to the matching `EditKind`, and read-only /
+    /// undeclared knobs map to `ReadOnly`. trace:STORY-671
+    #[test]
+    fn edit_kind_derives_from_registry() {
+        // Bool.
+        assert_eq!(
+            config_knob_edit_kind("telemetry", "enabled"),
+            aida_tui::EditKind::Bool
+        );
+        // The formerly-drifted field_study knob is editable as a bool now.
+        assert_eq!(
+            config_knob_edit_kind("field_study", "enabled"),
+            aida_tui::EditKind::Bool
+        );
+        // Enum carries its allowed set.
+        assert_eq!(
+            config_knob_edit_kind("ultraplan", "mode"),
+            aida_tui::EditKind::Enum(vec![
+                "never".to_string(),
+                "on-demand".to_string(),
+                "suggested".to_string(),
+            ])
+        );
+        // Integer carries its range.
+        assert_eq!(
+            config_knob_edit_kind("archive", "auto_after_days"),
+            aida_tui::EditKind::Integer { min: 7, max: 365 }
+        );
+        // Read-only declarations and undeclared knobs are not editable.
+        assert_eq!(
+            config_knob_edit_kind("agents", "bypass"),
+            aida_tui::EditKind::ReadOnly
+        );
+        assert_eq!(
+            config_knob_edit_kind("contained", "enable"),
+            aida_tui::EditKind::ReadOnly
+        );
+        assert_eq!(
+            config_knob_edit_kind("no_such", "knob"),
+            aida_tui::EditKind::ReadOnly
+        );
+    }
+
+    /// `config_knob_meta` (the editor's write-back gate) returns the editable
+    /// variants only — a read-only declaration yields `None` so the editor
+    /// refuses it, preserving the STORY-669/677 read-only set. trace:STORY-671
+    #[test]
+    fn config_knob_meta_filters_read_only() {
+        assert!(matches!(
+            config_knob_meta("telemetry", "enabled"),
+            Some(EditSafety::Bool { default: true })
+        ));
+        assert!(matches!(
+            config_knob_meta("archive", "auto_after_days"),
+            Some(EditSafety::Integer { min: 7, max: 365 })
+        ));
+        // The read-only set stays read-only (no live edit).
+        assert!(config_knob_meta("agents", "bypass").is_none());
+        assert!(config_knob_meta("contained", "os_wrap").is_none());
+        assert!(config_knob_meta("ui", "glyphs").is_none());
+        assert!(config_knob_meta("seats", "anything").is_none());
     }
 }
 
