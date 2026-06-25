@@ -34383,6 +34383,357 @@ fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
     AgentWorktreeVerdict::Removable(merged_reason.to_string())
 }
 
+// ============================================================================
+// BUG-614: conservative worktree GC.
+//
+// `git worktree prune` (lossless, run on session-end) removes only the
+// administrative entries whose directories are already gone — never a live
+// worktree. The explicit operator GC (`aida session gc`) is the destructive
+// half: it removes a `.claude/worktrees/agent-*` worktree ONLY when ALL of
+//   - its branch is merged into the default branch OR gone, AND
+//   - the worktree is CLEAN (no uncommitted/untracked changes), AND
+//   - it is NOT locked (no `locked` line in `git worktree list --porcelain`),
+//     AND
+//   - no live process / active session-lease references it.
+// hold. Anything else is PRESERVED and reported. Removal uses
+// `git worktree remove` (NOT `--force`) so git's own safety checks add a second
+// guard; if git refuses we SKIP (never `-f`) and report. trace:BUG-614
+// ============================================================================
+
+/// BUG-614: lossless prune of dead worktree bookkeeping. `git worktree prune`
+/// only removes administrative entries for worktrees whose directories no
+/// longer exist — it never deletes a live worktree, so this is always safe.
+/// Best-effort and quiet: a spawn/exec failure is swallowed (the caller treats
+/// it as a non-event). trace:BUG-614 | ai:claude
+fn lossless_prune_worktrees(project_root: &std::path::Path) {
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "prune"])
+        .output();
+}
+
+/// BUG-614: the GC eligibility verdict for one agent-managed worktree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum WorktreeGcVerdict {
+    /// All four safety predicates hold → safe for the operator GC to remove.
+    Eligible,
+    /// At least one predicate fails → PRESERVE and report the reason.
+    Preserve(String),
+}
+
+/// BUG-614: pure inputs to the conservative GC predicate — every probe result
+/// the safety model needs, gathered once per worktree by the scanner. Keeping
+/// the predicate pure (no git/lease/process probes) makes the four safety
+/// gates exhaustively unit-testable. trace:BUG-614 | ai:claude
+#[derive(Debug, Clone)]
+struct WorktreeGcFacts {
+    /// True when this worktree is one of the `.claude/worktrees/agent-*` /
+    /// `worktree-agent-*` isolation worktrees (the only ones the GC touches).
+    is_agent_managed: bool,
+    /// True when the branch is merged into the default branch OR is gone
+    /// (detached / branch deleted). A worktree whose branch carries unmerged
+    /// work is never GC'd.
+    merged_or_gone: bool,
+    /// True when the worktree has uncommitted/untracked changes. Dirty is
+    /// unambiguously "has work" — never removed.
+    dirty: bool,
+    /// True when `git worktree list --porcelain` reports a `locked` line for
+    /// this worktree. A locked worktree is operator-protected — never removed.
+    locked: bool,
+    /// True when a live process or an active session-lease references this
+    /// worktree (a session is in flight there). Never removed.
+    has_active_lease: bool,
+}
+
+/// BUG-614: the conservative GC predicate. Removal requires ALL of:
+/// agent-managed AND merged-or-gone AND clean AND unlocked AND no active lease.
+/// Any failing gate PRESERVES the worktree with a human-readable reason. The
+/// order is deliberate: cheapest / most-protective signals first so the reason
+/// names the strongest objection. Default-to-preserve: an unrecognized state
+/// is kept, never removed. trace:BUG-614 | ai:claude
+fn classify_worktree_gc(facts: &WorktreeGcFacts) -> WorktreeGcVerdict {
+    if !facts.is_agent_managed {
+        return WorktreeGcVerdict::Preserve("not an agent-managed worktree".to_string());
+    }
+    // Dirty first — uncommitted work is the costliest thing to lose.
+    if facts.dirty {
+        return WorktreeGcVerdict::Preserve(
+            "uncommitted changes present — never auto-removed".to_string(),
+        );
+    }
+    if facts.locked {
+        return WorktreeGcVerdict::Preserve("worktree is locked — operator-protected".to_string());
+    }
+    if facts.has_active_lease {
+        return WorktreeGcVerdict::Preserve(
+            "an active session/process references it — in flight".to_string(),
+        );
+    }
+    if !facts.merged_or_gone {
+        return WorktreeGcVerdict::Preserve(
+            "branch is not merged into the default branch — unmerged work".to_string(),
+        );
+    }
+    WorktreeGcVerdict::Eligible
+}
+
+/// BUG-614: the set of worktree paths (canonicalized) that a live process or an
+/// active session-lease references. Two sources, unioned:
+///   1. session leases whose `worktree_path` resolves to a live state
+///      ([`lease_state_for`] == Live) — a session is genuinely in flight there;
+///   2. live `claude` processes whose cwd sits inside a worktree (covers
+///      Agent-tool worktrees that carry no AIDA lease).
+/// A path appearing in either set is "active" and must never be GC'd.
+/// trace:BUG-614 | ai:claude
+fn active_worktree_paths(project_root: &std::path::Path) -> HashSet<std::path::PathBuf> {
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let mut out: HashSet<std::path::PathBuf> = HashSet::new();
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    // (1) live session leases.
+    for lease in list_leases(project_root) {
+        if lease.worktree_path.as_os_str().is_empty() {
+            continue;
+        }
+        if matches!(lease_state_for(&lease, &live, now), LeaseState::Live) {
+            out.insert(canon(&lease.worktree_path));
+        }
+    }
+    // (2) live claude processes whose cwd is a (non-stale) real directory.
+    for s in &live {
+        if s.stale_cwd {
+            continue;
+        }
+        out.insert(canon(&s.cwd));
+    }
+    out
+}
+
+/// BUG-614: does any active worktree path equal `wt` or sit beneath it? A live
+/// process one level down still pins the worktree. trace:BUG-614 | ai:claude
+fn worktree_is_active(wt: &std::path::Path, active: &HashSet<std::path::PathBuf>) -> bool {
+    let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.to_path_buf());
+    active
+        .iter()
+        .any(|a| *a == wt_canon || a.starts_with(&wt_canon))
+}
+
+/// BUG-614: is this worktree locked? Parses `git worktree list --porcelain` and
+/// reports whether the record for `wt` carries a bare `locked` line (git emits
+/// `locked` with an optional reason after it). Read-only; false on any git
+/// failure so a probe error never makes us treat a worktree as removable.
+/// trace:BUG-614 | ai:claude
+fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> bool {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+    let Ok(out) = out else { return false };
+    if !out.status.success() {
+        return false;
+    }
+    let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.to_path_buf());
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut cur_match = false;
+    for line in text.lines() {
+        if let Some(p) = line.strip_prefix("worktree ") {
+            let rec = std::path::PathBuf::from(p);
+            let rec_canon = rec.canonicalize().unwrap_or(rec);
+            cur_match = rec_canon == wt_canon;
+        } else if cur_match && (line == "locked" || line.starts_with("locked ")) {
+            return true;
+        }
+    }
+    false
+}
+
+/// BUG-614: `aida session gc` — the explicit operator GC of stale agent
+/// worktrees. Scans every `.claude/worktrees/agent-*` worktree, gathers the
+/// four safety facts, and (unless `--dry-run`) runs `git worktree remove` (NOT
+/// `--force`) on the ones the pure predicate calls Eligible. Anything preserved
+/// is reported with its reason; a worktree git itself refuses to remove is
+/// SKIPPED (never force-removed) and reported. Always runs the lossless prune
+/// first. Never invoked on the hot `aida status` read path — only on this
+/// explicit operator command. trace:BUG-614 | ai:claude
+fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    // Lossless first — clears dead bookkeeping cheaply regardless of the GC.
+    lossless_prune_worktrees(&project_root);
+
+    let default_ref = resolve_default_branch_ref(&project_root);
+    let project_canon = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let active = active_worktree_paths(&project_root);
+
+    let git_count = |args: &[&str]| -> Option<u32> {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+            })
+    };
+
+    let mut eligible: Vec<(std::path::PathBuf, Option<String>)> = Vec::new();
+    let mut preserved: Vec<(std::path::PathBuf, String)> = Vec::new();
+
+    for wt in list_worktrees(&project_root) {
+        let wt_canon = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
+        // Never touch the main worktree or the store worktree.
+        if wt_canon == project_canon || wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        let is_agent_managed = is_agent_managed_worktree(&wt.path, wt.branch.as_deref());
+        if !is_agent_managed {
+            continue;
+        }
+
+        // merged_or_gone: a detached/branchless agent worktree counts as "gone"
+        // (no branch ⇒ nothing unmerged to lose); a branch is merged when it has
+        // zero commits beyond the default ref. Without a resolvable default ref
+        // we cannot prove merged-ness — treat as NOT merged (preserve).
+        let merged_or_gone = match (wt.branch.as_deref(), default_ref.as_deref()) {
+            (None, _) => true,
+            (Some(branch), Some(default_ref)) => {
+                git_count(&["rev-list", "--count", &format!("{default_ref}..{branch}")])
+                    .map(|n| n == 0)
+                    .unwrap_or(false)
+            }
+            (Some(_), None) => false,
+        };
+
+        let facts = WorktreeGcFacts {
+            is_agent_managed,
+            merged_or_gone,
+            dirty: !worktree_dirty_entries(&wt.path).is_empty(),
+            locked: worktree_is_locked(&project_root, &wt.path),
+            has_active_lease: worktree_is_active(&wt.path, &active),
+        };
+
+        match classify_worktree_gc(&facts) {
+            WorktreeGcVerdict::Eligible => eligible.push((wt.path.clone(), wt.branch.clone())),
+            WorktreeGcVerdict::Preserve(reason) => preserved.push((wt.path.clone(), reason)),
+        }
+    }
+
+    if eligible.is_empty() && preserved.is_empty() {
+        println!("No agent-managed worktrees found — nothing to GC.");
+        return Ok(());
+    }
+
+    if !preserved.is_empty() {
+        println!(
+            "Preserved {} worktree(s) (kept by design):",
+            preserved.len()
+        );
+        for (path, reason) in &preserved {
+            println!("  {} {} — {}", "keep".yellow(), path.display(), reason);
+        }
+    }
+
+    if eligible.is_empty() {
+        println!("No worktree is GC-eligible (merged + clean + unlocked + no active lease).");
+        return Ok(());
+    }
+
+    println!(
+        "{} agent worktree(s) are GC-eligible (merged + clean + unlocked + no active lease):",
+        eligible.len()
+    );
+    for (path, branch) in &eligible {
+        match branch {
+            Some(b) => println!("  {} {} (branch `{}`)", "remove".cyan(), path.display(), b),
+            None => println!("  {} {} (detached)", "remove".cyan(), path.display()),
+        }
+    }
+
+    if dry_run {
+        println!("\n--dry-run: no worktrees removed. Re-run without --dry-run to GC them.");
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        eprint!(
+            "\nRemove the {} eligible worktree(s)? [y/N] ",
+            eligible.len()
+        );
+        std::io::stderr().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted — nothing removed.");
+            return Ok(());
+        }
+    }
+
+    let mut removed = 0usize;
+    let mut skipped = 0usize;
+    for (path, _branch) in &eligible {
+        // `git worktree remove` (NOT --force): git re-checks the worktree is
+        // clean and unlocked and refuses otherwise — a second guard on top of
+        // our predicate. On refusal we SKIP (never force) and report.
+        // trace:BUG-614 | ai:claude
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(["worktree", "remove"])
+            .arg(path)
+            .output();
+        match res {
+            Ok(o) if o.status.success() => {
+                removed += 1;
+                println!(
+                    "  {} removed {}",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    path.display()
+                );
+            }
+            Ok(o) => {
+                skipped += 1;
+                let err = String::from_utf8_lossy(&o.stderr);
+                println!(
+                    "  {} git refused to remove {} — kept (not forced): {}",
+                    "skip".yellow(),
+                    path.display(),
+                    err.trim()
+                );
+            }
+            Err(e) => {
+                skipped += 1;
+                println!(
+                    "  {} could not spawn git for {} — kept: {}",
+                    "skip".yellow(),
+                    path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    // Lossless tidy of any bookkeeping the removals left behind.
+    lossless_prune_worktrees(&project_root);
+
+    println!(
+        "\nGC complete: {} removed, {} skipped, {} preserved.",
+        removed,
+        skipped,
+        preserved.len()
+    );
+    Ok(())
+}
+
 /// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
 /// squash-aware safety model. Read-only — performs git ancestry/rev-list probes
 /// and one forge merged-PR lookup per branch, never mutates anything. Returns a
@@ -36172,6 +36523,145 @@ mod story_462_doctor_tests {
             classify_agent_worktree(&facts),
             AgentWorktreeVerdict::Keep(_)
         ));
+    }
+
+    // ----- BUG-614: conservative worktree GC predicate -----------------------
+
+    /// The all-safe baseline: agent-managed, merged-or-gone, clean, unlocked,
+    /// no active lease → the only combination the GC will remove.
+    fn gc_eligible_facts() -> WorktreeGcFacts {
+        WorktreeGcFacts {
+            is_agent_managed: true,
+            merged_or_gone: true,
+            dirty: false,
+            locked: false,
+            has_active_lease: false,
+        }
+    }
+
+    #[test]
+    fn gc_merged_clean_unlocked_no_lease_is_eligible() {
+        // BUG-614: all four safety gates pass → Eligible.
+        assert_eq!(
+            classify_worktree_gc(&gc_eligible_facts()),
+            WorktreeGcVerdict::Eligible
+        );
+    }
+
+    #[test]
+    fn gc_dirty_worktree_is_preserved() {
+        // BUG-614: uncommitted work is unambiguously "has work" — preserved even
+        // when its branch merged.
+        let facts = WorktreeGcFacts {
+            dirty: true,
+            ..gc_eligible_facts()
+        };
+        assert!(matches!(
+            classify_worktree_gc(&facts),
+            WorktreeGcVerdict::Preserve(_)
+        ));
+    }
+
+    #[test]
+    fn gc_locked_worktree_is_preserved() {
+        // BUG-614: a locked worktree is operator-protected — never removed.
+        let facts = WorktreeGcFacts {
+            locked: true,
+            ..gc_eligible_facts()
+        };
+        assert!(matches!(
+            classify_worktree_gc(&facts),
+            WorktreeGcVerdict::Preserve(_)
+        ));
+    }
+
+    #[test]
+    fn gc_unmerged_branch_worktree_is_preserved() {
+        // BUG-614: a branch that is NOT merged into the default branch carries
+        // unmerged work — preserved.
+        let facts = WorktreeGcFacts {
+            merged_or_gone: false,
+            ..gc_eligible_facts()
+        };
+        assert!(matches!(
+            classify_worktree_gc(&facts),
+            WorktreeGcVerdict::Preserve(_)
+        ));
+    }
+
+    #[test]
+    fn gc_active_lease_worktree_is_preserved() {
+        // BUG-614: a live process / active session-lease pins the worktree —
+        // never removed, even merged + clean.
+        let facts = WorktreeGcFacts {
+            has_active_lease: true,
+            ..gc_eligible_facts()
+        };
+        assert!(matches!(
+            classify_worktree_gc(&facts),
+            WorktreeGcVerdict::Preserve(_)
+        ));
+    }
+
+    #[test]
+    fn gc_non_agent_worktree_is_preserved() {
+        // BUG-614: the GC only ever touches agent-managed worktrees; a normal
+        // work-branch worktree is preserved regardless of the other facts.
+        let facts = WorktreeGcFacts {
+            is_agent_managed: false,
+            ..gc_eligible_facts()
+        };
+        assert!(matches!(
+            classify_worktree_gc(&facts),
+            WorktreeGcVerdict::Preserve(_)
+        ));
+    }
+
+    #[test]
+    fn gc_dirty_takes_priority_in_reason_over_unmerged() {
+        // BUG-614: when several gates fail, the costliest objection (dirty) is
+        // reported — losing uncommitted work is the worst outcome.
+        let facts = WorktreeGcFacts {
+            dirty: true,
+            locked: true,
+            merged_or_gone: false,
+            has_active_lease: true,
+            ..gc_eligible_facts()
+        };
+        match classify_worktree_gc(&facts) {
+            WorktreeGcVerdict::Preserve(reason) => assert!(
+                reason.contains("uncommitted"),
+                "dirty objection must win, got: {reason}"
+            ),
+            other => panic!("expected Preserve, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn gc_worktree_is_active_matches_self_and_descendants() {
+        // BUG-614: an active path equal to the worktree OR beneath it pins it.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let wt = tmp.path().join("agent-abc");
+        std::fs::create_dir_all(wt.join("nested")).unwrap();
+        let wt_canon = wt.canonicalize().unwrap();
+        let nested_canon = wt.join("nested").canonicalize().unwrap();
+
+        // Exact match.
+        let mut active = HashSet::new();
+        active.insert(wt_canon.clone());
+        assert!(worktree_is_active(&wt, &active));
+
+        // Descendant (a live claude one level down) still pins it.
+        let mut active = HashSet::new();
+        active.insert(nested_canon);
+        assert!(worktree_is_active(&wt, &active));
+
+        // Unrelated path does not pin it.
+        let other = tmp.path().join("agent-other");
+        std::fs::create_dir_all(&other).unwrap();
+        let mut active = HashSet::new();
+        active.insert(other.canonicalize().unwrap());
+        assert!(!worktree_is_active(&wt, &active));
     }
 
     #[test]
@@ -39243,6 +39733,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             orphans,
             escalations,
         } => session_prune(*days, *dry_run, *yes, *orphans, *escalations),
+        SessionCommand::Gc { dry_run, yes } => session_gc(*dry_run, *yes),
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
     }
 }
@@ -50237,6 +50728,16 @@ fn session_end(
         target.branch.cyan(),
         target.branch
     );
+
+    // BUG-614: lossless prune of administrative worktree entries whose
+    // directories are already gone. `git worktree prune` ONLY removes the
+    // bookkeeping for worktrees whose on-disk dir no longer exists — it never
+    // touches a live worktree — so it is always safe and cheap. Running it on
+    // session-end keeps `.git/worktrees/` from accumulating stale entries
+    // (which scale the per-worktree git spawns `aida status` makes). Quiet,
+    // best-effort: a failure here never fails the session teardown.
+    // trace:BUG-614 | ai:claude
+    lossless_prune_worktrees(&project_root);
 
     // TASK-70: handle the Claude Code project dir orphaned by the
     // worktree removal. Claude Code stores per-session jsonls under
