@@ -9,12 +9,12 @@ description: |-
   - Classify each item as observation, guidance, enforcement, mutation, approval, session control, or UX.
   - For each load-bearing item, identify the intended replacement: Codex config/hook, AGENTS.md, project script, AIDA CLI/MCP, git hook, CI, orchestrator, or explicit no-equivalent gap.
   - Produce a migration table that can be checked into docs or attached as a spec comment.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:04.022726496Z
-modified_at: 2026-06-25T07:05:15.451495804Z
+modified_at: 2026-06-25T07:47:25.505702964Z
 req_type: Task
 tags:
 - audit
@@ -41,3 +41,21 @@ comments:
     NET: the only hard Claude-Code dependency AIDA carries is the command-backed status line, and it is observability, not correctness — everything load-bearing already lives in AIDA/git/MCP. Recommend TASK-0421 be considered substantially SATISFIED by the doc (advisor/operator to dispose).
   created_at: 2026-06-25T07:05:15.451495804Z
   modified_at: 2026-06-25T07:05:15.451495804Z
+history:
+- id: 019efdbf-7c70-7140-8318-ede5e345f5df
+  author: aida-auto-bump
+  timestamp: 2026-06-25T07:47:25.424274562Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efdbf-7cc1-7b12-9b06-97d64a562663
+  timestamp: 2026-06-25T07:47:25.505697016Z
+  agent: aida
+  commit_sha: 598aaa3cf900fdbfed86fb470c32ff10054e8c91
+  summary: Completed via merge 598aaa3c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T07:47:24.450797959Z
+  completion_sha: 598aaa3cf900fdbfed86fb470c32ff10054e8c91
