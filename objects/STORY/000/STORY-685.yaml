@@ -3,15 +3,33 @@ spec_id: STORY-685
 agreed_id: STORY-685
 title: 'EPIC-52 TUI interaction model: two-pane Nav<->list focus navigation + active-panel focus colors'
 description: 'Operator interaction design (2026-06-25, live): (1) up/down navigates the NAV panel by default; (2) Enter or Left-arrow moves focus INTO the list panel; (3) Right-arrow or Esc returns focus to the Nav panel; (4) keep Tab/BackTab for switching tabs (unchanged). (5) The ACTIVE panels selected row gets a distinct background/selected color; (6) the inactive Nav-panels selected row dims (darker) once you have entered the list panel, so focus is always visually clear. Pairs with BUG-613 (instant/cache-fast data) + the async lazy-panel loading (navigate instantly, panel fills in async, parallel loads as you arrow down). Supervised + keyboard-verified.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T15:00:05.548358790Z
-modified_at: 2026-06-25T15:00:05.548358790Z
+modified_at: 2026-06-25T15:22:51.494948405Z
 req_type: Story
 tags:
 - aida:tui
 - from-operator
 - parent:EPIC-52
 - supervised
+history:
+- id: 019eff60-7295-73f2-ac20-a264e6ee9db7
+  author: aida-auto-bump
+  timestamp: 2026-06-25T15:22:51.413885652Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019eff60-72e6-7892-aa78-5fdbb836e80b
+  timestamp: 2026-06-25T15:22:51.494942020Z
+  agent: aida
+  commit_sha: 0c482d855df197d45fce27eb3f1c7c24f4e64dc2
+  summary: Completed via merge 0c482d85
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T15:22:50.439093931Z
+  completion_sha: 0c482d855df197d45fce27eb3f1c7c24f4e64dc2
