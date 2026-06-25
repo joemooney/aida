@@ -3,15 +3,33 @@ spec_id: STORY-678
 agreed_id: STORY-678
 title: 'EPIC-51 Slice 1: PTY suspend/resume mechanic — prefix key SIGSTOPs the chat child, overlay, SIGCONT + clean repaint'
 description: 'First + riskiest slice of EPIC-51, isolated. A free TUI prefix binding (Ctrl-a p, mnemonic palette/pause) intercepted by the TUI (never forwarded to the chat): SIGSTOP the chat PTY child process group, show a minimal "paused" overlay, then on a resume key SIGCONT the child + repaint the screen from the existing vt100::Parser state (same path as tab-switch repaint). Prove ZERO chat disruption (no terminal corruption, conversation continues). Unix-only (POSIX signals + PTY). Keyboard-verified by the operator in a live aida tui session — cannot be headless-tested.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:05:50.716865287Z
-modified_at: 2026-06-25T07:05:50.716865287Z
+modified_at: 2026-06-25T07:25:41.908541466Z
 req_type: Story
 tags:
 - aida:tui
 - from-operator
 - parent:EPIC-51
 - supervised
+history:
+- id: 019efdab-9844-7090-b8ff-266c476affbd
+  author: aida-auto-bump
+  timestamp: 2026-06-25T07:25:41.828477118Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efdab-9894-7522-8427-ffbcaf00cc66
+  timestamp: 2026-06-25T07:25:41.908535248Z
+  agent: aida
+  commit_sha: 48bc3364006602e59b81409a1aae84c5623d4507
+  summary: Completed via merge 48bc3364
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T07:25:40.851410157Z
+  completion_sha: 48bc3364006602e59b81409a1aae84c5623d4507
