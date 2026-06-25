@@ -777,6 +777,166 @@ hook-mediated pause/resume, rich lifecycle automation, or Claude-hosted TUI
 behavior. If Claude must be removed, treat those workflows as migration tasks,
 not as already-covered Codex behavior.
 
+## Appendix A: Worked Migration Examples
+
+Concrete before/after pairs for the surfaces a migration actually trips on.
+Syntax verified against current Codex docs (2026-06-24); both CLIs move fast, so
+re-check field names against your installed version.
+
+### A.1 Custom slash command → Codex skill (or AIDA CLI verb)
+
+Codex has **no** custom-slash-command files. A prompt-only Claude command becomes
+a Codex *skill*; a state-changing one should be a real CLI verb both humans and
+agents can run.
+
+**Claude** — `.claude/commands/aida-review.md`:
+
+```markdown
+---
+description: Review the current diff against its spec
+allowed-tools: Bash
+---
+Review the staged diff for $ARGUMENTS and check it satisfies the spec.
+```
+
+**Codex** — `.agents/skills/aida-review/SKILL.md` (a skill is a *directory* with a
+required `SKILL.md`; invoke with `/skills` or `$aida-review`):
+
+```markdown
+---
+name: aida-review
+description: Review the current diff against its spec. Trigger on review requests.
+---
+Review the staged diff and check it satisfies the spec.
+```
+
+For anything that changes state, skip both and use the CLI verb — most AIDA
+commands already are one (`/aida-commit` → `aida commit`, `/aida-pr` →
+`aida pr ship`).
+
+### A.2 Tool guardrail hook → Codex hook (nearly mechanical)
+
+Codex modeled its hook schema closely on Claude's — same `matcher` / `hooks` /
+`hookSpecificOutput` / `permissionDecision` shape — so most command hooks port
+with a path change.
+
+**Claude** — `.claude/settings.json`:
+
+```json
+{ "hooks": { "PreToolUse": [ { "matcher": "Bash",
+  "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh" } ] } ] } }
+```
+
+**Codex** — `~/.codex/hooks.json` (or project `.codex/hooks.json`):
+
+```json
+{ "hooks": { "PreToolUse": [ { "matcher": "Bash",
+  "hooks": [ { "type": "command", "command": "$(git rev-parse --show-toplevel)/.codex/hooks/guard.sh", "timeout": 30 } ] } ] } }
+```
+
+The deny/allow output is also near-identical — a Codex `PreToolUse` script prints:
+
+```json
+{ "hookSpecificOutput": { "hookEventName": "PreToolUse",
+  "permissionDecision": "deny", "permissionDecisionReason": "Destructive command blocked." } }
+```
+
+…and can now rewrite the call with `"permissionDecision": "allow"` plus
+`"updatedInput": { … }` (the 2026 mutation capability).
+
+### A.3 Repo instructions: `CLAUDE.md` → `AGENTS.md`
+
+Move agent-neutral repo conventions to `AGENTS.md` (the cross-vendor standard
+Codex reads natively). Keep `CLAUDE.md` only as optional Claude-specific support.
+
+### A.4 MCP registration: `.mcp.json` → `codex mcp add`
+
+**Claude** — `.mcp.json`:
+
+```json
+{ "mcpServers": { "aida": { "command": "aida", "args": ["mcp-serve"] } } }
+```
+
+**Codex** — one command (writes `[mcp_servers.aida]` into `config.toml`); verify
+from a session with `/mcp`:
+
+```bash
+codex mcp add aida -- aida mcp-serve
+```
+
+### A.5 Status line — the one genuine gap
+
+**Claude** — `.claude/settings.json` drives a live, command-backed footer:
+
+```json
+{ "statusLine": { "command": "aida statusline --color=always" } }
+```
+
+**Codex** — no command-backed status line yet (open FR #20043/#20244). The TUI
+footer takes built-in fields only:
+
+```toml
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+```
+
+So the live role/queue/lease readout can't live in the Codex footer today —
+surface it with the AIDA TUI, a shell-prompt/tmux integration, or `aida status`
+polling instead.
+
+### A.6 Headless approval gate: Claude `defer` → AIDA punt (portable)
+
+**Claude** — `PreToolUse` hook pauses *this* tool call and resumes the same run:
+
+```json
+{ "permissionDecision": "defer" }
+```
+
+```bash
+# caller reads the deferred payload, gets a decision, then:
+claude -p --resume <session-id>
+```
+
+**Codex/AIDA** — no pending-tool-call defer; use the substrate (this is what AIDA
+already does, so it ports unchanged):
+
+```bash
+# the gate parks the work instead of pausing a tool call:
+aida punt <SPEC> --note "needs advisor approval before <action>"   # → NeedsAttention + finding
+# advisor/human decides out of band, then a FRESH run resumes with the decision in context.
+```
+
+### A.7 Headless automation: `claude -p` → `codex exec`
+
+```bash
+# Claude:
+claude -p "implement SPEC-123"
+
+# Codex (structured event stream + optional final-output schema + explicit safety):
+codex exec "implement SPEC-123" --json --output-schema result.schema.json \
+  --sandbox workspace-write --ask-for-approval on-request
+```
+
+Note the two orthogonal safety knobs: `--sandbox`
+(`read-only`/`workspace-write`/`danger-full-access`) and `--ask-for-approval`
+(`untrusted`/`on-request`/`never`).
+
+### A.8 Subagent → `.codex/agents/*.toml`
+
+Codex subagents (2026) cover the fan-out/delegation case. A custom agent is TOML:
+
+```toml
+# .codex/agents/reviewer.toml
+name = "reviewer"
+description = "Reviews a diff against its spec and reports findings."
+developer_instructions = "Read the spec via the aida MCP tools; review the diff; report."
+# optional: model, sandbox_mode, mcp_servers
+```
+
+Built-ins: `default`, `worker`, `explorer`; globals `max_threads` (default 6) and
+`max_depth` (default 1). What does *not* port one-to-one is a persistent
+named-team UX — Codex subagents are spawned-on-request fan-out, not a standing team.
+
 ## References
 
 - `docs/agents/session-communication.md`
