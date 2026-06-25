@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T14:53:10.206289350Z
-modified_at: 2026-06-25T14:53:10.206289350Z
+modified_at: 2026-06-25T15:59:45.197617848Z
 req_type: Bug
 tags:
 - aida:status
@@ -21,3 +21,9 @@ tags:
 - from-operator
 - out-of-box
 - performance
+comments:
+- id: 019eff82-3a2d-7c51-a7ce-ceaf13c29b1c
+  author: joe
+  content: 'ROOT CAUSE pinned (strace, 2026-06-25): the dominant cost is `git status --porcelain` run ~1836x as `git -C <.claude/worktrees/...> status --porcelain`. ~27 worktrees x ~68 = the per-worktree dirty scan (worktree_dirty_entries @main.rs:47359, over `for wt in list_worktrees` @33492/34424 incl. scan_merged_agent_worktrees TASK-878) RE-RUNS ~68 times per single `aida status` instead of once. Fix: compute the worktree set + each worktree dirty-state at most once per invocation, and keep the full agent-worktree scan OFF the status hot path (it is doctor-grade; its own comment claims it is doctor-only — verify/restore that). SECONDARY: a worktree LEAK — 63 worktrees had accumulated because finished sessions/agents do not GC them; manual `git worktree prune` + remove of stale agent worktrees cut 63->27 and status 27.7s->22.5s (the rest is the re-scan). Re-fanned a tightly-scoped fix agent.'
+  created_at: 2026-06-25T15:59:45.197617848Z
+  modified_at: 2026-06-25T15:59:45.197617848Z
