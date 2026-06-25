@@ -65316,8 +65316,13 @@ mod bug_231_findings_promote_tests {
     /// where the human's drain looks. trace:BUG-605 | ai:claude
     #[test]
     fn drain_queue_user_id_skips_aida_user_for_shell_user() {
-        let _g1 = crate::test_env::EnvVarGuard::set("AIDA_USER", "claude-advisor-1");
-        let _g2 = crate::test_env::EnvVarGuard::set("USER", "joe");
+        // Both vars under ONE guard: EnvVarGuard holds ENV_LOCK for its whole
+        // lifetime, so two separate `set` calls deadlock (CI hung 25m on this).
+        // EnvVarsGuard takes the lock once for several keys. trace:BUG-611
+        let _g = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_USER", "claude-advisor-1"),
+            ("USER", "joe"),
+        ]);
         // current_user_id prefers the agent's mailbox id…
         assert_eq!(current_user_id(None), "claude-advisor-1");
         // …but drain-queue work targets the human/shell USER (the drainer).
