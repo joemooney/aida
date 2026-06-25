@@ -20749,5 +20749,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1989
+- id: 019f0066-3fa6-7c82-b037-5a7fa34d1577
+  target_id: 019f0066-3bed-76f3-b8e1-8734e7aadcd3
+  author: aida
+  node_id: '1'
+  lamport: 1990
+  timestamp: 2026-06-25T20:08:48.806860291Z
+  kind: !Create
+    title: aida add --parent X --blocked-by Y silently drops the blocked-by edge
+    description: 'When aida add receives BOTH --parent and --blocked-by in one invocation, it prints both Blocked by: and Linked: parent of lines, but only the parent (Child) edge survives - the BlockedBy edge is lost. Root cause in aida-cli/src/main.rs: the --blocked-by loop runs first via add_blocked_by_edge (re-fetches fresh and writes the edge). The --parent block then runs let mut child = last.clone() on the pre-blocked-by snapshot captured at add_requirement time, pushes the Child edge, and calls backend.update_requirement(&child) - clobbering the just-written BlockedBy edge. --blocked-by alone works; --parent alone works; only the combination loses data. Repro: aida add --type story --title D --parent EPIC-1 --blocked-by STORY-2 --status approved; aida show D shows only is child of, no is blocked by. Fix: re-fetch fresh before adding the parent edge (mirror add_blocked_by_edge), or merge both edge-adds into one read-modify-write. Workaround: aida add --parent then a separate aida edit --blocked-by. Surfaced building the TASK-875 Spec-Kit composition-seam demo.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1990
 node_id: '1'
