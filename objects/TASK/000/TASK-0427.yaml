@@ -10,12 +10,12 @@ description: |-
   - Include future-capability and lock-in tradeoffs for Claude Code and Codex CLI.
   - Provide a default recommendation for reversible migrations: keep invariants outside vendor-specific agent runtimes.
   - Link or fold the result into docs/agents/porting-claude-code-to-codex.md after review.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:30.150413674Z
-modified_at: 2026-06-25T08:38:24.678205013Z
+modified_at: 2026-06-25T08:47:29.324998856Z
 req_type: Task
 tags:
 - decision-guide
