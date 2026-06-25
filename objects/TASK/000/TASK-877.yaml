@@ -22,12 +22,12 @@ description: |-
   4. Alias -> alias cycles are detected and refused (no infinite expansion).
   5. HARD: with AIDA_AGENT_TYPE/AIDA_HEADLESS set, via the MCP server, or non-TTY, the aliased name is NOT expanded (canonical-only); a test asserts an agent-context invocation of a user alias does not run the expansion. aida alias list STILL lists user aliases in that context.
   6. Precedence (project vs personal vs built-in) is documented and tested.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T05:45:37.560541547Z
-modified_at: 2026-06-23T05:01:43.306127007Z
+modified_at: 2026-06-25T08:09:35.060801858Z
 req_type: Task
 tags:
 - aida:alias
@@ -45,3 +45,21 @@ comments:
   content: 'Operator decided FULL build (personal + project), 2026-06-22, over the advisor recommendation to not-build. Blocker cleared: the built-in registry STORY-667 is Completed. Advisor held one separate invariant firm and baked it into acceptance #5: alias expansion is human-shell-only; agents/MCP/headless always resolve canonical commands (protects the legibility moat — orthogonal to the personal-vs-project scope choice). Ready to plan/implement; keyboard-supervised recommended because it intercepts the command-dispatch path (shadowing/recursion guards).'
   created_at: 2026-06-23T05:01:43.306127007Z
   modified_at: 2026-06-23T05:01:43.306127007Z
+history:
+- id: 019efdd3-c603-7410-8c71-764f4df26c41
+  author: aida-auto-bump
+  timestamp: 2026-06-25T08:09:34.979164600Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efdd3-c654-7290-83c5-ef6205d488d6
+  timestamp: 2026-06-25T08:09:35.060791556Z
+  agent: aida
+  commit_sha: 2bc2899a9c892262613c5a3397b2e021d75083e2
+  summary: Completed via merge 2bc2899a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T08:09:34.005649366Z
+  completion_sha: 2bc2899a9c892262613c5a3397b2e021d75083e2
