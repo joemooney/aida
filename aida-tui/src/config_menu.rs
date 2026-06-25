@@ -36,15 +36,23 @@ use ratatui::widgets::{
 use ratatui::{Frame, Terminal};
 use std::time::Duration;
 
-/// How a knob may be edited from the menu (STORY-669). Plain data set by the
-/// caller; this crate only uses it to decide whether Enter/Space acts.
-/// trace:STORY-669 | ai:claude
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+/// How a knob may be edited from the menu (STORY-669, extended STORY-677).
+/// Plain data set by the caller; this crate uses it to decide what Enter/Space
+/// does. trace:STORY-669 trace:STORY-677 | ai:claude
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum EditKind {
     /// A boolean knob — Enter/Space toggles it in place.
     Bool,
-    /// Not editable from the menu in this slice (scalars, enums, env-shadowed,
-    /// separate-file knobs). Enter explains where to edit it instead.
+    /// An enum knob over a fixed value set (STORY-677) — Enter/Space cycles to
+    /// the next allowed value, wrapping at the end. The caller is asked to
+    /// write the cycled-to value. The `Vec` is the ordered allowed set.
+    Enum(Vec<String>),
+    /// An integer knob over an inclusive `[min, max]` range (STORY-677) — Enter
+    /// opens an inline text input; a valid in-range integer is written, an
+    /// out-of-range or non-numeric entry is rejected (the row is unchanged).
+    Integer { min: i64, max: i64 },
+    /// Not editable from the menu (env-shadowed, separate-file, or
+    /// dangerous-live knobs). Enter explains where to edit it instead.
     #[default]
     ReadOnly,
 }
@@ -90,16 +98,23 @@ enum DisplayRow {
     Item(usize),
 }
 
-/// Run the `aida config menu` TUI over `items`. Read + navigate only:
-/// up/down (or j/k) move the cursor, PgUp/PgDn page, g/G jump to top/bottom,
-/// q/Esc quit. Returns once the user quits.
+/// Run the `aida config menu` TUI over `items`. Navigate with up/down (or j/k),
+/// PgUp/PgDn page, g/G jump to top/bottom, q/Esc quit. Enter/Space edits the
+/// selected knob in place (bool toggle, enum cycle, integer inline-input).
+/// Returns once the user quits.
 ///
 /// The caller is responsible for the no-TTY check — this enters raw mode and
 /// the alternate screen via [`TermGuard`], which fails outside a real
 /// terminal. trace:STORY-661 | ai:claude
+///
+/// The `on_edit` callback receives the item plus an optional **requested new
+/// value**: `None` for a `Bool` toggle (the caller flips the current value),
+/// `Some(value)` for the enum value cycled to or the integer typed in. This
+/// keeps the value-derivation (next-in-cycle, range-validated integer) in the
+/// TUI while the write + re-resolve stays caller-side. trace:STORY-677
 pub fn run(
     mut items: Vec<ConfigMenuItem>,
-    mut on_edit: impl FnMut(&ConfigMenuItem) -> EditOutcome,
+    mut on_edit: impl FnMut(&ConfigMenuItem, Option<&str>) -> EditOutcome,
 ) -> Result<()> {
     install_panic_hook();
     // Best-effort: a missing signal handler must not block the menu.
@@ -121,9 +136,22 @@ pub fn run(
 
     let mut cursor: usize = 0; // index into `selectable`
     let mut flash: Option<String> = None; // transient feedback line in the footer
+
+    // STORY-677: when editing an Integer knob, an inline text-input overlay is
+    // active. `Some((item_index, buffer))` while the prompt is up.
+    let mut int_input: Option<(usize, String)> = None;
     loop {
         let table_state_selected = selectable.get(cursor).copied();
-        term.draw(|f| draw(f, &items, &rows, table_state_selected, flash.as_deref()))?;
+        term.draw(|f| {
+            draw(
+                f,
+                &items,
+                &rows,
+                table_state_selected,
+                flash.as_deref(),
+                int_input.as_ref(),
+            )
+        })?;
 
         // Poll so a resize repaints without a key press; 200ms is plenty
         // responsive for a navigable view.
@@ -136,6 +164,36 @@ pub fn run(
             if key.kind != KeyEventKind::Press {
                 continue;
             }
+
+            // STORY-677: the integer-input overlay captures keys until the user
+            // confirms (Enter) or cancels (Esc).
+            if let Some((i, buf)) = int_input.as_mut() {
+                match key.code {
+                    KeyCode::Esc => {
+                        int_input = None;
+                        flash = Some("edit cancelled".to_string());
+                    }
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        int_input = None;
+                        flash = Some("edit cancelled".to_string());
+                    }
+                    KeyCode::Backspace => {
+                        buf.pop();
+                    }
+                    KeyCode::Char(ch) if ch.is_ascii_digit() || (ch == '-' && buf.is_empty()) => {
+                        buf.push(ch);
+                    }
+                    KeyCode::Enter => {
+                        let idx = *i;
+                        let entered = buf.clone();
+                        int_input = None;
+                        flash = Some(commit_integer(&mut items, idx, &entered, &mut on_edit));
+                    }
+                    _ => {}
+                }
+                continue;
+            }
+
             let last = selectable.len().saturating_sub(1);
             // Any navigation key clears a stale flash; the edit keys set a new one.
             match key.code {
@@ -167,12 +225,21 @@ pub fn run(
                     flash = None;
                     cursor = last;
                 }
-                // STORY-669: Enter/Space edits the selected knob in place.
+                // STORY-669/STORY-677: Enter/Space edits the selected knob.
+                // Bool toggles, Enum cycles, Integer opens the inline input.
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if let Some(DisplayRow::Item(i)) =
                         table_state_selected.and_then(|d| rows.get(d))
                     {
-                        flash = Some(edit_selected(&mut items, *i, &mut on_edit));
+                        match &items[*i].edit {
+                            EditKind::Integer { .. } => {
+                                flash = None;
+                                int_input = Some((*i, String::new()));
+                            }
+                            _ => {
+                                flash = Some(edit_selected(&mut items, *i, &mut on_edit));
+                            }
+                        }
                     }
                 }
                 _ => {}
@@ -184,26 +251,93 @@ pub fn run(
 
 /// Apply an in-place edit to `items[i]` via the caller callback, returning the
 /// footer feedback line. Read-only knobs explain where to edit instead.
-/// trace:STORY-669 | ai:claude
+/// `Bool` toggles (caller flips); `Enum` cycles to the next allowed value;
+/// `Integer` is handled separately via [`commit_integer`] (it needs an input
+/// overlay first). trace:STORY-669 trace:STORY-677 | ai:claude
 fn edit_selected(
     items: &mut [ConfigMenuItem],
     i: usize,
-    on_edit: &mut impl FnMut(&ConfigMenuItem) -> EditOutcome,
+    on_edit: &mut impl FnMut(&ConfigMenuItem, Option<&str>) -> EditOutcome,
 ) -> String {
-    match items[i].edit {
-        EditKind::Bool => match on_edit(&items[i]) {
-            EditOutcome::Updated { value, scope } => {
-                items[i].value = value.clone();
-                items[i].scope = scope.clone();
-                format!("✓ {} = {}  (written to {})", items[i].name, value, scope)
-            }
-            EditOutcome::Blocked(reason) => reason,
-        },
+    match items[i].edit.clone() {
+        EditKind::Bool => apply_outcome(items, i, on_edit(&items[i], None)),
+        EditKind::Enum(allowed) => {
+            let Some(next) = next_enum_value(&items[i].value, &allowed) else {
+                return format!("{} has no editable value set", items[i].name);
+            };
+            apply_outcome(items, i, on_edit(&items[i], Some(&next)))
+        }
+        // Integer is opened through the inline-input path in `run`; reaching
+        // here means a programmatic call — nudge toward the input flow.
+        EditKind::Integer { .. } => format!("{} — press Enter to type a value", items[i].name),
         EditKind::ReadOnly => format!(
             "{} is read-only here — edit it in config.toml or via `aida config <set>`",
             items[i].name
         ),
     }
+}
+
+/// Commit a typed integer for the `Integer` knob at `items[i]`: validate it is
+/// numeric and within `[min, max]`, then ask the caller to write it. An empty,
+/// non-numeric, or out-of-range entry is rejected with an explanatory line and
+/// the row is left unchanged. trace:STORY-677 | ai:claude
+fn commit_integer(
+    items: &mut [ConfigMenuItem],
+    i: usize,
+    entered: &str,
+    on_edit: &mut impl FnMut(&ConfigMenuItem, Option<&str>) -> EditOutcome,
+) -> String {
+    let EditKind::Integer { min, max } = items[i].edit else {
+        return format!("{} is not an integer knob", items[i].name);
+    };
+    let trimmed = entered.trim();
+    if trimmed.is_empty() {
+        return "edit cancelled (no value entered)".to_string();
+    }
+    let Ok(n) = trimmed.parse::<i64>() else {
+        return format!(
+            "{trimmed:?} is not an integer — {} unchanged",
+            items[i].name
+        );
+    };
+    if n < min || n > max {
+        return format!(
+            "{n} is out of range [{min}, {max}] — {} unchanged",
+            items[i].name
+        );
+    }
+    apply_outcome(items, i, on_edit(&items[i], Some(&n.to_string())))
+}
+
+/// Apply a caller [`EditOutcome`] to `items[i]`: on `Updated`, write the new
+/// value/scope into the row and return the success flash; on `Blocked`, leave
+/// the row untouched and surface the reason. trace:STORY-677 | ai:claude
+fn apply_outcome(items: &mut [ConfigMenuItem], i: usize, outcome: EditOutcome) -> String {
+    match outcome {
+        EditOutcome::Updated { value, scope } => {
+            items[i].value = value.clone();
+            items[i].scope = scope.clone();
+            format!("✓ {} = {}  (written to {})", items[i].name, value, scope)
+        }
+        EditOutcome::Blocked(reason) => reason,
+    }
+}
+
+/// The next value in an enum's allowed set after `current`, wrapping at the
+/// end. If `current` is not in the set (e.g. a decorated/unknown rendering),
+/// start at the first allowed value. Returns `None` only for an empty set.
+/// trace:STORY-677 | ai:claude
+fn next_enum_value(current: &str, allowed: &[String]) -> Option<String> {
+    if allowed.is_empty() {
+        return None;
+    }
+    let cur = current.trim();
+    let idx = allowed.iter().position(|v| v == cur);
+    let next = match idx {
+        Some(pos) => (pos + 1) % allowed.len(),
+        None => 0,
+    };
+    Some(allowed[next].clone())
 }
 
 /// Flatten `items` into header + item display rows, one header per section in
@@ -229,6 +363,7 @@ fn draw(
     rows: &[DisplayRow],
     selected_display_idx: Option<usize>,
     flash: Option<&str>,
+    int_input: Option<&(usize, String)>,
 ) {
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -241,7 +376,42 @@ fn draw(
     draw_title(f, chunks[0]);
     draw_table(f, chunks[1], items, rows, selected_display_idx);
     draw_explanation(f, chunks[2], items, rows, selected_display_idx);
-    draw_footer(f, chunks[3], flash);
+    // STORY-677: while editing an integer, the footer becomes the input prompt.
+    if let Some((i, buf)) = int_input {
+        draw_int_input(f, chunks[3], &items[*i], buf);
+    } else {
+        draw_footer(f, chunks[3], flash);
+    }
+}
+
+/// STORY-677: render the inline integer-input prompt in the footer row, showing
+/// the knob, the allowed range, and the live buffer with a caret. The buffer
+/// only ever holds an optional leading `-` and digits (enforced on input).
+/// trace:STORY-677 | ai:claude
+fn draw_int_input(f: &mut Frame, area: Rect, item: &ConfigMenuItem, buf: &str) {
+    let (min, max) = match item.edit {
+        EditKind::Integer { min, max } => (min, max),
+        _ => (i64::MIN, i64::MAX),
+    };
+    let prompt = Paragraph::new(Line::from(vec![
+        Span::styled(
+            format!(" {} = ", item.name),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{buf}_"),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("   [{min}..{max}]  Enter=apply  Esc=cancel"),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
+    f.render_widget(prompt, area);
 }
 
 fn draw_title(f: &mut Frame, area: Rect) {
@@ -400,7 +570,7 @@ fn draw_footer(f: &mut Frame, area: Rect, flash: Option<&str>) {
         Span::styled("↑/↓ j/k", Style::default().fg(Color::Cyan)),
         Span::raw(" move  "),
         Span::styled("Enter/Space", Style::default().fg(Color::Cyan)),
-        Span::raw(" toggle  "),
+        Span::raw(" toggle/cycle/edit  "),
         Span::styled("PgUp/PgDn", Style::default().fg(Color::Cyan)),
         Span::raw(" page  "),
         Span::styled("g/G", Style::default().fg(Color::Cyan)),
@@ -473,7 +643,7 @@ mod tests {
     fn edit_on_readonly_row_is_noop() {
         let mut items = vec![item("telemetry", "enabled")]; // edit: ReadOnly
         let mut called = false;
-        let msg = edit_selected(&mut items, 0, &mut |_| {
+        let msg = edit_selected(&mut items, 0, &mut |_, _| {
             called = true;
             EditOutcome::Updated {
                 value: "x".into(),
@@ -486,14 +656,20 @@ mod tests {
     }
 
     /// STORY-669: Enter on a Bool row applies the callback's result in place.
+    /// The Bool path passes `None` as the requested value (caller toggles).
     #[test]
     fn edit_on_bool_row_updates_value_and_scope() {
         let mut items = vec![item("telemetry", "enabled")];
         items[0].edit = EditKind::Bool;
-        let msg = edit_selected(&mut items, 0, &mut |_| EditOutcome::Updated {
-            value: "false".into(),
-            scope: ".aida/config.toml".into(),
+        let mut seen_requested: Option<Option<String>> = None;
+        let msg = edit_selected(&mut items, 0, &mut |_, requested| {
+            seen_requested = Some(requested.map(str::to_string));
+            EditOutcome::Updated {
+                value: "false".into(),
+                scope: ".aida/config.toml".into(),
+            }
         });
+        assert_eq!(seen_requested, Some(None), "bool toggle passes no value");
         assert_eq!(items[0].value, "false");
         assert_eq!(items[0].scope, ".aida/config.toml");
         assert!(
@@ -508,10 +684,149 @@ mod tests {
     fn edit_blocked_leaves_row_unchanged() {
         let mut items = vec![item("telemetry", "enabled")];
         items[0].edit = EditKind::Bool;
-        let msg = edit_selected(&mut items, 0, &mut |_| {
+        let msg = edit_selected(&mut items, 0, &mut |_, _| {
             EditOutcome::Blocked("overridden by AIDA_TELEMETRY".into())
         });
         assert_eq!(items[0].value, "v", "value untouched when blocked");
         assert!(msg.contains("overridden"), "reason surfaced: {msg}");
+    }
+
+    fn enum_item(values: &[&str], current: &str) -> ConfigMenuItem {
+        let mut it = item("mailbox", "act_on_mail");
+        it.value = current.to_string();
+        it.edit = EditKind::Enum(values.iter().map(|s| s.to_string()).collect());
+        it
+    }
+
+    /// STORY-677: next_enum_value cycles forward and wraps at the end.
+    #[test]
+    fn enum_cycle_wraps() {
+        let allowed = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        assert_eq!(next_enum_value("a", &allowed).as_deref(), Some("b"));
+        assert_eq!(next_enum_value("b", &allowed).as_deref(), Some("c"));
+        assert_eq!(next_enum_value("c", &allowed).as_deref(), Some("a"));
+        // Unknown current → start at the first allowed value.
+        assert_eq!(next_enum_value("zzz", &allowed).as_deref(), Some("a"));
+        assert_eq!(next_enum_value("a", &[]), None);
+    }
+
+    /// STORY-677: cycling an enum asks the caller to write the next value and
+    /// applies the re-resolved result in place.
+    #[test]
+    fn edit_on_enum_row_cycles_and_applies() {
+        let mut items = vec![enum_item(
+            &["surface-and-recommend", "escalate-per-cascade"],
+            "surface-and-recommend",
+        )];
+        let mut requested: Option<String> = None;
+        let msg = edit_selected(&mut items, 0, &mut |_, req| {
+            requested = req.map(str::to_string);
+            // Caller echoes back the written value + a scope (as the live
+            // re-resolve would).
+            EditOutcome::Updated {
+                value: req.unwrap().to_string(),
+                scope: ".aida/config.toml".into(),
+            }
+        });
+        assert_eq!(requested.as_deref(), Some("escalate-per-cascade"));
+        assert_eq!(items[0].value, "escalate-per-cascade");
+        assert_eq!(items[0].scope, ".aida/config.toml");
+        assert!(msg.contains('✓'), "feedback: {msg}");
+    }
+
+    /// STORY-677: a Blocked enum edit (e.g. env-shadowed) leaves the row alone.
+    #[test]
+    fn edit_on_enum_row_blocked_is_noop() {
+        let mut items = vec![enum_item(&["a", "b"], "a")];
+        let msg = edit_selected(&mut items, 0, &mut |_, _| {
+            EditOutcome::Blocked("overridden by AIDA_X — unset it to edit".into())
+        });
+        assert_eq!(items[0].value, "a", "value untouched when blocked");
+        assert!(msg.contains("overridden"), "reason surfaced: {msg}");
+    }
+
+    fn int_item(min: i64, max: i64, current: &str) -> ConfigMenuItem {
+        let mut it = item("archive", "auto_after_days");
+        it.value = current.to_string();
+        it.edit = EditKind::Integer { min, max };
+        it
+    }
+
+    /// STORY-677: a valid in-range integer is written through the callback.
+    #[test]
+    fn integer_in_range_applies() {
+        let mut items = vec![int_item(7, 365, "30")];
+        let mut requested: Option<String> = None;
+        let msg = commit_integer(&mut items, 0, "90", &mut |_, req| {
+            requested = req.map(str::to_string);
+            EditOutcome::Updated {
+                value: "after 90 days".into(),
+                scope: ".aida/config.toml".into(),
+            }
+        });
+        assert_eq!(requested.as_deref(), Some("90"));
+        assert_eq!(items[0].value, "after 90 days");
+        assert!(msg.contains('✓'), "feedback: {msg}");
+    }
+
+    /// STORY-677: an out-of-range integer is rejected; the row is unchanged and
+    /// the callback never fires.
+    #[test]
+    fn integer_out_of_range_rejected() {
+        let mut items = vec![int_item(7, 365, "30")];
+        let mut called = false;
+        // Below min.
+        let msg = commit_integer(&mut items, 0, "3", &mut |_, _| {
+            called = true;
+            EditOutcome::Updated {
+                value: "x".into(),
+                scope: "y".into(),
+            }
+        });
+        assert!(!called, "callback must not fire for out-of-range");
+        assert!(msg.contains("out of range"), "explains rejection: {msg}");
+        assert_eq!(items[0].value, "30", "row unchanged");
+
+        // Above max.
+        let msg = commit_integer(&mut items, 0, "400", &mut |_, _| EditOutcome::Updated {
+            value: "x".into(),
+            scope: "y".into(),
+        });
+        assert!(msg.contains("out of range"), "explains rejection: {msg}");
+        assert_eq!(items[0].value, "30", "row unchanged");
+    }
+
+    /// STORY-677: a non-numeric integer entry is rejected, row unchanged.
+    #[test]
+    fn integer_non_numeric_rejected() {
+        let mut items = vec![int_item(7, 365, "30")];
+        let mut called = false;
+        let msg = commit_integer(&mut items, 0, "abc", &mut |_, _| {
+            called = true;
+            EditOutcome::Updated {
+                value: "x".into(),
+                scope: "y".into(),
+            }
+        });
+        assert!(!called, "callback must not fire for non-numeric");
+        assert!(msg.contains("not an integer"), "explains rejection: {msg}");
+        assert_eq!(items[0].value, "30", "row unchanged");
+    }
+
+    /// STORY-677: an empty integer entry cancels without firing the callback.
+    #[test]
+    fn integer_empty_cancels() {
+        let mut items = vec![int_item(7, 365, "30")];
+        let mut called = false;
+        let msg = commit_integer(&mut items, 0, "   ", &mut |_, _| {
+            called = true;
+            EditOutcome::Updated {
+                value: "x".into(),
+                scope: "y".into(),
+            }
+        });
+        assert!(!called, "callback must not fire for empty entry");
+        assert!(msg.contains("cancelled"), "explains cancel: {msg}");
+        assert_eq!(items[0].value, "30", "row unchanged");
     }
 }

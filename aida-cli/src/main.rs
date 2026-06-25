@@ -25173,6 +25173,7 @@ const KNOWN_CONFIG_SECTIONS: &[&str] = &[
     "archive",
     "telemetry",
     "intake",
+    "ultraplan",
     "presence",
     "hints",
     "ui",
@@ -25580,6 +25581,36 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         }
     });
 
+    // --- Ultraplan suggestion mode. trace:TASK-304 (surfaced for STORY-677) ---
+    sections.push({
+        let mode = read_ultraplan_config(project_root).mode;
+        let configured = config_lookup(cfg.as_ref(), "ultraplan", "mode")
+            .and_then(|v| v.as_str())
+            .and_then(UltraplanMode::from_token)
+            .is_some();
+        let (value, source) = (
+            match mode {
+                UltraplanMode::Never => "never".to_string(),
+                UltraplanMode::OnDemand => "on-demand".to_string(),
+                UltraplanMode::Suggested => "suggested".to_string(),
+            },
+            if configured {
+                PolicySource::ProjectConfig
+            } else {
+                PolicySource::Default
+            },
+        );
+        PolicySection {
+            section: "ultraplan",
+            header: "[ultraplan]".to_string(),
+            rows: vec![PolicyRow {
+                key: "mode",
+                value,
+                source,
+            }],
+        }
+    });
+
     // --- Presence settings. trace:STORY-561 ---
     sections.push({
         let render_str = |section: &str, key: &str, default: &str| match config_lookup(
@@ -25933,6 +25964,10 @@ fn config_knob_doc(section: &str, key: &str) -> (&'static str, &'static str) {
             "Spec classes the INTAKE pass will never auto-approve.",
             "(built-in)",
         ),
+        ("ultraplan", "mode") => (
+            "Whether AIDA proactively suggests `aida ultraplan <SPEC>`: never / on-demand / suggested.",
+            "on-demand",
+        ),
         ("presence", "consumers") => (
             "Whether presence-aware consumers act on the away/home signal.",
             "on",
@@ -26003,7 +26038,9 @@ fn handle_config_menu_command() -> Result<()> {
     // STORY-669: the edit callback lives cli-side (the tui crate stays free of
     // an aida-cli dependency) — it writes through `config_edit::set_kv` and
     // re-resolves the row from the live registry.
-    aida_tui::run_config_menu(items, |item| cli_edit_config_knob(&project_root, item))
+    aida_tui::run_config_menu(items, |item, requested| {
+        cli_edit_config_knob(&project_root, item, requested)
+    })
 }
 
 /// Stub for binaries built without the `tui` feature — `aida config menu`
@@ -26024,11 +26061,7 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
     for section in policy_registry(project_root) {
         for row in &section.rows {
             let (explanation, default) = config_knob_doc(section.section, row.key);
-            let edit = if config_knob_bool(section.section, row.key).is_some() {
-                aida_tui::EditKind::Bool
-            } else {
-                aida_tui::EditKind::ReadOnly
-            };
+            let edit = config_knob_edit_kind(section.section, row.key);
             items.push(aida_tui::ConfigMenuItem {
                 section: section.section.to_string(),
                 name: row.key.to_string(),
@@ -26043,26 +26076,73 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
     items
 }
 
-/// A boolean config knob editable from the menu (STORY-669), with its built-in
-/// default. MVP set: real-boolean keys with a known default. Decorated
-/// composites (`agents.bypass`), scalars, enums, and separate-file knobs stay
-/// read-only this slice. Kept in lockstep with `policy_registry` /
-/// `config_knob_doc`; STORY-671 folds this into the central registry.
-/// trace:STORY-669 | ai:claude
+/// How a config knob is editable from the `aida config menu` TUI (STORY-669,
+/// extended STORY-677). Carries the per-knob metadata the editor needs: the
+/// edit type plus, for the typed kinds, the parse target the caller writes.
+/// Knobs not present in [`config_knob_meta`] are read-only.
+///
+/// Kept in lockstep with `policy_registry` / `config_knob_doc`; STORY-671 folds
+/// this into the central registry. trace:STORY-669 trace:STORY-677 | ai:claude
 #[cfg(feature = "tui")]
-struct BoolKnob {
-    default: bool,
+enum KnobMeta {
+    /// A boolean knob with its built-in default (the menu toggles it).
+    Bool { default: bool },
+    /// An enum knob over a fixed allowed set (the menu cycles it). The first
+    /// value is the built-in default.
+    Enum { allowed: &'static [&'static str] },
+    /// An integer knob over an inclusive `[min, max]` range (the menu prompts).
+    Integer { min: i64, max: i64 },
 }
 
+/// The edit metadata for a config knob, keyed by `(section, key)`. The SAFE set
+/// only — knobs whose live edit is benign. Dangerous-live knobs
+/// (`id_format.*`, `deployment.*`, `agents.bypass`, `contained.*`) are
+/// deliberately absent so they render read-only with a reason-on-Enter.
+/// trace:STORY-669 trace:STORY-677 | ai:claude
 #[cfg(feature = "tui")]
-fn config_knob_bool(section: &str, key: &str) -> Option<BoolKnob> {
-    let default = match (section, key) {
-        ("telemetry", "enabled") => true,
-        ("hints", "workflow_hints") => true,
-        ("field_study", "enabled") => false,
+fn config_knob_meta(section: &str, key: &str) -> Option<KnobMeta> {
+    Some(match (section, key) {
+        // --- Booleans (STORY-669). ---
+        ("telemetry", "enabled") => KnobMeta::Bool { default: true },
+        ("hints", "workflow_hints") => KnobMeta::Bool { default: true },
+        ("field_study", "enabled") => KnobMeta::Bool { default: false },
+        // --- Enums (STORY-677). Allowed sets read from the real parsers:
+        // ActOnMail::parse, UltraplanMode::from_token, AwayDrain/HomeOffer
+        // ::from_config_str. ---
+        ("mailbox", "act_on_mail") => KnobMeta::Enum {
+            allowed: &["surface-and-recommend", "escalate-per-cascade"],
+        },
+        ("ultraplan", "mode") => KnobMeta::Enum {
+            allowed: &["never", "on-demand", "suggested"],
+        },
+        ("presence", "away_drain") => KnobMeta::Enum {
+            allowed: &[
+                "headless-both",
+                "headless-escalate-defaults",
+                "headless-park",
+            ],
+        },
+        ("presence", "home_offer") => KnobMeta::Enum {
+            allowed: &["surface", "dont-block"],
+        },
+        // --- Integers (STORY-677). ---
+        ("archive", "auto_after_days") => KnobMeta::Integer { min: 7, max: 365 },
         _ => return None,
-    };
-    Some(BoolKnob { default })
+    })
+}
+
+/// Project a knob's edit metadata into the TUI [`aida_tui::EditKind`]. Absent →
+/// `ReadOnly`. trace:STORY-677 | ai:claude
+#[cfg(feature = "tui")]
+fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
+    match config_knob_meta(section, key) {
+        Some(KnobMeta::Bool { .. }) => aida_tui::EditKind::Bool,
+        Some(KnobMeta::Enum { allowed }) => {
+            aida_tui::EditKind::Enum(allowed.iter().map(|s| s.to_string()).collect())
+        }
+        Some(KnobMeta::Integer { min, max }) => aida_tui::EditKind::Integer { min, max },
+        None => aida_tui::EditKind::ReadOnly,
+    }
 }
 
 /// Re-resolve one knob's (value, scope) strings from the live registry, exactly
@@ -26087,15 +26167,18 @@ fn resolve_config_menu_row(
     None
 }
 
-/// The cli-side edit callback the config menu invokes on Enter/Space over a
-/// `Bool` row (STORY-669). Toggles the knob's stored value, writes through the
-/// section-preserving writer to the file the value currently lives in, and
-/// re-resolves the row. Env-shadowed knobs are refused (the var still wins).
-/// trace:STORY-669 | ai:claude
+/// The cli-side edit callback the config menu invokes on Enter/Space over an
+/// editable row (STORY-669, extended STORY-677). `requested` is `None` for a
+/// `Bool` toggle (this fn flips the stored value) and `Some(value)` for the
+/// enum value cycled to or the integer typed in — the TUI derives those; this
+/// fn just writes the TOML value through the section-preserving writer to the
+/// file the value currently lives in, then re-resolves the row. Env-shadowed
+/// knobs are refused (the var still wins). trace:STORY-669 trace:STORY-677
 #[cfg(feature = "tui")]
 fn cli_edit_config_knob(
     project_root: &std::path::Path,
     item: &aida_tui::ConfigMenuItem,
+    requested: Option<&str>,
 ) -> aida_tui::EditOutcome {
     use aida_tui::EditOutcome;
 
@@ -26108,7 +26191,7 @@ fn cli_edit_config_knob(
             .unwrap_or("the env var");
         return EditOutcome::Blocked(format!("overridden by {var} — unset it to edit"));
     }
-    let Some(knob) = config_knob_bool(&item.section, &item.name) else {
+    let Some(meta) = config_knob_meta(&item.section, &item.name) else {
         return EditOutcome::Blocked(format!("{} is not editable here", item.name));
     };
 
@@ -26124,31 +26207,69 @@ fn cli_edit_config_knob(
         Err(e) => return EditOutcome::Blocked(format!("cannot resolve config path: {e}")),
     };
 
-    // Current value from THAT file; absent → the built-in default. Read back from
-    // disk (not the rendered row) so a partial/failed write surfaces honestly.
-    let current = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| toml::from_str::<toml::Value>(&s).ok())
-        .and_then(|cfg| {
-            config_lookup(Some(&cfg), &item.section, &item.name).and_then(|v| v.as_bool())
-        })
-        .unwrap_or(knob.default);
+    // Derive the toml value to write per edit kind. Bool toggles the current
+    // stored value (read back from disk, not the rendered row, so a failed
+    // write surfaces honestly); enum/integer write the TUI-supplied value.
+    let new_value: toml_edit::Value = match meta {
+        KnobMeta::Bool { default } => {
+            let current = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|s| toml::from_str::<toml::Value>(&s).ok())
+                .and_then(|cfg| {
+                    config_lookup(Some(&cfg), &item.section, &item.name).and_then(|v| v.as_bool())
+                })
+                .unwrap_or(default);
+            toml_edit::Value::from(!current)
+        }
+        KnobMeta::Enum { allowed } => {
+            let Some(v) = requested else {
+                return EditOutcome::Blocked(format!("no value supplied for {}", item.name));
+            };
+            if !allowed.contains(&v) {
+                return EditOutcome::Blocked(format!(
+                    "{v:?} is not an allowed value for {}",
+                    item.name
+                ));
+            }
+            toml_edit::Value::from(v)
+        }
+        KnobMeta::Integer { min, max } => {
+            let Some(v) = requested else {
+                return EditOutcome::Blocked(format!("no value supplied for {}", item.name));
+            };
+            let Ok(n) = v.parse::<i64>() else {
+                return EditOutcome::Blocked(format!("{v:?} is not an integer"));
+            };
+            if n < min || n > max {
+                return EditOutcome::Blocked(format!("{n} is out of range [{min}, {max}]"));
+            }
+            toml_edit::Value::from(n)
+        }
+    };
 
-    if let Err(e) = crate::config_edit::set_kv(
-        &path,
-        &item.section,
-        &item.name,
-        toml_edit::Value::from(!current),
-    ) {
+    if let Err(e) = crate::config_edit::set_kv(&path, &item.section, &item.name, new_value.clone())
+    {
         return EditOutcome::Blocked(format!("write failed: {e}"));
     }
 
     match resolve_config_menu_row(project_root, &item.section, &item.name) {
         Some((value, scope)) => EditOutcome::Updated { value, scope },
         None => EditOutcome::Updated {
-            value: (!current).to_string(),
+            value: rendered_toml_value(&new_value),
             scope: path.display().to_string(),
         },
+    }
+}
+
+/// Render a freshly-written toml value as the plain fallback display string
+/// (used only when the live re-resolve can't find the row). trace:STORY-677
+#[cfg(feature = "tui")]
+fn rendered_toml_value(v: &toml_edit::Value) -> String {
+    match v {
+        toml_edit::Value::String(s) => s.value().to_string(),
+        toml_edit::Value::Integer(i) => i.value().to_string(),
+        toml_edit::Value::Boolean(b) => b.value().to_string(),
+        other => other.to_string().trim().to_string(),
     }
 }
 
