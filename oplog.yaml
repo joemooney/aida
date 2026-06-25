@@ -20529,5 +20529,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Low
-clock: 1970
+- id: 019efd99-7555-71d1-8aee-0ffd50072055
+  target_id: 019efd99-6b7c-7951-9a04-f669df238064
+  author: aida
+  node_id: '1'
+  lamport: 1971
+  timestamp: 2026-06-25T07:05:53.237283011Z
+  kind: !Create
+    title: 'EPIC-51 Slice 1: PTY suspend/resume mechanic — prefix key SIGSTOPs the chat child, overlay, SIGCONT + clean repaint'
+    description: 'First + riskiest slice of EPIC-51, isolated. A free TUI prefix binding (Ctrl-a p, mnemonic palette/pause) intercepted by the TUI (never forwarded to the chat): SIGSTOP the chat PTY child process group, show a minimal "paused" overlay, then on a resume key SIGCONT the child + repaint the screen from the existing vt100::Parser state (same path as tab-switch repaint). Prove ZERO chat disruption (no terminal corruption, conversation continues). Unix-only (POSIX signals + PTY). Keyboard-verified by the operator in a live aida tui session — cannot be headless-tested.'
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 1971
 node_id: '1'
