@@ -20495,5 +20495,20 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1968
+- id: 019efd94-7520-7c32-ba70-dd9d616e940c
+  target_id: 019efd94-6b4b-71f1-a22f-328b407720be
+  author: aida
+  node_id: '1'
+  lamport: 1969
+  timestamp: 2026-06-25T07:00:25.504013871Z
+  kind: !Create
+    title: 'Deterministic immediate-response layer: Ctrl-D from chat to a TUI AIDA action surface, act instantly, resume the conversation'
+    description: |-
+      Operator vision (2026-06-24): make AIDA interactions timely + integrated rather than routing every action through the LLM. From a live chat session, drop out (Ctrl-D) to a DETERMINISTIC TUI action surface, run AIDA actions instantly (no LLM round-trip), and resume the conversation seamlessly with results injected back.
+
+      The seam exists: the TUI Launcher (STORY-244) is already a deterministic command dispatcher (: palette -> Intent -> dispatch); the TUI hosts the chat as a PTY child (EPIC-26). The full vision needs three pieces (operator chose FULL build): (1) a palette of instant AIDA actions [~exists], (2) PTY SUSPEND/RESUME of the live chat child (SIGSTOP/hold-PTY-master/SIGCONT + repaint) [missing], (3) run-AIDA-command-and-INJECT-result back into the chat JSONL [missing]. Design sketch (PTY signal handling + JSONL injection + session-pause-vs-end lifecycle) goes to the operator for sign-off before implementation (architecture-class, keyboard-not-headless). Supervised.
+    req_type: Epic
+    status: Draft
+    priority: High
+clock: 1969
 node_id: '1'
