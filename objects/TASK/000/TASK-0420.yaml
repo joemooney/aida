@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:03.004224420Z
-modified_at: 2026-06-24T03:44:13.649274183Z
+modified_at: 2026-06-25T04:39:32.348739097Z
 req_type: Task
 tags:
 - docs-review
@@ -25,3 +25,9 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-06-24T02:53:03.005959702Z
+comments:
+- id: 019efd13-78fc-7bc1-99e4-074008079a53
+  author: joe
+  content: Commit ea00b12ec references this requirement
+  created_at: 2026-06-25T04:39:32.348739097Z
+  modified_at: 2026-06-25T04:39:32.348739097Z
