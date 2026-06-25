@@ -311,3 +311,11 @@ blocks:
   range_end: 3000
   next: 2001
   allocated_at: 2026-06-16T22:02:57.947796055Z
+- node_id: '1'
+  owner: joe.mooney@gmail.com
+  hostname: imac
+  type_prefix: TASK
+  range_start: 915
+  range_end: 1014
+  next: 915
+  allocated_at: 2026-06-25T07:46:43.874902795Z
