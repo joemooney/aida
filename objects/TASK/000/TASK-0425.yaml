@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.259874534Z
-modified_at: 2026-06-24T03:44:19.097887028Z
+modified_at: 2026-06-25T07:41:29.527309700Z
 req_type: Task
 tags:
 - dogfood
@@ -26,3 +26,9 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-06-24T02:53:29.259918796Z
+comments:
+- id: 019efdba-0e37-7143-bbf5-ee8b1c912dc4
+  author: joe
+  content: 'Runbook authored: docs/agents/codex-validation-runbook.md (+ template mirror). 9-step end-to-end Codex MCP validation loop with troubleshooting table and negative-path checks. Surface notes captured while grounding: (1) `aida queue work` / `aida session start` launch CLAUDE, not Codex — Codex flow uses claim_task or session-start-as-worktree-bootstrap; documented as a boundary note. (2) CLI punt-list verb is `aida punts list` (plural subcommand), not `aida punt list`. (3) trace gate is permissive by default; AIDA_COMMIT_STRICT=true enforces. No code gaps requiring follow-up specs — all intended flow maps to a real verb/tool.'
+  created_at: 2026-06-25T07:41:29.527309700Z
+  modified_at: 2026-06-25T07:41:29.527309700Z
