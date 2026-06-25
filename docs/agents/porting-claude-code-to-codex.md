@@ -240,6 +240,87 @@ Codex/AIDA run after approval.
 See `docs/agents/session-communication.md` for the durable AIDA reference on
 Claude `ask`, `continue: false`, and `defer` semantics.
 
+## The `defer`/Resume Primitive, And What AIDA Actually Depends On
+
+This section makes the `defer` gap concrete and — importantly — checks it
+against what AIDA *actually* relies on, rather than what it could in principle
+use. The conclusion matters for migration planning: AIDA loses far less than the
+headline gap suggests, because it deliberately kept its invariants in the
+substrate rather than in Claude's hook primitives.
+
+### What `defer` is, concretely
+
+In headless `claude -p` mode, a `PreToolUse` hook can return
+`{"permissionDecision": "defer"}`. Claude exits with `stop_reason:
+"tool_deferred"` and **preserves the pending tool call in session state**. An
+external caller then:
+
+1. reads the deferred tool-use payload;
+2. asks an external authority (web UI, approval service, advisor, or human);
+3. resumes the *same session at the same pending call* via
+   `claude -p --resume <session-id>`;
+4. ensures the hook now returns `allow` or `deny` per that decision.
+
+The defining constraint: it only works for a **single** pending tool call — if
+the model emitted several parallel calls, defer is ignored, because resume can
+replay exactly one. Concretely, the capability lets you build a headless gate
+that pauses *one specific action* — "block this `git push` until an advisor
+approves, then continue the very same run from the very same push" — with no
+re-run.
+
+### What losing it would mean
+
+If AIDA had built its approval gates on `defer`, the Codex migration would cost:
+
+- a paused-and-resumed run becomes a stopped run plus a *fresh* run — the
+  original turn's in-context reasoning is gone, replaced by a cold-boot resume
+  (the same substrate-bounded-autonomy cost documented elsewhere in AIDA);
+- "approve this exact tool call and continue" degrades to "park the work, decide
+  out of band, start a new run with the decision in context";
+- the approval can no longer be a momentary pause *inside* one agent turn.
+
+### Why AIDA barely feels this (verified against the shipped hooks)
+
+AIDA does **not** depend on `defer`. None of AIDA's shipped hooks emit
+`permissionDecision`, `defer`, or `continue: false` — the `defer` pattern lives
+in `session-communication.md` as a *reference for what Claude can do*, not as a
+load-bearing AIDA path. AIDA's real escalation is substrate-based and already
+portable: a headless implementer that hits a decision it cannot safely make
+**punts** (parks the spec `NeedsAttention`, files a finding/punt), the
+orchestrator routes that to a headless advisor tier or a human, and work resumes
+as a *fresh* run carrying the recorded decision — exactly the "park, decide out
+of band, resume with context" shape above. That is the agent-agnostic version of
+`defer`, and it behaves identically under Claude, Codex, Antigravity, CI, or a
+human at a keyboard.
+
+So the honest verdict on `defer` is: **AIDA loses a capability it deliberately
+never used.** A project that *did* couple its approval gates to `defer` would
+have real migration work here; AIDA does not — which is the opening principle of
+this document (keep the invariant in the substrate; treat the agent primitive as
+an optional accelerator) paying off at exactly the moment a vendor switch tests
+it.
+
+### AIDA's actual Claude-Code dependency surface
+
+Mapping what AIDA touches against verified Codex coverage (2026-06-24):
+
+| Claude-Code capability AIDA uses | Depends on it for correctness? | Codex port status |
+|---|---|---|
+| Hook events: `PreToolUse`, `PostToolUse`, `SessionStart`, `Stop`, `UserPromptSubmit`, `SubagentStart`, `SubagentStop` | yes (observation/guidance hooks) | **all seven exist in Codex** (incl. SubagentStart/Stop) — port directly |
+| Command-type (`.sh`) hook handlers | yes | Codex supports command hooks — port |
+| `permissionDecision` / `defer` / `continue:false` | **no** (not emitted by any shipped hook) | n/a — nothing to port |
+| `.claude/skills` + `.claude/commands` | no (convenience; real workflows live in AIDA CLI/MCP) | Codex skills, or AIDA CLI verbs |
+| Command-backed status line (`statusLine.command = aida statusline`) | no (observability, not correctness) | **no Codex equivalent yet** (open FR #20043/#20244) — the one genuine gap |
+| Starter memory pack under `~/.claude/projects/<slug>/memory/` | no (guidance) | lives Claude-side; mirror key rules into `AGENTS.md` |
+| `os_wrap` around `claude -p` | only when outer OS confinement is required | Claude-launch-specific — needs a deliberate Codex wrapper (see the bubblewrap section) |
+
+The pattern is consistent: **the only hard Claude-Code dependency AIDA carries is
+the command-backed status line, and that is observability, not correctness.**
+Everything load-bearing — the gates, the escalation, the lifecycle, the trace
+graph — already lives in AIDA, git, and MCP. Until Codex ships a command-backed
+status line, rebuild the at-a-glance surface with the AIDA TUI, a shell-prompt or
+tmux integration, or `aida status` polling instead of the Claude footer.
+
 ## Tooling Comparison
 
 Claude Code is stronger today for a deeply instrumented agent runtime:
