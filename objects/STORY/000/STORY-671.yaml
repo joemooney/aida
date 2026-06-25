@@ -19,12 +19,12 @@ description: |-
   3. The currently-drifted [field_study] enabled knob appears in aida config show after the migration (regression-guarded).
   4. config_knob_doc + KNOWN_CONFIG_SECTIONS + policy_registry are collapsed into / derived from the single registry; no duplicated knob metadata.
   5. STORY-669 editability metadata (bool/scalar/enum + writable scope) hangs off the same declaration.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T06:03:25.024083321Z
-modified_at: 2026-06-25T07:51:03.946333878Z
+modified_at: 2026-06-25T08:31:25.882976197Z
 req_type: Story
 tags:
 - anti-drift
@@ -39,3 +39,21 @@ comments:
   content: Commit d650df35b references this requirement
   created_at: 2026-06-25T07:51:03.946333878Z
   modified_at: 2026-06-25T07:51:03.946333878Z
+history:
+- id: 019efde7-c669-7713-8d65-245b445dfa2d
+  author: aida-auto-bump
+  timestamp: 2026-06-25T08:31:25.801518806Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efde7-c6ba-70a3-8324-609f63dfbd76
+  timestamp: 2026-06-25T08:31:25.882970588Z
+  agent: aida
+  commit_sha: c64c5bee9b93a2241b412d54683f373a1beab076
+  summary: Completed via merge c64c5bee
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T08:31:24.831673829Z
+  completion_sha: c64c5bee9b93a2241b412d54683f373a1beab076
