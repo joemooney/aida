@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:47:48.861851420Z
-modified_at: 2026-06-24T04:48:27.255586715Z
+modified_at: 2026-06-25T05:03:46.427055343Z
 req_type: Story
 tags:
 - aida:init
@@ -31,3 +31,9 @@ relationships:
   target_id: 019e10a7-78a6-7750-bfc7-d1a34532da4d
   created_at: 2026-06-24T04:48:27.255572951Z
   created_by: joe
+comments:
+- id: 019efd29-a8fb-7783-a6fc-58da6afd9b60
+  author: joe
+  content: Commit cf16682b8 references this requirement
+  created_at: 2026-06-25T05:03:46.427055343Z
+  modified_at: 2026-06-25T05:03:46.427055343Z
