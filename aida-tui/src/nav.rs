@@ -6,6 +6,7 @@
 //! rule. Pure state + render; the parent dashboard owns the data each
 //! section drives. trace:STORY-244 | ai:claude
 
+use crate::dashboard::Pane;
 use crate::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -99,7 +100,6 @@ impl NavState {
 
     /// Move to the next section, wrapping. The dashboard treats wrapping
     /// as cheap — there are only 8 entries.
-    #[allow(dead_code)]
     pub fn select_next(&mut self) {
         if self.sections.is_empty() {
             return;
@@ -108,7 +108,6 @@ impl NavState {
     }
 
     /// Move to the previous section, wrapping.
-    #[allow(dead_code)]
     pub fn select_prev(&mut self) {
         if self.sections.is_empty() {
             return;
@@ -127,9 +126,12 @@ impl NavState {
 }
 
 /// Draw the left-nav panel into `area`. A divider row separates list
-/// sections from action verbs. Colors resolve through `theme`.
-/// trace:TASK-256 | ai:claude
-pub fn render(frame: &mut Frame, area: Rect, state: &NavState, theme: &Theme) {
+/// sections from action verbs. Colors resolve through `theme`. When
+/// `focus` is [`Pane::List`] the selected section dims (accent foreground,
+/// no fill) instead of taking the full accent background, so the focused
+/// pane is the only one wearing the bright highlight.
+/// trace:TASK-256 trace:STORY-685 | ai:claude
+pub fn render(frame: &mut Frame, area: Rect, state: &NavState, theme: &Theme, focus: Pane) {
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.border))
         .title(" Nav ");
@@ -149,10 +151,17 @@ pub fn render(frame: &mut Frame, area: Rect, state: &NavState, theme: &Theme) {
         }
         let marker = if i == state.selected { "▸ " } else { "  " };
         let style = if i == state.selected {
-            Style::default()
-                .fg(theme.on_accent)
-                .bg(theme.accent)
-                .add_modifier(Modifier::BOLD)
+            if focus == Pane::Nav {
+                // Nav owns focus: full accent fill, bold.
+                Style::default()
+                    .fg(theme.on_accent)
+                    .bg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                // Focus moved into the list — dim the Nav selection so it's
+                // clearly the inactive pane. trace:STORY-685 | ai:claude
+                Style::default().fg(theme.dim).add_modifier(Modifier::DIM)
+            }
         } else if section.is_list_section() {
             Style::default().fg(theme.fg)
         } else {
