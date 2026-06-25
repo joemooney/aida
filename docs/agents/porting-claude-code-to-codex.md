@@ -613,7 +613,7 @@ Translate Claude-specific surfaces selectively:
 | `CLAUDE.md` | `AGENTS.md` plus `docs/aida/discipline/` |
 | `.mcp.json` | `.codex/config.toml` or `codex mcp add aida -- aida mcp-serve` |
 | `.claude/skills` | Codex skills only where reusable; otherwise AIDA docs and CLI verbs |
-| `.claude/commands` | AIDA CLI verbs, MCP tools, or Codex slash commands where equivalent |
+| `.claude/commands` | AIDA CLI verbs / MCP tools for state-changing work; a Codex **skill** for a reusable prompt/workflow (Codex has no custom-slash-command files — `migrate-to-codex` converts Claude slash-commands into skills); a **built-in** Codex slash command only where a direct equivalent exists |
 | `.claude/hooks` | Codex command hooks only for simple checks; otherwise AIDA gates |
 | Claude command-backed status line | shell/tmux `aida statusline` plus Codex built-in footer fields |
 | Claude `defer` approval loop | AIDA punt/finding/brief plus external orchestration and a later Codex run |
