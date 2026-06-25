@@ -10,12 +10,12 @@ description: |-
   - Compare Codex native sandbox/permission profiles with AIDA outer bubblewrap confinement.
   - Decide whether Codex needs an AIDA-managed outer wrapper, or whether Codex-native permissions are sufficient for the target migration scenarios.
   - If needed, file implementation specs for a fail-closed Codex-capable wrapper, including userns self-test, doctor output, read/write/egress documentation, and verification tests.
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:05.135554324Z
-modified_at: 2026-06-25T08:23:15.098781098Z
+modified_at: 2026-06-25T08:33:01.792256355Z
 req_type: Task
 tags:
 - bubblewrap
