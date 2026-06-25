@@ -7918,6 +7918,15 @@ pub enum Command {
         #[clap(long, visible_alias = "join")]
         attach: bool,
 
+        /// Explicit store location for distributed mode — a separate store repo
+        /// at PATH (relative to this repo, or absolute). Several code repos that
+        /// point at the SAME path share one store. `--sibling` is sugar for
+        /// `--store-path ../aida-store`. Combine with `--attach` to join an
+        /// existing store at PATH.
+        // trace:STORY-676 | ai:claude
+        #[clap(long, value_name = "PATH")]
+        store_path: Option<String>,
+
         /// Git remote URL for the shared aida registry (used with --sibling).
         /// Example: git@github.com:org/aida-registry.git
         #[clap(long)]
