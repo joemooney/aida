@@ -3,14 +3,32 @@ spec_id: STORY-682
 agreed_id: STORY-682
 title: 'EPIC-52 Slice 2 core: fuzzy command matcher + clap command-surface enumeration (pure, unit-tested module)'
 description: 'The isolated, fully-unit-testable core of the fuzzy-command front door (design: docs/plans/2026-06-25-tui-redesign-fuzzy-command-palette.md), buildable WITHOUT any UI/launcher rework or keyboard testing. A new module (e.g. aida-tui/src/cmd_palette.rs) that: (1) enumerates the aida command surface from the clap command tree (subcommand path + about text) so it never drifts from the real CLI, plus a small curated common-actions boost list; (2) a tiny in-repo subsequence fuzzy matcher with Claude-like ranking (contiguous-run + word-boundary + prefix boosts), no new dependency; (3) returns ranked CommandEntry results for a query. Pure logic + thorough unit tests (match/rank ordering, empty query, boost behavior). NO TUI wiring in this slice — that is the supervised UI work. trace:EPIC-52'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:37:02.963157713Z
-modified_at: 2026-06-25T07:37:02.963157713Z
+modified_at: 2026-06-25T07:52:57.011016098Z
 req_type: Story
 tags:
 - aida:tui
 - from-operator
 - parent:EPIC-52
+history:
+- id: 019efdc4-8b61-7523-9a9d-74947bd82822
+  author: aida-auto-bump
+  timestamp: 2026-06-25T07:52:56.929565741Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efdc4-8bb3-71b3-b75f-5566c35dcfda
+  timestamp: 2026-06-25T07:52:57.011010077Z
+  agent: aida
+  commit_sha: aaf377b110cdbfe4f1bba47ab4934962f1fe3cd8
+  summary: Completed via merge aaf377b1
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T07:52:55.956454401Z
+  completion_sha: aaf377b110cdbfe4f1bba47ab4934962f1fe3cd8
