@@ -20541,5 +20541,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1971
+- id: 019efd99-a77a-7610-a138-697c6b5eff63
+  target_id: 019efd99-98dc-72e0-9042-c828c95754ee
+  author: aida
+  node_id: '1'
+  lamport: 1972
+  timestamp: 2026-06-25T07:06:06.074899513Z
+  kind: !Create
+    title: 'EPIC-51 Slice 2: deterministic AIDA action palette (no LLM) while the chat is suspended'
+    description: 'Second slice: while the chat is SIGSTOP-paused (Slice 1), show a deterministic command palette (extend the STORY-244 Launcher : palette) that runs aida ... --json subprocesses and renders results inline — :queue :punts :findings :spec <ID> :run <cmd> — zero LLM round-trip. Depends on Slice 1.'
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 1972
 node_id: '1'
