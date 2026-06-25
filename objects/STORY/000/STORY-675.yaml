@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:47:38.482966072Z
-modified_at: 2026-06-24T04:48:25.967885190Z
+modified_at: 2026-06-25T05:10:45.156639817Z
 req_type: Story
 tags:
 - aida:init
@@ -32,3 +32,9 @@ relationships:
   target_id: 019e10a7-78a6-7750-bfc7-d1a34532da4d
   created_at: 2026-06-24T04:48:25.967871177Z
   created_by: joe
+comments:
+- id: 019efd30-0ca4-7bd0-84e6-3259a2f775ca
+  author: joe
+  content: Commit fa1569b65 references this requirement
+  created_at: 2026-06-25T05:10:45.156639817Z
+  modified_at: 2026-06-25T05:10:45.156639817Z
