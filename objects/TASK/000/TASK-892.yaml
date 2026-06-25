@@ -1,0 +1,24 @@
+id: 019efd2f-ac61-7b70-ab62-f5d5e8aca31a
+spec_id: TASK-892
+agreed_id: TASK-892
+title: 'aida init: auto-register the project into ~/.aida/projects.toml (the registry-fills-itself half of STORY-675)'
+description: |-
+  Split from STORY-675, which shipped the high-value half (the interactive detect + join-vs-create-vs-abort prompt). This is the other half: after a successful init (create or attach), append a [[project]] entry (name, path, repo, store_path) to ~/.aida/projects.toml if not already present, comment-preserving (toml_edit, like glyph_config), so the registry fills itself.
+
+  DEFERRED on purpose: projects.toml is NOT consumed by aida today (verified: no code computes its path; its own header says EPIC-22 will wire consumption). Auto-registering into a file nothing reads is plumbing-before-consumption. REVISIT TRIGGER: when EPIC-22 (or any feature) starts READING projects.toml — implement the write half in the same change so the registry has data to read. Until then, low priority.
+
+  Acceptance: after aida init in a new repo, ~/.aida/projects.toml gains a [[project]] entry for it (idempotent; existing hand-maintained entries + comments preserved); paired with a consumer that reads it.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-25T05:10:20.513393891Z
+modified_at: 2026-06-25T05:10:20.513393891Z
+req_type: Task
+tags:
+- aida:init
+- deferred:until-projects-toml-consumed
+- distributed
+- from-operator
+- parent:EPIC-22
+- registry
