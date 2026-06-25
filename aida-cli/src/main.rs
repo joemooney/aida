@@ -65355,6 +65355,26 @@ mod bug_231_findings_promote_tests {
         assert_eq!(current_user_id(None), "env-bob");
     }
 
+    /// BUG-605: the groom/handoff queue identity SKIPS the agent's `AIDA_USER`
+    /// mailbox id and targets the draining shell `USER`, so groomed work lands
+    /// where the human's drain looks. trace:BUG-605 | ai:claude
+    #[test]
+    fn drain_queue_user_id_skips_aida_user_for_shell_user() {
+        // Both vars under ONE guard: EnvVarGuard holds ENV_LOCK for its whole
+        // lifetime, so two separate `set` calls deadlock (CI hung 25m on this).
+        // EnvVarsGuard takes the lock once for several keys. trace:BUG-611
+        let _g = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_USER", "claude-advisor-1"),
+            ("USER", "joe"),
+        ]);
+        // current_user_id prefers the agent's mailbox id…
+        assert_eq!(current_user_id(None), "claude-advisor-1");
+        // …but drain-queue work targets the human/shell USER (the drainer).
+        assert_eq!(drain_queue_user_id(None), "joe");
+        // An explicit --user still overrides.
+        assert_eq!(drain_queue_user_id(Some("alice")), "alice");
+    }
+
     /// BUG-90 acceptance: queue add + queue list from the same shell show the
     /// just-added item WITHOUT a `--user` flag (both route through the single
     /// `current_user_id` resolver, BUG-89's fix), and a different user_id does
@@ -82387,10 +82407,22 @@ fn handle_burndown_run(
         "burndown run ({})",
         burndown::selector_summary(status, tag, batch)
     );
-    let _drain_guard = {
-        let project_root = find_main_worktree_root()?;
-        drain_lock::acquire_drain_lock(&project_root, &drain_lock_command)?
-    };
+    let project_root = find_main_worktree_root()?;
+    let _drain_guard = drain_lock::acquire_drain_lock(&project_root, &drain_lock_command)?;
+
+    // BUG-607: a drain-state.json left behind by a KILLED or crashed
+    // `queue work --auto-complete` drain (its orchestrator pid is dead) must not
+    // make the spawned `/aida-burndown` agent falsely believe a live drain
+    // already owns these specs and refuse to fan out. The lock we just acquired
+    // already guarantees exclusivity (BUG-538), so a dead-pid drain-state is a
+    // pure stale tombstone — clear it before launching. trace:BUG-607 | ai:claude
+    if let crate::drain_state::DrainStatus::Stale(_) = crate::drain_state::probe(&project_root) {
+        let _ = crate::drain_state::DrainState::clear(&project_root);
+        println!(
+            "  {} cleared a stale drain-state (its orchestrator is no longer running)",
+            "ℹ".cyan()
+        );
+    }
 
     // The default posture is faithful to the operator's walk-away intent: a
     // headless drain that pushes/merges/fans-out can't stall on prompts, so
@@ -82434,6 +82466,11 @@ fn handle_burndown_run(
             .arg(&prompt)
             .arg("--permission-mode")
             .arg(mode)
+            // BUG-607: the launcher holds the exclusive drain lock (BUG-538), so
+            // the agent must NOT re-check for a "competing" drain — that check
+            // detects its own launcher and self-deadlocks. This flag tells the
+            // `/aida-burndown` skill to trust the lock and fan out.
+            .env("AIDA_BURNDOWN_LOCK_HELD", "1")
             .status()
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -83354,6 +83391,9 @@ fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitSt
     let status_code = std::process::Command::new("claude")
         .args(burndown_verbose_claude_args(prompt, mode))
         .stdout(std::process::Stdio::from(log))
+        // BUG-607: the launcher holds the exclusive drain lock — the agent must
+        // trust it and not self-detect a "competing" drain (see the quiet path).
+        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -109169,6 +109209,21 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     user_override.map(str::to_string).unwrap_or_else(|| {
         std::env::var("AIDA_USER")
             .or_else(|_| std::env::var("USER"))
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_else(|_| "default".to_string())
+    })
+}
+
+/// The queue identity for DRAINABLE handoff work (`aida backlog groom`): the
+/// draining shell's `USER`, deliberately SKIPPING the agent's `AIDA_USER`
+/// mailbox id. An advisor agent grooming on the human's behalf must queue where
+/// the human's drain (`aida queue work` / `aida burndown run`, which resolve the
+/// queue off the shell `USER`) will actually look — keying it to the agent's own
+/// `AIDA_USER` made the groomed batch invisible to the drainer (BUG-605).
+/// `--user` still overrides for the explicit case. trace:BUG-605 | ai:claude
+pub(crate) fn drain_queue_user_id(user_override: Option<&str>) -> String {
+    user_override.map(str::to_string).unwrap_or_else(|| {
+        std::env::var("USER")
             .or_else(|_| std::env::var("USERNAME"))
             .unwrap_or_else(|_| "default".to_string())
     })

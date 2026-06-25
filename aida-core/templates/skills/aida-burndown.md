@@ -69,6 +69,16 @@ aida session leases                                  # specs with an active leas
 Skip any ready spec whose SPEC-ID matches an open PR branch/title or an active
 lease scope; carry only the genuinely-idle remainder into the wave below.
 
+> **Do NOT invent a "competing drain" check beyond the two filters above.**
+> When `AIDA_BURNDOWN_LOCK_HELD` is set in your environment, the launcher
+> (`aida burndown run`) is already holding the **exclusive** drain lock — so by
+> construction there is **no** other live drain or orchestrator racing this set.
+> A `drain-state.json` you may see is either yours or a stale tombstone; do not
+> read it and do not "hold to avoid double-driving." If a spec passes the
+> open-PR + active-lease filters, **fan it out.** Treating the launcher's own
+> lock/state as a competitor is the BUG-607 self-deadlock (the drain reports a
+> live `pid …` that is actually its own parent and then refuses to do anything).
+
 For up to **N** of the remaining ready specs (a bounded wave), spawn one
 **worktree-isolated implementer subagent per spec**. **N = the `--concurrency`
 value from `$ARGUMENTS` if provided** (so `aida burndown run --concurrency 6`

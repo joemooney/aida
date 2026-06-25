@@ -802,7 +802,11 @@ fn handle_groom(
     user: Option<&str>,
 ) -> Result<()> {
     let store = storage.load()?;
-    let user_id = current_user_id(user);
+    // BUG-605: groomed work is HANDOFF work — it must land where the DRAINER
+    // looks (`aida queue work` / `aida burndown run`, keyed off the shell USER),
+    // not in the grooming agent's own AIDA_USER queue where the human can't see
+    // it. Route to the implementer role under the draining identity.
+    let user_id = crate::drain_queue_user_id(user);
     let queued_ids = collect_queued_ids(storage, &user_id)?;
 
     // Validate every id upfront — refuse the whole groom on the first
@@ -851,39 +855,64 @@ fn handle_groom(
             .unwrap_or_default();
         println!();
         println!(
-            "Would queue {} item(s){}.",
+            "Would queue {} item(s){} for {} (user:{}).",
             to_groom.len().to_string().bold(),
-            suffix
+            suffix,
+            "role:implementer".bold(),
+            crate::drain_queue_user_id(user)
         );
         return Ok(());
     }
 
+    // BUG-605: route blessed work to the IMPLEMENTER role (the doer), not the
+    // grooming session's own role — groomed work is for draining, not for the
+    // advisor's queue.
+    let for_role = "implementer";
     let mut updated = 0usize;
     for req in &to_groom {
-        enqueue_groomed(storage, req, batch, note, &user_id)
-            .with_context(|| format!("queueing {}", display_id(req)))?;
+        enqueue_groomed_for(
+            storage,
+            req,
+            batch,
+            note,
+            &user_id,
+            Some(for_role.to_string()),
+        )
+        .with_context(|| format!("queueing {}", display_id(req)))?;
         updated += 1;
         print_groom_line(req, batch);
     }
 
     println!();
-    if let Some(name) = batch {
-        println!(
-            "{} Groomed {} item(s) into the queue, tagged `batch:{}`.",
-            glyph(crate::glyphs::Glyph::Check).green(),
-            updated.to_string().bold(),
-            name.bold()
-        );
-        println!(
-            "  Drain with: {}",
-            format!("aida queue work --batch {}", name).bold()
-        );
-    } else {
-        println!(
-            "{} Groomed {} item(s) into the queue.",
-            glyph(crate::glyphs::Glyph::Check).green(),
-            updated.to_string().bold()
-        );
+    let drain_cmd = match batch {
+        Some(name) => format!("aida queue work --batch {} --auto-complete", name),
+        None => "aida queue work --auto-complete".to_string(),
+    };
+    let batch_suffix = batch
+        .map(|n| format!(", tagged `batch:{}`", n))
+        .unwrap_or_default();
+    println!(
+        "{} Groomed {} item(s) for {} (user:{}){}.",
+        glyph(crate::glyphs::Glyph::Check).green(),
+        updated.to_string().bold(),
+        format!("role:{for_role}").bold(),
+        user_id,
+        batch_suffix
+    );
+    println!("  Drain with: {}", drain_cmd.bold());
+    // If the grooming session's queue identity differs from where we routed
+    // (the agent's AIDA_USER vs the draining USER), say so plainly — the drain
+    // must run from the `user:{user_id}` identity to see this batch.
+    if let Ok(aida_user) = std::env::var("AIDA_USER") {
+        if !aida_user.is_empty() && aida_user != user_id {
+            println!(
+                "  {} queued for the drainer (user:{}), not this session's queue (AIDA_USER={}). \
+                 Drain from that identity.",
+                "ℹ".cyan(),
+                user_id,
+                aida_user
+            );
+        }
     }
     Ok(())
 }
