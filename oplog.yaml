@@ -20597,5 +20597,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 1976
+- id: 019efdb5-8092-7fb0-8e2a-39f25668300d
+  target_id: 019efdb5-76a0-71c2-b472-36be615942ac
+  author: aida
+  node_id: '1'
+  lamport: 1977
+  timestamp: 2026-06-25T07:36:31.122266493Z
+  kind: !Create
+    title: 'EPIC-52 Slice 1: self-sufficient aida tui launch — in-process dispatch replaces the fd-3/bash-wrapper'
+    description: 'Foundational slice + fixes the standalone-launch bug. Move the launcher Intent dispatch in-process: selecting a command executes it directly (subprocess for CLI/read, direct call for sub-TUIs, spawn/exec for sessions) then loops back, so aida tui runs from any shell with no fd-3 pipe / no aida-tui wrapper / no shell-init prerequisite. The Intent/fd-3 path may remain an optional power-user hook. Code: aida-tui/src/{intent.rs,launcher.rs,app.rs}. SUPERVISED — keyboard-verify aida tui launches + renders + dispatches cleanly. Slices 2-5 (fuzzy line, dispatch-by-kind, spec-id search, polish) follow per the design doc.'
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 1977
 node_id: '1'
