@@ -10,12 +10,12 @@ description: |-
   Impact: merges stall for hours; the queue head-of-lines. This is the #1 dev-experience reliability issue right now.
 
   Acceptance: identify the hanging test(s) and either fix the hang or add a per-test timeout / mark serial; add a job-level timeout-minutes to the CI workflow (e.g. 20m) so a hang fails fast instead of blocking the runner for 6h; consider a test-level timeout harness. Reproduce by running the suite under CI-like conditions (no TTY, restricted env) in a loop until it hangs.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T10:52:09.156659620Z
-modified_at: 2026-06-25T04:54:19.342736451Z
+modified_at: 2026-06-25T05:14:12.319587551Z
 req_type: Bug
 tags:
 - ci
