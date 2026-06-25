@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:04.022726496Z
-modified_at: 2026-06-24T03:44:16.529472966Z
+modified_at: 2026-06-25T07:05:15.451495804Z
 req_type: Task
 tags:
 - audit
@@ -24,3 +24,20 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-06-24T02:53:04.022777493Z
+comments:
+- id: 019efd98-e1bb-71d1-874f-9b457ff8ab28
+  author: joe
+  content: |-
+    INVENTORY DELIVERED (2026-06-25) — captured in docs/agents/porting-claude-code-to-codex.md, section "AIDA's actual Claude-Code dependency surface" (a per-capability table) + Appendix A (8 worked before/after examples). Verified against code (the shipped hooks/settings) and current Codex docs. Summary of the Claude-specific surfaces and their Codex replacement status:
+
+    - Hook EVENTS AIDA wires (PreToolUse, PostToolUse, SessionStart, Stop, UserPromptSubmit, SubagentStart, SubagentStop): ALL SEVEN exist in Codex (incl. the two Codex added in 2026) -> port directly.
+    - Hook HANDLERS: all AIDA hooks are command-type (.sh) -> Codex supports command hooks (near-identical schema: matcher/hooks/hookSpecificOutput/permissionDecision) -> port.
+    - permissionDecision / defer / continue:false: NONE of AIDA's shipped hooks emit these -> no dependency, nothing to port (escalation is punt/NeedsAttention, already portable).
+    - .claude/commands + .claude/skills: convenience; real workflows already live in AIDA CLI/MCP -> map prompt-only ones to Codex skills (.agents/skills/<n>/SKILL.md), state-changing ones stay CLI verbs. Codex has NO custom-slash-command files; migrate-to-codex converts Claude slash-commands to skills.
+    - Command-backed status line (statusLine.command = aida statusline): the ONE hard Claude-only dependency (observability, not correctness). Already handled to AIDA's fullest extent by TASK-0413/0414 + codex-mcp-setup.md; the native-wiring remainder is upstream-gated and filed as a DEFERRED watch-item (see the new TASK above).
+    - Starter memory pack (~/.claude/projects/<slug>/memory/): guidance only -> mirror key rules into AGENTS.md.
+    - os_wrap around claude -p: Claude-launch-specific -> needs a deliberate Codex wrapper (tracked separately; see the bubblewrap section).
+
+    NET: the only hard Claude-Code dependency AIDA carries is the command-backed status line, and it is observability, not correctness — everything load-bearing already lives in AIDA/git/MCP. Recommend TASK-0421 be considered substantially SATISFIED by the doc (advisor/operator to dispose).
+  created_at: 2026-06-25T07:05:15.451495804Z
+  modified_at: 2026-06-25T07:05:15.451495804Z
