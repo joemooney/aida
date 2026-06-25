@@ -20734,5 +20734,20 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1988
+- id: 019effa3-ddad-7ed1-9f81-2522af6c8511
+  target_id: 019effa3-d336-70f2-ad5a-40a0d4f61956
+  author: aida
+  node_id: '1'
+  lamport: 1989
+  timestamp: 2026-06-25T16:36:29.741012359Z
+  kind: !Create
+    title: 'git worktree leak: finished sessions/Agent-tool worktrees never GC''d — 63 accumulated, inflates status residual + caused an agent-worktree-removal stall'
+    description: |-
+      Found during BUG-613: `git worktree list` showed 63 worktrees on this host — leftover from finished `aida session`/Agent-tool isolation worktrees that are never pruned. Two harms: (1) the residual ~2.7s of `aida status` is partly ~78 per-worktree git spawns scaling with worktree count; (2) stale worktrees clutter `.claude/worktrees/` + confuse cleanup (manually pruning them mid-run removed an ACTIVE agents worktree, costing it its uncommitted work). scan_merged_agent_worktrees (TASK-878) already FLAGS merged agent worktrees but never removes them.
+
+      FIX (conservative, must NOT remove active work): (a) run lossless `git worktree prune` (removes only already-deleted worktree dirs) on a sensible path (session-end / aida doctor); (b) an explicit GC (aida doctor --heal action or `aida session gc`) that removes a `.claude/worktrees/agent-*` worktree ONLY when its branch is merged/gone AND the worktree is clean AND not locked AND no live process/lease holds it. NEVER auto-remove dirty/locked/active worktrees, and NEVER remove on a hot `aida status` read. Acceptance: a worktree whose branch merged + clean is GC-able via the explicit command; dirty/locked/active ones are preserved; lossless prune runs cheaply.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1989
 node_id: '1'
