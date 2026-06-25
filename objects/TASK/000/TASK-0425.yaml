@@ -10,12 +10,12 @@ description: |-
   - Verify the same state is visible through the AIDA CLI after MCP writes.
   - Include negative-path checks for blocked approval/session communication and sandbox posture assumptions.
   - Capture gaps as follow-up specs rather than unresolved notes.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.259874534Z
-modified_at: 2026-06-25T07:41:29.527309700Z
+modified_at: 2026-06-25T07:47:52.582100393Z
 req_type: Task
 tags:
 - dogfood
@@ -32,3 +32,21 @@ comments:
   content: 'Runbook authored: docs/agents/codex-validation-runbook.md (+ template mirror). 9-step end-to-end Codex MCP validation loop with troubleshooting table and negative-path checks. Surface notes captured while grounding: (1) `aida queue work` / `aida session start` launch CLAUDE, not Codex — Codex flow uses claim_task or session-start-as-worktree-bootstrap; documented as a boundary note. (2) CLI punt-list verb is `aida punts list` (plural subcommand), not `aida punt list`. (3) trace gate is permissive by default; AIDA_COMMIT_STRICT=true enforces. No code gaps requiring follow-up specs — all intended flow maps to a real verb/tool.'
   created_at: 2026-06-25T07:41:29.527309700Z
   modified_at: 2026-06-25T07:41:29.527309700Z
+history:
+- id: 019efdbf-e5db-70d0-881a-df05e5d04d40
+  author: aida-auto-bump
+  timestamp: 2026-06-25T07:47:52.411243352Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efdbf-e686-7f62-8ccb-d8d95a4f9c9c
+  timestamp: 2026-06-25T07:47:52.582092574Z
+  agent: aida
+  commit_sha: 3f3141a148013e5eb66286ece634bcc9d457ce11
+  summary: Completed via merge 3f3141a1
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T07:47:50.781417718Z
+  completion_sha: 3f3141a148013e5eb66286ece634bcc9d457ce11
