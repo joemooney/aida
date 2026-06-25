@@ -3,12 +3,12 @@ spec_id: TASK-875
 agreed_id: TASK-875
 title: 'Spec Kit composition-seam demo: scaffold there, graph + trace + lifecycle here'
 description: 'MOVE 11. Demonstrate the documented seam: scaffold a feature with GitHub Spec Kit, import via aida plan scan, then show the cross-feature graph + traces + lifecycle AIDA adds that Spec Kit structurally drops after /implement. WHY: Spec Kit is the nearest competitor with ~100x distribution; the honest positioning is composable-not-competing, but the seam is described not shown. Answers "why not just Spec Kit?" with an artifact - a Spec Kit feature kept queryable/traced/lifecycle-tracked AFTER it ships, six features later. EVIDENCE: before/after - a Spec Kit feature dir vs the same feature in AIDAs graph, "whats blocked across this epic?" answerable in one, unanswerable in the other. Size S-M (aida plan scan exists).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:49.828016312Z
-modified_at: 2026-06-25T20:09:30.767058360Z
+modified_at: 2026-06-25T20:18:17.620735386Z
 req_type: Task
 tags:
 - compete
@@ -23,6 +23,24 @@ comments:
   content: Commit 2d890e509 references this requirement
   created_at: 2026-06-25T20:09:30.767058360Z
   modified_at: 2026-06-25T20:09:30.767058360Z
+history:
+- id: 019f006e-ed41-7d43-9d3e-f5ce68f78790
+  author: aida-auto-bump
+  timestamp: 2026-06-25T20:18:17.537955068Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f006e-ed94-7592-948e-4d2767dcbbce
+  timestamp: 2026-06-25T20:18:17.620729042Z
+  agent: aida
+  commit_sha: df659982180adc1edd14e5709d81e2ef4cbbcceb
+  summary: Completed via merge df659982
 deferred: true
 deferred_at: 2026-06-19T08:41:49.680000197Z
 deferred_until: GitHub spec-kit (specify) installed so the scaffold→import→graph seam can be demoed against the real tool, not a mock
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T20:18:16.554241753Z
+  completion_sha: df659982180adc1edd14e5709d81e2ef4cbbcceb
