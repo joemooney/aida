@@ -20510,5 +20510,24 @@ operations:
     req_type: Epic
     status: Draft
     priority: High
-clock: 1969
+- id: 019efd98-c896-7002-92f8-5a9e92d7eec3
+  target_id: 019efd98-c566-7012-9b2a-9c477cdfc5a5
+  author: aida
+  node_id: '1'
+  lamport: 1970
+  timestamp: 2026-06-25T07:05:09.014208672Z
+  kind: !Create
+    title: When Codex ships command-backed status lines, wire aida statusline into the Codex footer
+    description: |-
+      WATCH / DEFERRED — no active AIDA work until the upstream trigger fires.
+
+      The AIDA-side Codex status fallback is ALREADY DONE: TASK-0413 scaffolded the [tui] status_line guidance + the "Codex has no command-backed status line" explanation; TASK-0414 shipped the opt-in aida-statusline bootstrap; docs/agents/codex-mcp-setup.md documents both. The only remaining piece is UPSTREAM and outside AIDA's control: Codex CLI does not support command-backed status lines (open FR: github.com/openai/codex issues #20043 and #20244).
+
+      REVISIT TRIGGER: when Codex ships command-backed status_line support, wire aida statusline (--color=always) into the Codex footer the way it drives Claude Code's statusLine.command, and refresh docs/agents/codex-mcp-setup.md + porting-claude-code-to-codex.md Appendix A.5.
+
+      Until then there is nothing to build — the built-in [tui] status_line fields plus aida statusline via shell/TUI are the documented fallback, and the command-backed gap is the single Claude-only dependency the migration doc names (observability, not correctness).
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 1970
 node_id: '1'
