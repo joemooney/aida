@@ -1,0 +1,28 @@
+id: 019efd94-261d-7c81-a535-c311027b50b3
+spec_id: STORY-677
+agreed_id: STORY-677
+title: 'aida config menu: enum + integer in-place edits (expand beyond the bool MVP)'
+description: |-
+  STORY-669 shipped in-place BOOLEAN toggle in aida config menu. This expands the editable surface to ENUM and INTEGER knobs.
+
+  Add EditKind::Enum(Vec<String>) and EditKind::Integer{min,max} to aida-tui/src/config_menu.rs (currently Bool | ReadOnly). Generalize the CLI knob-metadata (config_knob_bool -> a knob-edit-meta fn in aida-cli/src/main.rs) to carry edit-type + allowed values/range + default. Reuse config_edit::set_kv (already writes any TOML value) and preserve the env-shadow block.
+
+  Wire the SAFE knobs:
+  - ENUM: mailbox.act_on_mail [surface-and-recommend|escalate-per-cascade], ultraplan.mode [never|on-demand|suggested], presence.away_drain + presence.home_offer.
+  - INTEGER: archive.auto_after_days [7..365].
+  Keep DANGEROUS-live knobs READ-ONLY with a reason-on-Enter: id_format.policy/counter_scope (live change risks id collisions), deployment.* (breaks store access), agents.bypass (security posture), contained.* (sandbox posture).
+
+  TUI: enum = cycle/select; integer = validated text input. Tests: extend config_menu.rs tests for enum cycle + integer validate/clamp.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-25T07:00:05.277413290Z
+modified_at: 2026-06-25T07:00:05.277413290Z
+req_type: Story
+tags:
+- aida:config
+- config-menu
+- from-operator
+- parent:STORY-671
+- tui
