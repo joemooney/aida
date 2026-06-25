@@ -1,0 +1,18 @@
+id: 019efdbe-572d-7461-98d8-3463259338b5
+spec_id: STORY-684
+agreed_id: STORY-684
+title: Advisor-role code-write invariant must be a SUBSTRATE gate, not just a Claude PreToolUse hook (evaporates for Codex)
+description: Uncovered gap (TASK-0421 inventory) + a substrate-as-bouncer concern. The "advisor role must not write code" invariant (STORY-670) lives ONLY in aida-advisor-code-guard.sh, a Claude PreToolUse hook. For a non-Claude agent (Codex) the hook does not run, so the invariant evaporates. Per the substrate-as-bouncer principle, a load-bearing invariant must be enforced programmatically (an MCP/CLI write-gate or git pre-commit), not in a vendor-specific hook. Move/duplicate the gate to a vendor-neutral layer. trace:TASK-0421
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-25T07:46:10.349888254Z
+modified_at: 2026-06-25T07:46:10.349888254Z
+req_type: Story
+tags:
+- codex
+- cross-vendor
+- from-inventory:TASK-0421
+- parent:EPIC-0419
+- substrate-as-bouncer
