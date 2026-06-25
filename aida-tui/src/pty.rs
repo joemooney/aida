@@ -23,6 +23,18 @@ use std::thread::JoinHandle;
 /// ever re-renders the visible screen, so a small ring is plenty.
 const VT100_SCROLLBACK: usize = 0;
 
+/// POSIX job-control signals used by [`PtyHost::suspend`] / [`PtyHost::resume`].
+/// On unix these mirror `libc::SIGSTOP` / `libc::SIGCONT`; on non-unix they are
+/// inert placeholders for the no-op signal path. trace:STORY-678 | ai:claude
+#[cfg(unix)]
+const SIGSTOP: i32 = libc::SIGSTOP;
+#[cfg(unix)]
+const SIGCONT: i32 = libc::SIGCONT;
+#[cfg(not(unix))]
+const SIGSTOP: i32 = 0;
+#[cfg(not(unix))]
+const SIGCONT: i32 = 0;
+
 /// A single hosted child behind its own PTY.
 pub struct PtyHost {
     /// PTY master — kept for `resize`.
@@ -132,6 +144,51 @@ impl PtyHost {
         }
         Ok(())
     }
+
+    /// Pause the hosted child (and its whole subtree) with `SIGSTOP`.
+    ///
+    /// The child is the PTY session/group leader, so the `aida queue work`
+    /// process it `exec`'d into Claude — plus any tool subprocesses Claude
+    /// spawned — share its process group. Signalling the negative pid
+    /// (`-pid`) targets that group, so the entire conversation tree
+    /// freezes, not just the immediate child. If the group signal fails
+    /// (e.g. the child is not a group leader), fall back to signalling the
+    /// single pid. No-op gracefully when the pid is unavailable.
+    /// trace:STORY-678 | ai:claude
+    pub fn suspend(&self) {
+        self.signal_tree(SIGSTOP);
+    }
+
+    /// Resume the hosted child (and its subtree) with `SIGCONT` — the
+    /// mirror of [`PtyHost::suspend`]. trace:STORY-678 | ai:claude
+    pub fn resume(&self) {
+        self.signal_tree(SIGCONT);
+    }
+
+    /// Send `signal` to the child's process group, falling back to the
+    /// single pid if the group signal fails. Unix-only; a no-op elsewhere.
+    /// trace:STORY-678 | ai:claude
+    #[cfg(unix)]
+    fn signal_tree(&self, signal: i32) {
+        let Some(pid) = self.child.process_id() else {
+            return; // Child already reaped, or pid unknown — nothing to do.
+        };
+        let pid = pid as i32;
+        // SAFETY: `kill(2)` is async-signal-safe and takes only scalars.
+        // Targeting the process group (`-pid`) first pauses the whole tree;
+        // on failure we narrow to the single pid.
+        let group_result = unsafe { libc::kill(-pid, signal) };
+        if group_result != 0 {
+            unsafe {
+                libc::kill(pid, signal);
+            }
+        }
+    }
+
+    /// Non-unix builds have no POSIX job-control signals — pause/resume is
+    /// a no-op. trace:STORY-678 | ai:claude
+    #[cfg(not(unix))]
+    fn signal_tree(&self, _signal: i32) {}
 
     /// ANSI re-render of the child's current screen — used to repaint
     /// after a tab-switch or overlay-close without disturbing the child.

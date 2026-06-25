@@ -73,6 +73,11 @@ pub fn cheatsheet(prefix: &str) -> Vec<Group> {
                     desc: "queue, branch, PR/CI + quick actions",
                 },
                 Binding {
+                    keys: k("P"),
+                    action: "pause / resume",
+                    desc: "freeze the chat (SIGSTOP); any key resumes",
+                },
+                Binding {
                     keys: k("?"),
                     action: "keybindings",
                     desc: "this screen",
