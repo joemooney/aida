@@ -6,15 +6,33 @@ description: |-
   Found during BUG-613: `git worktree list` showed 63 worktrees on this host — leftover from finished `aida session`/Agent-tool isolation worktrees that are never pruned. Two harms: (1) the residual ~2.7s of `aida status` is partly ~78 per-worktree git spawns scaling with worktree count; (2) stale worktrees clutter `.claude/worktrees/` + confuse cleanup (manually pruning them mid-run removed an ACTIVE agents worktree, costing it its uncommitted work). scan_merged_agent_worktrees (TASK-878) already FLAGS merged agent worktrees but never removes them.
 
   FIX (conservative, must NOT remove active work): (a) run lossless `git worktree prune` (removes only already-deleted worktree dirs) on a sensible path (session-end / aida doctor); (b) an explicit GC (aida doctor --heal action or `aida session gc`) that removes a `.claude/worktrees/agent-*` worktree ONLY when its branch is merged/gone AND the worktree is clean AND not locked AND no live process/lease holds it. NEVER auto-remove dirty/locked/active worktrees, and NEVER remove on a hot `aida status` read. Acceptance: a worktree whose branch merged + clean is GC-able via the explicit command; dirty/locked/active ones are preserved; lossless prune runs cheaply.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T16:36:27.062435037Z
-modified_at: 2026-06-25T16:36:27.062435037Z
+modified_at: 2026-06-25T16:53:44.311530049Z
 req_type: Bug
 tags:
 - from-loop
 - hygiene
 - performance
 - worktree
+history:
+- id: 019effb3-a6a4-7472-97a0-a8bf1cc7725e
+  author: aida-auto-bump
+  timestamp: 2026-06-25T16:53:44.228435525Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019effb3-a6f7-7e40-90e2-662f3e00d226
+  timestamp: 2026-06-25T16:53:44.311523866Z
+  agent: aida
+  commit_sha: 92214f7f081934b52aaef7b289eafd20c9757cf3
+  summary: Completed via merge 92214f7f
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T16:53:43.247227243Z
+  completion_sha: 92214f7f081934b52aaef7b289eafd20c9757cf3
