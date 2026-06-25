@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:30.150413674Z
-modified_at: 2026-06-24T03:44:23.726113497Z
+modified_at: 2026-06-25T08:38:24.678205013Z
 req_type: Task
 tags:
 - decision-guide
@@ -25,6 +25,12 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-06-24T02:53:30.150452084Z
+comments:
+- id: 019efdee-2aa6-77c0-98a5-32bb97b1f61c
+  author: joe
+  content: Commit 3947a102f references this requirement
+  created_at: 2026-06-25T08:38:24.678205013Z
+  modified_at: 2026-06-25T08:38:24.678205013Z
 deferred: true
 deferred_at: 2026-06-24T03:44:23.726113497Z
 deferred_until: the foundational Codex slice (inventory TASK-0421 + validation runbook TASK-0425) confirms the migration approach
