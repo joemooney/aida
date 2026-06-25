@@ -1,24 +1,47 @@
 # Porting From Claude Code To Codex CLI
 
-Status: operational comparison from 2026-06-24. Refresh this document before
-making binding architecture decisions, because both agent CLIs are moving
-quickly.
+Status: operational comparison, last fact-checked against current Codex docs on
+2026-06-24. Refresh this document before making binding architecture decisions,
+because both agent CLIs are moving quickly — the 2026 deltas below show how fast
+the gap moves.
 
 This document is for advanced users and AIDA operators deciding whether Codex
 CLI can replace Claude Code for local development, autonomous drains, or
 cross-agent workflow. It focuses on hooks and tooling that affect workflow
 correctness, not model quality.
 
+> **What changed recently (verified 2026-06-24).** Several gaps this document
+> originally described have narrowed — verify against your own Codex version
+> before relying on the older framing:
+>
+> - **Codex now has subagents** (`.codex/agents/*.toml`, built-ins
+>   `default`/`worker`/`explorer`, `max_threads`/`max_depth`, plus
+>   `SubagentStart`/`SubagentStop` hook events). "Subagent/team workflows are
+>   Claude-only" is no longer true.
+> - **Codex hooks can now mutate tool I/O**: `PreToolUse` can rewrite a call via
+>   `updatedInput`, `PostToolUse` can replace results, and several events accept
+>   a `systemMessage` for context injection.
+> - **A native migration skill exists** — `codex --skill migrate-to-codex`
+>   imports `CLAUDE.md`, settings, skills/slash-commands, hooks, MCP servers,
+>   subagents, and recent sessions. Hand-porting is no longer the only path.
+> - **A narrow continuation primitive exists** on the `Stop` event
+>   (`{ decision: "block", reason: … }` auto-continues). The genuine remaining
+>   gap is *pending-tool-call* `defer`/resume, not continuation in general.
+
 ## Short Answer
 
 Codex CLI can replace Claude Code for local repo work, MCP-backed
-coordination, sandboxed command execution, reviews, and scripted `codex exec`
-automation.
+coordination, sandboxed command execution, reviews, scripted `codex exec`
+automation, and — as of 2026 — parallel subagent fan-out and tool-I/O-mutating
+hooks.
 
-Codex CLI is not a drop-in replacement when the workflow depends on Claude
-Code's richer lifecycle hook model, Claude-specific `defer` and resume
-semantics, command-backed status lines, `.claude/commands`, or Claude
-subagent/team UX.
+The genuine remaining gaps are narrower than they were. Codex CLI is still not a
+drop-in replacement when a workflow depends on Claude Code's **pending-tool-call
+`defer`/resume** semantics (pause a specific tool call, let an external authority
+decide, resume the same call), **command-backed status lines**, or muscle memory
+around `.claude/commands`. Most other 2025-era gaps (subagents, hook mutation,
+import tooling) have since closed or narrowed — see "What changed" above and the
+updated hook table.
 
 For AIDA, the right migration target is:
 
@@ -34,13 +57,18 @@ model-backed terminal. Its advantage is most visible when a workflow depends on
 runtime control:
 
 - broad lifecycle hooks;
-- hook decisions that can ask, deny, or defer tool use;
+- hook decisions that can ask, deny, or **defer** a pending tool call (the
+  `defer`/resume primitive is still the clearest Claude-only hook capability);
 - headless pause/resume patterns;
 - command-backed status lines;
 - `.claude/commands` and Claude-shaped workflow shortcuts;
-- SDK-level hook mutation/control paths;
-- subagent/team workflows;
 - a large and fast-moving Claude Code ecosystem.
+
+Note (2026): several items that were Claude-only when this section was first
+written have since landed in Codex — subagents and hook-level tool-I/O mutation
+in particular (see "What changed" above and the hook table). Claude's edge has
+narrowed to the `defer`/resume continuation model, command-backed status lines,
+and ecosystem maturity rather than a categorical runtime-feature gap.
 
 Codex CLI's current strength is a clean OpenAI-native execution environment
 with strong local controls and automation surfaces:
@@ -60,12 +88,19 @@ danger is losing implicit workflow guarantees that were accidentally provided by
 Claude Code-specific surfaces. Common losses include:
 
 - a hook no longer blocks the same event;
-- a stopped run no longer has a resumable pending tool call;
+- a stopped run no longer has a resumable pending tool call (the real `defer`
+  gap — Codex's `Stop`-event `{decision:"block"}` continuation is *not* the same
+  thing as resuming a specific paused tool call);
 - a command-backed status line disappears;
 - a Claude slash command had no real script behind it;
 - a Claude sandbox covered a different surface than Codex's sandbox;
-- a hook-mutated prompt/tool input becomes plain best-effort instruction text;
-- a subagent/team workflow becomes a single-agent workflow unless rebuilt.
+- a hook-mutated prompt/tool input is assumed lost — *verify first*: Codex now
+  supports `PreToolUse` `updatedInput` rewriting and `PostToolUse` result
+  replacement, so many mutation hooks port directly (a `PostToolUse` rewrite
+  still cannot undo already-executed side effects, so re-check those);
+- a subagent/team workflow is assumed to collapse to single-agent — *also verify
+  first*: Codex subagents (`.codex/agents/*.toml`) cover the fan-out/delegation
+  case; what does *not* port one-to-one is a persistent named-team UX.
 
 There is also a future-capability risk. Claude Code and Codex CLI are both
 shipping quickly, but not in identical directions. Betting exclusively on
@@ -183,21 +218,24 @@ that survives vendors," consider AIDA.
 
 | Capability | Claude Code | Codex CLI |
 |---|---|---|
-| Hook config location | `~/.claude/settings.json`, `.claude/settings.json`, `.claude/settings.local.json`, managed policy, plugins, skills/agents | `~/.codex/hooks.json`, `~/.codex/config.toml`, project `.codex/hooks.json`, project `.codex/config.toml`, plugins |
+| Hook config location | `~/.claude/settings.json`, `.claude/settings.json`, `.claude/settings.local.json`, managed policy, plugins, skills/agents | `~/.codex/hooks.json`, `~/.codex/config.toml`, project `.codex/hooks.json`, project `.codex/config.toml`, plugin-bundled `hooks/hooks.json`, and enterprise-managed `requirements.toml` `[hooks]` (managed hooks bypass `/hooks` trust) |
 | Handler types | command, HTTP, MCP tool, prompt, agent | documented current runtime: command only; `prompt` and `agent` are parsed but skipped |
 | Event coverage | broad lifecycle surface including `PreToolUse`, `PostToolUse`, tool failure/denial, notification, session, file/config/cwd changes, compaction, worktree, and message display events | narrower: `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `UserPromptSubmit`, `SessionStart`, `Stop`, `SubagentStart`, `SubagentStop` |
 | Blocking mechanics | hook exit code and JSON can block or steer selected events | hook events exist, but current public Codex docs emphasize command execution/trust and do not expose the same broad Claude hook-control matrix |
-| Tool permission decisions | `allow`, `deny`, `ask`, `defer` in Claude's hook model | no documented Claude-equivalent hook-level `defer` primitive |
-| Tool input/output rewriting | Claude SDK hook docs describe input/output/context mutation paths | no equivalent documented in current Codex hook docs |
+| Tool permission decisions | `allow`, `deny`, `ask`, `defer` in Claude's hook model | `allow`/`deny` documented; **no** pending-tool-call `defer` (can't pause one tool call and resume it). A narrow continuation exists on `Stop`: returning `{decision:"block", reason:…}` auto-creates a continuation prompt — a turn-level loop, not a tool-call resume |
+| Tool input/output rewriting | Claude SDK hook docs describe input/output/context mutation paths | **now supported** (changed in 2026): `PreToolUse` returns `permissionDecision:"allow"` + `updatedInput` to rewrite a call; `PostToolUse` can replace results; multiple events accept `systemMessage` for context injection. Caveat: a `PostToolUse` rewrite can't undo already-executed side effects |
 | Hook trust | managed policy hooks plus project/user settings | non-managed command hooks require review/trust by hash; `/hooks` can inspect, trust, or disable them |
 | Async hooks | supported in Claude SDK-style hooks | `async` is parsed but skipped for Codex command hooks today |
 
-The most important migration gap is `defer`. In Claude Code headless flows, a
-hook can defer a pending tool call, let an external authority decide, and then
-resume the Claude session. Codex CLI does not currently document an equivalent
-hook-level continuation primitive. For Codex, use external orchestration:
-record the pending decision in AIDA, stop or fail closed, and start/resume a
-new Codex/AIDA run after approval.
+The most important migration gap is the **pending-tool-call `defer`**. In Claude
+Code headless flows, a hook can defer a *specific pending tool call*, let an
+external authority decide, and then resume the Claude session at that call. Codex
+does have a *turn-level* continuation (the `Stop`-event `{decision:"block"}`
+auto-continuation), but that is not the same primitive — it does not resume a
+paused tool call. So the gap is narrower than "no continuation at all," but real:
+for the deferred-approval pattern on Codex, use external orchestration — record
+the pending decision in AIDA, stop or fail closed, and start/resume a new
+Codex/AIDA run after approval.
 
 See `docs/agents/session-communication.md` for the durable AIDA reference on
 Claude `ask`, `continue: false`, and `defer` semantics.
@@ -210,9 +248,10 @@ Claude Code is stronger today for a deeply instrumented agent runtime:
 - richer hook handler types;
 - Claude-native slash commands and `.claude/commands`;
 - Claude skill and plugin integration;
-- SDK-level hook control;
+- SDK-level hook control and the pending-tool-call `defer`/resume primitive;
 - command-backed status line support;
-- subagent and team-oriented UX.
+- persistent named-team UX (Codex now has subagents for the fan-out/delegation
+  case — see "What changed" — so this is a UX-maturity edge, not a capability gap).
 
 Codex CLI is strong for OpenAI-native local execution:
 
@@ -264,13 +303,21 @@ semantics.
 
 Claude hook-based approval workflows often encode local policy in scripts.
 Codex has first-class approval and sandbox configuration, so prefer those for
-baseline safety:
+baseline safety. Note these are **two orthogonal knobs**, not one — set them
+independently:
 
-- use read-only mode for analysis;
-- use workspace-write with `on-request` approvals for normal repo edits;
-- use `danger-full-access` only inside an externally isolated environment;
-- use permission profiles for durable filesystem and network boundaries;
-- use MCP per-server and per-tool approval settings for connected tools.
+- **Sandbox mode** (what the filesystem/network boundary is): `read-only`,
+  `workspace-write`, or `danger-full-access`.
+- **Approval mode** (`--ask-for-approval`: when Codex pauses to ask): `untrusted`,
+  `on-request`, or `never` (`on-failure` is deprecated).
+
+Typical combinations:
+
+- `read-only` for analysis;
+- `workspace-write` + `on-request` approvals for normal repo edits;
+- `danger-full-access` only inside an externally isolated environment;
+- permission profiles for durable filesystem and network boundaries;
+- MCP per-server and per-tool approval settings for connected tools.
 
 The practical shift is that Codex policy should start with sandbox and approval
 configuration, then add hooks for project-specific checks. Avoid using hooks as
@@ -379,6 +426,15 @@ For advanced automation, `codex exec --json` is often more useful than trying
 to infer state from terminal text. It gives a structured stream of thread,
 turn, tool, and error events.
 
+Two notes on the Codex `[tui] status_line`: its **default** is
+`["spinner", "project"]` (set to `null` to disable), and the field set is richer
+than the four-item example shown later in this document — e.g. `five-hour-limit`,
+`weekly-limit`, `context-window-size`, and token counters. What Codex does *not*
+yet have is Claude's **command-backed** status line (a script that emits the
+line); that is an open feature request (codex issues #20043, #20244) and a
+near-term watch item — so for now `aida statusline` cannot drive the Codex
+footer the way it drives Claude's `statusLine.command`.
+
 ### Plan for non-interactive differences
 
 Claude headless workflows that rely on hook-mediated `ask` or `defer` need a
@@ -417,14 +473,22 @@ across Codex, Claude, Antigravity, CI, and human-operated scripts.
 
 ### Expect import to help, not finish the migration
 
-Codex has an import path for Claude Code setup, but advanced users should treat
-it as a bootstrap. After importing, audit:
+Codex has a native migration skill for Claude Code setup —
+`codex --skill migrate-to-codex` (useful flags: `--scan-only`, `--plan`,
+`--doctor`, `--dry-run`). It imports `CLAUDE.md` → `AGENTS.md`,
+`settings.json` → `config.toml`, skills/slash-commands → Codex skills, MCP
+servers, hooks → `.codex/hooks/`, subagents → `.codex/agents/*.toml`, and recent
+(~30-day) sessions → Codex threads. Advanced users should still treat it as a
+**bootstrap**, not the finish line. Run `--scan-only`/`--plan` first to preview,
+then after importing, audit:
 
 - which instructions landed in Codex-readable surfaces;
 - which hooks were imported, trusted, skipped, or need replacement;
 - which slash-command workflows need project scripts or skills;
 - which MCP servers need Codex-specific approval settings;
-- which Claude-only semantics have no Codex equivalent.
+- which subagents imported, and whether their sandbox/model settings are right;
+- which Claude-only semantics (pending-tool-call `defer`, command-backed status
+  line) still have no Codex equivalent.
 
 The final migration step is not "the files imported"; it is "the old workflow
 can be run, observed, interrupted, and recovered under Codex semantics."
@@ -648,3 +712,7 @@ not as already-covered Codex behavior.
 - Codex MCP: `https://developers.openai.com/codex/mcp`
 - Codex non-interactive mode: `https://developers.openai.com/codex/noninteractive`
 - Codex slash commands: `https://developers.openai.com/codex/cli/slash-commands`
+- Codex subagents: `https://developers.openai.com/codex/subagents`
+- Codex config reference (sandbox, approval, `tui.status_line`): `https://developers.openai.com/codex/config-reference`
+- Codex migration skill: `codex --skill migrate-to-codex` (see `https://developers.openai.com/codex/cli`)
+- `AGENTS.md` guide: `https://developers.openai.com/codex/guides/agents-md`
