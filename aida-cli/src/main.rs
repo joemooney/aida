@@ -1514,6 +1514,7 @@ fn run() -> Result<()> {
         distributed: _,
         centralized,
         sibling,
+        attach,
         registry_remote,
         verbose,
         name,
@@ -1542,6 +1543,7 @@ fn run() -> Result<()> {
             handle_init_distributed_sibling(
                 registry_remote.as_deref(),
                 *force,
+                *attach,
                 *no_skills,
                 agent,
                 *no_hooks,
@@ -22336,6 +22338,7 @@ fn prompt_yes_no(prompt: &str, default_yes: bool) -> Result<bool> {
 fn handle_init_distributed_sibling(
     registry_remote: Option<&str>,
     force: bool,
+    attach: bool,
     no_skills: bool,
     agent: &str,
     no_hooks: bool,
@@ -22375,182 +22378,212 @@ fn handle_init_distributed_sibling(
         }
     }
 
-    // BUG-610: a populated store that this is NOT a --force re-init of is almost
-    // certainly a SHARED sibling store another repo already created — the whole
-    // point of `--sibling`. The fresh-init path below re-seeds META and
-    // `backend.save()`s a new store, which DELETES the other repo's requirements
-    // (silent data loss, verified: a second repo's init wiped the first's spec).
-    // Refuse rather than destroy. (Auto-attaching a second repo to the existing
-    // store is the STORY-674 feature; `--force` is the deliberate wipe.)
-    // trace:BUG-610 | ai:claude
-    if !force {
-        if let Some(count) = count_requirements_in_store(&store_dir) {
-            if count > 0 {
-                eprintln!(
-                    "{} A store already exists at {} with {} requirement(s).",
-                    "!".yellow(),
-                    store_dir.display(),
-                    count
-                );
-                eprintln!(
-                    "  Re-initializing would DELETE them — this is almost certainly a shared"
-                );
-                eprintln!("  sibling store another repo created. Refusing to overwrite it.");
-                eprintln!(
-                    "  {} To WIPE and re-initialize the store: re-run with {}.",
-                    crate::glyph(crate::glyphs::Glyph::Bullet),
-                    "--force".bold()
-                );
-                eprintln!(
-                    "  {} To ATTACH this repo to the existing store (multi-repo): tracked as STORY-674.",
-                    crate::glyph(crate::glyphs::Glyph::Bullet)
-                );
-                // Abort the WHOLE init (non-zero exit, no telemetry/config-menu
-                // post-setup) — a refusal must not look like success. trace:BUG-610
-                anyhow::bail!(
-                    "refused to re-initialize the existing store at {} (pass --force to wipe)",
-                    store_dir.display()
-                );
-            }
-        }
-    }
-
-    println!("{}", "Initializing AIDA in distributed mode...".bold());
-    println!();
-
-    // Create the local git-backed store directory
-    if !store_dir.exists() {
-        std::fs::create_dir_all(&store_dir)?;
-    }
-
-    // Initialize git repo if not already
-    if !git_ops::is_git_repo(&store_dir) {
-        git_ops::init(&store_dir)?;
-        println!(
-            "  {} git repository in {}",
-            "Created".green(),
-            "../aida-store/".white().bold()
+    // BUG-610 / STORY-674: decide create-vs-attach-vs-refuse for an existing
+    // populated store. The fresh-init path below re-seeds META and
+    // `backend.save()`s a new store, which DELETES whatever was there (silent
+    // data loss, verified: a second repo's init wiped the first's spec).
+    //   --force   → deliberate wipe (guarded above)
+    //   --attach  → JOIN the existing shared store (multi-repo): config + cache
+    //               only, store untouched. The shared dispenser serializes id
+    //               allocation across repos, so no separate node id is needed.
+    //   neither   → refuse rather than destroy.
+    // trace:BUG-610 trace:STORY-674 | ai:claude
+    let existing_count = count_requirements_in_store(&store_dir).unwrap_or(0);
+    let attaching = attach && existing_count > 0 && !force;
+    if existing_count > 0 && !force && !attach {
+        eprintln!(
+            "{} A store already exists at {} with {} requirement(s).",
+            "!".yellow(),
+            store_dir.display(),
+            existing_count
+        );
+        eprintln!("  Re-initializing would DELETE them — this is almost certainly a shared");
+        eprintln!("  sibling store another repo created. Refusing to overwrite it.");
+        eprintln!(
+            "  {} To ATTACH this repo to the existing store (multi-repo): re-run with {}.",
+            crate::glyph(crate::glyphs::Glyph::Bullet),
+            "--attach".bold()
+        );
+        eprintln!(
+            "  {} To WIPE and re-initialize the store: re-run with {}.",
+            crate::glyph(crate::glyphs::Glyph::Bullet),
+            "--force".bold()
+        );
+        // Abort the WHOLE init (non-zero exit, no telemetry/config-menu
+        // post-setup) — a refusal must not look like success. trace:BUG-610
+        anyhow::bail!(
+            "refused to re-initialize the existing store at {} (pass --attach to join, or --force to wipe)",
+            store_dir.display()
         );
     }
 
-    // Configure git user from global git config or defaults
-    let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
-    let git_email =
-        git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
-    git_ops::configure_user(&store_dir, &git_name, &git_email)?;
+    if attaching {
+        println!(
+            "{}",
+            format!("Attaching to existing store at {} ...", store_dir.display()).bold()
+        );
+        println!();
+    } else {
+        println!("{}", "Initializing AIDA in distributed mode...".bold());
+        println!();
 
-    // Add remote if specified
-    if let Some(remote) = registry_remote {
-        // Check if remote already exists
-        let has_remote = std::process::Command::new("git")
-            .current_dir(&store_dir)
-            .args(["remote", "get-url", "origin"])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
+        // Create the local git-backed store directory
+        if !store_dir.exists() {
+            std::fs::create_dir_all(&store_dir)?;
+        }
 
-        if !has_remote {
-            std::process::Command::new("git")
-                .current_dir(&store_dir)
-                .args(["remote", "add", "origin", remote])
-                .output()?;
-            println!("  {} remote: {}", "Added".green(), remote.white().bold());
+        // Initialize git repo if not already
+        if !git_ops::is_git_repo(&store_dir) {
+            git_ops::init(&store_dir)?;
+            println!(
+                "  {} git repository in {}",
+                "Created".green(),
+                "../aida-store/".white().bold()
+            );
         }
     }
 
-    // Initialize the git backend (creates objects/ and metadata.yaml)
-    let backend = aida_core::GitBackend::new(&store_dir)?;
-    let mut store = aida_core::models::RequirementsStore::new();
-    // Project name from --name or cwd basename. trace:BUG-25 | ai:claude
-    let project_name = name
-        .map(|s| s.to_string())
-        .or_else(|| {
+    // STORY-674: attach must NOT touch the shared store. It builds only a
+    // minimal in-memory store (project name → scaffolding/CLAUDE.md title) and
+    // skips the whole store-write path (configure/remote/seed/save/commit/
+    // register). Create builds+seeds+saves a fresh store. Both yield `store`
+    // for the shared scaffolding below. trace:STORY-674 | ai:claude
+    let store = if attaching {
+        let mut s = aida_core::models::RequirementsStore::new();
+        let pn = name.map(|s| s.to_string()).or_else(|| {
             std::env::current_dir()
                 .ok()
                 .and_then(|p| p.file_name().and_then(|n| n.to_str()).map(str::to_string))
-        })
-        .unwrap_or_default();
-    if !project_name.is_empty() {
-        store.name = project_name.clone();
-        store.title = project_name;
-    }
-    seed_meta_requirements(&mut store)?;
-    backend.save(&store)?;
-    println!(
-        "  {} {}",
-        "Created".green(),
-        "../aida-store/metadata.yaml".white().bold()
-    );
-    println!(
-        "  {} {}",
-        "Created".green(),
-        "../aida-store/objects/".white().bold()
-    );
-
-    // Create initial commit
-    git_ops::add(&store_dir, &["metadata.yaml"])?;
-    std::fs::create_dir_all(store_dir.join("objects"))?;
-    // Create a .gitkeep so objects/ is tracked
-    std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
-    git_ops::add(&store_dir, &["objects/.gitkeep"])?;
-
-    // Create .gitignore for node-local files
-    let gitignore_content = "# Node-local state (not shared)\n.aida/\n*.lock\n";
-    std::fs::write(store_dir.join(".gitignore"), gitignore_content)?;
-    git_ops::add(&store_dir, &[".gitignore"])?;
-
-    git_ops::commit(&store_dir, "chore: initialize AIDA distributed store")?;
-
-    // If we have a remote, push the initial commit and register the node
-    if registry_remote.is_some() {
-        let branch = git_ops::current_branch(&store_dir).unwrap_or_else(|_| "main".to_string());
-
-        // Push initial commit
-        match git_ops::push(&store_dir, "origin", &branch) {
-            Ok(true) => {
-                println!("  {} initial commit to remote", "Pushed".green(),);
-            }
-            Ok(false) => {
-                // Remote has content — pull first then push
-                git_ops::pull_rebase(&store_dir, "origin", &branch)?;
-                git_ops::push(&store_dir, "origin", &branch)?;
-                println!("  {} with remote and pushed", "Synced".green(),);
-            }
-            Err(e) => {
-                eprintln!("  {} Failed to push to remote: {}", "Warning:".yellow(), e);
-                eprintln!(
-                    "  You can push later with: cd ../aida-store && git push -u origin {}",
-                    branch
-                );
+        });
+        if let Some(pn) = pn {
+            if !pn.is_empty() {
+                s.name = pn.clone();
+                s.title = pn;
             }
         }
-
-        // Register this node
-        let hostname = hostname::get()
-            .map(|h| h.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "unknown".to_string());
-
-        match git_ops::register_node(&store_dir, 1, &hostname) {
-            Ok(node_id) => {
-                println!(
-                    "  {} node {} ({})",
-                    "Registered".green(),
-                    node_id.to_string().white().bold(),
-                    hostname
-                );
-            }
-            Err(e) => {
-                eprintln!("  {} Node registration failed: {}", "Warning:".yellow(), e);
-                eprintln!("  You can register later when the remote is available.");
-            }
-        }
+        s
     } else {
-        println!();
-        println!("  {} No --registry-remote specified.", "Note:".yellow());
-        println!("  The store is local-only until you add a remote:");
-        println!("    cd ../aida-store && git remote add origin <url>");
-        println!("    aida init --distributed --registry-remote <url>");
-    }
+        // Configure git user from global git config or defaults
+        let git_name =
+            git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
+        let git_email =
+            git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
+        git_ops::configure_user(&store_dir, &git_name, &git_email)?;
+
+        // Add remote if specified
+        if let Some(remote) = registry_remote {
+            // Check if remote already exists
+            let has_remote = std::process::Command::new("git")
+                .current_dir(&store_dir)
+                .args(["remote", "get-url", "origin"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+
+            if !has_remote {
+                std::process::Command::new("git")
+                    .current_dir(&store_dir)
+                    .args(["remote", "add", "origin", remote])
+                    .output()?;
+                println!("  {} remote: {}", "Added".green(), remote.white().bold());
+            }
+        }
+
+        // Initialize the git backend (creates objects/ and metadata.yaml)
+        let backend = aida_core::GitBackend::new(&store_dir)?;
+        let mut store = aida_core::models::RequirementsStore::new();
+        // Project name from --name or cwd basename. trace:BUG-25 | ai:claude
+        let project_name = name
+            .map(|s| s.to_string())
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .and_then(|p| p.file_name().and_then(|n| n.to_str()).map(str::to_string))
+            })
+            .unwrap_or_default();
+        if !project_name.is_empty() {
+            store.name = project_name.clone();
+            store.title = project_name;
+        }
+        seed_meta_requirements(&mut store)?;
+        backend.save(&store)?;
+        println!(
+            "  {} {}",
+            "Created".green(),
+            "../aida-store/metadata.yaml".white().bold()
+        );
+        println!(
+            "  {} {}",
+            "Created".green(),
+            "../aida-store/objects/".white().bold()
+        );
+
+        // Create initial commit
+        git_ops::add(&store_dir, &["metadata.yaml"])?;
+        std::fs::create_dir_all(store_dir.join("objects"))?;
+        // Create a .gitkeep so objects/ is tracked
+        std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
+        git_ops::add(&store_dir, &["objects/.gitkeep"])?;
+
+        // Create .gitignore for node-local files
+        let gitignore_content = "# Node-local state (not shared)\n.aida/\n*.lock\n";
+        std::fs::write(store_dir.join(".gitignore"), gitignore_content)?;
+        git_ops::add(&store_dir, &[".gitignore"])?;
+
+        git_ops::commit(&store_dir, "chore: initialize AIDA distributed store")?;
+
+        // If we have a remote, push the initial commit and register the node
+        if registry_remote.is_some() {
+            let branch = git_ops::current_branch(&store_dir).unwrap_or_else(|_| "main".to_string());
+
+            // Push initial commit
+            match git_ops::push(&store_dir, "origin", &branch) {
+                Ok(true) => {
+                    println!("  {} initial commit to remote", "Pushed".green(),);
+                }
+                Ok(false) => {
+                    // Remote has content — pull first then push
+                    git_ops::pull_rebase(&store_dir, "origin", &branch)?;
+                    git_ops::push(&store_dir, "origin", &branch)?;
+                    println!("  {} with remote and pushed", "Synced".green(),);
+                }
+                Err(e) => {
+                    eprintln!("  {} Failed to push to remote: {}", "Warning:".yellow(), e);
+                    eprintln!(
+                        "  You can push later with: cd ../aida-store && git push -u origin {}",
+                        branch
+                    );
+                }
+            }
+
+            // Register this node
+            let hostname = hostname::get()
+                .map(|h| h.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "unknown".to_string());
+
+            match git_ops::register_node(&store_dir, 1, &hostname) {
+                Ok(node_id) => {
+                    println!(
+                        "  {} node {} ({})",
+                        "Registered".green(),
+                        node_id.to_string().white().bold(),
+                        hostname
+                    );
+                }
+                Err(e) => {
+                    eprintln!("  {} Node registration failed: {}", "Warning:".yellow(), e);
+                    eprintln!("  You can register later when the remote is available.");
+                }
+            }
+        } else {
+            println!();
+            println!("  {} No --registry-remote specified.", "Note:".yellow());
+            println!("  The store is local-only until you add a remote:");
+            println!("    cd ../aida-store && git remote add origin <url>");
+            println!("    aida init --distributed --registry-remote <url>");
+        }
+        store
+    };
 
     // Create .aida/ config in the project root (not the store)
     std::fs::create_dir_all(&aida_dir)?;
@@ -22618,11 +22651,22 @@ fn handle_init_distributed_sibling(
     )?;
 
     println!();
-    println!("  {}:", "Push code + store together".bold());
-    println!(
-        "    {}                        push your branch and the orphan store in one go",
-        "aida push".cyan()
-    );
+    if attaching {
+        // trace:STORY-674 | ai:claude
+        println!(
+            "  {} Attached to existing store at {} ({} requirement(s)). Run {} to see them.",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            store_dir.display(),
+            existing_count,
+            "aida list".cyan()
+        );
+    } else {
+        println!("  {}:", "Push code + store together".bold());
+        println!(
+            "    {}                        push your branch and the orphan store in one go",
+            "aida push".cyan()
+        );
+    }
     println!();
 
     Ok(())

@@ -7910,6 +7910,14 @@ pub enum Command {
         #[clap(long)]
         sibling: bool,
 
+        /// Attach this repo to an EXISTING sibling store (multi-repo) instead of
+        /// creating a new one. Writes the local config + rebuilds the cache and
+        /// never touches the store's contents — the shared dispenser serializes
+        /// id allocation across repos, so no separate node id is needed.
+        // trace:STORY-674 | ai:claude
+        #[clap(long, visible_alias = "join")]
+        attach: bool,
+
         /// Git remote URL for the shared aida registry (used with --sibling).
         /// Example: git@github.com:org/aida-registry.git
         #[clap(long)]
