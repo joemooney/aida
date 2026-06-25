@@ -20585,5 +20585,17 @@ operations:
     req_type: Epic
     status: Draft
     priority: High
-clock: 1975
+- id: 019efdb5-5703-71f3-939e-f0cdf3e7607f
+  target_id: 019efdb5-4d54-7052-877d-ebe8db362143
+  author: aida
+  node_id: '1'
+  lamport: 1976
+  timestamp: 2026-06-25T07:36:20.483040436Z
+  kind: !Create
+    title: aida tui will not launch standalone — errors on the fd-3 intent channel, requires the aida-tui shell wrapper (not installed without a shell reload)
+    description: 'Operator hit this 2026-06-25 trying to test the EPIC-51 pause feature: `aida tui` -> "Error: the launchers intent fd 3 is the same kernel object as stdout/stderr. Run via the aida-tui shell wrapper... or pass --intent-fd". Then `aida dev shell-init --install` installed helpers but `aida-tui` -> command not found (the shell function needs `source ~/.bashrc`). So the out-of-box flow is broken: aida tui fails standalone + the wrapper isnt available without a shell reload. Root: aida-tui/src/intent.rs rejects when fd 3 == stdout/stderr (it expects a bash wrapper to wire the intent pipe + dispatch). FIX (= EPIC-52 Slice 1): move dispatch IN-PROCESS so aida tui Just Works from any shell, no fd-3/wrapper. Keyboard-verify the launch.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 1976
 node_id: '1'
