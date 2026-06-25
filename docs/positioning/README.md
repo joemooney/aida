@@ -48,6 +48,7 @@ Not one-neighbor-at-a-time comparisons, but the questions that span all of them:
 | File | The question it answers |
 |---|---|
 | [when-not-to-use-aida.md](when-not-to-use-aida.md) | The honest scope limits — six cases where a neighbor tool alone is the right call, and AIDA's overhead wouldn't earn its keep. Read this *first* if you're deciding whether to adopt at all. |
+| [agent-decision-matrix.md](agent-decision-matrix.md) | The build-vs-buy-vs-wait aid for *"which agent runtime, and how much workflow do I push into vendor-neutral infrastructure?"* — Claude Code vs Codex CLI vs an AIDA-style substrate, axis by axis. Includes the honest "do **not** adopt a substrate when…" rows. Grounded in the Claude→Codex migration docs under `docs/agents/`. |
 | [composition.md](composition.md) | The recipe book for *"use AIDA **with** X"* — Spec Kit, Agent Teams, MCP editors, `/workflow`, GitHub Issues, Karpathy markdown. Names the seam (and where a bridge is still manual today) for each. |
 
 Future-work files mentioned in [STORY-107](../../) and not yet seeded:
