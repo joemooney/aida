@@ -592,6 +592,8 @@ can be run, observed, interrupted, and recovered under Codex semantics."
 9. Verify with one real task: inspect, edit, test, review diff, recover from a
    blocked action, and resume work.
 
+Appendix A has the concrete before/after syntax for each of these surfaces.
+
 ## AIDA Migration Rules
 
 Keep these vendor-neutral and load-bearing:
@@ -660,107 +662,41 @@ The portable lesson from `os_wrap` is:
 ## If There Is A Mandate To Stop Using Claude
 
 A hard "no Claude Code" mandate is manageable only if AIDA treats Claude as one
-adapter, not as the source of truth. The response should be deliberate:
+adapter, not the source of truth. The *mechanics* are the same as any migration
+— follow the **Practical universal migration checklist** above, the **AIDA
+Migration Rules** translation table, and the worked before/after examples in
+**Appendix A** (launch flow, MCP, hooks, status line, `defer` → punt, headless).
+What a mandate adds is posture, not new steps:
 
-1. Freeze new Claude-specific surface area.
-   - Do not add new `.claude/commands`, `.claude/hooks`, or Claude-only skills
-     unless they are needed only for a temporary transition.
-   - Any new discipline must first land in AIDA docs, CLI/MCP, git hooks, CI,
-     or reviewer gates.
+1. **Freeze new Claude-specific surface.** Stop adding `.claude/commands`,
+   `.claude/hooks`, or Claude-only skills except for a temporary transition. Any
+   new discipline lands first in AIDA docs, CLI/MCP, git hooks, CI, or reviewer
+   gates.
 
-2. Classify existing Claude dependencies.
-   - Load-bearing: anything that prevents unsafe work, enforces lifecycle, gates
-     merges, or routes human approval.
-   - Convenience: shortcuts, prompts, status display, onboarding, command
-     aliases, and UX sugar.
-   - Retire convenience items after equivalents exist; reimplement load-bearing
-     items in AIDA itself.
+2. **Classify before you cut.** Split every Claude dependency into *load-bearing*
+   (prevents unsafe work, enforces lifecycle, gates merges, routes approval) vs
+   *convenience* (shortcuts, prompts, status display, UX sugar). Retire
+   convenience once an equivalent exists; reimplement load-bearing in AIDA
+   itself — never re-emulate it with prompt text.
 
-3. Replace launch and session flow.
-   - Use `aida agent new codex --role <role>` for normal Codex sessions.
-   - Use `aida agent new codex --spec <SPEC> --role implementer` for direct
-     assigned work.
-   - Keep sibling worktrees, leases, trace comments, and commit trailers
-     unchanged.
+3. **Switch the launch path.** `aida agent new codex --role <role>` for normal
+   sessions, `aida agent new codex --spec <SPEC> --role implementer` for assigned
+   work. Worktrees, leases, trace comments, and commit trailers are unchanged.
 
-4. Replace MCP setup.
-   - Register AIDA with Codex:
+4. **Keep an explicit exception path.** If a workflow still genuinely needs a
+   Claude-only primitive (pending-tool-call `defer`, command-backed status line),
+   either keep that one workflow blocked until AIDA owns the invariant, or file a
+   task to rebuild it outside Claude. Do not silently emulate Claude-only
+   semantics with prompt instructions.
 
-     ```bash
-     codex mcp add aida -- aida mcp-serve
-     ```
+Then run the transition verification pass: fresh Codex session through AIDA →
+read a spec via MCP → claim it → make a small traced edit → run targeted tests →
+mark done or punt via MCP → confirm the same state through the CLI.
 
-   - Verify from a Codex session with `/mcp`.
-   - Keep `tools/list` as canonical for tool names and schemas.
-
-5. Replace Claude hook gates with substrate gates.
-   - Pre-tool warnings become Codex command hooks only when best-effort is
-     acceptable.
-   - Required stop/approval behavior becomes an AIDA CLI/orchestrator gate,
-     a git hook, CI, or a reviewer check.
-   - Claude `defer` flows become durable AIDA state: punt, finding, directive,
-     brief, queue state, or needs-attention status.
-
-6. Replace Claude sandbox assumptions.
-   - Use Codex-native sandbox/approval settings for interactive and
-     non-interactive Codex sessions.
-   - Do not rely on `[contained] os_wrap` for Codex until AIDA explicitly wraps
-     Codex launches.
-   - If outer OS confinement is mandatory, block the migration path or add a
-     Codex-capable wrapper with fail-closed behavior before permitting
-     unattended Codex work.
-
-7. Replace session communication.
-   - Convert Claude `ask`/`defer`/resume workflows into durable AIDA state and
-     explicit follow-up runs.
-   - Notifications should be emitted by the component that stops the run.
-   - Do not rely on a later post-tool hook after a blocked pre-tool decision.
-
-8. Replace operator visibility.
-   - Use `aida status`, `aida statusline`, `aida session leases`, and the AIDA
-     TUI/status overlay where available.
-   - Configure Codex's built-in footer for complementary local state:
-
-     ```toml
-     [tui]
-     status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
-     ```
-
-9. Replace headless automation.
-   - Use `codex exec` for non-interactive Codex runs.
-   - Use `--json` when an orchestrator needs event streams.
-   - Use output schemas only for final structured results, not for live tool
-     approval semantics.
-   - Do not assume a stopped Codex hook leaves a resumable pending tool call in
-     the Claude `defer` sense.
-
-10. Update docs and templates.
-   - Make `AGENTS.md` the primary non-Claude instruction path.
-   - Keep `CLAUDE.md` only as legacy or optional Claude support if policy
-     allows checked-in Claude docs.
-   - Ensure `docs/agents/codex-mcp-setup.md`,
-     `docs/agents/codex-brief-pickup.md`, and this document are linked from
-     cross-agent onboarding.
-
-11. Run a transition verification pass.
-   - Start a fresh Codex session through AIDA.
-   - Read a spec through MCP.
-   - Claim it through MCP.
-   - Make a small traced edit.
-   - Run targeted tests.
-   - Mark the queue item done or punt through MCP.
-   - Verify the same state through the CLI.
-
-12. Keep an explicit exception path.
-    - If a workflow still requires Claude-only `defer`, hook mutation, or
-      status-line behavior, either keep that workflow blocked until AIDA owns
-      the invariant or file a task to reimplement it outside Claude.
-    - Do not silently emulate Claude-only semantics with prompt instructions.
-
-The strategic version: a stop-Claude mandate should accelerate AIDA's
+The strategic version: a stop-Claude mandate should *accelerate* AIDA's
 agent-agnostic architecture, not trigger a rushed reimplementation of Claude
-inside Codex. The more invariants move into AIDA's substrate, the less any
-future vendor mandate matters.
+inside Codex. The more invariants live in AIDA's substrate, the less any future
+vendor mandate matters.
 
 ## Current Practical Recommendation
 
