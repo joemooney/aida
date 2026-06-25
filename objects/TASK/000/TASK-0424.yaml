@@ -10,12 +10,12 @@ description: |-
   - Identify whether aida init or AIDA templates should scaffold any Codex-specific config, docs, or prompts beyond current AGENTS.md guidance.
   - File implementation child specs for any template/scaffold changes needed.
   - Keep Claude-specific guidance separate from agent-neutral discipline.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:28.814412397Z
-modified_at: 2026-06-25T07:12:30.794820842Z
+modified_at: 2026-06-25T07:23:31.173342524Z
 req_type: Task
 tags:
 - mcp
