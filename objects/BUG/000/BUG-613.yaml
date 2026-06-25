@@ -1,0 +1,23 @@
+id: 019eff45-44be-7912-9c56-442a1f4cc50e
+spec_id: BUG-613
+agreed_id: BUG-613
+title: aida status is O(store-size) — spawns ~1 git process per spec (2186 = 27s); TUI calls it at startup + per-panel → 20-30s launch + 3s nav lag
+description: |-
+  Verified 2026-06-25 (release build, 2186-spec store). `aida status` = 27.7s (`--no-hygiene` still 13.4s). strace: ONE `aida status --json` spawns ~2356 git subprocesses (~1 per spec) + 10 gh + 2 `claude agents --json`. Two O(store-size) hotspots: (1) hygiene scan_completed_without_commit git-checks every completed spec (~14s); (2) the main body does per-spec git-linkage + claude-agents (~13s). It scales with STORE SIZE, not work-in-flight.
+
+  Impact: the TUI (welcome.rs fetch_mission + the overlay) calls `aida status --json` at startup (2-3x) → operator reports 20-30s `aida tui` launch; and per-item panel loads block navigation ~3s on first visit. welcome.rs comment falsely claims the fetch is "cache-only sub-millisecond".
+
+  Fix (two layers): (A) ROOT — batch the O(N)-git scans into a SINGLE git-log pass (build a spec-id -> commit set once, look up per spec in-memory; reuse BUG-606 referenced_spec_ids_on_default_branch), only compute git-linkage for the FEW in-flight items not all specs, and cache/skip/async the `claude agents --json` spawn; target <200ms. (B) TUI UX — the hot paths (startup mission panel + per-item panels) must use cache-only fast data; navigation instant; panels load ASYNC in background threads with a loading placeholder (operator: "navigate instantaneously and lazy load the panel ... something happens when I press down arrow"), parallel loads as you navigate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-25T14:53:10.206289350Z
+modified_at: 2026-06-25T14:53:10.206289350Z
+req_type: Bug
+tags:
+- aida:status
+- aida:tui
+- from-operator
+- out-of-box
+- performance
