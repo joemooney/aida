@@ -1023,6 +1023,32 @@ pub enum SessionCommand {
         #[clap(long, conflicts_with = "orphans")]
         escalations: bool,
     },
+
+    /// Garbage-collect stale agent isolation worktrees under
+    /// `.claude/worktrees/agent-*`. CONSERVATIVE by design: a worktree is
+    /// removed ONLY when ALL of these hold — its branch is merged into the
+    /// default branch (or it is detached/branchless), the worktree is CLEAN,
+    /// it is NOT locked, and no live process / active session-lease references
+    /// it. Anything else is PRESERVED and reported, never removed. Removal uses
+    /// `git worktree remove` (NOT --force), so git's own safety checks add a
+    /// second guard; a worktree git refuses to remove is skipped, never forced.
+    ///
+    /// Always runs the lossless `git worktree prune` first (clears bookkeeping
+    /// for already-deleted worktree dirs). Never runs on the hot `aida status`
+    /// read path — only on this explicit operator command and on
+    /// `aida session end`.
+    // trace:BUG-614 | ai:claude
+    Gc {
+        /// Show what would be removed and what is preserved without touching
+        /// anything. Use to preview before committing to a real GC.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the y/N confirmation and remove the eligible worktrees
+        /// immediately after printing the candidate list.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 // `session forget` (single-target .jsonl removal) and `session wakeup`
