@@ -20657,5 +20657,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1981
+- id: 019efdbe-a1cf-77d2-8980-2d2dc8b5f91a
+  target_id: 019efdbe-9785-7b12-b5ee-c0a5d7c36817
+  author: aida
+  node_id: '1'
+  lamport: 1982
+  timestamp: 2026-06-25T07:46:29.455283949Z
+  kind: !Create
+    title: TUI can host a Codex session (app.rs spawn_tab threads Claude --session-id/--resume + spawn_claude_session)
+    description: Uncovered gap (TASK-0421 inventory). The TUI PtyHost is argv-agnostic, but app.rs::spawn_tab hosts `aida queue work`, which calls the Claude-only spawn_claude_session and threads Claude `--session-id`/`--resume`. To host a Codex session in a tab, the session-spawn + resume threading need a vendor-neutral path. trace:TASK-0421
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1982
 node_id: '1'
