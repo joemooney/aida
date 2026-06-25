@@ -19,6 +19,11 @@ vt100 = { workspace = true }
 # the status overlay (STORY-133) is the first heavy consumer.
 ratatui = { workspace = true }
 
+# Command-surface enumeration walks the real `aida` clap `Command` tree so the
+# fuzzy palette never drifts from the CLI (STORY-682). Already in the workspace
+# lockfile via aida-cli — no new external crate enters the build graph.
+clap = { workspace = true }
+
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
