@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T10:52:09.156659620Z
-modified_at: 2026-06-24T10:52:09.156659620Z
+modified_at: 2026-06-25T04:53:55.731797197Z
 req_type: Bug
 tags:
 - ci
@@ -23,3 +23,9 @@ tags:
 - flaky
 - from-operator
 - reliability
+comments:
+- id: 019efd20-a593-7203-a6db-4082ba6c9277
+  author: joe
+  content: Commit 89b695cc8 references this requirement
+  created_at: 2026-06-25T04:53:55.731797197Z
+  modified_at: 2026-06-25T04:53:55.731797197Z
