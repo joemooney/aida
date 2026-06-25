@@ -480,6 +480,11 @@ pub struct ScaffoldConfig {
     pub generate_skills: bool,
     /// Generate .codex/skills/ directory with Codex-compatible skills
     pub generate_codex_skills: bool,
+    /// Generate .codex/config.toml registering AIDA's MCP server with Codex
+    /// CLI — the Codex-side parallel to the `.mcp.json` that makes a project
+    /// MCP-ready for Claude Code, so a project that uses Codex instead of
+    /// Claude is first-class out of the box. trace:TASK-0424 | ai:claude
+    pub generate_codex_config: bool,
     /// Generate .antigravity/skills/ directory with Antigravity-compatible
     /// skills. Mirrors the `.codex/skills/` pattern so a second supported
     /// agent inherits the same onboarding parity. trace:TASK-457 | ai:claude
@@ -571,6 +576,8 @@ impl Default for ScaffoldConfig {
             generate_commands: true,
             generate_skills: true,
             generate_codex_skills: true,
+            // trace:TASK-0424 | ai:claude
+            generate_codex_config: true,
             // trace:TASK-457 | ai:claude
             generate_antigravity_skills: true,
             include_aida_req_skill: true,
@@ -1723,6 +1730,35 @@ impl Scaffolder {
                 path.clone(),
                 mcp_content,
                 "MCP server configuration for Claude Code".to_string(),
+                false,
+            );
+
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+
+            artifacts.push(artifact);
+        }
+
+        // .codex/config.toml — registers AIDA's MCP server with Codex CLI,
+        // the Codex-side parallel to the `.mcp.json` above. A project that
+        // uses Codex instead of Claude Code is therefore MCP-ready out of the
+        // box: a Codex session started from the project root discovers AIDA's
+        // tools without anyone running `codex mcp add aida ...` by hand.
+        // Template-class (carries an AIDA-Generated header, auto-upgrades on
+        // `scaffold apply`). trace:TASK-0424 | ai:claude
+        if self.config.generate_codex_config {
+            new_dirs.insert(PathBuf::from(".codex"));
+            let path = PathBuf::from(".codex/config.toml");
+            let artifact = self.create_artifact(
+                path.clone(),
+                self.generate_codex_config(),
+                "MCP server registration for Codex CLI".to_string(),
                 false,
             );
 
@@ -3133,6 +3169,10 @@ mod tests {
             generate_skills: false,
             generate_commands: false,
             generate_codex_skills: false,
+            // The Codex MCP registration is independent of skills, so disable
+            // it explicitly here to assert a fully-Codex-disabled config emits
+            // no `.codex/` artifacts at all. trace:TASK-0424 | ai:claude
+            generate_codex_config: false,
             generate_antigravity_skills: false,
             ..Default::default()
         };
@@ -3152,6 +3192,37 @@ mod tests {
 
         scaffolder.apply(&preview).expect("scaffolding apply");
         assert!(!temp_dir.path().join(".antigravity").exists());
+    }
+
+    /// TASK-0424: the default config scaffolds `.codex/config.toml` (the
+    /// Codex-side MCP registration parallel to `.mcp.json`) so a project that
+    /// uses Codex instead of Claude Code is MCP-ready out of the box.
+    /// trace:TASK-0424 | ai:claude
+    #[test]
+    fn codex_config_scaffolded_by_default() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut scaffolder =
+            Scaffolder::new(temp_dir.path().to_path_buf(), ScaffoldConfig::default());
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+
+        let codex_config = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == PathBuf::from(".codex/config.toml"))
+            .expect(".codex/config.toml should be scaffolded by default");
+        assert!(codex_config.content.contains("[mcp_servers.aida]"));
+
+        scaffolder.apply(&preview).expect("scaffolding apply");
+        let written = std::fs::read_to_string(temp_dir.path().join(".codex/config.toml")).unwrap();
+        assert!(written.contains("[mcp_servers.aida]"));
+        // Drops the AIDA-Generated header line; rest must parse as TOML.
+        let body: toml::Value =
+            toml::from_str(&written).expect("written .codex/config.toml parses");
+        assert_eq!(
+            body["mcp_servers"]["aida"]["command"].as_str(),
+            Some("aida")
+        );
     }
 
     /// STORY-305: `aida scaffold apply` must create `.claude/skills/local/`
