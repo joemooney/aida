@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:14:01.561270548Z
-modified_at: 2026-06-25T04:36:36.562188880Z
+modified_at: 2026-06-25T04:50:12.803901775Z
 req_type: Story
 tags:
 - aida:init
@@ -51,3 +51,8 @@ comments:
     Tests: seed a store, attach from a second repo, assert the pre-existing spec is visible AND both repos add without id collision (the live repro above, as a test).
   created_at: 2026-06-25T04:36:36.562188880Z
   modified_at: 2026-06-25T04:36:36.562188880Z
+- id: 019efd1d-3ec3-7321-a653-a8d368349a92
+  author: joe
+  content: Commit da387e34f references this requirement
+  created_at: 2026-06-25T04:50:12.803901775Z
+  modified_at: 2026-06-25T04:50:12.803901775Z
