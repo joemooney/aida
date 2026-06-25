@@ -1,0 +1,17 @@
+id: 019eff4b-9b2c-7481-b701-6f3d7ad644cc
+spec_id: STORY-685
+agreed_id: STORY-685
+title: 'EPIC-52 TUI interaction model: two-pane Nav<->list focus navigation + active-panel focus colors'
+description: 'Operator interaction design (2026-06-25, live): (1) up/down navigates the NAV panel by default; (2) Enter or Left-arrow moves focus INTO the list panel; (3) Right-arrow or Esc returns focus to the Nav panel; (4) keep Tab/BackTab for switching tabs (unchanged). (5) The ACTIVE panels selected row gets a distinct background/selected color; (6) the inactive Nav-panels selected row dims (darker) once you have entered the list panel, so focus is always visually clear. Pairs with BUG-613 (instant/cache-fast data) + the async lazy-panel loading (navigate instantly, panel fills in async, parallel loads as you arrow down). Supervised + keyboard-verified.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-25T15:00:05.548358790Z
+modified_at: 2026-06-25T15:00:05.548358790Z
+req_type: Story
+tags:
+- aida:tui
+- from-operator
+- parent:EPIC-52
+- supervised
