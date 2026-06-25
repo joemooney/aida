@@ -20553,5 +20553,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1972
+- id: 019efd9a-0ffe-7872-8cc3-8efaf14c1320
+  target_id: 019efd99-f8b0-7cf3-9407-d184bf0e2d03
+  author: aida
+  node_id: '1'
+  lamport: 1973
+  timestamp: 2026-06-25T07:06:32.830229294Z
+  kind: !Create
+    title: 'EPIC-51 Slice 3: inject a palette result into the chat via PTY stdin on resume'
+    description: 'Third slice: on resume, optionally type a chosen palette result (formatted context block) into the chat childs PTY stdin (reuse the STORY-136 inject-into-focused-PTY mechanism), so the result becomes a user message the conversation can see. NOT JSONL surgery (D2). Depends on Slice 1+2.'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 1973
 node_id: '1'
