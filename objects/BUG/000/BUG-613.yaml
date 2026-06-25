@@ -8,12 +8,12 @@ description: |-
   Impact: the TUI (welcome.rs fetch_mission + the overlay) calls `aida status --json` at startup (2-3x) → operator reports 20-30s `aida tui` launch; and per-item panel loads block navigation ~3s on first visit. welcome.rs comment falsely claims the fetch is "cache-only sub-millisecond".
 
   Fix (two layers): (A) ROOT — batch the O(N)-git scans into a SINGLE git-log pass (build a spec-id -> commit set once, look up per spec in-memory; reuse BUG-606 referenced_spec_ids_on_default_branch), only compute git-linkage for the FEW in-flight items not all specs, and cache/skip/async the `claude agents --json` spawn; target <200ms. (B) TUI UX — the hot paths (startup mission panel + per-item panels) must use cache-only fast data; navigation instant; panels load ASYNC in background threads with a loading placeholder (operator: "navigate instantaneously and lazy load the panel ... something happens when I press down arrow"), parallel loads as you navigate.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T14:53:10.206289350Z
-modified_at: 2026-06-25T15:59:45.197617848Z
+modified_at: 2026-06-25T16:33:53.531700917Z
 req_type: Bug
 tags:
 - aida:status
@@ -27,3 +27,21 @@ comments:
   content: 'ROOT CAUSE pinned (strace, 2026-06-25): the dominant cost is `git status --porcelain` run ~1836x as `git -C <.claude/worktrees/...> status --porcelain`. ~27 worktrees x ~68 = the per-worktree dirty scan (worktree_dirty_entries @main.rs:47359, over `for wt in list_worktrees` @33492/34424 incl. scan_merged_agent_worktrees TASK-878) RE-RUNS ~68 times per single `aida status` instead of once. Fix: compute the worktree set + each worktree dirty-state at most once per invocation, and keep the full agent-worktree scan OFF the status hot path (it is doctor-grade; its own comment claims it is doctor-only — verify/restore that). SECONDARY: a worktree LEAK — 63 worktrees had accumulated because finished sessions/agents do not GC them; manual `git worktree prune` + remove of stale agent worktrees cut 63->27 and status 27.7s->22.5s (the rest is the re-scan). Re-fanned a tightly-scoped fix agent.'
   created_at: 2026-06-25T15:59:45.197617848Z
   modified_at: 2026-06-25T15:59:45.197617848Z
+history:
+- id: 019effa1-7b28-7d30-820b-ae4041978d49
+  author: aida-auto-bump
+  timestamp: 2026-06-25T16:33:53.448785743Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019effa1-7b7b-7742-9460-efca7610c577
+  timestamp: 2026-06-25T16:33:53.531694844Z
+  agent: aida
+  commit_sha: 8b7dba8d766e4287533ae6ca1ef4fc6b53a64013
+  summary: Completed via merge 8b7dba8d
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T16:33:52.469324530Z
+  completion_sha: 8b7dba8d766e4287533ae6ca1ef4fc6b53a64013
