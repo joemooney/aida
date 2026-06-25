@@ -1,0 +1,18 @@
+id: 019efdbd-d82c-7213-983b-0b63890ebe7e
+spec_id: STORY-683
+agreed_id: STORY-683
+title: Headless orchestrator drain on Codex — generalize spawn_claude_headless to spawn_vendor_headless (codex exec)
+description: Uncovered gap from the TASK-0421 inventory (HIGH — autonomy keystone). session::spawn_claude_headless + auto_complete.rs drain phases hardcode `claude -p`, so sustained autonomous drains (burndown / --no-human) are Claude-only. compete.rs already has a working `codex exec` vendor adapter — reusable prior art. Generalize to spawn_vendor_headless(vendor) so the orchestrator drain + --no-human run on Codex too. trace:TASK-0421
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-25T07:45:37.836975819Z
+modified_at: 2026-06-25T07:45:37.836975819Z
+req_type: Story
+tags:
+- autonomy
+- codex
+- cross-vendor
+- from-inventory:TASK-0421
+- parent:EPIC-0419

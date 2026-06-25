@@ -20621,5 +20621,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1978
+- id: 019efdbd-e5de-77f1-9e44-bbf7e6545a0d
+  target_id: 019efdbd-d82c-7213-983b-0b63890ebe7e
+  author: aida
+  node_id: '1'
+  lamport: 1979
+  timestamp: 2026-06-25T07:45:41.342238022Z
+  kind: !Create
+    title: Headless orchestrator drain on Codex — generalize spawn_claude_headless to spawn_vendor_headless (codex exec)
+    description: Uncovered gap from the TASK-0421 inventory (HIGH — autonomy keystone). session::spawn_claude_headless + auto_complete.rs drain phases hardcode `claude -p`, so sustained autonomous drains (burndown / --no-human) are Claude-only. compete.rs already has a working `codex exec` vendor adapter — reusable prior art. Generalize to spawn_vendor_headless(vendor) so the orchestrator drain + --no-human run on Codex too. trace:TASK-0421
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 1979
 node_id: '1'
