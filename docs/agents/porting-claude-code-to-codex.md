@@ -818,7 +818,10 @@ status_line = ["model-with-reasoning", "context-remaining", "git-branch", "curre
 
 So the live role/queue/lease readout can't live in the Codex footer today —
 surface it with the AIDA TUI, a shell-prompt/tmux integration, or `aida status`
-polling instead.
+polling instead. AIDA already scaffolds this fallback: see
+`docs/agents/codex-mcp-setup.md` for the built-in `[tui] status_line` snippet and
+the opt-in `aida statusline` bootstrap. Native command-backed wiring is gated on
+the upstream FR and tracked as a deferred watch-item under EPIC-0419.
 
 ### A.6 Headless approval gate: Claude `defer` → AIDA punt (portable)
 
