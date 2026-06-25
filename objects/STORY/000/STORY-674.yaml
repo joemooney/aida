@@ -13,12 +13,12 @@ description: |-
   Skip seed_meta + backend.save + the initialize commit entirely.
 
   Acceptance: repo-a init+file TASK-1; repo-b aida init --sibling against the same store ATTACHES (store git log unchanged except a node registration), repo-b aida list immediately SHOWS TASK-1, and both repos can add specs with non-colliding node-namespaced ids (repo-a -> TASK-1-xxx, repo-b -> TASK-2-xxx). Regression test: seed a store, run sibling-attach from a second repo, assert the pre-existing spec survives + is visible + the second repo gets a distinct node id.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:14:01.561270548Z
-modified_at: 2026-06-25T04:50:12.803901775Z
+modified_at: 2026-06-25T04:58:28.484537793Z
 req_type: Story
 tags:
 - aida:init
@@ -56,3 +56,21 @@ comments:
   content: Commit da387e34f references this requirement
   created_at: 2026-06-25T04:50:12.803901775Z
   modified_at: 2026-06-25T04:50:12.803901775Z
+history:
+- id: 019efd24-ceb4-74d2-ae3a-6987f7761e30
+  author: aida-auto-bump
+  timestamp: 2026-06-25T04:58:28.404664579Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efd24-cf04-7822-a866-6938e968d157
+  timestamp: 2026-06-25T04:58:28.484529936Z
+  agent: aida
+  commit_sha: a84a1c2a14a6da5652e9f11f59a00af9009685c2
+  summary: Completed via merge a84a1c2a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T04:58:27.437995298Z
+  completion_sha: a84a1c2a14a6da5652e9f11f59a00af9009685c2
