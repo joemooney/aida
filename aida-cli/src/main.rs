@@ -22403,32 +22403,82 @@ fn handle_init_distributed_sibling(
     //   neither   → refuse rather than destroy.
     // trace:BUG-610 trace:STORY-674 | ai:claude
     let existing_count = count_requirements_in_store(&store_dir).unwrap_or(0);
-    let attaching = attach && existing_count > 0 && !force;
+    let mut force = force;
+    let mut attaching = attach && existing_count > 0 && !force;
     if existing_count > 0 && !force && !attach {
-        eprintln!(
-            "{} A store already exists at {} with {} requirement(s).",
-            "!".yellow(),
-            store_dir.display(),
-            existing_count
-        );
-        eprintln!("  Re-initializing would DELETE them — this is almost certainly a shared");
-        eprintln!("  sibling store another repo created. Refusing to overwrite it.");
-        eprintln!(
-            "  {} To ATTACH this repo to the existing store (multi-repo): re-run with {}.",
-            crate::glyph(crate::glyphs::Glyph::Bullet),
-            "--attach".bold()
-        );
-        eprintln!(
-            "  {} To WIPE and re-initialize the store: re-run with {}.",
-            crate::glyph(crate::glyphs::Glyph::Bullet),
-            "--force".bold()
-        );
-        // Abort the WHOLE init (non-zero exit, no telemetry/config-menu
-        // post-setup) — a refusal must not look like success. trace:BUG-610
-        anyhow::bail!(
-            "refused to re-initialize the existing store at {} (pass --attach to join, or --force to wipe)",
-            store_dir.display()
-        );
+        let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+        if interactive {
+            // STORY-675: a store already exists at the target path — instead of a
+            // flat refusal, OFFER to join it (the multi-repo case is the common
+            // one). Join routes through the STORY-674 attach path; "create new"
+            // requires the same typed confirmation as --force. trace:STORY-675
+            eprintln!(
+                "{} A store already exists at {} with {} requirement(s).",
+                "!".yellow(),
+                store_dir.display(),
+                existing_count
+            );
+            eprintln!("  Almost certainly a shared store another repo created. What now?");
+            eprintln!(
+                "  {} [{}] Join it — attach this repo to the existing store (recommended)",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "j".green().bold()
+            );
+            eprintln!(
+                "  {} [{}] Create new — WIPE and re-initialize ({} requirement(s) lost)",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "c".red().bold(),
+                existing_count
+            );
+            eprintln!(
+                "  {} [{}] Abort (default)",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "a".bold()
+            );
+            eprint!("  Choose [j/c/a]: ");
+            use std::io::Write;
+            let _ = std::io::stderr().flush();
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            match input.trim().to_lowercase().as_str() {
+                "j" | "join" => attaching = true,
+                "c" | "create" | "new" => {
+                    if !confirm_destructive_reset(existing_count, &store_dir)? {
+                        return Ok(());
+                    }
+                    force = true;
+                }
+                _ => {
+                    eprintln!("Aborted.");
+                    return Ok(());
+                }
+            }
+        } else {
+            // Non-TTY: never silently overwrite. Refuse with the actionable
+            // flags (BUG-610) and abort (non-zero exit, no post-setup).
+            eprintln!(
+                "{} A store already exists at {} with {} requirement(s).",
+                "!".yellow(),
+                store_dir.display(),
+                existing_count
+            );
+            eprintln!("  Re-initializing would DELETE them — this is almost certainly a shared");
+            eprintln!("  sibling store another repo created. Refusing to overwrite it.");
+            eprintln!(
+                "  {} To ATTACH this repo to the existing store (multi-repo): re-run with {}.",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "--attach".bold()
+            );
+            eprintln!(
+                "  {} To WIPE and re-initialize the store: re-run with {}.",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "--force".bold()
+            );
+            anyhow::bail!(
+                "refused to re-initialize the existing store at {} (pass --attach to join, or --force to wipe)",
+                store_dir.display()
+            );
+        }
     }
 
     if attaching {
