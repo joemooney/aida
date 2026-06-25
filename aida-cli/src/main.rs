@@ -1515,6 +1515,7 @@ fn run() -> Result<()> {
         centralized,
         sibling,
         attach,
+        store_path,
         registry_remote,
         verbose,
         name,
@@ -1539,11 +1540,14 @@ fn run() -> Result<()> {
                 *verbose,
                 name.as_deref(),
             )?;
-        } else if *sibling {
+        } else if *sibling || store_path.is_some() {
+            // STORY-676: --store-path implies the sibling storage model at an
+            // explicit path; --sibling is sugar for --store-path ../aida-store.
             handle_init_distributed_sibling(
                 registry_remote.as_deref(),
                 *force,
                 *attach,
+                store_path.as_deref(),
                 *no_skills,
                 agent,
                 *no_hooks,
@@ -22339,6 +22343,7 @@ fn handle_init_distributed_sibling(
     registry_remote: Option<&str>,
     force: bool,
     attach: bool,
+    store_path_arg: Option<&str>,
     no_skills: bool,
     agent: &str,
     no_hooks: bool,
@@ -22349,12 +22354,21 @@ fn handle_init_distributed_sibling(
 
     let cwd = std::env::current_dir()?;
     let aida_dir = cwd.join(".aida");
-    // BUG-608: the store must be a TRUE SIBLING of the code repo (one level up),
-    // not nested inside it — `--sibling`'s whole purpose is for multiple code
-    // repos to share one store, and a store nested in repo-a can't be reached by
-    // repo-b via `../aida-store`. Create it at the parent (`../aida-store`).
-    // trace:BUG-608 | ai:claude
-    let store_dir = cwd.parent().unwrap_or(cwd.as_path()).join("aida-store");
+    // BUG-608/STORY-676: the store is a separate repo at an explicit relative (or
+    // absolute) path. `--sibling` defaults it to `../aida-store` — a TRUE SIBLING
+    // of the code repo (not nested: a nested store can't be reached by a second
+    // repo). `store_rel` is what lands in config.toml (resolved relative to the
+    // project root, == cwd here); `store_dir` is its absolute form for git ops.
+    // trace:BUG-608 trace:STORY-676 | ai:claude
+    let store_rel = store_path_arg.unwrap_or("../aida-store");
+    let store_dir = {
+        let p = std::path::Path::new(store_rel);
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            cwd.join(p)
+        }
+    };
 
     // Check if already initialized
     if aida_dir.join("node.toml").exists() && !force {
@@ -22389,32 +22403,82 @@ fn handle_init_distributed_sibling(
     //   neither   → refuse rather than destroy.
     // trace:BUG-610 trace:STORY-674 | ai:claude
     let existing_count = count_requirements_in_store(&store_dir).unwrap_or(0);
-    let attaching = attach && existing_count > 0 && !force;
+    let mut force = force;
+    let mut attaching = attach && existing_count > 0 && !force;
     if existing_count > 0 && !force && !attach {
-        eprintln!(
-            "{} A store already exists at {} with {} requirement(s).",
-            "!".yellow(),
-            store_dir.display(),
-            existing_count
-        );
-        eprintln!("  Re-initializing would DELETE them — this is almost certainly a shared");
-        eprintln!("  sibling store another repo created. Refusing to overwrite it.");
-        eprintln!(
-            "  {} To ATTACH this repo to the existing store (multi-repo): re-run with {}.",
-            crate::glyph(crate::glyphs::Glyph::Bullet),
-            "--attach".bold()
-        );
-        eprintln!(
-            "  {} To WIPE and re-initialize the store: re-run with {}.",
-            crate::glyph(crate::glyphs::Glyph::Bullet),
-            "--force".bold()
-        );
-        // Abort the WHOLE init (non-zero exit, no telemetry/config-menu
-        // post-setup) — a refusal must not look like success. trace:BUG-610
-        anyhow::bail!(
-            "refused to re-initialize the existing store at {} (pass --attach to join, or --force to wipe)",
-            store_dir.display()
-        );
+        let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+        if interactive {
+            // STORY-675: a store already exists at the target path — instead of a
+            // flat refusal, OFFER to join it (the multi-repo case is the common
+            // one). Join routes through the STORY-674 attach path; "create new"
+            // requires the same typed confirmation as --force. trace:STORY-675
+            eprintln!(
+                "{} A store already exists at {} with {} requirement(s).",
+                "!".yellow(),
+                store_dir.display(),
+                existing_count
+            );
+            eprintln!("  Almost certainly a shared store another repo created. What now?");
+            eprintln!(
+                "  {} [{}] Join it — attach this repo to the existing store (recommended)",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "j".green().bold()
+            );
+            eprintln!(
+                "  {} [{}] Create new — WIPE and re-initialize ({} requirement(s) lost)",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "c".red().bold(),
+                existing_count
+            );
+            eprintln!(
+                "  {} [{}] Abort (default)",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "a".bold()
+            );
+            eprint!("  Choose [j/c/a]: ");
+            use std::io::Write;
+            let _ = std::io::stderr().flush();
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            match input.trim().to_lowercase().as_str() {
+                "j" | "join" => attaching = true,
+                "c" | "create" | "new" => {
+                    if !confirm_destructive_reset(existing_count, &store_dir)? {
+                        return Ok(());
+                    }
+                    force = true;
+                }
+                _ => {
+                    eprintln!("Aborted.");
+                    return Ok(());
+                }
+            }
+        } else {
+            // Non-TTY: never silently overwrite. Refuse with the actionable
+            // flags (BUG-610) and abort (non-zero exit, no post-setup).
+            eprintln!(
+                "{} A store already exists at {} with {} requirement(s).",
+                "!".yellow(),
+                store_dir.display(),
+                existing_count
+            );
+            eprintln!("  Re-initializing would DELETE them — this is almost certainly a shared");
+            eprintln!("  sibling store another repo created. Refusing to overwrite it.");
+            eprintln!(
+                "  {} To ATTACH this repo to the existing store (multi-repo): re-run with {}.",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "--attach".bold()
+            );
+            eprintln!(
+                "  {} To WIPE and re-initialize the store: re-run with {}.",
+                crate::glyph(crate::glyphs::Glyph::Bullet),
+                "--force".bold()
+            );
+            anyhow::bail!(
+                "refused to re-initialize the existing store at {} (pass --attach to join, or --force to wipe)",
+                store_dir.display()
+            );
+        }
     }
 
     if attaching {
@@ -22438,7 +22502,7 @@ fn handle_init_distributed_sibling(
             println!(
                 "  {} git repository in {}",
                 "Created".green(),
-                "../aida-store/".white().bold()
+                format!("{store_rel}/").white().bold()
             );
         }
     }
@@ -22510,12 +22574,12 @@ fn handle_init_distributed_sibling(
         println!(
             "  {} {}",
             "Created".green(),
-            "../aida-store/metadata.yaml".white().bold()
+            format!("{store_rel}/metadata.yaml").white().bold()
         );
         println!(
             "  {} {}",
             "Created".green(),
-            "../aida-store/objects/".white().bold()
+            format!("{store_rel}/objects/").white().bold()
         );
 
         // Create initial commit
@@ -22550,8 +22614,8 @@ fn handle_init_distributed_sibling(
                 Err(e) => {
                     eprintln!("  {} Failed to push to remote: {}", "Warning:".yellow(), e);
                     eprintln!(
-                        "  You can push later with: cd ../aida-store && git push -u origin {}",
-                        branch
+                        "  You can push later with: cd {} && git push -u origin {}",
+                        store_rel, branch
                     );
                 }
             }
@@ -22579,7 +22643,7 @@ fn handle_init_distributed_sibling(
             println!();
             println!("  {} No --registry-remote specified.", "Note:".yellow());
             println!("  The store is local-only until you add a remote:");
-            println!("    cd ../aida-store && git remote add origin <url>");
+            println!("    cd {store_rel} && git remote add origin <url>");
             println!("    aida init --distributed --registry-remote <url>");
         }
         store
@@ -22587,15 +22651,16 @@ fn handle_init_distributed_sibling(
 
     // Create .aida/ config in the project root (not the store)
     std::fs::create_dir_all(&aida_dir)?;
-    let config_content = "# AIDA distributed mode configuration\n\
+    let config_content = format!(
+        "# AIDA distributed mode configuration\n\
          [deployment]\n\
          mode = \"distributed\"\n\
-         # BUG-608: a true sibling store (one level up), shareable by multiple\n\
-         # code repos. Resolved relative to the project root (this .aida's parent).\n\
-         store_path = \"../aida-store\"\n\
+         # STORY-676: a separate store repo at this path (relative to the project\n\
+         # root, or absolute); code repos pointing at the same path share a store.\n\
+         store_path = \"{store_rel}\"\n\
          store_type = \"sibling\"\n\
-         \n\
-         [store.sync]\n\
+         \n"
+    ) + "[store.sync]\n\
          # Auto-push store commits after local writes. Values: manual,\n\
          # session-end, per-write, periodic. `periodic` is reserved until\n\
          # aida-worker (EPIC-30) ships.\n\
@@ -22631,9 +22696,10 @@ fn handle_init_distributed_sibling(
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
-        "{}{}Git-canonical store (sibling repo at ../aida-store/)",
-        "../aida-store/".white().bold(),
-        " ".repeat(20)
+        "{}{}Git-canonical store (separate store repo at {})",
+        format!("{store_rel}/").white().bold(),
+        " ".repeat(20),
+        store_rel
     );
     complete_init_scaffolding(
         &cwd,
