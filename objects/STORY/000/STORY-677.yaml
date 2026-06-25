@@ -13,12 +13,12 @@ description: |-
   Keep DANGEROUS-live knobs READ-ONLY with a reason-on-Enter: id_format.policy/counter_scope (live change risks id collisions), deployment.* (breaks store access), agents.bypass (security posture), contained.* (sandbox posture).
 
   TUI: enum = cycle/select; integer = validated text input. Tests: extend config_menu.rs tests for enum cycle + integer validate/clamp.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:00:05.277413290Z
-modified_at: 2026-06-25T07:00:05.277413290Z
+modified_at: 2026-06-25T07:21:10.098154485Z
 req_type: Story
 tags:
 - aida:config
@@ -26,3 +26,21 @@ tags:
 - from-operator
 - parent:STORY-671
 - tui
+history:
+- id: 019efda7-727e-7942-b2b3-86a38a158b03
+  author: aida-auto-bump
+  timestamp: 2026-06-25T07:21:10.014861811Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efda7-72d2-7df1-b398-704ce67b9309
+  timestamp: 2026-06-25T07:21:10.098148374Z
+  agent: aida
+  commit_sha: f2e6813f89bdff1b5b4123dff9b0f40dbcc6f71d
+  summary: Completed via merge f2e6813f
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T07:21:09.044956862Z
+  completion_sha: f2e6813f89bdff1b5b4123dff9b0f40dbcc6f71d
