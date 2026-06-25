@@ -12,12 +12,12 @@ description: |-
   Proposed fix: aida backlog groom should (a) route blessed items --for <doer-role> (default implementer) instead of into the grooming sessions own role queue, and (b) queue under a handoff-able identity — the project/human identity, not the agents PID/stable-name identity — OR at minimum PRINT exactly who/which-role/which-identity the items were queued for, so the drain command is unambiguous (today it just says "Drain with: aida queue work --batch NAME" with no identity, which is wrong from any other shell). Relates to BUG-89 (queue identity scoping) and the advisor-grooms-then-routes pattern.
 
   Acceptance: after aida backlog groom from an advisor-agent session, a human running the printed drain command from their own shell sees and can drain the blessed batch; groom output names the target role + identity.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-23T05:17:11.194426903Z
-modified_at: 2026-06-24T03:18:27.073251567Z
+modified_at: 2026-06-25T05:11:22.406808159Z
 req_type: Bug
 tags:
 - aida:backlog
@@ -33,3 +33,21 @@ comments:
   content: Commit c2e9b80b5 references this requirement
   created_at: 2026-06-24T03:18:27.073251567Z
   modified_at: 2026-06-24T03:18:27.073251567Z
+history:
+- id: 019efd30-9dd5-7080-a6ea-309be0c691f5
+  author: aida-auto-bump
+  timestamp: 2026-06-25T05:11:22.325824303Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019efd30-9e26-7340-88f1-fd8eb159a034
+  timestamp: 2026-06-25T05:11:22.406797110Z
+  agent: aida
+  commit_sha: 0890ecd887d3ebe5c0e8d563415cc0e185050b44
+  summary: Completed via merge 0890ecd8
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-25T05:11:21.354665754Z
+  completion_sha: 0890ecd887d3ebe5c0e8d563415cc0e185050b44
