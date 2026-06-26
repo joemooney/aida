@@ -87,6 +87,22 @@ pub enum RowKind {
     /// Action verb selected via the left nav action block.
     #[allow(dead_code)]
     Action,
+    // --- Blocked-board reason rows (STORY-686). Each carries the reason's
+    // Enter-dispatch action; see `launcher::act_on_row`. trace:STORY-686
+    /// In-flight spec — Enter is info-only (shows the spec).
+    ReasonInFlight,
+    /// Blocked-by-dependency spec — Enter shows the blocked spec.
+    ReasonBlocked,
+    /// NeedsAttention spec — Enter launches `aida findings` triage.
+    ReasonNeedsAttention,
+    /// Awaiting-review spec — Enter opens the PR / shows the spec.
+    ReasonAwaitingReview,
+    /// Needs-an-answer spec — Enter launches the `aida questions` flow.
+    ReasonNeedsAnswer,
+    /// Needs-approval (Draft) spec — Enter approves via `aida edit … --status approved`.
+    ReasonNeedsApproval,
+    /// Deferred spec — Enter undefers it (`aida undefer <id>`).
+    ReasonDeferred,
 }
 
 /// Which of the two panes currently owns the keyboard. Up/Down act on the
@@ -135,6 +151,22 @@ pub struct DashboardModel {
     /// Catppuccin Mocha palette; the launcher overrides it from
     /// `[tui] theme`. trace:TASK-256 | ai:claude
     pub theme: Theme,
+    /// The blocked-board's classified items — every open spec assigned to
+    /// exactly one reason-group (STORY-686). Refreshed from the cache-fast
+    /// sources on launch and on `g`; the reason-group nav sections read
+    /// their rows out of this. trace:STORY-686 | ai:claude
+    pub board: Vec<crate::board::ClassifiedItem>,
+    /// Per-reason counts derived from [`Self::board`] — drives the Nav
+    /// `(count) · owner` suffix and the empty-reason dim. trace:STORY-686
+    pub reason_counts: HashMap<&'static str, usize>,
+    /// Whether the cheap board inputs have been composed at least once. The
+    /// first reason-section render triggers the load; subsequent moves reuse
+    /// the cached classification until a `g` refresh. trace:STORY-686
+    pub board_loaded: bool,
+    /// Whether the lazy `gh pr list` awaiting-review fill has run for the
+    /// current board snapshot. The cheap rows paint first; the PR rows merge
+    /// in on the next refetch of the awaiting-review group. trace:STORY-686
+    pub prs_filled: bool,
 }
 
 impl DashboardModel {
@@ -162,6 +194,52 @@ impl DashboardModel {
     /// when the row set changed underneath.
     pub fn reset_selection(&mut self) {
         self.selected = 0;
+    }
+
+    /// Compose the cheap (non-network) board inputs, classify them, and
+    /// cache the result + per-reason counts on the model. Cheap: only
+    /// cache-fast `aida list …` reads and one `aida questions list` parse —
+    /// never `aida status`. The `gh pr list` awaiting-review fill is
+    /// deferred to [`Self::lazy_fill_prs`]. trace:STORY-686 | ai:claude
+    pub fn refresh_board(&mut self) {
+        let inputs = crate::board::fetch_inputs();
+        self.board = crate::board::classify(&inputs);
+        self.reason_counts = crate::board::counts(&self.board)
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+        self.board_loaded = true;
+        self.prs_filled = false;
+    }
+
+    /// Lazy-fill the awaiting-review group with open PRs from `gh pr list`
+    /// (the one ~1s network source). Idempotent per board snapshot via
+    /// `prs_filled`; PR rows are appended to the classified set as
+    /// awaiting-review items not already represented by a Done-on-branch
+    /// row, then the counts are recomputed. trace:STORY-686 | ai:claude
+    pub fn lazy_fill_prs(&mut self) {
+        if self.prs_filled {
+            return;
+        }
+        self.prs_filled = true;
+        let pr_rows = crate::board::fetch_open_pr_rows();
+        if pr_rows.is_empty() {
+            return;
+        }
+        // A PR row's `id` is the PR number; key the de-dupe on the head-ref
+        // SPEC mention is not available here, so we surface every open PR as
+        // an awaiting-review item. Existing Done-on-branch rows stay; PRs are
+        // appended with a `pr:<n>` synthetic id so Enter opens the PR.
+        for pr in pr_rows {
+            self.board.push(crate::board::ClassifiedItem {
+                spec_id: format!("pr:{}", pr.id),
+                title: pr.title,
+                status: pr.status,
+                reason: crate::board::Reason::AwaitingReview,
+            });
+        }
+        self.reason_counts = crate::board::counts(&self.board)
+            .into_iter()
+            .collect::<HashMap<_, _>>();
     }
 }
 
@@ -204,6 +282,19 @@ pub fn refetch_rows(
     model.notice = None;
     let section = model.nav.current();
     model.rows = match section {
+        // Blocked-board reason-group: read from the cached classification,
+        // loading it on first touch. The awaiting-review group triggers the
+        // lazy `gh pr list` fill so its PR rows appear without stalling the
+        // cheap reasons. trace:STORY-686 | ai:claude
+        NavSection::Reason(reason) => {
+            if !model.board_loaded {
+                model.refresh_board();
+            }
+            if reason == crate::board::Reason::AwaitingReview {
+                model.lazy_fill_prs();
+            }
+            crate::board::rows_for(&model.board, reason)
+        }
         NavSection::Queue => fetch_queue(model),
         NavSection::Backlog => fetch_status(model, &["approved", "planned"]),
         NavSection::History => fetch_status(model, &["completed"]),
@@ -302,8 +393,12 @@ fn fetch_status(model: &mut DashboardModel, statuses: &[&str]) -> Vec<ListRow> {
         .collect()
 }
 
-/// Compact list-JSON row — what `aida list --json` emits.
-/// trace:STORY-244 | ai:claude
+/// Compact list-JSON row — what `aida list --json` emits. The
+/// `queued`/`in_flight`/`blocked` routing flags are carried (TASK-670): the
+/// blocked-board classifier (STORY-686) reads `in_flight`/`blocked` to group
+/// each spec by why it's not moving. `blocked` is only populated when the
+/// shell-out passes `--blocked`; the field defaults to `false` otherwise.
+/// trace:STORY-244 trace:STORY-686 | ai:claude
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
 pub struct ListJsonRow {
@@ -314,6 +409,12 @@ pub struct ListJsonRow {
     pub status: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub queued: bool,
+    #[serde(default)]
+    pub in_flight: bool,
+    #[serde(default)]
+    pub blocked: bool,
 }
 
 /// Parse `aida list --json` output. Tolerant: a JSON shape mismatch
@@ -355,6 +456,14 @@ struct PrJson {
     head_ref_name: String,
     #[serde(rename = "statusCheckRollup", default)]
     status_check_rollup: Vec<serde_json::Value>,
+}
+
+/// Public re-export of [`parse_pr_json`] so the blocked-board's lazy
+/// awaiting-review fill ([`crate::board::fetch_open_pr_rows`]) reuses the
+/// same `gh pr list` JSON → [`ListRow`] mapping rather than re-deriving it.
+/// trace:STORY-686 | ai:claude
+pub fn parse_pr_json_rows(bytes: &[u8]) -> Vec<ListRow> {
+    parse_pr_json(bytes)
 }
 
 fn parse_pr_json(bytes: &[u8]) -> Vec<ListRow> {
@@ -487,6 +596,21 @@ pub fn ensure_preview(model: &mut DashboardModel) {
             "Enter resumes this conversation via `claude --resume`.".into(),
         ],
         RowKind::Action => vec![row.title.clone()],
+        // Blocked-board reason rows preview the spec body, except the
+        // synthetic PR rows (`pr:<n>`) which preview the PR. trace:STORY-686
+        RowKind::ReasonInFlight
+        | RowKind::ReasonBlocked
+        | RowKind::ReasonNeedsAttention
+        | RowKind::ReasonAwaitingReview
+        | RowKind::ReasonNeedsAnswer
+        | RowKind::ReasonNeedsApproval
+        | RowKind::ReasonDeferred => {
+            if let Some(num) = row.id.strip_prefix("pr:") {
+                preview_via_gh_pr(num)
+            } else {
+                preview_via_show(&row.id)
+            }
+        }
     };
     model.preview_cache.insert(row.id, lines);
 }
@@ -545,7 +669,14 @@ pub fn render(frame: &mut Frame, model: &DashboardModel) {
     ])
     .split(rows[1]);
 
-    nav::render(frame, body[0], &model.nav, &model.theme, model.focus);
+    nav::render(
+        frame,
+        body[0],
+        &model.nav,
+        &model.theme,
+        model.focus,
+        &model.reason_counts,
+    );
     render_list(frame, body[1], model);
     render_preview(frame, body[2], model);
     render_hint_row(frame, rows[2], model);
@@ -634,6 +765,9 @@ fn render_list(frame: &mut Frame, area: Rect, model: &DashboardModel) {
 
 fn section_title(s: NavSection) -> &'static str {
     match s {
+        // The board reason-groups title the list with their reason label.
+        // trace:STORY-686 | ai:claude
+        NavSection::Reason(r) => r.label(),
         NavSection::Queue => "Queue",
         NavSection::Backlog => "Backlog",
         NavSection::History => "History",
