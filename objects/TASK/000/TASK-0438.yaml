@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:29:15.599437866Z
-modified_at: 2026-06-26T18:58:14.485275723Z
+modified_at: 2026-06-26T18:59:10.632885399Z
 req_type: Task
 tags:
 - advisor-autopilot
@@ -68,3 +68,10 @@ comments:
   content: 'Design slice landed: docs/plans/2026-06-26-task-0438-fasttrack-lane.md (PR #1124). Two named tiers on one lane — trivial (batch:fasttrack + lifecycle:no-review, CI-only) and quick-fix express (batch:express, full gate). Reliability fixes: accept-implies-queue-and-drain (no stranding), punt-out invariant (no silent re-gate), derived status surface. Followups filed as children: STORY-692 (express filing verb), TASK-905 (lane status projection), TASK-906 (skill: tiers+litmus+punt-out), TASK-907 (wire into EPIC-0428 autopilot envelope, draft/blocked on EPIC-0428).'
   created_at: 2026-06-26T07:56:34.848955196Z
   modified_at: 2026-06-26T07:56:34.848955196Z
+- id: 019f054c-de9a-7323-856f-2d94b3e2beab
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-26-task-0438-fasttrack-lane.md
+    filed 4 task(s): TASK-924, TASK-925, TASK-926, TASK-927
+  created_at: 2026-06-26T18:59:11.642114343Z
+  modified_at: 2026-06-26T18:59:11.642114343Z
