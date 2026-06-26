@@ -1374,14 +1374,73 @@ pub(crate) fn render_path_to_empty(items: &[QueuedItem]) -> Option<String> {
              `aida queue clear` (just drops them)"
         ));
     }
-    for item in items.iter().filter(|i| i.bucket != OpenBucket::Actionable) {
+    // BUG-621: split the non-Actionable items by whether they ACTUALLY need the
+    // operator. Three groups, not one:
+    //  1. genuinely-parked/blocked/held → keep the "needs you:" prefix + a single
+    //     next action.
+    //  2. self-resolving in flight (lease-backed work, awaiting merge, long-lived
+    //     by design) → NO operator action; reads "nothing for you to do, clears
+    //     through normal flow". Pairing "needs you" with the AdvanceAction::None
+    //     "nothing to do" sentence was the self-contradiction this fixes.
+    //  3. InProgress WITHOUT a live lease (drift) → NOT self-resolving: a spec
+    //     marked in-progress with no session lease working it will not clear on
+    //     its own, so it does NOT get the reassuring "clears when shipped" line —
+    //     it needs a nudge. The classifier already keeps the two apart: a live
+    //     lease lands in OpenBucket::InFlight (line ~590), a status-only
+    //     in-progress spec lands in OpenBucket::InProgress (line ~728).
+    // trace:BUG-621 | ai:claude
+    for item in items.iter().filter(|i| {
+        i.bucket != OpenBucket::Actionable && !self_resolving(i.bucket) && !is_drift(i.bucket)
+    }) {
         out.push_str(&format!(
             "\n  {bullet} {:<10} needs you: {}",
             item.id,
             advance_action_sentence(item.bucket, &item.id)
         ));
     }
+    // Group 3: in-progress-without-lease drift — flag, but never as "needs you:
+    // resolves through normal flow". These will NOT self-resolve.
+    for item in items.iter().filter(|i| is_drift(i.bucket)) {
+        out.push_str(&format!(
+            "\n  {bullet} {:<10} in progress, but no live session lease — stalled; \
+             pick it back up (`aida queue work {}`) or park it",
+            item.id, item.id
+        ));
+    }
+    // Group 2: genuinely in flight / self-resolving — no operator action.
+    let self_resolving: Vec<&str> = items
+        .iter()
+        .filter(|i| self_resolving(i.bucket))
+        .map(|i| i.id.as_str())
+        .collect();
+    if !self_resolving.is_empty() {
+        out.push_str(&format!(
+            "\n  {bullet} {} in flight — nothing for you to do; clears when shipped: {}",
+            self_resolving.len(),
+            self_resolving.join(", ")
+        ));
+    }
     Some(out)
+}
+
+/// BUG-621: a bucket whose items clear through the normal lifecycle with NO
+/// operator action — lease-backed live work, work awaiting merge, and
+/// long-lived specs with no terminal state by design. These must NOT be labeled
+/// "needs you". Deliberately EXCLUDES [`OpenBucket::InProgress`] (status-only,
+/// no lease = drift; see [`is_drift`]). trace:BUG-621 | ai:claude
+fn self_resolving(bucket: OpenBucket) -> bool {
+    matches!(
+        bucket,
+        OpenBucket::InFlight | OpenBucket::AwaitingMerge | OpenBucket::LongLived
+    )
+}
+
+/// BUG-621: an item marked in-progress with NO live session lease — drift, not
+/// genuine motion. It will not self-resolve, so it gets neither the reassuring
+/// "clears when shipped" line nor the contradictory "needs you: nothing to do"
+/// line; it gets a "stalled — pick it back up" nudge. trace:BUG-621 | ai:claude
+fn is_drift(bucket: OpenBucket) -> bool {
+    matches!(bucket, OpenBucket::InProgress)
 }
 
 #[cfg(test)]
@@ -2454,6 +2513,68 @@ mod tests {
             // Strip the operator's own ids by checking the static prose only.
             assert!(!line.contains("trace:"));
         }
+    }
+
+    // BUG-621: the self-resolving (in-flight / awaiting-merge / long-lived)
+    // bucket must NEVER pair "needs you" with "nothing to do" — it reads as
+    // requiring no operator action. trace:BUG-621 | ai:claude
+    #[test]
+    fn render_path_to_empty_self_resolving_is_not_needs_you() {
+        for bucket in [
+            OpenBucket::InFlight,
+            OpenBucket::AwaitingMerge,
+            OpenBucket::LongLived,
+        ] {
+            let items = vec![QueuedItem {
+                id: "TASK-894".to_string(),
+                bucket,
+            }];
+            let f = render_path_to_empty(&items).expect("non-empty");
+            // The self-contradiction is gone: no "needs you" on a self-resolving
+            // item, and no "needs you: ... nothing to do" pairing anywhere.
+            assert!(
+                !f.contains("needs you"),
+                "self-resolving bucket {bucket:?} must not say 'needs you': {f}"
+            );
+            assert!(
+                !f.contains("nothing to do"),
+                "self-resolving bucket {bucket:?} must not say 'nothing to do': {f}"
+            );
+            // It reads as no-action: "nothing for you to do; clears when shipped".
+            assert!(
+                f.contains("nothing for you to do") && f.contains("TASK-894"),
+                "self-resolving item should read as no-action: {f}"
+            );
+        }
+    }
+
+    // BUG-621: an in-progress spec WITHOUT a live lease (drift) is NOT
+    // self-resolving — it must not get the reassuring "clears when shipped" line,
+    // and it must not say "needs you: ... nothing to do" either. It reads as
+    // stalled. trace:BUG-621 | ai:claude
+    #[test]
+    fn render_path_to_empty_in_progress_without_lease_reads_as_stalled() {
+        let items = vec![QueuedItem {
+            id: "TASK-895".to_string(),
+            bucket: OpenBucket::InProgress,
+        }];
+        let f = render_path_to_empty(&items).expect("non-empty");
+        assert!(
+            !f.contains("needs you"),
+            "drift must not say 'needs you': {f}"
+        );
+        assert!(
+            !f.contains("nothing to do"),
+            "drift must not say 'nothing to do': {f}"
+        );
+        assert!(
+            !f.contains("clears when shipped"),
+            "drift must NOT promise resolution: {f}"
+        );
+        assert!(
+            f.contains("stalled") && f.contains("TASK-895"),
+            "drift should read as stalled with a nudge: {f}"
+        );
     }
 
     // TASK-723: multi-reason — derived + finding-link + residual note.
