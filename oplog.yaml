@@ -22261,5 +22261,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 2107
+- id: 019f0656-a77c-75d3-b245-f3d301727480
+  target_id: 019f0656-9ac7-7272-8434-4f21ece73856
+  author: aida
+  node_id: '1'
+  lamport: 2108
+  timestamp: 2026-06-26T23:49:30.108628450Z
+  kind: !Create
+    title: TUI quiet-depth reveal (W5)
+    description: 'Address SPIKE-66 finding (flagship TUI unused 33d): make the graph/traces/lifecycle depth discoverable from the TUI without adding surface complexity — one progressive-disclosure affordance (a "whats underneath" peek).'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2108
 node_id: '1'
