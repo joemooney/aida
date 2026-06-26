@@ -174,6 +174,7 @@ doesn't match.
 | `AIDA_DEBUG_GLAB` | Traces `glab` (GitLab CLI) binary resolution to stderr — the GitLab sibling of `AIDA_DEBUG_GH`. | unset = off. Any non-empty value except `0` enables. | dev | process env |
 | `AIDA_DEBUG_AUTOBUMP` | Traces the auto-bump decision logic during pull (commit counts, SHAs, scan range). | unset = off. Any non-empty value except `0` enables. | dev | process env |
 | `AIDA_INIT_COMMIT_SCAFFOLD` | Whether `aida init` auto-commits scaffolding files. | unset = TTY-dependent (auto on non-TTY, prompt on TTY). Values: `1`/`true`/`yes`/`on` to commit, `0`/`false`/`no`/`off` to never. | user / launch-path | process env |
+| `AIDA_ADD_NO_REMOTE_SYNC` | Makes `aida add`'s pre/post id-allocation store sync purely local — skips the `ls-remote` probe, `pull --rebase`, and `push`. The local duplicate-id check still runs; the new id publishes on the next online `aida add` / `aida db sync --push`. For fully-offline or solo-clone workflows. | unset = remote sync attempted (with offline fallback). Opt-in (truthy: `1`/`true`/`yes`/`on`). | user | process env |
 
 ---
 
