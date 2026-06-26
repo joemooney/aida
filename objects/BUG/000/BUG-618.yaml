@@ -3,14 +3,32 @@ spec_id: BUG-618
 agreed_id: BUG-618
 title: Optimize aida queue list --json to resolve titles via SQLite cache summaries (1s->0.2s)
 description: BUG-616 left aida queue list --json at ~1s because the queue handler is built on the legacy YAML Storage and resolves titles via storage.load (full YAML scan). Thread the git/cache backend into handle_queue_command and resolve queue requirement_ids via backend.list_summaries (the SQLite cache, ~0.2s, same path aida list uses). RequirementSummary already carries id/spec_id/title/status.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T02:47:12.091037146Z
-modified_at: 2026-06-26T02:47:12.091037146Z
+modified_at: 2026-06-26T06:37:32.513685114Z
 req_type: Bug
 tags:
 - followup
 - perf
 - tui
+history:
+- id: 019f02a5-dd90-7a33-87ee-9ed03e01e7cf
+  author: aida-auto-bump
+  timestamp: 2026-06-26T06:37:32.432788867Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f02a5-dde1-7972-9e8e-b463427c523c
+  timestamp: 2026-06-26T06:37:32.513677720Z
+  agent: aida
+  commit_sha: 19f762cdc7bfe8c420b2074136a1511b3d437272
+  summary: Completed via merge 19f762cd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T06:37:31.456237423Z
+  completion_sha: 19f762cdc7bfe8c420b2074136a1511b3d437272
