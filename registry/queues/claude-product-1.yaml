@@ -6,3 +6,11 @@
   for_role: implementer
   for_scope: harness-worktree
   added_by_machine: imac
+- user_id: claude-product-1
+  requirement_id: 019f0537-af5f-7561-a10d-185cc05992aa
+  position: 3000
+  added_by: claude-product-1
+  added_at: 2026-06-26T18:36:12.793660222Z
+  for_role: implementer
+  for_scope: harness-worktree
+  added_by_machine: imac
