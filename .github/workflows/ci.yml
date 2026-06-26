@@ -113,6 +113,12 @@ jobs:
       - name: Run advisor-code-gate substrate test
         run: bash tests/test_advisor_code_gate.sh
 
+      # TASK-903: fast pre-commit gate for bare SPEC-IDs / trace: on `///` doc
+      # comments in cli.rs (the recurring --help-leak trap, #1105/#1116). Proves
+      # the grep-only hook mirrors the cli.rs CI tests at the commit boundary.
+      - name: Run pre-commit cli.rs doc-comment SPEC-ID gate test
+        run: bash tests/test_pre_commit_cli_doc_spec_id.sh
+
       # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
       # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
       - name: Run distributed / sibling-store integration tests

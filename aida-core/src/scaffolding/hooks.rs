@@ -200,23 +200,35 @@ if [ ${#IGNORED_STAGED_FILES[@]} -gt 0 ]; then
     exit 1
 fi
 
-# 5. Substrate-as-bouncer: reject SPEC-ID trace markers on `///` doc comments.
-# clap pulls `///` doc blocks into `--help`, so a `trace:` marker on one leaks
-# the developer breadcrumb into user-facing output (BUG-227 / TASK-268). Catches
-# the leak at write time; CI's source/help trace tests are the after-the-fact net.
-# Fix: demote the offending `///` to a plain `//` line. Skip: --no-verify.
-# trace:TASK-135 | ai:claude
+# 5. Substrate-as-bouncer: reject bare SPEC-IDs / `trace:` on `///` doc comments
+# in cli.rs. clap pulls `///` doc blocks into `--help`, so a `trace:` marker OR a
+# bare SPEC-ID leaks the developer breadcrumb into user-facing output (BUG-227 /
+# TASK-268). Mirrors the cli.rs CI tests (trace-token + spec-id-provenance, the
+# latter exempting `e.g.` usage examples); catches the leak at write time instead
+# of ~7min later in CI. Fix: demote to a plain `//` line, or reword. Skip: --no-verify.
+# trace:TASK-135 trace:TASK-903 | ai:claude
+SPEC_ID_RE='(STORY|TASK|BUG|EPIC|SPIKE|FR|SPEC|ADR|PRIN)-[0-9]+'
 DOC_TRACE_OFFENDERS=()
 for file in $staged_rs; do
+    case "$file" in
+        */cli.rs|cli.rs) ;;
+        *) continue ;;
+    esac
     while IFS= read -r match; do
-        [ -n "$match" ] && DOC_TRACE_OFFENDERS+=("$file:$match")
-    done < <(git show ":$file" 2>/dev/null | grep -nE '^[[:space:]]*///.*trace:' || true)
+        [ -z "$match" ] && continue
+        if printf '%s\n' "$match" | grep -q 'trace:'; then
+            DOC_TRACE_OFFENDERS+=("$file:$match")
+        elif printf '%s\n' "$match" | grep -qE "$SPEC_ID_RE" && ! printf '%s\n' "$match" | grep -qF 'e.g.'; then
+            DOC_TRACE_OFFENDERS+=("$file:$match")
+        fi
+    done < <(git show ":$file" 2>/dev/null | grep -nE "^[[:space:]]*///.*(trace:|${SPEC_ID_RE})" || true)
 done
 
 if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
-    echo -e "${RED}Refusing commit: a SPEC-ID trace marker is on a \`///\` doc comment." >&2
-    echo -e "clap pulls \`///\` doc blocks into \`--help\`; demote it to a plain \`//\`" >&2
-    echo -e "comment above the item. See docs/user-facing-text-conventions.md${NC}" >&2
+    echo -e "${RED}Refusing commit: a \`///\` doc comment in cli.rs carries a bare SPEC-ID" >&2
+    echo -e "or \`trace:\` marker. clap pulls \`///\` doc blocks into \`--help\`; move the id" >&2
+    echo -e "to a \`//\` trace marker above the item, or reword. Usage examples may use" >&2
+    echo -e "\`e.g. TASK-N\`. See docs/user-facing-text-conventions.md${NC}" >&2
     echo -e "${YELLOW}Offending lines:${NC}" >&2
     for off in "${DOC_TRACE_OFFENDERS[@]}"; do
         echo -e "  - ${YELLOW}${off}${NC}" >&2

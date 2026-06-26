@@ -82,29 +82,45 @@ if [ ${#IGNORED_STAGED_FILES[@]} -gt 0 ]; then
     exit 1
 fi
 
-# 5. Substrate-as-bouncer: reject SPEC-ID trace markers on `///` doc comments.
+# 5. Substrate-as-bouncer: reject bare SPEC-IDs / `trace:` on `///` doc comments.
 # A `///` doc comment on a clap field/variant doubles as `--help` text, so a
-# `trace:` marker on one leaks the developer breadcrumb into user-facing output
-# (BUG-227 / TASK-268's "both-at-once trap"). The CI tests
-# source_doc_comments_carry_no_trace_token + help_text_carries_no_trace_markers
-# catch it minutes later in CI; this gate catches it at the moment of writing.
-# Fix: demote the offending `///` to a plain `//` line above the item.
+# `trace:` marker OR a bare SPEC-ID on one leaks the developer breadcrumb into
+# user-facing output (BUG-227 / TASK-268's "both-at-once trap"). This gate
+# MIRRORS the cli.rs CI tests exactly — source_doc_comments_carry_no_trace_token
+# (any `///` line with `trace:`) and source_doc_comments_carry_no_spec_id_provenance
+# (any `///` line matching a concrete SPEC-ID and NOT containing `e.g.`; usage
+# examples like `e.g. TASK-N` are legitimate help text and exempted). Those tests
+# only fire at CI, ~7min later (it has bitten repeatedly, #1105/#1116); this gate
+# catches it at the moment of writing for ~no cost (grep only, no compile).
+# Fix: demote the offending `///` to a plain `//` line above the item, or reword.
 # Emergency skip: pass --no-verify (or --allow-intermediate, handled above).
-# trace:TASK-135 | ai:claude
+# trace:TASK-135 trace:TASK-903 | ai:claude
+SPEC_ID_RE='(STORY|TASK|BUG|EPIC|SPIKE|FR|SPEC|ADR|PRIN)-[0-9]+'
 DOC_TRACE_OFFENDERS=()
 for file in $staged_rs; do
+    # Gate only cli.rs files: `///` doc comments there feed clap `--help`.
+    case "$file" in
+        */cli.rs|cli.rs) ;;
+        *) continue ;;
+    esac
     # Read the staged blob (not the worktree) so partial staging is honored
-    # and any fmt re-staging above is reflected.
+    # and any fmt re-staging above is reflected. A `///` line offends when it
+    # carries `trace:` (always) OR a bare SPEC-ID without an `e.g.` example.
     while IFS= read -r match; do
-        [ -n "$match" ] && DOC_TRACE_OFFENDERS+=("$file:$match")
-    done < <(git show ":$file" 2>/dev/null | grep -nE '^[[:space:]]*///.*trace:' || true)
+        [ -z "$match" ] && continue
+        if printf '%s\n' "$match" | grep -q 'trace:'; then
+            DOC_TRACE_OFFENDERS+=("$file:$match")
+        elif printf '%s\n' "$match" | grep -qE "$SPEC_ID_RE" && ! printf '%s\n' "$match" | grep -qF 'e.g.'; then
+            DOC_TRACE_OFFENDERS+=("$file:$match")
+        fi
+    done < <(git show ":$file" 2>/dev/null | grep -nE "^[[:space:]]*///.*(trace:|${SPEC_ID_RE})" || true)
 done
 
 if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
-    echo -e "${RED}Refusing commit: a SPEC-ID trace marker is on a \`///\` doc comment." >&2
-    echo -e "clap pulls \`///\` doc blocks into \`--help\`, so the marker leaks into" >&2
-    echo -e "user-facing output. Demote it to a plain \`//\` comment above the item" >&2
-    echo -e "(SPEC-IDs stay in code as \`//\`, never \`///\`). See:" >&2
+    echo -e "${RED}Refusing commit: a \`///\` doc comment in cli.rs carries a bare SPEC-ID" >&2
+    echo -e "or \`trace:\` marker. clap pulls \`///\` doc blocks into \`--help\`, so it leaks" >&2
+    echo -e "into user-facing output. Move the id to a \`//\` trace marker above the item," >&2
+    echo -e "or reword. Usage examples may use \`e.g. TASK-N\`. See:" >&2
     echo -e "docs/user-facing-text-conventions.md${NC}" >&2
     echo -e "${YELLOW}Offending lines:${NC}" >&2
     for off in "${DOC_TRACE_OFFENDERS[@]}"; do
