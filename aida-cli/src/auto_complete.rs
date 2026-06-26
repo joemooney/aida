@@ -82,15 +82,33 @@ impl AutoCompleteVariant {
     }
 }
 
+/// The fasttrack express-tier routing bucket. A spec carrying this tag rides
+/// the express lane: fast because reliably *routed*, not because it is *less
+/// gated*. Express keeps the FULL pipeline — CI + reviewer + build all run —
+/// so any `lifecycle:*` short-circuit on the same spec is deliberately
+/// overridden.
+// trace:TASK-907 | ai:claude  (fasttrack express tier, STORY-692 / TASK-906)
+pub(crate) const EXPRESS_TIER_TAG: &str = "batch:express";
+
 /// Per-spec lifecycle short-circuit switches resolved from `lifecycle:*`
 /// tags. These skip only non-integrity phases: CI wait, reviewer, and local
 /// build. Merge and pull/auto-bump are deliberately not skippable.
+///
+/// The express tier (`batch:express`) is the inverse: it carries no
+/// short-circuit at all and its trust contract is that it NEVER silently
+/// downgrades its gate. When `express` is set, all three skips are forced off
+/// regardless of any `lifecycle:*` tag also present on the spec.
 /// trace:STORY-442 | ai:codex
+// trace:TASK-907 | ai:claude
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct LifecycleSkip {
     pub(crate) no_ci_wait: bool,
     pub(crate) no_review: bool,
     pub(crate) no_build: bool,
+    // TASK-907: this spec is on the fasttrack express tier (`batch:express`).
+    // Express runs the full gate; the skip fields above are forced off when
+    // this is true. Tracked so the orchestrator banner can announce the tier.
+    pub(crate) express: bool,
 }
 
 impl LifecycleSkip {
@@ -110,8 +128,21 @@ impl LifecycleSkip {
                     skip.no_review = true;
                     skip.no_build = true;
                 }
+                // TASK-907: express tier — recognized here so the single
+                // lifecycle-resolution point the drain already uses honors the
+                // express routing. Match is case-insensitive like the rest.
+                t if t == EXPRESS_TIER_TAG => skip.express = true,
                 _ => {}
             }
+        }
+        // TASK-907: the express trust contract — full CI + reviewer + build, no
+        // review-skip. Express overrides any `lifecycle:*` short-circuit that
+        // would otherwise downgrade the gate, so an express spec can never
+        // silently ship under a reduced gate.
+        if skip.express {
+            skip.no_ci_wait = false;
+            skip.no_review = false;
+            skip.no_build = false;
         }
         skip
     }
@@ -160,6 +191,11 @@ pub(crate) fn is_unrecognized_lifecycle_tag(tag: &str) -> bool {
 
 impl LifecycleSkip {
     pub(crate) fn banner_summary(self) -> Option<String> {
+        // TASK-907: the express tier announces itself even though it skips
+        // nothing — its contract is "fast because reliably routed, full gate".
+        if self.express {
+            return Some("express tier — full gate (CI + reviewer + build)".to_string());
+        }
         if self.is_empty() {
             return None;
         }
@@ -3682,7 +3718,53 @@ mod tests {
                 no_ci_wait: true,
                 no_review: true,
                 no_build: true,
+                express: false,
             }
+        );
+    }
+
+    // trace:TASK-907 — the fasttrack express tier (`batch:express`) is
+    // recognized at the single lifecycle-resolution point the drain uses, sets
+    // the `express` marker, and skips NOTHING — full CI + reviewer + build. Its
+    // trust contract: even if a `lifecycle:*` short-circuit is also present on
+    // the spec, express overrides it so the gate is never silently downgraded.
+    #[test]
+    fn lifecycle_skip_express_tier_forces_full_gate() {
+        // Plain express → marked, nothing skipped.
+        let skip = LifecycleSkip::from_tags([EXPRESS_TIER_TAG]);
+        assert!(skip.express, "batch:express sets the express marker");
+        assert!(!skip.no_ci_wait);
+        assert!(!skip.no_review);
+        assert!(!skip.no_build);
+        assert!(
+            skip.is_empty(),
+            "express skips no phase — is_empty() (the skip set) stays empty"
+        );
+        assert!(
+            skip.active_tokens().is_empty(),
+            "express records no short-circuit token in telemetry"
+        );
+
+        // Express + a lifecycle skip on the same spec → express wins; the gate
+        // is NOT downgraded (the punt-out / trust-contract invariant).
+        let conflicting = LifecycleSkip::from_tags([
+            "lifecycle:trivial",
+            EXPRESS_TIER_TAG,
+            "lifecycle:no-review",
+        ]);
+        assert!(conflicting.express);
+        assert!(
+            !conflicting.no_ci_wait && !conflicting.no_review && !conflicting.no_build,
+            "express overrides any lifecycle:* short-circuit — full gate enforced"
+        );
+
+        // Case-insensitive, matching the rest of from_tags.
+        assert!(LifecycleSkip::from_tags(["Batch:Express"]).express);
+
+        // The banner announces the tier even though nothing is skipped.
+        assert_eq!(
+            skip.banner_summary().as_deref(),
+            Some("express tier — full gate (CI + reviewer + build)")
         );
     }
 
@@ -3739,6 +3821,7 @@ mod tests {
             no_ci_wait: true,
             no_review: true,
             no_build: false,
+            express: false,
         };
         assert_eq!(
             skip.banner_summary().as_deref(),
@@ -3845,6 +3928,59 @@ mod tests {
             vec![Phase::Implementer, Phase::Merge, Phase::Pull,],
             "trivial skips the ci-wait, reviewer, and build phases; merge + pull \
              are substrate-integrity phases and must not be skipped"
+        );
+    }
+
+    // trace:TASK-907 — an express-tier spec (`batch:express`) drained by the
+    // autonomous loop runs the FULL six-phase pipeline — implementer → CI →
+    // reviewer → merge → pull → build. Express is fast because reliably
+    // *routed*, not because it is less gated, so no phase is skipped.
+    #[test]
+    fn orchestrate_express_tier_runs_full_pipeline() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-907",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::from_tags([EXPRESS_TIER_TAG]),
+            false,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ],
+            "express runs the full gate — CI + reviewer + build all execute"
+        );
+    }
+
+    // trace:TASK-907 trust contract: a spec that is on the express tier AND
+    // somehow also carries a `lifecycle:no-review` tag still runs the reviewer —
+    // the express override means the gate is never silently downgraded.
+    #[test]
+    fn orchestrate_express_overrides_lifecycle_skip_keeps_reviewer() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate_with_lifecycle_skip(
+            &mut driver,
+            "TASK-907",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+            LifecycleSkip::from_tags(["lifecycle:no-review", EXPRESS_TIER_TAG]),
+            false,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(
+            driver.calls.contains(&Phase::Reviewer),
+            "express overrides lifecycle:no-review — reviewer must still run"
         );
     }
 
