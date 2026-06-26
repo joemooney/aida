@@ -205,13 +205,31 @@ fi
 # the developer breadcrumb into user-facing output (BUG-227 / TASK-268). Catches
 # the leak at write time; CI's source/help trace tests are the after-the-fact net.
 # Fix: demote the offending `///` to a plain `//` line. Skip: --no-verify.
-# trace:TASK-135 | ai:claude
+#
+# Scoped to the STAGED DIFF (added lines only), NOT whole files: a commit that
+# merely TOUCHES a file with pre-existing `///` trace debt must not be rejected
+# for debt it didn't add — that just pushes agents to --no-verify, which also
+# skips the advisor-code-gate above (BUG-624). Only NEW `///` markers block.
+# trace:TASK-135 trace:BUG-624 | ai:claude
 DOC_TRACE_OFFENDERS=()
-for file in $staged_rs; do
-    while IFS= read -r match; do
-        [ -n "$match" ] && DOC_TRACE_OFFENDERS+=("$file:$match")
-    done < <(git show ":$file" 2>/dev/null | grep -nE '^[[:space:]]*///.*trace:' || true)
-done
+current_file=""
+while IFS= read -r line; do
+    case "$line" in
+        "+++ "*)
+            current_file="${line#+++ }"
+            current_file="${current_file#b/}"
+            ;;
+        "+"*)
+            added="${line#+}"
+            if printf '%s\n' "$added" | grep -qE '^[[:space:]]*///' \
+                && printf '%s\n' "$added" | grep -qE 'trace:|(STORY|BUG|TASK|EPIC|SPIKE|FR|CR|ADR|PRIN)-[0-9]+' \
+                && ! printf '%s\n' "$added" | grep -qiF 'e.g.'; then
+                trimmed="${added#"${added%%[![:space:]]*}"}"
+                DOC_TRACE_OFFENDERS+=("${current_file:-<staged>}: ${trimmed}")
+            fi
+            ;;
+    esac
+done < <(git diff --cached --unified=0 --no-color --diff-filter=ACMR -- '*.rs' 2>/dev/null || true)
 
 if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
     echo -e "${RED}Refusing commit: a SPEC-ID trace marker is on a \`///\` doc comment." >&2
