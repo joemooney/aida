@@ -22,12 +22,12 @@ description: |-
   - In-flight / self-resolving items are presented as requiring no operator action (separate group or count), distinct from items that genuinely need a human nudge.
   - Genuinely-parked/blocked/held items still show their single next action under a "needs you" heading.
   - Verify against the primary caller: aida queue with one In-Progress item reads as "in flight, nothing to do" with no contradiction.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T05:15:25.682956568Z
-modified_at: 2026-06-26T05:15:25.682956568Z
+modified_at: 2026-06-26T06:15:39.574315874Z
 req_type: Bug
 tags:
 - legibility
