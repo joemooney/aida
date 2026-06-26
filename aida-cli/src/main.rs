@@ -81346,7 +81346,12 @@ fn handle_tui_command(
     // the direct `run()` path — which then dispatches to `redesign::run()`.
     // trace:STORY-690 | ai:claude
     let redesign = std::env::var("AIDA_TUI_REDESIGN")
-        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false);
     let use_launcher = !redesign && (launcher || cfg.mode == aida_tui::TuiMode::Launcher);
     if use_launcher {

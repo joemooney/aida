@@ -19,19 +19,36 @@
 pub struct TargetItem {
     pub id: String,
     pub title: String,
+    /// The requirement type (e.g. "Task", "Story", "Bug"), carried so the
+    /// Open scope's rows render id / type / status / title. trace:STORY-690
+    pub req_type: String,
     pub status: String,
+    /// Priority, when the data path supplies it (the cache-fast
+    /// `aida list --json` does not today; left empty then). trace:STORY-690
+    pub priority: String,
     /// Full body text for the item modal (Slice 1 renders it as a plain
     /// paragraph; STORY-689 makes it markdown later).
     pub body: String,
+}
+
+impl TargetItem {
+    /// Is this item in the Draft state? The item-state-conditional verb logic
+    /// keys off this — `request approval` only applies to drafts. Matched
+    /// case-insensitively so a "Draft" / "draft" status both qualify.
+    /// trace:STORY-690 | ai:claude
+    pub fn is_draft(&self) -> bool {
+        self.status.eq_ignore_ascii_case("draft")
+    }
 }
 
 /// A scope is a noun with children (its verbs). At launch the top panel
 /// holds the scopes; drilling into one replaces the top panel with that
 /// scope's verbs. Only [`Scope::Backlog`] is functional in Slice 1; the
 /// rest are non-functional labels that prove the layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Scope {
     Backlog,
+    Open,
     Queue,
     Prs,
     History,
@@ -40,11 +57,12 @@ pub enum Scope {
 }
 
 impl Scope {
-    /// All scopes in display order. Backlog leads — it is the only one
-    /// wired in Slice 1.
+    /// All scopes in display order. Backlog leads; Open sits beside it —
+    /// both are wired functional scopes.
     pub fn all() -> &'static [Scope] {
         &[
             Scope::Backlog,
+            Scope::Open,
             Scope::Queue,
             Scope::Prs,
             Scope::History,
@@ -56,6 +74,7 @@ impl Scope {
     pub fn label(self) -> &'static str {
         match self {
             Scope::Backlog => "Backlog",
+            Scope::Open => "Open",
             Scope::Queue => "Queue",
             Scope::Prs => "PRs",
             Scope::History => "History",
@@ -69,6 +88,7 @@ impl Scope {
     pub fn hint(self) -> &'static str {
         match self {
             Scope::Backlog => "approved + planned specs",
+            Scope::Open => "the open backlog (all unfinished specs)",
             Scope::Queue => "your routed work",
             Scope::Prs => "open pull requests",
             Scope::History => "completed specs",
@@ -77,20 +97,43 @@ impl Scope {
         }
     }
 
-    /// Is this scope wired for real in Slice 1? Only Backlog drills.
+    /// Is this scope wired for real? Backlog and Open both drill.
     pub fn is_functional(self) -> bool {
-        matches!(self, Scope::Backlog)
+        matches!(self, Scope::Backlog | Scope::Open)
     }
 
-    /// The verbs this scope exposes. Slice 1 hardcodes Backlog's set (the
-    /// §5 "lean registry" fork is deferred). `groom` is the only verb that
-    /// executes; the rest are stubs that prove the verb list + breadcrumb.
+    /// The *static* verbs this scope exposes — those that do not depend on
+    /// the focused item's state. For the Open scope this is the always-on
+    /// pair (`show` / `why`); item-state-conditional verbs (`request
+    /// approval`, only for Draft specs) are layered on by
+    /// [`verb_list_for`]. Slice 1 hardcodes the sets (the §5 "lean registry"
+    /// fork is deferred). trace:STORY-690 | ai:claude
     pub fn verbs(self) -> Vec<Verb> {
         match self {
             Scope::Backlog => vec![Verb::Groom, Verb::Approve, Verb::Archive],
+            Scope::Open => vec![Verb::Show, Verb::Why],
             _ => Vec::new(),
         }
     }
+}
+
+/// The verb list a scope exposes *given the focused item's status*. This is
+/// the item-state-conditional logic, kept pure so it is unit-testable: for
+/// the Open scope, `request approval` is appended only when the focused
+/// item is a Draft (it routes drafts to the advisor queue). All other
+/// scopes ignore `focused_status` and return their static [`Scope::verbs`].
+/// trace:STORY-690 | ai:claude
+pub fn verb_list_for(scope: Scope, focused_status: Option<&str>) -> Vec<Verb> {
+    let mut verbs = scope.verbs();
+    if scope == Scope::Open {
+        let focused_is_draft = focused_status
+            .map(|s| s.eq_ignore_ascii_case("draft"))
+            .unwrap_or(false);
+        if focused_is_draft {
+            verbs.push(Verb::RequestApproval);
+        }
+    }
+    verbs
 }
 
 /// A verb (leaf action) applied to the current target selection.
@@ -99,6 +142,13 @@ pub enum Verb {
     Groom,
     Approve,
     Archive,
+    /// Open scope: `aida show <id> --no-git` on the focused item → modal.
+    Show,
+    /// Open scope: `aida why <id>` on the focused item → modal.
+    Why,
+    /// Open scope, Draft-only: route the selected drafts to the advisor
+    /// queue via `aida queue add --for advisor`. trace:STORY-690
+    RequestApproval,
 }
 
 impl Verb {
@@ -107,6 +157,9 @@ impl Verb {
             Verb::Groom => "groom",
             Verb::Approve => "approve",
             Verb::Archive => "archive",
+            Verb::Show => "show",
+            Verb::Why => "why",
+            Verb::RequestApproval => "request approval",
         }
     }
 
@@ -115,14 +168,28 @@ impl Verb {
             Verb::Groom => "cross-spec grooming + disposition",
             Verb::Approve => "advisor-only: draft → approved",
             Verb::Archive => "mark non-core specs archived",
+            Verb::Show => "show this spec (aida show --no-git)",
+            Verb::Why => "why is this spec still open? (aida why)",
+            Verb::RequestApproval => "route selected drafts to the advisor queue",
         }
     }
 
-    /// Is this verb wired in Slice 1? Only `groom` executes (stubbed);
-    /// `approve` / `archive` are present to prove the verb list renders and
-    /// the breadcrumb tracks the highlighted verb.
+    /// Does this verb operate on the single focused item (N=1), rather than
+    /// the multi-select target set? `show` / `why` are item-level; they
+    /// open a modal on the focused row. `request approval` is set-level.
+    /// trace:STORY-690 | ai:claude
+    pub fn is_item_level(self) -> bool {
+        matches!(self, Verb::Show | Verb::Why)
+    }
+
+    /// Is this verb wired to do real work? `groom` (stubbed), `show`, `why`,
+    /// and `request approval` execute; `approve` / `archive` are still
+    /// present-but-stubbed to prove the verb list + breadcrumb.
     pub fn is_functional(self) -> bool {
-        matches!(self, Verb::Groom)
+        matches!(
+            self,
+            Verb::Groom | Verb::Show | Verb::Why | Verb::RequestApproval
+        )
     }
 }
 
@@ -154,6 +221,15 @@ pub struct ConfirmAll {
     pub count: usize,
 }
 
+/// A modal showing the captured stdout of a one-shot item verb (`show` /
+/// `why`). The title is the breadcrumb-style header; `body` is the raw
+/// command output. trace:STORY-690 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerbModal {
+    pub title: String,
+    pub body: String,
+}
+
 /// The full pure UI state for the redesign prototype.
 #[derive(Debug, Clone)]
 pub struct RedesignState {
@@ -178,6 +254,11 @@ pub struct RedesignState {
     pub filter: String,
     /// Open item modal (full body preview), if any — holds the item index.
     pub modal: Option<usize>,
+    /// Verb-output modal content, if any — the captured stdout of a deliberate
+    /// one-shot item verb (`show` / `why`) plus a title. Distinct from
+    /// [`Self::modal`] (which previews an item's cached body); this carries
+    /// command output. trace:STORY-690 | ai:claude
+    pub verb_modal: Option<VerbModal>,
     /// Pending "apply to all?" confirmation, if any.
     pub confirm: Option<ConfirmAll>,
     /// Ambient context shown in the status line.
@@ -205,11 +286,23 @@ impl RedesignState {
             selected,
             filter: String::new(),
             modal: None,
+            verb_modal: None,
             confirm: None,
             role: role.into(),
             status: None,
             theme: crate::theme::Theme::default(),
         }
+    }
+
+    /// Replace the target set (e.g. when the highlighted scope changes from
+    /// Backlog to Open). Resets the selection and the bottom cursor; clears
+    /// any open modal that pointed into the old set. trace:STORY-690
+    pub fn set_items(&mut self, items: Vec<TargetItem>) {
+        self.selected = vec![false; items.len()];
+        self.items = items;
+        self.bottom_idx = 0;
+        self.modal = None;
+        self.verb_modal = None;
     }
 
     // --- Breadcrumb -------------------------------------------------------
@@ -231,6 +324,29 @@ impl RedesignState {
         }
     }
 
+    // --- Focused item + conditional verbs --------------------------------
+
+    /// The bottom-panel item under the cursor, if any (filter-aware). The
+    /// item-state-conditional verb list keys off this item's status.
+    /// trace:STORY-690 | ai:claude
+    pub fn focused_item(&self) -> Option<&TargetItem> {
+        let idxs = self.bottom_indices();
+        idxs.get(self.bottom_idx).and_then(|&i| self.items.get(i))
+    }
+
+    /// The verb list the drilled-into scope currently exposes, accounting
+    /// for the focused item's status (item-state-conditional verbs). At the
+    /// scope level this is empty. Every verb-list accessor routes through
+    /// this so the rendered list, the breadcrumb, and execution agree.
+    /// trace:STORY-690 | ai:claude
+    pub fn current_verbs(&self) -> Vec<Verb> {
+        let Some(scope) = self.scope else {
+            return Vec::new();
+        };
+        let focused_status = self.focused_item().map(|i| i.status.as_str());
+        verb_list_for(scope, focused_status)
+    }
+
     // --- Top-panel accessors ---------------------------------------------
 
     /// The top panel's entry count after applying the filter (when the top
@@ -244,7 +360,7 @@ impl RedesignState {
     pub fn top_indices(&self) -> Vec<usize> {
         let total = match self.level {
             Level::Scopes => Scope::all().len(),
-            Level::Verbs => self.scope.map(|s| s.verbs().len()).unwrap_or(0),
+            Level::Verbs => self.current_verbs().len(),
         };
         if self.focus != Focus::Top || self.filter.trim().is_empty() {
             return (0..total).collect();
@@ -264,8 +380,9 @@ impl RedesignState {
                 .map(|s| s.label().to_string())
                 .unwrap_or_default(),
             Level::Verbs => self
-                .scope
-                .and_then(|s| s.verbs().get(i).map(|v| v.label().to_string()))
+                .current_verbs()
+                .get(i)
+                .map(|v| v.label().to_string())
                 .unwrap_or_default(),
         }
     }
@@ -285,7 +402,7 @@ impl RedesignState {
         if self.level != Level::Verbs {
             return None;
         }
-        let verbs = self.scope?.verbs();
+        let verbs = self.current_verbs();
         let idxs = self.top_indices();
         idxs.get(self.top_idx).and_then(|&i| verbs.get(i).copied())
     }
@@ -454,10 +571,48 @@ impl RedesignState {
             .collect()
     }
 
-    /// Enter on a verb → either execute on the current selection, or, if
-    /// nothing is selected, raise the "apply to all N?" confirmation.
-    /// Returns the [`RunOutcome`] so the parent module performs the IO
-    /// (shell-out / status line) — the pure machine only decides.
+    /// The ids of the currently-selected items that are Draft, with the ids
+    /// of any selected non-drafts that were skipped. If nothing is selected,
+    /// the focused item stands in (the N=1 default) when it is itself a
+    /// Draft. Used by `request approval`, which only routes drafts.
+    /// Returns `(draft_ids, skipped_non_draft_ids)`. trace:STORY-690
+    pub fn draft_selection(&self) -> (Vec<String>, Vec<String>) {
+        let selected: Vec<&TargetItem> = self
+            .items
+            .iter()
+            .zip(self.selected.iter())
+            .filter(|(_, &s)| s)
+            .map(|(item, _)| item)
+            .collect();
+        let targets: Vec<&TargetItem> = if selected.is_empty() {
+            // None selected → the focused item is the N=1 default.
+            self.focused_item().into_iter().collect()
+        } else {
+            selected
+        };
+        let mut drafts = Vec::new();
+        let mut skipped = Vec::new();
+        for item in targets {
+            if item.is_draft() {
+                drafts.push(item.id.clone());
+            } else {
+                skipped.push(item.id.clone());
+            }
+        }
+        (drafts, skipped)
+    }
+
+    /// Enter on a verb → decide what IO the parent should perform.
+    ///
+    /// Three shapes:
+    ///   * item-level (`show` / `why`) → operate on the FOCUSED item (N=1),
+    ///     result lands in the modal;
+    ///   * `request approval` → operate on the marked drafts (skipping
+    ///     non-drafts), or the focused item if nothing is selected;
+    ///   * everything else (`groom`, …) → operate on the multi-select, with
+    ///     none-selected raising the "apply to all N?" confirmation.
+    ///
+    /// The pure machine only decides; the parent shells out. trace:STORY-690
     pub fn run_verb(&mut self) -> RunOutcome {
         let Some(verb) = self.top_verb() else {
             return RunOutcome::None;
@@ -466,6 +621,26 @@ impl RedesignState {
             self.status = Some(format!("{} is not wired yet (Slice 1)", verb.label()));
             return RunOutcome::None;
         }
+
+        // Item-level verbs target the focused item, regardless of selection.
+        if verb.is_item_level() {
+            let Some(item) = self.focused_item() else {
+                self.status = Some("no item focused".to_string());
+                return RunOutcome::None;
+            };
+            return RunOutcome::ShowItem {
+                verb,
+                id: item.id.clone(),
+            };
+        }
+
+        // request approval: route the marked drafts (or focused draft).
+        if verb == Verb::RequestApproval {
+            let (drafts, skipped) = self.draft_selection();
+            return RunOutcome::RequestApproval { drafts, skipped };
+        }
+
+        // Set-level verbs (groom, …) operate on the selection.
         let count = self.selected_count();
         if count == 0 {
             // None selected → confirm "apply to all N?".
@@ -508,6 +683,22 @@ impl RedesignState {
 
     pub fn close_modal(&mut self) {
         self.modal = None;
+        self.verb_modal = None;
+    }
+
+    /// Show a verb's captured stdout in the modal (`show` / `why` output).
+    /// trace:STORY-690 | ai:claude
+    pub fn open_verb_modal(&mut self, title: impl Into<String>, body: impl Into<String>) {
+        self.verb_modal = Some(VerbModal {
+            title: title.into(),
+            body: body.into(),
+        });
+    }
+
+    /// Is any modal (item-body or verb-output) open? The key router uses
+    /// this to know it should capture close keys. trace:STORY-690
+    pub fn modal_open(&self) -> bool {
+        self.modal.is_some() || self.verb_modal.is_some()
     }
 
     /// Append a char to the focused list's fuzzy filter and clamp the
@@ -548,8 +739,18 @@ pub enum RunOutcome {
     None,
     /// Raise the "apply to all N?" popup.
     NeedsConfirm(ConfirmAll),
-    /// Execute `verb` on these ids.
+    /// Execute a set-level `verb` on these ids.
     Execute { verb: Verb, ids: Vec<String> },
+    /// An item-level verb (`show` / `why`) on the focused item — the parent
+    /// shells out and shows the command's stdout in the item modal.
+    /// trace:STORY-690
+    ShowItem { verb: Verb, id: String },
+    /// `request approval` on the Draft selection: route `drafts` to the
+    /// advisor queue, report `skipped` non-drafts. trace:STORY-690
+    RequestApproval {
+        drafts: Vec<String>,
+        skipped: Vec<String>,
+    },
 }
 
 #[cfg(test)]
@@ -564,10 +765,38 @@ mod tests {
             .map(|i| TargetItem {
                 id: format!("STORY-{i}"),
                 title: format!("item title number {}", word_for(i)),
+                req_type: "Story".into(),
                 status: "Approved".into(),
+                priority: "medium".into(),
                 body: format!("body of item {}", word_for(i)),
             })
             .collect()
+    }
+
+    /// Items for the Open-scope tests: mixed statuses so the Draft-conditional
+    /// verb + the draft-selection filtering can be exercised. Index 0 + 2 are
+    /// Draft; 1 + 3 are Approved.
+    fn open_items() -> Vec<TargetItem> {
+        ["Draft", "Approved", "Draft", "Approved"]
+            .iter()
+            .enumerate()
+            .map(|(i, status)| TargetItem {
+                id: format!("TASK-{i}"),
+                title: format!("open item {i}"),
+                req_type: "Task".into(),
+                status: (*status).into(),
+                priority: "high".into(),
+                body: String::new(),
+            })
+            .collect()
+    }
+
+    /// Drill into the Open scope (it sits at index 1 in `Scope::all`).
+    fn drill_open(s: &mut RedesignState) {
+        s.move_down(); // Backlog → Open
+        assert_eq!(s.top_scope(), Some(Scope::Open));
+        assert!(s.drill());
+        assert_eq!(s.scope, Some(Scope::Open));
     }
 
     fn word_for(i: usize) -> &'static str {
@@ -604,8 +833,9 @@ mod tests {
     #[test]
     fn non_functional_scope_does_not_drill() {
         let mut s = state(3);
-        // Move highlight off Backlog onto Queue (index 1).
-        s.move_down();
+        // Move highlight onto Queue (index 2 — Backlog, Open, Queue, …).
+        s.move_down(); // → Open
+        s.move_down(); // → Queue
         assert_eq!(s.top_scope(), Some(Scope::Queue));
         assert!(!s.drill());
         assert_eq!(s.level, Level::Scopes);
@@ -829,10 +1059,171 @@ mod tests {
     #[test]
     fn move_down_saturates_at_list_end() {
         let mut s = state(3);
-        // 6 scopes; move past the end and confirm it clamps.
+        // All scopes; move past the end and confirm it clamps.
         for _ in 0..20 {
             s.move_down();
         }
         assert_eq!(s.top_idx, Scope::all().len() - 1);
+    }
+
+    // --- Open scope (STORY-690) ------------------------------------------
+
+    #[test]
+    fn open_scope_is_functional_and_sits_beside_backlog() {
+        assert!(Scope::Open.is_functional());
+        assert!(Scope::Backlog.is_functional());
+        // Backlog still leads; Open is the second entry.
+        assert_eq!(Scope::all()[0], Scope::Backlog);
+        assert_eq!(Scope::all()[1], Scope::Open);
+    }
+
+    #[test]
+    fn open_scope_static_verbs_are_show_and_why() {
+        assert_eq!(Scope::Open.verbs(), vec![Verb::Show, Verb::Why]);
+    }
+
+    #[test]
+    fn verb_list_for_open_adds_request_approval_only_on_draft() {
+        // Focused on a Draft → request approval is present (third verb).
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("Draft")),
+            vec![Verb::Show, Verb::Why, Verb::RequestApproval]
+        );
+        // Case-insensitive.
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("draft")),
+            vec![Verb::Show, Verb::Why, Verb::RequestApproval]
+        );
+        // Focused on a non-Draft → only show / why.
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("Approved")),
+            vec![Verb::Show, Verb::Why]
+        );
+        // No focused item → only show / why.
+        assert_eq!(
+            verb_list_for(Scope::Open, None),
+            vec![Verb::Show, Verb::Why]
+        );
+        // Other scopes ignore the status argument.
+        assert_eq!(
+            verb_list_for(Scope::Backlog, Some("Draft")),
+            vec![Verb::Groom, Verb::Approve, Verb::Archive]
+        );
+    }
+
+    #[test]
+    fn current_verbs_tracks_focused_item_status() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        // bottom_idx 0 = TASK-0 (Draft) → request approval present.
+        assert_eq!(
+            s.current_verbs(),
+            vec![Verb::Show, Verb::Why, Verb::RequestApproval]
+        );
+        s.move_down(); // → TASK-1 (Approved)
+        assert_eq!(s.current_verbs(), vec![Verb::Show, Verb::Why]);
+        s.move_down(); // → TASK-2 (Draft)
+        assert_eq!(
+            s.current_verbs(),
+            vec![Verb::Show, Verb::Why, Verb::RequestApproval]
+        );
+    }
+
+    #[test]
+    fn show_verb_targets_focused_item() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.move_down(); // focus TASK-1
+        s.focus_top(); // top_verb() = show (idx 0)
+        assert_eq!(s.top_verb(), Some(Verb::Show));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::ShowItem {
+                verb: Verb::Show,
+                id: "TASK-1".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn why_verb_targets_focused_item() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.move_down();
+        s.move_down(); // focus TASK-2
+        s.focus_top();
+        s.move_down(); // top_verb() = why (idx 1)
+        assert_eq!(s.top_verb(), Some(Verb::Why));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::ShowItem {
+                verb: Verb::Why,
+                id: "TASK-2".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn request_approval_targets_selected_drafts_skips_non_drafts() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.toggle_select(); // TASK-0 (Draft)
+        s.move_down();
+        s.toggle_select(); // TASK-1 (Approved — should be skipped)
+        s.move_down();
+        s.toggle_select(); // TASK-2 (Draft)
+                           // Focus back to TASK-0 (Draft) so the verb list includes the verb,
+                           // then move the top highlight onto `request approval` (idx 2).
+        s.focus_top();
+        s.move_down();
+        s.move_down();
+        assert_eq!(s.top_verb(), Some(Verb::RequestApproval));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::RequestApproval {
+                drafts: vec!["TASK-0".to_string(), "TASK-2".to_string()],
+                skipped: vec!["TASK-1".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn request_approval_with_no_selection_uses_focused_draft() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom(); // focus TASK-0 (Draft), nothing selected
+        s.focus_top();
+        s.move_down();
+        s.move_down(); // → request approval
+        assert_eq!(s.top_verb(), Some(Verb::RequestApproval));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::RequestApproval {
+                drafts: vec!["TASK-0".to_string()],
+                skipped: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn open_show_why_modal_round_trips() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        assert!(!s.modal_open());
+        s.open_verb_modal("TASK-0 — show", "spec body output");
+        assert!(s.modal_open());
+        assert_eq!(
+            s.verb_modal,
+            Some(VerbModal {
+                title: "TASK-0 — show".to_string(),
+                body: "spec body output".to_string(),
+            })
+        );
+        s.close_modal();
+        assert!(!s.modal_open());
+        assert!(s.verb_modal.is_none());
     }
 }
