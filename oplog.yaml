@@ -21001,5 +21001,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 2005
+- id: 019f025f-9fcc-7380-ab74-61723a3dcf03
+  target_id: 019f025f-910c-7ff2-abac-bdac0694e24e
+  author: aida
+  node_id: '1'
+  lamport: 2006
+  timestamp: 2026-06-26T05:20:49.100642367Z
+  kind: !Create
+    title: STORY-687 (cross-human collaboration) — deferred until this proves out
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2006
 node_id: '1'
