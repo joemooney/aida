@@ -21960,5 +21960,17 @@ operations:
     req_type: Spike
     status: Draft
     priority: High
-clock: 2081
+- id: 019f059c-a6cd-7183-b708-6fa4b65b2a75
+  target_id: 019f059c-99bc-7291-b28e-7e23b291b3c2
+  author: aida
+  node_id: '1'
+  lamport: 2082
+  timestamp: 2026-06-26T20:26:20.237579251Z
+  kind: !Create
+    title: 'Epic focus: picker (select from open epics) + per-worktree persistence/auto-detect (.aida/tui-focus)'
+    description: "Enhance the redesign TUI epic focus lens (STORY-695) with an epic PICKER and per-worktree PERSISTENCE / auto-detect.\n\nA) EPIC PICKER: the focus key (`F`) opens a selectable LIST of open epics instead of a blank type-an-id input. List open (non-terminal) epics in-process via the SpecStore (type=epic). Navigate with up/down, type to FUZZY-FILTER (reuse the cmd_palette fuzzy core), Enter selects -> focus on that epic, Esc cancels. Reuse the existing modal/list/fuzzy patterns. (This replaces the raw type-an-id input — the fuzzy filter covers typing a known id too.) Show id + title (+ progress if cheap) per epic row.\n\nB) WORKTREE AUTO-DETECT / PERSISTENCE: persist the focus epic in a per-worktree marker file `.aida/tui-focus` (one line: the epic id; auto-gitignored under the .aida/* deny-by-default convention). \n- On launch, resolve the focus with precedence: AIDA_TUI_EPIC env  >  .aida/tui-focus marker  >  none.\n- Selecting a focus (via the picker) WRITES the marker; clearing (C) removes/empties it. So re-launching `aida tui` in this worktree auto-focuses on the epic it last had — the worktree remembers its block of work.\n- STRETCH (optional, only if clean): if neither env nor marker is set, infer the focus epic from the current branch's trailered specs' most-common parent epic (git log (SPEC-ID) trailers -> each spec's parent epic -> mode). If not clean, leave a TODO and ship the marker path.\n\nACCEPTANCE:\n- `F` opens a fuzzy-filterable picker of open epics; Enter focuses the selected epic; Esc cancels.\n- focus persists across launches via .aida/tui-focus (precedence env > marker > none); picking writes it, C clears it.\n- pure logic unit-tested: the open-epic list source, picker selection -> focus, marker read/write + the precedence resolution.\n- build/test/fmt/clippy green; redesign module + a small marker-IO helper; existing TUI untouched; --no-verify commit."
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2082
 node_id: '1'
