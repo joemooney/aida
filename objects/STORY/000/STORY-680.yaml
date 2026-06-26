@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:06:26.864100593Z
-modified_at: 2026-06-26T17:39:43.558844410Z
+modified_at: 2026-06-26T17:40:29.367477720Z
 req_type: Story
 tags:
 - aida:tui
@@ -24,6 +24,14 @@ relationships:
 - rel_type: Parent
   target_id: 019f0504-b15d-72a3-8051-71b578e41721
   created_at: 2026-06-26T17:40:26.014342639Z
+comments:
+- id: 019f0504-d431-77e0-a157-f6a9c154b294
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-26-story-680-inject-palette-result-on-resume.md
+    filed 3 task(s): TASK-910, TASK-911, TASK-912
+  created_at: 2026-06-26T17:40:30.385677123Z
+  modified_at: 2026-06-26T17:40:30.385677123Z
 history:
 - id: 019f0504-1cf3-7c23-ae7f-d9873b3165a1
   author: aida-auto-bump
