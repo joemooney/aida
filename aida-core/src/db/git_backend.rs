@@ -713,6 +713,31 @@ impl DatabaseBackend for GitBackend {
         Self::read_queue_file(&path)
     }
 
+    // Enumerate every user id with a persisted queue file
+    // (registry/queues/<user_id>.yaml). Read-only; powers the fleet-wide
+    // `aida queue list --all-users` view. trace:STORY-672
+    fn queue_users(&self) -> Result<Vec<String>> {
+        let dir = self.root.join("registry/queues");
+        let mut users: Vec<String> = Vec::new();
+        let read = match std::fs::read_dir(&dir) {
+            Ok(rd) => rd,
+            // No queues directory yet → no users.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(users),
+            Err(e) => return Err(e.into()),
+        };
+        for entry in read.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("yaml") {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    users.push(stem.to_string());
+                }
+            }
+        }
+        users.sort();
+        users.dedup();
+        Ok(users)
+    }
+
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         let dir = self.root.join("registry/queues");
         std::fs::create_dir_all(&dir)?;

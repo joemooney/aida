@@ -66958,6 +66958,89 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    /// STORY-672: the fleet-wide `--all-users` view aggregates EVERY user's
+    /// queue, not just the current shell identity. Seed two distinct users'
+    /// queues (alice + bob), then verify the aggregation enumerates both users
+    /// and that `render_all_users_queue` runs read-only over the combined set
+    /// without error. The default per-user `queue_list` only ever sees one
+    /// user; the fleet view must span them. trace:STORY-672
+    #[test]
+    fn all_users_view_aggregates_every_users_queue() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+
+        // Two specs, each queued for a different user.
+        let alice_spec = seed_plain_spec(&root, "TASK-6720");
+        let bob_spec = seed_plain_spec(&root, "TASK-6721");
+
+        let storage = Storage::new(&root);
+        let now = chrono::Utc::now();
+        storage
+            .queue_add(aida_core::QueueEntry {
+                user_id: "alice".to_string(),
+                requirement_id: alice_spec,
+                position: 1000,
+                added_by: "alice".to_string(),
+                note: None,
+                added_at: now,
+                for_role: Some("implementer".to_string()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+        storage
+            .queue_add(aida_core::QueueEntry {
+                user_id: "bob".to_string(),
+                requirement_id: bob_spec,
+                position: 1000,
+                added_by: "bob".to_string(),
+                note: None,
+                added_at: now,
+                for_role: Some("reviewer".to_string()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+
+        // The per-user default would only ever see ONE of these. The fleet
+        // enumeration must surface BOTH users.
+        let mut users = storage.queue_users().unwrap();
+        users.sort();
+        assert_eq!(
+            users,
+            vec!["alice".to_string(), "bob".to_string()],
+            "queue_users must enumerate every user with a stored queue"
+        );
+
+        // Each user's queue carries exactly its own entry — proving the
+        // aggregate spans queues the current shell's `queue_list` never reads.
+        assert_eq!(
+            storage.queue_list("alice", false).unwrap().len(),
+            1,
+            "alice's queue holds her single entry"
+        );
+        assert_eq!(
+            storage.queue_list("bob", false).unwrap().len(),
+            1,
+            "bob's queue holds his single entry"
+        );
+
+        // The fleet renderer runs read-only over the combined set without
+        // error (it prints; we assert it doesn't blow up and leaves the
+        // underlying queues untouched).
+        let backend = test_cached_backend(&root);
+        let summaries = backend
+            .list_summaries(&aida_core::ListFilter::default())
+            .unwrap();
+        render_all_users_queue(&storage, &summaries, None, false, false).unwrap();
+
+        // Read-only: both queues are unchanged after rendering.
+        assert_eq!(storage.queue_list("alice", false).unwrap().len(), 1);
+        assert_eq!(storage.queue_list("bob", false).unwrap().len(), 1);
+    }
+
     /// Failure injection: pointing the store at a path that is neither a
     /// git directory nor a SQLite file makes `Storage::queue_backend` bail.
     /// The error must propagate (non-zero exit) instead of a silent success,
@@ -111643,6 +111726,161 @@ fn queue_json_rows(
         .collect()
 }
 
+/// STORY-672: render the fleet-wide `aida queue list --all-users` view.
+///
+/// Aggregates every user's queue (enumerated via `storage.queue_users()`),
+/// groups by user then routing role, and prints the owning user per group so a
+/// coordinator can see the whole fleet's queued work in one read. Read-only.
+///
+/// Title/status resolution reuses the SQLite-cache `summaries` (the BUG-618
+/// pattern) rather than a full `storage.load()` YAML scan, so the view stays
+/// fast even with many users. Filtering mirrors the default `queue list`:
+///   - role routing: `--for <role>` narrows to that role; `--all` (the
+///     default here is per-role just like the single-user path, but with no
+///     active session role a fleet view spans every role anyway) is honored
+///     via `resolve_queue_role_filter`;
+///   - terminal (Completed/Rejected) and archived specs are hidden unless
+///     `--include-terminal` is passed.
+// trace:STORY-672
+fn render_all_users_queue(
+    storage: &Storage,
+    summaries: &[aida_core::RequirementSummary],
+    role: Option<&str>,
+    all: bool,
+    include_terminal: bool,
+) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
+        summaries.iter().map(|s| (s.id, s)).collect();
+
+    // Role filter: same truth table as the per-user path. We deliberately pass
+    // `session_role = None` so the fleet view is not silently narrowed to the
+    // coordinator's own active role — `--for <role>` is the explicit narrow.
+    // trace:STORY-672
+    let (role_filter, only_unrouted) = resolve_queue_role_filter(role, all, None);
+
+    let users = storage.queue_users()?;
+
+    let display_id = |s: &aida_core::RequirementSummary| -> String {
+        s.agreed_id
+            .as_deref()
+            .or(s.spec_id.as_deref())
+            .unwrap_or("?")
+            .to_string()
+    };
+
+    // user → role-bucket → rows. BTreeMap keeps users + roles deterministically
+    // ordered. The role bucket key is the displayed routing label.
+    let mut grouped: BTreeMap<String, BTreeMap<String, Vec<(String, String)>>> = BTreeMap::new();
+    let mut total_rows: usize = 0;
+    let mut hidden_terminal: usize = 0;
+
+    for user in &users {
+        let entries = match storage.queue_list(user, include_terminal) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        for e in &entries {
+            if !entry_matches_role_filter(
+                e.for_role.as_deref(),
+                role_filter.as_deref(),
+                only_unrouted,
+            ) {
+                continue;
+            }
+            let summary = by_id.get(&e.requirement_id);
+            // Hide terminal / archived specs unless --include-terminal.
+            if !include_terminal {
+                if let Some(s) = summary {
+                    if s.archived {
+                        continue;
+                    }
+                    let st = s.status.to_ascii_lowercase();
+                    if st == "completed" || st == "rejected" {
+                        hidden_terminal += 1;
+                        continue;
+                    }
+                }
+            }
+            let (id, title) = match summary {
+                Some(s) => (display_id(s), s.title.clone()),
+                None => (e.requirement_id.to_string(), "(unknown spec)".to_string()),
+            };
+            let role_label = e.for_role.clone().unwrap_or_else(|| "unrouted".to_string());
+            grouped
+                .entry(user.clone())
+                .or_default()
+                .entry(role_label)
+                .or_default()
+                .push((id, title));
+            total_rows += 1;
+        }
+    }
+
+    println!("{}", "Fleet queue — all users (read-only)".bold().cyan());
+    println!();
+
+    if total_rows == 0 {
+        println!("{}", "No queued items across the fleet.".dimmed());
+        if hidden_terminal > 0 {
+            println!(
+                "{}",
+                format!(
+                    "  {} terminal item(s) hidden; pass --include-terminal to show.",
+                    hidden_terminal
+                )
+                .dimmed()
+            );
+        }
+        return Ok(());
+    }
+
+    for (user, roles) in &grouped {
+        let user_count: usize = roles.values().map(|v| v.len()).sum();
+        println!(
+            "{} {}",
+            user.bold().green(),
+            format!("({} queued)", user_count).dimmed()
+        );
+        for (role_label, rows) in roles {
+            println!("  {}", format!("[{}]", role_label).yellow());
+            for (id, title) in rows {
+                println!("    {}  {}", id.cyan(), title);
+            }
+        }
+        println!();
+    }
+
+    let role_count: usize = grouped
+        .values()
+        .flat_map(|roles| roles.keys())
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    println!(
+        "{}",
+        format!(
+            "fleet: {} queued across {} role(s) / {} user(s)",
+            total_rows,
+            role_count,
+            grouped.len()
+        )
+        .dimmed()
+    );
+    if hidden_terminal > 0 {
+        println!(
+            "{}",
+            format!(
+                "  {} terminal item(s) hidden; pass --include-terminal to show.",
+                hidden_terminal
+            )
+            .dimmed()
+        );
+    }
+
+    Ok(())
+}
+
 /// Handle queue commands
 ///
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
@@ -111677,8 +111915,29 @@ fn handle_queue_command(
             tag_prefix: tag_prefix_filter,
             by_batch,
             json,
+            all_users,
         } => {
             let user_id = get_user(user);
+
+            // STORY-672: fleet-wide bird's-eye. `--all-users` aggregates every
+            // user's queue (not just this shell's `current_user_id()`),
+            // grouped by user then role with the owning user shown per row.
+            // Read-only; renders its own view and returns early so it never
+            // perturbs the per-identity default path below. Title resolution
+            // reuses the SQLite cache summaries (BUG-618's pattern) rather than
+            // a slow `storage.load()` full YAML scan. trace:STORY-672
+            if *all_users {
+                let backend = advance_backend(store_path)?;
+                let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
+                render_all_users_queue(
+                    storage,
+                    &summaries,
+                    role.as_deref(),
+                    *all,
+                    *include_terminal,
+                )?;
+                return Ok(());
+            }
             // BUG-616: cache-fast JSON queue read for the TUI queue panel.
             // The panel only needs the user's queue head, enriched with each
             // spec's display id / title / status — emitting it straight from
@@ -112792,6 +113051,19 @@ fn handle_queue_command(
                         }
                     }
                 }
+            }
+
+            // STORY-672: legibility — the per-identity scoping (your user +
+            // active role) is not obvious. On the default human view, point at
+            // the fleet-wide aggregate so the bird's-eye is discoverable. Kept
+            // off the in-flight-only and empty paths to avoid noise.
+            // trace:STORY-672
+            if !skip_regular_render && !pending_empty {
+                println!();
+                println!(
+                    "{}",
+                    "Showing your queue. Pass --all-users for the fleet-wide view.".dimmed()
+                );
             }
         }
         QueueCommand::Load { user } => {
