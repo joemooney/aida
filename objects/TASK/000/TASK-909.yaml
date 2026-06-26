@@ -3,12 +3,12 @@ spec_id: TASK-909
 agreed_id: TASK-909
 title: Wire `Ctrl-D` capture from the hosted chat as an alternate palette-open trigger
 description: ''
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:18:32.954126468Z
-modified_at: 2026-06-26T17:18:32.954126468Z
+modified_at: 2026-06-26T18:21:15.785695799Z
 req_type: Task
 relationships:
 - rel_type: Child
