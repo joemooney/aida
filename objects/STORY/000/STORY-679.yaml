@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:06:02.332848181Z
-modified_at: 2026-06-26T17:18:11.607780179Z
+modified_at: 2026-06-26T17:18:40.905459456Z
 req_type: Story
 tags:
 - aida:tui
@@ -21,6 +21,14 @@ relationships:
 - rel_type: Parent
   target_id: 019f04f0-b9fa-7d71-8c19-6a11a58c77e8
   created_at: 2026-06-26T17:18:37.538739284Z
+comments:
+- id: 019f04f0-dcf2-7410-98e8-5f7fdde882fc
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-26-story-679-deterministic-action-palette.md
+    filed 2 task(s): TASK-908, TASK-909
+  created_at: 2026-06-26T17:18:41.906702078Z
+  modified_at: 2026-06-26T17:18:41.906702078Z
 history:
 - id: 019f04f0-6644-79d3-ace3-8e58d7380853
   author: aida-auto-bump
