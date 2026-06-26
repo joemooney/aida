@@ -19,6 +19,7 @@
 //!
 //! trace:STORY-690 | ai:claude
 
+mod list_row;
 mod state;
 mod store;
 
@@ -615,6 +616,33 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         0
     };
 
+    // CLI-style columnar render: aligned ID · Type · Status(glyph+label) ·
+    // Priority · Title, with the status glyph + semantic colour mirrored from
+    // the CLI's `aida list` palette (see `list_row`). The status/priority cells
+    // carry their own colour even on a non-cursor row so the eye learns one
+    // colour map, exactly like the CLI. trace:TASK-914 | ai:claude
+    let mode = list_row::GlyphMode::from_env();
+    // Column widths computed across the *visible* id set so columns line up.
+    let widths =
+        list_row::ColumnWidths::for_rows(idxs.iter().map(|&real| st.items[real].id.as_str()));
+    // The leading control cells (cursor marker + checkbox) reserve a fixed,
+    // mode-independent prefix; the title gets whatever width remains.
+    // "▸[x] " = marker(1) + checkbox(3) + space(1) = 5 visible cols, then each
+    // column + its single-space separator.
+    let prefix_w = 5;
+    let glyph_w = 2; // status glyph (1) + space (1)
+    let fixed = prefix_w
+        + widths.id
+        + 1
+        + widths.req_type
+        + 1
+        + glyph_w
+        + widths.status_label
+        + 1
+        + widths.priority
+        + 1;
+    let title_width = inner_w.saturating_sub(fixed).max(1);
+
     let mut lines: Vec<Line> = Vec::new();
     for (row, &real) in idxs.iter().enumerate().skip(start).take(inner_h) {
         let item = &st.items[real];
@@ -622,25 +650,53 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         let cursor = row == st.bottom_idx;
         let checkbox = if is_sel { "[x]" } else { "[ ]" };
         let marker = if cursor { "▸" } else { " " };
-        // id · type · status · title (priority appended when present — the
-        // cache-fast list json omits it today). trace:STORY-690
-        let prio = if item.priority.is_empty() {
-            String::new()
-        } else {
-            format!(" {{{}}}", item.priority)
-        };
-        let text = format!(
-            "{marker}{checkbox} {}  [{}/{}]{}  {}",
-            item.id, item.req_type, item.status, prio, item.title
+
+        let cells = list_row::layout_row(
+            list_row::RowInput {
+                id: &item.id,
+                req_type: &item.req_type,
+                status: &item.status,
+                priority: &item.priority,
+                title: &item.title,
+            },
+            widths,
+            mode,
+            title_width,
         );
-        let clipped: String = text.chars().take(inner_w.max(4)).collect();
-        let style = row_style(theme, cursor && focused, false);
-        let style = if is_sel && !(cursor && focused) {
-            style.fg(theme.info)
+
+        // The base row style: cursor row gets the accent highlight; a selected
+        // (but not cursor) row tints the structural text with `info`; otherwise
+        // plain fg. The status/priority cells override their own colour.
+        let cursor_active = cursor && focused;
+        let base = row_style(theme, cursor_active, false);
+        let structural = if is_sel && !cursor_active {
+            base.fg(theme.info)
         } else {
-            style
+            base
         };
-        lines.push(Line::from(Span::styled(clipped, style)));
+        // On the cursor-highlighted row keep the accent fill uniform (don't
+        // recolour the status/priority cells over the accent bg — that hurts
+        // contrast); elsewhere paint the semantic palette. trace:TASK-914
+        let status_style = if cursor_active {
+            structural
+        } else {
+            list_row::status_style(&item.status, theme)
+        };
+        let priority_style = if cursor_active {
+            structural
+        } else {
+            list_row::priority_style(&item.priority, theme)
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(format!("{marker}{checkbox} "), structural),
+            Span::styled(format!("{} ", cells.id), structural),
+            Span::styled(format!("{} ", cells.req_type), structural),
+            Span::styled(format!("{} ", cells.status_glyph), status_style),
+            Span::styled(format!("{} ", cells.status_label), status_style),
+            Span::styled(format!("{} ", cells.priority), priority_style),
+            Span::styled(cells.title, structural),
+        ]));
     }
     if focused && !st.filter.is_empty() {
         lines.insert(
@@ -1047,7 +1103,9 @@ mod render_tests {
                 // Alternate Draft / Approved so the open-scope render path
                 // (Draft-conditional verb) is exercised by the smoke tests.
                 status: if i % 2 == 0 { "Draft" } else { "Approved" }.into(),
-                priority: String::new(),
+                // Carry a priority so the columnar Priority cell is exercised
+                // by the render smoke tests. trace:TASK-914
+                priority: ["High", "Medium", "Low"][i % 3].into(),
                 body: format!("# STORY-{i}\n\nbody text here"),
             })
             .collect();
@@ -1084,6 +1142,25 @@ mod render_tests {
     #[test]
     fn renders_scope_level() {
         draw(&sample(5), 100, 30);
+    }
+
+    /// The columnar scope-list render (TASK-914): a multi-row Backlog list with
+    /// mixed statuses/priorities + a selection + the cursor paints over the
+    /// TestBackend without panicking, at a realistic and a tiny size. The pure
+    /// column-layout + status→glyph/colour mapping is unit-tested in
+    /// `super::list_row`. trace:TASK-914 | ai:claude
+    #[test]
+    fn renders_columnar_scope_list() {
+        let mut st = sample(8);
+        st.focus_bottom();
+        st.toggle_select(); // select the cursor row
+        st.move_down();
+        st.move_down(); // move the cursor off the selected row
+        draw(&st, 120, 20);
+        // Tiny terminal: columns clamp, title narrows, no panic.
+        draw(&st, 24, 8);
+        // Single row (id-width floor path).
+        draw(&sample(1), 100, 10);
     }
 
     #[test]
