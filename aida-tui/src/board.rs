@@ -114,6 +114,18 @@ pub struct ClassifiedItem {
     /// box. Drafts (the approve-or-reject sub-class) have this `false`.
     /// trace:TASK-901 | ai:claude
     pub advisor_backlog: bool,
+    /// True for a **live intake-proposal** row (TASK-904): a spec the headless
+    /// `aida intake` candidate fence weighs — the actual proposal set the
+    /// cold-boot advisor pass considers, as opposed to TASK-901's cache-fast
+    /// `Approved`-but-not-queued proxy (which an `aida intake` candidate set
+    /// can also surface DRAFTS the proxy misses). These ride the same
+    /// `NeedsApproval` reason but carry their own label + dispatch (Enter fires
+    /// `aida intake` on that scope). The fence is a heavyweight `claude -p`-
+    /// backed read (seconds-to-minutes), so it is filled async / on demand,
+    /// never on the paint path. Cache-fast rows (drafts, advisor-backlog) have
+    /// this `false`.
+    // trace:TASK-904 | ai:claude
+    pub intake_proposal: bool,
 }
 
 /// The cheap (non-network) inputs the classifier needs. Each Vec is the
@@ -167,6 +179,10 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
                 status: status.to_string(),
                 reason,
                 advisor_backlog,
+                // The cache-fast classify pass never produces intake-proposal
+                // rows; those merge in async via `merge_intake_proposals` after
+                // the heavyweight `aida intake` fence lands. trace:TASK-904
+                intake_proposal: false,
             });
         }
     };
@@ -311,6 +327,11 @@ pub fn counts(items: &[ClassifiedItem]) -> std::collections::HashMap<&'static st
 /// status is prefixed `backlog · ` so the operator sees the advisor's pending
 /// queue distinctly from the drafts awaiting a verdict.
 /// trace:TASK-901 | ai:claude
+/// An intake-proposal row (TASK-904) carries [`RowKind::ReasonIntakeProposal`]
+/// (Enter fires `aida intake` scoped to that spec) and an `intake · ` status
+/// prefix so the operator sees the live advisor's proposal fence distinctly
+/// from both the drafts awaiting a verdict and the cache-fast advisor backlog.
+// trace:TASK-904 | ai:claude
 pub fn rows_for(items: &[ClassifiedItem], reason: Reason) -> Vec<ListRow> {
     items
         .iter()
@@ -318,12 +339,16 @@ pub fn rows_for(items: &[ClassifiedItem], reason: Reason) -> Vec<ListRow> {
         .map(|it| ListRow {
             id: it.spec_id.clone(),
             title: it.title.clone(),
-            status: if it.advisor_backlog {
+            status: if it.intake_proposal {
+                format!("intake · {}", it.status)
+            } else if it.advisor_backlog {
                 format!("backlog · {}", it.status)
             } else {
                 it.status.clone()
             },
-            kind: if it.advisor_backlog {
+            kind: if it.intake_proposal {
+                RowKind::ReasonIntakeProposal
+            } else if it.advisor_backlog {
                 RowKind::ReasonAdvisorBacklog
             } else {
                 reason.row_kind()
@@ -525,6 +550,104 @@ fn run_gh_pr_list(timeout: Duration) -> Option<Vec<u8>> {
                 std::thread::sleep(Duration::from_millis(25));
             }
             Err(_) => return None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Live intake-proposal source (TASK-904). The heavyweight `aida intake` pass
+// spawns a cold-boot `claude -p` advisor (seconds-to-minutes) — far over the
+// board's paint budget. We surface its candidate FENCE (the proposal set the
+// advisor weighs) cheaply: `aida intake --dry-run` runs the same selection
+// without launching `claude`, printing the eligible candidate ids. That
+// dry-run is itself a store-load (~1s), so — exactly like the `gh pr list`
+// awaiting-review source — it runs off the UI thread and on demand, never on
+// paint. trace:TASK-904 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// Shell `aida intake --dry-run` (the deprecated alias of `aida assess`;
+/// `--dry-run` does the candidate selection WITHOUT the `claude -p` launch),
+/// parse the eligible candidate spec ids, and return them. Best effort: any
+/// failure (no store, binary error) yields an empty Vec so the board paints.
+/// This is a heavier read than the cache-fast `aida list` legs — only ever
+/// called off the UI thread.
+// trace:TASK-904 | ai:claude
+pub fn fetch_intake_proposal_ids() -> Vec<String> {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["intake", "--dry-run"]);
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    let Ok(out) = cmd.output() else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    parse_intake_proposal_ids(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Pure parse of `aida intake --dry-run` stdout → the eligible candidate spec
+/// ids. The handler prints a single line shaped
+/// `  → N spec(s) the advisor will weigh: ID, ID, …` (the fenced-out specs
+/// follow on their own `✕`-prefixed lines, which we ignore). Robust to ANSI
+/// colour codes. Returns an empty Vec for the "0 specs in the intake fence"
+/// case.
+// trace:TASK-904 | ai:claude
+pub fn parse_intake_proposal_ids(stdout: &str) -> Vec<String> {
+    for line in stdout.lines() {
+        let clean = strip_ansi(line);
+        if let Some(rest) = clean.split("the advisor will weigh:").nth(1) {
+            return rest
+                .split(',')
+                .filter_map(|tok| {
+                    let t = tok.trim();
+                    if is_spec_id(t) {
+                        Some(t.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// Merge the async-loaded intake-proposal candidate ids into the needs-approval
+/// board group. Each candidate becomes a [`ClassifiedItem`] flagged
+/// `intake_proposal`, with its title pulled from the already-classified board
+/// (the candidates are a subset of the open specs the cache-fast pass loaded)
+/// or left blank when not present. A candidate already surfaced as a draft or
+/// advisor-backlog row is upgraded in place (its `intake_proposal` flag set)
+/// rather than duplicated, so the operator sees one row per spec carrying the
+/// strongest available label.
+// trace:TASK-904 | ai:claude
+pub fn merge_intake_proposals(items: &mut Vec<ClassifiedItem>, candidate_ids: &[String]) {
+    use std::collections::HashSet;
+    let candidates: HashSet<&str> = candidate_ids.iter().map(|s| s.as_str()).collect();
+    // Upgrade existing rows in place, and note which candidates were absent.
+    let mut present: HashSet<String> = HashSet::new();
+    for it in items.iter_mut() {
+        if candidates.contains(it.spec_id.as_str()) {
+            it.intake_proposal = true;
+            present.insert(it.spec_id.clone());
+        }
+    }
+    // Append candidates the cache-fast pass didn't already surface (a draft the
+    // proxy missed, say). Title is unknown here, so we leave it blank; Enter
+    // still dispatches on the spec id. trace:TASK-904
+    for id in candidate_ids {
+        if !present.contains(id) {
+            items.push(ClassifiedItem {
+                spec_id: id.clone(),
+                title: String::new(),
+                status: "candidate".to_string(),
+                reason: Reason::NeedsApproval,
+                advisor_backlog: false,
+                intake_proposal: true,
+            });
         }
     }
 }
@@ -785,5 +908,89 @@ Answered (1)
                 assert_ne!(a, b, "row kinds must be distinct per reason");
             }
         }
+    }
+
+    // --- Live intake-proposal source (TASK-904). ---
+
+    #[test]
+    fn parse_intake_proposals_extracts_candidate_ids() {
+        // Mirrors the `aida intake --dry-run` weigh-line shape, with ANSI
+        // colour codes, plus the fenced-out `✕` lines that must be ignored.
+        let stdout = "\
+\u{1b}[36m▸\u{1b}[0m intake pass
+  bias=approve-eligible · risk≤medium
+  \u{1b}[32m→\u{1b}[0m 2 spec(s) the advisor will weigh: \u{1b}[36mTASK-903\u{1b}[0m, \u{1b}[36mTASK-904\u{1b}[0m
+  · 1 fenced out (do-not-approve class …):
+    ✕ EPIC-42 — do-not-approve class `epic` (advisor-authored)
+";
+        let ids = parse_intake_proposal_ids(stdout);
+        assert_eq!(ids, vec!["TASK-903".to_string(), "TASK-904".to_string()]);
+    }
+
+    #[test]
+    fn parse_intake_proposals_empty_fence() {
+        // The "0 specs in the intake fence" branch never prints a weigh-line.
+        let stdout = "\
+▸ intake pass
+  → 0 specs in the intake fence (50 fenced out). Nothing for the advisor to weigh.
+";
+        assert!(parse_intake_proposal_ids(stdout).is_empty());
+        assert!(parse_intake_proposal_ids("").is_empty());
+    }
+
+    #[test]
+    fn merge_intake_upgrades_existing_and_appends_new() {
+        // A candidate already classified (a draft) is upgraded in place — its
+        // `intake_proposal` flag is set, no duplicate row. A candidate the
+        // cache-fast pass never surfaced is appended as a fresh proposal row.
+        // trace:TASK-904
+        let inputs = BoardInputs {
+            draft_rows: vec![row("STORY-1", "Draft", false, false, false)],
+            ..BoardInputs::default()
+        };
+        let mut items = classify(&inputs);
+        merge_intake_proposals(&mut items, &["STORY-1".to_string(), "STORY-99".to_string()]);
+
+        let upgraded = items.iter().find(|i| i.spec_id == "STORY-1").unwrap();
+        assert!(upgraded.intake_proposal, "existing draft upgraded in place");
+        assert_eq!(
+            items.iter().filter(|i| i.spec_id == "STORY-1").count(),
+            1,
+            "no duplicate row for an upgraded candidate"
+        );
+
+        let appended = items.iter().find(|i| i.spec_id == "STORY-99").unwrap();
+        assert!(appended.intake_proposal);
+        assert_eq!(appended.reason, Reason::NeedsApproval);
+    }
+
+    #[test]
+    fn intake_proposal_row_has_distinct_kind_and_prefix() {
+        // An intake-proposal row carries ReasonIntakeProposal (Enter shows the
+        // candidate) and an `intake · ` status prefix — distinct from both the
+        // plain draft and the `backlog · ` advisor-backlog row. trace:TASK-904
+        let inputs = BoardInputs {
+            draft_rows: vec![row("STORY-1", "Draft", false, false, false)],
+            ..BoardInputs::default()
+        };
+        let mut items = classify(&inputs);
+        merge_intake_proposals(&mut items, &["STORY-1".to_string()]);
+        let rows = rows_for(&items, Reason::NeedsApproval);
+        let proposal = rows.iter().find(|r| r.id == "STORY-1").unwrap();
+        assert_eq!(proposal.kind, RowKind::ReasonIntakeProposal);
+        assert!(proposal.status.starts_with("intake · "));
+    }
+
+    #[test]
+    fn merge_intake_empty_is_noop() {
+        let inputs = BoardInputs {
+            draft_rows: vec![row("STORY-1", "Draft", false, false, false)],
+            ..BoardInputs::default()
+        };
+        let mut items = classify(&inputs);
+        let before = items.len();
+        merge_intake_proposals(&mut items, &[]);
+        assert_eq!(items.len(), before);
+        assert!(items.iter().all(|i| !i.intake_proposal));
     }
 }

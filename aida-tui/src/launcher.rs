@@ -61,6 +61,11 @@ pub enum LauncherAction {
     Redraw,
     /// Re-fetch the current section, then redraw.
     Refetch,
+    /// Kick the on-demand heavyweight `aida intake` fence fetch (the `i` key),
+    /// then redraw. The fetch runs off the UI thread; its proposals merge into
+    /// the needs-approval group when they land.
+    // trace:TASK-904 | ai:claude
+    FetchIntake,
     /// Emit `intent` and exit the loop.
     Emit(Intent),
     /// Show the help cheatsheet (overlay/help reuse stays as a followup
@@ -130,6 +135,7 @@ pub fn route_key(key: KeyEvent, model: &DashboardModel) -> LauncherAction {
         KeyCode::Char('s') => switch_section(NavSection::Sessions),
         KeyCode::Char('r') => LauncherAction::Redraw, // role cycle handled in loop
         KeyCode::Char('g') => LauncherAction::Refetch,
+        KeyCode::Char('i') => LauncherAction::FetchIntake,
         KeyCode::Char('?') => LauncherAction::Help,
         KeyCode::Char(':') => LauncherAction::EnterPalette,
         KeyCode::Tab => LauncherAction::Redraw, // role cycle handled in loop
@@ -153,7 +159,7 @@ pub fn route_key(key: KeyEvent, model: &DashboardModel) -> LauncherAction {
         KeyCode::Char('Q') => LauncherAction::Emit(Intent::Quit),
         KeyCode::Char(c) => {
             // Other characters: keep the surface tiny — direct keys are
-            // q/b/h/p/s/r/g/?/:/Q.
+            // q/b/h/p/s/r/g/i/?/:/Q.
             let _ = c;
             LauncherAction::Redraw
         }
@@ -259,6 +265,12 @@ pub fn act_on_row(row: &dashboard::ListRow, role: RoleTab, section: NavSection) 
         // Advisor backlog → the spec is already Approved; the unblock is to
         // route it to the work queue, not approve it again. trace:TASK-901
         RowKind::ReasonAdvisorBacklog => Intent::Launch(format!("aida queue add {}", row.id)),
+        // Live intake proposal → show the candidate so the operator can read it
+        // and decide; the actual disposition is the whole-pass `aida intake`
+        // (no per-id scope flag exists), kicked from the board with `i` rather
+        // than firing a multi-minute cold-boot advisor on a single Enter.
+        // trace:TASK-904 | ai:claude
+        RowKind::ReasonIntakeProposal => Intent::Launch(format!("aida show {}", row.id)),
         // Needs an answer → open the decision-inbox flow for this spec.
         RowKind::ReasonNeedsAnswer => Intent::Launch(format!("aida questions answer {}", row.id)),
         // Needs attention → show the parked spec (its punt reason / decision
@@ -488,15 +500,23 @@ fn event_loop(
         // the cursor stays responsive: `poll_prs` is a non-blocking channel
         // drain. trace:BUG-619 | ai:claude
         if !event::poll(PR_POLL_INTERVAL)? {
-            if model.poll_prs() {
+            // A landed `gh pr list` OR a landed `aida intake` fence both repaint
+            // without a keystroke; both polls are non-blocking channel drains.
+            // trace:BUG-619 trace:TASK-904 | ai:claude
+            let mut landed = model.poll_prs();
+            landed |= model.poll_intake();
+            if landed {
                 dashboard::ensure_preview(&mut model);
                 paint(terminal, &model)?;
             }
             continue;
         }
-        // A real event is queued — drain any landed PRs first so this frame
-        // already reflects them, then handle the event. trace:BUG-619
-        if model.poll_prs() {
+        // A real event is queued — drain any landed async results first so this
+        // frame already reflects them, then handle the event.
+        // trace:BUG-619 trace:TASK-904 | ai:claude
+        let mut landed = model.poll_prs();
+        landed |= model.poll_intake();
+        if landed {
             dashboard::ensure_preview(&mut model);
         }
         let Event::Key(key) = event::read()? else {
@@ -566,11 +586,19 @@ fn event_loop(
                 dashboard::ensure_preview(&mut model);
                 paint(terminal, &model)?;
             }
+            LauncherAction::FetchIntake => {
+                // `i` arms the on-demand heavyweight `aida intake` fence off the
+                // UI thread; its proposals merge into the needs-approval group
+                // when the worker lands (drained by `poll_intake`). The cursor
+                // never waits on the cold-boot pass. trace:TASK-904 | ai:claude
+                model.request_intake();
+                paint(terminal, &model)?;
+            }
             LauncherAction::Emit(intent) => return Ok(intent),
             LauncherAction::Help => {
                 // Help overlay is followups; for now flip the hint row.
                 // trace:STORY-685 | ai:claude
-                model.notice = Some("Help: ↑↓ nav sections · enter/← into list · ↑↓ rows · enter run · →/esc back to nav · tab role · g refresh · q quit".into());
+                model.notice = Some("Help: ↑↓ nav sections · enter/← into list · ↑↓ rows · enter run · →/esc back to nav · tab role · g refresh · i intake · q quit".into());
                 paint(terminal, &model)?;
             }
             LauncherAction::EnterPalette => {
@@ -784,6 +812,34 @@ mod tests {
     fn route_key_g_refetches() {
         let model = fixture(vec![]);
         assert_eq!(route_key(plain('g'), &model), LauncherAction::Refetch);
+    }
+
+    #[test]
+    fn route_key_i_fetches_intake() {
+        // `i` arms the on-demand heavyweight intake fence. trace:TASK-904
+        let model = fixture(vec![]);
+        assert_eq!(route_key(plain('i'), &model), LauncherAction::FetchIntake);
+    }
+
+    #[test]
+    fn intake_proposal_row_dispatches_to_show() {
+        // A live intake-proposal row's Enter shows the candidate (the actual
+        // disposition is the whole-pass `aida intake`, kicked with `i`).
+        // trace:TASK-904
+        let row = ListRow {
+            id: "STORY-42".into(),
+            title: "row".into(),
+            status: "intake · Draft".into(),
+            kind: RowKind::ReasonIntakeProposal,
+        };
+        assert_eq!(
+            act_on_row(
+                &row,
+                RoleTab::Implementer,
+                NavSection::Reason(crate::board::Reason::NeedsApproval)
+            ),
+            Intent::Launch("aida show STORY-42".into())
+        );
     }
 
     #[test]
