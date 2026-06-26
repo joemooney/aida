@@ -3,12 +3,12 @@ spec_id: TASK-925
 agreed_id: TASK-925
 title: (Followup A) `fasttrack_express_carries_no_lifecycle_skip_tag` — invariant
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:58:26.682232591Z
-modified_at: 2026-06-26T18:58:26.682232591Z
+modified_at: 2026-06-26T23:41:29.149229034Z
 req_type: Task
 relationships:
 - rel_type: Child
