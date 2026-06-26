@@ -21,6 +21,10 @@ description: |-
   - the show modal renders the spec's structured fields + body natively (not captured `aida show` stdout).
   - build/test/fmt/clippy green; in-process load covered by a test where feasible.
   - existing TUI (non-redesign path) unchanged.
+
+  ## Test Plan
+
+  1. Cursor up/down through scopes and press **p** on several specs in a row → **expect** the preview opens **instantly**, no lag/spinner. (Previously this shelled out `aida show` per keystroke — a ~287 MB process each time.)
 status: Approved
 priority: High
 owner: ''
