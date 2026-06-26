@@ -3,12 +3,12 @@ spec_id: EPIC-52
 agreed_id: EPIC-52
 title: 'aida tui redesign: clean Claude-Code-like fuzzy-command front door (replaces the dashboard wall)'
 description: 'Operator directive (2026-06-25): the tui must be EXTREMELY clean + claude-code-like; look/feel matches Claude; go in the OPPOSITE direction of overwhelm. Vision: a single input line with fuzzy-find over aida commands -> Enter runs it -> may open another TUI. Typing "menu" drops into the menu system. Full design: docs/plans/2026-06-25-tui-redesign-fuzzy-command-palette.md. The front door becomes a fuzzy-command palette (the hub); the existing PTY-host sessions, config menu, status board, and EPIC-51 pause-bridge become spokes reachable through it. Also fixes the aida tui standalone-launch bug (in-process dispatch replaces the fd-3/bash-wrapper). SUPERVISED + keyboard-verified (interactive feel) — implement with the operator, not unsupervised.'
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:36:02.471013081Z
-modified_at: 2026-06-26T18:54:27.678784802Z
+modified_at: 2026-06-26T18:54:29.748228878Z
 req_type: Epic
 tags:
 - aida:tui
