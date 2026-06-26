@@ -13,12 +13,12 @@ description: |-
   - The summarized counts are honest (pairs with BUG-609 live-vs-corpse counting — do not headline corpses as live).
   - A --full / --all flag reproduces today's exhaustive dump for those who want it.
   - Verify against the primary caller: a human running aida status to orient gets the next action in the first few lines, not after scrolling past 130 lines of fleet/worktree state.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:07:29.102015542Z
-modified_at: 2026-06-26T06:49:31.110139269Z
+modified_at: 2026-06-26T07:52:23.992175091Z
 req_type: Story
 tags:
 - legibility
@@ -26,3 +26,21 @@ tags:
 - product
 - status
 - streamlining
+history:
+- id: 019f02ea-6667-7cd3-b84e-e9aaff3b1191
+  author: aida-auto-bump
+  timestamp: 2026-06-26T07:52:23.911082904Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f02ea-66b8-7712-bbd7-1b59b838a091
+  timestamp: 2026-06-26T07:52:23.992169083Z
+  agent: aida
+  commit_sha: b7a6dd7c275b7f9ad28e4dd173c003042741e86d
+  summary: Completed via merge b7a6dd7c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T07:52:22.933736967Z
+  completion_sha: b7a6dd7c275b7f9ad28e4dd173c003042741e86d
