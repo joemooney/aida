@@ -3092,7 +3092,7 @@ fn run() -> Result<()> {
             )?;
         }
         Command::Queue(queue_cmd) => {
-            handle_queue_command(queue_cmd, &storage)?;
+            handle_queue_command(queue_cmd, &storage, &requirements_path)?;
         }
         Command::Load(load_cmd) => {
             handle_load_command(load_cmd, &storage)?;
@@ -17189,7 +17189,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // already implements queue_list/add/remove/reorder/clear.
             // Wrap our backend in a Storage façade pointing at the store path.
             let storage = Storage::new(store_path);
-            handle_queue_command(queue_cmd, &storage)?;
+            handle_queue_command(queue_cmd, &storage, store_path)?;
         }
         Command::Load(load_cmd) => {
             let storage = Storage::new(store_path);
@@ -111575,8 +111575,48 @@ fn advance_report_status(status: std::io::Result<std::process::ExitStatus>, disp
     }
 }
 
+// BUG-618: build the `aida queue list --json` rows from queue entries +
+// cache-backed summaries. Pure (no IO) so the JSON shape
+// ({spec_id,title,status,for_role}) is unit-testable without a backend. The
+// queue order is preserved; entries with no matching summary are dropped.
+// Display id mirrors `Requirement::display_id` (agreed_id, then spec_id,
+// then "?"). trace:BUG-618 | ai:claude
+fn queue_json_rows(
+    entries: &[aida_core::QueueEntry],
+    summaries: &[aida_core::RequirementSummary],
+) -> Vec<serde_json::Value> {
+    let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
+        summaries.iter().map(|s| (s.id, s)).collect();
+    entries
+        .iter()
+        .filter_map(|e| {
+            by_id.get(&e.requirement_id).map(|s| {
+                let display_id = s
+                    .agreed_id
+                    .as_deref()
+                    .or(s.spec_id.as_deref())
+                    .unwrap_or("?");
+                serde_json::json!({
+                    "spec_id": display_id,
+                    "title": s.title,
+                    "status": s.status,
+                    "for_role": e.for_role,
+                })
+            })
+        })
+        .collect()
+}
+
 /// Handle queue commands
-fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
+///
+/// `store_path` is the orphan-store path; the `--json` fast path opens a
+/// cache-backed backend from it to resolve titles via the SQLite cache rather
+/// than the legacy full YAML load. trace:BUG-618 | ai:claude
+fn handle_queue_command(
+    cmd: &QueueCommand,
+    storage: &Storage,
+    store_path: &std::path::Path,
+) -> Result<()> {
     let get_user = |user: &Option<String>| -> String { current_user_id(user.as_deref()) };
 
     match cmd {
@@ -111606,35 +111646,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // BUG-616: cache-fast JSON queue read for the TUI queue panel.
             // The panel only needs the user's queue head, enriched with each
             // spec's display id / title / status — emitting it straight from
-            // the cache-backed `storage.queue_list` + a `storage.load()` cache
+            // the cache-backed `storage.queue_list` + a SQLite-cache summary
             // read avoids the full `aida status` worktree/process scan (~3s).
             // Shape matches the status-overlay `QueueItem` the TUI already
             // parses ({spec_id,title,status,for_role}). Raw queue order, pre
             // role/scope display refinement. trace:BUG-616 | ai:claude
+            //
+            // BUG-618: resolve titles via the SQLite cache (`list_summaries`,
+            // the same path `aida list` uses, ~0.2s) instead of `storage.load()`
+            // — the legacy full YAML/git scan that cost ~1s on the cockpit
+            // paint. `RequirementSummary` carries id/spec_id/agreed_id/title/
+            // status, everything the JSON shape needs. trace:BUG-618 | ai:claude
             if *json {
                 let raw = if *global {
                     Vec::new()
                 } else {
                     storage.queue_list(&user_id, *include_completed)?
                 };
-                let store = storage.load()?;
-                let rows: Vec<serde_json::Value> = raw
-                    .iter()
-                    .filter_map(|e| {
-                        store
-                            .requirements
-                            .iter()
-                            .find(|r| r.id == e.requirement_id)
-                            .map(|r| {
-                                serde_json::json!({
-                                    "spec_id": r.display_id(),
-                                    "title": r.title,
-                                    "status": r.status,
-                                    "for_role": e.for_role,
-                                })
-                            })
-                    })
-                    .collect();
+                let backend = advance_backend(store_path)?;
+                let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
+                let rows = queue_json_rows(&raw, &summaries);
                 println!("{}", serde_json::to_string(&rows)?);
                 return Ok(());
             }
@@ -131492,5 +131523,113 @@ mod task_872_read_write_audit_tests {
         assert_eq!(tally.reads, 0);
         assert_eq!(tally.writes, 0);
         assert_eq!(tally.ratio(), None);
+    }
+}
+
+// BUG-618: lock the `aida queue list --json` shape — the TUI cockpit panel
+// parses {spec_id,title,status,for_role}, so the cache-summary resolution must
+// keep emitting exactly those keys in queue order. trace:BUG-618 | ai:claude
+#[cfg(test)]
+mod queue_json_rows_tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn summary(
+        id: Uuid,
+        spec_id: Option<&str>,
+        agreed_id: Option<&str>,
+    ) -> aida_core::RequirementSummary {
+        aida_core::RequirementSummary {
+            id,
+            spec_id: spec_id.map(|s| s.to_string()),
+            agreed_id: agreed_id.map(|s| s.to_string()),
+            title: format!("title for {id}"),
+            description: String::new(),
+            status: "approved".to_string(),
+            priority: "medium".to_string(),
+            owner: String::new(),
+            assignee: None,
+            feature: String::new(),
+            req_type: "bug".to_string(),
+            tags: Vec::new(),
+            created_at: String::new(),
+            modified_at: String::new(),
+            archived: false,
+            archived_at: None,
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
+            in_degree: 0,
+            out_degree: 0,
+            heft: 0,
+            yaml_path: String::new(),
+        }
+    }
+
+    fn entry(requirement_id: Uuid, for_role: Option<&str>) -> aida_core::QueueEntry {
+        aida_core::QueueEntry {
+            user_id: "u".to_string(),
+            requirement_id,
+            position: 0,
+            added_by: "u".to_string(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: for_role.map(|s| s.to_string()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        }
+    }
+
+    #[test]
+    fn emits_exact_keys_and_queue_order() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let summaries = vec![
+            summary(b, Some("BUG-7-002"), None),
+            summary(a, Some("BUG-7-001"), Some("BUG-2")),
+        ];
+        // Queue order is a, then b — the output must follow it, not the
+        // summary order.
+        let entries = vec![entry(a, Some("implementer")), entry(b, None)];
+
+        let rows = queue_json_rows(&entries, &summaries);
+        assert_eq!(rows.len(), 2);
+
+        // Row 0 (entry a): agreed_id wins over spec_id; for_role carried.
+        let r0 = &rows[0];
+        // Exactly the four keys the TUI cockpit parser expects, no more.
+        let mut keys: Vec<&str> = r0.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, vec!["for_role", "spec_id", "status", "title"]);
+        assert_eq!(r0["spec_id"], "BUG-2");
+        assert_eq!(r0["title"], format!("title for {a}"));
+        assert_eq!(r0["status"], "approved");
+        assert_eq!(r0["for_role"], "implementer");
+
+        // Row 1 (entry b): no agreed_id -> spec_id; for_role null.
+        let r1 = &rows[1];
+        assert_eq!(r1["spec_id"], "BUG-7-002");
+        assert!(r1["for_role"].is_null());
+    }
+
+    #[test]
+    fn drops_entries_with_no_matching_summary() {
+        let known = Uuid::new_v4();
+        let orphan = Uuid::new_v4();
+        let summaries = vec![summary(known, Some("BUG-9-001"), None)];
+        let entries = vec![entry(orphan, None), entry(known, None)];
+
+        let rows = queue_json_rows(&entries, &summaries);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["spec_id"], "BUG-9-001");
+    }
+
+    #[test]
+    fn missing_both_ids_falls_back_to_question_mark() {
+        let id = Uuid::new_v4();
+        let summaries = vec![summary(id, None, None)];
+        let rows = queue_json_rows(&[entry(id, None)], &summaries);
+        assert_eq!(rows[0]["spec_id"], "?");
     }
 }
