@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:19:35.838635342Z
-modified_at: 2026-06-19T01:52:34.821932397Z
+modified_at: 2026-06-26T18:46:24.480426898Z
 req_type: Epic
 tags:
 - competitive
@@ -76,3 +76,6 @@ comments:
   content: Commit c4c2bfd11 references this requirement
   created_at: 2026-06-19T01:52:34.821932397Z
   modified_at: 2026-06-19T01:52:34.821932397Z
+deferred: true
+deferred_at: 2026-06-26T18:46:24.480426898Z
+deferred_until: past stabilization; multi-vendor-fleet research phase begins
