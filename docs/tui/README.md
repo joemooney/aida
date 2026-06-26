@@ -136,6 +136,17 @@ block, not a directive, and long output is head-clipped. The hint only
 appears once an action has produced a result; with no result, `Ctrl-Y`
 degrades to a plain resume.
 
+### `Ctrl-D` as an alternate open trigger (opt-in)
+
+EPIC-51 frames the palette's literal entry point as **`Ctrl-D` from the
+chat**. Because `Ctrl-D` is also the terminal EOF byte (`0x04`), this is
+**off by default** — `Ctrl-D` passes straight through to the hosted child
+unless you opt in with `[tui] ctrl_d_palette = true`. When enabled, a raw
+`Ctrl-D` typed in a focused chat opens the same palette `prefix p` opens
+(suspend the chat → palette). It fires only with a child actually hosted;
+in the empty shell `Ctrl-D` is left alone. `prefix p` remains the
+always-available, EOF-free trigger regardless of this setting.
+
 ## Autonomous drains & `/goal` composition
 
 The two **Drain** buttons start an autonomous queue drain. They never
@@ -172,8 +183,9 @@ A `[tui]` block in `.aida/config.toml`:
 
 ```toml
 [tui]
-prefix_key = "Ctrl-a"   # command-mode prefix (also: "ctrl+a", "C-a", "alt-b")
-max_tabs   = 4          # soft cap on concurrently hosted sessions
+prefix_key     = "Ctrl-a"   # command-mode prefix (also: "ctrl+a", "C-a", "alt-b")
+max_tabs       = 4          # soft cap on concurrently hosted sessions
+ctrl_d_palette = false      # opt-in: Ctrl-D from the chat opens the action palette
 ```
 
 Missing file / section / keys fall back to the defaults — a config error

@@ -6,9 +6,10 @@
 //!
 //! ```toml
 //! [tui]
-//! prefix_key = "Ctrl-a"   # command-mode toggle key (PTY-host mode only)
-//! max_tabs   = 4          # soft cap on concurrently hosted sessions
-//! mode       = "launcher" # "launcher" (default) or "pty-host" (legacy)
+//! prefix_key     = "Ctrl-a"   # command-mode toggle key (PTY-host mode only)
+//! max_tabs       = 4          # soft cap on concurrently hosted sessions
+//! mode           = "launcher" # "launcher" (default) or "pty-host" (legacy)
+//! ctrl_d_palette = false      # opt-in: Ctrl-D from chat opens the palette
 //! ```
 //!
 //! trace:STORY-132 STORY-244 | ai:claude
@@ -92,6 +93,16 @@ pub struct TuiConfig {
     /// Claude; defaults to [`TabVendor::Claude`].
     // trace:TASK-895 | ai:claude
     pub vendor: TabVendor,
+    /// Opt-in: treat a raw `Ctrl-D` from the hosted chat as an alternate
+    /// trigger to open the deterministic action palette (suspend the chat →
+    /// palette), the same surface `prefix p` opens — the immediate-response
+    /// vision's literal entry point ("Ctrl-D from chat → palette"). Default
+    /// `false` because `Ctrl-D` is the terminal EOF byte (0x04): with this off
+    /// it passes straight through to the child unchanged, so nobody relying on
+    /// Ctrl-D in their chat/REPL is surprised. `[tui] ctrl_d_palette = true`
+    /// opts in.
+    // trace:TASK-909 | ai:claude
+    pub ctrl_d_palette: bool,
 }
 
 impl Default for TuiConfig {
@@ -103,6 +114,9 @@ impl Default for TuiConfig {
             mode: TuiMode::default(),
             theme: ThemeName::default(),
             vendor: TabVendor::default(),
+            // Off by default: `Ctrl-D` keeps passing through to the child as
+            // the EOF byte until the user opts in. trace:TASK-909 | ai:claude
+            ctrl_d_palette: false,
         }
     }
 }
@@ -146,6 +160,12 @@ impl TuiConfig {
                 "vendor" => {
                     if let Some(v) = TabVendor::parse(&val) {
                         cfg.vendor = v;
+                    }
+                }
+                // trace:TASK-909 | ai:claude
+                "ctrl_d_palette" => {
+                    if let Some(b) = parse_bool(&val) {
+                        cfg.ctrl_d_palette = b;
                     }
                 }
                 _ => {}
@@ -228,6 +248,18 @@ pub fn parse_mode(spec: &str) -> Option<TuiMode> {
     }
 }
 
+/// Parse a boolean config value. Case-insensitive; accepts the common
+/// truthy/falsy spellings (`true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`).
+/// Anything else returns `None` so the caller keeps the default.
+// trace:TASK-909 | ai:claude
+pub fn parse_bool(spec: &str) -> Option<bool> {
+    match spec.trim().to_ascii_lowercase().as_str() {
+        "true" | "yes" | "on" | "1" => Some(true),
+        "false" | "no" | "off" | "0" => Some(false),
+        _ => None,
+    }
+}
+
 /// Parse a prefix-key string into a [`KeyEvent`]. Accepts `Ctrl-a`,
 /// `ctrl+a`, `C-a` (case-insensitive); a bare single character maps to
 /// that char with no modifier. Returns `None` for anything unrecognized
@@ -279,6 +311,26 @@ mod tests {
         assert_eq!(parse_prefix_key(""), None);
         assert_eq!(parse_prefix_key("super-x"), None);
         assert_eq!(parse_prefix_key("ctrl-esc"), None);
+    }
+
+    #[test]
+    fn parse_bool_accepts_common_spellings() {
+        // TASK-909: the `ctrl_d_palette` opt-in parses the usual truthy/falsy
+        // forms case-insensitively; garbage keeps the caller's default.
+        for t in ["true", "TRUE", "yes", "on", "1"] {
+            assert_eq!(parse_bool(t), Some(true), "{t:?} should be true");
+        }
+        for f in ["false", "No", "off", "0"] {
+            assert_eq!(parse_bool(f), Some(false), "{f:?} should be false");
+        }
+        assert_eq!(parse_bool("maybe"), None);
+        assert_eq!(parse_bool(""), None);
+    }
+
+    #[test]
+    fn ctrl_d_palette_defaults_off() {
+        // The EOF-guarding default: Ctrl-D passes through unless opted in.
+        assert!(!TuiConfig::default().ctrl_d_palette);
     }
 
     #[test]
