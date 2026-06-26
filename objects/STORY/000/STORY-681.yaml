@@ -8,13 +8,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:36:28.576634829Z
-modified_at: 2026-06-26T07:25:12.472181091Z
+modified_at: 2026-06-26T18:00:47.860066807Z
 req_type: Story
 tags:
 - aida:tui
 - morning
 - parent:EPIC-52
 - supervised
+relationships:
+- rel_type: Child
+  target_id: 019efdb5-10a7-77d2-8c68-62ccb65fe9da
+  created_at: 2026-06-26T18:00:47.860059973Z
+  created_by: joe
 history:
 - id: 019f02d1-8145-73f1-a29d-49303f4547cf
   author: aida-auto-bump
