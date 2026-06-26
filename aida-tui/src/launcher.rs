@@ -15,6 +15,7 @@
 //! trace:STORY-244 | ai:claude
 
 use crate::dashboard::{self, DashboardModel, Pane, RoleTab, RowKind};
+use crate::dispatch;
 use crate::intent::{self, Intent};
 use crate::nav::NavSection;
 use crate::state::{self, TuiState};
@@ -31,9 +32,19 @@ pub struct LauncherOptions {
     /// Scope (an EPIC / STORY / … id) the launcher was started against —
     /// the Sessions section's `--list-sessions` shell-out targets it.
     pub scope: Option<String>,
-    /// File descriptor the intent line is written to on exit. The bash
-    /// wrapper sets `3>&1`; tests use 1 or a pipe fd.
-    pub intent_fd: u32,
+    /// Optional intent file descriptor — the **power-user / legacy** fd-3
+    /// hook (STORY-244). When `Some(fd)` and that fd is a real pipe (not
+    /// stdout/stderr), the launcher runs once, writes the intent line to
+    /// the fd, and exits — letting an external dispatcher (the old
+    /// `aida-tui` bash wrapper, or a script) handle it.
+    ///
+    /// When `None` (the default for bare `aida tui`), the launcher
+    /// dispatches the intent **in-process** and re-enters in a loop, so
+    /// `aida tui` is self-sufficient with no fd-3 pipe and no shell wrapper
+    /// (STORY-681).
+    //
+    // trace:STORY-681 | ai:claude
+    pub intent_fd: Option<u32>,
 }
 
 /// What a routed keystroke wants the loop to do.
@@ -262,67 +273,182 @@ pub fn act_on_row(row: &dashboard::ListRow, role: RoleTab, section: NavSection) 
     }
 }
 
-/// Run the launcher event loop. Sets up the RAII terminal guard, fetches
-/// the initial dashboard, drives keystrokes through [`route_key`], and
-/// on a [`LauncherAction::Emit`] exits cleanly while writing the intent
-/// to the configured fd. trace:STORY-244 | ai:claude
+/// Run the launcher. Sets up the panic hook + signal handler, then drives
+/// the board.
+///
+/// Two dispatch substrates (STORY-681):
+///
+/// - **In-process loop (default).** When `opts.intent_fd` is `None`, the
+///   launcher paints the board, and on a user action it drops the terminal
+///   guard, dispatches the intent **in this process** (spawns the command
+///   as a child that inherits the real terminal, waits for it), sanitizes
+///   the terminal, and re-enters — looping until the user quits. No fd 3,
+///   no `aida-tui` shell wrapper, no `aida dev shell-init` prerequisite:
+///   `aida tui` is self-sufficient from any shell. This fixes the BUG-612
+///   standalone-launch failure properly rather than papering over it with
+///   the shell function.
+///
+/// - **fd-3 emit (legacy / power-user hook).** When `opts.intent_fd` is
+///   `Some(fd)` (passed via `--intent-fd`), the launcher runs once, writes
+///   one intent line to that fd, and exits — preserving the STORY-244 wire
+///   protocol for the old `aida-tui` bash wrapper and any external
+///   dispatcher script.
+//
+// trace:STORY-244 STORY-681 | ai:claude
 pub fn run(opts: LauncherOptions) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let project_root = ensure_project_context(&cwd)?;
-    let prior_state = state::load(&project_root).unwrap_or_default();
-    let dialog_id = prior_state.dialog_session_id.clone();
 
     term::install_panic_hook();
     term::install_signal_handler()?;
-
-    // Safety check: if the user ran `aida tui --launcher` bare (no bash
-    // wrapper redirecting fd 3), refuse rather than corrupt the
-    // terminal post-exit. trace:STORY-244 risk #1 | ai:claude
-    if !intent::fd_is_writable_pipe(opts.intent_fd) {
-        anyhow::bail!(
-            "the launcher's intent fd {} is the same kernel object as stdout/stderr.\n\
-             Run `aida tui` via the `aida-tui` shell wrapper instead (installed by \
-             `aida dev shell-init --install`), or pass `--intent-fd` pointing at a pipe.",
-            opts.intent_fd
-        );
-    }
 
     // Resolve the configured theme up front so the dashboard paints in
     // the user's palette from the first frame. trace:TASK-256 | ai:claude
     let theme = crate::config::TuiConfig::load(&cwd).theme.theme();
 
-    let intent_to_emit = {
-        let _guard = term::TermGuard::enter()?;
-        let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
-        // STORY-686: the blocked/waiting board is the default home view —
-        // land on the first reason-group rather than the Queue perspective.
-        let mut model = dashboard::fetch(
-            RoleTab::default(),
-            NavSection::Reason(crate::board::Reason::all()[0]),
-            opts.scope.as_deref(),
-            dialog_id.as_deref(),
+    match opts.intent_fd {
+        // Legacy / power-user fd-3 path: emit one intent and exit.
+        // trace:STORY-244 | ai:claude
+        Some(fd) => run_emit_to_fd(&project_root, opts.scope.as_deref(), theme, fd),
+        // Default self-sufficient in-process loop. trace:STORY-681 | ai:claude
+        None => run_in_process_loop(&project_root, opts.scope.as_deref(), theme),
+    }
+}
+
+/// Render the board once, dispatch the resulting intent in-process, and
+/// re-enter — looping until the user quits. Each iteration: enter the
+/// terminal guard, run the event loop, drop the guard (restoring cooked
+/// mode), then act on the intent (spawn + wait the child), sanitize the
+/// terminal, and loop.
+//
+// trace:STORY-681 | ai:claude
+fn run_in_process_loop(
+    project_root: &std::path::Path,
+    scope: Option<&str>,
+    theme: crate::theme::Theme,
+) -> Result<()> {
+    loop {
+        // Re-read state each iteration so a `resume:` intent from the prior
+        // pass is remembered for this one's dialog-session discovery.
+        let prior_state = state::load(project_root).unwrap_or_default();
+        let dialog_id = prior_state.dialog_session_id.clone();
+
+        let intent = run_board_once(scope, dialog_id.as_deref(), theme)?;
+
+        // Outside the guard now — cooked mode + main screen restored, so
+        // the dispatched child paints the real terminal cleanly.
+        let new_state = TuiState {
+            tabs: prior_state.tabs,
+            dialog_session_id: maybe_update_dialog(&intent, dialog_id),
+        };
+        state::save(project_root, &new_state);
+
+        match dispatch::plan(&intent)? {
+            dispatch::Dispatch::Quit => return Ok(()),
+            dispatch::Dispatch::Run { program, args } => {
+                // Defense in depth: the in-process path bypasses the
+                // serialize() wire-format gate, so re-check the payload
+                // through the same allow-list before spawning. A malformed
+                // Intent (none of the board's Intents are) surfaces as a
+                // notice and re-enters rather than reaching Command::new.
+                // trace:STORY-681 | ai:claude
+                if !payload_is_dispatch_safe(&program, &args) {
+                    eprintln!(
+                        "aida tui: refusing to dispatch an intent with unsafe characters: \
+                         {program} {}",
+                        args.join(" ")
+                    );
+                    continue;
+                }
+                let status = dispatch::run_child(&program, &args);
+                // Sanitize the terminal between the child exiting and the
+                // next launcher entry — a crashed child can leave raw mode
+                // or a hidden cursor on. The bash wrapper ran `tput reset`
+                // on a non-zero exit; we always sanitize (cheap, idempotent).
+                term::sanitize_after_child();
+                if let Err(e) = status {
+                    // A missing program (e.g. `claude` not on PATH) is a
+                    // user-facing condition, not a loop-ending crash: report
+                    // it and re-enter so the board stays usable.
+                    eprintln!("aida tui: {e:#}");
+                }
+            }
+        }
+    }
+}
+
+/// Legacy fd-3 single-shot path: render the board once and write the
+/// resulting intent line to `fd` for an external dispatcher to handle.
+/// Preserves the STORY-244 wire protocol + the bare-invocation safety
+/// check. trace:STORY-244 | ai:claude
+fn run_emit_to_fd(
+    project_root: &std::path::Path,
+    scope: Option<&str>,
+    theme: crate::theme::Theme,
+    fd: u32,
+) -> Result<()> {
+    // Safety check: the caller asked for fd-emit but didn't wire a real
+    // pipe (e.g. `aida tui --launcher --intent-fd 3` with no `3>` redirect)
+    // — refuse rather than spray the intent line into the restored
+    // terminal. trace:STORY-244 risk #1 | ai:claude
+    if !intent::fd_is_writable_pipe(fd) {
+        anyhow::bail!(
+            "the launcher's intent fd {fd} is the same kernel object as stdout/stderr.\n\
+             Pass `--intent-fd` pointing at a real pipe, or drop it to use the default \
+             self-sufficient in-process dispatch (no wrapper needed)."
         );
-        model.theme = theme;
-        event_loop(
-            &mut terminal,
-            model,
-            opts.scope.as_deref(),
-            dialog_id.as_deref(),
-        )?
-    };
+    }
+
+    let prior_state = state::load(project_root).unwrap_or_default();
+    let dialog_id = prior_state.dialog_session_id.clone();
+
+    let intent_to_emit = run_board_once(scope, dialog_id.as_deref(), theme)?;
 
     // Outside the guard now — cooked mode restored.
-    intent::write_to_fd(&intent_to_emit, opts.intent_fd)?;
+    intent::write_to_fd(&intent_to_emit, fd)?;
 
-    // Persist state for the next re-entry (preserves PTY-host's `tabs`
-    // field, only mutates dialog_session_id).
     let new_state = TuiState {
         tabs: prior_state.tabs,
         dialog_session_id: maybe_update_dialog(&intent_to_emit, dialog_id),
     };
-    state::save(&project_root, &new_state);
+    state::save(project_root, &new_state);
 
     Ok(())
+}
+
+/// Enter the terminal guard, fetch the board, drive the event loop to an
+/// Emit, drop the guard, and return the intent. The single render pass
+/// shared by both the in-process loop and the fd-3 path.
+//
+// trace:STORY-681 | ai:claude
+fn run_board_once(
+    scope: Option<&str>,
+    dialog_id: Option<&str>,
+    theme: crate::theme::Theme,
+) -> Result<Intent> {
+    let _guard = term::TermGuard::enter()?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
+    // STORY-686: the blocked/waiting board is the default home view — land
+    // on the first reason-group rather than the Queue perspective.
+    let mut model = dashboard::fetch(
+        RoleTab::default(),
+        NavSection::Reason(crate::board::Reason::all()[0]),
+        scope,
+        dialog_id,
+    );
+    model.theme = theme;
+    event_loop(&mut terminal, model, scope, dialog_id)
+    // `_guard` drops here — cooked mode + main screen restored.
+}
+
+/// Defense-in-depth re-check before [`dispatch::run_child`]: every token of
+/// a to-be-spawned command must pass the same allow-list the wire format
+/// enforces. Belt-and-braces for the in-process path, which no longer
+/// routes through [`intent::serialize`].
+//
+// trace:STORY-681 | ai:claude
+fn payload_is_dispatch_safe(program: &str, args: &[String]) -> bool {
+    intent::is_safe_payload(program) && args.iter().all(|a| intent::is_safe_payload(a))
 }
 
 /// On a `Resume(<id>)` intent for the dialog role, remember the id. On a

@@ -135,6 +135,23 @@ pub fn install_signal_handler() -> Result<()> {
     }
 }
 
+/// Best-effort terminal sanitize between an in-process-dispatched child
+/// exiting and the launcher re-entering (STORY-681). The bash wrapper ran
+/// `tput reset` when a dispatched command exited non-zero — a crashed
+/// `claude`/`aida queue work` could leave raw mode or a hidden cursor on,
+/// and the next launcher entry would paint over garbage. We do the
+/// equivalent here: best-effort disable raw mode and show the cursor so
+/// [`TermGuard::enter`] starts from a clean slate. Every step swallows its
+/// error (the child may have left the terminal in any state).
+//
+// trace:STORY-681 | ai:claude
+pub fn sanitize_after_child() {
+    let mut out = stdout();
+    let _ = terminal::disable_raw_mode();
+    let _ = out.execute(cursor::Show);
+    let _ = out.flush();
+}
+
 /// Rows available to a hosted PTY child: the full terminal height minus
 /// the one row reserved for the always-visible status strip. Never
 /// returns 0 — a degenerate 1-row terminal still gets a 1-row child.

@@ -31,6 +31,12 @@ pub mod cmd_palette;
 mod config;
 mod config_menu;
 mod dashboard;
+/// In-process intent dispatch: turns the launcher's exit Intent into a
+/// spawned child the `aida tui` process runs and waits on, then re-enters —
+/// so `aida tui` is self-sufficient with no fd-3 pipe and no `aida-tui`
+/// shell wrapper.
+// trace:STORY-681 | ai:claude
+mod dispatch;
 mod event;
 mod help;
 mod intent;
@@ -62,6 +68,11 @@ pub use theme::{Theme, ThemeName};
 /// trace:STORY-244 | ai:claude
 #[doc(hidden)]
 pub mod __test_only {
+    // STORY-681: the in-process dispatch planner + child runner, so
+    // integration tests can assert the Intent → spawned-command mapping
+    // (the Rust equivalent of the old bash wrapper's `case` dispatch)
+    // without standing up a real terminal. trace:STORY-681 | ai:claude
+    pub use crate::dispatch::{plan as dispatch_plan, run_child as dispatch_run_child, Dispatch};
     pub use crate::intent::{write_to_fd as write_intent, Intent};
 }
 
