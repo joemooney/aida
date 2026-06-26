@@ -3,12 +3,12 @@ spec_id: TASK-908
 agreed_id: TASK-908
 title: 'EPIC-51 piece (3): inject a palette action''s result back into the suspended chat''s'
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:18:21.213831136Z
-modified_at: 2026-06-26T18:04:36.350515216Z
+modified_at: 2026-06-26T18:04:41.899736942Z
 req_type: Task
 relationships:
 - rel_type: Child
