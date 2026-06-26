@@ -1992,6 +1992,15 @@ fn run() -> Result<()> {
         return handle_status_spec(spec, *idle_minutes, *json);
     }
 
+    // STORY-696: `aida ps` is the GLOBAL running-work table — the project-wide
+    // companion to `aida status <spec>`. Like that command it reads the local
+    // session leases + probes pid liveness and self-loads the store read-only
+    // (to find orphaned In-Progress specs), so it needs no shared storage
+    // handle — dispatch early. trace:STORY-696 | ai:claude
+    if let Command::Ps { json, all } = &cli.command {
+        return handle_ps(*json, *all);
+    }
+
     // STORY-631: `aida intent <ID>` self-loads the store (read for cache-print,
     // read+write for generate), and may shell out to a headless `claude -p`
     // running `/aida-intent`. Like `aida why` / `aida intake`, it needs no
@@ -3107,6 +3116,8 @@ fn run() -> Result<()> {
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
+        // trace:STORY-696
+        Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -13637,6 +13648,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
+        // trace:STORY-696
+        Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -58551,6 +58564,142 @@ mod story_694_spec_liveness_tests {
     }
 }
 
+// The global running-work table (`aida ps`). trace:STORY-696 | ai:claude
+#[cfg(test)]
+mod story_696_ps_tests {
+    use super::*;
+
+    fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".into(),
+            worktree_path: worktree,
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+        }
+    }
+
+    /// A lease whose worktree IS a live claude's cwd classifies Live — that is
+    /// the row `aida ps` paints as live. We simulate "a live process inside the
+    /// worktree" with a LiveSession whose cwd is the lease worktree.
+    #[test]
+    fn ps_live_lease_classifies_live() {
+        let tmp = tempfile::tempdir().unwrap();
+        let l = ps_lease("l-live", "STORY-1", tmp.path().to_path_buf());
+        let live = vec![process_probe::LiveSession {
+            pid: std::process::id(),
+            cwd: tmp.path().to_path_buf(),
+            jsonl: None,
+            stale_cwd: false,
+        }];
+        assert_eq!(
+            lease_state_for(&l, &live, chrono::Utc::now()),
+            LeaseState::Live,
+            "a lease backed by a live claude in its worktree is Live"
+        );
+    }
+
+    /// A lease whose worktree is GONE (the dead-pid / crashed signature)
+    /// classifies Stale — the row `aida ps` paints STALE and folds behind
+    /// the footer count unless --all.
+    #[test]
+    fn ps_dead_pid_lease_classifies_stale() {
+        let l = ps_lease(
+            "l-dead",
+            "STORY-2",
+            std::path::PathBuf::from("/nonexistent/aida-ps-dead"),
+        );
+        assert_eq!(
+            lease_state_for(&l, &[], chrono::Utc::now()),
+            LeaseState::Stale,
+            "a lease with no live process + missing worktree is STALE"
+        );
+    }
+
+    /// An In-Progress spec with NO spec-scoped lease is orphaned (flag-only):
+    /// `ps_orphan_verdict(None) == Some(false)`. A live lease means genuinely
+    /// running (not orphaned → None). A dead/dormant lease is orphaned with a
+    /// crashed-session marker (`Some(true)`).
+    #[test]
+    fn ps_orphan_verdict_matrix() {
+        // No lease backing an In-Progress flag → orphaned, flag-only.
+        assert_eq!(ps_orphan_verdict(None), Some(false));
+        // Live lease → genuinely running, not orphaned.
+        assert_eq!(ps_orphan_verdict(Some(LeaseState::Live)), None);
+        // Dead lease → orphaned, crashed session.
+        assert_eq!(ps_orphan_verdict(Some(LeaseState::Stale)), Some(true));
+        // Dormant (no live process) → also orphaned: the flag is not
+        // liveness-backed.
+        assert_eq!(ps_orphan_verdict(Some(LeaseState::Dormant)), Some(true));
+    }
+
+    /// The `--json` row shape: every session row carries the documented keys,
+    /// and an orphaned spec is emitted under `orphaned` with a `flag-only`
+    /// liveness. Builds the same JSON the handler emits from in-memory rows.
+    #[test]
+    fn ps_json_shape() {
+        let tmp = tempfile::tempdir().unwrap();
+        let l = ps_lease("session-abc", "STORY-3", tmp.path().to_path_buf());
+        let row = serde_json::json!({
+            "session_id": l.id,
+            "scope": l.scope,
+            "spec": Some("STORY-3"),
+            "role": l.role,
+            "worktree": l.worktree_path.display().to_string(),
+            "branch": l.branch,
+            "pid": Some(4242u32),
+            "started_at": l.started_at.to_rfc3339(),
+            "elapsed_secs": 90u64,
+            "liveness": LeaseState::Live.label(),
+            "live": true,
+        });
+        for key in [
+            "session_id",
+            "scope",
+            "spec",
+            "role",
+            "worktree",
+            "branch",
+            "pid",
+            "started_at",
+            "elapsed_secs",
+            "liveness",
+            "live",
+        ] {
+            assert!(row.get(key).is_some(), "session row missing key `{key}`");
+        }
+        assert_eq!(row["liveness"], "live");
+
+        let orphan = serde_json::json!({
+            "spec": "STORY-9",
+            "title": "an in-progress spec nobody is working",
+            "liveness": "flag-only",
+            "live": false,
+        });
+        assert_eq!(orphan["liveness"], "flag-only");
+        assert_eq!(orphan["live"], false);
+
+        let envelope = serde_json::json!({ "sessions": [row], "orphaned": [orphan] });
+        assert!(envelope["sessions"].is_array());
+        assert!(envelope["orphaned"].is_array());
+    }
+}
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 mod task_358_escalation_cleanup_tests {
@@ -89187,6 +89336,291 @@ fn short_lease_id(l: &SessionLease, all: &[SessionLease]) -> String {
     let ids: Vec<&str> = all.iter().map(|x| x.id.as_str()).collect();
     let n = unique_prefix_len(&l.id, &ids, 8);
     l.id[..n.min(l.id.len())].to_string()
+}
+
+/// One row of the `aida ps` running-work table: a classified session lease plus
+/// the spec it is linked to (if any). Built off the SAME machinery the per-spec
+/// `aida status <spec>` and `aida session leases` use ([`list_leases`],
+/// [`lease_state_for`], the pid probe), so the global view and the per-spec view
+/// can never disagree about what is live.
+// trace:STORY-696 | ai:claude
+struct PsRow {
+    lease: SessionLease,
+    state: LeaseState,
+    /// PID of the live claude inside the worktree (or the review-verb creator
+    /// pid). `None` when no live process backs the lease.
+    pid: Option<u32>,
+    elapsed_secs: u64,
+    /// The display id of the spec this lease is scoped to, when the lease scope
+    /// resolves to a known spec id (the AIDA-launched happy path). `None` for
+    /// generic `harness-worktree` advisor fan-out leases — surfaced honestly as
+    /// "scope unknown" rather than guessed.
+    // trace:STORY-696
+    spec: Option<String>,
+}
+
+/// An In-Progress spec with NO live spec-scoped session backing it — the
+/// flag-only / orphaned case. Surfaced by `aida ps` alongside the live table so
+/// a crashed or never-started session can't hide behind a status flag.
+// trace:STORY-696 | ai:claude
+struct PsOrphan {
+    spec: String,
+    title: String,
+    /// `true` when a spec-scoped lease EXISTS but its holder process is dead
+    /// (STALE) — distinct from no lease at all (pure flag-only). Either way the
+    /// In-Progress flag is not liveness-backed.
+    stale_lease: bool,
+}
+
+/// The flag-only / orphaned verdict for one In-Progress spec, given the
+/// classified state of its spec-scoped lease (if any). A `Live` lease means the
+/// spec is genuinely running (NOT orphaned → `None`). A dead/dormant lease →
+/// orphaned with `stale_lease = true` (crashed session). No lease → orphaned
+/// flag-only. Pure so the orphan matrix is unit-testable without a store or a
+/// lease dir.
+// trace:STORY-696 | ai:claude
+fn ps_orphan_verdict(lease_state: Option<LeaseState>) -> Option<bool> {
+    match lease_state {
+        Some(LeaseState::Live) => None,
+        Some(_) => Some(true),
+        None => Some(false),
+    }
+}
+
+/// `aida ps` — the GLOBAL running-work table. One row per active session/agent
+/// across the project (the project-wide companion to `aida status <spec>`), plus
+/// a pass over In-Progress specs with no live spec-scoped lease so orphaned
+/// flags surface. Reuses the per-spec liveness machinery wholesale.
+// trace:STORY-696 trace:STORY-694 | ai:claude
+fn handle_ps(json: bool, all: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+
+    // One pid-probe + one lease read, shared by both the session table and the
+    // orphan pass — the same single-probe discipline `aida session leases` uses.
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let leases = list_leases(&project_root);
+
+    // The store gives us (a) the set of known spec ids (so a lease scope can be
+    // resolved to a spec vs. a generic harness scope) and (b) the In-Progress
+    // specs for the orphan pass. Read-only; degrade gracefully if unreachable.
+    let store = load_store_for_lookup(&project_root);
+
+    let rows: Vec<PsRow> = leases
+        .iter()
+        .map(|l| {
+            let state = lease_state_for(l, &live, now);
+            let live_in_worktree = live.iter().find(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            let pid = live_in_worktree.map(|s| s.pid).or(if l.review_verb {
+                l.creator_pid
+            } else {
+                None
+            });
+            let elapsed_secs = now.signed_duration_since(l.started_at).num_seconds().max(0) as u64;
+            let spec = store.as_ref().and_then(|s| {
+                s.requirements
+                    .iter()
+                    .filter_map(|r| {
+                        let disp = r
+                            .agreed_id
+                            .clone()
+                            .or_else(|| r.spec_id.clone())
+                            .unwrap_or_else(|| r.id.to_string());
+                        let matches = [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                            .into_iter()
+                            .flatten()
+                            .any(|id| l.scope.eq_ignore_ascii_case(id));
+                        matches.then_some(disp)
+                    })
+                    .next()
+            });
+            PsRow {
+                lease: l.clone(),
+                state,
+                pid,
+                elapsed_secs,
+                spec,
+            }
+        })
+        .collect();
+
+    // Orphan pass: every In-Progress spec with no LIVE spec-scoped lease. A
+    // dead-pid (STALE) lease still counts as orphaned — the flag is not
+    // liveness-backed — but we mark it so the operator sees "crashed session"
+    // vs "never started". trace:STORY-696
+    let mut orphans: Vec<PsOrphan> = Vec::new();
+    if let Some(store) = store.as_ref() {
+        for r in &store.requirements {
+            if !matches!(r.status, aida_core::RequirementStatus::InProgress) {
+                continue;
+            }
+            let disp = r
+                .agreed_id
+                .clone()
+                .or_else(|| r.spec_id.clone())
+                .unwrap_or_else(|| r.id.to_string());
+            let mut id_owned: Vec<String> = Vec::new();
+            if let Some(a) = r.agreed_id.as_deref() {
+                id_owned.push(a.to_string());
+            }
+            if let Some(s) = r.spec_id.as_deref() {
+                id_owned.push(s.to_string());
+            }
+            let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
+            let lease = spec_scoped_lease(&leases, &id_refs);
+            let lease_state = lease.map(|l| lease_state_for(l, &live, now));
+            if let Some(stale_lease) = ps_orphan_verdict(lease_state) {
+                orphans.push(PsOrphan {
+                    spec: disp,
+                    title: r.title.clone(),
+                    stale_lease,
+                });
+            }
+        }
+        orphans.sort_by(|a, b| a.spec.cmp(&b.spec));
+    }
+
+    if json {
+        let sessions: Vec<serde_json::Value> = rows
+            .iter()
+            .map(|row| {
+                serde_json::json!({
+                    "session_id": row.lease.id,
+                    "scope": row.lease.scope,
+                    "spec": row.spec,
+                    "role": row.lease.role,
+                    "worktree": row.lease.worktree_path.display().to_string(),
+                    "branch": row.lease.branch,
+                    "pid": row.pid,
+                    "started_at": row.lease.started_at.to_rfc3339(),
+                    "elapsed_secs": row.elapsed_secs,
+                    "liveness": row.state.label(),
+                    "live": matches!(row.state, LeaseState::Live),
+                })
+            })
+            .collect();
+        let orphaned: Vec<serde_json::Value> = orphans
+            .iter()
+            .map(|o| {
+                serde_json::json!({
+                    "spec": o.spec,
+                    "title": o.title,
+                    "liveness": if o.stale_lease { "stale" } else { "flag-only" },
+                    "live": false,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "sessions": sessions,
+                "orphaned": orphaned,
+            }))?
+        );
+        return Ok(());
+    }
+
+    // Hide STALE session rows behind a footer count unless --all, mirroring
+    // `aida session leases`. trace:STORY-696
+    let (shown, hidden_stale): (Vec<&PsRow>, Vec<&PsRow>) = if all {
+        (rows.iter().collect(), Vec::new())
+    } else {
+        rows.iter()
+            .partition(|r| !matches!(r.state, LeaseState::Stale))
+    };
+
+    println!("{}", "Running work".bold());
+    println!();
+
+    if shown.is_empty() && hidden_stale.is_empty() {
+        println!("{}", "(no active sessions)".dimmed());
+    } else {
+        let all_ids: Vec<&str> = leases.iter().map(|l| l.id.as_str()).collect();
+        let header = format!(
+            "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {}",
+            "session", "spec", "role", "pid", "started", "elapsed", "live"
+        );
+        println!("{}", header.dimmed());
+        for row in &shown {
+            let l = &row.lease;
+            let prefix_len = unique_prefix_len(&l.id, &all_ids, 8);
+            let spec_col = row.spec.clone().unwrap_or_else(|| truncate(&l.scope, 14));
+            let pid_col = row.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
+            let started = l
+                .started_at
+                .with_timezone(&chrono::Local)
+                .format("%H:%M")
+                .to_string();
+            let live_label = format!("{} {}", row.state.glyph(), row.state.label());
+            let live_col = match row.state {
+                LeaseState::Live => live_label.green(),
+                LeaseState::Dormant => live_label.cyan(),
+                LeaseState::Stale => live_label.yellow(),
+            };
+            println!(
+                "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {}",
+                (&l.id[..prefix_len]).yellow(),
+                truncate(&spec_col, 14),
+                truncate(l.role.as_deref().unwrap_or("-"), 10),
+                pid_col,
+                started,
+                humanize_duration_secs(row.elapsed_secs),
+                live_col,
+            );
+            // A second dimmed line carries the worktree so the wide path
+            // doesn't blow out the table's column alignment.
+            println!("{}{}", " ".repeat(11), l.worktree_path.display());
+        }
+        if !hidden_stale.is_empty() {
+            println!();
+            println!(
+                "{}",
+                format!(
+                    "({} stale session{} hidden — pass --all to show)",
+                    hidden_stale.len(),
+                    if hidden_stale.len() == 1 { "" } else { "s" }
+                )
+                .dimmed()
+            );
+        }
+    }
+
+    // Orphaned In-Progress specs — the flag-only / crashed-session case.
+    if !orphans.is_empty() {
+        let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+        println!();
+        println!(
+            "{}",
+            "Orphaned In-Progress specs (no live session backing the flag)"
+                .bold()
+                .yellow()
+        );
+        for o in &orphans {
+            let why = if o.stale_lease {
+                "stale lease — process dead"
+            } else {
+                "flag-only — no session linked"
+            };
+            println!(
+                "  {} {}  {}  {}",
+                warn.yellow(),
+                o.spec.yellow().bold(),
+                truncate(&o.title, 48).dimmed(),
+                format!("({why})").dimmed(),
+            );
+        }
+        println!(
+            "{}",
+            "  (advisor Agent-tool fan-outs take generic harness-worktree leases — \
+             not spec-linked — so their specs read flag-only)"
+                .dimmed()
+        );
+    }
+
+    Ok(())
 }
 
 /// STORY-545: resolve a selector to `(ready, awaiting_signoff, parked)` via the
