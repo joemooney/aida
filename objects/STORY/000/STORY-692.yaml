@@ -3,12 +3,12 @@ spec_id: STORY-692
 agreed_id: STORY-692
 title: 'Fasttrack express tier: batch:express filing verb (no lifecycle skip)'
 description: 'Followup A of TASK-0438 design. Add a thin filing verb (e.g. `aida fasttrack --tier express` or sibling `aida express`) that files a spec Approved + queued + `batch:express`, carrying NO lifecycle:* tag so the full CI+reviewer gate runs. Mirrors how `aida fasttrack` owns the trivial tiers filing convention in one place. Acceptance: a single command files Approved+queued+batch:express; invariant test asserts no lifecycle skip tag is set. See docs/plans/2026-06-26-task-0438-fasttrack-lane.md.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T07:55:11.001788646Z
-modified_at: 2026-06-26T07:56:23.967392781Z
+modified_at: 2026-06-26T18:22:00.551720078Z
 req_type: Story
 tags:
 - express
@@ -19,3 +19,21 @@ relationships:
   target_id: 019ef7ac-c54f-78a3-870a-0b2a485e5806
   created_at: 2026-06-26T07:56:23.967386917Z
   created_by: joe
+history:
+- id: 019f052a-d313-7963-87cb-2993cf387aa4
+  author: aida-auto-bump
+  timestamp: 2026-06-26T18:22:00.467723536Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f052a-d367-75e1-83f0-146e1ba44dbd
+  timestamp: 2026-06-26T18:22:00.551713268Z
+  agent: aida
+  commit_sha: f409227b973dbb4ff87f222a1373e9fdd642d847
+  summary: Completed via merge f409227b
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T18:21:59.388958484Z
+  completion_sha: f409227b973dbb4ff87f222a1373e9fdd642d847
