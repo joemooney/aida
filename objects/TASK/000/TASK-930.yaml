@@ -1,0 +1,22 @@
+id: 019f0642-12d3-7ed1-bab6-9577fa9b8deb
+spec_id: TASK-930
+agreed_id: TASK-930
+title: 'aida queue list: one-line summary footer (N items · M routed · K unrouted)'
+description: |-
+  Add a one-line summary FOOTER to `aida queue list`: after the items, print a single line like "N items · M routed · K unrouted" (counts of total queued, items routed to a role via --for, and unrouted items). Small, visible, human-testable.
+
+  This is the DEMO SPEC for an end-to-end lifecycle walkthrough (Draft -> advisor approval -> implementation -> human test-plan verification -> reviewer accept -> Completed) driven through the redesign TUI. Left as a Draft; the implementer will write its ## Test Plan during implementation.
+
+  ACCEPTANCE: `aida queue list` ends with a summary footer showing total / routed / unrouted counts; counts are correct; no footer when the queue is empty (the existing empty message stands).
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T23:27:01.331691676Z
+modified_at: 2026-06-26T23:27:01.331691676Z
+req_type: Task
+tags:
+- cli
+- demo:lifecycle
+- queue
+- ux
