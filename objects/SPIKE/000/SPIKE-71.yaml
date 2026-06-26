@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T19:52:13.150481811Z
-modified_at: 2026-06-26T19:52:13.150481811Z
+modified_at: 2026-06-26T20:09:42.804501622Z
 req_type: Spike
 tags:
 - cache
@@ -32,4 +32,10 @@ tags:
 - graph
 - relationships
 - substrate
+comments:
+- id: 019f058d-6e94-72d1-adcc-cdac33875a10
+  author: joe
+  content: 'CONCRETE FIX IDENTIFIED (2026-06-26): the CLI ''aida queue list --epic'' (TASK-923) reuses aida_core::graph_walk::walk_union over BOTH (Child,Parent) edges — the same closure aida graph --tree uses (BUG-543/BUG-448) — so it AGREES with the tree and is robust to one-directional edges. The TUI focus-lens closure (STORY-695, SpecStore::descendants_of) was written to walk ONLY Parent edges, which is exactly why it showed 4 of ~10 children. FIX: port the focus lens to the same walk_union(Child,Parent) pattern so the TUI lens, --tree, and the CLI --epic filter all agree and are direction-robust. That aligns the three views and removes the focus lens''s dependence on perfectly-bidirectional edges.'
+  created_at: 2026-06-26T20:09:42.804501622Z
+  modified_at: 2026-06-26T20:09:42.804501622Z
 human_only: true
