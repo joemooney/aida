@@ -6793,6 +6793,20 @@ pub enum Command {
         // trace:STORY-464 | ai:antigravity
         #[clap(long)]
         no_hygiene: bool,
+        /// Show the full fleet roster: reveal stale (dead-PID) agents the
+        /// default view hides behind a footer count, and list every worktree
+        /// instead of collapsing a large roster to a one-line summary. By
+        /// default `aida status` reflects LIVE reality and points at
+        /// `aida doctor heal` / `aida session gc` to reap the abandoned ones.
+        // trace:BUG-609 | ai:claude
+        #[clap(long)]
+        all: bool,
+        /// Reveal only the stale (dead-PID) agents the default "Active agents"
+        /// headline hides — the narrow form of `--all` (worktrees stay
+        /// summarized).
+        // trace:BUG-609 | ai:claude
+        #[clap(long)]
+        stale: bool,
     },
 
     /// List the team: every registered node/clone sharing this store
