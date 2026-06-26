@@ -1,0 +1,16 @@
+id: 019f01d0-5523-79f3-8109-8ca6ff99044b
+spec_id: BUG-616
+agreed_id: BUG-616
+title: TUI panel reads use full-scan paths — queue panel ran aida status (~3.75s), row preview ran aida show with git-linkage (~1s/item)
+description: 'The aida tui dashboard fetched the Queue panel via overlay::fetch -> aida status --json (the full worktree/process scan, ~3.75s) and the per-row preview via aida show WITH git-linkage (~1s uncached per row). Both only need cache data. Fix: queue panel uses a new cache-fast aida queue list --json (3.75s->1s; further 0.2s follow-up to resolve titles via SQLite cache summaries instead of the legacy YAML storage.load); row preview uses aida show --no-git (1s->0.13s). Operator-reported during live TUI testing.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T02:44:18.339982045Z
+modified_at: 2026-06-26T02:44:18.339982045Z
+req_type: Bug
+tags:
+- from-operator-testing
+- perf
+- tui
