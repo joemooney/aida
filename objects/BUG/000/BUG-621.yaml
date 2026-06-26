@@ -22,12 +22,12 @@ description: |-
   - In-flight / self-resolving items are presented as requiring no operator action (separate group or count), distinct from items that genuinely need a human nudge.
   - Genuinely-parked/blocked/held items still show their single next action under a "needs you" heading.
   - Verify against the primary caller: aida queue with one In-Progress item reads as "in flight, nothing to do" with no contradiction.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T05:15:25.682956568Z
-modified_at: 2026-06-26T06:15:39.574315874Z
+modified_at: 2026-06-26T06:39:14.075469094Z
 req_type: Bug
 tags:
 - legibility
@@ -35,3 +35,21 @@ tags:
 - queue
 - user-facing-text
 - ux
+history:
+- id: 019f02a7-6a4a-71a1-bb65-a3cce8b8d943
+  author: aida-auto-bump
+  timestamp: 2026-06-26T06:39:13.994228931Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f02a7-6a9b-7150-8291-84c729b3df9f
+  timestamp: 2026-06-26T06:39:14.075462387Z
+  agent: aida
+  commit_sha: da9079808f49188c1c9b53a4e8ebb08b1be57db1
+  summary: Completed via merge da907980
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T06:39:13.021679228Z
+  completion_sha: da9079808f49188c1c9b53a4e8ebb08b1be57db1
