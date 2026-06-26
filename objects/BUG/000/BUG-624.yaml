@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:04:29.803443767Z
-modified_at: 2026-06-26T17:04:29.803443767Z
+modified_at: 2026-06-26T17:16:27.414733821Z
 req_type: Bug
 tags:
 - dx
 - from-drive
 - hooks
 - substrate-gate
+comments:
+- id: 019f04ee-cf96-7a92-8efa-0870692de60b
+  author: joe
+  content: Commit 5dcddc339 references this requirement
+  created_at: 2026-06-26T17:16:27.414733821Z
+  modified_at: 2026-06-26T17:16:27.414733821Z
