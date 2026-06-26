@@ -1,0 +1,36 @@
+id: 019f024a-7f21-7c73-84a7-57c5d1835bf4
+spec_id: BUG-619
+agreed_id: BUG-619
+title: aida tui lags navigating to PRs — fetch_prs() is a synchronous gh call per navigation; load async + refresh, don't block the cursor
+description: |-
+  SYMPTOM (operator, 2026-06-25): navigating to the PRs section in `aida tui` lags — the selection/cursor movement is delayed while PR data loads. Felt on every navigation to the panel.
+
+  ROOT CAUSE (grounded in code): aida-tui/src/dashboard.rs:210 routes NavSection::Prs to fetch_prs() SYNCHRONOUSLY on each navigation; fetch_prs() (dashboard.rs:328) shells out to `gh pr list --state open --json ...` — a subprocess + network call on the UI thread. So every move into the PRs panel blocks on a live `gh` round-trip.
+
+  DESIRED BEHAVIOR (operator's direction):
+  - Load PRs ASYNC (off the UI thread): populate once on launch, refresh periodically and/or on an explicit command/key — NOT a fresh synchronous fetch on each navigation.
+  - Navigate to the panel IMMEDIATELY; never delay the selection movement. If a fetch is in flight, show a "refreshing…" notice and the last-known rows (or empty), rather than blocking the cursor.
+
+  REUSE (the building blocks already exist):
+  - dashboard.rs:130 already has a notice-line slot ("loading PRs…") — use it for the "refreshing…" state.
+  - app.rs:1139 spawn_overlay_refresh is an existing background-refresh precedent (the overlay already refreshes CI-inclusive state off-thread) — mirror that pattern for PRs.
+  - welcome.rs already degrades a `gh pr list` to "unavailable" on failure — keep that graceful-degrade behavior.
+
+  ACCEPTANCE:
+  - Moving into the PRs section moves the selection/cursor with no perceptible lag, even when PR data is stale, loading, or `gh` is slow/unavailable.
+  - PR rows are fetched off the UI thread: populated on launch, refreshed periodically and/or on an explicit refresh key/command; NOT re-fetched synchronously on every navigation.
+  - While a fetch is in flight the panel renders immediately with a "refreshing…" notice (existing notice line) plus last-known rows (or an empty state) — the cursor is never blocked.
+  - `gh` failure or absence degrades to an "unavailable" notice without hanging the UI.
+  - Verify against the primary caller: a human cycling tabs in `aida tui` perceives instant panel switching; the PR data fills in asynchronously.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T04:57:44.481303272Z
+modified_at: 2026-06-26T04:57:44.481303272Z
+req_type: Bug
+tags:
+- papercut
+- performance
+- tui
+- ux
