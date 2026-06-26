@@ -20845,5 +20845,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 1997
+- id: 019f0242-1b89-7230-919e-3da124381f62
+  target_id: 019f0242-0cc6-79d0-b0e4-aae9a35dc705
+  author: aida
+  node_id: '1'
+  lamport: 1998
+  timestamp: 2026-06-26T04:48:34.697458548Z
+  kind: !Create
+    title: 'Product/advisor role split: lighter product front-door vs heavy async advisor'
+    description: 'Operators hypothesis: a lighter product role does fast intake/propositioning and throws heavy analysis over the wall to an async-draining advisor, decoupling the fast path from the slow one. Note aida intake already seeds the lightweight front-door (cold-boot approve/reject/park/queue proposals). Deferred behind visibility-first: only mint a new role if, once the blocked-board surfaces the advisor backlog + intake proposals, the advisor is still a MEASURED throughput bottleneck (not just an opacity one).'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 1998
 node_id: '1'

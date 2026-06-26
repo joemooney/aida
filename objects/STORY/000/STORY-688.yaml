@@ -1,0 +1,17 @@
+id: 019f0242-0cc6-79d0-b0e4-aae9a35dc705
+spec_id: STORY-688
+agreed_id: STORY-688
+title: 'Product/advisor role split: lighter product front-door vs heavy async advisor'
+description: 'Operators hypothesis: a lighter product role does fast intake/propositioning and throws heavy analysis over the wall to an async-draining advisor, decoupling the fast path from the slow one. Note aida intake already seeds the lightweight front-door (cold-boot approve/reject/park/queue proposals). Deferred behind visibility-first: only mint a new role if, once the blocked-board surfaces the advisor backlog + intake proposals, the advisor is still a MEASURED throughput bottleneck (not just an opacity one).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T04:48:30.918246081Z
+modified_at: 2026-06-26T04:48:30.918246081Z
+req_type: Story
+tags:
+- advisor
+- cockpit
+- deferred:cockpit-phase2
+- roles
