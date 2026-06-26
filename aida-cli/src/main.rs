@@ -15219,6 +15219,31 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         last.spec_id.as_deref().unwrap_or("?")
                     );
                 }
+
+                // TASK-928 (SPIKE-71): when no explicit `--parent` was given,
+                // a `parent:<SPEC-ID>` tag must still materialize the real
+                // bidirectional edge, or the spec is orphaned from the graph
+                // (`aida graph --tree` / TUI focus-lens blind). Additive +
+                // lenient: the tag stays, an unresolvable target is a no-op.
+                // trace:TASK-928 | ai:claude
+                if parent.is_none() {
+                    if let Some(sid) = last.spec_id.as_deref() {
+                        match ensure_parent_edge_from_tag(&backend, sid) {
+                            Ok(Some(pdisp)) => {
+                                println!(
+                                    "  Linked: {} → parent of {} (from parent: tag)",
+                                    pdisp, sid
+                                )
+                            }
+                            Ok(None) => {}
+                            Err(e) => eprintln!(
+                                "  {} could not link parent from tag: {}",
+                                "Warning:".yellow().bold(),
+                                e
+                            ),
+                        }
+                    }
+                }
                 if let Some(spec_id) = last.spec_id.as_deref() {
                     let main_project_dir = main_worktree_root_from(&project_dir);
                     if let Err(e) = effort_calibration::upsert_open(
@@ -16290,6 +16315,30 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 req.modified_at = chrono::Utc::now();
                 backend.update_requirement(&req)?;
                 println!("Updated: {}", id);
+
+                // TASK-928 (SPIKE-71): a tag edit that introduces a
+                // `parent:<SPEC-ID>` tag must materialize the real bidirectional
+                // edge too (same gap as `aida add`). Only fires when tags were
+                // touched. Additive + lenient: tag stays, bad target = no-op.
+                // trace:TASK-928 | ai:claude
+                if tags.is_some() || !add_tag.is_empty() {
+                    if let Some(sid) = req.spec_id.as_deref() {
+                        match ensure_parent_edge_from_tag(&backend, sid) {
+                            Ok(Some(pdisp)) => {
+                                println!(
+                                    "  Linked: {} → parent of {} (from parent: tag)",
+                                    pdisp, sid
+                                )
+                            }
+                            Ok(None) => {}
+                            Err(e) => eprintln!(
+                                "  {} could not link parent from tag: {}",
+                                "Warning:".yellow().bold(),
+                                e
+                            ),
+                        }
+                    }
+                }
 
                 // STORY-98: if this edit changed the status AND a session
                 // manifest covers the active session, flip the manifest
@@ -104147,6 +104196,92 @@ fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: boo
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
+// TASK-928 (SPIKE-71 source-side fix): a `parent:<SPEC-ID>` tag must
+// materialize the REAL bidirectional parent/child edge, not just sit on the
+// spec as an opaque string. The canonical `--parent` flag already writes the
+// edge; a spec filed with only `--tags "parent:EPIC"` used to be orphaned
+// from the graph — the exact trap behind SPIKE-71 (`aida graph --tree` and the
+// TUI focus-lens never saw it). This closes that gap for `aida add` and the
+// tag-changing `aida edit` path. (Plain `//`, not `///`: keeps the SPEC-ID
+// breadcrumb out of any --help surface — substrate-as-bouncer pre-commit gate.)
+//
+// Contract:
+//   - Additive — the `parent:` tag is left in place (the edge is *added*).
+//   - Lenient — an unresolvable / self / empty target is a silent no-op
+//     (tag kept, NO error), per the spec.
+//   - Idempotent — an already-present Child->parent edge is skipped, and the
+//     reciprocal Parent->child edge is deduped independently.
+//   - Bidirectional — writes BOTH ends (same shape as `aida add --parent`),
+//     so the cache write-through on each `update_requirement` keeps the graph
+//     immediately consistent without a manual `aida cache rebuild`.
+//
+// Returns the linked parent's display id when a new edge was written (for
+// caller messaging), `None` when nothing changed. trace:TASK-928 | ai:claude
+fn ensure_parent_edge_from_tag(
+    backend: &aida_core::CachedGitBackend,
+    child_spec_id: &str,
+) -> Result<Option<String>> {
+    use aida_core::models::{Relationship, RelationshipType};
+
+    let Some(child) = backend.get_requirement_by_spec_id(child_spec_id)? else {
+        return Ok(None);
+    };
+    // First `parent:<ID>` tag, if any (a spec carrying several is degenerate;
+    // honor the first deterministically).
+    let Some(target) = child
+        .tags
+        .iter()
+        .filter_map(|t| t.strip_prefix("parent:").map(|s| s.trim().to_string()))
+        .find(|s| !s.is_empty())
+    else {
+        return Ok(None);
+    };
+    // Lenient resolve — an unknown target leaves the tag untouched, no error.
+    let Some(parent) = backend.get_requirement_by_spec_id(&target)? else {
+        return Ok(None);
+    };
+    if parent.id == child.id {
+        return Ok(None); // a spec cannot be its own parent
+    }
+    // Idempotent: skip when the child already records the Child→parent edge.
+    let child_linked = child
+        .relationships
+        .iter()
+        .any(|r| r.target_id == parent.id && r.rel_type == RelationshipType::Child);
+    let parent_linked = parent
+        .relationships
+        .iter()
+        .any(|r| r.target_id == child.id && r.rel_type == RelationshipType::Parent);
+    if child_linked && parent_linked {
+        return Ok(None);
+    }
+
+    let now = chrono::Utc::now();
+    if !child_linked {
+        let mut child_mut = child.clone();
+        child_mut.relationships.push(Relationship {
+            target_id: parent.id,
+            rel_type: RelationshipType::Child,
+            created_at: Some(now),
+            created_by: None,
+        });
+        child_mut.modified_at = now;
+        backend.update_requirement(&child_mut)?;
+    }
+    if !parent_linked {
+        let mut parent_mut = parent.clone();
+        parent_mut.relationships.push(Relationship {
+            target_id: child.id,
+            rel_type: RelationshipType::Parent,
+            created_at: Some(now),
+            created_by: None,
+        });
+        parent_mut.modified_at = now;
+        backend.update_requirement(&parent_mut)?;
+    }
+    Ok(Some(parent.spec_id.clone().unwrap_or(target)))
+}
+
 /// The canonical user-facing spellings of the STANDARD relationship types — the
 /// ones `RelationshipType::from_str` recognizes and the graph queries
 /// (`--blocked-by`, `--blocks`, `--tree`, `--impact`) actually traverse. The
@@ -104489,6 +104624,209 @@ mod task_679_canonical_rel_tests {
             nodes,
             std::collections::HashSet::from([can_id, leg_id]),
             "tree must find children from both the canonical and legacy edge orientations"
+        );
+    }
+}
+
+// TASK-928 (SPIKE-71 source-side fix): end-to-end tests over a real
+// CachedGitBackend (temp git store + cache), proving:
+//   * a `parent:<ID>` tag materializes the real bidirectional edge (part B);
+//   * the edge is visible to a fresh full-store load + graph walk WITHOUT a
+//     manual `aida cache rebuild` (part D — the cache write-through restamps
+//     HEAD, and graph reads the worktree YAML via inner.load());
+//   * the helper is lenient (bad target = no-op) and idempotent.
+// trace:TASK-928 | ai:claude
+#[cfg(test)]
+mod task_928_parent_tag_edge_tests {
+    use super::ensure_parent_edge_from_tag;
+    use aida_core::db::DatabaseBackend;
+    use aida_core::graph_walk::{walk_union, Direction};
+    use aida_core::models::{Relationship, RelationshipType, Requirement};
+    use aida_core::CachedGitBackend;
+    use tempfile::tempdir;
+
+    fn open_backend() -> (tempfile::TempDir, CachedGitBackend) {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        (dir, backend)
+    }
+
+    fn add_spec(backend: &CachedGitBackend, spec_id: &str, tags: &[&str]) -> Requirement {
+        let mut r = Requirement::new(spec_id.into(), "desc".into());
+        r.spec_id = Some(spec_id.into());
+        for t in tags {
+            r.tags.insert((*t).into());
+        }
+        backend.add_requirement(r).unwrap()
+    }
+
+    #[test]
+    fn parent_tag_materializes_bidirectional_edge_and_is_graph_visible() {
+        let (_dir, backend) = open_backend();
+        let epic = add_spec(&backend, "EPIC-1", &[]);
+        let child = add_spec(&backend, "TASK-1", &["parent:EPIC-1"]);
+        let epic_id = epic.id;
+        let child_id = child.id;
+
+        // The tag alone (pre-fix) left no edge — assert the helper writes both.
+        let linked = ensure_parent_edge_from_tag(&backend, "TASK-1").unwrap();
+        assert_eq!(linked.as_deref(), Some("EPIC-1"));
+
+        // Read BOTH ends back from the canonical store (full YAML load), no
+        // manual cache rebuild between the write and the read.
+        let child = backend
+            .get_requirement_by_spec_id("TASK-1")
+            .unwrap()
+            .unwrap();
+        assert!(
+            child
+                .relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Child && r.target_id == epic_id),
+            "child must carry Child --> epic"
+        );
+        let epic = backend
+            .get_requirement_by_spec_id("EPIC-1")
+            .unwrap()
+            .unwrap();
+        assert!(
+            epic.relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Parent && r.target_id == child_id),
+            "epic must carry the reciprocal Parent --> child"
+        );
+
+        // Part D: the new spec appears UNDER the epic in a graph query off a
+        // fresh load — the exact thing SPIKE-71 found broken until a rebuild.
+        let store = backend.load().unwrap();
+        let res = walk_union(
+            &store,
+            epic_id,
+            &[(
+                vec![RelationshipType::Child, RelationshipType::Parent],
+                Direction::Outgoing,
+            )],
+            None,
+        );
+        assert!(
+            res.nodes.contains(&child_id),
+            "graph --tree from the epic must reach the tag-linked child without a manual rebuild"
+        );
+
+        // The tag itself is retained (additive, not a move).
+        assert!(child.tags.contains("parent:EPIC-1"), "parent: tag is kept");
+    }
+
+    #[test]
+    fn parent_tag_unresolvable_target_is_lenient_noop() {
+        let (_dir, backend) = open_backend();
+        add_spec(&backend, "TASK-1", &["parent:EPIC-999"]);
+        // No such EPIC-999 → no error, no edge, tag preserved.
+        let linked = ensure_parent_edge_from_tag(&backend, "TASK-1").unwrap();
+        assert_eq!(linked, None, "unresolvable parent target is a silent no-op");
+        let child = backend
+            .get_requirement_by_spec_id("TASK-1")
+            .unwrap()
+            .unwrap();
+        assert!(
+            child.relationships.is_empty(),
+            "no edge written for an unresolvable target"
+        );
+        assert!(
+            child.tags.contains("parent:EPIC-999"),
+            "tag is left in place"
+        );
+    }
+
+    #[test]
+    fn parent_tag_is_idempotent() {
+        let (_dir, backend) = open_backend();
+        add_spec(&backend, "EPIC-1", &[]);
+        add_spec(&backend, "TASK-1", &["parent:EPIC-1"]);
+        // First call links; second is a no-op (no duplicate edges).
+        assert!(ensure_parent_edge_from_tag(&backend, "TASK-1")
+            .unwrap()
+            .is_some());
+        assert!(
+            ensure_parent_edge_from_tag(&backend, "TASK-1")
+                .unwrap()
+                .is_none(),
+            "re-running must not relink"
+        );
+        let epic = backend
+            .get_requirement_by_spec_id("EPIC-1")
+            .unwrap()
+            .unwrap();
+        let child = backend
+            .get_requirement_by_spec_id("TASK-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            child
+                .relationships
+                .iter()
+                .filter(|r| r.rel_type == RelationshipType::Child)
+                .count(),
+            1,
+            "exactly one Child edge"
+        );
+        assert_eq!(
+            epic.relationships
+                .iter()
+                .filter(|r| r.rel_type == RelationshipType::Parent)
+                .count(),
+            1,
+            "exactly one reciprocal Parent edge"
+        );
+    }
+
+    #[test]
+    fn parent_child_rel_add_visible_without_manual_cache_rebuild() {
+        // Part A + D: a parent/child edge written through the backend (the same
+        // update_requirement path `aida rel add` uses) is BOTH-directional and
+        // immediately visible to a fresh full-store load — no `cache rebuild`.
+        let (_dir, backend) = open_backend();
+        let epic = add_spec(&backend, "EPIC-1", &[]);
+        let child = add_spec(&backend, "TASK-1", &[]);
+        let (epic_id, child_id) = (epic.id, child.id);
+
+        // Write the Parent edge + its reciprocal (what rel add --type parent does
+        // by default post-TASK-679, via rel_should_write_inverse).
+        let now = chrono::Utc::now();
+        let mut epic_mut = epic.clone();
+        epic_mut.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: child_id,
+            created_at: Some(now),
+            created_by: None,
+        });
+        backend.update_requirement(&epic_mut).unwrap();
+        let mut child_mut = child.clone();
+        child_mut.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: epic_id,
+            created_at: Some(now),
+            created_by: None,
+        });
+        backend.update_requirement(&child_mut).unwrap();
+
+        // Fresh load (graph's data source) sees both directions right away.
+        let store = backend.load().unwrap();
+        let res = walk_union(
+            &store,
+            epic_id,
+            &[(
+                vec![RelationshipType::Child, RelationshipType::Parent],
+                Direction::Outgoing,
+            )],
+            None,
+        );
+        assert!(
+            res.nodes.contains(&child_id),
+            "rel-add must be graph-visible without a manual cache rebuild"
         );
     }
 }
