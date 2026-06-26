@@ -20888,5 +20888,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 1999
+- id: 019f024d-b919-7690-b996-7227edfd3993
+  target_id: 019f024d-b5c1-7913-9878-c57791be3532
+  author: aida
+  node_id: '1'
+  lamport: 2000
+  timestamp: 2026-06-26T05:01:15.929127441Z
+  kind: !Create
+    title: aida tui tab still labeled 'dialog' — should display 'advisor' (canonical per TASK-586)
+    description: |-
+      SYMPTOM (operator, 2026-06-25): the aida tui has a tab labeled "dialog". Everywhere else in AIDA the canonical role identifier is "advisor" — "dialog" is a deprecated alias that normalizes to "advisor" at every boundary (config, AIDA_SESSION_ROLE, queue routing, statusline, MCP, role files). The TUI tab is the one remaining USER-FACING surface still showing the deprecated token, so the flagship TUI disagrees with the rest of the product.
+
+      ROOT CAUSE (code-grounded): aida-tui/src/dashboard.rs:42 — RoleTab::Dialog => "dialog" renders the deprecated label string.
+
+      CANONICAL REFERENCE: TASK-586 made "advisor" canonical and demoted "dialog" to a silently-accepted deprecated alias (see aida-cli/src/mcp.rs:703 and team.rs:440 "The deprecated dialog token normalizes to advisor like everywhere"). The TUI tab label was missed by that migration.
+
+      FIX (minimal, user-facing): change the rendered label at dashboard.rs:42 from "dialog" to "advisor".
+
+      OPTIONAL FOLLOW-UP (internal, NOT user-facing, back-compat-sensitive): rename the RoleTab::Dialog enum variant and the state.rs dialog_session_id field to advisor-* for code-level consistency. Keep serde back-compat so existing persisted state files still load (state.rs already has a legacy-load test). This is a separate, lower-value cleanup from the label fix.
+
+      ACCEPTANCE:
+      - The aida tui tab displays "advisor"; no user-facing "dialog" token remains in the TUI.
+      - Tab cycling / selection behavior is unchanged (only the label changes).
+      - Existing persisted launcher state (dialog_session_id) still loads — back-compat preserved.
+    req_type: Bug
+    status: Draft
+    priority: Low
+clock: 2000
 node_id: '1'
