@@ -3,12 +3,12 @@ spec_id: TASK-904
 agreed_id: TASK-904
 title: Surface live aida intake proposals in the cockpit board (TASK-901 follow-up)
 description: 'TASK-901 surfaced the cache-fast advisor BACKLOG (Approved-but-not-queued) in the board needs-approval group. The LIVE aida intake proposal set (approve/reject/park/queue dispositions) was deferred: aida intake/assess spawns a heavyweight cold-boot claude -p advisor pass (seconds-to-minutes), far over the board paint budget. Options to explore: (1) cache the last intake run output to disk (aida intake --json written by a separate cadence) and read it cheaply in the board, like the brief/findings surfaces; (2) a background async fill like the gh pr list awaiting-review lane; (3) an explicit operator keystroke that fires intake on demand. Compose only cache-fast or async-off-thread sources; never block the cursor.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T07:35:50.391822128Z
-modified_at: 2026-06-26T17:02:43.513964275Z
+modified_at: 2026-06-26T17:14:30.951313205Z
 req_type: Task
 tags:
 - advisor
@@ -21,3 +21,21 @@ comments:
   content: Commit 3f9a2304b references this requirement
   created_at: 2026-06-26T17:02:43.513964275Z
   modified_at: 2026-06-26T17:02:43.513964275Z
+history:
+- id: 019f04ed-0853-7ab1-a0ce-f36c07465785
+  author: aida-auto-bump
+  timestamp: 2026-06-26T17:14:30.867829993Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f04ed-08a7-79c0-920b-a48743579f62
+  timestamp: 2026-06-26T17:14:30.951307715Z
+  agent: aida
+  commit_sha: 86c4c21800df71e75409058826bebfec3cfa1920
+  summary: Completed via merge 86c4c218
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T17:14:29.881376651Z
+  completion_sha: 86c4c21800df71e75409058826bebfec3cfa1920
