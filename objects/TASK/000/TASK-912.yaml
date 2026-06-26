@@ -1,0 +1,12 @@
+id: 019f0504-b15d-72a3-8051-71b578e41721
+spec_id: TASK-912
+agreed_id: TASK-912
+title: 'Possible: a per-action "inject this" choice (currently `Ctrl-Y` injects the *last*'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T17:40:21.469271332Z
+modified_at: 2026-06-26T17:40:21.469271332Z
+req_type: Task
