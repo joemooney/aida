@@ -21673,5 +21673,34 @@ operations:
   timestamp: 2026-06-26T18:31:07.200998114Z
   kind: !SetStatus
     status: In Progress
-clock: 2058
+- id: 019f0537-b2fb-7412-930e-c078c932a6b9
+  target_id: 019f0537-af5f-7561-a10d-185cc05992aa
+  author: aida
+  node_id: '1'
+  lamport: 2059
+  timestamp: 2026-06-26T18:36:04.219452782Z
+  kind: !Create
+    title: 'aida tui: optional EPIC focus lens — filter the whole TUI to an epic + its transitive children'
+    description: |-
+      Add an optional EPIC FOCUS LENS to the redesign TUI: filter the whole TUI to one epic + its TRANSITIVE children, giving a perspective into a single block of work independent of the rest of the system. Matches the worktree=epic=block-of-work mental model (you're on a worktree for an epic; the TUI should show that epic's work).
+
+      ARCHITECTURE: this is an ambient LENS orthogonal to scopes (not a new scope) — a sibling of the role-as-ambient-context decision (Slice 3). It filters EVERY scope's item set to the focused epic's descendant tree. Implement as "focus context" the status line shows and every scope-list query respects.
+
+      SLICE (first):
+      - Launch filter: `aida tui --epic <ID>` and `AIDA_TUI_EPIC=<ID>` scope the whole TUI to that epic + transitive children.
+      - Compute the descendant set IN-PROCESS via aida-core's parent graph (cheap now that STORY-693 landed) — walk parent relationships from the epic; no subprocess.
+      - Status line shows `focus: <ID>` and a progress summary (e.g. "EPIC-54: 6 done · 1 queued · 3 draft") computed from the filtered set.
+      - An in-TUI action/key to CLEAR or CHANGE the focus.
+
+      FOLLOW-ONS (not this slice): worktree auto-detect (a per-worktree .aida/tui-focus marker so re-launch auto-scopes to the worktree's epic); a hierarchical tree view of the epic.
+
+      ACCEPTANCE:
+      - `--epic <ID>` / AIDA_TUI_EPIC filters all scope lists to the epic + transitive children (in-process closure).
+      - status line shows the focus + a done/queued/draft progress summary.
+      - a key clears/changes focus.
+      - pure descendant-closure + filter + progress logic unit-tested; build/test/fmt/clippy green; redesign module; --no-verify.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2059
 node_id: '1'
