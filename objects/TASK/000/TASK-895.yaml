@@ -3,12 +3,12 @@ spec_id: TASK-895
 agreed_id: TASK-895
 title: TUI can host a Codex session (app.rs spawn_tab threads Claude --session-id/--resume + spawn_claude_session)
 description: Uncovered gap (TASK-0421 inventory). The TUI PtyHost is argv-agnostic, but app.rs::spawn_tab hosts `aida queue work`, which calls the Claude-only spawn_claude_session and threads Claude `--session-id`/`--resume`. To host a Codex session in a tab, the session-spawn + resume threading need a vendor-neutral path. trace:TASK-0421
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:46:26.821350918Z
-modified_at: 2026-06-25T07:46:26.821350918Z
+modified_at: 2026-06-26T08:15:38.029097516Z
 req_type: Task
 tags:
 - aida:tui
@@ -16,3 +16,21 @@ tags:
 - cross-vendor
 - from-inventory:TASK-0421
 - parent:EPIC-0419
+history:
+- id: 019f02ff-abdc-7773-979f-58096f84fb6b
+  author: aida-auto-bump
+  timestamp: 2026-06-26T08:15:37.948227276Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f02ff-ac2d-7442-9648-8d07754ad4ee
+  timestamp: 2026-06-26T08:15:38.029091285Z
+  agent: aida
+  commit_sha: ec9a07142b87c160d65824533763bd4031568e3a
+  summary: Completed via merge ec9a0714
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T08:15:36.968295118Z
+  completion_sha: ec9a07142b87c160d65824533763bd4031568e3a
