@@ -3,12 +3,12 @@ spec_id: TASK-894
 agreed_id: TASK-894
 title: Headless advisor tier (/aida-advise) on Codex — vendor-neutral spawn for the punt-resolution loop
 description: Uncovered gap (TASK-0421 inventory). The STORY-306 headless advisor tier (resolves an implementer punt) is spawned via `claude -p` with no Codex path. Pairs with the headless-drain generalization. trace:TASK-0421
-status: InProgress
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:45:58.675375812Z
-modified_at: 2026-06-25T14:54:08.357106721Z
+modified_at: 2026-06-26T16:53:10.064867763Z
 req_type: Task
 tags:
 - autonomy
