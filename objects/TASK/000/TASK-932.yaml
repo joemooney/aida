@@ -1,0 +1,17 @@
+id: 019f0642-4657-7ce3-a2d5-5ccda5e35995
+spec_id: TASK-932
+agreed_id: TASK-932
+title: 'TUI gap: show spec comments / advisor disposition in the preview (key ''c'')'
+description: 'GAP #2: the TUI does not surface the advisor disposition, so a human cannot READ "approved because X" in the TUI. Load the focused spec comments in-process (CachedGitBackend / the Requirement carries comments) and render them — either a Comments section appended in the preview modal, or a dedicated key (c) that opens a comments view (author + text + time per comment, markdown). ACCEPTANCE: with a spec focused, the human can read its comments (incl. the advisor disposition) inside the TUI; pure extraction/format logic tested; gates green; redesign module.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T23:27:14.519128011Z
+modified_at: 2026-06-26T23:27:14.519128011Z
+req_type: Task
+tags:
+- gap
+- lifecycle
+- redesign
+- tui
