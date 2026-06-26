@@ -21,12 +21,12 @@ description: |-
   - the help content for verbs/scopes comes from their hint/help strings (pure, data-driven), unit-tested (the right help string is selected for a given focus state).
   - Esc/'?' closes the help popup.
   - build/test/fmt/clippy green; redesign module; --no-verify.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:40:53.824948561Z
-modified_at: 2026-06-26T18:40:53.824948561Z
+modified_at: 2026-06-26T18:40:57.404205428Z
 req_type: Task
 tags:
 - help
