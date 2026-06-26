@@ -21641,5 +21641,17 @@ operations:
   timestamp: 2026-06-26T18:27:41.746957138Z
   kind: !SetStatus
     status: Approved
-clock: 2055
+- id: 019f0530-1c65-79a1-9cfe-61b5432fe0fd
+  target_id: 019f0530-0e4f-7aa3-b870-3fa133d72c27
+  author: aida
+  node_id: '1'
+  lamport: 2056
+  timestamp: 2026-06-26T18:27:46.917348726Z
+  kind: !Create
+    title: An epic should not be In-Progress with no children — derive epic status from child rollup, or warn/block the manual set
+    description: 'Operator found EPIC-49/EPIC-50 at status In-Progress with ZERO children — a false ''actively being worked'' signal that pollutes aida list --status in-progress (the live what-is-being-worked view). aida why already says ''decompose — an epic with no children yet''. An epics status should reflect its children (rollup), not be set independently: an epic with no in-progress children cannot itself be In-Progress. FIX OPTIONS (implementer picks): (a) aida edit <epic> --status in-progress warns or blocks when the epic has no children; (b) epic status auto-derives from child rollup so it cannot drift; (c) an aida doctor / lint check flags In-Progress childless epics. Prefer a programmatic guard (substrate-as-bouncer) over a rule, since this is exactly the kind of hygiene drift a confident setter will reintroduce.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2056
 node_id: '1'
