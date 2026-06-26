@@ -79963,10 +79963,13 @@ fn handle_tui_command(
     let cfg = aida_tui::TuiConfig::load(&cwd);
     let use_launcher = launcher || cfg.mode == aida_tui::TuiMode::Launcher;
     if use_launcher {
-        aida_tui::run_launcher(aida_tui::LauncherOptions {
-            scope,
-            intent_fd: intent_fd.unwrap_or(3),
-        })
+        // STORY-681: bare `aida tui` dispatches intents IN-PROCESS and
+        // re-enters in a loop — self-sufficient, no fd-3 pipe, no `aida-tui`
+        // shell wrapper. The `--intent-fd` flag stays as an opt-in
+        // power-user / legacy hook: when present it switches back to the
+        // STORY-244 single-shot fd-emit protocol for an external dispatcher.
+        // trace:STORY-681 | ai:claude
+        aida_tui::run_launcher(aida_tui::LauncherOptions { scope, intent_fd })
     } else {
         aida_tui::run(aida_tui::TuiOptions { scope, no_recover })
     }
@@ -82463,11 +82466,14 @@ aida() {
             eval "$(command aida "$@")"
             ;;
         "tui"|"tui "*)
-            # BUG-612: `aida tui` standalone fails the launcher's fd-3 intent
-            # check; route it through the aida-tui wrapper (which sets up the
-            # fd-3 pipe + dispatch loop) so `aida tui` Just Works without the
-            # user invoking aida-tui by hand.
-            aida-tui "${@:2}"
+            # STORY-681: `aida tui` is now self-sufficient — it dispatches
+            # the launcher's chosen command IN-PROCESS and re-enters in a
+            # loop, with no fd-3 pipe and no shell wrapper. So this case just
+            # passes through. (BUG-612 used to route `aida tui` through the
+            # `aida-tui` function to set up fd 3; that detour is no longer
+            # needed. The `aida-tui` function below stays as an opt-in
+            # power-user/legacy hook over the STORY-244 fd-3 protocol.)
+            command aida "$@"
             ;;
         *)
             command aida "$@"
@@ -82475,9 +82481,12 @@ aida() {
     esac
 }
 
-# STORY-244 launcher wrapper. Runs `aida tui --launcher` in a loop,
-# dispatches the intent line it writes on fd 3, and re-enters when the
-# dispatched command exits. The launcher writes one line per run:
+# STORY-244 launcher wrapper. LEGACY / power-user hook: as of STORY-681
+# bare `aida tui` dispatches IN-PROCESS and re-enters on its own, so this
+# function is no longer required for `aida tui` to work. It is kept for
+# scripts/users that want the fd-3 wire protocol — it explicitly passes
+# `--intent-fd 3` to opt into the single-shot emit mode, captures the
+# intent line on fd 3, dispatches it, and re-enters. One line per run:
 #
 #   quit                     stop the loop
 #   launch:<command>         eval <command> (typically `aida queue work …`)
@@ -82501,7 +82510,7 @@ aida-tui() {
         # its single intent line to fd 3 — the redirection here moves fd 3
         # into our captured pipe and points the launcher's stdout/stderr
         # at /dev/tty so it can draw without contaminating the capture.
-        _intent="$(command aida tui --launcher "${_args[@]}" 3>&1 1>/dev/tty 2>/dev/tty)"
+        _intent="$(command aida tui --launcher --intent-fd 3 "${_args[@]}" 3>&1 1>/dev/tty 2>/dev/tty)"
         case "$_intent" in
             ""|quit)
                 break

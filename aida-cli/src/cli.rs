@@ -8113,17 +8113,19 @@ pub enum Command {
         #[clap(long)]
         no_recover: bool,
         // trace:STORY-244 | ai:claude
-        /// Force launcher mode: the TUI renders a dashboard,
-        /// exits emitting one intent line, and the `aida-tui` bash
-        /// wrapper dispatches the intent. Defaults to whatever
-        /// `[tui] mode` resolves to (launcher unless overridden).
-        // trace:STORY-244 | ai:claude
+        /// Force launcher mode: the TUI renders the board, and on a user
+        /// action dispatches the chosen command in-process before
+        /// re-entering. Defaults to whatever `[tui] mode` resolves to
+        /// (launcher unless overridden).
+        // trace:STORY-244 STORY-681 | ai:claude
         #[clap(long)]
         launcher: bool,
-        /// File descriptor the launcher writes its intent line to on
-        /// exit. The `aida-tui` wrapper passes `3>&1`; tests may pass
-        /// any open writable fd. Defaults to 3. Launcher mode only.
-        // trace:STORY-244 | ai:claude
+        /// Power-user / legacy hook: emit one intent line to this file
+        /// descriptor and exit (the legacy single-shot fd-3 protocol an
+        /// external dispatcher consumes) instead of dispatching the intent
+        /// in-process. Omit it — bare `aida tui` is self-sufficient and
+        /// needs no fd-3 pipe or `aida-tui` shell wrapper.
+        // trace:STORY-244 STORY-681 | ai:claude
         #[clap(long, value_name = "FD", hide = true)]
         intent_fd: Option<u32>,
     },
