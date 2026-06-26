@@ -98,10 +98,22 @@ impl SpecStore {
             .map(summary_to_item);
         // Apply the EPIC focus lens (if set) — a PURE narrow over the produced
         // rows. trace:STORY-695 | ai:claude
-        match focus {
+        let mut items: Vec<TargetItem> = match focus {
             Some(set) => items.filter(|it| focus_includes(set, it)).collect(),
             None => items.collect(),
+        };
+        // Test scope: mark each row that carries a `## Test Plan` section, by
+        // loading its description in-process (the summaries don't carry the
+        // body). The set is the shipped specs in focus, so this stays small.
+        // trace:STORY-699 | ai:claude
+        if scope == Scope::Test {
+            for it in &mut items {
+                if let Ok(Some(req)) = self.backend.get_requirement_by_spec_id(&it.id) {
+                    it.has_test_plan = extract_test_plan(&req.description).is_some();
+                }
+            }
         }
+        items
     }
 
     /// The transitive descendant closure of `epic_id` (STORY-695): the epic
@@ -288,9 +300,21 @@ fn scope_includes(scope: Scope, status: &str) -> bool {
             status.eq_ignore_ascii_case("approved") || status.eq_ignore_ascii_case("planned")
         }
         Scope::Open => !is_terminal_status(status),
+        // Test = the shipped work to verify: Done OR Completed. trace:STORY-699
+        Scope::Test => is_testable_status(status),
         // Other scopes have no in-process target set yet.
         _ => false,
     }
+}
+
+/// Is a spec TESTABLE for the Test scope (STORY-699): has it shipped, i.e. is
+/// it Done (finished on a branch) OR Completed (merged)? These are the recently-
+/// shipped specs whose `## Test Plan` the operator walks. Matched
+/// case-insensitively against the cache's stored status strings. A pure
+/// predicate so the testable filter is unit-testable. trace:STORY-699 | ai:claude
+fn is_testable_status(status: &str) -> bool {
+    let t = status.trim();
+    t.eq_ignore_ascii_case("done") || t.eq_ignore_ascii_case("completed")
 }
 
 /// A status string is terminal when the spec is Completed or Rejected. Mirrors
@@ -314,7 +338,52 @@ fn summary_to_item(s: RequirementSummary) -> TargetItem {
         status: s.status,
         priority: s.priority,
         body: String::new(),
+        // Populated only for the Test scope (the description load happens there);
+        // every other scope leaves it false. trace:STORY-699
+        has_test_plan: false,
     }
+}
+
+/// Extract the `## Test Plan` section from a spec description (STORY-699): the
+/// `## Test Plan` heading through to the next `## ` (level-2) heading or the end
+/// of the description, trimmed. Returns `None` when there is no such section so
+/// the preview can fall back to the full description. The heading text is
+/// matched case-insensitively; level-3+ headings inside the section do NOT end
+/// it (only the next level-2 heading does). A PURE function so the extraction is
+/// unit-testable with and without the section. trace:STORY-699 | ai:claude
+pub fn extract_test_plan(description: &str) -> Option<String> {
+    let lines: Vec<&str> = description.lines().collect();
+    let start = lines.iter().position(|l| is_test_plan_heading(l))?;
+    let end = lines
+        .iter()
+        .enumerate()
+        .skip(start + 1)
+        .find(|(_, l)| is_section_heading(l))
+        .map(|(i, _)| i)
+        .unwrap_or(lines.len());
+    let section = lines[start..end].join("\n");
+    let trimmed = section.trim_end();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Is `line` the `## Test Plan` heading (a level-2 heading whose text is "Test
+/// Plan", case-insensitive)? trace:STORY-699 | ai:claude
+fn is_test_plan_heading(line: &str) -> bool {
+    line.trim()
+        .strip_prefix("## ")
+        .map(|rest| rest.trim().eq_ignore_ascii_case("Test Plan"))
+        .unwrap_or(false)
+}
+
+/// Is `line` a level-2 (`## `) section heading — the boundary that ends the Test
+/// Plan section? Level-1 (`# `) and level-3+ (`### `) headings do not bound it.
+/// trace:STORY-699 | ai:claude
+fn is_section_heading(line: &str) -> bool {
+    line.trim_start().starts_with("## ")
 }
 
 /// Compute the transitive descendant display-id closure of `root` over `store`,
@@ -696,6 +765,99 @@ mod tests {
         assert!(!scope_includes(Scope::Prs, "Open"));
     }
 
+    // --- Test scope: testable filter + ## Test Plan extraction (STORY-699) --
+
+    #[test]
+    fn scope_includes_test_is_done_and_completed_only() {
+        // The shipped work to verify: Done OR Completed.
+        assert!(scope_includes(Scope::Test, "Done"));
+        assert!(scope_includes(Scope::Test, "done"));
+        assert!(scope_includes(Scope::Test, "Completed"));
+        assert!(scope_includes(Scope::Test, "completed"));
+        // Everything still in flight is excluded.
+        assert!(!scope_includes(Scope::Test, "Draft"));
+        assert!(!scope_includes(Scope::Test, "Approved"));
+        assert!(!scope_includes(Scope::Test, "Planned"));
+        assert!(!scope_includes(Scope::Test, "InProgress"));
+        assert!(!scope_includes(Scope::Test, "Rejected"));
+    }
+
+    #[test]
+    fn testable_filter_intersects_with_focus() {
+        // The two halves of the Test scope's target set: Done/Completed AND in
+        // the active focus epic. STORY-695/TASK-913 are in focus; STORY-999 is
+        // not; TASK-1 is in focus but still Approved (not shipped).
+        let mut set = HashSet::new();
+        set.insert("STORY-695".to_string());
+        set.insert("TASK-913".to_string());
+        set.insert("TASK-1".to_string());
+        let rows = [
+            ("STORY-695", "Done"),      // testable ∧ focus → kept
+            ("TASK-913", "Completed"),  // testable ∧ focus → kept
+            ("TASK-1", "Approved"),     // focus but not testable → dropped
+            ("STORY-999", "Completed"), // testable but not focus → dropped
+        ];
+        let kept: Vec<String> = rows
+            .iter()
+            .filter(|(_, status)| scope_includes(Scope::Test, status))
+            .map(|(id, status)| target(id, status))
+            .filter(|it| focus_includes(&set, it))
+            .map(|it| it.id)
+            .collect();
+        // Both shipped+focused rows survive; the other two are filtered out.
+        assert_eq!(kept, vec!["STORY-695".to_string(), "TASK-913".to_string()]);
+    }
+
+    #[test]
+    fn extract_test_plan_returns_the_section_when_present() {
+        let desc = "Intro paragraph.\n\n\
+                    ## Acceptance\n- a\n- b\n\n\
+                    ## Test Plan\n\n\
+                    1. do X → expect Y\n2. do Z → expect W";
+        let plan = extract_test_plan(desc).expect("section present");
+        assert!(plan.starts_with("## Test Plan"), "leads with the heading");
+        assert!(plan.contains("1. do X → expect Y"));
+        assert!(plan.contains("2. do Z → expect W"));
+        // It does NOT pull in the earlier Acceptance section.
+        assert!(!plan.contains("## Acceptance"));
+    }
+
+    #[test]
+    fn extract_test_plan_stops_at_the_next_level2_heading() {
+        let desc = "## Test Plan\n1. step one\n2. step two\n\n\
+                    ## Notes\nsome trailing notes that are not the plan";
+        let plan = extract_test_plan(desc).expect("section present");
+        assert!(plan.contains("1. step one"));
+        assert!(plan.contains("2. step two"));
+        // The following section is not part of the plan.
+        assert!(!plan.contains("## Notes"));
+        assert!(!plan.contains("trailing notes"));
+    }
+
+    #[test]
+    fn extract_test_plan_keeps_nested_subheadings() {
+        // A level-3 heading inside the section does not terminate it.
+        let desc = "## Test Plan\n### Setup\n1. step\n### Teardown\n2. step";
+        let plan = extract_test_plan(desc).expect("section present");
+        assert!(plan.contains("### Setup"));
+        assert!(plan.contains("### Teardown"));
+        assert!(plan.contains("2. step"));
+    }
+
+    #[test]
+    fn extract_test_plan_is_none_when_absent() {
+        assert_eq!(extract_test_plan("Just a description, no plan here."), None);
+        assert_eq!(extract_test_plan(""), None);
+        // A heading whose text isn't exactly "Test Plan" doesn't match.
+        assert_eq!(extract_test_plan("## Testing Plans\n- nope"), None);
+    }
+
+    #[test]
+    fn extract_test_plan_matches_heading_case_insensitively() {
+        let desc = "## test plan\n1. lower-case heading still matches";
+        assert!(extract_test_plan(desc).is_some());
+    }
+
     // --- EPIC focus lens (STORY-695 / TASK-929) --------------------------
 
     /// A requirement with a fixed uuid + spec_id (so edges can target it
@@ -733,6 +895,7 @@ mod tests {
             status: status.to_string(),
             priority: String::new(),
             body: String::new(),
+            has_test_plan: false,
         }
     }
 

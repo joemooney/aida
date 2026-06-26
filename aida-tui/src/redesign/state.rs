@@ -29,6 +29,11 @@ pub struct TargetItem {
     /// Full body text for the item modal (Slice 1 renders it as a plain
     /// paragraph; STORY-689 makes it markdown later).
     pub body: String,
+    /// Does this spec's description carry a `## Test Plan` section? Populated
+    /// only for the [`Scope::Test`] item set (the in-process load checks the
+    /// description); `false` everywhere else. Drives the per-row "has a test
+    /// plan" marker in the Test scope. trace:STORY-699 | ai:claude
+    pub has_test_plan: bool,
 }
 
 impl TargetItem {
@@ -57,6 +62,9 @@ impl TargetItem {
 pub enum Scope {
     Backlog,
     Open,
+    /// The shipped-work-to-verify scope (STORY-699): Done + Completed specs in
+    /// the active focus, whose `## Test Plan` sections the preview surfaces.
+    Test,
     Queue,
     Prs,
     History,
@@ -71,6 +79,7 @@ impl Scope {
         &[
             Scope::Backlog,
             Scope::Open,
+            Scope::Test,
             Scope::Queue,
             Scope::Prs,
             Scope::History,
@@ -83,6 +92,7 @@ impl Scope {
         match self {
             Scope::Backlog => "Backlog",
             Scope::Open => "Open",
+            Scope::Test => "Test",
             Scope::Queue => "Queue",
             Scope::Prs => "PRs",
             Scope::History => "History",
@@ -97,6 +107,7 @@ impl Scope {
         match self {
             Scope::Backlog => "approved + planned specs",
             Scope::Open => "the open backlog (all unfinished specs)",
+            Scope::Test => "shipped specs to verify (Done + Completed)",
             Scope::Queue => "your routed work",
             Scope::Prs => "open pull requests",
             Scope::History => "completed specs",
@@ -120,6 +131,12 @@ impl Scope {
                  status-conditional ones (request approval / approve for drafts, \
                  queue for approved) and defer."
             }
+            Scope::Test => {
+                "Shows the shipped specs in focus — Done + Completed work ready to \
+                 verify. Drill in (↵) or press p on a row to open its ## Test Plan \
+                 (the do→expect steps) in the preview modal; rows carrying a test \
+                 plan are marked, and the full description shows when a spec has none."
+            }
             Scope::Queue => "Shows the work routed to your role. Not wired yet (Slice 1).",
             Scope::Prs => "Shows the open pull requests. Not wired yet (Slice 1).",
             Scope::History => "Shows completed specs. Not wired yet (Slice 1).",
@@ -128,9 +145,9 @@ impl Scope {
         }
     }
 
-    /// Is this scope wired for real? Backlog and Open both drill.
+    /// Is this scope wired for real? Backlog, Open, and Test all drill.
     pub fn is_functional(self) -> bool {
-        matches!(self, Scope::Backlog | Scope::Open)
+        matches!(self, Scope::Backlog | Scope::Open | Scope::Test)
     }
 
     /// The *static* verbs this scope exposes — those that do not depend on
@@ -143,6 +160,9 @@ impl Scope {
         match self {
             Scope::Backlog => vec![Verb::Groom, Verb::Approve, Verb::Archive],
             Scope::Open => vec![Verb::Show, Verb::Why],
+            // Test scope: `show` previews the focused spec's ## Test Plan in the
+            // modal (the same gesture as `p` on a row). trace:STORY-699
+            Scope::Test => vec![Verb::Show],
             _ => Vec::new(),
         }
     }
@@ -1499,6 +1519,7 @@ mod tests {
                 status: "Approved".into(),
                 priority: "medium".into(),
                 body: format!("body of item {}", word_for(i)),
+                has_test_plan: false,
             })
             .collect()
     }
@@ -1517,6 +1538,7 @@ mod tests {
                 status: (*status).into(),
                 priority: "high".into(),
                 body: String::new(),
+                has_test_plan: false,
             })
             .collect()
     }
@@ -1563,8 +1585,9 @@ mod tests {
     #[test]
     fn non_functional_scope_does_not_drill() {
         let mut s = state(3);
-        // Move highlight onto Queue (index 2 — Backlog, Open, Queue, …).
+        // Move highlight onto Queue (index 3 — Backlog, Open, Test, Queue, …).
         s.move_down(); // → Open
+        s.move_down(); // → Test
         s.move_down(); // → Queue
         assert_eq!(s.top_scope(), Some(Scope::Queue));
         assert!(!s.drill());

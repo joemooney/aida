@@ -45,6 +45,11 @@ use std::process::Command;
 /// trace:TASK-913 | ai:claude
 const MODAL_PAGE: u16 = 10;
 
+/// The trailing marker on a Test-scope row whose spec carries a `## Test Plan`
+/// section. A small suffix glyph so the operator sees which shipped specs have
+/// verification steps. trace:STORY-699 | ai:claude
+const TEST_PLAN_MARKER: &str = "🧪";
+
 /// Is the redesign prototype toggled on? Checked by `aida_tui::run` so the
 /// existing TUI is the default and the prototype is strictly opt-in.
 pub fn enabled() -> bool {
@@ -590,8 +595,26 @@ fn open_modal_with_body(
     store: Option<&SpecStore>,
     loaded_spec: &mut Option<LoadedSpec>,
 ) {
-    *loaded_spec = load_focused_spec(st, store);
+    *loaded_spec = load_focused_spec(st, store).map(|spec| test_plan_view(st, spec));
     st.open_modal();
+}
+
+/// For a Test-scope preview (STORY-699), swap the loaded spec's description for
+/// its extracted `## Test Plan` section so the modal renders the do→expect steps
+/// prominently; falls back to the full description when there is no test plan,
+/// and leaves every other scope's spec untouched. The structured field header
+/// (type/status/priority/tags) is preserved either way. trace:STORY-699 | ai:claude
+fn test_plan_view(st: &RedesignState, spec: LoadedSpec) -> LoadedSpec {
+    if active_item_scope(st) != Some(Scope::Test) {
+        return spec;
+    }
+    match store::extract_test_plan(&spec.description) {
+        Some(plan) => LoadedSpec {
+            description: plan,
+            ..spec
+        },
+        None => spec,
+    }
 }
 
 /// Turn a [`RunOutcome`] into IO. Slice 1 STUBS the actual groom: it logs
@@ -631,9 +654,12 @@ fn apply_outcome(
             // render its structured fields + body natively in the item modal
             // (no `aida show` subprocess). trace:STORY-693 | ai:claude
             Verb::Show => {
-                *loaded_spec = store
+                let spec = store
                     .map(|s| s.load_spec(&id).unwrap_or_else(|| missing_spec(&id)))
-                    .or_else(|| Some(missing_spec(&id)));
+                    .unwrap_or_else(|| missing_spec(&id));
+                // In the Test scope, `show` surfaces the ## Test Plan section
+                // (the same view as a `p` preview). trace:STORY-699
+                *loaded_spec = Some(test_plan_view(st, spec));
                 st.open_modal_external();
             }
             // `why` MAY remain a shell-out for now — its classifier lives in
@@ -1207,7 +1233,7 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
             list_row::priority_style(&item.priority, theme)
         };
 
-        lines.push(Line::from(vec![
+        let mut row_spans = vec![
             Span::styled(format!("{marker}{checkbox} "), structural),
             Span::styled(format!("{} ", cells.id), structural),
             Span::styled(format!("{} ", cells.req_type), structural),
@@ -1215,7 +1241,19 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
             Span::styled(format!("{} ", cells.status_label), status_style),
             Span::styled(format!("{} ", cells.priority), priority_style),
             Span::styled(cells.title, structural),
-        ]));
+        ];
+        // Test scope marker: a trailing glyph on rows whose description carries
+        // a `## Test Plan` section, so the operator sees at a glance which
+        // shipped specs have verification steps. trace:STORY-699 | ai:claude
+        if item.has_test_plan {
+            row_spans.push(Span::styled(
+                format!(" {TEST_PLAN_MARKER}"),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+        lines.push(Line::from(row_spans));
     }
     if focused && !st.filter.is_empty() {
         lines.insert(
@@ -1730,6 +1768,7 @@ mod render_tests {
                 // by the render smoke tests. trace:TASK-914
                 priority: ["High", "Medium", "Low"][i % 3].into(),
                 body: format!("# STORY-{i}\n\nbody text here"),
+                has_test_plan: false,
             })
             .collect();
         RedesignState::new(items, "advisor")
@@ -1784,6 +1823,50 @@ mod render_tests {
         draw(&st, 24, 8);
         // Single row (id-width floor path).
         draw(&sample(1), 100, 10);
+    }
+
+    /// The Test scope (STORY-699): a row carrying a `## Test Plan` gets the
+    /// trailing marker, and the render paints over the backend without
+    /// panicking. trace:STORY-699
+    #[test]
+    fn renders_test_scope_row_marker() {
+        let mut st = sample(4);
+        st.items[1].has_test_plan = true;
+        st.items[3].has_test_plan = true;
+        st.focus_bottom();
+        draw(&st, 120, 20);
+        draw(&st, 24, 8); // tiny terminal, no panic
+    }
+
+    /// `test_plan_view` (STORY-699): swaps the body to the extracted `## Test
+    /// Plan` ONLY in the Test scope; falls back to the full description when the
+    /// section is absent; leaves other scopes' specs untouched. trace:STORY-699
+    #[test]
+    fn test_plan_view_extracts_only_in_test_scope() {
+        let mut st = sample(3);
+        let spec = LoadedSpec {
+            id: "STORY-690".into(),
+            title: "t".into(),
+            req_type: "Story".into(),
+            status: "Done".into(),
+            priority: "High".into(),
+            tags: vec![],
+            description: "Intro paragraph.\n\n## Test Plan\n1. do X → expect Y".into(),
+        };
+        // Not in the Test scope → untouched (full description).
+        let untouched = test_plan_view(&st, spec.clone());
+        assert!(untouched.description.contains("Intro paragraph."));
+        // In the Test scope → only the ## Test Plan section is rendered.
+        st.scope = Some(Scope::Test);
+        let view = test_plan_view(&st, spec.clone());
+        assert!(view.description.starts_with("## Test Plan"));
+        assert!(!view.description.contains("Intro paragraph."));
+        // No test plan → falls back to the full description.
+        let plain = LoadedSpec {
+            description: "just a description".into(),
+            ..spec
+        };
+        assert_eq!(test_plan_view(&st, plain).description, "just a description");
     }
 
     #[test]
