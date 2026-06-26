@@ -17,12 +17,12 @@ description: |-
   - No regression: preview stays fast (cached per row, --no-git) and degrades gracefully on empty/missing fields.
 
   Slice 1 (markdown body, tui-markdown) shipped in: aida-tui/src/dashboard.rs preview_text / PreviewBody.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T07:34:06.126093294Z
-modified_at: 2026-06-26T07:34:06.126093294Z
+modified_at: 2026-06-26T17:04:09.671800259Z
 req_type: Story
 tags:
 - color
@@ -35,3 +35,21 @@ relationships:
 - rel_type: Child
   target_id: 019f025e-b103-7723-ae7c-7c991413e07b
   created_at: 2026-06-26T07:35:56.952213129Z
+history:
+- id: 019f04e3-8d72-7943-9c14-bfd1e57156c8
+  author: aida-auto-bump
+  timestamp: 2026-06-26T17:04:09.586793398Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f04e3-8dc7-7210-9d7f-9dfeae991f16
+  timestamp: 2026-06-26T17:04:09.671794130Z
+  agent: aida
+  commit_sha: 5dcddc339cc827276c0fcdaa25e437bb834877d1
+  summary: Completed via merge 5dcddc33
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T17:04:08.603883599Z
+  completion_sha: 5dcddc339cc827276c0fcdaa25e437bb834877d1
