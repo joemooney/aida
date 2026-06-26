@@ -90,15 +90,42 @@ fi
 # catch it minutes later in CI; this gate catches it at the moment of writing.
 # Fix: demote the offending `///` to a plain `//` line above the item.
 # Emergency skip: pass --no-verify (or --allow-intermediate, handled above).
-# trace:TASK-135 | ai:claude
+#
+# Scoped to the STAGED DIFF (added lines only), NOT whole staged files: a commit
+# that merely TOUCHES a file carrying pre-existing `///` trace debt must not be
+# rejected for debt it didn't introduce — that just pushes agents to --no-verify,
+# which ALSO skips the advisor-code-gate above, defeating both (BUG-624). We read
+# `git diff --cached --unified=0` and inspect only `+`-added content lines
+# (excluding the `+++ b/file` header), so only NEWLY-added `///` trace markers
+# block; pre-existing ones are ignored. Renames/binaries are diff-filtered out.
+# trace:TASK-135 trace:BUG-624 | ai:claude
 DOC_TRACE_OFFENDERS=()
-for file in $staged_rs; do
-    # Read the staged blob (not the worktree) so partial staging is honored
-    # and any fmt re-staging above is reflected.
-    while IFS= read -r match; do
-        [ -n "$match" ] && DOC_TRACE_OFFENDERS+=("$file:$match")
-    done < <(git show ":$file" 2>/dev/null | grep -nE '^[[:space:]]*///.*trace:' || true)
-done
+current_file=""
+while IFS= read -r line; do
+    case "$line" in
+        # New-side file header in the unified diff: remember which file the
+        # following `+` lines belong to. Strip the "+++ b/" prefix (this branch
+        # is tested BEFORE the generic "+"* arm so the header never counts as an
+        # added content line).
+        "+++ "*)
+            current_file="${line#+++ }"
+            current_file="${current_file#b/}"
+            ;;
+        # Any other line starting with "+" is added content. Strip the leading
+        # "+" and apply the same criterion to the added line: a `///` doc comment
+        # carrying a concrete SPEC-ID or a `trace:` marker, excluding obvious
+        # example text (`e.g.`).
+        "+"*)
+            added="${line#+}"
+            if printf '%s\n' "$added" | grep -qE '^[[:space:]]*///' \
+                && printf '%s\n' "$added" | grep -qE 'trace:|(STORY|BUG|TASK|EPIC|SPIKE|FR|CR|ADR|PRIN)-[0-9]+' \
+                && ! printf '%s\n' "$added" | grep -qiF 'e.g.'; then
+                trimmed="${added#"${added%%[![:space:]]*}"}"
+                DOC_TRACE_OFFENDERS+=("${current_file:-<staged>}: ${trimmed}")
+            fi
+            ;;
+    esac
+done < <(git diff --cached --unified=0 --no-color --diff-filter=ACMR -- '*.rs' 2>/dev/null || true)
 
 if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
     echo -e "${RED}Refusing commit: a SPEC-ID trace marker is on a \`///\` doc comment." >&2

@@ -3739,6 +3739,108 @@ mod tests {
         );
     }
 
+    // trace:BUG-624 | ai:claude
+    // The item-5 `///`-trace gate must scope to the STAGED DIFF (added lines),
+    // not whole staged files: a commit that merely TOUCHES a file carrying
+    // pre-existing `///` trace debt must PASS (else agents reach for --no-verify,
+    // which also skips the advisor-code-gate); a commit that ADDS a new `///`
+    // SPEC-ID line must still be REJECTED. Exercises the REAL scaffolded hook.
+    #[test]
+    fn test_pre_commit_doc_trace_gate_scopes_to_staged_diff() {
+        use std::process::Command;
+        let temp_dir = TempDir::new().unwrap();
+
+        let run_git = |args: &[&str]| {
+            let mut cmd = Command::new("git");
+            cmd.args(args);
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            let status = cmd.status().unwrap();
+            assert!(status.success(), "git command {:?} failed", args);
+        };
+
+        run_git(&["init"]);
+        run_git(&["config", "user.email", "test@aida.dev"]);
+        run_git(&["config", "user.name", "AIDA Test"]);
+
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        let hook_path = temp_dir.path().join(".git/hooks/pre-commit");
+        assert!(hook_path.exists(), "pre-commit hook file should exist");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let run_hook = || -> std::process::Output {
+            let mut cmd = if cfg!(windows) {
+                let mut cmd = Command::new("sh");
+                cmd.arg(&hook_path);
+                cmd
+            } else {
+                Command::new(&hook_path)
+            };
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            cmd.output().unwrap()
+        };
+
+        // A source file carrying PRE-EXISTING `///` trace debt (a doc comment
+        // with a SPEC-ID — exactly what predates the gate). The literal token is
+        // assembled at runtime so this very test file does not itself trip the
+        // gate / the CI source-doc-trace lint.
+        let bad_marker = format!("/// {}TASK-999 | ai:claude", "trace:");
+        let src = format!("{bad_marker}\npub fn legacy() {{}}\n");
+        let file = temp_dir.path().join("legacy.rs");
+        std::fs::write(&file, &src).unwrap();
+        run_git(&["add", "legacy.rs"]);
+        // Land the debt WITHOUT the hook (it would reject the freshly-added line;
+        // here we are simulating debt that predates the gate).
+        run_git(&["commit", "--no-verify", "-m", "seed: pre-existing /// debt"]);
+
+        // 1. A commit that merely TOUCHES the debt-bearing file (adds an
+        //    unrelated plain-`//` line) but adds NO new `///` marker → PASS.
+        let touched = format!("{src}// unrelated change\n");
+        std::fs::write(&file, &touched).unwrap();
+        run_git(&["add", "legacy.rs"]);
+        let output = run_hook();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success(),
+            "touching a file with pre-existing /// debt (adding none) must PASS; stderr: {stderr}"
+        );
+        run_git(&["commit", "--no-verify", "-m", "touch (no new marker)"]);
+
+        // 2. A commit that ADDS a NEW `///` SPEC-ID line → REJECTED.
+        let new_bad = format!("/// {}BUG-624 demo\npub fn fresh() {{}}\n", "trace:");
+        let with_new = format!("{touched}{new_bad}");
+        std::fs::write(&file, &with_new).unwrap();
+        run_git(&["add", "legacy.rs"]);
+        let output = run_hook();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success(),
+            "adding a new /// SPEC-ID line must be REJECTED; stderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("doc comment") || stderr.contains("user-facing"),
+            "rejection should carry the same /// guidance; stderr: {stderr}"
+        );
+    }
+
     // trace:TASK-503 | ai:antigravity
     // Verifies the pre-commit hook's auto-fmt section reformats and re-stages
     // a fmt-drifty Rust file so CI's `cargo fmt --all -- --check` cannot fail
@@ -3908,9 +4010,12 @@ mod tests {
             "hook must reject a `///` doc comment carrying a trace marker"
         );
         let stderr = String::from_utf8_lossy(&output.stderr);
+        // The gate now scopes to the staged DIFF (added lines), so it names the
+        // offending file plus the offending added line content (BUG-624 changed
+        // the surface from a whole-file `file:line:` grep to a diff scan).
         assert!(
-            stderr.contains("src/leaky.rs:1:"),
-            "rejection should name the offending file:line, got: {stderr}"
+            stderr.contains("src/leaky.rs:") && stderr.contains("/// trace:STORY-1"),
+            "rejection should name the offending file + added line, got: {stderr}"
         );
 
         // Fix: a plain `//` trace comment is the correct form — must pass the gate.
