@@ -70,8 +70,8 @@ pub enum LauncherAction {
 ///
 /// Two-pane focus model (STORY-685): Up/Down act on whichever pane holds
 /// focus (`model.focus`) — the Nav sections when [`Pane::Nav`], the list
-/// rows when [`Pane::List`]. Enter/Left move focus Nav→List (Enter on a
-/// *row* while already in the list still launches it); Right/Esc move
+/// rows when [`Pane::List`]. Enter/Right move focus Nav→List (Enter on a
+/// *row* while already in the list still launches it); Left/Esc move
 /// focus List→Nav. Esc from the Nav pane quits, so a quit path is always
 /// reachable (alongside `q` / `Q` / Ctrl-C). Tab/BackTab keep their role
 /// cycle. `b`/`h`/`p`/`s` stay as additive direct section jumps.
@@ -119,12 +119,15 @@ pub fn route_key(key: KeyEvent, model: &DashboardModel) -> LauncherAction {
         // Up/Down (and k/j) move the focused pane's selection.
         KeyCode::Up | KeyCode::Char('k') => LauncherAction::SelectPrev,
         KeyCode::Down | KeyCode::Char('j') => LauncherAction::SelectNext,
-        // Right always returns focus to the Nav pane (no-op there).
-        KeyCode::Right => LauncherAction::FocusNav,
-        // Left enters the list from Nav; inside the list it's a no-op.
-        KeyCode::Left => match model.focus {
+        // Right enters the list from Nav; inside the list it's a no-op.
+        KeyCode::Right => match model.focus {
             Pane::Nav => LauncherAction::FocusList,
             Pane::List => LauncherAction::Redraw,
+        },
+        // Left returns focus to the Nav pane from the list; no-op in Nav.
+        KeyCode::Left => match model.focus {
+            Pane::List => LauncherAction::FocusNav,
+            Pane::Nav => LauncherAction::Redraw,
         },
         KeyCode::Enter | KeyCode::Char(' ') => route_enter(model),
         // `q` direct-key is also bound, but we also accept the
@@ -643,10 +646,11 @@ mod tests {
     }
 
     #[test]
-    fn left_from_nav_focuses_list() {
+    fn right_from_nav_focuses_list() {
+        // BUG-617: Right enters the list from Nav (was Left).
         let model = fixture_focus(vec![queued_row("STORY-1")], Pane::Nav);
         assert_eq!(
-            route_key(code(KeyCode::Left), &model),
+            route_key(code(KeyCode::Right), &model),
             LauncherAction::FocusList
         );
     }
@@ -662,30 +666,31 @@ mod tests {
     }
 
     #[test]
-    fn right_returns_focus_to_nav_from_list() {
-        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::List);
-        assert_eq!(
-            route_key(code(KeyCode::Right), &model),
-            LauncherAction::FocusNav
-        );
-    }
-
-    #[test]
-    fn right_from_nav_is_noop_focus_nav() {
-        // Right in the Nav pane is harmless — still resolves to Nav focus.
-        let model = fixture_focus(vec![], Pane::Nav);
-        assert_eq!(
-            route_key(code(KeyCode::Right), &model),
-            LauncherAction::FocusNav
-        );
-    }
-
-    #[test]
-    fn left_in_list_is_noop_redraw() {
-        // Left only enters the list from Nav; inside the list it's inert.
+    fn left_returns_focus_to_nav_from_list() {
+        // BUG-617: Left returns focus to Nav from the list (was Right).
         let model = fixture_focus(vec![queued_row("STORY-1")], Pane::List);
         assert_eq!(
             route_key(code(KeyCode::Left), &model),
+            LauncherAction::FocusNav
+        );
+    }
+
+    #[test]
+    fn left_from_nav_is_noop_redraw() {
+        // BUG-617: Left in the Nav pane is inert (Right enters the list).
+        let model = fixture_focus(vec![], Pane::Nav);
+        assert_eq!(
+            route_key(code(KeyCode::Left), &model),
+            LauncherAction::Redraw
+        );
+    }
+
+    #[test]
+    fn right_in_list_is_noop_redraw() {
+        // BUG-617: Right only enters the list from Nav; inside the list it's inert.
+        let model = fixture_focus(vec![queued_row("STORY-1")], Pane::List);
+        assert_eq!(
+            route_key(code(KeyCode::Right), &model),
             LauncherAction::Redraw
         );
     }

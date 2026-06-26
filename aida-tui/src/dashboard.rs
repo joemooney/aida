@@ -225,29 +225,36 @@ pub fn refetch_rows(
         .count();
 }
 
-/// Queue section rows: reuse the overlay's cache-only fetch (sub-ms) to
-/// land the queue head fast on first paint.
+/// Queue section rows: shell out to the cache-fast `aida queue list --json`
+/// rather than `overlay::fetch`, which ran the full `aida status`
+/// worktree/process scan (~3s) just for the queue head. `queue list --json`
+/// reads straight from the cache (sub-100ms) and emits the same
+/// {spec_id,title,status} shape `parse_list_json` already handles.
+// trace:BUG-616 | ai:claude
 fn fetch_queue(model: &mut DashboardModel) -> Vec<ListRow> {
-    match crate::overlay::fetch(true) {
-        Ok(om) => om
-            .queue
-            .map(|q| {
-                q.head
-                    .into_iter()
-                    .map(|item| ListRow {
-                        id: item.spec_id,
-                        title: item.title,
-                        status: item.status,
-                        kind: RowKind::Queued,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        Err(e) => {
-            model.notice = Some(format!("queue fetch failed: {e}"));
-            Vec::new()
-        }
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["queue", "list", "--json"]);
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
     }
+    let Ok(out) = cmd.output() else {
+        model.notice = Some("queue fetch failed".into());
+        return Vec::new();
+    };
+    if !out.status.success() {
+        model.notice = Some("queue fetch failed".into());
+        return Vec::new();
+    }
+    parse_list_json(&out.stdout)
+        .into_iter()
+        .map(|row| ListRow {
+            id: row.spec_id,
+            title: row.title,
+            status: row.status,
+            kind: RowKind::Queued,
+        })
+        .collect()
 }
 
 /// Backlog / History rows: shell out to `aida list --status <csv> --json`.
@@ -471,7 +478,10 @@ pub fn ensure_preview(model: &mut DashboardModel) {
 fn preview_via_show(id: &str) -> Vec<String> {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
-    cmd.args(["show", id]);
+    // BUG-613-adjacent: the row preview only needs the cached spec body, not the
+    // per-spec git-linkage walk (commits/files/branch/PR) that makes `aida show`
+    // ~1-2s per uncached row. `--no-git` drops it to sub-200ms. trace:BUG-616 | ai:claude
+    cmd.args(["show", id, "--no-git"]);
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -648,8 +658,8 @@ fn render_hint_row(frame: &mut Frame, area: Rect, model: &DashboardModel) {
         Pane::List => "list",
     };
     let move_hint = match model.focus {
-        Pane::Nav => "↑↓ section · enter/← list",
-        Pane::List => "↑↓ row · enter act · →/esc nav",
+        Pane::Nav => "↑↓ section · enter/→ list",
+        Pane::List => "↑↓ row · enter act · ←/esc nav",
     };
     let text = format!(
         "role:{} · queue:{} · dialog:{} · focus:{}    {} · tab role · g refresh · : palette · ? help · q quit",
