@@ -3584,6 +3584,11 @@ pub enum QueueCommand {
         // trace:TASK-238 | ai:claude
         #[clap(long)]
         by_batch: bool,
+        /// Emit the queue as JSON (cache-fast machine read) instead of the
+        /// human table. Used by the TUI queue panel to avoid the full
+        /// `aida status` scan. trace:BUG-616 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
     /// Add a requirement to your queue
     Add {

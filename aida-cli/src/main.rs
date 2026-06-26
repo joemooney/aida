@@ -82186,6 +82186,13 @@ aida() {
             # to the user, stdin still reaches the binary for prompts.
             eval "$(command aida "$@")"
             ;;
+        "tui"|"tui "*)
+            # BUG-612: `aida tui` standalone fails the launcher's fd-3 intent
+            # check; route it through the aida-tui wrapper (which sets up the
+            # fd-3 pipe + dispatch loop) so `aida tui` Just Works without the
+            # user invoking aida-tui by hand.
+            aida-tui "${@:2}"
+            ;;
         *)
             command aida "$@"
             ;;
@@ -111269,8 +111276,44 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             tag: tag_filter,
             tag_prefix: tag_prefix_filter,
             by_batch,
+            json,
         } => {
             let user_id = get_user(user);
+            // BUG-616: cache-fast JSON queue read for the TUI queue panel.
+            // The panel only needs the user's queue head, enriched with each
+            // spec's display id / title / status — emitting it straight from
+            // the cache-backed `storage.queue_list` + a `storage.load()` cache
+            // read avoids the full `aida status` worktree/process scan (~3s).
+            // Shape matches the status-overlay `QueueItem` the TUI already
+            // parses ({spec_id,title,status,for_role}). Raw queue order, pre
+            // role/scope display refinement. trace:BUG-616 | ai:claude
+            if *json {
+                let raw = if *global {
+                    Vec::new()
+                } else {
+                    storage.queue_list(&user_id, *include_completed)?
+                };
+                let store = storage.load()?;
+                let rows: Vec<serde_json::Value> = raw
+                    .iter()
+                    .filter_map(|e| {
+                        store
+                            .requirements
+                            .iter()
+                            .find(|r| r.id == e.requirement_id)
+                            .map(|r| {
+                                serde_json::json!({
+                                    "spec_id": r.display_id(),
+                                    "title": r.title,
+                                    "status": r.status,
+                                    "for_role": e.for_role,
+                                })
+                            })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string(&rows)?);
+                return Ok(());
+            }
             // TASK-475: nudge when the local orphan store lags origin — a
             // multi-node user otherwise sees a silently-stale listing. Uses
             // already-known refs (no fetch); best-effort to stderr so it never
