@@ -13842,28 +13842,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 HashSet::new()
             };
-            // Blocked axis: only when --blocked. Needs the relationships array,
-            // which the cache projection drops, so load the full store once and
-            // resolve BlockedBy edges per row.
-            let blocked_ids: HashSet<Uuid> = if need_routing && *blocked {
-                match backend.load() {
-                    Ok(store) => store
-                        .requirements
-                        .iter()
-                        .filter(|r| aida_core::pickability::blocked_by_incomplete(r, &store))
-                        .map(|r| r.id)
-                        .collect(),
-                    Err(_) => HashSet::new(),
-                }
-            } else {
-                HashSet::new()
-            };
+            // Blocked axis: only when --blocked. TASK-902: the blocked flag is
+            // now cache-projected ("has an incomplete BlockedBy edge", computed
+            // into the SQLite cache at write/rebuild time), so each summary
+            // already carries `r.blocked` — no full backend.load() over every
+            // object. This was the cockpit board's slowest leg (~1.4s); reading
+            // the cache like --status/--archived cuts it to sub-second.
+            // trace:TASK-902 | ai:claude
             // Per-row routing classifier. A row is in-flight when a live lease's
             // scope matches its canonical or origin id (case-insensitive); the
             // in-flight set is empty unless a live lease exists.
+            let want_blocked = need_routing && *blocked;
             let row_routing = |r: &aida_core::RequirementSummary| -> (bool, bool, bool) {
                 let queued = queued_ids.contains(&r.id);
-                let blocked = blocked_ids.contains(&r.id);
+                // Surface the cached blocked flag only when --blocked was passed
+                // (parity with the prior overlay; off by default).
+                let blocked = want_blocked && r.blocked;
                 let in_flight = if in_flight_scopes.is_empty() {
                     false
                 } else {
@@ -131562,6 +131556,8 @@ mod queue_json_rows_tests {
             in_degree: 0,
             out_degree: 0,
             heft: 0,
+            // trace:TASK-902 | ai:claude
+            blocked: false,
             yaml_path: String::new(),
         }
     }

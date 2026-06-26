@@ -5521,6 +5521,9 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
     // graph so the MCP projection carries the same centrality as the cache.
     // trace:STORY-632 | ai:claude
     let degrees = aida_core::compute_degrees(store);
+    // TASK-902: project the blocked flag over the same full graph so the MCP
+    // summary carries it identically to the cache. trace:TASK-902 | ai:claude
+    let blocked = aida_core::compute_blocked(store);
     store
         .requirements
         .iter()
@@ -5552,6 +5555,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 in_degree: d.in_degree,
                 out_degree: d.out_degree,
                 heft: d.heft,
+                // trace:TASK-902 | ai:claude
+                blocked: blocked.contains(&r.id),
                 yaml_path: String::new(),
             }
         })
