@@ -105,6 +105,29 @@ impl Scope {
         }
     }
 
+    /// The fuller help text shown in the '?' help popup when this scope is
+    /// highlighted — expands [`Self::hint`] into a sentence describing what the
+    /// scope shows (and whether it is wired yet). trace:TASK-922 | ai:claude
+    pub fn help(self) -> &'static str {
+        match self {
+            Scope::Backlog => {
+                "Shows approved + planned specs — the groomed work waiting to be \
+                 picked up. Drill in (↵) to act on the set: groom, approve, or archive."
+            }
+            Scope::Open => {
+                "Shows the whole open backlog — every unfinished spec regardless of \
+                 status. Drill in (↵) for the per-item verbs (show, why) plus the \
+                 status-conditional ones (request approval / approve for drafts, \
+                 queue for approved) and defer."
+            }
+            Scope::Queue => "Shows the work routed to your role. Not wired yet (Slice 1).",
+            Scope::Prs => "Shows the open pull requests. Not wired yet (Slice 1).",
+            Scope::History => "Shows completed specs. Not wired yet (Slice 1).",
+            Scope::Findings => "Shows triage items (findings). Not wired yet (Slice 1).",
+            Scope::Sessions => "Shows recorded conversations. Not wired yet (Slice 1).",
+        }
+    }
+
     /// Is this scope wired for real? Backlog and Open both drill.
     pub fn is_functional(self) -> bool {
         matches!(self, Scope::Backlog | Scope::Open)
@@ -217,6 +240,52 @@ impl Verb {
             Verb::RequestApproval => "route selected drafts to the advisor queue",
             Verb::Queue => "route selected Approved specs to the implementer queue",
             Verb::Defer => "park selected specs off the active view with a revisit trigger",
+        }
+    }
+
+    /// The fuller help text shown in the '?' help popup when this verb is
+    /// highlighted — what it does plus what set it operates on (item-level vs
+    /// set-level) and any status condition. Expands [`Self::hint`].
+    /// trace:TASK-922 | ai:claude
+    pub fn help(self) -> &'static str {
+        match self {
+            Verb::Groom => {
+                "Cross-spec grooming and routine disposition of the backlog. \
+                 Set-level: runs over the selected specs, or all of them when \
+                 nothing is selected (confirms first)."
+            }
+            Verb::Approve => {
+                "Advisor's direct draft → approved transition. Draft-only: \
+                 set-level over the selected drafts (non-drafts are skipped), or \
+                 the focused draft when nothing is selected."
+            }
+            Verb::Archive => {
+                "Mark non-core specs archived (hidden from default views, audit \
+                 trail kept). Set-level. Not wired yet (Slice 1)."
+            }
+            Verb::Show => {
+                "Show this spec's details (aida show --no-git) in a modal. \
+                 Item-level: acts on the single focused row."
+            }
+            Verb::Why => {
+                "Explain why this spec is still open (aida why) in a modal. \
+                 Item-level: acts on the single focused row."
+            }
+            Verb::RequestApproval => {
+                "Route the selected drafts to the advisor queue for review. \
+                 Draft-only, set-level (non-drafts skipped); falls back to the \
+                 focused draft when nothing is selected."
+            }
+            Verb::Queue => {
+                "Route the selected Approved specs to the implementer queue. \
+                 Approved-only, set-level (non-approved skipped); falls back to \
+                 the focused approved spec when nothing is selected."
+            }
+            Verb::Defer => {
+                "Park the selected specs off the active view with a revisit \
+                 trigger (aida defer --until). Any open spec qualifies (not \
+                 status-conditional), set-level; falls back to the focused item."
+            }
         }
     }
 
@@ -368,6 +437,10 @@ pub struct RedesignState {
     /// typed buffer + the target ids captured when `defer` was run.
     /// trace:TASK-921 | ai:claude
     pub defer_input: Option<DeferInput>,
+    /// Is the context-sensitive '?' help popup open? Its content is derived
+    /// purely from the current focus via [`Self::help_content`]; the popup
+    /// only tracks that it is showing. trace:TASK-922 | ai:claude
+    pub help: bool,
     /// Ambient context shown in the status line.
     pub role: String,
     /// Transient status message (last executed action / stub notice).
@@ -397,6 +470,7 @@ impl RedesignState {
             verb_modal: None,
             confirm: None,
             defer_input: None,
+            help: false,
             role: role.into(),
             status: None,
             theme: crate::theme::Theme::default(),
@@ -802,6 +876,57 @@ impl RedesignState {
             .map(|di| (di.targets.clone(), di.trigger()))
     }
 
+    // --- Help popup (TASK-922) -------------------------------------------
+
+    /// Open the context-sensitive '?' help popup. trace:TASK-922 | ai:claude
+    pub fn open_help(&mut self) {
+        self.help = true;
+    }
+
+    /// Close the '?' help popup. trace:TASK-922 | ai:claude
+    pub fn close_help(&mut self) {
+        self.help = false;
+    }
+
+    /// Is the '?' help popup open? trace:TASK-922 | ai:claude
+    pub fn help_open(&self) -> bool {
+        self.help
+    }
+
+    /// The current focus, distilled to the element the '?' help popup should
+    /// describe: the highlighted scope, the highlighted verb, or the focused
+    /// item. Pure — drives [`Self::help_content`] (and `help_for`).
+    /// trace:TASK-922 | ai:claude
+    pub fn focus_target(&self) -> FocusTarget {
+        match self.focus {
+            Focus::Bottom => match self.focused_item() {
+                Some(item) => FocusTarget::Item {
+                    id: item.id.clone(),
+                    status: item.status.clone(),
+                },
+                None => FocusTarget::ItemsEmpty,
+            },
+            Focus::Top => match self.level {
+                Level::Scopes => match self.top_scope() {
+                    Some(scope) => FocusTarget::ScopeEntry(scope),
+                    None => FocusTarget::ScopesEmpty,
+                },
+                Level::Verbs => match (self.scope, self.top_verb()) {
+                    (Some(scope), Some(verb)) => FocusTarget::VerbEntry { scope, verb },
+                    (Some(scope), None) => FocusTarget::VerbsEmpty(scope),
+                    _ => FocusTarget::ScopesEmpty,
+                },
+            },
+        }
+    }
+
+    /// The context-sensitive help content for the current focus. Pure wrapper
+    /// over [`help_for`] so the parent renders without re-deriving the target.
+    /// trace:TASK-922 | ai:claude
+    pub fn help_content(&self) -> HelpContent {
+        help_for(self.focus_target())
+    }
+
     /// Enter on a verb → decide what IO the parent should perform.
     ///
     /// Three shapes:
@@ -1025,6 +1150,140 @@ pub enum RunOutcome {
     /// via `aida defer <id> --until "<trigger>"`. Emitted by the parent's
     /// input-modal confirm path, not by `run_verb`. trace:TASK-921
     Defer { ids: Vec<String>, trigger: String },
+}
+
+// ---------------------------------------------------------------------------
+// Context-sensitive '?' help (TASK-922)
+// ---------------------------------------------------------------------------
+
+/// A short, human-readable label for the top-level quit key — surfaced in the
+/// help popup's key legend so the quit gesture is documented where the user
+/// asks for help. trace:TASK-922 | ai:claude
+pub const QUIT_KEY_LABEL: &str = "q (or Esc at the top) / Ctrl-C: quit";
+
+/// The element the '?' help popup should describe, distilled from the focus
+/// state. A pure value so [`help_for`] is a total, unit-testable function.
+/// trace:TASK-922 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FocusTarget {
+    /// Scopes panel, a scope highlighted.
+    ScopeEntry(Scope),
+    /// Scopes panel, but the (filtered) list is empty.
+    ScopesEmpty,
+    /// Verbs panel, a verb highlighted (within its scope).
+    VerbEntry { scope: Scope, verb: Verb },
+    /// Verbs panel within a scope, but the (filtered) list is empty.
+    VerbsEmpty(Scope),
+    /// Items panel, a spec focused (carry its id + status for the header).
+    Item { id: String, status: String },
+    /// Items panel, but there is no focused item (empty / filtered-out).
+    ItemsEmpty,
+}
+
+/// The content of the '?' help popup: a header (where you are / what's
+/// selected), the focused element's help body, and a short key legend for the
+/// current context. Pure data so the parent render and the unit tests both
+/// consume the same thing. trace:TASK-922 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HelpContent {
+    /// "Where you are / what's selected" — the popup title line.
+    pub header: String,
+    /// The focused element's fuller help text.
+    pub body: String,
+    /// The keys that work in this context, each `"key: meaning"`. Always
+    /// includes the quit-key legend ([`QUIT_KEY_LABEL`]).
+    pub legend: Vec<String>,
+}
+
+/// Derive the '?' help popup content for a given focus target. PURE and total
+/// — every focus shape maps to a header + body + key legend, so the unit
+/// tests assert the right help is selected without a terminal. The verb/scope
+/// bodies come straight from their `help()` strings (data-driven).
+/// trace:TASK-922 | ai:claude
+pub fn help_for(target: FocusTarget) -> HelpContent {
+    match target {
+        FocusTarget::ScopeEntry(scope) => HelpContent {
+            header: format!("Scopes › {}", scope.label()),
+            body: scope.help().to_string(),
+            legend: scope_legend(),
+        },
+        FocusTarget::ScopesEmpty => HelpContent {
+            header: "Scopes".to_string(),
+            body: "No scope matches the current filter. Backspace to widen it.".to_string(),
+            legend: scope_legend(),
+        },
+        FocusTarget::VerbEntry { scope, verb } => HelpContent {
+            header: format!("{} › {}", scope.label(), verb.label()),
+            body: verb.help().to_string(),
+            legend: verb_legend(),
+        },
+        FocusTarget::VerbsEmpty(scope) => HelpContent {
+            header: format!("{} › verbs", scope.label()),
+            body: "No verb matches the current filter. Backspace to widen it.".to_string(),
+            legend: verb_legend(),
+        },
+        FocusTarget::Item { id, status } => {
+            let status_note = if status.is_empty() {
+                String::new()
+            } else {
+                format!(" (status: {status})")
+            };
+            HelpContent {
+                header: format!("Items › {id}{status_note}"),
+                body: "Item-level actions for the focused spec: p / ↵ previews it in \
+                       a modal. ⇧Tab returns to the verbs panel, where the per-item \
+                       verbs (show, why) and the status-conditional ones act on this \
+                       row. Space toggles it into the multi-select set."
+                    .to_string(),
+                legend: item_legend(),
+            }
+        }
+        FocusTarget::ItemsEmpty => HelpContent {
+            header: "Items".to_string(),
+            body: "No item is focused (the list is empty or filtered out). \
+                   Backspace to widen the filter, or ⇧Tab to return to the verbs."
+                .to_string(),
+            legend: item_legend(),
+        },
+    }
+}
+
+/// The key legend for the scopes panel context. trace:TASK-922 | ai:claude
+fn scope_legend() -> Vec<String> {
+    vec![
+        "↵: drill into the highlighted scope".to_string(),
+        "↑/↓: move highlight".to_string(),
+        "Tab: focus the items panel".to_string(),
+        "type: fuzzy-filter the list".to_string(),
+        "?: toggle this help".to_string(),
+        QUIT_KEY_LABEL.to_string(),
+    ]
+}
+
+/// The key legend for the verbs panel context. trace:TASK-922 | ai:claude
+fn verb_legend() -> Vec<String> {
+    vec![
+        "↵: run the highlighted verb".to_string(),
+        "↑/↓: move highlight".to_string(),
+        "Tab: focus the items panel".to_string(),
+        "Esc: back to scopes".to_string(),
+        "type: fuzzy-filter the list".to_string(),
+        "?: toggle this help".to_string(),
+        QUIT_KEY_LABEL.to_string(),
+    ]
+}
+
+/// The key legend for the items panel context. trace:TASK-922 | ai:claude
+fn item_legend() -> Vec<String> {
+    vec![
+        "Space: toggle-select this item".to_string(),
+        "a / A: select all / none".to_string(),
+        "p / ↵: preview this spec".to_string(),
+        "⇧Tab / Esc: back to the verbs panel".to_string(),
+        "type: fuzzy-filter the items".to_string(),
+        "?: toggle this help".to_string(),
+        QUIT_KEY_LABEL.to_string(),
+    ]
 }
 
 #[cfg(test)]
@@ -1818,5 +2077,117 @@ mod tests {
         s.cancel_defer_input();
         assert!(!s.defer_input_open());
         assert!(s.take_defer_input().is_none());
+    }
+
+    // --- '?' help popup (TASK-922) ---------------------------------------
+
+    #[test]
+    fn help_for_verb_returns_that_verbs_help() {
+        // Verb-focused → the popup body is that verb's help string, header is
+        // the breadcrumb-style "scope › verb", legend documents the quit key.
+        let hc = help_for(FocusTarget::VerbEntry {
+            scope: Scope::Backlog,
+            verb: Verb::Groom,
+        });
+        assert_eq!(hc.header, "Backlog › groom");
+        assert_eq!(hc.body, Verb::Groom.help());
+        assert!(hc.body.starts_with("Cross-spec grooming"));
+        assert!(hc
+            .legend
+            .iter()
+            .any(|l| l.contains("run the highlighted verb")));
+        assert!(hc.legend.iter().any(|l| l == QUIT_KEY_LABEL));
+    }
+
+    #[test]
+    fn help_for_scope_returns_that_scopes_help() {
+        let hc = help_for(FocusTarget::ScopeEntry(Scope::Open));
+        assert_eq!(hc.header, "Scopes › Open");
+        assert_eq!(hc.body, Scope::Open.help());
+        assert!(hc.legend.iter().any(|l| l.contains("drill")));
+        assert!(hc.legend.iter().any(|l| l == QUIT_KEY_LABEL));
+    }
+
+    #[test]
+    fn help_for_item_returns_item_help_with_status() {
+        let hc = help_for(FocusTarget::Item {
+            id: "TASK-7".to_string(),
+            status: "Draft".to_string(),
+        });
+        assert!(hc.header.contains("TASK-7"));
+        assert!(hc.header.contains("Draft"), "header surfaces the status");
+        assert!(hc.body.contains("preview"), "item body covers item actions");
+        assert!(hc.legend.iter().any(|l| l.contains("toggle-select")));
+        assert!(hc.legend.iter().any(|l| l == QUIT_KEY_LABEL));
+    }
+
+    #[test]
+    fn help_legend_always_documents_the_quit_key() {
+        // Every context's legend names the (new) quit key. trace:TASK-922
+        for target in [
+            FocusTarget::ScopeEntry(Scope::Backlog),
+            FocusTarget::ScopesEmpty,
+            FocusTarget::VerbEntry {
+                scope: Scope::Open,
+                verb: Verb::Show,
+            },
+            FocusTarget::VerbsEmpty(Scope::Open),
+            FocusTarget::Item {
+                id: "X-1".into(),
+                status: String::new(),
+            },
+            FocusTarget::ItemsEmpty,
+        ] {
+            let hc = help_for(target.clone());
+            assert!(
+                hc.legend.iter().any(|l| l == QUIT_KEY_LABEL),
+                "legend documents quit for {target:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn focus_target_tracks_panel_and_selection() {
+        // Scope level, top focus → the highlighted scope.
+        let mut s = RedesignState::new(open_items(), "advisor");
+        assert_eq!(s.focus_target(), FocusTarget::ScopeEntry(Scope::Backlog));
+        // Verb level → the highlighted verb within the drilled scope.
+        drill_open(&mut s);
+        assert_eq!(
+            s.focus_target(),
+            FocusTarget::VerbEntry {
+                scope: Scope::Open,
+                verb: Verb::Show,
+            }
+        );
+        // Bottom focus → the focused item (TASK-0, Draft).
+        s.focus_bottom();
+        assert_eq!(
+            s.focus_target(),
+            FocusTarget::Item {
+                id: "TASK-0".to_string(),
+                status: "Draft".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn help_content_matches_focus_target() {
+        // The state-bound `help_content` agrees with the pure `help_for` for
+        // the same focus. trace:TASK-922
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        assert_eq!(s.help_content(), help_for(s.focus_target()));
+        assert_eq!(s.help_content().body, Verb::Show.help());
+    }
+
+    #[test]
+    fn help_open_close_toggles_flag() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        assert!(!s.help_open());
+        s.open_help();
+        assert!(s.help_open());
+        s.close_help();
+        assert!(!s.help_open());
     }
 }

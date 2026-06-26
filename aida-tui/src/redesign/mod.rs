@@ -79,9 +79,9 @@ pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
     let mut st = RedesignState::new(items, resolve_role());
     st.theme = theme;
     st.status = Some(if store.is_some() {
-        "Slice 1 prototype — Backlog / Open scopes. ? exits.".to_string()
+        "Slice 1 prototype — Backlog / Open scopes. ? help · q quits.".to_string()
     } else {
-        "Slice 1 prototype — store unavailable (no in-process data). ? exits.".to_string()
+        "Slice 1 prototype — store unavailable (no in-process data). ? help · q quits.".to_string()
     });
 
     // Per-scope item-set cache so the bottom panel can follow the
@@ -217,6 +217,16 @@ fn handle_key(
         return Ok(true);
     }
 
+    // The context-sensitive '?' help popup captures all keys while open: Esc or
+    // '?' closes it; every other key is inert (it must not leak to the
+    // underlying panel). trace:TASK-922 | ai:claude
+    if st.help_open() {
+        if matches!(key.code, KeyCode::Esc | KeyCode::Char('?')) {
+            st.close_help();
+        }
+        return Ok(false);
+    }
+
     // The defer revisit-trigger input modal captures all typing until the
     // operator confirms (Enter → run the defer with the typed trigger) or
     // cancels (Esc). Printable chars append; Backspace edits. trace:TASK-921
@@ -279,9 +289,15 @@ fn handle_key(
     }
 
     match key.code {
-        // `?` exits the prototype (a bare `q` is reserved for the modal /
-        // could be typed into a filter, so the exit key is unambiguous).
-        KeyCode::Char('?') => return Ok(true),
+        // `?` opens the context-sensitive help popup (it no longer quits —
+        // quit moved to `q` / Esc-at-top / Ctrl-C). trace:TASK-922
+        KeyCode::Char('?') => st.open_help(),
+
+        // `q` quits — but ONLY when no fuzzy filter is being typed; with an
+        // active filter buffer a bare `q` is a literal filter character, so it
+        // falls through to the filter arm below. Ctrl-C always quits (handled
+        // above); the help popup documents this. trace:TASK-922
+        KeyCode::Char('q') if st.filter.is_empty() => return Ok(true),
 
         KeyCode::Up => st.move_up(),
         KeyCode::Down => st.move_down(),
@@ -712,6 +728,47 @@ fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
     if let Some(di) = &st.defer_input {
         render_defer_input(f, f.area(), theme, di);
     }
+    // The '?' help popup overlays everything — it is the topmost layer.
+    // trace:TASK-922 | ai:claude
+    if st.help_open() {
+        render_help(f, f.area(), theme, &st.help_content());
+    }
+}
+
+/// Render the context-sensitive '?' help popup: a header (where you are /
+/// what's selected), the focused element's help body, and a key legend for
+/// the current context. Content comes from the pure [`state::help_for`] via
+/// `st.help_content()`, so this is render-only. trace:TASK-922 | ai:claude
+fn render_help(f: &mut Frame, area: Rect, theme: &Theme, hc: &state::HelpContent) {
+    let popup = centered(area, 70, 70);
+    f.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.accent))
+        .title(format!(" Help — {} (Esc / ? to close) ", hc.header));
+
+    let mut lines: Vec<Line> = Vec::new();
+    // Body, wrapped as a paragraph (split on the blank-line boundaries the
+    // help strings don't carry — render as one wrapped block).
+    lines.push(Line::from(Span::styled(
+        hc.body.clone(),
+        Style::default().fg(theme.fg),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "Keys here:",
+        Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
+    )));
+    for key in &hc.legend {
+        lines.push(Line::from(vec![
+            Span::styled("  • ", Style::default().fg(theme.dim)),
+            Span::styled(key.clone(), Style::default().fg(theme.info)),
+        ]));
+    }
+
+    let para = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .block(block);
+    f.render_widget(para, popup);
 }
 
 fn render_status(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
@@ -922,9 +979,11 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
 
 fn render_hint(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
     let base = match (st.focus, st.level) {
-        (Focus::Top, Level::Scopes) => "↵ drill · Tab items · ? quit",
-        (Focus::Top, Level::Verbs) => "↵ run · Tab items · ⇧Tab scopes? Esc back · ? quit",
-        (Focus::Bottom, _) => "Space select · a/A all/none · p preview · ⇧Tab back · Esc back",
+        (Focus::Top, Level::Scopes) => "↵ drill · Tab items · ? help · q quit",
+        (Focus::Top, Level::Verbs) => "↵ run · Tab items · Esc back · ? help · q quit",
+        (Focus::Bottom, _) => {
+            "Space select · a/A all/none · p preview · ⇧Tab back · ? help · q quit"
+        }
     };
     let text = st.status.clone().unwrap_or_else(|| base.to_string());
     f.render_widget(
@@ -1717,6 +1776,28 @@ mod render_tests {
         draw_with_spec(&st, Some(&spec), 100, 30);
         // Tiny terminal must not panic either.
         draw_with_spec(&st, Some(&spec), 20, 6);
+    }
+
+    #[test]
+    fn renders_help_popup() {
+        // The '?' help popup paints over the backend in each focus context, at
+        // a realistic and a tiny size, no panic. trace:TASK-922
+        // Scope context.
+        let mut st = sample(5);
+        st.open_help();
+        draw(&st, 100, 30);
+        draw(&st, 20, 6);
+        // Verb context.
+        let mut st = sample(5);
+        st.drill();
+        st.open_help();
+        draw(&st, 100, 30);
+        // Item context.
+        let mut st = sample(5);
+        st.drill();
+        st.focus_bottom();
+        st.open_help();
+        draw(&st, 100, 30);
     }
 
     #[test]
