@@ -21460,5 +21460,17 @@ operations:
   timestamp: 2026-06-26T18:04:47.848789777Z
   kind: !SetStatus
     status: Rejected
-clock: 2040
+- id: 019f0521-e157-7140-beef-f7514c9df60f
+  target_id: 019f0521-d535-79e3-84c5-0e79af03fbf9
+  author: aida
+  node_id: '1'
+  lamport: 2041
+  timestamp: 2026-06-26T18:12:14.295089539Z
+  kind: !Create
+    title: Statusline inbox count never clears — out of sync with read-watermark
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 2041
 node_id: '1'

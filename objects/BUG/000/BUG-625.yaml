@@ -1,0 +1,16 @@
+id: 019f0521-d535-79e3-84c5-0e79af03fbf9
+spec_id: BUG-625
+agreed_id: BUG-625
+title: Statusline inbox count never clears — out of sync with read-watermark
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T18:12:11.189498690Z
+modified_at: 2026-06-26T18:12:11.189498690Z
+req_type: Bug
+tags:
+- legibility
+- mailbox
+- statusline
