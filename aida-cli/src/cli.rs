@@ -3590,6 +3590,14 @@ pub enum QueueCommand {
         // trace:BUG-616 | ai:claude
         #[clap(long)]
         json: bool,
+        /// Fleet-wide bird's-eye: aggregate every user's queue (not just your
+        /// shell identity), read-only, grouped by user then role with the
+        /// owning user shown per row. Opt-in for the coordinator seat;
+        /// composes with `--all` to span all roles. Default scoping (your
+        /// user + active role) is unchanged without this flag.
+        // trace:STORY-672
+        #[clap(long)]
+        all_users: bool,
     },
     /// Add a requirement to your queue
     Add {

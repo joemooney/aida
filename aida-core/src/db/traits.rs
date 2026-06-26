@@ -425,6 +425,15 @@ pub trait DatabaseBackend: Send + Sync {
         anyhow::bail!("Queue not supported for this backend")
     }
 
+    /// Lists every user id that has a stored queue (one per persisted queue
+    /// file). Read-only enumeration powering the fleet-wide
+    /// `aida queue list --all-users` view. The default impl returns an empty
+    /// list (no fleet view); backends that persist per-user queues override it.
+    // trace:STORY-672
+    fn queue_users(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+
     /// Adds an entry to a user's queue
     fn queue_add(&self, _entry: QueueEntry) -> Result<()> {
         anyhow::bail!("Queue not supported for this backend")
