@@ -3,15 +3,33 @@ spec_id: STORY-681
 agreed_id: STORY-681
 title: 'EPIC-52 Slice 1: self-sufficient aida tui launch — in-process dispatch replaces the fd-3/bash-wrapper'
 description: 'Foundational slice + fixes the standalone-launch bug. Move the launcher Intent dispatch in-process: selecting a command executes it directly (subprocess for CLI/read, direct call for sub-TUIs, spawn/exec for sessions) then loops back, so aida tui runs from any shell with no fd-3 pipe / no aida-tui wrapper / no shell-init prerequisite. The Intent/fd-3 path may remain an optional power-user hook. Code: aida-tui/src/{intent.rs,launcher.rs,app.rs}. SUPERVISED — keyboard-verify aida tui launches + renders + dispatches cleanly. Slices 2-5 (fuzzy line, dispatch-by-kind, spec-id search, polish) follow per the design doc.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:36:28.576634829Z
-modified_at: 2026-06-25T07:36:28.576634829Z
+modified_at: 2026-06-26T07:25:12.472181091Z
 req_type: Story
 tags:
 - aida:tui
 - morning
 - parent:EPIC-52
 - supervised
+history:
+- id: 019f02d1-8145-73f1-a29d-49303f4547cf
+  author: aida-auto-bump
+  timestamp: 2026-06-26T07:25:12.389789632Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f02d1-8198-7262-bc47-37c36c63d049
+  timestamp: 2026-06-26T07:25:12.472173456Z
+  agent: aida
+  commit_sha: cfcbee05fea6b4cb9d693301c9665628b61a2c15
+  summary: Completed via merge cfcbee05
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T07:25:10.947410249Z
+  completion_sha: cfcbee05fea6b4cb9d693301c9665628b61a2c15
