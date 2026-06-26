@@ -22109,5 +22109,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Low
-clock: 2091
+- id: 019f0642-37f6-7931-916d-906570c3a4e4
+  target_id: 019f0642-2d89-70a1-93d3-2940ce9777a0
+  author: aida
+  node_id: '1'
+  lamport: 2092
+  timestamp: 2026-06-26T23:27:10.838221656Z
+  kind: !Create
+    title: 'TUI gap: ''new'' action — create a Draft spec from the TUI (key ''n'' → title input → aida add --status draft)'
+    description: 'GAP #1 from the lifecycle walkthrough: the redesign TUI cannot create a spec. Add a top-level "new"/create action (key n) that opens a single-line title input (reuse the defer/focus input-modal pattern), then creates a Draft spec via aida add (default type task, status draft) — write via a safe path (MCP add_requirement or aida add with no shell-corruptible content). After creation, refresh the view so the new draft appears. ACCEPTANCE: pressing n opens a title input; Enter creates a Draft and it shows up; Esc cancels; pure input logic unit-tested; gates green; redesign module.'
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2092
 node_id: '1'
