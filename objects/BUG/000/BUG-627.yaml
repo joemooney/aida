@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:38:50.670851418Z
-modified_at: 2026-06-26T18:38:50.670851418Z
+modified_at: 2026-06-26T18:39:47.763963977Z
 req_type: Bug
 tags:
 - cache
 - from-operator
 - reliability
 - schema
+comments:
+- id: 019f053b-1c34-7e11-af5e-67cbad83fdc5
+  author: joe
+  content: 'Diagnosis refined: the self-heal mechanism is schema-VERSION-based and correct (cache.rs SCHEMA_VERSION=7 + META_KEY_SCHEMA_VERSION + STORY-441 drop-and-rebuild on mismatch) — NOT SHA-based as I first wrote. The actual bug: the ''blocked'' column (TASK-902) was added to the schema WITHOUT bumping SCHEMA_VERSION, so a cache at version 7-without-blocked is indistinguishable from version 7-with-blocked and never rebuilds. FIX: (1) immediate — bump SCHEMA_VERSION to 8 so all stale caches self-heal; (2) robust/prevention — derive SCHEMA_VERSION from a hash of the schema SQL (or assert in a test that the schema fingerprint matches the version), so a column add can NEVER ship without an auto-bump. Substrate-as-bouncer: you cannot rely on remembering to bump.'
+  created_at: 2026-06-26T18:39:47.763963977Z
+  modified_at: 2026-06-26T18:39:47.763963977Z
