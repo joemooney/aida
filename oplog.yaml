@@ -21319,5 +21319,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2031
+- id: 019f04f0-c942-7b43-bb9e-aab36075c989
+  target_id: 019f04f0-b9fa-7d71-8c19-6a11a58c77e8
+  author: aida
+  node_id: '1'
+  lamport: 2032
+  timestamp: 2026-06-26T17:18:36.866362766Z
+  kind: !Create
+    title: Wire `Ctrl-D` capture from the hosted chat as an alternate palette-open trigger
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2032
 node_id: '1'
