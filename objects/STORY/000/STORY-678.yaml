@@ -8,13 +8,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:05:50.716865287Z
-modified_at: 2026-06-25T07:25:41.908541466Z
+modified_at: 2026-06-26T17:29:45.659382401Z
 req_type: Story
 tags:
 - aida:tui
 - from-operator
 - parent:EPIC-51
 - supervised
+comments:
+- id: 019f04fa-fdbb-7d42-9ee8-46acb8b3e82a
+  author: joe
+  content: Commit 44551f526 references this requirement
+  created_at: 2026-06-26T17:29:45.659382401Z
+  modified_at: 2026-06-26T17:29:45.659382401Z
 history:
 - id: 019efdab-9844-7090-b8ff-266c476affbd
   author: aida-auto-bump
