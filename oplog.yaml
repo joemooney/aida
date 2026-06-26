@@ -22369,5 +22369,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 2116
+- id: 019f065b-a5e8-7832-8746-4dea8b206b5c
+  target_id: 019f065b-96e5-7bf1-93b7-3e18b1078310
+  author: aida
+  node_id: '1'
+  lamport: 2117
+  timestamp: 2026-06-26T23:54:57.384360204Z
+  kind: !Create
+    title: 'Diff-driven doc prompt at PR-open: nudge aida doc add for new public surface'
+    description: Hook into /aida-pr; when a PR adds a new CLI subcommand/flag/MCP tool with no Doc --about, nudge for capture. Pairs with the shipped aida doc coverage gate.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2117
 node_id: '1'
