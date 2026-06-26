@@ -106,6 +106,14 @@ pub struct ClassifiedItem {
     pub title: String,
     pub status: String,
     pub reason: Reason,
+    /// True for the **advisor-backlog** sub-class of the needs-approval group
+    /// (TASK-901): an `Approved`-but-not-yet-queued spec that the advisor has
+    /// blessed but not routed. These ride the same `NeedsApproval` reason as
+    /// drafts but want a different unblock action (queue it, not approve it)
+    /// and a backlog label, so the advisor's pending queue stops being a black
+    /// box. Drafts (the approve-or-reject sub-class) have this `false`.
+    /// trace:TASK-901 | ai:claude
+    pub advisor_backlog: bool,
 }
 
 /// The cheap (non-network) inputs the classifier needs. Each Vec is the
@@ -146,17 +154,22 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
     let mut claimed: HashSet<String> = HashSet::new();
     let mut out: Vec<ClassifiedItem> = Vec::new();
 
-    let mut take =
-        |id: &str, title: &str, status: &str, reason: Reason, claimed: &mut HashSet<String>| {
-            if claimed.insert(id.to_string()) {
-                out.push(ClassifiedItem {
-                    spec_id: id.to_string(),
-                    title: title.to_string(),
-                    status: status.to_string(),
-                    reason,
-                });
-            }
-        };
+    let mut take = |id: &str,
+                    title: &str,
+                    status: &str,
+                    reason: Reason,
+                    advisor_backlog: bool,
+                    claimed: &mut HashSet<String>| {
+        if claimed.insert(id.to_string()) {
+            out.push(ClassifiedItem {
+                spec_id: id.to_string(),
+                title: title.to_string(),
+                status: status.to_string(),
+                reason,
+                advisor_backlog,
+            });
+        }
+    };
 
     // 1. in flight — from the --blocked enrichment's in_flight flag.
     for r in inputs.all_rows.iter().filter(|r| r.in_flight) {
@@ -165,6 +178,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.title,
             &r.status,
             Reason::InFlight,
+            false,
             &mut claimed,
         );
     }
@@ -175,6 +189,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.title,
             &r.status,
             Reason::Blocked,
+            false,
             &mut claimed,
         );
     }
@@ -185,6 +200,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.title,
             &r.status,
             Reason::NeedsAttention,
+            false,
             &mut claimed,
         );
     }
@@ -195,6 +211,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.title,
             &r.status,
             Reason::AwaitingReview,
+            false,
             &mut claimed,
         );
     }
@@ -207,15 +224,42 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             .find(|r| &r.spec_id == id)
             .map(|r| (r.title.clone(), r.status.clone()))
             .unwrap_or_else(|| (String::new(), "Needs input".to_string()));
-        take(id, &title, &status, Reason::NeedsAnswer, &mut claimed);
+        take(
+            id,
+            &title,
+            &status,
+            Reason::NeedsAnswer,
+            false,
+            &mut claimed,
+        );
     }
-    // 6. needs approval — drafts.
+    // 6a. needs approval — drafts (the approve-or-reject sub-class).
     for r in &inputs.draft_rows {
         take(
             &r.spec_id,
             &r.title,
             &r.status,
             Reason::NeedsApproval,
+            false,
+            &mut claimed,
+        );
+    }
+    // 6b. advisor backlog — Approved-but-not-queued specs (TASK-901). The
+    //     advisor has blessed these but not routed them; they're the
+    //     cache-fast proxy for "what the advisor/intake pass would dispose of"
+    //     and ride the needs-approval group so the advisor's queue stops being
+    //     a black box. Derived from the same `--blocked` all-rows set (zero
+    //     extra shell-out): Approved, not queued, not in-flight, not blocked —
+    //     the higher-precedence passes above already claimed in-flight/blocked
+    //     specs, so the `claimed` guard keeps each spec in exactly one group.
+    //     trace:TASK-901 | ai:claude
+    for r in inputs.all_rows.iter().filter(|r| is_advisor_backlog(r)) {
+        take(
+            &r.spec_id,
+            &r.title,
+            &r.status,
+            Reason::NeedsApproval,
+            true,
             &mut claimed,
         );
     }
@@ -226,11 +270,24 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.title,
             &r.status,
             Reason::Deferred,
+            false,
             &mut claimed,
         );
     }
 
     out
+}
+
+/// True for the advisor-backlog sub-class of needs-approval (TASK-901): an
+/// `Approved` spec that is not yet queued and not otherwise in motion
+/// (in-flight / blocked). These are the specs the advisor has blessed but not
+/// routed — the cache-fast stand-in for the headless `aida intake` proposal
+/// set (which is a heavyweight cold-boot `claude -p` advisor pass, far too
+/// slow for the board's paint budget; live-proposal surfacing is filed as a
+/// follow-up). Status compare is case-insensitive to tolerate `Approved` vs
+/// `approved` across the cache projection. trace:TASK-901 | ai:claude
+fn is_advisor_backlog(r: &crate::dashboard::ListJsonRow) -> bool {
+    r.status.eq_ignore_ascii_case("approved") && !r.queued && !r.in_flight && !r.blocked
 }
 
 /// Count the items per reason in a classified set — drives the Nav-label
@@ -246,6 +303,14 @@ pub fn counts(items: &[ClassifiedItem]) -> std::collections::HashMap<&'static st
 /// Project the classified items for one reason into [`ListRow`]s the
 /// dashboard list pane renders. Each row carries the reason's [`RowKind`]
 /// so the launcher dispatches the right Enter action.
+///
+/// The needs-approval group is split by sub-class (TASK-901): a draft carries
+/// [`RowKind::ReasonNeedsApproval`] (Enter approves it), while an advisor-
+/// backlog row (Approved-but-not-queued) carries
+/// [`RowKind::ReasonAdvisorBacklog`] (Enter routes it to the queue) and its
+/// status is prefixed `backlog · ` so the operator sees the advisor's pending
+/// queue distinctly from the drafts awaiting a verdict.
+/// trace:TASK-901 | ai:claude
 pub fn rows_for(items: &[ClassifiedItem], reason: Reason) -> Vec<ListRow> {
     items
         .iter()
@@ -253,8 +318,16 @@ pub fn rows_for(items: &[ClassifiedItem], reason: Reason) -> Vec<ListRow> {
         .map(|it| ListRow {
             id: it.spec_id.clone(),
             title: it.title.clone(),
-            status: it.status.clone(),
-            kind: reason.row_kind(),
+            status: if it.advisor_backlog {
+                format!("backlog · {}", it.status)
+            } else {
+                it.status.clone()
+            },
+            kind: if it.advisor_backlog {
+                RowKind::ReasonAdvisorBacklog
+            } else {
+                reason.row_kind()
+            },
         })
         .collect()
 }
@@ -496,6 +569,95 @@ mod tests {
         assert_eq!(by_id("STORY-5"), Some(Reason::AwaitingReview));
         assert_eq!(by_id("STORY-6"), Some(Reason::Deferred));
         assert_eq!(by_id("STORY-7"), Some(Reason::NeedsAnswer));
+    }
+
+    #[test]
+    fn approved_not_queued_surfaces_as_advisor_backlog() {
+        // TASK-901: an Approved-but-not-queued spec rides the needs-approval
+        // group flagged as advisor backlog, derived from the all-rows set with
+        // no extra shell-out. A drafted spec stays a plain needs-approval row.
+        let inputs = BoardInputs {
+            all_rows: vec![
+                row("STORY-10", "Approved", false, false, false), // backlog
+                row("STORY-11", "Approved", true, false, false),  // queued → out
+                row("STORY-12", "Planned", false, false, false),  // not Approved → out
+            ],
+            draft_rows: vec![row("STORY-13", "Draft", false, false, false)],
+            ..BoardInputs::default()
+        };
+        let items = classify(&inputs);
+        let find = |id: &str| items.iter().find(|i| i.spec_id == id);
+
+        // STORY-10 is the advisor backlog: needs-approval reason, backlog flag.
+        let backlog = find("STORY-10").expect("approved-not-queued surfaces");
+        assert_eq!(backlog.reason, Reason::NeedsApproval);
+        assert!(backlog.advisor_backlog);
+
+        // The draft is needs-approval but NOT backlog (approve-or-reject).
+        let draft = find("STORY-13").expect("draft surfaces");
+        assert_eq!(draft.reason, Reason::NeedsApproval);
+        assert!(!draft.advisor_backlog);
+
+        // Queued / non-Approved rows are not advisor backlog.
+        assert!(
+            find("STORY-11").is_none(),
+            "queued is in-motion, not backlog"
+        );
+        assert!(find("STORY-12").is_none(), "Planned is not advisor backlog");
+
+        // Both drafts and backlog count toward the needs-approval group.
+        assert_eq!(counts(&items).get(Reason::NeedsApproval.label()), Some(&2));
+    }
+
+    #[test]
+    fn advisor_backlog_row_dispatches_to_queue_not_approve() {
+        // The backlog row carries a distinct RowKind (so Enter routes it to the
+        // queue, since it is already Approved) and a `backlog · ` status prefix.
+        let inputs = BoardInputs {
+            all_rows: vec![row("STORY-20", "Approved", false, false, false)],
+            draft_rows: vec![row("STORY-21", "Draft", false, false, false)],
+            ..BoardInputs::default()
+        };
+        let items = classify(&inputs);
+        let rows = rows_for(&items, Reason::NeedsApproval);
+        let backlog = rows.iter().find(|r| r.id == "STORY-20").unwrap();
+        let draft = rows.iter().find(|r| r.id == "STORY-21").unwrap();
+        assert_eq!(backlog.kind, RowKind::ReasonAdvisorBacklog);
+        assert!(backlog.status.starts_with("backlog · "));
+        assert_eq!(draft.kind, RowKind::ReasonNeedsApproval);
+        assert_eq!(draft.status, "Draft");
+    }
+
+    #[test]
+    fn in_flight_approved_is_not_advisor_backlog() {
+        // An Approved spec that a higher-precedence pass already claimed
+        // (in-flight / blocked) must NOT also appear as advisor backlog.
+        let inputs = BoardInputs {
+            all_rows: vec![
+                row("STORY-30", "Approved", false, true, false), // in flight
+                row("STORY-31", "Approved", false, false, true), // blocked
+            ],
+            ..BoardInputs::default()
+        };
+        let items = classify(&inputs);
+        assert_eq!(items.len(), 2, "no double-count into backlog");
+        assert_eq!(
+            items
+                .iter()
+                .find(|i| i.spec_id == "STORY-30")
+                .unwrap()
+                .reason,
+            Reason::InFlight
+        );
+        assert_eq!(
+            items
+                .iter()
+                .find(|i| i.spec_id == "STORY-31")
+                .unwrap()
+                .reason,
+            Reason::Blocked
+        );
+        assert!(items.iter().all(|i| !i.advisor_backlog));
     }
 
     #[test]
