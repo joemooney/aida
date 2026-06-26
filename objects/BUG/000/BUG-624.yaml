@@ -1,0 +1,17 @@
+id: 019f04e3-dc6b-78f3-a901-1d8a9f997de4
+spec_id: BUG-624
+agreed_id: BUG-624
+title: STORY-684 pre-commit /// gate scans WHOLE FILES — flags pre-existing debt, forcing agents to --no-verify (which bypasses the advisor-code-gate too)
+description: 'The STORY-684 aida-pre-commit.sh ///-SPEC-ID check (item 5) scans whole staged FILES, so any commit touching a file with pre-existing /// trace debt (~30 markers across main.rs/dashboard.rs/etc., predating the gate) is rejected — forcing agents to commit --no-verify, which ALSO skips the advisor-code-gate, defeating both. Fix: scope the check to the STAGED DIFF (added/changed lines only), so it flags only NEW /// debt and never pre-existing. Use git diff --cached -U0 / the staged hunks, not whole-file include. This is the robust fix; TASK-903 (clean the existing debt) is a complementary one-time stopgap. Relates to BUG-622 (gate must not push agents toward --no-verify).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T17:04:29.803443767Z
+modified_at: 2026-06-26T17:04:29.803443767Z
+req_type: Bug
+tags:
+- dx
+- from-drive
+- hooks
+- substrate-gate
