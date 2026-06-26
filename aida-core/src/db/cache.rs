@@ -166,6 +166,28 @@ pub fn compute_blocked(store: &RequirementsStore) -> HashSet<Uuid> {
         .collect()
 }
 
+/// Compute each EPIC's derived (read-only rollup) status over the WHOLE store,
+/// returned as a map of epic UUID -> the cache's `status` string form (the same
+/// `format!("{:?}", status)` projection `insert_one` uses, so the override is
+/// byte-compatible with the existing `idx_cache_status` filter).
+///
+/// Only epics whose rollup yields a status are present; an epic with no children
+/// or whose only children are Rejected is absent (the caller keeps the stored
+/// status). Like degree/heft/blocked this is a whole-graph fact, authoritative
+/// after a full rebuild.
+// trace:BUG-626 | ai:claude
+pub fn compute_epic_statuses(store: &RequirementsStore) -> HashMap<Uuid, String> {
+    store
+        .requirements
+        .iter()
+        .filter(|req| req.req_type == crate::models::RequirementType::Epic)
+        .filter_map(|req| {
+            crate::rollup::derive_epic_status(store, req.id)
+                .map(|status| (req.id, format!("{status:?}")))
+        })
+        .collect()
+}
+
 /// Three-way filter for the archive axis. STORY-441 introduces archive as
 /// a view-level flag distinct from status — `aida list` defaults to
 /// `NonArchivedOnly`, `--archived` flips to `ArchivedOnly`, `--all` is
@@ -719,6 +741,13 @@ impl Cache {
         // project it per row. This is the authoritative recompute on rebuild.
         // trace:TASK-902 | ai:claude
         let blocked = compute_blocked(store);
+        // BUG-626: an EPIC's status is a read-only rollup of its children, the
+        // same whole-graph fact pattern as `blocked` above — compute it once
+        // over the full store here so the projected cache `status` column is the
+        // derived value. Only epics whose rollup yields a status are overridden;
+        // an epic with no non-rejected children keeps its stored status (the
+        // derivation returns None). trace:BUG-626 | ai:claude
+        let epic_status = compute_epic_statuses(store);
         let count = {
             let conn = self.conn.lock().unwrap();
             with_cache_write(&self.path, "rebuild cache", || {
@@ -727,7 +756,8 @@ impl Cache {
                 let mut count = 0usize;
                 for req in &store.requirements {
                     let d = degrees.get(&req.id).copied().unwrap_or_default();
-                    insert_one(&tx, req, d, blocked.contains(&req.id))?;
+                    let status_override = epic_status.get(&req.id).map(String::as_str);
+                    insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
                     count += 1;
                 }
                 tx.commit()?;
@@ -785,8 +815,48 @@ impl Cache {
             // any BlockedBy target that isn't Completed (or is unresolvable in the
             // cache) leaves the row blocked. trace:TASK-902 | ai:claude
             let blocked = blocked_from_cache(&conn, req);
+            // BUG-626: if the upserted row is an EPIC, its status is the derived
+            // rollup of its children. The epic's own outbound Parent/Child edges
+            // name its children, so we can roll up from the children's CACHED
+            // statuses without a whole-store load. A non-epic projects its stored
+            // status (None). Propagating a child's status flip UP to its parent
+            // epic is handled by the backend wrapper (it has the inner store to
+            // re-read the epic's siblings); here we only freshen the epic's own
+            // row when the epic itself is the thing being written.
+            // trace:BUG-626 | ai:claude
+            let epic_override = epic_status_override_from_cache(&conn, req);
             delete_one_uncommitted(&conn, &req.id)?;
-            insert_one(&conn, req, degrees, blocked)?;
+            insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
+            Ok(())
+        })?;
+        Ok(())
+    }
+
+    /// Recompute and re-stamp a single EPIC's derived status column from the
+    /// statuses in `rollup` (the epic's children, as the caller resolved them —
+    /// typically by loading the epic + its children from the inner git store).
+    /// Updates ONLY the `status` column of the epic's existing cache row; a
+    /// no-op if the epic has no cache row yet. This is the child-status-flip
+    /// propagation the single-row upsert can't do on its own (it has no view of
+    /// the epic's other children).
+    // trace:BUG-626 | ai:claude
+    pub fn recompute_epic_status(
+        &self,
+        epic_id: &Uuid,
+        rollup: &crate::graph_walk::StatusRollup,
+    ) -> Result<()> {
+        let Some(derived) = crate::rollup::derive_epic_status_from_rollup(rollup) else {
+            // Only-rejected (or otherwise indeterminate) children: keep the
+            // stored status already in the row.
+            return Ok(());
+        };
+        let status_str = format!("{derived:?}");
+        let conn = self.conn.lock().unwrap();
+        with_cache_write(&self.path, "recompute epic status", || {
+            conn.execute(
+                "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
+                params![status_str, epic_id.to_string()],
+            )?;
             Ok(())
         })?;
         Ok(())
@@ -1100,7 +1170,75 @@ fn blocked_from_cache(conn: &Connection, req: &Requirement) -> bool {
         })
 }
 
-fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees, blocked: bool) -> Result<()> {
+/// When `req` is an EPIC, derive its rollup status from its children's CACHED
+/// statuses (the epic's own outbound `Parent`/`Child` edges name the children —
+/// same union the tree walk uses). Returns the cache `status` string form, or
+/// `None` for a non-epic / an epic whose rollup is indeterminate (only-rejected
+/// children → keep stored status). Used by the single-row upsert so an epic's
+/// own row stays fresh when the epic itself is written. A child resolvable in
+/// the cache contributes its status; an unresolvable child edge contributes
+/// nothing (skipped), matching `graph_walk::status_rollup`.
+// trace:BUG-626 | ai:claude
+fn epic_status_override_from_cache(conn: &Connection, req: &Requirement) -> Option<String> {
+    if req.req_type != crate::models::RequirementType::Epic {
+        return None;
+    }
+    let mut rollup = crate::graph_walk::StatusRollup::default();
+    for rel in &req.relationships {
+        if !matches!(
+            rel.rel_type,
+            RelationshipType::Parent | RelationshipType::Child
+        ) {
+            continue;
+        }
+        let child_status: Option<String> = conn
+            .query_row(
+                "SELECT status FROM requirements_cache WHERE id = ?1",
+                params![rel.target_id.to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .ok();
+        if let Some(status) = child_status {
+            tally_status_str(&mut rollup, &status);
+        }
+    }
+    crate::rollup::derive_epic_status_from_rollup(&rollup).map(|s| format!("{s:?}"))
+}
+
+/// Fold a cache `status` string (the `format!("{:?}", status)` form, or a
+/// custom status) into a [`StatusRollup`] bucket. Mirrors the match in
+/// `graph_walk::status_rollup`. An unrecognized (custom) status counts toward
+/// `remaining` — it isn't a terminal/in-flight signal.
+// trace:BUG-626 | ai:claude
+fn tally_status_str(r: &mut crate::graph_walk::StatusRollup, status: &str) {
+    r.total += 1;
+    match status {
+        "Completed" => r.completed += 1,
+        "Done" => r.done += 1,
+        "InProgress" => r.in_progress += 1,
+        "NeedsAttention" => r.shelved += 1,
+        "Rejected" => r.rejected += 1,
+        // Draft / Approved / Planned / any custom status → not yet started.
+        _ => r.remaining += 1,
+    }
+}
+
+/// Project a single requirement row into the cache.
+///
+/// `status_override`: when `Some`, the projected `status` column is the override
+/// string instead of the stored status. This is how the EPIC-rollup derived
+/// status (computed over the whole child subtree at rebuild time, the same
+/// whole-graph-fact pattern as `compute_blocked`) lands in the cache so the
+/// cache-backed `aida list` filters and displays the derived epic status without
+/// re-loading the full store. `None` projects the stored status verbatim.
+// trace:BUG-626 | ai:claude
+fn insert_one(
+    conn: &Connection,
+    req: &Requirement,
+    degrees: Degrees,
+    blocked: bool,
+    status_override: Option<&str>,
+) -> Result<()> {
     let yaml_path = yaml_path_for(req);
     let tags_json = serde_json::to_string(&req.tags).unwrap_or_else(|_| "[]".into());
     let archived = if req.archived { 1 } else { 0 };
@@ -1111,10 +1249,13 @@ fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees, blocked: b
     let deferred_at = req.deferred_at.map(|dt| dt.to_rfc3339());
     let deferred_until = req.deferred_until.clone();
     let req_type_str = format!("{:?}", req.req_type);
-    let status_str = req
-        .custom_status
-        .clone()
-        .unwrap_or_else(|| format!("{:?}", req.status));
+    // trace:BUG-626 | ai:claude — an epic's status is a read-only rollup of its
+    // children; the override (when present) is the derived value.
+    let status_str = status_override.map(str::to_string).unwrap_or_else(|| {
+        req.custom_status
+            .clone()
+            .unwrap_or_else(|| format!("{:?}", req.status))
+    });
     let priority_str = req
         .custom_priority
         .clone()
@@ -2600,5 +2741,100 @@ mod tests {
 
         std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
         std::env::remove_var("AIDA_CACHE_RETRY_MS");
+    }
+
+    // The cache projects an EPIC's status as the read-only rollup of its
+    // children, not the stored field. An epic stored as Draft whose child is In
+    // Progress must read In Progress from the cache; a childless epic stored In
+    // Progress must read Draft. trace:BUG-626 | ai:claude
+    fn cached_status(cache: &Cache, id: Uuid) -> String {
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
+        rows.into_iter()
+            .find(|r| r.id == id)
+            .map(|r| r.status)
+            .unwrap()
+    }
+
+    #[test]
+    fn cache_projects_epic_status_as_child_rollup() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // Active epic: stored Draft, but a child is In Progress.
+        let mut epic = sample_req("EPIC-1", "active epic");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Draft;
+        let mut child = sample_req("STORY-1", "child");
+        child.status = RequirementStatus::InProgress;
+        epic.relationships
+            .push(rel(RelationshipType::Parent, child.id));
+        child
+            .relationships
+            .push(rel(RelationshipType::Child, epic.id));
+
+        // Childless epic: stored In Progress (the false-active drift) → Draft.
+        let mut childless = sample_req("EPIC-2", "childless epic");
+        childless.req_type = RequirementType::Epic;
+        childless.status = RequirementStatus::InProgress;
+
+        // Done epic: every child Completed → Completed.
+        let mut done_epic = sample_req("EPIC-3", "done epic");
+        done_epic.req_type = RequirementType::Epic;
+        done_epic.status = RequirementStatus::Draft;
+        let mut done_child = sample_req("STORY-2", "done child");
+        done_child.status = RequirementStatus::Completed;
+        done_epic
+            .relationships
+            .push(rel(RelationshipType::Parent, done_child.id));
+
+        let (epic_id, childless_id, done_id) = (epic.id, childless.id, done_epic.id);
+
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([epic, child, childless, done_epic, done_child]);
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        assert_eq!(cached_status(&cache, epic_id), "InProgress");
+        assert_eq!(cached_status(&cache, childless_id), "Draft");
+        assert_eq!(cached_status(&cache, done_id), "Completed");
+    }
+
+    #[test]
+    fn upsert_refreshes_epic_own_row_from_cached_children() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // Epic stored Draft with one remaining child → derived Draft.
+        let mut epic = sample_req("EPIC-9", "epic");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Draft;
+        let mut child = sample_req("STORY-9", "child");
+        child.status = RequirementStatus::Approved;
+        epic.relationships
+            .push(rel(RelationshipType::Parent, child.id));
+
+        let (epic_id, child_id) = (epic.id, child.id);
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic.clone(), child.clone()]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+        assert_eq!(cached_status(&cache, epic_id), "Draft");
+
+        // The child starts; the child's own cache row reflects it, then an
+        // epic-self upsert re-derives the epic's row from the now-In-Progress
+        // child read from the cache.
+        let mut child = child;
+        child.status = RequirementStatus::InProgress;
+        cache.upsert_requirement(&child).unwrap();
+        assert_eq!(cached_status(&cache, child_id), "InProgress");
+        cache.upsert_requirement(&epic).unwrap();
+        assert_eq!(cached_status(&cache, epic_id), "InProgress");
     }
 }

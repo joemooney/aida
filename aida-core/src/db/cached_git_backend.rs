@@ -182,6 +182,86 @@ impl CachedGitBackend {
         }
     }
 
+    /// An EPIC's status is a read-only rollup of its children, so a child's
+    /// status flip (or a newly-added/removed child) must refresh the PARENT
+    /// epic's cached status. The single-row cache upsert can't do this on its
+    /// own — it has no view of the epic's other children. Here we have the inner
+    /// git store, so for each epic the written `req` is a child of (its
+    /// reciprocal `Parent`/`Child` edges name the parent), we re-read the epic +
+    /// its children from git, roll their statuses up, and re-stamp the epic's
+    /// cache row. This keeps `aida list --status in-progress` truthful for epics
+    /// without waiting for a full rebuild. Best-effort: a failed lookup leaves
+    /// the epic to be corrected on the next full rebuild (the
+    /// rebuildable-projection contract).
+    ///
+    /// Scope note: this rolls up the epic's DIRECT children only (cheap, no
+    /// whole-store load on every write), whereas the full rebuild
+    /// (`compute_epic_statuses` → `derive_epic_status` → transitive
+    /// `child_status_rollup`) is the AUTHORITATIVE transitive value. The two
+    /// agree for the overwhelmingly common case; an epic whose only finished
+    /// work lives in a grandchild is reconciled on the next rebuild — same
+    /// approximation contract as the cache's `in_degree` / `blocked` axes.
+    // trace:BUG-626 | ai:claude
+    fn refresh_parent_epic_status(&self, req: &Requirement) {
+        use crate::graph_walk::status_rollup;
+        use crate::models::{RelationshipType, RequirementType};
+
+        // A child stores the reciprocal edge to its parent (`Child --> parent`),
+        // and some stores also carry `Parent --> parent`; union both so the
+        // parent resolves whichever orientation was written. The epic itself, if
+        // it is the thing written, is freshened by the cache upsert directly.
+        let mut parent_ids: Vec<Uuid> = req
+            .relationships
+            .iter()
+            .filter(|rel| {
+                matches!(
+                    rel.rel_type,
+                    RelationshipType::Parent | RelationshipType::Child
+                )
+            })
+            .map(|rel| rel.target_id)
+            .collect();
+        parent_ids.sort();
+        parent_ids.dedup();
+
+        for parent_id in parent_ids {
+            // Load the candidate parent; skip anything that isn't an epic.
+            let Ok(Some(epic)) = self.inner.get_requirement(&parent_id) else {
+                continue;
+            };
+            if epic.req_type != RequirementType::Epic {
+                continue;
+            }
+            // Resolve the epic's children from its OWN outbound Parent/Child
+            // edges, load each, and roll the statuses up over a tiny store
+            // (the epic + its children) — the same `status_rollup` the cache
+            // rebuild path uses, so the two agree.
+            let mut subset: Vec<Requirement> = vec![epic.clone()];
+            let mut child_ids: Vec<Uuid> = Vec::new();
+            for rel in &epic.relationships {
+                if matches!(
+                    rel.rel_type,
+                    RelationshipType::Parent | RelationshipType::Child
+                ) {
+                    child_ids.push(rel.target_id);
+                }
+            }
+            child_ids.sort();
+            child_ids.dedup();
+            for cid in &child_ids {
+                if let Ok(Some(child)) = self.inner.get_requirement(cid) {
+                    subset.push(child);
+                }
+            }
+            let store = RequirementsStore {
+                requirements: subset,
+                ..Default::default()
+            };
+            let rollup = status_rollup(&store, &child_ids);
+            let _ = self.cache.recompute_epic_status(&parent_id, &rollup);
+        }
+    }
+
     /// Write-through batched update (BUG-425): apply many requirement updates
     /// in a SINGLE store commit (via `GitBackend::bulk_update`), then upsert
     /// each into the cache and re-stamp the HEAD-SHA once. Mirrors
@@ -206,6 +286,10 @@ impl CachedGitBackend {
             }
         }
         if cache_ok {
+            // BUG-626: refresh each touched child's parent epic rollup status.
+            for req in requirements {
+                self.refresh_parent_epic_status(req);
+            }
             self.restamp_head(&pre_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
@@ -267,6 +351,8 @@ impl DatabaseBackend for CachedGitBackend {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
+            // BUG-626: a new child shifts its parent epic's rollup status.
+            self.refresh_parent_epic_status(&added);
             self.restamp_head(&pre_write_head);
         }
         Ok(added)
@@ -280,6 +366,9 @@ impl DatabaseBackend for CachedGitBackend {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
+            // BUG-626: a child's status (or hierarchy edge) change shifts its
+            // parent epic's rollup status — refresh the parent epic's row.
+            self.refresh_parent_epic_status(requirement);
             self.restamp_head(&pre_write_head);
         }
         Ok(())
@@ -294,6 +383,8 @@ impl DatabaseBackend for CachedGitBackend {
                 let _ = self.cache.set_source_head_sha("");
                 eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
             } else {
+                // BUG-626: refresh the parent epic's rollup status. trace:BUG-626
+                self.refresh_parent_epic_status(requirement);
                 self.restamp_head(&pre_write_head);
             }
         }
