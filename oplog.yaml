@@ -21243,5 +21243,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2024
+- id: 019f02ed-b27c-7f62-8548-0e162fe41e37
+  target_id: 019f02ed-a740-72a3-bda6-78219daa191c
+  author: aida
+  node_id: '1'
+  lamport: 2025
+  timestamp: 2026-06-26T07:55:59.996956790Z
+  kind: !Create
+    title: Wire fasttrack express into the EPIC-0428 advisor-autopilot envelope
+    description: Followup D of TASK-0438 design (DRAFT - depends on EPIC-0428 design landing). Make the express disposition contract the canonical ordinary-low-risk-request authority class in the advisor-autopilot policy envelope, so the envelope and the fasttrack lane share one safety fence (do-not-approve classes, risk ceiling, architecture/security/autonomy exclusions). See docs/plans/2026-06-26-task-0438-fasttrack-lane.md.
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 2025
 node_id: '1'
