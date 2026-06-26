@@ -1,0 +1,26 @@
+id: 019f052d-04ae-7870-a98e-d581c10300c1
+spec_id: SPIKE-70
+agreed_id: SPIKE-70
+title: Drain has no coupled-sequential-single-branch mode (dogfooding finding from EPIC-54)
+description: |-
+  DOGFOODING FINDING (surfaced building EPIC-54, the TUI redesign, 2026-06-26). AIDA's autonomous drain (burndown run / queue work --auto-complete) assumes ONE work shape: INDEPENDENT ready specs -> each gets its OWN worktree + branch -> CI -> review -> MERGE TO MAIN, fanned out in PARALLEL. There is NO native mode for COUPLED, SEQUENTIAL, SINGLE-FEATURE-BRANCH, HUMAN-VALIDATED incremental work.
+
+  Concretely, building the TUI redesign could NOT use the drain because: (1) every increment touches the same files (mod.rs/state.rs) and builds on the prior -> parallel fanout would conflict; (2) increments accumulate on ONE feature branch and become ONE PR at the end, validated step-by-step -> the drain's per-spec merge-to-main is wrong. So the work had to be hand-orchestrated sequentially.
+
+  PROPOSED MODE (a real capability gap, not just a one-off): a drain mode that commits each queued increment to the CURRENT feature branch (no per-spec branch, no merge-to-main), runs sequentially (one at a time, same worktree), and gates each on a human/validation checkpoint before the next. Call it e.g. `queue work --branch-accumulate` / a `sequential single-branch` drain. This is the orchestration shape for incremental feature builds (vs the independent-backlog-drain shape the burndown already serves).
+
+  This is probe-thesis data: using AIDA on AIDA's own work revealed where the autonomy machinery's assumptions don't fit a common real shape.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T18:24:24.238621261Z
+modified_at: 2026-06-26T18:24:24.238621261Z
+req_type: Spike
+tags:
+- autonomy
+- dogfooding
+- finding
+- orchestration
+- probe
+human_only: true
