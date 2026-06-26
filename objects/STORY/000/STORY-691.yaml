@@ -31,3 +31,7 @@ tags:
 - theme
 - tui
 - ux
+relationships:
+- rel_type: Child
+  target_id: 019f025e-b103-7723-ae7c-7c991413e07b
+  created_at: 2026-06-26T07:35:56.952213129Z
