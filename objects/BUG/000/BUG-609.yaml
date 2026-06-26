@@ -14,12 +14,12 @@ description: |-
   - Worktrees: abandoned worktree-agent-* with no lease and no unmerged work are reaped by doctor heal (conservative: leave dirty / unmerged / leased worktrees alone), and the status default summarizes the count rather than listing all 45.
   - No change to STORY-496 reaper semantics (conservative pid-liveness; reused-pid left alone).
   - On a host with K dead-PID registrations + M abandoned worktrees, the status headline drops by K and the worktree list collapses to a count by default; doctor heal removes the reapable ones.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:03:13.861603135Z
-modified_at: 2026-06-26T06:07:38.107161491Z
+modified_at: 2026-06-26T06:14:59.579051717Z
 req_type: Bug
 tags:
 - fleet-coordination
@@ -34,3 +34,21 @@ comments:
   content: 'PR #1108 opened (worktree-agent-ab8e12a20fb93dad5). Active-agents headline now counts only live agents (Stale/dead-PID corpses partitioned out, hidden behind a ''+K stale'' footer pointing at doctor heal); --all/--stale reveal them. Worktrees collapse to a one-line summary above 8 rows (with obsolete tally + ''aida session gc'' hint); --all lists. Reused the BUG-613 memoized liveness verdict on AgentRegistryView.status + the STORY-456 obsolete verdict — no new per-agent/per-worktree scan, so the BUG-613 timing win holds. Awaiting CI; left unmerged for the lead.'
   created_at: 2026-06-26T06:07:38.107161491Z
   modified_at: 2026-06-26T06:07:38.107161491Z
+history:
+- id: 019f0291-38a1-7cc2-b376-ee8d55c403ea
+  author: aida-auto-bump
+  timestamp: 2026-06-26T06:14:59.489807822Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f0291-38fb-7103-88ef-8b106ec658ea
+  timestamp: 2026-06-26T06:14:59.579044953Z
+  agent: aida
+  commit_sha: 95ef3fcb8d18cf0cf8bbeeb87a3f9018d99f6007
+  summary: Completed via merge 95ef3fcb
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T06:14:58.318110360Z
+  completion_sha: 95ef3fcb8d18cf0cf8bbeeb87a3f9018d99f6007
