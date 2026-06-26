@@ -14,6 +14,13 @@ description: |-
   - "queue" verb appears only for Approved focus; routes selected Approved specs via `aida queue add --for implementer`; non-Approved skipped with a clear status message.
   - Pure target-selection + conditional-verb logic unit-tested.
   - build/test/fmt/clippy green (clippy --no-deps); redesign module only; commit --no-verify with trace:TASK-915.
+
+  ## Test Plan
+
+  1. On **Open**, drill to verbs while a **Draft** spec is focused → **expect** `approve` and `request approval` appear. Focus an **Approved** spec → **expect** `queue` appears (and the draft-only verbs don't).
+  2. **queue** → routes the selected Approved specs to the implementer queue (`aida queue add --for implementer`); status line reports routed/skipped.
+  3. **approve** → transitions selected Drafts → Approved (runs with advisor authority).
+  4. **defer** → opens a one-line **trigger input**; type a revisit condition, Enter → runs `aida defer … --until "<trigger>"`; status line reports deferred ids.
 status: Approved
 priority: High
 owner: ''
