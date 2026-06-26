@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:00:22.987621183Z
-modified_at: 2026-06-26T18:54:26.568281753Z
+modified_at: 2026-06-26T18:55:58.909686515Z
 req_type: Epic
 tags:
 - aida:tui
@@ -43,6 +43,10 @@ relationships:
 - rel_type: Parent
   target_id: 019f052d-04ae-7870-a98e-d581c10300c1
   created_at: 2026-06-26T18:54:26.568278082Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-26T18:55:58.909672640Z
   created_by: joe
 comments:
 - id: 019f0548-3f34-7d83-a56c-6fee5d82e081
