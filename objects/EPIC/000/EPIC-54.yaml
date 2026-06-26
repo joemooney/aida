@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T06:52:56.629549430Z
-modified_at: 2026-06-26T18:55:59.398323024Z
+modified_at: 2026-06-26T18:56:03.080161066Z
 req_type: Epic
 tags:
 - product
@@ -43,3 +43,8 @@ comments:
   content: Folded into EPIC-51 as the incremental TUI-redesign path (operator decision). Children re-homed to EPIC-51. Rejecting.
   created_at: 2026-06-26T18:54:31.825482901Z
   modified_at: 2026-06-26T18:54:31.825482901Z
+- id: 019f0549-fe08-7961-8863-bcb9d58d5a4b
+  author: joe
+  content: 'Correction: EPIC-54 is actively being worked — restored from my erroneous reject (I should have checked for active work first). EPIC-54 SURVIVES as the redesign workstream, now nested under EPIC-51 (the fold). EPIC-52 deduped into EPIC-54. Children restored here.'
+  created_at: 2026-06-26T18:56:03.080161066Z
+  modified_at: 2026-06-26T18:56:03.080161066Z
