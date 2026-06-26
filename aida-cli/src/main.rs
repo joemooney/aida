@@ -2838,6 +2838,7 @@ fn run() -> Result<()> {
             no_hygiene: _,
             all: _,
             stale: _,
+            full: _,
         } => {
             handle_status_command(*no_dev_context, None, &storage)?;
         }
@@ -13272,6 +13273,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_hygiene,
             all,
             stale,
+            full,
         } => {
             return handle_status_command_distributed(
                 *no_dev_context,
@@ -13288,6 +13290,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *no_hygiene,
                 *all,
                 *stale,
+                *full,
                 store_path,
                 &backend,
             );
@@ -48378,6 +48381,86 @@ mod fleet_state_hygiene_tests {
     }
 }
 
+// STORY-673: terse default + opt-in detail for `aida status`. The default
+// folds the long-tail rosters (open-PRs, recently-merged, remote activity,
+// coordination, recent-activity feed, per-status requirement breakdown,
+// AIDA-dev-context) behind one-line summaries; `--full` / `--all` expands them.
+// These tests pin the PURE pieces of that contract: the requirement-breakdown
+// summary copy and the open-PRs collapse threshold. trace:STORY-673 | ai:claude
+#[cfg(test)]
+mod story_673_terse_status_tests {
+    use super::*;
+
+    fn breakdown(pairs: &[(&str, usize)]) -> std::collections::BTreeMap<String, usize> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), *v))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    }
+
+    #[test]
+    fn requirement_summary_leads_with_open_then_closed_and_points_at_full() {
+        let by_status = breakdown(&[
+            ("Approved", 128),
+            ("InProgress", 7),
+            ("Planned", 1),
+            ("Completed", 1707),
+            ("Rejected", 466),
+        ]);
+        let line = requirement_breakdown_summary_line(&by_status);
+        // Open total = everything non-terminal (128 + 7 + 1 = 136).
+        assert!(
+            line.starts_with("136 open ("),
+            "leads with the OPEN total, got: {line}"
+        );
+        // Per-status open tail is present (lower-cased).
+        assert!(line.contains("128 approved"), "got: {line}");
+        assert!(line.contains("7 inprogress"), "got: {line}");
+        assert!(line.contains("1 planned"), "got: {line}");
+        // Closed tallies follow.
+        assert!(line.contains("1707 completed"), "got: {line}");
+        assert!(line.contains("466 rejected"), "got: {line}");
+        // Terminal states are NOT counted as open.
+        assert!(
+            !line.contains("1707 completed ·")
+                || line.find("open").unwrap() < line.find("completed").unwrap(),
+            "completed must come after the open clause, got: {line}"
+        );
+        // Pointer to the per-status detail.
+        assert!(line.contains("aida status --full"), "got: {line}");
+    }
+
+    #[test]
+    fn requirement_summary_handles_no_open_work() {
+        let by_status = breakdown(&[("Completed", 3), ("Rejected", 1)]);
+        let line = requirement_breakdown_summary_line(&by_status);
+        assert!(line.starts_with("0 open"), "got: {line}");
+        assert!(line.contains("3 completed"), "got: {line}");
+        assert!(line.contains("1 rejected"), "got: {line}");
+    }
+
+    #[test]
+    fn requirement_summary_omits_absent_closed_tallies() {
+        // No Completed / Rejected rows → those clauses are omitted entirely.
+        let by_status = breakdown(&[("Approved", 2), ("Draft", 5)]);
+        let line = requirement_breakdown_summary_line(&by_status);
+        assert!(line.starts_with("7 open ("), "got: {line}");
+        assert!(!line.contains("completed"), "got: {line}");
+        assert!(!line.contains("rejected"), "got: {line}");
+    }
+
+    #[test]
+    fn open_prs_collapse_threshold_is_small() {
+        // The terse default caps the open-PR roster at a small number so a
+        // large fleet of PRs doesn't dump a wall; the full list is behind
+        // `--full`. Guard the constant so the collapse stays terse.
+        assert!(
+            OPEN_PRS_SUMMARY_THRESHOLD <= 5,
+            "open-PR terse cap must stay small (got {OPEN_PRS_SUMMARY_THRESHOLD})"
+        );
+    }
+}
+
 /// STORY-456: I/O wrapper that gathers the inputs (worktrees, leases, live
 /// sessions, the batched open-PR snapshot, per-worktree ahead-of-default
 /// counts) and hands them to the pure `assemble_worktree_status_rows`. Shared
@@ -48418,7 +48501,13 @@ fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStat
 /// and a recommended next step per state. Silent when there are no open PRs
 /// or gh is unavailable — display-only orientation, not a gate.
 /// trace:STORY-456 | ai:claude
-fn print_status_open_prs_section(project_root: &std::path::Path) {
+// STORY-673: above this many open PRs, the default `aida status` collapses the
+// roster to a one-line count and shows only the first few — the full list is
+// behind `--full` / `--all`. Keeps the actionable "is there a PR that needs me"
+// signal at a glance without dumping a 10-PR wall. trace:STORY-673 | ai:claude
+const OPEN_PRS_SUMMARY_THRESHOLD: usize = 3;
+
+fn print_status_open_prs_section(project_root: &std::path::Path, show_full: bool) {
     let snapshot = collect_open_prs(project_root);
     if snapshot.by_branch.is_empty() {
         return;
@@ -48426,8 +48515,16 @@ fn print_status_open_prs_section(project_root: &std::path::Path) {
     let mut prs: Vec<&status_cleanup::OpenPrItem> = snapshot.by_branch.values().collect();
     prs.sort_by_key(|p| p.number);
 
+    let total = prs.len();
     println!("{}", "─── Open PRs ───".bold());
-    for pr in prs {
+    // STORY-673: terse default caps the roster at OPEN_PRS_SUMMARY_THRESHOLD;
+    // `--full` lists every open PR. trace:STORY-673 | ai:claude
+    let shown = if show_full {
+        total
+    } else {
+        total.min(OPEN_PRS_SUMMARY_THRESHOLD)
+    };
+    for pr in prs.iter().take(shown) {
         let ci = pr.ci_rollup.as_deref().unwrap_or("?");
         let merge = pr.mergeable.as_deref().unwrap_or("UNKNOWN");
         let next = open_pr_next_step(
@@ -48444,6 +48541,13 @@ fn print_status_open_prs_section(project_root: &std::path::Path) {
             merge.to_ascii_lowercase()
         );
         println!("    {} · {}", pr.head_branch.dimmed(), next.dimmed());
+    }
+    if !show_full && total > shown {
+        // STORY-673: pointer to the full open-PR roster. trace:STORY-673
+        println!(
+            "  {}",
+            format!("… {} more open — `aida status --full`", total - shown).dimmed()
+        );
     }
     println!();
 }
@@ -48484,12 +48588,38 @@ fn truncate_for_width(s: &str, max: usize) -> String {
 /// STORY-456: `aida status` Recently merged section — last N merged PRs (one
 /// batched `gh pr list --state merged` call) for orientation. Silent when
 /// there are none or gh is unavailable. trace:STORY-456 | ai:claude
-fn print_status_recently_merged_section(project_root: &std::path::Path, limit: usize) {
+fn print_status_recently_merged_section(
+    project_root: &std::path::Path,
+    limit: usize,
+    show_full: bool,
+) {
     let merged = collect_recently_merged_prs(project_root, limit);
     if merged.is_empty() {
         return;
     }
     println!("{}", "─── Recently merged ───".bold());
+    // STORY-673: the recently-merged tail is pure backward-looking orientation
+    // — collapse to a one-line "latest + count" by default; `--full` / `--all`
+    // lists the tail. trace:STORY-673 | ai:claude
+    if !show_full {
+        let (number, title, when) = &merged[0];
+        let title = truncate_for_width(title, 48);
+        let when = when.as_deref().unwrap_or("");
+        let more = if merged.len() > 1 {
+            format!(" (+{} more — `aida status --full`)", merged.len() - 1)
+        } else {
+            String::new()
+        };
+        println!(
+            "  latest: {} {} {}{}",
+            format!("PR #{number}").green(),
+            title,
+            when.dimmed(),
+            more.dimmed()
+        );
+        println!();
+        return;
+    }
     for (number, title, when) in &merged {
         let title = truncate_for_width(title, 56);
         let when = when.as_deref().unwrap_or("");
@@ -48627,7 +48757,11 @@ fn parse_remote_branch_commits(stdout: &str) -> Vec<remote_activity::RemoteCommi
 /// that have NO local session lease, since those agents never appear in the
 /// local registry. Read-only, lossy-by-design, and silent when there is no
 /// remote signal (or git is unavailable). trace:STORY-452 | ai:claude
-fn print_status_remote_activity_section(project_root: &std::path::Path, limit: usize) {
+fn print_status_remote_activity_section(
+    project_root: &std::path::Path,
+    limit: usize,
+    show_full: bool,
+) {
     let commits = collect_remote_branch_commits(project_root);
     if commits.is_empty() {
         return;
@@ -48642,6 +48776,27 @@ fn print_status_remote_activity_section(project_root: &std::path::Path, limit: u
         return;
     }
     println!("{}", "─── Recent remote activity (inferred) ───".bold());
+    // STORY-673: inferred cross-machine activity is a lossy-by-design long-tail
+    // — collapse to a one-line count by default; `--full` / `--all` expands the
+    // per-branch feed. trace:STORY-673 | ai:claude
+    if !show_full {
+        let row = &rows[0];
+        let spec = row.spec_id.as_deref().unwrap_or("");
+        let more = if rows.len() > 1 {
+            format!(" (+{} more — `aida status --full`)", rows.len() - 1)
+        } else {
+            String::new()
+        };
+        println!(
+            "  {} on {} {}{}",
+            row.agent_type.cyan(),
+            spec.bold(),
+            format!("(branch {})", row.branch).dimmed(),
+            more.dimmed()
+        );
+        println!();
+        return;
+    }
     for row in &rows {
         let subject = truncate_for_width(&row.subject, 52);
         let when = row.when.map(humanize_relative).unwrap_or_default();
@@ -99830,6 +99985,49 @@ fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> Result<()> {
     Ok(())
 }
 
+// STORY-673: compose the terse one-line requirement breakdown for default
+// `aida status`. Leads with OPEN work (what's actionable — every status that
+// isn't a terminal Completed/Rejected), then the closed tallies, then a pointer
+// to the per-status detail. Pure (no I/O) so the copy is unit-testable.
+// trace:STORY-673 | ai:claude
+fn requirement_breakdown_summary_line(
+    by_status: &std::collections::BTreeMap<String, usize>,
+) -> String {
+    let is_terminal = |s: &str| {
+        let s = s.to_ascii_lowercase();
+        s == "completed" || s == "rejected"
+    };
+    let completed = by_status.get("Completed").copied().unwrap_or(0);
+    let rejected = by_status.get("Rejected").copied().unwrap_or(0);
+
+    // Open = everything that isn't a terminal state, with a compact per-status
+    // tail in deterministic (BTreeMap) order.
+    let open_total: usize = by_status
+        .iter()
+        .filter(|(s, _)| !is_terminal(s))
+        .map(|(_, n)| *n)
+        .sum();
+    let open_parts: Vec<String> = by_status
+        .iter()
+        .filter(|(s, _)| !is_terminal(s))
+        .map(|(s, n)| format!("{n} {}", s.to_ascii_lowercase()))
+        .collect();
+
+    let mut line = if open_parts.is_empty() {
+        "0 open".to_string()
+    } else {
+        format!("{} open ({})", open_total, open_parts.join(" · "))
+    };
+    if completed > 0 {
+        line.push_str(&format!(" · {completed} completed"));
+    }
+    if rejected > 0 {
+        line.push_str(&format!(" · {rejected} rejected"));
+    }
+    line.push_str(" · `aida status --full` for the per-status breakdown");
+    line
+}
+
 /// `aida status` cross-clone coordination view (STORY-640, coordination slice
 /// 3): the ACTIVE `coordination/` claims (leases + drain + solo) held across
 /// all clones — distinct from the LOCAL leases section. Silent when there are
@@ -99837,6 +100035,7 @@ fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> Result<()> {
 fn print_status_coordination_section(
     store_root: &std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
+    show_full: bool,
 ) {
     let mut claims = coordination::list_claims(store_root);
     claims.extend(coordination::list_lock_claims(store_root));
@@ -99844,6 +100043,27 @@ fn print_status_coordination_section(
         return;
     }
     println!("{}", "─── Cross-clone coordination ───".bold());
+    // STORY-673: the cross-clone claim table is a fleet long-tail — collapse to
+    // a one-line count by default; `--full` / `--all` prints the table.
+    // trace:STORY-673 | ai:claude
+    if !show_full {
+        let scopes: Vec<&str> = claims.iter().take(3).map(|c| c.scope.as_str()).collect();
+        let preview = scopes.join(", ");
+        let suffix = if claims.len() > scopes.len() {
+            " …"
+        } else {
+            ""
+        };
+        println!(
+            "  {} active claim{}: {}{} · `aida status --full`",
+            claims.len(),
+            if claims.len() == 1 { "" } else { "s" },
+            preview,
+            suffix
+        );
+        println!();
+        return;
+    }
     println!();
     println!(
         "  {:<16} {:<10} {:<14} {:<14} age",
@@ -99891,6 +100111,7 @@ fn handle_status_command_distributed(
     no_hygiene: bool,
     all: bool,
     stale: bool,
+    full: bool,
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
@@ -99905,6 +100126,19 @@ fn handle_status_command_distributed(
     // trace:BUG-609 | ai:claude
     let show_all = all;
     let show_stale_agents = all || stale;
+
+    // STORY-673: terse default + opt-in detail. `--full` (and `--all`, which
+    // implies it) expands every long-tail roster the default now folds behind a
+    // one-line summary — open-PR roster, recently-merged tail, inferred remote
+    // activity, cross-clone coordination, the recent-activity feed, the
+    // per-status requirement breakdown, and the AIDA-dev-context block. The
+    // default leads with the answer (awaiting / session / branch / PR / queue)
+    // and keeps the fleet/orientation long-tails one line each so the
+    // orientation command fits roughly one screen — the Trojan-horse principle:
+    // quiet depth on demand, not a wall. Reuses the same I/O-cheap memoized
+    // probes BUG-613 introduced; the collapse only changes RENDERING, never
+    // adds a scan. trace:STORY-673 | ai:claude
+    let show_full = all || full;
 
     // STORY-385: `--cleanup` focuses on the "Needs attention" section.
     // `--cleanup --json` emits the structured report; otherwise we render
@@ -100075,20 +100309,24 @@ fn handle_status_command_distributed(
     // single batched gh snapshot per section, not a call per row.
     // trace:STORY-456 | ai:claude
     print_status_worktrees_section(&project_root, show_all);
-    print_status_open_prs_section(&project_root);
-    print_status_recently_merged_section(&project_root, 5);
+    // STORY-673: the open-PR roster, recently-merged tail, inferred remote
+    // activity, and cross-clone coordination are orientation long-tails — folded
+    // to a one-line count by default, expanded with `--full` / `--all`.
+    // trace:STORY-673 | ai:claude
+    print_status_open_prs_section(&project_root, show_full);
+    print_status_recently_merged_section(&project_root, 5, show_full);
 
     // STORY-452: inferred cloud / cross-machine agent activity from commit
     // trailers on lease-less remote branches — local agents already appear in
     // the "Active agents" section. Read-only; silent when no remote signal.
     // trace:STORY-452 | ai:claude
-    print_status_remote_activity_section(&project_root, 5);
+    print_status_remote_activity_section(&project_root, 5, show_full);
 
     // STORY-640 (coordination slice 3): active cross-clone `coordination/`
     // claims (leases + drain + solo) held across all clones — who holds what,
     // where. Distinct from the LOCAL leases above; silent when no claims exist.
     // trace:STORY-640 | ai:claude
-    print_status_coordination_section(store_path, chrono::Utc::now());
+    print_status_coordination_section(store_path, chrono::Utc::now(), show_full);
 
     // STORY-405: live state-affecting advisor/external activity recorded by
     // AIDA verbs such as `aida pr ship`. Read-only and silent when absent or
@@ -100160,8 +100398,17 @@ fn handle_status_command_distributed(
     }
     println!("{}", "─── Requirements ───".bold());
     println!("  Total:        {}", total);
-    for (status, count) in &by_status {
-        println!("    {:<14} {}", status, count);
+    if show_full {
+        // STORY-673: the full per-status breakdown is detail — one line per
+        // status. trace:STORY-673 | ai:claude
+        for (status, count) in &by_status {
+            println!("    {:<14} {}", status, count);
+        }
+    } else {
+        // STORY-673: terse default — one compact line leading with OPEN work
+        // (what's actionable), then the closed tallies, then a pointer to the
+        // full breakdown. trace:STORY-673 | ai:claude
+        println!("  {}", requirement_breakdown_summary_line(&by_status));
     }
     println!();
 
@@ -100221,8 +100468,12 @@ fn handle_status_command_distributed(
         .cloned()
         .collect();
     recent.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+    // STORY-673: the recent-activity feed is orientation detail. The terse
+    // default shows only the single most-recent row plus a "+N more" pointer;
+    // `--full` / `--all` shows the top-5 feed. trace:STORY-673 | ai:claude
+    let recent_shown = if show_full { 5 } else { 1 };
     println!("{}", "─── Recent activity ───".bold());
-    for r in recent.iter().take(5) {
+    for r in recent.iter().take(recent_shown) {
         let id = r
             .agreed_id
             .as_deref()
@@ -100238,6 +100489,14 @@ fn handle_status_command_distributed(
     }
     if recent.is_empty() {
         println!("  (no user requirements yet — try `aida add --type vision --title \"...\"`)");
+    } else if !show_full && recent.len() > recent_shown {
+        // STORY-673: pointer to the full feed. The default shows only the
+        // single newest row; `--full` shows the top-5 feed (NOT every spec —
+        // so we don't headline the whole store's size here). trace:STORY-673
+        println!(
+            "  {}",
+            "… more recent activity — `aida status --full`".dimmed()
+        );
     }
     println!();
 
@@ -100249,8 +100508,16 @@ fn handle_status_command_distributed(
     }
 
     // AIDA-self developer context — only when this project IS the aida repo.
+    // STORY-673: this is a heavy dev-only block (and `cross_platform_ci_status`
+    // makes a network call) — folded to a one-line summary by default,
+    // expanded with `--full` / `--all`. Folding it away is also a perf win on
+    // the default path (no CI network probe). trace:STORY-673 | ai:claude
     if !no_dev_context && is_aida_repo(&project_root) {
-        print_aida_dev_context(&project_root);
+        if show_full {
+            print_aida_dev_context(&project_root);
+        } else {
+            print_aida_dev_context_summary(&project_root);
+        }
     }
 
     // STORY-464: passive doctor scan integrated into `aida status` under `Hygiene` section
@@ -100696,6 +100963,31 @@ fn print_aida_dev_context(project_root: &std::path::Path) {
     println!(
         "    {}    — cargo publish to crates.io",
         "scripts/publish.sh".cyan()
+    );
+    println!();
+}
+
+/// STORY-673: terse one-line AIDA-dev-context for the default `aida status`.
+/// Shows the running binary + workspace version + commits-since-tag, and
+/// crucially SKIPS the cross-platform-CI network probe and template/lockfile
+/// checks the full block runs — so the default path stays cheap. `--full` /
+/// `--all` calls `print_aida_dev_context` for the complete picture.
+/// trace:STORY-673 | ai:claude
+fn print_aida_dev_context_summary(project_root: &std::path::Path) {
+    let workspace_version = read_workspace_version(project_root).unwrap_or_else(|| "?".into());
+    let latest_tag = git_describe_latest_tag(project_root).unwrap_or_else(|| "(none)".into());
+    let commits_since_tag = git_commits_since_tag(project_root, &latest_tag).unwrap_or(0);
+    let ahead = if commits_since_tag > 0 {
+        format!(", {commits_since_tag} commits ahead of {latest_tag}")
+    } else {
+        ", matches latest tag".to_string()
+    };
+    println!("{}", "─── AIDA development context ───".bold());
+    println!(
+        "  {}  (v{}{}) · `aida status --full`",
+        build_banner(),
+        workspace_version,
+        ahead
     );
     println!();
 }
