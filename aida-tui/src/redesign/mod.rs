@@ -386,6 +386,21 @@ fn apply_outcome(
             }
             st.status = Some(request_approval_status(&routed, &failed, &skipped));
         }
+        RunOutcome::Approve { drafts, skipped } => {
+            // Directly approve each draft via the advisor-gated transition
+            // (`aida edit <id> --status approved`, run with advisor authority).
+            // The do-it-yourself mirror of request approval. trace:TASK-920 | ai:claude
+            let mut approved = Vec::new();
+            let mut failed = Vec::new();
+            for id in &drafts {
+                if approve_spec(id) {
+                    approved.push(id.clone());
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+            st.status = Some(approve_status(&approved, &failed, &skipped));
+        }
         RunOutcome::Queue { approved, skipped } => {
             // Route each Approved spec to the implementer queue via the
             // RELIABLE path (`aida queue add --for implementer <id>`) — the
@@ -523,6 +538,52 @@ fn queue_status(routed: &[String], failed: &[String], skipped: &[String]) -> Str
     }
     if parts.is_empty() {
         return "queue: nothing to route (no approved specs selected)".to_string();
+    }
+    parts.join(" · ")
+}
+
+/// Directly approve one draft spec. Returns `true` on success. Runs the
+/// advisor-gated transition `aida edit <id> --status approved` — the approval
+/// transition is REFUSED from a non-advisor identity, so the spawned command
+/// carries advisor authority via `AIDA_SESSION_ROLE=advisor` in its env. The
+/// do-it-yourself mirror of [`queue_for_advisor`]. trace:TASK-920 | ai:claude
+fn approve_spec(id: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["edit", id, "--status", "approved"]);
+    // The approved-status transition is advisor-gated; carry advisor authority
+    // on the spawned command so it is not refused as a non-advisor identity.
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    matches!(cmd.output(), Ok(out) if out.status.success())
+}
+
+/// The status-line confirmation for an `approve` run: which ids were approved,
+/// which failed the transition, and which were skipped as non-drafts. Pure (no
+/// IO) so it is unit testable. The mirror of [`queue_status`]. trace:TASK-920 | ai:claude
+fn approve_status(approved: &[String], failed: &[String], skipped: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !approved.is_empty() {
+        parts.push(format!(
+            "approved {}: {}",
+            approved.len(),
+            approved.join(", ")
+        ));
+    }
+    if !failed.is_empty() {
+        parts.push(format!("FAILED to approve: {}", failed.join(", ")));
+    }
+    if !skipped.is_empty() {
+        parts.push(format!(
+            "skipped {} non-draft(s): {}",
+            skipped.len(),
+            skipped.join(", ")
+        ));
+    }
+    if parts.is_empty() {
+        return "approve: nothing to approve (no drafts selected)".to_string();
     }
     parts.join(" · ")
 }
@@ -1273,7 +1334,8 @@ mod render_tests {
 
     #[test]
     fn renders_open_scope_verbs_with_draft_conditional() {
-        // Focused on a Draft item → the verb list shows request approval.
+        // Focused on a Draft item → the verb list shows request approval +
+        // approve (the Draft-conditional verbs). trace:TASK-920
         let mut st = sample(5); // index 0 is Draft
         drill_open(&mut st);
         st.focus_bottom(); // focus TASK-0 (Draft)
@@ -1281,7 +1343,7 @@ mod render_tests {
         draw(&st, 100, 30);
         assert_eq!(
             st.current_verbs(),
-            vec![Verb::Show, Verb::Why, Verb::RequestApproval]
+            vec![Verb::Show, Verb::Why, Verb::RequestApproval, Verb::Approve]
         );
     }
 
@@ -1324,6 +1386,23 @@ mod render_tests {
         // Empty case.
         let empty = queue_status(&[], &[], &[]);
         assert!(empty.contains("nothing to route"));
+    }
+
+    #[test]
+    fn approve_status_lists_approved_skipped_failed() {
+        // trace:TASK-920
+        let s = approve_status(
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &["TASK-3".to_string()],
+            &["TASK-4".to_string()],
+        );
+        assert!(s.contains("approved 2"));
+        assert!(s.contains("TASK-1"));
+        assert!(s.contains("FAILED"));
+        assert!(s.contains("skipped 1"));
+        // Empty case.
+        let empty = approve_status(&[], &[], &[]);
+        assert!(empty.contains("nothing to approve"));
     }
 
     // --- Markdown body rendering (TASK-913) -------------------------------
