@@ -3,12 +3,12 @@ spec_id: BUG-624
 agreed_id: BUG-624
 title: STORY-684 pre-commit /// gate scans WHOLE FILES — flags pre-existing debt, forcing agents to --no-verify (which bypasses the advisor-code-gate too)
 description: 'The STORY-684 aida-pre-commit.sh ///-SPEC-ID check (item 5) scans whole staged FILES, so any commit touching a file with pre-existing /// trace debt (~30 markers across main.rs/dashboard.rs/etc., predating the gate) is rejected — forcing agents to commit --no-verify, which ALSO skips the advisor-code-gate, defeating both. Fix: scope the check to the STAGED DIFF (added/changed lines only), so it flags only NEW /// debt and never pre-existing. Use git diff --cached -U0 / the staged hunks, not whole-file include. This is the robust fix; TASK-903 (clean the existing debt) is a complementary one-time stopgap. Relates to BUG-622 (gate must not push agents toward --no-verify).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:04:29.803443767Z
-modified_at: 2026-06-26T17:17:05.668842036Z
+modified_at: 2026-06-26T17:27:02.930439373Z
 req_type: Bug
 tags:
 - dx
@@ -26,3 +26,21 @@ comments:
   content: Commit 54d3149ab references this requirement
   created_at: 2026-06-26T17:17:05.668842036Z
   modified_at: 2026-06-26T17:17:05.668842036Z
+history:
+- id: 019f04f8-81bc-7922-989e-04c5fcd313b8
+  author: aida-auto-bump
+  timestamp: 2026-06-26T17:27:02.844793575Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f04f8-8212-7783-8c40-7236712e6891
+  timestamp: 2026-06-26T17:27:02.930432576Z
+  agent: aida
+  commit_sha: f049a11a5438c95f3f4cf4b9f6f68e3824ac1979
+  summary: Completed via merge f049a11a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T17:27:01.807329112Z
+  completion_sha: f049a11a5438c95f3f4cf4b9f6f68e3824ac1979
