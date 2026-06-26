@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T01:36:45.413199316Z
-modified_at: 2026-06-26T18:22:00.467484664Z
+modified_at: 2026-06-26T18:22:52.150387784Z
 req_type: Spike
 tags:
 - field-study
@@ -54,6 +54,13 @@ comments:
   content: Commit d650df35b references this requirement
   created_at: 2026-06-25T07:51:01.506709975Z
   modified_at: 2026-06-25T07:51:01.506709975Z
+- id: 019f052b-a0d7-7c40-b9fd-34fab636acbf
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-26-spike-67-gate-vs-rule-evidence.md
+    filed 4 task(s): TASK-916, TASK-917, TASK-918, TASK-919
+  created_at: 2026-06-26T18:22:53.143939440Z
+  modified_at: 2026-06-26T18:22:53.143939440Z
 history:
 - id: 019ee8e6-7056-7060-a322-d12d1c60a12b
   author: aida-auto-bump
