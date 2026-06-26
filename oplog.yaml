@@ -21472,5 +21472,28 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 2041
+- id: 019f0529-9d19-7543-9082-84fd3e953b36
+  target_id: 019f0529-999b-7201-9740-15f19a40540d
+  author: aida
+  node_id: '1'
+  lamport: 2042
+  timestamp: 2026-06-26T18:20:41.113459613Z
+  kind: !Create
+    title: 'Add ''queue'' verb (Approved-conditional): route selected Approved specs to the implementer queue'
+    description: |-
+      Add a "queue" verb to the redesign TUI — the mirror of "request approval", closing the lifecycle loop. The bottleneck is concrete (12 Approved, 0 queued): approved work has nothing routing it to an implementer.
+
+      BEHAVIOR (mirror the existing request-approval verb almost exactly):
+      - "queue" is APPROVED-conditional: appears in the verb list only when the focused/selected spec status is Approved (the symmetric counterpart to request-approval being Draft-conditional). Put this in verb_list_for in state.rs.
+      - Set-level: operates on the marked selection filtered to Approved (or the focused Approved item if nothing selected). For each, runs `aida queue add --for implementer <id>` (the routing write — same shape as request-approval's `aida queue add --for advisor`). Skips non-Approved; reports routed/skipped/failed on the status line.
+      - Pure logic (the Approved-conditional verb presence; the approved_selection target set) unit-tested in state.rs, mirroring the draft_selection / request_approval tests.
+
+      ACCEPTANCE:
+      - "queue" verb appears only for Approved focus; routes selected Approved specs via `aida queue add --for implementer`; non-Approved skipped with a clear status message.
+      - Pure target-selection + conditional-verb logic unit-tested.
+      - build/test/fmt/clippy green (clippy --no-deps); redesign module only; commit --no-verify with trace:TASK-915.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2042
 node_id: '1'
