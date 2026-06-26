@@ -15,3 +15,7 @@ tags:
 - cockpit
 - deferred:cockpit-phase2
 - roles
+relationships:
+- rel_type: Child
+  target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
+  created_at: 2026-06-26T04:48:35.410641586Z
