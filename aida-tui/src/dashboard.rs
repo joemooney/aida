@@ -205,8 +205,8 @@ pub fn refetch_rows(
     let section = model.nav.current();
     model.rows = match section {
         NavSection::Queue => fetch_queue(model),
-        NavSection::Backlog => fetch_status(&["approved", "planned"]),
-        NavSection::History => fetch_status(&["completed"]),
+        NavSection::Backlog => fetch_status(model, &["approved", "planned"]),
+        NavSection::History => fetch_status(model, &["completed"]),
         NavSection::Prs => match fetch_prs() {
             Ok(rows) => rows,
             Err(e) => {
@@ -257,8 +257,16 @@ fn fetch_queue(model: &mut DashboardModel) -> Vec<ListRow> {
         .collect()
 }
 
-/// Backlog / History rows: shell out to `aida list --status <csv> --json`.
-fn fetch_status(statuses: &[&str]) -> Vec<ListRow> {
+/// Most-recent rows shown per Backlog/History panel. `aida list --json`
+/// returns recency-first, so taking the first N keeps a large History
+/// (hundreds of Completed specs) light to build, render, and scroll. The
+/// full set is always available via `aida list`. trace:TASK-897 | ai:claude
+const PANEL_ROW_LIMIT: usize = 100;
+
+/// Backlog / History rows: shell out to `aida list --status <csv> --json`,
+/// capped to the most-recent [`PANEL_ROW_LIMIT`]. Sets a truncation notice
+/// when the full set is larger so the cap is discoverable. trace:TASK-897
+fn fetch_status(model: &mut DashboardModel, statuses: &[&str]) -> Vec<ListRow> {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["list", "--status", &statuses.join(","), "--json"]);
@@ -271,17 +279,25 @@ fn fetch_status(statuses: &[&str]) -> Vec<ListRow> {
     if !out.status.success() {
         return Vec::new();
     }
-    parse_list_json(&out.stdout)
-        .into_iter()
+    let kind = if statuses.contains(&"completed") {
+        RowKind::History
+    } else {
+        RowKind::Backlog
+    };
+    let all = parse_list_json(&out.stdout);
+    let total = all.len();
+    if total > PANEL_ROW_LIMIT {
+        model.notice = Some(format!(
+            "showing {PANEL_ROW_LIMIT} most-recent of {total} — `aida list` for all"
+        ));
+    }
+    all.into_iter()
+        .take(PANEL_ROW_LIMIT)
         .map(|row| ListRow {
             id: row.spec_id,
             title: row.title,
             status: row.status,
-            kind: if statuses.contains(&"completed") {
-                RowKind::History
-            } else {
-                RowKind::Backlog
-            },
+            kind,
         })
         .collect()
 }
