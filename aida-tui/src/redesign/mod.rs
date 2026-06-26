@@ -72,12 +72,24 @@ pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
     // trace:STORY-693 | ai:claude
     let store = SpecStore::open(project_root);
 
-    // The optional EPIC focus lens (STORY-695): `AIDA_TUI_EPIC=<id>` scopes the
-    // whole TUI to that epic + its transitive children. We compute the
-    // descendant closure ONCE here (in-process) and thread it through every
-    // scope-list fetch; an empty/unresolvable closure leaves the TUI unfocused.
-    // trace:STORY-695 | ai:claude
-    let mut focus_set = resolve_focus_set(store.as_ref());
+    // The optional EPIC focus lens (STORY-695 / STORY-697): the TUI can launch
+    // scoped to an epic + its transitive children. The launch epic is resolved
+    // with precedence `AIDA_TUI_EPIC` env > `.aida/tui-focus` marker > branch
+    // inference (STORY-697). We compute the descendant closure ONCE here
+    // (in-process) and thread it through every scope-list fetch; an
+    // empty/unresolvable closure leaves the TUI unfocused.
+    // trace:STORY-695 trace:STORY-697 | ai:claude
+    let launch_epic = launch_focus_epic(project_root, store.as_ref());
+    let mut focus_set = launch_epic.as_ref().and_then(|epic| {
+        store.as_ref().and_then(|s| {
+            let set = s.descendants_of(epic);
+            if set.is_empty() {
+                None
+            } else {
+                Some(set)
+            }
+        })
+    });
 
     let items = store
         .as_ref()
@@ -86,11 +98,9 @@ pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
     let mut st = RedesignState::new(items, resolve_role());
     st.theme = theme;
     // Seed the focus context (epic id + progress summary) when launched focused.
-    // trace:STORY-695 | ai:claude
+    // trace:STORY-695 trace:STORY-697 | ai:claude
     if let (Some(set), Some(s)) = (focus_set.as_ref(), store.as_ref()) {
-        st.focus_epic = std::env::var("AIDA_TUI_EPIC")
-            .ok()
-            .map(|e| e.trim().to_string());
+        st.focus_epic = launch_epic.clone();
         refresh_focus_summary(&mut st, s, set);
     }
     st.status = Some(if store.is_some() {
@@ -117,26 +127,69 @@ pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
         &mut item_cache,
         &mut loaded_scope,
         &mut focus_set,
+        project_root,
     )?;
     Ok(())
 }
 
-/// Resolve the launch-time EPIC focus closure from `AIDA_TUI_EPIC`. Returns the
-/// descendant-id set when the env var names an epic the store can resolve;
-/// `None` when unset, blank, or unresolvable (the TUI then launches unfocused).
-/// trace:STORY-695 | ai:claude
-fn resolve_focus_set(store: Option<&SpecStore>) -> Option<std::collections::HashSet<String>> {
-    let epic = std::env::var("AIDA_TUI_EPIC").ok()?;
-    let epic = epic.trim();
-    if epic.is_empty() {
+/// Resolve the launch-time EPIC to focus on, with precedence
+/// **`AIDA_TUI_EPIC` env > `.aida/tui-focus` marker > branch inference**
+/// (STORY-697). The pure precedence over env-vs-marker lives in
+/// [`store::resolve_focus_epic`]; when both are absent we *infer* the epic from
+/// the current branch's trailered specs' most-common parent epic (the stretch).
+/// Returns the epic id (still to be closure-resolved by the caller), or `None`
+/// when nothing resolves. trace:STORY-697 | ai:claude
+fn launch_focus_epic(project_root: &std::path::Path, store: Option<&SpecStore>) -> Option<String> {
+    let env = std::env::var("AIDA_TUI_EPIC").ok();
+    let marker = store::read_focus_marker(project_root);
+    if let Some(epic) = store::resolve_focus_epic(env.as_deref(), marker.as_deref()) {
+        return Some(epic);
+    }
+    // Stretch (STORY-697): neither env nor marker set — infer from the branch.
+    infer_focus_from_branch(project_root, store)
+}
+
+/// Infer the launch focus epic from the current branch's commit trailers
+/// (STORY-697 stretch): read the branch's `(SPEC-ID)` trailers, map each
+/// trailered spec to its parent epic, and take the mode. Returns `None` when
+/// the store is unavailable, git can't be read, or no trailered spec has an
+/// epic parent. trace:STORY-697 | ai:claude
+fn infer_focus_from_branch(
+    project_root: &std::path::Path,
+    store: Option<&SpecStore>,
+) -> Option<String> {
+    let store = store?;
+    let log = branch_commit_subjects(project_root)?;
+    let trailered = store::parse_spec_trailers(&log);
+    if trailered.is_empty() {
         return None;
     }
-    let set = store?.descendants_of(epic);
-    if set.is_empty() {
-        None
-    } else {
-        Some(set)
-    }
+    let epics = store.parent_epics_of(&trailered);
+    store::most_common(&epics)
+}
+
+/// The commit subjects unique to the current branch (`origin/main..HEAD`),
+/// newline-joined — the input to the branch-inference trailer scan. Falls back
+/// to the last 50 subjects when `origin/main` is unknown (a fresh clone with no
+/// upstream). One bounded `git` shell-out, fired ONCE at launch only when env +
+/// marker are both unset. trace:STORY-697 | ai:claude
+fn branch_commit_subjects(project_root: &std::path::Path) -> Option<String> {
+    let run = |range: &str| -> Option<String> {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["log", "--pretty=%s", range])
+            .output()
+            .ok()?;
+        if out.status.success() {
+            String::from_utf8(out.stdout).ok()
+        } else {
+            None
+        }
+    };
+    run("origin/main..HEAD")
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| run("-n50"))
 }
 
 /// Recompute and store the focus-line progress summary for the active focus set
@@ -157,12 +210,14 @@ fn refresh_focus_summary(
 /// unresolvable epic clears the focus instead. The `loaded` sentinel is reset
 /// so [`sync_scope_items`] re-fetches even when the active scope is unchanged.
 /// trace:STORY-695 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn apply_focus(
     st: &mut RedesignState,
     store: Option<&SpecStore>,
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
     loaded: &mut Scope,
     focus_set: &mut Option<std::collections::HashSet<String>>,
+    project_root: &std::path::Path,
     epic: &str,
 ) {
     let set = store.map(|s| s.descendants_of(epic)).unwrap_or_default();
@@ -183,7 +238,10 @@ fn apply_focus(
         refresh_focus_summary(st, s, set);
     }
     invalidate_scope_cache(cache, loaded);
-    st.status = Some(format!("focus set to {epic}"));
+    // Persist the pick so re-launching this worktree auto-focuses on it.
+    // trace:STORY-697 | ai:claude
+    store::write_focus_marker(project_root, epic);
+    st.status = Some(format!("focus set to {epic} (saved to .aida/tui-focus)"));
 }
 
 /// Clear the runtime focus (the clear-focus key): drop the lens + summary and
@@ -194,7 +252,11 @@ fn clear_focus(
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
     loaded: &mut Scope,
     focus_set: &mut Option<std::collections::HashSet<String>>,
+    project_root: &std::path::Path,
 ) {
+    // Always remove the marker so a cleared worktree relaunches unfocused, even
+    // if the in-memory lens was already empty. trace:STORY-697 | ai:claude
+    store::clear_focus_marker(project_root);
     if !st.focused() {
         st.status = Some("no focus set".to_string());
         return;
@@ -202,7 +264,7 @@ fn clear_focus(
     st.clear_focus();
     *focus_set = None;
     invalidate_scope_cache(cache, loaded);
-    st.status = Some("focus cleared — showing all items".to_string());
+    st.status = Some("focus cleared (.aida/tui-focus removed)".to_string());
 }
 
 /// Drop the per-scope item cache and reset the `loaded` sentinel to a value no
@@ -293,6 +355,7 @@ fn missing_spec(id: &str) -> LoadedSpec {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
@@ -300,6 +363,7 @@ fn event_loop(
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
     loaded: &mut Scope,
     focus_set: &mut Option<std::collections::HashSet<String>>,
+    project_root: &std::path::Path,
 ) -> Result<()> {
     // The spec currently shown in the item modal (loaded in-process on open,
     // cleared on close). trace:STORY-693 | ai:claude
@@ -323,6 +387,7 @@ fn event_loop(
             cache,
             loaded,
             focus_set,
+            project_root,
             key,
         )? {
             break;
@@ -341,6 +406,7 @@ fn handle_key(
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
     loaded: &mut Scope,
     focus_set: &mut Option<std::collections::HashSet<String>>,
+    project_root: &std::path::Path,
     key: KeyEvent,
 ) -> Result<bool> {
     // Ctrl-C always quits.
@@ -385,21 +451,24 @@ fn handle_key(
         return Ok(false);
     }
 
-    // The change-focus epic-id input modal captures all typing until the
-    // operator confirms (Enter → apply the typed epic as the focus) or cancels
-    // (Esc). A blank buffer confirmed = clear the focus. trace:STORY-695
-    if st.focus_input_open() {
+    // The EPIC focus picker captures all keys while open (STORY-697): ↑/↓
+    // navigate the (fuzzy-filtered) list; printable chars fuzzy-filter it;
+    // Backspace edits the filter; Enter focuses the highlighted epic (and saves
+    // the marker); Esc cancels. trace:STORY-697 | ai:claude
+    if st.epic_picker_open() {
         match key.code {
-            KeyCode::Enter => match st.take_focus_input() {
-                Some(epic) => apply_focus(st, store, cache, loaded, focus_set, &epic),
-                None => clear_focus(st, cache, loaded, focus_set),
+            KeyCode::Up => st.picker_move_up(),
+            KeyCode::Down => st.picker_move_down(),
+            KeyCode::Enter => match st.take_epic_selection() {
+                Some(epic) => apply_focus(st, store, cache, loaded, focus_set, project_root, &epic),
+                None => st.status = Some("no epic to focus on".to_string()),
             },
             KeyCode::Esc => {
-                st.cancel_focus_input();
-                st.status = Some("change-focus cancelled".to_string());
+                st.cancel_epic_picker();
+                st.status = Some("focus picker cancelled".to_string());
             }
-            KeyCode::Backspace => st.pop_focus_char(),
-            KeyCode::Char(c) if !c.is_control() => st.push_focus_char(c),
+            KeyCode::Backspace => st.pop_picker_char(),
+            KeyCode::Char(c) if !c.is_control() => st.push_picker_char(c),
             _ => {}
         }
         return Ok(false);
@@ -444,13 +513,16 @@ fn handle_key(
         // quit moved to `q` / Esc-at-top / Ctrl-C). trace:TASK-922
         KeyCode::Char('?') => st.open_help(),
 
-        // `F` opens the change-focus input (type an EPIC id to scope the whole
-        // TUI to it + its transitive children); `C` clears the focus back to
-        // all items. Capital letters so they don't collide with the
-        // type-to-filter fallthrough (lowercase) or the bottom-panel a/A.
-        // trace:STORY-695 | ai:claude
-        KeyCode::Char('F') => st.open_focus_input(),
-        KeyCode::Char('C') => clear_focus(st, cache, loaded, focus_set),
+        // `F` opens the EPIC focus PICKER (a fuzzy-filterable list of open
+        // epics to scope the whole TUI to + its transitive children); `C`
+        // clears the focus back to all items. Capital letters so they don't
+        // collide with the type-to-filter fallthrough (lowercase) or the
+        // bottom-panel a/A. trace:STORY-697 | ai:claude
+        KeyCode::Char('F') => match store {
+            Some(s) => st.open_epic_picker(s.open_epics()),
+            None => st.status = Some("store unavailable — cannot list epics".to_string()),
+        },
+        KeyCode::Char('C') => clear_focus(st, cache, loaded, focus_set, project_root),
 
         // `q` quits — but ONLY when no fuzzy filter is being typed; with an
         // active filter buffer a bare `q` is a literal filter character, so it
@@ -887,9 +959,9 @@ fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
     if let Some(di) = &st.defer_input {
         render_defer_input(f, f.area(), theme, di);
     }
-    // The change-focus epic-id input overlays everything else. trace:STORY-695
-    if let Some(fi) = &st.focus_input {
-        render_focus_input(f, f.area(), theme, fi);
+    // The EPIC focus picker overlays everything else. trace:STORY-697
+    if let Some(p) = &st.epic_picker {
+        render_epic_picker(f, f.area(), theme, p);
     }
     // The '?' help popup overlays everything — it is the topmost layer.
     // trace:TASK-922 | ai:claude
@@ -1535,35 +1607,65 @@ fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::Defe
     f.render_widget(Paragraph::new(lines).block(block), popup);
 }
 
-/// Render the single-line epic-id input modal for the change-focus key: a
-/// prompt, the typed buffer with a block cursor, and the confirm/cancel keys.
-/// Mirrors [`render_defer_input`]. trace:STORY-695 | ai:claude
-fn render_focus_input(f: &mut Frame, area: Rect, theme: &Theme, fi: &state::FocusInput) {
-    let popup = centered(area, 60, 25);
+/// Render the EPIC focus PICKER modal (STORY-697): a fuzzy-filter prompt with a
+/// block cursor, then the (filtered) open-epic list — one row per epic showing
+/// its id + title + status, with the highlighted row reverse-styled. Mirrors
+/// the selectable-list + fuzzy-filter patterns of the main panels.
+/// trace:STORY-697 | ai:claude
+fn render_epic_picker(f: &mut Frame, area: Rect, theme: &Theme, p: &state::EpicPicker) {
+    let popup = centered(area, 70, 70);
     f.render_widget(Clear, popup);
+    let idxs = p.filtered_indices();
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.accent))
-        .title(" focus on an EPIC — type its id ");
-    let lines = vec![
-        Line::from(Span::styled(
-            "Scope the whole TUI to this epic + its transitive children.",
+        .title(format!(
+            " focus on an EPIC — {}/{} (type to filter · ↑↓ · ↵ focus · Esc) ",
+            idxs.len(),
+            p.epics.len()
+        ));
+
+    let mut lines: Vec<Line> = Vec::new();
+    // The fuzzy-filter input line with a block cursor.
+    lines.push(Line::from(vec![
+        Span::styled("filter> ", Style::default().fg(theme.accent)),
+        Span::styled(
+            p.filter.clone(),
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("█", Style::default().fg(theme.accent)),
+    ]));
+    lines.push(Line::from(""));
+
+    if idxs.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No open epic matches the filter. Backspace to widen it.",
             Style::default().fg(theme.dim),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("> ", Style::default().fg(theme.accent)),
-            Span::styled(
-                fi.buffer.clone(),
-                Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("█", Style::default().fg(theme.accent)),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Enter = focus (blank = clear)   ·   Esc = cancel",
-            Style::default().fg(theme.dim),
-        )),
-    ];
+        )));
+    } else {
+        // Window the list so the highlighted row stays visible in a tall list.
+        let inner_h = popup.height.saturating_sub(4) as usize; // borders + filter + blank
+        let visible = inner_h.max(1);
+        let start = p.selected.saturating_sub(visible.saturating_sub(1));
+        for (row, &real) in idxs.iter().enumerate().skip(start).take(visible) {
+            let epic = &p.epics[real];
+            let active = row == p.selected;
+            let style = row_style(theme, active, false);
+            let marker = if active { "▸ " } else { "  " };
+            lines.push(Line::from(vec![
+                Span::styled(marker, style),
+                Span::styled(format!("{}  ", epic.id), style.add_modifier(Modifier::BOLD)),
+                Span::styled(epic.title.clone(), style),
+                Span::styled(
+                    format!("  ({})", epic.status),
+                    if active {
+                        style
+                    } else {
+                        Style::default().fg(theme.dim)
+                    },
+                ),
+            ]));
+        }
+    }
     f.render_widget(Paragraph::new(lines).block(block), popup);
 }
 

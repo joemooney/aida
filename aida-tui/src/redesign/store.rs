@@ -26,7 +26,7 @@ use aida_core::{
     RequirementSummary,
 };
 
-use super::state::{Scope, TargetItem};
+use super::state::{EpicRow, Scope, TargetItem};
 
 /// A loaded spec for the show modal: structured fields + the description body,
 /// read in-process. Rendered natively by the modal (replacing the captured
@@ -169,6 +169,103 @@ impl SpecStore {
             description: req.description.clone(),
         })
     }
+
+    /// The OPEN-epic list for the focus picker (STORY-697): every active
+    /// (non-archived, non-deferred) spec whose type is Epic and whose status is
+    /// non-terminal, projected to [`EpicRow`] (id + title + status). Read once
+    /// in-process from the cache when the picker opens. Sorted by id for a
+    /// stable list. trace:STORY-697 | ai:claude
+    pub fn open_epics(&self) -> Vec<EpicRow> {
+        let filter = ListFilter {
+            archive: ArchiveFilter::NonArchivedOnly,
+            defer: DeferFilter::NonDeferredOnly,
+            ..Default::default()
+        };
+        let summaries = match self.backend.list_summaries(&filter) {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+        let mut rows = epic_rows_from_summaries(summaries);
+        rows.sort_by(|a, b| a.id.cmp(&b.id));
+        rows
+    }
+
+    /// Map each spec display-id in `spec_ids` to its parent EPIC's display-id,
+    /// for the branch-inference focus fallback (STORY-697 stretch). Loads every
+    /// requirement once, builds a child-uuid → parent-uuid index from the same
+    /// `Parent`-type edges [`Self::descendants_of`] walks, and resolves each
+    /// input id whose parent is itself an Epic. Ids with no Epic parent are
+    /// dropped. trace:STORY-697 | ai:claude
+    pub fn parent_epics_of(&self, spec_ids: &[String]) -> Vec<String> {
+        let all = match self.backend.list_requirements(true) {
+            Ok(reqs) => reqs,
+            Err(_) => return Vec::new(),
+        };
+        // display_id → uuid, and uuid → (display_id, is_epic) for resolution.
+        let mut display_to_uuid: HashMap<String, uuid::Uuid> = HashMap::new();
+        let mut uuid_display: HashMap<uuid::Uuid, String> = HashMap::new();
+        let mut uuid_is_epic: HashMap<uuid::Uuid, bool> = HashMap::new();
+        // child-uuid → parent-uuid (a parent holds a `Parent` edge → child).
+        let mut child_parent: HashMap<uuid::Uuid, uuid::Uuid> = HashMap::new();
+        for req in &all {
+            let display = req
+                .spec_id
+                .clone()
+                .or_else(|| req.agreed_id.clone())
+                .unwrap_or_default();
+            if !display.is_empty() {
+                display_to_uuid.insert(display.clone(), req.id);
+                uuid_display.insert(req.id, display);
+            }
+            uuid_is_epic.insert(
+                req.id,
+                format!("{:?}", req.req_type).eq_ignore_ascii_case("epic"),
+            );
+            for rel in &req.relationships {
+                if rel.rel_type == RelationshipType::Parent {
+                    child_parent.insert(rel.target_id, req.id);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for id in spec_ids {
+            let Some(&uuid) = display_to_uuid.get(id) else {
+                continue;
+            };
+            let Some(&parent) = child_parent.get(&uuid) else {
+                continue;
+            };
+            if uuid_is_epic.get(&parent).copied().unwrap_or(false) {
+                if let Some(display) = uuid_display.get(&parent) {
+                    out.push(display.clone());
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Filter + project cache summaries into the open-epic picker rows: type is
+/// Epic (case-insensitive) and status is non-terminal. Pure over its input so
+/// the open-epic source is unit-testable without a store. trace:STORY-697 | ai:claude
+fn epic_rows_from_summaries(summaries: Vec<RequirementSummary>) -> Vec<EpicRow> {
+    summaries
+        .into_iter()
+        .filter(|s| is_open_epic(&s.req_type, &s.status))
+        .map(|s| EpicRow {
+            id: s.spec_id.or(s.agreed_id).unwrap_or_default(),
+            title: s.title,
+            status: s.status,
+        })
+        .filter(|r| !r.id.is_empty())
+        .collect()
+}
+
+/// Is a spec an OPEN epic for the focus picker: type is Epic (case-insensitive)
+/// and status is non-terminal (not Completed / Rejected)? Pure predicate so the
+/// open-epic filter is unit-testable. trace:STORY-697 | ai:claude
+fn is_open_epic(req_type: &str, status: &str) -> bool {
+    req_type.eq_ignore_ascii_case("epic") && !is_terminal_status(status)
 }
 
 /// Does `scope` include a spec whose cache status string is `status`?
@@ -440,6 +537,121 @@ fn main_worktree_store(current: &Path, rel_store: &str) -> Option<PathBuf> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Per-worktree focus persistence (STORY-697)
+// ---------------------------------------------------------------------------
+
+/// The per-worktree focus marker path: `<project_root>/.aida/tui-focus`. A pure
+/// path-builder (no IO) so the precedence + path logic is unit-testable. The
+/// file is auto-gitignored by the `.aida/*` deny-by-default convention, so it
+/// is never tracked. trace:STORY-697 | ai:claude
+pub fn focus_marker_path(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("tui-focus")
+}
+
+/// Resolve the launch focus epic from the (already-read) `AIDA_TUI_EPIC` env
+/// value and the marker-file contents, with precedence **env > marker > none**.
+/// A blank / whitespace-only value at either tier is ignored (falls through).
+/// PURE — both inputs are passed in, so the precedence logic is unit-testable
+/// without touching the environment or the filesystem. trace:STORY-697 | ai:claude
+pub fn resolve_focus_epic(env: Option<&str>, marker: Option<&str>) -> Option<String> {
+    if let Some(e) = env {
+        let t = e.trim();
+        if !t.is_empty() {
+            return Some(t.to_string());
+        }
+    }
+    if let Some(m) = marker {
+        let t = m.trim();
+        if !t.is_empty() {
+            return Some(t.to_string());
+        }
+    }
+    None
+}
+
+/// Read the per-worktree focus marker (the first non-empty line of
+/// `.aida/tui-focus`), or `None` when it is absent / empty. A thin FS wrapper
+/// over [`focus_marker_path`]; the precedence logic it feeds lives in the pure
+/// [`resolve_focus_epic`]. trace:STORY-697 | ai:claude
+pub fn read_focus_marker(project_root: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(focus_marker_path(project_root)).ok()?;
+    let line = content.lines().map(str::trim).find(|l| !l.is_empty())?;
+    Some(line.to_string())
+}
+
+/// Write the per-worktree focus marker (one line = `epic`), creating `.aida/`
+/// if needed. Best-effort: a write failure is swallowed (persistence is a
+/// convenience, not load-bearing). trace:STORY-697 | ai:claude
+pub fn write_focus_marker(project_root: &Path, epic: &str) {
+    let path = focus_marker_path(project_root);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, format!("{}\n", epic.trim()));
+}
+
+/// Clear the per-worktree focus marker (remove the file). Best-effort; a
+/// missing file is not an error. trace:STORY-697 | ai:claude
+pub fn clear_focus_marker(project_root: &Path) {
+    let _ = std::fs::remove_file(focus_marker_path(project_root));
+}
+
+/// Parse the `(SPEC-ID)` trailers out of a block of git-log subject lines (one
+/// subject per line). The convention is the LAST `(SPEC-ID)`-shaped group on a
+/// line (an UPPERCASE token + `-` + digits), so each line contributes at most
+/// one id; duplicates are kept so the caller can take the mode. PURE over its
+/// input. trace:STORY-697 | ai:claude
+pub fn parse_spec_trailers(log: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in log.lines() {
+        let mut best: Option<String> = None;
+        let mut i = 0;
+        while let Some(open) = line[i..].find('(') {
+            let start = i + open + 1;
+            let Some(close_rel) = line[start..].find(')') else {
+                break;
+            };
+            let inner = &line[start..start + close_rel];
+            if is_spec_id(inner) {
+                best = Some(inner.to_string());
+            }
+            i = start + close_rel + 1;
+        }
+        if let Some(id) = best {
+            out.push(id);
+        }
+    }
+    out
+}
+
+/// Does `s` have the `UPPERCASE-DIGITS` shape of a spec id (e.g. `STORY-697`)?
+/// trace:STORY-697 | ai:claude
+fn is_spec_id(s: &str) -> bool {
+    match s.split_once('-') {
+        Some((prefix, num)) => {
+            !prefix.is_empty()
+                && prefix.chars().all(|c| c.is_ascii_uppercase())
+                && !num.is_empty()
+                && num.chars().all(|c| c.is_ascii_digit())
+        }
+        None => false,
+    }
+}
+
+/// The most-common element of `ids` (the mode), or `None` when empty. Ties
+/// break on the lexically-smallest id for determinism. PURE. trace:STORY-697 | ai:claude
+pub fn most_common(ids: &[String]) -> Option<String> {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for id in ids {
+        *counts.entry(id.as_str()).or_insert(0) += 1;
+    }
+    counts
+        .into_iter()
+        .max_by(|a, b| a.1.cmp(&b.1).then_with(|| b.0.cmp(a.0)))
+        .map(|(id, _)| id.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -589,5 +801,103 @@ mod tests {
             "store_type = \"worktree\"\nstore_path = \".aida-store\"\nbranch = \"aida-store\"\n";
         assert_eq!(store_path_value(cfg), Some(".aida-store".to_string()));
         assert_eq!(store_path_value("# nothing here\n"), None);
+    }
+
+    // --- EPIC focus picker + persistence (STORY-697) ---------------------
+
+    #[test]
+    fn open_epic_predicate_is_epic_and_non_terminal() {
+        assert!(is_open_epic("Epic", "Approved"));
+        assert!(is_open_epic("epic", "InProgress"));
+        assert!(is_open_epic("EPIC", "Draft"));
+        // STORY-86: Done is non-terminal → still an open epic.
+        assert!(is_open_epic("Epic", "Done"));
+        // Terminal statuses drop out.
+        assert!(!is_open_epic("Epic", "Completed"));
+        assert!(!is_open_epic("Epic", "Rejected"));
+        // Non-epic types never qualify.
+        assert!(!is_open_epic("Story", "Approved"));
+        assert!(!is_open_epic("Task", "Draft"));
+    }
+
+    #[test]
+    fn resolve_focus_epic_precedence_env_over_marker_over_none() {
+        // env wins outright.
+        assert_eq!(
+            resolve_focus_epic(Some("EPIC-1"), Some("EPIC-2")),
+            Some("EPIC-1".to_string())
+        );
+        // blank env falls through to the marker.
+        assert_eq!(
+            resolve_focus_epic(Some("   "), Some("EPIC-2")),
+            Some("EPIC-2".to_string())
+        );
+        // env absent → marker.
+        assert_eq!(
+            resolve_focus_epic(None, Some(" EPIC-3 ")),
+            Some("EPIC-3".to_string())
+        );
+        // both blank / absent → none.
+        assert_eq!(resolve_focus_epic(None, None), None);
+        assert_eq!(resolve_focus_epic(Some(""), Some("  ")), None);
+    }
+
+    #[test]
+    fn focus_marker_path_is_under_dot_aida() {
+        let p = focus_marker_path(Path::new("/tmp/proj"));
+        assert!(p.ends_with(".aida/tui-focus"), "{p:?}");
+    }
+
+    #[test]
+    fn focus_marker_round_trips_write_read_clear() {
+        let dir = std::env::temp_dir().join(format!("aida-tui-focus-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        // No marker yet.
+        assert_eq!(read_focus_marker(&dir), None);
+        write_focus_marker(&dir, "EPIC-54");
+        assert_eq!(read_focus_marker(&dir), Some("EPIC-54".to_string()));
+        // Overwrite, and ignore surrounding whitespace on read.
+        write_focus_marker(&dir, "  EPIC-26  ");
+        assert_eq!(read_focus_marker(&dir), Some("EPIC-26".to_string()));
+        clear_focus_marker(&dir);
+        assert_eq!(read_focus_marker(&dir), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_spec_trailers_takes_last_group_per_line() {
+        let log = "\
+[AI:claude] feat(tui): epic picker (STORY-697)
+fix(api): handle null (FR-1) and route (BUG-23)
+chore: no trailer here
+docs: mentions (lowercase-7) but not an id";
+        let trailers = parse_spec_trailers(log);
+        // Line 1 → STORY-697; line 2 → the LAST group BUG-23; lines 3/4 → none.
+        assert_eq!(trailers, vec!["STORY-697", "BUG-23"]);
+    }
+
+    #[test]
+    fn is_spec_id_shape() {
+        assert!(is_spec_id("STORY-697"));
+        assert!(is_spec_id("FR-1"));
+        assert!(!is_spec_id("story-1")); // lowercase prefix
+        assert!(!is_spec_id("STORY")); // no number
+        assert!(!is_spec_id("STORY-")); // empty number
+        assert!(!is_spec_id("-7")); // empty prefix
+        assert!(!is_spec_id("lowercase-7"));
+    }
+
+    #[test]
+    fn most_common_returns_mode_with_deterministic_tiebreak() {
+        let ids = vec![
+            "EPIC-1".to_string(),
+            "EPIC-2".to_string(),
+            "EPIC-1".to_string(),
+        ];
+        assert_eq!(most_common(&ids), Some("EPIC-1".to_string()));
+        // Tie → lexically-smallest id wins (deterministic).
+        let tie = vec!["EPIC-9".to_string(), "EPIC-3".to_string()];
+        assert_eq!(most_common(&tie), Some("EPIC-3".to_string()));
+        assert_eq!(most_common(&[]), None);
     }
 }

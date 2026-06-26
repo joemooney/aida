@@ -398,46 +398,105 @@ impl DeferInput {
     }
 }
 
-/// A pending single-line text-input modal for the change-focus key (STORY-695):
-/// the operator types a new EPIC id to focus the whole TUI on. Mirrors
-/// [`DeferInput`] — a typed `buffer`; Enter applies it as the new focus epic,
-/// Esc cancels. Kept pure (push_char / backspace / take) so it is
-/// unit-testable without a terminal. trace:STORY-695 | ai:claude
+/// One selectable row in the EPIC focus picker (STORY-697): an open epic's
+/// display id + title (+ its status, carried for an optional progress hint).
+/// The picker fuzzy-filters over `id` + `title`. trace:STORY-697 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FocusInput {
-    /// The epic id typed so far.
-    pub buffer: String,
+pub struct EpicRow {
+    pub id: String,
+    pub title: String,
+    pub status: String,
 }
 
-impl FocusInput {
-    /// Open a fresh input pre-filled with `initial` (the current focus epic, so
-    /// "change" starts from the existing value; empty when first focusing).
-    pub fn new(initial: &str) -> Self {
-        FocusInput {
-            buffer: initial.to_string(),
+/// The fuzzy EPIC picker modal (STORY-697): replaces the old type-an-id focus
+/// input with a selectable, fuzzy-filterable LIST of open epics. The operator
+/// opens it with `F`; navigates with ↑/↓; types to fuzzy-filter (reusing
+/// [`crate::cmd_palette::fuzzy_score`]); Enter focuses the highlighted epic;
+/// Esc cancels. Kept PURE (filter / navigate / select are IO-free) so the
+/// selection logic is unit-tested without a terminal. trace:STORY-697 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EpicPicker {
+    /// The full open-epic list (fetched once when the picker opens).
+    pub epics: Vec<EpicRow>,
+    /// The fuzzy-filter buffer typed so far.
+    pub filter: String,
+    /// The highlighted row index — an index into the *filtered* list (the
+    /// result of [`Self::filtered_indices`]), not the full `epics` vec.
+    pub selected: usize,
+}
+
+impl EpicPicker {
+    /// Open a fresh picker over `epics`, highlighting the first row.
+    pub fn new(epics: Vec<EpicRow>) -> Self {
+        EpicPicker {
+            epics,
+            filter: String::new(),
+            selected: 0,
         }
     }
 
-    /// Append a typed char to the epic-id buffer.
+    /// The indices (into `epics`) that survive the current fuzzy filter, in
+    /// display order. An empty filter passes every row. Matches against each
+    /// epic's `"<id> <title>"` so typing a known id narrows to it too.
+    /// trace:STORY-697 | ai:claude
+    pub fn filtered_indices(&self) -> Vec<usize> {
+        if self.filter.trim().is_empty() {
+            return (0..self.epics.len()).collect();
+        }
+        (0..self.epics.len())
+            .filter(|&i| {
+                let e = &self.epics[i];
+                let hay = format!("{} {}", e.id, e.title);
+                crate::cmd_palette::fuzzy_score(&self.filter, &hay).is_some()
+            })
+            .collect()
+    }
+
+    /// Move the highlight down within the filtered list (saturating at the end).
+    pub fn move_down(&mut self) {
+        let len = self.filtered_indices().len();
+        if len == 0 {
+            return;
+        }
+        if self.selected + 1 < len {
+            self.selected += 1;
+        }
+    }
+
+    /// Move the highlight up within the filtered list (saturating at the top).
+    pub fn move_up(&mut self) {
+        if self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
+
+    /// Append a char to the fuzzy filter, clamping the highlight into the
+    /// (possibly newly-narrowed) filtered range.
     pub fn push_char(&mut self, c: char) {
-        self.buffer.push(c);
+        self.filter.push(c);
+        self.clamp();
     }
 
-    /// Backspace the buffer (no-op when empty).
+    /// Backspace the fuzzy filter (no-op when empty), re-clamping the highlight.
     pub fn backspace(&mut self) {
-        self.buffer.pop();
+        self.filter.pop();
+        self.clamp();
     }
 
-    /// The trimmed epic id to focus on confirm, or `None` when the buffer is
-    /// blank (confirming an empty buffer clears the focus rather than focusing
-    /// on nothing). trace:STORY-695 | ai:claude
-    pub fn epic_id(&self) -> Option<String> {
-        let t = self.buffer.trim();
-        if t.is_empty() {
-            None
-        } else {
-            Some(t.to_string())
+    fn clamp(&mut self) {
+        let len = self.filtered_indices().len();
+        if len == 0 {
+            self.selected = 0;
+        } else if self.selected >= len {
+            self.selected = len - 1;
         }
+    }
+
+    /// The display id of the highlighted epic, or `None` when the filtered list
+    /// is empty (nothing to focus). trace:STORY-697 | ai:claude
+    pub fn selected_epic(&self) -> Option<String> {
+        let idxs = self.filtered_indices();
+        idxs.get(self.selected).map(|&i| self.epics[i].id.clone())
     }
 }
 
@@ -490,10 +549,10 @@ pub struct RedesignState {
     /// computed by the parent from the filtered set when the focus is set.
     /// `None` when unfocused. trace:STORY-695 | ai:claude
     pub focus_summary: Option<String>,
-    /// Pending epic-id input for the change-focus key, if open. Mirrors
-    /// [`DeferInput`]: the operator types a new epic id; Enter applies it as the
-    /// focus, Esc cancels. trace:STORY-695 | ai:claude
-    pub focus_input: Option<FocusInput>,
+    /// The open EPIC focus picker, if any (STORY-697): a fuzzy-filterable list
+    /// of open epics. Opened by `F`; Enter focuses the highlighted epic, Esc
+    /// cancels. Replaces the old type-an-id `FocusInput`. trace:STORY-697 | ai:claude
+    pub epic_picker: Option<EpicPicker>,
     /// Is the context-sensitive '?' help popup open? Its content is derived
     /// purely from the current focus via [`Self::help_content`]; the popup
     /// only tracks that it is showing. trace:TASK-922 | ai:claude
@@ -529,7 +588,7 @@ impl RedesignState {
             defer_input: None,
             focus_epic: None,
             focus_summary: None,
-            focus_input: None,
+            epic_picker: None,
             help: false,
             role: role.into(),
             status: None,
@@ -950,45 +1009,59 @@ impl RedesignState {
         self.focus_summary = None;
     }
 
-    /// Open the change-focus input modal, pre-filled with the current focus
-    /// epic (so "change" edits the existing value; empty when first focusing).
-    /// trace:STORY-695 | ai:claude
-    pub fn open_focus_input(&mut self) {
-        let initial = self.focus_epic.clone().unwrap_or_default();
-        self.focus_input = Some(FocusInput::new(&initial));
+    // --- EPIC focus picker (STORY-697) -----------------------------------
+
+    /// Open the EPIC focus picker over `epics` (the open-epic list fetched by
+    /// the parent from the store). Replaces the old type-an-id focus input with
+    /// a fuzzy-filterable selectable list. trace:STORY-697 | ai:claude
+    pub fn open_epic_picker(&mut self, epics: Vec<EpicRow>) {
+        self.epic_picker = Some(EpicPicker::new(epics));
     }
 
-    /// Is the change-focus input modal open? trace:STORY-695 | ai:claude
-    pub fn focus_input_open(&self) -> bool {
-        self.focus_input.is_some()
+    /// Is the EPIC picker open? trace:STORY-697 | ai:claude
+    pub fn epic_picker_open(&self) -> bool {
+        self.epic_picker.is_some()
     }
 
-    /// Append a char to the open focus-epic buffer (no-op when closed).
-    pub fn push_focus_char(&mut self, c: char) {
-        if let Some(fi) = &mut self.focus_input {
-            fi.push_char(c);
+    /// Move the picker highlight down (no-op when closed). trace:STORY-697
+    pub fn picker_move_down(&mut self) {
+        if let Some(p) = &mut self.epic_picker {
+            p.move_down();
         }
     }
 
-    /// Backspace the open focus-epic buffer (no-op when closed).
-    pub fn pop_focus_char(&mut self) {
-        if let Some(fi) = &mut self.focus_input {
-            fi.backspace();
+    /// Move the picker highlight up (no-op when closed). trace:STORY-697
+    pub fn picker_move_up(&mut self) {
+        if let Some(p) = &mut self.epic_picker {
+            p.move_up();
         }
     }
 
-    /// Cancel the focus input (Esc) — discards the buffer, leaves the current
-    /// focus unchanged. trace:STORY-695 | ai:claude
-    pub fn cancel_focus_input(&mut self) {
-        self.focus_input = None;
+    /// Append a char to the picker's fuzzy filter (no-op when closed).
+    pub fn push_picker_char(&mut self, c: char) {
+        if let Some(p) = &mut self.epic_picker {
+            p.push_char(c);
+        }
     }
 
-    /// Confirm the focus input (Enter) — take the pending input out and return
-    /// the epic id to focus on (`Some`), or `None` when the buffer was blank
-    /// (which the parent treats as a clear-focus). Closes the modal either way.
-    /// trace:STORY-695 | ai:claude
-    pub fn take_focus_input(&mut self) -> Option<String> {
-        self.focus_input.take().and_then(|fi| fi.epic_id())
+    /// Backspace the picker's fuzzy filter (no-op when closed).
+    pub fn pop_picker_char(&mut self) {
+        if let Some(p) = &mut self.epic_picker {
+            p.backspace();
+        }
+    }
+
+    /// Cancel the picker (Esc) — closes it, leaves the current focus unchanged.
+    /// trace:STORY-697 | ai:claude
+    pub fn cancel_epic_picker(&mut self) {
+        self.epic_picker = None;
+    }
+
+    /// Confirm the picker (Enter) — take the highlighted epic id out and close
+    /// the modal. `None` when the filtered list was empty (nothing to focus) or
+    /// no picker is open. trace:STORY-697 | ai:claude
+    pub fn take_epic_selection(&mut self) -> Option<String> {
+        self.epic_picker.take().and_then(|p| p.selected_epic())
     }
 
     // --- Help popup (TASK-922) -------------------------------------------
@@ -1280,7 +1353,7 @@ pub const QUIT_KEY_LABEL: &str = "q (or Esc at the top) / Ctrl-C: quit";
 /// the ambient lens is discoverable wherever the operator asks for help.
 /// trace:STORY-695 | ai:claude
 pub const FOCUS_KEY_LABEL: &str =
-    "F: focus the whole TUI on an EPIC (+ its children) · C: clear the focus";
+    "F: pick an EPIC to focus the whole TUI on (+ its children) · C: clear the focus";
 
 /// The element the '?' help popup should describe, distilled from the focus
 /// state. A pure value so [`help_for`] is a total, unit-testable function.
@@ -2329,42 +2402,100 @@ mod tests {
         assert!(s.focus_summary.is_none());
     }
 
+    // --- EPIC focus picker (STORY-697) -----------------------------------
+
+    fn epic_rows() -> Vec<EpicRow> {
+        vec![
+            EpicRow {
+                id: "EPIC-54".into(),
+                title: "aida tui redesign".into(),
+                status: "Approved".into(),
+            },
+            EpicRow {
+                id: "EPIC-26".into(),
+                title: "the TUI is the product".into(),
+                status: "InProgress".into(),
+            },
+            EpicRow {
+                id: "EPIC-42".into(),
+                title: "advisor grooming".into(),
+                status: "Planned".into(),
+            },
+        ]
+    }
+
     #[test]
-    fn focus_input_prefills_with_current_epic_and_confirms() {
+    fn picker_opens_navigates_and_selects() {
         let mut s = state(3);
-        s.focus_epic = Some("EPIC-54".to_string());
-        s.open_focus_input();
-        assert!(s.focus_input_open());
-        // Pre-filled with the current focus epic.
-        assert_eq!(s.focus_input.as_ref().unwrap().buffer, "EPIC-54");
-        // Edit it to a new epic.
-        for _ in 0..2 {
-            s.pop_focus_char();
+        assert!(!s.epic_picker_open());
+        s.open_epic_picker(epic_rows());
+        assert!(s.epic_picker_open());
+        // Highlight starts on the first row.
+        assert_eq!(
+            s.epic_picker.as_ref().unwrap().selected_epic(),
+            Some("EPIC-54".into())
+        );
+        s.picker_move_down(); // → EPIC-26
+        s.picker_move_down(); // → EPIC-42
+        s.picker_move_down(); // saturates at the end
+        assert_eq!(
+            s.epic_picker.as_ref().unwrap().selected_epic(),
+            Some("EPIC-42".into())
+        );
+        s.picker_move_up(); // → EPIC-26
+        assert_eq!(s.take_epic_selection(), Some("EPIC-26".into()));
+        assert!(!s.epic_picker_open(), "taking closes the modal");
+    }
+
+    #[test]
+    fn picker_fuzzy_filter_narrows_and_reselects() {
+        let mut s = state(3);
+        s.open_epic_picker(epic_rows());
+        // Move off the first row, then type a filter that excludes the current
+        // highlight — the highlight must clamp back into the filtered range.
+        s.picker_move_down();
+        s.picker_move_down(); // → EPIC-42
+                              // "redesign" only matches EPIC-54's title.
+        for c in "redesign".chars() {
+            s.push_picker_char(c);
         }
-        s.push_focus_char('9');
-        s.push_focus_char('9');
-        assert_eq!(s.take_focus_input(), Some("EPIC-99".to_string()));
-        assert!(!s.focus_input_open(), "taking closes the modal");
+        let p = s.epic_picker.as_ref().unwrap();
+        assert_eq!(p.filtered_indices().len(), 1);
+        assert_eq!(p.selected_epic(), Some("EPIC-54".into()));
+        // Typing a known id narrows to it too (fuzzy over "<id> <title>").
+        s.pop_picker_char(); // remove enough to widen, then refilter by id
+        for _ in 0.."redesig".len() {
+            s.pop_picker_char();
+        }
+        for c in "26".chars() {
+            s.push_picker_char(c);
+        }
+        let p = s.epic_picker.as_ref().unwrap();
+        assert_eq!(p.selected_epic(), Some("EPIC-26".into()));
     }
 
     #[test]
-    fn focus_input_blank_buffer_confirms_to_none() {
-        let mut s = state(3);
-        s.open_focus_input();
-        assert_eq!(s.focus_input.as_ref().unwrap().buffer, "");
-        // Confirming an empty buffer yields None (parent treats as clear).
-        assert_eq!(s.take_focus_input(), None);
-    }
-
-    #[test]
-    fn focus_input_cancel_leaves_focus_unchanged() {
+    fn picker_cancel_leaves_focus_unchanged() {
         let mut s = state(3);
         s.focus_epic = Some("EPIC-54".to_string());
-        s.open_focus_input();
-        s.push_focus_char('x');
-        s.cancel_focus_input();
-        assert!(!s.focus_input_open());
-        // Focus epic is untouched by a cancelled edit.
+        s.open_epic_picker(epic_rows());
+        s.push_picker_char('x');
+        s.cancel_epic_picker();
+        assert!(!s.epic_picker_open());
+        // Focus epic is untouched by a cancelled pick.
         assert_eq!(s.focus_epic, Some("EPIC-54".to_string()));
+    }
+
+    #[test]
+    fn picker_selection_is_none_when_filter_excludes_all() {
+        let mut s = state(3);
+        s.open_epic_picker(epic_rows());
+        for c in "zzzzz".chars() {
+            s.push_picker_char(c);
+        }
+        let p = s.epic_picker.as_ref().unwrap();
+        assert!(p.filtered_indices().is_empty());
+        assert_eq!(p.selected_epic(), None);
+        assert_eq!(s.take_epic_selection(), None);
     }
 }
