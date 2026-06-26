@@ -21397,5 +21397,27 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2036
+- id: 019f0510-8f16-7500-b290-7d68aaba1055
+  target_id: 019f0510-8b60-7a50-b56a-46a76340c2d8
+  author: aida
+  node_id: '1'
+  lamport: 2037
+  timestamp: 2026-06-26T17:53:19.126221903Z
+  kind: !Create
+    title: Render the spec body as markdown in the redesign show modal (finish STORY-689's body half)
+    description: |-
+      Finish the redesign show-modal preview: render the spec DESCRIPTION BODY as markdown (headings, bold/italic, inline code, code blocks, lists) instead of plain line-by-line text. STORY-689 delivered the color-coded structured field row (type/status/priority/tags) via the in-process native render (STORY-693); this completes the remaining "markdown body" half.
+
+      RENDERER CHOICE (grounded): workspace ratatui is 0.30.0 (bleeding-edge); tui-markdown may not support it. pulldown-cmark is ALREADY in the dependency tree. Prefer pulldown-cmark: parse the body and build styled ratatui Lines/Spans ourselves (no new dep, no ratatui-version risk, full styling control). Only use tui-markdown if it cleanly supports ratatui 0.30.
+
+      ACCEPTANCE:
+      - The redesign show modal renders the description body as markdown: headings emphasized, bold/italic, inline `code` and fenced code blocks styled, list bullets, paragraphs.
+      - The color-coded field row + tags (already native) are unchanged.
+      - Long bodies SCROLL within the modal (verify the modal has scroll; add if missing).
+      - Pure markdown->Lines mapping is unit-tested (e.g. a heading line gets bold, a list item gets a bullet); render smoke test for a representative body.
+      - build/test/fmt/clippy green; the redesign module only; existing TUI untouched.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2037
 node_id: '1'
