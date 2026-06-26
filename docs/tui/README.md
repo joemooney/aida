@@ -45,6 +45,7 @@ keystrokes pass straight through to the focused Claude session.
 |------|--------|
 | `prefix` `n` | open the **new-session picker** |
 | `prefix` `o` | open the **status overlay** |
+| `prefix` `p` | **pause** the focused chat and open the deterministic action palette |
 | `prefix` `?` | open the **keybinding cheatsheet** |
 | `prefix` `[` / `]` | focus the previous / next tab |
 | `prefix` `1`…`9` | focus tab N |
@@ -107,6 +108,33 @@ log**, **Actions**. `←/→` (or `h/l`) select an action, `Enter` runs it,
 
 The first three run as captured subprocesses — their output lands in the
 Activity log panel. State-changing actions arm a `y`/cancel confirm.
+
+## Action palette (`prefix p`) — pause, act, inject, resume
+
+`prefix p` **suspends** the focused chat (`SIGSTOP`s its whole process
+group) and opens a deterministic AIDA action palette. The palette is
+zero-LLM: typing fuzzy-filters a curated verb set (`queue`, `punts`,
+`findings`, `status`, `list`, `history`), and `spec <ID>` / `run <cmd>`
+run a parametric `aida show <ID> --json` / arbitrary read-only command.
+`Enter` runs the highlighted action as a captured subprocess; the result
+renders inline in the Result pane. The chat stays frozen the whole time —
+no keystroke reaches it.
+
+| Keys | Action |
+|------|--------|
+| type | fuzzy-filter the action list |
+| `↑` / `↓` / `Tab` | move the selection |
+| `Enter` | run the highlighted (or `spec`/`run`) action |
+| `Ctrl-Y` | **resume + inject** the last result into the chat |
+| `Esc` | resume the conversation (no injection) |
+
+`Ctrl-Y` is the EPIC-51 payoff: it `SIGCONT`s the chat **and** types the
+last action's result into the chat's PTY stdin as a quoted, fenced
+context block (`[AIDA palette result — \`aida queue list --json\`]` …),
+so the conversation continues with that result in view. It is a result
+block, not a directive, and long output is head-clipped. The hint only
+appears once an action has produced a result; with no result, `Ctrl-Y`
+degrades to a plain resume.
 
 ## Autonomous drains & `/goal` composition
 

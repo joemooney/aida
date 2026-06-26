@@ -132,6 +132,14 @@ pub enum Routing {
     //
     // trace:STORY-678
     Resume,
+    /// `Ctrl-Y` while paused with a result in hand — resume the focused
+    /// child (`SIGCONT`) AND type the last palette result into its PTY
+    /// stdin as a quoted context block, so the conversation continues with
+    /// that result in view (the immediate-response slice's payoff). Routed
+    /// as a plain `Resume` when no result has been produced yet.
+    //
+    // trace:STORY-680
+    ResumeWithInject,
     /// A palette keystroke that only changed palette state (a typed/erased
     /// character, a moved selection) — repaint the palette.
     //
@@ -358,15 +366,27 @@ impl App {
         }
     }
 
-    /// Route a keystroke while the suspended-chat action palette is open
-    /// (STORY-679). `Esc` resumes the frozen conversation; `Enter` runs the
-    /// highlighted (or typed `spec`/`run`) deterministic action; printable
-    /// characters / Backspace edit the filter query; arrows / Tab move the
-    /// selection. Every path is deterministic — no keystroke ever reaches
-    /// the `SIGSTOP`ped child, and nothing here spawns an LLM.
+    /// Route a keystroke while the suspended-chat action palette is open.
+    /// `Esc` resumes the frozen conversation; `Ctrl-Y` resumes AND injects
+    /// the last result into the chat; `Enter` runs the highlighted (or typed
+    /// `spec`/`run`) deterministic action; printable characters / Backspace
+    /// edit the filter query; arrows / Tab move the selection. Every path is
+    /// deterministic — no keystroke ever reaches the `SIGSTOP`ped child
+    /// unmediated, and nothing here spawns an LLM.
     //
-    // trace:STORY-679 | ai:claude
+    // trace:STORY-679 trace:STORY-680 | ai:claude
     fn route_palette_key(&mut self, key: KeyEvent) -> Routing {
+        // Ctrl-Y — "yank" the last palette result into the resumed chat as a
+        // context block (EPIC-51 slice 3). Intercepted before the generic
+        // `Char` arm so it never lands as filter text. With no result yet,
+        // it degrades to a plain resume. trace:STORY-680
+        if matches!(key.code, KeyCode::Char('y')) && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.mode = Mode::Focused;
+            if self.activity.last().is_some() {
+                return Routing::ResumeWithInject;
+            }
+            return Routing::Resume;
+        }
         match key.code {
             KeyCode::Esc => {
                 self.mode = Mode::Focused;
@@ -737,6 +757,7 @@ impl App {
                 }
                 self.full_repaint(out)?;
             }
+            Routing::ResumeWithInject => self.resume_with_inject(out)?,
             Routing::PaletteRedraw => self.draw_paused()?,
             Routing::RunPaletteAction => self.run_palette_action()?,
         }
@@ -912,6 +933,59 @@ impl App {
         self.draw_paused()
     }
 
+    /// Resume the suspended chat AND inject the last palette result into it
+    /// as a quoted context block — the immediate-response slice's payoff.
+    ///
+    /// Sequence (order matters):
+    ///
+    /// 1. `SIGCONT` the focused child so its line discipline is live again
+    ///    before we feed it bytes (writing to a `SIGSTOP`ped child's PTY
+    ///    would queue input the frozen reader can't drain — it must be
+    ///    running to consume the typed block + submit byte).
+    /// 2. Format the last activity entry as a context block
+    ///    ([`crate::palette::format_injection`]) and type it into the
+    ///    focused PTY's stdin via the same write path the drain injection
+    ///    uses ([`App::write_to_focused_pty`] — bytes + `\r`).
+    /// 3. Full-repaint so the conversation is back on screen with the result
+    ///    typed in, ready for the user to send / continue.
+    ///
+    /// With no focused child the injection is skipped with a note; with no
+    /// result this path is never reached (`route_palette_key` degrades to a
+    /// plain `Resume`). The mode is already `Focused` by the time we get
+    /// here — set in `route_palette_key` — so this never types into the
+    /// palette.
+    //
+    // trace:STORY-680 | ai:claude
+    fn resume_with_inject(&mut self, out: &mut Stdout) -> Result<()> {
+        // 1. SIGCONT first — the child must be running to consume the input.
+        if let Some(tab) = self.tabs.focused() {
+            tab.pty.resume();
+        }
+        // 2. Format the latest result and type it into the focused PTY. Own
+        //    the block so the `&self.activity` borrow ends before the
+        //    `&mut self` write call.
+        let block = self.activity.last().map(palette::format_injection);
+        match block {
+            Some(text) => {
+                if self.write_to_focused_pty(&text) {
+                    self.push_activity(ActivityEntry::note(
+                        "palette",
+                        "injected the result into the resumed conversation",
+                    ));
+                } else {
+                    self.push_activity(ActivityEntry::note(
+                        "palette",
+                        "no focused session to inject into — resumed only",
+                    ));
+                }
+            }
+            // Defensive: routing guarantees a result, but never panic if the
+            // log was somehow cleared between routing and handling.
+            None => {}
+        }
+        self.full_repaint(out)
+    }
+
     /// Build the `ratatui` terminal on first use (overlay, picker, help).
     fn ensure_ratatui_term(&mut self) -> Result<()> {
         if self.ratatui_term.is_none() {
@@ -967,6 +1041,26 @@ impl App {
         Ok(())
     }
 
+    /// Type `text` into the focused child's PTY stdin, followed by a single
+    /// `\r` submit byte. Returns `true` if a child was focused (bytes
+    /// written), `false` if there was no session to type into. The shared
+    /// low-level write path behind both the drain injection and the
+    /// palette-result injection — neither hand-rolls the PTY write, so the
+    /// "bytes + submit byte" contract lives in one place.
+    //
+    // trace:STORY-136 trace:STORY-680 | ai:claude
+    fn write_to_focused_pty(&mut self, text: &str) -> bool {
+        if self.tabs.focused().is_none() {
+            return false;
+        }
+        let mut bytes = text.as_bytes().to_vec();
+        bytes.push(b'\r');
+        if let Some(tab) = self.tabs.focused_mut() {
+            let _ = tab.pty.write_input(&bytes);
+        }
+        true
+    }
+
     /// Type a slash command into the focused Claude session, then close
     /// the overlay so Claude — now focused — receives and runs it. The
     /// autonomous-drain buttons use this (STORY-136): the drain runs
@@ -978,12 +1072,7 @@ impl App {
     fn inject_to_focused(&mut self, text: &str, out: &mut Stdout) -> Result<()> {
         self.overlay.confirm = None;
         self.mode = Mode::Focused;
-        if self.tabs.focused().is_some() {
-            let mut bytes = text.as_bytes().to_vec();
-            bytes.push(b'\r');
-            if let Some(tab) = self.tabs.focused_mut() {
-                let _ = tab.pty.write_input(&bytes);
-            }
+        if self.write_to_focused_pty(text) {
             self.push_activity(ActivityEntry::note(
                 "drain",
                 &format!("started — typed `{text}` into the focused session"),
@@ -1574,6 +1663,44 @@ mod tests {
         let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         assert!(matches!(app.route_key(esc), Routing::Resume));
         assert_eq!(app.mode, Mode::Focused);
+    }
+
+    #[test]
+    fn palette_ctrl_y_without_a_result_just_resumes() {
+        // STORY-680: Ctrl-Y resumes + injects, but with no result produced
+        // yet there is nothing to inject — it degrades to a plain resume,
+        // and the `y` is NOT typed into the filter.
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('p'));
+        assert_eq!(app.mode, Mode::Paused);
+        assert!(app.activity.is_empty());
+
+        let ctrl_y = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL);
+        assert!(matches!(app.route_key(ctrl_y), Routing::Resume));
+        assert_eq!(app.mode, Mode::Focused);
+        // The Ctrl-Y never reached the palette query.
+        assert!(app.paused_palette.query.is_empty());
+    }
+
+    #[test]
+    fn palette_ctrl_y_with_a_result_resumes_and_injects() {
+        // STORY-680: once an action has produced a result, Ctrl-Y routes a
+        // ResumeWithInject (resume the chat AND type the result into it).
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('p'));
+        assert_eq!(app.mode, Mode::Paused);
+
+        // Simulate a run having landed a result in the activity log.
+        app.push_activity(ActivityEntry::note("queue", "3 items queued"));
+
+        let ctrl_y = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL);
+        assert!(matches!(app.route_key(ctrl_y), Routing::ResumeWithInject));
+        assert_eq!(app.mode, Mode::Focused);
+        assert!(app.paused_palette.query.is_empty());
     }
 
     fn enter() -> KeyEvent {

@@ -342,6 +342,105 @@ impl PaletteState {
 }
 
 // ---------------------------------------------------------------------------
+// Injection — formatting a palette result as a chat context block (STORY-680).
+// ---------------------------------------------------------------------------
+
+/// Maximum number of captured output lines folded into an injected context
+/// block. A palette action can produce a long `aida list --json` dump;
+/// typing thousands of lines into the chat's PTY stdin would bury the
+/// conversation and stress the line discipline. We keep the head and note
+/// the elision, so the model sees the shape of the result without the whole
+/// firehose. The full output stays visible in the palette's result pane.
+const INJECT_MAX_LINES: usize = 40;
+
+/// Format a finished palette result ([`ActivityEntry`]) as a single
+/// **context block** to type into the resumed chat's PTY stdin (the
+/// immediate-response slice). The block is the deterministic command's
+/// captured output,
+/// fenced and labelled as quoted AIDA output — NOT an instruction. The
+/// model reads it as "here is the result of the AIDA command I just ran,"
+/// so the conversation continues with that context in view.
+///
+/// Shape (a single multi-line string; the caller appends the submit byte):
+///
+/// ```text
+/// [AIDA palette result — `aida queue list --json`]
+/// ```
+/// {captured output, head-clipped to INJECT_MAX_LINES}
+/// ```
+/// ```
+///
+/// Design notes:
+///
+/// - **Quoted, not commanded.** The block is presented as a result the user
+///   pulled in, not a directive — it carries no "do X" verb. This matches
+///   the spec's "becomes a user message the conversation can see" framing.
+/// - **Head-clipped.** Long dumps are truncated to [`INJECT_MAX_LINES`] with
+///   an explicit elision note, so a `list --json` doesn't flood the PTY.
+/// - **Carriage returns stripped.** Embedded `\r`/`\n` inside a captured
+///   line can't reach the PTY mid-block (a stray CR would submit a partial
+///   message). `ActivityEntry::lines` is already line-split, but we defend
+///   against any embedded control bytes by replacing them with spaces.
+/// - **Bracketed-paste-free.** We do not wrap in bracketed-paste markers;
+///   the caller writes the bytes followed by a single submit byte, exactly
+///   as the drain injection does.
+//
+// trace:STORY-680 | ai:claude
+pub fn format_injection(entry: &ActivityEntry) -> String {
+    let header = if entry.command.is_empty() {
+        format!("[AIDA palette result — {}]", entry.label)
+    } else {
+        format!("[AIDA palette result — `{}`]", entry.command)
+    };
+
+    let total = entry.lines.len();
+    let mut body: Vec<String> = entry
+        .lines
+        .iter()
+        .take(INJECT_MAX_LINES)
+        .map(|l| sanitize_inject_line(l))
+        .collect();
+    if total > INJECT_MAX_LINES {
+        body.push(format!(
+            "… ({} more line(s) — see the palette result pane)",
+            total - INJECT_MAX_LINES
+        ));
+    }
+    if body.is_empty() {
+        body.push("(no output)".to_string());
+    }
+
+    let mut out = String::new();
+    out.push_str(&header);
+    out.push('\n');
+    out.push_str("```\n");
+    for line in &body {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.push_str("```");
+    out
+}
+
+/// Replace control bytes (CR/LF/other C0) in one captured output line with
+/// spaces so the injected block can't submit a partial message or smuggle
+/// an escape sequence into the chat's PTY. Tabs are kept (harmless, and
+/// they preserve aligned `aida` output).
+fn sanitize_inject_line(line: &str) -> String {
+    line.chars()
+        .map(|c| {
+            if c == '\t' {
+                c
+            } else if c.is_control() {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // Rendering — the `ratatui` view of the suspended-chat palette.
 // ---------------------------------------------------------------------------
 
@@ -367,7 +466,7 @@ pub fn render(frame: &mut Frame, state: &PaletteState, last: Option<&ActivityEnt
     render_query(frame, rows[0], state);
     render_candidates(frame, rows[1], state);
     render_result(frame, rows[2], last);
-    render_hints(frame, rows[3]);
+    render_hints(frame, rows[3], last.is_some());
 }
 
 /// The `[paused]` banner and the live `:`-prefixed query the user is typing.
@@ -487,19 +586,29 @@ fn render_result(frame: &mut Frame, area: Rect, last: Option<&ActivityEntry>) {
     );
 }
 
-/// The key-hint footer.
-fn render_hints(frame: &mut Frame, area: Rect) {
-    let hint = Line::from(vec![
+/// The key-hint footer. `has_result` decides whether the `ctrl-y`
+/// "resume + inject the last result" hint is shown — only meaningful once an
+/// action has produced a result to inject (the immediate-response slice).
+//
+// trace:STORY-680 | ai:claude
+fn render_hints(frame: &mut Frame, area: Rect, has_result: bool) {
+    let mut spans = vec![
         Span::styled(" type ", Style::default().fg(Color::Cyan)),
         Span::styled("filter   ", dim()),
         Span::styled("up/down ", Style::default().fg(Color::Cyan)),
         Span::styled("select   ", dim()),
         Span::styled("enter ", Style::default().fg(Color::Cyan)),
         Span::styled("run   ", dim()),
-        Span::styled("esc ", Style::default().fg(Color::Cyan)),
-        Span::styled("resume the conversation", dim()),
-    ]);
-    frame.render_widget(Paragraph::new(hint), area);
+    ];
+    if has_result {
+        // Resume the conversation AND type the last result into it as a
+        // context block (the EPIC-51 slice-3 payoff).
+        spans.push(Span::styled("ctrl-y ", Style::default().fg(Color::Cyan)));
+        spans.push(Span::styled("resume + inject result   ", dim()));
+    }
+    spans.push(Span::styled("esc ", Style::default().fg(Color::Cyan)));
+    spans.push(Span::styled("resume the conversation", dim()));
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 /// Dim style for secondary text (mirrors `overlay::dim`).
@@ -783,5 +892,88 @@ mod tests {
             }
             other => panic!("expected Run, got {other:?}"),
         }
+    }
+
+    // --- inject-on-resume formatting (STORY-680) -------------------------
+
+    fn entry(command: &str, lines: &[&str]) -> ActivityEntry {
+        ActivityEntry {
+            when: "12:00:00".to_string(),
+            label: "queue".to_string(),
+            command: command.to_string(),
+            ok: true,
+            lines: lines.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn format_injection_quotes_command_and_fences_output() {
+        let e = entry("aida queue list --json", &["[]", "(empty)"]);
+        let block = format_injection(&e);
+        // Header names the deterministic command, in backticks.
+        assert!(
+            block.starts_with("[AIDA palette result — `aida queue list --json`]"),
+            "got: {block:?}"
+        );
+        // Output is fenced so the chat reads it as a quoted result block.
+        assert!(block.contains("```\n[]\n(empty)\n```"), "got: {block:?}");
+    }
+
+    #[test]
+    fn format_injection_is_a_result_not_a_command() {
+        // The defining property of slice 3: the block is QUOTED CONTEXT, not
+        // an instruction. It must not start with a slash command or an
+        // imperative verb that the chat would treat as a directive.
+        let e = entry("aida status --json", &["3 open"]);
+        let block = format_injection(&e);
+        assert!(!block.trim_start().starts_with('/'), "got: {block:?}");
+        assert!(block.contains("result"), "must frame itself as a result");
+    }
+
+    #[test]
+    fn format_injection_head_clips_long_output() {
+        let many: Vec<String> = (0..100).map(|i| format!("row {i}")).collect();
+        let refs: Vec<&str> = many.iter().map(String::as_str).collect();
+        let block = format_injection(&entry("aida list --json", &refs));
+        // Kept the head…
+        assert!(block.contains("row 0"));
+        assert!(block.contains(&format!("row {}", INJECT_MAX_LINES - 1)));
+        // …dropped the tail and said so.
+        assert!(!block.contains(&format!("row {}", INJECT_MAX_LINES)));
+        assert!(
+            block.contains(&format!("{} more line(s)", 100 - INJECT_MAX_LINES)),
+            "got: {block:?}"
+        );
+    }
+
+    #[test]
+    fn format_injection_strips_control_bytes() {
+        // A captured line carrying an embedded CR / escape must not reach the
+        // PTY intact — a stray CR would submit a partial message.
+        let e = entry("aida history", &["before\rafter", "esc\x1b[31mred"]);
+        let block = format_injection(&e);
+        assert!(!block.contains('\r'), "carriage return survived: {block:?}");
+        assert!(!block.contains('\x1b'), "escape survived: {block:?}");
+        assert!(block.contains("before after"));
+        assert!(block.contains("esc [31mred"));
+    }
+
+    #[test]
+    fn format_injection_handles_empty_output() {
+        let e = entry("aida status --json", &[]);
+        let block = format_injection(&e);
+        assert!(block.contains("(no output)"), "got: {block:?}");
+    }
+
+    #[test]
+    fn format_injection_falls_back_to_label_without_command() {
+        // A refused/noted entry has an empty command — use the label.
+        let mut e = entry("", &["some note"]);
+        e.label = "palette".to_string();
+        let block = format_injection(&e);
+        assert!(
+            block.starts_with("[AIDA palette result — palette]"),
+            "got: {block:?}"
+        );
     }
 }
