@@ -161,10 +161,10 @@ pub(crate) fn load_table(path: &Path) -> Result<Vec<(String, String)>> {
     Ok(out)
 }
 
+// trace:TASK-877 | ai:claude
 /// The set of real top-level subcommand names + aliases, derived from the live
 /// clap command tree (`Cli::command()`) — the single source of truth for "what
 /// is a real subcommand". A user alias may not shadow any of these.
-/// trace:TASK-877 | ai:claude
 pub(crate) fn real_subcommand_names() -> std::collections::HashSet<String> {
     use clap::CommandFactory;
     let cmd = crate::cli::Cli::command();
@@ -178,9 +178,10 @@ pub(crate) fn real_subcommand_names() -> std::collections::HashSet<String> {
     names
 }
 
+// trace:TASK-877 | ai:claude
 /// A user-alias name must be a single non-flag token that does not collide with
 /// a real subcommand. Returns Ok for a valid name or an error explaining the
-/// refusal. trace:TASK-877 | ai:claude
+/// refusal.
 fn validate_name(name: &str) -> Result<()> {
     if name.is_empty() {
         anyhow::bail!("alias name cannot be empty");
@@ -199,10 +200,11 @@ fn validate_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-877 | ai:claude
 /// `aida alias add <name> <command...>` — write `[alias] name = "<expansion>"`
 /// to the scope's `aliases.toml`, preserving the rest of the file. The
 /// expansion is the command line *after* `aida`. Refuses to shadow a real
-/// subcommand. trace:TASK-877 | ai:claude
+/// subcommand.
 pub(crate) fn add(scope: Scope, name: &str, command_tokens: &[String]) -> Result<()> {
     validate_name(name)?;
     if command_tokens.is_empty() {
@@ -226,9 +228,9 @@ pub(crate) fn add(scope: Scope, name: &str, command_tokens: &[String]) -> Result
     Ok(())
 }
 
+// trace:TASK-877 | ai:claude
 /// `aida alias remove <name>` — drop `[alias] name` from the scope's file.
 /// Errors if absent. Drops an emptied `[alias]` table.
-/// trace:TASK-877 | ai:claude
 pub(crate) fn remove(scope: Scope, name: &str) -> Result<()> {
     let path = aliases_path_for(scope)?;
     let mut doc = load_doc(&path)?;
@@ -253,8 +255,8 @@ pub(crate) fn remove(scope: Scope, name: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-877 | ai:claude
 /// A resolved user alias for the `aida alias list` registry.
-/// trace:TASK-877 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct UserAliasRow {
     pub name: String,
@@ -262,8 +264,9 @@ pub(crate) struct UserAliasRow {
     pub scope: Scope,
 }
 
+// trace:TASK-877
 /// Read both scopes and return the effective set of user aliases, with project
-/// overriding personal on a name clash. Sorted by name. trace:TASK-877
+/// overriding personal on a name clash. Sorted by name.
 pub(crate) fn effective_user_aliases() -> Vec<UserAliasRow> {
     use std::collections::BTreeMap;
     let mut map: BTreeMap<String, UserAliasRow> = BTreeMap::new();
@@ -299,12 +302,12 @@ pub(crate) fn effective_user_aliases() -> Vec<UserAliasRow> {
     map.into_values().collect()
 }
 
+// trace:TASK-877 | ai:claude
 /// True for an interactive human caller; false for an agent / headless / MCP /
 /// non-TTY caller. This is the HARD-INVARIANT gate (TASK-877): only an
 /// interactive human shell ever has its argv expanded against the user-alias
 /// tables. An agent (`AIDA_AGENT_TYPE` set), a headless drain (`AIDA_HEADLESS`),
 /// the MCP server path, or any non-TTY caller resolves the canonical surface.
-/// trace:TASK-877 | ai:claude
 pub(crate) fn is_interactive_human_caller() -> bool {
     if std::env::var_os("AIDA_AGENT_TYPE").is_some_and(|v| !v.is_empty()) {
         return false;
@@ -319,17 +322,19 @@ pub(crate) fn is_interactive_human_caller() -> bool {
     std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
 }
 
+// trace:TASK-877 | ai:claude
 /// Maximum expansion hops before we declare a cycle. A user alias expanding to a
 /// command whose first token is another user alias is followed, but only this
-/// many times. trace:TASK-877 | ai:claude
+/// many times.
 const MAX_EXPANSION_HOPS: usize = 16;
 
+// trace:TASK-877 | ai:claude
 /// Expand `args` (the full argv incl. `argv[0]`) against the user-alias tables,
 /// IF the caller is an interactive human and `args[1]` is a user alias whose
 /// name does not collide with a real subcommand. Trailing args are appended.
 /// Follows alias→alias chains up to [`MAX_EXPANSION_HOPS`], then bails to avoid
 /// infinite expansion (the recursion guard). Unmatched / non-human input is
-/// returned unchanged. trace:TASK-877 | ai:claude
+/// returned unchanged.
 pub(crate) fn expand(args: &[String]) -> Vec<String> {
     // HARD INVARIANT: only interactive human shells expand user aliases.
     if !is_interactive_human_caller() {
@@ -338,10 +343,11 @@ pub(crate) fn expand(args: &[String]) -> Vec<String> {
     expand_inner(args, true)
 }
 
+// trace:TASK-877 | ai:claude
 /// The scope-aware expansion core. `emit_cycle_warning` controls whether a
 /// detected cycle prints to stderr (suppressed under unit tests). Returns the
 /// rewritten argv, or the input unchanged if there is nothing to expand or a
-/// cycle is detected. trace:TASK-877 | ai:claude
+/// cycle is detected.
 fn expand_inner(args: &[String], emit_cycle_warning: bool) -> Vec<String> {
     if args.len() < 2 {
         return args.to_vec();

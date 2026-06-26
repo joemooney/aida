@@ -99,7 +99,7 @@ pub struct AdvisorConfig {
     pub allow_mtime_fallback: bool,
     pub keep_fork_jsonls: bool,
     pub max_source_size_mb: u64,
-    /// trace:STORY-347 | ai:claude
+    // trace:STORY-347 | ai:claude
     pub calibration_mode: CalibrationMode,
 }
 
@@ -524,11 +524,12 @@ pub fn execute_fork(plan: &ForkPlan) -> Result<u64> {
     })
 }
 
+// trace:STORY-360 | ai:claude
 /// Rough $/fork cost estimate from a source JSONL size. The transcript is
 /// loaded into cache; cache-creation pricing dominates (~$15/MTok on Opus
 /// 4.7). Used by `aida advisor status` to surface "this'll cost ~$X per
 /// punt at the current transcript size." Not load-bearing — purely a
-/// visibility hint. trace:STORY-360 | ai:claude
+/// visibility hint.
 pub fn estimated_fork_cost_usd(jsonl_size_bytes: u64) -> f64 {
     // SPIKE-11 data point: 1.3 MB JSONL ≈ 225K cache-creation tokens
     // → roughly 173K tokens / MB. Opus 4.7 cache-creation $15/MTok.

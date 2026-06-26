@@ -185,6 +185,7 @@ fn is_subcommand_token(tok: &str) -> bool {
         .all(|b| b.is_ascii_lowercase() || *b == b'-' || b.is_ascii_digit())
 }
 
+// trace:TASK-872 | ai:claude
 /// How a logged command shape relates to the requirement/intent graph.
 ///
 /// The trace-read-rate audit (TASK-872) asks the cheap internal falsifier
@@ -192,7 +193,6 @@ fn is_subcommand_token(tok: &str) -> bool {
 /// A high read:write ratio is evidence the typed layer earns its keep; a
 /// written-but-near-zero-read shape would falsify P2b cleanly.
 ///
-/// trace:TASK-872 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphAccess {
     /// Consults the intent graph (list/show/search/graph/why/history/…).

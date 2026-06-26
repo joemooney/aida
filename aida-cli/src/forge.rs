@@ -48,9 +48,10 @@ impl ForgeKind {
         }
     }
 
+    // trace:STORY-508 | ai:claude
     /// User-facing noun for a change request — "PR" (GitHub) / "MR" (GitLab) /
     /// "change" (pure-git). For hint and error prose so a GitLab user reads
-    /// "merge the MR" rather than "merge the PR". trace:STORY-508 | ai:claude
+    /// "merge the MR" rather than "merge the PR".
     pub fn change_noun(self) -> &'static str {
         match self {
             ForgeKind::GitHub => "PR",
@@ -59,6 +60,7 @@ impl ForgeKind {
         }
     }
 
+    // trace:STORY-508 | ai:claude
     /// A forge-aware CLI hint for a change-request action (`view` / `merge` /
     /// `create` / `checks` / …). GitHub → `gh pr <verb> [args]`, GitLab →
     /// `glab mr <verb> [args]`. Returns `None` for pure-git, which has no forge
@@ -68,7 +70,6 @@ impl ForgeKind {
     /// hint is directional, so minor per-forge flag differences (glab's
     /// `--remove-source-branch` vs gh's `--delete-branch`) are acceptable —
     /// the load-bearing fix is to stop naming `gh` to a non-GitHub user.
-    /// trace:STORY-508 | ai:claude
     pub fn change_cmd_hint(self, verb: &str, args: &str) -> Option<String> {
         let (cli, noun) = match self {
             ForgeKind::GitHub => ("gh", "pr"),
@@ -92,9 +93,9 @@ impl ForgeKind {
     // `--remove-source-branch`. Each returns `None` for pure-git (no forge
     // CLI) — callers supply a git/aida-native phrasing or drop the hint.
 
+    // trace:TASK-651 | ai:claude
     /// Watch a change's CI to completion. `change_id` is a display string so
     /// callers can pass a number (`"47"`) or a placeholder (`"<N>"`).
-    /// trace:TASK-651 | ai:claude
     pub fn ci_watch_cmd(self, change_id: &str) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some(format!("gh pr checks {change_id} --watch")),
@@ -105,7 +106,8 @@ impl ForgeKind {
         }
     }
 
-    /// View a CI run / pipeline by id. trace:TASK-651 | ai:claude
+    // trace:TASK-651 | ai:claude
+    /// View a CI run / pipeline by id.
     pub fn ci_view_cmd(self, run_id: &str) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some(format!("gh run view {run_id}")),
@@ -114,9 +116,10 @@ impl ForgeKind {
         }
     }
 
+    // trace:TASK-651 | ai:claude
     /// Merge a change, squashing and deleting the source branch — with each
     /// forge's correct branch-cleanup flag. `change_id` is a display string
-    /// (number or `"<N>"` placeholder). trace:TASK-651 | ai:claude
+    /// (number or `"<N>"` placeholder).
     pub fn merge_cmd(self, change_id: &str) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some(format!("gh pr merge {change_id} --squash --delete-branch")),
@@ -127,7 +130,8 @@ impl ForgeKind {
         }
     }
 
-    /// Open a new change. trace:TASK-651 | ai:claude
+    // trace:TASK-651 | ai:claude
+    /// Open a new change.
     pub fn create_cmd(self) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some("gh pr create".to_string()),
@@ -136,9 +140,9 @@ impl ForgeKind {
         }
     }
 
+    // trace:TASK-651 | ai:claude
     /// Human name + install URL for this forge's CLI, for "tool not on PATH"
     /// errors. `None` for pure-git (no forge CLI is needed at all).
-    /// trace:TASK-651 | ai:claude
     pub fn cli_install_hint(self) -> Option<(&'static str, &'static str)> {
         match self {
             ForgeKind::GitHub => Some(("GitHub CLI", "https://cli.github.com")),
@@ -147,12 +151,13 @@ impl ForgeKind {
         }
     }
 
+    // trace:TASK-860 | ai:claude
     /// Whether this forge's CLI binary (`gh` / `glab`) is on `PATH`. Pure-git
     /// needs no CLI, so it is trivially "present". This is the load-bearing
     /// detection behind the `aida doctor` / `aida init` forge-CLI status line:
     /// `aida pr auto-queue-review` (and the rest of the PR/CI lifecycle) fails
     /// hard when the needed CLI is absent, so we want to surface it up front
-    /// rather than silently at the first `pr` command. trace:TASK-860 | ai:claude
+    /// rather than silently at the first `pr` command.
     pub fn cli_on_path(self) -> bool {
         match self.cli_name() {
             "" => true, // pure-git: no CLI required
@@ -160,8 +165,8 @@ impl ForgeKind {
         }
     }
 
+    // trace:TASK-651 | ai:claude
     /// View a change by id (display string — number or `"<N>"`).
-    /// trace:TASK-651 | ai:claude
     pub fn view_cmd(self, change_id: &str) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some(format!("gh pr view {change_id}")),
@@ -190,6 +195,7 @@ impl ForgeKind {
         }
     }
 
+    // trace:TASK-844 | ai:claude
     /// Build the forge-CLI argv that explicitly sets the remote repository's
     /// **default branch** to `branch`. Returns the program + its arguments in
     /// argv form (not a shell string) so callers can spawn it without a shell.
@@ -203,7 +209,6 @@ impl ForgeKind {
     /// - GitHub: `gh repo edit [project] --default-branch <branch>`
     /// - GitLab: `glab api -X PUT projects/<enc-path> -f default_branch=<branch>`
     ///
-    /// trace:TASK-844 | ai:claude
     pub fn set_default_branch_cmd(
         self,
         branch: &str,
@@ -240,20 +245,20 @@ impl ForgeKind {
     }
 }
 
+// trace:TASK-844 | ai:claude
 /// URL-encode a GitLab project path (`group/subgroup/project`) for use as the
 /// `:id` segment of a `projects/:id` REST call. GitLab accepts the path with
 /// `/` percent-encoded to `%2F`; only `/` needs encoding for well-formed
 /// project paths. Kept minimal + pure so the command construction is testable.
-/// trace:TASK-844 | ai:claude
 fn gitlab_encode_project_path(path: &str) -> String {
     path.trim_matches('/').replace('/', "%2F")
 }
 
+// trace:TASK-844 | ai:claude
 /// Extract the forge-native project path (`owner/repo` or
 /// `group/subgroup/project`) from an `origin` URL, stripping any trailing
 /// `.git`. `None` for an unparseable URL. Pure so the init push-to-create
 /// default-branch call can be unit-tested without a live remote.
-/// trace:TASK-844 | ai:claude
 pub fn project_path_of(origin_url: &str) -> Option<String> {
     let url = origin_url.trim();
     if url.is_empty() {
@@ -290,17 +295,18 @@ pub struct ChangeRef {
     pub url: String,
     pub branch: String,
     pub base: String,
+    // trace:STORY-516 | ai:claude
     /// Change title, when the lookup carried it (`gh pr view` / `glab mr view`).
     /// `None` for refs built from a number alone (e.g. a merge target).
-    /// trace:STORY-516 | ai:claude
     pub title: Option<String>,
 }
 
+// trace:STORY-516 trace:BUG-257 | ai:claude
 /// STORY-516: the outcome of looking up the open change for a branch — the
 /// forge-neutral equivalent of the orchestrator's `PrLookup`. Preserves the
 /// BUG-257 distinction the orchestrator's phase-1 verdict depends on:
 /// `NoChange` (definitively none) is NOT the same as `Unreachable` (a transient
-/// API outage — cannot tell). trace:STORY-516 trace:BUG-257 | ai:claude
+/// API outage — cannot tell).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChangeLookup {
     /// An open change exists for the branch.
@@ -311,17 +317,18 @@ pub enum ChangeLookup {
     CliMissing,
     /// The CLI ran but errored (auth / parse / non-transient). Carries stderr.
     CliFailed(String),
+    // trace:BUG-257 | ai:claude
     /// The CLI could not reach the forge API — a *transient* network error.
     /// The orchestrator treats this as Inconclusive, not a definitive "none".
-    /// Carries the diagnostic. trace:BUG-257 | ai:claude
+    /// Carries the diagnostic.
     Unreachable(String),
 }
 
+// trace:STORY-516 trace:BUG-257 | ai:claude
 /// STORY-516: adapt the orchestrator's `PrLookup` (main.rs) to the forge-neutral
 /// `ChangeLookup`. 1:1 state mapping — preserves the BUG-257 transient
 /// (`GhUnreachable` → `Unreachable`) vs definitive (`NoOpenPr` → `NoChange`)
 /// distinction the phase-1 verdict depends on. Pure + unit-tested.
-/// trace:STORY-516 trace:BUG-257 | ai:claude
 fn change_lookup_from_pr_lookup(pl: crate::PrLookup, branch: &str) -> ChangeLookup {
     match pl {
         crate::PrLookup::Found(info) => ChangeLookup::Found(ChangeRef {
@@ -388,11 +395,12 @@ pub struct CiStatus {
     pub failing_checks: Vec<String>,
 }
 
+// trace:STORY-516 | ai:claude
 /// STORY-516: the outcome of a branch-keyed CI probe — the forge-neutral
 /// equivalent of the orchestrator's `CiProbe`. Richer than [`CiStatus`]: it
 /// carries the change number each state belongs to and a `NoSignal(reason)`
 /// for "couldn't probe" (gh missing / no PR / API blip), distinct from a
-/// genuine "no checks configured". trace:STORY-516 | ai:claude
+/// genuine "no checks configured".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CiProbeResult {
     /// Could not probe (no CLI / no change / transient failure). Carries why.
@@ -407,9 +415,9 @@ pub enum CiProbeResult {
     Failed { change: u64, summary: String },
 }
 
+// trace:STORY-516 | ai:claude
 /// STORY-516: adapt the orchestrator's `CiProbe` (main.rs) to the forge-neutral
 /// `CiProbeResult` — 1:1, preserving `NoSignal(reason)`. Pure + unit-tested.
-/// trace:STORY-516 | ai:claude
 fn ci_probe_result_from_ci_probe(p: crate::CiProbe) -> CiProbeResult {
     match p {
         crate::CiProbe::NoSignal(why) => CiProbeResult::NoSignal(why),
@@ -439,10 +447,11 @@ pub enum MergeMethod {
     Rebase,
 }
 
+// trace:STORY-516
 /// How to merge a change. Carries the cross-cutting concerns the pre-EPIC-35
 /// `gh pr merge` call sites already honored — the explicit squash `--subject`
 /// (SPEC-410 / TASK-140 trailer preservation) and `--delete-branch` (subject to
-/// the BUG-434 stacked-children guard, decided by the caller). trace:STORY-516
+/// the BUG-434 stacked-children guard, decided by the caller).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergeOptions {
     pub method: MergeMethod,
@@ -522,28 +531,31 @@ pub trait Forge {
     /// `gh run` / `glab ci` / pure-git `CiState::None`.
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus>;
 
+    // trace:STORY-516 | ai:claude
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
     /// — the forge-neutral form of `probe_ci_state_for_branch`. Returns a
     /// [`CiProbeResult`] preserving the `NoSignal(reason)` "couldn't probe"
-    /// state the orchestrator's CI phase relies on. trace:STORY-516 | ai:claude
+    /// state the orchestrator's CI phase relies on.
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult>;
 
+    // trace:STORY-516 | ai:claude
     /// STORY-516: block until the change's CI reaches a terminal state,
     /// **streaming** progress to the terminal (`gh pr checks <id> --watch`).
     /// Returns `Success` / `Failed` once CI settles, or `None` when the forge
     /// has no CI (pure-git) — nothing to wait on. `Err` only when the watch
     /// itself could not be invoked. Stdio is inherited (live progress), so the
-    /// verdict is the exit status, not captured output. trace:STORY-516 | ai:claude
+    /// verdict is the exit status, not captured output.
     fn watch_ci(&self, change: &ChangeRef) -> Result<CiState>;
 
+    // trace:STORY-516 | ai:claude
     /// STORY-516: block until the branch's workflow-run CI reaches a terminal
     /// state, then report the [`CiProbeResult`]. Streams live (`gh run watch`)
     /// when `interactive` and stdout is a TTY; otherwise quiet-polls. This is
     /// the orchestrator / `--watch-ci` path (distinct from [`watch_ci`]'s
     /// `gh pr checks --watch`). `interactive` is the negation of headless mode.
-    /// trace:STORY-516 | ai:claude
     fn stream_ci_for_branch(&self, branch: &str, interactive: bool) -> Result<CiProbeResult>;
 
+    // trace:STORY-516 | ai:claude
     /// `gh pr merge` / `glab mr merge` / pure-git git merge.
     ///
     /// Contract (STORY-516): returns `Err` when the merge could not be
@@ -554,7 +566,7 @@ pub trait Forge {
     /// `sink` receives retry events for any transient-blip retries (BUG-286):
     /// the `aida pr ship` caller passes a `StderrSink`; the orchestrator passes
     /// a `DualSink` (stderr + drain-state correlation). Providers that don't
-    /// retry (GitLab/pure-git today) ignore it. trace:STORY-516 | ai:claude
+    /// retry (GitLab/pure-git today) ignore it.
     fn merge_change(
         &self,
         c: &ChangeRef,
@@ -574,11 +586,12 @@ pub trait Forge {
 
 // ─────────────────────────── detection + factory ───────────────────────────
 
+// trace:EPIC-35 | ai:claude
 /// Map a git `origin` remote URL to a forge. `github.com` → GitHub; any host
 /// whose label contains `gitlab` (covers `gitlab.com` and self-hosted
 /// `gitlab.example.com`) → GitLab; anything else → pure-git. Handles both SSH
 /// (`git@host:owner/repo.git`) and HTTPS (`https://host/owner/repo.git`) forms.
-/// Pure — the unit of auto-detection. trace:EPIC-35 | ai:claude
+/// Pure — the unit of auto-detection.
 pub fn detect_forge_kind(origin_url: &str) -> ForgeKind {
     let host = forge_host_of(origin_url)
         .unwrap_or_default()
@@ -650,9 +663,10 @@ pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
     None
 }
 
+// trace:TASK-860 | ai:claude
 /// Is `name` an executable on `PATH`? A small, dependency-free `which` —
 /// scans the `PATH` dirs for a file named `name`. Used by [`ForgeKind::cli_on_path`]
-/// to detect the forge CLI (`gh` / `glab`). trace:TASK-860 | ai:claude
+/// to detect the forge CLI (`gh` / `glab`).
 fn binary_on_path(name: &str) -> bool {
     let Some(path) = std::env::var_os("PATH") else {
         return false;
@@ -660,12 +674,13 @@ fn binary_on_path(name: &str) -> bool {
     std::env::split_paths(&path).any(|dir| dir.join(name).is_file())
 }
 
+// trace:TASK-860 | ai:claude
 /// The forge-CLI status line for `aida doctor` / `aida init`: which forge the
 /// project uses and whether its CLI is on `PATH`, with install guidance when it
 /// is missing. Returns `(resolved_kind, status_message)`. The message is a
 /// single human-facing line that names the CLI, says OK / missing, and (when
 /// missing) carries the install URL — so a new user learns up front rather than
-/// hitting "gh CLI not on PATH" at the first `pr` command. trace:TASK-860 | ai:claude
+/// hitting "gh CLI not on PATH" at the first `pr` command.
 pub fn forge_cli_status(project_root: &Path) -> (ForgeKind, String) {
     let kind = resolve_forge_kind(project_root);
     let msg = match kind {
@@ -716,9 +731,9 @@ pub fn origin_url(project_root: &Path) -> Option<String> {
     }
 }
 
+// trace:EPIC-35 | ai:claude
 /// Resolve the forge a project uses: explicit `[forge] provider` config wins;
 /// otherwise auto-detect from `origin`'s host; otherwise pure-git.
-/// trace:EPIC-35 | ai:claude
 pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
     if let Some(k) = read_forge_config(project_root) {
         return k;
@@ -728,10 +743,11 @@ pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
         .unwrap_or(ForgeKind::None)
 }
 
+// trace:EPIC-35 | ai:claude
 /// The `[forge]` config block to scaffold at `aida init`, with the provider
 /// auto-detected from `origin`'s host. Written so a GitLab-origin project is
 /// GitLab-aware out of the box and an unknown remote degrades to pure-git —
-/// the operator never has to "point" AIDA at a forge. trace:EPIC-35 | ai:claude
+/// the operator never has to "point" AIDA at a forge.
 pub fn init_forge_config_section(project_root: &Path) -> String {
     let kind = origin_url(project_root)
         .map(|u| detect_forge_kind(&u))
@@ -748,12 +764,13 @@ pub fn init_forge_config_section(project_root: &Path) -> String {
     )
 }
 
+// trace:STORY-511 | ai:claude
 /// STORY-511: a one-line, human-facing summary of which forge `aida init`
 /// auto-detected from `origin`, for printing in the init success output so
 /// the operator *sees* the inference rather than having to read
 /// `.aida/config.toml`. EPIC-35 slice-5 init-UX polish. Returns the forge
 /// kind alongside the message so the caller can tailor follow-up hints
-/// (e.g. naming the right CLI to install). trace:STORY-511 | ai:claude
+/// (e.g. naming the right CLI to install).
 pub fn init_forge_detection_message(project_root: &Path) -> (ForgeKind, String) {
     let url = origin_url(project_root);
     let kind = url
@@ -1144,6 +1161,7 @@ impl Forge for GitHubForge {
 
 // ─────────────────────────── GitLab provider ───────────────────────────
 
+// trace:STORY-509 trace:STORY-510 | ai:claude
 /// GitLab provider — shells out to `glab` (symmetric with GitHub→`gh`), with a
 /// REST fallback to be added for gaps. `open_change` uses `glab mr create`
 /// (token-free MR creation via push options is proven live in SPIKE-49); slice 3
@@ -1152,7 +1170,6 @@ impl Forge for GitHubForge {
 /// (`ci_status` / `ci_probe_for_branch` / `watch_ci` / `stream_ci_for_branch`)
 /// lands in slice 4 (STORY-510) via `glab ci list`/`glab ci status`, mapped by
 /// `glab_ci_state_from_status` + `ci_probe_from_glab_pipelines`.
-/// trace:STORY-509 trace:STORY-510 | ai:claude
 pub struct GitLabForge {
     project_root: PathBuf,
 }
@@ -1172,10 +1189,11 @@ impl GitLabForge {
             .context("could not invoke `glab` — is the GitLab CLI installed?")
     }
 
+    // trace:STORY-510 | ai:claude
     /// Best-effort resolve the open MR iid for a branch — used to fill the
     /// `change` number a [`CiProbeResult`] carries. GitLab pipelines are
     /// branch-scoped, so a missing MR (no MR opened yet) is not an error: it
-    /// degrades to `0`. trace:STORY-510 | ai:claude
+    /// degrades to `0`.
     fn mr_iid_for_branch(&self, branch: &str) -> u64 {
         match self.change_for_branch(branch) {
             Ok(ChangeLookup::Found(c)) => c.id,
@@ -1641,8 +1659,9 @@ impl Forge for PureGitForge {
 // `--output json` emits the GitLab REST object verbatim, so a fixture is
 // faithful). trace:STORY-509 | ai:claude
 
+// trace:STORY-509
 /// Map a GitLab MR `state` token to the forge-neutral [`ChangeState`].
-/// GitLab uses `opened` / `merged` / `closed` / `locked`. trace:STORY-509
+/// GitLab uses `opened` / `merged` / `closed` / `locked`.
 fn glab_state_from_str(s: &str) -> ChangeState {
     match s {
         "merged" => ChangeState::Merged,
@@ -1652,9 +1671,10 @@ fn glab_state_from_str(s: &str) -> ChangeState {
     }
 }
 
+// trace:STORY-509 | ai:claude
 /// Build a [`ChangeRef`] from one MR JSON object. `branch_hint` supplies the
 /// source-branch label when the JSON omits it (it normally carries
-/// `source_branch`, so the hint is a fallback). trace:STORY-509 | ai:claude
+/// `source_branch`, so the hint is a fallback).
 fn change_ref_from_glab_mr(mr: &serde_json::Value, branch_hint: &str) -> Option<ChangeRef> {
     let id = mr.get("iid").and_then(|v| v.as_u64())?;
     let url = mr
@@ -1686,6 +1706,7 @@ fn change_ref_from_glab_mr(mr: &serde_json::Value, branch_hint: &str) -> Option<
     })
 }
 
+// trace:STORY-509 trace:BUG-257 | ai:claude
 /// Map the output of a `glab mr list … --output json` invocation to a
 /// [`ChangeLookup`], preserving the BUG-257 transient-vs-definitive distinction
 /// the orchestrator's phase-1 verdict depends on:
@@ -1695,7 +1716,6 @@ fn change_ref_from_glab_mr(mr: &serde_json::Value, branch_hint: &str) -> Option<
 ///   - clean exit, empty array                  → `NoChange`
 ///   - clean exit, ≥1 MR                         → `Found(first)`
 ///   - clean exit, unparseable JSON             → `CliFailed(parse-error)`
-///     trace:STORY-509 trace:BUG-257 | ai:claude
 fn glab_lookup_from_list_output(
     out: Result<std::process::Output>,
     branch_hint: &str,
@@ -1732,10 +1752,10 @@ fn glab_lookup_from_list_output(
     }
 }
 
+// trace:STORY-509 trace:BUG-257 | ai:claude
 /// Heuristic: does a `glab` stderr indicate a *transient* network/API outage
 /// (→ `Unreachable`, treated as Inconclusive) rather than a definitive failure
 /// (auth, not-found)? Mirrors the spirit of the gh-side BUG-257 classification.
-/// trace:STORY-509 trace:BUG-257 | ai:claude
 fn glab_stderr_is_transient(stderr: &str) -> bool {
     let s = stderr.to_ascii_lowercase();
     s.contains("timeout")
@@ -1752,13 +1772,13 @@ fn glab_stderr_is_transient(stderr: &str) -> bool {
         || s.contains("eof")
 }
 
+// trace:STORY-509 | ai:claude
 /// Map a `glab mr view <iid> --output json` body to a [`ChangeStatus`]. GitLab
 /// review semantics differ from GitHub's single review-decision (approvals are a
 /// separate rule-count API), so slice-3 reports `ReviewDecision::None` — the
 /// merge round-trip the spec targets keys off state + mergeable, not a review
 /// gate. `mergeable` is derived from `detailed_merge_status` (preferred) or the
 /// legacy `merge_status`; `head_sha` from `sha`/`diff_refs.head_sha`.
-/// trace:STORY-509 | ai:claude
 fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
     let v: serde_json::Value =
         serde_json::from_str(body.trim()).context("glab mr view did not return valid JSON")?;
@@ -1798,12 +1818,13 @@ fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
 //   success / failed / canceled / skipped / manual
 // trace:STORY-510 | ai:claude
 
+// trace:STORY-510 | ai:claude
 /// Map a single GitLab pipeline `status` token to the forge-neutral
 /// [`CiState`]. In-flight states (created/pending/running/…) → `Running`;
 /// `success` → `Success`; `failed`/`canceled` → `Failed` (a canceled pipeline
 /// did not pass, so a CI-wait must treat it as a failure); `skipped`/`manual`
 /// are non-failing terminal states (nothing to block on) → `Success`; an empty
-/// or unknown token → `None` (no signal). trace:STORY-510 | ai:claude
+/// or unknown token → `None` (no signal).
 fn glab_ci_state_from_status(status: &str) -> CiState {
     match status {
         "success" => CiState::Success,
@@ -1820,9 +1841,10 @@ fn glab_ci_state_from_status(status: &str) -> CiState {
     }
 }
 
+// trace:STORY-510 | ai:claude
 /// Pick the newest pipeline object from a `glab ci list -F json` array — the one
 /// with the highest `id` (GitLab pipeline ids are monotonic; `created_at` is a
-/// tie-breaker only when ids are absent). trace:STORY-510 | ai:claude
+/// tie-breaker only when ids are absent).
 fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value> {
     arr.iter().max_by(|a, b| {
         let ai = a.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -1835,10 +1857,10 @@ fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value>
     })
 }
 
+// trace:STORY-510 | ai:claude
 /// Map a `glab ci list -F json` invocation to a [`CiStatus`]. A non-success exit
 /// or no pipelines degrades to `CiState::None` (no CI / nothing to wait on),
 /// mirroring GitHubForge::ci_status's treatment of an empty check set.
-/// trace:STORY-510 | ai:claude
 fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
         state: CiState::None,
@@ -1889,12 +1911,13 @@ fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus 
     }
 }
 
+// trace:STORY-510 | ai:claude
 /// Map a `glab ci list -F json` invocation to a [`CiProbeResult`] — the
 /// branch-keyed probe the orchestrator's CI-wait phase consumes. `change` is the
 /// resolved MR iid (0 when no MR was found; GitLab pipelines are branch-scoped,
 /// so a probe is still meaningful without an MR). Preserves the
 /// transient-vs-definitive split: a `glab` invocation error → `NoSignal` (couldn't
-/// probe), distinct from "no pipelines" (`NoChecks`). trace:STORY-510 | ai:claude
+/// probe), distinct from "no pipelines" (`NoChecks`).
 fn ci_probe_from_glab_pipelines(out: Result<std::process::Output>, change: u64) -> CiProbeResult {
     let out = match out {
         // The only Err `glab(...)` produces is "could not invoke glab".
@@ -1943,10 +1966,10 @@ fn ci_probe_from_glab_pipelines(out: Result<std::process::Output>, change: u64) 
     }
 }
 
+// trace:STORY-509 | ai:claude
 /// Map a `glab mr list --output json` body to a `Vec<ChangeRef>`. A clean run
 /// with non-array JSON or per-row gaps is an error / row-skip respectively (a
 /// non-success exit is handled upstream as an empty list, mirroring GitHub).
-/// trace:STORY-509 | ai:claude
 fn parse_glab_mr_list(body: &str) -> Result<Vec<ChangeRef>> {
     let trimmed = body.trim();
     if trimmed.is_empty() {
@@ -1987,9 +2010,10 @@ fn branch_is_ancestor_of(project_root: &Path, branch: &str, base: &str) -> bool 
         .unwrap_or(false)
 }
 
+// trace:STORY-516 | ai:claude
 /// First line (subject) of a ref's HEAD commit message — used to preserve a
 /// branch's `(SPEC-ID)`-trailered subject when squash-committing in pure-git
-/// mode. trace:STORY-516 | ai:claude
+/// mode.
 fn branch_head_subject(project_root: &Path, r#ref: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
@@ -2453,9 +2477,10 @@ mod tests {
         assert_eq!(cr.branch, "feat");
     }
 
+    // trace:STORY-516
     /// STORY-516: pure-git squash merge must actually COMMIT (advance base,
     /// leave a clean index) and preserve the branch's `(SPEC-ID)`-trailered
-    /// subject — `git merge --squash` alone only stages. trace:STORY-516
+    /// subject — `git merge --squash` alone only stages.
     #[test]
     fn pure_git_squash_merge_commits_and_advances_base() {
         let tmp = tempfile::tempdir().unwrap();

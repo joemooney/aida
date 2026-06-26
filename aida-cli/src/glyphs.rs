@@ -35,6 +35,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+// trace:STORY-628
 /// The named set of symbols AIDA prints. Each variant maps to a default
 /// UNICODE value and a curated ASCII fallback via [`Glyph::unicode`] /
 /// [`Glyph::ascii`].
@@ -43,7 +44,7 @@ use std::path::{Path, PathBuf};
 /// glyphs via `status_display`); the rest are seeded here so the long-tail
 /// migration (phase 3 / TASK-835) routes literals to an already-defined entry
 /// rather than growing the enum incrementally. `allow(dead_code)` keeps the
-/// not-yet-consumed variants from warning until then. trace:STORY-628
+/// not-yet-consumed variants from warning until then.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Glyph {
@@ -80,19 +81,23 @@ pub(crate) enum Glyph {
     Solo,
     /// Generic robot / agent (🤖).
     Robot,
+    // trace:TASK-835
     /// Done — work finished on a branch, not yet merged (◉). The bright-green
-    /// bold status in [`crate::status_display`]. trace:TASK-835
+    /// bold status in [`crate::status_display`].
     Done,
+    // trace:TASK-835
     /// Neutral / unknown-status bullet (·) — the fallback marker for a custom or
-    /// unmapped status so a badge's layout stays stable. trace:TASK-835
+    /// unmapped status so a badge's layout stays stable.
     Neutral,
+    // trace:TASK-835
     /// Work-routing: a *live* session lease holds the spec right now (▶). Axis is
     /// orthogonal to status — "where in the pipeline now", not "what state".
-    /// trace:TASK-835
     FlowActive,
-    /// Work-routing: BlockedBy an incomplete spec (⊘). trace:TASK-835
+    // trace:TASK-835
+    /// Work-routing: BlockedBy an incomplete spec (⊘).
     FlowBlocked,
-    /// Work-routing: present in a role queue, not yet started (↑). trace:TASK-835
+    // trace:TASK-835
+    /// Work-routing: present in a role queue, not yet started (↑).
     FlowQueued,
 }
 
@@ -161,10 +166,11 @@ impl Glyph {
         }
     }
 
+    // trace:STORY-629
     /// The canonical name of this glyph — the key used in the `[glyphs]`
     /// custom-override config table (phase 2 / STORY-629). These match the
     /// lower-snake-case form of the variant names so a config like
-    /// `[glyphs]\ncheck = "OK"` targets [`Glyph::Check`]. trace:STORY-629
+    /// `[glyphs]\ncheck = "OK"` targets [`Glyph::Check`].
     pub(crate) const fn name(self) -> &'static str {
         match self {
             Glyph::Check => "check",
@@ -191,22 +197,24 @@ impl Glyph {
         }
     }
 
+    // trace:STORY-629
+    // trace:STORY-633
     /// Map a `[glyphs]` config key to its [`Glyph`] variant. Accepts the
     /// canonical name (see [`Glyph::name`]); also tolerates a `-` separator in
     /// place of `_` (so `sub-arrow` and `in-flight` work). Case-insensitive.
     /// Unknown key → `None` (silently ignored so a typo or a future glyph name
-    /// in config doesn't error an older binary). trace:STORY-629
+    /// in config doesn't error an older binary).
     ///
     /// Phase 4 (STORY-633) reuses this for the `aida config glyph set <name>`
     /// validation — but the CLI rejects an unknown name with the valid list
-    /// rather than silently ignoring it. trace:STORY-633
+    /// rather than silently ignoring it.
     pub(crate) fn from_name(raw: &str) -> Option<Glyph> {
         let normalized = raw.trim().to_ascii_lowercase().replace('-', "_");
         Glyph::ALL.iter().copied().find(|g| g.name() == normalized)
     }
 
+    // trace:STORY-629
     /// Every variant, for iteration (name parsing, exhaustive tests).
-    /// trace:STORY-629
     pub(crate) const ALL: [Glyph; 21] = [
         Glyph::Check,
         Glyph::Cross,
@@ -253,8 +261,8 @@ impl GlyphProfile {
         }
     }
 
+    // trace:TASK-793 | ai:claude
     /// Canonical profile name for display (e.g. in `aida config show`).
-    /// trace:TASK-793 | ai:claude
     pub(crate) const fn name(self) -> &'static str {
         match self {
             GlyphProfile::Unicode => "unicode",
@@ -263,6 +271,7 @@ impl GlyphProfile {
     }
 }
 
+// trace:STORY-633
 /// A named, binary-embedded glyph *theme* (phase 4 / STORY-633).
 ///
 /// A theme is a curated preset of `{base profile + per-symbol override bundle}`.
@@ -273,7 +282,7 @@ impl GlyphProfile {
 ///
 /// Precedence tier introduced: a per-symbol `[glyphs]` override beats the theme
 /// bundle, which beats the base `[ui] glyphs` profile, which beats the registry
-/// default. See [`resolve_with_theme`]. trace:STORY-633
+/// default. See [`resolve_with_theme`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Theme {
     /// The reference name written to `[ui] theme` (lowercase, hyphen-friendly).
@@ -288,8 +297,9 @@ pub(crate) struct Theme {
 }
 
 impl Theme {
+    // trace:STORY-633
     /// Render `glyph` under this theme: the bundle wins for a symbol it covers,
-    /// else the base profile's rendering. trace:STORY-633
+    /// else the base profile's rendering.
     pub(crate) fn render(&self, glyph: Glyph) -> String {
         self.bundle
             .iter()
@@ -299,6 +309,7 @@ impl Theme {
     }
 }
 
+// trace:STORY-633
 /// The binary-embedded theme presets (phase 4 / STORY-633). Kept intentionally
 /// small — three sensible starters. `unicode` is the implicit default when no
 /// theme is set, so it is NOT listed here (selecting it = no theme reference).
@@ -307,7 +318,7 @@ impl Theme {
 /// - `minimal`: unicode base, but the noisier emoji collapsed to quiet
 ///   monochrome marks (no 🤖/🏠/🚶/⏳) for low-chrome terminals.
 /// - `nerd-font`: unicode base with heavier Nerd-Font-style status marks for
-///   terminals with a patched font. trace:STORY-633
+///   terminals with a patched font.
 pub(crate) const THEMES: &[Theme] = &[
     Theme {
         name: "ascii",
@@ -344,8 +355,9 @@ pub(crate) const THEMES: &[Theme] = &[
     },
 ];
 
+// trace:STORY-633
 /// Look up an embedded theme by name (case-insensitive; `-`/`_` interchangeable).
-/// `None` → unknown name. trace:STORY-633
+/// `None` → unknown name.
 pub(crate) fn theme_by_name(raw: &str) -> Option<&'static Theme> {
     let normalized = raw.trim().to_ascii_lowercase().replace('_', "-");
     THEMES
@@ -353,13 +365,15 @@ pub(crate) fn theme_by_name(raw: &str) -> Option<&'static Theme> {
         .find(|t| t.name.replace('_', "-") == normalized)
 }
 
-/// The comma-separated valid theme names, for error messages. trace:STORY-633
+// trace:STORY-633
+/// The comma-separated valid theme names, for error messages.
 pub(crate) fn valid_theme_names() -> String {
     THEMES.iter().map(|t| t.name).collect::<Vec<_>>().join(", ")
 }
 
+// trace:STORY-633
 /// Read `[ui] theme` from a `config.toml`. Missing file / key / unknown theme →
-/// `None` so the resolver falls through cleanly. trace:STORY-633
+/// `None` so the resolver falls through cleanly.
 fn read_theme_from_config(config_path: &Path) -> Option<&'static Theme> {
     let body = std::fs::read_to_string(config_path).ok()?;
     let value: toml::Value = toml::from_str(&body).ok()?;
@@ -367,10 +381,10 @@ fn read_theme_from_config(config_path: &Path) -> Option<&'static Theme> {
     theme_by_name(raw)
 }
 
+// trace:STORY-633
 /// Resolve the active theme following the same project>user precedence as the
 /// profile selector. `AIDA_GLYPHS` env does NOT name a theme (it only forces a
 /// raw profile), so the env tier is skipped here. `None` → no theme set.
-/// trace:STORY-633
 pub(crate) fn active_theme(project_root: Option<&Path>) -> Option<&'static Theme> {
     if let Some(root) = project_root {
         let path = root.join(".aida").join("config.toml");
@@ -387,6 +401,7 @@ pub(crate) fn active_theme(project_root: Option<&Path>) -> Option<&'static Theme
     None
 }
 
+// trace:STORY-633
 /// Render `glyph` honoring the FULL phase-4 precedence resolved from
 /// `project_root`:
 ///
@@ -395,7 +410,7 @@ pub(crate) fn active_theme(project_root: Option<&Path>) -> Option<&'static Theme
 ///     > base `[ui] glyphs` profile (env>project>user)
 ///     > registry default.
 ///
-/// This is the one resolver new render sites should call. trace:STORY-633
+/// This is the one resolver new render sites should call.
 pub(crate) fn resolve_with_theme(glyph: Glyph, project_root: Option<&Path>) -> String {
     let overrides = GlyphOverrides::resolve(project_root);
     if let Some(custom) = overrides.get(glyph) {
@@ -443,6 +458,7 @@ pub(crate) fn active_profile(project_root: Option<&Path>) -> GlyphProfile {
     GlyphProfile::Unicode
 }
 
+// trace:STORY-628
 /// Fetch a glyph honoring the active profile resolved from `project_root`.
 ///
 /// Convenience wrapper over [`active_profile`] + [`Glyph::render`]; callers
@@ -450,30 +466,32 @@ pub(crate) fn active_profile(project_root: Option<&Path>) -> GlyphProfile {
 /// resolve [`active_profile`] once and call [`Glyph::render`] per glyph.
 ///
 /// Provided for the phase-3 long-tail migration; phase 1's proof site
-/// (`status_display`) resolves the profile once instead. trace:STORY-628
+/// (`status_display`) resolves the profile once instead.
 #[allow(dead_code)]
 pub(crate) fn get(glyph: Glyph, project_root: Option<&Path>) -> &'static str {
     glyph.render(active_profile(project_root))
 }
 
+// trace:STORY-629
 /// A custom per-symbol override table (phase 2 / STORY-629).
 ///
 /// Maps a [`Glyph`] to an arbitrary replacement string. Loaded from the
 /// `[glyphs]` section of `config.toml`, project layered over user. An override
 /// for a symbol wins over the active profile's rendering for *that one symbol*;
 /// symbols with no entry fall through to the profile (and then to the registry
-/// default). An empty table = phase-1 behavior unchanged. trace:STORY-629
+/// default). An empty table = phase-1 behavior unchanged.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GlyphOverrides {
     map: HashMap<Glyph, String>,
 }
 
 impl GlyphOverrides {
+    // trace:STORY-629
     /// Resolve the custom override table following the same project>user
     /// precedence as the profile selector. The user tier is loaded first, then
     /// the project tier is overlaid on top so a project `[glyphs]` entry wins
     /// over the user's for the same symbol (while still inheriting the user's
-    /// entries for symbols the project doesn't set). trace:STORY-629
+    /// entries for symbols the project doesn't set).
     pub(crate) fn resolve(project_root: Option<&Path>) -> GlyphOverrides {
         let mut map: HashMap<Glyph, String> = HashMap::new();
 
@@ -493,22 +511,23 @@ impl GlyphOverrides {
         GlyphOverrides { map }
     }
 
+    // trace:STORY-629
     /// The custom override string for `glyph`, if any. `None` → no override,
-    /// caller falls through to the profile. trace:STORY-629
+    /// caller falls through to the profile.
     pub(crate) fn get(&self, glyph: Glyph) -> Option<&str> {
         self.map.get(&glyph).map(String::as_str)
     }
 
+    // trace:STORY-629
     /// `true` when no custom overrides are configured (phase-1 behavior).
-    /// trace:STORY-629
     #[allow(dead_code)]
     pub(crate) fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
 
+    // trace:STORY-629
     /// Render `glyph` honoring this override table layered over `profile`:
     /// a custom `[glyphs]` entry wins; otherwise the profile's rendering.
-    /// trace:STORY-629
     #[allow(dead_code)]
     pub(crate) fn render(&self, glyph: Glyph, profile: GlyphProfile) -> String {
         match self.get(glyph) {
@@ -518,6 +537,7 @@ impl GlyphOverrides {
     }
 }
 
+// trace:STORY-629
 /// Fetch a glyph honoring BOTH the custom `[glyphs]` override table and the
 /// active profile, resolved from `project_root`. Full precedence:
 ///
@@ -526,7 +546,7 @@ impl GlyphOverrides {
 ///
 /// Convenience wrapper for one-off sites; for tight loops resolve
 /// [`GlyphOverrides::resolve`] + [`active_profile`] once and call
-/// [`GlyphOverrides::render`] per glyph. trace:STORY-629
+/// [`GlyphOverrides::render`] per glyph.
 #[allow(dead_code)]
 pub(crate) fn get_custom(glyph: Glyph, project_root: Option<&Path>) -> String {
     let overrides = GlyphOverrides::resolve(project_root);
@@ -534,10 +554,11 @@ pub(crate) fn get_custom(glyph: Glyph, project_root: Option<&Path>) -> String {
     overrides.render(glyph, profile)
 }
 
+// trace:STORY-629
 /// Read the `[glyphs]` table from a `config.toml` into `map`, overwriting any
 /// existing entries for the same symbol (so the caller controls precedence by
 /// load order). Missing file / missing section / non-string values are skipped
-/// cleanly; unknown keys are ignored (forward-compat). trace:STORY-629
+/// cleanly; unknown keys are ignored (forward-compat).
 fn read_overrides_from_config(config_path: &Path, map: &mut HashMap<Glyph, String>) {
     let Ok(body) = std::fs::read_to_string(config_path) else {
         return;

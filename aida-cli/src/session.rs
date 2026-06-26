@@ -19,8 +19,9 @@ use colored::Colorize;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+// trace:TASK-840 | ai:claude
 /// Render a registry glyph honoring the active profile. Default Unicode profile
-/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+/// reproduces the historical literals byte-for-byte.
 fn glyph(g: crate::glyphs::Glyph) -> &'static str {
     crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
 }
@@ -37,31 +38,31 @@ pub struct SessionMeta {
     /// new` record so the user-chosen title and authoritative role can
     /// override the grep heuristic.
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
+    // trace:STORY-59 | ai:claude
     /// Most-recent cwd recorded in the .jsonl. Each Claude Code message
     /// stores the cwd at message time; we sample the LAST one we see in
     /// our parse window so worktree switches mid-session show up.
-    /// trace:STORY-59 | ai:claude
     pub last_cwd: Option<String>,
+    // trace:STORY-59 | ai:claude
     /// Branch the worktree at `last_cwd` was on when we ran. Computed on
     /// demand at table-print time (one cheap `git branch --show-current`
     /// per unique cwd) — None if we can't resolve a branch (cwd missing,
     /// not a repo, etc.).
-    /// trace:STORY-59 | ai:claude
     pub branch: Option<String>,
+    // trace:BUG-112 | ai:claude
     /// Most-recent spec this session worked — the RECENT FOCUS column.
     /// Filled by `fill_recent_focus` from AIDA's per-session activity log
     /// (newest-first) with the manifest's planned items as fallback. None
     /// when AIDA never tracked the session (renders `-`). Distinct from
     /// `spec`, which stays the *first*-mentioned (launch) spec — together
     /// they show the session's spec evolution.
-    /// trace:BUG-112 | ai:claude
     pub recent_focus: Option<String>,
 }
 
+// trace:STORY-59 | ai:claude
 /// STORY-59: liveness inferred from activity recency. Visual indicator
 /// only — no PID tracking (Claude Code forks; child PIDs ≠ launch PID,
 /// so PID-based liveness is unreliable across reads).
-/// trace:STORY-59 | ai:claude
 fn liveness_indicator(age_seconds: u64) -> &'static str {
     if age_seconds < 5 * 60 {
         "●" // live (active in last 5 minutes) — `●` is not a registry glyph.
@@ -176,13 +177,13 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:BUG-98 | ai:claude
 /// BUG-98: append a one-line nudge pointing at `aida session leases`
 /// when the project has any active scoped leases. `aida session list`
 /// shows historical .jsonl conversations — not the same set as the
 /// scoped-lease view — so users reaching here for "what's active"
 /// otherwise miss the leases entirely. We only print when there's
 /// something to point at; an empty-leases project gets no noise.
-/// trace:BUG-98 | ai:claude
 fn print_leases_hint() {
     let count = crate::active_lease_count_for_cwd();
     if count == 0 {
@@ -199,10 +200,10 @@ fn print_leases_hint() {
     );
 }
 
+// trace:STORY-58 | ai:claude
 /// STORY-58: a friendly label for a project-root path — the basename when
 /// available, the full path otherwise. Used in `── This worktree (foo) ──`
 /// headers so the user sees which dir each group represents.
-/// trace:STORY-58 | ai:claude
 fn group_label(path: &Path) -> String {
     path.file_name()
         .and_then(|s| s.to_str())
@@ -210,13 +211,14 @@ fn group_label(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
+// trace:STORY-58 | ai:claude
 /// STORY-58: render a `── Label ──` separator above each group. Dimmed so
 /// it doesn't compete with the table content.
-/// trace:STORY-58 | ai:claude
 fn print_group_header(label: &str) {
     println!("{}", format!("── {} ──", label).dimmed());
 }
 
+// trace:TASK-237 | ai:claude
 /// STORY-59: resolve `branch` per session by running `git -C <cwd>
 /// branch --show-current` once per unique cwd. Cheap (one fork/exec per
 /// distinct worktree), and the result is cached across sessions sharing
@@ -227,7 +229,6 @@ fn print_group_header(label: &str) {
 /// the short form (`FR-42`) so it matches how `aida list` / `aida show`
 /// / `aida history` render specs. A spec that no longer resolves to a
 /// requirement is left as-is with an `(unresolved)` suffix.
-/// trace:TASK-237 | ai:claude
 fn normalize_specs(sessions: &mut [SessionMeta]) {
     if sessions.iter().all(|s| s.spec.is_none()) {
         return;
@@ -241,9 +242,9 @@ fn normalize_specs(sessions: &mut [SessionMeta]) {
     normalize_specs_with_store(sessions, &store);
 }
 
+// trace:TASK-237 | ai:claude
 /// TASK-237: the store-pure half of [`normalize_specs`] — split out so
 /// the resolution rules are unit-testable without a project on disk.
-/// trace:TASK-237 | ai:claude
 fn normalize_specs_with_store(sessions: &mut [SessionMeta], store: &aida_core::RequirementsStore) {
     for s in sessions.iter_mut() {
         let Some(spec) = s.spec.as_deref() else {
@@ -260,6 +261,7 @@ fn normalize_specs_with_store(sessions: &mut [SessionMeta], store: &aida_core::R
     }
 }
 
+// trace:BUG-112 | ai:claude
 /// BUG-112: populate `recent_focus` — the most-recent spec each session
 /// worked, for the RECENT FOCUS column. Joins each Claude session to its
 /// AIDA manifest on `claude_session_id`, then reads the session activity
@@ -267,7 +269,6 @@ fn normalize_specs_with_store(sessions: &mut [SessionMeta], store: &aida_core::R
 /// recently picked-up planned item. Sessions AIDA never tracked keep
 /// `recent_focus = None` and render `-` — absent signal, not the
 /// misleading stale title BUG-112 set out to remove.
-/// trace:BUG-112 | ai:claude
 fn fill_recent_focus(sessions: &mut [SessionMeta]) {
     if sessions.is_empty() {
         return;
@@ -294,13 +295,14 @@ fn fill_recent_focus(sessions: &mut [SessionMeta]) {
     }
 }
 
+// trace:BUG-112 | ai:claude
 /// BUG-112: the store-pure half of [`fill_recent_focus`] — derive the
 /// RECENT FOCUS value from a session's manifest plus the optional
 /// most-recent spec from its activity log. The activity log is the live
 /// signal (actual `aida` spec interactions, newest-first); the manifest's
 /// most recently picked-up planned item — latest `started_at`, else
 /// highest `position` — is the fallback. Split out so the precedence is
-/// unit-testable without a project on disk. trace:BUG-112 | ai:claude
+/// unit-testable without a project on disk.
 fn recent_focus_from(
     manifest: &crate::session_manifest::SessionManifest,
     activity_recent: Option<&str>,
@@ -402,8 +404,8 @@ mod normalize_specs_tests {
     }
 }
 
+// trace:STORY-59 | ai:claude
 /// the same cwd.
-/// trace:STORY-59 | ai:claude
 fn fill_branches(sessions: &mut [SessionMeta]) {
     use std::collections::HashMap;
     let mut cache: HashMap<String, Option<String>> = HashMap::new();
@@ -444,13 +446,13 @@ pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
     exec_claude_resume(&target, None, false)
 }
 
+// trace:FR-1-044 | ai:claude
 /// `aida session new` — capture role + title up-front, append a record
 /// to `~/.aida/session-launches.log`, then exec `claude
 /// --permission-mode <mode>`. Subsequent `aida session list` calls read
 /// the launches log and join it with the .jsonl files (cwd + start-time
 /// match) to surface the user-chosen title and authoritative role —
 /// instead of falling back to the grep heuristic.
-/// trace:FR-1-044 | ai:claude
 ///
 /// STORY-495: `permission_mode` is now `Option<&str>`. `None` means honor
 /// Claude's native permission posture — no `--permission-mode` is injected
@@ -503,6 +505,7 @@ pub fn new_session(
     )
 }
 
+// trace:TASK-31 | ai:claude
 /// TASK-31: derive a claude `--name` value from session metadata. Keeps the
 /// /resume picker and terminal title legible when multiple concurrent
 /// worktrees are open.
@@ -516,7 +519,6 @@ pub fn new_session(
 /// `<suffix>` is the part of the branch name after `<scope-slug>-`. Returns
 /// `None` when scope is empty (defensive — the caller already validates).
 /// Result is truncated to 64 chars to fit common terminal-title budgets.
-/// trace:TASK-31 | ai:claude
 pub fn derive_session_name(scope: &str, branch: &str, role: &str) -> Option<String> {
     if scope.trim().is_empty() {
         return None;
@@ -601,10 +603,10 @@ fn launch_log_path() -> Result<PathBuf> {
     Ok(home.join(LAUNCH_LOG_REL))
 }
 
+// trace:FR-1-044 | ai:claude
 /// Append a launch record. Format: TSV with these fields, one record per
 /// line (newline-terminated):
 ///   iso_ts \t role-or-dash \t cwd \t permission_mode \t title
-/// trace:FR-1-044 | ai:claude
 fn append_launch_log(role: &str, permission_mode: &str, title: &str) -> Result<()> {
     use std::io::Write;
     let path = launch_log_path()?;
@@ -633,9 +635,11 @@ fn sanitize_for_tsv(s: &str) -> String {
     s.replace(['\t', '\n', '\r'], " ")
 }
 
+// trace:TASK-31 | ai:claude
+// trace:STORY-42, TASK-112 | ai:claude
 /// Replace this process with `claude --permission-mode <mode>`. When `name`
 /// is `Some(...)`, also passes `--name <n>` so the launched session is
-/// labeled in the /resume picker and terminal title. trace:TASK-31 | ai:claude
+/// labeled in the /resume picker and terminal title.
 /// STORY-42 / TASK-112: replace this process with `claude
 /// --permission-mode <mode> [--name <n>] --session-id <uuid>
 /// <initial_prompt>`. The initial prompt becomes claude's first message
@@ -644,7 +648,7 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// work` mints the UUID up front so it can record it in the session
 /// manifest (and a later `--resume` can find the conversation) before
 /// `exec` replaces this process. `session_id` must be a valid UUID —
-/// claude rejects anything else. trace:STORY-42, TASK-112 | ai:claude
+/// claude rejects anything else.
 pub fn exec_claude_with_session(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -661,12 +665,12 @@ pub fn exec_claude_with_session(
     )
 }
 
+// trace:BUG-226 | ai:claude
 /// Build the argv (after the `claude` program name) for an interactive
 /// `aida queue work` launch — `--permission-mode`, optional `--name` /
 /// `--session-id`, and a trailing positional initial prompt. Shared by
 /// `exec_claude` (process replacement) and `spawn_claude_session`
 /// (spawn + wait, BUG-226) so the two launch paths can never drift.
-/// trace:BUG-226 | ai:claude
 ///
 /// STORY-495: `permission_mode` is `Option<&str>`. `None` omits
 /// `--permission-mode` entirely so the spawned `claude` uses its native
@@ -735,11 +739,11 @@ fn exec_claude(
     }
 }
 
+// trace:BUG-226 | ai:claude
 /// BUG-226: spawn an interactive `claude` session (inherited stdio) and
 /// wait for it, returning the exit status. The standalone reviewer path
 /// needs `aida queue work` to *outlive* the launch so it can print an
 /// end-of-command summary — `exec_claude` (process replacement) cannot.
-/// trace:BUG-226 | ai:claude
 pub fn spawn_claude_session(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -759,18 +763,19 @@ pub fn spawn_claude_session(
         .context("failed to spawn claude")
 }
 
+// trace:BUG-226 | ai:claude
+// trace:TASK-307 | ai:claude
 /// BUG-226: spawn (not exec) a headless `claude -p` reviewer and wait,
 /// returning the exit status. Mirrors `exec_claude_headless` exactly —
 /// same `claude_headless_args` flag set, `AIDA_HEADLESS=1` in the env,
 /// stdout redirected to `log_path` — but keeps the parent alive so the
 /// standalone reviewer summary can read the verdict file + JSONL log.
-/// trace:BUG-226 | ai:claude
 ///
 /// TASK-307: starts a background tee thread on `log_path` so the headless
 /// session's high-signal events surface to the orchestrator's terminal
 /// alongside the launch banner. The tee's filter and on/off are driven by
 /// `tee_opts`; even when disabled, failure events (`is_error`,
-/// `permission_denials`) still stream. trace:TASK-307 | ai:claude
+/// `permission_denials`) still stream.
 pub fn spawn_claude_headless(
     prompt: &str,
     session_id: &str,
@@ -787,13 +792,14 @@ pub fn spawn_claude_headless(
     spawn_vendor_headless(vendor, prompt, session_id, log_path, tee_opts, contained)
 }
 
+// trace:STORY-683 | ai:claude
 /// STORY-683: spawn (not exec) a headless run of `vendor`'s CLI and wait,
 /// returning the exit status. The vendor-neutral generalization of
 /// [`spawn_claude_headless`]: it builds the right argv per vendor
 /// ([`headless_vendor_args`] — `claude -p …` vs `codex exec …`), applies the
 /// opt-in OS-boundary wrapper (`bwrap`, STORY-612) around whichever program, and
 /// sets `AIDA_HEADLESS=1` in the env. The Claude path is unchanged from the
-/// pre-STORY-683 behavior. trace:STORY-683 | ai:claude
+/// pre-STORY-683 behavior.
 pub fn spawn_vendor_headless(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -840,11 +846,11 @@ pub fn spawn_vendor_headless(
     Ok(status)
 }
 
+// trace:STORY-612 | ai:claude
 /// STORY-612: the worktree root a non-resume headless drain runs in — its
 /// `.aida-store` sibling and the worktree itself are the rw surfaces the OS
 /// wrapper binds. Resolve the project root from cwd, falling back to cwd itself
 /// (and `.` if even that fails) so the wrapper never panics on a stray env.
-/// trace:STORY-612 | ai:claude
 fn headless_worktree_root() -> PathBuf {
     crate::find_project_root()
         .ok()
@@ -852,9 +858,9 @@ fn headless_worktree_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+// trace:BUG-226 | ai:claude
 /// BUG-226: spawn `claude --resume <id>` and wait — the spawn counterpart
 /// of `exec_claude_resume` for the standalone reviewer summary path.
-/// trace:BUG-226 | ai:claude
 pub fn spawn_claude_resume(
     id: &str,
     permission_mode: Option<&str>,
@@ -908,6 +914,7 @@ pub fn exec_codex_session(initial_prompt: &str) -> Result<()> {
     }
 }
 
+// trace:STORY-683 | ai:claude
 /// STORY-683: which vendor's headless CLI drives an orchestrator drain phase.
 /// The autonomous drain (`burndown` / `queue work --auto-complete --no-human`)
 /// used to hardcode `claude -p`; this enum lets the same spawn path launch
@@ -917,12 +924,12 @@ pub fn exec_codex_session(initial_prompt: &str) -> Result<()> {
 /// (via `AIDA_HEADLESS_VENDOR=codex` or `[orchestrator] headless_vendor =
 /// "codex"`), so an un-configured drain is byte-identical to the pre-STORY-683
 /// behavior. Prior art for the `codex exec` adapter is `compete.rs::vendor_adapter`.
-/// trace:STORY-683 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeadlessVendor {
     /// `claude -p …` — the default. The SPIKE-7 mandatory flag set.
     Claude,
-    /// `codex exec …` — the Codex headless CLI. trace:STORY-683
+    // trace:STORY-683
+    /// `codex exec …` — the Codex headless CLI.
     Codex,
 }
 
@@ -943,9 +950,10 @@ impl HeadlessVendor {
         }
     }
 
+    // trace:STORY-683 | ai:claude
     /// Parse a vendor token. Case-insensitive, surrounding whitespace tolerated.
     /// `None` for an unrecognized token so the caller can fall through to the
-    /// default rather than launch an unknown binary. trace:STORY-683 | ai:claude
+    /// default rather than launch an unknown binary.
     pub fn parse(raw: &str) -> Option<HeadlessVendor> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "claude" => Some(HeadlessVendor::Claude),
@@ -955,13 +963,14 @@ impl HeadlessVendor {
     }
 }
 
+// trace:STORY-683 | ai:claude
 /// STORY-683: resolve the vendor a headless drain spawn should use. Resolution
 /// order, highest precedence first:
 ///   1. `AIDA_HEADLESS_VENDOR` env (per-host / per-invocation override) — mirrors
 ///      the `AIDA_OS_WRAP` precedence convention; an unrecognized value is ignored.
 ///   2. `[orchestrator] headless_vendor` in the project config.
 ///   3. `Claude` (default) — so an un-configured drain is unchanged.
-/// `worktree_root` roots the config read. trace:STORY-683 | ai:claude
+/// `worktree_root` roots the config read.
 pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
     if let Some(raw) = std::env::var("AIDA_HEADLESS_VENDOR").ok() {
         if let Some(v) = HeadlessVendor::parse(&raw) {
@@ -975,13 +984,14 @@ pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
         .unwrap_or(HeadlessVendor::Claude)
 }
 
+// trace:STORY-683 | ai:claude
 /// STORY-683: build the argv (after the program name) for a headless launch of
 /// the given vendor. `Claude` reuses the SPIKE-7 mandatory flag set
 /// ([`claude_headless_args_with_posture`]); `Codex` builds the `codex exec`
 /// argv (prior art: `compete.rs::vendor_adapter`), with the prompt as the final
 /// positional. Pure — both arms are unit-tested without spawning. The `contained`
 /// posture only affects the Claude arm today (Codex carries its own sandbox via
-/// `--dangerously-bypass-approvals-and-sandbox`). trace:STORY-683 | ai:claude
+/// `--dangerously-bypass-approvals-and-sandbox`).
 pub fn headless_vendor_args(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -994,6 +1004,7 @@ pub fn headless_vendor_args(
     }
 }
 
+// trace:STORY-683 | ai:claude
 /// STORY-683: the `codex exec` argv (after the `codex` program name) for a
 /// one-shot headless run. Mirrors the working `compete.rs` adapter:
 /// `exec --dangerously-bypass-approvals-and-sandbox <prompt>`. Codex's headless
@@ -1001,7 +1012,7 @@ pub fn headless_vendor_args(
 /// claude's `-p`); approvals are bypassed so the run is unattended. The prompt
 /// is the final positional. Unlike claude there is no `--session-id` /
 /// `--output-format stream-json` (codex has no matching resumable session model),
-/// so the codex arm does not thread `session_id`. trace:STORY-683 | ai:claude
+/// so the codex arm does not thread `session_id`.
 pub fn codex_headless_args(prompt: &str) -> Vec<String> {
     vec![
         "exec".to_string(),
@@ -1010,6 +1021,8 @@ pub fn codex_headless_args(prompt: &str) -> Vec<String> {
     ]
 }
 
+// trace:BUG-327 | ai:claude
+// trace:STORY-263 | ai:claude
 /// STORY-263: build the argv (after the `claude` program name) for a headless
 /// `claude -p` launch. The flag set is SPIKE-7's mandatory list — see
 /// `docs/spikes/2026-05-16-claude-headless.md`:
@@ -1027,13 +1040,11 @@ pub fn codex_headless_args(prompt: &str) -> Vec<String> {
 ///     variadic on the claude side, so we wedge it between `--verbose`
 ///     and `--session-id` so the next `--` token terminates its value
 ///     list and the prompt positional at the tail stays the prompt.
-///     trace:BUG-327 | ai:claude
 ///   - `--session-id <uuid>` — persistence stays ON, so a killed run stays
 ///     resumable (spike Q9).
 ///
 /// Never `--bare`: it strips OAuth/keychain auth and breaks login (spike Q1).
 /// Pure — the flag set is unit-tested without spawning claude.
-/// trace:STORY-263 | ai:claude
 pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
     claude_headless_args_with_posture(prompt, session_id, false)
 }
@@ -1094,11 +1105,12 @@ fn claude_contained_settings_json() -> String {
     contained_settings_json(&allowed_hosts, managed_only)
 }
 
+// trace:STORY-605 | ai:claude
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
 /// Empty when unset, absent, or malformed — the network-egress restriction is
 /// strictly OPT-IN, so an absent/typo'd key never silently restricts a drain.
 /// Section is `[contained]` (not `[sandbox]`) to avoid colliding with the
-/// `aida sandbox` throwaway-store command's vocabulary. trace:STORY-605 | ai:claude
+/// `aida sandbox` throwaway-store command's vocabulary.
 pub(crate) fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<String> {
     let cfg = crate::read_project_config_value(project_root);
     crate::config_lookup(cfg.as_ref(), "contained", "allowed_hosts")
@@ -1111,6 +1123,7 @@ pub(crate) fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<Str
         .unwrap_or_default()
 }
 
+// trace:STORY-615 | ai:claude
 /// STORY-615: read `[contained] managed_domains_only` (bool, default false).
 /// When true, the contained settings add `sandbox.network.allowManagedDomainsOnly`
 /// so a HEADLESS drain default-DENIES egress (to the managed set + any
@@ -1118,7 +1131,6 @@ pub(crate) fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<Str
 /// hits — which a `claude -p` drain can't answer. Default OFF so a building drain
 /// that needs crates.io / github.com / npm isn't silently cut off; opt in only
 /// when the drain's egress is fully covered by the managed set + allowed_hosts.
-/// trace:STORY-615 | ai:claude
 pub(crate) fn contained_managed_domains_only(project_root: &std::path::Path) -> bool {
     let cfg = crate::read_project_config_value(project_root);
     crate::config_lookup(cfg.as_ref(), "contained", "managed_domains_only")
@@ -1126,13 +1138,14 @@ pub(crate) fn contained_managed_domains_only(project_root: &std::path::Path) -> 
         .unwrap_or(false)
 }
 
+// trace:STORY-617 | ai:claude
 /// STORY-617: read `[contained] read_allowlist` (a string array of absolute
 /// paths) from the project config. EMPTY when unset, absent, or malformed — the
 /// strict read-confinement is strictly OPT-IN (default-ABSENT key), so an
 /// absent/typo'd key never silently narrows the readable filesystem. Mirrors the
 /// slice-1 `allowed_hosts` rule. When non-empty the os_wrap path binds ONLY
 /// these paths (+ the essential system/toolchain paths + the worktree) ro,
-/// instead of `--ro-bind / /`. trace:STORY-617 | ai:claude
+/// instead of `--ro-bind / /`.
 pub(crate) fn contained_read_allowlist(project_root: &std::path::Path) -> Vec<String> {
     let cfg = crate::read_project_config_value(project_root);
     crate::config_lookup(cfg.as_ref(), "contained", "read_allowlist")
@@ -1145,6 +1158,7 @@ pub(crate) fn contained_read_allowlist(project_root: &std::path::Path) -> Vec<St
         .unwrap_or_default()
 }
 
+// trace:TASK-809 | ai:claude
 /// TASK-809: build the Claude Code MANAGED-settings JSON for a headless drain.
 /// STORY-615 already emits `sandbox.network.allowManagedDomainsOnly` in the
 /// project `--settings` JSON, but Claude Code only HARD-BLOCKS (deny without a
@@ -1158,7 +1172,7 @@ pub(crate) fn contained_read_allowlist(project_root: &std::path::Path) -> Vec<St
 /// Per Claude Code's docs, when `allowManagedDomainsOnly` is set in managed
 /// settings, ONLY `allowedDomains` from the MANAGED settings are honored — so the
 /// operator's `allowed_hosts` are mirrored here too. Pure + total so the shape is
-/// unit-tested without spawning. trace:TASK-809 | ai:claude
+/// unit-tested without spawning.
 pub(crate) fn managed_settings_json(allowed_hosts: &[String]) -> String {
     let mut network = serde_json::Map::new();
     network.insert(
@@ -1179,6 +1193,7 @@ pub(crate) fn managed_settings_json(allowed_hosts: &[String]) -> String {
     .to_string()
 }
 
+// trace:STORY-605
 /// Build the contained-mode `--settings` JSON. With a NON-EMPTY `allowed_hosts`
 /// egress allowlist, a `sandbox.network.allowedDomains` key is added so Claude
 /// Code's own sandbox (bubblewrap + an out-of-sandbox proxy on Linux) default-
@@ -1191,7 +1206,7 @@ pub(crate) fn managed_settings_json(allowed_hosts: &[String]) -> String {
 /// default; a headless `claude -p` drain can't answer that prompt. True block-
 /// without-prompt needs `network.allowManagedDomainsOnly` via MANAGED settings
 /// (not this project `--settings`) and is a follow-up — see STORY-605. Pure +
-/// total so the "empty → unchanged" invariant is unit-tested. trace:STORY-605
+/// total so the "empty → unchanged" invariant is unit-tested.
 pub(crate) fn contained_settings_json(
     allowed_hosts: &[String],
     managed_domains_only: bool,
@@ -1280,11 +1295,13 @@ fn destructive_command_deny_rules() -> Vec<&'static str> {
 // for an OS boundary and not getting one must never pass silently.
 // trace:STORY-612 | ai:claude
 
+// trace:STORY-612 | ai:claude
+// trace:TASK-866 | ai:claude
+// trace:TASK-876 | ai:claude
 /// Resolve the opt-in `[contained] os_wrap` flag from the project config rooted
 /// at `worktree_root`. Defaults to `false` (today's behavior) when unset,
 /// absent, malformed, or the config can't be read — the OS boundary is strictly
-/// opt-in, mirroring the slice-1 `allowed_hosts` rule. trace:STORY-612 | ai:claude
-/// trace:TASK-866 | ai:claude
+/// opt-in, mirroring the slice-1 `allowed_hosts` rule.
 ///
 /// The `AIDA_OS_WRAP` environment variable takes PRECEDENCE over the config
 /// value (TASK-876): `bwrap` availability is a per-MACHINE property, so its
@@ -1295,7 +1312,6 @@ fn destructive_command_deny_rules() -> Vec<&'static str> {
 /// shell / `.bashrc`) with NO shared-config change and NO risk to other clones.
 /// Accepts `1`/`true`/`yes` (on) and `0`/`false`/`no` (off), case-insensitive;
 /// an unrecognized value is ignored (falls through to config).
-/// trace:TASK-876 | ai:claude
 pub(crate) fn os_wrap_enabled(worktree_root: &Path) -> bool {
     if let Some(over) = os_wrap_env_override() {
         return over;
@@ -1306,10 +1322,11 @@ pub(crate) fn os_wrap_enabled(worktree_root: &Path) -> bool {
         .unwrap_or(false)
 }
 
+// trace:TASK-876 | ai:claude
 /// Parse the `AIDA_OS_WRAP` per-host override. Returns `Some(true)`/`Some(false)`
 /// for a recognized truthy/falsey value, `None` when the var is unset or holds
 /// an unrecognized value (so the config value is consulted). Case-insensitive;
-/// surrounding whitespace tolerated. trace:TASK-876 | ai:claude
+/// surrounding whitespace tolerated.
 fn os_wrap_env_override() -> Option<bool> {
     let raw = std::env::var("AIDA_OS_WRAP").ok()?;
     match raw.trim().to_ascii_lowercase().as_str() {
@@ -1319,6 +1336,7 @@ fn os_wrap_env_override() -> Option<bool> {
     }
 }
 
+// trace:STORY-612 | ai:claude
 /// Build the bubblewrap argv that goes BETWEEN the `bwrap` program name and the
 /// wrapped `claude` command — i.e. the confinement flags only. Pure + total so
 /// the write-confinement invariants (ro root, rw worktree, never `--unshare-net`)
@@ -1328,7 +1346,7 @@ fn os_wrap_env_override() -> Option<bool> {
 /// npm caches, the `~/.claude` auth dir + `~/.claude.json`). They use the
 /// `--bind-try` form so a missing path is skipped rather than erroring — only
 /// the worktree itself is a hard `--bind` (it always exists; the drain runs in
-/// it). trace:STORY-612 | ai:claude
+/// it).
 // STORY-617: the default (no read-allowlist) convenience entry — preserved as
 // the STORY-612 public signature; production now calls the `_inner` variant
 // directly to thread the opt-in allowlist. Still used by the bwrap unit tests.
@@ -1337,6 +1355,7 @@ pub(crate) fn bwrap_confinement_args(worktree: &Path, rw_paths: &[PathBuf]) -> V
     bwrap_confinement_args_inner(worktree, rw_paths, &[])
 }
 
+// trace:STORY-617 | ai:claude
 /// STORY-617: the essential system paths a strict read-confinement allowlist
 /// always binds (read-only) on top of the operator's `read_allowlist`, because
 /// `claude` / `node` / `cargo` cannot run without them. Kept minimal and
@@ -1344,13 +1363,14 @@ pub(crate) fn bwrap_confinement_args(worktree: &Path, rw_paths: &[PathBuf]) -> V
 /// shared libs under `/lib*`, system config (incl. resolv.conf and the
 /// `/etc/claude-code` managed-settings drop the TASK-809 path mounts over) and
 /// TLS roots under `/etc`. `/dev`, `/proc`, `/tmp` are provided separately by
-/// the bwrap `--dev`/`--proc`/`--tmpfs` flags. trace:STORY-617 | ai:claude
+/// the bwrap `--dev`/`--proc`/`--tmpfs` flags.
 fn strict_read_essential_paths() -> &'static [&'static str] {
     &[
         "/usr", "/bin", "/sbin", "/lib", "/lib64", "/lib32", "/etc", "/opt", "/nix", "/run", "/var",
     ]
 }
 
+// trace:STORY-617
 /// Build the bubblewrap confinement argv. STORY-617 adds an OPTIONAL strict
 /// read-confinement allowlist: when `read_allowlist` is NON-EMPTY the whole-
 /// filesystem `--ro-bind / /` base is REPLACED by an enumerated set of ro
@@ -1361,7 +1381,7 @@ fn strict_read_essential_paths() -> &'static [&'static str] {
 /// output is byte-for-byte the pre-STORY-617 write-confinement base (ro root),
 /// so the default posture is unchanged. The allowlist entries use `--ro-bind-try`
 /// so a listed-but-absent path is skipped rather than aborting the launch.
-/// Pure + total so both arms are unit-tested without spawning. trace:STORY-617
+/// Pure + total so both arms are unit-tested without spawning.
 pub(crate) fn bwrap_confinement_args_inner(
     worktree: &Path,
     rw_paths: &[PathBuf],
@@ -1420,6 +1440,7 @@ pub(crate) fn bwrap_confinement_args_inner(
     args
 }
 
+// trace:STORY-612 | ai:claude
 /// Compose the program + argv to actually exec for a headless `claude` launch,
 /// applying the STORY-612 OS-boundary wrapper when `[contained] os_wrap` is on.
 ///
@@ -1429,7 +1450,7 @@ pub(crate) fn bwrap_confinement_args_inner(
 ///   ro. Errors (fail-closed) if `bwrap` is not on PATH.
 ///
 /// `worktree_root` is the code worktree the drain runs in (its `.aida-store`
-/// sibling is bound rw). trace:STORY-612 | ai:claude
+/// sibling is bound rw).
 fn claude_program_and_args(
     worktree_root: &Path,
     claude_args: Vec<String>,
@@ -1437,6 +1458,7 @@ fn claude_program_and_args(
     os_wrapped_program_and_args(worktree_root, "claude", claude_args)
 }
 
+// trace:TASK-864 | ai:claude
 /// Generalized form of `claude_program_and_args` that wraps an ARBITRARY program
 /// (the headless paths pass the bare `"claude"`; the interactive `aida agent new`
 /// path passes the PATH-resolved claude binary). Same fail-closed contract:
@@ -1447,7 +1469,6 @@ fn claude_program_and_args(
 ///   (fail-closed) if `bwrap` is not on PATH or the userns preflight fails —
 ///   never launches unconfined when the OS boundary was requested.
 ///
-/// trace:TASK-864 | ai:claude
 pub(crate) fn os_wrapped_program_and_args(
     worktree_root: &Path,
     program: &str,
@@ -1523,11 +1544,12 @@ pub(crate) fn os_wrapped_program_and_args(
     Ok(("bwrap".to_string(), full))
 }
 
+// trace:STORY-612 | ai:claude
 /// Run a trivial `bwrap … true` to confirm bubblewrap can actually create the
 /// user namespace + uid map on this host BEFORE wrapping the real drain. On
 /// failure (typically the AppArmor unprivileged-userns restriction) bail with
 /// the remediation rather than letting the drain hit a cryptic bwrap error —
-/// and never fall through to an unconfined launch. trace:STORY-612 | ai:claude
+/// and never fall through to an unconfined launch.
 fn bwrap_preflight() -> Result<()> {
     use std::process::{Command, Stdio};
     let ran = Command::new("bwrap")
@@ -1560,11 +1582,12 @@ fn bwrap_preflight() -> Result<()> {
     }
 }
 
+// trace:TASK-865 | ai:claude
 /// Availability of the bubblewrap (`bwrap`) OS sandbox on this host, as
 /// reported by `aida doctor` / `aida init`. A read-only probe — it does NOT
 /// enable `os_wrap` (the `[contained] os_wrap` config knob, exposed separately
 /// by TASK-866); it only tells the user whether userns confinement *could* be
-/// used. trace:TASK-865 | ai:claude
+/// used.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BwrapAvailability {
     /// `bwrap` is on PATH and the userns self-test passes.
@@ -1576,11 +1599,11 @@ pub(crate) enum BwrapAvailability {
     UsernsBlocked { hint: String },
 }
 
+// trace:TASK-865 | ai:claude
 /// Probe whether the bubblewrap OS sandbox is available on this host: is
 /// `bwrap` on PATH, and does the trivial userns self-test pass? Reuses
 /// `which_on_path` + `bwrap_preflight` so the doctor/init report matches what
 /// the launch path actually checks. Read-only — never enables confinement.
-/// trace:TASK-865 | ai:claude
 pub(crate) fn bwrap_availability() -> BwrapAvailability {
     if which_on_path("bwrap").is_none() {
         return BwrapAvailability::NotInstalled;
@@ -1593,9 +1616,10 @@ pub(crate) fn bwrap_availability() -> BwrapAvailability {
     }
 }
 
+// trace:TASK-865 | ai:claude
 /// Distil `bwrap_preflight`'s long fail-closed message down to the one-line
 /// remediation a doctor/init status row wants. Falls back to the full text if
-/// the expected `Remediate with ONE of:` marker is absent. trace:TASK-865 | ai:claude
+/// the expected `Remediate with ONE of:` marker is absent.
 fn bwrap_userns_remediation_hint(full: &str) -> String {
     // The preflight message lists remediations after a "Remediate with ONE of:"
     // marker; surface the first concrete `sysctl` line as the short hint.
@@ -1618,24 +1642,27 @@ fn bwrap_userns_remediation_hint(full: &str) -> String {
         .to_string()
 }
 
+// trace:STORY-665 | ai:claude
 /// The exact command that lifts the kernel's unprivileged-userns restriction
 /// for the CURRENT boot (does not survive a reboot). Single source of truth so
 /// the doctor remediation, the guided setup printer, and the docs can't drift.
-/// trace:STORY-665 | ai:claude
 pub(crate) const BWRAP_USERNS_SYSCTL_RUNTIME: &str =
     "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0";
 
+// trace:STORY-665 | ai:claude
 /// The command that PERSISTS the userns sysctl across reboots via a
-/// `/etc/sysctl.d` drop-in. trace:STORY-665 | ai:claude
+/// `/etc/sysctl.d` drop-in.
 pub(crate) const BWRAP_USERNS_SYSCTL_PERSIST: &str =
     "echo 'kernel.apparmor_restrict_unprivileged_userns=0' \
      | sudo tee /etc/sysctl.d/99-aida-bwrap-userns.conf";
 
-/// The Debian/Ubuntu install command for bubblewrap. trace:STORY-665 | ai:claude
+// trace:STORY-665 | ai:claude
+/// The Debian/Ubuntu install command for bubblewrap.
 pub(crate) const BWRAP_INSTALL_DEBIAN: &str = "sudo apt install bubblewrap";
 
+// trace:STORY-612 | ai:claude
 /// Minimal PATH lookup for an executable name (avoids pulling in a `which`
-/// crate). Returns the first matching path, or `None`. trace:STORY-612 | ai:claude
+/// crate). Returns the first matching path, or `None`.
 fn which_on_path(exe: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
@@ -1643,17 +1670,20 @@ fn which_on_path(exe: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+// trace:STORY-263 | ai:claude
+// trace:STORY-278 | ai:claude
+// trace:TASK-307 | ai:claude
 /// STORY-263: replace this process with a headless `claude -p` run — the
 /// launch path behind `aida queue work --no-human` (the `--auto-complete`
 /// orchestrator's reviewer phase). Claude's stream-json stdout is redirected
 /// to `log_path` so the orchestrator's own stdout stays clean (it carries
 /// `--json` phase events) and TASK-298's watchdog has a file to tail; stderr
-/// stays inherited so Claude errors still surface. trace:STORY-263 | ai:claude
+/// stays inherited so Claude errors still surface.
 ///
 /// Sets `AIDA_HEADLESS=1` in the launched environment so skills can tell
 /// they are running unattended — the `/aida-review` skill keys its
 /// finding-filing step on it, since there is no human to triage the
-/// reviewer's findings. trace:STORY-278 | ai:claude
+/// reviewer's findings.
 ///
 /// TASK-307: the headless `claude -p` reviewer/implementer is now hosted by
 /// the parent (spawn + wait + exit) instead of `exec`-replacing it, so a
@@ -1663,7 +1693,7 @@ fn which_on_path(exe: &str) -> Option<PathBuf> {
 /// with the child's exit code. The pre-TASK-307 `exec()` behaviour is gone
 /// because the parent must stay alive to host the tee — including for the
 /// `--no-tee-headless` path, where the tee still runs so failure events
-/// (`is_error`, `permission_denials`) can never hide. trace:TASK-307 | ai:claude
+/// (`is_error`, `permission_denials`) can never hide.
 pub fn exec_claude_headless(
     prompt: &str,
     session_id: &str,
@@ -1695,13 +1725,14 @@ pub fn exec_claude_headless(
     std::process::exit(status.code().unwrap_or(1));
 }
 
+// trace:STORY-306 | ai:claude
 /// STORY-306: build the argv (after the `claude` program name) for a headless
 /// `claude -p --resume <id>` launch — the advisor tier's implementer-resume
 /// leg. Identical to [`claude_headless_args`] (the SPIKE-7 mandatory flag
 /// set) except it `--resume`s an existing session instead of minting a new
 /// `--session-id`, so the resumed implementer re-enters its punted phase-1
 /// conversation with the working model it had already built. Pure — the flag
-/// set is unit-tested without spawning claude. trace:STORY-306 | ai:claude
+/// set is unit-tested without spawning claude.
 pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String> {
     claude_headless_resume_args_with_posture(prompt, session_id, false)
 }
@@ -1741,6 +1772,7 @@ pub fn claude_headless_resume_args_with_posture(
     args
 }
 
+// trace:STORY-306 | ai:claude
 /// STORY-306: spawn a headless `claude -p --resume <id>` run and wait,
 /// returning the exit status. The spawn-and-wait counterpart of
 /// [`spawn_claude_headless`] for the orchestrator's advisor-resume leg — the
@@ -1754,7 +1786,7 @@ pub fn claude_headless_resume_args_with_posture(
 /// derived from cwd, so a resume from a different directory looks in the
 /// wrong slug folder and fails with "No conversation found." The original
 /// SPIKE-7 verification of this code missed this because the unit test
-/// exercises only the argv. trace:STORY-306 | ai:claude
+/// exercises only the argv.
 pub fn spawn_claude_headless_resume(
     prompt: &str,
     session_id: &str,
@@ -1832,11 +1864,11 @@ fn read_launches_for_cwd(cwd: &Path) -> Vec<LaunchRecord> {
         .collect()
 }
 
+// trace:FR-1-044 | ai:claude
 /// Find the closest launch record (by timestamp) that's within `window`
 /// seconds before-or-after the session's start time. Uses the .jsonl's
 /// FIRST event timestamp (≈ launch time), not the file mtime (which
 /// updates on every event).
-/// trace:FR-1-044 | ai:claude
 fn match_launch(
     launches: &[LaunchRecord],
     session_started_at: chrono::DateTime<chrono::Utc>,
@@ -1855,10 +1887,10 @@ fn collect_sessions(limit: usize) -> Result<Vec<SessionMeta>> {
     collect_sessions_from_cwd(&cwd, limit)
 }
 
+// trace:STORY-58 | ai:claude
 /// STORY-58: same as `collect_sessions` but for an arbitrary project root,
 /// so `aida session list` can pull a second batch from the parent project's
 /// Claude Code session storage when it's invoked inside a session worktree.
-/// trace:STORY-58 | ai:claude
 fn collect_sessions_from_cwd(cwd: &Path, limit: usize) -> Result<Vec<SessionMeta>> {
     let dir = claude_project_dir(cwd)?;
     if !dir.is_dir() {
@@ -1926,6 +1958,7 @@ pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
     Ok(home.join(".claude/projects").join(encoded))
 }
 
+// trace:TASK-112 | ai:claude
 /// TASK-112: scan every Claude Code project directory under
 /// `~/.claude/projects/` and return recorded sessions whose first-mentioned
 /// SPEC-ID matches `scope` (case-insensitive), most recent first. Used by
@@ -1936,7 +1969,7 @@ pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
 ///
 /// Bounded: across all project dirs we parse only the 150
 /// most-recently-modified `.jsonl` files, so the scan stays fast even with
-/// hundreds of historical sessions. trace:TASK-112 | ai:claude
+/// hundreds of historical sessions.
 pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
     let home = dirs::home_dir().context("HOME not set; cannot locate Claude sessions")?;
     let projects = home.join(".claude").join("projects");
@@ -2001,11 +2034,12 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
     Ok(out)
 }
 
+// trace:BUG-447 | ai:claude
 /// BUG-447: is a recorded session's `cwd` within the current project's scope —
 /// the project-root subtree, or a sibling `<root>-<slug>` worktree that
 /// `aida queue work` creates (`<parent>/<repo_name>-<slug>`)? `Path::starts_with`
 /// is component-wise, so a sibling worktree (`…/ai-task-007`) does NOT match the
-/// root (`…/ai`); the explicit sibling check handles it. trace:BUG-447 | ai:claude
+/// root (`…/ai`); the explicit sibling check handles it.
 fn session_cwd_in_project(cwd: &str, project_root: &Path) -> bool {
     let cwd = Path::new(cwd.trim());
     if cwd == project_root || cwd.starts_with(project_root) {
@@ -2025,6 +2059,7 @@ fn session_cwd_in_project(cwd: &str, project_root: &Path) -> bool {
     }
 }
 
+// trace:TASK-402 | ai:claude
 /// TASK-402: canonicalize a role name parsed out of a session's JSONL so
 /// `--list-sessions` reports the project-wide identity, not a deprecated
 /// alias. `dialog` is the legacy token (TASK-279) for `advisor` (TASK-586);
@@ -2032,7 +2067,6 @@ fn session_cwd_in_project(cwd: &str, project_root: &Path) -> bool {
 /// actually launched (`--role implementer`/`advisor`) and removes the
 /// "did the orchestrator launch the wrong role?" confusion during a
 /// resume-after-failure recovery. Pure + case-insensitive on the alias.
-/// trace:TASK-402 | ai:claude
 fn canonical_session_role(raw: &str) -> String {
     if raw.eq_ignore_ascii_case("dialog") {
         "advisor".to_string()
@@ -2041,9 +2075,10 @@ fn canonical_session_role(raw: &str) -> String {
     }
 }
 
+// trace:TASK-112 | ai:claude
 /// TASK-112: one-line summary of a recorded Claude session, for the
 /// `aida queue work --list-sessions` output. `<liveness> <id8>  <age>
-/// <role>  <title>`. trace:TASK-112 | ai:claude
+/// <role>  <title>`.
 pub fn format_session_line(m: &SessionMeta) -> String {
     format!(
         "{} {:<8}  {:>4}  {:<11}  {}",
@@ -2262,11 +2297,11 @@ fn first_spec_id(line: &str) -> Option<String> {
     None
 }
 
+// trace:STORY-58 | ai:claude
 /// STORY-58: column widths for the session-list table, computed over a
 /// chosen set of rows. Lifted out of `print_table` so the grouped path can
 /// compute one shared width set from the union of "this worktree" + parent
 /// rows, keeping columns aligned across both sections.
-/// trace:STORY-58 | ai:claude
 struct TableWidths {
     id_w: usize,
     age_w: usize,
@@ -2302,9 +2337,9 @@ fn print_table(sessions: &[SessionMeta]) {
     print_table_with_widths(sessions, &widths);
 }
 
+// trace:STORY-58 | ai:claude
 /// STORY-58: render the session-list table using caller-supplied widths
 /// (so two grouped sections can share one column layout).
-/// trace:STORY-58 | ai:claude
 fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
     println!(
         "{}",
@@ -2364,9 +2399,9 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
     }
 }
 
+// trace:STORY-59 | ai:claude
 /// STORY-59: render `<basename> @ <branch>` with truncation. Empty/no
 /// cwd shows a dash; missing branch shows just the basename.
-/// trace:STORY-59 | ai:claude
 fn format_worktree_label(cwd: Option<&str>, branch: Option<&str>, max: usize) -> String {
     let Some(cwd) = cwd else {
         return "-".to_string();
@@ -2458,10 +2493,11 @@ fn resolve_id(prefix: &str) -> Result<String> {
     }
 }
 
+// trace:TASK-112 | ai:claude
 /// Replace this process with `claude --resume <id>`. Falls back to spawn
 /// + wait on platforms without exec semantics. `permission_mode`, when
 ///   given, is passed through so a resumed `aida queue work` session keeps
-///   the same permission posture as a fresh one. trace:TASK-112 | ai:claude
+///   the same permission posture as a fresh one.
 pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>, contained: bool) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
@@ -2500,6 +2536,7 @@ mod tests {
     // trace:BUG-581 | ai:claude
     static OS_WRAP_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    // trace:BUG-581 | ai:claude
     /// RAII guard for the os_wrap env tests (BUG-581). On construction it locks
     /// the shared `OS_WRAP_ENV_LOCK` (recovering from a poisoned lock so one
     /// panicking test can't cascade), saves the ambient `AIDA_OS_WRAP`, and
@@ -2507,7 +2544,6 @@ mod tests {
     /// the saved value, so the rest of the suite is unaffected. Every os_wrap
     /// test acquires this at its top; mutators still set/remove the var within
     /// their body — those changes are also undone by the drop restore.
-    /// trace:BUG-581 | ai:claude
     struct OsWrapEnvGuard {
         _lock: std::sync::MutexGuard<'static, ()>,
         saved: Option<std::ffi::OsString>,
@@ -3070,10 +3106,11 @@ mod tests {
         assert_eq!(sanitize_for_tsv("plain"), "plain");
     }
 
+    // trace:STORY-59 | ai:claude
     /// STORY-59: liveness indicator buckets — `●` live (<5min), a recent
     /// marker (<1h), space for idle. The widths are visual; the test
     /// guards the bucket boundaries. The recent marker routes through the
-    /// glyph registry (TASK-840). trace:STORY-59 | ai:claude
+    /// glyph registry (TASK-840).
     #[test]
     fn liveness_indicator_buckets() {
         let recent = crate::glyphs::Glyph::InFlight.render(crate::glyphs::active_profile(None));
@@ -3085,10 +3122,10 @@ mod tests {
         assert_eq!(liveness_indicator(86_400), " ");
     }
 
+    // trace:STORY-59 | ai:claude
     /// STORY-59: worktree label = "<basename> @ <branch>", truncated
     /// with `…` when it overflows the column width. Empty cwd → "-".
     /// Missing branch → just the basename.
-    /// trace:STORY-59 | ai:claude
     #[test]
     fn worktree_label_formatting() {
         assert_eq!(format_worktree_label(None, None, 28), "-");
@@ -3109,10 +3146,10 @@ mod tests {
         assert!(truncated.ends_with('…'));
     }
 
+    // trace:STORY-59 | ai:claude
     /// STORY-59: extract_str pulls cwd out of a Claude Code event line.
     /// We piggyback on the existing `extract_str` helper; this test
     /// guards the marker we use.
-    /// trace:STORY-59 | ai:claude
     #[test]
     fn extract_cwd_from_event_line() {
         let line = r#"{"type":"user","cwd":"/home/joe/ai/aida-epic-20","message":{"role":"user"}}"#;
@@ -3224,9 +3261,9 @@ mod tests {
         assert!(args.contains(&"019e0000-0000-7000-8000-000000000000".to_string()));
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: a native interactive launch (`permission_mode = None`)
     /// injects NO `--permission-mode` — Claude uses its own default posture.
-    /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_native_omits_permission_mode() {
         let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"), false);
@@ -3239,8 +3276,8 @@ mod tests {
         assert!(args.contains(&"/aida-pickup".to_string()), "{args:?}");
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: an explicit mode is injected as `--permission-mode <m>`.
-    /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_some_injects_permission_mode() {
         let args = claude_session_args(Some("bypassPermissions"), None, None, None, false);
@@ -3272,12 +3309,13 @@ mod tests {
         );
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495 safety invariant: the headless argv ALWAYS forces
     /// `bypassPermissions` regardless of the interactive faithful default —
     /// a prompting (`default`) headless child has no TTY to answer and would
     /// hang the unattended drain forever. This is structurally separate from
     /// `claude_session_args`, so flipping the interactive default can never
-    /// reach it. trace:STORY-495 | ai:claude
+    /// reach it.
     #[test]
     fn headless_args_force_bypass_regardless_of_interactive_default() {
         // The interactive builder is now native-by-default…
@@ -3357,9 +3395,10 @@ mod tests {
         }
     }
 
+    // trace:STORY-683 | ai:claude
     /// STORY-683: the vendor selector builds the correct command for each vendor.
     /// Claude reuses the SPIKE-7 `claude -p` flag set; Codex builds `codex exec`.
-    /// This is the core vendor-dispatch invariant. trace:STORY-683 | ai:claude
+    /// This is the core vendor-dispatch invariant.
     #[test]
     fn headless_vendor_args_builds_correct_command_per_vendor() {
         let prompt = "/aida-review --pr 7";
@@ -3398,17 +3437,17 @@ mod tests {
         );
     }
 
+    // trace:STORY-683 | ai:claude
     /// STORY-683: the program a vendor spawns is its own binary.
-    /// trace:STORY-683 | ai:claude
     #[test]
     fn headless_vendor_program_maps_to_binary() {
         assert_eq!(HeadlessVendor::Claude.program(), "claude");
         assert_eq!(HeadlessVendor::Codex.program(), "codex");
     }
 
+    // trace:STORY-683 | ai:claude
     /// STORY-683: vendor-token parsing is case-insensitive, whitespace-tolerant,
     /// and rejects unknowns (so the caller falls through to the default).
-    /// trace:STORY-683 | ai:claude
     #[test]
     fn headless_vendor_parse_is_lenient_and_rejects_unknown() {
         assert_eq!(
@@ -3424,9 +3463,10 @@ mod tests {
         assert_eq!(HeadlessVendor::parse(""), None);
     }
 
+    // trace:STORY-683 | ai:claude
     /// STORY-683: with no env override and no config, the resolver defaults to
     /// Claude — an un-configured drain is byte-identical to the pre-STORY-683
-    /// behavior. trace:STORY-683 | ai:claude
+    /// behavior.
     #[test]
     fn resolve_headless_vendor_defaults_to_claude() {
         let _env = HeadlessVendorEnvGuard::acquire();
@@ -3434,9 +3474,9 @@ mod tests {
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
     }
 
+    // trace:STORY-683 | ai:claude
     /// STORY-683: `AIDA_HEADLESS_VENDOR=codex` selects Codex (env precedence);
     /// an unrecognized value is ignored and falls through to the Claude default.
-    /// trace:STORY-683 | ai:claude
     #[test]
     fn resolve_headless_vendor_env_override() {
         let _env = HeadlessVendorEnvGuard::acquire();
@@ -3493,6 +3533,7 @@ mod tests {
         assert!(args.contains(&"proceed with OAuth".to_string()), "{args:?}");
     }
 
+    // trace:BUG-327 | ai:claude
     /// BUG-327: both headless argv builders must structurally disable
     /// `AskUserQuestion` so a headless reviewer / implementer / advisor
     /// cannot reason past the skill-template instruction added in BUG-280
@@ -3502,7 +3543,6 @@ mod tests {
     /// to terminate the value list — otherwise the prompt positional at
     /// the tail would be consumed as a second "disallowed tool". This test
     /// pins both the presence and the safe placement.
-    /// trace:BUG-327 | ai:claude
     #[test]
     fn headless_argv_disables_askuserquestion_structurally() {
         for (label, args) in [
@@ -3620,6 +3660,7 @@ mod tests {
         );
     }
 
+    // trace:STORY-612 | ai:claude
     /// STORY-612 — the automated live-verify gate. Adapts to the host:
     ///
     /// - On a host where bubblewrap CAN create an unprivileged user namespace
@@ -3635,7 +3676,6 @@ mod tests {
     ///   os_wrap-enabled launch returns an Err carrying the remediation, and
     ///   never silently falls through to an unconfined run.
     ///
-    /// trace:STORY-612 | ai:claude
     #[test]
     fn bwrap_write_confinement_live_or_fail_closed() {
         // Clean, serialized os_wrap env baseline (BUG-581) — a leaked
@@ -3730,11 +3770,12 @@ mod tests {
         }
     }
 
+    // trace:TASK-876 | ai:claude
     /// TASK-876: the `AIDA_OS_WRAP` per-host override takes PRECEDENCE over the
     /// tracked config value, in BOTH directions, and recognizes the documented
     /// truthy/falsey spellings (case-insensitive). An unrecognized value falls
     /// through to the config. These tests mutate a process-global env var, so
-    /// they run serially under a shared mutex. trace:TASK-876 | ai:claude
+    /// they run serially under a shared mutex.
     #[test]
     fn aida_os_wrap_env_overrides_config() {
         // Serialize env mutation across the os_wrap tests + start clean; the
@@ -3787,11 +3828,12 @@ mod tests {
         assert!(os_wrap_enabled(on_dir.path()));
     }
 
+    // trace:TASK-864 | ai:claude
     /// TASK-864: the INTERACTIVE launch path (which calls
     /// `os_wrapped_program_and_args` with the PATH-resolved claude binary) is
     /// byte-identical to a bare exec when os_wrap is OFF, and produces a
     /// `bwrap … <binary> …` wrap (or a fail-closed Err on a userns-restricted
-    /// host) when os_wrap is ON. trace:TASK-864 | ai:claude
+    /// host) when os_wrap is ON.
     #[test]
     fn interactive_path_wraps_when_enabled_unchanged_when_off() {
         // Serialize + clean env baseline; the guard restores it on drop

@@ -96,13 +96,14 @@ pub fn ledger_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("punts.jsonl")
 }
 
+// trace:EPIC-28 | ai:claude
 /// `resolution_path` slug for an orchestrator shelving on phase failure
 /// (EPIC-28). The punt ledger is the project's "paused decisions" corpus —
 /// a phase failure that parked a spec in `NeedsAttention` belongs in the
 /// same file as a design-fork punt, distinguished by this slug.
-/// trace:EPIC-28 | ai:claude
 pub const RESOLUTION_SHELVED_FAILURE: &str = "shelved-by-failure";
 
+// trace:EPIC-28 | ai:claude
 /// Append a `shelved-by-failure` record to `.aida/punts.jsonl` derived from
 /// the structured [`aida_core::FailureReason`] the orchestrator just wrote
 /// onto the spec. Reuses the punt ledger (rather than a sibling file) so
@@ -110,7 +111,7 @@ pub const RESOLUTION_SHELVED_FAILURE: &str = "shelved-by-failure";
 /// is `PuntRecord::resolution_path == RESOLUTION_SHELVED_FAILURE`.
 ///
 /// Best-effort: a ledger-write failure here must not undo the spec's status
-/// flip, which is the load-bearing part. trace:EPIC-28 | ai:claude
+/// flip, which is the load-bearing part.
 pub fn append_failure_to_ledger(
     project_root: &Path,
     spec: &str,
@@ -139,6 +140,7 @@ pub fn append_failure_to_ledger(
     append_to_ledger(project_root, &record)
 }
 
+// trace:STORY-361
 /// Append one punt record to `.aida/punts.jsonl`, creating the file (and the
 /// `.aida/` directory) if needed. One JSON object per line.
 ///
@@ -146,7 +148,7 @@ pub fn append_failure_to_ledger(
 /// call so POSIX `O_APPEND` atomicity holds under concurrent writers. (The
 /// earlier `writeln!` form made multiple `write(2)` syscalls per record, so
 /// two concurrent writers could interleave content and newline, producing
-/// a torn JSON line both consumers dropped.) trace:STORY-361
+/// a torn JSON line both consumers dropped.)
 pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Result<()> {
     // Check telemetry opt-out
     if !crate::usage::is_enabled(Some(project_root)) {
@@ -166,9 +168,11 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
     Ok(())
 }
 
+// trace:STORY-306
+// trace:BUG-592 | ai:claude
 /// Read every punt-ledger record from `.aida/punts.jsonl`, in append order
 /// (oldest first). Bad or forward-incompatible lines are skipped rather than
-/// aborting the read; an absent ledger reads as empty. trace:STORY-306
+/// aborting the read; an absent ledger reads as empty.
 ///
 /// A fresh project's ledger starts EMPTY. The advisor decisions / findings
 /// surface only ever shows decisions this project actually made. (BUG-592:
@@ -177,7 +181,6 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
 /// only on telemetry being enabled — so a brand-new store's advisor surface
 /// cited AIDA-internal spec IDs the user never created. The dev-corpus seeds
 /// are gone; an absent ledger is the empty corpus it claims to be.)
-/// trace:BUG-592 | ai:claude
 pub fn read_ledger(project_root: &Path) -> Vec<PuntRecord> {
     let path = ledger_path(project_root);
     let Ok(body) = std::fs::read_to_string(path) else {
@@ -207,14 +210,16 @@ pub fn read_ledger(project_root: &Path) -> Vec<PuntRecord> {
 // (operator decision 2026-06-06) until it is actually wanted.
 // trace:TASK-340 | ai:claude
 
+// trace:TASK-340 | ai:claude
 /// `resolution_path` slug for a punt that the headless advisor tier could not
 /// resolve and handed back to a human — the unit of "human intervention" the
-/// autonomy-maturity metric counts. trace:TASK-340 | ai:claude
+/// autonomy-maturity metric counts.
 pub const RESOLUTION_ESCALATED_TO_HUMAN: &str = "escalated-to-human";
 
+// trace:TASK-340 | ai:claude
 /// One day's worth of human-intervention activity, derived from the punt
 /// ledger. `date` is the UTC calendar day; `interventions` is the number of
-/// escalate-to-human punt records raised that day. trace:TASK-340 | ai:claude
+/// escalate-to-human punt records raised that day.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AutonomyDay {
     /// UTC calendar day, `YYYY-MM-DD`.
@@ -223,18 +228,20 @@ pub struct AutonomyDay {
     pub interventions: usize,
 }
 
+// trace:TASK-340 | ai:claude
 /// Whether a punt record represents a human intervention (an escalation a
 /// human had to resolve). Both the `resolution_path` slug and STORY-325's
 /// `decision == "escalated"` field are honored so older and newer record
-/// shapes both count. trace:TASK-340 | ai:claude
+/// shapes both count.
 pub fn is_human_intervention(r: &PuntRecord) -> bool {
     r.resolution_path == RESOLUTION_ESCALATED_TO_HUMAN || r.decision.as_deref() == Some("escalated")
 }
 
+// trace:TASK-340 | ai:claude
 /// Roll up escalate-to-human punt records into a per-day intervention count,
 /// newest day first. Pure over a slice of records so it is unit-testable
 /// against fixture data. Days with zero escalations are omitted (the ledger
-/// only records decisions, not idle time). trace:TASK-340 | ai:claude
+/// only records decisions, not idle time).
 pub fn human_interventions_by_day(records: &[PuntRecord]) -> Vec<AutonomyDay> {
     use std::collections::BTreeMap;
     let mut by_day: BTreeMap<String, usize> = BTreeMap::new();
@@ -253,8 +260,8 @@ pub fn human_interventions_by_day(records: &[PuntRecord]) -> Vec<AutonomyDay> {
         .collect()
 }
 
+// trace:TASK-340 | ai:claude
 /// Total escalate-to-human interventions across all supplied records.
-/// trace:TASK-340 | ai:claude
 pub fn total_human_interventions(records: &[PuntRecord]) -> usize {
     records.iter().filter(|r| is_human_intervention(r)).count()
 }
@@ -416,8 +423,8 @@ pub fn read_hold_signal(path: &Path) -> Option<HoldSignal> {
 // verdict files, STORY-285 findings, the TASK-329 sentinel): one request file
 // in, one response file out, both under `.aida/punts/`. trace:STORY-306
 
+// trace:STORY-306 | ai:claude
 /// What a headless advisor decided about a punted design-fork.
-/// trace:STORY-306 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PuntResolution {
@@ -428,11 +435,12 @@ pub enum PuntResolution {
     Escalated,
 }
 
+// trace:STORY-306
 /// The rich, ultraplan-grade payload the orchestrator writes for a headless
 /// advisor to judge a punted design-fork. Everything an advisor with **no
 /// session context** needs: the structured fork (`question` + `options` +
 /// `stakes` + `lean`) plus a markdown brief (`context_markdown` — the spec,
-/// its acceptance, graph context, trace-graph helpers). trace:STORY-306
+/// its acceptance, graph context, trace-graph helpers).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PuntRequest {
     /// Display ID of the punted spec.
@@ -458,8 +466,9 @@ pub struct PuntRequest {
     pub context_markdown: String,
 }
 
+// trace:STORY-306 | ai:claude
 /// The headless advisor's answer to a [`PuntRequest`], written back for the
-/// orchestrator to act on. trace:STORY-306 | ai:claude
+/// orchestrator to act on.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PuntResponse {
     /// Whether the advisor resolved the fork or escalated it.
@@ -777,10 +786,10 @@ mod tests {
         assert!(lines[0].contains("\"design-fork\""), "{}", lines[0]);
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: the shelving helper writes one ledger line with the
     /// `shelved-by-failure` discriminator + a `failure:<phase>` slug on
     /// `decision`, so STORY-325 analysis can filter punts out of failures.
-    /// trace:EPIC-28 | ai:claude
     #[test]
     fn append_failure_to_ledger_writes_shelved_marker() {
         let dir = tempfile::tempdir().unwrap();
@@ -807,10 +816,11 @@ mod tests {
         assert!(rec.resolved_at.is_none());
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: shelving records sit in the same ledger as punts but use
     /// `category = Other`. STORY-325 punt-frequency views can subtract
     /// shelved records by the `resolution_path` discriminator without
-    /// having to special-case the category. trace:EPIC-28 | ai:claude
+    /// having to special-case the category.
     #[test]
     fn append_failure_to_ledger_preserves_punt_category_other() {
         let dir = tempfile::tempdir().unwrap();

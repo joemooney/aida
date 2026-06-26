@@ -32,8 +32,8 @@ use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
 
+// trace:STORY-667 | ai:claude
 /// One built-in shortcut row in the `aida alias` registry.
-/// trace:STORY-667 | ai:claude
 #[derive(Debug, Clone, Serialize)]
 pub struct AliasRow {
     /// The alias as the user types it (e.g. `aida list open`).
@@ -44,8 +44,8 @@ pub struct AliasRow {
     pub meaning: String,
 }
 
+// trace:STORY-667 | ai:claude
 /// A surface group of built-in shortcuts.
-/// trace:STORY-667 | ai:claude
 #[derive(Debug, Clone, Serialize)]
 pub struct AliasGroup {
     /// The surface name (e.g. "Status lenses").
@@ -56,11 +56,12 @@ pub struct AliasGroup {
     pub rows: Vec<AliasRow>,
 }
 
+// trace:STORY-667 | ai:claude
 /// The canonical status tokens accepted as positional shortcuts on `aida list`.
 /// Every entry MUST parse via `RequirementStatus::from_filter_str` (asserted by
 /// a unit test) — that recognizer is the single source for "what is a valid
 /// status shortcut", so this list documents the accepted set without forking
-/// it. trace:STORY-667 | ai:claude
+/// it.
 const STATUS_TOKENS: &[&str] = &[
     "draft",
     "approved",
@@ -80,13 +81,14 @@ fn row(alias: &str, expands_to: &str, meaning: &str) -> AliasRow {
     }
 }
 
+// trace:STORY-667 | ai:claude
 /// Build the full grouped registry of built-in shortcuts.
 ///
 /// The List-lenses group is DERIVED from [`crate::LIST_LENS_ALIASES`] so it
 /// can't drift from `rewrite_list_alias`. The other groups document resolvers
 /// (status-shortcut expansion in the `List` handler, `rewrite_advisor_assess`,
 /// `rewrite_agent_default_new`, and clap's `#[command(alias = "intake")]`); a
-/// unit test pins each to the live resolver. trace:STORY-667 | ai:claude
+/// unit test pins each to the live resolver.
 pub fn registry() -> Vec<AliasGroup> {
     // --- Status lenses (positional status shortcut on `aida list`) ----------
     // `aida list <status>` == `aida list --status <status>`; the `open` /
@@ -239,8 +241,9 @@ pub fn registry() -> Vec<AliasGroup> {
     groups
 }
 
+// trace:STORY-667
 /// Run `aida alias` / `aida alias list`. Prints the grouped registry of
-/// built-in shortcuts, or the JSON form with `--json`. trace:STORY-667
+/// built-in shortcuts, or the JSON form with `--json`.
 pub fn run(json: bool) -> Result<()> {
     let groups = registry();
 
@@ -288,10 +291,10 @@ pub fn run(json: bool) -> Result<()> {
 mod tests {
     use super::*;
 
+    // trace:STORY-667
     /// The registry's List-lenses group must agree with the live
     /// `rewrite_list_alias` resolver for every lens it advertises — drive both
     /// from `LIST_LENS_ALIASES` and prove the rewrite actually fires.
-    /// trace:STORY-667
     #[test]
     fn list_lenses_agree_with_resolver() {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
@@ -308,9 +311,10 @@ mod tests {
         }
     }
 
+    // trace:STORY-667
     /// Every advertised status token must be accepted by the live recognizer
     /// (`RequirementStatus::from_filter_str`) — so the registry can't advertise
-    /// a status shortcut the `aida list` path would reject. trace:STORY-667
+    /// a status shortcut the `aida list` path would reject.
     #[test]
     fn status_tokens_agree_with_recognizer() {
         for tok in STATUS_TOKENS {
@@ -328,9 +332,9 @@ mod tests {
         }
     }
 
+    // trace:STORY-667
     /// The registry must cover the known lenses + status aliases — guards
     /// against a lens silently dropping out of the catalog.
-    /// trace:STORY-667
     #[test]
     fn registry_covers_known_shortcuts() {
         let groups = registry();
@@ -368,10 +372,10 @@ mod tests {
         }
     }
 
+    // trace:STORY-667
     /// The command-alias rows must agree with the live resolvers: the
     /// `advisor assess` -> `assess` rewrite, the bare `agent` -> `agent new`
     /// default, and clap's `intake` alias on the `Assess` variant.
-    /// trace:STORY-667
     #[test]
     fn command_aliases_agree_with_resolvers() {
         use crate::cli::{Cli, Command};
@@ -411,8 +415,8 @@ mod tests {
         );
     }
 
+    // trace:STORY-667
     /// `--json` output is valid JSON and round-trips the group shape.
-    /// trace:STORY-667
     #[test]
     fn json_output_is_valid() {
         let groups = registry();

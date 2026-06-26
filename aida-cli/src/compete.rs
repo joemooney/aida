@@ -188,9 +188,10 @@ pub fn count_diff_lines(numstat: &str) -> usize {
         .sum()
 }
 
+// trace:TASK-835
 /// Glyphs the report renderer needs, supplied by the caller from the central
 /// registry (so this pure module never embeds raw glyph literals — they route
-/// through `[ui] glyphs` / `AIDA_GLYPHS`). trace:TASK-835
+/// through `[ui] glyphs` / `AIDA_GLYPHS`).
 #[derive(Debug, Clone)]
 pub struct ReportGlyphs {
     pub check: String,
@@ -325,12 +326,13 @@ pub struct DeterministicRank {
     pub files_touched: usize,
 }
 
+// trace:STORY-660 | ai:claude
 /// Rank the gate-passing arms by the cheap deterministic signal: fewer changed
 /// lines first, ties broken by fewer files touched, then by vendor name for a
 /// stable order. Only arms that actually passed the gate are ranked — a failing
 /// arm is not a winner candidate regardless of how small its diff is. The
 /// `files_touched` per vendor is supplied by the caller (it counts `--numstat`
-/// rows); arms missing a diff measurement sort last. trace:STORY-660 | ai:claude
+/// rows); arms missing a diff measurement sort last.
 pub fn deterministic_ranking(
     results: &[ArmResult],
     files_touched: &[(String, usize)],
@@ -358,9 +360,10 @@ pub fn deterministic_ranking(
     ranked
 }
 
+// trace:STORY-660 | ai:claude
 /// Render the deterministic-rank block for the report. Pure. Shows each
 /// gate-passing arm ordered smaller-diff-first, marking the leader. This is a
-/// useful tie-breaker on its own (no LLM needed). trace:STORY-660 | ai:claude
+/// useful tie-breaker on its own (no LLM needed).
 pub fn render_deterministic_ranking(ranked: &[DeterministicRank]) -> String {
     if ranked.is_empty() {
         return "Deterministic ranking: no gate-passing arms to rank.\n".to_string();
@@ -421,16 +424,17 @@ pub struct JudgeVerdict {
     pub reasoning: String,
 }
 
+// trace:STORY-660 | ai:claude
 /// The JSON shape we ask the judge to emit, then parse. Keeping the prompt's
 /// contract in one place so the prompt builder and the parser can't drift.
-/// trace:STORY-660 | ai:claude
 pub const JUDGE_JSON_CONTRACT: &str = r#"{"scores":[{"vendor":"<name>","spec_adherence":1-5,"correctness":1-5,"simplicity":1-5,"test_coverage":1-5}],"winner":"<vendor>","reasoning":"<one line>"}"#;
 
+// trace:TASK-869 | ai:claude
 /// Which vendor renders the rubric judgment. The judge PROMPT is identical for
 /// both; only the executing model changes. Default `Claude` preserves the
 /// pre-TASK-869 behaviour. Splitting the judge from the implementer vendor is
 /// what removes the self-evaluation caveat: a Codex judge over a Claude-vs-Codex
-/// bake-off is no longer Claude grading Claude. trace:TASK-869 | ai:claude
+/// bake-off is no longer Claude grading Claude.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum JudgeVendor {
     #[default]
@@ -474,6 +478,7 @@ impl JudgeVendor {
     }
 }
 
+// trace:TASK-869 | ai:claude
 /// Build the full judge argv (binary + args) for a vendor, with the prompt as
 /// the final positional argument. The binary is `AIDA_COMPETE_JUDGE` if set
 /// (parallels the vendor-binary override patterns), else the vendor default.
@@ -483,7 +488,6 @@ impl JudgeVendor {
 ///
 /// Pure + unit-tested; the I/O (spawn, stdin-redirect, parse) is the caller's.
 /// `binary_override` is the resolved `AIDA_COMPETE_JUDGE` value (or `None`).
-/// trace:TASK-869 | ai:claude
 pub fn judge_command(
     vendor: JudgeVendor,
     binary_override: Option<&str>,
@@ -508,10 +512,10 @@ pub fn judge_command(
     (binary, args)
 }
 
+// trace:STORY-660 | ai:claude
 /// Build the rubric-judge prompt: the spec context + each candidate's diff, with
 /// the strict JSON contract. Pure — the I/O (gathering diffs, spawning the
 /// judge) is the caller's. `candidates` is `(vendor, diff_text)`.
-/// trace:STORY-660 | ai:claude
 pub fn build_judge_prompt(
     spec_id: &str,
     spec_context: &str,
@@ -541,10 +545,11 @@ pub fn build_judge_prompt(
     p
 }
 
+// trace:STORY-660 | ai:claude
 /// Parse the judge's raw stdout into a [`JudgeVerdict`]. Tolerant of a model
 /// that wraps the JSON in prose or a ```json fence: we extract the first
 /// balanced `{...}` object and parse it. Returns `None` if no valid verdict is
-/// found. Pure + unit-tested. trace:STORY-660 | ai:claude
+/// found. Pure + unit-tested.
 pub fn parse_judge_verdict(raw: &str) -> Option<JudgeVerdict> {
     let json = extract_first_json_object(raw)?;
     let v: serde_json::Value = serde_json::from_str(&json).ok()?;
@@ -592,9 +597,10 @@ pub fn parse_judge_verdict(raw: &str) -> Option<JudgeVerdict> {
     })
 }
 
+// trace:STORY-660 | ai:claude
 /// Extract the first balanced `{...}` JSON object from arbitrary text (the judge
 /// may emit prose or a fenced block around it). Returns the substring including
-/// the braces. trace:STORY-660 | ai:claude
+/// the braces.
 fn extract_first_json_object(raw: &str) -> Option<String> {
     let bytes = raw.as_bytes();
     let start = raw.find('{')?;
@@ -628,9 +634,10 @@ fn extract_first_json_object(raw: &str) -> Option<String> {
     None
 }
 
+// trace:STORY-660 | ai:claude
 /// Render the judge verdict block for the report: a per-axis score table plus
 /// the clearly-marked recommended winner. Pure + unit-tested. REPORT-ONLY — the
-/// human/advisor still merges. trace:STORY-660 | ai:claude
+/// human/advisor still merges.
 pub fn render_judge_verdict(verdict: &JudgeVerdict) -> String {
     let mut out = String::new();
     out.push_str("Rubric judge (1-5 per axis; report-only, no auto-merge):\n");
@@ -669,8 +676,9 @@ pub fn render_judge_verdict(verdict: &JudgeVerdict) -> String {
     out
 }
 
+// trace:STORY-660 | ai:claude
 /// Render the full recommended-winner line with the resolved branch, given the
-/// arm results (so the branch is accurate). Pure. trace:STORY-660 | ai:claude
+/// arm results (so the branch is accurate). Pure.
 pub fn render_recommended_winner(verdict: &JudgeVerdict, results: &[ArmResult]) -> String {
     let branch = results
         .iter()

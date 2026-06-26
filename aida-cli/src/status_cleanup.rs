@@ -20,8 +20,9 @@
 use colored::Colorize;
 use std::io::Write;
 
+// trace:TASK-840 | ai:claude
 /// Render a registry glyph honoring the active profile. Default Unicode profile
-/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+/// reproduces the historical literals byte-for-byte.
 fn glyph(g: crate::glyphs::Glyph) -> &'static str {
     crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
 }
@@ -127,10 +128,10 @@ pub(crate) struct OpenPrItem {
     pub head_branch: String,
     pub ci_rollup: Option<String>,
     pub mergeable: Option<String>,
+    // trace:STORY-465 | ai:claude
     /// `reviewDecision` from `gh pr list`: `APPROVED`, `CHANGES_REQUESTED`,
     /// `REVIEW_REQUIRED`, or `""`/None when no review is set up on the repo.
     /// The "Awaiting you" classifier excludes `CHANGES_REQUESTED` PRs.
-    /// trace:STORY-465 | ai:claude
     pub review_decision: Option<String>,
 }
 
@@ -151,8 +152,9 @@ pub(crate) struct DormantLeaseItem {
     pub role: Option<String>,
     pub worktree_path: std::path::PathBuf,
     pub age_hours: i64,
+    // trace:BUG-376
     /// True when the lease's scope is a spec at status Done or Completed
-    /// — the BUG-376 lingering-implementer signal. trace:BUG-376
+    /// — the BUG-376 lingering-implementer signal.
     pub spec_done: bool,
 }
 
@@ -174,10 +176,10 @@ pub(crate) struct OrphanProjectDirItem {
     pub jsonl_count: usize,
 }
 
+// trace:STORY-469 | ai:claude
 /// STORY-469 Guard 3: a spec whose status claims Done/Completed but whose
 /// local reality contradicts the claim. `kind` names which contradiction
 /// fired so the renderer can word the recovery hint precisely.
-/// trace:STORY-469 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct ClaimedDoneDivergedItem {
     pub spec_id: String,
@@ -187,7 +189,8 @@ pub(crate) struct ClaimedDoneDivergedItem {
     pub kind: DivergenceKind,
 }
 
-/// Why a claimed-Done spec is flagged as diverged. trace:STORY-469 | ai:claude
+// trace:STORY-469 | ai:claude
+/// Why a claimed-Done spec is flagged as diverged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DivergenceKind {
     /// An active lease covers the spec AND the worktree has uncommitted
@@ -221,6 +224,7 @@ impl CleanupReport {
         self.total() == 0
     }
 
+    // trace:TASK-753 | ai:claude
     /// Whether at least one rendered finding belongs to a category that
     /// `aida doctor heal` can actually auto-fix. Drives the read→heal
     /// signpost at the foot of the "Needs attention" report: the pointer
@@ -239,11 +243,11 @@ impl CleanupReport {
     /// (`branches_ahead_no_pr` → `orphan-branches`), so they don't light the
     /// pointer on their own. Keep this in sync with `heal_doctor_finding`'s
     /// match arms when a cleanup category gains a heal action.
-    /// trace:TASK-753 | ai:claude
     pub fn is_doctor_healable(&self) -> bool {
         !self.sticky_in_progress.is_empty() || !self.stale_reviewer_leases.is_empty()
     }
 
+    // trace:TASK-1-099-companion | ai:claude
     /// Multi-line summary suitable for appending to the default
     /// `aida status` output when the report is non-empty. Inlines
     /// per-category counts + a single representative item per non-empty
@@ -251,7 +255,6 @@ impl CleanupReport {
     /// --cleanup` to learn what the count refers to. The hint at the
     /// bottom still points at `--cleanup` for the full report (with
     /// recovery commands per item).
-    /// trace:TASK-1-099-companion | ai:claude
     pub fn summary_line(&self) -> Option<String> {
         // Project-scoped count for the summary: excludes orphan_project_dirs
         // (system-wide cross-project state surfaced in --cleanup instead;
@@ -936,9 +939,10 @@ fn render_claimed_done_diverged(
     Ok(())
 }
 
+// trace:STORY-469 | ai:claude
 /// One spec's local-vs-substrate facts, fed to [`detect_claimed_done_divergence`].
 /// Pure data so the detector is filesystem-free and unit-testable; `main.rs`
-/// gathers these from leases + git + the store. trace:STORY-469 | ai:claude
+/// gathers these from leases + git + the store.
 #[derive(Debug, Clone)]
 pub(crate) struct ClaimedDoneInput {
     pub spec_id: String,
@@ -960,13 +964,14 @@ pub(crate) struct ClaimedDoneInput {
     pub has_pr: bool,
 }
 
+// trace:STORY-469 | ai:claude
 /// STORY-469 Guard 3 (pure core): flag specs whose status claims Done/Completed
 /// but whose local reality contradicts the claim. Two contradictions fire:
 ///   1. an active lease + a dirty worktree (work still on disk despite Done), and
 ///   2. no commit references the spec AND no PR exists (no shipping evidence).
 ///      Specs whose status is not Done/Completed are never flagged here (sticky
 ///      In-Progress is a separate category). Returns the diverged items in input
-///      order. trace:STORY-469 | ai:claude
+///      order.
 pub(crate) fn detect_claimed_done_divergence(
     inputs: &[ClaimedDoneInput],
 ) -> Vec<ClaimedDoneDivergedItem> {
@@ -1483,13 +1488,13 @@ mod tests {
         assert!(out.is_empty(), "non-Done spec should be skipped: {out:?}");
     }
 
+    // trace:BUG-606 | ai:claude
     /// A `Completed` spec still qualifies for the DIRTY-WORKTREE contradiction
     /// (uncommitted work despite Completed) — but NOT for no-commit-no-pr: a
     /// Completed spec with no commit is legacy (predates the `(SPEC-ID)` trailer
     /// convention) or merge-driven, never a reopen-worthy divergence. Firing on
     /// legacy completeds produced ~1464 false positives (BUG-606); the separate
     /// completed-without-commit doctor category covers Completed.
-    /// trace:BUG-606 | ai:claude
     #[test]
     fn guard3_completed_qualifies_for_dirty_worktree_not_no_commit() {
         // Dirty worktree on a Completed spec → flagged (contradiction 1).

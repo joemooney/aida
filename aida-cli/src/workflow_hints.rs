@@ -162,12 +162,12 @@ pub fn emit(project_root: Option<&Path>, lines: &[String]) {
     }
 }
 
+// trace:BUG-232 | ai:claude
 /// BUG-232: what `aida queue done` could determine about the current
 /// branch's pull-request state. Lets the drained-queue hint sharpen the
 /// generic "open a PR" nudge into a pointed "no PR open — run `/aida-pr`"
 /// warning when the branch carries committed-but-unshipped work — the
 /// failure mode where a `--zen` session left a spec Done but unmergeable.
-/// trace:BUG-232 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrState {
     /// `gh` confirmed an open PR (carrying its number) for the branch.
@@ -179,9 +179,10 @@ pub enum PrState {
     Unknown,
 }
 
+// trace:BUG-232
 /// Pure builder for the drained-queue hint lines — split out so the
 /// message selection is unit-testable without touching config or env.
-/// `branch` + `pr` drive the BUG-232 PR-aware sharpening. trace:BUG-232
+/// `branch` + `pr` drive the BUG-232 PR-aware sharpening.
 /// | ai:claude
 fn queue_drained_hint_lines(
     kind: crate::forge::ForgeKind,
@@ -258,6 +259,7 @@ fn queue_drained_hint_lines(
     vec![header, body]
 }
 
+// trace:BUG-285 | ai:claude
 /// BUG-285: pure decision for whether `aida queue done`'s PR check should
 /// be bypassed. Takes ALL three flags `aida queue done` accepts —
 /// `--yes`, `--force`, `--skip-pr-check` — so the invariant *"--yes does
@@ -271,12 +273,12 @@ fn queue_drained_hint_lines(
 /// `--skip-pr-check` (BUG-285, intent-named). Both bypass identically;
 /// `--skip-pr-check` is the recommended name when the bypass is
 /// specifically about the PR-check gate.
-/// trace:BUG-285 | ai:claude
 pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: bool) -> bool {
     let _ = yes;
     force || skip_pr_check
 }
 
+// trace:BUG-269 BUG-285 | ai:claude
 /// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
 /// Returns `Some(error_lines)` when the call must be refused (committed-
 /// but-unshipped work with no open PR), `None` to proceed.
@@ -301,7 +303,6 @@ pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: 
 /// `display_id` is the short id (e.g. `BUG-249`) used verbatim in the
 /// suggested follow-up commands; that's what the user typed and what they
 /// want to re-type.
-/// trace:BUG-269 BUG-285 | ai:claude
 pub fn queue_done_precheck_error(
     display_id: &str,
     branch_commits_ahead: Option<u32>,
@@ -333,6 +334,7 @@ pub fn queue_done_precheck_error(
     Some(vec![summary, action, bypass])
 }
 
+// trace:TASK-500 | ai:claude
 /// TASK-500: the resolved outcome of the `aida queue done` PR-check gate.
 /// Extracted from the inline match-tree in `QueueCommand::Done`'s handler
 /// so the whole decision can be exercised in isolation — every skip path,
@@ -340,7 +342,6 @@ pub fn queue_done_precheck_error(
 ///
 /// The caller maps each variant to its I/O: `Refuse` → print lines + exit 1,
 /// `SilentSkip` → print the warning line, `Proceed` → do nothing.
-/// trace:TASK-500 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueueDoneGateDiagnose {
     /// All conditions resolved; the gate decided to refuse with these error lines.
@@ -356,10 +357,10 @@ pub enum QueueDoneGateDiagnose {
     },
 }
 
+// trace:TASK-500 | ai:claude
 /// TASK-500: which precondition could not be resolved, so the gate skipped.
 /// One variant per `if let`/`match` arm in the original inline tree, so a
 /// test can assert the right warning fires for each failure mode.
-/// trace:TASK-500 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkipReason {
     /// `find_project_root` failed — no `.aida/` anchor to resolve git from.
@@ -374,6 +375,7 @@ pub enum SkipReason {
     GhUnknown,
 }
 
+// trace:TASK-500 | ai:claude
 /// TASK-500: pure decision for the `aida queue done` PR-check gate. Mirrors
 /// the inline tree that used to live in `QueueCommand::Done`'s handler but
 /// with the I/O dependencies injected as closures, so every branch is unit-
@@ -396,7 +398,6 @@ pub enum SkipReason {
 /// refusals. The closures let the caller keep using the real
 /// `find_project_root` / `current_branch_at` / `branch_commits_ahead_main` /
 /// `change_lookup_for_branch` helpers while tests inject fakes.
-/// trace:TASK-500 | ai:claude
 pub fn queue_done_precheck_diagnose(
     display_id: &str,
     project_root: anyhow::Result<PathBuf>,
@@ -475,6 +476,7 @@ pub fn queue_done_precheck_diagnose(
     }
 }
 
+// trace:BUG-232 | ai:claude
 /// Hint after `queue done` (or any other op that just emptied the queue
 /// for the active role+scope). Caller is responsible for verifying the
 /// queue is actually empty before calling — we trust the caller.
@@ -482,7 +484,6 @@ pub fn queue_done_precheck_diagnose(
 /// BUG-232: `branch` + `pr` let the hint distinguish "committed but no PR
 /// open" (a pointed warning — the spec would otherwise sit Done-but-
 /// unshipped) from "PR already open" (merge it) and the generic case.
-/// trace:BUG-232 | ai:claude
 pub fn after_queue_drained(
     project_root: Option<&Path>,
     role: Option<&str>,
@@ -502,6 +503,7 @@ pub fn after_queue_drained(
     emit(project_root, &lines);
 }
 
+// trace:TASK-267 | ai:claude
 /// Build the post-`session end` PR hint as ready-to-print lines.
 ///
 /// The hint is a SEQUENTIAL step chain (review → merge → pull), so it
@@ -510,7 +512,7 @@ pub fn after_queue_drained(
 /// self-merge sidebar for solo developers with no separate reviewer.
 /// This is deliberately NOT the Path/Action/Why table format (TASK-260):
 /// that shape is for parallel choices (pick one of N); this is a do-all
-/// sequence. trace:TASK-267 | ai:claude
+/// sequence.
 ///
 /// `tty` picks the form — the multi-line numbered block for an
 /// interactive terminal, a single-line summary when stderr is piped.
@@ -557,11 +559,11 @@ fn session_end_pr_hint_lines(
     ]
 }
 
+// trace:TASK-267 | ai:claude
 /// Hint after `aida session end` filed (or found an existing) review
 /// story for a PR on the just-ended branch. Shows the FULL remaining
 /// path — start review, merge, pull — plus the self-merge alternative,
 /// so the user isn't left one step short with the spec stuck at Done.
-/// trace:TASK-267 | ai:claude
 pub fn after_session_end_with_pr(
     project_root: Option<&Path>,
     pr_number: u64,

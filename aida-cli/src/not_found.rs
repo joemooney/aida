@@ -102,6 +102,7 @@ pub fn requirement_not_found(id: &str, store_path: Option<&Path>) -> anyhow::Err
 // aida_core::object_store::parse_failure_hint so both aida-cli and
 // aida-core can use it. Import it directly from there.
 
+// trace:BUG-601 | ai:claude
 /// Build the "spec doesn't exist, but the store does" not-found error for a
 /// caller that holds a loaded, non-empty store but can't thread the store path
 /// through to `requirement_not_found`.
@@ -112,7 +113,6 @@ pub fn requirement_not_found(id: &str, store_path: Option<&Path>) -> anyhow::Err
 /// store was attached and other ids resolved fine from the same cwd. When the
 /// store is demonstrably present (it loaded with rows), say "check the spec ID"
 /// — the same hint the GitCanonical branch gives — not "wrong directory".
-/// trace:BUG-601 | ai:claude
 pub fn requirement_not_found_in_loaded_store(id: &str) -> anyhow::Error {
     anyhow::anyhow!(
         "Requirement not found: {id}\n  \
@@ -120,6 +120,7 @@ pub fn requirement_not_found_in_loaded_store(id: &str) -> anyhow::Error {
     )
 }
 
+// trace:BUG-599 | ai:claude
 /// Build the "that's not a spec id" error for a user-typed argument whose
 /// shape can't possibly resolve (a typo, a UUID-shaped string, anything that
 /// isn't `TYPE-SEQ` / `TYPE-NODE-SEQ`).
@@ -128,7 +129,7 @@ pub fn requirement_not_found_in_loaded_store(id: &str) -> anyhow::Error {
 /// latter is for on-disk YAML that genuinely failed to parse (binary/version
 /// skew), and must NOT fire for a malformed argument. A bad id the user typed
 /// gets a format hint that names the expected shape and points at `aida list`,
-/// matching the tone of `requirement_not_found`. trace:BUG-599 | ai:claude
+/// matching the tone of `requirement_not_found`.
 pub fn invalid_spec_id_format(id: &str) -> anyhow::Error {
     anyhow::anyhow!(
         "Requirement not found: {id} (not a valid spec ID)\n  \

@@ -237,6 +237,7 @@ pub enum ConflictPrediction {
     Unknown,
 }
 
+// trace:STORY-281 | ai:claude
 /// Pre-flight verdict produced before launching a headless reviewer
 /// against a PR (STORY-281). The orchestrator's phase 3 entry point and
 /// the direct `aida queue work PR-N --for reviewer` path both call
@@ -252,7 +253,6 @@ pub enum ConflictPrediction {
 /// land clean at merge time. With overlap, the review is against the
 /// wrong version of the code and the conflict may not show up until
 /// merge.
-/// trace:STORY-281 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StaleBaseOutcome {
     /// origin/<base> has not moved since the PR forked — silent proceed.
@@ -273,10 +273,11 @@ pub enum StaleBaseOutcome {
     },
 }
 
+// trace:STORY-281 | ai:claude
 /// Pure classifier: given the same inputs `pr_rebase_check_report`
 /// derives (behind-count, PR-touched files, base-touched-since-fork
 /// files, merge-tree prediction), pick the [`StaleBaseOutcome`] for
-/// the reviewer pre-flight. trace:STORY-281 | ai:claude
+/// the reviewer pre-flight.
 pub fn classify_stale_base(
     behind: u32,
     pr_files: &[String],
@@ -309,11 +310,11 @@ pub fn classify_stale_base(
     }
 }
 
+// trace:STORY-281 | ai:claude
 /// Format the user-facing "reviewer refused — stale base + overlap"
 /// message for [`StaleBaseOutcome::StaleOverlap`]. Pulled out so the
 /// text is pinned by unit tests — first-users see this string and it
 /// must name the conflicting files and the exact recovery command.
-/// trace:STORY-281 | ai:claude
 pub fn stale_base_block_message(n: u64, behind: u32, overlap: &[String]) -> String {
     let mut msg = format!(
         "PR-{n} base is {behind} commit{plural} behind origin and overlaps {count} \
@@ -339,12 +340,13 @@ pub fn stale_base_block_message(n: u64, behind: u32, overlap: &[String]) -> Stri
     msg
 }
 
+// trace:BUG-510 | ai:claude
 /// Format the stale-base warning for the human-review verb
 /// (`aida review <SPEC>`). Unlike the reviewer-role pre-flight, the
 /// human verb NEVER refuses — the verdict on the code is valid either
 /// way — so even the overlap case is informational: name the gap, name
 /// the overlapping files, and give the exact recovery command. Pinned
-/// by unit tests like its siblings. trace:BUG-510 | ai:claude
+/// by unit tests like its siblings.
 pub fn stale_base_review_warn_message(n: u64, behind: u32, overlap: &[String]) -> String {
     let mut msg = format!(
         "PR-{n} is {behind} commit{plural} behind its base — this review will run \
@@ -377,9 +379,9 @@ pub fn stale_base_review_warn_message(n: u64, behind: u32, overlap: &[String]) -
     msg
 }
 
+// trace:STORY-281 | ai:claude
 /// Format the warning printed for [`StaleBaseOutcome::StaleNoOverlap`].
 /// Same pinning rationale as [`stale_base_block_message`].
-/// trace:STORY-281 | ai:claude
 pub fn stale_base_warn_message(n: u64, behind: u32) -> String {
     format!(
         "PR-{n} base is {behind} commit{plural} behind origin (no file overlap) — \
@@ -416,9 +418,9 @@ pub enum PathClass {
     Intermediate,
 }
 
+// trace:TASK-480 | ai:claude
 /// Verdict for the reviewer's intermediate-only pre-flight, mirroring
 /// the [`StaleBaseOutcome`] shape (silent / warn / refuse).
-/// trace:TASK-480 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IntermediateOnlyOutcome {
     /// Diff is empty, or source-majority with at most minor intermediate
@@ -434,11 +436,12 @@ pub enum IntermediateOnlyOutcome {
     IntermediateOnly { intermediate: Vec<String> },
 }
 
+// trace:TASK-480 | ai:claude
 /// Known-generated / intermediate path heuristics, independent of the
 /// project's `.gitignore`. These are the directories and file shapes
 /// that are build products across the common ecosystems even when a
 /// project forgets to ignore them. Pure + unit-tested so the heuristic
-/// set is pinned. trace:TASK-480 | ai:claude
+/// set is pinned.
 pub fn path_looks_generated(path: &str) -> bool {
     // Normalise leading "./" and Windows separators so the segment
     // matching below is uniform.
@@ -502,10 +505,11 @@ pub fn path_looks_generated(path: &str) -> bool {
     false
 }
 
+// trace:TASK-480 | ai:claude
 /// Classify one path. `is_gitignored` is the project's own answer
 /// (`git check-ignore`) for that path; we OR it with the
 /// ecosystem-wide [`path_looks_generated`] heuristic so a project that
-/// forgot to ignore `target/` is still caught. trace:TASK-480 | ai:claude
+/// forgot to ignore `target/` is still caught.
 pub fn classify_path(path: &str, is_gitignored: bool) -> PathClass {
     if is_gitignored || path_looks_generated(path) {
         PathClass::Intermediate
@@ -514,6 +518,7 @@ pub fn classify_path(path: &str, is_gitignored: bool) -> PathClass {
     }
 }
 
+// trace:TASK-480 | ai:claude
 /// Pure classifier: given the PR's changed paths and a predicate that
 /// answers "is this path gitignored in the repo?", decide whether the
 /// reviewer should proceed silently, flag, or refuse.
@@ -527,7 +532,7 @@ pub fn classify_path(path: &str, is_gitignored: bool) -> PathClass {
 ///
 /// Refusal is reserved for the unambiguous "no source at all" case so we
 /// never block a real fix on a heuristic; a mixed diff is at most
-/// flagged. trace:TASK-480 | ai:claude
+/// flagged.
 pub fn classify_intermediate_only(
     files: &[String],
     is_gitignored: impl Fn(&str) -> bool,
@@ -558,10 +563,10 @@ pub fn classify_intermediate_only(
     }
 }
 
+// trace:TASK-480 | ai:claude
 /// Refusal message for [`IntermediateOnlyOutcome::IntermediateOnly`].
 /// Pinned by unit tests — first-users (and the headless orchestrator's
 /// logs) see this string and the verdict text is contract-visible.
-/// trace:TASK-480 | ai:claude
 pub fn intermediate_only_block_message(n: u64, intermediate: &[String]) -> String {
     let mut msg = format!(
         "PR-{n} changes only intermediate/generated files — refusing to review: \
@@ -582,8 +587,9 @@ pub fn intermediate_only_block_message(n: u64, intermediate: &[String]) -> Strin
     msg
 }
 
+// trace:TASK-480 | ai:claude
 /// Flag message for [`IntermediateOnlyOutcome::SourcePlusIntermediate`].
-/// Same pinning rationale. trace:TASK-480 | ai:claude
+/// Same pinning rationale.
 pub fn intermediate_only_warn_message(n: u64, intermediate: &[String]) -> String {
     let count = intermediate.len();
     let plural = if count == 1 { "" } else { "s" };

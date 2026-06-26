@@ -27,13 +27,14 @@ use aida_core::node::{NodeRegistry, NodeRegistryEntry};
 /// Filename of the shared node roster under the store worktree.
 const NODES_TOML_REL: &[&str] = &["registry", "nodes.toml"];
 
+// trace:STORY-646 | ai:claude
 /// Filename of the shared per-user role roster under the store worktree.
-/// trace:STORY-646 | ai:claude
 const TEAM_TOML_REL: &[&str] = &["registry", "team.toml"];
 
+// trace:STORY-640 | ai:claude
 /// Load the shared node roster from `<store_root>/registry/nodes.toml`.
 /// Returns an empty roster when the file is absent or unreadable — a missing
-/// roster is "not a team", never an error. trace:STORY-640 | ai:claude
+/// roster is "not a team", never an error.
 pub(crate) fn load_roster(store_root: &Path) -> NodeRegistry {
     let mut path = store_root.to_path_buf();
     for seg in NODES_TOML_REL {
@@ -51,6 +52,7 @@ fn canon(path: &Path) -> String {
         .to_string()
 }
 
+// trace:STORY-640 | ai:claude
 /// True when the roster describes a real TEAM relative to `our_clone`: either
 /// more than one node is registered, or the single registered node is some
 /// OTHER clone (we joined an existing store but haven't acquired a node id).
@@ -59,7 +61,6 @@ fn canon(path: &Path) -> String {
 /// A clone is "ours" when its recorded `clone_path` canonicalizes to ours;
 /// entries with no recorded path can't be attributed, so they count toward the
 /// team size (conservative — better a stray nag than a missed collision).
-/// trace:STORY-640 | ai:claude
 pub(crate) fn is_team_context(registry: &NodeRegistry, our_clone: &str) -> bool {
     if registry.nodes.len() > 1 {
         return true;
@@ -87,14 +88,15 @@ fn clone_matches(node: &NodeRegistryEntry, our_clone: &str) -> bool {
     }
 }
 
+// trace:STORY-640 | ai:claude
 /// True when this clone has its OWN entry in the roster (a clone_path that
 /// matches ours). A fresh clone that joined an existing store but never ran
 /// `aida node acquire` has no own entry → the onboarding hint fires.
-/// trace:STORY-640 | ai:claude
 pub(crate) fn clone_is_registered(registry: &NodeRegistry, our_clone: &str) -> bool {
     registry.nodes.iter().any(|n| clone_matches(n, our_clone))
 }
 
+// trace:STORY-640 | ai:claude
 /// The distinct-identity guard decision (BUG-89 hardening). Pure + testable.
 ///
 /// In a team context, the BUG-89 `"default"` fallback (no `$USER` / `$AIDA_USER`
@@ -106,7 +108,6 @@ pub(crate) fn clone_is_registered(registry: &NodeRegistry, our_clone: &str) -> b
 ///   loud warning. Reads still proceed; writes proceed unless the caller opts
 ///   into refusal via `AIDA_TEAM_REQUIRE_USER` (handled at the call site).
 ///
-/// trace:STORY-640 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum IdentityVerdict {
     /// Identity is fine — distinct user, or not a team.
@@ -115,9 +116,10 @@ pub(crate) enum IdentityVerdict {
     DefaultInTeam,
 }
 
+// trace:STORY-640
 /// Decide the identity verdict from the resolved user id + whether we're in a
 /// team context. The `"default"` literal is the BUG-89 fallback that
-/// `current_user_id` produces when no env var is set. trace:STORY-640
+/// `current_user_id` produces when no env var is set.
 pub(crate) fn identity_verdict(user_id: &str, team_context: bool) -> IdentityVerdict {
     if team_context && user_id == "default" {
         IdentityVerdict::DefaultInTeam
@@ -126,8 +128,9 @@ pub(crate) fn identity_verdict(user_id: &str, team_context: bool) -> IdentityVer
     }
 }
 
+// trace:STORY-640 | ai:claude
 /// A roster row joined with whether the node currently holds a `coordination/`
-/// claim. trace:STORY-640 | ai:claude
+/// claim.
 pub(crate) struct TeamMember {
     pub entry: NodeRegistryEntry,
     /// Scopes this node currently holds a live claim on (lease scope, "drain",
@@ -137,10 +140,11 @@ pub(crate) struct TeamMember {
     pub is_self: bool,
 }
 
+// trace:STORY-640 | ai:claude
 /// Build the joined team view: every roster entry annotated with the
 /// `coordination/` claims it currently holds (matched by clone path) and a
 /// self-marker. Claim lookup is best-effort — an unreadable coordination tree
-/// just yields empty claim lists. trace:STORY-640 | ai:claude
+/// just yields empty claim lists.
 pub(crate) fn build_team_view(store_root: &Path, our_clone: &str) -> Vec<TeamMember> {
     let registry = load_roster(store_root);
     // One read of the coordination tree; bucket claims by canonical clone path.
@@ -197,6 +201,7 @@ pub(crate) fn our_clone_path(store_root: &Path) -> String {
 // caveat is surfaced in `aida team set-role` --help, its output, and the docs.
 // trace:STORY-646 | ai:claude
 
+// trace:STORY-646 | ai:claude
 /// The shared per-user role roster — `registry/team.toml` on the `aida-store`
 /// branch. Maps a `user_id` (the person, per `current_user_id`) to a role
 /// string. An absent file / absent user = unranked → falls back to
@@ -207,7 +212,6 @@ pub(crate) fn our_clone_path(store_root: &Path) -> String {
 /// alice = "advisor"
 /// bob   = "implementer"
 /// ```
-/// trace:STORY-646 | ai:claude
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct TeamRoster {
     /// user_id -> role string. `BTreeMap` keeps the file deterministically
@@ -226,9 +230,10 @@ impl TeamRoster {
         path
     }
 
+    // trace:STORY-646
     /// Load the roster from `<store_root>/registry/team.toml`. A missing or
     /// unreadable file yields an empty roster — "no RBAC configured" is never
-    /// an error (best-effort, backward-compatible). trace:STORY-646
+    /// an error (best-effort, backward-compatible).
     pub(crate) fn load(store_root: &Path) -> Self {
         let path = Self::path(store_root);
         let Ok(content) = std::fs::read_to_string(&path) else {
@@ -242,9 +247,10 @@ impl TeamRoster {
         self.members.get(user_id).map(String::as_str)
     }
 
+    // trace:STORY-650 | ai:claude
     /// Set (or replace) a user's role and serialize to TOML. The CAS write now
     /// lives in `aida_core::team::set_role_cas`; this remains for the round-trip
-    /// unit test below. trace:STORY-650 | ai:claude
+    /// unit test below.
     #[cfg(test)]
     fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
         self.members.insert(user_id.to_string(), role.to_string());
@@ -252,6 +258,7 @@ impl TeamRoster {
     }
 }
 
+// trace:STORY-646 | ai:claude
 /// Pure resolution of a user's effective role for the guardrail.
 ///
 /// Priority: the **roster** role for the user (durable, survives a forgotten
@@ -261,7 +268,6 @@ impl TeamRoster {
 ///
 /// Pure over its inputs (roster role + raw env value) so it is directly
 /// unit-testable without touching the process env or the filesystem.
-/// trace:STORY-646 | ai:claude
 pub(crate) fn resolve_effective_role(
     roster_role: Option<&str>,
     env_role: Option<&str>,
@@ -275,9 +281,9 @@ pub(crate) fn resolve_effective_role(
     }
 }
 
+// trace:STORY-646 | ai:claude
 /// Where an effective role came from — lets call sites tailor the refusal
 /// message (a roster role is the durable team role; an env role is per-shell).
-/// trace:STORY-646 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RoleSource {
     /// From `registry/team.toml` (the durable team role).
@@ -288,10 +294,11 @@ pub(crate) enum RoleSource {
     Default,
 }
 
+// trace:STORY-646
 /// Resolve the effective role for `user_id` against the store at `store_root`,
 /// reading `AIDA_SESSION_ROLE` from the process env. Best-effort: an
 /// unreachable / unreadable store yields an empty roster, so resolution falls
-/// straight through to the env / default (never blocks). trace:STORY-646
+/// straight through to the env / default (never blocks).
 pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (String, RoleSource) {
     let roster = TeamRoster::load(store_root);
     let roster_role = roster.role_for(user_id).map(str::to_string);
@@ -299,11 +306,12 @@ pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (Stri
     resolve_effective_role(roster_role.as_deref(), env_role.as_deref())
 }
 
+// trace:STORY-646
 /// Write `user_id = role` into `registry/team.toml` on the store with a
 /// CAS push-wins loop (mirrors `git_ops::register_node_full`): pull → load →
 /// merge our edit → save → commit → push; on a rejected push, hard-reset the
 /// stale commit and retry. Solo (no `origin`) writes locally and lets the next
-/// `aida push` upload. Returns the canonicalized role written. trace:STORY-646
+/// `aida push` upload. Returns the canonicalized role written.
 pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyhow::Result<()> {
     // Delegate to the shared aida-core implementation so the CLI and the REST
     // `PUT /api/v2/team/:user/role` endpoint write team.toml identically.
@@ -312,17 +320,19 @@ pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyh
         .map_err(|e| anyhow::anyhow!("setting team role failed: {}", e))
 }
 
+// trace:STORY-654 | ai:claude
 /// Remove `user_id`'s entry from `registry/team.toml` via the shared aida-core
 /// CAS push-wins loop. Returns `Ok(true)` if an entry was removed, `Ok(false)`
 /// if absent (friendly no-op). Used by `aida team unset-role` to clean stray /
-/// duplicate keys. trace:STORY-654 | ai:claude
+/// duplicate keys.
 pub(crate) fn unset_role_cas(store_root: &Path, user_id: &str) -> anyhow::Result<bool> {
     aida_core::team::unset_role_cas(store_root, user_id)
         .map_err(|e| anyhow::anyhow!("removing team role failed: {}", e))
 }
 
+// trace:STORY-646 | ai:claude
 /// A roster member row joined with the role recorded for its user_id, for the
-/// extended `aida team` view. trace:STORY-646 | ai:claude
+/// extended `aida team` view.
 pub(crate) fn roles_by_user(store_root: &Path) -> BTreeMap<String, String> {
     TeamRoster::load(store_root).members
 }

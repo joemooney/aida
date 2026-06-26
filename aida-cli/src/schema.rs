@@ -42,6 +42,7 @@ struct CatalogEntry {
     name: &'static str,
     /// One-line description of what it stores / where it lives.
     description: &'static str,
+    // trace:TASK-714 | ai:claude
     /// Reflection hook: returns the `TS::decl()` of the canonical Rust struct
     /// that backs this object, so `aida schema <object>` can render a
     /// reflection-derived field table the same way the Requirement view does.
@@ -49,26 +50,28 @@ struct CatalogEntry {
     /// — every catalog kind now has a reflected backing type). The closure is
     /// what the drift-guard tests pin: a field added/removed/renamed on the
     /// backing struct changes its `decl()` and ripples through here.
-    /// trace:TASK-714 | ai:claude
     decl: fn() -> String,
+    // trace:TASK-714
     /// Optional note rendered under the field table — used where the reflected
     /// struct is a *projection* (a derived in-memory shape) rather than the
-    /// exact on-disk record, so the reader isn't misled. trace:TASK-714
+    /// exact on-disk record, so the reader isn't misled.
     note: Option<&'static str>,
+    // trace:STORY-630 | ai:claude
     /// The object-level **lifecycle** block surfaced by `aida schema --explain`:
     /// who writes the record, when, why it exists, how/where it is read back,
     /// and when it is deleted/archived. Hand-curated prose grounded in
     /// `docs/lifecycle.md` + the discipline `lifecycle-vocabulary.md`; not
     /// reflected. Rendered only under `--explain`, so the terse view is
-    /// unchanged. trace:STORY-630 | ai:claude
+    /// unchanged.
     lifecycle: &'static str,
 }
 
+// trace:STORY-538 trace:TASK-714 | ai:claude
 /// The curated catalog of storable object kinds. The one-liner descriptions are
 /// hand-written; the per-object *field detail* (`aida schema <object>`) is
 /// reflection-derived from the `decl` closure on each entry — never
 /// hand-maintained. STORY-538 shipped Requirement detail; TASK-714 extended the
-/// reflection registry to every remaining kind. trace:STORY-538 trace:TASK-714 | ai:claude
+/// reflection registry to every remaining kind.
 const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Requirement",
@@ -213,40 +216,43 @@ const CATALOG: &[CatalogEntry] = &[
     },
 ];
 
+// trace:STORY-538 | ai:claude
 /// True if `name` (case-insensitive) is a kind in the storable-object catalog —
 /// lets the dispatcher tell "known object, detail not built yet" from a typo.
-/// trace:STORY-538 | ai:claude
 pub fn is_catalog_object(name: &str) -> bool {
     CATALOG.iter().any(|e| e.name.eq_ignore_ascii_case(name))
 }
 
+// trace:TASK-715 | ai:claude
 /// The storable-object catalog as the JSON value the `aida schema --json`
 /// CLI surface and the `aida://schema` MCP resource / `schema` MCP tool all
 /// emit. Single source so the MCP surface can't drift from the CLI.
-/// trace:TASK-715 | ai:claude
 pub fn catalog_json() -> Value {
     catalog_json_inner(false)
 }
 
+// trace:STORY-630
 /// The catalog JSON with the optional explanatory layer (lifecycle per object)
-/// — the public surface the MCP `schema` tool calls. trace:STORY-630
+/// — the public surface the MCP `schema` tool calls.
 pub fn catalog_json_explain(explain: bool) -> Value {
     catalog_json_inner(explain)
 }
 
-/// The full-dump JSON with the optional explanatory layer. trace:STORY-630
+// trace:STORY-630
+/// The full-dump JSON with the optional explanatory layer.
 pub fn full_dump_json_explain(explain: bool) -> Value {
     full_dump_json_inner(explain)
 }
 
+// trace:STORY-630
 /// The per-object detail JSON with the optional explanatory layer.
-/// trace:STORY-630
 pub fn object_json_explain(name: &str, explain: bool) -> Option<Value> {
     object_json_inner(name, explain)
 }
 
+// trace:STORY-630 | ai:claude
 /// The catalog JSON, optionally carrying the `lifecycle` block per object
-/// (`--explain`). trace:STORY-630 | ai:claude
+/// (`--explain`).
 fn catalog_json_inner(explain: bool) -> Value {
     let objects: Vec<Value> = CATALOG
         .iter()
@@ -261,6 +267,8 @@ fn catalog_json_inner(explain: bool) -> Value {
     json!({ "objects": objects })
 }
 
+// trace:TASK-799
+// trace:STORY-630 | ai:claude
 /// The **full dump** as the JSON value `aida schema --all --json` and the
 /// field-included no-arg `aida schema --json` emit: the catalog with each
 /// object's reflection-derived `fields` array (and `note`, and — for
@@ -268,8 +276,7 @@ fn catalog_json_inner(explain: bool) -> Value {
 /// A true one-fetch full dump for the CLI manual generator, aida-tutor, and MCP
 /// consumers. Reuses the same per-object projection [`object_json`] builds — no
 /// reimplementation. With `explain`, adds the explanatory layer (per-field
-/// example/provenance/description + per-object lifecycle). trace:TASK-799
-/// trace:STORY-630 | ai:claude
+/// example/provenance/description + per-object lifecycle).
 fn full_dump_json_inner(explain: bool) -> Value {
     let objects: Vec<Value> = CATALOG
         .iter()
@@ -278,20 +285,22 @@ fn full_dump_json_inner(explain: bool) -> Value {
     json!({ "objects": objects })
 }
 
+// trace:TASK-715 | ai:claude
 /// The per-object detail as the JSON value the `aida schema <object> --json`
 /// CLI surface and the `aida://schema/{object}` MCP resource / `schema` MCP
 /// tool emit. Every catalog kind renders its reflection-derived field table
 /// (TASK-714's registry); `Requirement` additionally carries the four
 /// controlled-vocabulary enums. An unknown name returns `None` so the caller
 /// can distinguish a typo from a catalog kind. Single source so the MCP
-/// surface can't drift from the CLI. trace:TASK-715 | ai:claude
+/// surface can't drift from the CLI.
 pub fn object_json(name: &str) -> Option<Value> {
     object_json_inner(name, false)
 }
 
+// trace:STORY-630 | ai:claude
 /// As [`object_json`] but, when `explain` is set, adds the per-field
 /// `example`/`provenance`/`description` (where a curated doc entry exists) and
-/// the object's `lifecycle` block. trace:STORY-630 | ai:claude
+/// the object's `lifecycle` block.
 fn object_json_inner(name: &str, explain: bool) -> Option<Value> {
     if name.eq_ignore_ascii_case("Requirement") {
         return Some(requirement_json_inner(explain));
@@ -314,10 +323,11 @@ fn object_json_inner(name: &str, explain: bool) -> Option<Value> {
     Some(Value::Object(obj))
 }
 
+// trace:STORY-630 | ai:claude
 /// JSON for one reflected field. With `explain`, folds in the curated
 /// `example`/`provenance`/`description` when a doc entry exists for that field
 /// (Requirement is fully documented today; other kinds carry the base shape
-/// until Slice 2). trace:STORY-630 | ai:claude
+/// until Slice 2).
 fn field_json(f: &FieldSchema, explain: bool, object: &str) -> Value {
     let mut m = serde_json::Map::new();
     m.insert("name".to_string(), json!(f.name));
@@ -333,11 +343,13 @@ fn field_json(f: &FieldSchema, explain: bool, object: &str) -> Value {
     Value::Object(m)
 }
 
+// trace:TASK-715 | ai:claude
+// trace:STORY-630 | ai:claude
 /// The reflection-derived `Requirement` field table + the four
 /// controlled-vocabulary enums as a JSON value. Shared by `print_requirement`
-/// (CLI `--json`) and the MCP schema surface. trace:TASK-715 | ai:claude
+/// (CLI `--json`) and the MCP schema surface.
 /// With `explain`, folds the curated per-field semantics into each field and
-/// adds the object lifecycle block. trace:STORY-630 | ai:claude
+/// adds the object lifecycle block.
 fn requirement_json_inner(explain: bool) -> Value {
     let fields = requirement_fields();
     let enums = requirement_enums();
@@ -390,9 +402,10 @@ struct FieldSchema {
 // orphan entry. Mirrors `schema_enums_match_reflection`. trace:STORY-630
 // ============================================================================
 
+// trace:STORY-630 | ai:claude
 /// The closed set of "set-by" provenance tokens a documented field carries.
 /// Keeping this an enum (not free text) is what makes provenance a controlled
-/// vocabulary the operator can scan. trace:STORY-630 | ai:claude
+/// vocabulary the operator can scan.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Provenance {
     /// Written by a person or an agent acting on a person's behalf (`aida add`,
@@ -408,9 +421,10 @@ enum Provenance {
     /// Maintained by the engine itself — IDs, timestamps, the history array,
     /// version counters. The user never sets these directly.
     ReflectionDerived,
+    // trace:STORY-631 | ai:claude
     /// Generated by an AI synthesis pass and cached on the spec — not
     /// hand-authored ground truth (e.g. `intent`, the AI WHY-comprehension
-    /// written by `aida intent`). trace:STORY-631 | ai:claude
+    /// written by `aida intent`).
     Ai,
 }
 
@@ -428,10 +442,10 @@ impl Provenance {
     }
 }
 
+// trace:STORY-630 | ai:claude
 /// The hand-curated semantics for one reflected field: a concrete example
 /// value, a provenance token, and a 1-2 line "set by X when Y, because Z"
 /// gloss. Keyed by the reflected field name so the drift-guard can pair them.
-/// trace:STORY-630 | ai:claude
 struct FieldDoc {
     /// Reflected field name this entry documents (must match a `FieldSchema.name`).
     name: &'static str,
@@ -444,11 +458,11 @@ struct FieldDoc {
     description: &'static str,
 }
 
+// trace:STORY-630 | ai:claude
 /// The per-field semantics for `Requirement` — Slice 1 of STORY-630 documents
 /// the core spec node completely. The drift-guard test asserts this list covers
 /// exactly the reflected `Requirement` field set (no gaps, no orphans), so a
 /// field added to `models.rs` without an entry here fails the build.
-/// trace:STORY-630 | ai:claude
 const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
     FieldDoc {
         name: "id",
@@ -771,17 +785,18 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
     },
 ];
 
+// trace:STORY-630 | ai:claude
 /// Look up the curated semantics for a Requirement field by reflected name.
-/// trace:STORY-630 | ai:claude
 fn requirement_field_doc(name: &str) -> Option<&'static FieldDoc> {
     REQUIREMENT_FIELD_DOCS.iter().find(|d| d.name == name)
 }
 
+// trace:STORY-538 | ai:claude
 /// Convert a reflected PascalCase enum variant name into its on-the-wire
 /// token — the kebab-case form every CLI parser accepts
 /// (`InProgress` -> `in-progress`, `NonFunctional` -> `non-functional`,
 /// `VerifiedBy` -> `verified-by`). This is the single conversion rule the
-/// drift-guard pins. trace:STORY-538 | ai:claude
+/// drift-guard pins.
 fn variant_to_wire_token(variant: &str) -> String {
     let mut out = String::with_capacity(variant.len() + 4);
     for (i, ch) in variant.chars().enumerate() {
@@ -797,10 +812,11 @@ fn variant_to_wire_token(variant: &str) -> String {
     out
 }
 
+// trace:STORY-538 | ai:claude
 /// Parse the unit-variant names out of a `TS::decl()` enum declaration line of
 /// the form `type Name = "A" | "B" | { "Custom": string };`. Newtype variants
 /// (the `{ "Custom": string }` arm) are skipped — they carry a user-defined
-/// payload, not a fixed token. trace:STORY-538 | ai:claude
+/// payload, not a fixed token.
 fn parse_enum_variants(decl: &str) -> Vec<String> {
     let mut variants = Vec::new();
     let bytes = decl.as_bytes();
@@ -860,14 +876,16 @@ fn requirement_enums() -> Vec<EnumSchema> {
     ]
 }
 
+// trace:STORY-538 | ai:claude
 /// Parse the Requirement field table out of its `TS::decl()` named-struct
 /// declaration. Each field line has the shape `name: type,` or
 /// `name?: type | null,` (with `/** ... */` doc-comment blocks between
-/// fields, which we skip). trace:STORY-538 | ai:claude
+/// fields, which we skip).
 fn requirement_fields() -> Vec<FieldSchema> {
     parse_struct_fields(&Requirement::decl())
 }
 
+// trace:STORY-538 trace:TASK-714 | ai:claude
 /// The named-struct field parser shared by every catalog kind (and the
 /// drift-guard tests). Handles both `TS::decl()` field layouts:
 ///   - one field per line (ts-rs-forge emits this when a field carries a
@@ -881,7 +899,6 @@ fn requirement_fields() -> Vec<FieldSchema> {
 /// (commas inside nested `{}`/`<>`/`[]`/`()` are part of a type, not field
 /// separators) and parses each segment as `name(?): type`. A `| null` type
 /// arm is treated as optional, matching the `name?:` convention.
-/// trace:STORY-538 trace:TASK-714 | ai:claude
 fn parse_struct_fields(decl: &str) -> Vec<FieldSchema> {
     // 1. Strip `/** ... */` doc-comment blocks (they may span lines).
     let mut body = String::with_capacity(decl.len());
@@ -957,10 +974,10 @@ fn parse_struct_fields(decl: &str) -> Vec<FieldSchema> {
     fields
 }
 
+// trace:TASK-714 | ai:claude
 /// True if a reflected TS type admits `null` — i.e. it is (or unions in) the
 /// `null` literal, the shape ts-rs-forge gives an `Option<T>`. Checked on
 /// top-level union arms only so a nested `{ x: T | null }` doesn't count.
-/// trace:TASK-714 | ai:claude
 fn type_admits_null(ts_type: &str) -> bool {
     let mut depth: i32 = 0;
     let mut arm = String::new();
@@ -991,8 +1008,9 @@ fn type_admits_null(ts_type: &str) -> bool {
     admits
 }
 
+// trace:STORY-630 | ai:claude
 /// `aida schema` (no args) — the storable-object catalog. With `explain`, each
-/// object also renders its lifecycle block. trace:STORY-630 | ai:claude
+/// object also renders its lifecycle block.
 pub fn print_catalog(json_out: bool, explain: bool) {
     if json_out {
         // Single source: the same value `aida://schema` / the `schema` MCP
@@ -1031,9 +1049,10 @@ pub fn print_catalog(json_out: bool, explain: bool) {
     );
 }
 
+// trace:STORY-630
 /// Reflow a long lifecycle/description string onto wrapped lines with a hanging
 /// indent, so the explanatory blocks read as prose in a terminal rather than as
-/// one ragged line. Whitespace-collapsing; ~78-col target. trace:STORY-630
+/// one ragged line. Whitespace-collapsing; ~78-col target.
 fn wrap_indent(text: &str, indent: &str) -> String {
     const WIDTH: usize = 78;
     let mut out = String::new();
@@ -1059,12 +1078,12 @@ fn wrap_indent(text: &str, indent: &str) -> String {
     out
 }
 
+// trace:TASK-799 | ai:claude
 /// `aida schema --all` (and the field-included no-arg `aida schema --json`) —
 /// the full dump in one pass: the catalog followed by every object's
 /// reflection-derived field detail, in catalog order. Reuses the existing
 /// per-object renderers ([`full_dump_json_inner`] / [`print_requirement`] /
 /// [`print_object`]) — no field assembly is reimplemented here.
-/// trace:TASK-799 | ai:claude
 pub fn print_all(json_out: bool, explain: bool) {
     if json_out {
         // Single source: the same per-object projection `aida schema <object>`
@@ -1090,15 +1109,17 @@ pub fn print_all(json_out: bool, explain: bool) {
     }
 }
 
-/// Look up a catalog entry by case-insensitive name. trace:TASK-714
+// trace:TASK-714
+/// Look up a catalog entry by case-insensitive name.
 fn catalog_entry(name: &str) -> Option<&'static CatalogEntry> {
     CATALOG.iter().find(|e| e.name.eq_ignore_ascii_case(name))
 }
 
+// trace:TASK-714 | ai:claude
 /// `aida schema <object>` for any catalog kind other than `requirement`
 /// (which keeps its enum-augmented view in [`print_requirement`]). Renders the
 /// reflection-derived field table for the kind's backing struct. The caller has
-/// already confirmed `name` is a catalog kind. trace:TASK-714 | ai:claude
+/// already confirmed `name` is a catalog kind.
 pub fn print_object(name: &str, json_out: bool, explain: bool) {
     let Some(entry) = catalog_entry(name) else {
         // Defensive: the dispatcher only calls this for catalog kinds.
@@ -1143,12 +1164,12 @@ pub fn print_object(name: &str, json_out: bool, explain: bool) {
     }
 }
 
+// trace:STORY-630 | ai:claude
 /// Render the per-field explanatory block: for each field, its type + (when a
 /// curated doc entry exists) example value, provenance token, and the
 /// when/why gloss. Fields without a doc entry (non-Requirement kinds until
 /// Slice 2) print type-only with a `(prose pending)` marker so the gap is
 /// visible — the drift-guard test names exactly which fields those are.
-/// trace:STORY-630 | ai:claude
 fn print_explained_fields(fields: &[FieldSchema], object: &str) {
     for f in fields {
         let opt = if f.optional { " (optional)" } else { "" };
@@ -1266,11 +1287,12 @@ mod tests {
         assert!(!variants.contains(&"Custom".to_string()));
     }
 
+    // trace:STORY-538
     /// DRIFT-GUARD: the enum tokens the schema reports must stay in sync with
     /// the model reflection AND with the canonical CLI/wire forms. If a variant
     /// is added/removed/renamed in `models.rs`, the reflected `decl()` changes
     /// and these expectations break — forcing the schema (and this list) to be
-    /// updated deliberately rather than silently rotting. trace:STORY-538
+    /// updated deliberately rather than silently rotting.
     #[test]
     fn schema_enums_match_reflection() {
         let enums = requirement_enums();
@@ -1439,8 +1461,9 @@ mod tests {
         }
     }
 
+    // trace:TASK-714
     /// Smoke: `print_object` runs for every non-Requirement catalog kind without
-    /// panicking, in both text and JSON modes. trace:TASK-714
+    /// panicking, in both text and JSON modes.
     #[test]
     fn print_object_covers_every_catalog_kind() {
         for entry in CATALOG {
@@ -1507,8 +1530,8 @@ mod tests {
         );
     }
 
+    // trace:TASK-799
     /// Smoke: `print_all` runs in both text and JSON modes without panicking.
-    /// trace:TASK-799
     #[test]
     fn print_all_runs_in_both_modes() {
         print_all(false, false);
@@ -1611,9 +1634,10 @@ mod tests {
         );
     }
 
+    // trace:STORY-630
     /// Every catalog kind carries a non-empty lifecycle block (the object-level
     /// layer of `--explain`). A new catalog kind added without a lifecycle block
-    /// fails here. trace:STORY-630
+    /// fails here.
     #[test]
     fn every_catalog_kind_has_a_lifecycle_block() {
         for e in CATALOG {
@@ -1626,10 +1650,10 @@ mod tests {
         }
     }
 
+    // trace:STORY-630
     /// The `--explain` JSON for Requirement carries the per-field
     /// example/provenance/description and the object lifecycle, and the
     /// non-explain JSON does NOT (pure opt-in / byte-stable default).
-    /// trace:STORY-630
     #[test]
     fn explain_json_carries_semantics_default_does_not() {
         // Default: no example/provenance/description, no lifecycle.

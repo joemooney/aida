@@ -47,8 +47,9 @@ impl DigestAudience {
         !matches!(self, DigestAudience::Customer | DigestAudience::Operator)
     }
 
+    // trace:STORY-541
     /// The operator lens replaces the work-narrative sections (Released / Major
-    /// progress / …) with a capabilities-surface view. trace:STORY-541
+    /// progress / …) with a capabilities-surface view.
     fn is_capabilities_lens(self) -> bool {
         matches!(self, DigestAudience::Operator)
     }
@@ -418,14 +419,15 @@ pub struct CapabilityChange {
     pub value: String,
 }
 
+// trace:STORY-541
+// trace:STORY-541
 /// True when a commit is zero-user-impact dev work that the operator lens must
 /// DROP: lint/clippy hygiene, internal refactors, internal-only plumbing,
 /// test-only, plus the existing docs/style/chore/revert/typo noise. The cut is
 /// "did it change what the user can do / experience" — NOT "feat vs chore".
-/// trace:STORY-541
 /// Strip a leading `[AI:tool] ` (or `[AI:tool1+tool2:conf] `) authorship prefix
 /// so the conventional-commit type is at the start of the string for the noise /
-/// classification checks. trace:STORY-541
+/// classification checks.
 fn strip_ai_prefix(subject: &str) -> &str {
     let t = subject.trim_start();
     if let Some(rest) = t.strip_prefix("[AI:") {
@@ -478,10 +480,11 @@ pub fn is_dev_only_commit(subject: &str) -> bool {
     false
 }
 
+// trace:STORY-541
 /// Classify a (non-dev-only) commit subject into its capability surface. Reads
 /// the conventional-commit type + light keyword cues. Returns None when the
 /// subject does not clearly map to a user-facing surface (it is then dropped —
-/// the operator lens errs toward signal over completeness). trace:STORY-541
+/// the operator lens errs toward signal over completeness).
 pub fn classify_capability(subject: &str) -> Option<CapabilitySurface> {
     let lower = strip_ai_prefix(subject).to_lowercase();
     let is_feat = lower.starts_with("feat:") || lower.starts_with("feat(");
@@ -529,9 +532,10 @@ impl CapabilitiesReport {
     }
 }
 
+// trace:STORY-541
 /// Build the deterministic capabilities candidate set from the window's commits.
 /// Dev-only commits are dropped; the survivors are value-cleaned (PR suffix +
-/// SPEC-IDs stripped) and bucketed by surface. trace:STORY-541
+/// SPEC-IDs stripped) and bucketed by surface.
 pub fn collect_capabilities(commits: &[CommitRec]) -> CapabilitiesReport {
     let mut report = CapabilitiesReport::default();
     let mut seen: BTreeSet<String> = BTreeSet::new();
@@ -560,10 +564,11 @@ pub fn collect_capabilities(commits: &[CommitRec]) -> CapabilitiesReport {
     report
 }
 
+// trace:STORY-542
 /// True when any spec completed in the window carries captured
 /// `interface_changes` — i.e. the deterministic Layer-1 source (STORY-542) is
 /// populated and the operator lens should read from it instead of re-inferring
-/// from git commit subjects. trace:STORY-542
+/// from git commit subjects.
 pub fn has_captured_interface_changes(store: &RequirementsStore, opts: &DigestOptions) -> bool {
     store.requirements.iter().any(|req| {
         if !matches!(
@@ -586,6 +591,7 @@ pub fn has_captured_interface_changes(store: &RequirementsStore, opts: &DigestOp
     })
 }
 
+// trace:STORY-542
 /// Build the operator capabilities candidate set from the DETERMINISTIC
 /// `interface_changes` captured at spec close (STORY-542), rather than
 /// re-inferring surface deltas from git commit subjects. Only specs completed
@@ -598,7 +604,7 @@ pub fn has_captured_interface_changes(store: &RequirementsStore, opts: &DigestOp
 /// command" line vs a changed-behavior line vs a fix line); `mcp` lines bucket
 /// as changed-behavior since the operator's MCP surface is API-shaped. The
 /// Layer-2 `/aida-digest` skill still value-frames; this just yields the
-/// candidate set deterministically. trace:STORY-542
+/// candidate set deterministically.
 pub fn collect_capabilities_from_store(
     store: &RequirementsStore,
     opts: &DigestOptions,
@@ -682,10 +688,11 @@ pub fn collect_capabilities_from_store(
     report
 }
 
+// trace:STORY-542
 /// Heuristically bucket a captured interface-change line (free-form prose
 /// authored by the implementer) into a [`CapabilitySurface`]. Light keyword
 /// cues only — the implementer already decided this line is user-facing, so we
-/// never DROP, we only group. trace:STORY-542
+/// never DROP, we only group.
 pub fn classify_interface_line(line: &str) -> CapabilitySurface {
     let lower = line.to_lowercase();
     if lower.contains("skill") || lower.contains("slash command") || lower.contains("/aida-") {
@@ -1085,12 +1092,14 @@ pub struct DigestReport {
     pub next: NextSection,
     pub plans: Vec<PlanRef>,
     pub process: Vec<MemoryEntry>,
-    /// Operator-audience capabilities lens (CLI-surface diff). trace:STORY-541
+    // trace:STORY-541
+    /// Operator-audience capabilities lens (CLI-surface diff).
     pub capabilities: CapabilitiesReport,
 }
 
+// trace:STORY-541
 /// Render the operator (capabilities) lens: grouped by surface, value-framed,
-/// SPEC-IDs stripped, including any releases in the window. trace:STORY-541
+/// SPEC-IDs stripped, including any releases in the window.
 fn render_capabilities_markdown(report: &DigestReport, _opts: &DigestOptions) -> String {
     let mut s = String::new();
     s.push_str(&format!(
@@ -1614,10 +1623,11 @@ mod json_shapes {
 // Orchestrator.
 // ============================================================================
 
+// trace:TASK-381 | ai:claude
 /// Render the digest to a string without writing it anywhere. Used by
 /// the --copy flow in main.rs which needs the text content for the
 /// clipboard. Also used by `run` (which writes the text to stdout/file).
-/// Does NOT touch the cadence marker. trace:TASK-381 | ai:claude
+/// Does NOT touch the cadence marker.
 pub fn render_string(
     opts: &DigestOptions,
     project_root: &Path,

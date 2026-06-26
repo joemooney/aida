@@ -16,8 +16,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+// trace:TASK-266 | ai:claude
 /// Wall time spent in one lifecycle phase of an `--auto-complete` run.
-/// trace:TASK-266 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PhaseDuration {
     /// 1-based phase index (1 = implementer … 6 = build).
@@ -42,8 +42,9 @@ pub struct AutoRebaseEvent {
     pub outcome: String,
 }
 
+// trace:TASK-266 | ai:claude
 /// One `aida queue work --auto-complete` invocation — appended one-per-run
-/// to `~/.aida/auto-complete.jsonl`. trace:TASK-266 | ai:claude
+/// to `~/.aida/auto-complete.jsonl`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AutoCompleteEvent {
     /// The spec the orchestrator was driving.

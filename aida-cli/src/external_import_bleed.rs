@@ -21,11 +21,12 @@ use std::path::{Component, Path, PathBuf};
 pub(crate) const ANCESTOR_INSTRUCTION_FILES: &[&str] =
     &["CLAUDE.md", "CLAUDE.local.md", "AGENTS.md"];
 
+// trace:TASK-696
 /// Extract the `@`-import targets from an instruction file's content. Claude
 /// Code's import syntax is a line whose first non-space token begins with `@`
 /// (e.g. `@docs/aida/discipline/README.md`). Conservative: we take the token
 /// after `@` up to the first whitespace, and ignore `@` mid-sentence (only a
-/// leading `@` on the trimmed line counts). trace:TASK-696
+/// leading `@` on the trimmed line counts).
 pub(crate) fn parse_at_imports(content: &str) -> Vec<String> {
     content
         .lines()
@@ -42,10 +43,10 @@ pub(crate) fn parse_at_imports(content: &str) -> Vec<String> {
         .collect()
 }
 
+// trace:TASK-696
 /// Lexically normalize a path (resolve `.` and `..` without touching the
 /// filesystem) so `starts_with` is meaningful. Does not follow symlinks — a
 /// best-effort prefix check, which is all the bleed heuristic needs.
-/// trace:TASK-696
 fn lexical_normalize(p: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for comp in p.components() {
@@ -64,11 +65,12 @@ fn lexical_normalize(p: &Path) -> PathBuf {
     out
 }
 
+// trace:TASK-696
 /// Does `import` — an `@`-import found in an instruction file located in
 /// `file_dir` — resolve to a path OUTSIDE `project_root`? Relative imports
 /// resolve against the file's own directory (how Claude Code resolves them);
 /// absolute imports are taken as-is. An import that resolves within
-/// `project_root` is fine (not a bleed). trace:TASK-696
+/// `project_root` is fine (not a bleed).
 pub(crate) fn import_escapes_project(file_dir: &Path, import: &str, project_root: &Path) -> bool {
     let raw = Path::new(import);
     let resolved = if raw.is_absolute() {

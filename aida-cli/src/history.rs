@@ -29,26 +29,30 @@ pub struct HistoryOpts {
     pub since: Option<String>,
     pub until: Option<String>,
     pub status_changes_only: bool,
+    // trace:TASK-507 | ai:claude
     /// TASK-507: `--shipped` — only Done→Completed status transitions (the
     /// "did my ship register?" view), vs `--all`'s recency-blind archive dump.
-    /// Implies events mode. trace:TASK-507 | ai:claude
+    /// Implies events mode.
     pub shipped_only: bool,
     pub comments_only: bool,
     pub oneline: bool,
+    // trace:STORY-441 | ai:claude
     /// Spec-IDs currently archived. The default `aida history` view hides
     /// rows whose spec_id is in this set. Empty when `--all` or `--archived`
-    /// was passed (no hiding needed). trace:STORY-441 | ai:claude
+    /// was passed (no hiding needed).
     pub archived_specs: std::collections::HashSet<String>,
+    // trace:STORY-441 | ai:claude
     /// When `Some`, only rows whose spec_id is in this set are shown.
     /// Used by `--archived` to narrow the view to the archive itself.
-    /// trace:STORY-441 | ai:claude
     pub archived_only_specs: Option<std::collections::HashSet<String>>,
+    // trace:STORY-584 | ai:claude
     /// Spec-IDs currently deferred (flag set OR `deferred:*`-tagged). The
     /// default `aida history` view hides rows whose spec_id is in this set.
-    /// Empty when `--all` or `--deferred` was passed. trace:STORY-584 | ai:claude
+    /// Empty when `--all` or `--deferred` was passed.
     pub deferred_specs: std::collections::HashSet<String>,
+    // trace:STORY-584 | ai:claude
     /// When `Some`, only rows whose spec_id is in this set are shown.
-    /// Used by `--deferred` to narrow to the primed shelf. trace:STORY-584 | ai:claude
+    /// Used by `--deferred` to narrow to the primed shelf.
     pub deferred_only_specs: Option<std::collections::HashSet<String>>,
 }
 
@@ -62,8 +66,9 @@ struct CommitMeta {
     git_author: String,
 }
 
+// trace:TASK-507 | ai:claude
 /// TASK-507: is this event the Done→Completed ship transition (merge-to-default
-/// branch)? The `--shipped` view keeps only these. trace:TASK-507 | ai:claude
+/// branch)? The `--shipped` view keeps only these.
 fn is_ship_event(kind: &EventKind) -> bool {
     matches!(
         kind,
@@ -133,10 +138,10 @@ struct Event {
     kind: EventKind,
 }
 
+// trace:TASK-538 | ai:codex
 /// Structured event record for MCP and other programmatic consumers.
 /// It is derived from the same orphan-branch decoder used by `aida history`
 /// so CLI and MCP history views cannot drift.
-/// trace:TASK-538 | ai:codex
 #[derive(Debug, Clone, Serialize)]
 pub struct HistoryEventRecord {
     pub sha: String,
@@ -206,9 +211,9 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-538 | ai:codex
 /// Collect structured event records using the same filters as
 /// `aida history --events`. Intended for MCP and other non-TTY consumers.
-/// trace:TASK-538 | ai:codex
 pub fn collect_event_records(
     store_path: &Path,
     opts: &HistoryOpts,
@@ -343,6 +348,7 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
     Ok((filtered, opts.archived_specs.len()))
 }
 
+// trace:FR-1-037 | ai:claude
 /// Digest mode (default): one row per recently-touched requirement, sorted
 /// by last-touch time. Aimed at "what was I up to last session?" — answers
 /// in a glance without decoding every individual diff.
@@ -362,7 +368,6 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
 ///
 /// Speed: one `git log --name-status` call + one filesystem read per
 /// distinct requirement that surfaces. Sub-second on the AIDA store.
-/// trace:FR-1-037 | ai:claude
 fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     let mut log_args: Vec<String> = vec![
         "log".into(),
@@ -684,12 +689,12 @@ fn read_current(yaml_path: &Path) -> (String, String, Option<String>) {
     (status, title, modified_at)
 }
 
+// trace:FR-1-037 | ai:claude
 /// Extract the SPEC-ID a commit's subject line explicitly targets, if any.
 /// Subjects emitted by GitBackend look like "update FR-1-037" / "add
 /// FR-1-037 — title" / "delete FR-1-037". The bulk-save path emits
 /// "chore: update requirements store" — None for those, so they don't
 /// inflate the per-spec commit count.
-/// trace:FR-1-037 | ai:claude
 fn targeted_spec_id_from_subject(subject: &str) -> Option<String> {
     let s = subject.trim();
     for prefix in ["update ", "add ", "delete "] {
@@ -725,13 +730,13 @@ fn pick_author_email(email: &str) -> String {
     email.split('@').next().unwrap_or(email).to_string()
 }
 
+// trace:FR-1-037 | ai:claude
 /// HH:MM if today (in the user's local tz), else "MM-DD HH:MM". Always
 /// converts the input ISO timestamp from UTC (or whatever offset it
 /// carries) into the user's local time first — YAML modified_at fields
 /// are stored as UTC (`Z` suffix), so showing the raw HH:MM made
 /// timestamps look up to 12 hours in the future on west-of-UTC
 /// machines.
-/// trace:FR-1-037 | ai:claude
 fn short_clock(iso: &str) -> String {
     use chrono::{DateTime, FixedOffset, Local};
     let Ok(dt_offset) = iso.parse::<DateTime<FixedOffset>>() else {
@@ -767,12 +772,12 @@ fn display_type_name(s: &str) -> String {
     }
 }
 
+// trace:TASK-269 | ai:claude
 /// Colourise an already-padded status cell for the `aida history` table.
 /// TASK-269 unified the per-command palettes — this delegates to the shared
 /// `status_display` module. `status` arrives column-padded; `paint_status`
 /// normalises the trailing spaces away when picking the colour. No glyph is
 /// added here: a 2-char glyph prefix would break the fixed-width column.
-/// trace:TASK-269 | ai:claude
 fn colorize_status(status: &str) -> String {
     crate::status_display::paint_status(status, status).to_string()
 }
@@ -1040,12 +1045,12 @@ fn yaml_array_len(v: &Value, key: &str) -> usize {
         .unwrap_or(0)
 }
 
+// trace:FR-1-037 | ai:claude
 /// "YYYY-MM-DD HH:MM" in the user's LOCAL timezone. Full RFC3339 is too
 /// noisy for a feed view, but date+time without timezone is enough to
 /// scan. Always converts to local — input ISO strings are usually UTC
 /// (`Z` suffix on YAML modified_at) and showing them raw made timestamps
 /// look up to 12 hours in the future on west-of-UTC machines.
-/// trace:FR-1-037 | ai:claude
 fn human_timestamp(iso: &str) -> String {
     use chrono::{DateTime, FixedOffset, Local};
     let Ok(dt_offset) = iso.parse::<DateTime<FixedOffset>>() else {

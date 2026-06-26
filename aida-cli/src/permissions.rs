@@ -34,8 +34,8 @@ use std::path::Path;
 
 use crate::team::{self, RoleSource};
 
+// trace:STORY-647 | ai:claude
 /// A team-gated operation. Each maps to a minimum role via the permission map.
-/// trace:STORY-647 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GatedOp {
     /// Status transition into the approved+ pipeline (slice 1's gate).
@@ -73,10 +73,11 @@ impl GatedOp {
     }
 }
 
+// trace:STORY-647 | ai:claude
 /// The resolved `[team]` policy: the permission map (op -> min role), the set of
 /// protected tags + their required role, and strict mode. Built from
 /// `.aida/config.toml`; an absent file / section yields the all-default policy
-/// (which reproduces slice-1 behavior). trace:STORY-647 | ai:claude
+/// (which reproduces slice-1 behavior).
 #[derive(Debug, Clone, Default)]
 pub(crate) struct TeamPermissions {
     /// Per-op minimum-role overrides from `[team.permissions]`. A missing entry
@@ -94,10 +95,10 @@ pub(crate) struct TeamPermissions {
 }
 
 impl TeamPermissions {
+    // trace:STORY-647 | ai:claude
     /// Load the `[team]` policy from a parsed `.aida/config.toml` value. A
     /// missing `[team]` section yields the all-default policy. Pure over the
     /// parsed value so it can be unit-tested without the filesystem.
-    /// trace:STORY-647 | ai:claude
     pub(crate) fn from_config(cfg: Option<&toml::Value>) -> Self {
         let Some(team) = cfg.and_then(|c| c.get("team")) else {
             return Self::default();
@@ -142,9 +143,10 @@ impl TeamPermissions {
         }
     }
 
+    // trace:STORY-647
     /// Load the `[team]` policy from the project's `.aida/config.toml`.
     /// Best-effort: an unreadable / unparseable config yields the all-default
-    /// (non-strict) policy, so a degraded config never blocks. trace:STORY-647
+    /// (non-strict) policy, so a degraded config never blocks.
     pub(crate) fn load(project_root: &Path) -> Self {
         Self::from_config(super::read_project_config_value(project_root).as_ref())
     }
@@ -164,8 +166,9 @@ impl TeamPermissions {
             .unwrap_or_else(|| op.default_min_role().to_string())
     }
 
+    // trace:STORY-647 | ai:claude
     /// A human-readable rendering of the protected-tag set for `aida config
-    /// show` (`(none)` when empty). trace:STORY-647 | ai:claude
+    /// show` (`(none)` when empty).
     pub(crate) fn protected_tags_display(&self) -> String {
         if self.protected_tags.is_empty() {
             "(none — no protected specs)".to_string()
@@ -174,8 +177,9 @@ impl TeamPermissions {
         }
     }
 
+    // trace:STORY-647
     /// Whether `tags` mark a spec protected under this policy (case-insensitive,
-    /// any-match). Empty `protected_tags` => never protected. trace:STORY-647
+    /// any-match). Empty `protected_tags` => never protected.
     pub(crate) fn spec_is_protected<I, S>(&self, tags: I) -> bool
     where
         I: IntoIterator<Item = S>,
@@ -191,9 +195,10 @@ impl TeamPermissions {
     }
 }
 
+// trace:STORY-647 | ai:claude
 /// The gated ops shown in `aida config show`'s `[team]` permission-map rows,
 /// each paired with its `[team.permissions]` config key. (Protected-spec gating
-/// is rendered separately via `protected_role`.) trace:STORY-647 | ai:claude
+/// is rendered separately via `protected_role`.)
 pub(crate) const POLICY_DISPLAY_OPS: &[(GatedOp, &str)] = &[
     (GatedOp::StatusTransition, "status_transition"),
     (GatedOp::MergeGate, "merge_gate"),
@@ -201,6 +206,7 @@ pub(crate) const POLICY_DISPLAY_OPS: &[(GatedOp, &str)] = &[
     (GatedOp::DrainStart, "drain_start"),
 ];
 
+// trace:STORY-647 | ai:claude
 /// Whether `effective_role` satisfies the minimum role for `op` under `config`.
 ///
 /// The policy is a simple two-tier ladder: `advisor` outranks every other role.
@@ -210,15 +216,16 @@ pub(crate) const POLICY_DISPLAY_OPS: &[(GatedOp, &str)] = &[
 /// to anyone (there is no role below implementer in the guardrail model).
 ///
 /// Pure over its inputs — no env, no filesystem — so the op×role×config matrix
-/// is directly unit-testable. trace:STORY-647 | ai:claude
+/// is directly unit-testable.
 pub(crate) fn permits(op: GatedOp, effective_role: &str, config: &TeamPermissions) -> bool {
     let min = config.min_role(op);
     role_satisfies(effective_role, &min)
 }
 
+// trace:STORY-647
 /// Does `have` satisfy a `need` minimum role? `advisor` is the only privileged
 /// tier today, so the rule is: if the op needs `advisor`, the caller must be
-/// `advisor`; any non-advisor minimum is satisfied by anyone. trace:STORY-647
+/// `advisor`; any non-advisor minimum is satisfied by anyone.
 fn role_satisfies(have: &str, need: &str) -> bool {
     if need == "advisor" {
         have == "advisor"
@@ -227,6 +234,7 @@ fn role_satisfies(have: &str, need: &str) -> bool {
     }
 }
 
+// trace:STORY-647 | ai:claude
 /// The effective role to use for a *gated-op* decision, honoring strict mode.
 ///
 /// - Non-strict (slice-1 behavior): roster role → `AIDA_SESSION_ROLE` → default
@@ -238,7 +246,7 @@ fn role_satisfies(have: &str, need: &str) -> bool {
 ///   `AIDA_SESSION_ROLE` — default-deny for gated ops.
 ///
 /// Returns the role plus its source (so the refusal message can name a durable
-/// team role). Pure over its inputs. trace:STORY-647 | ai:claude
+/// team role). Pure over its inputs.
 pub(crate) fn gated_effective_role(
     roster_role: Option<&str>,
     env_role: Option<&str>,
@@ -255,13 +263,14 @@ pub(crate) fn gated_effective_role(
     }
 }
 
+// trace:STORY-647 | ai:claude
 /// Resolve the gated-op effective role for the current user against the store,
 /// honoring `config.strict`. Best-effort: an unreachable / unreadable store
 /// yields an empty roster → in strict mode a non-rostered user (everyone, since
 /// the roster couldn't be read) lands least-privilege, EXCEPT we treat an
 /// unreachable store as a degraded environment and fall back to non-strict
 /// slice-1 behavior so a transient store outage never hard-blocks (point 4:
-/// store/config unreachable → never block). trace:STORY-647 | ai:claude
+/// store/config unreachable → never block).
 pub(crate) fn gated_effective_role_for_user(
     store_root: Option<&Path>,
     user_id: &str,
@@ -280,11 +289,11 @@ pub(crate) fn gated_effective_role_for_user(
     }
 }
 
+// trace:STORY-647 | ai:claude
 /// A clear, role-naming refusal message for a denied gated op. Names the op, the
 /// caller's effective role (and that it's the durable *team* role when sourced
 /// from the roster), the required role, and the `--force` audited escape hatch.
 /// Reaffirms the guardrail-not-security framing implicitly by offering `--force`.
-/// trace:STORY-647 | ai:claude
 pub(crate) fn refusal_message(
     op: GatedOp,
     have_role: &str,

@@ -31,9 +31,10 @@ use serde::{Deserialize, Serialize};
 
 use aida_core::fs_atomic::write_atomic;
 
+// trace:TASK-661
 /// Default scope slug when an advisor disposes without naming a subsystem
 /// scope — the whole project. One authoritative advisor per project until
-/// subsystem-scoped advisors (SPIKE-10) partition it. trace:TASK-661
+/// subsystem-scoped advisors (SPIKE-10) partition it.
 pub const DEFAULT_SCOPE: &str = "project";
 
 /// A held disposition/triage lease — one disposing advisor per scope.
@@ -67,6 +68,7 @@ pub enum AcquireDecision {
     AlreadyHeld(DispositionLease),
 }
 
+// trace:TASK-661 | ai:claude
 /// Pure core of the bouncer (TASK-661): decide whether `requester` may acquire
 /// the disposition lease for `scope`, given the set of *live* leases (the
 /// caller has already filtered out dead-PID leases via the reaper) and a
@@ -81,7 +83,6 @@ pub enum AcquireDecision {
 /// Ownership for the idempotent case is keyed on `(owner, pid)`: the same
 /// process re-acquiring is a no-op; the same user from a *different* live
 /// process is still refused (two advisor shells, same login, both disposing).
-/// trace:TASK-661 | ai:claude
 pub fn decide_acquire(
     new_lease: DispositionLease,
     live_leases: &[DispositionLease],
@@ -95,9 +96,10 @@ pub fn decide_acquire(
     }
 }
 
+// trace:TASK-661
 /// Normalize a raw scope string into a filesystem-safe slug. Empty / absent
 /// scope → [`DEFAULT_SCOPE`]. Keeps alphanumerics, lowercases, and collapses
-/// every other run into a single `-`. trace:TASK-661
+/// every other run into a single `-`.
 pub fn scope_slug(raw: Option<&str>) -> String {
     let raw = raw.map(str::trim).unwrap_or("");
     if raw.is_empty() {
@@ -122,9 +124,10 @@ pub fn scope_slug(raw: Option<&str>) -> String {
     }
 }
 
+// trace:TASK-661
 /// Directory holding disposition-lease files: `.aida/triage-leases/`.
 /// Sibling of `.aida/sessions/` (the session-lease dir), runtime per-clone
-/// state, gitignored by the deny-by-default `.aida/*` rule. trace:TASK-661
+/// state, gitignored by the deny-by-default `.aida/*` rule.
 pub fn leases_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("triage-leases")
 }
@@ -133,9 +136,10 @@ fn lease_path(project_root: &Path, slug: &str) -> PathBuf {
     leases_dir(project_root).join(format!("{slug}.toml"))
 }
 
+// trace:TASK-661
 /// Read all disposition leases on disk (live and stale). Tolerates a missing
 /// dir and malformed files (skips them) — the same forgiving read the session
-/// lease loader uses. trace:TASK-661
+/// lease loader uses.
 pub fn list_all(project_root: &Path) -> Vec<DispositionLease> {
     let dir = leases_dir(project_root);
     if !dir.exists() {
@@ -159,11 +163,11 @@ pub fn list_all(project_root: &Path) -> Vec<DispositionLease> {
     out
 }
 
+// trace:TASK-661 | ai:claude
 /// Read all leases, reaping (deleting) any whose holder PID is no longer
 /// alive, and return only the live set. A crashed advisor's lease is freed so
 /// triage isn't locked forever. The liveness probe is injected so the core
 /// is testable; production callers pass `process_probe::pid_is_alive`.
-/// trace:TASK-661 | ai:claude
 pub fn live_leases_reaping(
     project_root: &Path,
     is_alive: impl Fn(u32) -> bool,
@@ -180,7 +184,8 @@ pub fn live_leases_reaping(
     live
 }
 
-/// Persist a granted/re-acquired lease atomically. trace:TASK-661
+// trace:TASK-661
+/// Persist a granted/re-acquired lease atomically.
 pub fn write_lease(project_root: &Path, lease: &DispositionLease) -> Result<()> {
     let dir = leases_dir(project_root);
     std::fs::create_dir_all(&dir)?;
@@ -189,9 +194,10 @@ pub fn write_lease(project_root: &Path, lease: &DispositionLease) -> Result<()> 
     Ok(())
 }
 
+// trace:TASK-661
 /// Release (delete) the lease for `slug` iff `owner` holds it. Returns
 /// `Ok(true)` when a lease was removed, `Ok(false)` when none was held by
-/// this owner (nothing to release / held by someone else). trace:TASK-661
+/// this owner (nothing to release / held by someone else).
 pub fn release(project_root: &Path, slug: &str, owner: &str) -> Result<bool> {
     let path = lease_path(project_root, slug);
     let Ok(content) = std::fs::read_to_string(&path) else {

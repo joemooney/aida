@@ -17,32 +17,36 @@ use aida_core::RequirementSummary;
 
 /// Tag prefix every reviewer-filed finding carries (the value is `PR-<n>`).
 pub const FROM_REVIEW_PREFIX: &str = "from-review:";
+// trace:STORY-285
 /// Tag prefix every implementer-filed finding carries (the value is the
 /// SPEC-ID the implementer was working when it raised the finding).
-/// trace:STORY-285
 pub const FROM_IMPLEMENTER_PREFIX: &str = "from-implementer:";
+// trace:STORY-467
 /// Tag prefix every advisor-filed observation carries. The value is the
 /// origin bucket: the first `--linked-specs` value (a SPEC-ID), or
 /// `general` when the observation isn't anchored to one spec.
-/// trace:STORY-467
 pub const FROM_ADVISOR_PREFIX: &str = "from-advisor:";
 /// Tag prefix carrying a review finding's PR number, e.g. `from-review:PR-64`.
 const PR_TAG_PREFIX: &str = "from-review:PR-";
 /// Tag prefix carrying a finding's severity, e.g. `severity:major`.
 pub(crate) const SEVERITY_PREFIX: &str = "severity:";
+// trace:STORY-285 trace:STORY-467
 /// Tag prefix carrying an implementer or advisor finding's category, e.g.
-/// `kind:bug-spotted`, `kind:observation`. trace:STORY-285 trace:STORY-467
+/// `kind:bug-spotted`, `kind:observation`.
 pub(crate) const KIND_PREFIX: &str = "kind:";
+// trace:STORY-467
 /// Tag prefix carrying a recurrence counter, e.g. `recurrence:3`. Filed
 /// findings start without the tag (implicit recurrence:1); the first
-/// `aida findings recur <ID>` writes `recurrence:2`. trace:STORY-467
+/// `aida findings recur <ID>` writes `recurrence:2`.
 pub const RECURRENCE_PREFIX: &str = "recurrence:";
+// trace:STORY-467
 /// Tag prefix carrying an additional linked spec when an advisor observation
 /// names more than one (the first goes into `from-advisor:<spec>`, the rest
 /// become `linked:<spec>` so they survive grep and show up in the spec's
-/// own relationship-by-tag view). trace:STORY-467
+/// own relationship-by-tag view).
 pub const LINKED_PREFIX: &str = "linked:";
 
+// trace:STORY-467 trace:TASK-120 | ai:claude
 /// A finding's severity, parsed from its `severity:<level>` tag. Ordered so
 /// [`Severity::rank`] sorts a triage view major → minor → cosmetic, with
 /// unknown (no/garbled tag) last.
@@ -55,7 +59,6 @@ pub const LINKED_PREFIX: &str = "linked:";
 ///   - note      — informational only, low-priority capture (TASK-120)
 ///   - unknown   — no/garbled tag
 ///
-/// trace:STORY-467 trace:TASK-120 | ai:claude
 // trace:TASK-714
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ts_rs_forge::TS)]
 pub enum Severity {
@@ -170,9 +173,10 @@ pub fn finding_source(tags: &[String]) -> Option<FindingSource> {
     }
 }
 
+// trace:STORY-285 trace:STORY-467
 /// True when `tags` marks the requirement as a finding. Guards
 /// `aida findings dismiss/promote/recur` so they only act on real findings —
-/// review, implementer, or (STORY-467) advisor. trace:STORY-285 trace:STORY-467
+/// review, implementer, or (STORY-467) advisor.
 pub fn is_finding(tags: &[String]) -> bool {
     finding_source(tags).is_some()
 }
@@ -200,9 +204,10 @@ fn finding_origin(tags: &[String], source: FindingSource) -> String {
         })
 }
 
+// trace:STORY-285
 /// A finding's `kind:<category>` tag value. Implementer findings carry one
 /// (`deviation`, `design-choice`, `bug-spotted`, `followup-suggestion`);
-/// review findings do not. trace:STORY-285
+/// review findings do not.
 fn finding_kind(tags: &[String]) -> Option<String> {
     tags.iter()
         .find_map(|t| t.strip_prefix(KIND_PREFIX))
@@ -231,17 +236,19 @@ pub fn finding_recurrence(tags: &[String]) -> u32 {
         .unwrap_or(1)
 }
 
+// trace:TASK-37 | ai:claude
 /// Default recurrence count above which the recur handler emits the
 /// promote-it hint. Configurable via `[findings] promote_threshold = N`
-/// in `.aida/config.toml`. trace:TASK-37 | ai:claude
+/// in `.aida/config.toml`.
 pub const DEFAULT_PROMOTE_THRESHOLD: u32 = 3;
 
+// trace:TASK-37 | ai:claude
 /// Resolve the promote-it threshold for a project. Reads
 /// `[findings] promote_threshold = N` from `.aida/config.toml` (clamped
 /// to >= 1; values <= 0 fall back to the default). Returns the default
 /// (`DEFAULT_PROMOTE_THRESHOLD`) when the file is absent or the key
 /// isn't set. Errors are swallowed — config reading never blocks the
-/// caller. trace:TASK-37 | ai:claude
+/// caller.
 pub fn promote_threshold_for_project(project_dir: Option<&std::path::Path>) -> u32 {
     let Some(dir) = project_dir else {
         return DEFAULT_PROMOTE_THRESHOLD;
@@ -253,11 +260,12 @@ pub fn promote_threshold_for_project(project_dir: Option<&std::path::Path>) -> u
     parse_promote_threshold(&content).unwrap_or(DEFAULT_PROMOTE_THRESHOLD)
 }
 
+// trace:TASK-37 | ai:claude
 /// Parse `[findings] promote_threshold = N` out of a TOML string.
 /// Returns `Some(N)` for any N >= 1, `None` otherwise. Mirrors
 /// `parse_telemetry_enabled` in `usage.rs` — a hand-rolled TOML-ish
 /// parser so the read path never pulls a full TOML dependency just to
-/// look up one value. trace:TASK-37 | ai:claude
+/// look up one value.
 pub fn parse_promote_threshold(content: &str) -> Option<u32> {
     let mut in_findings = false;
     for raw in content.lines() {
@@ -287,13 +295,13 @@ pub struct FindingRow {
     pub display_id: String,
     pub title: String,
     pub severity: Severity,
+    // trace:STORY-285 trace:STORY-467
     /// The `kind:` category, when the finding carries one (implementer
     /// findings do; review findings don't; advisor observations do).
-    /// trace:STORY-285 trace:STORY-467
     pub kind: Option<String>,
+    // trace:STORY-467
     /// Recurrence count (`recurrence:N` tag value). Defaults to 1 for a
     /// freshly-filed finding; `aida findings recur <ID>` increments it.
-    /// trace:STORY-467
     pub recurrence: u32,
 }
 
@@ -306,16 +314,18 @@ pub struct OriginGroup {
     pub rows: Vec<FindingRow>,
 }
 
+// trace:STORY-285
 /// All findings from one source (review / implementer), origin-grouped — the
-/// top-level section of the triage view. trace:STORY-285
+/// top-level section of the triage view.
 #[derive(Debug, Clone)]
 pub struct SourceSection {
     pub source: FindingSource,
     pub groups: Vec<OriginGroup>,
 }
 
+// trace:STORY-285
 /// Filters applied to the triage view by `aida findings list`. Every field
-/// defaults to "no filter". trace:STORY-285
+/// defaults to "no filter".
 #[derive(Debug, Clone, Default)]
 pub struct FindingsFilter {
     /// Narrow review findings to one PR number (excludes implementer
@@ -327,6 +337,7 @@ pub struct FindingsFilter {
     pub kind: Option<String>,
 }
 
+// trace:STORY-278 trace:STORY-285 | ai:claude
 /// Build the triage view: keep only finding requirements, apply `filter`, and
 /// group source → origin → rows.
 ///
@@ -336,7 +347,6 @@ pub struct FindingsFilter {
 /// freshest spec first). Each origin group's rows sort major → minor →
 /// cosmetic; the severity sort is stable, so within one severity the freshest
 /// finding still leads. Empty sections are dropped.
-/// trace:STORY-278 trace:STORY-285 | ai:claude
 pub fn build_findings_view(
     summaries: &[RequirementSummary],
     filter: &FindingsFilter,

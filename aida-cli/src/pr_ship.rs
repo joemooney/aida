@@ -33,16 +33,16 @@ pub struct PrShipOptions {
     pub no_cleanup: bool,
     /// `--dry-run` — print the resolved sequence and exit zero.
     pub dry_run: bool,
+    // trace:STORY-439 | ai:claude
     /// STORY-439: the implementer's self-assessed actual complexity at
     /// ship time. Captured to the per-spec calibration record alongside
     /// the punt count read from `.aida/punts.jsonl`. Absent ⇒ no
     /// ship-side complexity slot is written; the punt count is still
     /// captured against every spec the PR credits.
-    /// trace:STORY-439 | ai:claude
     pub complexity: Option<crate::complexity_calibration::ComplexityLevel>,
+    // trace:STORY-451 | ai:codex
     /// STORY-451: implementer's actual effort spent at ship time.
     /// Captured per credited spec in `.aida/effort-calibration/`.
-    /// trace:STORY-451 | ai:codex
     pub effort: Option<crate::effort_calibration::EffortBucket>,
 }
 
@@ -249,6 +249,7 @@ fn parse_spec_id_group(inner: &str) -> Vec<String> {
     }
 }
 
+// trace:BUG-434 | ai:claude
 /// BUG-434: decide whether `aida pr ship` may pass `--delete-branch`.
 ///
 /// Deleting the just-merged branch is the convenient default, but it has two
@@ -262,7 +263,7 @@ fn parse_spec_id_group(inner: &str) -> Vec<String> {
 ///
 /// `force` is the operator's explicit `--force-delete-branch` override — it
 /// deletes regardless (deliberately orphaning children). Kept pure so the
-/// guard is unit-testable without a worktree or `gh`. trace:BUG-434 | ai:claude
+/// guard is unit-testable without a worktree or `gh`.
 pub fn should_delete_branch(
     branch_in_sibling: bool,
     stacked_child_count: usize,
@@ -331,12 +332,13 @@ pub fn gh_pr_checks_output_is_unregistered(stdout: &str, stderr: &str) -> bool {
         || lower.contains("no checks have been reported")
 }
 
+// trace:BUG-417 | ai:claude
 /// BUG-417: parse the PR base branch from `gh repo view --json
 /// defaultBranchRef -q .defaultBranchRef.name`. `gh` prints the bare branch
 /// name on its own line (e.g. `master\n`). Returns the first non-empty trimmed
 /// line, or `None` when the output is empty / unusable — the caller then falls
 /// back to the local origin/HEAD probe and finally `main`. Pure so the parse
-/// contract is unit-testable without invoking `gh`. trace:BUG-417 | ai:claude
+/// contract is unit-testable without invoking `gh`.
 pub fn parse_gh_default_branch(stdout: &str) -> Option<String> {
     stdout
         .lines()
@@ -345,12 +347,13 @@ pub fn parse_gh_default_branch(stdout: &str) -> Option<String> {
         .map(|l| l.to_string())
 }
 
+// trace:BUG-417 | ai:claude
 /// BUG-417: true when the repository has at least one GitHub Actions workflow
 /// file configured (a `.yml`/`.yaml` under `.github/workflows/`). When this is
 /// false, `aida pr ship` skips the blocking CI-wait instead of hanging for the
 /// full timeout waiting for checks that will never register. Pure over the file
 /// names so the "is this a CI workflow file?" rule is unit-testable without a
-/// real directory. trace:BUG-417 | ai:claude
+/// real directory.
 pub fn workflow_files_indicate_ci<I, S>(file_names: I) -> bool
 where
     I: IntoIterator<Item = S>,
@@ -528,15 +531,16 @@ pub fn recovery_hint(step: &ShipStep, pr_number: Option<u64>) -> String {
     }
 }
 
+// trace:STORY-529 | ai:claude
 /// STORY-529: a spec carrying this tag must NOT be auto-merged by `aida pr
 /// ship` — the PR is left a draft for a human to review + merge. Enforces the
 /// draft-for-review handoff that briefs alone couldn't (handed-off agents kept
-/// self-merging draft-for-review work). trace:STORY-529 | ai:claude
+/// self-merging draft-for-review work).
 pub const DRAFT_ONLY_TAG: &str = "review:draft-only";
 
+// trace:STORY-529 | ai:claude
 /// True iff any of `tags` marks the spec draft-only (case-insensitive match on
 /// [`DRAFT_ONLY_TAG`]). The pure heart of the ship-time draft gate.
-/// trace:STORY-529 | ai:claude
 pub fn is_draft_only_tagged(tags: &[String]) -> bool {
     tags.iter()
         .any(|t| t.trim().eq_ignore_ascii_case(DRAFT_ONLY_TAG))

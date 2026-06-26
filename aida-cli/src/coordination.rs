@@ -74,9 +74,9 @@ pub(crate) const DEFAULT_TTL_SECS: u64 = 1800;
 /// Max CAS push attempts before giving up (mirrors `git_ops::MAX_CAS_RETRIES`).
 const MAX_CAS_RETRIES: u32 = 5;
 
+// trace:STORY-637 | ai:claude
 /// A cross-clone lease claim, serialized as TOML at
 /// `coordination/leases/<sanitized-scope>.toml` on the `aida-store` branch.
-/// trace:STORY-637 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct Claim {
     /// Raw scope string (a SPEC-ID like `FR-1`, or a worktree scope).
@@ -100,6 +100,7 @@ pub(crate) struct Claim {
     pub heartbeat_at: String,
     /// Staleness horizon in seconds for the cross-host TTL backstop.
     pub ttl_secs: u64,
+    // trace:STORY-637 | ai:claude
     /// Whether the recorded `pid` is a LONG-LIVED process whose liveness
     /// faithfully tracks the claim (e.g. a drain loop — slice 2). When `true`,
     /// the same-host pid probe is an exact reclaim signal. When `false` (the
@@ -109,7 +110,7 @@ pub(crate) struct Claim {
     /// session leases the holder is the worktree (cross-clone-invisible), so
     /// only the TTL backstop governs reclaim. Defaults to `false` so an old
     /// reader / older binary treats every claim as TTL-governed (never wrongly
-    /// reclaims via a dead ephemeral pid). trace:STORY-637 | ai:claude
+    /// reclaims via a dead ephemeral pid).
     #[serde(default)]
     pub process_backed: bool,
     /// True for advisory PR/MR-review claims (no worktree). Informational —
@@ -130,6 +131,7 @@ impl Claim {
     }
 }
 
+// trace:STORY-637 | ai:claude
 /// The pure decision: given the claim currently on the store (if any) and the
 /// claim we want to write, should we ACQUIRE (no contention), be REFUSED (a
 /// live foreign holder), or RECLAIM (a dead/stale foreign holder)?
@@ -137,7 +139,7 @@ impl Claim {
 /// Liveness is injected as a closure so the paths are unit-testable without
 /// spawning real processes — mirrors `drain_lock::decide_lock`. `--force` is
 /// NOT modeled here (the call site short-circuits to acquire), keeping this
-/// fn pure and total. trace:STORY-637 | ai:claude
+/// fn pure and total.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ClaimDecision {
     /// No live foreign claim stands in the way — write ours.
@@ -219,11 +221,12 @@ pub(crate) fn decide_claim(
     }
 }
 
+// trace:STORY-637
 /// Sanitize a scope into a safe, collision-resistant filename stem. Lowercases,
 /// keeps `[a-z0-9._-]`, maps every other byte to `_`. A trailing FNV-1a hash of
 /// the ORIGINAL scope guarantees two scopes that sanitize to the same stem
 /// (e.g. `FR/1` vs `FR_1`) still get distinct files — the same distinctness
-/// guarantee as `worktree_lease::lease_id_from_agent_id`. trace:STORY-637
+/// guarantee as `worktree_lease::lease_id_from_agent_id`.
 pub(crate) fn sanitize_scope(scope: &str) -> String {
     let stem: String = scope
         .chars()
@@ -259,21 +262,22 @@ pub(crate) fn claim_path(store_root: &Path, scope: &str) -> PathBuf {
     leases_dir(store_root).join(format!("{}.toml", sanitize_scope(scope)))
 }
 
+// trace:STORY-637
 /// Read + parse a claim file, if present and well-formed. A missing file or a
 /// parse error both yield `None` — a corrupt claim must never wedge a lease
-/// (treated as "no claim", i.e. reclaimable). trace:STORY-637
+/// (treated as "no claim", i.e. reclaimable).
 fn read_claim(path: &Path) -> Option<Claim> {
     let raw = std::fs::read_to_string(path).ok()?;
     toml::from_str(&raw).ok()
 }
 
+// trace:STORY-642 | ai:claude
 /// Best-effort host name (informational; drives the same-host pid fast path).
 ///
 /// `AIDA_HOST_OVERRIDE` (test hook) takes precedence when set non-empty: it lets
 /// the multi-clone harness simulate two DISTINCT hosts on one machine so the
 /// cross-host TTL/heartbeat path (where pid liveness is meaningless) can be
 /// exercised without a second physical machine. Production never sets it.
-/// trace:STORY-642 | ai:claude
 pub(crate) fn hostname() -> String {
     if let Ok(h) = std::env::var("AIDA_HOST_OVERRIDE") {
         if !h.is_empty() {
@@ -295,13 +299,13 @@ fn canonical_clone_path(clone_path: &Path) -> String {
         .to_string()
 }
 
+// trace:STORY-637 | ai:claude
 /// Resolve this clone's node id. Two clones sharing one store inherit the same
 /// `node_id` in the store worktree's `.aida/node.toml` (it rides the branch),
 /// so that is NOT a per-clone discriminator — the authoritative per-clone id is
 /// the `registry/nodes.toml` entry keyed by `clone_path`. Look that up first,
 /// falling back to the store node.toml, then `"1"`. Used only for a human-
 /// readable label; clone-identity comparisons key off `clone_path`.
-/// trace:STORY-637 | ai:claude
 fn node_id_for_clone(store_root: &Path, clone_path: &Path) -> String {
     let canon = canonical_clone_path(clone_path);
     let registry_path = store_root.join("registry").join("nodes.toml");
@@ -369,6 +373,7 @@ pub(crate) enum AcquireOutcome {
     Unavailable(String),
 }
 
+// trace:STORY-637 | ai:claude
 /// Acquire a cross-clone lease claim for `scope` on the shared store.
 ///
 /// `store_root` is the `.aida-store` worktree; `clone_path` the project root.
@@ -378,7 +383,7 @@ pub(crate) enum AcquireOutcome {
 ///
 /// **Best-effort:** with no `origin` remote, or if the store can't be reached,
 /// returns `Ok(AcquireOutcome::Unavailable(..))` rather than erroring — the
-/// caller WARNs and proceeds local-only. trace:STORY-637 | ai:claude
+/// caller WARNs and proceeds local-only.
 pub(crate) fn acquire_claim(
     store_root: &Path,
     scope: &str,
@@ -533,12 +538,13 @@ fn refusal_message(scope: &str, holder: &Claim, path: &Path) -> String {
     )
 }
 
+// trace:STORY-637 | ai:claude
 /// Release a cross-clone lease claim for `scope`: delete the file, commit, push.
 ///
 /// Best-effort by design — staleness (pid / TTL) guarantees a crashed holder's
 /// claim is always eventually reclaimable, so a failed release never deadlocks.
 /// Only deletes a claim recorded by OUR clone (matched by `clone_path`), so we
-/// never stomp a claim a successor reclaimed. trace:STORY-637 | ai:claude
+/// never stomp a claim a successor reclaimed.
 pub(crate) fn release_claim(store_root: &Path, scope: &str, clone_path: &Path) {
     if !store_root.exists() || !aida_core::git_ops::has_remote(store_root, "origin") {
         return;
@@ -574,9 +580,10 @@ pub(crate) fn release_claim(store_root: &Path, scope: &str, clone_path: &Path) {
     }
 }
 
+// trace:STORY-637 | ai:claude
 /// List the cross-clone lease claims currently recorded on the store. Returns
 /// an empty vec when the registry tree doesn't exist (no claims yet).
-/// Surfaced by `aida session leases`. trace:STORY-637 | ai:claude
+/// Surfaced by `aida session leases`.
 pub(crate) fn list_claims(store_root: &Path) -> Vec<Claim> {
     let dir = leases_dir(store_root);
     let mut out = Vec::new();
@@ -594,10 +601,11 @@ pub(crate) fn list_claims(store_root: &Path) -> Vec<Claim> {
     out
 }
 
+// trace:STORY-640 | ai:claude
 /// List the per-repo process-lock claims (drain + solo) currently recorded on
 /// the store. Returns the live `Claim` records — empty when neither lock is
 /// held. Surfaced alongside the lease claims by the `aida status` cross-clone
-/// coordination view (STORY-640). trace:STORY-640 | ai:claude
+/// coordination view (STORY-640).
 pub(crate) fn list_lock_claims(store_root: &Path) -> Vec<Claim> {
     let mut out = Vec::new();
     for kind in [LockKind::Drain, LockKind::Solo] {
@@ -630,8 +638,8 @@ pub(crate) fn list_lock_claims(store_root: &Path) -> Vec<Claim> {
 /// Subdir (under the store worktree root) holding the per-repo process locks.
 const LOCKS_SUBDIR: &str = "coordination";
 
+// trace:STORY-638 | ai:claude
 /// Which per-repo process lock — drives the file name + the human label.
-/// trace:STORY-638 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LockKind {
     /// `coordination/drain.lock.toml` — one active drain across all clones.
@@ -663,10 +671,11 @@ pub(crate) fn lock_claim_path(store_root: &Path, kind: LockKind) -> PathBuf {
     store_root.join(LOCKS_SUBDIR).join(kind.file_name())
 }
 
+// trace:STORY-638 | ai:claude
 /// Build the process-backed claim we want to write for `kind`. `command` is the
 /// launching command (e.g. `burndown run --status approved`), carried in the
 /// `agent` field so a refusal can name what is running. `ttl_secs` folds in the
-/// drain's age-backstop horizon. trace:STORY-638 | ai:claude
+/// drain's age-backstop horizon.
 fn build_lock_claim(
     store_root: &Path,
     kind: LockKind,
@@ -705,6 +714,7 @@ pub(crate) enum LockAcquireOutcome {
     Unavailable(String),
 }
 
+// trace:STORY-638 | ai:claude
 /// Acquire the shared per-repo process lock for `kind` on the store.
 ///
 /// `store_root` is the `.aida-store` worktree; `clone_path` the project root;
@@ -715,7 +725,6 @@ pub(crate) enum LockAcquireOutcome {
 /// On a live foreign claim, returns `Err` whose message names the holder. On no
 /// remote / unreachable store, returns `Ok(Unavailable(..))` — the caller WARNs
 /// and proceeds local-only (a drain must never be brittle on the network).
-/// trace:STORY-638 | ai:claude
 pub(crate) fn acquire_lock_claim(
     store_root: &Path,
     kind: LockKind,
@@ -871,11 +880,12 @@ fn lock_refusal_message(kind: LockKind, holder: &Claim, path: &Path) -> String {
     )
 }
 
+// trace:STORY-638 | ai:claude
 /// Refresh `heartbeat_at` on OUR process-lock claim so a long-running drain/solo
 /// never ages past its TTL. Best-effort and CHEAP-ish (one pull + commit + push
 /// per tick): only rewrites when the on-disk claim is still ours. A successor
 /// that reclaimed it (different clone_path) is left intact — we no longer hold
-/// the lock. trace:STORY-638 | ai:claude
+/// the lock.
 pub(crate) fn heartbeat_lock_claim(store_root: &Path, kind: LockKind, clone_path: &Path) {
     if !store_root.exists() || !aida_core::git_ops::has_remote(store_root, "origin") {
         return;
@@ -909,9 +919,10 @@ pub(crate) fn heartbeat_lock_claim(store_root: &Path, kind: LockKind, clone_path
     }
 }
 
+// trace:STORY-638 | ai:claude
 /// Release OUR per-repo process lock claim: delete the file, commit, push.
 /// Best-effort (staleness covers a crash). Only deletes a claim recorded by OUR
-/// clone (matched by `clone_path`). trace:STORY-638 | ai:claude
+/// clone (matched by `clone_path`).
 pub(crate) fn release_lock_claim(store_root: &Path, kind: LockKind, clone_path: &Path) {
     if !store_root.exists() || !aida_core::git_ops::has_remote(store_root, "origin") {
         return;

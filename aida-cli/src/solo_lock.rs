@@ -45,10 +45,10 @@ pub(crate) fn solo_lock_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join(SOLO_LOCK_FILE)
 }
 
+// trace:STORY-627 | ai:claude
 /// On-disk lock record. Serialized as JSON via [`aida_core::write_atomic`] so a
 /// concurrent reader never sees a torn file. Mirrors `drain_lock::DrainLock`
 /// minus the `command` field (there is only one solo command).
-/// trace:STORY-627 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct SoloLock {
     /// PID of the solo-loop process holding the lock.
@@ -59,11 +59,12 @@ pub(crate) struct SoloLock {
     pub(crate) host: String,
 }
 
+// trace:STORY-627 | ai:claude
 /// The pure decision: given the lock currently on disk (if any), should a new
 /// solo loop ACQUIRE (write its own, possibly reclaiming a stale one) or be
 /// REFUSED? Liveness is injected as a predicate so both paths (no-lock /
 /// live-refuse / stale-reclaim) are unit-testable without real processes —
-/// mirrors `drain_lock::decide_lock`. trace:STORY-627 | ai:claude
+/// mirrors `drain_lock::decide_lock`.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum LockDecision {
     /// No live lock stands in the way — write ours.
@@ -72,11 +73,12 @@ pub(crate) enum LockDecision {
     Refuse(SoloLock),
 }
 
+// trace:STORY-627 | ai:claude
 /// Decide ACQUIRE vs REFUSE. An absent / unparseable on-disk lock is ACQUIRE. A
 /// present lock is reclaimable (→ ACQUIRE) when its pid is dead; otherwise
 /// REFUSE. Unlike the drain lock there is no age backstop — the solo loop is
 /// expected to run for hours (up to its TTL), so age says nothing about
-/// staleness; only pid-liveness does. trace:STORY-627 | ai:claude
+/// staleness; only pid-liveness does.
 pub(crate) fn decide_lock(
     existing: Option<SoloLock>,
     is_alive: impl Fn(u32) -> bool,
@@ -106,12 +108,12 @@ fn hostname() -> String {
     sysinfo::System::host_name().unwrap_or_default()
 }
 
+// trace:STORY-627 | ai:claude
 /// Acquire the solo-loop lock for `project_root`.
 ///
 /// On success returns a [`SoloGuard`] that removes the lock on `Drop`. On a live
 /// conflict returns an `Err` whose message names the holder and the recovery
 /// path (`aida solo stop`, or — if certain it's dead — remove the file).
-/// trace:STORY-627 | ai:claude
 pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
     let path = solo_lock_path(project_root);
     let existing = read_lock(&path);
@@ -205,10 +207,10 @@ pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
     }
 }
 
+// trace:STORY-627 | ai:claude
 /// Liveness-corroborated read of the solo lock for `aida solo stop` / `status`.
 /// Mirrors `drain_lock::LockStatus`: the on-disk lock is classified against a
 /// PID-liveness probe so callers can tell a live loop from a crashed one.
-/// trace:STORY-627 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum LockStatus {
     /// No lock file — no loop is (or recently was) running.
@@ -220,8 +222,9 @@ pub(crate) enum LockStatus {
     Stale(SoloLock),
 }
 
+// trace:STORY-627
 /// Read `.aida/solo.lock` and corroborate the recorded `pid` against a liveness
-/// probe. A missing or corrupt lock is [`LockStatus::None`]. trace:STORY-627
+/// probe. A missing or corrupt lock is [`LockStatus::None`].
 pub(crate) fn probe_lock(project_root: &Path) -> LockStatus {
     classify_lock(
         read_lock(&solo_lock_path(project_root)),
@@ -229,9 +232,9 @@ pub(crate) fn probe_lock(project_root: &Path) -> LockStatus {
     )
 }
 
+// trace:STORY-627 | ai:claude
 /// Pure classifier: split from [`probe_lock`] so the three paths
 /// (none / running / stale) are unit-testable without a real lock or pid.
-/// trace:STORY-627 | ai:claude
 fn classify_lock(existing: Option<SoloLock>, is_alive: impl Fn(u32) -> bool) -> LockStatus {
     match existing {
         None => LockStatus::None,
@@ -245,11 +248,11 @@ fn classify_lock(existing: Option<SoloLock>, is_alive: impl Fn(u32) -> bool) -> 
     }
 }
 
+// trace:STORY-627 | ai:claude
 /// Best-effort SIGTERM to `pid` (cross-platform via `sysinfo`, mirroring
 /// `exit_signal::signal_process_tree`). Returns `true` if the signal was
 /// delivered. Used by `aida solo stop` to terminate a live loop mid-step so stop
 /// takes effect even when the loop is blocked inside a long `claude -p` step.
-/// trace:STORY-627 | ai:claude
 pub(crate) fn signal_stop(pid: u32) -> bool {
     use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, Signal, System};
     let mut sys =
@@ -269,25 +272,27 @@ pub(crate) fn signal_stop(pid: u32) -> bool {
     }
 }
 
+// trace:STORY-627 | ai:claude
 /// RAII handle: while held, this process owns the solo lock. `Drop` removes the
 /// lock file — but ONLY if it still records THIS process's pid, so a guard that
 /// outlives a stale-reclaim by a successor never deletes the successor's live
-/// lock. trace:STORY-627 | ai:claude
+/// lock.
 #[derive(Debug)]
 pub(crate) struct SoloGuard {
     path: PathBuf,
     pid: u32,
+    // trace:STORY-638 | ai:claude
     /// Set when we hold the SHARED cross-clone solo claim on the store (STORY-638).
     /// `None` when cross-clone coordination was unavailable (local-only).
-    /// trace:STORY-638 | ai:claude
     store_root: Option<PathBuf>,
     project_root: PathBuf,
 }
 
 impl SoloGuard {
+    // trace:STORY-638 | ai:claude
     /// Refresh the shared solo claim's heartbeat on each loop tick so a
     /// long-running solo loop never ages past its TTL. No-op when cross-clone
-    /// coordination is unavailable. Best-effort. trace:STORY-638 | ai:claude
+    /// coordination is unavailable. Best-effort.
     pub(crate) fn heartbeat(&self) {
         if let Some(store_root) = &self.store_root {
             crate::coordination::heartbeat_lock_claim(

@@ -183,6 +183,7 @@ pub struct TracedFile {
     pub symbol: Option<String>,
 }
 
+// trace:SPIKE-35
 /// SPIKE-35: emit `REVIEW.md` at project root from the spec graph. One
 /// file (Anthropic's managed Code Review reads exactly one REVIEW.md per
 /// repo as the highest-priority injection into every reviewer agent).
@@ -191,16 +192,16 @@ pub struct TracedFile {
 ///
 /// Substrate-as-bouncer for the reviewer surface — same shape as
 /// SPIKE-31 for path-gated rules but targeting Code Review's reviewer
-/// pipeline rather than implementer file-loads. trace:SPIKE-35
+/// pipeline rather than implementer file-loads.
 fn review_fragments_root(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("review")
 }
 
+// trace:SPIKE-35 | ai:antigravity
 /// SPIKE-35 v2: emit per-spec `REVIEW` fragments under `.aida/review/<SPEC-ID>.md`.
 /// Discovers active specs that carry trace comments, renders their fragment,
 /// and reconciles `.aida/review/` against the active set (writes new/changed,
 /// removes stale specs).
-/// trace:SPIKE-35 | ai:antigravity
 pub fn sync_review_md(
     project_root: &Path,
     backend: &aida_core::CachedGitBackend,
@@ -385,9 +386,9 @@ fn render_spec_fragment(
     out
 }
 
+// trace:SPIKE-35 | ai:antigravity
 /// SPIKE-35: Assemble all active fragments under `.aida/review/` into a root `REVIEW.md`
 /// and save it to `output_path` (defaulting to `<project_root>/REVIEW.md`).
-/// trace:SPIKE-35 | ai:antigravity
 pub fn assemble_review_md(project_root: &Path, output_path: Option<&Path>) -> Result<PathBuf> {
     let dir = review_fragments_root(project_root);
     let mut fragments: Vec<(String, String)> = Vec::new();

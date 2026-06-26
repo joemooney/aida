@@ -62,6 +62,7 @@ pub(crate) fn spec_id_from_branch(branch: &str) -> Option<String> {
     Some(format!("{}-{}", kind.to_uppercase(), num))
 }
 
+// trace:TASK-712
 /// Normalize Claude's agent id into a filesystem-safe lease id. Claude agent
 /// ids are already stable correlation keys; this maps one to a `.aida/sessions/
 /// <id>.toml`-safe filename.
@@ -75,7 +76,6 @@ pub(crate) fn spec_id_from_branch(branch: &str) -> Option<String> {
 /// ids while the prefix stays human-readable. Determinism matters: the same
 /// agent must resolve to the same lease file on start and on stop, so we use a
 /// fixed FNV-1a (no random seed) rather than `DefaultHasher`/`RandomState`.
-/// trace:TASK-712
 pub(crate) fn lease_id_from_agent_id(agent_id: &str) -> String {
     let prefix: String = agent_id
         .chars()

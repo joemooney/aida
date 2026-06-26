@@ -58,28 +58,32 @@ use crate::process_probe;
 /// `--auto-complete` run. On its own it is **not** trusted — see [`TOKEN_ENV`].
 pub(crate) const AUTO_COMPLETE_ENV: &str = "AIDA_AUTO_COMPLETE";
 
+// trace:TASK-336
 /// The corroboration token: a per-run UUID matching
 /// [`crate::drain_state::DrainState::run_uuid`] on the live drain-state file.
 /// Set by the orchestrator alongside [`AUTO_COMPLETE_ENV`] on every phase
-/// child. trace:TASK-336
+/// child.
 pub(crate) const TOKEN_ENV: &str = "AIDA_AUTO_COMPLETE_TOKEN";
 
+// trace:TASK-306 | ai:claude
 /// The 1-based phase index (`1`..=`6`) the current process is running, set by
 /// the orchestrator on each Claude-launching phase child (phase 1 implementer,
 /// phase 3 reviewer). The child's statusline reads it to show `auto:N/6` so an
 /// interactive phase advertises that it is an orchestrator step the user must
-/// act in. Unset for a standalone session. trace:TASK-306 | ai:claude
+/// act in. Unset for a standalone session.
 pub(crate) const PHASE_ENV: &str = "AIDA_AUTO_COMPLETE_PHASE";
 
+// trace:TASK-306 | ai:claude
 /// The `--no-human` mode slug (`reviewer-only` | `both`) in effect for an
 /// `--auto-complete` run, propagated to phase children so the statusline can
 /// show the headless scope alongside the phase. Absent for a fully
-/// interactive run. trace:TASK-306 | ai:claude
+/// interactive run.
 pub(crate) const NO_HUMAN_MODE_ENV: &str = "AIDA_NO_HUMAN_MODE";
 
+// trace:BUG-233
 /// A token is only ever a bare UUID. Rejecting anything else keeps a crafted
 /// `AIDA_AUTO_COMPLETE_TOKEN` from ever being treated as live, regardless of
-/// what happens to land in the drain-state file. trace:BUG-233
+/// what happens to land in the drain-state file.
 fn is_valid_token(token: &str) -> bool {
     uuid::Uuid::parse_str(token).is_ok()
 }
@@ -199,10 +203,11 @@ pub(crate) fn classify(
     }
 }
 
+// trace:TASK-336 | ai:claude
 /// Is `token` owned by a live orchestrator run? True iff it is a valid UUID
 /// that matches [`crate::drain_state::DrainState::run_uuid`] on the drain-
 /// state file under `project_root` whose recorded `orchestrator_pid` is
-/// alive. trace:TASK-336 | ai:claude
+/// alive.
 pub(crate) fn run_is_live(project_root: &Path, token: &str) -> bool {
     if !is_valid_token(token) {
         return false;
@@ -228,12 +233,12 @@ pub(crate) fn detect(project_root: &Path) -> OrchestratorContext {
     )
 }
 
+// trace:BUG-237 trace:TASK-336 | ai:claude
 /// The diagnostic view of the *live, corroborated* orchestrator run that owns
 /// the current process, or `None`. `Some` exactly when [`detect`] would return
 /// [`OrchestratorContext::Orchestrated`] — so a caller that needs a field off
 /// the run (zen-mode corroboration, BUG-237) gets it without re-deriving the
 /// corroboration. Derived from [`crate::drain_state::DrainState`] (TASK-336).
-/// trace:BUG-237 trace:TASK-336 | ai:claude
 pub(crate) fn live_run_marker(project_root: &Path) -> Option<RunMarker> {
     let auto_complete = std::env::var(AUTO_COMPLETE_ENV).ok()?;
     if auto_complete.is_empty() {
@@ -582,6 +587,7 @@ pub(crate) enum AutoReleaseDecision {
     },
 }
 
+// trace:BUG-307 | ai:claude
 /// BUG-307: pure classifier for the auto-release gate. Given pre-collected
 /// liveness signals + the configured threshold, decide whether a same-scope
 /// lease conflict is safe to release without `--steal`.
@@ -593,7 +599,6 @@ pub(crate) enum AutoReleaseDecision {
 /// safety case is the one the bug filed against (dormant lease, no live claude,
 /// lease minted hours ago).
 ///
-/// trace:BUG-307 | ai:claude
 pub(crate) fn classify_for_auto_release(
     pid_alive: bool,
     lease_mtime_age_secs: i64,
@@ -776,11 +781,12 @@ mod auto_release_tests {
         assert!(matches!(d, AutoReleaseDecision::SafelyDormant { .. }));
     }
 
+    // trace:BUG-438 | ai:claude
     /// BUG-438: the fast-resume case. A crashed implementer's lease is dead-PID
     /// but its mtime is still *fresh* (e.g. 30s) — under the default threshold
     /// that pins it `Live`, so the reviewer phase collides with it. Resume forces
     /// `threshold = 0` so the same dead-PID, clean-worktree lease releases
-    /// instead. trace:BUG-438 | ai:claude
+    /// instead.
     #[test]
     fn classify_fresh_dead_lease_releases_only_at_zero_threshold() {
         // dead pid, 30s-fresh mtime, no live claude, worktree present + clean.

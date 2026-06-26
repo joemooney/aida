@@ -49,11 +49,11 @@ pub fn default_repo_name(project_root: &Path) -> String {
         .to_string()
 }
 
+// trace:STORY-537 | ai:claude
 /// Build the `gh repo create` argv (after the `gh` binary itself) for creating
 /// a repo from the current directory, wiring `origin` and pushing in one shot.
 /// `ns_name` may be bare (`myrepo`) or namespaced (`owner/myrepo`). Pure so the
 /// exact command shape is unit-testable without invoking `gh`.
-/// trace:STORY-537 | ai:claude
 pub fn gh_repo_create_args(ns_name: &str, private: bool) -> Vec<String> {
     vec![
         "repo".to_string(),
@@ -68,10 +68,10 @@ pub fn gh_repo_create_args(ns_name: &str, private: bool) -> Vec<String> {
     ]
 }
 
+// trace:STORY-537 | ai:claude
 /// Build a GitLab SSH push-to-create origin URL. Uses the `ssh://` scheme form
 /// when a non-default port is given (scp-like syntax can't carry a port),
 /// otherwise the compact scp-like `git@host:ns/name.git`. Pure.
-/// trace:STORY-537 | ai:claude
 pub fn gitlab_ssh_origin_url(host: &str, port: Option<u16>, namespace: &str, name: &str) -> String {
     let repo = name.trim_end_matches(".git");
     let path = if namespace.is_empty() {
@@ -85,10 +85,11 @@ pub fn gitlab_ssh_origin_url(host: &str, port: Option<u16>, namespace: &str, nam
     }
 }
 
+// trace:STORY-537 | ai:claude
 /// The manual recipe AIDA prints in a non-interactive context (no TTY) when it
 /// finds no origin. It can't prompt, so it hands the operator the exact steps
 /// for each forge and exits cleanly (exit 0 — this is guidance, not an error).
-/// Pure → snapshot-testable. trace:STORY-537 | ai:claude
+/// Pure → snapshot-testable.
 pub fn manual_recipe(repo_name: &str, branch: &str) -> String {
     let mut s = String::new();
     s.push_str("No `origin` remote — create or attach one, then push:\n\n");
@@ -107,10 +108,10 @@ pub fn manual_recipe(repo_name: &str, branch: &str) -> String {
     s
 }
 
+// trace:STORY-537 | ai:claude
 /// The clear UI-step + attach instruction printed when an auto-create attempt
 /// fails on a forge AIDA can't guarantee (corporate GitLab: push-to-create off,
 /// API namespace perms). Never leaves the operator stuck. Pure.
-/// trace:STORY-537 | ai:claude
 pub fn attach_fallback_hint(host: &str, repo_name: &str) -> String {
     format!(
         "Couldn't auto-create the repo on {host} (push-to-create may be disabled, \
@@ -130,10 +131,10 @@ pub fn known_hosts_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".aida").join("remotes.toml"))
 }
 
+// trace:STORY-537 | ai:claude
 /// Parse the `[[gitlab_host]]` array-of-tables from a `remotes.toml` body.
 /// Hand-rolled (mirrors the project's other section parsers) to avoid a serde
 /// round-trip for a tiny file. Pure over its `&str` input → unit-testable.
-/// trace:STORY-537 | ai:claude
 pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
     let mut hosts = Vec::new();
     let mut cur: Option<KnownHost> = None;
@@ -178,8 +179,8 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
     hosts
 }
 
+// trace:STORY-537 | ai:claude
 /// Serialize known hosts back to a `remotes.toml` body. Pure → round-trippable.
-/// trace:STORY-537 | ai:claude
 pub fn serialize_known_hosts(hosts: &[KnownHost]) -> String {
     let mut s = String::from(
         "# AIDA remembered forge hosts (machine-global).\n\
@@ -211,9 +212,9 @@ pub fn load_known_hosts() -> Vec<KnownHost> {
     parse_known_hosts(&body)
 }
 
+// trace:STORY-537 | ai:claude
 /// Insert-or-update a host in the remembered set (dedup by host), then persist.
 /// Idempotent on a repeat bootstrap of the same host. Returns the path written.
-/// trace:STORY-537 | ai:claude
 pub fn remember_host(new: KnownHost) -> Result<PathBuf> {
     let path = known_hosts_path().context("cannot resolve home dir for remotes.toml")?;
     let mut hosts = load_known_hosts();
@@ -238,9 +239,9 @@ pub fn remember_host(new: KnownHost) -> Result<PathBuf> {
 
 // ───────────────────────────── git plumbing ─────────────────────────────
 
+// trace:STORY-537 | ai:claude
 /// Run `git -C <root> remote add origin <url>`, then `git -C <root> push -u
 /// origin <branch>`. Returns Ok(()) only when both succeed.
-/// trace:STORY-537 | ai:claude
 fn add_origin_and_push(project_root: &Path, url: &str, branch: &str) -> Result<()> {
     let add = Command::new("git")
         .arg("-C")
@@ -329,10 +330,11 @@ fn prompt_line(prompt: &str) -> Result<String> {
 
 // ───────────────────────────── command entry points ─────────────────────
 
+// trace:STORY-537 | ai:claude
 /// `aida remote attach <url>` — wire an existing repo's URL as origin and push
 /// the code leg. The clean-degradation target for corporate GitLab. The store
 /// leg is synced by a follow-up `aida push`; we only own the code leg + origin
-/// wiring here so the module stays store-agnostic. trace:STORY-537 | ai:claude
+/// wiring here so the module stays store-agnostic.
 pub fn handle_remote_attach(project_root: &Path, url: &str) -> Result<()> {
     if has_origin(project_root) {
         anyhow::bail!(
@@ -346,10 +348,11 @@ pub fn handle_remote_attach(project_root: &Path, url: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-537 | ai:claude
 /// `aida remote create` — the guided bootstrap. Non-interactive prints the
 /// recipe and exits cleanly; interactive walks the forge menu. The
 /// `--attach <url>` / `--github` / `--gitlab <host>` flags pre-select a route
-/// so the flow stays scriptable. trace:STORY-537 | ai:claude
+/// so the flow stays scriptable.
 pub fn handle_remote_create(
     project_root: &Path,
     attach: Option<&str>,

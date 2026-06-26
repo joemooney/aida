@@ -53,10 +53,11 @@ pub struct ManifestItem {
     pub note: Option<String>,
 }
 
+// trace:TASK-95 | ai:claude
 /// TASK-95: plan content extracted from a matching `docs/plans/` file when
 /// `aida queue work` set this session up. Lets /aida-pickup hand the
 /// implementer their brief (blast radius, definition of done, deferred
-/// work) without grepping for the plan. trace:TASK-95 | ai:claude
+/// work) without grepping for the plan.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlanContext {
     /// Repo-relative path to the `docs/plans/` file this brief came from.
@@ -90,6 +91,7 @@ pub struct SessionManifest {
     /// ahead of the `[plan]` table and `[[items]]` array-of-tables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_session_id: Option<String>,
+    // trace:TASK-272 | ai:claude
     /// TASK-272: the batch this session is draining — the bare `NAME` from
     /// `aida queue work --batch NAME` (no `batch:` prefix). Recorded when the
     /// session was set up via `--batch`; lets `/aida-pickup` detect batch
@@ -97,7 +99,6 @@ pub struct SessionManifest {
     /// and `/aida-pr` frame the PR as the batch. `None` for non-batch
     /// sessions. Declared as a scalar before `plan`/`items` so TOML
     /// serializes it ahead of the `[plan]` table and `[[items]]` array.
-    /// trace:TASK-272 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_name: Option<String>,
     /// TASK-95: plan brief pre-populated from a matching `docs/plans/` file
@@ -167,9 +168,10 @@ pub fn list_all(project_root: &Path) -> Vec<SessionManifest> {
         .collect()
 }
 
+// trace:BUG-80 | ai:claude
 /// Like `list_all` but also returns the manifest file's path — used by
 /// `session prune` to remove orphan manifests whose owning lease has been
-/// deleted. trace:BUG-80 | ai:claude
+/// deleted.
 pub fn list_all_with_paths(project_root: &Path) -> Vec<(PathBuf, SessionManifest)> {
     let dir = project_root.join(".aida").join("sessions");
     if !dir.exists() {

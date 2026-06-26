@@ -21,8 +21,9 @@ pub(crate) enum Pickability {
     Parked(String),
 }
 
+// trace:STORY-527
 /// Already-probed facts about one candidate spec. Built in `main.rs` from the
-/// store + graph; consumed by the pure [`classify`]. trace:STORY-527
+/// store + graph; consumed by the pure [`classify`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BurndownCandidate {
     /// Display SPEC-ID (e.g. `TASK-702`).
@@ -38,13 +39,13 @@ pub(crate) struct BurndownCandidate {
     pub has_pending_decision: bool,
 }
 
+// trace:TASK-803 | ai:claude
 /// The per-spec verdict of the burndown selector's first pass: should this spec
 /// be discarded, collected into the keyboard-only `supervised` section, or
 /// carried forward as a drain candidate? Extracted from the inline loop in
 /// `resolve_burndown_sets` so the filter/bucket ordering — the load-bearing
 /// invariant behind BUG-537 (deferred), BUG-551 (supervised AFTER the status
 /// filter), and the selector semantics — is unit-testable without a live store.
-/// trace:TASK-803 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SpecDisposition {
     /// Out of scope for this selector — drop it entirely.
@@ -55,9 +56,10 @@ pub(crate) enum SpecDisposition {
     Candidate(BurndownCandidate),
 }
 
+// trace:TASK-803
 /// Already-probed inputs for [`classify_spec`]. All status strings are expected
 /// pre-normalized (alphanumeric-lowercase) by the caller so comparison is a
-/// plain `==`. trace:TASK-803
+/// plain `==`.
 pub(crate) struct SpecClassifyInput<'a> {
     pub archived: bool,
     pub deferred: bool,
@@ -76,12 +78,13 @@ pub(crate) struct SpecClassifyInput<'a> {
     pub has_pending_decision: bool,
 }
 
+// trace:TASK-803 trace:BUG-551 trace:BUG-537
 /// Classify ONE spec for the burndown selector. The filter order is load-bearing
 /// and mirrors the historical inline loop EXACTLY:
 ///   archived → deferred → status → tag → batch → supervised → candidate.
 /// The `supervised` check sits AFTER the status/tag/batch filters (BUG-551), so a
 /// Done/Completed supervised spec fails the status guard and is `Skip`ped before
-/// it can reach the supervised bucket. trace:TASK-803 trace:BUG-551 trace:BUG-537
+/// it can reach the supervised bucket.
 pub(crate) fn classify_spec(input: &SpecClassifyInput) -> SpecDisposition {
     if input.archived {
         return SpecDisposition::Skip;
@@ -118,14 +121,16 @@ pub(crate) fn classify_spec(input: &SpecClassifyInput) -> SpecDisposition {
     })
 }
 
+// trace:STORY-527
+// trace:STORY-555 | ai:claude
 /// A tag that marks a spec as not-autonomously-pickable — a human decision, a
 /// deferral, or a draft-review gate. Matched case-insensitively; `deferred:` is
-/// a prefix. Returns the matched tag (for the parked reason). trace:STORY-527
+/// a prefix. Returns the matched tag (for the parked reason).
 ///
 /// `pub(crate)` so the `aida questions answer` unpark path (STORY-555) can ask
 /// "does the tag I just added/cleared still park this spec?" against the SAME
 /// predicate the burndown gate uses — the answer path and the gate can never
-/// disagree on what a parking tag is. trace:STORY-555 | ai:claude
+/// disagree on what a parking tag is.
 pub(crate) fn parking_tag(tags: &[String]) -> Option<String> {
     for t in tags {
         let lo = t.trim().to_ascii_lowercase();
@@ -186,10 +191,11 @@ pub(crate) fn classify_spike_lane(tags: &[String]) -> SpikeLane {
     }
 }
 
+// trace:STORY-527
 /// The pickability gate. READY iff the spec is bounded (not an epic),
 /// decision-free, unblocked, and not parking-tagged. Exclusions are ordered
 /// cheapest/broadest first so the parked reason names the most fundamental
-/// blocker. trace:STORY-527
+/// blocker.
 pub(crate) fn classify(c: &BurndownCandidate) -> Pickability {
     if c.req_type.eq_ignore_ascii_case("epic") {
         return Pickability::Parked("epic — decompose into bounded specs first".to_string());
@@ -224,8 +230,9 @@ pub(crate) fn classify(c: &BurndownCandidate) -> Pickability {
     Pickability::Ready
 }
 
+// trace:STORY-527
 /// Partition candidates into `(ready_ids, parked)` preserving input order —
-/// the fan-out set and the skipped set with reasons. trace:STORY-527
+/// the fan-out set and the skipped set with reasons.
 pub(crate) fn partition(candidates: &[BurndownCandidate]) -> (Vec<String>, Vec<(String, String)>) {
     let mut ready = Vec::new();
     let mut parked = Vec::new();
@@ -238,12 +245,12 @@ pub(crate) fn partition(candidates: &[BurndownCandidate]) -> (Vec<String>, Vec<(
     (ready, parked)
 }
 
+// trace:STORY-546 | ai:claude
 /// STORY-546: split the pickable set into `(ready, awaiting_signoff)` by advisor
 /// sign-off. Queue membership IS the sign-off (`queue add` is advisor-authority-
 /// gated, ADR-3 / TASK-647), so `ready` = blessed + drainable and
 /// `awaiting_signoff` = pickable but not yet queued. Order-preserving + pure so
 /// the queue-gate is unit-testable independent of the filesystem queue read.
-/// trace:STORY-546 | ai:claude
 pub(crate) fn split_by_signoff(
     pickable: Vec<String>,
     queued: &std::collections::HashSet<String>,
@@ -251,9 +258,10 @@ pub(crate) fn split_by_signoff(
     pickable.into_iter().partition(|id| queued.contains(id))
 }
 
+// trace:STORY-614
 /// Extract the `serialize:<group>` group names from a spec's tags (case-
 /// insensitive prefix, lowercased group key). A spec may belong to several
-/// serialize groups; each is returned. trace:STORY-614
+/// serialize groups; each is returned.
 pub(crate) fn serialize_groups(tags: &[String]) -> Vec<String> {
     tags.iter()
         .filter_map(|t| {
@@ -266,6 +274,7 @@ pub(crate) fn serialize_groups(tags: &[String]) -> Vec<String> {
         .collect()
 }
 
+// trace:STORY-614 | ai:claude
 /// STORY-614: substrate-enforce the `serialize:<group>` convention. Given the
 /// READY fan-out set (display ids, in deterministic order) and a lookup from
 /// display id → its serialize groups, collapse the set so that AT MOST ONE spec
@@ -278,7 +287,6 @@ pub(crate) fn serialize_groups(tags: &[String]) -> Vec<String> {
 /// supplies `ready` sorted (lowest id first) so the pick is stable across runs.
 /// Specs with no serialize tag are never held — they all stay parallel. Pure +
 /// order-preserving so the gate is unit-testable without a live store.
-/// trace:STORY-614 | ai:claude
 pub(crate) fn collapse_serialize_groups(
     ready: Vec<String>,
     groups_by_id: &std::collections::HashMap<String, Vec<String>>,
@@ -301,6 +309,7 @@ pub(crate) fn collapse_serialize_groups(
     (kept, held)
 }
 
+// trace:STORY-547 | ai:claude
 /// STORY-547: the broader "why is this open spec *still open*?" classifier.
 /// Where [`classify`] answers the narrow pickability question for the candidate
 /// set (the approved+queued specs a burndown would fan out), `explain_open`
@@ -308,7 +317,7 @@ pub(crate) fn collapse_serialize_groups(
 /// signals (type, status, tags, BlockedBy edges, pending decisions, live
 /// leases). No new stored field, no hand-written status, no findings — the
 /// reason a spec stays open is already latent in the substrate; this just reads
-/// it back. trace:STORY-547 | ai:claude
+/// it back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OpenBucket {
     /// Built; a draft PR is held for human review (`review:draft-only`).
@@ -318,9 +327,10 @@ pub(crate) enum OpenBucket {
     /// Parked on a human decision (pending DecisionRequest, design-signoff,
     /// operator-action, needs-human, or NeedsAttention triage).
     AwaitingDecision,
+    // trace:TASK-744 | ai:claude
     /// Clear to build, but keystone / blast-radius work that ships at the
     /// keyboard (`aida queue work <id> --zen`), not the unsupervised drain
-    /// (tagged `needs-supervised-build`). trace:TASK-744 | ai:claude
+    /// (tagged `needs-supervised-build`).
     BuildSupervised,
     /// Deliberately postponed (`deferred:<why>`).
     Deferred,
@@ -365,13 +375,14 @@ impl OpenBucket {
         }
     }
 
+    // trace:STORY-547
     /// True for the buckets that genuinely need a person's nudge (vs. those
     /// that will resolve themselves through normal flow). This is the UNION
     /// across both seats — drives the explainer's "needs you" grouping. The
     /// per-seat split (operator vs advisor) is layered on top by
     /// [`OpenBucket::advisor_seat`] / [`OpenBucket::operator_seat`], so the two
     /// worklist views (`aida human` / `aida advisor`) partition this union
-    /// without changing what "needs a person" means. trace:STORY-547
+    /// without changing what "needs a person" means.
     pub(crate) fn needs_human(self) -> bool {
         matches!(
             self,
@@ -384,12 +395,13 @@ impl OpenBucket {
         )
     }
 
+    // trace:STORY-618
     /// STORY-618: the "needs a person" buckets that are ADVISOR work — routine
     /// dispositions that require cross-spec awareness + product judgment but NOT
     /// the operator's strategic sign-off. These belong on `aida advisor`'s
     /// worklist (GROOM ungroomed drafts, DECOMPOSE childless umbrellas, CLOSE
     /// fully-delivered epics), NOT on `aida human` — leaking them onto the
-    /// operator's list is the seat-confusion EPIC-42 fixes. trace:STORY-618
+    /// operator's list is the seat-confusion EPIC-42 fixes.
     pub(crate) fn advisor_seat(self) -> bool {
         matches!(
             self,
@@ -397,13 +409,14 @@ impl OpenBucket {
         )
     }
 
+    // trace:STORY-618
     /// STORY-618: the "needs a person" buckets that are genuinely OPERATOR work
     /// — they require the human's strategic/keystone judgment the advisor can't
     /// make unilaterally (review a PR, decide a posed fork, drive a keystone
     /// build). The complement of [`advisor_seat`] within [`needs_human`].
     /// (`AwaitingDecision` is operator work too, but the human view renders it
     /// as its own first-class "decisions-awaiting" bucket, so it is excluded
-    /// from the derived-bucket grouping here.) trace:STORY-618
+    /// from the derived-bucket grouping here.)
     pub(crate) fn operator_seat(self) -> bool {
         matches!(
             self,
@@ -412,10 +425,11 @@ impl OpenBucket {
     }
 }
 
+// trace:BUG-579 | ai:claude
 /// BUG-579: the fixed, most-actionable-first render order for the DERIVED buckets
 /// in `aida human`. The single source of truth — `handle_list_human` iterates
 /// this, and [`classified_row_is_rendered`] checks against it so the count and
-/// the render can never silently disagree. trace:BUG-579 | ai:claude
+/// the render can never silently disagree.
 pub(crate) const HUMAN_DERIVED_BUCKET_ORDER: [OpenBucket; 5] = [
     OpenBucket::ReadyToClose,
     OpenBucket::HeldForReview,
@@ -424,6 +438,7 @@ pub(crate) const HUMAN_DERIVED_BUCKET_ORDER: [OpenBucket; 5] = [
     OpenBucket::Umbrella,
 ];
 
+// trace:BUG-579 | ai:claude
 /// BUG-579: does a `classified` row get rendered somewhere in `aida human`?
 ///
 /// A classified row is *counted* toward the "N items need a human" total
@@ -438,17 +453,16 @@ pub(crate) const HUMAN_DERIVED_BUCKET_ORDER: [OpenBucket; 5] = [
 /// invisible, the phantom "1 item needs a human" with no bucket to act on. This
 /// predicate returns `false` for exactly those rows, so the catch-all in
 /// `handle_list_human` can surface them and restore the count==render invariant.
-/// trace:BUG-579 | ai:claude
 pub(crate) fn classified_row_is_rendered(bucket: OpenBucket, has_pending_decision: bool) -> bool {
     HUMAN_DERIVED_BUCKET_ORDER.contains(&bucket)
         || (bucket == OpenBucket::AwaitingDecision && has_pending_decision)
 }
 
+// trace:BUG-579 | ai:claude
 /// BUG-579: a short, actionable hint for a counted-but-unrendered classified row
 /// in the `aida human` catch-all. `AwaitingDecision` with no posed question is
 /// the common case (a Spike that needs a decision but has no formal
 /// `DecisionRequest`); other buckets fall back to their derived reason text.
-/// trace:BUG-579 | ai:claude
 pub(crate) fn needs_attention_hint(bucket: OpenBucket) -> &'static str {
     match bucket {
         OpenBucket::AwaitingDecision => {
@@ -459,9 +473,10 @@ pub(crate) fn needs_attention_hint(bucket: OpenBucket) -> &'static str {
     }
 }
 
+// trace:STORY-547
 /// Already-probed facts about one OPEN spec. `status` is normalized to
 /// alphanumeric-lowercase (`inprogress`, `needsattention`, …) by the caller so
-/// this stays pure + exhaustively testable. trace:STORY-547
+/// this stays pure + exhaustively testable.
 #[derive(Debug, Clone)]
 pub(crate) struct OpenFacts {
     /// Display SPEC-ID.
@@ -498,6 +513,7 @@ pub(crate) struct OpenFacts {
     /// surfaces as `ReadyToClose` rather than the generic umbrella reason. The
     /// caller computes it (it needs the store); `OpenFacts` stays pure.
     pub epic_rollup: Option<(usize, usize)>,
+    // trace:BUG-564 | ai:claude
     /// BUG-564: the orthogonal `human_only` pickability marker (`req.human_only`
     /// on the crate-level `Requirement`), carried here so the human worklist can
     /// fold it into the [`human_required`] predicate. It is an INPUT to
@@ -508,28 +524,30 @@ pub(crate) struct OpenFacts {
     /// `false`, so a spec that was human-required PURELY via this marker (a
     /// non-human bucket) was invisible in `aida list human` while the queue's
     /// human-only bucket — which reads the same `req.human_only` — showed it.
-    /// trace:BUG-564 | ai:claude
     pub human_only: bool,
+    // trace:TASK-884
     /// TASK-884: for an EPIC, whether ANY child is actually in motion
     /// (Completed / Done / InProgress). An epic with children that are all still
     /// Draft/Approved/Planned (or shelved) is NOT self-driving "in progress" —
     /// nothing is being worked, so it needs decomposition/grooming attention and
     /// must surface in the advisor's `decompose` lane rather than vanishing into
     /// the (invisible-to-both-worklists) `InProgress` bucket. `false` for
-    /// non-epics and childless epics. trace:TASK-884
+    /// non-epics and childless epics.
     pub epic_children_in_motion: bool,
 }
 
+// trace:TASK-723 | ai:claude
 /// TASK-723: prefix marking a comment as a non-derivable residual openness
 /// reason — the chosen vehicle (resolving STORY-548's open fork). A comment
 /// whose content (trimmed, case-insensitive) starts with `why-open:` records a
 /// reason the graph can't derive ("waiting on upstream X", "deferred pending
-/// budget"). trace:TASK-723 | ai:claude
+/// budget").
 pub(crate) const WHY_OPEN_PREFIX: &str = "why-open:";
 
+// trace:TASK-723 | ai:claude
 /// TASK-723: extract the residual reason from a `why-open:<reason>` comment
 /// body, or `None` if the comment isn't a residual note. Case-insensitive on
-/// the prefix; returns the trimmed reason text. trace:TASK-723 | ai:claude
+/// the prefix; returns the trimmed reason text.
 pub(crate) fn parse_why_open_comment(content: &str) -> Option<String> {
     let trimmed = content.trim_start();
     if trimmed.len() < WHY_OPEN_PREFIX.len() {
@@ -548,8 +566,9 @@ pub(crate) fn parse_why_open_comment(content: &str) -> Option<String> {
     }
 }
 
+// trace:TASK-723
 /// TASK-723: where a single openness reason came from — drives grouping,
-/// ordering (most-fundamental-first), and the JSON `source` field. trace:TASK-723
+/// ordering (most-fundamental-first), and the JSON `source` field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReasonSource {
     /// Derived purely from the graph (status / tags / BlockedBy / lease / type).
@@ -579,10 +598,11 @@ pub(crate) struct Reason {
     pub text: String,
 }
 
+// trace:STORY-547
 /// Classify one open spec into its `(bucket, human-readable reason)`. Precedence
 /// runs live/human signals first (most actionable + most current), then
 /// structural facts (epic / vision), then a status fallback — so the reason
-/// names the *most specific* thing keeping the spec open. trace:STORY-547
+/// names the *most specific* thing keeping the spec open.
 pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
     let has_tag =
         |name: &str| -> bool { f.tags.iter().any(|t| t.trim().eq_ignore_ascii_case(name)) };
@@ -734,6 +754,7 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
     }
 }
 
+// trace:TASK-746 trace:STORY-618 | ai:claude
 /// The canonical "a human is required" classification predicate (SPIKE-57).
 ///
 /// This is the single, intention-revealing name for the bottleneck signal the
@@ -755,13 +776,13 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
 /// has a production caller — it is retained (and still tested) because it
 /// folds in the orthogonal `human_only` marker that the seat predicates do not,
 /// which the deferred SPIKE-57 human_only view phase will need.
-/// trace:TASK-746 trace:STORY-618 | ai:claude
 #[allow(dead_code)]
 pub(crate) fn human_required(f: &OpenFacts, human_only: bool) -> bool {
     let (bucket, _) = explain_open(f);
     bucket.needs_human() || human_only
 }
 
+// trace:TASK-723 | ai:claude
 /// TASK-723: the FULL reason set for one open spec, most-fundamental-first.
 /// Unions the three sources from STORY-548's design:
 ///   1. DERIVED (the [`explain_open`] graph reason) — always first; it's the
@@ -771,7 +792,6 @@ pub(crate) fn human_required(f: &OpenFacts, human_only: bool) -> bool {
 ///   3. RESIDUAL notes (human `why-open:` comments) — the non-derivable tail.
 /// Returns the primary [`OpenBucket`] (from the derived reason — it still drives
 /// grouping + the needs-human signal) alongside the ordered reasons.
-/// trace:TASK-723 | ai:claude
 pub(crate) fn explain_reasons(f: &OpenFacts) -> (OpenBucket, Vec<Reason>) {
     let (bucket, derived) = explain_open(f);
     let mut reasons = Vec::with_capacity(1 + f.findings.len() + f.residual_notes.len());
@@ -796,12 +816,13 @@ pub(crate) fn explain_reasons(f: &OpenFacts) -> (OpenBucket, Vec<Reason>) {
     (bucket, reasons)
 }
 
+// trace:STORY-563
 /// STORY-563: the classification of an open spec by WHAT keeps it out of the
 /// burndown ready set — the lens `aida human unblock` groups by. Where
 /// [`explain_open`] answers "why is this still open?" for every open spec,
 /// `classify_unblock` answers the narrower operator question "what do I, the
 /// human, have to DO to move this into the burndown?". The buckets map onto
-/// three actions: queue it, clarify it first, or leave it parked. trace:STORY-563
+/// three actions: queue it, clarify it first, or leave it parked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UnblockClass {
     /// Draft — needs advisor approval before it can be queued.
@@ -809,10 +830,11 @@ pub(crate) enum UnblockClass {
     /// Approved + bounded + unblocked + decision-free, but not yet queued —
     /// the advisor can queue it straight into the burndown.
     ApprovedUnqueued,
+    // trace:BUG-502 | ai:claude
     /// BUG-502: built work awaiting human REVIEW — a `review:draft-only` spec
     /// (or one at/past Done) is DONE work, not re-implementation. It belongs in
     /// a REVIEW bucket ("review it / reopen the draft PR"), never QUEUE or
-    /// CLARIFY — those would re-build done work. trace:BUG-502 | ai:claude
+    /// CLARIFY — those would re-build done work.
     HeldForReview,
     /// Implementable but missing acceptance criteria — clarify FIRST.
     UnderSpecified,
@@ -862,9 +884,10 @@ impl UnblockClass {
     }
 }
 
+// trace:BUG-502 | ai:claude
 /// STORY-563: the grooming actions the prompt routes each spec to. BUG-502 added
 /// `Review` for built-but-held work that wants a human review pass, not a queue
-/// or clarify. trace:BUG-502 | ai:claude
+/// or clarify.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UnblockAction {
     /// Queue it straight into the burndown.
@@ -877,9 +900,10 @@ pub(crate) enum UnblockAction {
     Leave,
 }
 
+// trace:STORY-563
 /// STORY-563: already-probed facts about one open spec, for the unblock lens.
 /// Pure inputs so [`classify_unblock`] is exhaustively unit-testable. The caller
-/// (`main.rs`) probes the store/queue/graph to build these. trace:STORY-563
+/// (`main.rs`) probes the store/queue/graph to build these.
 #[derive(Debug, Clone)]
 pub(crate) struct UnblockFacts {
     /// Display SPEC-ID.
@@ -907,11 +931,12 @@ pub(crate) struct UnblockFacts {
 }
 
 impl UnblockFacts {
+    // trace:BUG-502
     /// BUG-502: built work whose acceptance gap is MOOT — at/past Done, or tagged
     /// `review:draft-only` (work done, awaiting human review). Mirrors the
     /// questions-sweep `is_built_or_held` predicate (BUG-495) so the two surfaces
     /// agree on "this is built, don't treat it as re-implementation." Excludes the
-    /// in-flight case (that's its own BuildSupervised signal). trace:BUG-502
+    /// in-flight case (that's its own BuildSupervised signal).
     pub(crate) fn is_built_or_held(&self) -> bool {
         let at_or_past_done = self.status == "done" || self.status == "completed";
         let draft_only = self
@@ -921,12 +946,13 @@ impl UnblockFacts {
         at_or_past_done || draft_only
     }
 
+    // trace:BUG-502 | ai:claude
     /// BUG-502: does this spec pass the same pickability gate `aida burndown plan`
     /// applies (see [`classify`])? Bounded (not epic), decision-free, unblocked,
     /// not parking-tagged. Crucially the gate does NOT require a `## Acceptance`
     /// section — so a queued spec that passes the gate is GROOMED and must not be
     /// flagged "missing acceptance → clarify" by unblock. Reuses [`parking_tag`]
-    /// so the buckets agree with the burndown plan. trace:BUG-502 | ai:claude
+    /// so the buckets agree with the burndown plan.
     pub(crate) fn passes_pickability_gate(&self) -> bool {
         !self.req_type.eq_ignore_ascii_case("epic")
             && !self.has_pending_decision
@@ -935,23 +961,24 @@ impl UnblockFacts {
             && parking_tag(&self.tags).is_none()
     }
 
+    // trace:BUG-502
     /// True for the items the human has nothing left to do for — the GROOMED set
     /// that `aida human unblock` excludes. BUG-502 reconciles this with the
     /// pickability gate: a spec already QUEUED that passes the gate is groomed
     /// regardless of an `## Acceptance` section (the gate doesn't require one), so
     /// a queued-ready spec is no longer mis-flagged "missing acceptance". The
-    /// status must be approved+ (queued draft still needs sign-off). trace:BUG-502
+    /// status must be approved+ (queued draft still needs sign-off).
     pub(crate) fn in_burndown_ready_set(&self) -> bool {
         self.queued && self.status == "approved" && self.passes_pickability_gate()
     }
 }
 
+// trace:STORY-563 | ai:claude
 /// STORY-563: classify one open spec by what keeps it out of the burndown
 /// ready set, or `None` if it's already in the ready set (nothing for the human
 /// to do). Precedence runs the "leave parked" hard blockers first (decision /
 /// blocker / deferral / in-flight) so the most fundamental reason wins, then the
 /// human-actionable buckets (clarify, approve, queue). Pure + testable.
-/// trace:STORY-563 | ai:claude
 pub(crate) fn classify_unblock(f: &UnblockFacts) -> Option<UnblockClass> {
     if f.in_burndown_ready_set() {
         return None;
@@ -1041,9 +1068,9 @@ pub(crate) struct UnblockLine {
     pub reason: String,
 }
 
+// trace:STORY-563 | ai:claude
 /// STORY-563: a one-line human-readable reason for each unblock class — the
 /// `WHAT keeps it out` text the prompt and the human view both print. Pure.
-/// trace:STORY-563 | ai:claude
 pub(crate) fn unblock_reason(class: UnblockClass) -> &'static str {
     match class {
         UnblockClass::NeedsApproval => "draft — needs advisor approval before it can be queued",
@@ -1066,13 +1093,14 @@ pub(crate) fn unblock_reason(class: UnblockClass) -> &'static str {
     }
 }
 
+// trace:STORY-563 | ai:claude
 /// STORY-563: assemble the PASTE-READY advisor prompt from the classified set.
 /// DETERMINISTIC + side-effect-free — this is the SPIKE-55 prompt-assembler
 /// pattern (like `aida ultraplan` / `aida goal`): no LLM in the CLI, just turn
 /// store state into an instruction the advisor (the grooming skill / live
 /// session) executes. The prompt tells the advisor to QUEUE the autonomous-able,
 /// CLARIFY the under-specified first, and LEAVE parked the rest, with one line +
-/// spec-id + reason each. trace:STORY-563 | ai:claude
+/// spec-id + reason each.
 pub(crate) fn assemble_unblock_prompt(lines: &[UnblockLine]) -> String {
     let by_action = |want: UnblockAction| -> Vec<&UnblockLine> {
         lines.iter().filter(|l| l.class.action() == want).collect()
@@ -1193,10 +1221,11 @@ pub(crate) fn reconcile_held_for_review(obs: &DraftPrObservation) -> String {
     }
 }
 
+// trace:STORY-544 | ai:claude
 /// Plain-language description of the active selector for the human-facing
 /// header — glosses the bare word "selector" so a new user understands what is
 /// being shown and how to narrow it. Pure (no color), so it's unit-testable;
-/// the caller colorizes. trace:STORY-544 | ai:claude
+/// the caller colorizes.
 pub(crate) fn selector_summary(status: &str, tag: Option<&str>, batch: Option<&str>) -> String {
     let mut filters: Vec<String> = Vec::new();
     if let Some(t) = tag {
@@ -1216,10 +1245,11 @@ pub(crate) fn selector_summary(status: &str, tag: Option<&str>, batch: Option<&s
     format!("{scope} Narrow with --batch NAME, --tag X, or --status <s>.")
 }
 
+// trace:STORY-544 | ai:claude
 /// The next-step footer printed after a non-empty ready set. Points the user at
 /// `aida burndown run` (the kick-off-and-walk-away headless drain) as the primary
 /// command, and notes `/aida-burndown` as the in-Claude alternative.
-/// Pure text (no color); the caller colorizes. trace:STORY-544 | ai:claude
+/// Pure text (no color); the caller colorizes.
 // trace:BUG-494 | ai:claude
 pub(crate) fn next_step_footer() -> String {
     "Next step: run `aida burndown run` to drain the ready set above (kick off and walk away).\n\
@@ -1227,12 +1257,13 @@ pub(crate) fn next_step_footer() -> String {
         .to_string()
 }
 
+// trace:STORY-566 | ai:claude
 /// STORY-566: the primary next ACTION `aida queue advance` offers for a queued
 /// spec in each bucket — a ROUTER over the existing flows, not a new flow. The
 /// kind drives the interactive menu's first option and the `--yes` auto-take
 /// gate. Pure + exhaustively testable; the handler maps the chosen kind back to
 /// the existing `aida review` / `aida queue work [--zen]` / approve / reject
-/// dispatch. trace:STORY-566 | ai:claude
+/// dispatch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AdvanceAction {
     /// Run the human review pass (`aida review <id>`); on approval, offer to
@@ -1259,20 +1290,21 @@ pub(crate) enum AdvanceAction {
 }
 
 impl AdvanceAction {
+    // trace:STORY-566 | ai:claude
     /// True for the ONE unambiguous autonomous step `--yes` may auto-take
     /// without a human in the loop (drain a ready spec / approve a groomed
     /// draft). Everything else (review, supervised build, decision, reject) is
-    /// a human call and is SKIPPED under `--yes`. trace:STORY-566 | ai:claude
+    /// a human call and is SKIPPED under `--yes`.
     pub(crate) fn is_autonomous(self) -> bool {
         matches!(self, AdvanceAction::Drain | AdvanceAction::Approve)
     }
 }
 
+// trace:STORY-566 | ai:claude
 /// STORY-566: the primary action `aida queue advance` routes each open-bucket
 /// to. PURE map (bucket → action) — the side-effecting dispatch lives in
 /// `main.rs`; keeping the routing here makes it exhaustively unit-testable and
 /// keeps the menu + the `--yes` gate agreeing on what each bucket needs.
-/// trace:STORY-566 | ai:claude
 pub(crate) fn advance_action(bucket: OpenBucket) -> AdvanceAction {
     match bucket {
         OpenBucket::HeldForReview => AdvanceAction::Review,
@@ -1296,8 +1328,9 @@ pub(crate) fn advance_action(bucket: OpenBucket) -> AdvanceAction {
     }
 }
 
+// trace:STORY-566
 /// STORY-566: the menu/label text for each bucket's primary action — the first
-/// `inquire::Select` option `aida queue advance` shows. Pure. trace:STORY-566
+/// `inquire::Select` option `aida queue advance` shows. Pure.
 pub(crate) fn advance_action_label(bucket: OpenBucket) -> &'static str {
     match advance_action(bucket) {
         AdvanceAction::Review => "Review it (aida review)",
@@ -1311,12 +1344,13 @@ pub(crate) fn advance_action_label(bucket: OpenBucket) -> &'static str {
     }
 }
 
+// trace:STORY-565 | ai:claude
 /// STORY-565: the SINGLE next action for ONE non-ready queued item, phrased with
 /// the operator's own SPEC-ID inlined so the footer reads as a copy-pasteable
 /// instruction. A ROUTER over `advance_action` — same bucket→action map the
 /// interactive `aida queue advance` uses, just rendered as one imperative line.
 /// Pure + testable; the `id` is the operator's own queued spec (fine to print —
-/// it's their item, not a breadcrumb). trace:STORY-565 | ai:claude
+/// it's their item, not a breadcrumb).
 fn advance_action_sentence(bucket: OpenBucket, id: &str) -> String {
     match advance_action(bucket) {
         AdvanceAction::Review => format!("review it (`aida review {id}`)"),
@@ -1334,9 +1368,10 @@ fn advance_action_sentence(bucket: OpenBucket, id: &str) -> String {
     }
 }
 
+// trace:STORY-565 | ai:claude
 /// STORY-565: one queued item, already classified, for the path-to-empty footer.
 /// `bucket == Actionable` ⇒ it's part of the "ready" count; everything else gets
-/// its own per-item "needs you" line. trace:STORY-565 | ai:claude
+/// its own per-item "needs you" line.
 #[derive(Debug, Clone)]
 pub(crate) struct QueuedItem {
     /// The operator's own display SPEC-ID.
@@ -1345,6 +1380,7 @@ pub(crate) struct QueuedItem {
     pub bucket: OpenBucket,
 }
 
+// trace:STORY-565 | ai:claude
 /// STORY-565: render the "how do I get to zero?" footer for a non-empty queue —
 /// SIGNPOSTING over the SAME classifier `aida queue advance` uses, not new
 /// state. Disambiguates the two meanings of "empty": DRAIN (`aida burndown run`)
@@ -1352,7 +1388,7 @@ pub(crate) struct QueuedItem {
 /// names the single next action for each non-ready (parked/blocked/held) item.
 /// Pure (no color, no store) so it's unit-testable without a store; the caller
 /// colorizes. Returns `None` for an empty slice (caller prints the empty-queue
-/// line instead). trace:STORY-565 | ai:claude
+/// line instead).
 pub(crate) fn render_path_to_empty(items: &[QueuedItem]) -> Option<String> {
     if items.is_empty() {
         return None;
@@ -1423,11 +1459,12 @@ pub(crate) fn render_path_to_empty(items: &[QueuedItem]) -> Option<String> {
     Some(out)
 }
 
+// trace:BUG-621 | ai:claude
 /// BUG-621: a bucket whose items clear through the normal lifecycle with NO
 /// operator action — lease-backed live work, work awaiting merge, and
 /// long-lived specs with no terminal state by design. These must NOT be labeled
 /// "needs you". Deliberately EXCLUDES [`OpenBucket::InProgress`] (status-only,
-/// no lease = drift; see [`is_drift`]). trace:BUG-621 | ai:claude
+/// no lease = drift; see [`is_drift`]).
 fn self_resolving(bucket: OpenBucket) -> bool {
     matches!(
         bucket,
@@ -1435,10 +1472,11 @@ fn self_resolving(bucket: OpenBucket) -> bool {
     )
 }
 
+// trace:BUG-621 | ai:claude
 /// BUG-621: an item marked in-progress with NO live session lease — drift, not
 /// genuine motion. It will not self-resolve, so it gets neither the reassuring
 /// "clears when shipped" line nor the contradictory "needs you: nothing to do"
-/// line; it gets a "stalled — pick it back up" nudge. trace:BUG-621 | ai:claude
+/// line; it gets a "stalled — pick it back up" nudge.
 fn is_drift(bucket: OpenBucket) -> bool {
     matches!(bucket, OpenBucket::InProgress)
 }
@@ -2045,6 +2083,7 @@ mod tests {
         }
     }
 
+    // trace:BUG-564 | ai:claude
     /// BUG-564: a human-only spec whose DERIVED bucket is NOT a needs-human
     /// bucket must still be classified human-required (so it surfaces in
     /// `aida list human`), and must NOT be human-required when the marker is
@@ -2052,7 +2091,7 @@ mod tests {
     /// into — before the fix the view fed `human_required` a hardcoded `false`,
     /// so the init scaffolding-commit task (High/Approved → Actionable, a
     /// non-human bucket) was invisible while the queue's human-only bucket showed
-    /// it. trace:BUG-564 | ai:claude
+    /// it.
     #[test]
     fn human_required_folds_in_human_only_marker_over_non_human_bucket() {
         // An approved, unblocked, decision-free, in-flight-free task classifies

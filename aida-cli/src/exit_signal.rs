@@ -132,12 +132,13 @@ pub(crate) enum ExitOutcome {
     /// (signal-terminated) status. The status is retained for diagnostics and
     /// the reap tests — the orchestrator itself does not branch on it.
     Reaped(#[allow(dead_code)] ExitStatus),
+    // trace:BUG-420 | ai:claude
     /// BUG-420: the phase watchdog tripped — the child made no progress for the
     /// no-progress window (a degenerate echo/sleep spin) or blew past the
     /// wall-clock ceiling — so the orchestrator killed its process tree. The
     /// `String` is the one-line trip reason for the phase failure / shelve.
     /// This is NOT a clean completion: the caller turns it into a shelvable
-    /// phase failure. trace:BUG-420 | ai:claude
+    /// phase failure.
     WatchdogTripped(String),
 }
 
@@ -159,6 +160,7 @@ pub(crate) fn spawn_and_wait(
     spawn_and_wait_watched(cmd, sentinel, config, None)
 }
 
+// trace:BUG-420 | ai:claude
 /// BUG-420: [`spawn_and_wait`] plus an optional **watchdog**. On each poll tick
 /// the watchdog closure is consulted; when it returns `Some(reason)` the child's
 /// process tree is reaped (the same SIGTERM→grace→SIGKILL cascade as the
@@ -167,7 +169,6 @@ pub(crate) fn spawn_and_wait(
 /// legitimately idles waiting for the user, so it passes `None` and behaves
 /// exactly as before. The closure owns its own git/mtime polling cadence
 /// (rate-limited internally) so this tight poll loop stays cheap.
-/// trace:BUG-420 | ai:claude
 pub(crate) fn spawn_and_wait_watched(
     mut cmd: Command,
     sentinel: &Path,

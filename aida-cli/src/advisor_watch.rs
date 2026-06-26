@@ -169,10 +169,11 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
     Ok(())
 }
 
+// trace:TASK-776 | ai:claude
 /// Count unread messages addressed to the `advisor` (direct + broadcast),
 /// merging the local + canonical mailbox layers against the advisor's read
 /// watermark. Used for the event-driven fork trigger (TASK-776). Best-effort —
-/// any read failure yields 0 (never blocks the loop). trace:TASK-776 | ai:claude
+/// any read failure yields 0 (never blocks the loop).
 fn advisor_unread_count(project_root: &Path) -> usize {
     let store_root = project_root.join(".aida-store");
     let local = crate::mailbox_store::read_local_messages(project_root).unwrap_or_default();

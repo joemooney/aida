@@ -82,8 +82,9 @@ fn table_mut<'a>(doc: &'a mut DocumentMut, key: &str) -> &'a mut Table {
         .expect("just-inserted/confirmed table")
 }
 
+// trace:STORY-633
 /// Set `[glyphs] <name> = "<value>"`, preserving the rest of the file.
-/// `name` is assumed already validated by the caller. trace:STORY-633
+/// `name` is assumed already validated by the caller.
 pub(crate) fn set_override(path: &Path, name: &str, value: &str) -> Result<()> {
     let mut doc = load_doc(path)?;
     let glyphs = table_mut(&mut doc, "glyphs");
@@ -91,8 +92,9 @@ pub(crate) fn set_override(path: &Path, name: &str, value: &str) -> Result<()> {
     save_doc(path, &doc)
 }
 
+// trace:STORY-633
 /// Remove `[glyphs] <name>`. Returns whether an entry was actually present.
-/// Drops the `[glyphs]` table entirely if it becomes empty. trace:STORY-633
+/// Drops the `[glyphs]` table entirely if it becomes empty.
 pub(crate) fn unset_override(path: &Path, name: &str) -> Result<bool> {
     let mut doc = load_doc(path)?;
     let mut removed = false;
@@ -108,8 +110,8 @@ pub(crate) fn unset_override(path: &Path, name: &str) -> Result<bool> {
     Ok(removed)
 }
 
+// trace:STORY-633
 /// Clear the whole `[glyphs]` table. Returns whether anything was removed.
-/// trace:STORY-633
 pub(crate) fn reset_overrides(path: &Path) -> Result<bool> {
     let mut doc = load_doc(path)?;
     let removed = doc.remove("glyphs").is_some();
@@ -119,10 +121,10 @@ pub(crate) fn reset_overrides(path: &Path) -> Result<bool> {
     Ok(removed)
 }
 
+// trace:STORY-633
 /// Write `[ui] theme = "<name>"`, preserving the rest of the file. Clears any
 /// expanded `[glyphs]` table the user previously materialized? No — leave it;
 /// per-symbol overrides intentionally win over the theme (precedence tier).
-/// trace:STORY-633
 pub(crate) fn set_theme(path: &Path, name: &str) -> Result<()> {
     let mut doc = load_doc(path)?;
     let ui = table_mut(&mut doc, "ui");
@@ -130,10 +132,11 @@ pub(crate) fn set_theme(path: &Path, name: &str) -> Result<()> {
     save_doc(path, &doc)
 }
 
+// trace:STORY-633
 /// Materialize a theme's bundle into `[glyphs]` and set `[ui] glyphs` to the
 /// theme's base profile, instead of writing a named `[ui] theme` reference
 /// (`--expand`). Removes any existing `[ui] theme` so the expanded form is the
-/// single source. trace:STORY-633
+/// single source.
 pub(crate) fn expand_theme(path: &Path, base_profile: &str, bundle: &[(&str, &str)]) -> Result<()> {
     let mut doc = load_doc(path)?;
     {

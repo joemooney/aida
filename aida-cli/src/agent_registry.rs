@@ -161,10 +161,10 @@ impl AgentBinaryIdentity {
     }
 }
 
+// trace:STORY-435 | ai:claude
 /// Inputs the status classifier needs that aren't on the registry entry
 /// itself. Built once per `list_agent_views` call so every entry is
 /// classified against the same wall-clock and the same lease snapshot.
-/// trace:STORY-435 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct AgentClassifyContext {
     pub(crate) now: DateTime<Utc>,
@@ -186,11 +186,11 @@ impl AgentClassifyContext {
     }
 }
 
+// trace:STORY-435 | ai:claude
 /// `[agent_registry]` section in `.aida/config.toml`. Sensible default
 /// (30s) means a project that never writes the section gets reasonable
 /// busy/idle behaviour for free; missing file / section / keys all fall
 /// through to defaults — a config error never blocks `aida status`.
-/// trace:STORY-435 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Config {
     pub(crate) busy_threshold_secs: u64,
@@ -271,6 +271,7 @@ fn registry_path(project_root: &Path, id: &str) -> PathBuf {
     agents_dir(project_root).join(format!("{id}.toml"))
 }
 
+// trace:BUG-416 | ai:claude
 /// BUG-416: count the LIVE agents registered as operating within `cwd` — i.e.
 /// whose `worktree_path` equals or is an ancestor of `cwd`. Used to detect a
 /// SHARED worktree: when two `aida agent new` sessions land in the same
@@ -280,7 +281,6 @@ fn registry_path(project_root: &Path, id: &str) -> PathBuf {
 /// (not in the registry) yields 0; a lone agent yields 1; co-located agents
 /// yield ≥2 — the caller suppresses the hint only at ≥2. Dead PIDs are skipped
 /// so an exited agent's stale record doesn't keep a worktree "shared".
-/// trace:BUG-416 | ai:claude
 pub(crate) fn live_agents_covering_cwd(project_root: &Path, cwd: &Path) -> usize {
     let canon_cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
     let mut count = 0usize;
@@ -644,9 +644,10 @@ pub(crate) fn remove_agent(project_root: &Path, agent_type: &str, pid: u32) -> R
     }
 }
 
+// trace:STORY-528 | ai:claude
 /// Load every registry entry (alive or stale) as `(path, entry)` pairs.
 /// Unlike `list_agent_views` this hands back the raw record so callers can
-/// mutate + rewrite it (pause/resume). trace:STORY-528 | ai:claude
+/// mutate + rewrite it (pause/resume).
 fn load_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
@@ -667,11 +668,11 @@ fn load_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
     out
 }
 
+// trace:STORY-528 | ai:claude
 /// Resolve a `<target>` (name, `<type>#<pid>`, or `<type>-<pid>` id) to the
 /// single matching live registry entry. Prefers an exact name match, falling
 /// back to the synthetic id forms. Errors on no-match or ambiguity so the
 /// caller can surface a clear message rather than silently picking one.
-/// trace:STORY-528 | ai:claude
 fn resolve_target_entry(
     project_root: &Path,
     target: &str,
@@ -719,8 +720,9 @@ fn resolve_target_entry(
     }
 }
 
+// trace:STORY-528 | ai:claude
 /// Mark a live agent `Paused`. Returns the updated entry so the caller can
-/// render a confirmation. trace:STORY-528 | ai:claude
+/// render a confirmation.
 pub(crate) fn pause_agent(
     project_root: &Path,
     target: &str,
@@ -736,8 +738,8 @@ pub(crate) fn pause_agent(
     Ok(entry)
 }
 
+// trace:STORY-528 | ai:claude
 /// Clear a paused agent back to `Available`, dropping all pause metadata.
-/// trace:STORY-528 | ai:claude
 pub(crate) fn resume_agent(project_root: &Path, target: &str) -> Result<AgentRegistryEntry> {
     let (_, mut entry) = resolve_target_entry(project_root, target)?;
     entry.availability = Availability::Available;
@@ -748,10 +750,11 @@ pub(crate) fn resume_agent(project_root: &Path, target: &str) -> Result<AgentReg
     Ok(entry)
 }
 
+// trace:STORY-528 | ai:claude
 /// Brief-time GUARD: if a brief target resolves to a *paused* live agent,
 /// return a one-line warning string (does NOT refuse). Returns `None` when
 /// the target isn't a paused live agent (unknown target, available agent,
-/// stale entry — all of those are "no warning"). trace:STORY-528 | ai:claude
+/// stale entry — all of those are "no warning").
 pub(crate) fn paused_warning_for_target(project_root: &Path, target: &str) -> Option<String> {
     let (_, entry) = resolve_target_entry(project_root, target).ok()?;
     if !entry.availability.is_paused() {
@@ -772,8 +775,9 @@ pub(crate) fn paused_warning_for_target(project_root: &Path, target: &str) -> Op
     ))
 }
 
+// trace:STORY-528 | ai:claude
 /// Render the `paused (budget, ~back HH:MM)` detail fragment shared by the
-/// status line and the brief-time warning. trace:STORY-528 | ai:claude
+/// status line and the brief-time warning.
 pub(crate) fn pause_detail(reason: PauseReason, expected_back: Option<DateTime<Utc>>) -> String {
     match expected_back {
         Some(when) => format!(
@@ -785,8 +789,9 @@ pub(crate) fn pause_detail(reason: PauseReason, expected_back: Option<DateTime<U
     }
 }
 
+// trace:STORY-528 | ai:claude
 /// The `⏸ paused (...)` glyph fragment for an agent view, or `None` when the
-/// agent is Available. trace:STORY-528 | ai:claude
+/// agent is Available.
 pub(crate) fn paused_glyph(view: &AgentRegistryView) -> Option<String> {
     if !view.availability.is_paused() {
         return None;
@@ -934,12 +939,12 @@ pub(crate) fn elapsed_secs_clamped(now: DateTime<Utc>, at: DateTime<Utc>) -> i64
     now.signed_duration_since(at).num_seconds().max(0)
 }
 
+// trace:STORY-435 trace:TASK-474 | ai:claude
 /// `agent` is covered by `worktrees` iff some entry is exactly `agent` or
 /// `agent` lives under that entry. Mirrors `lease_covers_cwd` in
 /// `aida-cli/src/main.rs` — empty paths are intentionally treated as
 /// non-covering, since `Path::starts_with("")` is true for every path and
 /// would otherwise let an advisory MCP lease silently match every agent.
-/// trace:STORY-435 trace:TASK-474 | ai:claude
 fn covers(worktrees: &[PathBuf], agent: &Path) -> bool {
     worktrees.iter().any(|w| {
         if w.as_os_str().is_empty() {
@@ -1205,10 +1210,11 @@ mod tests {
         assert_eq!(views[0].status, AgentStatus::Stale);
     }
 
+    // trace:BUG-416
     /// BUG-416: live_agents_covering_cwd counts only LIVE agents whose
     /// worktree covers the cwd (equal or ancestor), skipping dead PIDs. A
     /// worktree with ≥2 live agents reads as "shared" (the add-hint suppressor
-    /// fires); a lone agent or an unrelated dir does not. trace:BUG-416
+    /// fires); a lone agent or an unrelated dir does not.
     #[test]
     fn live_agents_covering_cwd_counts_shared_live_worktrees_only() {
         let tmp = TempDir::new().unwrap();

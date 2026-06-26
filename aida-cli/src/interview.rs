@@ -330,6 +330,7 @@ fn truncate(s: &str, max: usize) -> String {
     format!("{head}...")
 }
 
+// trace:STORY-657 | ai:claude
 /// Append `line` to a description body's `## Acceptance` section, creating the
 /// section if absent. Section-aware: inserts after the section's last non-blank
 /// content line (before the next heading) so the new criterion reads as the
@@ -338,7 +339,7 @@ fn truncate(s: &str, max: usize) -> String {
 /// This duplicates the section-walk logic of
 /// `main.rs::append_resolved_to_acceptance` deliberately, to keep this module
 /// dependency-light and fully unit-testable without pulling in `main.rs`. The
-/// two are exercised against the same shapes. trace:STORY-657 | ai:claude
+/// two are exercised against the same shapes.
 fn append_to_acceptance(description: &str, line: &str) -> String {
     let lines: Vec<&str> = description.lines().collect();
     let heading_idx = lines.iter().position(|l| {

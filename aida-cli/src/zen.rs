@@ -48,12 +48,13 @@ use crate::orchestrator;
 /// children — and, being inherited, unverifiable on its own.
 pub(crate) const ZEN_ENV: &str = "AIDA_ZEN";
 
+// trace:STORY-564 | ai:claude
 /// STORY-564: set by `aida queue work --zen --pause-always` (and inherited by
 /// the launched session). Forces the standalone-`--zen` finish checkpoint to
 /// pause at grab-next/stop even on a clean finish, restoring the pre-STORY-564
 /// always-pause behavior for an operator who wants to drive grab-next by hand.
 /// A leak only ever *adds* a pause (the safe direction), so unlike `AIDA_ZEN`
-/// it needs no corroboration token. trace:STORY-564 | ai:claude
+/// it needs no corroboration token.
 pub(crate) const ZEN_PAUSE_ALWAYS_ENV: &str = "AIDA_ZEN_PAUSE_ALWAYS";
 
 /// The provenance anchor: a per-invocation UUID minted by the `--zen` dispatch
@@ -193,11 +194,12 @@ pub(crate) fn classify(
     }
 }
 
+// trace:BUG-237 | ai:claude
 /// The corroborated zen verdict for the current process: reads `AIDA_ZEN` from
 /// the environment, the orchestrator run marker under `project_root`, and the
 /// session lease covering `cwd`. Resolve `project_root` with
 /// `find_main_worktree_root` so a child in a sibling worktree reads the shared
-/// `.aida/`. trace:BUG-237 | ai:claude
+/// `.aida/`.
 pub(crate) fn detect(project_root: &Path, cwd: &Path) -> ZenContext {
     let orchestrator = match orchestrator::live_run_marker(project_root) {
         Some(marker) => OrchestratorZenSignal::Live { zen: marker.zen },
@@ -339,11 +341,11 @@ pub(crate) fn needs_human_marker_path(project_root: &Path, session_id: &str) -> 
     needs_human_dir(project_root).join(format!("{session_id}.marker"))
 }
 
+// trace:STORY-564 | ai:claude
 /// Record that the current `--zen` session needed a human — called by `aida
 /// zen needs-human` when the session pauses on a design-fork or raises a punt.
 /// The body is the human-readable reason (for later triage); only the file's
 /// *presence* drives the gate. Idempotent: re-marking overwrites.
-/// trace:STORY-564 | ai:claude
 pub(crate) fn mark_needs_human(
     project_root: &Path,
     session_id: &str,

@@ -33,12 +33,12 @@
 use serde_json::Value;
 use std::path::Path;
 
+// trace:EPIC-36
 /// Read and classify every `.aida/headless-logs/*.jsonl` under `dir` into a
 /// `SessionTally`. This is the one I/O boundary in the module; the
 /// classification + aggregation it delegates to are pure. Best-effort: an
 /// unreadable file is skipped (a session whose log we can't read tells us
 /// nothing). Returns an empty tally (total 0) when the directory is absent.
-/// trace:EPIC-36
 pub fn tally_from_dir(dir: &Path) -> SessionTally {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return SessionTally::default();
@@ -104,6 +104,7 @@ impl SessionOutcome {
     }
 }
 
+// trace:EPIC-36
 /// Classify one headless session log (the full JSONL body of a single
 /// `.aida/headless-logs/*.jsonl` file) into a `SessionOutcome`.
 ///
@@ -118,7 +119,6 @@ impl SessionOutcome {
 ///   3. No result event, but a kill/abort marker → `MidWorkKill`.
 ///   4. Otherwise → `Truncated`.
 ///
-/// trace:EPIC-36
 pub fn classify_session(jsonl: &str) -> SessionOutcome {
     let mut saw_sentinel_reap = false;
     let mut saw_kill = false;
@@ -162,11 +162,12 @@ pub fn classify_session(jsonl: &str) -> SessionOutcome {
     }
 }
 
+// trace:EPIC-36
 /// `true` when an event marks the sentinel reaping the session after its work
 /// landed. The orchestrator writes a terminal marker line when it terminates a
 /// session whose success artifact is already present; we recognise both an
 /// explicit `type == "aida_sentinel_reap"` event and a generic event carrying
-/// `reason == "sentinel-reaped"` / `aida_sentinel: "reaped"`. trace:EPIC-36
+/// `reason == "sentinel-reaped"` / `aida_sentinel: "reaped"`.
 fn is_sentinel_reap_marker(v: &Value) -> bool {
     if v.get("type").and_then(|t| t.as_str()) == Some("aida_sentinel_reap") {
         return true;
@@ -180,10 +181,10 @@ fn is_sentinel_reap_marker(v: &Value) -> bool {
     )
 }
 
+// trace:EPIC-36
 /// `true` when an event marks the session being killed before it finished.
 /// Recognises an explicit `type == "aida_session_kill"` event and a generic
 /// event carrying `aida_kill: true` or `reason == "killed"` / `"aborted"`.
-/// trace:EPIC-36
 fn is_kill_marker(v: &Value) -> bool {
     if v.get("type").and_then(|t| t.as_str()) == Some("aida_session_kill") {
         return true;
@@ -214,8 +215,9 @@ impl SessionTally {
         self.clean_success + self.sentinel_reaped
     }
 
+    // trace:EPIC-36
     /// Fraction of sessions that succeeded, in `0.0..=1.0`. `0.0` when there
-    /// are no sessions (zero-denominator edge case). trace:EPIC-36
+    /// are no sessions (zero-denominator edge case).
     pub fn success_rate(&self) -> f64 {
         if self.total == 0 {
             0.0
@@ -224,10 +226,10 @@ impl SessionTally {
         }
     }
 
+    // trace:EPIC-36
     /// Per-class breakdown in a stable order — each outcome class paired with
     /// its count. Drives the JSON `breakdown` surface (keyed by `slug`) and any
     /// caller wanting the full distribution rather than just the rate.
-    /// trace:EPIC-36
     pub fn breakdown(&self) -> [(SessionOutcome, usize); 5] {
         [
             (SessionOutcome::CleanSuccess, self.clean_success),
@@ -251,11 +253,11 @@ impl SessionTally {
     }
 }
 
+// trace:EPIC-36
 /// Aggregate a collection of per-session log bodies into a `SessionTally`.
 ///
 /// Pure over the supplied log texts — the caller is responsible for reading
 /// the files (so the aggregation stays filesystem-free and testable).
-/// trace:EPIC-36
 pub fn tally_sessions<I, S>(logs: I) -> SessionTally
 where
     I: IntoIterator<Item = S>,
@@ -268,7 +270,8 @@ where
     tally
 }
 
-/// The session-vs-drain misclassification gap. trace:EPIC-36
+// trace:EPIC-36
+/// The session-vs-drain misclassification gap.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MisclassificationGap {
     /// Successes / total over the headless session logs.
@@ -283,9 +286,10 @@ pub struct MisclassificationGap {
 }
 
 impl MisclassificationGap {
+    // trace:EPIC-36
     /// GAP = session_success_rate − drain_success_rate. A positive value is
     /// the orchestrator misclassification rate (work that succeeded at the
-    /// session level but was scored as a drain failure). trace:EPIC-36
+    /// session level but was scored as a drain failure).
     pub fn gap(&self) -> f64 {
         self.session_success_rate - self.drain_success_rate
     }
@@ -297,9 +301,10 @@ impl MisclassificationGap {
     }
 }
 
+// trace:EPIC-36
 /// Compose the gap metric from a session tally + the already-computed drain
 /// summary. Pure arithmetic so the gap computation (including the
-/// zero-denominator edge case) is unit-testable. trace:EPIC-36
+/// zero-denominator edge case) is unit-testable.
 pub fn compute_gap(
     sessions: &SessionTally,
     drain_success_rate: f64,
@@ -324,12 +329,13 @@ pub fn compute_gap(
 // trace:STORY-530 | ai:claude
 // ============================================================================
 
+// trace:STORY-530
 /// Drain halt-rate (#3): the EPIC-28 resilient drain *parks-and-continues* on a
 /// shelvable phase failure (CI red, RequestChanges, build fail) but *halts* the
 /// whole batch on a non-shelvable environment failure (`spawn`, `missing-tool`,
 /// `internal`). This breakdown counts, over the drain failures, how many were
 /// shelve-and-continue vs how many would halt the batch — the signal for how
-/// often a drain stops dead vs degrades gracefully. trace:STORY-530
+/// often a drain stops dead vs degrades gracefully.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HaltBreakdown {
     /// Failures whose `failure_kind` shelves (parks the spec, drain continues).
@@ -347,11 +353,11 @@ impl HaltBreakdown {
         self.shelved + self.halted + self.unclassified
     }
 
+    // trace:STORY-530
     /// Fraction of failures that halted the batch, in `0.0..=1.0`. `0.0` when
     /// there are no failures (zero-denominator edge). The denominator is
     /// shelved + halted (classified failures); unclassified rows are excluded
     /// so an unknown slug neither inflates nor deflates the rate.
-    /// trace:STORY-530
     pub fn halt_rate(&self) -> f64 {
         let classified = self.shelved + self.halted;
         if classified == 0 {
@@ -362,9 +368,10 @@ impl HaltBreakdown {
     }
 }
 
+// trace:STORY-530
 /// `true` when a `failure_kind` slug is a *shelvable* (park-and-continue) kind.
 /// Mirrors `auto_complete::FailureKind::is_shelvable` over the stable slugs so
-/// this module stays free of the orchestrator's internal types. trace:STORY-530
+/// this module stays free of the orchestrator's internal types.
 pub fn failure_kind_is_shelvable(slug: &str) -> bool {
     matches!(
         slug,
@@ -379,15 +386,17 @@ pub fn failure_kind_is_shelvable(slug: &str) -> bool {
     )
 }
 
+// trace:STORY-530
 /// `true` when a `failure_kind` slug is a *non-shelvable* (batch-halting)
-/// environment failure. trace:STORY-530
+/// environment failure.
 pub fn failure_kind_is_halting(slug: &str) -> bool {
     matches!(slug, "spawn" | "missing-tool" | "internal")
 }
 
+// trace:STORY-530
 /// Classify a slice of drain-failure `failure_kind` slugs into a
 /// `HaltBreakdown`. A `None` slug (a failure with no recorded kind) is
-/// `unclassified`. Pure over the slug list. trace:STORY-530
+/// `unclassified`. Pure over the slug list.
 pub fn halt_breakdown<I, S>(failure_kinds: I) -> HaltBreakdown
 where
     I: IntoIterator<Item = Option<S>>,
@@ -404,9 +413,10 @@ where
     b
 }
 
+// trace:STORY-530
 /// Recovery latency (#4): the wall-clock gap between a drain *failure* and the
 /// *next* drain run — the human-babysitting cost (how long work sat parked
-/// before someone kicked off the next drain). trace:STORY-530
+/// before someone kicked off the next drain).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RecoveryLatency {
     /// One gap per failure that was followed by a later drain, in seconds.
@@ -419,8 +429,8 @@ impl RecoveryLatency {
         self.gaps_secs.len()
     }
 
+    // trace:STORY-530
     /// Mean gap in seconds, or `None` when no gaps were measured.
-    /// trace:STORY-530
     pub fn mean_secs(&self) -> Option<f64> {
         if self.gaps_secs.is_empty() {
             None
@@ -430,8 +440,8 @@ impl RecoveryLatency {
         }
     }
 
+    // trace:STORY-530
     /// Median gap in seconds, or `None` when no gaps were measured.
-    /// trace:STORY-530
     pub fn median_secs(&self) -> Option<f64> {
         if self.gaps_secs.is_empty() {
             return None;
@@ -452,10 +462,10 @@ impl RecoveryLatency {
     }
 }
 
+// trace:STORY-530
 /// One drain run reduced to the two timestamps recovery-latency needs, as epoch
 /// seconds, plus whether it failed. The caller parses the RFC3339 strings from
 /// the telemetry log; this struct keeps the latency computation pure.
-/// trace:STORY-530
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DrainRun {
     /// When the run started (epoch seconds).
@@ -466,11 +476,12 @@ pub struct DrainRun {
     pub failed: bool,
 }
 
+// trace:STORY-530
 /// Compute recovery latencies from a set of drain runs. Sorts by completion
 /// time, then for each *failed* run measures the gap to the *next run that
 /// started after this one completed* (the next drain a human kicked off). A
 /// failure with no following drain contributes no gap. Pure over the supplied
-/// runs. trace:STORY-530
+/// runs.
 pub fn recovery_latency(runs: &[DrainRun]) -> RecoveryLatency {
     // Order by completion so "the next drain" is well-defined.
     let mut ordered: Vec<DrainRun> = runs.to_vec();
@@ -495,10 +506,11 @@ pub fn recovery_latency(runs: &[DrainRun]) -> RecoveryLatency {
     latency
 }
 
+// trace:STORY-530
 /// Draft-inbox depth (#5, ADR-3): the count of untriaged Draft specs awaiting
 /// the advisor's approve/reject decision. A high number is unreviewed backlog
 /// piling up. Pure over `(is_draft, is_archived)` flags; archived drafts are
-/// excluded (they are no longer in the inbox). trace:STORY-530
+/// excluded (they are no longer in the inbox).
 pub fn draft_inbox_depth<I>(specs: I) -> usize
 where
     I: IntoIterator<Item = (bool, bool)>,
@@ -509,10 +521,11 @@ where
         .count()
 }
 
+// trace:STORY-530
 /// Burn-down velocity (#6): net completions per day — specs that *reached
 /// Completed* minus specs that were *newly added* on the same day. A positive
 /// net means the backlog is shrinking; a negative net means the advisor is
-/// adding work faster than it ships. trace:STORY-530
+/// adding work faster than it ships.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BurnDownVelocity {
     /// Specs that reached Completed in the window.
@@ -530,8 +543,9 @@ impl BurnDownVelocity {
         self.completed as i64 - self.added as i64
     }
 
+    // trace:STORY-530
     /// Net completions per day, or `None` when the window spans no days
-    /// (zero-denominator edge). trace:STORY-530
+    /// (zero-denominator edge).
     pub fn net_per_day(&self) -> Option<f64> {
         if self.days == 0 {
             None
@@ -541,6 +555,7 @@ impl BurnDownVelocity {
     }
 }
 
+// trace:STORY-530
 /// One spec reduced to the two day-stamps burn-down needs: the ordinal day it
 /// was created and (optionally) the ordinal day it reached Completed. The
 /// caller derives the Completed day by walking the spec `history:` for a
@@ -548,7 +563,6 @@ impl BurnDownVelocity {
 /// `modified_at` for currently-Completed specs with no history row), and the
 /// created day from `created_at`. Using an ordinal day index (e.g.
 /// `num_days_from_ce` or epoch-day) keeps the bucketing pure and timezone-free.
-/// trace:STORY-530
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpecLifecycleDays {
     /// Ordinal day the spec was created.
@@ -557,11 +571,12 @@ pub struct SpecLifecycleDays {
     pub completed_day: Option<i64>,
 }
 
+// trace:STORY-530
 /// Compute net burn-down velocity over `[window_start_day, window_end_day]`
 /// (inclusive ordinal-day bounds). Counts a completion when `completed_day`
 /// falls in the window, and an add when `created_day` falls in the window. The
 /// `days` denominator is the inclusive span of the window. Pure over the
-/// supplied lifecycle days. trace:STORY-530
+/// supplied lifecycle days.
 pub fn burn_down_velocity(
     specs: &[SpecLifecycleDays],
     window_start_day: i64,

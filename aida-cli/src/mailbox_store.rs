@@ -14,18 +14,20 @@ use aida_core::mailbox::{message_state_rank, Message};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-650 | ai:claude
 /// The local mailbox directory: `<project_root>/.aida/mailbox/` (fast layer).
 /// Delegates to the shared aida-core helper so the CLI and the REST server
-/// agree on the on-disk layout. trace:STORY-650 | ai:claude
+/// agree on the on-disk layout.
 pub(crate) fn mailbox_dir(project_root: &Path) -> PathBuf {
     aida_core::mailbox::local_mailbox_dir(project_root)
 }
 
+// trace:TASK-605 | ai:claude
 /// The canonical mailbox directory in the orphan-store worktree:
 /// `<store_root>/mailbox/`. Durable, replayable, shareable across clones — the
 /// git-canonical half of the hybrid, digested from the local layer and
 /// committed on the orphan branch (separate from `objects/`, so it never
-/// touches the spec store or its cache). trace:TASK-605 | ai:claude
+/// touches the spec store or its cache).
 pub(crate) fn canonical_dir(store_root: &Path) -> PathBuf {
     store_root.join("mailbox")
 }
@@ -42,9 +44,9 @@ fn write_message_in(dir: &Path, msg: &Message) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-650 | ai:claude
 /// Append a message to the LOCAL layer. Delegates to the shared aida-core
 /// writer so the CLI and the REST server share one implementation.
-/// trace:STORY-650 | ai:claude
 pub(crate) fn write_message(project_root: &Path, msg: &Message) -> Result<()> {
     aida_core::mailbox::write_local_message(project_root, msg)
         .with_context(|| format!("writing message {}", msg.id))
@@ -84,12 +86,12 @@ pub(crate) fn read_canonical_messages(store_root: &Path) -> Result<Vec<Message>>
     read_messages_in(&canonical_dir(store_root))
 }
 
+// trace:TASK-605 | ai:claude
 /// Digest the local layer into the canonical layer: write every local message
 /// whose id is not already canonical into `<store_root>/mailbox/`. Append-only
 /// + id-keyed, so it is idempotent (re-running digests nothing new) and two
 ///   agents digesting concurrently merge without edit conflict. Returns the count
 ///   newly written; the CALLER stages + commits the orphan-store change.
-///   trace:TASK-605 | ai:claude
 pub(crate) fn digest_local_to_canonical(store_root: &Path, project_root: &Path) -> Result<usize> {
     use std::collections::HashMap;
     let local = read_local_messages(project_root)?;
@@ -118,12 +120,12 @@ pub(crate) fn write_message_marker(project_root: &Path, msg: &Message) -> Result
     write_message(project_root, msg)
 }
 
+// trace:STORY-539 | ai:claude
 /// Per-agent read-watermark directory: `<project_root>/.aida/mailbox/.read/`.
 /// One file per agent (`<agent>.txt`) holding the timestamp (epoch millis) of
 /// the newest message that agent has seen. Lets the operator overview compute
 /// unread counts without mutating the append-only message model. Lives under
 /// the existing `.aida/*` deny-by-default gitignore — local runtime state.
-/// trace:STORY-539 | ai:claude
 fn read_marker_dir(project_root: &Path) -> PathBuf {
     mailbox_dir(project_root).join(".read")
 }
@@ -137,9 +139,10 @@ pub(crate) fn read_watermark(project_root: &Path, agent: &str) -> Option<i64> {
         .and_then(|s| s.trim().parse::<i64>().ok())
 }
 
+// trace:STORY-539 | ai:claude
 /// Set one agent's read-watermark to `ts` (epoch millis). Monotonic: never
 /// lowers an existing watermark, so re-reading an older view doesn't "un-read"
-/// newer messages. trace:STORY-539 | ai:claude
+/// newer messages.
 pub(crate) fn set_watermark(project_root: &Path, agent: &str, ts: i64) -> Result<()> {
     let dir = read_marker_dir(project_root);
     std::fs::create_dir_all(&dir)

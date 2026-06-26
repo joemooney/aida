@@ -106,8 +106,9 @@ impl NeighborhoodInputs {
     }
 }
 
+// trace:STORY-631 | ai:claude
 /// FNV-1a 64-bit, hex-encoded. Stable across platforms (no float, no endian
-/// dependence). trace:STORY-631 | ai:claude
+/// dependence).
 pub fn fnv1a_hex(bytes: &[u8]) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for &b in bytes {
@@ -123,6 +124,7 @@ pub fn is_stale(stored_source_hash: &str, fresh_source_hash: &str) -> bool {
     stored_source_hash != fresh_source_hash
 }
 
+// trace:TASK-838 | ai:claude
 /// The pickup-brief decision for a spec's cached comprehension (TASK-838).
 ///
 /// `/aida-pickup` and the `aida queue work` brief lead the implementer context
@@ -131,7 +133,6 @@ pub fn is_stale(stored_source_hash: &str, fresh_source_hash: &str) -> bool {
 /// (an `Option`) and the freshly-computed neighborhood hash, it says what the
 /// brief should render. Pickup must stay fast and non-AI-blocking, so a missing
 /// or stale comprehension is a ONE-LINE note, never an inline generation.
-/// trace:TASK-838 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PickupIntent {
     /// Fresh comprehension — render the `llm` register at the top of the brief,
@@ -147,6 +148,7 @@ pub enum PickupIntent {
     Note { stale: bool },
 }
 
+// trace:TASK-838 | ai:claude
 /// Decide what the pickup brief should render for a spec's cached comprehension.
 ///
 /// FEATURE-DETECT the `Option`: a spec with no `intent` (STORY-631 not run for
@@ -155,7 +157,6 @@ pub enum PickupIntent {
 /// (neighborhood hash drifted) yields `Note { stale: true }`. Only a present,
 /// fresh comprehension yields `Render`. Reuses [`is_stale`] for the drift call —
 /// the same comparator `aida intent` uses — so the two surfaces never diverge.
-/// trace:TASK-838 | ai:claude
 pub fn decide_pickup_intent(
     intent: Option<&aida_core::SpecIntent>,
     fresh_source_hash: &str,
@@ -176,10 +177,10 @@ pub fn decide_pickup_intent(
     }
 }
 
+// trace:TASK-838 | ai:claude
 /// The one-line note text for the absent / stale cases. Names the spec and the
 /// remedy (`aida intent <spec>`) without leaking the SPEC-ID into a banner — the
 /// id is the developer breadcrumb the implementer already holds at pickup.
-/// trace:TASK-838 | ai:claude
 pub fn pickup_intent_note(disp: &str, stale: bool) -> String {
     if stale {
         format!("stale intent comprehension — run `aida intent {disp}` to refresh")

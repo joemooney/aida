@@ -112,13 +112,14 @@ pub(crate) fn reconcile_resume_phase(postconditions: &[(Phase, bool)]) -> Resume
     ResumeDecision::AlreadyComplete
 }
 
+// trace:STORY-492 | ai:claude
 /// The reconciled-from-reality facts for one crashed drain member: whether each
 /// phase's *effect* is already present in the world. The caller probes these
 /// from git / PR / spec state (branch exists, CI green, review verdict present,
 /// PR merged, spec promoted, post-merge build ok); this module only reasons
 /// over them. Keeping the probing out of here means the decision is pure and
 /// exhaustively testable, and the probing can be a thin, separately-tested
-/// shell. trace:STORY-492 | ai:claude
+/// shell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct ResumeFacts {
     /// Implementer: a feature branch with commits referencing the spec exists.
@@ -166,13 +167,14 @@ pub(crate) enum ResumeOutcome {
     ResumeAt(Phase),
 }
 
+// trace:STORY-492 | ai:claude
 /// Decide the explicit-resume outcome. Pure: the caller supplies the liveness +
 /// shelve facts (probed via the same PID-liveness gate the orchestrator uses to
 /// auto-release dormant leases) and the per-phase reality `facts`. The
 /// orchestrator-alive guard dominates — a `--resume` must refuse on any doubt
 /// that the original drive is dead, because double-driving a spec (two
 /// processes merging the same PR / writing the same worktree) is the one
-/// unrecoverable failure mode. trace:STORY-492 | ai:claude
+/// unrecoverable failure mode.
 pub(crate) fn resume_plan(
     orchestrator_alive: bool,
     member_in_flight: bool,
@@ -222,6 +224,7 @@ pub(crate) fn resume_plan(
     }
 }
 
+// trace:TASK-405 | ai:claude
 /// TASK-405: the decision for a PR-only invocation
 /// (`aida queue work <SPEC> --auto-complete --from-pr`). Implementation shipped
 /// OUTSIDE the orchestrator — a PR is already open for the spec — and the
@@ -238,7 +241,7 @@ pub(crate) fn resume_plan(
 /// The refusals are the spec's "no zombie launches" guarantee: refuse when no
 /// PR exists, when the PR is already merged, or when the spec is already
 /// Completed (the merge already promoted it) — there is nothing to drive in any
-/// of those cases. trace:TASK-405 | ai:claude
+/// of those cases.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FromPrOutcome {
     /// No open PR was found for the spec — refuse (nothing to drive).
@@ -253,6 +256,7 @@ pub(crate) enum FromPrOutcome {
     DriveFrom(Phase),
 }
 
+// trace:TASK-405 | ai:claude
 /// Decide what a `--from-pr` invocation should do, from probed world facts.
 /// Pure: the caller probes whether a PR exists, its merged/CI/review state, and
 /// whether the spec is already Completed; this only decides.
@@ -270,7 +274,6 @@ pub(crate) enum FromPrOutcome {
 /// the CI-wait phase is coupled to the implementer session/lease a fresh
 /// process does not hold (the same STORY-492 / `clamp_resume_start_phase`
 /// reasoning) — re-entering at the reviewer re-establishes gating safely.
-/// trace:TASK-405 | ai:claude
 pub(crate) fn from_pr_plan(pr_exists: bool, facts: &ResumeFacts) -> FromPrOutcome {
     if facts.spec_completed {
         return FromPrOutcome::RefuseAlreadyCompleted;

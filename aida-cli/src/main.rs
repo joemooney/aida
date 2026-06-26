@@ -262,12 +262,13 @@ pub(crate) fn get_default_author() -> String {
     }
 }
 
+// trace:BUG-99 | ai:claude
 /// BUG-99: restore SIGPIPE's default behavior so `aida ... | head -N` exits
 /// cleanly (status 141) instead of triggering Rust's "failed printing to
 /// stdout: Broken pipe" panic. Rust deliberately ignores SIGPIPE by default
 /// so library code can decide how to handle it, but for a Unix CLI we want
 /// the classic "downstream closed, terminate quietly" semantics. Windows
-/// has no SIGPIPE; this is a no-op there. trace:BUG-99 | ai:claude
+/// has no SIGPIPE; this is a no-op there.
 #[cfg(unix)]
 fn install_sigpipe_handler() {
     // Safety: signal() with SIG_DFL is async-signal-safe and is the
@@ -1212,17 +1213,18 @@ mod story_423_asciinema_tests {
     }
 }
 
+// trace:TASK-822 trace:TASK-824 trace:TASK-828 trace:TASK-831
+// trace:STORY-623 | ai:claude
 /// TASK-822 / 824 / 828 / 831: rewrite the `aida list <lens>` discoverability
 /// aliases into their canonical commands before clap parses, so the list family
 /// (`open` / `human` / `queue` / `why` / `advisor` / `inflight`) reads uniformly
 /// while each alias is a pure passthrough of the target command's flags. The
 /// target may be one token (`aida advisor`) or two (`aida queue list`). Unmatched
 /// input is returned unchanged. `args[0]` is the binary name.
-/// trace:TASK-822 trace:TASK-824 trace:TASK-828 trace:TASK-831
 /// STORY-623: rewrite `aida advisor assess [args]` → `aida assess [args]` before
 /// clap, so the advisor's draft-disposition verb is reachable under its seat
 /// while the implementation stays the single `assess` (aka `intake`) command.
-/// Unmatched input is returned unchanged. trace:STORY-623 | ai:claude
+/// Unmatched input is returned unchanged.
 fn rewrite_advisor_assess(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "advisor" && args[2] == "assess" {
         let mut out = Vec::with_capacity(args.len() - 1);
@@ -1320,8 +1322,8 @@ fn rewrite_queue_default_list(args: &[String]) -> Vec<String> {
     args.to_vec()
 }
 
+// trace:STORY-667 | ai:claude
 /// One `aida list <lens>` argv-rewrite row. See [`LIST_LENS_ALIASES`].
-/// trace:STORY-667 | ai:claude
 pub(crate) struct ListLensAlias {
     /// The positional lens token(s) that trigger this rewrite (first is canonical).
     pub tokens: &'static [&'static str],
@@ -1331,12 +1333,13 @@ pub(crate) struct ListLensAlias {
     pub meaning: &'static str,
 }
 
+// trace:STORY-667 | ai:claude
 /// The `aida list <lens>` argv-rewrite table — the SINGLE SOURCE OF TRUTH for
 /// the list-lens aliases. Each row maps the positional lens token(s) it accepts
 /// to the canonical command tokens it expands to, plus a one-line meaning for
 /// the `aida alias` registry. `rewrite_list_alias` resolves against this table
 /// and the `aida alias` registry enumerates it — so the surface and its catalog
-/// can't drift. trace:STORY-667 | ai:claude
+/// can't drift.
 pub(crate) const LIST_LENS_ALIASES: &[ListLensAlias] = &[
     ListLensAlias {
         tokens: &["queue"],
@@ -3330,18 +3333,18 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-278 trace:STORY-285 | ai:claude
+// trace:STORY-306 | ai:claude
 /// Handle `aida findings {list,dismiss,promote}` — the advisor's triage surface
 /// over findings the headless drain files as draft TASKs: review findings
 /// (`from-review:`, STORY-278) and implementer findings (`from-implementer:`,
 /// STORY-285). `list` is a read-only query; `dismiss`/`promote` are status
 /// flips guarded so they only act on real findings of either source.
-/// trace:STORY-278 trace:STORY-285 | ai:claude
 /// STORY-306: the morning-after audit block for `aida findings list` — read
 /// the punt ledger and summarise the headless advisor's decisions: how many
 /// design-forks it resolved vs escalated, and the escalated rows (a human
 /// still owns those). `None` when the advisor has decided nothing, so the
 /// section is omitted entirely rather than printing an empty header.
-/// trace:STORY-306 | ai:claude
 fn render_advisor_decisions_footer(project_root: &std::path::Path) -> Option<String> {
     let records = punt::read_ledger(project_root);
     // Advisor decisions only — a plain implementer punt has no `answered_by`.
@@ -4065,18 +4068,19 @@ impl QuestionSweepScope {
     }
 }
 
+// trace:STORY-555 | ai:claude
 /// What KIND of decision a swept candidate needs — which shape of
 /// DecisionRequest [`formulate_sweep_decision_request`] should attach.
-/// trace:STORY-555 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SweepKind {
     /// Under-specified / design-fork text: the proceed-as-written vs
     /// park-for-clarification question (the original slice-1 sweep shape).
     Clarify,
+    // trace:STORY-555 (R2)
     /// A spec held ONLY by a disposition parking tag, with no explicit
     /// question — synthesize an approve / reject / keep-parked disposition so
     /// the tag-park inbox converges on the decision inbox. Carries the gating
-    /// tag that triggered it. trace:STORY-555 (R2)
+    /// tag that triggered it.
     Disposition(String),
 }
 
@@ -4427,9 +4431,10 @@ fn record_answer(request: &mut aida_core::DecisionRequest, choice: &str) -> Resu
     Ok(idx)
 }
 
+// trace:STORY-522 | ai:claude
 /// Confirm the recommended default on a (pending) DecisionRequest. Returns
 /// the chosen index, or `None` when there is no default to confirm or the
-/// request is already answered. Pure (no I/O). trace:STORY-522 | ai:claude
+/// request is already answered. Pure (no I/O).
 fn confirm_default(request: &mut aida_core::DecisionRequest) -> Option<usize> {
     if !request.is_pending() {
         return None;
@@ -4451,12 +4456,13 @@ fn confirm_default(request: &mut aida_core::DecisionRequest) -> Option<usize> {
 // drain. trace:STORY-555 | ai:claude
 // ===================================================================
 
+// trace:STORY-555 | ai:claude
 /// The parking tags that mark a spec as held for a human DISPOSITION
 /// (approve / reject / keep-parked) rather than for an authored design answer.
 /// A deliberate SUBSET of [`burndown::parking_tag`]'s set — `needs-supervised-
 /// build`, `deferred:*`, and `review:draft-only` carry their own resolution
 /// path and are NOT a yes/no disposition, so the sweep does not synthesize a
-/// disposition for them. trace:STORY-555 | ai:claude
+/// disposition for them.
 const DISPOSITION_GATING_TAGS: &[&str] = &[
     "needs-design-signoff",
     "needs-design",
@@ -4464,14 +4470,16 @@ const DISPOSITION_GATING_TAGS: &[&str] = &[
     "operator-action",
 ];
 
+// trace:STORY-555
 /// The first disposition gating tag present on `tags` (case-insensitive),
-/// preserving the spec's own casing in the returned value. trace:STORY-555
+/// preserving the spec's own casing in the returned value.
 fn disposition_gating_tag(tags: &std::collections::HashSet<String>) -> Option<String> {
     tags.iter()
         .find(|t| DISPOSITION_GATING_TAGS.contains(&t.trim().to_ascii_lowercase().as_str()))
         .map(|t| t.trim().to_string())
 }
 
+// trace:TASK-884
 /// The effect of applying one answered choice's resolution token to a spec.
 /// `effects` are human-readable lines for the answer printout; `is_disposition`
 /// suppresses the R1(a) `## Acceptance` refinement (a disposition is a
@@ -4482,7 +4490,7 @@ fn disposition_gating_tag(tags: &std::collections::HashSet<String>) -> Option<St
 /// that should be written into `## Acceptance` — `noop`, an unrecognized token,
 /// or a no-op edit (empty tag, tag-not-present) mutate nothing and so must NOT
 /// claim to have bound a decision (else the printout contradicts itself:
-/// "no spec change (noop)" + "bound the decision into ## Acceptance"). trace:TASK-884
+/// "no spec change (noop)" + "bound the decision into ## Acceptance").
 // trace:STORY-555 | ai:claude
 struct ResolutionApplied {
     effects: Vec<String>,
@@ -4492,11 +4500,13 @@ struct ResolutionApplied {
     #[allow(dead_code)]
     is_disposition: bool,
     keeps_parked: bool,
+    // trace:TASK-884
     /// Whether this resolution made a real design refinement worth binding into
-    /// `## Acceptance`. trace:TASK-884
+    /// `## Acceptance`.
     binds_acceptance: bool,
 }
 
+// trace:STORY-555 | ai:claude
 /// Apply a DecisionChoice `resolution` token to `req` in place — the slice-2
 /// auto-applier `record_answer` deferred. The token grammar mirrors what
 /// `aida questions ask --choice label|consequence|<resolution>` and the sweep
@@ -4509,7 +4519,7 @@ struct ResolutionApplied {
 ///   * `disposition:keep-parked`       — record a why-open note, leave parked (R2)
 ///
 /// An unrecognized token is recorded-only (no mutation) so a typo never
-/// silently mangles a spec. trace:STORY-555 | ai:claude
+/// silently mangles a spec.
 fn apply_resolution_token(
     req: &mut Requirement,
     token: &str,
@@ -4673,8 +4683,9 @@ fn apply_resolution_token(
     }
 }
 
+// trace:STORY-555 | ai:claude
 /// Record a `why-open:` note (the keep-parked disposition's audit trail) as a
-/// comment on the spec. trace:STORY-555 | ai:claude
+/// comment on the spec.
 fn push_why_open(req: &mut Requirement, label: &str, consequence: &str) {
     let now = chrono::Utc::now();
     req.comments.push(Comment {
@@ -4692,10 +4703,11 @@ fn push_why_open(req: &mut Requirement, label: &str, consequence: &str) {
     });
 }
 
+// trace:STORY-555
 /// The `## Acceptance` refinement line that BINDS a chosen design decision into
 /// the spec (R1(a) — a decision recorded only as a comment does not bind the
 /// next implementer; an acceptance refinement does, per the
-/// refinements-must-be-acceptance-criteria discipline). trace:STORY-555
+/// refinements-must-be-acceptance-criteria discipline).
 fn resolved_acceptance_line(label: &str, consequence: &str) -> String {
     let date = chrono::Utc::now().format("%Y-%m-%d");
     format!(
@@ -4703,11 +4715,11 @@ fn resolved_acceptance_line(label: &str, consequence: &str) -> String {
     )
 }
 
+// trace:STORY-555 | ai:claude
 /// Append `line` to the spec body's `## Acceptance` section, creating the
 /// section if absent. Inserts after the section's last non-blank content line
 /// (before the next heading) so the refinement reads as the newest acceptance
 /// item rather than landing in the blank gap before the following section.
-/// trace:STORY-555 | ai:claude
 fn append_resolved_to_acceptance(description: &str, line: &str) -> String {
     let lines: Vec<&str> = description.lines().collect();
     let heading_idx = lines.iter().position(|l| {
@@ -4748,10 +4760,11 @@ fn append_resolved_to_acceptance(description: &str, line: &str) -> String {
     }
 }
 
+// trace:STORY-555 | ai:claude
 /// Re-run the burndown pickability gate against a spec AFTER its answer's
 /// resolution has been applied — the honest "is it actually Ready now, or what
 /// still holds it?" check (#2 round-trip + #4 honest partial-unpark). Pure over
-/// the passed store snapshot. trace:STORY-555 | ai:claude
+/// the passed store snapshot.
 fn evaluate_unpark(req: &Requirement, all: &[Requirement]) -> burndown::Pickability {
     let status_by_id: std::collections::HashMap<uuid::Uuid, RequirementStatus> =
         all.iter().map(|r| (r.id, r.status.clone())).collect();
@@ -4776,6 +4789,7 @@ fn evaluate_unpark(req: &Requirement, all: &[Requirement]) -> burndown::Pickabil
     burndown::classify(&candidate)
 }
 
+// trace:STORY-555 | ai:claude
 /// Apply a just-recorded answer's resolution and, when it fully unparks the
 /// spec, auto-queue it — the shared tail of every `aida questions answer` path
 /// (single, interactive loop, `--all-defaults`). This is STORY-555's core: the
@@ -4783,7 +4797,7 @@ fn evaluate_unpark(req: &Requirement, all: &[Requirement]) -> burndown::Pickabil
 /// decision into `## Acceptance` (R1), clears a disposition gate (R2), and
 /// hands the now-decision-free spec to the burndown ready set via the same
 /// advisor-gated enqueue path a groom uses (R3). `req` arrives with the answer
-/// already recorded on its DecisionRequest. trace:STORY-555 | ai:claude
+/// already recorded on its DecisionRequest.
 fn finalize_answer(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
@@ -4889,11 +4903,12 @@ fn finalize_answer(
     Ok(())
 }
 
+// trace:STORY-555 | ai:claude
 /// Queue a fully-unparked spec via the same advisor-gated enqueue path a groom
 /// uses (R3). Honors the advisor-authority gate (queueing IS the advisor
 /// sign-off, ADR-3 / TASK-647) and only queues Approved work (the burndown
 /// ready scope); reports honestly when it can't. Idempotent — skips a spec
-/// already queued. trace:STORY-555 | ai:claude
+/// already queued.
 fn maybe_autoqueue(store_path: &std::path::Path, req: &Requirement) -> Result<()> {
     if !matches!(req.status, RequirementStatus::Approved) {
         println!(
@@ -4964,9 +4979,10 @@ fn print_decision_request(display_id: &str, title: &str, request: &aida_core::De
     }
 }
 
+// trace:STORY-522 | ai:claude
 /// Load every requirement carrying a DecisionRequest, partitioned into
 /// (pending, answered). Reads full objects (the cache does not project the
-/// `decision_request` field, mirroring history). trace:STORY-522 | ai:claude
+/// `decision_request` field, mirroring history).
 fn collect_decision_requests(
     backend: &aida_core::CachedGitBackend,
 ) -> Result<(Vec<aida_core::Requirement>, Vec<aida_core::Requirement>)> {
@@ -5341,10 +5357,11 @@ fn handle_research_command(
     Ok(())
 }
 
+// trace:STORY-523 | ai:codex
 /// `aida questions sweep` - proactive producer for the async decision inbox.
 /// The cheap pre-filter is deterministic; only flagged candidates receive a
 /// formulated DecisionRequest, and specs with open requests are skipped for
-/// idempotency. trace:STORY-523 | ai:codex
+/// idempotency.
 fn questions_sweep(
     backend: &aida_core::CachedGitBackend,
     raw_scope: Option<&str>,
@@ -5465,9 +5482,10 @@ fn is_clarify_excluded(req: &Requirement) -> bool {
     false
 }
 
+// trace:STORY-557 | ai:claude
 /// Resolve the default clarify set: specs the sweep would flag as
 /// under-specified, minus the BUG-495 exclusions and any spec held by a live
-/// lease. Returns display IDs in stable order. trace:STORY-557 | ai:claude
+/// lease. Returns display IDs in stable order.
 fn clarify_default_specs(backend: &aida_core::CachedGitBackend) -> Result<Vec<String>> {
     let all = backend.list_requirements(false)?;
     let project_root = find_project_root().ok();
@@ -5726,8 +5744,9 @@ fn questions_ask(
     Ok(())
 }
 
+// trace:STORY-522 | ai:claude
 /// Record one answer on a spec's DecisionRequest (the non-interactive,
-/// agent-free data op). trace:STORY-522 | ai:claude
+/// agent-free data op).
 // trace:TASK-791 | ai:claude
 fn questions_answer_one(
     backend: &aida_core::CachedGitBackend,
@@ -5779,9 +5798,10 @@ enum DecisionPromptAction {
     Chat,
 }
 
+// trace:TASK-791 | ai:claude
 /// Render the decision prompt + read one operator action. Shared by the answer
 /// loop and the `aida decide` single-spec path so the option list and the two
-/// escapes stay identical. trace:TASK-791 | ai:claude
+/// escapes stay identical.
 fn prompt_decision_action(request: &aida_core::DecisionRequest) -> Result<DecisionPromptAction> {
     use std::io::Write;
     let prompt = match request.recommended {
@@ -5859,7 +5879,8 @@ fn prompt_decision_action(request: &aida_core::DecisionRequest) -> Result<Decisi
     Ok(DecisionPromptAction::Pick(entered.to_string()))
 }
 
-/// Print a prompt and read one trimmed line. trace:TASK-791 | ai:claude
+// trace:TASK-791 | ai:claude
+/// Print a prompt and read one trimmed line.
 fn read_line_prompt(prompt: &str) -> Result<String> {
     use std::io::Write;
     print!("{prompt}");
@@ -5869,9 +5890,10 @@ fn read_line_prompt(prompt: &str) -> Result<String> {
     Ok(input)
 }
 
+// trace:STORY-522 | ai:claude
 /// Interactive answer loop over every pending DecisionRequest. Reads a
 /// choice number (or `s`/`skip`, `t`=type a note, `c`=chat) from stdin per
-/// question. trace:STORY-522 | ai:claude
+/// question.
 // trace:TASK-791 | ai:claude
 fn questions_answer_loop(
     backend: &aida_core::CachedGitBackend,
@@ -5924,8 +5946,9 @@ fn questions_answer_loop(
     Ok(())
 }
 
+// trace:STORY-522 | ai:claude
 /// `aida questions answer --all-defaults` — confirm every recommended
-/// default in one shot. trace:STORY-522 | ai:claude
+/// default in one shot.
 fn questions_answer_all_defaults(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
@@ -6867,6 +6890,7 @@ fn detect_spec_id_from_filename(filename: &str) -> Option<String> {
         .map(|c| format!("{}-{}", c[1].to_uppercase(), &c[2]))
 }
 
+// trace:TASK-516 | ai:claude
 /// `aida import-plan <file> [--spec <SPEC>] [--request-review]` (TASK-516).
 ///
 /// Archives a saved plan markdown file under
@@ -6878,7 +6902,7 @@ fn detect_spec_id_from_filename(filename: &str) -> Option<String> {
 ///
 /// Minimal Phase-1 slice of TASK-516: no dedicated approve/revise/decline
 /// verbs and no `aida status` pane — the master clears the tag/edits the
-/// comment by hand. trace:TASK-516 | ai:claude
+/// comment by hand.
 fn handle_import_plan_command(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
@@ -7001,13 +7025,13 @@ fn handle_import_plan_command(
     Ok(())
 }
 
+// trace:STORY-360 | ai:claude
 /// `aida advisor` — manage the live-advisor registration the
 /// `--no-human=both` orchestrator reads (STORY-360). Three actions:
 ///   - `register` writes the current session's UUID + project slug to
 ///     `~/.aida/advisor.toml`. Auto-detects from `CLAUDE_CODE_SESSION_ID`.
 ///   - `unregister` clears the file.
 ///   - `status` prints what's registered and an estimated $/fork.
-///     trace:STORY-360 | ai:claude
 fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
     match cmd {
         AdvisorCommand::Register { uuid, project_slug } => {
@@ -7248,10 +7272,10 @@ mod story_363_handoff_tests {
     }
 }
 
+// trace:STORY-262 | ai:claude
 /// STORY-262: `aida advisor schedule <add|list|enable|disable|remove|run>`.
 /// The no-daemon scheduling primitive — recurring task templates with a
 /// cadence, fired into the queue on `aida pull`.
-/// trace:STORY-262 | ai:claude
 fn handle_schedule_command(
     cmd: &ScheduleCommand,
     project_root: &std::path::Path,
@@ -7376,7 +7400,8 @@ fn handle_schedule_command(
     }
 }
 
-/// STORY-262 helper: flip a schedule's `enabled` flag. trace:STORY-262 | ai:claude
+// trace:STORY-262 | ai:claude
+/// STORY-262 helper: flip a schedule's `enabled` flag.
 fn set_schedule_enabled(project_root: &std::path::Path, name: &str, enabled: bool) -> Result<()> {
     let mut file = schedule::load(project_root);
     let s = file
@@ -7398,6 +7423,7 @@ fn set_schedule_enabled(project_root: &std::path::Path, name: &str, enabled: boo
     Ok(())
 }
 
+// trace:STORY-262 | ai:claude
 /// STORY-262: evaluate schedules and fire the due ones (the logic `aida pull`
 /// invokes, and `aida advisor schedule run` too). Returns the names of
 /// schedules that actually filed a TASK.
@@ -7409,7 +7435,6 @@ fn set_schedule_enabled(project_root: &std::path::Path, name: &str, enabled: boo
 ///
 /// Skip rule (acceptance): if a schedule already has an open (non-terminal)
 /// TASK from a prior fire, SKIP and surface a note rather than piling up.
-/// trace:STORY-262 | ai:claude
 fn fire_schedules(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
@@ -7505,11 +7530,11 @@ fn fire_schedules(
     Ok(fired)
 }
 
+// trace:STORY-262 | ai:claude
 /// STORY-262: file one TASK from a schedule template into the target role's
 /// queue. Returns the new spec id (or the UUID if no spec id was assigned).
 /// Tags the TASK `scheduled:<name>` + `batch:scheduled` so it's traceable and
 /// drainable via `aida queue work --batch scheduled --auto-complete`.
-/// trace:STORY-262 | ai:claude
 fn file_task_for_schedule(storage: &Storage, s: &schedule::Schedule) -> Result<String> {
     let mut store = storage.load()?;
 
@@ -7618,10 +7643,11 @@ fn handle_advisor_register(uuid: Option<&str>, project_slug: Option<&str>) -> Re
     Ok(())
 }
 
+// trace:STORY-559 | ai:claude
 /// STORY-559: the narrow live-advisor registration block — the pre-dashboard
 /// `aida advisor status` output, now reachable via `--registration` (and the
 /// dashboard's "Live advisor" section). Reads only `~/.aida/advisor.toml` +
-/// `.aida/config.toml [advisor]`; no requirement store. trace:STORY-559 | ai:claude
+/// `.aida/config.toml [advisor]`; no requirement store.
 fn handle_advisor_registration_status(json: bool) -> Result<()> {
     let reg = advisor::read_registration();
     let cfg_root = find_project_root().ok();
@@ -8046,11 +8072,11 @@ fn locate_for_status(reg: &advisor::AdvisorRegistration) -> Option<advisor::Live
     })
 }
 
+// trace:STORY-332 | ai:claude
 /// `aida punt` — pause a spec in `NeedsAttention` with a structured reason
 /// instead of guessing past a design-fork (STORY-332). The transition is
 /// enforced (`InProgress → NeedsAttention` only); a punt record is appended
 /// to the ledger; control returns immediately so an orchestrator advances.
-/// trace:STORY-332 | ai:claude
 fn handle_punt_command(
     id: &str,
     category: &str,
@@ -8177,16 +8203,18 @@ fn handle_punt_command(
     Ok(())
 }
 
+// trace:STORY-441 | ai:claude
+// trace:BUG-492 | ai:claude
 /// STORY-441: `aida archive <ID>` and `aida archive --older-than <DUR>`.
 /// Single-id form mutates one spec; bulk form sweeps every spec whose
 /// status is in `status` (default `completed,rejected`) and whose
 /// `modified_at` is older than the cutoff. `--dry-run` prints the plan
-/// and exits. trace:STORY-441 | ai:claude
+/// and exits.
 /// BUG-492: the single-spec archive guard decision, factored out as a pure
 /// function so the "non-terminal / queued / forced" matrix is unit-testable
 /// without touching the store or a TTY. `Allow` archives silently;
 /// `Confirm` carries the warning reason and demands an interactive y/N (or
-/// `--force`). trace:BUG-492 | ai:claude
+/// `--force`).
 #[derive(Debug, PartialEq, Eq)]
 enum ArchiveGuard {
     Allow,
@@ -8246,13 +8274,14 @@ fn handle_archive_command(
     }
 }
 
+// trace:BUG-492 | ai:claude
 /// BUG-492: archive is for the closed long-tail (Completed/Rejected). A
 /// non-terminal spec — and especially a QUEUED one — being archived is the
 /// active-work footgun that silently swept 128 Approved specs (incl. 4
 /// queued items) in the Session-63 reset. The single-id path now refuses a
 /// non-terminal archive without `--force` (or an interactive confirm), warns
 /// louder + dequeues when the spec is in the queue, and `queue list` flags
-/// any archived member. trace:BUG-492 | ai:claude
+/// any archived member.
 fn archive_single(
     id: &str,
     force: bool,
@@ -8500,7 +8529,7 @@ fn archive_sweep(
     Ok(())
 }
 
-/// trace:STORY-441 | ai:claude
+// trace:STORY-441 | ai:claude
 fn handle_unarchive_command(
     id: &str,
     backend: &aida_core::CachedGitBackend,
@@ -8526,13 +8555,14 @@ fn handle_unarchive_command(
     Ok(())
 }
 
+// trace:STORY-584 | ai:claude
 /// `aida defer <SPEC> [--until "<condition>"]` — park a spec as primed /
 /// conditional work, hidden from the default open-work view. Mirrors
 /// `archive_single` but sets the parallel defer view-flag and records the
 /// free-text revisit trigger that distinguishes deferred (prospective) from
 /// archived (filed). Defer does NOT touch the lifecycle state machine and
 /// deliberately carries no terminal-status guard — the whole point is to shelf
-/// live, open backlog. trace:STORY-584 | ai:claude
+/// live, open backlog.
 fn defer_single(
     id: &str,
     until: Option<&str>,
@@ -8578,9 +8608,9 @@ fn defer_single(
     Ok(())
 }
 
+// trace:STORY-584 | ai:claude
 /// Inverse of `aida defer` — clears the deferred flag + revisit trigger so the
 /// spec reappears in the default views. Mirrors `handle_unarchive_command`.
-/// trace:STORY-584 | ai:claude
 fn handle_undefer_command(
     id: &str,
     backend: &aida_core::CachedGitBackend,
@@ -8616,12 +8646,12 @@ fn handle_undefer_command(
     Ok(())
 }
 
+// trace:STORY-644 | ai:claude
 /// Send a best-effort notification message into `recipient`'s mailbox (the
 /// fast local layer; STORY-643 auto-sync propagates it to other clones on the
 /// next pull/push). Reuses the existing message-send path — no new notification
 /// system. Failures are swallowed with a dimmed warning so a mailbox problem
 /// never breaks the verb that triggered the notice (assign / comment).
-/// trace:STORY-644 | ai:claude
 fn send_notification(store_path: &std::path::Path, sender: &str, recipient: &str, body: String) {
     use aida_core::mailbox::{Intent, Message, Recipient};
     let project_root = match store_path.parent() {
@@ -8650,12 +8680,13 @@ fn send_notification(store_path: &std::path::Path, sender: &str, recipient: &str
     }
 }
 
+// trace:STORY-644 | ai:claude
 /// Extract distinct `@mention` handles from free text (STORY-644). Conservative
 /// word-boundary parse: a `@` that is NOT preceded by a word char (so `foo@bar`
 /// email locals and `a@b` are ignored) followed by `[A-Za-z0-9_.-]+`. The
 /// trailing run is trimmed of `.` and `-` so sentence punctuation (`@bob.`) and
 /// hyphen-tails don't leak into the handle. Returns handles in first-seen order,
-/// deduped. trace:STORY-644 | ai:claude
+/// deduped.
 fn extract_mentions(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
     let mut out: Vec<String> = Vec::new();
@@ -8692,8 +8723,9 @@ fn extract_mentions(text: &str) -> Vec<String> {
     out
 }
 
+// trace:STORY-644 | ai:claude
 /// One-line snippet of `text` for a mention notice: collapsed whitespace,
-/// truncated to `max` chars with an ellipsis. trace:STORY-644 | ai:claude
+/// truncated to `max` chars with an ellipsis.
 fn mention_snippet(text: &str, max: usize) -> String {
     let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut chars = collapsed.chars();
@@ -8705,6 +8737,7 @@ fn mention_snippet(text: &str, max: usize) -> String {
     }
 }
 
+// trace:STORY-639 | ai:claude
 /// `aida assign <SPEC> --to <user>` — set the durable assignee on a spec and
 /// route it into that user's work queue so it surfaces in their
 /// `aida queue list`. Idempotent: re-assigning to the same user is a no-op on
@@ -8712,7 +8745,7 @@ fn mention_snippet(text: &str, max: usize) -> String {
 ///
 /// Assignment is distinct from `owner` (the creator/author): owner records who
 /// filed the spec and drives contributions analytics; assignee is mutable
-/// work-division metadata. trace:STORY-639 | ai:claude
+/// work-division metadata.
 fn handle_assign_command(
     id: &str,
     to: &str,
@@ -8792,10 +8825,10 @@ fn handle_assign_command(
     Ok(())
 }
 
+// trace:STORY-639 | ai:claude
 /// `aida unassign <SPEC>` — clear the assignee. By default the spec stays in
 /// the (former) assignee's queue, since the queue is the now-doing list rather
 /// than the assignment of record; `--from-queue` also removes it.
-/// trace:STORY-639 | ai:claude
 fn handle_unassign_command(
     id: &str,
     from_queue: bool,
@@ -8838,12 +8871,13 @@ fn handle_unassign_command(
     Ok(())
 }
 
+// trace:TASK-727 | ai:claude
 /// `aida done <SPEC>` — the newcomer's "I finished it" verb. Marks a spec
 /// Completed, the solo end of the capture → build → done loop. Found running a
 /// novice's first session: there was no `aida done`, and `aida edit --status
 /// completed` is jargon (and authority-gated off a TTY). A human at a terminal
 /// IS the authority (TTY satisfies the advisor gate), so for a solo user this
-/// just works. trace:TASK-727 | ai:claude
+/// just works.
 fn handle_done_command(
     id: &str,
     backend: &aida_core::CachedGitBackend,
@@ -8933,13 +8967,13 @@ fn maybe_print_whats_left_tip(status_filter: Option<&str>, reqs: &[aida_core::Re
     }
 }
 
+// trace:STORY-584 | ai:claude
 /// STORY-584 (criterion 4): in the `--deferred` view, print each spec's revisit
 /// trigger so the operator can scan "what is primed, and what brings each back."
 /// The trigger comes from the `deferred_until` field when set; for rows deferred
 /// only via a legacy `deferred:*` parking tag, fall back to the tag's suffix
 /// (e.g. `deferred:stabilization-first` → "stabilization-first"). Prints nothing
 /// outside the deferred view or when no rows carry a discoverable trigger.
-/// trace:STORY-584 | ai:claude
 fn print_deferred_triggers(deferred_view: bool, reqs: &[aida_core::RequirementSummary]) {
     if !deferred_view || reqs.is_empty() {
         return;
@@ -9282,6 +9316,7 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-439 | ai:claude
 /// STORY-439: `aida autonomy calibration mismatches` — the substrate-gap
 /// signal. Walks `.aida/complexity-calibration/*.yaml`, drops records
 /// missing a pickup-or-review half, and surfaces the rest ranked by
@@ -9289,7 +9324,6 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
 /// view IS the calibration view this STORY adds; the broader autonomy
 /// report (TASK-340) gains `--by` / `--calibration` slices in a
 /// follow-up that hangs off this same parent enum.
-/// trace:STORY-439 | ai:claude
 fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
     match cmd {
         AutonomyCommand::Calibration(sub) => match sub {
@@ -9457,6 +9491,7 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
         }
     }
 }
+// trace:BUG-231 | ai:claude
 /// Add a promoted finding to a role's work queue.
 ///
 /// Findings are follow-ups that usually need an implementer, so the default
@@ -9469,7 +9504,6 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
 /// marked Approved — BUG-231 was a silent "Approved but in no queue"
 /// half-state because the old promote path flipped status and printed
 /// "joins the work queue" without ever calling `queue add`.
-/// trace:BUG-231 | ai:claude
 fn queue_promoted_finding(
     store_path: &std::path::Path,
     requirement_id: Uuid,
@@ -9505,10 +9539,10 @@ fn queue_promoted_finding(
 }
 
 // trace:TASK-0001 | ai:claude:high
+// trace:EPIC-1-001 | ai:claude
 /// Count requirements in a git-canonical store at `store_path`. Returns
 /// None if the store doesn't exist or can't be opened — caller treats that
 /// as "no data to lose, proceed".
-/// trace:EPIC-1-001 | ai:claude
 fn count_requirements_in_store(store_path: &std::path::Path) -> Option<usize> {
     if !store_path.is_dir() {
         return None;
@@ -9525,11 +9559,11 @@ fn count_requirements_in_sqlite(db_path: &std::path::Path) -> Result<usize> {
     Ok(storage.load()?.requirements.len())
 }
 
+// trace:EPIC-1-001 | ai:claude
 /// Surface the data-loss risk of `aida init --force` on a populated store.
 /// Returns true if the user confirmed (typed "reset"), false otherwise.
 /// Bails the parent caller via Ok if the user cancels — caller pattern is
 /// `if !confirm_destructive_reset(...)? { return Ok(()); }`.
-/// trace:EPIC-1-001 | ai:claude
 fn confirm_destructive_reset(count: usize, store_path: &std::path::Path) -> Result<bool> {
     eprintln!();
     eprintln!(
@@ -9641,9 +9675,10 @@ fn handle_init_command(
     )
 }
 
+// trace:TASK-92
 /// Write `docs/plans/_TEMPLATE.md` from the embedded `plan-template.md`
 /// template. Idempotent: skips when the file already exists unless `force`
-/// is set. trace:TASK-92
+/// is set.
 fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Result<()> {
     let dest = plans_dir.join("_TEMPLATE.md");
     if dest.exists() && !force {
@@ -9655,6 +9690,7 @@ fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Re
     Ok(())
 }
 
+// trace:STORY-255 | STORY-443 | ai:claude
 /// Scaffold the discipline pack — every embedded `docs/aida/discipline/*`
 /// template — into `<root>/docs/aida/discipline/`. Idempotent: an existing
 /// file is left alone unless `force` is set. Returns the count written.
@@ -9662,7 +9698,6 @@ fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Re
 /// The destination is pinned to `docs/aida/discipline/` (not `docs/aida/`
 /// flat) so the pack coexists with `aida docs build`'s graph projection
 /// at `docs/aida/{README,00-*,...}` without colliding on README.md.
-/// trace:STORY-255 | STORY-443 | ai:claude
 fn ensure_discipline_pack_scaffold(root: &std::path::Path, force: bool) -> Result<usize> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
     let mut pack: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
@@ -9716,9 +9751,10 @@ fn ensure_ecosystem_watch_scaffold(root: &std::path::Path, force: bool) -> Resul
     Ok(true)
 }
 
+// trace:STORY-255 | ai:claude
 /// FNV-1a 64-bit hash, lowercase hex. Used as the starter memory pack's
 /// "edited since scaffold?" fingerprint — deterministic across releases and
-/// platforms, no dependency. trace:STORY-255 | ai:claude
+/// platforms, no dependency.
 fn fnv1a_hex(data: &[u8]) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for &b in data {
@@ -9728,12 +9764,12 @@ fn fnv1a_hex(data: &[u8]) -> String {
     format!("{h:016x}")
 }
 
+// trace:BUG-244 | ai:claude
 /// Normalize Windows (`\r\n`) and classic-Mac (`\r`) line endings to `\n`
 /// so the frontmatter parser is line-ending-agnostic. Git on Windows with
 /// `autocrlf` checks the embedded memory templates out as CRLF, which
 /// `build.rs` then embeds verbatim — without this the `---\n` frontmatter
 /// fence never matches and the template is reported malformed.
-/// trace:BUG-244 | ai:claude
 pub(crate) fn normalize_line_endings(s: &str) -> String {
     s.replace("\r\n", "\n").replace('\r', "\n")
 }
@@ -9747,9 +9783,10 @@ pub(crate) fn split_md_frontmatter(content: &str) -> Option<(&str, &str)> {
     Some((&rest[..end], &rest[end + 5..]))
 }
 
+// trace:STORY-255 | ai:claude
 /// Read a top-level scalar frontmatter field. Indented (nested) keys are
 /// ignored on purpose — `originSessionId` must be a top-level key for the
-/// refresh check to see it. trace:STORY-255 | ai:claude
+/// refresh check to see it.
 pub(crate) fn frontmatter_field<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
     let prefix = format!("{key}: ");
     frontmatter
@@ -9758,11 +9795,11 @@ pub(crate) fn frontmatter_field<'a>(frontmatter: &'a str, key: &str) -> Option<&
         .map(str::trim)
 }
 
+// trace:STORY-255 | ai:claude
 /// Build the on-disk form of a starter memory from its embedded template:
 /// stamp `originSessionId: aida-scaffold` and a `scaffoldChecksum` (an
 /// FNV-1a fingerprint of the body) into the frontmatter, so a later
 /// `--refresh` can tell a pristine pack file from a user-edited one.
-/// trace:STORY-255 | ai:claude
 fn build_scaffolded_memory(template: &str) -> Option<String> {
     let template = normalize_line_endings(template);
     let (fm, body) = split_md_frontmatter(&template)?;
@@ -9781,8 +9818,9 @@ fn build_scaffolded_memory(template: &str) -> Option<String> {
     Some(format!("---\n{new_fm}---\n{body}\n"))
 }
 
+// trace:STORY-255 | ai:claude
 /// What `aida init --with-memories --refresh` should do with an existing
-/// memory file. trace:STORY-255 | ai:claude
+/// memory file.
 #[derive(Debug, PartialEq, Eq)]
 enum MemoryDisposition {
     /// Not a scaffolded pack file (no `originSessionId: aida-scaffold`) —
@@ -9812,9 +9850,9 @@ fn memory_refresh_disposition(existing: &str) -> MemoryDisposition {
     }
 }
 
+// trace:STORY-255 | ai:claude
 /// Regenerate the `aida:scaffold-pack` block in the memory dir's MEMORY.md
 /// index. Content outside the markers is the user's and is preserved.
-/// trace:STORY-255 | ai:claude
 fn update_memory_index(mem_dir: &std::path::Path, files: &[(&str, &str)]) -> Result<()> {
     const START: &str = "<!-- aida:scaffold-pack:start -->";
     const END: &str = "<!-- aida:scaffold-pack:end -->";
@@ -9866,8 +9904,8 @@ fn update_memory_index(mem_dir: &std::path::Path, files: &[(&str, &str)]) -> Res
     Ok(())
 }
 
+// trace:STORY-255 | ai:claude
 /// Per-disposition counts from a starter-memory-pack scaffold/refresh run.
-/// trace:STORY-255 | ai:claude
 #[derive(Debug, Default, PartialEq, Eq)]
 struct MemoryPackReport {
     /// Files that did not exist and were freshly written.
@@ -9883,11 +9921,12 @@ struct MemoryPackReport {
     kept_user: usize,
 }
 
+// trace:STORY-362 | ai:claude
 /// Decide whether a memory template loads under an active `--focus`
 /// subsystem. A memory with no top-level `subsystem:` frontmatter key is
 /// **universal** and always loads. A tagged memory loads only when its
 /// `subsystem:` value matches `focus` (case-insensitive). When `focus` is
-/// `None` the full pack loads (every member passes). trace:STORY-362 | ai:claude
+/// `None` the full pack loads (every member passes).
 fn memory_matches_focus(template: &str, focus: Option<&str>) -> bool {
     let Some(focus) = focus else {
         return true; // no focus → full pack
@@ -9902,6 +9941,7 @@ fn memory_matches_focus(template: &str, focus: Option<&str>) -> bool {
     }
 }
 
+// trace:STORY-255 | ai:claude
 /// Write (or `--refresh`) the starter memory pack into `mem_dir`. Every
 /// embedded `memories/*` template except the MEMORY.md skeleton is a pack
 /// member; MEMORY.md's `aida:scaffold-pack` index block is regenerated.
@@ -9911,7 +9951,6 @@ fn memory_matches_focus(template: &str, focus: Option<&str>) -> bool {
 /// `focus` scopes the pack to a subsystem (STORY-362): when `Some`, only
 /// universal (untagged) memories plus those whose `subsystem:` frontmatter
 /// matches are written/indexed; `None` writes the full pack.
-/// trace:STORY-255 | ai:claude
 fn scaffold_memory_pack_into(
     mem_dir: &std::path::Path,
     refresh: bool,
@@ -9982,10 +10021,10 @@ fn scaffold_memory_pack_into(
     Ok(report)
 }
 
+// trace:STORY-255 | ai:claude
 /// Write (or `--refresh`) the starter memory pack into the Claude Code
 /// project memory dir for the current working directory. `focus` scopes the
 /// pack to a subsystem (STORY-362); `None` writes the full pack.
-/// trace:STORY-255 | ai:claude
 fn scaffold_memory_pack(refresh: bool, focus: Option<&str>) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let home =
@@ -10043,8 +10082,8 @@ fn scaffold_memory_pack(refresh: bool, focus: Option<&str>) -> Result<()> {
 // trace:STORY-410 | ai:claude
 // ──────────────────────────────────────────────────────────────────────────
 
+// trace:STORY-410 | ai:claude
 /// One pack member's relationship to the binary's embedded master.
-/// trace:STORY-410 | ai:claude
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum MemoryDriftState {
     /// The master ships this memory; the local dir doesn't have it.
@@ -10063,8 +10102,8 @@ enum MemoryDriftState {
     UserOwned,
 }
 
+// trace:STORY-410 | ai:claude
 /// One row of `aida memories check` output.
-/// trace:STORY-410 | ai:claude
 #[derive(Debug)]
 struct MemoryDriftRow {
     /// Pack-member filename (e.g. `feedback_advocate_not_be_passive.md`).
@@ -10076,9 +10115,9 @@ struct MemoryDriftRow {
     state: MemoryDriftState,
 }
 
+// trace:STORY-410 | ai:claude
 /// The full drift report: every embedded pack member classified against the
 /// local memory dir. Pure data — printing lives in `print_memory_drift`.
-/// trace:STORY-410 | ai:claude
 #[derive(Debug, Default)]
 struct MemoryDriftReport {
     rows: Vec<MemoryDriftRow>,
@@ -10122,11 +10161,11 @@ fn master_memory_meta(template: &str) -> (String, String) {
     (label, desc)
 }
 
+// trace:STORY-410 | ai:claude
 /// Classify every embedded scaffolding-pack memory against an on-disk memory
 /// dir. The pure core of `aida memories check` — takes the dir directly so it
 /// is testable without touching the real `$HOME`. Mirrors the marker-driven
 /// selection in `scaffold_memory_pack_into` so the two surfaces never diverge.
-/// trace:STORY-410 | ai:claude
 fn compute_memory_drift_into(mem_dir: &std::path::Path) -> Result<MemoryDriftReport> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
 
@@ -10196,10 +10235,11 @@ fn project_memory_dir() -> Result<std::path::PathBuf> {
         .join("memory"))
 }
 
+// trace:STORY-410 | ai:claude
 /// `aida memories check`: compare the local memory pack against the binary's
 /// embedded master and report drift. Reads only — never writes. The
 /// recommendation (`aida init --with-memories --refresh`) is exact and
-/// paste-ready. trace:STORY-410 | ai:claude
+/// paste-ready.
 fn handle_memories_check(verbose: bool, json: bool) -> Result<()> {
     let mem_dir = project_memory_dir()?;
     let report = compute_memory_drift_into(&mem_dir)?;
@@ -10243,9 +10283,9 @@ fn handle_memories_check(verbose: bool, json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-410 | ai:claude
 /// Render the human-readable `aida memories check` report. Default mode caps
 /// each category at 5 entries; `--verbose` lists them all.
-/// trace:STORY-410 | ai:claude
 fn print_memory_drift(mem_dir: &std::path::Path, report: &MemoryDriftReport, verbose: bool) {
     let max = if verbose { usize::MAX } else { 5 };
 
@@ -10337,7 +10377,8 @@ fn print_memory_drift(mem_dir: &std::path::Path, report: &MemoryDriftReport, ver
     }
 }
 
-/// The exact, paste-ready refresh command. trace:STORY-410 | ai:claude
+// trace:STORY-410 | ai:claude
+/// The exact, paste-ready refresh command.
 fn print_memory_drift_recommendation() {
     println!();
     println!(
@@ -10347,12 +10388,13 @@ fn print_memory_drift_recommendation() {
     println!();
 }
 
+// trace:STORY-410 | ai:claude
 /// STORY-410 Phase 2: the `aida status` one-liner. Silent unless a local
 /// memory pack exists AND is behind the binary's master — so a project that
 /// never opted into `--with-memories` is never nagged, and a current pack
 /// stays quiet (the line appearing is itself the signal). Best-effort: any
 /// error (no $HOME, no embedded pack) degrades to silence rather than
-/// breaking the status surface. trace:STORY-410 | ai:claude
+/// breaking the status surface.
 fn print_status_memory_drift_section() {
     let Ok(mem_dir) = project_memory_dir() else {
         return;
@@ -10384,6 +10426,8 @@ fn print_status_memory_drift_section() {
     println!();
 }
 
+// trace:EPIC-21 | ai:claude
+// trace:BUG-73 trace:TASK-877 | ai:claude
 /// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
 /// new entry was written (so callers can echo "updated .gitignore"); `false`
 /// if everything was already covered or the file had to be created from
@@ -10392,12 +10436,12 @@ fn print_status_memory_drift_section() {
 /// Writes two blocks:
 /// - `<worktree_dir>/` (+ bare symlink form) — the orphan-branch worktree
 ///   (`.aida-store/` by default). Bare-name pattern needed because session
-///   worktrees link to the canonical store. trace:EPIC-21 | ai:claude
+///   worktrees link to the canonical store.
 /// - `.aida/*` deny-by-default + `!.aida/config.toml` + `!.aida/aliases.toml`
 ///   allow-list — covers every per-clone runtime file under `.aida/` (sessions,
 ///   roles, cache, session-env, server data, review prompts, future runtime
 ///   additions) without per-file whack-a-mole, while keeping team-shareable
-///   project config tracked. trace:BUG-73 trace:TASK-877 | ai:claude
+///   project config tracked.
 ///
 /// Migration: when invoked against a `.gitignore` from an older AIDA scaffold
 /// (which listed each runtime path individually), the deny block is appended.
@@ -10549,12 +10593,14 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
     Ok(wrote)
 }
 
+// trace:BUG-73 | ai:claude
 /// Detect whether the deny-by-default `.aida/*` line is present (ignoring
-/// comments and surrounding whitespace). trace:BUG-73 | ai:claude
+/// comments and surrounding whitespace).
 fn has_aida_runtime_deny_pattern(content: &str) -> bool {
     content.lines().any(|line| line.trim() == ".aida/*")
 }
 
+// trace:TASK-631 | ai:claude
 /// The canonical set of top-level paths `aida init` writes as scaffolding.
 /// This is the ALLOW-LIST for the init self-commit (TASK-631) — the commit
 /// stages exactly these and NEVER a bare `git add .`, so an `aida init` run
@@ -10565,7 +10611,6 @@ fn has_aida_runtime_deny_pattern(content: &str) -> bool {
 /// separate orphan branch with its own commits), `.aida/cache.db` and other
 /// runtime state (gitignored by the deny-by-default `.aida/*` rule). Only
 /// `.aida/config.toml` is the tracked exception under `.aida/`.
-/// trace:TASK-631 | ai:claude
 fn init_scaffold_candidate_paths() -> &'static [&'static str] {
     &[
         ".gitignore",
@@ -10585,10 +10630,11 @@ fn init_scaffold_candidate_paths() -> &'static [&'static str] {
     ]
 }
 
+// trace:TASK-631 | ai:claude
 /// Filter [`init_scaffold_candidate_paths`] to the ones that actually exist
 /// on disk under `root`. Pure (modulo filesystem reads) so it can be unit
 /// tested against a temp dir. Returns paths relative to `root`, suitable for
-/// passing straight to `git add`. trace:TASK-631 | ai:claude
+/// passing straight to `git add`.
 fn init_scaffold_commit_paths(root: &std::path::Path) -> Vec<String> {
     init_scaffold_candidate_paths()
         .iter()
@@ -10597,6 +10643,7 @@ fn init_scaffold_commit_paths(root: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
+// trace:TASK-631 | ai:claude
 /// Decide whether init should auto-commit its scaffolding (`Some(true)`),
 /// never commit (`Some(false)`), or prompt the operator (`None`). Pure so the
 /// auto-vs-prompt branch is unit-testable without a real TTY.
@@ -10606,7 +10653,7 @@ fn init_scaffold_commit_paths(root: &std::path::Path) -> Vec<String> {
 /// `None` so the caller prompts (default-Y) and an operator with unrelated
 /// WIP can decline. An explicit `AIDA_INIT_COMMIT_SCAFFOLD` env override wins
 /// over the TTY heuristic in both directions (`1`/`true`/`yes`/`on` → auto,
-/// `0`/`false`/`no`/`off` → never). trace:TASK-631 | ai:claude
+/// `0`/`false`/`no`/`off` → never).
 fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -> Option<bool> {
     if let Some(raw) = env_override {
         match raw.trim().to_ascii_lowercase().as_str() {
@@ -10624,6 +10671,7 @@ fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -
     }
 }
 
+// trace:BUG-565 | ai:claude
 /// BUG-565: split scaffold paths into `(to_stage, ignored)` by asking git which
 /// of them the repo's `.gitignore` covers — `git check-ignore <paths...>` prints
 /// exactly the ignored subset (exit 0 = some matched, 1 = none matched, 128 =
@@ -10632,7 +10680,7 @@ fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -
 /// drop the paths `git add` would actually refuse (untracked + ignored). On any
 /// spawn/other error we fail OPEN (treat nothing as ignored) so a check failure
 /// never silently drops scaffolding — the subsequent stage will surface it.
-/// Order within each bucket follows the input. trace:BUG-565 | ai:claude
+/// Order within each bucket follows the input.
 fn partition_scaffold_paths_by_gitignore(
     root: &std::path::Path,
     paths: &[String],
@@ -10667,6 +10715,7 @@ fn partition_scaffold_paths_by_gitignore(
     (to_stage, skipped)
 }
 
+// trace:TASK-631 | ai:claude
 /// After scaffolding is on disk, commit init's OWN created paths so a fresh
 /// clone / session worktree inherits the scaffolding without the operator
 /// having to remember the manual `git add . && git commit` step (BUG-445,
@@ -10676,7 +10725,7 @@ fn partition_scaffold_paths_by_gitignore(
 /// Scoped to [`init_scaffold_commit_paths`] — never `git add .`. Returns
 /// `Ok(true)` when a commit was made (so the caller can dedup the onboarding
 /// "commit scaffolding" task), `Ok(false)` otherwise. Best-effort: a git
-/// failure here is a soft note, not a fatal init error. trace:TASK-631 | ai:claude
+/// failure here is a soft note, not a fatal init error.
 fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
     use aida_core::git_ops;
 
@@ -10783,10 +10832,10 @@ fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
     }
 }
 
+// trace:EPIC-1-001 | ai:claude
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
 /// commands, hooks, MCP integration, etc. Called by both centralized and
 /// distributed init paths after their respective storage setup is complete.
-/// trace:EPIC-1-001 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn complete_init_scaffolding(
     root: &std::path::Path,
@@ -11453,6 +11502,7 @@ mod task_510_init_scaffold_task_tests {
         );
     }
 
+    // trace:BUG-445 | ai:claude
     /// BUG-445: the durable guardrail. The seeded scaffolding-commit task
     /// must be flagged `human_only` so `aida queue work` never worktree-
     /// isolates it. A worktree branched off the initial commit lacks the
@@ -11468,7 +11518,7 @@ mod task_510_init_scaffold_task_tests {
     /// git-backend YAML round-trip preserves it, per
     /// `RequirementsStore`/`models.rs`), so testing through `Storage::load`
     /// on a `.db` path would assert the cache's lossiness rather than the
-    /// seeding decision. trace:BUG-445 | ai:claude
+    /// seeding decision.
     #[test]
     fn scaffold_task_is_primary_worktree_only_and_not_pickable() {
         use aida_core::pickability::{pickability, BlockedReason, Pickability};
@@ -11496,11 +11546,11 @@ mod task_510_init_scaffold_task_tests {
         );
     }
 
+    // trace:BUG-445 | ai:claude
     /// BUG-445 guard (c): the seeded task instruction must never emit a bare
     /// `git add .` — it stages only AIDA's own paths, with `.gitignore`
     /// listed first so deny-by-default rules apply. Asserts on the persisted
     /// description (which the cache DOES round-trip, unlike `human_only`).
-    /// trace:BUG-445 | ai:claude
     #[test]
     fn scaffold_task_instruction_never_bare_git_add_dot() {
         let tmp = TempDir::new().unwrap();
@@ -11632,10 +11682,11 @@ mod task_631_init_self_commit_tests {
         );
     }
 
+    // trace:BUG-565 | ai:claude
     /// BUG-565: the resilient-staging partition must drop the gitignored path
     /// and keep the rest — never abort the whole batch on one ignored path.
     /// `.claude` is the canonical local-only gitignore entry that used to
-    /// strand the onboarding commit. trace:BUG-565 | ai:claude
+    /// strand the onboarding commit.
     #[test]
     fn partition_drops_gitignored_paths_keeps_remainder() {
         let tmp = TempDir::new().unwrap();
@@ -11664,10 +11715,10 @@ mod task_631_init_self_commit_tests {
         );
     }
 
+    // trace:BUG-565 | ai:claude
     /// BUG-565 end-to-end: a scaffold set containing one gitignored path must
     /// still COMMIT the non-ignored remainder (init no longer aborts the whole
     /// commit on one ignored path) and must NOT commit the ignored path.
-    /// trace:BUG-565 | ai:claude
     #[test]
     fn commit_scaffolding_commits_remainder_when_one_path_is_gitignored() {
         let tmp = TempDir::new().unwrap();
@@ -11715,10 +11766,11 @@ mod task_631_init_self_commit_tests {
         );
     }
 
+    // trace:BUG-570
     /// Set up a temp git repo standing in for a fresh CLONE: an initial commit
     /// exists on `main`, and a fake `origin` remote points HEAD at it so HEAD ==
     /// origin/main at the start. Returns the repo root + the HEAD sha. The
-    /// scaffold files are written but NOT committed by the helper. trace:BUG-570
+    /// scaffold files are written but NOT committed by the helper.
     fn setup_clone_like_repo(tmp: &TempDir) -> (std::path::PathBuf, String) {
         let root = tmp.path().to_path_buf();
         git_in(&root, &["init", "-q", "-b", "main"]);
@@ -11772,10 +11824,10 @@ mod task_631_init_self_commit_tests {
         git_head(root)
     }
 
+    // trace:BUG-570 | ai:claude
     /// BUG-570 criterion 1+5: a bootstrap-clone init (suppress=true) must NOT
     /// create a code-branch commit — HEAD stays exactly where origin/main is.
     /// The scaffold files are written (working tree dirty) but uncommitted.
-    /// trace:BUG-570 | ai:claude
     #[test]
     fn bootstrap_clone_init_leaves_head_unchanged() {
         let tmp = TempDir::new().unwrap();
@@ -11803,11 +11855,11 @@ mod task_631_init_self_commit_tests {
         );
     }
 
+    // trace:BUG-570 | ai:claude
     /// BUG-570 criterion 2: non-interactive (no TTY, the test harness) init on a
     /// bootstrap-clone must NOT auto-commit. Same HEAD-unchanged guarantee as the
     /// TTY case — suppression is independent of the TTY heuristic. The test
     /// process has no TTY, so this exercises exactly the dangerous silent path.
-    /// trace:BUG-570 | ai:claude
     #[test]
     fn bootstrap_clone_init_no_tty_does_not_autocommit() {
         // Belt-and-suspenders: even if some env tried to force auto-commit, the
@@ -11824,10 +11876,10 @@ mod task_631_init_self_commit_tests {
         );
     }
 
+    // trace:BUG-570 | ai:claude
     /// BUG-570 criterion 3: a genuinely-new first-init (suppress=false) STILL
     /// commits its scaffolding — no regression. In the no-TTY test harness the
     /// auto-commit branch fires, so HEAD must advance past the root commit.
-    /// trace:BUG-570 | ai:claude
     #[test]
     fn genuinely_new_init_still_commits_scaffolding() {
         std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
@@ -11905,6 +11957,8 @@ mod bug_588_history_id_resolves_uuid_tests {
     }
 }
 
+// trace:SPIKE-48 | ai:claude
+// trace:BUG-57 | ai:claude
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
 ///
@@ -11916,8 +11970,7 @@ mod bug_588_history_id_resolves_uuid_tests {
 /// without touching the project's real `aida-store` orphan branch. The pointed
 /// directory must already exist and look like a store; a missing or malformed
 /// `AIDA_STORE` is ignored so a stale export never silently writes to a
-/// half-formed location. trace:SPIKE-48 | ai:claude
-/// trace:BUG-57 | ai:claude
+/// half-formed location.
 fn detect_distributed_store() -> Option<std::path::PathBuf> {
     if let Some(store) = aida_store_override() {
         return Some(store);
@@ -11926,20 +11979,22 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
     detect_distributed_store_from(&cwd)
 }
 
+// trace:BUG-433 | ai:claude
 /// BUG-433: is a git-canonical store physically attached at `<root>/.aida-store`?
 /// True when `.aida-store/objects/` is a directory — the hallmark of an attached
 /// orphan-store worktree, resolved through a symlink too. Used to detect
 /// distributed mode from the store's SHAPE when neither `.aida/config.toml` nor
 /// an `aida-store` branch is present, so plain `aida` uses the real store
-/// instead of silently serving legacy data. trace:BUG-433 | ai:claude
+/// instead of silently serving legacy data.
 fn attached_store_present(project_root: &std::path::Path) -> bool {
     project_root.join(".aida-store").join("objects").is_dir()
 }
 
+// trace:BUG-567 | ai:claude
 /// Classification of an `AIDA_STORE` value: either it resolves to a usable
 /// store, or it's set-but-unusable with a specific reason. Lets the
 /// resolution core stay pure/unit-testable while the env wrapper decides
-/// whether to print the BUG-567 fall-through notice. trace:BUG-567 | ai:claude
+/// whether to print the BUG-567 fall-through notice.
 enum StoreOverride {
     /// `AIDA_STORE` points at a valid git-canonical store (canonicalized).
     Usable(std::path::PathBuf),
@@ -11948,6 +12003,7 @@ enum StoreOverride {
     Unusable { reason: String },
 }
 
+// trace:SPIKE-48 trace:BUG-567 | ai:claude
 /// Resolve the `AIDA_STORE` env override into a usable store path, or `None`
 /// when unset / pointing at something that isn't a git-canonical store. A valid
 /// store directory is one that exists and contains an `objects/` subdirectory
@@ -11963,7 +12019,6 @@ enum StoreOverride {
 /// through (no error, no behavior change; informational only). Suppress with
 /// `AIDA_QUIET` so scripts can mute it. The never-break-a-forgotten-export
 /// intent (SPIKE-48) is preserved — we inform, we don't error.
-/// trace:SPIKE-48 trace:BUG-567 | ai:claude
 fn aida_store_override() -> Option<std::path::PathBuf> {
     let raw = std::env::var("AIDA_STORE").ok()?;
     let raw = raw.trim();
@@ -12038,13 +12093,14 @@ fn detect_multi_repo_shared_store(from: &std::path::Path) -> Option<Vec<String>>
     Some(others)
 }
 
+// trace:BUG-568 | ai:claude
 /// BUG-568: emit ONE clear stderr warning that a completion/linkage scan
 /// covered only the local repo while the store is shared across multiple repos,
 /// so cross-repo completions/linkage may be missed. `scan_label` names the scan
 /// (e.g. "auto-bump", "linkage scan") so the user can tell which surface was
 /// limited. Suppressible via `AIDA_QUIET` (uniform with the BUG-567 store
 /// fall-through notice). No-ops in the single-repo case (the detector returns
-/// `None`). trace:BUG-568 | ai:claude
+/// `None`).
 fn warn_multi_repo_scan_limited(from: &std::path::Path, scan_label: &str) {
     if aida_quiet() {
         return;
@@ -12076,9 +12132,10 @@ fn warn_multi_repo_scan_limited(from: &std::path::Path, scan_label: &str) {
     );
 }
 
+// trace:BUG-567 | ai:claude
 /// Is output suppression requested? BUG-567: honor `AIDA_QUIET` (any non-empty,
 /// non-"0"/"false" value) so the informational store fall-through notice can be
-/// muted by scripts. trace:BUG-567 | ai:claude
+/// muted by scripts.
 fn aida_quiet() -> bool {
     match std::env::var("AIDA_QUIET") {
         Ok(v) => {
@@ -12089,11 +12146,11 @@ fn aida_quiet() -> bool {
     }
 }
 
+// trace:SPIKE-48 trace:BUG-567 | ai:claude
 /// Path-resolution core of [`aida_store_override`], split out so it can be
 /// unit-tested without mutating process env. Returns [`StoreOverride::Usable`]
 /// (canonicalized) when `path` exists and holds an `objects/` directory, else
 /// [`StoreOverride::Unusable`] carrying the specific reason it was rejected.
-/// trace:SPIKE-48 trace:BUG-567 | ai:claude
 fn aida_store_override_from(path: &std::path::Path) -> StoreOverride {
     if !path.is_dir() {
         return StoreOverride::Unusable {
@@ -12124,6 +12181,7 @@ impl StoreOverride {
     }
 }
 
+// trace:BUG-428 | ai:claude
 /// Walk up from `start` and return the project root whose `.aida/config.toml`
 /// declares `mode = "distributed"`. Used to distinguish two states that look
 /// identical to [`detect_distributed_store`] (both return `None` for the
@@ -12133,7 +12191,6 @@ impl StoreOverride {
 /// hallmark of a fresh clone, since the worktree is gitignored and only
 /// created by `aida init`. In the latter case the caller must refuse the
 /// legacy fallback (it would show stale data) and point at `aida init`.
-/// trace:BUG-428 | ai:claude
 fn distributed_mode_declared_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
     let mut current = start;
     loop {
@@ -12157,6 +12214,7 @@ fn distributed_mode_declared() -> Option<std::path::PathBuf> {
     distributed_mode_declared_from(&cwd)
 }
 
+// trace:TASK-621 | ai:claude
 /// TASK-621: attach the `.aida-store` worktree from the existing `aida-store`
 /// branch so read commands "just work" on a fresh clone without a manual
 /// `aida init`. Reuses the exact fetch + worktree-add sequence the post-clone
@@ -12166,7 +12224,6 @@ fn distributed_mode_declared() -> Option<std::path::PathBuf> {
 /// WRITING. Reading the store needs only the worktree. Idempotent at the
 /// git-ops layer (create_store_worktree no-ops when the worktree already
 /// exists), but in practice only called when the worktree is absent.
-/// trace:TASK-621 | ai:claude
 fn try_attach_store_worktree(project_root: &std::path::Path) -> Result<std::path::PathBuf> {
     use aida_core::git_ops;
     let worktree_dir = ".aida-store";
@@ -12206,9 +12263,10 @@ fn try_attach_store_worktree(project_root: &std::path::Path) -> Result<std::path
     git_ops::create_store_worktree(project_root, worktree_dir, branch)
 }
 
+// trace:BUG-559 | ai:claude
 /// The recovery action chosen when `aida-store` is the checked-out branch on a
 /// fresh clone (the BUG-559 GitLab state). Pure value so the decision is
-/// unit-testable without running git. trace:BUG-559 | ai:claude
+/// unit-testable without running git.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StoreAttachRecovery {
     /// Switch the working tree to this code branch before fetching `aida-store`.
@@ -12217,15 +12275,17 @@ enum StoreAttachRecovery {
     DetachHead,
 }
 
+// trace:BUG-559 | ai:claude
 /// The conventional code-branch names to prefer when recovering, in priority
-/// order. trace:BUG-559 | ai:claude
+/// order.
 const CODE_BRANCH_PREFERENCE: [&str; 2] = ["main", "master"];
 
+// trace:BUG-559 | ai:claude
 /// Collect the code-branch names available to switch to, in preference order:
 /// a local `main`/`master` if it exists, else an `origin/main`/`origin/master`
 /// (referenced by short name so `git checkout` sets up tracking). Used as input
 /// to [`choose_store_attach_recovery`]; split out so the decision logic stays
-/// pure and testable. trace:BUG-559 | ai:claude
+/// pure and testable.
 fn local_code_branch_candidates(project_root: &std::path::Path) -> Vec<String> {
     use aida_core::git_ops;
     let mut out = Vec::new();
@@ -12241,10 +12301,11 @@ fn local_code_branch_candidates(project_root: &std::path::Path) -> Vec<String> {
     out
 }
 
+// trace:BUG-559 | ai:claude
 /// Decide how to get the working tree off the `aida-store` branch so a fetch
 /// into the `aida-store` ref can succeed: check out the first available code
 /// branch, or detach HEAD when none is available. Pure — given the candidate
-/// list it returns the action, no git side effects. trace:BUG-559 | ai:claude
+/// list it returns the action, no git side effects.
 fn choose_store_attach_recovery(
     _project_root: &std::path::Path,
     code_branch_candidates: &[String],
@@ -12255,12 +12316,12 @@ fn choose_store_attach_recovery(
     }
 }
 
+// trace:TASK-844 | ai:claude
 /// What `aida init` should push to a fresh/empty origin, and in what order, so a
 /// forge that adopts the first-pushed branch as its default (GitLab's
 /// push-to-create) ends up with the **code** branch as default — never the
 /// orphan `aida-store` (which would make a fresh clone check out the internal
 /// YAML store as if it were the project). Root-cause prevention for BUG-559.
-/// trace:TASK-844 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum InitPushPlan {
     /// A code branch exists and has commits → push it FIRST (so the forge
@@ -12274,6 +12335,7 @@ enum InitPushPlan {
     OrphanOnly,
 }
 
+// trace:TASK-844 | ai:claude
 /// Decide the init push plan from two facts about the working repo: whether a
 /// code branch (`main`/`master`) **exists**, and whether it **has commits**.
 /// Pure so the push-order decision is unit-testable without a live remote.
@@ -12282,7 +12344,6 @@ enum InitPushPlan {
 /// - otherwise → [`InitPushPlan::OrphanOnly`] (conservative fallback; never
 ///   pushes code the user hasn't committed).
 ///
-/// trace:TASK-844 | ai:claude
 fn decide_init_push_plan(code_branch: Option<&str>, code_branch_has_commits: bool) -> InitPushPlan {
     match code_branch {
         Some(name) if code_branch_has_commits => InitPushPlan::CodeBranchFirst(name.to_string()),
@@ -12542,10 +12603,10 @@ mod bug_559_clone_recovery_tests {
     }
 }
 
+// trace:BUG-57 | ai:claude
 /// Walk-up resolver split out from `detect_distributed_store` so the search
 /// path is testable without changing process cwd. Returns the absolute store
 /// path on the first ancestor whose `.aida/config.toml` declares one.
-/// trace:BUG-57 | ai:claude
 fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
     let mut current = start;
     loop {
@@ -12585,6 +12646,7 @@ fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::P
     }
 }
 
+// trace:BUG-331 | ai:claude
 /// BUG-331: resolve `<main-worktree>/<rel_store>` from inside a git worktree.
 ///
 /// `git rev-parse --git-common-dir` yields the SHARED `.git` directory (e.g.
@@ -12596,7 +12658,6 @@ fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::P
 ///
 /// Returns None when not in a git repo, git is unavailable/old, or the store is
 /// genuinely absent — callers then fall through to their existing resolution.
-/// trace:BUG-331 | ai:claude
 fn main_worktree_store(current: &std::path::Path, rel_store: &str) -> Option<std::path::PathBuf> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -12628,6 +12689,8 @@ fn main_worktree_store(current: &std::path::Path, rel_store: &str) -> Option<std
     }
 }
 
+// trace:EPIC-1-052 | ai:claude
+// trace:FR-1-073 | ai:claude
 /// Read the `[id_format] policy` from `.aida/config.toml`. Honors the legacy
 /// `use_agreed_blocks` boolean as a fallback when the new section is missing
 /// (so existing projects keep working unchanged).
@@ -12637,13 +12700,11 @@ fn main_worktree_store(current: &std::path::Path, rel_store: &str) -> Option<std
 ///   2. legacy `use_agreed_blocks = false`  → `node-aware-only`
 ///   3. legacy `use_agreed_blocks = true`   → `blocks-then-fallback`
 ///   4. neither set                          → `blocks-then-fallback` (default)
-///      trace:EPIC-1-052 | ai:claude
 ///      Read the agreed-id counter for a given type from the orphan store's
 ///      `registry/agreed_counters.toml`. Returns 0 when the file doesn't exist
 ///      or the type has no entry — both mean "no ids issued yet for this type".
 ///      Used as the floor when claiming a new block so the block doesn't
 ///      overlap with already-issued agreed-ids.
-///      trace:FR-1-073 | ai:claude
 fn read_agreed_counter(store_path: &std::path::Path, type_prefix: &str) -> u32 {
     let path = store_path.join("registry").join("agreed_counters.toml");
     let Ok(content) = std::fs::read_to_string(&path) else {
@@ -12671,19 +12732,20 @@ fn read_id_format_policy(project_dir: &std::path::Path) -> aida_core::IdFormatPo
     read_id_format_settings(project_dir).0
 }
 
+// trace:FR-271 | ai:claude
 /// Read counter_scope from `.aida/config.toml`. When absent, defaults to
 /// PerType (back-compat — flipping a live store would conflate FR-100
 /// and BUG-100 numerically). Projects created from 2026-05-09 onwards
 /// have `counter_scope = "global"` written explicitly at init.
-/// trace:FR-271 | ai:claude
 #[allow(dead_code)]
 fn read_id_counter_scope(project_dir: &std::path::Path) -> aida_core::IdCounterScope {
     read_id_format_settings(project_dir).1
 }
 
+// trace:FR-271 | ai:claude
 /// Single pass over `.aida/config.toml` returning both the policy and
 /// the counter scope. Cheaper than two separate reads when a caller
-/// needs both. trace:FR-271 | ai:claude
+/// needs both.
 fn read_id_format_settings(
     project_dir: &std::path::Path,
 ) -> (aida_core::IdFormatPolicy, aida_core::IdCounterScope) {
@@ -12978,9 +13040,10 @@ fn load_dispenser(store_path: &std::path::Path) -> Result<aida_core::models::Dis
     )))
 }
 
+// trace:TASK-102 | ai:claude
 /// TASK-102: human-readable phrase for a relationship edge, shared by
 /// `aida show`'s inline enumeration and the centralized renderer so the two
-/// stay consistent. trace:TASK-102 | ai:claude
+/// stay consistent.
 fn relationship_phrase(rt: &aida_core::models::RelationshipType) -> String {
     use aida_core::models::RelationshipType as R;
     match rt {
@@ -12996,12 +13059,12 @@ fn relationship_phrase(rt: &aida_core::models::RelationshipType) -> String {
     }
 }
 
+// trace:STORY-446 | ai:claude
 /// STORY-446: add a BlockedBy edge from `spec_id` to `blocker_id`, plus the
 /// inverse Blocks edge on the blocker — atomically and idempotently. Returns
 /// the blocker's display id for messaging. The pickability gate
 /// (`aida_core::pickability`) already matches the typed BlockedBy variant, so
 /// this is purely the ergonomic declaration path (STORY-333 added the variant).
-/// trace:STORY-446 | ai:claude
 fn add_blocked_by_edge(
     backend: &aida_core::CachedGitBackend,
     spec_id: &str,
@@ -13059,9 +13122,10 @@ fn add_blocked_by_edge(
     Ok(blocker_display)
 }
 
+// trace:STORY-446 | ai:claude
 /// STORY-446: remove the BlockedBy edge from `spec_id` to `blocker_id` and the
 /// inverse Blocks edge on the blocker. No-op (returns the display id) when the
-/// edge is absent. trace:STORY-446 | ai:claude
+/// edge is absent.
 fn remove_blocked_by_edge(
     backend: &aida_core::CachedGitBackend,
     spec_id: &str,
@@ -13102,6 +13166,7 @@ fn remove_blocked_by_edge(
     Ok(blocker_display)
 }
 
+// trace:BUG-588 | ai:claude
 /// Handle commands routed to the GitBackend (when --file points to a directory).
 /// Resolve an `aida history --id <X>` argument to the canonical spec_id the
 /// orphan-branch event decoder keys on. `aida history` walks the git log and
@@ -13112,7 +13177,6 @@ fn remove_blocked_by_edge(
 /// we pass the argument through unchanged (it's already a spec_id, or a
 /// not-found value that will simply match nothing). Best-effort: a backend
 /// lookup error falls back to the raw argument rather than failing the command.
-/// trace:BUG-588 | ai:claude
 fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(backend: &B, raw: &str) -> String {
     if let Ok(uuid) = uuid::Uuid::parse_str(raw.trim()) {
         if let Ok(Some(req)) = backend.get_requirement(&uuid) {
@@ -17559,12 +17623,12 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
     }
 }
 
+// trace:TASK-64 | ai:claude
 /// String form of [`is_terminal_status`] — used by `aida list` / `aida
 /// history` to hide the archive by default (TASK-64). Case-insensitive;
 /// tolerates display vs storage casing. Companion to the enum version
 /// at line ~4807 (BUG-64); both live here so the list/history surface
 /// and the parent-guard share the same notion of "this is closed work".
-/// trace:TASK-64 | ai:claude
 pub fn is_terminal_status_str(s: &str) -> bool {
     // trace:STORY-86 | ai:claude — "Done" is NOT terminal anymore (work
     // finished on a branch; auto-bumps to Completed once merged to main).
@@ -17646,13 +17710,14 @@ fn handle_brief_command(
     }
 }
 
+// trace:SPIKE-33 | ai:claude
 /// SPIKE-33: render a `claude-cli://open` URL pointing at the agent's
 /// expected worktree (active lease for the spec, else project_root) with
 /// a short prompt that tells the receiving Claude session to read the
 /// brief file and pick the work up. The brief body itself isn't inlined
 /// in `q=` — even modest briefs blow past the 5000-char ceiling — and
 /// AIDA's existing brief workflow already establishes that the agent
-/// reads the file. trace:SPIKE-33 | ai:claude
+/// reads the file.
 fn emit_brief_deep_link(
     project_root: &std::path::Path,
     agent: &str,
@@ -17764,6 +17829,7 @@ fn pending_brief_exists(project_root: &std::path::Path, agent: &str, spec_id: &s
     })
 }
 
+// trace:STORY-569 | ai:claude
 /// STORY-569: the clean-finish build→review handoff. When a standalone
 /// `--zen` session finishes with an open PR on its lease branch, file a
 /// pickup brief to the advisor's mailbox (`.aida/agent-briefs/<agent>/`)
@@ -17776,7 +17842,7 @@ fn pending_brief_exists(project_root: &std::path::Path, agent: &str, spec_id: &s
 /// forge is unreachable — fail open, a notify must never block a finish),
 /// or a pending brief for the spec already sits in the mailbox
 /// (idempotent). Reuses the existing brief writer + `.pending` sentinel;
-/// nothing reinvented. trace:STORY-569 | ai:claude
+/// nothing reinvented.
 fn file_zen_review_brief(
     project_root: &std::path::Path,
     lease: &SessionLease,
@@ -18135,12 +18201,13 @@ fn collect_agent_briefs_inner(
     Ok(entries)
 }
 
+// trace:BUG-569 | ai:claude
 /// BUG-569: resolve brief directories for `target`, dropping the ambiguity
 /// warning entirely when `warn_on_ambiguity` is false. The warning is only a
 /// real user error when the caller explicitly targeted an agent (e.g.
 /// `aida brief list --for-agent <target>`); internal scans that pass a bare
 /// agent-TYPE name-class must stay silent. Split out so the suppression
-/// decision is unit-testable without capturing stderr. trace:BUG-569 | ai:claude
+/// decision is unit-testable without capturing stderr.
 fn resolve_brief_dirs_with_optional_warning(
     project_root: &std::path::Path,
     target: &str,
@@ -18249,6 +18316,7 @@ fn sort_brief_entries_topologically(entries: &mut [BriefListEntry]) -> Result<()
     Ok(())
 }
 
+// trace:BUG-378 | ai:claude
 /// BUG-378: substrate-as-bouncer for agent scratchpad drift.
 ///
 /// When an agent is about to declare a spec Done/Completed, scan the brief
@@ -18265,7 +18333,7 @@ fn sort_brief_entries_topologically(entries: &mut [BriefListEntry]) -> Result<()
 /// - Only briefs matching the running agent's type are listed. A pending
 ///   `antigravity` brief never fires when Codex is running.
 /// - Banner goes to stderr in bold red so it survives stdout piping and
-///   stands out in a wall of green check marks. trace:BUG-378 | ai:claude
+///   stands out in a wall of green check marks.
 fn warn_pending_briefs_for_running_agent(project_root: &std::path::Path) {
     let agent_type = agent_registry::detect_agent_type();
     let Some(lines) = pending_brief_banner_lines(project_root, &agent_type) else {
@@ -18276,10 +18344,11 @@ fn warn_pending_briefs_for_running_agent(project_root: &std::path::Path) {
     }
 }
 
+// trace:BUG-378 | ai:claude
 /// Pure-function core of [`warn_pending_briefs_for_running_agent`] —
 /// returns the banner lines (already styled with ANSI red/bold) or `None`
 /// when the gate stays silent. Split out so unit tests can assert directly
-/// on the rendered output without capturing stderr. trace:BUG-378 | ai:claude
+/// on the rendered output without capturing stderr.
 fn pending_brief_banner_lines(
     project_root: &std::path::Path,
     agent_type: &str,
@@ -19677,12 +19746,13 @@ mod task_492_brief_tests {
     }
 }
 
+// trace:BUG-47
 /// Validate a status string against the canonical set. Accepts case-
 /// insensitive matches and common spelling variants (`in-progress`,
 /// `inprogress`, `in_progress`). Returns Ok with the canonical form, or
 /// Err with a list-of-valid-values message. Use at the CLI layer before
 /// calling `Requirement::set_status_from_str` to prevent typos like
-/// `approvedxxx` from silently landing as a `custom_status`. trace:BUG-47
+/// `approvedxxx` from silently landing as a `custom_status`.
 pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
     let normalized: String = raw
         .chars()
@@ -19710,7 +19780,8 @@ pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
     }
 }
 
-/// Same shape, for priority. trace:BUG-47
+// trace:BUG-47
+/// Same shape, for priority.
 pub fn validate_priority_input(raw: &str) -> Result<&'static str, String> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "high" => Ok("High"),
@@ -19723,11 +19794,11 @@ pub fn validate_priority_input(raw: &str) -> Result<&'static str, String> {
     }
 }
 
+// trace:BUG-22 | ai:claude
 /// Detect signs that a `--title` was mangled by shell command-substitution
 /// (backticks the user forgot to escape, an unmatched quote that lost the
 /// rest of the string). Returns Some(message) if suspicious. Caller should
 /// print as a warning — never reject — since false positives are possible.
-/// trace:BUG-22 | ai:claude
 fn suspicious_title_signal(title: &str) -> Option<String> {
     if title.contains('`') {
         return Some(
@@ -19752,11 +19823,11 @@ fn config_path_for_project(project_root: &std::path::Path) -> std::path::PathBuf
     project_root.join(".aida").join("config.toml")
 }
 
+// trace:TASK-304 | ai:claude
 /// TASK-304: `[ultraplan] mode` governs whether AIDA proactively suggests
 /// `aida ultraplan <SPEC>` for chunky specs. /ultraplan is inherently
 /// interactive (claude.ai web approval), so the realistic surface is
 /// `never | on-demand | suggested` — never a "frequently auto-pull" mode.
-/// trace:TASK-304 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UltraplanMode {
     /// `aida ultraplan` refuses with a configured-off message; no clipboard.
@@ -19780,6 +19851,7 @@ impl UltraplanMode {
     }
 }
 
+// trace:TASK-697 | ai:claude
 /// TASK-697: which heuristic the `suggested` mode uses to decide a spec is
 /// worth a planning prompt.
 ///
@@ -19791,7 +19863,6 @@ impl UltraplanMode {
 /// 9-bullet spec with a design block needs planning less than a 2-bullet spec
 /// with none. `Thinness` keys on that signal and is the default; the legacy
 /// `acceptance-bullets>N` heuristic is still honored for backward compat.
-/// trace:TASK-697 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SuggestThreshold {
     /// Legacy (TASK-304): suggest when the `## Acceptance` checkbox count is
@@ -19802,10 +19873,10 @@ enum SuggestThreshold {
     Thinness,
 }
 
+// trace:TASK-697 | ai:claude
 /// TASK-304/TASK-697: parsed `[ultraplan]` config. Both fields default safely
 /// so a project with no `[ultraplan]` block (or an unparseable one) keeps the
 /// opt-in behavior: `mode = on-demand`, threshold `spec-thinness`.
-/// trace:TASK-697 | ai:claude
 struct UltraplanConfig {
     mode: UltraplanMode,
     /// Which heuristic `suggested` mode applies. Defaults to `Thinness`.
@@ -19821,10 +19892,10 @@ impl Default for UltraplanConfig {
     }
 }
 
+// trace:TASK-304 | ai:claude
 /// TASK-304: read `[ultraplan]` from `.aida/config.toml`. Missing file,
 /// missing block, unparseable TOML, or unknown token values all fall back to
 /// the defaults — the suggestion layer is a soft feature, never load-bearing.
-/// trace:TASK-304 | ai:claude
 fn read_ultraplan_config(project_root: &std::path::Path) -> UltraplanConfig {
     let mut cfg = UltraplanConfig::default();
     let path = config_path_for_project(project_root);
@@ -19854,10 +19925,11 @@ fn read_ultraplan_config(project_root: &std::path::Path) -> UltraplanConfig {
     cfg
 }
 
+// trace:TASK-304 | ai:claude
 /// TASK-304: parse a `suggest_threshold` token. Only `acceptance-bullets>N`
 /// is honored today (the spec's chosen default heuristic — mechanical, no
 /// NLP, falsifiable); the `N` is extracted. Unknown tokens return `None` so
-/// the caller keeps the default threshold. trace:TASK-304 | ai:claude
+/// the caller keeps the default threshold.
 fn parse_acceptance_bullet_threshold(token: &str) -> Option<usize> {
     token
         .trim()
@@ -19868,11 +19940,12 @@ fn parse_acceptance_bullet_threshold(token: &str) -> Option<usize> {
         .ok()
 }
 
+// trace:TASK-697 | ai:claude
 /// TASK-697: parse a `suggest_threshold` token into a `SuggestThreshold`.
 /// `acceptance-bullets>N` → `BulletCount(N)` (legacy, still honored);
 /// `spec-thinness` / `thinness` / `under-specified` → `Thinness` (the SPIKE-8
 /// recommendation, the new default). Unknown tokens return `None` so the
-/// caller keeps the default threshold. trace:TASK-697 | ai:claude
+/// caller keeps the default threshold.
 fn parse_suggest_threshold(token: &str) -> Option<SuggestThreshold> {
     if let Some(n) = parse_acceptance_bullet_threshold(token) {
         return Some(SuggestThreshold::BulletCount(n));
@@ -19883,10 +19956,10 @@ fn parse_suggest_threshold(token: &str) -> Option<SuggestThreshold> {
     }
 }
 
+// trace:TASK-697 | ai:claude
 /// TASK-697: heading prefixes that mark a spec as carrying its own design —
 /// the signal that planning would add little (the spec already *is* a plan).
 /// Matched case-insensitively against the heading text after the `#` markers.
-/// trace:TASK-697 | ai:claude
 const DESIGN_SECTION_MARKERS: &[&str] = &[
     "proposed shape",
     "proposed solution",
@@ -19901,9 +19974,9 @@ const DESIGN_SECTION_MARKERS: &[&str] = &[
 /// spec is "thin" in the sense that matters (under-specified, not too-small).
 const THIN_MIN_BODY_CHARS: usize = 240;
 
+// trace:TASK-697 | ai:claude
 /// TASK-697: does the spec carry a design / proposed-shape section? Scans
 /// markdown headings (any level) for a `DESIGN_SECTION_MARKERS` prefix.
-/// trace:TASK-697 | ai:claude
 fn has_design_section(description: &str) -> bool {
     for line in description.lines() {
         let trimmed = line.trim_start();
@@ -19920,22 +19993,23 @@ fn has_design_section(description: &str) -> bool {
     false
 }
 
+// trace:TASK-697 | ai:claude
 /// TASK-697: is this spec "thin" — under-specified enough that a planning
 /// prompt would plausibly add value? True when it has NO design section yet a
 /// substantive body. Well-specified specs (which embed `## Proposed shape` and
 /// the like) stay quiet — exactly the SPIKE-8 finding that bullet count is the
 /// wrong signal. Trivial one-liners also stay quiet (too small to plan).
-/// trace:TASK-697 | ai:claude
 fn is_spec_thin(description: &str) -> bool {
     !has_design_section(description) && description.trim().chars().count() >= THIN_MIN_BODY_CHARS
 }
 
+// trace:TASK-304 | ai:claude
 /// TASK-304: count the markdown task-list bullets (`- [ ]` / `- [x]`) inside
 /// a spec's `## Acceptance` section — a rough complexity proxy. Returns 0
 /// when there's no Acceptance section. Checked and unchecked items both
 /// count: a long checklist is chunky regardless of how much is already
 /// ticked. Tolerates `*`/`+` bullet markers and `## Acceptance Criteria`
-/// heading variants. trace:TASK-304 | ai:claude
+/// heading variants.
 fn count_acceptance_bullets(description: &str) -> usize {
     let mut in_section = false;
     let mut count = 0;
@@ -19970,12 +20044,12 @@ fn is_task_bullet(trimmed: &str) -> bool {
     }
 }
 
+// trace:TASK-304 | ai:claude
 /// TASK-304: the pickup-time suggestion hint. Returns `Some(message)` only
 /// when `[ultraplan] mode = "suggested"` AND the spec's acceptance checklist
 /// is longer than the configured threshold; `None` otherwise (the common
 /// case — on-demand/never, or a spec that isn't chunky). The message format
 /// is fixed by the spec so downstream surfaces render it identically.
-/// trace:TASK-304 | ai:claude
 fn ultraplan_suggestion_hint(
     project_root: &std::path::Path,
     req: &aida_core::Requirement,
@@ -20011,9 +20085,10 @@ fn ultraplan_suggestion_hint(
     }
 }
 
+// trace:TASK-304 | ai:claude
 /// TASK-304: render the ultraplan suggestion hint to stdout under the
 /// shared pickup surfaces (queue next / work / list). No-op when the helper
-/// returns `None`. trace:TASK-304 | ai:claude
+/// returns `None`.
 fn print_ultraplan_suggestion_hint(project_root: &std::path::Path, req: &aida_core::Requirement) {
     if let Some(hint) = ultraplan_suggestion_hint(project_root, req) {
         println!();
@@ -20021,12 +20096,12 @@ fn print_ultraplan_suggestion_hint(project_root: &std::path::Path, req: &aida_co
     }
 }
 
+// trace:TASK-304 | ai:claude
 /// TASK-304: the `[ultraplan]` block `aida init` scaffolds into a new
 /// project's `.aida/config.toml`. Ships `mode = "on-demand"` (preserves
 /// current behavior) plus a comment explaining the never/on-demand/suggested
 /// trade-off and why "frequently/auto-pull" isn't an option. Appended like
 /// the `[forge]` section so all three init paths share one source of truth.
-/// trace:TASK-304 | ai:claude
 fn init_ultraplan_config_section() -> &'static str {
     "\n# trace:TASK-304 | ai:claude  (suggest_threshold: trace:TASK-697)\n\
      # Whether AIDA proactively suggests `aida ultraplan <SPEC>` for specs\n\
@@ -20098,7 +20173,7 @@ mod story_569_review_brief_tests {
         std::fs::write(dir.join("config.toml"), body).unwrap();
     }
 
-    /// trace:STORY-569 | ai:claude — default advisor; empty string disables;
+    // trace:STORY-569 | ai:claude — default advisor; empty string disables;
     /// explicit value wins; unparseable TOML falls back to the default.
     #[test]
     fn review_brief_agent_default_disable_and_override() {
@@ -20134,7 +20209,7 @@ mod story_569_review_brief_tests {
         );
     }
 
-    /// trace:STORY-569 | ai:claude — only an unacked `.md` counts as pending;
+    // trace:STORY-569 | ai:claude — only an unacked `.md` counts as pending;
     /// acked briefs (`.md.acked`) and other specs' briefs don't, and the
     /// spec match is case-insensitive (brief filenames carry the canonical
     /// uppercase id).
@@ -20163,7 +20238,7 @@ mod story_569_review_brief_tests {
         assert!(pending_brief_exists(root, "advisor", "story-569"));
     }
 
-    /// trace:STORY-569 | ai:claude — a disabled target short-circuits before
+    // trace:STORY-569 | ai:claude — a disabled target short-circuits before
     /// any forge/store work, and an empty lease scope files nothing.
     #[test]
     fn file_zen_review_brief_short_circuits() {
@@ -20218,9 +20293,9 @@ mod story_569_review_brief_tests {
 mod task_760_intake_config_section_tests {
     use super::*;
 
+    // trace:TASK-760 | ai:claude
     /// The scaffolded `[intake]` block is fully commented-out: written to a
     /// config.toml as-is it changes nothing (loads pure defaults).
-    /// trace:TASK-760 | ai:claude
     #[test]
     fn scaffolded_intake_block_is_fully_commented() {
         let section = init_intake_config_section();
@@ -20238,9 +20313,9 @@ mod task_760_intake_config_section_tests {
         );
     }
 
+    // trace:TASK-760 | ai:claude
     /// Uncommenting the example lines yields exactly the built-in defaults —
     /// the documented values match what the parser actually accepts.
-    /// trace:TASK-760 | ai:claude
     #[test]
     fn uncommented_intake_example_matches_defaults() {
         let section = init_intake_config_section();
@@ -20283,7 +20358,7 @@ mod task_304_ultraplan_cadence_tests {
         - [ ] six\n- [ ] seven\n- [ ] eight\n- [ ] nine\n\n## Out of scope\n\n- [ ] not counted\n";
 
     // ── mode token parsing ──────────────────────────────────────────────
-    /// trace:TASK-304 | ai:claude
+    // trace:TASK-304 | ai:claude
     #[test]
     fn mode_tokens_parse() {
         assert_eq!(
@@ -20301,7 +20376,7 @@ mod task_304_ultraplan_cadence_tests {
         assert_eq!(UltraplanMode::from_token("frequently"), None);
     }
 
-    /// trace:TASK-304 | ai:claude
+    // trace:TASK-304 | ai:claude
     #[test]
     fn threshold_token_parses_and_rejects() {
         assert_eq!(
@@ -20323,28 +20398,30 @@ mod task_304_ultraplan_cadence_tests {
     }
 
     // ── bullet counting ─────────────────────────────────────────────────
+    // trace:TASK-304 | ai:claude
     /// Counts only `## Acceptance` checkbox bullets, both checked and
-    /// unchecked; ignores bullets in other sections. trace:TASK-304 | ai:claude
+    /// unchecked; ignores bullets in other sections.
     #[test]
     fn counts_acceptance_bullets_only() {
         assert_eq!(count_acceptance_bullets(NINE_BULLETS), 9);
     }
 
-    /// trace:TASK-304 | ai:claude
+    // trace:TASK-304 | ai:claude
     #[test]
     fn counts_checked_and_unchecked() {
         let d = "## Acceptance\n- [ ] todo\n- [x] done\n- [X] also done\n";
         assert_eq!(count_acceptance_bullets(d), 3);
     }
 
-    /// trace:TASK-304 | ai:claude
+    // trace:TASK-304 | ai:claude
     #[test]
     fn counts_zero_without_acceptance_section() {
         let d = "## Why\n- [ ] not acceptance\n- [ ] still not\n";
         assert_eq!(count_acceptance_bullets(d), 0);
     }
 
-    /// Tolerates `## Acceptance Criteria` heading variants. trace:TASK-304
+    // trace:TASK-304
+    /// Tolerates `## Acceptance Criteria` heading variants.
     #[test]
     fn tolerates_acceptance_criteria_heading() {
         let d = "## Acceptance Criteria\n- [ ] a\n- [ ] b\n";
@@ -20352,8 +20429,8 @@ mod task_304_ultraplan_cadence_tests {
     }
 
     // ── read_ultraplan_config: each mode + threshold ────────────────────
+    // trace:TASK-697 | ai:claude
     /// Absent config → on-demand default, threshold = thinness (TASK-697).
-    /// trace:TASK-697 | ai:claude
     #[test]
     fn config_absent_defaults_on_demand() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20362,7 +20439,7 @@ mod task_304_ultraplan_cadence_tests {
         assert_eq!(cfg.threshold, SuggestThreshold::Thinness);
     }
 
-    /// trace:TASK-304 | ai:claude
+    // trace:TASK-304 | ai:claude
     #[test]
     fn config_never_mode_parses() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20370,7 +20447,7 @@ mod task_304_ultraplan_cadence_tests {
         assert_eq!(read_ultraplan_config(tmp.path()).mode, UltraplanMode::Never);
     }
 
-    /// trace:TASK-304 | ai:claude
+    // trace:TASK-304 | ai:claude
     #[test]
     fn config_suggested_mode_with_custom_threshold() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20383,8 +20460,9 @@ mod task_304_ultraplan_cadence_tests {
         assert_eq!(cfg.threshold, SuggestThreshold::BulletCount(3));
     }
 
+    // trace:TASK-304 | ai:claude
     /// Unknown mode token falls back to the on-demand default rather than
-    /// erroring. trace:TASK-304 | ai:claude
+    /// erroring.
     #[test]
     fn config_unknown_mode_falls_back() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20396,7 +20474,8 @@ mod task_304_ultraplan_cadence_tests {
     }
 
     // ── ultraplan_suggestion_hint: mode × threshold matrix ──────────────
-    /// on-demand never hints, even for a chunky spec. trace:TASK-304
+    // trace:TASK-304
+    /// on-demand never hints, even for a chunky spec.
     #[test]
     fn hint_silent_on_demand() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20405,7 +20484,8 @@ mod task_304_ultraplan_cadence_tests {
         assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
     }
 
-    /// never never hints. trace:TASK-304 | ai:claude
+    // trace:TASK-304 | ai:claude
+    /// never never hints.
     #[test]
     fn hint_silent_never() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20414,8 +20494,9 @@ mod task_304_ultraplan_cadence_tests {
         assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
     }
 
+    // trace:TASK-304 | ai:claude
     /// suggested + legacy bullet threshold, over it → hint with the documented
-    /// format. trace:TASK-304 | ai:claude
+    /// format.
     #[test]
     fn hint_fires_suggested_over_threshold() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20432,8 +20513,9 @@ mod task_304_ultraplan_cadence_tests {
         );
     }
 
+    // trace:TASK-304 | ai:claude
     /// suggested + legacy bullet threshold, at/under it (8 is not > 8) →
-    /// silent. trace:TASK-304 | ai:claude
+    /// silent.
     #[test]
     fn hint_silent_at_threshold_boundary() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20447,8 +20529,8 @@ mod task_304_ultraplan_cadence_tests {
         assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
     }
 
+    // trace:TASK-304 | ai:claude
     /// A custom lower threshold makes a smaller checklist trip the hint.
-    /// trace:TASK-304 | ai:claude
     #[test]
     fn hint_respects_custom_threshold() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20461,9 +20543,9 @@ mod task_304_ultraplan_cadence_tests {
         assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_some());
     }
 
+    // trace:TASK-697 | ai:claude
     /// The scaffolded `[ultraplan]` block ships mode = on-demand and the
     /// spec-thinness threshold, and parses back to those defaults.
-    /// trace:TASK-697 | ai:claude
     #[test]
     fn scaffolded_block_is_on_demand() {
         let section = init_ultraplan_config_section();
@@ -20478,8 +20560,9 @@ mod task_304_ultraplan_cadence_tests {
     }
 
     // ── TASK-697: spec-thinness threshold ───────────────────────────────
+    // trace:TASK-697
     /// A well-specified spec carrying a `## Proposed shape` block (the
-    /// SPIKE-8 example of where planning does NOT help). trace:TASK-697
+    /// SPIKE-8 example of where planning does NOT help).
     const WELL_SPECIFIED: &str = "## Problem\n\nThe gate logic lives inline in \
         the handler, mixing pure decision logic with I/O. This makes the \
         decision tree hard to test in isolation, so regressions slip through.\n\n\
@@ -20487,15 +20570,16 @@ mod task_304_ultraplan_cadence_tests {
         Refuse / Proceed / Skip variants, then have the caller match on it.\n\n\
         ## Acceptance\n\n- [ ] pure function\n- [ ] caller matches\n";
 
+    // trace:TASK-697
     /// A thin spec: substantive problem statement, an acceptance list, but no
-    /// design section — where planning plausibly helps. trace:TASK-697
+    /// design section — where planning plausibly helps.
     const THIN_SPEC: &str = "## Problem\n\nThe error message printed when a \
         pull hits a divergence is terse and does not tell the user which of \
         the two legs (code vs store) actually diverged, so they cannot tell \
         what to reconcile. We should make it actionable.\n\n## Acceptance\n\n\
         - [ ] message names the diverged leg\n- [ ] suggests the recovery cmd\n";
 
-    /// trace:TASK-697 | ai:claude
+    // trace:TASK-697 | ai:claude
     #[test]
     fn suggest_threshold_token_parsing() {
         assert_eq!(
@@ -20517,8 +20601,9 @@ mod task_304_ultraplan_cadence_tests {
         assert_eq!(parse_suggest_threshold("story-with-design-forks"), None);
     }
 
+    // trace:TASK-697 | ai:claude
     /// `has_design_section` matches any design-marker heading at any level,
-    /// case-insensitively. trace:TASK-697 | ai:claude
+    /// case-insensitively.
     #[test]
     fn detects_design_sections() {
         assert!(has_design_section("## Proposed shape\n\nfoo"));
@@ -20530,8 +20615,9 @@ mod task_304_ultraplan_cadence_tests {
         assert!(!has_design_section("## Problem\n\njust prose, no design\n"));
     }
 
+    // trace:TASK-697 | ai:claude
     /// Thin = no design section AND a substantive body. Well-specified specs
-    /// and trivial one-liners are both not-thin. trace:TASK-697 | ai:claude
+    /// and trivial one-liners are both not-thin.
     #[test]
     fn is_spec_thin_classification() {
         assert!(is_spec_thin(THIN_SPEC));
@@ -20541,8 +20627,9 @@ mod task_304_ultraplan_cadence_tests {
         assert!(!is_spec_thin("fix the typo in the README header"));
     }
 
+    // trace:TASK-697 | ai:claude
     /// suggested + thinness default fires on a design-less spec with the
-    /// thinness-flavored message. trace:TASK-697 | ai:claude
+    /// thinness-flavored message.
     #[test]
     fn hint_fires_on_thin_spec() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20556,9 +20643,10 @@ mod task_304_ultraplan_cadence_tests {
         );
     }
 
+    // trace:TASK-697 | ai:claude
     /// suggested + thinness default stays SILENT on a well-specified spec —
     /// the core SPIKE-8 correction: bullet count would have fired here, but the
-    /// spec already carries its plan. trace:TASK-697 | ai:claude
+    /// spec already carries its plan.
     #[test]
     fn hint_silent_on_well_specified_spec() {
         let tmp = tempfile::tempdir().unwrap();
@@ -20913,13 +21001,13 @@ fn push_store_after_id_allocation(
     Ok(())
 }
 
+// trace:STORY-441 | ai:claude
 /// STORY-441: read `[archive] auto_after_days` from `.aida/config.toml`.
 /// Returns `Some(days)` when the user has opted in, `None` when the key is
 /// absent (auto-sweep stays off). Clamps below 7 to 7 with a stderr warning
 /// — auto-archiving a freshly-shipped spec defeats the whole point.
 /// Missing config file or unparseable TOML returns `None` silently (the
 /// optional auto-sweep is a soft feature, not load-bearing).
-/// trace:STORY-441 | ai:claude
 fn read_archive_auto_after_days(project_root: &std::path::Path) -> Option<u64> {
     let path = config_path_for_project(project_root);
     let body = std::fs::read_to_string(&path).ok()?;
@@ -20941,13 +21029,14 @@ fn read_archive_auto_after_days(project_root: &std::path::Path) -> Option<u64> {
     }
 }
 
+// trace:STORY-564 | ai:claude
 /// STORY-564: read `[zen] auto_exit` from `.aida/config.toml`. Returns the
 /// operator's persistent preference for whether a clean standalone-`--zen`
 /// finish auto-exits (`true`, the default) or always pauses (`false`).
 /// Missing config / key / unparseable TOML → `true` (the new default
 /// behavior). The per-invocation `--pause-always` flag (→ `AIDA_ZEN_PAUSE_ALWAYS`)
 /// overrides this toward pausing; this is the standing preference when the
-/// flag isn't passed. trace:STORY-564 | ai:claude
+/// flag isn't passed.
 fn read_zen_auto_exit(project_root: &std::path::Path) -> bool {
     let path = config_path_for_project(project_root);
     let Ok(body) = std::fs::read_to_string(&path) else {
@@ -20963,20 +21052,21 @@ fn read_zen_auto_exit(project_root: &std::path::Path) -> bool {
         .unwrap_or(true)
 }
 
+// trace:STORY-564 | ai:claude
 /// STORY-564: should the standalone-`--zen` finish *pause* (vs auto-exit)
 /// because the operator asked it to? True when `--pause-always` was passed
 /// (propagated as `AIDA_ZEN_PAUSE_ALWAYS=1`) OR `[zen] auto_exit = false` is
 /// configured. Either is the operator electing to drive grab-next by hand.
-/// trace:STORY-564 | ai:claude
 fn zen_pause_always_in_force(project_root: &std::path::Path) -> bool {
     std::env::var(zen::ZEN_PAUSE_ALWAYS_ENV).as_deref() == Ok("1")
         || !read_zen_auto_exit(project_root)
 }
 
+// trace:STORY-569 | ai:claude
 /// STORY-569: read `[zen] review_brief_agent` from `.aida/config.toml` — the
 /// mailbox target for the clean-finish build→review handoff. Missing config /
 /// key / unparseable TOML → the default `advisor`. An explicitly empty string
-/// disables the handoff. trace:STORY-569 | ai:claude
+/// disables the handoff.
 fn read_zen_review_brief_agent(project_root: &std::path::Path) -> Option<String> {
     let default = || Some("advisor".to_string());
     let path = config_path_for_project(project_root);
@@ -21008,11 +21098,12 @@ fn auto_archive_enabled() -> bool {
     }
 }
 
+// trace:STORY-441 | ai:claude
 /// STORY-441: run the same `--older-than N days --status completed,rejected`
 /// sweep that `aida archive --older-than` exposes, but as a side-effect of
 /// `aida pull` once the auto-bump has finished. Off by default — gated on
 /// `[archive] auto_after_days` being set. Best-effort: any error is printed
-/// as a warning, never fails the pull. trace:STORY-441 | ai:claude
+/// as a warning, never fails the pull.
 fn maybe_auto_archive_sweep(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
@@ -21081,14 +21172,14 @@ mod story_441_archive_config_tests {
         std::fs::write(config_dir.join("config.toml"), body).unwrap();
     }
 
-    /// trace:STORY-441 | ai:claude
+    // trace:STORY-441 | ai:claude
     #[test]
     fn read_archive_config_absent_returns_none() {
         let tmp = tempfile::tempdir().unwrap();
         assert_eq!(read_archive_auto_after_days(tmp.path()), None);
     }
 
-    /// trace:STORY-441 | ai:claude
+    // trace:STORY-441 | ai:claude
     #[test]
     fn read_archive_config_returns_configured_days() {
         let tmp = tempfile::tempdir().unwrap();
@@ -21096,8 +21187,9 @@ mod story_441_archive_config_tests {
         assert_eq!(read_archive_auto_after_days(tmp.path()), Some(30));
     }
 
+    // trace:STORY-441 | ai:claude
     /// Clamps below 7 to 7 with a stderr warning (warning is fire-and-
-    /// forget; we just verify the return value). trace:STORY-441 | ai:claude
+    /// forget; we just verify the return value).
     #[test]
     fn read_archive_config_clamps_below_seven_days() {
         let tmp = tempfile::tempdir().unwrap();
@@ -21105,7 +21197,7 @@ mod story_441_archive_config_tests {
         assert_eq!(read_archive_auto_after_days(tmp.path()), Some(7));
     }
 
-    /// trace:STORY-441 | ai:claude
+    // trace:STORY-441 | ai:claude
     #[test]
     fn read_archive_config_at_seven_passes_through() {
         let tmp = tempfile::tempdir().unwrap();
@@ -21113,7 +21205,7 @@ mod story_441_archive_config_tests {
         assert_eq!(read_archive_auto_after_days(tmp.path()), Some(7));
     }
 
-    /// trace:STORY-441 | ai:claude
+    // trace:STORY-441 | ai:claude
     #[test]
     fn read_archive_config_missing_section_returns_none() {
         let tmp = tempfile::tempdir().unwrap();
@@ -21121,9 +21213,9 @@ mod story_441_archive_config_tests {
         assert_eq!(read_archive_auto_after_days(tmp.path()), None);
     }
 
+    // trace:STORY-441 | ai:claude
     /// Mirrors `auto_bump_env_flag_respects_opt_out` shape — one test that
     /// saves/restores the env var so parallel tests don't race on it.
-    /// trace:STORY-441 | ai:claude
     #[test]
     fn auto_archive_enabled_env_flag_respects_opt_out() {
         let saved = std::env::var("AIDA_AUTO_ARCHIVE").ok();
@@ -21320,10 +21412,10 @@ mod story_284_store_sync_tests {
     }
 }
 
+// trace:BUG-21 | ai:claude
 /// Ensure git/claude hook files are executable. Called from scaffolder
 /// write paths so freshly-scaffolded hooks don't trigger git's "hook was
 /// ignored because not executable" warning.
-/// trace:BUG-21 | ai:claude
 fn ensure_executable_if_hook(rel_path: &std::path::Path, full_path: &std::path::Path) {
     let s = rel_path.to_string_lossy();
     let is_hook =
@@ -21346,12 +21438,12 @@ fn ensure_executable_if_hook(rel_path: &std::path::Path, full_path: &std::path::
     }
 }
 
+// trace:BUG-17 | ai:claude
 /// Resolve the description from one of three sources: inline `--description`,
 /// `--description-from-file PATH`, or `--description-stdin`. The CLI struct
 /// already enforces mutual exclusion via `conflicts_with_all`; here we just
 /// fetch the content from the right source. Returns `Ok(None)` when no
 /// source is set (caller falls back to empty / interactive prompt).
-/// trace:BUG-17 | ai:claude
 fn resolve_description(
     description: &Option<String>,
     description_from_file: &Option<std::path::PathBuf>,
@@ -21410,10 +21502,10 @@ pub(crate) fn parse_requirement_type(s: &str) -> Result<RequirementType> {
 mod parse_requirement_type_tests {
     use super::*;
 
+    // trace:STORY-104 | ai:claude
     /// `--type doc` and `--type documentation` both resolve to
     /// `RequirementType::Doc`. Aliases keep the user-facing surface tolerant
     /// to spell-outs, matching the precedent set by `--type adr`/`decision`.
-    /// trace:STORY-104 | ai:claude
     #[test]
     fn parses_doc_aliases() {
         assert_eq!(parse_requirement_type("doc").unwrap(), RequirementType::Doc);
@@ -21424,13 +21516,13 @@ mod parse_requirement_type_tests {
         );
     }
 
+    // trace:TASK-716 | ai:claude
     /// Drift guard (TASK-716): every `RequirementType` variant must have a
     /// canonical lowercase string that `parse_requirement_type` round-trips.
     /// The `match` below is exhaustive, so adding a new variant to the enum
     /// without wiring it into the CLI parser fails to compile here — keeping
     /// the documented/user-facing type list from silently drifting behind the
     /// model (the 13-vs-19 drift this test was filed to prevent).
-    /// trace:TASK-716 | ai:claude
     #[test]
     fn every_requirement_type_variant_round_trips() {
         use aida_core::models::RequirementType::*;
@@ -21491,6 +21583,7 @@ mod parse_requirement_type_tests {
     }
 }
 
+// trace:BUG-446 trace:TASK-686 | ai:claude
 /// Initialize distributed mode using an orphan branch + worktree.
 /// This is the default for single-repo projects.
 /// Store lives at .aida-store/ (worktree of orphan branch 'aida-store').
@@ -21510,7 +21603,6 @@ mod parse_requirement_type_tests {
 /// TASK-686 added the child-`.aida/` arm: a parent of AIDA projects that aren't
 /// all plain git repos (the `~/ai/` case — ~80 children) would otherwise slip
 /// the guard and leave a scaffold every child inherits via ancestor CLAUDE.md.
-/// trace:BUG-446 trace:TASK-686 | ai:claude
 fn unmanaged_nested_projects(cwd: &std::path::Path) -> Vec<String> {
     let submodule_paths = gitmodule_child_paths(cwd);
     let mut found = Vec::new();
@@ -21534,9 +21626,10 @@ fn unmanaged_nested_projects(cwd: &std::path::Path) -> Vec<String> {
     found
 }
 
+// trace:BUG-446 | ai:claude
 /// First path component of each `path = …` entry in the top-level `.gitmodules`
 /// — enough to exclude an immediate-child submodule directory from the
-/// workspace-of-projects guard. trace:BUG-446 | ai:claude
+/// workspace-of-projects guard.
 fn gitmodule_child_paths(cwd: &std::path::Path) -> std::collections::HashSet<String> {
     let mut paths = std::collections::HashSet::new();
     let Ok(content) = std::fs::read_to_string(cwd.join(".gitmodules")) else {
@@ -21557,8 +21650,8 @@ fn gitmodule_child_paths(cwd: &std::path::Path) -> std::collections::HashSet<Str
     paths
 }
 
+// trace:STORY-552 | ai:claude
 /// What to do when `aida init` runs in a directory that isn't a git repo yet.
-/// trace:STORY-552 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 enum GitInitDecision {
     /// Run `git init` without asking (explicit `--git-init`).
@@ -21570,9 +21663,10 @@ enum GitInitDecision {
     Bail,
 }
 
+// trace:STORY-552 | ai:claude
 /// Decide how to handle a non-git folder at the front of init. `--git-init`
 /// always wins; otherwise prompt at a TTY and bail elsewhere. Pure so it can be
-/// unit-tested without a terminal. trace:STORY-552 | ai:claude
+/// unit-tested without a terminal.
 fn git_init_decision(git_init_flag: bool, at_tty: bool) -> GitInitDecision {
     if git_init_flag {
         GitInitDecision::Yes
@@ -22174,11 +22268,11 @@ fn handle_init_distributed_worktree(
     Ok(())
 }
 
+// trace:EPIC-1-052 Phase 4 | ai:claude
 /// Bootstrap an AIDA clone: the user just `git clone`d a repo whose origin
 /// already has the `aida-store` orphan branch, and they're running `aida init`
 /// to set the project up locally. We fetch the orphan, attach a worktree,
 /// run scaffolding, and prompt for node-id acquisition.
-/// trace:EPIC-1-052 Phase 4 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_init_post_clone(
     cwd: &std::path::Path,
@@ -23182,12 +23276,12 @@ fn add_requirement_cli(
     Ok(())
 }
 
+// trace:TASK-527 | ai:claude
 /// TASK-527: match one `--tags` filter token against a spec's tag set, with
 /// prefix-glob support. A trailing `*` (`aida:queue:*`) matches any tag starting
 /// with the literal prefix, plus the bare prefix without its trailing `:` (so
 /// `aida:queue:*` also matches an exact `aida:queue` tag). Without `*` it's the
 /// existing exact membership test. Comma-OR composition happens at the caller.
-/// trace:TASK-527 | ai:claude
 fn tag_filter_matches(filter: &str, tags: &std::collections::HashSet<String>) -> bool {
     if let Some(prefix) = filter.strip_suffix('*') {
         let bare = prefix.strip_suffix(':').unwrap_or(prefix);
@@ -23315,6 +23409,7 @@ fn list_requirements(
     Ok(())
 }
 
+// trace:STORY-476 | ai:claude
 /// Read the `[external_refs]` provider → base-URL map from `.aida/config.toml`.
 ///
 /// Each line under the section is `provider = "https://..."` (e.g.
@@ -23323,7 +23418,6 @@ fn list_requirements(
 /// finally CWD. Missing file or section yields an empty map (callers then use
 /// the built-in defaults — see `aida_core::external_refs::render_ref_url`).
 /// Mirrors the line-by-line `read_config_workflow_hints` pattern.
-/// trace:STORY-476 | ai:claude
 fn read_external_ref_base_urls(
     store_path: &std::path::Path,
 ) -> std::collections::HashMap<String, String> {
@@ -23536,10 +23630,11 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-582 | ai:claude
 /// STORY-582: render the durable processing-record audit trail for `aida
 /// show`. One block per record: timestamp + agent header, the linkage
 /// (PR/commit/brief), the summary, and the decisions / punted / verdict
-/// tails when present. trace:STORY-582 | ai:claude
+/// tails when present.
 fn print_processing_records(records: &[aida_core::ProcessingRecord]) {
     println!("\n{}:", "Processing record".green().bold());
     for rec in records {
@@ -23583,9 +23678,10 @@ fn print_processing_records(records: &[aida_core::ProcessingRecord]) {
     }
 }
 
+// trace:STORY-582
 /// STORY-582: `aida record list|prune` — inspect or trim the durable
 /// processing-record audit trail. List is read-only (backend); prune writes
-/// through `Storage::update_atomically`, propose-by-default. trace:STORY-582
+/// through `Storage::update_atomically`, propose-by-default.
 fn handle_record_command(
     cmd: &crate::cli::RecordCommand,
     backend: &aida_core::CachedGitBackend,
@@ -23747,13 +23843,13 @@ pub(crate) fn apply_tag_deltas(
     changed
 }
 
+// trace:BUG-545 | ai:claude
 /// Build the loud-on-clobber warning shown when `aida edit --tags` REPLACES the
 /// whole tag set. `--tags` is a full replace (other scripts depend on that), so
 /// we don't change its semantics — we surface the old→new diff so the caller
 /// sees that provenance/routing tags were dropped, and point at the incremental
 /// `--add-tag` / `--remove-tag` forms. Returns `None` when the set is unchanged
 /// (no warning needed). The returned string is sorted for deterministic output.
-/// trace:BUG-545 | ai:claude
 pub(crate) fn tags_replace_warning(
     old_tags: &HashSet<String>,
     new_tags: &HashSet<String>,
@@ -23778,10 +23874,11 @@ pub(crate) fn tags_replace_warning(
     ))
 }
 
+// trace:STORY-489 | ai:claude
 /// Handler for `aida graph <SPEC>` — query the cross-spec relationship graph
 /// (blocked-by / blocks chains, epic rollup, reverse impact) on top of the
 /// cycle-safe `graph_walk` primitive (TASK-594). Read-only; the flagship
-/// "outsmart the flat-markdown spec tools" demo. trace:STORY-489 | ai:claude
+/// "outsmart the flat-markdown spec tools" demo.
 #[allow(clippy::too_many_arguments)]
 fn handle_graph_command(
     store: &aida_core::RequirementsStore,
@@ -23991,12 +24088,13 @@ fn handle_graph_command(
     Ok(())
 }
 
+// trace:STORY-439 | ai:claude
 /// STORY-439: stamp `complexity:<level>` / `estimated-assistance:<level>`
 /// tags on `spec` so the new dimension composes with existing tag tooling
 /// (`aida queue list --tag-prefix complexity:`, batch routing). Mirrors
 /// `load_store_for_lookup` for backend resolution. Best-effort — a missing
 /// store / missing spec / save failure logs and returns; the pickup itself
-/// is unaffected. trace:STORY-439 | ai:claude
+/// is unaffected.
 fn apply_calibration_tags(
     storage: &Storage,
     spec: &str,
@@ -24062,9 +24160,9 @@ fn apply_calibration_tags(
     }
 }
 
+// trace:STORY-451 | ai:codex
 /// STORY-451: stamp `effort:<touchpoint>:<bucket>` while preserving the
 /// other effort touchpoints. Best-effort sibling of [`apply_calibration_tags`].
-/// trace:STORY-451 | ai:codex
 fn apply_effort_tag(
     storage: &Storage,
     spec: &str,
@@ -24713,12 +24811,13 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
     Ok(())
 }
 
+// trace:BUG-64 | ai:claude
 /// True when a requirement's status means "this work is done — no new
 /// children should be filed under it without explicit override". Used by
 /// the BUG-64 guard on `aida add --parent` and `aida rel add --type
 /// child` to refuse parenting under closed work, and to keep `aida show
 /// --tree` / `aida list --parent` views from accumulating mixed-status
-/// trees. trace:BUG-64 | ai:claude
+/// trees.
 pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
     // TASK-741: "terminal" is single-sourced in the lifecycle model so the
     // archive invariant, the BUG-64 parent guard, and the diagram all read the
@@ -24767,12 +24866,12 @@ fn classify_queue_move_target(
     Ok(())
 }
 
+// trace:FR-1-011 | ai:claude
 /// Parse requirement ID - accepts either UUID or SPEC-ID. Used by the legacy
 /// SQLite path; the git-canonical dispatch resolves IDs directly via
 /// `get_requirement_by_spec_id` and uses `not_found::requirement_not_found`
 /// at the call site (with the actual store path).
 ///
-/// trace:FR-1-011 | ai:claude
 fn parse_requirement_id(id_str: &str, store: &RequirementsStore) -> Result<Uuid> {
     // Try parsing as UUID first
     if let Ok(uuid) = Uuid::parse_str(id_str) {
@@ -25235,9 +25334,10 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
     Ok(())
 }
 
+// trace:BUG-533 | ai:claude
 /// Where an effective config value came from. Rendered beside each value by
 /// `aida config show` so the operator can tell a deliberate override from an
-/// inherited default at a glance. trace:BUG-533 | ai:claude
+/// inherited default at a glance.
 enum PolicySource {
     /// No file or env set this — the built-in default is in force.
     Default,
@@ -25262,8 +25362,9 @@ impl PolicySource {
         }
     }
 
+    // trace:STORY-661 | ai:claude
     /// Color-free scope label for the `aida config menu` TUI, which does its
-    /// own styling. trace:STORY-661 | ai:claude
+    /// own styling.
     fn plain_label(&self) -> String {
         match self {
             PolicySource::Default => "default".to_string(),
@@ -25275,8 +25376,9 @@ impl PolicySource {
     }
 }
 
+// trace:BUG-533 | ai:claude
 /// One rendered policy row: a knob's effective value and where it resolved
-/// from. trace:BUG-533 | ai:claude
+/// from.
 struct PolicyRow {
     key: &'static str,
     value: String,
@@ -25294,6 +25396,7 @@ impl PolicyRow {
     }
 }
 
+// trace:TASK-793 | ai:claude
 /// One config section in the central policy registry: a `[section]` header and
 /// the resolved knob rows under it.
 ///
@@ -25304,7 +25407,7 @@ impl PolicyRow {
 /// and it surfaces in `config show` automatically. The
 /// [`KNOWN_CONFIG_SECTIONS`] const plus the `policy_registry_covers_*` tests are
 /// the bouncer: a section read elsewhere in the codebase but absent from the
-/// registry fails CI. trace:TASK-793 | ai:claude
+/// registry fails CI.
 struct PolicySection {
     /// The bare `[section]` name (no brackets) — the registry key matched
     /// against [`KNOWN_CONFIG_SECTIONS`] by the completeness test.
@@ -25326,6 +25429,7 @@ impl PolicySection {
     }
 }
 
+// trace:STORY-671 | ai:claude
 /// How a config knob may be edited from `aida config menu`, declared once per
 /// knob in [`CONFIG_KNOBS`] (STORY-671 — the single source the editor, the
 /// menu's `EditKind`, and the doc default all derive from). The value-type
@@ -25336,7 +25440,6 @@ impl PolicySection {
 /// This collapses the former hand-maintained `config_knob_meta` /
 /// `config_knob_edit_kind` tables into the registry: an editable knob's type +
 /// allowed set + range live with its doc + default in one declaration.
-/// trace:STORY-671 | ai:claude
 #[derive(Clone, Copy)]
 enum EditSafety {
     /// A boolean knob — the menu toggles it. Carries the built-in default.
@@ -25351,6 +25454,7 @@ enum EditSafety {
     ReadOnly { reason: &'static str },
 }
 
+// trace:STORY-671 | ai:claude
 /// One config knob, declared once. This is the **single source of truth**
 /// STORY-671 consolidates to: `aida config show`'s rows, `aida config menu`'s
 /// `EditKind`, the menu's per-knob default + explanation, `aida config edit`'s
@@ -25358,7 +25462,6 @@ enum EditSafety {
 /// knob is one entry here (plus its resolution branch in [`policy_registry`],
 /// which renders the live value) — no separate `config_knob_doc` /
 /// `config_knob_meta` / `KNOWN_CONFIG_SECTIONS` edits to forget.
-/// trace:STORY-671 | ai:claude
 struct KnobSpec {
     /// The bare `[section]` name (no brackets).
     section: &'static str,
@@ -25378,6 +25481,7 @@ struct KnobSpec {
     edit: EditSafety,
 }
 
+// trace:STORY-671 | ai:claude
 /// The central config-knob registry — STORY-671's single source of truth. Each
 /// knob declares its section/key, doc, default, and value-type + edit-safety
 /// once. Every config surface derives from this table:
@@ -25392,7 +25496,6 @@ struct KnobSpec {
 /// key the resolver emits under that section whose `(section, key)` is not
 /// otherwise declared (used where the key set is data-driven). A concrete
 /// `(section, key)` entry always takes precedence.
-/// trace:STORY-671 | ai:claude
 const CONFIG_KNOBS: &[KnobSpec] = &[
     // --- [agents] — agent permission posture (read-only: security-relevant). ---
     KnobSpec {
@@ -25649,10 +25752,10 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
     },
 ];
 
+// trace:STORY-671 | ai:claude
 /// Look up a knob's declaration in [`CONFIG_KNOBS`]: an exact `(section, key)`
 /// match wins; failing that, the `(section, "*")` section-wildcard entry covers
 /// data-driven key sets. `None` when the section is undeclared entirely.
-/// trace:STORY-671 | ai:claude
 fn config_knob_spec(section: &str, key: &str) -> Option<&'static KnobSpec> {
     CONFIG_KNOBS
         .iter()
@@ -25664,6 +25767,7 @@ fn config_knob_spec(section: &str, key: &str) -> Option<&'static KnobSpec> {
         })
 }
 
+// trace:STORY-671 trace:TASK-793 | ai:claude
 /// Every config section `aida config show` is expected to render — DERIVED from
 /// [`CONFIG_KNOBS`] (STORY-671), not a hand-maintained list. This is the drift
 /// tripwire's known-section set: each `[section]` AIDA reads from
@@ -25673,7 +25777,6 @@ fn config_knob_spec(section: &str, key: &str) -> Option<&'static KnobSpec> {
 /// shows up here automatically the moment its `KnobSpec` is declared — there is
 /// no separate list to forget. Consumed by the anti-drift tests (the only
 /// caller; `policy_registry` enumerates the resolvers directly).
-/// trace:STORY-671 trace:TASK-793 | ai:claude
 #[cfg(test)]
 fn known_config_sections() -> Vec<&'static str> {
     let mut seen = Vec::new();
@@ -25685,16 +25788,17 @@ fn known_config_sections() -> Vec<&'static str> {
     seen
 }
 
+// trace:BUG-533 | ai:claude
 /// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
 /// when absent / unparseable (so a missing file just means "all defaults").
-/// trace:BUG-533 | ai:claude
 pub(crate) fn read_project_config_value(project_root: &std::path::Path) -> Option<toml::Value> {
     let body = std::fs::read_to_string(config_path_for_project(project_root)).ok()?;
     toml::from_str(&body).ok()
 }
 
+// trace:BUG-533 | ai:claude
 /// Look up `[section].key` in a parsed config, returning the raw `toml::Value`
-/// when present. trace:BUG-533 | ai:claude
+/// when present.
 pub(crate) fn config_lookup<'a>(
     cfg: Option<&'a toml::Value>,
     section: &str,
@@ -25703,6 +25807,7 @@ pub(crate) fn config_lookup<'a>(
     cfg?.get(section)?.get(key)
 }
 
+// trace:TASK-793 trace:BUG-533 | ai:claude
 /// Render the full effective policy surface for `aida config show`. Iterates the
 /// central [`policy_registry`] — each registered section is shown with its
 /// resolved value + source (default / project `.aida/config.toml` / global
@@ -25714,7 +25819,6 @@ pub(crate) fn config_lookup<'a>(
 /// added there surfaces here for free. [`KNOWN_CONFIG_SECTIONS`] +
 /// `policy_registry_covers_known_sections` keep the registry from silently
 /// falling behind a newly-added config section.
-/// trace:TASK-793 trace:BUG-533 | ai:claude
 fn render_effective_policy(project_root: &std::path::Path) {
     println!();
     println!("{}", "Effective Policy:".blue().bold());
@@ -25730,6 +25834,7 @@ fn render_effective_policy(project_root: &std::path::Path) {
     );
 }
 
+// trace:TASK-793 trace:BUG-533 | ai:claude
 /// The central config-policy registry (BUG-533 slice 2 / TASK-793). Returns one
 /// [`PolicySection`] per known config section, each carrying its resolved knob
 /// rows. This is the **single source of truth** consumed by `aida config show`
@@ -25742,7 +25847,6 @@ fn render_effective_policy(project_root: &std::path::Path) {
 /// `glyphs::active_*`, `workflow_hints::enabled`, …) so the rendered values
 /// match what the rest of the binary actually reads — the registry is a view
 /// over the real readers, not a parallel re-derivation.
-/// trace:TASK-793 trace:BUG-533 | ai:claude
 fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
     let cfg = read_project_config_value(project_root);
     let mut sections: Vec<PolicySection> = Vec::new();
@@ -26390,8 +26494,9 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
     sections
 }
 
+// trace:STORY-106 | ai:claude
 /// Handle `aida config hints [true|false]` — show or persist the
-/// `[hints] workflow_hints` setting. trace:STORY-106 | ai:claude
+/// `[hints] workflow_hints` setting.
 fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
     let project_root = storage
         .path()
@@ -26454,12 +26559,12 @@ fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-671 trace:STORY-661 | ai:claude
 /// A one-line explanation + built-in default for a config knob, keyed by
 /// `(section, key)` — DERIVED from the central [`CONFIG_KNOBS`] registry
 /// (STORY-671). The framing matches `docs/environment-variables.md` and the
 /// `aida config show` rationale so the TUI carries the same human story the docs
 /// do. Knobs with no declaration fall back to a generic placeholder.
-/// trace:STORY-671 trace:STORY-661 | ai:claude
 fn config_knob_doc(section: &str, key: &str) -> (&'static str, &'static str) {
     match config_knob_spec(section, key) {
         Some(spec) => (spec.doc, spec.default),
@@ -26467,6 +26572,7 @@ fn config_knob_doc(section: &str, key: &str) -> (&'static str, &'static str) {
     }
 }
 
+// trace:STORY-661 | ai:claude
 /// `aida config menu` — assemble the configurable-item rows from the live
 /// policy registry (the same source `aida config show` walks) and launch the
 /// navigable TUI. Read + navigate only for this slice; inline editing is a
@@ -26476,7 +26582,7 @@ fn config_knob_doc(section: &str, key: &str) -> (&'static str, &'static str) {
 ///
 /// No-TTY degrades gracefully: prints a pointer to `aida config show` and
 /// exits 0, mirroring how `aida tui` / `aida --asciinema` handle a missing
-/// terminal. trace:STORY-661 | ai:claude
+/// terminal.
 #[cfg(feature = "tui")]
 fn handle_config_menu_command() -> Result<()> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
@@ -26494,18 +26600,19 @@ fn handle_config_menu_command() -> Result<()> {
     })
 }
 
+// trace:STORY-661 | ai:claude
 /// Stub for binaries built without the `tui` feature — `aida config menu`
 /// points the user at `aida config show` rather than half-running.
-/// trace:STORY-661 | ai:claude
 #[cfg(not(feature = "tui"))]
 fn handle_config_menu_command() -> Result<()> {
     println!("config menu requires a build with the TUI enabled; use `aida config show`.");
     Ok(())
 }
 
+// trace:STORY-661
 /// Project the policy registry into plain-text [`aida_tui::ConfigMenuItem`]
 /// rows: strip ANSI from the resolved value, flatten the source to a plain
-/// scope label, and attach the per-knob default + explanation. trace:STORY-661
+/// scope label, and attach the per-knob default + explanation.
 #[cfg(feature = "tui")]
 fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::ConfigMenuItem> {
     let mut items = Vec::new();
@@ -26527,13 +26634,14 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
     items
 }
 
+// trace:STORY-671 trace:STORY-669 trace:STORY-677 | ai:claude
 /// The edit metadata the menu's write-back path needs for a config knob, keyed
 /// by `(section, key)` — DERIVED from the central [`CONFIG_KNOBS`] registry
 /// (STORY-671). Returns the editable [`EditSafety`] variants (`Bool` / `Enum` /
 /// `Integer`) only; a `ReadOnly` declaration or an undeclared knob yields `None`
 /// so the editor refuses it. This replaces the former hand-maintained
 /// `config_knob_meta` table — the SAFE set is now whatever the registry declares
-/// editable. trace:STORY-671 trace:STORY-669 trace:STORY-677 | ai:claude
+/// editable.
 #[cfg(feature = "tui")]
 fn config_knob_meta(section: &str, key: &str) -> Option<EditSafety> {
     match config_knob_spec(section, key)?.edit {
@@ -26544,9 +26652,9 @@ fn config_knob_meta(section: &str, key: &str) -> Option<EditSafety> {
     }
 }
 
+// trace:STORY-671 trace:STORY-677 | ai:claude
 /// Project a knob's registry edit-safety into the TUI [`aida_tui::EditKind`].
 /// A `ReadOnly` declaration or an undeclared knob → `ReadOnly`.
-/// trace:STORY-671 trace:STORY-677 | ai:claude
 #[cfg(feature = "tui")]
 fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
     match config_knob_spec(section, key).map(|s| s.edit) {
@@ -26559,9 +26667,10 @@ fn config_knob_edit_kind(section: &str, key: &str) -> aida_tui::EditKind {
     }
 }
 
+// trace:STORY-669 | ai:claude
 /// Re-resolve one knob's (value, scope) strings from the live registry, exactly
 /// as `build_config_menu_items` does — so a freshly-written value shows live in
-/// the menu. trace:STORY-669 | ai:claude
+/// the menu.
 #[cfg(feature = "tui")]
 fn resolve_config_menu_row(
     project_root: &std::path::Path,
@@ -26581,13 +26690,14 @@ fn resolve_config_menu_row(
     None
 }
 
+// trace:STORY-669 trace:STORY-677
 /// The cli-side edit callback the config menu invokes on Enter/Space over an
 /// editable row (STORY-669, extended STORY-677). `requested` is `None` for a
 /// `Bool` toggle (this fn flips the stored value) and `Some(value)` for the
 /// enum value cycled to or the integer typed in — the TUI derives those; this
 /// fn just writes the TOML value through the section-preserving writer to the
 /// file the value currently lives in, then re-resolves the row. Env-shadowed
-/// knobs are refused (the var still wins). trace:STORY-669 trace:STORY-677
+/// knobs are refused (the var still wins).
 #[cfg(feature = "tui")]
 fn cli_edit_config_knob(
     project_root: &std::path::Path,
@@ -26680,8 +26790,9 @@ fn cli_edit_config_knob(
     }
 }
 
+// trace:STORY-677
 /// Render a freshly-written toml value as the plain fallback display string
-/// (used only when the live re-resolve can't find the row). trace:STORY-677
+/// (used only when the live re-resolve can't find the row).
 #[cfg(feature = "tui")]
 fn rendered_toml_value(v: &toml_edit::Value) -> String {
     match v {
@@ -26692,11 +26803,12 @@ fn rendered_toml_value(v: &toml_edit::Value) -> String {
     }
 }
 
+// trace:STORY-633 | ai:claude
 /// Handle `aida config glyph ...` — the CLI surface over the glyph registry,
 /// themes, and per-symbol override table (EPIC-45 phase 4). Pure ergonomics +
 /// theme presets + a format-preserving TOML writer on top of the tested
 /// resolution layer in [`crate::glyphs`] / [`crate::glyph_config`]. Adds NO new
-/// resolution logic. trace:STORY-633 | ai:claude
+/// resolution logic.
 fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
     use crate::glyph_config::{self, Scope};
     use crate::glyphs::{self, Glyph};
@@ -26897,9 +27009,9 @@ fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-633 | ai:claude
 /// Drop the `[ui] theme` key, preserving the rest of the file. Used by
 /// `aida config glyph theme unicode` to return to the implicit default.
-/// trace:STORY-633 | ai:claude
 fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
     use toml_edit::DocumentMut;
     let body = match std::fs::read_to_string(path) {
@@ -26915,8 +27027,8 @@ fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-633 | ai:claude
 /// The comma-separated valid glyph names, for `set`/`unset` error messages.
-/// trace:STORY-633 | ai:claude
 fn valid_glyph_names() -> String {
     crate::glyphs::Glyph::ALL
         .iter()
@@ -26925,8 +27037,8 @@ fn valid_glyph_names() -> String {
         .join(", ")
 }
 
+// trace:STORY-633 | ai:claude
 /// A short "(scope: path)" suffix for glyph-command confirmations.
-/// trace:STORY-633 | ai:claude
 fn scope_label(scope: crate::glyph_config::Scope, path: &std::path::Path) -> String {
     let which = match scope {
         crate::glyph_config::Scope::Project => "project",
@@ -26935,8 +27047,8 @@ fn scope_label(scope: crate::glyph_config::Scope, path: &std::path::Path) -> Str
     format!("{}: {}", which, path.display())
 }
 
+// trace:STORY-44 | ai:claude
 /// Handle `aida config user` — show or update `~/.aida/preferences.toml`.
-/// trace:STORY-44 | ai:claude
 fn handle_config_user(node_id: Option<&str>, email: Option<&str>, emit_toml: bool) -> Result<()> {
     let mut prefs = aida_core::UserPreferences::load()?;
     let mut changed = false;
@@ -27069,10 +27181,11 @@ fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
     Ok(())
 }
 
+// trace:EPIC-1-001 | ai:claude
 /// Handle `aida cache {rebuild,status}` against a CachedGitBackend.
-/// trace:EPIC-1-001 | ai:claude
 /// Handle `aida db block <subcommand>` — pre-allocated agreed ID blocks.
 // trace:FR-2-005 | ai:claude
+// trace:FR-1-071 | ai:claude
 /// One-shot migration: collapse legacy origin spec_ids onto their agreed_ids.
 /// For each requirement where spec_id ≠ agreed_id, set spec_id := agreed_id
 /// and clear agreed_id (since the canonical id now lives in spec_id alone).
@@ -27081,7 +27194,6 @@ fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
 /// "delete files that fell out of the store" pass.
 ///
 /// Relationships use UUIDs internally so they're unaffected.
-/// trace:FR-1-071 | ai:claude
 fn handle_retire_legacy_ids(
     backend: &aida_core::CachedGitBackend,
     _store_path: &std::path::Path,
@@ -27159,6 +27271,7 @@ fn handle_retire_legacy_ids(
     Ok(())
 }
 
+// trace:TASK-80 | ai:claude
 /// Audit the store for pre-existing agreed-id collisions — two requirements
 /// claiming the same short id across their (spec_id, agreed_id) pair.
 ///
@@ -27172,7 +27285,7 @@ fn handle_retire_legacy_ids(
 /// a collision typically means picking a winner manually because
 /// "automatically re-gate the later claimant" interacts with the
 /// pre-allocated block registry (FR-2-005) in ways that need policy
-/// decisions, not just code. trace:TASK-80 | ai:claude
+/// decisions, not just code.
 fn handle_db_check_collisions(
     backend: &aida_core::CachedGitBackend,
     _store_path: &std::path::Path,
@@ -27640,22 +27753,22 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
     Ok(())
 }
 
+// trace:EPIC-1-052 | ai:claude
+// trace:FR-1-077 | ai:claude
 /// Handle `aida node` subcommands. Operates on the orphan-store worktree
 /// at `store_path` (typically `.aida-store/`).
-/// trace:EPIC-1-052 | ai:claude
 /// Render the docs tree, called from the legacy (Storage facade) dispatch.
-/// trace:FR-1-077 | ai:claude
 fn handle_docs_command(cmd: &DocsCommand, storage: &Storage) -> Result<()> {
     let store = storage.load()?;
     handle_docs_with_store(cmd, &store)
 }
 
+// trace:TASK-589 | ai:claude
 /// TASK-589: assemble the discipline-pack glossary from the binary's embedded
 /// templates — the machinery glossary and/or the lifecycle vocabulary. Reads
 /// the embedded copy (not the project's scaffolded files), so it is correct
 /// even when a project's `docs/aida/discipline/` is missing or stale. With
 /// neither flag (or both) it returns both sections, machinery first.
-/// trace:TASK-589 | ai:claude
 fn render_discipline_glossary(machinery: bool, lifecycle: bool) -> Result<String> {
     let templates = aida_core::get_embedded_templates();
     let embedded = |key: &str| -> Result<String> {
@@ -27683,10 +27796,11 @@ fn render_discipline_glossary(machinery: bool, lifecycle: bool) -> Result<String
     Ok(out)
 }
 
+// trace:STORY-104 | ai:claude
 /// Dispatch `aida doc {add,list,show}`. Always operates against the
 /// distributed git-canonical backend — Doc entries are just requirements
 /// with `req_type == Doc` and `--about` modeled as `References`
-/// relationships. trace:STORY-104 | ai:claude
+/// relationships.
 fn handle_doc_command(
     cmd: &DocCommand,
     store_path: &std::path::Path,
@@ -28021,9 +28135,9 @@ fn handle_doc_command(
     Ok(())
 }
 
+// trace:TASK-680 | ai:claude
 /// Resolve the commit time of a git ref/tag as a UTC timestamp. Best-effort —
 /// `None` on any git failure or unparseable output.
-/// trace:TASK-680 | ai:claude
 fn git_ref_commit_time(
     root: &std::path::Path,
     git_ref: &str,
@@ -28046,6 +28160,7 @@ fn git_ref_commit_time(
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
+// trace:TASK-680 | ai:claude
 /// Pure selection for the release-time doc-coverage gate (TASK-680).
 ///
 /// Returns the requirements that **reached Completed at or after `cutoff`** and
@@ -28063,7 +28178,6 @@ fn git_ref_commit_time(
 /// Doc-typed requirements and archived specs are never themselves reported as
 /// gaps (a doc doesn't need a doc about it).
 ///
-/// trace:TASK-680 | ai:claude
 fn find_uncovered_completed_specs(
     requirements: &[aida_core::models::Requirement],
     cutoff: Option<chrono::DateTime<chrono::Utc>>,
@@ -28135,8 +28249,8 @@ fn find_uncovered_completed_specs(
     gaps
 }
 
+// trace:STORY-104 | ai:claude
 /// Print the full detail view for a single Doc entry.
-/// trace:STORY-104 | ai:claude
 fn print_doc_detail(req: &aida_core::models::Requirement, store: &aida_core::RequirementsStore) {
     use aida_core::models::RelationshipType;
 
@@ -28181,9 +28295,9 @@ fn print_doc_detail(req: &aida_core::models::Requirement, store: &aida_core::Req
     }
 }
 
+// trace:FR-1-077 | ai:claude
 /// Shared implementation — both the legacy Storage path and the git-canonical
 /// path call this with a loaded store.
-/// trace:FR-1-077 | ai:claude
 fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Result<()> {
     match cmd {
         DocsCommand::Build { output, dry_run } => {
@@ -28317,10 +28431,10 @@ mod glossary_render_tests {
     }
 }
 
+// trace:SPIKE-31 | ai:claude
 /// SPIKE-31 entry point: reconcile `.claude/rules/aida-specs/` against the
 /// spec graph. Surfaces a small text report (or dry-run preview) — the
 /// substrate side of the substrate-as-bouncer compose move.
-/// trace:SPIKE-31 | ai:claude
 fn handle_rules_command(
     cmd: &cli::RulesCommand,
     backend: &aida_core::CachedGitBackend,
@@ -28874,18 +28988,20 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
     Ok(())
 }
 
+// trace:FR-1-073 | ai:claude
+// trace:FR-1-074 | ai:claude
 /// Common requirement types that get auto-allocated blocks on `aida node
 /// acquire` (Phase 3 of EPIC-1-052). Without these, new reqs of these
 /// types fall through to the node-aware form (`TASK-1-019`) and require
 /// `aida db merge-gate` to promote them — friction the user shouldn't
 /// have to think about. Includes the five docs-layer types from FR-1-074
 /// so new clones get short ADR-1, PRIN-1, VIS-1, etc., out of the box.
-/// trace:FR-1-073 | ai:claude
-/// trace:FR-1-074 | ai:claude
 const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
     "FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE", "PRIN", "VIS", "CON", "ADR", "TERM",
 ];
 
+// trace:EPIC-1-052 Phase 3 | ai:claude
+// trace:FR-1-073 | ai:claude
 /// Auto-allocate initial blocks for a freshly-acquired node. Claims one
 /// block per common type that doesn't already have one for this node.
 /// Returns a vector of allocated range labels (e.g., `["FR-101..200",
@@ -28894,8 +29010,6 @@ const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
 ///
 /// Default block size is 100. Each block claim goes through its own CAS
 /// push loop so a stray contention on one type doesn't block the others.
-/// trace:EPIC-1-052 Phase 3 | ai:claude
-/// trace:FR-1-073 | ai:claude
 fn auto_allocate_initial_blocks(
     store_path: &std::path::Path,
     node_id: &str,
@@ -28913,9 +29027,9 @@ fn auto_allocate_initial_blocks(
     auto_allocate_initial_blocks_with_scope(store_path, node_id, hn, email, scope)
 }
 
+// trace:FR-271 | ai:claude
 /// Same as `auto_allocate_initial_blocks` but with an explicit scope —
 /// for use by `aida init` which decides scope before writing config.toml.
-/// trace:FR-271 | ai:claude
 fn auto_allocate_initial_blocks_with_scope(
     store_path: &std::path::Path,
     node_id: &str,
@@ -28950,10 +29064,10 @@ fn auto_allocate_initial_blocks_with_scope(
     Ok(allocated)
 }
 
+// trace:TASK-281 | ai:claude
 /// Why a block is being claimed — controls the idempotency guard and the
 /// commit message in `auto_allocate_block_inner`.
 ///
-/// trace:TASK-281 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BlockClaimReason {
     /// Initial allocation on `aida node acquire` — idempotent. Returns
@@ -28964,9 +29078,9 @@ enum BlockClaimReason {
     OnThresholdCross,
 }
 
+// trace:FR-271 | ai:claude
 /// Like `auto_allocate_block_for_type` but with an explicit size — used
 /// by the Global counter-scope path which wants a larger shared block.
-/// trace:FR-271 | ai:claude
 fn auto_allocate_block_with_size(
     store_path: &std::path::Path,
     node_id: &str,
@@ -28986,10 +29100,10 @@ fn auto_allocate_block_with_size(
     )
 }
 
+// trace:FR-1-073 | ai:claude
 /// Allocate a single block for the given (node_id, type_prefix) if one
 /// doesn't already exist. Returns Some("<TYPE>-<start>..<end>") on a fresh
 /// claim, None if the node already had a block for that type.
-/// trace:FR-1-073 | ai:claude
 fn auto_allocate_block_for_type(
     store_path: &std::path::Path,
     node_id: &str,
@@ -29008,6 +29122,8 @@ fn auto_allocate_block_for_type(
     )
 }
 
+// trace:FR-271 | ai:claude
+// trace:TASK-281 | ai:claude
 /// Shared CAS-loop allocator. Size differs by caller: per-type defaults
 /// to 100; global scope uses 1000. The label format `<TYPE>-<start>..<end>`
 /// is preserved verbatim so existing user-facing output looks unchanged
@@ -29019,8 +29135,6 @@ fn auto_allocate_block_for_type(
 /// claims a fresh block alongside any existing ones (the TASK-281 auto-
 /// claim refill).
 ///
-/// trace:FR-271 | ai:claude
-/// trace:TASK-281 | ai:claude
 fn auto_allocate_block_inner(
     store_path: &std::path::Path,
     node_id: &str,
@@ -29114,11 +29228,11 @@ fn auto_allocate_block_inner(
     );
 }
 
+// trace:TASK-281 | ai:claude
 /// Read the `[block_allocation]` section (and any `[block_allocation.<type>]`
 /// subsections) from `.aida/config.toml`. Returns the project's auto-claim
 /// defaults when the file or section is absent.
 ///
-/// trace:TASK-281 | ai:claude
 fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::BlockAllocationConfig {
     let config_path = project_dir.join(".aida").join("config.toml");
     let Ok(content) = std::fs::read_to_string(&config_path) else {
@@ -29158,6 +29272,7 @@ fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::Blo
     cfg
 }
 
+// trace:TASK-444 | ai:claude
 /// Human-readable one-liner describing the effective auto-claim policy
 /// for `type_prefix`, used as the continuation line under each per-type
 /// row of `aida db block status` (TASK-444). Resolves the effective
@@ -29166,7 +29281,6 @@ fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::Blo
 /// vs `per-type opt-out`) so a user troubleshooting "why didn't a fresh
 /// block claim?" doesn't have to grep `.aida/config.toml` to find out.
 ///
-/// trace:TASK-444 | ai:claude
 fn auto_claim_summary(cfg: &aida_core::BlockAllocationConfig, type_prefix: &str) -> String {
     if !cfg.is_enabled_for(type_prefix) {
         if !cfg.auto_claim {
@@ -29190,6 +29304,7 @@ fn auto_claim_summary(cfg: &aida_core::BlockAllocationConfig, type_prefix: &str)
     )
 }
 
+// trace:TASK-449 | ai:claude
 /// Type-agnostic counterpart to `auto_claim_summary`, used by the
 /// "no blocks for node N" branch of `aida db block status` (TASK-449).
 /// At that point no concrete type prefix is in scope, so the summary
@@ -29198,7 +29313,6 @@ fn auto_claim_summary(cfg: &aida_core::BlockAllocationConfig, type_prefix: &str)
 /// `(configured)` tag fires whenever the user has any per-type section
 /// in `.aida/config.toml` (signal that `[block_allocation]` is wired up).
 ///
-/// trace:TASK-449 | ai:claude
 fn global_auto_claim_summary(cfg: &aida_core::BlockAllocationConfig) -> String {
     if !cfg.auto_claim {
         // TASK-467: a per-type re-enable (e.g. `[block_allocation.bug]
@@ -29222,11 +29336,11 @@ fn global_auto_claim_summary(cfg: &aida_core::BlockAllocationConfig) -> String {
     )
 }
 
+// trace:TASK-281 | ai:claude
 /// Outcome of a successful auto-claim — used by `add_requirement_cli` to
 /// print the one-line info notice ("Auto-claimed BUG-517..616 (threshold
 /// crossed: 18 remaining → 118)"). `previous_remaining` is the aggregate
 /// before the claim; `new_remaining` is the aggregate after.
-/// trace:TASK-281 | ai:claude
 #[derive(Debug, Clone)]
 struct AutoClaimOutcome {
     label: String,
@@ -29234,6 +29348,7 @@ struct AutoClaimOutcome {
     new_remaining: u32,
 }
 
+// trace:TASK-281 | ai:claude
 /// Ensure the (node, type) pair has at least `cfg.threshold_for(type)`
 /// IDs remaining; if not (and auto-claim is enabled per config), claim a
 /// fresh block of `cfg.size_for(type)`. Scope-aware: under
@@ -29248,7 +29363,6 @@ struct AutoClaimOutcome {
 ///   stale local block, because continuing there can recreate the cross-clone
 ///   ID collision that lost specs during the PR-270 pull.
 ///
-/// trace:TASK-281 | ai:claude
 fn ensure_block_capacity(
     store_path: &std::path::Path,
     project_dir: &std::path::Path,
@@ -29771,26 +29885,26 @@ struct RoleState {
     #[serde(default)]
     activity: Vec<RoleActivity>,
 
+    // trace:TASK-1-021 | ai:claude
     /// Phase 3 scope filter: tags AND'd into the default filter for
     /// `aida list` and `aida queue list/next` while this role is active.
     /// Empty = no tag scope. Override on a single command with explicit
     /// --tags or --no-scope.
-    /// trace:TASK-1-021 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     scope_tags: Vec<String>,
 
+    // trace:TASK-1-021 | ai:claude
     /// Phase 3 scope filter: status auto-applied while this role is active.
     /// None = no status scope. Override on a single command with explicit
     /// --status or --no-scope.
-    /// trace:TASK-1-021 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     scope_status: Option<String>,
 
+    // trace:TASK-1-022 | ai:claude
     /// Phase 3 system-prompt addendum: free-form text injected into Claude
     /// Code's context at SessionStart (via the aida-role-context.sh hook)
     /// when this role is active. Lets you keep role-specific instructions
     /// to the model alongside the role itself.
-    /// trace:TASK-1-022 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     system_prompt: Option<String>,
 }
@@ -30281,8 +30395,9 @@ fn mailbox_operator_id() -> String {
         .unwrap_or_else(|_| "default".to_string())
 }
 
+// trace:STORY-539 | ai:claude
 /// One mailbox message as a compact line: short-id, urgency flag, originator →
-/// recipient, local time, body. trace:STORY-539 | ai:claude
+/// recipient, local time, body.
 fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     let to = match &m.to {
         aida_core::mailbox::Recipient::Agent(a) => a.clone(),
@@ -30329,13 +30444,14 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     );
 }
 
+// trace:STORY-585 | ai:claude
 /// The identity set whose mail a session should see: the shell's agent/user id
 /// (BUG-89 resolution) plus the session role (`AIDA_SESSION_ROLE`) when set and
 /// distinct. A handoff addressed `--to advisor` lands in the role's inbox, not
 /// the shell user's, so surfacing only `current_user_id` would miss it — this
 /// is the union both the notice and the statusline urgent counter resolve over,
 /// so the two surfaces agree (STORY-585 acceptance #5). Deduped, role-aliases
-/// normalized (`dialog` → `advisor`). trace:STORY-585 | ai:claude
+/// normalized (`dialog` → `advisor`).
 // trace:TASK-818 | ai:claude
 fn inbox_identities() -> Vec<String> {
     let mut ids = vec![current_user_id(None)];
@@ -30373,10 +30489,11 @@ fn inbox_identities() -> Vec<String> {
     ids
 }
 
+// trace:STORY-585
 /// Render an unread-mail notice as plain, agent-facing context text (no ANSI —
 /// it is injected into a context window by a hook, not painted on a terminal).
 /// Framed so the agent knows it is interpreted INPUT, not a command, and how to
-/// read/ack explicitly. Empty summaries never reach here. trace:STORY-585
+/// read/ack explicitly. Empty summaries never reach here.
 fn render_mailbox_notice(
     summary: &aida_core::mailbox::NoticeSummary,
     identities: &[String],
@@ -30468,11 +30585,11 @@ fn global_role_file(name: &str) -> Option<std::path::PathBuf> {
     global_roles_dir().map(|d| d.join(format!("{}.toml", name)))
 }
 
+// trace:BUG-228 | ai:claude
 /// True if `line` (already trimmed) looks like a TOML `key = value`
 /// assignment — a bare-key identifier followed by `=`. The role-file
 /// salvage path uses it to tell a real field from injected junk such as
 /// the stray `"` a torn write left behind in BUG-228.
-/// trace:BUG-228 | ai:claude
 fn is_toml_kv_line(line: &str) -> bool {
     match line.split_once('=') {
         Some((key, _)) => {
@@ -30486,6 +30603,7 @@ fn is_toml_kv_line(line: &str) -> bool {
     }
 }
 
+// trace:BUG-228 | ai:claude
 /// Parse a role file leniently. A clean file behaves exactly like a strict
 /// `toml::from_str`. When the strict parse fails, salvage the header table
 /// and every well-formed `[[activity]]` entry, dropping — and reporting,
@@ -30493,7 +30611,6 @@ fn is_toml_kv_line(line: &str) -> bool {
 /// corrupted activity append (BUG-228: a torn concurrent write left a
 /// stray `"`) from taking down the whole role. Returns `Err` only when the
 /// *header* itself is unparseable, since nothing useful survives that.
-/// trace:BUG-228 | ai:claude
 fn parse_role_lenient(content: &str) -> Result<(RoleState, Vec<String>)> {
     // Fast path: a clean file parses strictly, no salvage needed.
     let strict_err = match toml::from_str::<RoleState>(content) {
@@ -30555,10 +30672,10 @@ fn parse_role_lenient(content: &str) -> Result<(RoleState, Vec<String>)> {
     Ok((state, warnings))
 }
 
+// trace:BUG-228 | ai:claude
 /// Load a role by name. Looks in the project first, then the global dir.
 /// Returns the state, the path it was loaded from (for save-back), and any
 /// salvage warnings from `parse_role_lenient` (empty for a clean file).
-/// trace:BUG-228 | ai:claude
 fn load_role_with_warnings(
     project_root: &std::path::Path,
     name: &str,
@@ -30748,7 +30865,7 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     }
 }
 
-/// trace:TASK-1-022 | ai:claude
+// trace:TASK-1-022 | ai:claude
 fn handle_role_prompt(project_root: &std::path::Path, cmd: &RolePromptCommand) -> Result<()> {
     match cmd {
         RolePromptCommand::Set {
@@ -30813,8 +30930,8 @@ fn print_role_prompt(state: &RoleState) {
     }
 }
 
+// trace:TASK-1-021 | ai:claude
 /// Resolve a role name from --name or AIDA_SESSION_ROLE; error if neither.
-/// trace:TASK-1-021 | ai:claude
 fn resolve_role_name(name: Option<&str>) -> Result<String> {
     // TASK-586: canonicalize so an explicit `--name dialog` or a stale
     // `AIDA_SESSION_ROLE=dialog` shell still resolves to the advisor role.
@@ -30830,10 +30947,10 @@ fn resolve_role_name(name: Option<&str>) -> Result<String> {
     }
 }
 
+// trace:TASK-1-021 | ai:claude
 /// Read the active role's scope (tags, status), if any. Returns None when
 /// no role is active or the role file is unreadable. Used by `aida list`
 /// and `aida queue list/next` to compose default filters.
-/// trace:TASK-1-021 | ai:claude
 fn active_role_scope() -> Option<(Vec<String>, Option<String>)> {
     let role_name = std::env::var("AIDA_SESSION_ROLE")
         .ok()
@@ -31202,13 +31319,14 @@ fn handle_role_add(
     Ok(())
 }
 
+// trace:BUG-427 | ai:claude
 /// Escape an arbitrary string for safe interpolation inside a
 /// single-quoted shell word: every `'` becomes `'\''` (close-quote,
 /// escaped-quote, reopen-quote). Any value emitted into the `eval`-able
 /// shell of `aida role enter` MUST pass through this — free-text role
 /// purposes and spec titles routinely contain apostrophes/parens, and an
 /// unescaped apostrophe closes the quote and exposes the rest to bare
-/// bash (`syntax error near unexpected token )`). trace:BUG-427 | ai:claude
+/// bash (`syntax error near unexpected token )`).
 fn sh_single_quote(s: &str) -> String {
     s.replace('\'', "'\\''")
 }
@@ -31454,12 +31572,13 @@ fn emit_role_enter_eval(
     }
 }
 
+// trace:TASK-42 | ai:claude
 /// `aida role active` — one-line stub that prints just the active role
 /// name, scriptable counterpart to `git branch --show-current` and
 /// `git config --get user.email`. Pure read of `$AIDA_SESSION_ROLE` so
 /// it never loads the project store; exits 1 with empty stdout when no
 /// role is active so shell guards like `[ -n "$(aida role active)" ]`
-/// work without parsing. trace:TASK-42 | ai:claude
+/// work without parsing.
 fn handle_role_active() -> Result<()> {
     match std::env::var("AIDA_SESSION_ROLE") {
         Ok(role) if !role.is_empty() => {
@@ -31517,13 +31636,14 @@ fn handle_role_end() -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-586 | ai:claude
 /// Canonicalize a role name. TASK-586 made `advisor` the canonical
 /// identifier; `dialog` (TASK-279's old internal token) is now a
 /// deprecated, silently-accepted alias so existing config / shells
 /// (`AIDA_SESSION_ROLE=dialog`) / `dialog`-routed queue items / legacy
 /// `dialog.toml` role files on not-yet-migrated machines keep resolving.
 /// Applied at every role-name boundary: load, list, input resolution,
-/// and queue routing. trace:TASK-586 | ai:claude
+/// and queue routing.
 fn canonical_role_name(raw: &str) -> String {
     if raw.eq_ignore_ascii_case("dialog") {
         "advisor".to_string()
@@ -31538,27 +31658,28 @@ fn canonical_role_name(raw: &str) -> String {
     }
 }
 
+// trace:TASK-747 | ai:claude
 /// The canonical first-class route target for "a human is required" — the
 /// escalation-cascade terminus (implementer → advisor → human). `aida queue add
 /// --for human` files a spec explicitly into the human-attention set, and
 /// `aida list human` unions those explicitly-routed specs with the
-/// status/tag-derived membership. trace:TASK-747 | ai:claude
+/// status/tag-derived membership.
 const HUMAN_ROUTE: &str = "human";
 
+// trace:TASK-747 | ai:claude
 /// Is this `--for <role>` value the `human` route target? Case-insensitive so
 /// `--for Human` and `--for HUMAN` are accepted as the same first-class route.
-/// trace:TASK-747 | ai:claude
 fn is_human_route(raw: &str) -> bool {
     raw.eq_ignore_ascii_case(HUMAN_ROUTE)
 }
 
+// trace:TASK-747 | ai:claude
 /// Collect the spec IDs (uppercased, stable order) of every OPEN requirement
 /// explicitly routed `--for human` across all per-user queues. Work-routing is
 /// a project-global axis, so we union across all queue YAML files directly
 /// (mirrors [`all_queued_requirement_ids`]). Terminal (Completed/Rejected) and
 /// archived specs are skipped — a routed item that already shipped is no longer
 /// a human bottleneck. Returns an empty set when the queue dir is absent.
-/// trace:TASK-747 | ai:claude
 fn human_routed_spec_ids(
     project_root: &std::path::Path,
     store: &aida_core::RequirementsStore,
@@ -31611,10 +31732,11 @@ fn human_routed_spec_ids(
     out
 }
 
+// trace:TASK-747 | ai:claude
 /// A `--for human` routed spec counts toward the human-attention view only
 /// while it is OPEN — an archived or terminal (Completed/Rejected) spec that
 /// once carried the route is no longer a bottleneck. Pure over its inputs so
-/// the open-test is directly unit-testable. trace:TASK-747 | ai:claude
+/// the open-test is directly unit-testable.
 fn human_route_is_open(archived: bool, status: &aida_core::RequirementStatus) -> bool {
     !archived
         && !matches!(
@@ -31766,10 +31888,11 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
     Ok(())
 }
 
+// trace:BUG-228 | ai:claude
 /// Repair a corrupted role file (BUG-228). Quarantines any unparseable
 /// activity-log entries, preserves the header and every well-formed entry,
 /// backs the original up, and rewrites the file cleanly. A healthy file is
-/// left untouched. trace:BUG-228 | ai:claude
+/// left untouched.
 fn handle_role_repair(project_root: &std::path::Path, name: Option<&str>) -> Result<()> {
     let resolved = resolve_role_name(name)?;
     // Resolve the on-disk path the way load_role does, but read the raw
@@ -31900,12 +32023,12 @@ const STARTER_ROLES: &[(&str, &str)] = &[
     ),
 ];
 
+// trace:TASK-608 TASK-638 | ai:claude
 /// Core of `aida role scaffold` (TASK-608): install the [`STARTER_ROLES`] into
 /// global `~/.aida/roles/`, skipping any that already exist (idempotent,
 /// non-destructive). Returns the (created, skipped) role names so callers can
 /// report in their own voice — both the `role scaffold` command and `aida init`
 /// (TASK-638) reuse this rather than re-deriving the role set.
-/// trace:TASK-608 TASK-638 | ai:claude
 fn scaffold_starter_roles(
     project_root: &std::path::Path,
 ) -> Result<(Vec<&'static str>, Vec<&'static str>)> {
@@ -32287,10 +32410,11 @@ fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
 // branch, no remote. This is the dev-playground slice of SPIKE-48; the
 // first-user/tutorial layer is deferred. trace:SPIKE-48 | ai:claude
 
+// trace:SPIKE-48 | ai:claude
 /// Default sandbox store location: a stable per-user dir under the system temp
 /// directory, so repeated `aida sandbox create` / `path` point at the same
 /// playground without the user tracking a path. Per-user so two accounts on one
-/// box don't collide. trace:SPIKE-48 | ai:claude
+/// box don't collide.
 fn default_sandbox_path() -> std::path::PathBuf {
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
@@ -32331,10 +32455,10 @@ fn sandbox_is_populated(dir: &std::path::Path) -> bool {
     aida_core::git_ops::is_git_repo(dir) && dir.join("objects").is_dir()
 }
 
+// trace:SPIKE-48 | ai:claude
 /// Create (or no-op on) the sandbox store at `store`. Initializes a git repo +
 /// `GitBackend` (which lays down `objects/` and `metadata.yaml`), optionally
 /// seeds curated scenario specs, and prints the activation export line.
-/// trace:SPIKE-48 | ai:claude
 fn sandbox_create(store: std::path::PathBuf, seed: bool, force: bool) -> Result<()> {
     use aida_core::git_ops;
 
@@ -32404,9 +32528,9 @@ fn sandbox_create(store: std::path::PathBuf, seed: bool, force: bool) -> Result<
     Ok(())
 }
 
+// trace:SPIKE-48 | ai:claude
 /// Wipe the sandbox's contents and re-create it empty (or `--seed`-ed). The
 /// directory path is reused so an exported `AIDA_STORE` stays valid.
-/// trace:SPIKE-48 | ai:claude
 fn sandbox_reset(store: std::path::PathBuf, seed: bool) -> Result<()> {
     if store.exists() {
         std::fs::remove_dir_all(&store)
@@ -32415,8 +32539,8 @@ fn sandbox_reset(store: std::path::PathBuf, seed: bool) -> Result<()> {
     sandbox_create(store, seed, true)
 }
 
+// trace:SPIKE-48 | ai:claude
 /// Delete the sandbox store directory entirely. Idempotent.
-/// trace:SPIKE-48 | ai:claude
 fn sandbox_destroy(store: std::path::PathBuf) -> Result<()> {
     if store.exists() {
         std::fs::remove_dir_all(&store)
@@ -32437,8 +32561,9 @@ fn sandbox_destroy(store: std::path::PathBuf) -> Result<()> {
     Ok(())
 }
 
+// trace:SPIKE-48 | ai:claude
 /// Print the sandbox path (and existence), or the `export AIDA_STORE=...` line
-/// with `--export`. trace:SPIKE-48 | ai:claude
+/// with `--export`.
 fn sandbox_path(store: std::path::PathBuf, export: bool) -> Result<()> {
     if export {
         println!("{}", sandbox_export_line(&store));
@@ -32453,10 +32578,11 @@ fn sandbox_path(store: std::path::PathBuf, export: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:SPIKE-48 | ai:claude
 /// Seed a small, deterministic set of curated scenario specs into the sandbox:
 /// a short lifecycle walk plus a blocked-by chain (so `aida graph --blocked-by`
 /// and a drain have something to chew on). Deterministic + offline by design —
-/// AI-generated scenarios are a deferred nicety. trace:SPIKE-48 | ai:claude
+/// AI-generated scenarios are a deferred nicety.
 fn sandbox_seed(store: &std::path::Path) -> Result<()> {
     use aida_core::models::{RelationshipType, Requirement, RequirementStatus, RequirementType};
 
@@ -32516,10 +32642,10 @@ fn sandbox_seed(store: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+// trace:EPIC-21 | ai:claude
 /// Print the alignment between this commit's paired store SHA (from the
 /// `Aida-Store:` trailer) and the current orphan store HEAD. Reports
 /// "aligned" when they match, "drift" with commit count otherwise.
-/// trace:EPIC-21 | ai:claude
 fn store_status() -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
@@ -32710,7 +32836,8 @@ fn short_sha(sha: &str) -> String {
     }
 }
 
-/// Verdict for the code↔store SHA pairing. trace:BUG-584 | ai:claude
+// trace:BUG-584 | ai:claude
+/// Verdict for the code↔store SHA pairing.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum StoreDriftVerdict {
     /// Nothing to compare — no trailer, or no `.aida-store/`.
@@ -32728,6 +32855,7 @@ enum StoreDriftVerdict {
     Diverged,
 }
 
+// trace:STORY-49 trace:BUG-584 | ai:claude
 /// Pure drift verdict: given the code commit's paired store SHA (from the
 /// `Aida-Store:` trailer), the current orphan-store HEAD, and whether the
 /// paired SHA is an ancestor of the current store HEAD, decide the pairing
@@ -32745,7 +32873,6 @@ enum StoreDriftVerdict {
 /// `paired_is_ancestor_of_current` is the caller-supplied ancestry fact
 /// (`git merge-base --is-ancestor <paired> <current>`); kept as a parameter
 /// so this stays a pure, unit-testable function.
-/// trace:STORY-49 trace:BUG-584 | ai:claude
 fn store_drift_verdict(
     paired_store_sha: Option<&str>,
     current_store_head: Option<&str>,
@@ -32759,12 +32886,13 @@ fn store_drift_verdict(
     }
 }
 
+// trace:BUG-584 | ai:claude
 /// True when `ancestor` is an ancestor of (or equal to) `descendant` in the
 /// orphan store's git history — i.e. the store fast-forwarded from `ancestor`
 /// to `descendant`. Resolved via `git merge-base --is-ancestor` inside the
 /// `.aida-store/` worktree. Returns `false` on any git error or when either
 /// SHA is missing locally (which is itself a divergence signal, so the
-/// caller correctly reports drift). trace:BUG-584 | ai:claude
+/// caller correctly reports drift).
 fn store_sha_is_ancestor(store_path: &std::path::Path, ancestor: &str, descendant: &str) -> bool {
     if !store_path.exists() {
         return false;
@@ -32778,9 +32906,10 @@ fn store_sha_is_ancestor(store_path: &std::path::Path, ancestor: &str, descendan
         .unwrap_or(false)
 }
 
+// trace:STORY-49 | ai:claude
 /// Read the `Aida-Store:` trailer SHA from the code HEAD commit message at
 /// `project_root`, if present. Returns `None` on any git error, no trailer,
-/// or no commits. trace:STORY-49 | ai:claude
+/// or no commits.
 fn paired_store_sha_for_head(project_root: &std::path::Path) -> Option<String> {
     let head_msg = std::process::Command::new("git")
         .arg("-C")
@@ -32814,8 +32943,9 @@ fn paired_store_sha_for_head(project_root: &std::path::Path) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+// trace:STORY-49 | ai:claude
 /// Current orphan-store HEAD SHA from `<project_root>/.aida-store`, if the
-/// worktree exists and git can resolve it. trace:STORY-49 | ai:claude
+/// worktree exists and git can resolve it.
 fn current_store_head_sha(project_root: &std::path::Path) -> Option<String> {
     let store_path = project_root.join(".aida-store");
     if !store_path.exists() {
@@ -32837,6 +32967,7 @@ fn current_store_head_sha(project_root: &std::path::Path) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+// trace:STORY-49 trace:BUG-584
 /// STORY-49: one-line store/code SHA-drift warning for `aida status`.
 ///
 /// Warn-only, and only on **genuine** divergence. The code HEAD's paired
@@ -32848,7 +32979,7 @@ fn current_store_head_sha(project_root: &std::path::Path) -> Option<String> {
 /// store HEAD — a rewind/rewrite, or a paired SHA missing locally). Silent
 /// when aligned, when the store is simply ahead (the normal, healthy state),
 /// when there is no trailer (hook not installed / pre-hook commit), or when
-/// there is no `.aida-store/`. trace:STORY-49 trace:BUG-584
+/// there is no `.aida-store/`.
 fn print_status_store_drift_section(project_root: &std::path::Path) {
     let paired = paired_store_sha_for_head(project_root);
     let current = current_store_head_sha(project_root);
@@ -32942,8 +33073,9 @@ mod story_49_store_drift_tests {
     }
 }
 
+// trace:EPIC-21 | ai:claude
 /// Install the prepare-commit-msg hook from EMBEDDED_TEMPLATES into
-/// `.git/hooks/prepare-commit-msg`. Idempotent. trace:EPIC-21 | ai:claude
+/// `.git/hooks/prepare-commit-msg`. Idempotent.
 fn store_install_hook(force: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let hooks_dir = project_root.join(".git").join("hooks");
@@ -33837,9 +33969,10 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
     Ok(normalized.to_string())
 }
 
+// trace:TASK-673 | ai:claude
 /// Whether `category` (a normalized doctor category) is in scope given the
 /// user's `--category` filter. `None` filter selects everything. Errors only
-/// if the filter itself is an unknown category. trace:TASK-673 | ai:claude
+/// if the filter itself is an unknown category.
 fn doctor_category_selected(filter: Option<&str>, category: &str) -> Result<bool> {
     match filter {
         None => Ok(true),
@@ -33875,10 +34008,11 @@ struct CompletedWithoutCommitScan {
     hidden_older: usize,
 }
 
+// trace:TASK-673 | ai:claude
 /// TASK-673: spec-graph ⟂ git tripwire. Returns a `completed-without-commit`
 /// finding for every spec in `Completed` status that NO commit on the default
 /// CODE branch references (by `(SPEC-ID)` subject/trailer) and that NO tracked
-/// file at that branch carries a `// trace:SPEC-ID`. A Completed spec with zero
+/// file at that branch carries a `// trace` marker for it. A Completed spec with zero
 /// corroboration means the requirement graph is asserting work git has never
 /// seen — the defense-in-depth companion to the BUG-449 MCP gate.
 ///
@@ -33893,7 +34027,7 @@ struct CompletedWithoutCommitScan {
 /// `since` (a git ref/tag or ISO date) exempts specs last modified before that
 /// point, quieting noise on legacy history predating trace conventions. The
 /// reference scan itself always walks the FULL default-branch history so an old
-/// corroborating commit is never missed. trace:TASK-673 | ai:claude
+/// corroborating commit is never missed.
 fn scan_completed_without_commit(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -33902,6 +34036,8 @@ fn scan_completed_without_commit(
     scan_completed_without_commit_with_options(project_root, store, since, false).findings
 }
 
+// trace:BUG-606 | ai:claude
+// trace:BUG-606 | ai:claude
 /// Build the corroboration set: every spec-id any commit message references.
 /// Scans the FULL message (subject + body) of each commit — a squash-merge
 /// concatenates each child commit's `(SPEC-ID)` trailer into the BODY, so a
@@ -33909,12 +34045,10 @@ fn scan_completed_without_commit(
 /// subject-trailer extractor (`(SPEC-ID)` / leading `SPEC-ID:`) with the
 /// body-trailer extractor (skips code-like lines per BUG-412). Plan commits are
 /// skipped — they name PLANNED, not shipped, specs (BUG-426). Pure + testable.
-/// trace:BUG-606 | ai:claude
 /// Full-history corroboration set for the default branch: every spec-id any
 /// commit message references (subject + body, squash-body-aware). The
 /// completed-without-commit and claimed-done-divergence detectors both rely on
 /// this being COMPLETE — an incomplete set false-flags shipped specs.
-/// trace:BUG-606 | ai:claude
 fn referenced_spec_ids_on_default_branch(
     project_root: &std::path::Path,
 ) -> std::collections::HashSet<String> {
@@ -34119,7 +34253,8 @@ fn scan_completed_without_commit_with_options(
 // is gated behind --yes --force (destructive remote deletion). trace:TASK-717
 // ============================================================================
 
-/// The classification verdict for one remote branch. trace:TASK-717
+// trace:TASK-717
+/// The classification verdict for one remote branch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RemoteBranchVerdict {
     /// Protected or open-PR — excluded from any consideration.
@@ -34130,10 +34265,11 @@ enum RemoteBranchVerdict {
     Keep(String),
 }
 
+// trace:TASK-717
 /// Inputs to the pure remote-branch classifier — every git/gh probe result the
 /// safety model needs, gathered once per branch by the scanner. Keeping the
 /// classification pure makes the squash-aware safety model unit-testable
-/// without git or gh. trace:TASK-717
+/// without git or gh.
 #[derive(Debug, Clone)]
 struct RemoteBranchFacts {
     /// True when the branch is a protected ref (main/master/aida-store).
@@ -34156,11 +34292,12 @@ struct RemoteBranchFacts {
     unique_unmerged_commits: u32,
 }
 
+// trace:TASK-717
 /// Pure squash-aware classification of one remote branch. No git/gh — every
 /// input is pre-gathered in `RemoteBranchFacts`. This is the safety model:
 /// excludes protected + open-PR branches first; declares safe-to-delete only on
 /// a positive "merged/terminal" signal AND zero unique unmerged commits;
-/// otherwise keeps the branch and flags it. trace:TASK-717
+/// otherwise keeps the branch and flags it.
 fn classify_stale_remote_branch(facts: &RemoteBranchFacts) -> RemoteBranchVerdict {
     // EXCLUDE first — protected and open-PR branches are never candidates.
     if facts.protected {
@@ -34202,9 +34339,10 @@ fn classify_stale_remote_branch(facts: &RemoteBranchFacts) -> RemoteBranchVerdic
     RemoteBranchVerdict::SafeToDelete(merged_reason.to_string())
 }
 
+// trace:TASK-717
 /// Derive the candidate spec id from a work-branch name (`task-281-foo` →
 /// `TASK-281`). Returns None when the branch doesn't follow the work-branch
-/// convention. trace:TASK-717
+/// convention.
 fn spec_id_from_work_branch(branch: &str) -> Option<String> {
     if !is_work_spec_branch_name(branch) {
         return None;
@@ -34225,13 +34363,14 @@ fn spec_id_from_work_branch(branch: &str) -> Option<String> {
     Some(format!("{}-{}", kind.to_ascii_uppercase(), digits))
 }
 
+// trace:TASK-717
 /// TASK-717: scan stale `origin/*` branches and classify each under the
 /// squash-aware safety model. Read-only — performs git ancestry/rev-list probes
 /// and one `gh pr list` for the open-PR set, never mutates anything. Returns a
 /// `stale-remote-branches` finding for every branch that is either SafeToDelete
 /// (verdict carries the merge reason; `safe_heal=false` so deletion stays gated
 /// behind --yes --force) or Keep (flagged for the operator, never auto-healed).
-/// Excluded branches produce no finding. trace:TASK-717
+/// Excluded branches produce no finding.
 fn scan_stale_remote_branches(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -34358,10 +34497,11 @@ fn scan_stale_remote_branches(
     findings
 }
 
+// trace:TASK-717
 /// TASK-717: delete one stale remote branch via `git push origin --delete`.
 /// Only reachable when the finding's action surfaced it as SafeToDelete and the
 /// caller passed --yes --force (see `heal_doctor_finding`). A Keep-flagged
-/// branch never routes here — its action string is operator-only. trace:TASK-717
+/// branch never routes here — its action string is operator-only.
 fn heal_doctor_stale_remote_branch(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -34422,12 +34562,12 @@ fn heal_doctor_stale_remote_branch(
 // sign-off. trace:TASK-878
 // ============================================================================
 
+// trace:TASK-878 | ai:claude
 /// Is this worktree one of the AIDA/Agent-tool managed isolation worktrees that
 /// accumulate? Matched on EITHER the conventional path segment
 /// (`.claude/worktrees/agent-<id>`) OR the conventional branch name
 /// (`worktree-agent-<id>`) — both are stamped by the same launcher, and matching
 /// either keeps detached or oddly-pathed cases in scope. Pure → unit-testable.
-/// trace:TASK-878 | ai:claude
 fn is_agent_managed_worktree(path: &std::path::Path, branch: Option<&str>) -> bool {
     let path_str = path.to_string_lossy().replace('\\', "/");
     let path_match = path_str.contains("/.claude/worktrees/agent-")
@@ -34438,7 +34578,8 @@ fn is_agent_managed_worktree(path: &std::path::Path, branch: Option<&str>) -> bo
     path_match || branch_match
 }
 
-/// The classification verdict for one agent-managed worktree. trace:TASK-878
+// trace:TASK-878
+/// The classification verdict for one agent-managed worktree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum AgentWorktreeVerdict {
     /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
@@ -34447,10 +34588,11 @@ enum AgentWorktreeVerdict {
     Keep(String),
 }
 
+// trace:TASK-878
 /// Inputs to the pure agent-worktree classifier — every git/forge probe result
 /// the safety model needs, gathered once per worktree by the scanner. Keeping
 /// the classification pure makes the squash-aware safety model unit-testable
-/// without git or a forge. trace:TASK-878
+/// without git or a forge.
 #[derive(Debug, Clone)]
 struct AgentWorktreeFacts {
     /// True when the worktree has uncommitted changes (tracked or staged dirt,
@@ -34469,11 +34611,12 @@ struct AgentWorktreeFacts {
     unique_unmerged_commits: u32,
 }
 
+// trace:TASK-878 | ai:claude
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
 /// — every input is pre-gathered in `AgentWorktreeFacts`. This is the safety
 /// model: a dirty worktree is always kept; removal needs a positive merged
 /// signal AND zero unique unmerged commits; otherwise the worktree is kept and
-/// flagged. trace:TASK-878 | ai:claude
+/// flagged.
 fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
     // KEEP first — uncommitted work is unambiguously "has work". Clean != no
     // work, but dirty is definitely work; never delete it.
@@ -34528,11 +34671,12 @@ fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
 // guard; if git refuses we SKIP (never `-f`) and report. trace:BUG-614
 // ============================================================================
 
+// trace:BUG-614 | ai:claude
 /// BUG-614: lossless prune of dead worktree bookkeeping. `git worktree prune`
 /// only removes administrative entries for worktrees whose directories no
 /// longer exist — it never deletes a live worktree, so this is always safe.
 /// Best-effort and quiet: a spawn/exec failure is swallowed (the caller treats
-/// it as a non-event). trace:BUG-614 | ai:claude
+/// it as a non-event).
 fn lossless_prune_worktrees(project_root: &std::path::Path) {
     let _ = std::process::Command::new("git")
         .arg("-C")
@@ -34550,10 +34694,11 @@ enum WorktreeGcVerdict {
     Preserve(String),
 }
 
+// trace:BUG-614 | ai:claude
 /// BUG-614: pure inputs to the conservative GC predicate — every probe result
 /// the safety model needs, gathered once per worktree by the scanner. Keeping
 /// the predicate pure (no git/lease/process probes) makes the four safety
-/// gates exhaustively unit-testable. trace:BUG-614 | ai:claude
+/// gates exhaustively unit-testable.
 #[derive(Debug, Clone)]
 struct WorktreeGcFacts {
     /// True when this worktree is one of the `.claude/worktrees/agent-*` /
@@ -34574,12 +34719,13 @@ struct WorktreeGcFacts {
     has_active_lease: bool,
 }
 
+// trace:BUG-614 | ai:claude
 /// BUG-614: the conservative GC predicate. Removal requires ALL of:
 /// agent-managed AND merged-or-gone AND clean AND unlocked AND no active lease.
 /// Any failing gate PRESERVES the worktree with a human-readable reason. The
 /// order is deliberate: cheapest / most-protective signals first so the reason
 /// names the strongest objection. Default-to-preserve: an unrecognized state
-/// is kept, never removed. trace:BUG-614 | ai:claude
+/// is kept, never removed.
 fn classify_worktree_gc(facts: &WorktreeGcFacts) -> WorktreeGcVerdict {
     if !facts.is_agent_managed {
         return WorktreeGcVerdict::Preserve("not an agent-managed worktree".to_string());
@@ -34606,6 +34752,7 @@ fn classify_worktree_gc(facts: &WorktreeGcFacts) -> WorktreeGcVerdict {
     WorktreeGcVerdict::Eligible
 }
 
+// trace:BUG-614 | ai:claude
 /// BUG-614: the set of worktree paths (canonicalized) that a live process or an
 /// active session-lease references. Two sources, unioned:
 ///   1. session leases whose `worktree_path` resolves to a live state
@@ -34613,7 +34760,6 @@ fn classify_worktree_gc(facts: &WorktreeGcFacts) -> WorktreeGcVerdict {
 ///   2. live `claude` processes whose cwd sits inside a worktree (covers
 ///      Agent-tool worktrees that carry no AIDA lease).
 /// A path appearing in either set is "active" and must never be GC'd.
-/// trace:BUG-614 | ai:claude
 fn active_worktree_paths(project_root: &std::path::Path) -> HashSet<std::path::PathBuf> {
     let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
     let mut out: HashSet<std::path::PathBuf> = HashSet::new();
@@ -34638,8 +34784,9 @@ fn active_worktree_paths(project_root: &std::path::Path) -> HashSet<std::path::P
     out
 }
 
+// trace:BUG-614 | ai:claude
 /// BUG-614: does any active worktree path equal `wt` or sit beneath it? A live
-/// process one level down still pins the worktree. trace:BUG-614 | ai:claude
+/// process one level down still pins the worktree.
 fn worktree_is_active(wt: &std::path::Path, active: &HashSet<std::path::PathBuf>) -> bool {
     let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.to_path_buf());
     active
@@ -34647,11 +34794,11 @@ fn worktree_is_active(wt: &std::path::Path, active: &HashSet<std::path::PathBuf>
         .any(|a| *a == wt_canon || a.starts_with(&wt_canon))
 }
 
+// trace:BUG-614 | ai:claude
 /// BUG-614: is this worktree locked? Parses `git worktree list --porcelain` and
 /// reports whether the record for `wt` carries a bare `locked` line (git emits
 /// `locked` with an optional reason after it). Read-only; false on any git
 /// failure so a probe error never makes us treat a worktree as removable.
-/// trace:BUG-614 | ai:claude
 fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> bool {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -34677,6 +34824,7 @@ fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> b
     false
 }
 
+// trace:BUG-614 | ai:claude
 /// BUG-614: `aida session gc` — the explicit operator GC of stale agent
 /// worktrees. Scans every `.claude/worktrees/agent-*` worktree, gathers the
 /// four safety facts, and (unless `--dry-run`) runs `git worktree remove` (NOT
@@ -34684,7 +34832,7 @@ fn worktree_is_locked(project_root: &std::path::Path, wt: &std::path::Path) -> b
 /// is reported with its reason; a worktree git itself refuses to remove is
 /// SKIPPED (never force-removed) and reported. Always runs the lossless prune
 /// first. Never invoked on the hot `aida status` read path — only on this
-/// explicit operator command. trace:BUG-614 | ai:claude
+/// explicit operator command.
 fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
 
@@ -34862,6 +35010,7 @@ fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-878
 /// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
 /// squash-aware safety model. Read-only — performs git ancestry/rev-list probes
 /// and one forge merged-PR lookup per branch, never mutates anything. Returns a
@@ -34869,7 +35018,7 @@ fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
 /// Removable (verified merged + clean + no unique commits; `safe_heal=false` so
 /// removal stays gated behind --yes --force + the STORY-666 sign-off) or Keep
 /// (flagged for the operator, never auto-removed). The project's own worktree
-/// and the `aida-store` worktree are skipped. trace:TASK-878
+/// and the `aida-store` worktree are skipped.
 fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     use std::process::Command as PCmd;
 
@@ -34989,6 +35138,7 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
     findings
 }
 
+// trace:TASK-878 | ai:claude
 /// TASK-878: remove one merged agent worktree + delete its branch. Only
 /// reachable when the finding surfaced it as Removable AND the caller passed
 /// --yes --force under an interactive (non-autonomous) context — the STORY-666
@@ -34996,7 +35146,7 @@ fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFind
 /// Keep-flagged worktree never routes here (its action string is operator-only).
 /// Re-verifies the worktree is still clean right before removing (a salvage
 /// patch is written if anything appeared since the scan) and only deletes the
-/// branch after the worktree is gone. trace:TASK-878 | ai:claude
+/// branch after the worktree is gone.
 fn heal_doctor_merged_agent_worktree(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -35096,11 +35246,12 @@ fn heal_doctor_merged_agent_worktree(
     })
 }
 
+// trace:TASK-673 | ai:claude
 /// Parse the spec id out of a `git grep -o` hit on the trace regex. The line is
-/// the matched text (`trace:SPEC-ID`), possibly carrying a `ref:file:` prefix
-/// git adds when grepping a tree; we locate the last `trace:` and read the id
+/// the matched text (a `trace` marker plus SPEC-ID), possibly carrying a
+/// `ref:file:` prefix git adds when grepping a tree; we locate the last
+/// `trace` token and read the id
 /// after it. Returns the id upper-cased, or None if the token is malformed.
-/// trace:TASK-673 | ai:claude
 fn parse_trace_id_token(line: &str) -> Option<String> {
     let idx = line.rfind("trace:")?;
     let rest = &line[idx + "trace:".len()..];
@@ -35118,10 +35269,10 @@ fn parse_trace_id_token(line: &str) -> Option<String> {
     }
 }
 
+// trace:TASK-673 | ai:claude
 /// Resolve a `--since` value to a UTC cutoff: first try it as a git ref/tag and
 /// take that commit's committer date; failing that, parse it as an RFC-3339
 /// datetime or a bare `YYYY-MM-DD` date. None if it resolves to neither.
-/// trace:TASK-673 | ai:claude
 fn resolve_completed_since_cutoff(
     project_root: &std::path::Path,
     since: &str,
@@ -35235,12 +35386,13 @@ fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-860 | ai:claude
 /// Render the forge-CLI availability row in `aida doctor`'s environment section.
 /// `aida pr auto-queue-review` (and the rest of the PR/CI lifecycle) fails hard
 /// when the project's forge CLI (`gh` for GitHub, `glab` for GitLab) is not on
 /// PATH, so surface it here — OK / missing-with-install-hint / none-needed
 /// (pure-git) — rather than letting it stay silent until the first `pr` command.
-/// Colourised to match the doctor-check output style. trace:TASK-860 | ai:claude
+/// Colourised to match the doctor-check output style.
 fn render_doctor_forge_row() {
     let project_root = match find_project_root() {
         Ok(root) => main_worktree_root_from(&root),
@@ -35260,10 +35412,10 @@ fn render_doctor_forge_row() {
     println!("  {} {}", glyph, msg);
 }
 
+// trace:TASK-865 | ai:claude
 /// One-line bubblewrap (`bwrap`) OS-sandbox availability status, shared by
 /// `aida doctor` and `aida init`. Reports AVAILABILITY only — it does not
 /// enable `os_wrap` (the `[contained] os_wrap` knob is a separate concern).
-/// trace:TASK-865 | ai:claude
 fn bwrap_status_line() -> String {
     match crate::session::bwrap_availability() {
         crate::session::BwrapAvailability::Ok => {
@@ -35276,12 +35428,13 @@ fn bwrap_status_line() -> String {
     }
 }
 
+// trace:TASK-865 | ai:claude
+// trace:STORY-665 | ai:claude
 /// Render the bwrap availability row in `aida doctor`'s environment section,
 /// colourised to match the doctor-check output style. When confinement is
 /// blocked or bwrap is missing, print the EXACT copy-pasteable remediation
 /// (not just a one-line prose hint) plus a pointer at the guided setup command;
-/// when it's ready, confirm how to opt in. trace:TASK-865 | ai:claude
-/// trace:STORY-665 | ai:claude
+/// when it's ready, confirm how to opt in.
 fn render_doctor_bwrap_row() {
     let avail = crate::session::bwrap_availability();
     let glyph = match avail {
@@ -35338,13 +35491,13 @@ fn render_doctor_bwrap_row() {
     }
 }
 
+// trace:STORY-665 | ai:claude
 /// `aida doctor --fix-sandbox` — guided, copy-pasteable bring-up of the OS
 /// sandbox (bubblewrap write-confinement) on the current host. A PRINTER, not a
 /// silent sudo-runner: it detects the current state, prints the exact ordered
 /// sequence (install / persist-sysctl / opt-in / verify) with sudo steps marked
 /// "run this yourself", and runs the NON-sudo availability re-probe as a smoke
 /// check. Honest + safe — it never escalates privileges on the user's behalf.
-/// trace:STORY-665 | ai:claude
 fn doctor_fix_sandbox() -> Result<()> {
     use crate::session::{
         bwrap_availability, BwrapAvailability, BWRAP_INSTALL_DEBIAN, BWRAP_USERNS_SYSCTL_PERSIST,
@@ -35483,6 +35636,7 @@ fn doctor_fix_sandbox() -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-666
 /// STORY-666: is THIS process an autonomous / unattended context for the
 /// purposes of the destructive-heal gate? Pure so it is unit-testable without
 /// touching the real terminal or environment — `doctor_running_autonomously`
@@ -35496,7 +35650,7 @@ fn doctor_fix_sandbox() -> Result<()> {
 /// `--yes` flag only ever *reaches* a destructive heal together with `--force`,
 /// and at a TTY that combination is a deliberate human decision; what we must
 /// fail-closed against is the genuinely unattended case — piped/CI stdin (no
-/// TTY) or an `--auto-complete` drain (orchestrator token live). trace:STORY-666
+/// TTY) or an `--auto-complete` drain (orchestrator token live).
 fn doctor_context_is_autonomous(stdin_is_tty: bool, orchestrated: bool) -> bool {
     !stdin_is_tty || orchestrated
 }
@@ -35509,10 +35663,11 @@ fn doctor_running_autonomously(project_root: &std::path::Path) -> bool {
     doctor_context_is_autonomous(std::io::stdin().is_terminal(), orchestrated)
 }
 
+// trace:STORY-666 | ai:claude
 /// STORY-666: the heal disposition for one finding-category, decided by its
 /// safe/destructive classification, the requested flags, and whether we are in
 /// an autonomous context. Pure → unit-testable. The single place the
-/// fail-closed invariant lives. trace:STORY-666 | ai:claude
+/// fail-closed invariant lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HealDisposition {
     /// Apply the category's heals (safe always; destructive only with explicit
@@ -35734,10 +35889,11 @@ fn heal_doctor_finding(
     }
 }
 
+// trace:STORY-496 | ai:claude
 /// STORY-496: reap a dead-PID agent-registry entry. The finding id is
 /// `{agent_type}#{pid}`. Re-checks the pid is still dead before removing — a
 /// pid can be reused by an unrelated process between scan and heal, and we
-/// must never reap a live agent. trace:STORY-496 | ai:claude
+/// must never reap a live agent.
 fn heal_doctor_dead_agent(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -35936,13 +36092,14 @@ fn heal_doctor_spec_status(
     })
 }
 
+// trace:TASK-673 | ai:claude
 /// TASK-673: re-open a Completed-without-corroboration spec to Done. Done is the
 /// "finished on a branch, awaiting merge" state, so the spec lands in the
 /// queue's "awaiting commit" lane where the missing corroboration is visible and
 /// actionable — far better than a Completed row git can't back up. Re-checks the
 /// status is still Completed (a concurrent `aida pull` may have legitimately
 /// corroborated it since the scan). The finding id matches either spec_id or
-/// agreed_id. trace:TASK-673 | ai:claude
+/// agreed_id.
 fn heal_doctor_completed_without_commit(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -36002,11 +36159,12 @@ fn heal_doctor_orphan_worktree(
     })
 }
 
+// trace:TASK-752 | ai:claude
 /// TASK-752: heal a tracked legacy-store-cruft finding — exactly PR-651's
 /// resolution: `git rm` the file from the tree, then append the gitignore block
 /// (`requirements*.yaml`, `scaffold-report.html`) so the artifacts can't return.
 /// Idempotent: a path already untracked (e.g. a prior heal removed it) reports
-/// `skipped`; the gitignore block is appended only once. trace:TASK-752 | ai:claude
+/// `skipped`; the gitignore block is appended only once.
 fn heal_doctor_legacy_store_cruft(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -36062,9 +36220,10 @@ fn heal_doctor_legacy_store_cruft(
     })
 }
 
+// trace:TASK-752 | ai:claude
 /// TASK-752: append PR-651's exact gitignore guard so the swept legacy-store
 /// artifacts can't return. Idempotent — no-op if the patterns are already
-/// present. Returns whether it wrote anything. trace:TASK-752 | ai:claude
+/// present. Returns whether it wrote anything.
 fn ensure_legacy_store_cruft_gitignore(project_root: &std::path::Path) -> Result<bool> {
     use std::io::Write;
     let gitignore_path = project_root.join(".gitignore");
@@ -36086,6 +36245,7 @@ fn ensure_legacy_store_cruft_gitignore(project_root: &std::path::Path) -> Result
     Ok(true)
 }
 
+// trace:BUG-563 | ai:claude
 /// BUG-563: heal a per-clone runtime file wrongly tracked on the orphan
 /// `aida-store` branch — `git rm --cached` it IN THE STORE WORKTREE (untrack but
 /// keep the working copy, since the live clone still needs its own node.toml /
@@ -36093,7 +36253,7 @@ fn ensure_legacy_store_cruft_gitignore(project_root: &std::path::Path) -> Result
 /// per-clone runtime set, then COMMIT the untrack on the store worktree so the
 /// orphan branch stops carrying it. Idempotent: a path already untracked (e.g. a
 /// prior heal removed it) reports `skipped`; the gitignore block is appended only
-/// once; a no-op commit is skipped. trace:BUG-563 | ai:claude
+/// once; a no-op commit is skipped.
 fn heal_doctor_store_tracked_runtime(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -36185,10 +36345,11 @@ fn heal_doctor_store_tracked_runtime(
     })
 }
 
+// trace:BUG-563 | ai:claude
 /// BUG-563: append the per-clone-runtime gitignore guard to the STORE worktree's
 /// `.gitignore` so the untracked files can't return on the orphan branch.
 /// Idempotent — no-op if the load-bearing patterns are already present. Returns
-/// whether it wrote anything. trace:BUG-563 | ai:claude
+/// whether it wrote anything.
 fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
     use std::io::Write;
     let gitignore_path = store_worktree.join(".gitignore");
@@ -37352,13 +37513,14 @@ mod story_462_doctor_tests {
         assert_eq!(again.status, "skipped");
     }
 
+    // trace:BUG-407 | ai:claude
     /// BUG-407: `confirm_doctor_category` must NOT block on stdin in a
     /// non-interactive shell (the `aida doctor --heal` hang). Under `cargo
     /// test` stdin is non-interactive, so this returns Ok(false) immediately
     /// and the test completing at all proves it doesn't block. Also locks the
     /// contract: non-interactive declines (never silently auto-confirms).
     /// The open-socket hang condition itself is verified empirically (a
-    /// background `--heal` run with a finding present). trace:BUG-407 | ai:claude
+    /// background `--heal` run with a finding present).
     #[test]
     fn confirm_doctor_category_declines_in_non_interactive_shell() {
         assert!(!confirm_doctor_category("stale-leases", 3).unwrap());
@@ -37425,12 +37587,13 @@ mod story_462_doctor_tests {
         assert!(doctor_context_is_autonomous(false, true));
     }
 
+    // trace:STORY-666 | ai:claude
     /// End-to-end: in a simulated non-interactive context (under `cargo test`
     /// stdin is not a TTY, and the tempdir has no live drain → autonomous),
     /// a DESTRUCTIVE finding requested with `--force --yes` is GATED — the heal
     /// never executes and the spec is left untouched. This is the heart of the
     /// safety rail: it FAILS against the old code (which would re-open the spec)
-    /// and PASSES with the gate. trace:STORY-666 | ai:claude
+    /// and PASSES with the gate.
     #[test]
     fn destructive_heal_is_gated_in_autonomous_context() {
         let (tmp, storage) = integrity_fixture();
@@ -37491,10 +37654,10 @@ mod story_462_doctor_tests {
         );
     }
 
+    // trace:STORY-666 | ai:claude
     /// End-to-end companion: in the SAME autonomous context, a SAFE
     /// (reversible) fix DOES proceed — the gate is scoped to the destructive
     /// subset only and must never over-gate routine reversible fixes.
-    /// trace:STORY-666 | ai:claude
     #[test]
     fn safe_heal_proceeds_in_autonomous_context() {
         let dir = tempfile::tempdir().unwrap();
@@ -38165,11 +38328,11 @@ mod story_462_doctor_tests {
     }
 }
 
+// trace:STORY-70 | ai:claude
 /// STORY-70: a STORY or BUG description should carry an acceptance
 /// section that STORY-67's review-prompt generator can lift verbatim.
 /// Returns true when the requirement's type is in the lint scope and
 /// its description doesn't carry one of the recognized headings.
-/// trace:STORY-70 | ai:claude
 fn requirement_missing_acceptance(req: &aida_core::Requirement) -> bool {
     matches!(
         req.req_type,
@@ -38177,11 +38340,11 @@ fn requirement_missing_acceptance(req: &aida_core::Requirement) -> bool {
     ) && extract_acceptance_section(&req.description).is_none()
 }
 
+// trace:STORY-70 | ai:claude
 /// STORY-70: walk the orphan store, flag STORY/BUG requirements whose
 /// descriptions don't contain a recognized acceptance heading. Output
 /// shape mirrors the other doctor commands (per-finding rows + a final
 /// summary). Exits non-zero on findings so CI/scripts can gate on it.
-/// trace:STORY-70 | ai:claude
 fn doctor_convention_check(quiet: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let objects_root = project_root.join(".aida-store").join("objects");
@@ -38239,6 +38402,7 @@ fn doctor_convention_check(quiet: bool) -> Result<()> {
     std::process::exit(1);
 }
 
+// trace:TASK-58 | ai:claude
 /// Walk every YAML in objects/, collect every `relationships[*].target_id`
 /// reference, and verify each resolves to an existing req's UUID. Reports
 /// dangling references, optionally repairs by stripping the bad entries.
@@ -38248,7 +38412,7 @@ fn doctor_convention_check(quiet: bool) -> Result<()> {
 /// (any line starting with `-` matched the "exiting top-level key"
 /// heuristic) and so never inspected any `target_id`. Now uses
 /// `object_store::load_all_objects()` for proper serde-driven
-/// deserialization. trace:TASK-58 | ai:claude
+/// deserialization.
 fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
@@ -38372,10 +38536,11 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     Ok(())
 }
 
-/// Walk source files under the project root for `trace:<SPEC-ID>`
-/// patterns and verify each spec_id resolves to a requirement in the
+// trace:EPIC-19 | ai:claude
+/// Walk source files under the project root for `trace` markers naming a
+/// `<SPEC-ID>` and verify each spec_id resolves to a requirement in the
 /// store. With `strip_dangling`, rewrites source files to remove the
-/// dangling trace markers. trace:EPIC-19 | ai:claude
+/// dangling trace markers.
 fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
@@ -38523,9 +38688,10 @@ struct StripStats {
     lines_modified: usize,
 }
 
+// trace:EPIC-19
 /// Walk every text source file under `root` and either delete or modify
-/// any line containing `trace:<DANGLING>` per the dangling_ids set.
-/// When `dry_run`, returns counts without writing. trace:EPIC-19
+/// any line containing a `trace` marker for a `<DANGLING>` id per the dangling_ids set.
+/// When `dry_run`, returns counts without writing.
 fn strip_dangling_traces(
     root: &std::path::Path,
     dangling_ids: &std::collections::HashSet<String>,
@@ -38621,11 +38787,12 @@ fn strip_dangling_walk(
     }
 }
 
+// trace:EPIC-19
 /// Pure transform: take a file's content and the dangling-id set,
 /// return (new_content, lines_deleted, lines_modified). A line is
 /// "deleted" when the only meaningful content was the trace marker
 /// (post-strip, only a comment marker remains); otherwise the trace
-/// fragment is excised and the line is "modified". trace:EPIC-19
+/// fragment is excised and the line is "modified".
 fn rewrite_strip_dangling(
     content: &str,
     dangling_ids: &std::collections::HashSet<String>,
@@ -38700,8 +38867,9 @@ fn rewrite_strip_dangling(
     (out, deleted, modified)
 }
 
+// trace:EPIC-19 | ai:claude
 /// Recurse into source files looking for trace comments. Skips the
-/// usual "don't grep here" directories. trace:EPIC-19 | ai:claude
+/// usual "don't grep here" directories.
 fn walk_source_for_traces(
     root: &std::path::Path,
     re: &regex::Regex,
@@ -38775,10 +38943,11 @@ fn walk_source_for_traces(
     }
 }
 
+// trace:EPIC-19 | ai:claude
 /// Recursively collect every `*.yaml` file under `root` into `out`.
 /// Hand-rolled to avoid adding a walkdir dep just for the doctor ops.
 /// The orphan store's objects/ tree is shallow (3 levels) so a simple
-/// recursive read_dir is fine. trace:EPIC-19 | ai:claude
+/// recursive read_dir is fine.
 fn walk_yamls(root: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
@@ -38793,10 +38962,11 @@ fn walk_yamls(root: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
+// trace:EPIC-19 | ai:claude
 /// Mark blocks whose owner isn't in nodes.toml as exhausted, so the
 /// dispenser skips them but their range stays reserved (so other
 /// clones don't reallocate the same numbers and create a real
-/// collision). trace:EPIC-19 | ai:claude
+/// collision).
 fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
     use aida_core::{BlockRegistry, NodeRegistry};
 
@@ -38888,10 +39058,11 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:EPIC-19 | ai:claude
 /// Walk the orphan store's objects tree, group requirements by their
 /// `spec_id` field, and report any spec_id claimed by more than one
 /// requirement. v1 reports only — auto-renumber is dangerous (would
-/// orphan trace comments + commit refs). trace:EPIC-19 | ai:claude
+/// orphan trace comments + commit refs).
 // why: the one-off `collisions` borrow-tuple is local to this reporter; a named alias used in a single spot would obscure more than the inline type.
 #[allow(clippy::type_complexity)]
 fn doctor_scrub_collisions() -> Result<()> {
@@ -38981,8 +39152,9 @@ fn doctor_scrub_collisions() -> Result<()> {
     std::process::exit(1);
 }
 
+// trace:EPIC-19 | ai:claude
 /// Compose every diagnostic into a single report. Exits non-zero on any
-/// problem so it can gate CI. trace:EPIC-19 | ai:claude
+/// problem so it can gate CI.
 fn doctor_fsck() -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
@@ -39599,6 +39771,7 @@ fn validate_session_start_args(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-661 | ai:claude
 /// TASK-661 (ADR-3): per-scope disposition/triage lease. The authority gate
 /// (`has_advisor_authority`) decides WHO may dispose; this lease enforces HOW
 /// MANY — exactly one live advisor per scope. Acquire takes the lease (refused,
@@ -39606,7 +39779,6 @@ fn validate_session_start_args(args: &[String]) -> Result<()> {
 /// it, status lists the live set (reaping dead holders on read). Reuses the
 /// same PID-liveness reaper primitive (`process_probe::pid_is_alive`) the
 /// session-lease reaper uses, so a crashed advisor cannot lock triage forever.
-/// trace:TASK-661 | ai:claude
 fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
     let project_root = find_project_root()?;
     match cmd {
@@ -39735,7 +39907,7 @@ fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
     }
 }
 
-/// trace:FR-1-043 | ai:claude
+// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
         // trace:BUG-522 | ai:claude — renamed from `session list`;
@@ -40129,8 +40301,9 @@ fn agent_resume(agent: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-528 | ai:claude
 /// Parse a `--resets` value: an RFC3339 timestamp, or a relative duration
-/// (`2h` / `90m` / `45s`) added to now. trace:STORY-528 | ai:claude
+/// (`2h` / `90m` / `45s`) added to now.
 fn parse_resets_when(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
     let raw = raw.trim();
     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
@@ -40173,10 +40346,11 @@ struct AgentLaunchPlan {
     role: Option<String>,
     current_spec: Option<String>,
     name: String,
+    // trace:SPIKE-34
     /// SPIKE-34: id of the lease created by `prepare_agent_launch` when
     /// `--spec` was supplied. None otherwise. Lets the `--bg` dispatch
     /// path attach Claude Code's sessionId back to the AIDA manifest so
-    /// `aida status` cross-references the right pair. trace:SPIKE-34
+    /// `aida status` cross-references the right pair.
     lease_id: Option<String>,
 }
 
@@ -40228,10 +40402,11 @@ impl AgentDefaultFlagOptions {
     }
 }
 
+// trace:STORY-495 | ai:claude
 /// STORY-495: each agent's bypass flag(s), injected when the uniform
 /// `[agents] bypass = true` knob is on and the launch has no explicit posture.
 /// Mirrors the per-tool opt-in flags the launchers already inject for
-/// `--bypass-sandbox` / `--permission-mode`. trace:STORY-495 | ai:claude
+/// `--bypass-sandbox` / `--permission-mode`.
 fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
     match agent_type {
         "claude" => vec![
@@ -40599,6 +40774,7 @@ fn agent_new_with_config(
     )
 }
 
+// trace:SPIKE-34 | ai:claude
 /// SPIKE-34: shape-mirror of `agent_new_with_config` for the `claude --bg`
 /// dispatch path. The semantic difference is fundamental:
 ///   - Foreground: AIDA spawns claude, waits for exit, owns the PID.
@@ -40611,7 +40787,6 @@ fn agent_new_with_config(
 /// captured sessionId onto the lease's manifest (when one exists), and
 /// return success. After that, `aida status`'s SPIKE-30 cross-substrate
 /// section + `claude agents` both see the session.
-/// trace:SPIKE-34 | ai:claude
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn agent_new_bg_dispatch(
@@ -40789,9 +40964,10 @@ fn agent_new_bg_dispatch(
     Ok(())
 }
 
+// trace:SPIKE-34 | ai:claude
 /// SPIKE-34: pull the short sessionId from `claude --bg`'s stdout. The
 /// observed format is one `backgrounded · <8-hex>` line among the
-/// helper-command rows. trace:SPIKE-34 | ai:claude
+/// helper-command rows.
 fn parse_bg_session_id(stdout: &str) -> Option<String> {
     for line in stdout.lines() {
         let line = line.trim();
@@ -41089,6 +41265,7 @@ fn maybe_prompt_agent_posture() -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-859 | ai:claude
 /// TASK-859: after the core scaffold, prompt for a small curated set of
 /// high-value config knobs that would otherwise sit at silent defaults, then
 /// offer to open `aida config menu` for the full surface.
@@ -41100,7 +41277,6 @@ fn maybe_prompt_agent_posture() -> Result<()> {
 /// present in `.aida/config.toml` is detected and skipped, so re-running
 /// `aida init --force` never re-prompts settled choices). Skips re-prompting
 /// the things init already prompted for (agent posture, node name).
-/// trace:TASK-859 | ai:claude
 fn maybe_prompt_init_config(project_root: &std::path::Path) -> Result<()> {
     // TTY-gated: non-interactive init (--yes, CI, the test suite) writes
     // nothing and keeps the current defaults. This is the critical regression
@@ -41162,11 +41338,12 @@ fn maybe_prompt_init_config(project_root: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-859 | ai:claude
 /// TASK-859: append a `[telemetry] enabled = false` block to the project's
 /// `.aida/config.toml`, opting out of the local usage trail. The config file
 /// already exists (the scaffold wrote it just before this prompt runs); we
 /// only append, never rewrite, so the rest of the scaffolded config is
-/// untouched. trace:TASK-859 | ai:claude
+/// untouched.
 fn append_telemetry_disabled(config_path: &std::path::Path) -> Result<()> {
     use std::io::Write as _;
     let mut f = std::fs::OpenOptions::new()
@@ -41186,8 +41363,9 @@ fn append_telemetry_disabled(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-698 | ai:claude
 /// Write the global `~/.aida/agents.toml` recording the chosen permission
-/// posture. Creates `~/.aida/` if needed. trace:TASK-698 | ai:claude
+/// posture. Creates `~/.aida/` if needed.
 fn write_global_agents_posture(path: &std::path::Path, bypass: bool) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -41488,6 +41666,7 @@ fn prepare_agent_launch_context(
     Ok(Some(AgentLaunchContext { path, token }))
 }
 
+// trace:BUG-408 | ai:claude
 /// BUG-408: the dry counterpart of `prepare_agent_launch`. Computes what the
 /// launch plan WOULD be — resolved role, generated stable name, current spec —
 /// WITHOUT any side effects: no `session_start`, so no worktree is created, no
@@ -41497,7 +41676,6 @@ fn prepare_agent_launch_context(
 /// real launch); the preview banner makes that explicit. `generate_or_validate_name`
 /// is read-only (it inspects the registry to pick a unique name but reserves
 /// nothing until the agent record is written at launch), so it is safe here.
-/// trace:BUG-408 | ai:claude
 fn prepare_agent_launch_dry(
     project_root: &std::path::Path,
     role: Option<String>,
@@ -41522,10 +41700,11 @@ fn prepare_agent_launch_dry(
     })
 }
 
+// trace:BUG-408 | ai:claude
 /// BUG-408: shared `--show-context` preview for both the foreground and `--bg`
 /// launch paths. Builds a dry plan, renders the launch-context snapshot, and
 /// prints a preview banner + the body. No session is started, no worktree or
-/// lease is created, and the spec status is untouched. trace:BUG-408 | ai:claude
+/// lease is created, and the spec status is untouched.
 fn print_dry_launch_context(
     project_root: &std::path::Path,
     role: Option<String>,
@@ -41672,6 +41851,7 @@ session; if you need the next pickup, start a fresh `aida agent new ... --spec N
     Ok(out)
 }
 
+// trace:STORY-619 | ai:claude
 /// STORY-619: build the launch-context `## Mailbox` body for a spawned agent.
 ///
 /// Closes the cross-vendor delivery-awareness gap: only Claude Code gets the
@@ -41686,7 +41866,7 @@ session; if you need the next pickup, start a fresh `aida agent new ... --spec N
 /// spawned agent's stable identity (the `AIDA_USER` the launcher exports, per
 /// BUG-558), so the snapshot is keyed to the agent's own inbox. The guidance
 /// line always renders (even when caught up) so the agent learns the mailbox
-/// exists and how to poll it. trace:STORY-619 | ai:claude
+/// exists and how to poll it.
 fn render_launch_mailbox_section(project_root: &std::path::Path, agent_name: &str) -> String {
     let mut out = String::new();
 
@@ -42318,9 +42498,10 @@ mod agent_launcher_tests {
     use clap::Parser;
     use tempfile::TempDir;
 
+    // trace:BUG-421
     /// BUG-421: `aida agent list-roles` must list exactly the canonical
     /// AGENT_ROLES (so the listing and the validator can't drift) and must not
-    /// regress to the pre-correction fabricated/inaccurate phrasing. trace:BUG-421
+    /// regress to the pre-correction fabricated/inaccurate phrasing.
     #[test]
     fn agent_role_infos_cover_canonical_set_without_fabrications() {
         let listed: std::collections::HashSet<&str> =
@@ -42405,12 +42586,13 @@ mod agent_launcher_tests {
         assert_eq!(extra_flags, vec!["--verbose"]);
     }
 
+    // trace:BUG-408 | ai:claude
     /// BUG-408: `--show-context` must be a PURE PREVIEW. `prepare_agent_launch_dry`
     /// builds the plan WITHOUT `session_start`, so no lease is written, the working
     /// directory stays the project root (no worktree is created), and `lease_id`
     /// is `None`. This is the core regression guard for the bug where
     /// `--show-context` created a worktree + lease and flipped the spec to
-    /// InProgress. trace:BUG-408 | ai:claude
+    /// InProgress.
     #[test]
     fn dry_launch_plan_creates_no_lease_or_worktree() {
         let tmp = TempDir::new().unwrap();
@@ -42599,8 +42781,8 @@ mod agent_launcher_tests {
         );
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: each tool maps to its own bypass flag(s).
-    /// trace:STORY-495 | ai:claude
     #[test]
     fn tool_bypass_flags_per_agent() {
         assert_eq!(
@@ -42643,8 +42825,9 @@ mod agent_launcher_tests {
         assert!(tool_contained_flags("codex").is_empty());
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: the `[agents] bypass` knob is off when no agents.toml
-    /// declares it; project overrides the user base. trace:STORY-495 | ai:claude
+    /// declares it; project overrides the user base.
     #[test]
     fn agents_bypass_knob_user_base_and_project_override() {
         let tmp = TempDir::new().unwrap();
@@ -42707,10 +42890,10 @@ mod agent_launcher_tests {
         assert!(!load_agents_contained(&project).unwrap());
     }
 
+    // trace:TASK-798 | ai:claude
     /// TASK-798: `[contained] enable` in the project config.toml is an alias of
     /// `[agents] contained`, and wins last so a config migrated to the unified
     /// `[contained]` block takes effect over the legacy `[agents] contained`.
-    /// trace:TASK-798 | ai:claude
     #[test]
     fn contained_enable_alias_in_config_toml() {
         let tmp = TempDir::new().unwrap();
@@ -42747,10 +42930,11 @@ mod agent_launcher_tests {
         assert!(!load_agents_contained(&project).unwrap());
     }
 
+    // trace:TASK-698 | ai:claude
     /// TASK-698: the first-machine-setup writer emits a valid agents.toml whose
     /// `[agents] bypass` value round-trips back through the resolver, for both
     /// the native (false) and bypass (true) postures, and creates ~/.aida/ if
-    /// it is missing. trace:TASK-698 | ai:claude
+    /// it is missing.
     #[test]
     fn agent_posture_writer_round_trips_both_postures() {
         let tmp = TempDir::new().unwrap();
@@ -42777,11 +42961,12 @@ mod agent_launcher_tests {
         );
     }
 
+    // trace:TASK-698 | ai:claude
     /// TASK-698: the posture prompt is idempotent and TTY-gated — when
     /// ~/.aida/agents.toml already exists it is left byte-for-byte untouched,
     /// and a non-interactive (no-TTY) init writes nothing. The test harness has
     /// no TTY, so `maybe_prompt_agent_posture` must never create or mutate the
-    /// file here. trace:TASK-698 | ai:claude
+    /// file here.
     #[test]
     fn agent_posture_prompt_is_idempotent_and_tty_gated() {
         let tmp = TempDir::new().unwrap();
@@ -42802,8 +42987,9 @@ mod agent_launcher_tests {
         assert!(!path.exists());
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: with the knob on and no explicit posture / per-tool flags,
-    /// the tool's bypass flag is injected. trace:STORY-495 | ai:claude
+    /// the tool's bypass flag is injected.
     #[test]
     fn apply_agent_default_flags_knob_injects_when_native() {
         let tmp = TempDir::new().unwrap();
@@ -42899,8 +43085,9 @@ mod agent_launcher_tests {
         assert!(format!("{err:?}").contains("mutually exclusive"));
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: an explicit posture (e.g. `--permission-mode`) skips the
-    /// knob even when it is on. trace:STORY-495 | ai:claude
+    /// knob even when it is on.
     #[test]
     fn apply_agent_default_flags_explicit_skips_knob() {
         let tmp = TempDir::new().unwrap();
@@ -42932,9 +43119,9 @@ mod agent_launcher_tests {
         assert_eq!(claude.default_args, vec!["--permission-mode", "plan"]);
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: per-tool `default_flags` (TASK-557) override the uniform
     /// knob — the bypass flag is NOT additionally injected.
-    /// trace:STORY-495 | ai:claude
     #[test]
     fn apply_agent_default_flags_per_tool_flags_override_knob() {
         let tmp = TempDir::new().unwrap();
@@ -42966,9 +43153,9 @@ mod agent_launcher_tests {
         assert_eq!(codex.default_args, vec!["--my-flag"]);
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: `--no-default-flags` skips agents.toml entirely, so the
     /// knob is never read → faithful native (empty argv).
-    /// trace:STORY-495 | ai:claude
     #[test]
     fn apply_agent_default_flags_no_default_flags_is_native() {
         let tmp = TempDir::new().unwrap();
@@ -43741,52 +43928,55 @@ pub(crate) struct SessionLease {
     started_at: chrono::DateTime<chrono::Utc>,
     /// Hostname when started.
     hostname: String,
+    // trace:STORY-65 | ai:claude
     /// Role active in the calling shell at session-start time, if any.
     /// Lets `aida session leases` / `aida session show` display role per
     /// session, and gives subsequent role-aware tooling inside the worktree
     /// the right starting persona. Optional for back-compat with older
-    /// leases written before STORY-65. trace:STORY-65 | ai:claude
+    /// leases written before STORY-65.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     role: Option<String>,
+    // trace:STORY-73 | ai:claude
     /// PID of the shell that ran `aida session start`. Used by
     /// `aida session end` to resolve the right lease when the user runs
     /// `end` from the same parent shell that ran `start` (cwd is outside
-    /// the worktree). Optional for back-compat. trace:STORY-73 | ai:claude
+    /// the worktree). Optional for back-compat.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     creator_pid: Option<u32>,
+    // trace:STORY-52 | ai:claude
     /// Parent project's `target/` dir, captured so the session shell can
     /// share its cargo build cache with the parent worktree (avoids a full
     /// rebuild on first `cargo build` inside the session). `None` when the
     /// project doesn't have a `target/` (e.g., non-Rust project, or fresh
     /// checkout that's never been built). Sourced via `.aida/session-env.sh`.
-    /// trace:STORY-52 | ai:claude
     #[serde(default)]
     cargo_target_dir: Option<std::path::PathBuf>,
+    // trace:STORY-58 | ai:claude
     /// Parent project root (the worktree where `aida session start` ran).
     /// Recorded so cross-worktree views like `aida session list` can walk
     /// the parent's Claude Code session directory in addition to the
     /// session worktree's own. `None` for leases written before STORY-58.
-    /// trace:STORY-58 | ai:claude
     #[serde(default)]
     parent_project_root: Option<std::path::PathBuf>,
+    // trace:STORY-71 | ai:claude
     /// STORY-71: for PR/MR review sessions (--owns PR-N / MR-N), the
     /// PR head commit SHA captured via `gh pr view` / `glab mr view` at
     /// session-start time. `None` when the scope isn't a PR/MR or when
     /// the forge CLI wasn't available. Surfaced by `aida session show`.
-    /// trace:STORY-71 | ai:claude
     #[serde(default)]
     pr_head_sha: Option<String>,
+    // trace:STORY-71 | ai:claude
     /// STORY-71: PR base commit SHA at session-start time (companion to
     /// pr_head_sha). Lets the reviewer recompute the diff range later
     /// without round-tripping to the forge.
-    /// trace:STORY-71 | ai:claude
     #[serde(default)]
     pr_base_sha: Option<String>,
+    // trace:STORY-71 | ai:claude
     /// STORY-71: PR base ref name (e.g. `main`). Mostly informational —
     /// for reporting in `aida session show`.
-    /// trace:STORY-71 | ai:claude
     #[serde(default)]
     pr_base_ref: Option<String>,
+    // trace:BUG-237 | ai:claude
     /// BUG-237: zen-intent token for a standalone `aida queue work --zen`
     /// session — the per-invocation UUID the `--zen` dispatch minted into
     /// `AIDA_ZEN_TOKEN`. Its presence is what corroborates a standalone zen
@@ -43795,9 +43985,9 @@ pub(crate) struct SessionLease {
     /// orchestrator run owns the session). `None` for non-`--zen` sessions —
     /// the dispatch scrubs `AIDA_ZEN_TOKEN` unless `--zen` was genuinely
     /// passed — so a leaked `AIDA_ZEN=1` cannot silently enable zen mode.
-    /// trace:BUG-237 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     zen_intent_token: Option<String>,
+    // trace:TASK-358 | ai:claude
     /// TASK-358: when the orchestrator's `--escalate-blocks` path parks a
     /// punted spec for a human, it stamps this timestamp on the implementer's
     /// lease. The marker has two readers: `aida edit --status` (out of
@@ -43807,33 +43997,32 @@ pub(crate) struct SessionLease {
     /// `aida session prune --escalations` lists the same set for explicit
     /// bulk cleanup. Absent for interactive user sessions and for the
     /// advisor-resume path, so neither is touched.
-    /// trace:TASK-358 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     escalated_to_human: Option<chrono::DateTime<chrono::Utc>>,
+    // trace:STORY-248 | ai:claude
     /// STORY-248: when this session was started via `aida queue work
     /// --stack` or `--base BRANCH`, the branch we forked from. `None` for
     /// the default case (forked from `origin/main`). Paired with
     /// `parent_branch_sha`; both are also reflected into `.aida/stacks.json`
     /// for the auto-rebase cascade.
-    /// trace:STORY-248 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     parent_branch: Option<String>,
+    // trace:STORY-248 | ai:claude
     /// STORY-248: HEAD SHA of `parent_branch` at fork time. Critical for
     /// the cascade: the project squash-merges + deletes branches, so a
     /// later `git rebase origin/main` would replay the parent's
     /// pre-squash commits. The cascade uses
     /// `git rebase --onto origin/main <parent_branch_sha> <branch>` to
     /// skip them. `None` when `parent_branch` is `None`.
-    /// trace:STORY-248 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     parent_branch_sha: Option<String>,
+    // trace:BUG-511 | ai:claude
     /// BUG-511: marks a lease minted by the human-review verb
     /// (`aida review <spec>`). A review lease is an advisory lock with NO
     /// worktree (`worktree_path` is empty, the TASK-474 convention) — its
     /// liveness signal is the `aida review` process itself (`creator_pid`):
     /// alive → the spec is in flight (being reviewed); dead → the lease is
     /// stale and always safe to reap (no worktree, no uncommitted work).
-    /// trace:BUG-511 | ai:claude
     #[serde(default)]
     review_verb: bool,
 }
@@ -43842,15 +44031,16 @@ fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
     project_root.join(".aida").join("sessions")
 }
 
+// trace:STORY-55 | ai:claude
 /// Max display width for the @SCOPE statusline segment (matches @SPEC budget).
-/// trace:STORY-55 | ai:claude
 const SCOPE_LABEL_MAX: usize = 12;
 
+// trace:TASK-60 trace:TASK-282 | ai:claude
 /// Max display width for the `sess:` statusline label (scope + batch
 /// suffix). Slightly wider than SCOPE_LABEL_MAX so common `epic-N#batchM`
 /// shapes don't truncate the scope when the suffix is the new signal.
 /// Shared by the standalone `sess:` segment and the `[sess:]` anchor
-/// annotation folded into `@SPEC`. trace:TASK-60 trace:TASK-282 | ai:claude
+/// annotation folded into `@SPEC`.
 const SESS_LABEL_MAX: usize = 20;
 
 fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
@@ -43955,6 +44145,7 @@ fn session_harness_worktree_release(agent_id: &str) -> Result<()> {
     }
 }
 
+// trace:TASK-607 | ai:claude
 /// Lease-occupancy primitive: find a lease that already occupies `worktree` and
 /// is still live. Pure over the lease set + an injected liveness predicate: the
 /// caller supplies PID-liveness / dormancy (via `creator_pid` + the same logic
@@ -43966,7 +44157,7 @@ fn session_harness_worktree_release(agent_id: &str) -> Result<()> {
 /// gates on *agent* occupancy (`agent_registry::live_agents_covering_cwd`), not
 /// lease occupancy — so this primitive is currently unused. Retained as the
 /// natural building block for lease-hygiene work that needs "is this worktree
-/// still claimed?" (e.g. BUG-362 pr-ship lease cleanup). trace:TASK-607 | ai:claude
+/// still claimed?" (e.g. BUG-362 pr-ship lease cleanup).
 #[allow(dead_code)] // unused since BUG-416 chose agent-occupancy; kept for lease-hygiene reuse
 fn worktree_occupant<'a>(
     worktree: &std::path::Path,
@@ -44001,12 +44192,12 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+// trace:BUG-574 | ai:claude
 /// BUG-574: pure decision — does THIS clone already hold a lease for `scope`?
 /// Returns the existing lease (the first by start time, matching `list_leases`'
 /// sort) so `aida session start` can treat a re-run as benign idempotent
 /// re-entry (exit 0, report the live session) rather than a hard error.
 /// Case-insensitive on the raw scope string, mirroring the old guard.
-/// trace:BUG-574 | ai:claude
 fn existing_lease_for_scope<'a>(
     leases: &'a [SessionLease],
     scope: &str,
@@ -44014,6 +44205,7 @@ fn existing_lease_for_scope<'a>(
     leases.iter().find(|l| l.scope.eq_ignore_ascii_case(scope))
 }
 
+// trace:BUG-483 | ai:claude
 /// BUG-483: pure decision — does any lease OTHER than the one being ended
 /// share `worktree_path`? `aida agent new` can land two sessions in one
 /// worktree (BUG-416), and `session end` force-removes the worktree
@@ -44021,7 +44213,7 @@ fn existing_lease_for_scope<'a>(
 /// fingerprint hazard + BUG-108 `(deleted)` cwd). We filter the ending lease
 /// out by id and compare canonicalized paths so symlink chains don't mask a
 /// match. Conservative: returns the first peer found so the caller can SKIP
-/// the removal and name the peer. trace:BUG-483 | ai:claude
+/// the removal and name the peer.
 fn peer_lease_sharing_worktree<'a>(
     leases: &'a [SessionLease],
     ending_id: &str,
@@ -44036,13 +44228,13 @@ fn peer_lease_sharing_worktree<'a>(
     })
 }
 
+// trace:TASK-670 | ai:claude
 /// TASK-670: the set of requirement UUIDs that sit in *some* role queue
 /// (across every user's queue file), for the leading queued work-routing glyph on
 /// `aida list`. Cheap by design — one `read_dir` over
 /// `.aida-store/registry/queues/` + a YAML parse per file, no Storage::load().
 /// Work-routing is a project-global axis (not the current shell's queue), so we
 /// union across all queue files. Returns an empty set when the dir is absent.
-/// trace:TASK-670 | ai:claude
 fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
     let mut out = HashSet::new();
     let dir = project_root.join(".aida-store/registry/queues");
@@ -44066,6 +44258,7 @@ fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
     out
 }
 
+// trace:BUG-527
 /// BUG-527: queue memberships for a single spec, across every user's queue
 /// file, for the `Queued:` line on `aida show <ID>` (and the MCP
 /// `show_requirement` mirror). Each membership is `(for_role, rank)`, where
@@ -44078,7 +44271,7 @@ fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
 /// [`all_queued_requirement_ids`] (no `Storage::load()`); queue membership
 /// is a project-global axis so we union across all queue files. Returns an
 /// empty vec when the dir is absent or the spec sits in no queue (the
-/// caller omits the line in that case). trace:BUG-527
+/// caller omits the line in that case).
 pub(crate) fn queue_memberships_for(
     project_root: &std::path::Path,
     requirement_id: &Uuid,
@@ -44124,12 +44317,12 @@ pub(crate) fn queue_memberships_for(
     out
 }
 
+// trace:BUG-527
 /// BUG-527: render the `(for_role, rank)` memberships from
 /// [`queue_memberships_for`] as the value half of the `Queued:` line, e.g.
 /// `implementer (pos 2)` or `implementer (pos 2), reviewer (pos 1)`.
 /// Unrouted entries render as `general (pos N)`. Returns `None` when there
 /// are no memberships so the caller can omit the line entirely.
-/// trace:BUG-527
 pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -> Option<String> {
     if memberships.is_empty() {
         return None;
@@ -44144,21 +44337,22 @@ pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -
     Some(parts.join(", "))
 }
 
+// trace:TASK-670 | ai:claude
 /// TASK-670: the set of scope strings held by *live* session leases — the input
 /// for the in-flight work-routing glyph. "Live" means a running claude was
 /// found inside the lease's worktree (the same probe `aida session leases` uses
 /// for its `live` state); dormant / stale / reaped leases are excluded so a
 /// dead session never shows the in-flight marker (cf. STORY-496). Scopes are lowercased for a
-/// case-insensitive match against a row's spec/agreed id. trace:TASK-670 | ai:claude
+/// case-insensitive match against a row's spec/agreed id.
 fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
     in_flight_lease_role_map(project_root).into_keys().collect()
 }
 
+// trace:BUG-511 | ai:claude
 /// BUG-511: like [`in_flight_lease_scopes`] but keeps each live lease's
 /// role, so the open-spec explainer can say *what kind* of work holds the
 /// spec ("being reviewed" vs the generic in-flight line). Same liveness
 /// rules: [`lease_state_for`] over every lease, keep the `Live` ones.
-/// trace:BUG-511 | ai:claude
 fn in_flight_lease_role_map(
     project_root: &std::path::Path,
 ) -> std::collections::HashMap<String, Option<String>> {
@@ -44177,12 +44371,13 @@ fn in_flight_lease_role_map(
         .collect()
 }
 
+// trace:BUG-511 | ai:claude
 /// BUG-511: lease-state classification that understands review-verb
 /// advisory leases. A review lease has no worktree, so the standard
 /// worktree/claude/age matrix would always call it stale; its real
 /// liveness signal is the `aida review` process recorded in
 /// `creator_pid`. Session leases fall through to [`classify_lease_state`]
-/// unchanged. trace:BUG-511 | ai:claude
+/// unchanged.
 fn lease_state_for(
     l: &SessionLease,
     live_sessions: &[process_probe::LiveSession],
@@ -44207,13 +44402,13 @@ fn lease_state_for(
     classify_lease_state(worktree_exists, has_live_claude, age_hours)
 }
 
+// trace:BUG-98 | ai:claude
 /// BUG-98: cheap lease count for the `aida session list` footer hint.
 /// Users repeatedly reach for `session list` looking for "active
 /// sessions" when they really want `session leases` (the scoped-lease
 /// view). Exposing the count here lets the historical-view command
 /// nudge them at the right moment. Tries the current project root first
 /// and silently falls through to 0 if we're not inside a project.
-/// trace:BUG-98 | ai:claude
 pub(crate) fn active_lease_count_for_cwd() -> usize {
     match find_project_root() {
         Ok(root) => list_leases(&root).len(),
@@ -44221,10 +44416,10 @@ pub(crate) fn active_lease_count_for_cwd() -> usize {
     }
 }
 
+// trace:STORY-55 | ai:claude
 /// Find the active session lease whose worktree contains `cwd`, if any.
 /// Used by statusline + enforcement to identify which session "owns" the
 /// shell the user is operating from.
-/// trace:STORY-55 | ai:claude
 fn active_lease_for_cwd(
     project_root: &std::path::Path,
     cwd: &std::path::Path,
@@ -44235,6 +44430,7 @@ fn active_lease_for_cwd(
         .find(|l| lease_covers_cwd(l, &canon))
 }
 
+// trace:TASK-474 | ai:claude
 /// Whether `lease` covers `canon_cwd` — true iff the lease records a real
 /// worktree path AND `canon_cwd` is exactly that path or a descendant of it.
 ///
@@ -44244,7 +44440,6 @@ fn active_lease_for_cwd(
 /// `Path::starts_with` treats every path as starting with the empty path,
 /// so an empty-worktree lease would otherwise match every cwd and misroute
 /// "this session owns scope X" hints in `aida add` to unrelated shells.
-/// trace:TASK-474 | ai:claude
 fn lease_covers_cwd(lease: &SessionLease, canon_cwd: &std::path::Path) -> bool {
     if lease.worktree_path.as_os_str().is_empty() {
         return false;
@@ -44319,11 +44514,11 @@ mod lease_covers_cwd_tests {
         ));
     }
 
+    // trace:TASK-474 | ai:claude
     /// TASK-474: a lease with an empty `worktree_path` (the MCP `claim_task`
     /// shape when the agent did not pass its cwd) must NOT match — otherwise
     /// `Path::starts_with(empty)` returns true for every cwd and misroutes
     /// "this session owns scope X" hints to unrelated shells.
-    /// trace:TASK-474 | ai:claude
     #[test]
     fn empty_worktree_lease_matches_no_cwd() {
         let lease = lease_with_worktree(PathBuf::new());
@@ -44333,13 +44528,13 @@ mod lease_covers_cwd_tests {
     }
 }
 
+// trace:STORY-58 | ai:claude
 /// STORY-58: from inside a session worktree, return the parent project's
 /// root path so cross-worktree views (currently just `aida session list`)
 /// can also surface sessions launched from the parent. `None` when:
 ///   - cwd isn't covered by an active lease (not in a session), OR
 ///   - the lease was written before STORY-58 (no parent recorded), OR
 ///   - we can't locate any project root to read leases from.
-///     trace:STORY-58 | ai:claude
 pub(crate) fn parent_project_root_for_session(cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     // The lease dir is `<root>/.aida/sessions/`. Inside a session worktree
     // that dir is a symlink back to the parent project's, so `list_leases`
@@ -44427,11 +44622,11 @@ fn save_session_activity(
     Ok(())
 }
 
+// trace:STORY-56 | ai:claude
 /// Append an activity entry to the given session's log. Dedupes against
 /// the most recent entry the same way project-level activity does:
 /// consecutive (role, spec_id, action) collapse into one entry whose
 /// timestamp ticks forward.
-/// trace:STORY-56 | ai:claude
 fn append_session_activity(
     project_root: &std::path::Path,
     session_id: &str,
@@ -44458,11 +44653,11 @@ fn append_session_activity(
     save_session_activity(project_root, session_id, &log)
 }
 
+// trace:BUG-112 | ai:claude
 /// BUG-112: the most-recent spec a session lease touched, read from its
 /// session activity log. `entries` are newest-first, so the head entry's
 /// `spec_id` is the session's current focus. `None` when the log is empty
 /// or absent. Used by `aida session list`'s RECENT FOCUS column.
-/// trace:BUG-112 | ai:claude
 pub(crate) fn session_log_recent_spec(
     project_root: &std::path::Path,
     lease_id: &str,
@@ -44474,6 +44669,9 @@ pub(crate) fn session_log_recent_spec(
         .map(|e| e.spec_id)
 }
 
+// trace:STORY-57 | ai:claude
+// trace:TASK-44 | ai:claude
+// trace:TASK-91 | ai:claude
 /// STORY-57: queue routing filter. Returns true if `entry`'s scope/session
 /// routing tags are compatible with the consumer side (the shell calling
 /// `queue list` / `queue next`).
@@ -44489,7 +44687,6 @@ pub(crate) fn session_log_recent_spec(
 ///     to all consumers.
 ///
 /// Bypass with `bypass=true` (used for `--all` / explicit `--scope any`).
-/// trace:STORY-57 | ai:claude
 /// TASK-44: walk `req`'s relationships for a Child edge whose target is
 /// an Epic-typed requirement and return that Epic's display id
 /// (`agreed_id` when merged-trunk-canonical, else `spec_id`). A `Child`
@@ -44501,7 +44698,7 @@ pub(crate) fn session_log_recent_spec(
 ///   - the target id doesn't resolve to a requirement in `store`, OR
 ///   - the target's type isn't Epic.
 ///     Pure — no I/O — so the decision rules can be unit-tested without
-///     fixtures. trace:TASK-44 | ai:claude
+///     fixtures.
 ///     TASK-91: detect a synthetic review-story title `Review PR-<n>:` filed
 ///     by STORY-90's auto-queue and return a display tuple where PR-N is the
 ///     prominent id and the canonical STORY-NNN is the parenthetical
@@ -44516,7 +44713,6 @@ pub(crate) fn session_log_recent_spec(
 ///
 /// PR-N is the conceptual handle the user reaches for ("I need to review
 /// PR-15"); STORY-NNN stays visible for direct `aida edit` operations.
-/// trace:TASK-91 | ai:claude
 fn format_review_story_display(display_id: &str, title: &str) -> Option<(String, String)> {
     // BUG-91: match the `Review PR-` prefix case-insensitively so a
     // hand-typed `review pr-15: foo` renders consistently with how
@@ -44601,6 +44797,7 @@ fn entry_scope_session_match(
     true
 }
 
+// trace:STORY-56 | ai:claude
 /// Fold a closed session's activity entries back into each participating
 /// role's project-level `activity` stream. Called from `session_end` so
 /// long-running views (`aida role show`, `aida statusline` outside any
@@ -44612,7 +44809,6 @@ fn entry_scope_session_match(
 /// the project role's existing activity, dedupe by spec_id, truncate to
 /// ACTIVITY_MAX. Best-effort — malformed/missing role files are skipped
 /// (the project role might have been deleted while the session ran).
-/// trace:STORY-56 | ai:claude
 fn aggregate_session_activity_into_roles(project_root: &std::path::Path, session_id: &str) {
     let log = load_session_activity(project_root, session_id);
     if log.entries.is_empty() {
@@ -44653,10 +44849,10 @@ fn aggregate_session_activity_into_roles(project_root: &std::path::Path, session
     }
 }
 
+// trace:STORY-48 | ai:claude
 /// Lease-enforcement mode for cross-session writes.
 /// Configured via `[session] enforcement = "warn"|"block"|"off"` in
 /// `.aida/config.toml`; default is `Warn`.
-/// trace:STORY-48 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SessionEnforcement {
     Off,
@@ -44674,10 +44870,10 @@ impl SessionEnforcement {
     }
 }
 
+// trace:STORY-48 | ai:claude
 /// Read `[session].enforcement` from `<project_root>/.aida/config.toml`.
 /// Falls back to `Warn` on any parse/IO failure — enforcement should
 /// never break the host command.
-/// trace:STORY-48 | ai:claude
 fn session_enforcement(project_root: &std::path::Path) -> SessionEnforcement {
     let path = project_root.join(".aida").join("config.toml");
     let Ok(content) = std::fs::read_to_string(&path) else {
@@ -44694,12 +44890,12 @@ fn session_enforcement(project_root: &std::path::Path) -> SessionEnforcement {
         .unwrap_or(SessionEnforcement::Warn)
 }
 
+// trace:STORY-48 | ai:claude
 /// Returns the lease that "owns" `target_uuid` — i.e. the spec is itself
 /// the scope, OR is a descendant of the scope's spec via Parent
 /// relationships. Excludes `self_lease` (the caller's own session) so a
 /// session can freely edit specs in its own scope. Returns `None` for
 /// path-glob / free-form scopes that we can't resolve to a spec id.
-/// trace:STORY-48 | ai:claude
 fn lease_owning_spec(
     leases: &[SessionLease],
     self_lease: Option<&SessionLease>,
@@ -44766,12 +44962,12 @@ fn lease_owning_spec(
     None
 }
 
+// trace:STORY-48 | ai:claude
 /// Enforce a session lease for an outbound mutation on `target`. Returns
 /// `Err` only when the active enforcement mode is `Block` and another
 /// session owns the scope; in `Warn` mode it prints a warning and returns
 /// `Ok(())` so the operation proceeds. `force_block` (e.g. `--strict` on
 /// `aida edit`) escalates Warn → Block for this single call.
-/// trace:STORY-48 | ai:claude
 fn enforce_session_lease(
     project_root: &std::path::Path,
     target: &Requirement,
@@ -44868,10 +45064,11 @@ pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+// trace:TASK-475 | ai:claude
 /// TASK-475: how many commits the local `aida-store` branch is behind
 /// `origin/aida-store`, using already-known refs (no network fetch). `None`
 /// when the origin ref is unknown (never fetched), git is unavailable, or the
-/// range doesn't resolve; `Some(0)` when up-to-date. trace:TASK-475 | ai:claude
+/// range doesn't resolve; `Some(0)` when up-to-date.
 fn orphan_store_behind_count(project_root: &std::path::Path) -> Option<u32> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -44958,6 +45155,7 @@ mod task_475_store_behind_tests {
     }
 }
 
+// trace:BUG-108 trace:BUG-566 | ai:claude
 /// Render the cwd-unreadable warning, given the result of a `getcwd()`
 /// probe. Pure, so the unreadable-cwd state is regression-testable
 /// without a process-global `chdir`: a worktree that `aida session end`
@@ -44974,7 +45172,6 @@ mod task_475_store_behind_tests {
 /// network share (ESTALE / EIO), a plainly-deleted directory (ENOENT),
 /// or a permissions change (EACCES). On platforms where `current_dir()`
 /// returns the offending path in the error we surface it too.
-/// trace:BUG-108 trace:BUG-566 | ai:claude
 fn cwd_removed_warning(cwd: &std::io::Result<std::path::PathBuf>) -> Option<String> {
     // trace:BUG-566 | ai:claude
     let err = match cwd {
@@ -44997,13 +45194,13 @@ fn cwd_removed_warning(cwd: &std::io::Result<std::path::PathBuf>) -> Option<Stri
     ))
 }
 
+// trace:BUG-108 | ai:claude
 /// BUG-108: warn — once, up front — when the shell's working directory
 /// was removed out from under it, typically a worktree that `aida
 /// session end` deleted in another terminal. Without this, every
 /// project-root walk silently falls back to empty state and `aida queue
 /// list` prints "Your queue is empty" indistinguishably from a genuinely
 /// empty queue. Returns true when the warning fired.
-/// trace:BUG-108 | ai:claude
 fn warn_if_cwd_removed() -> bool {
     match cwd_removed_warning(&std::env::current_dir()) {
         Some(msg) => {
@@ -45014,6 +45211,7 @@ fn warn_if_cwd_removed() -> bool {
     }
 }
 
+// trace:BUG-75 | ai:claude
 /// Resolve the MAIN worktree path given a starting checkout (which may
 /// itself be a linked worktree). When the caller is inside a linked
 /// worktree (created via `git worktree add`), `find_project_root()`
@@ -45021,7 +45219,7 @@ fn warn_if_cwd_removed() -> bool {
 /// first `.git` (file or dir). Session-start path / branch derivation
 /// needs the canonical project root regardless of cwd, otherwise new
 /// sessions stack as `~/ai/aida-pr-9-epic-20` instead of landing as
-/// siblings under `~/ai/aida`. trace:BUG-75 | ai:claude
+/// siblings under `~/ai/aida`.
 ///
 /// Uses `git worktree list --porcelain`; the first record is always the
 /// main worktree. Falls back to `start` when git can't be invoked.
@@ -45049,9 +45247,10 @@ fn find_main_worktree_root() -> Result<std::path::PathBuf> {
     Ok(main_worktree_root_from(&start))
 }
 
+// trace:BUG-76 | ai:claude
 /// Resolve the project's default branch ref (e.g. `origin/main` or
 /// `origin/master`). Used by session_start to fork new branches from
-/// origin's mainline regardless of cwd's HEAD. trace:BUG-76 | ai:claude
+/// origin's mainline regardless of cwd's HEAD.
 ///
 /// Resolution order:
 /// 1. `git symbolic-ref refs/remotes/origin/HEAD` if it resolves
@@ -45087,11 +45286,11 @@ fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     None
 }
 
+// trace:STORY-335 | ai:claude
 /// STORY-335: read-only forecast of whether `branch` rebases cleanly onto
 /// `base_ref`, via `git merge-tree --write-tree` (no worktree mutation, no
 /// merge/rebase performed). git exits 0 = clean, 1 = conflict (paths listed),
 /// anything else (old git, missing branch, error) → Unknown — never guessed.
-/// trace:STORY-335 | ai:claude
 fn forecast_rebase_onto(
     project_root: &std::path::Path,
     base_ref: &str,
@@ -45122,8 +45321,9 @@ fn forecast_rebase_onto(
     }
 }
 
+// trace:BUG-76 | ai:claude
 /// Return the branch name currently checked out at `path` (its HEAD).
-/// `None` if detached or git fails. trace:BUG-76 | ai:claude
+/// `None` if detached or git fails.
 fn current_branch_at(path: &std::path::Path) -> Option<String> {
     let o = std::process::Command::new("git")
         .arg("-C")
@@ -45142,11 +45342,11 @@ fn current_branch_at(path: &std::path::Path) -> Option<String> {
     }
 }
 
+// trace:STORY-61 | ai:claude
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a
 /// review-branch fetch + worktree-on-existing-branch flow instead of
 /// the default new-branch flow.
-/// trace:STORY-61 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReviewForge {
     GitHub,
@@ -45178,10 +45378,10 @@ impl ReviewForge {
         }
     }
 
+    // trace:STORY-71 | ai:claude
     /// STORY-71: forge CLI binary name used to enrich the lease with the
     /// PR's head/base SHAs (and to surface a clear stderr note when it's
     /// not on PATH).
-    /// trace:STORY-71 | ai:claude
     fn cli_name(&self) -> &'static str {
         match self {
             Self::GitHub => "gh",
@@ -45197,11 +45397,11 @@ impl ReviewForge {
     }
 }
 
+// trace:STORY-71 | ai:claude
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
 /// Recorded into the lease so `aida session show` can display it without
 /// re-querying the forge, and so a reviewer can recompute the diff range
 /// later even after the PR has moved on.
-/// trace:STORY-71 | ai:claude
 #[derive(Debug, Clone, Default)]
 struct PrMetadata {
     head_sha: Option<String>,
@@ -45209,11 +45409,11 @@ struct PrMetadata {
     base_ref: Option<String>,
 }
 
+// trace:STORY-71 | ai:claude
 /// STORY-71: query the forge CLI for a PR/MR's head/base SHAs + base ref.
 /// Returns `Err(reason)` when the CLI isn't installed or the query fails
 /// (caller turns that into a stderr note + Default fallback) and
 /// `Ok(None)` when the JSON parsed but key fields were missing.
-/// trace:STORY-71 | ai:claude
 fn query_pr_metadata(
     forge: ReviewForge,
     n: u64,
@@ -45270,10 +45470,10 @@ fn query_pr_metadata(
     Ok(parse_pr_metadata_json(forge, &json))
 }
 
+// trace:STORY-71 | ai:claude
 /// STORY-71: extract the head SHA / base SHA / base ref out of the JSON
 /// the forge CLI returned. Pulled out of `query_pr_metadata` so unit
 /// tests can pin the parsing without invoking the CLI.
-/// trace:STORY-71 | ai:claude
 fn parse_pr_metadata_json(forge: ReviewForge, json: &serde_json::Value) -> PrMetadata {
     let s = |v: &serde_json::Value| -> Option<String> {
         v.as_str().map(|s| s.to_string()).filter(|s| !s.is_empty())
@@ -45297,12 +45497,12 @@ fn parse_pr_metadata_json(forge: ReviewForge, json: &serde_json::Value) -> PrMet
     }
 }
 
+// trace:TASK-76 | ai:claude
 /// TASK-76: query the PR/MR's source/head branch name via gh/glab. Used by
 /// the session_start pre-flight to detect when the PR's source branch is
 /// already held by another lease (which would make `gh pr checkout` fail
 /// with `branch already used by worktree`). Returns None when the forge
 /// CLI isn't installed or fails — pre-flight degrades to "no warning."
-/// trace:TASK-76 | ai:claude
 fn query_pr_source_branch(
     forge: ReviewForge,
     n: u64,
@@ -45355,10 +45555,10 @@ fn query_pr_source_branch(
     }
 }
 
+// trace:STORY-61 | ai:claude
 /// STORY-61: parse `PR-N` / `MR-N` scope strings (case-insensitive).
 /// Returns the implied forge + PR number when the scope matches; None
 /// otherwise (lets normal scope handling proceed).
-/// trace:STORY-61 | ai:claude
 fn parse_review_scope(scope: &str) -> Option<(ReviewForge, u64)> {
     let trimmed = scope.trim();
     let (prefix, rest) = trimmed.split_once('-')?;
@@ -45370,9 +45570,10 @@ fn parse_review_scope(scope: &str) -> Option<(ReviewForge, u64)> {
     }
 }
 
+// trace:TASK-85 | ai:claude
 /// TASK-85: short label for a review forge + number, e.g. "PR-14" / "MR-7".
 /// Centralized so the error messages stay consistent with how STORY-66 /
-/// STORY-90 produce the auto-queue titles. trace:TASK-85 | ai:claude
+/// STORY-90 produce the auto-queue titles.
 fn format_review_label(forge: ReviewForge, n: u64) -> String {
     let prefix = match forge {
         ReviewForge::GitHub => "PR",
@@ -45381,11 +45582,12 @@ fn format_review_label(forge: ReviewForge, n: u64) -> String {
     format!("{}-{}", prefix, n)
 }
 
+// trace:TASK-85 | ai:claude
 /// TASK-85: predicate for `aida queue work PR-N` resolution. Returns
 /// true when the requirement title is a review story for this PR/MR —
 /// i.e. starts with `Review <LABEL>:` (case-insensitive on the prefix,
 /// exact on the number). Kept pure so the resolver path can be unit
-/// tested without a fake store. trace:TASK-85 | ai:claude
+/// tested without a fake store.
 fn review_title_matches(title: &str, forge: ReviewForge, n: u64) -> bool {
     let label = format_review_label(forge, n);
     let lower = title.trim_start().to_ascii_lowercase();
@@ -45393,10 +45595,10 @@ fn review_title_matches(title: &str, forge: ReviewForge, n: u64) -> bool {
     lower.starts_with(&want)
 }
 
+// trace:STORY-61 | ai:claude
 /// STORY-61: detect the project's forge by inspecting `origin`'s URL.
 /// Returns None for hosts we don't recognize (Bitbucket, self-hosted
 /// without telltale domain, etc.) — caller can require `--forge`.
-/// trace:STORY-61 | ai:claude
 fn detect_forge_from_origin(project_root: &std::path::Path) -> Option<ReviewForge> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -45417,11 +45619,11 @@ fn detect_forge_from_origin(project_root: &std::path::Path) -> Option<ReviewForg
     }
 }
 
+// trace:STORY-65 | ai:claude
 /// True if `branch` exists either locally or as `origin/<branch>`. Used by
 /// STORY-65 auto-branch resolution. Treats any git error as "doesn't exist"
 /// — better to try the name and let `git worktree add -b` fail loudly than
 /// to refuse to start a session because origin is unreachable.
-/// trace:STORY-65 | ai:claude
 fn branch_exists_anywhere(project_root: &std::path::Path, branch: &str) -> bool {
     let local = std::process::Command::new("git")
         .arg("-C")
@@ -45457,13 +45659,14 @@ mod bug_442_distributed_detection_tests {
         );
     }
 
+    // trace:BUG-442 | ai:claude
     /// BUG-442: a fresh clone has NO local `.aida/config.toml`, so
     /// `distributed_mode_declared_from` is None — but the project IS distributed
     /// when the `aida-store` branch exists. The dispatch must detect that from
     /// the git ref (and then auto-attach / refuse the silent ambient fallback),
     /// never treat a config-less clone as a non-AIDA dir. This locks the two
     /// halves of that signal so a future change can't re-gate detection on a
-    /// local config. trace:BUG-442 | ai:claude
+    /// local config.
     #[test]
     fn distributed_detected_from_git_ref_without_local_config() {
         let tmp = tempfile::tempdir().unwrap();
@@ -45495,17 +45698,18 @@ mod bug_442_distributed_detection_tests {
     }
 }
 
+// trace:TASK-245 | ai:claude
 /// TASK-245: decide whether `aida session start` should check out an
 /// existing branch instead of forking a new one. True when
 /// `--reuse-branch` was passed, or when an explicitly-named `--branch`
 /// already exists (auto-reuse). An auto-derived branch name
 /// (`branch_explicit == false`) never reuses — `resolve_session_branch`
 /// already picked a name free locally and on origin.
-/// trace:TASK-245 | ai:claude
 fn should_reuse_branch(reuse_flag: bool, branch_explicit: bool, branch_preexists: bool) -> bool {
     reuse_flag || (branch_explicit && branch_preexists)
 }
 
+// trace:STORY-248 | ai:claude
 /// STORY-248: resolve the stacked-branch base for `aida queue work`.
 ///
 /// Returns `Ok(None)` when neither `--stack` nor `--base` is set — the
@@ -45524,7 +45728,7 @@ fn should_reuse_branch(reuse_flag: bool, branch_explicit: bool, branch_preexists
 /// The error names `--force-base` as the override.
 ///
 /// Pure-ish: the lease + branch / PR lookups are all best-effort
-/// against the project's git state. trace:STORY-248 | ai:claude
+/// against the project's git state.
 fn resolve_stack_base(
     project_root: &std::path::Path,
     cwd: &std::path::Path,
@@ -45617,13 +45821,14 @@ mod session_start_reuse_tests {
     }
 }
 
+// trace:STORY-248 | ai:claude
 /// STORY-248: `resolve_stack_base` integration tests against a real
 /// temp git repo. Covers the "no flags" pass-through and the
 /// `--base BRANCH` validation legs. The `--stack` auto-detect leg also
 /// runs against a temp repo with a hand-written lease file, exercising
 /// the lease walker without spawning `gh` (we use a branch with no PR,
 /// so `detect_merged_pr_for_branch` returns NoOpenPr / GhMissing — both
-/// pass the "not merged" filter). trace:STORY-248 | ai:claude
+/// pass the "not merged" filter).
 #[cfg(test)]
 mod resolve_stack_base_tests {
     use super::*;
@@ -45789,6 +45994,7 @@ mod session_start_args_tests {
     }
 }
 
+// trace:TASK-1-108 | ai:claude
 /// TASK-1-108: when the current process is the orchestrator-spawned phase-1
 /// child (corroborated via AIDA_AUTO_COMPLETE + AIDA_AUTO_COMPLETE_TOKEN
 /// against the live drain-state file), the parent has already bumped
@@ -45798,7 +46004,7 @@ mod session_start_args_tests {
 /// force_claim to true in that case so preflight doesn't bounce work the
 /// parent already authorized. Returns `force_claim` unchanged when not
 /// orchestrator-corroborated (interactive runs keep the existing safety
-/// gate). trace:TASK-1-108 | ai:claude
+/// gate).
 fn effective_force_claim_for_session_start(
     explicit_force_claim: bool,
     orchestrator_corroborated: bool,
@@ -45806,7 +46012,8 @@ fn effective_force_claim_for_session_start(
     explicit_force_claim || orchestrator_corroborated
 }
 
-/// BUG-379: pre-flight spec-status gate tests. trace:BUG-379 | ai:claude
+// trace:BUG-379 | ai:claude
+/// BUG-379: pre-flight spec-status gate tests.
 #[cfg(test)]
 mod preflight_spec_status_tests {
     use super::{
@@ -46014,7 +46221,7 @@ mod preflight_spec_status_tests {
         ));
     }
 
-    /// trace:TASK-1-108 | ai:claude
+    // trace:TASK-1-108 | ai:claude
     #[test]
     fn effective_force_claim_is_true_when_explicit() {
         // Operator passed --force-claim → honor it regardless of
@@ -46023,7 +46230,7 @@ mod preflight_spec_status_tests {
         assert!(effective_force_claim_for_session_start(true, true));
     }
 
-    /// trace:TASK-1-108 | ai:claude
+    // trace:TASK-1-108 | ai:claude
     #[test]
     fn effective_force_claim_is_true_when_orchestrator_corroborated() {
         // No --force-claim, but we're the orchestrator's phase-1 child.
@@ -46031,7 +46238,7 @@ mod preflight_spec_status_tests {
         assert!(effective_force_claim_for_session_start(false, true));
     }
 
-    /// trace:TASK-1-108 | ai:claude
+    // trace:TASK-1-108 | ai:claude
     #[test]
     fn effective_force_claim_is_false_in_interactive_session() {
         // Bare `aida session start` (no orchestrator, no --force-claim).
@@ -46251,12 +46458,12 @@ mod preflight_spec_status_tests {
     }
 }
 
+// trace:STORY-65 | ai:claude
 /// Walk a candidate list of branch names and return the first that's free
 /// locally and on origin. STORY-65: auto for slug → slug-2..-10 →
 /// slug-YYYY-MM-DD → slug-YYYY-MM-DD-2..-10; date for slug-YYYY-MM-DD
 /// (with -N suffix on collision). Bails if 21 candidates all collide —
 /// that's a strong signal the user wants an explicit --branch.
-/// trace:STORY-65 | ai:claude
 fn resolve_session_branch(
     project_root: &std::path::Path,
     slug: &str,
@@ -46300,12 +46507,13 @@ fn resolve_session_branch(
     )
 }
 
+// trace:STORY-73 | ai:claude
 /// Best-effort PID of the shell that invoked `aida session start`. The
 /// `aida` shell wrapper is a function (not a forked process) so the
 /// binary's parent IS the user's interactive shell. Goes through sysinfo
 /// — already on for STORY-69 — so we don't add a libc dep just for
 /// `getppid`. Returns None if sysinfo can't see this process at all (a
-/// platform that didn't make it into the probe). trace:STORY-73 | ai:claude
+/// platform that didn't make it into the probe).
 fn creator_shell_pid() -> Option<u32> {
     let mut sys = sysinfo::System::new_with_specifics(
         sysinfo::RefreshKind::new().with_processes(sysinfo::ProcessRefreshKind::new()),
@@ -46315,9 +46523,10 @@ fn creator_shell_pid() -> Option<u32> {
     sys.process(me)?.parent().map(|p| p.as_u32())
 }
 
+// trace:BUG-379 | ai:claude
 /// BUG-379: decision returned by the `aida session start` pre-flight
 /// spec-status gate. Pure-data so the gate is unit-testable without
-/// spinning up a worktree / store fixture. trace:BUG-379 | ai:claude
+/// spinning up a worktree / store fixture.
 #[derive(Debug, PartialEq, Eq)]
 enum PreflightDecision {
     /// Status is Approved — proceed and bump to InProgress after lease save.
@@ -46331,10 +46540,11 @@ enum PreflightDecision {
     Refuse(String),
 }
 
+// trace:BUG-379 | ai:claude
 /// BUG-379: decide whether `aida session start --owns <scope>` is allowed
 /// given the spec's current status. Pure function — takes the looked-up
 /// status (None when the scope isn't a SPEC-ID) and the `--force-claim`
-/// flag, returns the decision. trace:BUG-379 | ai:claude
+/// flag, returns the decision.
 fn preflight_spec_status(
     owns: &str,
     status: Option<&RequirementStatus>,
@@ -46400,6 +46610,7 @@ fn preflight_spec_status(
     }
 }
 
+// trace:BUG-436 | ai:claude
 /// BUG-436: review-aware wrapper around [`preflight_spec_status`]. A *review*
 /// session (the orchestrator's phase-3 reviewer, or a human running
 /// `aida queue work PR-N`) reviews a PR — it does not implement or own the
@@ -46408,7 +46619,6 @@ fn preflight_spec_status(
 /// branch, PR open, awaiting review); `Completed` (merged) is harmless to open
 /// read-only. For a non-review (implementer) session this is exactly
 /// [`preflight_spec_status`], so the re-implement guard is fully preserved.
-/// trace:BUG-436 | ai:claude
 fn preflight_spec_status_review_aware(
     owns: &str,
     status: Option<&RequirementStatus>,
@@ -46426,6 +46636,7 @@ fn preflight_spec_status_review_aware(
     preflight_spec_status(owns, status, force_claim)
 }
 
+// trace:TASK-619 |
 /// TASK-619: outcome of the pull-then-re-check guard that runs immediately
 /// before `aida queue work` claims a spec. Session leases live under
 /// `.aida/sessions/` and are machine-local (gitignored), so they cannot stop
@@ -46434,7 +46645,7 @@ fn preflight_spec_status_review_aware(
 /// eventually-consistent. `handle_queue_work` already pulls the orphan store
 /// before claiming; this guard re-reads the spec's status from that freshly
 /// pulled view and refuses if the spec was grabbed (or shipped) elsewhere in
-/// the window between when we planned the pickup and now. trace:TASK-619 |
+/// the window between when we planned the pickup and now.
 /// ai:claude
 #[derive(Debug, PartialEq, Eq)]
 enum DupPickupDecision {
@@ -46445,6 +46656,7 @@ enum DupPickupDecision {
     Refuse(String),
 }
 
+// trace:TASK-619 | ai:claude
 /// TASK-619: pure decision for the cross-machine duplicate-pickup guard.
 ///
 /// Fires only when the spec was *pickable* at plan time (i.e. not already
@@ -46458,7 +46670,7 @@ enum DupPickupDecision {
 /// Bypassed entirely when `--force-claim` is set, when the orchestrator
 /// corroborated this child (the parent already flipped status before spawning
 /// us), or for review sessions (reviewing a Done/Completed PR is the normal
-/// pre-review state). trace:TASK-619 | ai:claude
+/// pre-review state).
 fn dup_pickup_recheck(
     spec_id: &str,
     status_at_plan: Option<&RequirementStatus>,
@@ -47530,13 +47742,13 @@ fn session_start(
     Ok(())
 }
 
+// trace:BUG-61 | ai:claude
 /// BUG-61: enumerate live `claude` processes whose cwd is at-or-under
 /// `worktree`. Used by both `session end` (refuse to remove a worktree
 /// with live claudes inside) and `session start` (refuse to recreate a
 /// worktree path that has a leaked claude pinning its dangling inode).
 /// Returns an empty vec when probing isn't possible — better to let the
 /// session op proceed than to block on a probe failure.
-/// trace:BUG-61 | ai:claude
 fn probe_live_claudes_in_worktree(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
     let canon = worktree
         .canonicalize()
@@ -47547,12 +47759,13 @@ fn probe_live_claudes_in_worktree(worktree: &std::path::Path) -> Vec<process_pro
         .collect()
 }
 
+// trace:BUG-61 | ai:claude
 /// BUG-61: enumerate dangling-cwd claude processes that USED to be inside
 /// `worktree` (cwd matches the path with `(deleted)` suffix). Used by
 /// `session start` to refuse recreating a worktree path that has an
 /// orphan claude attached — the new worktree's writes would be ignored
 /// by the leaked process and any hook it fires would resolve against a
-/// stale inode. trace:BUG-61 | ai:claude
+/// stale inode.
 fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
     process_probe::probe_live_claude_sessions()
         .into_iter()
@@ -47560,6 +47773,8 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
         .collect()
 }
 
+// trace:TASK-54 | ai:claude
+// trace:STORY-106 | ai:claude
 /// TASK-54: return Some((behind, sample)) when `branch` lags `main`
 /// (or origin/main) by 1+ commits. `sample` is a list of one-line
 /// `<short-sha> <subject>` strings for the commits the user would
@@ -47570,11 +47785,10 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
 ///   - any git invocation fails (treat as "no signal" rather than
 ///     pretending we know the answer).
 ///     Prefers `origin/main` when present so users with stale local
-///     `main` still see the right delta. trace:TASK-54 | ai:claude
+///     `main` still see the right delta.
 ///     STORY-106: count commits this branch is ahead of `origin/main` (falls
 ///     back to `main` when origin isn't available). Best-effort — returns
 ///     `None` on any git failure so callers can degrade silently.
-///     trace:STORY-106 | ai:claude
 fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32> {
     if branch == "main" || branch == "HEAD" {
         return None;
@@ -47606,12 +47820,13 @@ fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
+// trace:TASK-99 | ai:claude
 /// TASK-99: count how many commits the local `base_ref` is BEHIND
 /// `origin/main` — i.e. commits on origin that the base hasn't yet
 /// picked up. Returns `None` when `origin/main` (or the base ref)
 /// doesn't resolve — fresh clone, offline, detached, etc. — so the
 /// caller stays silent rather than warn on missing data. Best-effort:
-/// any git failure → `None`. trace:TASK-99 | ai:claude
+/// any git failure → `None`.
 fn commits_behind_origin_main(repo: &std::path::Path, base_ref: &str) -> Option<u32> {
     let rev_parse = |refname: &str| {
         std::process::Command::new("git")
@@ -47641,11 +47856,12 @@ fn commits_behind_origin_main(repo: &std::path::Path, base_ref: &str) -> Option<
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
+// trace:TASK-99 | ai:claude
 /// TASK-99: pure decision — given how many commits the new worktree's
 /// base is behind `origin/<branch>`, produce the warning line (or
 /// `None` when the base is current). Side-effect-free so the
 /// behind-count → message mapping is unit-testable in isolation, no
-/// git/CWD required. trace:TASK-99 | ai:claude
+/// git/CWD required.
 fn behind_origin_warning(behind: u32, branch: &str) -> Option<String> {
     if behind == 0 {
         return None;
@@ -47691,10 +47907,11 @@ mod task_99_behind_origin_tests {
         assert!(msg.contains("origin/develop"), "{msg}");
     }
 
+    // trace:TASK-99 | ai:claude
     /// Fully isolated: own tempdir, never touches the shared CWD or repo.
     /// `origin/main` is absent in a bare local init, so the behind-count
     /// helper returns `None` (stay silent on missing remote-tracking data)
-    /// rather than erroring or warning spuriously. trace:TASK-99 | ai:claude
+    /// rather than erroring or warning spuriously.
     #[test]
     fn no_origin_main_is_silent() {
         fn git(repo: &std::path::Path, args: &[&str]) {
@@ -47723,9 +47940,9 @@ mod task_99_behind_origin_tests {
         assert_eq!(commits_behind_origin_main(repo, "main"), None);
     }
 
+    // trace:TASK-99 | ai:claude
     /// Fully isolated: a local clone whose `main` is N commits behind its
     /// origin counts exactly N behind. Own tempdir; no shared state.
-    /// trace:TASK-99 | ai:claude
     #[test]
     fn counts_behind_against_origin_main() {
         fn git(repo: &std::path::Path, args: &[&str]) {
@@ -47785,13 +48002,13 @@ mod task_99_behind_origin_tests {
     }
 }
 
+// trace:STORY-106 | ai:claude
 /// STORY-106: best-effort emit the "queue empty for this role" workflow
 /// hint after a successful `queue done` (or `edit --status completed` on
 /// a queue-tracked spec). Detects role+scope from the session env / lease,
 /// counts remaining queue entries, and fires the hint only when the
 /// active-role queue is now empty. Silent on any detection failure —
 /// hints are nice-to-have, not load-bearing.
-/// trace:STORY-106 | ai:claude
 fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
     let project_root = match storage.path().parent() {
         Some(p) => p.to_path_buf(),
@@ -47935,12 +48152,13 @@ fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<
     Some((count, sample))
 }
 
+// trace:TASK-53 | ai:claude
 /// TASK-53: list distinct files touched by commits on `branch` since
 /// `since` (a git-friendly time string like "14 days ago"). Returns
 /// an empty vec on any git error or when the branch has no commits in
 /// the window. Used by `aida session start`'s pre-flight conflict
 /// warning so the user sees what another concurrent session has been
-/// touching. trace:TASK-53 | ai:claude
+/// touching.
 fn recent_files_for_branch(
     repo: &std::path::Path,
     branch: &str,
@@ -47975,6 +48193,7 @@ fn recent_files_for_branch(
     seen.into_iter().collect()
 }
 
+// trace:BUG-67 | ai:claude
 /// BUG-67: list every line of `git status --porcelain` inside `worktree`,
 /// skipping the leading two-char status code so output is human-readable.
 /// Ignored entries are excluded by default (no `--ignored=normal`), so
@@ -47982,7 +48201,7 @@ fn recent_files_for_branch(
 /// and-modified or untracked-but-not-ignored files. Returns an empty
 /// vec when the worktree is clean OR when `git status` itself fails
 /// (we treat an unparseable status as clean and let `git worktree
-/// remove --force` produce the authoritative error). trace:BUG-67 | ai:claude
+/// remove --force` produce the authoritative error).
 fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -48000,9 +48219,10 @@ fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
+// trace:STORY-457 | ai:claude
 /// STORY-457: is this untracked path auto-flaggable as safe-to-remove? Editor
 /// scratch, build droppings, and OS cruft — never source. Matched on the file
-/// name / extension or a path segment. trace:STORY-457 | ai:claude
+/// name / extension or a path segment.
 fn untracked_is_safe_to_remove(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path);
     const SUFFIXES: &[&str] = &[
@@ -48019,13 +48239,14 @@ fn untracked_is_safe_to_remove(path: &str) -> bool {
         .any(|seg| seg == "__pycache__" || seg == ".mypy_cache" || seg == ".pytest_cache")
 }
 
+// trace:STORY-456 | ai:claude
 /// STORY-456: structured per-worktree status row — the assembled merge of
 /// `git worktree list`, the session lease covering it, live/dormant process
 /// state, working-tree cleanliness, commits-ahead-of-default, and the open
 /// PR (if any) on its branch. Drives both the text Worktrees section and the
 /// `--json` projection so the two never drift. The PR-derived fields are
 /// populated from a single batched `gh pr list` snapshot — never one gh call
-/// per row. trace:STORY-456 | ai:claude
+/// per row.
 #[derive(Debug, Clone, PartialEq)]
 struct WorktreeStatusRow {
     path: std::path::PathBuf,
@@ -48045,9 +48266,10 @@ struct WorktreeStatusRow {
     obsolete: bool,
 }
 
+// trace:STORY-456
 /// STORY-456: tie a worktree to a spec id. The lease scope is authoritative;
 /// fall back to inferring `TASK-425` from a `task-425` / `task-425-2` branch
-/// name so leaseless worktrees still get a spec hint. trace:STORY-456
+/// name so leaseless worktrees still get a spec hint.
 fn infer_tied_spec(lease_scope: Option<&str>, branch: &str) -> Option<String> {
     if let Some(scope) = lease_scope {
         if !scope.is_empty() {
@@ -48066,6 +48288,7 @@ fn infer_tied_spec(lease_scope: Option<&str>, branch: &str) -> Option<String> {
     }
 }
 
+// trace:STORY-456 | ai:claude
 /// STORY-456: pure assembly of the Worktrees rows from already-collected
 /// inputs (no I/O) so the merge + obsolescence logic is unit-testable.
 ///
@@ -48074,7 +48297,7 @@ fn infer_tied_spec(lease_scope: Option<&str>, branch: &str) -> Option<String> {
 /// it has un-merged commits ahead of the default branch, or it has an open
 /// PR. It is OBSOLETE (safe to remove) only when ALL of those are false: no
 /// lease, clean tree, nothing live, nothing ahead, no open PR. The conjunction
-/// keeps the "safe to remove" signal conservative. trace:STORY-456 | ai:claude
+/// keeps the "safe to remove" signal conservative.
 fn assemble_worktree_status_rows(
     worktrees: &[WorktreeRecord],
     main_root: &std::path::Path,
@@ -48125,16 +48348,18 @@ fn assemble_worktree_status_rows(
     rows
 }
 
+// trace:BUG-609
 /// BUG-609: above this many worktree rows the default `aida status` collapses
 /// the section to a one-line summary instead of listing every row — fanned-out
 /// agent worktrees accumulate (observed ~45, many abandoned) and the full list
 /// drowns the rest of the status surface. `--all` always lists. Below the
-/// threshold the list is short enough to print in full. trace:BUG-609
+/// threshold the list is short enough to print in full.
 const WORKTREE_SUMMARY_THRESHOLD: usize = 8;
 
+// trace:BUG-609 | ai:claude
 /// BUG-609: render one worktree row's display line (display-only; no I/O).
 /// Pulled out of `print_status_worktrees_section` so the full-list path and any
-/// future caller share one formatter. trace:BUG-609 | ai:claude
+/// future caller share one formatter.
 fn format_worktree_status_line(row: &WorktreeStatusRow) -> String {
     let dirty_part = if row.dirty_count == 0 {
         "clean".to_string()
@@ -48195,12 +48420,13 @@ fn format_worktree_status_line(row: &WorktreeStatusRow) -> String {
     line
 }
 
+// trace:BUG-609 | ai:claude
 /// BUG-609: assemble the collapsed one-line summary the default (non-`--all`)
 /// worktree section prints once the roster crosses `WORKTREE_SUMMARY_THRESHOLD`.
 /// Pure (no I/O) so the collapse copy is unit-testable: "Worktrees: M
 /// (K obsolete — `aida session gc` to reap)". The reaping itself lives in
 /// `aida session gc` / `aida doctor heal` (already built — BUG-614); status
-/// only summarizes. trace:BUG-609 | ai:claude
+/// only summarizes.
 fn worktree_summary_line(rows: &[WorktreeStatusRow]) -> String {
     let total = rows.len();
     let obsolete = rows.iter().filter(|r| r.obsolete).count();
@@ -48214,6 +48440,8 @@ fn worktree_summary_line(rows: &[WorktreeStatusRow]) -> String {
     s
 }
 
+// trace:STORY-456 | ai:claude
+// trace:BUG-609 | ai:claude
 /// STORY-456: `aida status` Worktrees section. Display-only — lists each
 /// non-main, non-store worktree with its branch, tied spec, clean/dirty
 /// state, the session lease covering it, live/dormant status, commits-ahead
@@ -48221,12 +48449,12 @@ fn worktree_summary_line(rows: &[WorktreeStatusRow]) -> String {
 /// obsolescence verdict (in flight / obsolete — `git worktree remove`).
 /// Silent when only the main worktree exists. The open-PR fields come from a
 /// single batched `gh pr list` snapshot — one gh call regardless of worktree
-/// count. trace:STORY-456 | ai:claude
+/// count.
 ///
 /// BUG-609: `show_all` (from `aida status --all`) forces the full list. By
 /// default a roster larger than `WORKTREE_SUMMARY_THRESHOLD` collapses to a
 /// one-line count + obsolete tally so abandoned fanned-out worktrees stop
-/// drowning the surface. trace:BUG-609 | ai:claude
+/// drowning the surface.
 fn print_status_worktrees_section(project_root: &std::path::Path, show_all: bool) {
     let main_root = main_worktree_root_from(project_root);
     let rows = collect_worktree_status_rows(&main_root);
@@ -48455,11 +48683,11 @@ mod story_673_terse_status_tests {
     }
 }
 
+// trace:STORY-456 | ai:claude
 /// STORY-456: I/O wrapper that gathers the inputs (worktrees, leases, live
 /// sessions, the batched open-PR snapshot, per-worktree ahead-of-default
 /// counts) and hands them to the pure `assemble_worktree_status_rows`. Shared
 /// by the text section and the `--json` projection so they never drift.
-/// trace:STORY-456 | ai:claude
 fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStatusRow> {
     let worktrees = list_worktrees(main_root);
     let leases = list_leases(main_root);
@@ -48490,11 +48718,11 @@ fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStat
     )
 }
 
+// trace:STORY-456 | ai:claude
 /// STORY-456: `aida status` Open PRs section. Lists every open PR (one
 /// batched `gh pr list` call) with number + title, CI rollup, mergeability,
 /// and a recommended next step per state. Silent when there are no open PRs
 /// or gh is unavailable — display-only orientation, not a gate.
-/// trace:STORY-456 | ai:claude
 // STORY-673: above this many open PRs, the default `aida status` collapses the
 // roster to a one-line count and shows only the first few — the full list is
 // behind `--full` / `--all`. Keeps the actionable "is there a PR that needs me"
@@ -48546,10 +48774,11 @@ fn print_status_open_prs_section(project_root: &std::path::Path, show_full: bool
     println!();
 }
 
+// trace:STORY-456
 /// STORY-456: recommended next step for an open PR, keyed off CI rollup,
 /// mergeability, and review decision. Distinguishes CI-failing from
 /// merge-conflict from awaiting-review — the conflation the spec calls out
-/// (`gh pr checks --watch` blurs CI with mergeability). Pure. trace:STORY-456
+/// (`gh pr checks --watch` blurs CI with mergeability). Pure.
 fn open_pr_next_step(ci: &str, mergeable: &str, review_decision: Option<&str>) -> String {
     if ci == "fail" {
         return "CI failing — fix & push".to_string();
@@ -48579,9 +48808,10 @@ fn truncate_for_width(s: &str, max: usize) -> String {
     out
 }
 
+// trace:STORY-456 | ai:claude
 /// STORY-456: `aida status` Recently merged section — last N merged PRs (one
 /// batched `gh pr list --state merged` call) for orientation. Silent when
-/// there are none or gh is unavailable. trace:STORY-456 | ai:claude
+/// there are none or gh is unavailable.
 fn print_status_recently_merged_section(
     project_root: &std::path::Path,
     limit: usize,
@@ -48627,9 +48857,10 @@ fn print_status_recently_merged_section(
     println!();
 }
 
+// trace:STORY-456 | ai:claude
 /// STORY-456: parse `gh pr list --state merged --json number,title,mergedAt`
 /// into `(number, title, humanized-merge-time)` rows. Pure — unit-tested
-/// against captured gh JSON. trace:STORY-456 | ai:claude
+/// against captured gh JSON.
 fn parse_recently_merged_prs(stdout: &str) -> Vec<(u64, String, Option<String>)> {
     let json: serde_json::Value = match serde_json::from_str(stdout) {
         Ok(v) => v,
@@ -48655,8 +48886,9 @@ fn parse_recently_merged_prs(stdout: &str) -> Vec<(u64, String, Option<String>)>
     rows
 }
 
+// trace:STORY-456 | ai:claude
 /// STORY-456: batched fetch of the last `limit` merged PRs. Empty when gh is
-/// missing or the call fails. trace:STORY-456 | ai:claude
+/// missing or the call fails.
 fn collect_recently_merged_prs(
     project_root: &std::path::Path,
     limit: usize,
@@ -48687,11 +48919,12 @@ fn collect_recently_merged_prs(
     rows
 }
 
+// trace:STORY-452 | ai:claude
 /// STORY-452: read the tip commit of each remote-tracking branch under
 /// `origin/*` into `RemoteCommit`s for the remote-activity inference. One
 /// `git for-each-ref` call, no per-branch git invocations. Records use the
 /// short branch name (`origin/bug-250` → `bug-250`). Empty when git is
-/// unavailable or there are no remote branches. trace:STORY-452 | ai:claude
+/// unavailable or there are no remote branches.
 fn collect_remote_branch_commits(
     project_root: &std::path::Path,
 ) -> Vec<remote_activity::RemoteCommit> {
@@ -48714,9 +48947,10 @@ fn collect_remote_branch_commits(
     parse_remote_branch_commits(&stdout)
 }
 
+// trace:STORY-452 | ai:claude
 /// STORY-452: parse the tab-delimited `git for-each-ref` output into
 /// `RemoteCommit`s. Pure — unit-tested without git. `origin/HEAD` (a symbolic
-/// pointer, not a real branch) is skipped. trace:STORY-452 | ai:claude
+/// pointer, not a real branch) is skipped.
 fn parse_remote_branch_commits(stdout: &str) -> Vec<remote_activity::RemoteCommit> {
     let mut commits = Vec::new();
     for line in stdout.lines() {
@@ -48746,11 +48980,12 @@ fn parse_remote_branch_commits(stdout: &str) -> Vec<remote_activity::RemoteCommi
     commits
 }
 
+// trace:STORY-452 | ai:claude
 /// STORY-452: `aida status` "Recent remote activity" section. Infers cloud /
 /// cross-machine agent work from `[AI:...]` commit trailers on remote branches
 /// that have NO local session lease, since those agents never appear in the
 /// local registry. Read-only, lossy-by-design, and silent when there is no
-/// remote signal (or git is unavailable). trace:STORY-452 | ai:claude
+/// remote signal (or git is unavailable).
 fn print_status_remote_activity_section(
     project_root: &std::path::Path,
     limit: usize,
@@ -49094,12 +49329,13 @@ mod story_456_status_worktrees_tests {
     }
 }
 
+// trace:TASK-539 | ai:claude
 /// TASK-539: `aida status` Findings section. Display-only — surfaces the
 /// pending-triage findings backlog (silent when empty) so it isn't invisible
 /// until the user remembers `aida findings list`. Reuses the same
 /// `build_findings_view` the findings command uses; shows a compact per-finding
 /// line (source + id + origin + title), capped, with a pointer to the full
-/// list. trace:TASK-539 | ai:claude
+/// list.
 fn print_status_findings_section(backend: &aida_core::CachedGitBackend) {
     // Findings are DRAFT specs carrying a from-* tag (matches `aida findings
     // list`). Filtering to draft avoids counting completed/rejected specs that
@@ -49153,13 +49389,14 @@ fn print_status_findings_section(backend: &aida_core::CachedGitBackend) {
     println!();
 }
 
+// trace:STORY-457 | ai:claude
+// trace:STORY-457 | ai:claude
 /// STORY-457: `aida status` working-tree section. Display-only — parses
 /// `git status --porcelain` in `root` and groups into staged / modified-tracked
 /// / untracked, auto-flagging safe-to-remove untracked cruft with an `rm`
 /// recommendation and surfacing the rest for a commit-or-remove decision.
 /// Silent when the tree is clean. (The mtime recent-vs-stale split + the
 /// content-matches-HEAD heuristic from the spec are a follow-up refinement.)
-/// trace:STORY-457 | ai:claude
 /// STORY-457 persistence: per-clone status-run state under `.aida/`, gitignored
 /// by the deny-by-default `.aida/*` rule (no .gitignore change needed). Two
 /// files drive the recent-vs-stale untracked heuristic and TASK-662's
@@ -49168,7 +49405,6 @@ fn print_status_findings_section(backend: &aida_core::CachedGitBackend) {
 ///   - `untracked-history.toml`: first-observed timestamp per untracked path.
 ///     All I/O is best-effort: failures degrade to an empty / in-memory view
 ///     (everything reads as first-seen-now) and never break `aida status`.
-///     trace:STORY-457 | ai:claude
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 struct LastStatusRecord {
     last_status_at: Option<String>,
@@ -49182,9 +49418,9 @@ fn status_untracked_history_path(root: &std::path::Path) -> std::path::PathBuf {
     root.join(".aida").join("untracked-history.toml")
 }
 
+// trace:STORY-457 | ai:claude
 /// Read the previous `aida status` run timestamp, if one was recorded.
 /// Consumed by the recent-vs-stale heuristic and (later) TASK-662's delta.
-/// trace:STORY-457 | ai:claude
 // why: paired reader for write_last_status_at; wired into tests now, awaiting TASK-662's delta surface in production.
 #[allow(dead_code)]
 fn read_last_status_at(root: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
@@ -49196,8 +49432,9 @@ fn read_last_status_at(root: &std::path::Path) -> Option<chrono::DateTime<chrono
         .map(|dt| dt.with_timezone(&chrono::Utc))
 }
 
+// trace:STORY-457
 /// Record `now` as the latest `aida status` run time (best-effort; no-op when
-/// `.aida/` is absent, i.e. not an initialized project). trace:STORY-457
+/// `.aida/` is absent, i.e. not an initialized project).
 fn write_last_status_at(root: &std::path::Path, now: chrono::DateTime<chrono::Utc>) {
     if !root.join(".aida").is_dir() {
         return;
@@ -49210,13 +49447,13 @@ fn write_last_status_at(root: &std::path::Path, now: chrono::DateTime<chrono::Ut
     }
 }
 
+// trace:TASK-662 | ai:claude
 /// TASK-662: per-clone snapshot of the finding IDs seen on the previous
 /// `aida status` run, persisted under `.aida/last-findings.toml` (gitignored by
 /// the deny-by-default `.aida/*` rule — no .gitignore change needed). Drives the
 /// `findings.delta` block in `aida status --json` (new-since-last-run). All I/O
 /// is best-effort: a missing/unreadable file reads as "no prior run" so the
 /// first delta is suppressed, and a write failure never breaks `aida status`.
-/// trace:TASK-662 | ai:claude
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 struct LastFindingsRecord {
     /// Sorted-unique finding display IDs (e.g. `TASK-5`) seen last run.
@@ -49228,17 +49465,19 @@ fn status_last_findings_path(root: &std::path::Path) -> std::path::PathBuf {
     root.join(".aida").join("last-findings.toml")
 }
 
+// trace:TASK-662 | ai:claude
 /// Read the finding IDs recorded on the previous run. `None` distinguishes
 /// "no prior run recorded" (suppress the delta entirely on a first run) from
-/// "prior run had zero findings" (`Some(empty)`). trace:TASK-662 | ai:claude
+/// "prior run had zero findings" (`Some(empty)`).
 fn read_last_findings(root: &std::path::Path) -> Option<Vec<String>> {
     let txt = std::fs::read_to_string(status_last_findings_path(root)).ok()?;
     let rec: LastFindingsRecord = toml::from_str(&txt).ok()?;
     Some(rec.ids)
 }
 
+// trace:TASK-662
 /// Record the current finding IDs as the new baseline (best-effort; no-op when
-/// `.aida/` is absent, i.e. not an initialized project). trace:TASK-662
+/// `.aida/` is absent, i.e. not an initialized project).
 fn write_last_findings(root: &std::path::Path, ids: &[String]) {
     if !root.join(".aida").is_dir() {
         return;
@@ -49252,8 +49491,9 @@ fn write_last_findings(root: &std::path::Path, ids: &[String]) {
     }
 }
 
+// trace:TASK-662
 /// The delta between the previous run's findings snapshot and the current set.
-/// Serialized into `findings.delta` of `aida status --json`. trace:TASK-662
+/// Serialized into `findings.delta` of `aida status --json`.
 #[derive(Debug, PartialEq, Eq, serde::Serialize)]
 struct FindingsDelta {
     /// Total findings recorded on the previous run.
@@ -49268,11 +49508,11 @@ struct FindingsDelta {
     resolved_count: usize,
 }
 
+// trace:TASK-662 | ai:claude
 /// Pure core of the delta-since-last-run: compare the persisted snapshot
 /// (`previous`, `None` = no prior run) against the `current` finding IDs.
 /// `None` ⇒ `None` (first run has no baseline to diff). Order-insensitive and
 /// dedup-safe so a reordered or duplicated snapshot can't fabricate a delta.
-/// trace:TASK-662 | ai:claude
 fn compute_findings_delta(
     previous: Option<&[String]>,
     current: &[String],
@@ -49296,11 +49536,11 @@ fn compute_findings_delta(
     })
 }
 
+// trace:STORY-457 | ai:claude
 /// Load → upsert (first-observed = `now` for new paths) → prune (drop paths no
 /// longer untracked) → persist the untracked-history map, returning the
 /// first-observed timestamp for each currently-untracked path. Pure-data core
 /// is `reconcile_untracked_map` (unit-tested); this wrapper does the I/O.
-/// trace:STORY-457 | ai:claude
 fn reconcile_untracked_history(
     root: &std::path::Path,
     current: &[String],
@@ -49327,9 +49567,10 @@ fn reconcile_untracked_history(
         .collect()
 }
 
+// trace:STORY-457 | ai:claude
 /// Pure core of `reconcile_untracked_history`: upsert new paths with
 /// first-observed = `now`, prune entries no longer untracked. RFC3339 strings
-/// in/out so it's trivially serializable + testable. trace:STORY-457 | ai:claude
+/// in/out so it's trivially serializable + testable.
 fn reconcile_untracked_map(
     mut stored: std::collections::HashMap<String, String>,
     current: &[String],
@@ -49343,8 +49584,9 @@ fn reconcile_untracked_map(
     stored
 }
 
+// trace:STORY-457
 /// STORY-457 recent-vs-stale classification of an untracked path given its
-/// first-observed time: recent (<1h), stale (≥1d), or mid. trace:STORY-457
+/// first-observed time: recent (<1h), stale (≥1d), or mid.
 #[derive(Debug, PartialEq, Eq)]
 enum UntrackedAge {
     Recent,
@@ -49526,8 +49768,9 @@ fn print_status_working_tree_section(root: &std::path::Path) {
     println!();
 }
 
+// trace:BUG-61 | ai:claude
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
-/// are still alive. trace:BUG-61 | ai:claude
+/// are still alive.
 fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
     use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
     let mut sys =
@@ -49620,9 +49863,9 @@ pub(crate) enum CiAction {
     Cancel(String),
 }
 
+// trace:TASK-111 | ai:claude
 /// Pure decision function: given a probe result + flags, decide what to
 /// do. Pure so the unit tests can pin every branch without spawning gh.
-/// trace:TASK-111 | ai:claude
 pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiAction {
     match probe {
         CiProbe::NoSignal(reason) => {
@@ -49705,10 +49948,13 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
     }
 }
 
+// trace:TASK-111 | ai:claude
+// trace:STORY-516 | ai:claude
+// trace:STORY-516 | ai:claude
 /// Side-effecting probe: shell out to gh and parse the result. Returns a
 /// `CiProbe::NoSignal` for any failure path so callers don't have to
 /// distinguish between "no PR" and "gh broken" — both degrade to "proceed
-/// silently." trace:TASK-111 | ai:claude
+/// silently."
 /// STORY-516: forge-routed CI probe — the ci-op entry point the call sites use
 /// instead of `probe_ci_state_for_branch` directly, so a GitLab / pure-git repo
 /// goes through its own provider. GitHubForge delegates back to
@@ -49717,11 +49963,10 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
 /// resolved internally here and the call sites stay a pure name-swap. Converts
 /// the forge-neutral `CiProbeResult` back to `CiProbe` so the existing match
 /// sites are unchanged; a provider Err collapses to `NoSignal`.
-/// trace:STORY-516 | ai:claude
 /// STORY-516: reverse of `ci_probe_result_from_ci_probe` — convert a forge
 /// `CiProbeResult` (incl. a provider `Err`) back to the orchestrator's
 /// `CiProbe`, so the `*_via_forge` CI helpers stay a pure name-swap at their
-/// call sites. trace:STORY-516 | ai:claude
+/// call sites.
 fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiProbe {
     match r {
         Ok(crate::forge::CiProbeResult::NoSignal(why)) => CiProbe::NoSignal(why),
@@ -49749,11 +49994,11 @@ pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
     )
 }
 
+// trace:STORY-516 | ai:claude
 /// STORY-516: forge-routed orchestrator / `--watch-ci` CI watch — blocks until
 /// the branch's workflow-run CI is terminal (streaming when interactive),
 /// returning CiProbe. GitHubForge delegates to `watch_ci_for_context`.
 /// `no_human_active` is the headless flag (inverted to `interactive`).
-/// trace:STORY-516 | ai:claude
 pub(crate) fn watch_ci_for_context_via_forge(branch: &str, no_human_active: bool) -> CiProbe {
     let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
     ci_probe_from_ci_probe_result(
@@ -49799,10 +50044,10 @@ pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
     parse_ci_probe(&stdout)
 }
 
+// trace:TASK-111 | ai:claude
 /// Pure JSON-to-CiProbe parser. Extracted so we can unit-test it without
 /// running gh. The input shape is `[{"number": N, "statusCheckRollup": [...]}]`
 /// (a JSON array of PR objects from gh; we only ever look at the first).
-/// trace:TASK-111 | ai:claude
 pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     let trimmed = stdout.trim();
     if trimmed.is_empty() || trimmed == "[]" {
@@ -49886,10 +50131,10 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     CiProbe::Green { pr_number }
 }
 
+// trace:TASK-111 | ai:claude
 /// Block until the branch's CI run reaches a terminal state. Polls every
 /// 30s; gives up after 30 minutes (60 polls) and returns NoSignal so the
 /// caller proceeds rather than hanging. Ctrl+C interrupts cleanly.
-/// trace:TASK-111 | ai:claude
 fn wait_for_ci_terminal(branch: &str) -> CiProbe {
     const POLL_INTERVAL_SECS: u64 = 30;
     const MAX_POLLS: u32 = 60;
@@ -49916,11 +50161,11 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
     CiProbe::NoSignal("--wait-ci gave up after 30m".to_string())
 }
 
+// trace:BUG-273
 /// BUG-273: `gh run watch` is an interactive terminal renderer. When stdout
 /// is piped to tee, or when an auto-complete drain is explicitly headless, its
 /// redraw frames become hundreds of repeated log blocks. Stream only for the
 /// true interactive case; otherwise use the quiet poller.
-/// trace:BUG-273
 fn should_stream_ci_watch(stdout_is_tty: bool, no_human_active: bool) -> bool {
     stdout_is_tty && !no_human_active
 }
@@ -49937,20 +50182,22 @@ pub(crate) fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiPro
     }
 }
 
+// trace:TASK-233 | ai:claude
 /// TASK-233: extract the most-recent workflow run id from `gh run list
 /// --json databaseId` JSON output. Pure — unit-testable independent of
-/// the `gh` subprocess. trace:TASK-233 | ai:claude
+/// the `gh` subprocess.
 fn first_run_id_from_gh_json(json: &str) -> Option<String> {
     let parsed: serde_json::Value = serde_json::from_str(json).ok()?;
     let id = parsed.as_array()?.first()?.get("databaseId")?;
     id.as_u64().map(|n| n.to_string())
 }
 
+// trace:TASK-233
 /// TASK-233: `--watch-ci` — stream live CI progress via `gh run watch`
 /// rather than silently polling, then re-probe for the terminal state so
 /// the end-session decision tree (green proceeds / red prompts) runs
 /// exactly as it does for `--wait-ci`. Falls back to the silent poll
-/// loop when `gh` is missing or no run id resolves. trace:TASK-233
+/// loop when `gh` is missing or no run id resolves.
 fn watch_ci_terminal(branch: &str) -> CiProbe {
     let Some(gh) = resolve_gh_binary() else {
         return wait_for_ci_terminal(branch);
@@ -49991,10 +50238,11 @@ fn watch_ci_terminal(branch: &str) -> CiProbe {
     ci_probe_via_forge(branch) // STORY-516: forge-routed
 }
 
-/// trace:STORY-73 | ai:claude
+// trace:STORY-73 | ai:claude
+// trace:TASK-243 | ai:claude
 /// TASK-243: format the `Claude session: <id>… (last active …)` line for
 /// `aida session end`'s ambiguity prompt. Pure — `age_secs` is resolved
-/// by the caller. trace:TASK-243 | ai:claude
+/// by the caller.
 fn format_claude_session_line(claude_id: &str, age_secs: Option<u64>) -> String {
     let short: String = claude_id.chars().take(8).collect();
     match age_secs {
@@ -50007,10 +50255,11 @@ fn format_claude_session_line(claude_id: &str, age_secs: Option<u64>) -> String 
     }
 }
 
+// trace:TASK-243 | ai:claude
 /// TASK-243: one-line ambiguity-resolution summary for `aida session
 /// end` — `(headline, optional Claude-session line)`. Pure formatter so
 /// the role / Claude-id surfacing is unit-testable independent of the
-/// interactive prompt. trace:TASK-243 | ai:claude
+/// interactive prompt.
 fn format_session_end_summary(
     id: &str,
     role: Option<&str>,
@@ -50030,11 +50279,11 @@ fn format_session_end_summary(
     (headline, claude_line)
 }
 
+// trace:TASK-243 | ai:claude
 /// TASK-243: resolve the Claude conversation linked to a lease — the
 /// `claude_session_id` recorded in the session manifest (TASK-112) plus
 /// a best-effort "last active" age from the conversation JSONL's mtime.
 /// Returns `(None, None)` when there's no manifest or no recorded id.
-/// trace:TASK-243 | ai:claude
 fn resolve_lease_claude_session(lease: &SessionLease) -> (Option<String>, Option<u64>) {
     let project_root = find_main_worktree_root()
         .ok()
@@ -50286,8 +50535,9 @@ mod session_end_summary_tests {
     }
 }
 
+// trace:STORY-73 | ai:claude
 /// Look up a lease by id prefix (case-insensitive). Errors on no-match
-/// or ambiguous prefix. trace:STORY-73 | ai:claude
+/// or ambiguous prefix.
 fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<SessionLease> {
     let q = query.to_lowercase();
     let matches: Vec<&SessionLease> = leases
@@ -50317,11 +50567,11 @@ fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<Sessi
     }
 }
 
+// trace:TASK-489 | ai:claude
 /// TASK-489: is the alpha prefix of `s` (the chars before the first `-`)
 /// all uppercase? Used to disambiguate the positional resolution between
 /// SPEC-ID (`TASK-489` → spec lookup) and branch name (`task-489` →
 /// branch lookup) when the shared `looks_like_spec_id` would accept both.
-/// trace:TASK-489 | ai:claude
 fn positional_has_uppercase_spec_prefix(s: &str) -> bool {
     let bytes = s.trim().as_bytes();
     let mut i = 0;
@@ -50334,6 +50584,7 @@ fn positional_has_uppercase_spec_prefix(s: &str) -> bool {
     i > 0
 }
 
+// trace:TASK-489 | ai:claude
 /// TASK-489: look up a lease by spec ID (case-insensitive equality against
 /// `lease.scope`). Errors with the message shape the user friction asked
 /// for: zero matches surfaces `aida session leases` as the diagnostic;
@@ -50341,7 +50592,6 @@ fn positional_has_uppercase_spec_prefix(s: &str) -> bool {
 /// can disambiguate. The lease's `scope` field holds the raw `--owns`
 /// argument from session start — for normal pickups that's the SPEC-ID,
 /// matching the operator's mental model exactly.
-/// trace:TASK-489 | ai:claude
 fn find_lease_by_spec(query: &str, leases: &[SessionLease]) -> Result<SessionLease> {
     let q = query.trim().to_lowercase();
     let matches: Vec<&SessionLease> = leases
@@ -50370,9 +50620,9 @@ fn find_lease_by_spec(query: &str, leases: &[SessionLease]) -> Result<SessionLea
     }
 }
 
+// trace:TASK-489 | ai:claude
 /// TASK-489: look up a lease by branch name (case-sensitive — git refs
 /// are case-sensitive). Same error shape as `find_lease_by_spec`.
-/// trace:TASK-489 | ai:claude
 fn find_lease_by_branch(query: &str, leases: &[SessionLease]) -> Result<SessionLease> {
     let q = query.trim();
     let matches: Vec<&SessionLease> = leases.iter().filter(|l| l.branch == q).collect();
@@ -50398,6 +50648,7 @@ fn find_lease_by_branch(query: &str, leases: &[SessionLease]) -> Result<SessionL
     }
 }
 
+// trace:BUG-312 | ai:claude
 /// BUG-312: shortest prefix of `target_id` that does not collide with any
 /// other id in `all_ids`, floored at `min_len`. Used by `aida session
 /// leases` to render an id that the operator can paste straight back into
@@ -50405,7 +50656,6 @@ fn find_lease_by_branch(query: &str, leases: &[SessionLease]) -> Result<SessionL
 /// so two leases created in the same generation window collide on the
 /// historical 8-char prefix; this function bumps just those colliding
 /// rows wider while leaving solitary ids at the short form.
-/// trace:BUG-312 | ai:claude
 fn unique_prefix_len(target_id: &str, all_ids: &[&str], min_len: usize) -> usize {
     let max_len = target_id.len();
     let floor = min_len.min(max_len);
@@ -50421,12 +50671,12 @@ fn unique_prefix_len(target_id: &str, all_ids: &[&str], min_len: usize) -> usize
     max_len
 }
 
+// trace:STORY-52 | ai:claude
 /// STORY-52: locate the parent project's cargo `target/` directory so a
 /// session worktree can reuse its build cache. Returns the canonicalized
 /// path when `target/` exists (Rust project that has been built), `None`
 /// otherwise. Pure-function over the filesystem so callers can test the
 /// session-start flow with a temp dir.
-/// trace:STORY-52 | ai:claude
 fn detect_cargo_target_dir(project_root: &std::path::Path) -> Option<std::path::PathBuf> {
     let target = project_root.join("target");
     if !target.is_dir() {
@@ -50435,6 +50685,7 @@ fn detect_cargo_target_dir(project_root: &std::path::Path) -> Option<std::path::
     Some(target.canonicalize().unwrap_or(target))
 }
 
+// trace:STORY-52 | ai:claude
 /// STORY-52: write the worktree-local `.aida/session-env.sh` that the user
 /// sources after `cd`-ing into the session worktree. Sourcing it sets
 /// `CARGO_TARGET_DIR` to the parent's `target/` so cargo reuses that build
@@ -50442,7 +50693,6 @@ fn detect_cargo_target_dir(project_root: &std::path::Path) -> Option<std::path::
 /// worktree's `.aida/` (created here if it doesn't already exist), which
 /// lives alongside the symlinked runtime subdirs (sessions/, roles/,
 /// cache.db, etc.) that `session_start` set up moments earlier.
-/// trace:STORY-52 | ai:claude
 fn write_session_env_file(
     worktree_path: &std::path::Path,
     cargo_target_dir: &std::path::Path,
@@ -50458,9 +50708,9 @@ fn write_session_env_file(
     Ok(())
 }
 
+// trace:STORY-52 | ai:claude
 /// STORY-52: build the body of `.aida/session-env.sh`. Split out so unit
 /// tests can assert the export shape without touching the filesystem.
-/// trace:STORY-52 | ai:claude
 fn render_session_env_file(cargo_target_dir: &std::path::Path, agent_type: Option<&str>) -> String {
     let mut body = format!(
         "# Generated by `aida session start` — source after cd-ing into\n\
@@ -50478,6 +50728,7 @@ fn render_session_env_file(cargo_target_dir: &std::path::Path, agent_type: Optio
     body
 }
 
+// trace:TASK-63 | ai:claude
 /// TASK-63: parse a `.aida/session-env.sh` body into `(name, value)`
 /// pairs. Pure: no env mutation, so unit tests can exercise the parser
 /// without racing the live process env across parallel test threads.
@@ -50486,7 +50737,7 @@ fn render_session_env_file(cargo_target_dir: &std::path::Path, agent_type: Optio
 /// `render_session_env_file` writes — `export VAR='single-quoted-value'`
 /// with `'\''` close-reopen escaping. Lines we don't recognize are
 /// skipped silently, so a manually-edited shim with extra noise doesn't
-/// poison the env. trace:TASK-63 | ai:claude
+/// poison the env.
 fn parse_session_env(body: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for line in body.lines() {
@@ -50514,13 +50765,14 @@ fn parse_session_env(body: &str) -> Vec<(String, String)> {
     out
 }
 
+// trace:TASK-63 | ai:claude
 /// TASK-63: apply parsed env pairs to the current process so the
 /// subsequent `exec claude` inherits them. Returns the names that were
 /// applied so the caller can echo them to the user. Calls
 /// `std::env::set_var` for each pair — the wrapping `unsafe { }` is
 /// forward-compatibility with Edition 2024 where `set_var` is marked
 /// unsafe; safe here because `session_start --launch` is single-threaded
-/// between parse and exec. trace:TASK-63 | ai:claude
+/// between parse and exec.
 fn apply_session_env_to_process(body: &str) -> Vec<String> {
     let pairs = parse_session_env(body);
     let mut applied = Vec::with_capacity(pairs.len());
@@ -50534,9 +50786,10 @@ fn apply_session_env_to_process(body: &str) -> Vec<String> {
     applied
 }
 
+// trace:TASK-63 | ai:claude
 /// Inverse of `shell_single_quote` for the narrow shape we write.
 /// `'X'` → `X`. `'a'\''b'` → `a'b`. Bare (unquoted) values are returned
-/// as-is — POSIX-y enough for the shim's purposes. trace:TASK-63 | ai:claude
+/// as-is — POSIX-y enough for the shim's purposes.
 fn unquote_shell_single_quoted(raw: &str) -> String {
     let bytes = raw.as_bytes();
     if bytes.len() < 2 || bytes[0] != b'\'' || bytes[bytes.len() - 1] != b'\'' {
@@ -50546,9 +50799,9 @@ fn unquote_shell_single_quoted(raw: &str) -> String {
     inner.replace("'\\''", "'")
 }
 
+// trace:STORY-52 | ai:claude
 /// Wrap a string in POSIX single quotes for safe inclusion in shell source.
 /// `'` inside the value is escaped via the standard `'\''` close-reopen trick.
-/// trace:STORY-52 | ai:claude
 fn shell_single_quote(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('\'');
@@ -50563,10 +50816,11 @@ fn shell_single_quote(s: &str) -> String {
     out
 }
 
+// trace:BUG-225 | ai:claude
 /// Render an argv slice as a copy-pasteable shell command line: an
 /// element with shell-special characters (whitespace, quotes, globs, …)
 /// is wrapped in POSIX single quotes; a plain word is left bare so the
-/// output stays readable. trace:BUG-225 | ai:claude
+/// output stays readable.
 fn shell_join_display(args: &[String]) -> String {
     args.iter()
         .map(|a| {
@@ -50678,6 +50932,7 @@ fn record_session_end_unshipped_work(
     }
 }
 
+// trace:BUG-422 | ai:claude
 /// BUG-422: should `aida session end` auto-skip the CI/PR probe because we're
 /// in a non-interactive context? The probe shells out to `gh` with no timeout;
 /// with no TTY to Ctrl+C or answer a prompt it can hang the lease teardown
@@ -50685,7 +50940,7 @@ fn record_session_end_unshipped_work(
 /// worktree from outside the agent). True only when the probe WOULD otherwise
 /// run (`!skip_ci && !force`), the caller did NOT explicitly ask to wait for CI
 /// (`--wait-ci`/`--watch-ci` is honored even headless — that's an explicit
-/// choice), and stdin is not a TTY. trace:BUG-422 | ai:claude
+/// choice), and stdin is not a TTY.
 fn non_tty_skips_ci_probe(
     skip_ci: bool,
     force: bool,
@@ -51361,15 +51616,16 @@ fn session_end_stale_cwd_hint_lines(project_root: &std::path::Path) -> Vec<Strin
     ]
 }
 
+// trace:STORY-66 | ai:claude
 /// Open-PR metadata captured by `gh pr list` for a session's branch. Just
 /// the fields the auto-queue side-effect needs to brief a reviewer.
-/// trace:STORY-66 | ai:claude
 pub(crate) struct OpenPrInfo {
     pub(crate) number: u64,
     pub(crate) title: String,
     pub(crate) url: String,
 }
 
+// trace:BUG-72 BUG-257 | ai:claude
 /// Why `detect_open_pr_for_branch` returned no PR — so the caller (and the
 /// user reading `aida session end` output) can tell "no PR yet" from "gh
 /// isn't installed" from "gh blew up". The old None-everything return type
@@ -51381,7 +51637,6 @@ pub(crate) struct OpenPrInfo {
 /// *Inconclusive* (drain pauses, retry later) and the second as a phase
 /// failure — same as before. Conflating the two made every network blip
 /// look like a "no PR" failure with a misleading recovery hint.
-/// trace:BUG-72 BUG-257 | ai:claude
 pub(crate) enum PrLookup {
     Found(OpenPrInfo),
     /// `gh` ran cleanly but reported no open PR for this branch.
@@ -51392,13 +51647,15 @@ pub(crate) enum PrLookup {
     /// String carries the trimmed stderr / parse error so the user sees
     /// the actual cause instead of a silent no-op.
     GhFailed(String),
+    // trace:BUG-257 | ai:claude
     /// `gh` ran but could not reach the GitHub API — a *transient* network
     /// error (DNS, TCP, TLS, githubstatus pointer). The orchestrator treats
     /// this as Inconclusive (the API outage means we cannot tell whether a
-    /// PR exists), not as a phase failure. trace:BUG-257 | ai:claude
+    /// PR exists), not as a phase failure.
     GhUnreachable(String),
 }
 
+// trace:BUG-74 trace:STORY-621 | ai:claude
 /// Walk PATH (plus a handful of common install locations) looking for a
 /// real, executable forge CLI binary (`exe_base`, e.g. `gh` or `glab`).
 /// Returns the resolved path or None.
@@ -51412,7 +51669,7 @@ pub(crate) enum PrLookup {
 ///
 /// `debug_env`=1 (AIDA_DEBUG_GH / AIDA_DEBUG_GLAB) prints the search trace
 /// to stderr; `test_env` (AIDA_TEST_GH_BINARY / AIDA_TEST_GLAB_BINARY)
-/// overrides resolution in tests. trace:BUG-74 trace:STORY-621 | ai:claude
+/// overrides resolution in tests.
 fn resolve_forge_binary(
     exe_base: &str,
     test_env: &str,
@@ -51562,24 +51819,26 @@ fn resolve_forge_binary(
     None
 }
 
+// trace:BUG-74 trace:STORY-621 | ai:claude
 /// Resolve the `gh` (GitHub CLI) binary — thin wrapper over the
 /// forge-generic resolver, preserving pre-Slice-0 behavior byte-for-byte.
-/// trace:BUG-74 trace:STORY-621 | ai:claude
 fn resolve_gh_binary() -> Option<std::path::PathBuf> {
     resolve_forge_binary("gh", "AIDA_TEST_GH_BINARY", "AIDA_DEBUG_GH")
 }
 
+// trace:STORY-621 | ai:claude
 /// Resolve the `glab` (GitLab CLI) binary, mirroring `resolve_gh_binary`'s
 /// PATH-walk + sanity-spawn (BUG-74/79). Wired into the forge call sites in
-/// follow-on STORY-621 slices. trace:STORY-621 | ai:claude
+/// follow-on STORY-621 slices.
 #[allow(dead_code)] // wired into call sites in follow-on STORY-621 slices
 fn resolve_glab_binary() -> Option<std::path::PathBuf> {
     resolve_forge_binary("glab", "AIDA_TEST_GLAB_BINARY", "AIDA_DEBUG_GLAB")
 }
 
+// trace:STORY-621 | ai:claude
 /// Forge-keyed CLI binary dispatch: GitHub → `gh`, GitLab → `glab`. `None`
 /// (pure-git) names no forge CLI. The foundation for routing the main.rs gh
-/// call sites through the configured forge. trace:STORY-621 | ai:claude
+/// call sites through the configured forge.
 #[allow(dead_code)] // wired into call sites in follow-on STORY-621 slices
 fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::path::PathBuf> {
     use crate::forge::ForgeKind;
@@ -51625,10 +51884,11 @@ mod forge_binary_resolution_tests {
     }
 }
 
+// trace:BUG-74 | ai:claude
 /// True when `path` exists as a file and is executable by the current
 /// process. On Windows we just check existence (the PATHEXT-aware Rust
 /// spawn handles the rest); on Unix we check the executable bit on the
-/// metadata. trace:BUG-74 | ai:claude
+/// metadata.
 fn is_executable(path: &std::path::Path) -> bool {
     let Ok(meta) = std::fs::metadata(path) else {
         return false;
@@ -51648,12 +51908,12 @@ fn is_executable(path: &std::path::Path) -> bool {
     }
 }
 
+// trace:BUG-107 | ai:claude
 /// Format a `gh` spawn failure for a `PrLookup::GhFailed`. The OS reports
 /// ENOENT against the *binary* when the spawn's working directory has been
 /// removed — even though the binary is perfectly fine. `aida session end`
 /// removes the session worktree, so this case is common; say so plainly
 /// rather than letting the message read as "gh is missing".
-/// trace:BUG-107 | ai:claude
 fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::Error) -> String {
     if !cwd.is_dir() {
         format!(
@@ -51673,6 +51933,7 @@ fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::
     }
 }
 
+// trace:STORY-66 BUG-72 BUG-74 BUG-107 BUG-223 | ai:claude
 /// Run `gh pr list <filter> --limit 1 --json number,title,url` and parse the
 /// single result line into a [`PrLookup`]. The shared core behind the
 /// branch-keyed and spec-keyed PR lookups — each caller supplies only its
@@ -51685,7 +51946,6 @@ fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::
 /// after the binary resolved means a removed working directory far more
 /// often than a missing binary — `gh_spawn_error` names the real culprit.
 /// AIDA_DEBUG_GH=1 surfaces the binary search.
-/// trace:STORY-66 BUG-72 BUG-74 BUG-107 BUG-223 | ai:claude
 fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup {
     let gh_bin = match resolve_gh_binary() {
         Some(p) => p,
@@ -51727,6 +51987,7 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
     parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
 }
 
+// trace:BUG-257 | ai:claude
 /// Classify a `gh` stderr line as a transient network error (the GH API
 /// was unreachable) rather than an auth/parse/other failure. Used by
 /// [`gh_pr_list_first`] to split `PrLookup::GhFailed` into the
@@ -51737,7 +51998,7 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
 /// gh's own diagnostic suffixes). The match is conservative —
 /// case-insensitive substring matching against a small allow-list — so an
 /// auth/parse failure never gets re-classified as a transient network
-/// blip. trace:BUG-257 | ai:claude
+/// blip.
 fn gh_stderr_is_network_error(stderr: &str) -> bool {
     let s = stderr.to_ascii_lowercase();
     // The most stable signal: gh's own diagnostic suffix that fires for
@@ -51769,6 +52030,7 @@ fn gh_stderr_is_network_error(stderr: &str) -> bool {
     NETWORK_MARKERS.iter().any(|m| s.contains(m))
 }
 
+// trace:BUG-266 | ai:claude
 /// BUG-266: classify a headless `claude -p` JSONL log as evidence the
 /// upstream Anthropic API took the session out (a transient outage), not
 /// that the implementer attempted the work and failed. The orchestrator
@@ -51782,7 +52044,7 @@ fn gh_stderr_is_network_error(stderr: &str) -> bool {
 /// are Anthropic's own wording, `upstream connect error` is the Envoy /
 /// proxy convention, `stream timeout` is the SSE-stream variant. Returns
 /// the first matching diagnostic line so the orchestrator's epilogue can
-/// echo what the substrate said. trace:BUG-266 | ai:claude
+/// echo what the substrate said.
 fn claude_log_indicates_api_outage(content: &str) -> Option<String> {
     if content.is_empty() {
         return None;
@@ -51854,6 +52116,7 @@ fn reason_excerpt(line: &str, match_start: usize) -> String {
     format!("…{}…", &line[start..end])
 }
 
+// trace:BUG-266 | ai:claude
 /// BUG-266: locate the headless implementer's JSONL log by the session UUID
 /// the orchestrator minted (the filename pattern is
 /// `<branch>-<session-uuid>.jsonl` under `.aida/headless-logs/`). Glob by
@@ -51863,7 +52126,7 @@ fn reason_excerpt(line: &str, match_start: usize) -> String {
 /// not have a lease yet, so we can't depend on the branch). Returns the log
 /// contents on success; `None` if the directory doesn't exist, no matching
 /// file is found, or the file can't be read. Best-effort by design —
-/// classification is a refinement, not a gate. trace:BUG-266 | ai:claude
+/// classification is a refinement, not a gate.
 fn read_headless_log_for_session(
     project_root: &std::path::Path,
     session_uuid: &str,
@@ -51885,6 +52148,7 @@ fn read_headless_log_for_session(
     None
 }
 
+// trace:BUG-453 | ai:claude
 /// BUG-453: byte length of the headless session's JSONL log (the newest file
 /// matching `-<session_id>.jsonl` under `.aida/headless-logs/`), or `None`. A
 /// *growing* log means the session is alive and emitting events — reading,
@@ -51893,7 +52157,6 @@ fn read_headless_log_for_session(
 /// currently-reading implementer is not false-killed as "no progress" (the
 /// TASK-673 symptom: it wrote 503 lines, then spent its final window reading
 /// tests in a 20k-line file and the worktree-only signature went static).
-/// trace:BUG-453 | ai:claude
 fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<u64> {
     let dir = project_root.join(".aida").join("headless-logs");
     let suffix = format!("-{session_id}.jsonl");
@@ -51920,6 +52183,7 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
     newest_len
 }
 
+// trace:TASK-298 | ai:claude
 /// TASK-298: scan one headless `claude -p --output-format stream-json` JSONL
 /// *line* for a hard "the session bailed at a gate" signal and, when present,
 /// return a specific human-readable reason. SPIKE-7 found `claude -p`'s exit
@@ -51940,7 +52204,7 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
 /// JSONL, but a partially-flushed final line must never trip a false stall).
 /// The watchdog folds this over the log so a `--no-human` drain wedged at a
 /// permission gate is detected and failed instead of hanging until the
-/// no-progress / ceiling timeout. trace:TASK-298 | ai:claude
+/// no-progress / ceiling timeout.
 fn headless_line_permission_stall(line: &str) -> Option<String> {
     let trimmed = line.trim();
     if trimmed.is_empty() {
@@ -51995,18 +52259,18 @@ fn headless_line_permission_stall(line: &str) -> Option<String> {
     None
 }
 
+// trace:TASK-298 | ai:claude
 /// TASK-298: fold [`headless_line_permission_stall`] over a whole headless log
 /// body, returning the first line's stall reason or `None`. Best-effort, like
 /// the sibling [`claude_log_indicates_api_outage`]: the classification is a
 /// refinement that lets the watchdog fail fast, not a gate.
-/// trace:TASK-298 | ai:claude
 fn headless_log_permission_stall(content: &str) -> Option<String> {
     content.lines().find_map(headless_line_permission_stall)
 }
 
+// trace:TASK-298 | ai:claude
 /// First non-empty trimmed line of a string, or the empty string. Small pure
 /// helper so a multi-line `result` detail collapses to one log-friendly row.
-/// trace:TASK-298 | ai:claude
 fn first_nonempty_line(s: &str) -> String {
     s.lines()
         .map(str::trim)
@@ -52078,11 +52342,12 @@ fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt
     })
 }
 
+// trace:BUG-462 | ai:claude
 /// Decision-fork phrasing markers for a single (already lowercased) question
 /// sentence. Broadened under BUG-462 beyond the original BUG-354/BUG-374 set so
 /// novel phrasings ("which way", "do you want", "would you like") still route to
 /// the advisor tier. Kept narrow enough that an ordinary summary question
-/// ("does the parser handle aliases?") does not match. trace:BUG-462 | ai:claude
+/// ("does the parser handle aliases?") does not match.
 fn question_has_fork_marker(question_lower: &str) -> bool {
     const QUESTION_FORK_MARKERS: &[&str] = &[
         "which path",
@@ -52116,9 +52381,10 @@ fn question_has_fork_marker(question_lower: &str) -> bool {
         .any(|marker| question_lower.contains(marker))
 }
 
+// trace:BUG-462
 /// Every `?`-terminated sentence in `text`, whitespace-collapsed. Splits on
 /// `.`/`!`/`?` so a fork question buried after rhetorical asides is still
-/// surfaced (BUG-462 scans all of them, not just the first). trace:BUG-462
+/// surfaced (BUG-462 scans all of them, not just the first).
 fn all_question_sentences(text: &str) -> Vec<String> {
     let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut out = Vec::new();
@@ -52142,13 +52408,14 @@ fn all_question_sentences(text: &str) -> Vec<String> {
     out
 }
 
+// trace:BUG-462 | ai:claude
 /// True when `text` presents an enumerated *choice* — two or more lines that
 /// start with a letter-labelled option (`Option A`, `A)`, `B:`). Deliberately
 /// LETTER-only (not `1.`/`2.`): digit labels far more often enumerate completed
 /// *steps* in a summary than mutually-exclusive choices, and the fallback fires
 /// only when no phrase marker matched, so a numbered accomplishments list with a
 /// trailing rhetorical question must not read as a fork. Line-anchored so inline
-/// version strings like `v1.2.0` don't count. trace:BUG-462 | ai:claude
+/// version strings like `v1.2.0` don't count.
 fn has_options_block(text: &str) -> bool {
     let mut enumerated = 0usize;
     for raw in text.lines() {
@@ -52164,8 +52431,9 @@ fn has_options_block(text: &str) -> bool {
     enumerated >= 2
 }
 
+// trace:BUG-462 | ai:claude
 /// A single letter (`A`–`H`, any case) followed by `)`, `.`, or `:` — the start
-/// of a letter-labelled option line. trace:BUG-462 | ai:claude
+/// of a letter-labelled option line.
 fn starts_with_letter_label(line: &str) -> bool {
     let mut chars = line.chars();
     let Some(first) = chars.next() else {
@@ -52199,10 +52467,10 @@ fn bounded_text(text: &str, max: usize) -> String {
     format!("{}…", &text[..end])
 }
 
+// trace:STORY-516 | ai:claude
 /// STORY-516: reverse of `change_lookup_from_pr_lookup` — convert a forge
 /// `ChangeLookup` back to the orchestrator's `PrLookup` so the `*_via_forge`
 /// helpers are a pure name-swap at their call sites (match arms stay PrLookup).
-/// trace:STORY-516 | ai:claude
 fn pr_lookup_from_change_lookup(c: crate::forge::ChangeLookup) -> PrLookup {
     match c {
         crate::forge::ChangeLookup::Found(r) => PrLookup::Found(OpenPrInfo {
@@ -52217,8 +52485,9 @@ fn pr_lookup_from_change_lookup(c: crate::forge::ChangeLookup) -> PrLookup {
     }
 }
 
+// trace:STORY-516 | ai:claude
 /// STORY-516: forge-routed spec-search open-PR lookup (BUG-223 fallback). GitHub
-/// delegates to `detect_open_pr_for_spec`. trace:STORY-516 | ai:claude
+/// delegates to `detect_open_pr_for_spec`.
 pub(crate) fn detect_open_pr_for_spec_via_forge(
     project_root: &std::path::Path,
     spec: &str,
@@ -52230,8 +52499,9 @@ pub(crate) fn detect_open_pr_for_spec_via_forge(
     )
 }
 
+// trace:STORY-516 | ai:claude
 /// STORY-516: forge-routed merged-PR-for-branch lookup. GitHub delegates to
-/// `detect_merged_pr_for_branch`. trace:STORY-516 | ai:claude
+/// `detect_merged_pr_for_branch`.
 pub(crate) fn detect_merged_pr_for_branch_via_forge(
     project_root: &std::path::Path,
     branch: &str,
@@ -52243,13 +52513,14 @@ pub(crate) fn detect_merged_pr_for_branch_via_forge(
     )
 }
 
+// trace:STORY-516 | ai:claude
 /// STORY-516: forge-routed branch lookup — the view-op entry point the call
 /// sites use instead of `detect_open_pr_for_branch` directly, so a GitLab /
 /// pure-git repo goes through its own provider. GitHubForge delegates back to
 /// `detect_open_pr_for_branch`, so behaviour on GitHub is unchanged. The
 /// provider returns `Result<ChangeLookup>`; GitHub never errs (it adapts a
 /// PrLookup), and a provider Err (GitLab stub) collapses to `CliFailed` so
-/// callers keep a single 5-state match. trace:STORY-516 | ai:claude
+/// callers keep a single 5-state match.
 pub(crate) fn change_lookup_for_branch(
     project_root: &std::path::Path,
     branch: &str,
@@ -52259,20 +52530,21 @@ pub(crate) fn change_lookup_for_branch(
         .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")))
 }
 
+// trace:STORY-66 BUG-72 BUG-74 | ai:claude
 /// Look up a single open PR keyed on `branch`. The richer [`PrLookup`]
 /// return shape lets callers print an honest skip reason (no PR yet / gh
 /// missing / gh failed) instead of collapsing every case to `None`.
-/// trace:STORY-66 BUG-72 BUG-74 | ai:claude
 pub(crate) fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "open"])
 }
 
+// trace:BUG-257 | ai:claude
 /// BUG-257: the three states `probe_branch_on_origin` can settle on when the
 /// orchestrator narrows a `PrLookup::GhUnreachable` with `git ls-remote`. The
 /// existing `aida_core::git_ops::remote_branch_exists` collapses `Absent` and
 /// `LsRemoteFailed` into one `false` — exactly the conflation BUG-257 must
 /// avoid here, so we keep this enum and the probe local to the orchestrator
-/// caller. trace:BUG-257 | ai:claude
+/// caller.
 enum BranchOriginProbe {
     /// `git ls-remote` reported the branch is on origin — a PR may exist.
     Present,
@@ -52284,6 +52556,7 @@ enum BranchOriginProbe {
     LsRemoteFailed,
 }
 
+// trace:BUG-257 | ai:claude
 /// BUG-257: narrow a `PrLookup::GhUnreachable` outcome with `git ls-remote`
 /// against `origin`. The git protocol is HTTPS-API-independent, so when the
 /// GH API is down `ls-remote` often still works — and a missing branch
@@ -52292,7 +52565,6 @@ enum BranchOriginProbe {
 /// without the API; that case becomes Inconclusive. When `ls-remote` also
 /// fails, the orchestrator has no way to tell and stays Inconclusive.
 /// Best-effort: short timeout so a hung connection never blocks phase 1.
-/// trace:BUG-257 | ai:claude
 fn probe_branch_on_origin(project_root: &std::path::Path, branch: &str) -> BranchOriginProbe {
     let out = std::process::Command::new("git")
         .current_dir(project_root)
@@ -52323,17 +52595,18 @@ fn probe_branch_on_origin(project_root: &std::path::Path, branch: &str) -> Branc
     }
 }
 
+// trace:BUG-223 | ai:claude
 /// Fallback PR lookup for BUG-223: find an open PR that references `spec` in
 /// its title or body, used when the branch-keyed lookup comes up empty
 /// because `/aida-pr` swapped the branch. `gh pr list --search` does a
 /// full-text search across PR title + body; an AIDA PR body always names
 /// every covered spec in its `## Per-spec` section, so the spec id is a
 /// reliable key even after the branch the PR was opened from changed.
-/// trace:BUG-223 | ai:claude
 pub(crate) fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--search", spec, "--state", "open"])
 }
 
+// trace:TASK-843 | ai:claude
 /// TASK-843: list ALL open PRs that reference `spec` (number + head branch),
 /// not just the first. `detect_open_pr_for_spec_via_forge` returns at most one,
 /// so a spec with >1 open PR (a reopened/duplicate) was resolved by a silent,
@@ -52341,7 +52614,6 @@ pub(crate) fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str
 /// [`integrate::select_canonical_pr`] policy can pick the newest-canonical PR
 /// and report the rest. Best-effort: an empty vec when gh is missing/failing or
 /// no PR references the spec — the caller falls back to the single-PR path.
-/// trace:TASK-843 | ai:claude
 fn all_open_prs_for_spec_via_forge(
     project_root: &std::path::Path,
     spec: &str,
@@ -52387,11 +52659,11 @@ fn all_open_prs_for_spec_via_forge(
         .collect()
 }
 
+// trace:BUG-223 | ai:claude
 /// Look up the head branch of an open PR by number — used by the BUG-223
 /// spec-id fallback to realign the orchestrator's branch after a swap the
 /// worktree-HEAD reconciliation missed, so the CI / merge phases probe the
 /// PR's actual head. Best-effort: `None` on any `gh` failure.
-/// trace:BUG-223 | ai:claude
 fn pr_head_branch(project_root: &std::path::Path, pr_number: u64) -> Option<String> {
     let gh_bin = resolve_gh_binary()?;
     let out = std::process::Command::new(&gh_bin)
@@ -52418,12 +52690,13 @@ fn pr_head_branch(project_root: &std::path::Path, pr_number: u64) -> Option<Stri
     }
 }
 
+// trace:BUG-88 | ai:claude
 /// Detect whether `branch` was the head of a now-MERGED PR. Used by
 /// `aida push` (BUG-88) to warn that new commits will be stranded —
 /// pushing to a merged-PR branch puts the commit on `origin/<branch>`
 /// but it won't reach `main` without a new PR. Mirrors the shape of
 /// [`detect_open_pr_for_branch`] but queries `--state merged` and returns
-/// only the first hit (most recent). trace:BUG-88 | ai:claude
+/// only the first hit (most recent).
 pub(crate) fn detect_merged_pr_for_branch(
     project_root: &std::path::Path,
     branch: &str,
@@ -52431,18 +52704,19 @@ pub(crate) fn detect_merged_pr_for_branch(
     gh_pr_list_first(project_root, &["--head", branch, "--state", "merged"])
 }
 
+// trace:BUG-241 | ai:claude
+// trace:BUG-286 | ai:claude
 /// Is PR #`pr` merged on GitHub? Ground truth for the BUG-241 reconcile step
 /// — a reviewer that escalated the merge to a human who merged out-of-band
 /// leaves the PR merged but the orchestrator's verdict file absent. `None` on
 /// any `gh` failure (binary missing, auth, network): the caller treats
 /// "cannot confirm" as "the failure stands", never as a silent success.
-/// trace:BUG-241 | ai:claude
 /// BUG-286: same intent as the pre-BUG-286 `pr_is_merged` but with a
 /// caller-supplied retry sink, so the orchestrator can surface a sub-second
 /// transient blip to the drain-state file rather than treating it as
 /// "cannot confirm." Non-orchestrator callers (none today) can pass
 /// [`network_retry::NoopSink`] to keep the original silent best-effort
-/// semantics. trace:BUG-286 | ai:claude
+/// semantics.
 fn pr_is_merged_with_sink(
     project_root: &std::path::Path,
     pr: u32,
@@ -52469,6 +52743,8 @@ fn pr_is_merged_with_sink(
     )
 }
 
+// trace:BUG-245 | ai:claude
+// trace:BUG-286 | ai:claude
 /// BUG-245: which SPEC-ID does the PR's commits actually credit?
 ///
 /// Reads the PR's commit subjects via `gh pr view <N> --json commits` and
@@ -52485,11 +52761,10 @@ fn pr_is_merged_with_sink(
 /// Picks the first credited id when multiple non-dispatched ids appear. The
 /// observed BUG-245 case is one commit / one trailer; a PR carrying multiple
 /// genuinely-different specs is an open-ended case the operator must triage.
-/// trace:BUG-245 | ai:claude
 /// BUG-286: same intent as the pre-BUG-286 `pr_credited_spec_id` but with a
 /// caller-supplied retry sink. The orchestrator passes a [`crate::network_retry::DualSink`]
 /// (stderr + drain-state); a hypothetical silent caller can pass
-/// [`network_retry::NoopSink`]. trace:BUG-286 | ai:claude
+/// [`network_retry::NoopSink`].
 fn pr_credited_spec_id_with_sink(
     project_root: &std::path::Path,
     pr: u32,
@@ -52613,10 +52888,10 @@ fn pr_credit_match_with_sink(
     }
 }
 
+// trace:BUG-245 | ai:claude
 /// Pure selector for the credited spec id, given newline-separated commit
 /// subjects (one per commit on the PR) and the dispatched id. Split out so
 /// the precedence rules are unit-testable without spawning `gh`.
-/// trace:BUG-245 | ai:claude
 fn pick_credited_spec(commit_subjects: &str, dispatched: &str) -> Option<String> {
     let mut first_other: Option<String> = None;
     for subject in commit_subjects.lines() {
@@ -52632,9 +52907,10 @@ fn pick_credited_spec(commit_subjects: &str, dispatched: &str) -> Option<String>
     first_other
 }
 
+// trace:BUG-88 | ai:claude
 /// Parse a single tab-separated `gh pr list -q ...` line into a
 /// `PrLookup`. Extracted for unit-testing the empty / well-formed /
-/// malformed shapes without spawning `gh`. trace:BUG-88 | ai:claude
+/// malformed shapes without spawning `gh`.
 fn parse_gh_pr_line(stdout: &str) -> PrLookup {
     let Some(line) = stdout.lines().next().map(str::trim) else {
         return PrLookup::NoOpenPr;
@@ -52656,9 +52932,10 @@ fn parse_gh_pr_line(stdout: &str) -> PrLookup {
     })
 }
 
+// trace:STORY-66 | ai:claude
 /// Detect whether a `Review PR-<n>:` story already exists in the local
 /// store, so calling `aida session end` twice on the same branch doesn't
-/// create duplicate queue entries. trace:STORY-66 | ai:claude
+/// create duplicate queue entries.
 fn pr_review_story_already_exists(project_root: &std::path::Path, pr_number: u64) -> bool {
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
     let Ok(out) = std::process::Command::new(&aida)
@@ -52677,10 +52954,10 @@ fn pr_review_story_already_exists(project_root: &std::path::Path, pr_number: u64
         .any(|line| line.contains(&needle))
 }
 
+// trace:STORY-66 | ai:claude
 /// Strip ANSI SGR sequences (`ESC[...m`) so we can match output text
 /// regardless of whether the child invocation colored its output. Keep it
 /// minimal — we only need the SGR shape `aida add` emits.
-/// trace:STORY-66 | ai:claude
 fn strip_ansi_color(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -52699,9 +52976,9 @@ fn strip_ansi_color(s: &str) -> String {
     out
 }
 
+// trace:STORY-66 | ai:claude
 /// Self-invoke `aida add` for a Story-typed review requirement and parse the
 /// resulting spec id out of stdout. Returns None on any failure.
-/// trace:STORY-66 | ai:claude
 fn aida_subcmd_add_review_story(
     project_root: &std::path::Path,
     title: &str,
@@ -52737,10 +53014,11 @@ fn aida_subcmd_add_review_story(
     parse_spec_id_from_add_output(&stdout)
 }
 
+// trace:STORY-66 | ai:claude
 /// Parse the spec id printed by `aida add`. The git-canonical path prints
 /// `Added: STORY-N - <title>` (one line); the legacy YAML/SQLite path
 /// prints a standalone `ID: STORY-N` line. Accept either so this hook keeps
-/// working across backends. trace:STORY-66 | ai:claude
+/// working across backends.
 fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
     for line in stdout.lines() {
         let cleaned = strip_ansi_color(line);
@@ -52823,6 +53101,7 @@ pub(crate) fn find_plan_files_for_spec(
     hits
 }
 
+// trace:TASK-431
 /// Parse the `## Followups` section of a plan: collect the column-0
 /// `- `/`* ` bullets until the next `##` header. Leading marker and a
 /// trailing period are stripped; placeholder/empty bullets are dropped.
@@ -52830,7 +53109,7 @@ pub(crate) fn find_plan_files_for_spec(
 /// (`None`, `N/A`, `NA`, `Nothing`, `(none)`, optionally followed by an
 /// em-dash / colon / spaced-dash explanation) rather than a real followup?
 /// Conservative — only when the sentinel is the WHOLE leading clause, so a
-/// genuine bullet like "None of these handlers do X" is kept. trace:TASK-431
+/// genuine bullet like "None of these handlers do X" is kept.
 fn followup_is_sentinel(text: &str) -> bool {
     let lower = text.trim().to_ascii_lowercase();
     let unparen = lower.trim_start_matches('(').trim_end_matches(')').trim();
@@ -53061,10 +53340,11 @@ fn aida_subcmd_add_followup_task(
     parse_spec_id_from_add_output(&String::from_utf8_lossy(&out.stdout))
 }
 
+// trace:STORY-542 | ai:claude
 /// True when interface-change capture is disabled via
 /// `AIDA_CAPTURE_INTERFACE_CHANGES=0|false|no`. Mirrors
 /// [`auto_followups_disabled`]: the env-opt-out keeps the close-checkpoint out
-/// of unattended drains that don't want the prompt. trace:STORY-542 | ai:claude
+/// of unattended drains that don't want the prompt.
 fn capture_interface_changes_disabled() -> bool {
     matches!(
         std::env::var("AIDA_CAPTURE_INTERFACE_CHANGES")
@@ -53075,9 +53355,10 @@ fn capture_interface_changes_disabled() -> bool {
     )
 }
 
+// trace:STORY-542 | ai:claude
 /// Prompt for the surface-delta lines on one interface (cli/mcp/tui/other) at a
 /// TTY: one line per `Enter`, blank line ends the surface. Returns the
-/// collected lines. trace:STORY-542 | ai:claude
+/// collected lines.
 fn prompt_interface_surface(label: &str, example: &str) -> Vec<String> {
     use std::io::Write;
     let mut lines = Vec::new();
@@ -53103,6 +53384,7 @@ fn prompt_interface_surface(label: &str, example: &str) -> Vec<String> {
     lines
 }
 
+// trace:STORY-542 | ai:claude
 /// Capture the spec's user-facing interface changes at close (`aida queue
 /// done`) — the deterministic Layer-1 source for the operator digest
 /// (STORY-541 / STORY-542). Precedence:
@@ -53120,7 +53402,7 @@ fn prompt_interface_surface(label: &str, example: &str) -> Vec<String> {
 /// Idempotent: if the spec already carries a non-empty `interface_changes`
 /// (e.g. `/aida-pr` populated it earlier), and no flags override it, it is left
 /// alone. Best-effort — any failure returns `Ok(())` so it never breaks
-/// `queue done`. trace:STORY-542 | ai:claude
+/// `queue done`.
 #[allow(clippy::too_many_arguments)]
 fn capture_interface_changes(
     storage: &Storage,
@@ -53234,13 +53516,14 @@ fn capture_interface_changes(
     Ok(())
 }
 
+// trace:TASK-96 | ai:claude
 /// Extract the Followups section of any plan owned by `spec_id` and file
 /// the accepted bullets as child TASKs. Idempotent via [`FOLLOWUPS_MARKER`].
 ///
 /// `interactive` drives a per-bullet `[y/N/skip]` prompt; when false (the
 /// auto-bump / `--yes` path) every bullet is filed. Best-effort throughout —
 /// any failure logs a warning and returns `Ok(())` so it never breaks the
-/// `queue done` / `aida pull` flow it hangs off. trace:TASK-96 | ai:claude
+/// `queue done` / `aida pull` flow it hangs off.
 fn extract_plan_followups(
     storage: &Storage,
     project_root: &std::path::Path,
@@ -53397,12 +53680,12 @@ fn extract_plan_followups(
     Ok(())
 }
 
+// trace:STORY-66 | ai:claude
 /// Best-effort `aida rel add <from> <to> --type implements` (and the
 /// matching reverse `implemented-by` so `aida show <spec>` surfaces the
 /// review story). Custom relation types don't have an `inverse()` mapping
 /// in core, so `--bidirectional` is a no-op for them — we add both
 /// directions manually instead. Logs and continues on failure.
-/// trace:STORY-66 | ai:claude
 fn aida_subcmd_rel_add_implements(project_root: &std::path::Path, from: &str, to: &str) {
     aida_subcmd_rel_add(project_root, from, to, "implements");
     aida_subcmd_rel_add(project_root, to, from, "implemented-by");
@@ -53432,8 +53715,8 @@ fn aida_subcmd_rel_add(project_root: &std::path::Path, from: &str, to: &str, rel
     }
 }
 
+// trace:STORY-66 | ai:claude
 /// Best-effort `aida queue add <id> --for reviewer --no-scope --note <...>`.
-/// trace:STORY-66 | ai:claude
 fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &str, note: &str) {
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
     let out = std::process::Command::new(&aida)
@@ -53465,44 +53748,46 @@ fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &
     }
 }
 
+// trace:BUG-72 TASK-74 | ai:claude
 /// What `try_auto_queue_pr_review` did, in four buckets that map to the
 /// caller's display formatting (green check / cyan info / dim by-design /
 /// yellow attention-needed). The fourth bucket (TASK-74) was carved out
 /// of the original BUG-72 "Skipped" bucket so review sessions (whose
 /// branches don't produce PRs by design) stop reading as failures, and
 /// missing-tool / lookup-failed cases stop reading as routine.
-/// trace:BUG-72 TASK-74 | ai:claude
 enum AutoQueueStatus {
     /// New review story filed and queued for reviewer.
     Filed,
     /// PR found but a `Review PR-N` story already exists — idempotent re-run.
     AlreadyExists,
+    // trace:TASK-74 | ai:claude
     /// Skipped on purpose — this session shape never produces a PR (e.g.
     /// reviewer session on a `pr-N` branch). Dimmed in output: nothing to
     /// fix, the user just needs to know the hook checked and stepped aside.
-    /// trace:TASK-74 | ai:claude
     SkippedByDesign,
+    // trace:TASK-74 | ai:claude
     /// Skipped but the user might want to do something about it: `gh`
     /// missing, `gh pr list` failed, or the queue/rel-add subprocess
     /// errored. Rendered in yellow so it doesn't blend into the by-design
-    /// noise floor. trace:TASK-74 | ai:claude
+    /// noise floor.
     SkippedNeedsAttention,
 }
 
+// trace:BUG-72 | ai:claude
 /// Outcome of the end-of-session auto-queue. Always returns SOMETHING so
-/// `session_end` can render a clear status line. trace:BUG-72 | ai:claude
+/// `session_end` can render a clear status line.
 struct AutoQueueOutcome {
     status: AutoQueueStatus,
     summary: String,
+    // trace:STORY-106 | ai:claude
     /// STORY-106: PR number this outcome relates to (set on Filed and
     /// AlreadyExists). Drives the post-session "start the review"
     /// workflow hint. `None` for the skip cases.
-    /// trace:STORY-106 | ai:claude
     pr_number: Option<u64>,
+    // trace:TASK-267 | ai:claude
     /// TASK-267: delivered `(REQ-ID)` trailers the PR carries. Lets the
     /// post-session workflow hint name which specs `aida pull` will
     /// auto-bump Done → Completed. Populated on Filed; empty otherwise.
-    /// trace:TASK-267 | ai:claude
     covered_specs: Vec<String>,
 }
 
@@ -53529,15 +53814,16 @@ impl AutoQueueOutcome {
         self.pr_number = Some(pr_number);
         self
     }
+    // trace:TASK-267 | ai:claude
     /// TASK-267: attach the delivered spec IDs the PR covers, so the
     /// session-end hint names them in the `aida pull` auto-bump line.
-    /// trace:TASK-267 | ai:claude
     fn with_specs(mut self, specs: Vec<String>) -> Self {
         self.covered_specs = specs;
         self
     }
+    // trace:TASK-74 | ai:claude
     /// Skip the user shouldn't care about (review session, no PR-producing
-    /// branch). Rendered dim. trace:TASK-74 | ai:claude
+    /// branch). Rendered dim.
     fn skipped_by_design(s: impl Into<String>) -> Self {
         Self {
             status: AutoQueueStatus::SkippedByDesign,
@@ -53546,8 +53832,9 @@ impl AutoQueueOutcome {
             covered_specs: Vec::new(),
         }
     }
+    // trace:TASK-74 | ai:claude
     /// Skip the user might want to act on (missing tool, gh failed, queue
-    /// subprocess error). Rendered yellow. trace:TASK-74 | ai:claude
+    /// subprocess error). Rendered yellow.
     fn skipped_needs_attention(s: impl Into<String>) -> Self {
         Self {
             status: AutoQueueStatus::SkippedNeedsAttention,
@@ -53558,10 +53845,11 @@ impl AutoQueueOutcome {
     }
 }
 
+// trace:TASK-74 | ai:claude
 /// Heuristic: does this branch shape correspond to a session that, by
 /// design, never produces a PR? Today: `pr-N`, `mr-N`, `github-N`,
 /// `gitlab-N` — the local branch names `aida session start --owns PR-N`
-/// creates for review sessions. Case-insensitive. trace:TASK-74 | ai:claude
+/// creates for review sessions. Case-insensitive.
 fn is_review_session_branch(branch: &str) -> bool {
     let lower = branch.to_ascii_lowercase();
     let prefixes = ["pr-", "mr-", "github-", "gitlab-"];
@@ -53573,11 +53861,12 @@ fn is_review_session_branch(branch: &str) -> bool {
     })
 }
 
+// trace:STORY-90 | ai:claude
 /// Where the auto-queue was triggered from. Used purely for the
 /// description blurb on the filed review story (so a reviewer reading
 /// it later can tell "the /aida-pr skill filed me at PR-create time"
 /// from "session end picked me up as a backup"). Doesn't change any
-/// other behavior. trace:STORY-90 | ai:claude
+/// other behavior.
 #[derive(Debug, Clone, Copy)]
 enum AutoQueueOrigin {
     /// Fired from `aida pr auto-queue-review`, normally by /aida-pr right
@@ -53596,12 +53885,13 @@ impl AutoQueueOrigin {
     }
 }
 
+// trace:STORY-66 STORY-90 BUG-72 | ai:claude
+// trace:BUG-107 | ai:claude
 /// Auto-detect-and-queue. Triggered primarily from /aida-pr right after
 /// `gh pr create` returns, and as an idempotent backup from `aida session
 /// end` so a forgotten `gh pr create` (or a manual one outside the skill)
 /// doesn't leave the reviewer unaware. Returns an outcome describing what
 /// happened — see `AutoQueueStatus` for the categories.
-/// trace:STORY-66 STORY-90 BUG-72 | ai:claude
 /// Pick a working directory the end-of-session auto-queue can safely
 /// shell out from. It runs `gh` / `git` / `aida` subprocesses, every one
 /// of which fails with a misleading ENOENT (blamed on the binary, not the
@@ -53610,7 +53900,6 @@ impl AutoQueueOrigin {
 /// fall back to the lease's recorded parent project root — the main
 /// worktree, which is never removed. Returns the first candidate that is
 /// still a real directory, or `None` when both are gone.
-/// trace:BUG-107 | ai:claude
 fn auto_queue_working_dir(
     parent_project_root: Option<&std::path::Path>,
     invocation_root: &std::path::Path,
@@ -53788,10 +54077,10 @@ fn try_auto_queue_pr_review(
     .with_specs(spec_ids)
 }
 
+// trace:STORY-90 BUG-72 | ai:claude
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
 /// end` and `aida pr auto-queue-review` (filed = green check, already-exists
 /// = cyan info, by-design skip = dim, needs-attention = yellow warning).
-/// trace:STORY-90 BUG-72 | ai:claude
 fn render_auto_queue_outcome(outcome: &AutoQueueOutcome) {
     match outcome.status {
         AutoQueueStatus::Filed => println!(
@@ -53813,7 +54102,8 @@ fn render_auto_queue_outcome(outcome: &AutoQueueOutcome) {
     }
 }
 
-/// `aida pr <subcommand>` dispatcher. trace:STORY-90 | ai:claude
+// trace:STORY-90 | ai:claude
+/// `aida pr <subcommand>` dispatcher.
 fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
         PrCommand::AutoQueueReview { branch } => pr_auto_queue_review(branch.as_deref()),
@@ -53847,6 +54137,7 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     }
 }
 
+// trace:BUG-250 | ai:claude
 /// BUG-250: `aida pr hold` — deliberately hold the PR on the current session.
 ///
 /// The implementer pushed its branch but is intentionally not opening the PR
@@ -53857,7 +54148,7 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
 /// worktree root (the handshake is worktree-resolution-independent, exactly
 /// like the punt signal); a standalone invocation still drops the marker under
 /// the main root's `.aida/pr-holds/` so the state is recorded. Prints the hint
-/// for opening the PR once the gate passes. trace:BUG-250 | ai:claude
+/// for opening the PR once the gate passes.
 fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     let project_root = find_main_worktree_root()?;
     let cwd = std::env::current_dir().context("could not resolve the current directory")?;
@@ -53901,9 +54192,9 @@ fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-308 | ai:claude
 /// Mode selector for `aida pr rebase`. Computed once from the CLI
 /// flags so the rest of the handler is a flat match on intent.
-/// trace:TASK-308 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PrRebaseMode {
     /// Default: auto-rebase if clean, abort + recipe on conflict.
@@ -53915,11 +54206,11 @@ enum PrRebaseMode {
     Interactive,
 }
 
+// trace:BUG-289 | ai:claude
 /// BUG-289: build the `aida pr rebase` fetch-failure message. When git's
 /// stderr shows the branch is checked out in a worktree (the pr-N reviewer
 /// worktree), surface a clear, actionable hint — end the lease or remove the
 /// worktree — instead of the misleading "is the PR number correct?" line.
-/// trace:BUG-289 | ai:claude
 fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &str) -> String {
     if stderr.contains("checked out at") || stderr.contains("refusing to fetch into branch") {
         format!(
@@ -53938,10 +54229,10 @@ fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &str) -> Stri
     }
 }
 
+// trace:TASK-308 | ai:claude
 /// `aida pr rebase <N>` — orchestrates the temp-worktree / fetch /
 /// rebase / smoke / force-push-with-lease / cleanup recipe.
 ///
-/// trace:TASK-308 | ai:claude
 fn pr_rebase_handler(
     n: u64,
     check: bool,
@@ -54281,10 +54572,10 @@ fn pr_rebase_handler(
     Ok(())
 }
 
+// trace:TASK-308 | ai:claude
 /// Run `gh pr view <N> --json …` and return the parsed JSON. Pulled
 /// out of `pr_rebase_handler` so the side-effecting call is isolated
 /// (parse rules are pinned by `pr_rebase::parse_pr_info` tests).
-/// trace:TASK-308 | ai:claude
 fn fetch_pr_info_via_gh(project_root: &std::path::Path, n: u64) -> Result<serde_json::Value> {
     fetch_pr_info_via_gh_bin(project_root, n, std::ffi::OsStr::new("gh"))
 }
@@ -54325,6 +54616,8 @@ fn fetch_pr_info_via_gh_bin(
     Ok(json)
 }
 
+// trace:TASK-458 | ai:claude
+// trace:STORY-529 | ai:claude
 /// `aida pr ship [<N>]` — collapse the "create-if-needed + watch CI +
 /// squash-merge + pull + worktree-aware cleanup" recipe into one call.
 /// The direct-publish counterpart to `aida queue work PR-N
@@ -54339,12 +54632,11 @@ fn fetch_pr_info_via_gh_bin(
 /// cwd warning, the auto-bump scan, the live-claude refusal) without
 /// double-implementing them.
 ///
-/// trace:TASK-458 | ai:claude
 /// STORY-529: the spec-IDs referenced by the commits about to ship whose spec
 /// carries the `review:draft-only` tag. Reuses the trailer-gate machinery
 /// (range → commits → store) so the ship-time draft gate sees the same specs
 /// the trailer guard validates. Empty when no store/commits or nothing is
-/// tagged. trace:STORY-529 | ai:claude
+/// tagged.
 fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<String> {
     let range = resolve_gate_range(project_root, None);
     let Ok(commits) = read_commits_in_range(project_root, &range) else {
@@ -55085,6 +55377,7 @@ fn pr_ship_handler(
     Ok(())
 }
 
+// trace:BUG-376 | ai:claude
 /// Loud "IMPLEMENTER COMPLETE — EXIT NOW" banner printed at the end of
 /// a successful `aida pr ship`. Substrate-as-bouncer signal for BUG-376:
 /// an interactive implementer session that has just shipped a PR has
@@ -55100,7 +55393,6 @@ fn pr_ship_handler(
 /// Takes `&mut impl Write` so the rendering is unit-testable without
 /// spawning a subprocess — mirrors the `status_cleanup::render` pattern.
 ///
-/// trace:BUG-376 | ai:claude
 fn write_implementer_complete_banner(
     w: &mut impl std::io::Write,
     pr_number: u64,
@@ -55167,6 +55459,7 @@ fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
     resolve_aida_exe()
 }
 
+// trace:BUG-574 | ai:claude
 /// `gh pr create` with title/body derived from the latest commit on
 /// `branch`. Returns the new PR's number, parsed from the URL `gh`
 /// prints on success. Branch must already be pushed; we push it first.
@@ -55175,7 +55468,7 @@ fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
 /// but a merged one) and exit 0 instead of failing in `pr_ship_create_pr`'s
 /// "no commits between" path. Best-effort: any `gh` failure (missing binary,
 /// auth, network) returns `None`, so a probe blip never converts an otherwise-
-/// fine create into a spurious already-merged short-circuit. trace:BUG-574 | ai:claude
+/// fine create into a spurious already-merged short-circuit.
 fn latest_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Option<u64> {
     let gh = resolve_gh_binary()?;
     let out = std::process::Command::new(&gh)
@@ -55268,10 +55561,11 @@ fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64
     Ok(change.id)
 }
 
+// trace:TASK-140 | ai:claude
 /// TASK-140: the full HEAD commit message of a BRANCH (not the local cwd HEAD).
 /// Tries the local ref first, then `origin/<branch>` (shipping a PR whose branch
 /// isn't checked out locally). `None` when neither resolves. Caller takes the
-/// first line as the squash subject. trace:TASK-140 | ai:claude
+/// first line as the squash subject.
 fn branch_head_commit_message(project_root: &std::path::Path, branch: &str) -> Option<String> {
     for r in [branch.to_string(), format!("origin/{branch}")] {
         let out = std::process::Command::new("git")
@@ -55432,13 +55726,13 @@ fn fetch_pr_ship_metadata_via_gh(project_root: &std::path::Path, n: u64) -> Resu
     })
 }
 
+// trace:BUG-417 | ai:claude
 /// BUG-417: return `Some(reason)` when `aida pr ship` should skip the blocking
 /// CI wait rather than hang on a repo that will never register checks. Two
 /// triggers: (1) an explicit opt-out env (`AIDA_PR_SHIP_NO_CI_WAIT=1` or the
 /// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) no GitHub Actions
 /// workflow files configured (`.github/workflows/*.{yml,yaml}` absent or empty)
 /// — the quizdom "no `.github/workflows` at all" case. `None` ⇒ wait normally.
-/// trace:BUG-417 | ai:claude
 fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Option<String> {
     // Explicit opt-out (env-level honoring of lifecycle:no-ci-wait, which the
     // direct `pr ship` path does not otherwise read from a spec).
@@ -55465,10 +55759,10 @@ fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Option<String>
     None
 }
 
+// trace:BUG-417 | ai:claude
 /// BUG-417: true when the project has at least one GitHub Actions workflow file
 /// (`.github/workflows/*.{yml,yaml}`). The pure file-name rule lives in
 /// `pr_ship::workflow_files_indicate_ci`; this only does the directory read.
-/// trace:BUG-417 | ai:claude
 fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
     let dir = project_root.join(".github").join("workflows");
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -55482,6 +55776,8 @@ fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
     pr_ship::workflow_files_indicate_ci(names.iter().map(String::as_str))
 }
 
+// trace:BUG-463 | ai:claude
+// trace:BUG-468 | ai:claude
 /// Run a `Command` to completion, retrying transient `ETXTBSY`
 /// ("Text file busy", `os error 26`) spawn failures.
 ///
@@ -55497,12 +55793,11 @@ fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
 /// retry-with-backoff turns the flake into a deterministic success. This
 /// also hardens the real `gh` exec (e.g. a freshly-written `gh` wrapper)
 /// at negligible cost.
-/// trace:BUG-463 | ai:claude
 ///
 /// `libc` is a `cfg(unix)`-only dependency and `ETXTBSY` is a Unix-only errno
 /// (Windows can never produce it on spawn), so the errno check is behind a
 /// cfg-gated helper — a real check on unix, a compile-time `false` elsewhere —
-/// to keep the Windows build green. trace:BUG-468 | ai:claude
+/// to keep the Windows build green.
 #[cfg(unix)]
 fn is_etxtbsy(e: &std::io::Error) -> bool {
     e.raw_os_error() == Some(libc::ETXTBSY)
@@ -55633,6 +55928,7 @@ fn prepare_main_worktree_for_pr_ship_pull(main_worktree: &std::path::Path) -> Re
     Ok(())
 }
 
+// trace:BUG-434 | ai:claude
 /// True when `branch` is checked out in a worktree other than the main
 /// worktree at `main_worktree`. Used by `aida pr ship` to decide
 /// whether `gh pr merge --delete-branch` will fail its local cleanup
@@ -55641,7 +55937,6 @@ fn prepare_main_worktree_for_pr_ship_pull(main_worktree: &std::path::Path) -> Re
 /// would auto-close if `branch` were deleted. Best-effort: returns empty on
 /// any `gh` error (offline, not a GitHub remote, gh absent), so the guard
 /// degrades to the stacks.json-only signal rather than blocking the ship.
-/// trace:BUG-434 | ai:claude
 fn open_child_prs(project_root: &std::path::Path, branch: &str) -> Vec<u64> {
     let out = std::process::Command::new("gh")
         .current_dir(project_root)
@@ -55737,9 +56032,9 @@ fn log_ship_activity(
     }
 }
 
+// trace:TASK-308 | ai:claude
 /// `aida pr rebase <N> --check` — print the stale-base / overlap /
 /// conflict-prediction report and exit zero. Modifies nothing.
-/// trace:TASK-308 | ai:claude
 fn pr_rebase_check_report(
     project_root: &std::path::Path,
     info: &pr_rebase::PrInfo,
@@ -55869,6 +56164,7 @@ fn pr_rebase_check_report(
     Ok(())
 }
 
+// trace:STORY-281 | ai:claude
 /// STORY-281: pre-flight stale-base check fired before launching the
 /// headless reviewer (orchestrator phase 3) or a direct
 /// `aida queue work <PR-N> --for reviewer` session. Mirrors the data
@@ -55882,7 +56178,7 @@ fn pr_rebase_check_report(
 /// reviewer or proceed. The convention here is "fail open with a
 /// warning" so a transient network blip never blocks an autonomous
 /// drain, but a stale-base + overlap that we *did* successfully
-/// detect always blocks. trace:STORY-281 | ai:claude
+/// detect always blocks.
 fn preflight_stale_base_check(
     project_root: &std::path::Path,
     n: u64,
@@ -55984,10 +56280,10 @@ fn preflight_stale_base_check_with_gh(
     ))
 }
 
+// trace:TASK-308 | ai:claude
 /// Files touched by `git log --name-only --pretty=format:` over a range.
 /// Local helper for `pr_rebase_check_report` so we don't depend on
 /// `aida_core::rebase`'s internal helpers (which are crate-private).
-/// trace:TASK-308 | ai:claude
 fn files_in_range(repo: &std::path::Path, range: &str) -> Vec<String> {
     std::process::Command::new("git")
         .arg("-C")
@@ -56021,6 +56317,7 @@ fn preflight_stale_base_file_sets(
     )
 }
 
+// trace:TASK-480 | ai:claude
 /// TASK-480: reviewer pre-flight intermediate-only check. Fetches the
 /// PR's head, computes the files it changes against its base, asks the
 /// repo's own `.gitignore` whether each is ignored, and runs the pure
@@ -56030,7 +56327,6 @@ fn preflight_stale_base_file_sets(
 /// git infra errors surface as `Err` and the caller proceeds with a
 /// warning — we never block an autonomous drain on a transient blip.
 /// A *successfully detected* intermediate-only diff always refuses.
-/// trace:TASK-480 | ai:claude
 fn preflight_intermediate_only_check(
     project_root: &std::path::Path,
     n: u64,
@@ -56078,10 +56374,11 @@ fn preflight_intermediate_only_check_with_gh(
     ))
 }
 
+// trace:TASK-480 | ai:claude
 /// Run the pure classifier with a `git check-ignore`-backed gitignore
 /// predicate. Pulled out so the wiring (build the predicate, call the
 /// classifier) is reused by the preflight and unit-testable in
-/// isolation. trace:TASK-480 | ai:claude
+/// isolation.
 fn classify_intermediate_only_with_gitignore(
     project_root: &std::path::Path,
     changed: &[String],
@@ -56089,12 +56386,13 @@ fn classify_intermediate_only_with_gitignore(
     pr_rebase::classify_intermediate_only(changed, |path| git_path_is_ignored(project_root, path))
 }
 
+// trace:TASK-480 | ai:claude
 /// `git check-ignore -q <path>` — exit 0 ⇒ ignored. We pass `--no-index`
 /// so a path that is *tracked* but matches an ignore rule still reports
 /// its ignore status (we OR this with the generated-path heuristic; a
 /// tracked-but-ignored build output is exactly the intermediate case we
 /// want to catch). Any spawn/other error ⇒ treat as not-ignored (fail
-/// open). trace:TASK-480 | ai:claude
+/// open).
 fn git_path_is_ignored(project_root: &std::path::Path, path: &str) -> bool {
     std::process::Command::new("git")
         .arg("-C")
@@ -56573,10 +56871,11 @@ mod pr_ship_environment_tests {
     }
 }
 
+// trace:STORY-90 | ai:claude
 /// Implementation of `aida pr auto-queue-review` — files (or skips, if
 /// already filed) the reviewer story for the PR open on `branch` (default
 /// to `git branch --show-current`). Designed to be invoked by /aida-pr
-/// right after `gh pr create` returns. trace:STORY-90 | ai:claude
+/// right after `gh pr create` returns.
 fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
     let project_root = find_project_root()?;
 
@@ -56664,9 +56963,10 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
     }
 }
 
+// trace:STORY-90 | ai:claude
 /// `git -C <root> branch --show-current` — used by `aida pr` when the
 /// caller doesn't pass --branch. Returns trimmed branch name on success;
-/// empty string when detached / not a repo. trace:STORY-90 | ai:claude
+/// empty string when detached / not a repo.
 fn current_git_branch(project_root: &std::path::Path) -> Result<String> {
     let out = std::process::Command::new("git")
         .current_dir(project_root)
@@ -56682,8 +56982,8 @@ fn current_git_branch(project_root: &std::path::Path) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+// trace:TASK-55 | ai:claude
 /// TASK-55: lease liveness classification used by `session leases`.
-/// trace:TASK-55 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LeaseState {
     /// Live claude found inside the worktree — actively working.
@@ -56713,9 +57013,10 @@ impl LeaseState {
     }
 }
 
+// trace:TASK-55 | ai:claude
 /// TASK-55: classify a lease using its worktree existence, live-claude
 /// probe result, and age. Pure given pre-collected inputs so the
-/// decision matrix is unit-testable. trace:TASK-55 | ai:claude
+/// decision matrix is unit-testable.
 fn classify_lease_state(
     worktree_exists: bool,
     has_live_claude: bool,
@@ -56733,10 +57034,11 @@ fn classify_lease_state(
     LeaseState::Dormant
 }
 
+// trace:TASK-56 | ai:claude
 /// TASK-56: find the Claude Code session id matching a worktree path,
 /// derived from the newest `*.jsonl` file at
 /// `~/.claude/projects/<encoded-cwd>/`. Returns None when the project
-/// dir doesn't exist or has no jsonl files. trace:TASK-56 | ai:claude
+/// dir doesn't exist or has no jsonl files.
 fn cc_session_id_for_worktree(worktree: &std::path::Path) -> Option<String> {
     let dir = session::claude_project_dir(worktree).ok()?;
     if !dir.exists() {
@@ -56767,10 +57069,11 @@ fn cc_session_id_for_worktree(worktree: &std::path::Path) -> Option<String> {
     newest.map(|(_, s)| s)
 }
 
+// trace:STORY-637 | ai:claude
 /// STORY-637: render the cross-clone lease section — claims on the shared
 /// `aida-store` registry held by OTHER clones (a different clone path than
 /// ours). Returns the number of foreign claims shown. Distinct from the
-/// local-lease table above it. trace:STORY-637 | ai:claude
+/// local-lease table above it.
 fn print_cross_clone_leases(
     project_root: &std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
@@ -57007,18 +57310,18 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-60 | ai:claude
 /// One `.jsonl` file old enough to prune. Captured up-front so the
 /// confirmation list and the deletion loop see the same set.
-/// trace:STORY-60 | ai:claude
 struct PruneCandidate {
     path: std::path::PathBuf,
     size: u64,
     age_seconds: u64,
 }
 
+// trace:STORY-60 | ai:claude
 /// Format a byte count with a human-readable unit (KB/MB/GB). One
 /// decimal place so a 1.5 MB file doesn't read as "1 MB" or "1500000 B".
-/// trace:STORY-60 | ai:claude
 fn humanize_size(bytes: u64) -> String {
     const KB: f64 = 1024.0;
     const MB: f64 = 1024.0 * 1024.0;
@@ -57035,6 +57338,7 @@ fn humanize_size(bytes: u64) -> String {
     }
 }
 
+// trace:STORY-72 | ai:claude
 /// Compute the new queue position for `aida queue move X --after Y`.
 /// `anchor` is Y's current position; `successor` is the position of the
 /// next entry strictly after Y, or `None` when Y is at the bottom.
@@ -57046,7 +57350,6 @@ fn humanize_size(bytes: u64) -> String {
 /// saturating so a corrupt-state queue (every item at `i64::MAX` from a
 /// pre-fix queue_add, see git_backend.rs) doesn't panic on overflow —
 /// the callsite is expected to surface a friendlier hint instead.
-/// trace:STORY-72 | ai:claude
 fn position_after(anchor: i64, successor: Option<i64>) -> i64 {
     match successor {
         Some(np) if np > anchor.saturating_add(1) => {
@@ -57057,6 +57360,7 @@ fn position_after(anchor: i64, successor: Option<i64>) -> i64 {
     }
 }
 
+// trace:TASK-280 | ai:claude
 /// Compute the queue order after `aida queue move X --to N` — moving
 /// `moved_id` to the 1-indexed absolute slot `requested`.
 ///
@@ -57067,7 +57371,6 @@ fn position_after(anchor: i64, successor: Option<i64>) -> i64 {
 /// to `1..=entries.len()`: an out-of-range N moves the item to the
 /// nearest end rather than erroring (the callsite surfaces a hint). The
 /// caller renumbers the returned id list with the standard 1000-gap.
-/// trace:TASK-280 | ai:claude
 fn move_to_absolute_position(
     entries: &[uuid::Uuid],
     moved_id: uuid::Uuid,
@@ -57095,20 +57398,22 @@ fn humanize_age_secs(secs: u64) -> String {
     }
 }
 
+// trace:STORY-60 | ai:claude
+// trace:TASK-70 | ai:claude
+// trace:TASK-358 | ai:claude
 /// `aida session prune` — walk Claude Code's per-project session
 /// directories under `~/.claude/projects/<encoded>/` and delete `.jsonl`
 /// files whose mtime is older than `days`. Skips any project dir
 /// corresponding to an active session lease so a long-running session
 /// doesn't self-delete from a forgotten cron-like usage. Logs each
 /// deletion to `<project>/.aida/session-prune.log` for auditing.
-/// trace:STORY-60 | ai:claude
 /// Walk `~/.claude/projects/*` and find project dirs whose recorded cwd
 /// no longer exists on disk. Each surviving jsonl encodes its cwd in
 /// every event; we read one jsonl per project dir, extract the cwd
 /// from the first event that has one, and check the filesystem. No
 /// jsonls in the dir → treat as orphan (the dir is content-less).
 /// Falls back to the lossy dir-name decode (replace `-` with `/`) when
-/// the jsonl lacks a `"cwd":` field. trace:TASK-70 | ai:claude
+/// the jsonl lacks a `"cwd":` field.
 /// TASK-358: mechanically tear down a lease + its worktree without the
 /// interactive ceremony of [`session_end`] — no CI probe, no live-claude
 /// refusal, no dirty-tree refusal, no prompts. Only callers that already
@@ -57119,7 +57424,6 @@ fn humanize_age_secs(secs: u64) -> String {
 /// --force` — and warns rather than errors on partial failure so a sweep
 /// that hits one stuck worktree still tries the rest. Returns `true` when
 /// the worktree was removed cleanly.
-/// trace:TASK-358 | ai:claude
 fn force_cleanup_lease(project_root: &std::path::Path, lease: &SessionLease) -> bool {
     // BUG-511: advisory leases (review-verb / MCP claims that recorded no
     // worktree) have nothing on disk beyond the lease file itself — and an
@@ -57215,6 +57519,7 @@ fn force_cleanup_lease(project_root: &std::path::Path, lease: &SessionLease) -> 
     removed
 }
 
+// trace:TASK-358 | ai:claude
 /// TASK-358: on a triage that takes a spec out of `NeedsAttention`, find any
 /// orchestrator-escalated lease for it and clean up the lingering worktree.
 /// The lease's `escalated_to_human` marker is the load-bearing gate: only
@@ -57222,7 +57527,7 @@ fn force_cleanup_lease(project_root: &std::path::Path, lease: &SessionLease) -> 
 /// session on the same spec stays put, and the advisor-resume path
 /// (which never sets the marker) preserves its worktree as STORY-306
 /// requires. Best-effort: a missing project root or zero matching leases
-/// is a quiet no-op. trace:TASK-358 | ai:claude
+/// is a quiet no-op.
 fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &str) {
     let leases = list_leases(project_root);
     let mut cleaned = 0usize;
@@ -57252,6 +57557,7 @@ fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &s
     }
 }
 
+// trace:EPIC-28 | ai:claude
 /// EPIC-28: park a spec in `NeedsAttention` with a structured
 /// [`aida_core::FailureReason`] so a batch drain can continue past a phase
 /// failure rather than halting. Called from
@@ -57263,7 +57569,6 @@ fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &s
 /// when the spec cannot be safely shelved (e.g. it is already in a
 /// terminal status). Best-effort: ledger-write failures are logged but
 /// never undo the status flip, mirroring `aida punt`.
-/// trace:EPIC-28 | ai:claude
 fn shelve_spec_on_failure(
     project_root: &std::path::Path,
     spec: &str,
@@ -57345,6 +57650,8 @@ fn shelve_spec_on_failure(
     Ok(Some(fr))
 }
 
+// trace:TASK-133 | ai:claude
+// trace:BUG-479 | ai:claude
 /// TASK-133: undo the orchestrator parent's pre-spawn phase-1 status bump.
 ///
 /// `prepare_auto_complete_phase1_status` flips a spec Approved/Planned/Draft →
@@ -57361,7 +57668,6 @@ fn shelve_spec_on_failure(
 /// store-write error is logged but never aborts the drain epilogue. Writes
 /// through `CachedGitBackend` so the read-projection (`aida list`) reflects
 /// the reset immediately rather than waiting for a stale-detection rebuild.
-/// trace:TASK-133 | ai:claude
 /// BUG-479: does ANY child-side evidence of real work exist for `spec`?
 /// Pure decision over the three probed signals — a live/stale lease scoped to
 /// the spec, an on-disk worktree for it, or unmerged commits on its branch.
@@ -57369,11 +57675,12 @@ fn shelve_spec_on_failure(
 /// work before exiting non-zero (e.g. a post-commit `/aida-pr` failure or a
 /// headless session aborting after committing), so the parent's "no lease ⇒ no
 /// work" assumption is wrong and the spec must stay shelved for triage rather
-/// than be reset. trace:BUG-479 | ai:claude
+/// than be reset.
 fn child_side_work_exists(has_lease: bool, has_worktree: bool, has_unmerged_commits: bool) -> bool {
     has_lease || has_worktree || has_unmerged_commits
 }
 
+// trace:BUG-479 | ai:claude
 /// BUG-479: probe the real world for child-side work on `spec`, returning
 /// `(has_lease, has_worktree, has_unmerged_commits)`.
 ///
@@ -57387,7 +57694,7 @@ fn child_side_work_exists(has_lease: bool, has_worktree: bool, has_unmerged_comm
 ///
 /// Conservative: a git probe that can't run leaves its signal `false`, but the
 /// lease/worktree signals already cover the dominant case, and the caller treats
-/// ANY of the three as "leave it shelved". trace:BUG-479 | ai:claude
+/// ANY of the three as "leave it shelved".
 fn probe_child_side_work_for_spec(
     project_root: &std::path::Path,
     spec: &str,
@@ -57473,6 +57780,7 @@ fn restore_phase1_status_on_lease_failure(
     Ok(())
 }
 
+// trace:BUG-511 | ai:claude
 /// TASK-358 tests — the `--escalate-blocks` worktree cleanup.
 ///
 /// The wiring exercised here:
@@ -57484,7 +57792,6 @@ fn restore_phase1_status_on_lease_failure(
 ///      and an escalated lease for an unrelated spec is ignored (the triage
 ///      hook is per-spec).
 ///
-/// trace:BUG-511 | ai:claude
 #[cfg(test)]
 mod bug_511_review_lease_tests {
     use super::*;
@@ -57639,7 +57946,7 @@ mod bug_511_review_lease_tests {
     }
 }
 
-/// trace:TASK-358 | ai:claude
+// trace:TASK-358 | ai:claude
 #[cfg(test)]
 mod task_358_escalation_cleanup_tests {
     use super::*;
@@ -58036,6 +58343,7 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-358 | ai:claude
 /// TASK-358: explicit pruner for `--escalate-blocks` worktrees whose
 /// underlying spec has been triaged out of `NeedsAttention`. The auto-clean
 /// in `edit_requirement_cli` covers the happy path; this verb is the
@@ -58043,7 +58351,6 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
 /// triage that pre-dates this code, a write that errored, a sibling
 /// worktree at edit time). A lease with the marker but whose spec is still
 /// in `NeedsAttention` is left alone — the human hasn't triaged yet.
-/// trace:TASK-358 | ai:claude
 fn session_prune_escalations(dry_run: bool, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -58413,11 +58720,12 @@ fn session_prune(
     Ok(())
 }
 
+// trace:STORY-68 | ai:claude
 /// STORY-68: detail view for one session lease. Resolution: explicit id
 /// → cwd-based lease → ancestor-PID match (same chain as session end's
 /// resolution chain, minus the single-active prompt — `show` should be
 /// non-interactive). Errors with the active-lease listing if nothing
-/// resolves. trace:STORY-68 | ai:claude
+/// resolves.
 fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -58641,10 +58949,11 @@ fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-98
 /// Render the planned-cluster manifest for `session_id` as a status table.
 /// Reads the requirement store once to resolve each item's current status
 /// (so a spec the user flipped to "in progress" via /aida-pickup actually
-/// shows as the in-flight glyph regardless of whether mark-started ran). trace:STORY-98
+/// shows as the in-flight glyph regardless of whether mark-started ran).
 fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> Result<()> {
     let path = session_manifest::manifest_path(project_root, session_id);
     println!();
@@ -58791,12 +59100,13 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
     Ok(())
 }
 
+// trace:STORY-98 | ai:claude
 /// STORY-98: best-effort manifest-row flip on `aida edit --status`.
 /// Resolves the active session lease via cwd / ancestor-PID match, then
 /// stamps started_at or completed_at on the matching item. Silent no-op
 /// when no lease covers this shell or the manifest doesn't list the
 /// spec — most edits happen outside a planned cluster, so the path stays
-/// quiet by design. trace:STORY-98 | ai:claude
+/// quiet by design.
 pub(crate) fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
     let Ok(project_root) = find_project_root() else {
         return;
@@ -58861,6 +59171,7 @@ pub(crate) fn update_manifest_for_status(spec_id: &str, canonical_status: &str) 
     }
 }
 
+// trace:BUG-83 | ai:claude
 /// Build a map from "any id form a caller might have stored"
 /// (spec_id or agreed_id) to the requirement's preferred display id
 /// (agreed_id when assigned, else spec_id). Used by the session-show
@@ -58868,7 +59179,7 @@ pub(crate) fn update_manifest_for_status(spec_id: &str, canonical_status: &str) 
 /// consistently as the short post-merge-gate id once one's been minted.
 ///
 /// Returns an empty map when the store can't be loaded — callers fall
-/// back to the raw stored id. trace:BUG-83 | ai:claude
+/// back to the raw stored id.
 fn build_display_id_lookup(
     project_root: &std::path::Path,
 ) -> std::collections::HashMap<String, String> {
@@ -58888,12 +59199,13 @@ fn build_display_id_lookup(
     map
 }
 
+// trace:STORY-98 | ai:claude
 /// Best-effort load of the requirements store for read-only spec-id /
 /// title / status lookups inside session-manifest rendering. Tries
 /// distributed git-canonical mode first (the default), then falls back
 /// to the legacy YAML/SQLite path. Returns None on any error — caller
 /// renders with "(not found)" placeholders so missing data degrades
-/// gracefully. trace:STORY-98 | ai:claude
+/// gracefully.
 pub(crate) fn load_store_for_lookup(
     project_root: &std::path::Path,
 ) -> Option<aida_core::RequirementsStore> {
@@ -58912,7 +59224,8 @@ pub(crate) fn load_store_for_lookup(
         .and_then(|s| s.load().ok())
 }
 
-/// `aida session manifest <subcommand>` dispatcher. trace:STORY-98
+// trace:STORY-98
+/// `aida session manifest <subcommand>` dispatcher.
 fn session_manifest_dispatch(cmd: &SessionManifestCommand) -> Result<()> {
     match cmd {
         SessionManifestCommand::Write {
@@ -59109,11 +59422,11 @@ fn session_manifest_mark(spec_id: &str, session_query: Option<&str>, kind: MarkK
     Ok(())
 }
 
+// trace:TASK-1-045 | ai:claude
 /// True when one SHA is a (case-insensitive, hex) prefix of the other.
 /// Used by statusline to compare a cache-stored SHA (potentially full,
 /// 40 chars) against the current `git rev-parse --short HEAD` output (7
 /// chars) without flagging a spurious stale.
-/// trace:TASK-1-045 | ai:claude
 fn sha_prefix_match(a: &str, b: &str) -> bool {
     if a.is_empty() || b.is_empty() {
         return a == b;
@@ -59122,6 +59435,7 @@ fn sha_prefix_match(a: &str, b: &str) -> bool {
     a[..min].eq_ignore_ascii_case(&b[..min])
 }
 
+// trace:STORY-78 | ai:claude
 /// Statusline cache freshness state. Two independent axes folded into a
 /// single label by severity:
 ///   1. cache.db vs local orphan branch HEAD — `Stale` when they differ
@@ -59131,26 +59445,28 @@ fn sha_prefix_match(a: &str, b: &str) -> bool {
 ///      `Unknown` covers "can't tell about origin yet" — either no recent
 ///      fetch (STORY-79 hasn't run, or it's been >threshold) or no
 ///      `origin/aida-store` ref locally. `Fresh` is the all-good state and
-///      doesn't render. trace:STORY-78 | ai:claude
+///      doesn't render.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CacheFreshness {
     Fresh,
     Stale,
     Behind,
     Unknown,
+    // trace:BUG-518 | ai:claude
     /// No `.aida-store` attached in this worktree (e.g. a harness /
     /// general-purpose worktree with no orphan store checked out).
     /// Distinct from `Unknown` (origin freshness is transiently
     /// unknowable in an *attached* store): with no store at all there is
     /// nothing to report, so the segment is omitted rather than rendering
-    /// a misleading `cache:?`. trace:BUG-518 | ai:claude
+    /// a misleading `cache:?`.
     NoStore,
 }
 
 impl CacheFreshness {
+    // trace:STORY-78 | ai:claude
     /// One-letter label used by statusline. None means "don't render"
     /// (the Fresh case — boring, hide it; and the NoStore case — there is
-    /// no store to report on, BUG-518). trace:STORY-78 | ai:claude
+    /// no store to report on, BUG-518).
     fn label(self) -> Option<&'static str> {
         match self {
             CacheFreshness::Fresh => None,
@@ -59163,6 +59479,7 @@ impl CacheFreshness {
     }
 }
 
+// trace:STORY-78 | ai:claude
 /// Decide which freshness state to render given pre-collected inputs.
 /// Pure — no I/O, no env reads — so the precedence rules can be
 /// exhaustively tested.
@@ -59177,7 +59494,6 @@ impl CacheFreshness {
 /// The "strictly ahead → Fresh" semantics keep us from nagging the user
 /// to pull when they have unpushed local commits — `cache:behind` would
 /// be misleading because there's nothing on origin to pull.
-/// trace:STORY-78 | ai:claude
 fn classify_cache_freshness(
     recorded_cache_sha: Option<&str>,
     local_sha: &str,
@@ -59220,6 +59536,7 @@ fn classify_cache_freshness(
     }
 }
 
+// trace:STORY-78 | ai:claude
 /// Decide whether `local_sha` is strictly behind `origin_sha` in the
 /// orphan store at `store_path`. "Strictly behind" means: origin has at
 /// least one commit not reachable from local. Returns None when git
@@ -59227,7 +59544,7 @@ fn classify_cache_freshness(
 ///
 /// `local == origin` short-circuits to Some(false). Strictly-ahead also
 /// returns Some(false) — we explicitly do NOT report "behind" for the
-/// have-unpushed-commits case. trace:STORY-78 | ai:claude
+/// have-unpushed-commits case.
 fn local_lags_origin(
     store_path: &std::path::Path,
     local_sha: &str,
@@ -59250,11 +59567,12 @@ fn local_lags_origin(
     Some(count > 0)
 }
 
+// trace:STORY-78 | ai:claude
 /// Read `~/.aida/cache/last-fetch.toml` and return the age (in seconds)
 /// of the most recent successful fetch for `project_root`. Returns None
 /// when the file is absent, the entry is missing, the last result was
 /// an error, or the timestamp is unparseable — all of which collapse to
-/// "Unknown" in the freshness classifier. trace:STORY-78 | ai:claude
+/// "Unknown" in the freshness classifier.
 fn read_last_fetch_age_secs(project_root: &std::path::Path) -> Option<u64> {
     let home = aida_home_dir()?;
     let toml_path = home.join(".aida/cache/last-fetch.toml");
@@ -59282,11 +59600,12 @@ fn read_last_fetch_age_secs(project_root: &std::path::Path) -> Option<u64> {
     }
 }
 
+// trace:STORY-78 | ai:claude
 /// `git rev-parse origin/aida-store` against the orphan-store worktree.
 /// Returns None when the ref doesn't exist (no remote configured, never
 /// fetched) or the git invocation otherwise fails. The caller maps None
 /// to `CacheFreshness::Unknown` rather than treating it as
-/// "no-difference". trace:STORY-78 | ai:claude
+/// "no-difference".
 fn rev_parse_origin_aida_store(project_root: &std::path::Path) -> Option<String> {
     let store_path = if project_root.join(".aida-store").exists() {
         project_root.join(".aida-store")
@@ -59312,11 +59631,12 @@ fn rev_parse_origin_aida_store(project_root: &std::path::Path) -> Option<String>
     }
 }
 
+// trace:STORY-78 | ai:claude
 /// Threshold above which a last-fetch timestamp is treated as "stale"
 /// (i.e. we render `cache:?` rather than `cache:fresh|behind`). Matches
 /// STORY-79's default background-fetch interval so a single missed fetch
 /// cycle is the boundary. Overridable via `AIDA_FETCH_FRESHNESS_SECS` so
-/// CI / tests can dial it without hardcoding `300`. trace:STORY-78 | ai:claude
+/// CI / tests can dial it without hardcoding `300`.
 fn cache_freshness_threshold_secs() -> u64 {
     std::env::var("AIDA_FETCH_FRESHNESS_SECS")
         .ok()
@@ -59324,6 +59644,7 @@ fn cache_freshness_threshold_secs() -> u64 {
         .unwrap_or(300)
 }
 
+// trace:STORY-78 | ai:claude
 /// STORY-78 Part 2: the implementation of `--sync` on read commands.
 /// Mirrors `aida db sync --pull` but without the commit-pending step
 /// (read commands have no pending work to commit) and without conflict
@@ -59341,7 +59662,6 @@ fn cache_freshness_threshold_secs() -> u64 {
 /// On success, updates `~/.aida/cache/last-fetch.toml` so the statusline
 /// `cache:behind|?` indicator immediately reflects the pull (instead of
 /// waiting for STORY-79's background fetcher).
-/// trace:STORY-78 | ai:claude
 fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
     if !aida_core::git_ops::is_git_repo(store_path) {
         eprintln!(
@@ -59399,20 +59719,21 @@ fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-78 | ai:claude
 /// Stamp `~/.aida/cache/last-fetch.toml` with "ok"/now for the project
 /// whose orphan store is `store_path`. Best-effort — keys on the
 /// canonicalized parent of `store_path` so reads (via
 /// `read_last_fetch_age_secs(project_root)`) match writes.
-/// trace:STORY-78 | ai:claude
 fn touch_last_fetch_ok(store_path: &std::path::Path) -> Result<()> {
     write_last_fetch_entry(store_path, "ok")
 }
 
+// trace:STORY-78 | ai:claude
 /// Write a result string (`"ok"` for success, `"error: <msg>"` for
 /// failure) plus a fresh timestamp into `~/.aida/cache/last-fetch.toml`
 /// for the project whose orphan store is `store_path`. Shared between
 /// the `--sync` path (STORY-78) and the background fetch worker
-/// (STORY-79). trace:STORY-78 | ai:claude
+/// (STORY-79).
 fn write_last_fetch_entry(store_path: &std::path::Path, result: &str) -> Result<()> {
     let project_root = store_path
         .parent()
@@ -59451,9 +59772,10 @@ fn write_last_fetch_entry(store_path: &std::path::Path, result: &str) -> Result<
 // STORY-79 — background fetch from statusline (auto-freshness)
 // ───────────────────────────────────────────────────────────────────
 
+// trace:STORY-79 | ai:claude
 /// Default seconds between background fetches. Statusline skips spawning
 /// when the most recent fetch (or attempt) is within this window. Overridable
-/// via `AIDA_BG_FETCH_INTERVAL_SECS`. trace:STORY-79 | ai:claude
+/// via `AIDA_BG_FETCH_INTERVAL_SECS`.
 fn bg_fetch_interval_secs() -> u64 {
     std::env::var("AIDA_BG_FETCH_INTERVAL_SECS")
         .ok()
@@ -59461,9 +59783,10 @@ fn bg_fetch_interval_secs() -> u64 {
         .unwrap_or(300)
 }
 
+// trace:STORY-79 | ai:claude
 /// Whether the background fetcher is enabled. `AIDA_BG_FETCH=false`
 /// (or `0`, `no`, `off`) disables it entirely. Any other value (or
-/// unset) leaves it enabled. trace:STORY-79 | ai:claude
+/// unset) leaves it enabled.
 fn bg_fetch_enabled() -> bool {
     match std::env::var("AIDA_BG_FETCH") {
         Ok(v) => !matches!(
@@ -59474,11 +59797,12 @@ fn bg_fetch_enabled() -> bool {
     }
 }
 
+// trace:STORY-79 | ai:claude
 /// Path to the per-project lockfile used to coordinate background
 /// fetches across concurrent shells. The basename mixes the project
 /// dir name and a hex digest of the canonical path: dir name keeps it
 /// debuggable, digest disambiguates two projects with the same
-/// basename. trace:STORY-79 | ai:claude
+/// basename.
 fn bg_fetch_lock_path(store_path: &std::path::Path) -> Option<std::path::PathBuf> {
     let project_root = store_path.parent()?;
     let canon = project_root
@@ -59503,9 +59827,10 @@ fn bg_fetch_lock_path(store_path: &std::path::Path) -> Option<std::path::PathBuf
     )
 }
 
+// trace:STORY-79 | ai:claude
 /// Best-effort: ensure `~/.aida/cache/` exists for the lock + toml writes.
 /// Returns Ok even if creation fails — caller treats missing dir as
-/// "skip background fetch this render". trace:STORY-79 | ai:claude
+/// "skip background fetch this render".
 fn ensure_cache_dir() -> Option<std::path::PathBuf> {
     let home = aida_home_dir()?;
     let cache = home.join(".aida/cache");
@@ -59513,12 +59838,13 @@ fn ensure_cache_dir() -> Option<std::path::PathBuf> {
     Some(cache)
 }
 
+// trace:TASK-32 | ai:claude
 /// TASK-32: cross-platform home-dir lookup with an `AIDA_HOME` override.
 /// On Windows, `dirs::home_dir()` resolves via `SHGetKnownFolderPath`,
 /// which ignores env vars — that breaks bg_worker tests that need to
 /// isolate writes from the real user profile. Checking `AIDA_HOME` first
 /// gives tests a deterministic hook on every platform without changing
-/// the production lookup. trace:TASK-32 | ai:claude
+/// the production lookup.
 fn aida_home_dir() -> Option<std::path::PathBuf> {
     if let Ok(p) = std::env::var("AIDA_HOME") {
         if !p.is_empty() {
@@ -59528,12 +59854,12 @@ fn aida_home_dir() -> Option<std::path::PathBuf> {
     dirs::home_dir()
 }
 
+// trace:STORY-79 | ai:claude
 /// Should statusline kick off a fresh background fetch for this project?
 /// Returns true when ALL conditions hold: feature enabled, no recent
 /// fetch attempt (per `last-fetch.toml`), and no live lockfile.
 /// Stale lockfiles (>3× interval) are considered dead and overridden.
 /// Pure decision: callers do the lockfile create + spawn separately.
-/// trace:STORY-79 | ai:claude
 fn should_spawn_bg_fetch(
     last_fetch_age_secs: Option<u64>,
     lock_age_secs: Option<u64>,
@@ -59552,11 +59878,12 @@ fn should_spawn_bg_fetch(
     true
 }
 
+// trace:STORY-79 | ai:claude
 /// Spawn the `_bg-fetch` worker for `store_path` if the project is due
 /// for a fetch and no other shell is already on it. All failure modes
 /// (no home dir, can't create cache dir, lockfile-create race lost,
 /// spawn failed) collapse to "skip silently" so statusline stays
-/// silent and sub-50ms regardless. trace:STORY-79 | ai:claude
+/// silent and sub-50ms regardless.
 fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::Path) {
     if !bg_fetch_enabled() {
         return;
@@ -59601,22 +59928,24 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
         .spawn();
 }
 
+// trace:STORY-79 TASK-107 | ai:claude
+// trace:TASK-756
 /// Worker entry point — runs `git fetch origin <branch> --prune` against
 /// the orphan store at `store_path`, then stamps `last-fetch.toml` with
 /// the outcome and removes the lockfile. Never panics; every error
 /// path is silent. Called from `aida _bg-fetch <store-path>`, which
 /// statusline spawns detached. Shares its fetch + cache-stamp logic
 /// with `aida fetch --store-only --quiet` (TASK-107); the only thing
-/// it adds is the lockfile lifecycle. trace:STORY-79 TASK-107 | ai:claude
+/// it adds is the lockfile lifecycle.
 /// Resolve the away TTL for the current project: `[presence] away_ttl` from
-/// `.aida/config.toml` when present, else the 8h default. trace:TASK-756
+/// `.aida/config.toml` when present, else the 8h default.
 fn resolve_away_ttl_secs() -> u64 {
     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     presence::away_ttl_secs(&config_path_for_project(&project_root))
 }
 
+// trace:TASK-756 | ai:claude
 /// `aida away` — mark the operator away with the configured TTL.
-/// trace:TASK-756 | ai:claude
 fn handle_away_command() -> Result<()> {
     let ttl = resolve_away_ttl_secs();
     presence::set_away(ttl)?;
@@ -59630,8 +59959,8 @@ fn handle_away_command() -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-756 | ai:claude
 /// `aida home` — mark the operator back at the keyboard.
-/// trace:TASK-756 | ai:claude
 fn handle_home_command() -> Result<()> {
     let ttl = resolve_away_ttl_secs();
     presence::set_home(ttl)?;
@@ -59642,8 +59971,8 @@ fn handle_home_command() -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-756 | ai:claude
 /// `aida presence` — print current effective presence.
-/// trace:TASK-756 | ai:claude
 fn handle_presence_command() -> Result<()> {
     let now = chrono::Utc::now();
     let file = presence::read_presence_file();
@@ -59680,13 +60009,13 @@ fn handle_presence_command() -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-625 | ai:claude
 /// STORY-625: one cycle of the solo loop — the safe-backlog pipeline, composed
 /// from the existing (individually-safe) commands by shelling out to this same
 /// binary. Order: garden (hygiene) → assess+queue (advisor sign-off, keystone
 /// parked) → implement (headless drain) → integrate (merge Done PRs, keystone
 /// parked). A non-zero step is logged but does NOT kill the loop (a shelved
 /// phase is retried next tick). With `dry_run`, each step is PRINTED, not run.
-/// trace:STORY-625 | ai:claude
 fn solo_cycle(dry_run: bool) -> Result<()> {
     // BUG-562: use the hardened resolver, NOT raw current_exe(). The solo loop is
     // long-running; a `cargo build` that swaps the binary mid-run makes Linux
@@ -59788,20 +60117,23 @@ fn solo_cycle(dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-627 | ai:claude
 /// STORY-627: how often the per-step progress heartbeat prints while a long
-/// `solo_cycle` step (e.g. `claude -p`) runs. trace:STORY-627 | ai:claude
+/// `solo_cycle` step (e.g. `claude -p`) runs.
 const SOLO_HEARTBEAT_SECS: u64 = 30;
 
+// trace:STORY-627
 /// STORY-627: while the inter-cycle sleep waits, poll the solo flag this often so
-/// `aida solo stop` lands within seconds, not a full cycle. trace:STORY-627
+/// `aida solo stop` lands within seconds, not a full cycle.
 const SOLO_STOP_POLL_SECS: u64 = 2;
 
+// trace:STORY-625 | ai:claude
 /// STORY-625: the solo LOOP — the single leave-it-running command that works the
 /// safe backlog end-to-end on a cadence (subsumes `aida queue integrate
 /// --watch`). Sets the solo flag on entry; each tick re-checks it and exits when
 /// it's cleared (`aida solo --off`) or the TTL lapses; Ctrl-C also stops it.
 /// `--dry-run` runs ONE tick that prints the cycle and exits, so the loop is
-/// verifiable without a live drain. trace:STORY-625 | ai:claude
+/// verifiable without a live drain.
 fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
     // STORY-627: acquire the per-repo solo lock so a second `aida solo run`
     // refuses while a live one holds it (and a Ctrl-C-killed loop is
@@ -59880,13 +60212,13 @@ fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-627 | ai:claude
 /// STORY-627: the inter-cycle sleep, broken into `poll_secs` increments so the
 /// solo flag is re-checked frequently and `aida solo stop` lands within seconds.
 /// Returns `true` if the flag cleared mid-sleep (caller should stop the loop),
 /// `false` if the full `interval` elapsed with the flag still set. Both `sleep`
 /// and the flag check (`still_solo`) are injected so the poll cadence is
 /// unit-testable without real wall-clock waits or touching `~/.aida/solo.toml`.
-/// trace:STORY-627 | ai:claude
 fn solo_sleep_until_stop(
     interval: u64,
     poll_secs: u64,
@@ -59906,14 +60238,16 @@ fn solo_sleep_until_stop(
     false
 }
 
+// trace:STORY-624 trace:STORY-625 | ai:claude
+// trace:STORY-627 | ai:claude
 /// `aida solo [--off | --status | --ttl <DURATION> | --watch [--dry-run]]` —
 /// enter/exit/show solo mode (the visible work-state flag, STORY-624) or run the
 /// solo LOOP (STORY-625). State lives in `~/.aida/solo.toml` with a safety TTL;
-/// the statusline surfaces it. trace:STORY-624 trace:STORY-625 | ai:claude
+/// the statusline surfaces it.
 /// STORY-627: the resolved solo action after folding the canonical verb and the
 /// legacy `--watch`/`--off`/`--status` flag aliases into one. The verb wins when
 /// present; otherwise the flag aliases apply (silently, so nothing breaks).
-/// Pure so the verb→action mapping is unit-testable. trace:STORY-627 | ai:claude
+/// Pure so the verb→action mapping is unit-testable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SoloEffect {
     /// Run the loop (`solo run` / `--watch`).
@@ -59926,10 +60260,11 @@ enum SoloEffect {
     EnterMode,
 }
 
+// trace:STORY-627 | ai:claude
 /// Fold the canonical verb and the legacy flag aliases into a single effect.
 /// The verb takes precedence; otherwise `--watch`→Run, `--off`→Stop,
 /// `--status`→Status, and (with none of them) EnterMode. `--off` is checked
-/// before `--status` to match the prior arm order. trace:STORY-627 | ai:claude
+/// before `--status` to match the prior arm order.
 fn resolve_solo_effect(
     action: Option<SoloAction>,
     off: bool,
@@ -60169,13 +60504,13 @@ mod solo_tests {
     }
 }
 
+// trace:TASK-784
 /// Pure source-label resolver for `aida whoami`'s user-id line. Mirrors
 /// `current_user_id`'s resolution order (`AIDA_USER` → `USER` → `USERNAME` →
 /// default) over already-read env values, so the printed source label can never
 /// drift from the value `current_user_id` actually returned. Each arg is the
 /// env var's value as `Option`, where an empty string counts as unset (matching
 /// the `is_ok_and(|v| !v.is_empty())` checks the resolver uses).
-/// trace:TASK-784
 fn whoami_user_source(
     aida_user: Option<&str>,
     user: Option<&str>,
@@ -60195,6 +60530,7 @@ fn whoami_user_source(
     }
 }
 
+// trace:TASK-784
 /// `aida whoami` — print the caller identity AIDA resolved, each line
 /// annotated with where the value came from. This is a PURE READ of the same
 /// resolvers the gating / queue / provenance code already uses
@@ -60205,7 +60541,6 @@ fn whoami_user_source(
 /// not advisor, so the advisor-gate fired) and "why is my queue empty?" (the
 /// shell's user/role identity differs from whatever queued the items — see the
 /// BUG-89 queue-identity note in CLAUDE.md).
-/// trace:TASK-784
 fn handle_whoami_command() -> Result<()> {
     // Helper: read an env var, returning the value + a source label that names
     // the env var when set (non-empty) and the fallback otherwise.
@@ -60418,7 +60753,8 @@ mod statusline_tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// Cache-stored full SHA matches `--short` output. trace:TASK-1-045
+    // trace:TASK-1-045
+    /// Cache-stored full SHA matches `--short` output.
     #[test]
     fn sha_prefix_match_full_vs_short() {
         let full = "4e39de29ddd72417772aa14b552937018d270746";
@@ -60488,10 +60824,10 @@ mod statusline_tests {
         assert_eq!(r, CacheFreshness::Unknown);
     }
 
+    // trace:STORY-78 | ai:claude
     /// Local strictly ahead of origin → Fresh (no pull needed; cache:behind
     /// would be misleading since there's nothing to pull). The user may
     /// still need to push, but that's a different signal.
-    /// trace:STORY-78 | ai:claude
     #[test]
     fn freshness_local_ahead_of_origin_is_fresh() {
         let r = classify_cache_freshness(Some("aaaaaaa"), "aaaaaaa", Some(false), Some(60), 300);
@@ -60514,18 +60850,20 @@ mod statusline_tests {
         assert_eq!(r, CacheFreshness::Unknown);
     }
 
+    // trace:BUG-518 | ai:claude
     /// Empty local SHA (no orphan store attached) → NoStore, distinct
     /// from Unknown (transiently-unknown origin freshness on an attached
     /// store). NoStore renders nothing so a store-less worktree doesn't
-    /// show a misleading `cache:?`. trace:BUG-518 | ai:claude
+    /// show a misleading `cache:?`.
     #[test]
     fn freshness_no_local_store_is_no_store() {
         let r = classify_cache_freshness(Some("aaaaaaa"), "", Some(true), Some(60), 300);
         assert_eq!(r, CacheFreshness::NoStore);
     }
 
+    // trace:BUG-518 | ai:claude
     /// Label mapping: Fresh + NoStore suppressed (render nothing), others
-    /// render the documented strings. trace:BUG-518 | ai:claude
+    /// render the documented strings.
     #[test]
     fn freshness_label_mapping() {
         assert_eq!(CacheFreshness::Fresh.label(), None);
@@ -60997,11 +61335,11 @@ mod statusline_tests {
     // serialises process-global env-var swaps under a single mutex so
     // sibling tests reading `AIDA_HOME` can't race. trace:TASK-521 trace:TASK-32 | ai:claude
 
+    // trace:TASK-32 | ai:claude — Windows-capable now that bg_worker
     /// Worker writes `result = "error: ..."` to last-fetch.toml when the
     /// store has no `origin` remote configured. Exercises the failure
     /// path without needing network. Uses an isolated AIDA_HOME so the
     /// test doesn't clobber the real ~/.aida/cache/last-fetch.toml.
-    /// trace:TASK-32 | ai:claude — Windows-capable now that bg_worker
     /// routes home-dir lookups through `aida_home_dir()`.
     #[test]
     fn bg_worker_records_error_on_missing_remote() {
@@ -61058,10 +61396,10 @@ mod statusline_tests {
         );
     }
 
+    // trace:STORY-66 | ai:claude
     /// STORY-66: the auto-queue hook parses `aida add`'s spec_id out of a
     /// line that may be wrapped in colored() output. Drop SGR sequences
     /// without depending on a regex / ansi crate.
-    /// trace:STORY-66 | ai:claude
     #[test]
     fn strip_ansi_color_basic() {
         assert_eq!(strip_ansi_color("plain"), "plain");
@@ -61074,9 +61412,9 @@ mod statusline_tests {
         assert_eq!(strip_ansi_color("a\x1bb"), "a\x1bb");
     }
 
+    // trace:STORY-60 | ai:claude
     /// STORY-60: byte-count formatter — boundary cases at KB/MB/GB
     /// crossover. Below 1KB renders as bytes; otherwise one decimal.
-    /// trace:STORY-60 | ai:claude
     #[test]
     fn humanize_size_buckets() {
         assert_eq!(humanize_size(0), "0 B");
@@ -61379,9 +61717,10 @@ mod statusline_tests {
         }
     }
 
+    // trace:TASK-739
     /// TASK-739: exhaustive parity — `status_requires_advisor_authority` (now
     /// delegating to `lifecycle::target_requires_advisor_authority`) matches the
-    /// pre-migration hand-coded predicate over every status. trace:TASK-739
+    /// pre-migration hand-coded predicate over every status.
     #[test]
     fn status_requires_advisor_authority_parity_with_oracle() {
         use super::status_requires_advisor_authority as f;
@@ -61407,11 +61746,11 @@ mod statusline_tests {
         }
     }
 
+    // trace:TASK-739
     /// TASK-739: exhaustive parity — `status_advance_requires_advisor_authority`
     /// (now delegating to `lifecycle::transition_guard`) matches the
     /// pre-migration predicate over every (from, to) pair, including direct
     /// edits the model does not declare (e.g. `Draft → InProgress`).
-    /// trace:TASK-739
     #[test]
     fn status_advance_requires_advisor_authority_parity_with_oracle() {
         use super::status_advance_requires_advisor_authority as gate;
@@ -61444,11 +61783,12 @@ mod statusline_tests {
         }
     }
 
+    // trace:TASK-741
     /// TASK-741: exhaustive parity — `archive_guard_decision` (now delegating
     /// to `lifecycle::archive_invariant_block`) yields the same verdict as the
     /// pre-migration predicate over every `(status, queued, force)` triple. The
     /// `--force` override and the two reason wordings (queued-louder vs
-    /// non-terminal) must be byte-identical. trace:TASK-741
+    /// non-terminal) must be byte-identical.
     #[test]
     fn archive_guard_decision_parity_with_oracle() {
         use super::{archive_guard_decision, is_terminal_status, ArchiveGuard};
@@ -61517,9 +61857,10 @@ mod statusline_tests {
         );
     }
 
+    // trace:BUG-64 STORY-86 | ai:claude
     /// BUG-64: terminal-status predicate. Completed and Rejected are
     /// terminal; everything else (including the STORY-86 `Done` state) is
-    /// open and accepts new children. trace:BUG-64 STORY-86 | ai:claude
+    /// open and accepts new children.
     #[test]
     fn is_terminal_status_buckets() {
         assert!(is_terminal_status(&RequirementStatus::Completed));
@@ -61534,12 +61875,13 @@ mod statusline_tests {
         assert!(!is_terminal_status(&RequirementStatus::Done));
     }
 
+    // trace:BUG-492 | ai:claude
     /// BUG-492: `aida archive <ID>` must not silently sweep live work. The
     /// guard fires (demands confirm / --force) for any non-terminal status,
     /// and louder when the spec is also queued; a terminal spec archives
     /// freely; `--force` always passes through. This is the regression for
     /// the Session-63 over-sweep that archived 128 Approved specs (incl. 4
-    /// queued items). trace:BUG-492 | ai:claude
+    /// queued items).
     #[test]
     fn archive_guard_blocks_non_terminal_and_queued() {
         // Terminal, not queued → archive silently.
@@ -61605,9 +61947,10 @@ mod statusline_tests {
         );
     }
 
+    // trace:STORY-72 | ai:claude
     /// STORY-72: position math for `queue move --after`. Three regimes —
     /// gapped (typical), adjacent (collision fallback), bottom (no
-    /// successor). trace:STORY-72 | ai:claude
+    /// successor).
     #[test]
     fn position_after_picks_midpoint_when_gapped() {
         // Typical case: anchor + successor with the standard 1000 gap.
@@ -61635,11 +61978,11 @@ mod statusline_tests {
         assert_eq!(position_after(i64::MAX - 1, None), i64::MAX);
     }
 
+    // trace:TASK-280 | ai:claude
     /// TASK-280: `aida queue move X --to N` absolute positioning. The
     /// helper drops the moved id, then re-inserts it at the clamped
     /// 1-indexed slot; the caller renumbers the returned order. Cover
     /// front / middle / back and the out-of-range clamp on both ends.
-    /// trace:TASK-280 | ai:claude
     #[test]
     fn move_to_absolute_position_places_at_requested_slot() {
         let a = uuid::Uuid::from_u128(1);
@@ -61679,10 +62022,10 @@ mod statusline_tests {
         assert_eq!(move_to_absolute_position(&[a], a, 5), (vec![a], 1));
     }
 
+    // trace:TASK-280 | ai:claude
     /// TASK-280: `aida queue move` accepts the absolute-positioning forms
     /// — the `--to-front` / `--to-back` aliases and `--to <N>` — alongside
     /// the existing relative flags, and `--to` conflicts with them.
-    /// trace:TASK-280 | ai:claude
     #[test]
     fn queue_move_absolute_flags_parse() {
         // --to-front is a visible alias of --top.
@@ -61730,10 +62073,10 @@ mod statusline_tests {
         .is_err());
     }
 
+    // trace:BUG-249 | ai:claude
     /// BUG-249: `aida queue move` exposes `--force` for the bypass path
     /// (move a terminal-status entry that lingers in the queue file).
     /// Default is `force: false`; the long flag flips it.
-    /// trace:BUG-249 | ai:claude
     #[test]
     fn queue_move_force_flag_parses() {
         let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"]).unwrap();
@@ -61749,13 +62092,13 @@ mod statusline_tests {
         ));
     }
 
+    // trace:BUG-249 | ai:claude
     /// BUG-249: pre-fix, `aida queue move <id>` printed a `Moved` check line even
     /// when `<id>` wasn't in the queue at all — queue_reorder's update
     /// loop simply didn't match anything and the write completed with
     /// no entries changed. The classifier distinguishes that case from
     /// "in queue but terminal status" and demands `--force` for the
     /// latter.
-    /// trace:BUG-249 | ai:claude
     #[test]
     fn queue_move_target_not_in_queue_errors() {
         let target = uuid::Uuid::now_v7();
@@ -61781,11 +62124,11 @@ mod statusline_tests {
         );
     }
 
+    // trace:BUG-249 | ai:claude
     /// BUG-249: a Completed (terminal) entry still appears in the
     /// queue YAML file but is hidden from the default `queue list`
     /// view. `move` on it errors with a `--force` hint instead of
     /// silently succeeding.
-    /// trace:BUG-249 | ai:claude
     #[test]
     fn queue_move_target_terminal_errors_with_force_hint() {
         let target = uuid::Uuid::now_v7();
@@ -61829,10 +62172,10 @@ mod statusline_tests {
         .expect("--force must bypass the terminal-status guard");
     }
 
+    // trace:BUG-249 | ai:claude
     /// BUG-249: sanity check the happy path — an in-queue non-terminal
     /// entry passes the classifier so the handler proceeds to the
     /// path-specific reorder logic.
-    /// trace:BUG-249 | ai:claude
     #[test]
     fn queue_move_target_ok_for_in_queue_non_terminal() {
         let target = uuid::Uuid::now_v7();
@@ -61858,11 +62201,11 @@ mod statusline_tests {
         .expect("in-queue non-terminal target should pass the guard");
     }
 
+    // trace:TASK-491 | ai:claude
     /// TASK-491: `--to-top` is an additional visible alias of `--top` so
     /// the operator can use the spelling the task spec calls out without
     /// having to remember `--to-front`. The existing `--to-front` alias
     /// still parses too.
-    /// trace:TASK-491 | ai:claude
     #[test]
     fn queue_move_to_top_alias_parses() {
         let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-top"]).unwrap();
@@ -61877,12 +62220,12 @@ mod statusline_tests {
         );
     }
 
+    // trace:TASK-491 TASK-501 | ai:claude
     /// TASK-280/TASK-491: regression for the shared visible ordering in the
     /// spec's worked example — add 5 items in order, move the position-5 item
     /// to absolute slot 1, queue ends up as `[5, 1, 2, 3, 4]`. This exercises
     /// the `--to 1` path; `--top` uses separate position arithmetic that should
     /// be tested independently if it needs coverage.
-    /// trace:TASK-491 TASK-501 | ai:claude
     #[test]
     fn queue_move_to_absolute_slot_promotes_last_item_to_head() {
         let ids: Vec<uuid::Uuid> = (1..=5).map(uuid::Uuid::from_u128).collect();
@@ -61891,11 +62234,11 @@ mod statusline_tests {
         assert_eq!(order, vec![ids[4], ids[0], ids[1], ids[2], ids[3]]);
     }
 
+    // trace:STORY-60 | ai:claude
     /// STORY-60: age formatter for the prune candidate list. Resolution
     /// drops as we cross day/week/month/year boundaries; sub-day uses
     /// hours since `--days 30` makes anything finer than that
     /// uninteresting (and 0d would be confusing).
-    /// trace:STORY-60 | ai:claude
     #[test]
     fn humanize_age_secs_buckets() {
         assert_eq!(humanize_age_secs(3600), "1h");
@@ -61907,10 +62250,10 @@ mod statusline_tests {
         assert_eq!(humanize_age_secs(365 * 86_400), "1y");
     }
 
+    // trace:STORY-66 | ai:claude
     /// STORY-66: parse spec_id out of `aida add` stdout. Cover both backend
     /// output shapes — git-canonical (`Added: ID - title`) and legacy
     /// (`ID: spec_id`) — plus colored output and trailing `Hint:` noise.
-    /// trace:STORY-66 | ai:claude
     #[test]
     fn parse_spec_id_from_add_output_handles_known_shapes() {
         // Git-canonical default.
@@ -61936,12 +62279,12 @@ mod statusline_tests {
         assert_eq!(parse_spec_id_from_add_output("something unrelated\n"), None);
     }
 
+    // trace:BUG-72 | ai:claude
     /// BUG-72: the auto-queue outcome shape must distinguish Filed,
     /// AlreadyExists, and the various Skipped reasons so `session end`
     /// can render the right glyph and the user knows why the reviewer
     /// queue did or didn't grow an entry. Smoke-checks the constructors
     /// since the real flow needs a live gh + filesystem to exercise.
-    /// trace:BUG-72 | ai:claude
     #[test]
     fn auto_queue_outcome_constructors_tag_status_correctly() {
         let filed =
@@ -61977,12 +62320,12 @@ mod statusline_tests {
         }
     }
 
+    // trace:BUG-107 | ai:claude
     /// BUG-107: `aida session end` removes the session worktree, then runs
     /// the auto-queue, which shells out to `gh`. If the auto-queue uses the
     /// removed worktree as its cwd, every spawn fails with a misleading
     /// ENOENT. `auto_queue_working_dir` must pick a directory that still
     /// exists — preferring the lease's recorded parent project root.
-    /// trace:BUG-107 | ai:claude
     #[test]
     fn auto_queue_working_dir_skips_removed_worktree() {
         let real = std::env::temp_dir(); // always exists
@@ -62009,10 +62352,10 @@ mod statusline_tests {
         assert_eq!(auto_queue_working_dir(Some(gone2.as_path()), &gone), None);
     }
 
+    // trace:BUG-107 | ai:claude
     /// BUG-107: a spawn failure whose real cause is a removed working
     /// directory must not read as "gh is missing" — `gh_spawn_error`
     /// names the cwd as the culprit and absolves the binary.
-    /// trace:BUG-107 | ai:claude
     #[test]
     fn gh_spawn_error_blames_the_missing_cwd_not_the_binary() {
         let gh = std::path::Path::new("/usr/bin/gh");
@@ -62028,6 +62371,7 @@ mod statusline_tests {
         assert!(!live.contains("no longer exists"));
     }
 
+    // trace:BUG-108 trace:BUG-566 | ai:claude
     /// BUG-108 / BUG-566: a worktree removed by `aida session end` leaves
     /// any shell still inside it with a dangling cwd — `getcwd()` returns
     /// ENOENT. The warning must fire for that `Err` and stay silent for a
@@ -62035,7 +62379,6 @@ mod statusline_tests {
     /// BUG-566 additionally requires the message to surface the REAL
     /// io::ErrorKind and stay cause-neutral (not assert the worktree case),
     /// so a network-share / permission failure isn't misattributed.
-    /// trace:BUG-108 trace:BUG-566 | ai:claude
     #[test]
     fn cwd_removed_warning_fires_only_for_a_dangling_cwd() {
         // Healthy cwd → no warning.
@@ -62072,11 +62415,11 @@ mod statusline_tests {
         );
     }
 
+    // trace:TASK-74 | ai:claude
     /// TASK-74: branch-shape heuristic for "this is a reviewer session;
     /// don't expect a PR from it". Covers the four branch prefixes the
     /// `aida session start --owns PR-N` / `MR-N` etc. flows produce, and
     /// rejects neighbors that just happen to start with the same letters.
-    /// trace:TASK-74 | ai:claude
     #[test]
     fn is_review_session_branch_recognizes_review_branches() {
         // Positives
@@ -62098,10 +62441,10 @@ mod statusline_tests {
         }
     }
 
+    // trace:STORY-55 | ai:claude
     /// STORY-55: scope-fallback decision table for the `@<…>` segment.
     /// Captures the four (latest-activity, active-lease) cases the
     /// statusline distinguishes.
-    /// trace:STORY-55 | ai:claude
     #[test]
     fn scope_fallback_decision_table() {
         use chrono::TimeZone;
@@ -62156,9 +62499,9 @@ mod statusline_tests {
         assert_eq!(pick(None, None, "", ""), None);
     }
 
+    // trace:STORY-55 | ai:claude
     /// STORY-55: long scopes (e.g. file-path scopes) are truncated to fit
     /// the statusline budget, matching @SPEC's visual width.
-    /// trace:STORY-55 | ai:claude
     #[test]
     fn scope_label_truncates_to_budget() {
         let long = "very-long-scope-name-that-overflows";
@@ -62170,9 +62513,9 @@ mod statusline_tests {
         assert_eq!(truncate(exact, SCOPE_LABEL_MAX), "EPIC-20");
     }
 
+    // trace:STORY-48 | ai:claude
     /// STORY-48: enforcement-mode parsing is forgiving on capitalization
     /// and whitespace, and unknown values fall through to `Warn`.
-    /// trace:STORY-48 | ai:claude
     #[test]
     fn session_enforcement_parsing() {
         assert_eq!(
@@ -62210,11 +62553,11 @@ mod statusline_tests {
         );
     }
 
+    // trace:STORY-53 | ai:claude
     /// STORY-53: the `sess:<scope>` segment reuses SCOPE_LABEL_MAX, the
     /// same budget that bounds @SPEC's width — long path-glob scopes get
     /// the trailing ellipsis so the statusline stays scannable, and short
     /// scopes pass through verbatim.
-    /// trace:STORY-53 | ai:claude
     #[test]
     fn sess_segment_label_truncation() {
         let short = "EPIC-20";
@@ -62226,10 +62569,10 @@ mod statusline_tests {
         assert!(out.ends_with('…'));
     }
 
+    // trace:STORY-56 | ai:claude
     /// STORY-56: appending session activity dedupes consecutive same-(role,
     /// spec_id, action) writes by ticking the timestamp instead of stacking
     /// duplicate entries — same shape as project-level role activity.
-    /// trace:STORY-56 | ai:claude
     #[test]
     fn session_activity_dedupes_consecutive_repeats() {
         let tmp = tempfile::tempdir().unwrap();
@@ -62250,11 +62593,11 @@ mod statusline_tests {
         assert_eq!(log.entries[0].action, "show", "newest first");
     }
 
+    // trace:BUG-65 | ai:claude
     /// BUG-65: dedupe is LRU-by-(role, spec_id, action), not just
     /// consecutive — interleaved actions across specs still collapse
     /// duplicates. Without this, a long agent run that revisits the same
     /// spec produces an ever-growing log.
-    /// trace:BUG-65 | ai:claude
     #[test]
     fn session_activity_dedupes_lru_across_interleaving() {
         let tmp = tempfile::tempdir().unwrap();
@@ -62278,11 +62621,11 @@ mod statusline_tests {
         assert_eq!(log.entries[1].spec_id, "STORY-B");
     }
 
+    // trace:STORY-70 | ai:claude
     /// STORY-70: convention-check predicate flags STORY/BUG with no
     /// acceptance section, accepts STORY/BUG that has one (any of the
     /// recognized headings), and ignores other types entirely. Pins the
     /// scope of the lint so it doesn't grow over-eagerly.
-    /// trace:STORY-70 | ai:claude
     #[test]
     fn requirement_missing_acceptance_scope() {
         use aida_core::{Requirement, RequirementType};
@@ -62318,12 +62661,12 @@ mod statusline_tests {
         assert!(!requirement_missing_acceptance(&task));
     }
 
+    // trace:TASK-680 | ai:claude
     /// TASK-680: the release-time doc-coverage selector reports a spec iff it
     /// reached Completed at/after the cutoff AND no Doc references it. Pins:
     /// window filtering by completion timestamp, the doc-reference exemption,
     /// the modified_at fallback for history-less Completed specs, and that
     /// Docs / archived specs are never themselves reported.
-    /// trace:TASK-680 | ai:claude
     #[test]
     fn doc_coverage_selects_completed_since_tag_without_doc() {
         use aida_core::models::{
@@ -62416,12 +62759,12 @@ mod statusline_tests {
         assert!(!all_ids.contains(&"TASK-101".to_string()));
     }
 
+    // trace:BUG-65 | ai:claude
     /// BUG-65 acceptance: shipping 3 specs sequentially via a typical
     /// implementer lifecycle (edit → done) leaves the activity log
     /// pointing at the 3rd, not the 1st. This is the contract the
     /// statusline @SPEC reads off of, so this test pins the regression
     /// that motivated the bug.
-    /// trace:BUG-65 | ai:claude
     #[test]
     fn session_activity_three_specs_lifecycle_points_at_last() {
         let tmp = tempfile::tempdir().unwrap();
@@ -62444,11 +62787,12 @@ mod statusline_tests {
         assert_eq!(log.entries.len(), 6);
     }
 
+    // trace:STORY-67 | ai:claude
     /// STORY-67: extract_acceptance_section finds `## Acceptance`,
     /// `## Verify`, etc. (case-insensitive) and returns the body until
     /// the next `## ` heading. Missing or empty sections return None
     /// so the caller can render a placeholder rather than an empty
-    /// section. trace:STORY-67 | ai:claude
+    /// section.
     #[test]
     fn extract_acceptance_section_basic() {
         let desc = "Some intro paragraph.\n\n## Acceptance\n\n- alpha\n- bravo\n\n## Notes\n\nFollow-up.\n";
@@ -62456,7 +62800,7 @@ mod statusline_tests {
         assert_eq!(body, "- alpha\n- bravo");
     }
 
-    /// trace:STORY-67 | ai:claude
+    // trace:STORY-67 | ai:claude
     #[test]
     fn extract_acceptance_section_aliases() {
         for heading in &[
@@ -62478,7 +62822,7 @@ mod statusline_tests {
         assert!(extract_acceptance_section(desc).is_none());
     }
 
-    /// trace:STORY-67 | ai:claude
+    // trace:STORY-67 | ai:claude
     #[test]
     fn extract_acceptance_section_empty_body() {
         let desc = "## Acceptance\n\n## Why\n\nReason.\n";
@@ -62486,9 +62830,9 @@ mod statusline_tests {
         assert!(extract_acceptance_section(desc).is_none());
     }
 
+    // trace:TASK-265 | ai:claude
     /// TASK-265: card_lead_prose returns everything before the first
     /// `## ` heading — the plain summary AIDA descriptions front-load.
-    /// trace:TASK-265 | ai:claude
     #[test]
     fn card_lead_prose_stops_at_first_heading() {
         let desc = "Lead summary.\n\nSecond line.\n\n## Acceptance\n\n- a\n";
@@ -62502,8 +62846,9 @@ mod statusline_tests {
         );
     }
 
+    // trace:TASK-265 | ai:claude
     /// TASK-265: card_truncate_paragraphs caps at N paragraphs / ~M chars
-    /// without ever cutting inside a paragraph. trace:TASK-265 | ai:claude
+    /// without ever cutting inside a paragraph.
     #[test]
     fn card_truncate_paragraphs_respects_boundaries() {
         let text = "Para one.\n\nPara two.\n\nPara three.\n\nPara four.";
@@ -62528,8 +62873,8 @@ mod statusline_tests {
         assert_eq!(body, "wayy-too-long-first-para");
     }
 
+    // trace:TASK-265 | ai:claude
     /// TASK-265: card_count_acceptance counts `- [ ]` / `* [ ]` items.
-    /// trace:TASK-265 | ai:claude
     #[test]
     fn card_count_acceptance_counts_checkboxes() {
         let body = "- [ ] one\n- [x] two\n  * [ ] nested three\nplain line\n- bullet not a box";
@@ -62537,9 +62882,10 @@ mod statusline_tests {
         assert_eq!(card_count_acceptance(""), 0);
     }
 
+    // trace:TASK-265 | ai:claude
     /// TASK-265: card_rel_label buckets a `Child` edge under "Parent"
     /// (the edge reads "I am a child of the target") and everything else
-    /// under "Related". trace:TASK-265 | ai:claude
+    /// under "Related".
     #[test]
     fn card_rel_label_buckets_relationships() {
         assert_eq!(card_rel_label(&RelationshipType::Child), "Parent");
@@ -62551,10 +62897,10 @@ mod statusline_tests {
         );
     }
 
+    // trace:STORY-67 | ai:claude
     /// STORY-67: spec ID detection inside a `(...)` group at end of
     /// commit subject. Matches AIDA-format SPEC-IDs and rejects
     /// anything else (e.g., issue refs, version strings).
-    /// trace:STORY-67 | ai:claude
     #[test]
     fn extract_spec_ids_from_commit_subject() {
         let msg = "[AI:claude] feat(api): add endpoint (FR-1-042)\n\nBody text.\n";
@@ -64152,10 +64498,10 @@ trailing prose after the block, also skipped\n";
         assert!(prompt.contains("Parent: EPIC-1"));
     }
 
+    // trace:TASK-247 | ai:claude
     /// TASK-247: the ultraplan prompt pulls the spec's enrichment
     /// comments into a `## Comments` section (most recent first), and
     /// `--no-comments` (`include_comments = false`) omits it.
-    /// trace:TASK-247 | ai:claude
     #[test]
     fn ultraplan_prompt_includes_comments() {
         use aida_core::models::Comment;
@@ -64255,8 +64601,9 @@ reason = "reserved by docs build"
         assert_eq!(value["reservations"][0]["reason"], "reserved by docs build");
     }
 
+    // trace:TASK-247 | ai:claude
     /// TASK-247: an empty comment list produces no `## Comments` section
-    /// (and no stray heading). trace:TASK-247 | ai:claude
+    /// (and no stray heading).
     #[test]
     fn ultraplan_comments_section_empty_is_none() {
         assert!(ultraplan_comments_section(&[]).is_none());
@@ -64324,10 +64671,11 @@ reason = "reserved by docs build"
         assert!(msg.contains("2655"));
     }
 
+    // trace:TASK-516 | ai:claude
     /// TASK-516: the `aida queue work` warn-decision fires exactly when the
     /// spec carries `plan-review:pending`, and stays silent otherwise.
     /// Fully isolated — feeds tag sets straight into the pure decision
-    /// function, no store / FS / process. trace:TASK-516 | ai:claude
+    /// function, no store / FS / process.
     #[test]
     fn plan_review_warning_fires_only_on_pending_tag() {
         use std::collections::HashSet;
@@ -64383,8 +64731,9 @@ reason = "reserved by docs build"
         assert_eq!(detect_spec_id_from_filename("no-numbers-here.md"), None);
     }
 
+    // trace:TASK-516 | ai:claude
     /// TASK-516: the CLI exposes `import-plan` with the `--request-review`
-    /// flag and an optional `--spec`. trace:TASK-516 | ai:claude
+    /// flag and an optional `--spec`.
     #[test]
     fn import_plan_flag_parses() {
         use crate::cli::{Cli, Command};
@@ -64467,9 +64816,10 @@ reason = "reserved by docs build"
         assert!(payload.context_markdown.contains("emits JSON"));
     }
 
+    // trace:BUG-102 | ai:claude
     /// BUG-102: subject scanner picks up the trailing `(#N)` squash-merge
     /// suffix so the auto-bump pass can match review stories filed against
-    /// that PR. trace:BUG-102 | ai:claude
+    /// that PR.
     #[test]
     fn extract_pr_number_from_commit_subject_shapes() {
         // Plain squash-merge subject from `gh pr merge --squash`.
@@ -64498,12 +64848,12 @@ reason = "reserved by docs build"
         assert_eq!(extract_pr_number_from_commit_subject(s), Some(7));
     }
 
+    // trace:BUG-245 | ai:claude
     /// BUG-245: `pick_credited_spec` precedence. Given the PR's commit
     /// subjects (one per line) and the dispatched id, returns:
     ///   - the dispatched id when it appears among the credits
     ///   - the first non-dispatched id otherwise
     ///   - `None` when no commit names any spec
-    ///     trace:BUG-245 | ai:claude
     #[test]
     fn pick_credited_spec_returns_dispatched_when_credited() {
         // Single commit crediting the dispatched id — no mismatch.
@@ -64523,9 +64873,10 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-245 | ai:claude
     /// BUG-245: the observed case — PR-108 crediting BUG-244 while STORY-276
     /// was dispatched. The dispatched id is absent from the credits, so the
-    /// first non-dispatched id is returned. trace:BUG-245 | ai:claude
+    /// first non-dispatched id is returned.
     #[test]
     fn pick_credited_spec_returns_other_when_dispatched_absent() {
         let subjects = "[AI:claude] fix(release): v0.8.0 blocker (BUG-244)";
@@ -64543,9 +64894,10 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-245 | ai:claude
     /// BUG-245: `None` when the PR's commits credit no spec at all — the
     /// orchestrator treats this as "cannot determine", which preserves the
-    /// pre-BUG-245 dispatched-id credit. trace:BUG-245 | ai:claude
+    /// pre-BUG-245 dispatched-id credit.
     #[test]
     fn pick_credited_spec_returns_none_when_no_spec_credited() {
         // No `(SPEC-ID)` trailers anywhere.
@@ -64598,8 +64950,9 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-102 | ai:claude
     /// BUG-102: title-to-PR parser used to match Done review stories
-    /// against just-merged PR numbers. trace:BUG-102 | ai:claude
+    /// against just-merged PR numbers.
     #[test]
     fn parse_review_story_pr_number_shapes() {
         let t = "Review PR-26: EPIC-23 batch 6: observability — 6 specs";
@@ -64617,11 +64970,12 @@ reason = "reserved by docs build"
         assert_eq!(parse_review_story_pr_number("Review PR-abc: x"), None);
     }
 
+    // trace:BUG-85 | ai:claude
     /// BUG-85: end-to-end shape of the PR-14 over-counting incident. The
     /// auto-queue extractor walked a multi-commit range and incorrectly
     /// added body-referenced spec IDs to the "covers" list. After this fix,
     /// delivered = subject parens-suffix only; referenced = body content,
-    /// disjoint. trace:BUG-85 | ai:claude
+    /// disjoint.
     #[test]
     fn bug_85_delivered_vs_referenced_disjoint() {
         // Simulated 6-commit PR + 1 commit with body refs to non-delivered specs.
@@ -64660,8 +65014,9 @@ reason = "reserved by docs build"
         assert_eq!(referenced, vec!["TASK-48", "TASK-49", "STORY-98"]);
     }
 
+    // trace:BUG-85 | ai:claude
     /// BUG-85: referenced extractor excludes IDs already delivered in the
-    /// same commit's subject. trace:BUG-85 | ai:claude
+    /// same commit's subject.
     #[test]
     fn referenced_specs_disjoint_from_delivered_within_one_commit() {
         // BUG-83 appears in BOTH the subject paren and the body; it's
@@ -64679,9 +65034,10 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-412 | ai:claude
     /// BUG-412: a `(PREFIX-NNN)` literal inside a pasted code snippet in the
     /// body must NOT be mined as a referenced spec, while a genuine prose/bullet
-    /// reference still is. trace:BUG-412 | ai:claude
+    /// reference still is.
     #[test]
     fn referenced_specs_skip_code_like_body_lines() {
         let msg = "feat(x): real work (TASK-1)\n\n\
@@ -64701,6 +65057,7 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-536 | ai:claude
     /// BUG-536: a squash-merge of an umbrella PR names only ONE spec in its
     /// subject trailer, but GitHub's default squash body concatenates every
     /// constituent commit's message — each with its own `(SPEC-ID)` completion
@@ -64708,7 +65065,6 @@ reason = "reserved by docs build"
     /// (gated on a `(#N)` squash/merge subject) so the folded child specs
     /// complete instead of stranding. Mirrors the exact composition the scan
     /// now performs: subject trailers ∪ (squash-gated) body trailers.
-    /// trace:BUG-536 | ai:claude
     #[test]
     fn squash_body_yields_folded_child_completion_trailers() {
         // Realistic GitHub squash body (the #832 shape): subject trailers
@@ -64753,11 +65109,12 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-606 | ai:claude
     /// BUG-606: the completed-without-commit corroboration scan must read FULL
     /// messages, not subjects. A squash-merge keeps only the PR title as its
     /// subject (no spec id) and folds each child's `(SPEC-ID)` trailer into the
     /// body — a subject-only scan false-flagged every squash-merged Completed
-    /// spec (~1464 false positives on this repo). trace:BUG-606 | ai:claude
+    /// spec (~1464 false positives on this repo).
     #[test]
     fn corroboration_scan_finds_squash_body_trailer() {
         // The exact shape that broke: subject is the PR title with NO spec id;
@@ -64781,10 +65138,11 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-606 | ai:claude
     /// BUG-606: prose / punctuated / mid-line paren mentions must also
     /// corroborate — `(BUG-109).` (trailing period) and `(ADR-3 / TASK-647),`
     /// (mid-line, prose after) are real references a trailing-trailer-only
-    /// extractor missed. trace:BUG-606 | ai:claude
+    /// extractor missed.
     #[test]
     fn corroboration_scan_finds_prose_and_punctuated_mentions() {
         let msg = "feat(tui): shell (#144)\n\n\
@@ -64799,8 +65157,9 @@ reason = "reserved by docs build"
         }
     }
 
+    // trace:BUG-606 | ai:claude
     /// Plan commits name PLANNED, not shipped, specs (BUG-426) — they must not
-    /// corroborate a completion. trace:BUG-606 | ai:claude
+    /// corroborate a completion.
     #[test]
     fn corroboration_scan_skips_plan_commits() {
         let refs =
@@ -64811,10 +65170,10 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:BUG-606 | ai:claude
     /// A bare `update SPEC-ID` subject is `aida edit` store bookkeeping — it
     /// exists for every edited spec and must not corroborate (STORY-462),
     /// else the liberal token match would mask every violation.
-    /// trace:BUG-606 | ai:claude
     #[test]
     fn corroboration_scan_skips_store_bookkeeping_commits() {
         assert!(
@@ -64845,9 +65204,9 @@ reason = "reserved by docs build"
         assert!(!body_line_is_code_like("This touches the (BUG-83) area."));
     }
 
+    // trace:STORY-67 | ai:claude
     /// STORY-67: looks_like_spec_id validates the alpha-DASH-digits
     /// shape used throughout AIDA.
-    /// trace:STORY-67 | ai:claude
     #[test]
     fn spec_id_shape_recognition() {
         assert!(looks_like_spec_id("FR-42"));
@@ -64866,10 +65225,10 @@ reason = "reserved by docs build"
         assert!(looks_like_spec_id("fr-1"));
     }
 
+    // trace:STORY-61 | ai:claude
     /// STORY-61: PR-N / MR-N scope parsing — case-insensitive, requires
     /// the trailing number, and rejects everything else (so the normal
     /// scope flow is preserved for non-review scopes like EPIC-20).
-    /// trace:STORY-61 | ai:claude
     #[test]
     fn review_scope_parsing() {
         assert_eq!(parse_review_scope("PR-1"), Some((ReviewForge::GitHub, 1)));
@@ -64888,10 +65247,10 @@ reason = "reserved by docs build"
         assert_eq!(parse_review_scope("MR-abc"), None);
     }
 
+    // trace:STORY-61 | ai:claude
     /// STORY-61: refspec format — same-repo and fork PRs both work
     /// because `pull/N/head` (GitHub) and `merge-requests/N/head`
     /// (GitLab) are populated on origin in both cases.
-    /// trace:STORY-61 | ai:claude
     #[test]
     fn review_forge_refspec() {
         assert_eq!(ReviewForge::GitHub.pr_head_ref(1), "pull/1/head");
@@ -64901,10 +65260,10 @@ reason = "reserved by docs build"
         assert_eq!(ReviewForge::GitLab.local_branch_for(7), "mr-7");
     }
 
+    // trace:STORY-61 | ai:claude
     /// STORY-61: --forge string parsing accepts both the long form
     /// (`github`/`gitlab`) and the CLI-tool short form (`gh`/`glab`)
     /// since users usually have one or the other muscle-memory'd.
-    /// trace:STORY-61 | ai:claude
     #[test]
     fn review_forge_override_parsing() {
         assert_eq!(ReviewForge::parse("github"), Some(ReviewForge::GitHub));
@@ -64916,12 +65275,12 @@ reason = "reserved by docs build"
         assert_eq!(ReviewForge::parse(""), None);
     }
 
+    // trace:STORY-57 | ai:claude
     /// STORY-57: routing-filter decision table for the consumer side.
     /// Entries with `for_scope` only route to sessions whose lease scope
     /// matches; entries with `for_session` only route to that exact lease
     /// (8+ char prefix). No lease + scope-tagged entry → filtered. The
     /// `--all` bypass (the boolean param) lets users see everything.
-    /// trace:STORY-57 | ai:claude
     #[test]
     fn entry_scope_session_match_decision_table() {
         use aida_core::QueueEntry;
@@ -65030,13 +65389,13 @@ reason = "reserved by docs build"
         ));
     }
 
+    // trace:STORY-56 | ai:claude
     /// STORY-56: aggregating a session log into the project role keeps
     /// only the newest entry per spec_id, merges in front of the role's
     /// existing activity, and respects ACTIVITY_MAX. The session's
     /// per-spec winners survive even when the project role already had
     /// older entries for the same specs (the session entry is fresher,
     /// so it wins).
-    /// trace:STORY-56 | ai:claude
     #[test]
     fn session_aggregation_dedupes_and_promotes() {
         let tmp = tempfile::tempdir().unwrap();
@@ -65086,10 +65445,10 @@ reason = "reserved by docs build"
         );
     }
 
+    // trace:STORY-52 | ai:claude
     /// STORY-52: detect_cargo_target_dir returns Some when target/ exists
     /// and None otherwise — the latter case is the "not a Rust project /
     /// never built" path that should silently skip env-shim generation.
-    /// trace:STORY-52 | ai:claude
     #[test]
     fn detect_cargo_target_dir_only_when_present() {
         let tmp = tempfile::tempdir().unwrap();
@@ -65110,10 +65469,10 @@ reason = "reserved by docs build"
         assert_eq!(detect_cargo_target_dir(tmp2.path()), None);
     }
 
+    // trace:STORY-52 | ai:claude
     /// STORY-52: render_session_env_file emits a sourceable export with
     /// the path POSIX-quoted so spaces or apostrophes in the parent path
     /// don't break the shell.
-    /// trace:STORY-52 | ai:claude
     #[test]
     fn render_session_env_file_quotes_path() {
         let body = render_session_env_file(std::path::Path::new("/tmp/aida/target"), None);
@@ -65128,11 +65487,11 @@ reason = "reserved by docs build"
         assert!(body.contains("export AIDA_AGENT_TYPE='codex'"));
     }
 
+    // trace:STORY-52 | ai:claude
     /// STORY-52: write_session_env_file writes `.aida/session-env.sh` under
     /// the worktree, creating `.aida/` if it doesn't exist yet (the symlink
     /// pass in session_start sometimes runs before this, sometimes the dir
     /// is fresh — either way it should land in place).
-    /// trace:STORY-52 | ai:claude
     #[test]
     fn write_session_env_file_creates_aida_dir_if_needed() {
         let tmp = tempfile::tempdir().unwrap();
@@ -65143,10 +65502,11 @@ reason = "reserved by docs build"
         assert!(written.contains("CARGO_TARGET_DIR='/tmp/parent/target'"));
     }
 
+    // trace:TASK-63 | ai:claude
     /// TASK-63: parse_session_env handles the shape we write today.
     /// Cover the round-trip with render_session_env_file (the source of
     /// truth for what we produce) so a future change to the shim format
-    /// has to update both sides. trace:TASK-63 | ai:claude
+    /// has to update both sides.
     #[test]
     fn parse_session_env_roundtrips_with_render() {
         let body = render_session_env_file(std::path::Path::new("/tmp/parent/target"), None);
@@ -65156,9 +65516,9 @@ reason = "reserved by docs build"
         assert_eq!(pairs[0].1, "/tmp/parent/target");
     }
 
+    // trace:TASK-63 | ai:claude
     /// TASK-63: apostrophe in the target path → close-reopen escape on
     /// the way out, must unescape cleanly on the way back in.
-    /// trace:TASK-63 | ai:claude
     #[test]
     fn parse_session_env_unquotes_close_reopen_escape() {
         let body = render_session_env_file(std::path::Path::new("/tmp/joe's repo/target"), None);
@@ -65167,10 +65527,10 @@ reason = "reserved by docs build"
         assert_eq!(pairs[0].1, "/tmp/joe's repo/target");
     }
 
+    // trace:TASK-63 | ai:claude
     /// TASK-63: ignore comments, blanks, non-export lines, malformed
     /// names. The shim is gitignored runtime state but a user might
     /// hand-edit it (debug session) — don't poison the env if they do.
-    /// trace:TASK-63 | ai:claude
     #[test]
     fn parse_session_env_skips_noise() {
         let body = "\
@@ -65189,19 +65549,19 @@ export NO_EQUALS\n\
         assert_eq!(pairs[2].1, "trimmed");
     }
 
+    // trace:TASK-63 | ai:claude
     /// TASK-63: bare (unquoted) values pass through unchanged — the
     /// parser is forgiving so a hand-written `export FOO=bar` works.
-    /// trace:TASK-63 | ai:claude
     #[test]
     fn parse_session_env_handles_unquoted_value() {
         let pairs = parse_session_env("export FOO=bar\n");
         assert_eq!(pairs, vec![("FOO".to_string(), "bar".to_string())]);
     }
 
+    // trace:TASK-63 | ai:claude
     /// TASK-63: apply_session_env_to_process really mutates the process
     /// env, and returns the names it set. Use a name unique to this test
     /// so parallel test runs don't trample each other.
-    /// trace:TASK-63 | ai:claude
     #[test]
     fn apply_session_env_to_process_sets_env() {
         const VAR: &str = "AIDA_TEST_TASK_63_APPLIED";
@@ -65221,10 +65581,10 @@ export NO_EQUALS\n\
         }
     }
 
+    // trace:STORY-52 | ai:claude
     /// STORY-52: leases predating the cargo_target_dir field must still
     /// deserialize cleanly so an old session can be ended after upgrading
     /// aida. `#[serde(default)]` handles this; this test pins the contract.
-    /// trace:STORY-52 | ai:claude
     #[test]
     fn lease_without_cargo_target_dir_deserializes() {
         let toml_text = r#"
@@ -65244,11 +65604,11 @@ hostname = "h"
         assert!(lease.parent_project_root.is_none());
     }
 
+    // trace:STORY-58 | ai:claude
     /// STORY-58: from inside a worktree covered by a lease that records a
     /// parent, the helper returns that parent. Models the on-disk layout
     /// session_start produces (lease lives at <root>/.aida/sessions/) so
     /// we exercise the actual lookup path.
-    /// trace:STORY-58 | ai:claude
     #[test]
     fn parent_project_root_for_session_returns_recorded_parent() {
         let tmp = tempfile::tempdir().unwrap();
@@ -65292,10 +65652,10 @@ hostname = "h"
         assert_eq!(got, parent_dir.canonicalize().unwrap());
     }
 
+    // trace:STORY-58 | ai:claude
     /// STORY-58: pre-STORY-58 leases (no parent recorded) return None
     /// even when the cwd is squarely inside the lease's worktree, so the
     /// list path falls back to the classic single-group output.
-    /// trace:STORY-58 | ai:claude
     #[test]
     fn parent_project_root_for_session_none_for_legacy_lease() {
         let tmp = tempfile::tempdir().unwrap();
@@ -65323,9 +65683,9 @@ hostname = "h"
         assert!(parent_project_root_for_session(&worktree).is_none());
     }
 
+    // trace:STORY-58 | ai:claude
     /// STORY-58: outside a session worktree (no lease covers cwd), the
     /// helper returns None — list stays single-group as today.
-    /// trace:STORY-58 | ai:claude
     #[test]
     fn parent_project_root_for_session_none_when_no_lease() {
         let tmp = tempfile::tempdir().unwrap();
@@ -65335,10 +65695,10 @@ hostname = "h"
         assert!(parent_project_root_for_session(&dir).is_none());
     }
 
+    // trace:STORY-71 | ai:claude
     /// STORY-71: parsing the JSON shape `gh pr view --json
     /// headRefOid,baseRefOid,baseRefName` returns. Pinned so a future
     /// refactor of the field list can't silently break the lease enrichment.
-    /// trace:STORY-71 | ai:claude
     #[test]
     fn parse_pr_metadata_json_github_shape() {
         let body = serde_json::json!({
@@ -65358,10 +65718,10 @@ hostname = "h"
         assert_eq!(m.base_ref.as_deref(), Some("main"));
     }
 
+    // trace:STORY-71 | ai:claude
     /// STORY-71: glab's `mr view --output json` mirrors the GitLab REST
     /// API — head SHA in `sha`, base SHA in `diff_refs.base_sha`, base
     /// ref in `target_branch`. Test pins all three lookups.
-    /// trace:STORY-71 | ai:claude
     #[test]
     fn parse_pr_metadata_json_gitlab_shape() {
         let body = serde_json::json!({
@@ -65384,10 +65744,10 @@ hostname = "h"
         assert_eq!(m.base_ref.as_deref(), Some("develop"));
     }
 
+    // trace:STORY-71 | ai:claude
     /// STORY-71: missing or empty fields drop through as None rather than
     /// pinning empty strings into the lease. Forwards-compat for forge
     /// CLIs that omit some keys (auth scope, schema drift, etc.).
-    /// trace:STORY-71 | ai:claude
     #[test]
     fn parse_pr_metadata_json_missing_fields_yield_none() {
         let body = serde_json::json!({ "headRefOid": "" });
@@ -65397,10 +65757,10 @@ hostname = "h"
         assert!(m.base_ref.is_none());
     }
 
+    // trace:STORY-71 | ai:claude
     /// STORY-71: leases written before the new PR fields existed must
     /// still deserialize cleanly (so an in-flight session survives an
     /// aida upgrade). Test pins the back-compat contract.
-    /// trace:STORY-71 | ai:claude
     #[test]
     fn lease_without_pr_fields_deserializes() {
         let toml_text = r#"
@@ -65424,8 +65784,8 @@ hostname = "h"
 mod bug_88_pr_lookup_parse_tests {
     use super::*;
 
+    // trace:BUG-88 | ai:claude
     /// BUG-88: a well-formed `gh pr list -q` line parses into a Found PR.
-    /// trace:BUG-88 | ai:claude
     #[test]
     fn parses_single_well_formed_line() {
         let stdout = "42\tFix the thing\thttps://github.com/o/r/pull/42\n";
@@ -65439,8 +65799,9 @@ mod bug_88_pr_lookup_parse_tests {
         }
     }
 
+    // trace:BUG-88 | ai:claude
     /// BUG-88: empty stdout means no PR matched the query — distinct from
-    /// gh failing. trace:BUG-88 | ai:claude
+    /// gh failing.
     #[test]
     fn empty_stdout_is_no_open_pr() {
         assert!(matches!(parse_gh_pr_line(""), PrLookup::NoOpenPr));
@@ -65448,9 +65809,9 @@ mod bug_88_pr_lookup_parse_tests {
         assert!(matches!(parse_gh_pr_line("   \n"), PrLookup::NoOpenPr));
     }
 
+    // trace:BUG-88 | ai:claude
     /// BUG-88: malformed lines (too few fields, non-numeric PR number)
     /// surface as GhFailed so the caller doesn't silently swallow them.
-    /// trace:BUG-88 | ai:claude
     #[test]
     fn malformed_line_is_gh_failed() {
         // Only one field.
@@ -65470,9 +65831,9 @@ mod bug_88_pr_lookup_parse_tests {
         ));
     }
 
+    // trace:BUG-88 | ai:claude
     /// BUG-88: only the first line is considered (we pass --limit 1 to gh
     /// but defensively the parser shouldn't blow up if more arrive).
-    /// trace:BUG-88 | ai:claude
     #[test]
     fn only_first_line_consumed() {
         let stdout = "11\tfirst\thttps://x/1\n22\tsecond\thttps://x/2\n";
@@ -65483,17 +65844,19 @@ mod bug_88_pr_lookup_parse_tests {
     }
 }
 
+// trace:BUG-257 | ai:claude
 /// BUG-257: `gh_stderr_is_network_error` classifies a `gh` stderr line as a
 /// transient network error vs. an auth/parse/other failure. The split powers
 /// the `PrLookup::GhUnreachable` variant so the orchestrator can report
 /// *Inconclusive* (drain pauses) instead of conflating "no PR" with "can't
-/// reach the API". trace:BUG-257 | ai:claude
+/// reach the API".
 #[cfg(test)]
 mod bug_257_gh_stderr_network_classifier_tests {
     use super::*;
 
+    // trace:BUG-257 | ai:claude
     /// Real-world stderr from the BUG-257 origin incident — exactly what the
-    /// orchestrator saw. Must classify as network. trace:BUG-257 | ai:claude
+    /// orchestrator saw. Must classify as network.
     #[test]
     fn observed_origin_incident_stderr_is_network() {
         let stderr = "error connecting to api.github.com\n\
@@ -65501,9 +65864,9 @@ mod bug_257_gh_stderr_network_classifier_tests {
         assert!(gh_stderr_is_network_error(stderr));
     }
 
+    // trace:BUG-257 | ai:claude
     /// gh's own diagnostic suffix is the most stable signal — its presence
     /// alone is sufficient even when the surrounding message changes.
-    /// trace:BUG-257 | ai:claude
     #[test]
     fn githubstatus_pointer_alone_is_network() {
         assert!(gh_stderr_is_network_error(
@@ -65511,8 +65874,8 @@ mod bug_257_gh_stderr_network_classifier_tests {
         ));
     }
 
+    // trace:BUG-257 | ai:claude
     /// Go `net` and `crypto/tls` error families that gh wraps verbatim.
-    /// trace:BUG-257 | ai:claude
     #[test]
     fn dial_dns_tls_error_families_are_network() {
         for s in [
@@ -65536,9 +65899,9 @@ mod bug_257_gh_stderr_network_classifier_tests {
         }
     }
 
+    // trace:BUG-257 | ai:claude
     /// Case-insensitivity — a gh upgrade that capitalizes a phrase must
     /// not silently re-classify the error as auth/parse.
-    /// trace:BUG-257 | ai:claude
     #[test]
     fn classification_is_case_insensitive() {
         assert!(gh_stderr_is_network_error(
@@ -65547,9 +65910,9 @@ mod bug_257_gh_stderr_network_classifier_tests {
         assert!(gh_stderr_is_network_error("DIAL TCP: I/O TIMEOUT"));
     }
 
+    // trace:BUG-257 | ai:claude
     /// Auth, parse, and miscellaneous gh failures stay `GhFailed` — they
     /// are not transient and a different recovery hint applies.
-    /// trace:BUG-257 | ai:claude
     #[test]
     fn non_network_failures_are_not_network() {
         for s in [
@@ -65571,20 +65934,21 @@ mod bug_257_gh_stderr_network_classifier_tests {
     }
 }
 
+// trace:BUG-266 | ai:claude
 /// BUG-266: `claude_log_indicates_api_outage` classifies the headless
 /// implementer's JSONL log as evidence the upstream Anthropic API took the
 /// session out (a transient outage), rather than the implementer attempting
 /// the work and failing. The orchestrator flips that phase from *failed* to
 /// *Inconclusive* (the BUG-257 path), so a 529 / 5xx / stream-timeout no
-/// longer marks a spec failed-by-implementer. trace:BUG-266 | ai:claude
+/// longer marks a spec failed-by-implementer.
 #[cfg(test)]
 mod bug_266_anthropic_api_outage_classifier_tests {
     use super::*;
 
+    // trace:BUG-266 | ai:claude
     /// Verbatim 529 incident text from the BUG-266 origin (TASK-358 drain on
     /// 2026-05-20). Must classify as outage, and the returned reason must
     /// surface the matched phrasing so the orchestrator's epilogue echoes it.
-    /// trace:BUG-266 | ai:claude
     #[test]
     fn verbatim_529_overloaded_is_outage() {
         let log = "{\"type\":\"assistant\",\"text\":\"API Error: 529 Overloaded. \
@@ -65598,8 +65962,9 @@ mod bug_266_anthropic_api_outage_classifier_tests {
         );
     }
 
+    // trace:BUG-266 | ai:claude
     /// The 5xx family beyond 529 — 500, 502, 503, 504 are all transient
-    /// upstream classes. trace:BUG-266 | ai:claude
+    /// upstream classes.
     #[test]
     fn api_error_5xx_family_is_outage() {
         for code in [500, 502, 503, 504, 520, 599] {
@@ -65613,17 +65978,18 @@ mod bug_266_anthropic_api_outage_classifier_tests {
         }
     }
 
+    // trace:BUG-266 | ai:claude
     /// The capitalized `Overloaded` keyword alone is sufficient — Anthropic's
-    /// shorthand for capacity-shed responses. trace:BUG-266 | ai:claude
+    /// shorthand for capacity-shed responses.
     #[test]
     fn overloaded_keyword_alone_is_outage() {
         let log = "{\"type\":\"system\",\"subtype\":\"error\",\"message\":\"Overloaded\"}";
         assert!(claude_log_indicates_api_outage(log).is_some());
     }
 
+    // trace:BUG-266 | ai:claude
     /// Proxy / load-balancer connectivity errors from the model edge —
     /// Envoy's `upstream connect error` is the canonical phrasing.
-    /// trace:BUG-266 | ai:claude
     #[test]
     fn upstream_connect_error_is_outage() {
         let log = "{\"type\":\"error\",\"text\":\"upstream connect error or disconnect/\
@@ -65631,9 +65997,9 @@ mod bug_266_anthropic_api_outage_classifier_tests {
         assert!(claude_log_indicates_api_outage(log).is_some());
     }
 
+    // trace:BUG-266 | ai:claude
     /// SSE-stream disconnects — the connection dropped while the model was
     /// mid-response. Indistinguishable from an outage from the client side.
-    /// trace:BUG-266 | ai:claude
     #[test]
     fn stream_timeout_is_outage() {
         for line in [
@@ -65647,9 +66013,9 @@ mod bug_266_anthropic_api_outage_classifier_tests {
         }
     }
 
+    // trace:BUG-266 | ai:claude
     /// Case-insensitivity — an Anthropic rephrasing that uppercases or
     /// lowercases a phrase must not silently re-classify the error.
-    /// trace:BUG-266 | ai:claude
     #[test]
     fn classification_is_case_insensitive() {
         assert!(claude_log_indicates_api_outage("API ERROR: 503 OVERLOADED").is_some());
@@ -65657,9 +66023,9 @@ mod bug_266_anthropic_api_outage_classifier_tests {
         assert!(claude_log_indicates_api_outage("Upstream Connect Error: ...").is_some());
     }
 
+    // trace:BUG-266 | ai:claude
     /// A clean session log (no errors, just normal tool/assistant events)
     /// must NOT classify as an outage. Empty log returns `None`.
-    /// trace:BUG-266 | ai:claude
     #[test]
     fn clean_session_log_is_not_outage() {
         assert!(claude_log_indicates_api_outage("").is_none());
@@ -65670,9 +66036,10 @@ mod bug_266_anthropic_api_outage_classifier_tests {
         assert!(claude_log_indicates_api_outage(clean).is_none());
     }
 
+    // trace:BUG-266 | ai:claude
     /// Non-outage failure modes — permission errors, parse errors, in-session
     /// aborts — stay outside the outage classifier. The orchestrator should
-    /// keep treating these as phase-1 failures. trace:BUG-266 | ai:claude
+    /// keep treating these as phase-1 failures.
     #[test]
     fn non_outage_failures_are_not_outage() {
         for s in [
@@ -65695,9 +66062,9 @@ mod bug_266_anthropic_api_outage_classifier_tests {
         }
     }
 
+    // trace:BUG-266 | ai:claude
     /// The returned reason must stay short — the orchestrator's epilogue is
     /// one line and a multi-KB assistant turn would smear the terminal.
-    /// trace:BUG-266 | ai:claude
     #[test]
     fn reason_excerpt_is_bounded() {
         let mut long = String::from("preamble ");
@@ -65980,9 +66347,10 @@ mod bug_354_text_question_classifier_tests {
 mod bug_87_queue_filter_tests {
     use super::*;
 
+    // trace:BUG-87 | ai:claude
     /// BUG-87: full composition matrix. `--for X` always wins over `--all`;
     /// `--for any` selects unrouted; `--all` only suppresses the
-    /// active-session-role default. trace:BUG-87 | ai:claude
+    /// active-session-role default.
     // why: the inline case-matrix tuple documents the test's input/expected columns; an alias would scatter that legend away from the data.
     #[allow(clippy::type_complexity)]
     #[test]
@@ -66035,8 +66403,9 @@ mod bug_87_queue_filter_tests {
         }
     }
 
+    // trace:BUG-87 | ai:claude
     /// BUG-87: predicate honors only_unrouted before falling through
-    /// to the role-equality check. trace:BUG-87 | ai:claude
+    /// to the role-equality check.
     #[test]
     fn entry_matches_filter_branches() {
         // only_unrouted: only entries with for_role==None pass.
@@ -66062,9 +66431,9 @@ mod bug_87_queue_filter_tests {
         assert!(entry_matches_role_filter(Some("anything"), None, false));
     }
 
+    // trace:BUG-87 | ai:claude
     /// BUG-87: the original incident. `--all --for reviewer` against a
     /// queue of mixed-role items returns ONLY reviewer-routed items.
-    /// trace:BUG-87 | ai:claude
     #[test]
     fn all_and_for_reviewer_returns_only_reviewer_routed() {
         let entries: Vec<Option<&str>> = vec![
@@ -66087,8 +66456,8 @@ mod bug_87_queue_filter_tests {
         assert_eq!(kept, vec![Some("reviewer"), Some("reviewer")]);
     }
 
+    // trace:BUG-87 | ai:claude
     /// BUG-87: `--all --for any` returns ONLY unrouted items.
-    /// trace:BUG-87 | ai:claude
     #[test]
     fn all_and_for_any_returns_only_unrouted() {
         let entries: Vec<Option<&str>> = vec![
@@ -66108,9 +66477,9 @@ mod bug_87_queue_filter_tests {
         assert_eq!(kept, vec![None, None]);
     }
 
+    // trace:BUG-527 | ai:claude
     /// BUG-527: the `Queued:` value formatter — empty → None (line omitted),
     /// unrouted → `general`, multiple memberships joined.
-    /// trace:BUG-527 | ai:claude
     #[test]
     fn format_queue_membership_shapes() {
         assert_eq!(format_queue_membership(&[]), None);
@@ -66132,9 +66501,10 @@ mod bug_87_queue_filter_tests {
         );
     }
 
+    // trace:BUG-527 | ai:claude
     /// BUG-527: `queue_memberships_for` ranks per-role within a user's queue
     /// by raw position (1-based), surfaces the matching spec only, and
-    /// returns empty for a spec in no queue. trace:BUG-527 | ai:claude
+    /// returns empty for a spec in no queue.
     #[test]
     fn queue_memberships_for_ranks_and_filters() {
         let tmp = tempfile::tempdir().unwrap();
@@ -66184,9 +66554,9 @@ mod bug_87_queue_filter_tests {
         assert!(queue_memberships_for(project_root, &absent).is_empty());
     }
 
+    // trace:BUG-87 | ai:claude
     /// BUG-87: no regression — bare `aida queue list` in an implementer
     /// session still filters to implementer-routed items.
-    /// trace:BUG-87 | ai:claude
     #[test]
     fn default_session_role_filter_preserved() {
         let entries: Vec<Option<&str>> = vec![
@@ -66205,10 +66575,10 @@ mod bug_87_queue_filter_tests {
         assert_eq!(kept, vec![Some("implementer"), Some("implementer")]);
     }
 
+    // trace:TASK-747 | ai:claude
     /// TASK-747: `human` is a first-class route target. `--role Human`
     /// canonicalizes to lowercase `human` and matches `--for human` entries
     /// (written canonical on add), symmetric with `dialog`→`advisor`.
-    /// trace:TASK-747 | ai:claude
     #[test]
     fn human_route_filter_matches_canonical_entries() {
         let entries: Vec<Option<&str>> = vec![
@@ -66252,8 +66622,9 @@ mod bug_231_findings_promote_tests {
         id
     }
 
+    // trace:BUG-231
     /// A promoted finding lands in the `implementer` queue by default, and
-    /// `queue_list` (the consumer side) sees it. trace:BUG-231
+    /// `queue_list` (the consumer side) sees it.
     #[test]
     fn promote_routes_to_implementer_queue_by_default() {
         let dir = tempfile::tempdir().unwrap();
@@ -66272,32 +66643,36 @@ mod bug_231_findings_promote_tests {
         assert_eq!(entry.for_role.as_deref(), Some("implementer"));
     }
 
-    /// STORY-652: `--node-name` is used verbatim (validated). trace:STORY-652
+    // trace:STORY-652
+    /// STORY-652: `--node-name` is used verbatim (validated).
     #[test]
     fn resolve_node_name_flag_override_wins() {
         let got = resolve_node_name(Some("my-box"), "imac", "joe", "1").unwrap();
         assert_eq!(got, "my-box");
     }
 
+    // trace:STORY-652
     /// STORY-652: with no flag and no TTY (the test harness has no terminal on
     /// stdin), resolve_node_name returns the computed default WITHOUT blocking
-    /// on stdin. trace:STORY-652
+    /// on stdin.
     #[test]
     fn resolve_node_name_non_interactive_uses_default() {
         let got = resolve_node_name(None, "imac", "joe", "1").unwrap();
         assert_eq!(got, "imac-joe-1");
     }
 
-    /// STORY-652: an invalid (non-slug) name is rejected. trace:STORY-652
+    // trace:STORY-652
+    /// STORY-652: an invalid (non-slug) name is rejected.
     #[test]
     fn resolve_node_name_rejects_invalid() {
         assert!(resolve_node_name(Some("bad name!"), "imac", "joe", "1").is_err());
     }
 
+    // trace:TASK-859
     /// TASK-859: appending the telemetry opt-out leaves prior config intact and
     /// produces a `[telemetry] enabled = false` that `parse_telemetry_enabled`
     /// (the live reader) recognises — proving the init prompt's write round-trips
-    /// to the actual opt-out path. trace:TASK-859
+    /// to the actual opt-out path.
     #[test]
     fn append_telemetry_disabled_round_trips() {
         let dir = tempfile::tempdir().unwrap();
@@ -66311,7 +66686,8 @@ mod bug_231_findings_promote_tests {
         assert_eq!(crate::usage::parse_telemetry_enabled(&body), Some(false));
     }
 
-    /// `--for <role>` overrides the default queue route. trace:BUG-231
+    // trace:BUG-231
+    /// `--for <role>` overrides the default queue route.
     #[test]
     fn promote_honors_for_override() {
         let dir = tempfile::tempdir().unwrap();
@@ -66336,9 +66712,10 @@ mod bug_231_findings_promote_tests {
         assert_eq!(current_user_id(Some("alice")), "alice");
     }
 
+    // trace:STORY-662 | ai:claude
     /// STORY-662: `aida list --user me` (and the positional `me`) resolves to
     /// the current shell identity; any other value is a literal handle, casing
-    /// of the `me` token is ignored. trace:STORY-662 | ai:claude
+    /// of the `me` token is ignored.
     #[test]
     fn resolve_list_user_filter_maps_me_to_current_user() {
         assert_eq!(resolve_list_user_filter("me", "joe"), "joe");
@@ -66383,9 +66760,9 @@ mod bug_231_findings_promote_tests {
         assert_eq!(s, "abcd…");
     }
 
+    // trace:STORY-644 | ai:claude
     /// Assign-to-self sends no mailbox message: with `current_user_id == target`
     /// the notify branch is skipped, so the local mailbox dir stays empty.
-    /// trace:STORY-644 | ai:claude
     #[test]
     fn assign_to_self_sends_no_notification() {
         // Drive the same self-skip predicate the assign handler uses, then
@@ -66629,9 +67006,9 @@ mod bug_231_findings_promote_tests {
 
     // ---- TASK-784: `aida whoami` user-id source label ----
 
+    // trace:TASK-784
     /// AIDA_USER wins over USER/USERNAME — the source label names it, matching
     /// `current_user_id`'s resolution precedence (BUG-89 queue identity).
-    /// trace:TASK-784
     #[test]
     fn whoami_user_source_prefers_aida_user() {
         assert_eq!(
@@ -66640,8 +67017,9 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    // trace:TASK-784
     /// USER is used when AIDA_USER is unset (or empty); USERNAME when both
-    /// above are unset; "default" when none resolve. trace:TASK-784
+    /// above are unset; "default" when none resolve.
     #[test]
     fn whoami_user_source_falls_through_to_user_then_username_then_default() {
         assert_eq!(whoami_user_source(None, Some("bob"), None), "from USER");
@@ -66687,16 +67065,17 @@ mod bug_231_findings_promote_tests {
 
     // ---- BUG-528: `aida add --queue` routing ----
 
+    // trace:BUG-528
     /// Default (no `--for`): `add --queue` routes to the `implementer` queue —
     /// the common target for filed work — NOT the filer's session role.
-    /// trace:BUG-528
     #[test]
     fn add_queue_routes_to_implementer_by_default() {
         assert_eq!(add_queue_route_role(None), Some("implementer".to_string()));
     }
 
+    // trace:BUG-528
     /// `--for <role>` routes to that role's queue, canonicalized (so `dialog`
-    /// normalizes to `advisor`, matching `aida queue add --for`). trace:BUG-528
+    /// normalizes to `advisor`, matching `aida queue add --for`).
     #[test]
     fn add_queue_routes_to_explicit_role_canonicalized() {
         assert_eq!(
@@ -66714,8 +67093,9 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    // trace:BUG-528
     /// `--for any` leaves the spec unrouted (explicit opt-out), mirroring the
-    /// `aida queue add --for any` write-side semantic. trace:BUG-528
+    /// `aida queue add --for any` write-side semantic.
     #[test]
     fn add_queue_for_any_is_unrouted() {
         assert_eq!(add_queue_route_role(Some("any")), None);
@@ -66787,9 +67167,10 @@ mod bug_231_findings_promote_tests {
         assert_eq!(current_user_id(None), "env-bob");
     }
 
+    // trace:BUG-605 | ai:claude
     /// BUG-605: the groom/handoff queue identity SKIPS the agent's `AIDA_USER`
     /// mailbox id and targets the draining shell `USER`, so groomed work lands
-    /// where the human's drain looks. trace:BUG-605 | ai:claude
+    /// where the human's drain looks.
     #[test]
     fn drain_queue_user_id_skips_aida_user_for_shell_user() {
         // Both vars under ONE guard: EnvVarGuard holds ENV_LOCK for its whole
@@ -66835,8 +67216,9 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    // trace:STORY-639 | ai:claude
     /// Build a `CachedGitBackend` over a seeded store dir, mirroring the
-    /// production `handle_git_backend_command` setup. trace:STORY-639 | ai:claude
+    /// production `handle_git_backend_command` setup.
     #[cfg(test)]
     fn test_cached_backend(root: &std::path::Path) -> aida_core::CachedGitBackend {
         let inner = aida_core::GitBackend::new(root).unwrap();
@@ -66844,8 +67226,9 @@ mod bug_231_findings_promote_tests {
         aida_core::CachedGitBackend::with_inner(inner, &cache_path).unwrap()
     }
 
+    // trace:BUG-615 | ai:claude
     /// Seed a single edge-free spec with the given spec_id; returns its UUID.
-    /// Used by the BUG-615 combined-flag regression test. trace:BUG-615 | ai:claude
+    /// Used by the BUG-615 combined-flag regression test.
     #[cfg(test)]
     fn seed_plain_spec(root: &std::path::Path, spec_id: &str) -> Uuid {
         let backend = aida_core::GitBackend::new(root).unwrap();
@@ -66858,6 +67241,7 @@ mod bug_231_findings_promote_tests {
         id
     }
 
+    // trace:BUG-615 | ai:claude
     /// BUG-615 regression: `aida add --parent X --blocked-by Y` in a SINGLE
     /// invocation must persist BOTH edges. The bug was that the `--parent`
     /// block re-saved a STALE pre-blocked-by snapshot of the child
@@ -66870,7 +67254,6 @@ mod bug_231_findings_promote_tests {
     /// stale snapshot), and assert the child carries BOTH a Child edge to the
     /// parent AND a BlockedBy edge to the blocker. With the pre-fix
     /// `last.clone()` snapshot this assertion fails: the BlockedBy edge is gone.
-    /// trace:BUG-615 | ai:claude
     #[test]
     fn add_parent_and_blocked_by_combined_keeps_both_edges() {
         use aida_core::models::{Relationship, RelationshipType};
@@ -66943,10 +67326,10 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    // trace:BUG-573 | ai:claude
     /// Seed a single spec that carries one DANGLING relationship — an edge
     /// whose `target_id` resolves to no requirement in the store. Mirrors the
     /// real-world state `aida rel list --dangling` reports.
-    /// trace:BUG-573 | ai:claude
     #[cfg(test)]
     fn seed_spec_with_dangling_rel(root: &std::path::Path, spec_id: &str) {
         let backend = aida_core::GitBackend::new(root).unwrap();
@@ -66964,13 +67347,14 @@ mod bug_231_findings_promote_tests {
         backend.save(&store).unwrap();
     }
 
+    // trace:BUG-573 | ai:claude
     /// BUG-573: `aida rel list` is a READ-ONLY query, so it must exit 0 (return
     /// `Ok`) whenever it COMPLETES — even when it surfaces dangling-relationship
     /// warnings or when the named spec doesn't resolve. Reserving a non-zero
     /// exit for warnings/empty-results was the single biggest distortion in
     /// `aida usage --errors` (~50% phantom failures across 8k calls) and
     /// papercut every hook/loop that called it. Genuine bad-arguments still
-    /// bail non-zero. trace:BUG-573 | ai:claude
+    /// bail non-zero.
     #[test]
     fn rel_list_exits_zero_on_dangling_and_not_found() {
         let dir = tempfile::tempdir().unwrap();
@@ -67048,11 +67432,11 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    // trace:STORY-639 | ai:claude
     /// STORY-639: `aida assign --to <user>` sets the assignee AND routes the
     /// spec into that user's queue. Re-running is idempotent (no duplicate
     /// queue entry). `aida unassign` clears the assignee and, by default,
     /// leaves the spec in the queue; `--from-queue` removes it.
-    /// trace:STORY-639 | ai:claude
     #[test]
     fn assign_sets_assignee_and_routes_queue_idempotently() {
         let dir = tempfile::tempdir().unwrap();
@@ -67113,12 +67497,13 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    // trace:STORY-672
     /// STORY-672: the fleet-wide `--all-users` view aggregates EVERY user's
     /// queue, not just the current shell identity. Seed two distinct users'
     /// queues (alice + bob), then verify the aggregation enumerates both users
     /// and that `render_all_users_queue` runs read-only over the combined set
     /// without error. The default per-user `queue_list` only ever sees one
-    /// user; the fleet view must span them. trace:STORY-672
+    /// user; the fleet view must span them.
     #[test]
     fn all_users_view_aggregates_every_users_queue() {
         let dir = tempfile::tempdir().unwrap();
@@ -67196,10 +67581,11 @@ mod bug_231_findings_promote_tests {
         assert_eq!(storage.queue_list("bob", false).unwrap().len(), 1);
     }
 
+    // trace:BUG-231
     /// Failure injection: pointing the store at a path that is neither a
     /// git directory nor a SQLite file makes `Storage::queue_backend` bail.
     /// The error must propagate (non-zero exit) instead of a silent success,
-    /// and name the route + the not-promoted outcome. trace:BUG-231
+    /// and name the route + the not-promoted outcome.
     #[test]
     fn promote_surfaces_queue_add_failure() {
         let dir = tempfile::tempdir().unwrap();
@@ -67218,13 +67604,13 @@ mod bug_231_findings_promote_tests {
     }
 }
 
+// trace:BUG-574 | ai:claude
 /// BUG-574: reliability papercuts — spurious non-zero exits on the idempotent
 /// re-entry paths of `aida session start` (re-running for a scope this clone
 /// already leases) and `aida pr ship` (re-running on an already-merged PR).
 /// Both are benign no-ops that completed, so they must exit 0 — reserving
 /// non-zero for real failures — exactly like the BUG-573 read-only contract.
 /// These tests pin the pure decision points that drive the exit-0 behavior.
-/// trace:BUG-574 | ai:claude
 #[cfg(test)]
 mod bug_574_spurious_exit_tests {
     use super::*;
@@ -67254,11 +67640,11 @@ mod bug_574_spurious_exit_tests {
         }
     }
 
+    // trace:BUG-574 | ai:claude
     /// Re-running `aida session start <scope>` when THIS clone already holds a
     /// lease for that scope is benign idempotent re-entry. The handler resolves
     /// the existing lease via this pure predicate and exits 0 (reporting it)
     /// rather than bailing — that decision is what these assertions pin.
-    /// trace:BUG-574 | ai:claude
     #[test]
     fn existing_lease_for_scope_recognizes_reentry() {
         let leases = vec![lease_for("STORY-574"), lease_for("TASK-100")];
@@ -67278,9 +67664,10 @@ mod bug_574_spurious_exit_tests {
         );
     }
 
+    // trace:BUG-574 | ai:claude
     /// A scope with NO existing lease must NOT be treated as re-entry — the
     /// handler proceeds to actually create the worktree/lease, and a genuine
-    /// failure there stays non-zero. trace:BUG-574 | ai:claude
+    /// failure there stays non-zero.
     #[test]
     fn existing_lease_for_scope_none_when_unleased() {
         let leases = vec![lease_for("TASK-100")];
@@ -67298,7 +67685,7 @@ mod lease_enforcement_tests {
     use super::*;
     use aida_core::models::Relationship;
 
-    /// trace:STORY-48 | ai:claude
+    // trace:STORY-48 | ai:claude
     fn lease(scope: &str, id: &str) -> SessionLease {
         SessionLease {
             id: id.to_string(),
@@ -67324,11 +67711,11 @@ mod lease_enforcement_tests {
         }
     }
 
+    // trace:STORY-48 | ai:claude
     /// AIDA's parent-edge convention: a child stores `rel_type: Child`
     /// pointing at its parent (display reads "X is child of Y"). So to
     /// model "this requirement has these parents" in fixtures, we emit
     /// `Child` edges from `r` to each parent UUID.
-    /// trace:STORY-48 | ai:claude
     fn req_with_parents(spec_id: &str, parents: &[Uuid]) -> Requirement {
         let mut r = Requirement::new(format!("Title for {}", spec_id), "".into());
         r.spec_id = Some(spec_id.into());
@@ -67344,8 +67731,8 @@ mod lease_enforcement_tests {
         r
     }
 
+    // trace:STORY-48 | ai:claude
     /// Direct spec-id ownership: lease scope == target spec id.
-    /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owns_direct_spec_match() {
         let target = req_with_parents("STORY-48", &[]);
@@ -67357,8 +67744,8 @@ mod lease_enforcement_tests {
         assert_eq!(owner.unwrap().scope, "STORY-48");
     }
 
+    // trace:STORY-48 | ai:claude
     /// EPIC-scope ownership: lease.scope is the parent of target.
-    /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owns_via_parent_chain() {
         let epic = req_with_parents("EPIC-20", &[]);
@@ -67375,9 +67762,9 @@ mod lease_enforcement_tests {
         assert_eq!(owner.unwrap().scope, "EPIC-20");
     }
 
+    // trace:STORY-48 | ai:claude
     /// Self-lease must be skipped — a session can edit specs in its own
     /// scope without a warning.
-    /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owning_skips_self() {
         let target = req_with_parents("STORY-48", &[]);
@@ -67395,12 +67782,12 @@ mod lease_enforcement_tests {
         assert!(owner.is_none(), "should not flag the caller's own lease");
     }
 
+    // trace:BUG-54 | ai:claude
     /// BUG-54: a session whose scope is an EPIC must be allowed to edit
     /// children of that EPIC from inside the worktree. Direct-spec-match
     /// covers `aida edit EPIC-X` from the EPIC-X session; this exercises
     /// the parent-chain case (`aida edit <child-of-EPIC-X>`), which is
     /// the actual flow that triggered the in-session enforcement bug.
-    /// trace:BUG-54 | ai:claude
     #[test]
     fn lease_owning_skips_self_via_parent_chain() {
         let epic = req_with_parents("EPIC-20", &[]);
@@ -67423,9 +67810,9 @@ mod lease_enforcement_tests {
         );
     }
 
+    // trace:STORY-48 | ai:claude
     /// Path-glob / free-form scopes that don't resolve to a spec id are
     /// treated as non-enforced.
-    /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owning_ignores_unresolved_scopes() {
         let target = req_with_parents("STORY-48", &[]);
@@ -67436,8 +67823,8 @@ mod lease_enforcement_tests {
         assert!(owner.is_none());
     }
 
+    // trace:STORY-48 | ai:claude
     /// Cycle in parent edges must not infinite-loop the ancestor walk.
-    /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owning_handles_parent_cycle() {
         let mut a = req_with_parents("FR-A", &[]);
@@ -67467,12 +67854,12 @@ mod lease_enforcement_tests {
         assert!(owner.is_none());
     }
 
+    // trace:BUG-98 | ai:claude
     /// BUG-98: list_leases scans the on-disk lease toml files and
     /// returns one entry per file. This is the count `aida session list`
     /// uses to decide whether to render the leases-hint footer. The
     /// shape exercised here matches the BUG-98 repro (multiple leases
     /// from concurrent worktrees on the project).
-    /// trace:BUG-98 | ai:claude
     #[test]
     fn list_leases_counts_active_lease_files() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -67513,9 +67900,10 @@ mod lease_enforcement_tests {
         assert!(scopes.contains(&"EPIC-21"));
     }
 
+    // trace:BUG-479 | ai:claude
     /// BUG-479: `child_side_work_exists` is the pure decision — ANY of the three
     /// child-side signals means real work was done before the non-zero exit, so
-    /// the spec must stay shelved (don't restore). trace:BUG-479 | ai:claude
+    /// the spec must stay shelved (don't restore).
     #[test]
     fn bug479_child_side_work_exists_is_any_signal() {
         assert!(!child_side_work_exists(false, false, false));
@@ -67525,13 +67913,14 @@ mod lease_enforcement_tests {
         assert!(child_side_work_exists(true, true, true));
     }
 
+    // trace:BUG-479 | ai:claude
     /// BUG-479: the probe (and therefore the restore guard) must report
     /// child-side work when a lease scoped to the spec exists, and report none
     /// when no lease matches. A lease present ⇒ the implementer child acquired a
     /// lease + worktree before exiting non-zero, so
     /// `restore_phase1_status_on_lease_failure` would bail (leave it shelved)
     /// rather than reset; no lease ⇒ genuinely no child-side work, restore is
-    /// safe. trace:BUG-479 | ai:claude
+    /// safe.
     #[test]
     fn bug479_probe_reports_lease_scoped_to_spec_and_skips_unrelated() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -67584,13 +67973,13 @@ mod lease_enforcement_tests {
         .expect("guard should short-circuit cleanly when child-side work exists");
     }
 
+    // trace:BUG-483 | ai:claude
     /// BUG-483: `peer_lease_sharing_worktree` is the pure gate that decides
     /// whether `aida session end` must SKIP its `git worktree remove --force`.
     /// Two leases sharing one `worktree_path` ⇒ ending one finds the peer and
     /// leaves the dir standing; a sole lease on a worktree ⇒ no peer ⇒ removal
     /// proceeds as before. We write lease .toml fixtures and read them back
     /// through `list_leases` so the real on-disk shape is exercised.
-    /// trace:BUG-483 | ai:claude
     #[test]
     fn bug483_peer_lease_sharing_worktree_blocks_removal() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -67674,12 +68063,13 @@ mod lease_enforcement_tests {
         );
     }
 
+    // trace:BUG-416 | ai:claude
     /// BUG-416: `worktree_occupant` is the detection core for the
     /// detect-and-auto-isolate gate. It must (1) find a LIVE lease on the
     /// target worktree, (2) ignore a lease on a DIFFERENT worktree, and
     /// (3) treat a dead/auto-released lease's worktree as free — driven by
     /// the injected liveness predicate so the pure core is testable without
-    /// poking real PIDs. trace:BUG-416 | ai:claude
+    /// poking real PIDs.
     #[test]
     fn worktree_occupant_finds_only_live_same_worktree_lease() {
         fn lease(scope: &str, wt: &str, pid: u32) -> SessionLease {
@@ -67791,8 +68181,8 @@ mod scope_fallback_tests {
         r
     }
 
+    // trace:STORY-63 | ai:claude
     /// Highest-priority approved child wins.
-    /// trace:STORY-63 | ai:claude
     #[test]
     fn picks_highest_priority_approved_child() {
         let mut a = child_of(Uuid::nil(), "STORY-1");
@@ -67814,8 +68204,8 @@ mod scope_fallback_tests {
         assert_eq!(res.approved_count, 3);
     }
 
+    // trace:STORY-63 | ai:claude
     /// Created_at breaks ties at equal priority — older wins.
-    /// trace:STORY-63 | ai:claude
     #[test]
     fn ties_break_on_created_at_oldest_first() {
         let mut older = child_of(Uuid::nil(), "STORY-A");
@@ -67836,9 +68226,9 @@ mod scope_fallback_tests {
         assert_eq!(res.pick.spec_id.as_deref(), Some("STORY-A"));
     }
 
+    // trace:STORY-63 | ai:claude
     /// Any sibling InProgress → no pick (don't run two children in
     /// parallel under the same EPIC).
-    /// trace:STORY-63 | ai:claude
     #[test]
     fn skips_when_sibling_in_progress() {
         let mut active = child_of(Uuid::nil(), "STORY-ACTIVE");
@@ -67856,8 +68246,8 @@ mod scope_fallback_tests {
         assert!(res.is_none(), "should not double-pick under the same EPIC");
     }
 
+    // trace:STORY-63 | ai:claude
     /// Path-glob / free-form scope can't resolve to a Requirement → None.
-    /// trace:STORY-63 | ai:claude
     #[test]
     fn unresolved_scope_returns_none() {
         let store = RequirementsStore::new();
@@ -67865,9 +68255,9 @@ mod scope_fallback_tests {
         assert!(scope_fallback_pick(&store, &lease, None).is_none());
     }
 
+    // trace:STORY-63 | ai:claude
     /// Scope resolves but has no children → None (caller falls through
     /// to the normal "queue empty" message + nudge).
-    /// trace:STORY-63 | ai:claude
     #[test]
     fn scope_with_no_children_returns_none() {
         let epic = scope_root("EPIC-20", &[]);
@@ -67877,8 +68267,8 @@ mod scope_fallback_tests {
         assert!(scope_fallback_pick(&store, &lease, None).is_none());
     }
 
+    // trace:STORY-63 | ai:claude
     /// Children exist but none are Approved → None.
-    /// trace:STORY-63 | ai:claude
     #[test]
     fn no_approved_children_returns_none() {
         let mut draft = child_of(Uuid::nil(), "STORY-DRAFT");
@@ -67891,9 +68281,9 @@ mod scope_fallback_tests {
         assert!(scope_fallback_pick(&store, &lease, None).is_none());
     }
 
+    // trace:STORY-63 | ai:claude
     /// Role scope filter on tags is honored — a candidate without all
     /// the role's required tags is dropped.
-    /// trace:STORY-63 | ai:claude
     #[test]
     fn role_scope_filter_drops_untagged_candidates() {
         let mut tagged = child_of(Uuid::nil(), "STORY-TAGGED");
@@ -67922,9 +68312,9 @@ mod store_walkup_tests {
     use std::fs;
     use tempfile::TempDir;
 
+    // trace:BUG-57 | ai:claude
     /// `.aida/config.toml` only at the repo root → `aida edit` from a
     /// nested subdir must still resolve the store.
-    /// trace:BUG-57 | ai:claude
     #[test]
     fn detect_distributed_store_walks_up_from_subdir() {
         let tmp = TempDir::new().unwrap();
@@ -67990,9 +68380,9 @@ mod store_walkup_tests {
         assert_eq!(distributed_mode_declared_from(root), None);
     }
 
+    // trace:BUG-57 | ai:claude
     /// store_path is interpreted relative to the directory containing
     /// config.toml, not relative to the starting cwd.
-    /// trace:BUG-57 | ai:claude
     #[test]
     fn detect_distributed_store_resolves_relative_to_config_dir() {
         let tmp = TempDir::new().unwrap();
@@ -68014,6 +68404,7 @@ mod store_walkup_tests {
         assert_eq!(resolved, root.join(".aida-store"));
     }
 
+    // trace:FR-267 | ai:claude
     /// FR-267: in an `aida init --sibling` workspace the code repo's
     /// `.aida/config.toml` points `store_path` OUTSIDE the repo (e.g.
     /// `../aida-store`). Store resolution must follow that pointer to the
@@ -68021,7 +68412,6 @@ mod store_walkup_tests {
     /// `aida trace scan` / `aida trace list` (they route through the
     /// resolved `store_path` in `handle_git_backend_command`). Resolving
     /// from a nested subdir of the code repo must still land on the sibling.
-    /// trace:FR-267 | ai:claude
     #[test]
     fn detect_distributed_store_resolves_sibling_store_outside_repo() {
         let tmp = TempDir::new().unwrap();
@@ -68051,10 +68441,11 @@ mod store_walkup_tests {
         );
     }
 
+    // trace:FR-267 | ai:claude
     /// FR-267: the resolution-path selector that backs trace commands must
     /// also declare distributed mode for a sibling-store config — so a
     /// sibling workspace never falls through to the legacy YAML/SQLite
-    /// fallback. trace:FR-267 | ai:claude
+    /// fallback.
     #[test]
     fn sibling_store_config_declares_distributed_mode() {
         let tmp = TempDir::new().unwrap();
@@ -68072,9 +68463,10 @@ mod store_walkup_tests {
         );
     }
 
+    // trace:BUG-568 | ai:claude
     /// BUG-568: single-repo store (no `.aida-workspace`) → detector returns
     /// None → no multi-repo warning fires (ZERO behavior change for the common
-    /// case). trace:BUG-568 | ai:claude
+    /// case).
     #[test]
     fn detect_multi_repo_returns_none_for_single_repo_store() {
         let tmp = TempDir::new().unwrap();
@@ -68087,9 +68479,10 @@ mod store_walkup_tests {
         );
     }
 
+    // trace:BUG-568 | ai:claude
     /// BUG-568: a `.aida-workspace` manifest listing ≥2 repos → detector returns
     /// Some(other_repos) → the loud cross-repo-miss warning fires. The reported
-    /// list excludes the repo we're standing in. trace:BUG-568 | ai:claude
+    /// list excludes the repo we're standing in.
     #[test]
     fn detect_multi_repo_returns_others_for_workspace_with_two_repos() {
         let tmp = TempDir::new().unwrap();
@@ -68133,9 +68526,9 @@ mod store_walkup_tests {
         );
     }
 
+    // trace:BUG-57 | ai:claude
     /// No `.aida/config.toml` anywhere up the tree → returns None (caller
     /// falls through to legacy / registry resolution).
-    /// trace:BUG-57 | ai:claude
     #[test]
     fn detect_distributed_store_returns_none_when_absent() {
         let tmp = TempDir::new().unwrap();
@@ -68144,9 +68537,9 @@ mod store_walkup_tests {
         assert!(detect_distributed_store_from(&nested).is_none());
     }
 
+    // trace:SPIKE-48 | ai:claude
     /// SPIKE-48: a directory that exists and holds `objects/` is accepted as a
     /// sandbox store override; the returned path resolves to it.
-    /// trace:SPIKE-48 | ai:claude
     #[test]
     fn aida_store_override_accepts_dir_with_objects() {
         let tmp = TempDir::new().unwrap();
@@ -68157,10 +68550,10 @@ mod store_walkup_tests {
         assert_eq!(resolved, store.canonicalize().unwrap());
     }
 
+    // trace:SPIKE-48 | ai:claude
     /// SPIKE-48: validation is strict-but-quiet — a missing path, a regular
     /// file, or a dir without `objects/` all fall through (return None) rather
     /// than erroring, so a stale/typo'd export never silently misdirects writes.
-    /// trace:SPIKE-48 | ai:claude
     #[test]
     fn aida_store_override_rejects_non_store_paths() {
         let tmp = TempDir::new().unwrap();
@@ -68185,12 +68578,13 @@ mod store_walkup_tests {
         assert!(aida_store_override_from(&weird).is_none());
     }
 
+    // trace:BUG-567 | ai:claude
     /// BUG-567 Finding 1: a set-but-unusable AIDA_STORE classifies as
     /// `Unusable` with a SPECIFIC reason (so the env wrapper can name WHY it
     /// fell through), and a valid store classifies as `Usable`. The wrapper
     /// stays a pure fall-through — it never errors — preserving the SPIKE-48
     /// never-break-a-forgotten-export intent; this only makes the reason
-    /// surfaceable. trace:BUG-567 | ai:claude
+    /// surfaceable.
     #[test]
     fn aida_store_override_reports_reason_for_unusable() {
         let tmp = TempDir::new().unwrap();
@@ -68215,9 +68609,10 @@ mod store_walkup_tests {
         assert!(aida_store_override_from(&good).is_some());
     }
 
+    // trace:BUG-567 | ai:claude
     /// BUG-567: the notice is suppressible. `aida_quiet()` is true only for a
     /// real opt-in value, false for unset / "0" / "false" / empty, so scripts
-    /// can mute the informational store fall-through. trace:BUG-567 | ai:claude
+    /// can mute the informational store fall-through.
     #[test]
     fn aida_quiet_honors_only_real_optin_values() {
         // This mutates process env, so keep it self-contained and restore.
@@ -68242,9 +68637,10 @@ mod store_walkup_tests {
         restore(&prev);
     }
 
+    // trace:SPIKE-48 | ai:claude
     /// SPIKE-48: `sandbox_is_populated` is true only for a git repo holding
     /// `objects/`; the seed/scenario round-trip produces an override-acceptable
-    /// store. trace:SPIKE-48 | ai:claude
+    /// store.
     #[test]
     fn sandbox_create_and_seed_round_trip() {
         let tmp = TempDir::new().unwrap();
@@ -68266,11 +68662,11 @@ mod store_walkup_tests {
         assert!(aida_store_override_from(&store).is_none());
     }
 
+    // trace:BUG-331 | ai:claude
     /// BUG-331: from a sibling git worktree, detection resolves the canonical
     /// store at the MAIN worktree (via git-common-dir) instead of failing and
     /// falling back to centralized mode. The sibling has the tracked
     /// `.aida/config.toml` but no local `.aida-store/`.
-    /// trace:BUG-331 | ai:claude
     #[test]
     fn detect_distributed_store_resolves_from_sibling_worktree() {
         fn git(repo: &std::path::Path, args: &[&str]) {
@@ -68371,9 +68767,9 @@ mod session_end_resolution_tests {
         }
     }
 
+    // trace:BUG-361 | ai:codex
     /// BUG-361: session end warns only on the verified risk state:
     /// commits ahead + GH-confirmed no open PR.
-    /// trace:BUG-361 | ai:codex
     #[test]
     fn classifies_session_end_unshipped_work_when_commits_and_no_pr() {
         let got = classify_session_end_unshipped_work(
@@ -68397,9 +68793,9 @@ mod session_end_resolution_tests {
         assert!(lines[1].contains("aida pr ship"), "{lines:?}");
     }
 
+    // trace:BUG-361 | ai:codex
     /// BUG-361: if there are no commits ahead, an open PR, or GH state is
     /// unknown, session end must not assert the missing-PR condition.
-    /// trace:BUG-361 | ai:codex
     #[test]
     fn session_end_unshipped_work_skips_non_risk_states() {
         assert!(classify_session_end_unshipped_work(
@@ -68436,9 +68832,9 @@ mod session_end_resolution_tests {
         .is_none());
     }
 
+    // trace:BUG-361 | ai:codex
     /// BUG-361: the durable morning-sweep signal is a STORY-325 punt-ledger
     /// record, not just ephemeral stderr.
-    /// trace:BUG-361 | ai:codex
     #[test]
     fn session_end_unshipped_work_builds_punt_ledger_record() {
         let work = SessionEndUnshippedWork {
@@ -68472,9 +68868,9 @@ mod session_end_resolution_tests {
         );
     }
 
+    // trace:BUG-361 | ai:codex
     /// BUG-361: recording uses the existing STORY-325 punt ledger path so
     /// morning-sweep tooling can discover the unfinished session.
-    /// trace:BUG-361 | ai:codex
     #[test]
     fn session_end_unshipped_work_appends_to_punt_ledger() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -68530,9 +68926,9 @@ mod session_end_resolution_tests {
         );
     }
 
+    // trace:BUG-367 | ai:antigravity
     /// BUG-367: session end suppresses the unshipped work warning if the spec
     /// status is already Completed in the requirement store.
-    /// trace:BUG-367 | ai:antigravity
     #[test]
     fn session_end_unshipped_work_suppressed_when_completed() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -68563,8 +68959,8 @@ mod session_end_resolution_tests {
         assert!(is_completed);
     }
 
+    // trace:STORY-73 | ai:claude
     /// Explicit id query short-circuits the resolution chain.
-    /// trace:STORY-73 | ai:claude
     #[test]
     fn id_query_takes_precedence() {
         let leases = vec![
@@ -68575,8 +68971,8 @@ mod session_end_resolution_tests {
         assert_eq!(got.scope, "EPIC-2");
     }
 
+    // trace:STORY-73 | ai:claude
     /// Ambiguous prefix bails clearly.
-    /// trace:STORY-73 | ai:claude
     #[test]
     fn ambiguous_id_query_bails() {
         let leases = vec![
@@ -68588,10 +68984,10 @@ mod session_end_resolution_tests {
         assert!(err.to_string().contains("ambiguous"), "{}", err);
     }
 
+    // trace:BUG-312 | ai:claude
     /// BUG-312: the ambiguous-prefix error includes the FULL id + scope of
     /// every match so the operator can pick the right one without
     /// grepping `.aida/sessions/`.
-    /// trace:BUG-312 | ai:claude
     #[test]
     fn ambiguous_id_query_lists_full_ids_and_scopes() {
         let leases = vec![
@@ -68607,8 +69003,8 @@ mod session_end_resolution_tests {
         assert!(msg.contains("TASK-420"), "{}", msg);
     }
 
+    // trace:STORY-73 | ai:claude
     /// Empty id query miss bails (find_lease_by_id_prefix path).
-    /// trace:STORY-73 | ai:claude
     #[test]
     fn unknown_id_query_bails() {
         let leases = vec![lease("019e10260000", "EPIC-1", "/tmp/wt-1", None)];
@@ -68621,10 +69017,10 @@ mod session_end_resolution_tests {
         assert!(s.contains("aida session leases"), "{}", s);
     }
 
+    // trace:STORY-73 | ai:claude
     /// No-arg + zero leases never reaches the chain (caller short-circuits)
     /// — but multi-lease, no env, cwd not under any worktree yields the
     /// "no resolvable" error with a listing.
-    /// trace:STORY-73 | ai:claude
     #[test]
     fn unresolvable_lists_active_leases() {
         let leases = vec![
@@ -68644,8 +69040,8 @@ mod session_end_resolution_tests {
         assert!(s.contains("EPIC-2"), "{}", s);
     }
 
+    // trace:STORY-73 | ai:claude
     /// -y on single-active fallback skips the prompt.
-    /// trace:STORY-73 | ai:claude
     #[test]
     fn single_active_with_yes_resolves() {
         let leases = vec![lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None)];
@@ -68656,8 +69052,8 @@ mod session_end_resolution_tests {
         assert_eq!(got.scope, "EPIC-1");
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: `--spec` resolves by lease scope, case-insensitively.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn spec_flag_resolves_by_scope() {
         let leases = vec![
@@ -68672,8 +69068,8 @@ mod session_end_resolution_tests {
         assert_eq!(got.scope, "TASK-489");
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: `--spec` with zero matches uses the spec-shaped error.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn spec_flag_zero_matches_errors() {
         let leases = vec![lease("019e10260000", "TASK-1", "/tmp/wt-1", None)];
@@ -68684,9 +69080,9 @@ mod session_end_resolution_tests {
         assert!(s.contains("aida session leases"), "{}", s);
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: `--spec` with multiple matches lists every candidate's
     /// lease id so the operator can disambiguate.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn spec_flag_multi_matches_lists_lease_ids() {
         let leases = vec![
@@ -68700,8 +69096,8 @@ mod session_end_resolution_tests {
         assert!(s.contains("disambiguate"), "{}", s);
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: `--branch` resolves by branch name.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn branch_flag_resolves_by_branch() {
         let leases = vec![lease("019e10260000", "TASK-489", "/tmp/wt-489", None)];
@@ -68711,9 +69107,9 @@ mod session_end_resolution_tests {
         assert_eq!(got.scope, "TASK-489");
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: `--branch` with zero matches uses the branch-shaped
     /// error.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn branch_flag_zero_matches_errors() {
         let leases = vec![lease("019e10260000", "TASK-1", "/tmp/wt-1", None)];
@@ -68724,10 +69120,10 @@ mod session_end_resolution_tests {
         assert!(s.contains("aida session leases"), "{}", s);
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: positional matching the SPEC-ID pattern routes through
     /// the spec lookup (so a missing scope errors with the spec-shaped
     /// message, not the 8-char-id-prefix one).
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn positional_spec_pattern_routes_to_spec_lookup() {
         let leases = vec![
@@ -68744,9 +69140,9 @@ mod session_end_resolution_tests {
         assert!(s.contains("BUG-999"), "{}", s);
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: positional that doesn't look like a spec ID and isn't a
     /// hex-id-prefix match falls back to branch lookup.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn positional_non_spec_falls_back_to_branch() {
         let leases = vec![lease("019e10260000", "TASK-489", "/tmp/wt-489", None)];
@@ -68755,11 +69151,11 @@ mod session_end_resolution_tests {
         assert_eq!(got.scope, "TASK-489");
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: lowercase `task-489` shape is treated as a branch, not a
     /// spec — the AC explicitly distinguishes the two by case. The shared
     /// `looks_like_spec_id` accepts both, so the resolver applies an
     /// extra uppercase-prefix guard.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn lowercase_spec_shape_routes_to_branch() {
         let mut l = lease("019e10260000", "TASK-489", "/tmp/wt-489", None);
@@ -68769,10 +69165,10 @@ mod session_end_resolution_tests {
         assert_eq!(got.scope, "TASK-489");
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: the uppercase-prefix guard accepts canonical SPEC-IDs
     /// (`TASK-489`, `STORY-86`, `FR-1-001`) and rejects lowercase
     /// (`task-489`) or mixed (`Task-489`) shapes.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn uppercase_spec_prefix_guard() {
         assert!(positional_has_uppercase_spec_prefix("TASK-489"));
@@ -68783,10 +69179,10 @@ mod session_end_resolution_tests {
         assert!(!positional_has_uppercase_spec_prefix("019e4df1"));
     }
 
+    // trace:TASK-489 | ai:claude
     /// TASK-489: ambiguous hex-id prefix on a positional still surfaces
     /// the ambiguous-prefix error (BUG-312 path) rather than masking it
     /// with a branch fallback.
-    /// trace:TASK-489 | ai:claude
     #[test]
     fn positional_ambiguous_hex_prefix_keeps_ambiguous_error() {
         let leases = vec![
@@ -68798,18 +69194,18 @@ mod session_end_resolution_tests {
         assert!(s.contains("ambiguous"), "{}", s);
     }
 
+    // trace:BUG-312 | ai:claude
     /// BUG-312: no collision against other ids → floor (8 chars) is enough.
-    /// trace:BUG-312 | ai:claude
     #[test]
     fn unique_prefix_len_returns_floor_when_no_collision() {
         let ids = ["019e4df1af45", "019aaaaaaaaa", "019bbbbbbbbb"];
         assert_eq!(unique_prefix_len("019e4df1af45", &ids, 8), 8);
     }
 
+    // trace:BUG-312 | ai:claude
     /// BUG-312: two ids share the first 8 chars → bump to the first
     /// distinguishing char (9). The historical 8-char display would lie;
     /// 9 chars is the smallest honest answer.
-    /// trace:BUG-312 | ai:claude
     #[test]
     fn unique_prefix_len_bumps_past_collision() {
         // From the bug report — same HLC generation window.
@@ -68818,11 +69214,11 @@ mod session_end_resolution_tests {
         assert_eq!(unique_prefix_len("019e4df1e131", &ids, 8), 9);
     }
 
+    // trace:BUG-312 | ai:claude
     /// BUG-312: an id identical (or prefix-of) to the WHOLE other id can
     /// never be made unique by extending — return the full length and
     /// let the caller decide. Defensive guard; lease ids are uniform 12
     /// chars in practice, so this is the never-shorter-than-self path.
-    /// trace:BUG-312 | ai:claude
     #[test]
     fn unique_prefix_len_caps_at_id_length() {
         let ids = ["019e4df1af45", "019e4df1af45ff"];
@@ -68830,8 +69226,8 @@ mod session_end_resolution_tests {
         assert_eq!(unique_prefix_len("019e4df1af45", &ids, 8), 12);
     }
 
+    // trace:BUG-312 | ai:claude
     /// BUG-312: a single-lease set never needs to extend — floor wins.
-    /// trace:BUG-312 | ai:claude
     #[test]
     fn unique_prefix_len_single_id() {
         let ids = ["019e4df1af45"];
@@ -68844,10 +69240,11 @@ mod terminal_status_guard_tests {
     use super::*;
     use aida_core::RequirementStatus::*;
 
+    // trace:TASK-47 | ai:claude
     /// Mirrors the TASK-47 guard: refuse Closed→Open without --force,
     /// while allowing Open→Closed, idempotent flips, and any path under
     /// `force=true`. Pure helper so the matrix is exhaustively testable
-    /// without touching the storage backend. trace:TASK-47 | ai:claude
+    /// without touching the storage backend.
     fn would_block_status_change(
         old: &aida_core::RequirementStatus,
         new: &aida_core::RequirementStatus,
@@ -68930,12 +69327,12 @@ mod terminal_status_guard_tests {
         }
     }
 
+    // trace:STORY-86 | ai:claude
     /// STORY-86: `Done` is on the OPEN side of the guard, so transitions
     /// from Done to anywhere (including back to InProgress) require no
     /// --force, and transitions INTO Done from anywhere are likewise
     /// unguarded. The auto-bump path (Done → Completed) lands cleanly
     /// without the user ever passing --force.
-    /// trace:STORY-86 | ai:claude
     #[test]
     fn done_transitions_are_unguarded() {
         let from_done = [Draft, Approved, Planned, InProgress, Completed, Rejected];
@@ -68977,9 +69374,10 @@ mod auto_complete_head_tests {
     use super::*;
     use aida_core::RequirementStatus::*;
 
+    // trace:TASK-292 | ai:claude
     /// Only pre-implementation statuses are drivable by the orchestrator from
     /// scratch — In Progress / Done are mid-flight, Completed / Rejected are
-    /// terminal. trace:TASK-292 | ai:claude
+    /// terminal.
     #[test]
     fn drivable_statuses_are_pre_implementation_only() {
         assert!(auto_complete_head_drivable(&Draft));
@@ -69003,9 +69401,10 @@ mod auto_complete_head_tests {
         assert!(skipped.is_empty());
     }
 
+    // trace:TASK-292 | ai:claude
     /// Acceptance criterion: an in-flight head is skipped to the next eligible
     /// item, and every skipped item is reported back to the caller so it can
-    /// surface a note. trace:TASK-292 | ai:claude
+    /// surface a note.
     #[test]
     fn skips_in_flight_head_to_next_eligible() {
         let candidates = vec![
@@ -69033,9 +69432,10 @@ mod auto_complete_head_tests {
         assert!(skipped.is_empty());
     }
 
+    // trace:TASK-292 | ai:claude
     /// A queue holding only in-flight / terminal items is not drivable: the
     /// error carries every skipped item so the caller can name them — a
-    /// distinct case from the empty queue. trace:TASK-292 | ai:claude
+    /// distinct case from the empty queue.
     #[test]
     fn all_in_flight_queue_is_not_drivable() {
         let candidates = vec![
@@ -69053,12 +69453,12 @@ mod auto_complete_head_tests {
     }
 }
 
+// trace:TASK-293 | ai:claude
 /// TASK-293 — the `next` / `nextN` keyword parser. Covers every named form
 /// in the acceptance criteria (`next`, `next1`, `next 1`, `next3`, `next 3`)
 /// plus the malformed-input edge cases. The drain machinery itself
 /// (empty-queue, N > queue-length) is the already-tested `drain_batch` /
 /// `pick_auto_complete_head` — this module only covers the pure parse.
-/// trace:TASK-293 | ai:claude
 #[cfg(test)]
 mod next_keyword_tests {
     use super::*;
@@ -69168,18 +69568,19 @@ mod next_keyword_tests {
     }
 }
 
+// trace:STORY-86 | ai:claude
 /// STORY-86 — env-flag opt-out + colorize_status coverage for the new
 /// `Done` variant. Integration coverage (set up git+store, exercise the
 /// helper end-to-end) lives in the verification script in the plan; the
 /// unit slice here protects the bits that are pure functions.
-/// trace:STORY-86 | ai:claude
 #[cfg(test)]
 mod auto_bump_done_tests {
     use super::*;
 
+    // trace:TASK-740
     /// TASK-740: exhaustive parity — `auto_bump_eligible_status` (now delegating
     /// to `lifecycle::git_merge_completes`) matches the pre-migration hand-coded
-    /// predicate (BUG-328 + BUG-405) over every status. trace:TASK-740
+    /// predicate (BUG-328 + BUG-405) over every status.
     #[test]
     fn auto_bump_eligible_status_parity_with_oracle() {
         use aida_core::models::RequirementStatus as S;
@@ -69451,10 +69852,10 @@ mod auto_bump_done_tests {
         flips.iter().any(|f| f.spec_id == spec_id)
     }
 
+    // trace:STORY-86 | ai:claude
     /// STORY-86: the helper picks up a `(SPEC-ID)` from a commit subject
     /// on the default branch, flips the spec from Done to Completed, and
     /// stamps `completed_at` + `completion_sha` on `implementation_info`.
-    /// trace:STORY-86 | ai:claude
     #[test]
     fn auto_bump_picks_up_subject_refs_on_default_branch() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69499,12 +69900,13 @@ mod auto_bump_done_tests {
         assert!(info.completed_at.is_some(), "completed_at should be set");
     }
 
+    // trace:BUG-477
     /// BUG-477: the merge-driven Done→Completed auto-bump must record the
     /// status transition in the per-spec `history:` array (the source-of-truth
     /// for spec-state time series), the same way the manual `aida edit --status`
     /// path does. Before the fix the bump only assigned `status` and wrote no
     /// `HistoryEntry`, so burn-down analytics walking history under-counted the
-    /// most common completion transition. trace:BUG-477
+    /// most common completion transition.
     #[test]
     fn auto_bump_records_status_transition_in_history() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69558,13 +69960,14 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-426 | ai:claude
     /// BUG-426: a `docs(plans): …` plan commit names the specs it PLANS for
     /// in its trailing `(SPEC-ID …)` group, but a plan is pre-implementation
     /// — those specs stay Approved. The auto-bump candidate scan must NOT
     /// treat a plan commit's trailer as a completion signal (it previously
     /// false-completed the umbrella specs `(TASK-136 BUG-420)` off a plan-only
     /// commit). A non-plan commit referencing the same spec still completes
-    /// it. trace:BUG-426 | ai:claude
+    /// it.
     #[test]
     fn auto_bump_ignores_plan_commit_trailers() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69630,9 +70033,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-426 | ai:claude
     /// BUG-426: `is_plan_commit_subject` recognizes plan commits (with or
     /// without an `[AI:tool]` prefix) and leaves ordinary docs / delivery
-    /// commits alone. trace:BUG-426 | ai:claude
+    /// commits alone.
     #[test]
     fn is_plan_commit_subject_classifies_plan_commits() {
         assert!(is_plan_commit_subject("docs(plans): a plan (TASK-1)"));
@@ -69650,11 +70054,12 @@ mod auto_bump_done_tests {
         assert!(!is_plan_commit_subject("fix(plans): real fix (TASK-1)"));
     }
 
+    // trace:BUG-405 | ai:claude
     /// BUG-405: a spec the drain shelved into NeedsAttention (with a
     /// populated FailureReason) whose referencing commit then lands on the
     /// default branch graduates to Completed, and the stale FailureReason is
     /// cleared so `aida findings list` stops surfacing a "CI is red" finding
-    /// for work that actually shipped. trace:BUG-405 | ai:claude
+    /// for work that actually shipped.
     #[test]
     fn auto_bump_completes_needs_attention_spec_and_clears_failure_reason() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69718,10 +70123,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-328 | ai:codex
     /// BUG-328: direct spec refs at Approved/Planned/InProgress now
     /// graduate to Completed when their commit lands on main. Draft
     /// preserves the approval signal; terminal statuses stay untouched.
-    /// trace:BUG-328 | ai:codex
     #[test]
     fn auto_bump_eligibility_matrix_for_direct_subject_refs() {
         let cases = [
@@ -69783,9 +70188,10 @@ mod auto_bump_done_tests {
         }
     }
 
+    // trace:STORY-86 | ai:claude
     /// STORY-86: when current branch ≠ default branch, the helper is a
     /// silent no-op — merges to default haven't happened yet, so no
-    /// auto-bump fires. trace:STORY-86 | ai:claude
+    /// auto-bump fires.
     #[test]
     fn auto_bump_skips_when_not_on_default_branch() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69825,10 +70231,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:STORY-86 | ai:claude
     /// STORY-86: helper is idempotent — running it twice on the same
     /// merged commit only flips once. The second invocation sees the
     /// spec at Completed (not Done) and silently skips.
-    /// trace:STORY-86 | ai:claude
     #[test]
     fn auto_bump_is_idempotent() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69855,11 +70261,12 @@ mod auto_bump_done_tests {
         assert!(second.is_empty(), "second call is a no-op: {:?}", second);
     }
 
+    // trace:BUG-410 | ai:claude
     /// BUG-410: a spec auto-completed by a commit and then MANUALLY REOPENED
     /// (status back to eligible, completion_sha retained as a `--force` reopen
     /// leaves it) must NOT be re-completed by the SAME commit on a later pull —
     /// that silently overwrites the deliberate reopen. Fails without the
-    /// completion_sha dedup guard. trace:BUG-410 | ai:claude
+    /// completion_sha dedup guard.
     #[test]
     fn auto_bump_does_not_recomplete_reopened_spec_by_same_commit() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69920,9 +70327,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:STORY-86 | ai:claude
     /// STORY-86: a commit whose subject does NOT reference any spec in
     /// Done leaves the store untouched. Guards against the helper
-    /// over-firing on prose/release commits. trace:STORY-86 | ai:claude
+    /// over-firing on prose/release commits.
     #[test]
     fn auto_bump_ignores_unrelated_commits() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -69952,10 +70360,11 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-102 | ai:claude
     /// Seed a Story-typed review-story at status=Done with the given
     /// `Review PR-<n>: <suffix>` title and spec_id. Mirrors
     /// `seed_done_spec` but stamps the title that BUG-102's matcher keys
-    /// off of. trace:BUG-102 | ai:claude
+    /// off of.
     fn seed_done_review_story(
         store_path: &std::path::Path,
         spec_id: &str,
@@ -69976,11 +70385,12 @@ mod auto_bump_done_tests {
         spec_id.to_string()
     }
 
+    // trace:BUG-102 | ai:claude
     /// BUG-102: a merge commit with `(#N)` squash-suffix flips any Done
     /// review story whose title encodes PR-N — even when that review
     /// story's spec ID is NOT in any commit subject. This is the gap
     /// before the fix: review stories filed by /aida-pr's auto-queue
-    /// were stuck at Done forever. trace:BUG-102 | ai:claude
+    /// were stuck at Done forever.
     #[test]
     fn auto_bump_flips_review_story_via_pr_number_match() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70028,10 +70438,11 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-106 | ai:claude
     /// BUG-106: seed a Done review story for PR-N that `implements`
     /// (covers) the given specs — mirrors what /aida-pr's auto-queue
     /// records. Each covered spec is seeded at Done. Returns
-    /// `(review_story_spec_id, covered_spec_ids)`. trace:BUG-106 | ai:claude
+    /// `(review_story_spec_id, covered_spec_ids)`.
     fn seed_cluster_pr_review_story(
         store_path: &std::path::Path,
         review_spec_id: &str,
@@ -70076,13 +70487,14 @@ mod auto_bump_done_tests {
         (review_spec_id.to_string(), covered_ids)
     }
 
+    // trace:BUG-113 | ai:claude
     /// BUG-113: seed a `Done` review story for PR-N that `implements` one
     /// covered spec, with the covered spec at `covered_status`. Mirrors
     /// what /aida-pr's auto-queue records (`## Covers` list + an
     /// `implements` relationship per covered spec). When the covered spec
     /// is `Completed` it is stamped with a `completion_sha` so the covers
     /// chain has a real merge sha to propagate. Returns
-    /// `(review_spec_id, covered_spec_id)`. trace:BUG-113 | ai:claude
+    /// `(review_spec_id, covered_spec_id)`.
     fn seed_covers_chain_review_story(
         store_path: &std::path::Path,
         review_spec_id: &str,
@@ -70125,11 +70537,12 @@ mod auto_bump_done_tests {
         (review_spec_id.to_string(), covered_spec_id.to_string())
     }
 
+    // trace:BUG-113 | ai:claude
     /// BUG-113: a review story stranded at `Done` — its PR merged, but the
     /// merge commit carried the *covered* spec's `(REQ-ID)` and no `(#N)`
     /// suffix, so the BUG-102/BUG-106 `pr_to_sha` linkage never saw it.
     /// The covers chain must still graduate the review story in the same
-    /// pass that completes its covered spec. trace:BUG-113 | ai:claude
+    /// pass that completes its covered spec.
     #[test]
     fn auto_bump_flips_review_story_via_covers_chain() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70189,11 +70602,12 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-113 | ai:claude
     /// BUG-113: `aida db reconcile-status --spec STORY-N` on a review
     /// story stuck at `Done` — its covered spec is already `Completed`,
     /// but the `(#N)` merge commit is outside the replay window so the
     /// BUG-102 PR linkage can't fire. The covers chain must still graduate
-    /// the stuck review story. trace:BUG-113 | ai:claude
+    /// the stuck review story.
     #[test]
     fn reconcile_status_flips_stuck_review_story_via_covers_chain() {
         let (_tmp, _project_root, store_path) = init_test_project();
@@ -70228,11 +70642,11 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-106 | ai:claude
     /// BUG-106: a cluster-mode PR squash-merges with the PR TITLE as the
     /// commit subject — the covered specs' IDs never reach main's commit
     /// log. Auto-bump must follow the `(#N)` → review-story →
     /// `implements` linkage and flip every covered Done spec.
-    /// trace:BUG-106 | ai:claude
     #[test]
     fn auto_bump_flips_cluster_pr_covered_specs_via_review_story() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70297,9 +70711,9 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-106 | ai:claude
     /// BUG-106: a `(#N)` merge with no review story for PR-N must not
     /// crash and must flip nothing — the PR-linkage path finds nothing.
-    /// trace:BUG-106 | ai:claude
     #[test]
     fn auto_bump_cluster_pr_without_review_story_is_noop() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70328,9 +70742,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:TASK-246 | ai:claude
     /// TASK-246: seed an In-Progress review story with a
     /// `Review PR-<n>: <suffix>` title — the state a reviewer leaves it
-    /// in when requesting fixups. trace:TASK-246 | ai:claude
+    /// in when requesting fixups.
     fn seed_inprogress_review_story(
         store_path: &std::path::Path,
         spec_id: &str,
@@ -70351,10 +70766,10 @@ mod auto_bump_done_tests {
         spec_id.to_string()
     }
 
+    // trace:TASK-246 | ai:claude
     /// TASK-246: a review story left at In Progress when the user
     /// self-merges the PR (no fresh /aida-review iteration) flips to
     /// Completed on the next `aida pull`, with an audit comment.
-    /// trace:TASK-246 | ai:claude
     #[test]
     fn auto_bump_completes_inprogress_review_story_on_self_merge() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70391,10 +70806,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:TASK-246 | ai:claude
     /// TASK-246: an In-Progress review story whose PR has NOT merged is
     /// left untouched — only the `(#N)` merge signal triggers the flip,
     /// so an active review iteration is never stomped.
-    /// trace:TASK-246 | ai:claude
     #[test]
     fn auto_bump_leaves_inprogress_review_story_alone_without_merge() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70419,9 +70834,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-219 | ai:claude
     /// BUG-219: seed a review story at an arbitrary status with a
     /// `Review PR-<n>: <suffix>` title — the shape /aida-pr's auto-queue
-    /// files. trace:BUG-219 | ai:claude
+    /// files.
     fn seed_review_story_at(
         store_path: &std::path::Path,
         spec_id: &str,
@@ -70443,10 +70859,11 @@ mod auto_bump_done_tests {
         spec_id.to_string()
     }
 
+    // trace:BUG-219 | ai:claude
     /// BUG-219: a review story left at Approved when the user self-merges
     /// the PR (no reviewer session was ever spawned) flips to Completed
     /// on the next `aida pull`, with an audit comment that names the
-    /// skipped review. trace:BUG-219 | ai:claude
+    /// skipped review.
     #[test]
     fn auto_bump_completes_approved_review_story_on_self_merge() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70483,9 +70900,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-219 | ai:claude
     /// BUG-219: an Approved review story whose PR has NOT merged is left
     /// untouched — only the `(#N)` merge signal triggers the flip, so a
-    /// genuinely-pending review is never stomped. trace:BUG-219 | ai:claude
+    /// genuinely-pending review is never stomped.
     #[test]
     fn auto_bump_leaves_approved_review_story_alone_without_merge() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70509,11 +70927,11 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-219 | ai:claude
     /// BUG-219 acceptance regression: 4 review stories at Approved (the
     /// observed PR-52/53/54/56 case — `--auto-complete` shipped them,
     /// the orchestrator failed before spawning a reviewer), all 4 PRs
     /// merged, a single `aida pull` flips every one to Completed.
-    /// trace:BUG-219 | ai:claude
     #[test]
     fn auto_bump_completes_four_approved_review_stories_in_one_pass() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70561,10 +70979,10 @@ mod auto_bump_done_tests {
         }
     }
 
+    // trace:BUG-219 | ai:claude
     /// BUG-219: `aida db reconcile-status` — the manual replay tool —
     /// also flips an Approved review story whose PR merged, so the
     /// safety net covers the same case as the pull-time auto-bump.
-    /// trace:BUG-219 | ai:claude
     #[test]
     fn reconcile_status_completes_approved_review_story() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70594,13 +71012,14 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:TASK-1-113 | ai:claude
     /// TASK-1-113: the reconcile-status APPLY path must match `agreed_id`,
     /// not just `spec_id`. A node-aware spec stores the canonical id
     /// (FR-1-042) but is referenced in commit subjects by its agreed id
     /// (FR-42). The candidate/dry-run path uses `get_requirement_by_spec_id`
     /// (agreed-aware) and reported "would flip"; the apply write-loop matched
     /// only `r.spec_id` and silently skipped every agreed≠canonical spec —
-    /// so dry-run and apply diverged. trace:TASK-1-113 | ai:claude
+    /// so dry-run and apply diverged.
     #[test]
     fn reconcile_status_flips_node_aware_spec_by_agreed_id() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70640,6 +71059,7 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-94 | ai:claude
     /// BUG-94 acceptance check: `aida db sync --pull` calls
     /// `auto_bump_done_to_completed` with `pre_sha = None`. The helper's
     /// HEAD~50 fallback range must catch any spec-referencing commit
@@ -70647,7 +71067,6 @@ mod auto_bump_done_tests {
     /// `git pull` the user ran before this command). Verifies the
     /// "scan range collapses to empty" claim is fixed/non-reproducible:
     /// with the fallback range, the bump still fires.
-    /// trace:BUG-94 | ai:claude
     #[test]
     fn auto_bump_with_none_pre_sha_uses_head_50_fallback() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70686,10 +71105,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-102 | ai:claude
     /// BUG-102: when no `(#N)` suffix is present in any subject, review
     /// stories stay untouched (no false-positives from PR-numbered titles
     /// that happen to match an unrelated number elsewhere in the repo).
-    /// trace:BUG-102 | ai:claude
     #[test]
     fn auto_bump_leaves_review_story_alone_without_pr_suffix() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70719,12 +71138,12 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:TASK-226 | ai:claude
     /// TASK-226: reconcile-status replays the same scan as the pull-time
     /// auto-bump but over a wider, user-bounded range. Verifies the
     /// recovery path for a spec whose YAML was unreadable at pull time:
     /// the merge commit is already on local main (so pull's scan window
     /// has moved past it), but reconcile-status still finds and flips it.
-    /// trace:TASK-226 | ai:claude
     #[test]
     fn reconcile_status_replays_missed_bump() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70755,12 +71174,13 @@ mod auto_bump_done_tests {
         assert!(info.completion_sha.is_some());
     }
 
+    // trace:BUG-418
     /// BUG-418: when a spec's referencing commit IS on the default branch but
     /// the spec is already `Completed` (a prior reconcile/pull graduated it),
     /// the no-flip message must say "already Completed — nothing to do", NOT
     /// the misleading "no commit references it" text that reads as a failed
     /// recovery. The store state is correctly untouched either way; this
-    /// guards the OUTPUT, which is the whole of the bug. trace:BUG-418
+    /// guards the OUTPUT, which is the whole of the bug.
     #[test]
     fn reconcile_status_already_completed_says_so_not_no_match() {
         // --spec form: a referencing commit landed, spec already Completed.
@@ -70792,10 +71212,11 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-418
     /// BUG-418 (end-to-end): drive `handle_db_reconcile_status` against a spec
     /// already `Completed` whose merge commit references it; the run must
     /// succeed (no error, no state change) — the regression is in the message
-    /// path, exercised by the unit test above. trace:BUG-418
+    /// path, exercised by the unit test above.
     #[test]
     fn reconcile_status_completed_spec_with_ref_is_noop_ok() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70822,9 +71243,9 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:BUG-328 | ai:codex
     /// BUG-328: `aida db reconcile-status` uses the same expanded direct
     /// candidate rules as pull-time auto-bump.
-    /// trace:BUG-328 | ai:codex
     #[test]
     fn reconcile_status_eligibility_matrix_for_direct_subject_refs() {
         let cases = [
@@ -70878,8 +71299,8 @@ mod auto_bump_done_tests {
         }
     }
 
+    // trace:TASK-226 | ai:claude
     /// TASK-226: --dry-run reports the planned flips without writing.
-    /// trace:TASK-226 | ai:claude
     #[test]
     fn reconcile_status_dry_run_does_not_write() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70905,9 +71326,9 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:TASK-226 | ai:claude
     /// TASK-226: --spec narrows the candidate set to a single requirement.
     /// Other Done specs (with referencing commits) stay untouched.
-    /// trace:TASK-226 | ai:claude
     #[test]
     fn reconcile_status_spec_filter_narrows_candidates() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70944,9 +71365,10 @@ mod auto_bump_done_tests {
         );
     }
 
+    // trace:TASK-226 | ai:claude
     /// TASK-226: a spec already at Completed is a no-op (no double-write,
     /// no error). This is the idempotency contract — running the
-    /// command twice in a row should be safe. trace:TASK-226 | ai:claude
+    /// command twice in a row should be safe.
     #[test]
     fn reconcile_status_idempotent_on_completed_specs() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70970,9 +71392,10 @@ mod auto_bump_done_tests {
         assert!(matches!(req.status, RequirementStatus::Completed));
     }
 
+    // trace:TASK-226 | ai:claude
     /// TASK-226: refuses to run on a non-default branch — same guard as
     /// the pull-time auto-bump, since the scan window only makes sense
-    /// for default-branch history. trace:TASK-226 | ai:claude
+    /// for default-branch history.
     #[test]
     fn reconcile_status_refuses_non_default_branch() {
         let (_tmp, project_root, store_path) = init_test_project();
@@ -70983,10 +71406,11 @@ mod auto_bump_done_tests {
     }
 }
 
+// trace:TASK-103 | ai:claude
 /// TASK-103: `aida rebase` — detect → classify → execute → report.
 /// The detection + classification live in `aida_core::rebase` (reusable
 /// substrate); this handler owns the execute (auto/prompt/stash) and
-/// report (human + `--json`) phases. trace:TASK-103 | ai:claude
+/// report (human + `--json`) phases.
 fn handle_rebase_command(
     store_path: &std::path::Path,
     auto: bool,
@@ -71295,6 +71719,7 @@ fn rebase_report(
     }
 }
 
+// trace:BUG-95 | ai:claude
 /// BUG-95: regression coverage for the claim that `aida pull --code-only`
 /// skips the Done → Completed auto-bump. The bug-as-filed asserted the
 /// conditional was nested in the wrong branch; the current structure has
@@ -71302,7 +71727,6 @@ fn rebase_report(
 /// `!store_only`), so `--code-only` (code_only=true, store_only=false)
 /// reaches it. This test exercises that path end-to-end via
 /// `handle_pull_command` and verifies the bump fires.
-/// trace:BUG-95 | ai:claude
 #[cfg(test)]
 mod handle_pull_command_tests {
     use super::*;
@@ -71412,9 +71836,10 @@ mod handle_pull_command_tests {
         run_git_in(&work, &["push", "origin", "main", "--quiet"]);
     }
 
+    // trace:BUG-254 | ai:claude
     /// BUG-254: like `push_remote_commit_referencing`, but lets the test
     /// choose the filename + content so it can set up an untracked-file
-    /// conflict on the local clone. trace:BUG-254 | ai:claude
+    /// conflict on the local clone.
     fn push_remote_file(bare: &std::path::Path, name: &str, content: &str, spec_id: &str) {
         let tmp = tempfile::TempDir::new().unwrap();
         let work = tmp.path().to_path_buf();
@@ -71448,10 +71873,11 @@ mod handle_pull_command_tests {
         storage.save(&store).unwrap();
     }
 
+    // trace:BUG-95 | ai:claude
     /// BUG-95: `aida pull --code-only` (code_only=true, store_only=false)
     /// must trigger the auto-bump on the just-pulled commits. Regression
     /// guard against the bug-as-filed (claimed the conditional was in the
-    /// wrong block). trace:BUG-95 | ai:claude
+    /// wrong block).
     #[test]
     fn pull_code_only_triggers_auto_bump() {
         let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
@@ -71481,6 +71907,7 @@ mod handle_pull_command_tests {
         );
     }
 
+    // trace:BUG-404 | ai:claude
     /// BUG-404: when local main was already advanced to the merge commit
     /// before the pull runs — exactly what `aida pr ship` step 3
     /// (`gh pr merge --squash`) does before step 4's pull — the pull is a
@@ -71488,7 +71915,6 @@ mod handle_pull_command_tests {
     /// empty, so the merged spec never bumped (it stayed Done until a manual
     /// `reconcile-status`). The fix: a no-op pull falls back to the wide
     /// scan, so a main advanced outside this pull is still covered.
-    /// trace:BUG-404 | ai:claude
     #[test]
     fn pull_noop_still_auto_bumps_externally_advanced_main() {
         let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
@@ -71524,12 +71950,13 @@ mod handle_pull_command_tests {
         );
     }
 
+    // trace:BUG-254 | ai:claude
     /// BUG-254: when the code-leg `git pull --ff-only` fails (here: an
     /// untracked file would be overwritten by the merge), `handle_pull_command`
     /// must return Err so `aida pull` exits non-zero — the orchestrator's
     /// phase 5 then halts instead of falsely announcing `phase 5 complete`
     /// over a stale tree (which used to break phase 6 with confusing
-    /// missing-file errors). trace:BUG-254 | ai:claude
+    /// missing-file errors).
     #[test]
     fn pull_code_leg_failure_returns_err() {
         let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
@@ -71570,6 +71997,7 @@ mod handle_pull_command_tests {
         );
     }
 
+    // trace:BUG-476 | ai:claude
     /// BUG-476: when the code leg fails AND the store pull is skipped (no
     /// orphan worktree / no `origin` — a code-only clone or not-yet-attached
     /// store, common in CI), `handle_pull_command` must STILL return Err.
@@ -71579,7 +72007,7 @@ mod handle_pull_command_tests {
     /// orchestrator's phase 5 falsely announced success. Here the store path
     /// is a plain `requirements.yaml` file (not a git repo), so the first
     /// early return is taken — with `code_only=false` so the store block
-    /// actually runs. trace:BUG-476 | ai:claude
+    /// actually runs.
     #[test]
     fn pull_code_leg_failure_with_store_skipped_returns_err() {
         let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
@@ -71622,11 +72050,11 @@ mod handle_pull_command_tests {
         );
     }
 
+    // trace:BUG-95 | ai:claude
     /// BUG-95 mirror: `aida pull --store-only` should NOT touch the code
     /// branch (no code pull happens), so the auto-bump correctly does
     /// not fire — even if there's a Done spec that a separate code pull
     /// would have bumped. Defensive guard against an over-broad fix.
-    /// trace:BUG-95 | ai:claude
     #[test]
     fn pull_store_only_does_not_run_auto_bump() {
         let (_bare_tmp, _proj_tmp, _bare, project_root) = make_remote_and_clone();
@@ -71662,10 +72090,11 @@ mod handle_pull_command_tests {
     }
 }
 
+// trace:TASK-106 | ai:claude
 /// TASK-106: coverage for the `aida push` / `aida pull` scope flags —
 /// all four combinations (default / --code-only / --store-only / both)
 /// at the clap-parse layer, the `AIDA_PUSH_DEFAULT` env-var override,
-/// and the mutual-exclusion guard. trace:TASK-106 | ai:claude
+/// and the mutual-exclusion guard.
 #[cfg(test)]
 mod push_pull_scope_tests {
     use super::*;
@@ -71920,13 +72349,13 @@ mod push_pull_scope_tests {
     }
 }
 
+// trace:TASK-234 TASK-241 | ai:claude
 /// TASK-234 / TASK-241: integration coverage for the git-state
 /// classifiers behind `aida queue list`'s "Done — awaiting merge"
 /// section and `aida show`'s git-linkage section. Both extracted
 /// helpers (`classify_in_flight_specs`, `collect_git_linkage`) are
 /// gh-free — they only run `git` — so a temp repo with hand-built
 /// commits exercises every branch without a GitHub round-trip.
-/// trace:TASK-234 TASK-241 | ai:claude
 #[cfg(test)]
 mod in_flight_linkage_integration_tests {
     use super::*;
@@ -72001,13 +72430,13 @@ mod in_flight_linkage_integration_tests {
         assert_eq!(b.no_commit, vec!["TASK-803".to_string()]);
     }
 
+    // trace:BUG-229 | ai:claude
     /// BUG-229: a Done spec whose referencing commit lives on BOTH the
     /// reviewer-worktree snapshot branch (`pr-71`, left by `git fetch
     /// origin pull/71/head:pr-71`) and the real PR-source branch
     /// (`task-282`). The classifier must bucket it under the real
     /// branch — picking the `pr-N` snapshot is what mis-rendered the row
     /// as "no PR opened yet" while the PR was under review.
-    /// trace:BUG-229 | ai:claude
     #[test]
     fn classify_prefers_pr_source_branch_over_reviewer_snapshot() {
         let (_tmp, root) = init_repo();
@@ -72032,11 +72461,11 @@ mod in_flight_linkage_integration_tests {
         );
     }
 
+    // trace:BUG-229 | ai:claude
     /// BUG-229: when the ONLY branch containing the commit is a `pr-N`
     /// reviewer snapshot (the real PR-source branch was pruned), the
     /// classifier falls back to it rather than losing the spec — a
     /// degraded but honest key, better than `(branch unknown)`.
-    /// trace:BUG-229 | ai:claude
     #[test]
     fn classify_falls_back_to_pr_n_when_it_is_the_only_branch() {
         let (_tmp, root) = init_repo();
@@ -72398,9 +72827,10 @@ mod in_flight_linkage_integration_tests {
     }
 }
 
+// trace:TASK-241 | ai:claude
 /// TASK-241: coverage for the squash-merge PR-number parser that
 /// `aida show`'s git-linkage section uses to point shipped specs at
-/// their merged PR. trace:TASK-241 | ai:claude
+/// their merged PR.
 #[cfg(test)]
 mod git_linkage_tests {
     use super::*;
@@ -72435,11 +72865,11 @@ mod git_linkage_tests {
     }
 }
 
+// trace:STORY-511 | ai:claude
 /// STORY-511: coverage for the forge-aware change-request (PR/MR) linkage
 /// formatter that `aida show`'s git-linkage section renders. Fully
 /// isolated — no git repo, no `gh`/`glab` on PATH, no I/O — the rendering
 /// is a pure function of (ForgeKind, ChangeLinkageState). EPIC-35 slice 5.
-/// trace:STORY-511 | ai:claude
 #[cfg(test)]
 mod change_linkage_format_tests {
     use super::*;
@@ -72572,8 +73002,9 @@ mod change_linkage_format_tests {
     }
 }
 
+// trace:TASK-238
 /// TASK-238: coverage for the queue-list tag surfacing — the inline
-/// chip formatter and the `--by-batch` group key. trace:TASK-238
+/// chip formatter and the `--by-batch` group key.
 #[cfg(test)]
 mod queue_tag_tests {
     use super::*;
@@ -72674,13 +73105,14 @@ mod queue_tag_tests {
     }
 }
 
+// trace:TASK-107 | ai:claude
 /// TASK-107: regression coverage for `aida fetch`. The behaviors we
 /// pin: (1) code-leg fetch updates origin/<branch> without touching the
 /// worktree, (2) cache-invalidation hook fires after the store leg
 /// (best-effort, off the real `~/.aida` since `AIDA_HOME` overrides it
 /// for tests), (3) `--code-only` / `--store-only` route correctly,
 /// (4) the auto-bump does NOT fire on fetch — that's a pull-only
-/// behavior. trace:TASK-107 | ai:claude
+/// behavior.
 #[cfg(test)]
 mod handle_fetch_command_tests {
     use super::*;
@@ -72898,8 +73330,8 @@ mod derive_parent_epic_label_tests {
         }
     }
 
+    // trace:TASK-44 | ai:claude
     /// Child edge into an Epic → derives that Epic's spec_id.
-    /// trace:TASK-44 | ai:claude
     #[test]
     fn child_into_epic_derives_label() {
         let epic = req("EPIC-20", None, RequirementType::Epic);
@@ -72941,9 +73373,10 @@ mod derive_parent_epic_label_tests {
         assert_eq!(derive_parent_epic_label(&task, &store), None);
     }
 
+    // trace:TASK-44 | ai:claude
     /// Parent edge (the inverse direction) is NOT what we want — a Parent
     /// rel on `req` means `req` is the parent of something else. We
-    /// only derive from Child edges. trace:TASK-44 | ai:claude
+    /// only derive from Child edges.
     #[test]
     fn parent_edge_does_not_derive() {
         let epic = req("EPIC-20", None, RequirementType::Epic);
@@ -73152,7 +73585,8 @@ mod auto_branch_tests {
             .unwrap();
     }
 
-    /// First call returns the slug as-is. trace:STORY-65 | ai:claude
+    // trace:STORY-65 | ai:claude
+    /// First call returns the slug as-is.
     #[test]
     fn auto_branch_slug_when_free() {
         let tmp = init_repo();
@@ -73160,7 +73594,8 @@ mod auto_branch_tests {
         assert_eq!(got, "epic-20");
     }
 
-    /// Slug taken → `-2`. trace:STORY-65 | ai:claude
+    // trace:STORY-65 | ai:claude
+    /// Slug taken → `-2`.
     #[test]
     fn auto_branch_appends_2_on_first_collision() {
         let tmp = init_repo();
@@ -73169,8 +73604,8 @@ mod auto_branch_tests {
         assert_eq!(got, "epic-20-2");
     }
 
+    // trace:STORY-65 | ai:claude
     /// Slug + slug-2..-10 all taken → falls through to dated form.
-    /// trace:STORY-65 | ai:claude
     #[test]
     fn auto_branch_falls_back_to_dated_form() {
         let tmp = init_repo();
@@ -73183,8 +73618,9 @@ mod auto_branch_tests {
         assert_eq!(got, format!("epic-20-{}", today));
     }
 
+    // trace:STORY-65 | ai:claude
     /// `--branch-style date` skips the slug attempt and goes straight to
-    /// the dated form. trace:STORY-65 | ai:claude
+    /// the dated form.
     #[test]
     fn date_branch_style_uses_date_form_even_when_slug_free() {
         let tmp = init_repo();
@@ -73193,7 +73629,8 @@ mod auto_branch_tests {
         assert_eq!(got, format!("epic-20-{}", today));
     }
 
-    /// Unknown style errors clearly. trace:STORY-65 | ai:claude
+    // trace:STORY-65 | ai:claude
+    /// Unknown style errors clearly.
     #[test]
     fn unknown_branch_style_errors() {
         let tmp = init_repo();
@@ -73240,16 +73677,18 @@ mod worktree_dirty_entries_tests {
         tmp
     }
 
-    /// Clean worktree → empty vec. trace:BUG-67 | ai:claude
+    // trace:BUG-67 | ai:claude
+    /// Clean worktree → empty vec.
     #[test]
     fn clean_worktree_is_clean() {
         let tmp = init_repo_with_gitignore();
         assert!(worktree_dirty_entries(tmp.path()).is_empty());
     }
 
+    // trace:BUG-67 | ai:claude
     /// Build artifacts under `target/` are gitignored → no entries.
     /// This is the headline case from BUG-67: every reviewer session
-    /// builds with cargo before reviewing. trace:BUG-67 | ai:claude
+    /// builds with cargo before reviewing.
     #[test]
     fn gitignored_target_dir_is_clean() {
         let tmp = init_repo_with_gitignore();
@@ -73258,7 +73697,8 @@ mod worktree_dirty_entries_tests {
         assert!(worktree_dirty_entries(tmp.path()).is_empty());
     }
 
-    /// `.aida/cache.db` is gitignored → no entries. trace:BUG-67 | ai:claude
+    // trace:BUG-67 | ai:claude
+    /// `.aida/cache.db` is gitignored → no entries.
     #[test]
     fn gitignored_cache_db_is_clean() {
         let tmp = init_repo_with_gitignore();
@@ -73267,7 +73707,8 @@ mod worktree_dirty_entries_tests {
         assert!(worktree_dirty_entries(tmp.path()).is_empty());
     }
 
-    /// A modified tracked file shows up. trace:BUG-67 | ai:claude
+    // trace:BUG-67 | ai:claude
+    /// A modified tracked file shows up.
     #[test]
     fn tracked_modified_file_is_dirty() {
         let tmp = init_repo_with_gitignore();
@@ -73282,7 +73723,8 @@ mod worktree_dirty_entries_tests {
         assert!(entries[0].contains(".gitignore"), "{:?}", entries);
     }
 
-    /// Untracked-but-not-ignored file shows up. trace:BUG-67 | ai:claude
+    // trace:BUG-67 | ai:claude
+    /// Untracked-but-not-ignored file shows up.
     #[test]
     fn untracked_unignored_file_is_dirty() {
         let tmp = init_repo_with_gitignore();
@@ -73292,8 +73734,8 @@ mod worktree_dirty_entries_tests {
         assert!(entries[0].contains("scratch.rs"), "{:?}", entries);
     }
 
+    // trace:BUG-67 | ai:claude
     /// Mix: gitignored build output is hidden, real changes show.
-    /// trace:BUG-67 | ai:claude
     #[test]
     fn mixed_only_real_changes_show() {
         let tmp = init_repo_with_gitignore();
@@ -73310,9 +73752,9 @@ mod worktree_dirty_entries_tests {
         );
     }
 
+    // trace:BUG-67 | ai:claude
     /// Non-git path → empty vec (git errors, we treat as clean and let
     /// the downstream remove --force produce the real error).
-    /// trace:BUG-67 | ai:claude
     #[test]
     fn non_git_path_is_clean() {
         let tmp = TempDir::new().unwrap();
@@ -73325,9 +73767,10 @@ mod add_aida_gitignore_entries_tests {
     use super::*;
     use tempfile::TempDir;
 
+    // trace:BUG-73 | ai:claude
     /// Fresh project (no .gitignore) → file is created with both blocks.
     /// Returns Ok(false) per the contract (a brand-new file isn't an
-    /// "update"). trace:BUG-73 | ai:claude
+    /// "update").
     #[test]
     fn creates_gitignore_with_both_blocks() {
         let tmp = TempDir::new().unwrap();
@@ -73346,6 +73789,7 @@ mod add_aida_gitignore_entries_tests {
         );
     }
 
+    // trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 trace:BUG-484 | ai:claude
     /// Existing .gitignore that already covers ALL six blocks (store,
     /// runtime, CLAUDE.local.md, rules/aida-specs/, docs/plans/_draft/,
     /// settings.local.json) → no write, returns Ok(false). The third block
@@ -73353,7 +73797,6 @@ mod add_aida_gitignore_entries_tests {
     /// (.claude/rules/aida-specs/) was added by SPIKE-31. The fifth
     /// (docs/plans/_draft/) by TASK-383. The sixth (settings.local.json) by
     /// BUG-484.
-    /// trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 trace:BUG-484 | ai:claude
     #[test]
     fn idempotent_when_both_blocks_present() {
         let tmp = TempDir::new().unwrap();
@@ -73369,8 +73812,9 @@ mod add_aida_gitignore_entries_tests {
         assert_eq!(content, original);
     }
 
+    // trace:BUG-484 | ai:claude
     /// .gitignore lacking only the settings.local.json block → that block is
-    /// appended (and only that one). trace:BUG-484 | ai:claude
+    /// appended (and only that one).
     #[test]
     fn appends_settings_local_when_missing() {
         let tmp = TempDir::new().unwrap();
@@ -73389,10 +73833,10 @@ mod add_aida_gitignore_entries_tests {
         assert!(!updated2, "second pass should be a no-op");
     }
 
+    // trace:BUG-73 | ai:claude
     /// Legacy .gitignore (has `.aida-store/` but pre-BUG-73 per-file ignores)
     /// → the deny block is appended; the old per-file lines are left in place
     /// (harmless but redundant). Migration path for existing projects.
-    /// trace:BUG-73 | ai:claude
     #[test]
     fn appends_deny_block_when_only_legacy_per_file_entries() {
         let tmp = TempDir::new().unwrap();
@@ -73411,8 +73855,8 @@ mod add_aida_gitignore_entries_tests {
         assert!(content.starts_with("target/\n.aida-store/\n.aida/session-env.sh\n"));
     }
 
+    // trace:BUG-73 | ai:claude
     /// .gitignore exists but no AIDA blocks → both get appended.
-    /// trace:BUG-73 | ai:claude
     #[test]
     fn appends_both_when_neither_present() {
         let tmp = TempDir::new().unwrap();
@@ -73426,9 +73870,9 @@ mod add_aida_gitignore_entries_tests {
         assert!(content.contains("!.aida/config.toml"));
     }
 
+    // trace:BUG-73 | ai:claude
     /// Detection helper: matches a bare `.aida/*` line, ignores comments
     /// that mention the string, ignores leading/trailing whitespace.
-    /// trace:BUG-73 | ai:claude
     #[test]
     fn deny_pattern_detection() {
         assert!(has_aida_runtime_deny_pattern(".aida/*\n"));
@@ -73445,8 +73889,9 @@ mod recent_files_for_branch_tests {
     use std::process::Command;
     use tempfile::TempDir;
 
+    // trace:TASK-53 | ai:claude
     /// Init a git repo on `branch_name` with `files` committed across N
-    /// commits (one commit per file). trace:TASK-53 | ai:claude
+    /// commits (one commit per file).
     fn init_repo_with_files(branch_name: &str, files: &[&str]) -> TempDir {
         let tmp = TempDir::new().unwrap();
         let p = tmp.path();
@@ -73480,8 +73925,9 @@ mod recent_files_for_branch_tests {
         tmp
     }
 
+    // trace:TASK-53 | ai:claude
     /// Branch with recent commits → returns the touched files (deduped,
-    /// sorted by BTreeSet ordering). trace:TASK-53 | ai:claude
+    /// sorted by BTreeSet ordering).
     #[test]
     fn returns_committed_files() {
         let tmp = init_repo_with_files("feat-x", &["a.rs", "b.rs", "c.rs"]);
@@ -73699,8 +74145,9 @@ mod resolve_gh_binary_tests {
         std::fs::set_permissions(path, perms).unwrap();
     }
 
+    // trace:BUG-74 | ai:claude
     /// PATH walk picks up gh even when the system gh isn't on PATH.
-    /// Critical regression guard for BUG-74. trace:BUG-74 | ai:claude
+    /// Critical regression guard for BUG-74.
     #[test]
     fn finds_gh_via_path() {
         let tmp = TempDir::new().unwrap();
@@ -73714,7 +74161,8 @@ mod resolve_gh_binary_tests {
         );
     }
 
-    /// PATH walk ignores non-executable files named gh. trace:BUG-74
+    // trace:BUG-74
+    /// PATH walk ignores non-executable files named gh.
     #[test]
     fn rejects_non_executable() {
         let tmp = TempDir::new().unwrap();
@@ -73755,9 +74203,10 @@ mod resolve_gh_binary_tests {
         assert!(!is_executable(&tmp.path().join("nope")));
     }
 
+    // trace:BUG-79 | ai:claude
     /// BUG-79: a file that passes is_executable but whose spawn fails
     /// (broken interpreter line) is not returned — we fall back to the
-    /// next candidate or return None. trace:BUG-79 | ai:claude
+    /// next candidate or return None.
     #[test]
     fn rejects_is_executable_but_spawn_fails() {
         let tmp = TempDir::new().unwrap();
@@ -73786,8 +74235,9 @@ mod resolve_gh_binary_tests {
         }
     }
 
+    // trace:BUG-79 | ai:claude
     /// BUG-79: when PATH has a broken candidate followed by a working one,
-    /// the working one wins. trace:BUG-79 | ai:claude
+    /// the working one wins.
     #[test]
     fn falls_back_past_broken_to_working() {
         let broken_dir = TempDir::new().unwrap();
@@ -73913,10 +74363,10 @@ mod session_root_resolution_tests {
     }
 }
 
+// trace:FR-1-041 | ai:claude
 /// Apply the user's `--color=auto|always|never` choice to the colored
 /// crate's global override. `auto` is the colored crate's default
 /// behavior — it uses `isatty(stdout)` and respects `NO_COLOR`.
-/// trace:FR-1-041 | ai:claude
 fn apply_color_mode(mode: &str) {
     match mode {
         "always" => colored::control::set_override(true),
@@ -73925,6 +74375,7 @@ fn apply_color_mode(mode: &str) {
     }
 }
 
+// trace:FR-1-041 | ai:claude
 /// Count queue entries in the user's queue file that pass the role filter.
 /// When `role` is `Some`, returns the count of entries with `for_role`
 /// matching exactly. When `role` is `None`, returns the total entry
@@ -73934,7 +74385,6 @@ fn apply_color_mode(mode: &str) {
 /// keeps statusline off the heavier Storage::load() path so the sub-50ms
 /// budget holds even when the orphan store has hundreds of objects.
 /// Returns `None` if the file is missing or unreadable.
-/// trace:FR-1-041 | ai:claude
 /// TASK-648 (ADR-3): non-archived draft count from the cache, read-only and
 /// fast (same SQLite-without-Cache::open pattern as the statusline freshness
 /// probe — no migration, no write lock on the prompt hot path). The advisor's
@@ -73960,11 +74410,12 @@ fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
     .unwrap_or(0)
 }
 
+// trace:STORY-539 | ai:claude
 /// STORY-539: count URGENT unread mailbox messages for the current shell user,
 /// for the statusline nag. Reads only the LOCAL fast layer (`.aida/mailbox/`)
 /// plus the local read-watermark — no git / orphan-store I/O — to honor the
 /// statusline's cache-only contract. Returns `None` when there is no mailbox
-/// dir at all (nothing to count, stay silent). trace:STORY-539 | ai:claude
+/// dir at all (nothing to count, stay silent).
 fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
     let local = mailbox_store::read_local_messages(project_root).ok()?;
     if local.is_empty() {
@@ -73997,6 +74448,7 @@ fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
 // sites do the cheap query and feed the result to the predicate.
 // trace:STORY-127 | ai:claude
 
+// trace:STORY-127 | ai:claude
 /// Detector (1) + (2): `aida pull` / `git pull` (code leg) no-op.
 ///
 /// `pull_was_noop` — the code-leg `git pull --ff-only` advanced nothing
@@ -74008,7 +74460,6 @@ fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
 /// When there is no such reviewer lease the no-op is unremarkable — a plain
 /// one-line note still helps ("Already up to date — nothing to pull") but is
 /// not the same alarm. The two callers distinguish via the second arg.
-/// trace:STORY-127 | ai:claude
 fn pull_noop_warning(pull_was_noop: bool, reviewer_unmerged_pr: Option<&str>) -> Option<String> {
     if !pull_was_noop {
         return None;
@@ -74023,10 +74474,10 @@ fn pull_noop_warning(pull_was_noop: bool, reviewer_unmerged_pr: Option<&str>) ->
     }
 }
 
+// trace:STORY-127 | ai:claude
 /// Detector (2): cheap "local main already at origin/main" check, expressed
 /// as a pure predicate over the two SHAs so it is testable. `None` for
 /// either SHA (couldn't resolve a ref) means "can't tell" → no warning.
-/// trace:STORY-127 | ai:claude
 fn local_main_already_at_origin(local_sha: Option<&str>, origin_sha: Option<&str>) -> bool {
     match (local_sha, origin_sha) {
         (Some(a), Some(b)) => !a.is_empty() && a == b,
@@ -74034,10 +74485,11 @@ fn local_main_already_at_origin(local_sha: Option<&str>, origin_sha: Option<&str
     }
 }
 
+// trace:STORY-127 | ai:claude
 /// Detector (3): `aida dev release` (→ `scripts/release.sh`) with unmerged
 /// PRs. Returns a one-line warning naming every open PR — a release tag cut
 /// now will NOT include their changes. Pure over the already-collected
-/// open-PR numbers. trace:STORY-127 | ai:claude
+/// open-PR numbers.
 fn release_unmerged_pr_warning(open_pr_numbers: &[u64]) -> Option<String> {
     if open_pr_numbers.is_empty() {
         return None;
@@ -74065,12 +74517,12 @@ fn release_unmerged_pr_warning(open_pr_numbers: &[u64]) -> Option<String> {
     ))
 }
 
+// trace:STORY-127 | ai:claude
 /// Detector (4): `aida session end` while a DIFFERENT role has queued work
 /// waiting. `ending_role` is the role of the lease being torn down;
 /// `role_counts` is the per-role queue depth for the current user. Returns
 /// the `(role, count)` pairs for every OTHER role with at least one waiting
 /// item, sorted by role name for stable output. Pure over the inputs.
-/// trace:STORY-127 | ai:claude
 fn cross_role_queue_waiting(
     ending_role: Option<&str>,
     role_counts: &std::collections::HashMap<String, usize>,
@@ -74086,8 +74538,9 @@ fn cross_role_queue_waiting(
     out
 }
 
+// trace:STORY-127 | ai:claude
 /// Render the detector-(4) warning body from the cross-role pairs. `None`
-/// when nothing is waiting elsewhere. trace:STORY-127 | ai:claude
+/// when nothing is waiting elsewhere.
 fn session_end_cross_role_warning(waiting: &[(String, usize)]) -> Option<String> {
     if waiting.is_empty() {
         return None;
@@ -74111,10 +74564,11 @@ fn session_end_cross_role_warning(waiting: &[(String, usize)]) -> Option<String>
     ))
 }
 
+// trace:STORY-127 | ai:claude
 /// STORY-127: per-role queue depth for the current user. Reads the same
 /// queue YAML `aida queue list` / `read_queue_depth` consult (keyed off
 /// `current_user_id`). Returns an empty map on any read/parse failure —
-/// the detectors degrade to silent. trace:STORY-127 | ai:claude
+/// the detectors degrade to silent.
 fn read_queue_role_counts(
     project_root: &std::path::Path,
 ) -> std::collections::HashMap<String, usize> {
@@ -74139,12 +74593,12 @@ fn read_queue_role_counts(
     counts
 }
 
+// trace:STORY-127 | ai:claude
 /// STORY-127: does the current user hold an active **reviewer** lease whose
 /// scope is a PR (`PR-N` / `MR-N`) that is still open (unmerged)? Returns
 /// the PR label for the warning, else `None`. Cheap: walks the local lease
 /// set, then a single forge open-PR snapshot keyed by number. The PR is
 /// "unmerged" iff its number appears in the open-PR snapshot.
-/// trace:STORY-127 | ai:claude
 fn active_reviewer_unmerged_pr(project_root: &std::path::Path) -> Option<String> {
     let leases = list_leases(project_root);
     // Reviewer leases scope to a PR/MR; the scope string is e.g. "PR-27".
@@ -74177,8 +74631,8 @@ fn active_reviewer_unmerged_pr(project_root: &std::path::Path) -> Option<String>
     None
 }
 
+// trace:STORY-127 | ai:claude
 /// Parse a PR/MR number out of a lease scope like `PR-27` / `MR-3` / `pr-27`.
-/// trace:STORY-127 | ai:claude
 fn pr_number_from_scope(scope: &str) -> Option<u64> {
     let s = scope.trim();
     let rest = s
@@ -74217,9 +74671,10 @@ fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Optio
     Some(count)
 }
 
+// trace:TASK-244 | ai:claude
 /// TASK-244: read `[statusline] role_mismatch_warning` from
 /// `.aida/config.toml`. Defaults to `true` (warn on mismatch) when the
-/// key, section, or file is absent. trace:TASK-244 | ai:claude
+/// key, section, or file is absent.
 fn statusline_role_mismatch_enabled(project_dir: &std::path::Path) -> bool {
     let Ok(content) = std::fs::read_to_string(project_dir.join(".aida").join("config.toml")) else {
         return true;
@@ -74279,13 +74734,13 @@ fn effective_role_resolved() -> (String, bool) {
     resolve_effective_role(std::env::var("AIDA_SESSION_ROLE").ok().as_deref())
 }
 
+// trace:STORY-646 | ai:claude
 /// STORY-646: the effective role for the *guardrail*, consulting the durable
 /// per-user roster (`registry/team.toml`) FIRST, then `AIDA_SESSION_ROLE`, then
 /// the default. So a rostered user gets their role even with no env set; a
 /// non-rostered user (or an absent/unreachable store) resolves exactly as
 /// [`effective_role`] does today (backward-compatible). Best-effort — never
 /// blocks. Returns the role plus where it came from (for the refusal message).
-/// trace:STORY-646 | ai:claude
 fn effective_role_with_roster() -> (String, team::RoleSource) {
     let user_id = current_user_id(None);
     match find_project_root().map(|root| root.join(".aida-store")) {
@@ -74297,9 +74752,10 @@ fn effective_role_with_roster() -> (String, team::RoleSource) {
     }
 }
 
+// trace:STORY-684
 /// Dispatch for the hidden `aida internal <…>` family — substrate machinery
 /// invoked by hooks/scaffolding, not by humans. Today it carries the
-/// vendor-agnostic advisor-code-write gate (STORY-684). trace:STORY-684
+/// vendor-agnostic advisor-code-write gate (STORY-684).
 fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     match command {
         // Called by the git pre-commit hook: enforce the advisor-no-code-write
@@ -74316,6 +74772,7 @@ fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     }
 }
 
+// trace:STORY-647 | ai:claude
 /// STORY-647 (team RBAC slice 2): enforce the team permission map for a gated
 /// op. Resolves the `[team]` policy + the caller's gated effective role (strict
 /// mode honored), and bails with a clear, role-naming refusal when the role
@@ -74324,7 +74781,7 @@ fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
 /// to the all-default (non-strict) policy and never hard-blocks. The
 /// advisor-authority TTY/orchestrator carve-outs of [`has_advisor_authority`]
 /// are honored first so interactive humans and live drains are never blocked by
-/// this finer gate. trace:STORY-647 | ai:claude
+/// this finer gate.
 fn enforce_team_gate(op: permissions::GatedOp, force: bool) -> Result<()> {
     if force {
         return Ok(());
@@ -74355,12 +74812,13 @@ fn enforce_team_gate(op: permissions::GatedOp, force: bool) -> Result<()> {
     anyhow::bail!(permissions::refusal_message(op, &role, source, &config));
 }
 
+// trace:STORY-647 | ai:claude
 /// STORY-647: the non-role half of [`has_advisor_authority`] — an interactive
 /// (TTY) session OR a corroborated live orchestrator. These are legitimate
 /// authority in the guardrail model regardless of role, so the finer RBAC gates
 /// bypass them. Kept distinct from `has_advisor_authority` so the team gates do
 /// NOT inherit its env-role leg (which would let `AIDA_SESSION_ROLE=advisor`
-/// bypass strict mode). trace:STORY-647 | ai:claude
+/// bypass strict mode).
 fn authority_carveout_active() -> bool {
     let orchestrated = find_main_worktree_root()
         .map(|root| {
@@ -74373,12 +74831,12 @@ fn authority_carveout_active() -> bool {
     std::io::stdin().is_terminal() || orchestrated
 }
 
+// trace:STORY-647 | ai:claude
 /// STORY-647: the protected-spec variant of [`enforce_team_gate`] — gates
 /// editing/transitioning a spec carrying any `[team] protected_tags` entry on
 /// the configured `protected_role` (advisor by default). A no-op when the spec
 /// carries no protected tag, when `force` is set, or when the caller holds
 /// advisor authority (TTY / live drain / advisor role). Best-effort.
-/// trace:STORY-647 | ai:claude
 fn enforce_protected_spec_gate<'a, I>(tags: I, force: bool) -> Result<()>
 where
     I: IntoIterator<Item = &'a String>,
@@ -74426,6 +74884,7 @@ fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
     )
 }
 
+// trace:BUG-482 | ai:claude
 /// BUG-482: whether advancing a spec from `from` to `to` (via `aida edit
 /// --status`) is an advisor-authority act keyed on the (source, target) pair.
 ///
@@ -74438,7 +74897,7 @@ fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
 /// self-re-approve a spec it (or the orchestrator) had just punted, bypassing
 /// the triage the punt exists to request. Execution flips from a source
 /// already in the pipeline (`Approved → InProgress → Done`) are NOT gated, so
-/// drains are unaffected. trace:BUG-482 | ai:claude
+/// drains are unaffected.
 pub(crate) fn status_advance_requires_advisor_authority(
     from: &RequirementStatus,
     to: &RequirementStatus,
@@ -74465,6 +74924,7 @@ fn approval_forbidden_for_type(req_type: &RequirementType) -> bool {
     )
 }
 
+// trace:TASK-130 | ai:claude
 /// TASK-130: resolve the `human_only` marker for a freshly-added spec from its
 /// type plus the explicit `--human-only` / `--no-human-only` flags.
 ///
@@ -74481,7 +74941,6 @@ fn approval_forbidden_for_type(req_type: &RequirementType) -> bool {
 /// - `--no-human-only`  → `false` (opt a Spike back out into auto-pickup)
 /// - neither            → the per-type default above
 ///
-/// trace:TASK-130 | ai:claude
 fn resolve_human_only(req_type: &RequirementType, human_only: bool, no_human_only: bool) -> bool {
     if human_only {
         return true;
@@ -74492,6 +74951,7 @@ fn resolve_human_only(req_type: &RequirementType, human_only: bool, no_human_onl
     matches!(req_type, RequirementType::Spike)
 }
 
+// trace:BUG-460 trace:TASK-647 | ai:claude
 /// TASK-647 (ADR-3): "advisor authority" — permission to produce approved+
 /// specs and queue work for execution. Held by an explicit advisor role OR a
 /// human at an interactive terminal (stdin is a TTY). Headless `claude -p`,
@@ -74510,16 +74970,16 @@ fn resolve_human_only(req_type: &RequirementType, human_only: bool, no_human_onl
 /// lifecycle), not a bare agent self-advancing — and corroboration requires a
 /// token matching the live drain-state run, which a bare agent cannot forge, so
 /// the TASK-647/ADR-3 gate still blocks an un-orchestrated agent.
-/// trace:BUG-460 trace:TASK-647 | ai:claude
 pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
     role == "advisor" || is_tty || orchestrated
 }
 
+// trace:STORY-646 | ai:claude
 /// STORY-646: a one-line clause for an advisor-authority refusal that names the
 /// caller's *durable team role* when the roster supplies one. Empty when the
 /// effective role came from the env/default (the refusal message already covers
 /// that case). The guardrail-not-security caveat lives in `aida team set-role`,
-/// not here. trace:STORY-646 | ai:claude
+/// not here.
 fn team_role_refusal_clause() -> String {
     let (role, source) = effective_role_with_roster();
     if source == team::RoleSource::Roster && role != "advisor" {
@@ -74570,11 +75030,11 @@ enum QueueAtFilingRefusal {
     NotApproved,
 }
 
+// trace:TASK-754 | ai:claude
 /// `None` ⇒ enqueue is allowed. `Some(reason)` ⇒ refuse with the matching
 /// message. AC2 + AC5 collapse to one rule: the new spec must end up Approved,
 /// and a downgrade (the authority gate having fired) is reported distinctly so
 /// the operator knows to re-run as the advisor rather than just fix the status.
-/// trace:TASK-754 | ai:claude
 fn queue_at_filing_refusal(
     final_status: &RequirementStatus,
     intake_downgraded: bool,
@@ -74589,6 +75049,7 @@ fn queue_at_filing_refusal(
     }
 }
 
+// trace:BUG-528 | ai:claude
 /// BUG-528: resolve which role queue `aida add --queue` routes the freshly-filed
 /// spec to. Mirrors `aida queue add --for`'s `--for any` semantic, but the
 /// *default* (no `--for`) is the `implementer` queue — the overwhelmingly common
@@ -74599,7 +75060,6 @@ fn queue_at_filing_refusal(
 ///   * `Some("any")`  → `None` (unrouted, explicit opt-out).
 ///   * `Some(role)`   → `Some(canonical_role_name(role))`.
 ///   * `None`         → `Some("implementer")` (canonicalized).
-/// trace:BUG-528 | ai:claude
 fn add_queue_route_role(r#for: Option<&str>) -> Option<String> {
     match r#for {
         Some("any") => None,
@@ -74628,12 +75088,13 @@ fn advisor_seat_hint_warranted(role: &str, session_project_set: bool) -> bool {
     role == "advisor" && !session_project_set
 }
 
+// trace:BUG-498
 /// BUG-498: print a one-time stderr hint when an advisor-gated command is run
 /// advisor-style via an `AIDA_SESSION_ROLE=advisor` prefix while the persistent
 /// seat was never established (no `aida role enter advisor`). Never blocks the
 /// command, never changes the role. Gated on a per-clone marker file under
 /// `.aida/` so it fires at most once (the `.aida/*` deny-by-default gitignore
-/// convention means the marker needs no allow-list entry). trace:BUG-498
+/// convention means the marker needs no allow-list entry).
 fn maybe_hint_advisor_seat() {
     let role = effective_role();
     let session_project_set = std::env::var("AIDA_SESSION_PROJECT")
@@ -74663,11 +75124,12 @@ fn maybe_hint_advisor_seat() {
     );
 }
 
+// trace:TASK-244 | ai:claude
 /// they disagree — and the warning is enabled — both are shown with a
 /// warning glyph so three-way role confusion (shell vs session vs resumed
 /// conversation) is visible at a glance. Returns `(text, is_mismatch)`
 /// so the caller picks the colour. Pure — unit-tested independent of
-/// the statusline IO. trace:TASK-244 | ai:claude
+/// the statusline IO.
 fn role_segment_text(
     shell_role: &str,
     session_role: Option<&str>,
@@ -75055,13 +75517,13 @@ fn handle_statusline_command(color: &str) -> Result<()> {
 // trace:TASK-0414
 // ----------------------------------------------------------------------------
 
+// trace:TASK-0414
 /// The command Claude Code runs for its `statusLine`. Renders the AIDA
 /// one-liner with color forced on (Claude Code pipes the command with no
 /// TTY, so `--color=auto` would emit plain text); falls back to the cwd
 /// when `aida` is not on PATH or the cwd is outside an AIDA project. Kept
 /// in sync with the scaffolder's STATUSLINE_COMMAND so init-scaffolded and
 /// setup-installed config agree. No bashisms — runs under /bin/sh (dash).
-/// trace:TASK-0414
 const STATUSLINE_SETUP_COMMAND: &str =
     "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\"";
 
@@ -75163,7 +75625,8 @@ fn install_claude_statusline(settings_path: &std::path::Path) -> Result<bool> {
     Ok(!existed)
 }
 
-/// Dispatch for `aida statusline setup`. trace:TASK-0414
+// trace:TASK-0414
+/// Dispatch for `aida statusline setup`.
 fn handle_statusline_setup_command(action: &cli::StatuslineAction) -> Result<()> {
     let cli::StatuslineAction::Setup { client, install } = action;
 
@@ -75218,13 +75681,13 @@ fn handle_statusline_setup_command(action: &cli::StatuslineAction) -> Result<()>
     Ok(())
 }
 
+// trace:TASK-60 | ai:claude
 /// TASK-60: pure function deciding what (if anything) to append to
 /// the `sess:` segment given the lease scope and branch. Returns an
 /// empty string when the branch already matches the slugified scope
 /// (no point repeating "epic-20" after "EPIC-20"). Otherwise either
 /// `#<suffix>` (when branch shares the scope's slug prefix — the
 /// common `epic-N-batchM` pattern) or `@<branch>` (free-form).
-/// trace:TASK-60 | ai:claude
 fn derive_session_branch_suffix(scope: &str, branch: &str) -> String {
     let scope_slug = slugify(scope);
     if scope_slug.is_empty() || branch == scope_slug {
@@ -75239,9 +75702,10 @@ fn derive_session_branch_suffix(scope: &str, branch: &str) -> String {
     format!("@{}", branch)
 }
 
+// trace:TASK-60 | ai:claude
 /// TASK-60: assemble the `sess:` label, fitting scope + suffix into
 /// `max_total` characters. Scope is truncated first if the combined
-/// length overflows. trace:TASK-60 | ai:claude
+/// length overflows.
 fn sess_label_with_suffix(scope: &str, suffix: &str, max_total: usize) -> String {
     if suffix.is_empty() {
         return truncate(scope, max_total).to_string();
@@ -75257,6 +75721,7 @@ fn sess_label_with_suffix(scope: &str, suffix: &str, max_total: usize) -> String
     format!("{}{}", scope_part, suffix)
 }
 
+// trace:TASK-282 | ai:claude
 /// TASK-282: the `[sess:<anchor>]` annotation folded into the `@SPEC`
 /// statusline segment. Returns `None` when the session anchor is
 /// redundant with the `@<scope>` label — identical scope AND no
@@ -75266,7 +75731,6 @@ fn sess_label_with_suffix(scope: &str, suffix: &str, max_total: usize) -> String
 /// batch suffix the bare `@<scope>` can't carry. Keeping the suffix as a
 /// divergence trigger preserves TASK-60's batch disambiguation (three
 /// EPIC-20 batches stay distinguishable even when `@` equals the scope).
-/// trace:TASK-282 | ai:claude
 fn sess_anchor_annotation(at_spec: &str, sess_scope: &str, suffix: &str) -> Option<String> {
     if at_spec == sess_scope && suffix.is_empty() {
         return None;
@@ -75275,6 +75739,7 @@ fn sess_anchor_annotation(at_spec: &str, sess_scope: &str, suffix: &str) -> Opti
     Some(format!("[sess:{}]", label))
 }
 
+// trace:TASK-282 | ai:claude
 /// TASK-282: the `wt:<name>` statusline segment. Returns `Some` only when
 /// the session worktree's directory name diverges from the scope slug.
 /// `aida session start` auto-names worktrees `<repo>-<slug>` (and a bare
@@ -75283,7 +75748,6 @@ fn sess_anchor_annotation(at_spec: &str, sess_scope: &str, suffix: &str) -> Opti
 /// names the worktree something else (e.g. `hot-fix`) is the divergence
 /// the segment exists to surface. The matched name is truncated to the
 /// `sess:` budget so a long path doesn't blow the line width.
-/// trace:TASK-282 | ai:claude
 fn wt_divergence_segment(worktree_path: &std::path::Path, slug: &str) -> Option<String> {
     let basename = worktree_path.file_name().and_then(|s| s.to_str())?;
     if slug.is_empty() {
@@ -75297,11 +75761,11 @@ fn wt_divergence_segment(worktree_path: &std::path::Path, slug: &str) -> Option<
     }
 }
 
+// trace:TASK-306 | ai:claude
 /// TASK-306: the orchestrator-context badge for the statusline. Built for a
 /// corroborated `--auto-complete` phase session; the caller colors the
 /// fields. `phase` is the 1-based phase index (`AIDA_AUTO_COMPLETE_PHASE`),
 /// `no_human_mode` the `--no-human` scope slug (`AIDA_NO_HUMAN_MODE`).
-/// trace:TASK-306 | ai:claude
 struct OrchestratorBadge {
     /// `auto:N/6 <phase-name>` — the phase indicator. `auto:?/6` when the
     /// phase env var is missing or unparseable (defensive — the orchestrator
@@ -75441,10 +75905,11 @@ struct PlanRefFix {
     new: String,
 }
 
+// trace:EPIC-27 | ai:claude
 /// The full result of linting a plan file: the three finding groups plus the
 /// confirmed drifted-ref fixes. Split out from `verify_plan` so both the CLI
 /// renderer (`verify_plan`) and the read-only MCP `plan_verify` tool compute
-/// from the same source of truth. trace:EPIC-27 | ai:claude
+/// from the same source of truth.
 struct PlanReport {
     sections: Vec<PlanFinding>,
     files: Vec<PlanFinding>,
@@ -75621,6 +76086,7 @@ fn handle_lifecycle_command(
     Ok(())
 }
 
+// trace:TASK-742 | ai:claude
 /// Phase 3 (TASK-742): reconstruct the observed state machine from the spec
 /// store's `history:` arrays and either print it (`--empirical`) or diff it
 /// against the declared model (`--diff`, which implies `--empirical`).
@@ -75629,7 +76095,7 @@ fn handle_lifecycle_command(
 /// walks: each spec's `HistoryEntry` carries a `changes:` list, and we keep the
 /// `{field_name == "status"}` triples as observed `old_value → new_value`
 /// flips. Exits non-zero from `--diff` when any undocumented flip is found, so
-/// it is CI-gate-able. trace:TASK-742 | ai:claude
+/// it is CI-gate-able.
 fn handle_lifecycle_empirical(
     declared: &aida_core::lifecycle::LifecycleModel,
     diff: bool,
@@ -75809,6 +76275,7 @@ fn replace_first_mermaid_block(markdown: &str, old_body: &str, new_body: &str) -
     out
 }
 
+// trace:TASK-0417 | ai:claude
 /// `aida lint [<SPEC>|--scope feature|task|story] [--json]` — opt-in EARS-style
 /// quality lint over requirement text. AIDA stays a graph-first substrate;
 /// EARS is offered here as an optional clarity lens. The pass is read-only and
@@ -75817,7 +76284,6 @@ fn replace_first_mermaid_block(markdown: &str, old_body: &str, new_body: &str) -
 /// conflicting constraints, and low-testability wording, and prints suggested
 /// rewrites as drafts only — it never mutates a spec. Exits non-zero when any
 /// finding is reported so it can gate a pre-commit hook or a drain step.
-/// trace:TASK-0417 | ai:claude
 fn handle_lint_command(spec: Option<&str>, scope: Option<&str>, json: bool) -> Result<()> {
     use aida_core::ears_lint::lint_text;
     use colored::Colorize;
@@ -75980,6 +76446,7 @@ fn handle_lint_command(spec: Option<&str>, scope: Option<&str>, json: bool) -> R
     }
 }
 
+// trace:STORY-447 | ai:claude
 /// `aida deps sweep [--for-spec <ID>] [--json]` — list likely dependencies
 /// inferred read-only from the trace graph. For each spec, the candidate
 /// dependencies are other specs that share trace-link files (≥2 shared → high,
@@ -75987,7 +76454,6 @@ fn handle_lint_command(spec: Option<&str>, scope: Option<&str>, json: bool) -> R
 /// a real edge with `aida edit <id> --blocked-by <dep>`. The `--apply`
 /// interactive write-back and the scheduled-advisor variant are deliberately
 /// gated until suggestion quality is observed (operator decision, 2026-06-06).
-/// trace:STORY-447 | ai:claude
 fn deps_sweep(for_spec: Option<&str>, json: bool) -> Result<()> {
     use aida_core::deps_sweep::{rank_dependencies, sweep_all, SpecSignals};
     use std::collections::BTreeSet;
@@ -76218,9 +76684,10 @@ fn deps_sweep(for_spec: Option<&str>, json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-265 | ai:claude
 /// STORY-265: the SPEC-IDs listed on a plan file's `Specs:` header line
 /// (`Specs: STORY-N, BUG-M`). Comma- or whitespace-separated; only the first
-/// `Specs:` line (the header) is read. trace:STORY-265 | ai:claude
+/// `Specs:` line (the header) is read.
 fn parse_plan_specs(content: &str) -> Vec<String> {
     for line in content.lines() {
         let t = line.trim();
@@ -76239,10 +76706,11 @@ fn parse_plan_specs(content: &str) -> Vec<String> {
     Vec::new()
 }
 
+// trace:STORY-265 | ai:claude
 /// STORY-265: find the plan file under `plans_dir` whose `Specs:` header lists
 /// `spec_id` (case-insensitive). Skips `_`-prefixed files (e.g. `_TEMPLATE.md`)
 /// and only scans the header region. Returns the lexicographically-last match
-/// so the newest date-prefixed plan wins. trace:STORY-265 | ai:claude
+/// so the newest date-prefixed plan wins.
 fn find_plan_file_for_spec(
     plans_dir: &std::path::Path,
     spec_id: &str,
@@ -76287,9 +76755,10 @@ fn find_plan_file_for_spec(
 // trace:TASK-305 | ai:claude
 // ============================================================================
 
+// trace:TASK-305 | ai:claude
 /// The structured input `synthesize_plan_from_pr` needs, kept separate from the
 /// `gh` subprocess calls so the synthesis is a pure function (PR data → plan
-/// markdown) that can be unit-tested with a fixture. trace:TASK-305 | ai:claude
+/// markdown) that can be unit-tested with a fixture.
 #[derive(Debug, Clone, Default)]
 struct CapturedPr {
     number: u64,
@@ -76301,8 +76770,8 @@ struct CapturedPr {
     changed_files: Vec<String>,
 }
 
+// trace:TASK-305 | ai:claude
 /// Parse a PR argument that may arrive as `65`, `PR-65`, `pr-65`, or `#65`.
-/// trace:TASK-305 | ai:claude
 fn parse_pr_number(arg: &str) -> Result<u64> {
     let trimmed = arg.trim();
     let digits = trimmed
@@ -76316,11 +76785,12 @@ fn parse_pr_number(arg: &str) -> Result<u64> {
     })
 }
 
+// trace:TASK-305 | ai:claude
 /// Scan free text for lines that look like test / verification commands so the
 /// captured plan's `## Verification` section is grounded in what the PR author
 /// actually claimed they ran. Matches fenced-code lines and inline `cargo` /
 /// `aida` / `npm` / `make` / `pytest` / `go test` invocations. Returns the
-/// matched lines verbatim (deduped, order-preserving). trace:TASK-305 | ai:claude
+/// matched lines verbatim (deduped, order-preserving).
 fn extract_verification_commands(body: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut in_fence = false;
@@ -76367,12 +76837,13 @@ fn extract_verification_commands(body: &str) -> Vec<String> {
     out
 }
 
+// trace:TASK-305 | ai:claude
 /// Synthesize the 11-section plan markdown from captured PR data. Pure function
 /// (no I/O) so it is unit-tested against a fixture. `date` is injected so the
 /// header is deterministic in tests. Missing-data sections carry an explicit
 /// `<!-- not captured from PR -->` marker rather than being omitted, so the
 /// output still passes `aida plan verify` (which treats Critical Files /
-/// Verification / Followups as hard-required). trace:TASK-305 | ai:claude
+/// Verification / Followups as hard-required).
 fn synthesize_plan_from_pr(pr: &CapturedPr, date: &str) -> String {
     const NOT_CAPTURED: &str = "<!-- not captured from PR -->";
 
@@ -76527,11 +76998,11 @@ fn synthesize_plan_from_pr(pr: &CapturedPr, date: &str) -> String {
     md
 }
 
+// trace:TASK-305 | ai:claude
 /// Build the output filename slug for a captured plan: prefer the first
 /// credited spec id, else a slug of the PR title, else `pr-<N>`. Always
 /// suffixed with `-from-pr-<N>` so the provenance is in the path and the file
 /// is deterministic (idempotent re-capture overwrites the same path).
-/// trace:TASK-305 | ai:claude
 fn captured_plan_slug(pr: &CapturedPr) -> String {
     let mut specs: Vec<String> = Vec::new();
     for id in extract_spec_ids_from_commit(&pr.title) {
@@ -76565,9 +77036,10 @@ fn captured_plan_slug(pr: &CapturedPr) -> String {
     }
 }
 
+// trace:TASK-305 | ai:claude
 /// Fetch a PR's title/body/commit-subjects via `gh pr view --json` and the
 /// changed files via `gh pr diff --name-only`. Isolated from the synthesis so
-/// the pure function stays testable. trace:TASK-305 | ai:claude
+/// the pure function stays testable.
 fn fetch_captured_pr(project_root: &std::path::Path, number: u64) -> Result<CapturedPr> {
     let gh = resolve_gh_binary().ok_or_else(|| {
         anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
@@ -76640,7 +77112,8 @@ fn fetch_captured_pr(project_root: &std::path::Path, number: u64) -> Result<Capt
     })
 }
 
-/// `aida plan capture <PR>` handler. trace:TASK-305 | ai:claude
+// trace:TASK-305 | ai:claude
+/// `aida plan capture <PR>` handler.
 fn plan_capture(pr_arg: &str, stdout: bool) -> Result<()> {
     use colored::Colorize;
     let number = parse_pr_number(pr_arg)?;
@@ -76794,8 +77267,9 @@ struct FanOutCandidate {
     tags: Vec<String>,
 }
 
+// trace:STORY-519 | ai:claude
 /// How the fan-out set was selected. Drives both resolution and the
-/// human-readable header. trace:STORY-519 | ai:claude
+/// human-readable header.
 enum FanOutSelector<'a> {
     /// Explicit SPEC-IDs passed on the command line.
     Specs(&'a [String]),
@@ -76805,6 +77279,7 @@ enum FanOutSelector<'a> {
     Epic(&'a str),
 }
 
+// trace:STORY-519 | ai:claude
 /// Pure resolution + workable-set filtering for plan-only fan-out.
 ///
 /// Returns the ordered set of SPEC-IDs to fan out over, plus the SPEC-IDs
@@ -76818,7 +77293,7 @@ enum FanOutSelector<'a> {
 /// For an explicit `Specs` selection the requested ids are kept in the
 /// order given; for `Batch`/`Epic` the matching candidates are returned
 /// in their natural store order. Unknown explicit ids are reported as
-/// dropped (caller surfaces "not found"). trace:STORY-519 | ai:claude
+/// dropped (caller surfaces "not found").
 fn resolve_fan_out_set(
     candidates: &[FanOutCandidate],
     selector: &FanOutSelector,
@@ -76886,6 +77361,7 @@ fn resolve_fan_out_set(
     (keep, dropped)
 }
 
+// trace:STORY-519 | ai:claude
 /// `aida plan fan-out` — the thin plan-only fan-out driver (STORY-519).
 ///
 /// Resolves a workable set of Approved specs (by explicit list, `--batch`,
@@ -76896,7 +77372,7 @@ fn resolve_fan_out_set(
 /// agents), and promotion is contention-free pre-work — never a merge — so
 /// fan-out can't race the drain (the STORY-519 thesis). `--promote-only`
 /// skips the plan-session launch and just runs the lifecycle bumps for specs
-/// whose plan file already landed. trace:STORY-519 | ai:claude
+/// whose plan file already landed.
 fn plan_fan_out(
     specs: &[String],
     batch: Option<&str>,
@@ -77055,9 +77531,10 @@ fn plan_fan_out(
     Ok(())
 }
 
+// trace:TASK-299 | ai:claude
 /// Dispatch `aida changelog <generate|refresh|preview>`. The whole engine
 /// lives in `crate::changelog`; this just maps the subcommand variant to a
-/// `ChangelogOptions` and calls `changelog::run`. trace:TASK-299 | ai:claude
+/// `ChangelogOptions` and calls `changelog::run`.
 fn handle_changelog_command(cmd: &cli::ChangelogCommand) -> Result<()> {
     let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let opts = match cmd {
@@ -77218,12 +77695,13 @@ fn plan_symbols_on_line(line: &str) -> Vec<String> {
     out
 }
 
+// trace:EPIC-27 | ai:claude
 /// Pure plan-lint pass: compute the section / file / line-ref findings (and
 /// the drifted-ref fixes) for `content` resolved against repo `root`. Does no
 /// I/O beyond reading the source files the plan references, and never writes
 /// or exits — the rendering, `--fix` rewrite, and process exit live in the
 /// callers (`verify_plan` for the CLI, the `plan_verify` MCP tool for the
-/// server). trace:EPIC-27 | ai:claude
+/// server).
 fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
     use regex::Regex;
     let lines: Vec<&str> = content.lines().collect();
@@ -77526,10 +78004,11 @@ fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
     }
 }
 
+// trace:TASK-93 | ai:claude
 /// CLI entry point for `aida plan verify <file> [--fix] [--quiet]`. Reads the
 /// plan, runs the pure `compute_plan_report` pass, prints the grouped findings,
 /// optionally rewrites drifted refs in place, and exits non-zero on errors
-/// (pre-commit-hook-able). trace:TASK-93 | ai:claude
+/// (pre-commit-hook-able).
 fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()> {
     let content = std::fs::read_to_string(plan_file)
         .with_context(|| format!("could not read plan file {}", plan_file.display()))?;
@@ -77627,10 +78106,11 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
     Ok(())
 }
 
+// trace:EPIC-27
 /// Render a `PlanReport` as a plain (un-colored) text report for the read-only
 /// `plan_verify` MCP tool. Mirrors the CLI's grouped layout + verdict line but
 /// returns a string instead of printing, and never rewrites or exits (the MCP
-/// server must not mutate files or kill its own process). trace:EPIC-27
+/// server must not mutate files or kill its own process).
 fn render_plan_report_string(report: &PlanReport, plan_label: &str) -> String {
     use std::fmt::Write as _;
     let mut out = String::new();
@@ -77719,11 +78199,11 @@ fn collect_source_files(dir: &std::path::Path, exts: &[&str], out: &mut Vec<std:
     }
 }
 
-/// Scan the codebase for `trace:<SPEC-ID>` comments whose id is in `wanted`,
+// trace:TASK-94 | ai:claude
+/// Scan the codebase for `trace` markers naming a `<SPEC-ID>` in `wanted`,
 /// returning spec_id → the trace hits found. The symbol on each hit is the
 /// first definition on the trace line or the two lines below it (comment
 /// lines are skipped so the comment's own prose can't false-match).
-/// trace:TASK-94 | ai:claude
 pub(crate) fn scan_trace_graph(
     project_root: &std::path::Path,
     wanted: &HashSet<String>,
@@ -77786,13 +78266,13 @@ pub(crate) fn scan_trace_graph(
     out
 }
 
+// trace:STORY-511 | ai:claude
 /// STORY-511: the resolved state of the change-request (PR/MR) line in
 /// `aida show`'s git-linkage section, decoupled from the git/forge probes
 /// so the *rendering* is a pure function of (forge, state) — and thus
 /// unit-testable with no git repo and no `gh`/`glab` on PATH. EPIC-35
 /// slice 5 makes this section forge-aware: a GitLab repo reads "MR-47"
 /// and "glab not installed", not the GitHub-only "PR-47"/"gh" wording.
-/// trace:STORY-511 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ChangeLinkageState {
     /// Shipped (merged to the default branch); carries the squash-merge
@@ -77812,6 +78292,7 @@ pub(crate) enum ChangeLinkageState {
     BranchNotFound,
 }
 
+// trace:STORY-511 | ai:claude
 /// STORY-511: render the change-request linkage lines for `aida show`'s
 /// git-linkage section, forge-aware. Returns `(label, value)` pairs of
 /// **plain, uncolored** text in render order (caller applies styling).
@@ -77820,7 +78301,7 @@ pub(crate) enum ChangeLinkageState {
 /// [`crate::forge::ForgeKind::cli_name`] ("gh" / "glab" / "the forge CLI")
 /// so a GitLab project reads "MR-47" and "glab not installed" rather than
 /// the GitHub-only wording. Pure: no git, no forge CLI, no I/O — fully
-/// unit-testable in isolation. trace:STORY-511 | ai:claude
+/// unit-testable in isolation.
 pub(crate) fn format_change_linkage(
     forge: crate::forge::ForgeKind,
     state: &ChangeLinkageState,
@@ -77872,9 +78353,10 @@ pub(crate) fn format_change_linkage(
     out
 }
 
+// trace:TASK-241 | ai:claude
 /// TASK-241: extract the PR number from a GitHub squash-merge commit
 /// subject, which ends with `(#NN)`. Returns None when the subject has
-/// no such suffix. trace:TASK-241 | ai:claude
+/// no such suffix.
 fn parse_squash_pr_number(subject: &str) -> Option<u64> {
     subject
         .trim_end()
@@ -77883,11 +78365,12 @@ fn parse_squash_pr_number(subject: &str) -> Option<u64> {
         .and_then(|n| n.parse::<u64>().ok())
 }
 
+// trace:TASK-238 STORY-442
 /// TASK-238/STORY-442: the inline tag-chip body for an `aida queue list`
 /// row. `batch:*` and `lifecycle:*` tags come first and are always shown
 /// (they alter pickup/routing behavior); plain tags are sorted, capped at
 /// 3, and any remainder collapses to a `+N` overflow marker. Returns None
-/// when the requirement carries no tags. trace:TASK-238 STORY-442
+/// when the requirement carries no tags.
 pub(crate) fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Option<String> {
     if tags.is_empty() {
         return None;
@@ -77917,23 +78400,25 @@ pub(crate) fn format_tag_chip(tags: &std::collections::HashSet<String>) -> Optio
     Some(shown.join(", "))
 }
 
+// trace:TASK-238 | ai:claude
 /// TASK-238: does the tag set contain `want` (case-insensitive)? The
-/// predicate behind `aida queue list --tag`. trace:TASK-238 | ai:claude
+/// predicate behind `aida queue list --tag`.
 pub(crate) fn tag_matches_exact(tags: &std::collections::HashSet<String>, want: &str) -> bool {
     tags.iter().any(|t| t.eq_ignore_ascii_case(want))
 }
 
+// trace:TASK-238
 /// TASK-238: does any tag start with `prefix` (case-insensitive)? The
-/// predicate behind `aida queue list --tag-prefix`. trace:TASK-238
+/// predicate behind `aida queue list --tag-prefix`.
 pub(crate) fn tag_matches_prefix(tags: &std::collections::HashSet<String>, prefix: &str) -> bool {
     let lp = prefix.to_ascii_lowercase();
     tags.iter().any(|t| t.to_ascii_lowercase().starts_with(&lp))
 }
 
+// trace:TASK-238 | ai:claude
 /// TASK-238: the `batch:*` tag a requirement carries (lowest-sorting
 /// when several), used as the group key for `aida queue list
 /// --by-batch`. None when the requirement is un-batched.
-/// trace:TASK-238 | ai:claude
 pub(crate) fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&str> {
     let mut found: Vec<&str> = tags
         .iter()
@@ -77944,11 +78429,12 @@ pub(crate) fn batch_tag_of(tags: &std::collections::HashSet<String>) -> Option<&
     found.into_iter().next()
 }
 
+// trace:TASK-270 | ai:claude
 /// TASK-270: strip a redundant leading `batch:` prefix off a string,
 /// returning `Some(rest)` only when the prefix was present
 /// (case-insensitive). `batch:` is the literal tag printed by `aida
 /// queue list`; first-users reflexively copy that whole token back into
-/// `--batch` or a positional id. trace:TASK-270 | ai:claude
+/// `--batch` or a positional id.
 fn strip_batch_prefix(s: &str) -> Option<&str> {
     let prefix = "batch:";
     s.get(..prefix.len())
@@ -77956,9 +78442,10 @@ fn strip_batch_prefix(s: &str) -> Option<&str> {
         .map(|_| &s[prefix.len()..])
 }
 
+// trace:TASK-270 | ai:claude
 /// TASK-270: normalize a `--batch` flag value so `--batch NAME` and the
 /// redundant `--batch batch:NAME` (the literal tag from `aida queue
-/// list`) both resolve to `NAME`. trace:TASK-270 | ai:claude
+/// list`) both resolve to `NAME`.
 pub(crate) fn normalize_batch_name(s: &str) -> &str {
     strip_batch_prefix(s).unwrap_or(s)
 }
@@ -77982,6 +78469,8 @@ fn parse_batch_chain(raw: &str) -> Result<Vec<String>> {
     Ok(names)
 }
 
+// trace:TASK-270 | ai:claude
+// trace:TASK-322 | ai:claude
 /// TASK-270: resolve the effective positional id and batch name for
 /// `aida queue work`. Accepts `batch:NAME` as a positional id
 /// (equivalent to `--batch NAME`) and strips a redundant `batch:`
@@ -77989,11 +78478,9 @@ fn parse_batch_chain(raw: &str) -> Result<Vec<String>> {
 /// returned `(id, batch)` pair is `Some` — clap's
 /// `conflicts_with(batch, id)` already rejects passing both, and a
 /// `batch:`-prefixed positional is rerouted to the batch slot.
-/// trace:TASK-270 | ai:claude
 /// TASK-322: true when a `queue work` positional is a `next` / `nextN`
 /// head-pickup keyword (vs a SPEC-ID or `batch:NAME`). Used to catch the
 /// `--batch` + `nextN` collision that otherwise silently dropped the keyword.
-/// trace:TASK-322 | ai:claude
 fn is_next_keyword_id(id: &str) -> bool {
     id.to_ascii_lowercase()
         .strip_prefix("next")
@@ -78017,10 +78504,11 @@ fn resolve_queue_work_batch<'a>(
     (None, None)
 }
 
+// trace:TASK-234 | ai:claude
 /// TASK-234: the three in-flight buckets, split out of
 /// [`render_in_flight_grouped`] so the classification — which only ever
 /// touches git (`log` / `merge-base` / `branch --contains`), never gh —
-/// is unit-testable against a temp repo. trace:TASK-234 | ai:claude
+/// is unit-testable against a temp repo.
 struct InFlightBuckets {
     /// (spec_id, squash-merge PR number if any, relative time) — the
     /// referencing commit is already on main but the spec never bumped
@@ -78033,10 +78521,11 @@ struct InFlightBuckets {
     no_commit: Vec<String>,
 }
 
+// trace:TASK-234 | ai:claude
 /// TASK-234: bucket Done specs by git state. gh-free by design — the
 /// PR-state lookup happens later, in [`render_in_flight_grouped`]. A
 /// referencing commit on main → `stuck`; on a feature branch →
-/// `awaiting`; no commit at all → `no_commit`. trace:TASK-234 | ai:claude
+/// `awaiting`; no commit at all → `no_commit`.
 fn classify_in_flight_specs(
     specs: &[&aida_core::Requirement],
     project_root: &std::path::Path,
@@ -78149,10 +78638,11 @@ fn classify_in_flight_specs(
     }
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: a PR's review sub-state, derived from AIDA-local signals
 /// only — session leases and the `Review PR-N:` story status. The gh
 /// `reviewDecision` probe that promotes a row to State 3 (Approved)
-/// layers on top in the render path. trace:TASK-250 | ai:claude
+/// layers on top in the render path.
 #[derive(Debug, PartialEq)]
 enum LocalReviewState {
     /// State 1: no reviewer lease, no In-Progress review story.
@@ -78165,11 +78655,12 @@ enum LocalReviewState {
     InProgressStory { story_id: String },
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: classify a PR's review state from session leases + the
 /// `Review PR-N:` story. gh-free by design — it only reads lease TOML
 /// and the in-memory requirement set, so it is unit-testable against a
 /// temp project root. The render path adds the gh `reviewDecision`
-/// probe (State 3) on top. trace:TASK-250 | ai:claude
+/// probe (State 3) on top.
 fn detect_local_review_state(
     project_root: &std::path::Path,
     all_reqs: &[aida_core::Requirement],
@@ -78207,9 +78698,9 @@ fn detect_local_review_state(
     LocalReviewState::NotStarted
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: gh's `reviewDecision` for a PR plus the approving
 /// reviewer's login — the State 3 ("reviewed + approved") signal.
-/// trace:TASK-250 | ai:claude
 struct PrReviewDecision {
     /// gh `reviewDecision`: "APPROVED" / "CHANGES_REQUESTED" /
     /// "REVIEW_REQUIRED" / "" (no reviews).
@@ -78218,9 +78709,10 @@ struct PrReviewDecision {
     approver: Option<String>,
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: parse `gh pr view --json reviewDecision,latestReviews`
 /// output. Pure — unit-tested against captured gh JSON without
-/// spawning gh. trace:TASK-250 | ai:claude
+/// spawning gh.
 fn parse_review_decision_json(stdout: &str) -> Option<PrReviewDecision> {
     let json: serde_json::Value = serde_json::from_str(stdout).ok()?;
     let decision = json
@@ -78246,9 +78738,10 @@ fn parse_review_decision_json(stdout: &str) -> Option<PrReviewDecision> {
     Some(PrReviewDecision { decision, approver })
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: probe gh for a PR's review decision. `None` when gh is
 /// missing or the call fails — the caller degrades to the local review
-/// state. trace:TASK-250 | ai:claude
+/// state.
 fn detect_pr_review_decision(
     project_root: &std::path::Path,
     pr_number: u64,
@@ -78271,9 +78764,10 @@ fn detect_pr_review_decision(
     parse_review_decision_json(&String::from_utf8_lossy(&out.stdout))
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: parse `gh pr list --state merged --json number,mergedAt`
 /// output into (pr_number, humanized merge time). Pure — unit-tested
-/// against captured gh JSON. trace:TASK-250 | ai:claude
+/// against captured gh JSON.
 fn parse_merged_pr_json(stdout: &str) -> Option<(u64, Option<String>)> {
     let json: serde_json::Value = serde_json::from_str(stdout).ok()?;
     let first = json.as_array()?.first()?;
@@ -78286,11 +78780,11 @@ fn parse_merged_pr_json(stdout: &str) -> Option<(u64, Option<String>)> {
     Some((number, merged))
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: State-4 probe — was `branch` the head of a now-MERGED PR,
 /// and when did it merge? Distinct from `detect_merged_pr_for_branch`
 /// because it also pulls `mergedAt` for the "Merged {time}" hint.
 /// `None` when gh is missing / fails / reports no merged PR.
-/// trace:TASK-250 | ai:claude
 fn detect_merged_pr_with_time(
     project_root: &std::path::Path,
     branch: &str,
@@ -78318,11 +78812,12 @@ fn detect_merged_pr_with_time(
     parse_merged_pr_json(&String::from_utf8_lossy(&out.stdout))
 }
 
+// trace:TASK-250 | ai:claude
 /// TASK-250: unit coverage for the four-state classification behind
 /// `aida queue list`'s "Done — awaiting merge" section. The lease /
 /// review-story leg (`detect_local_review_state`) is exercised against
 /// a temp project root; the gh-JSON parsers are exercised against
-/// captured `gh` output. trace:TASK-250 | ai:claude
+/// captured `gh` output.
 #[cfg(test)]
 mod task_250_review_state_tests {
     use super::*;
@@ -78508,11 +79003,12 @@ mod task_250_review_state_tests {
     }
 }
 
+// trace:BUG-229 | ai:claude
 /// BUG-229: the in-flight display state for a branch with an open PR —
 /// one variant per drain-pipeline stage. Derived purely from the three
 /// signals the render path already gathers (`gh reviewDecision`, the
 /// local review state, the CI probe) so the mapping is unit-testable
-/// without spawning `gh`. trace:BUG-229 | ai:claude
+/// without spawning `gh`.
 #[derive(Debug, PartialEq)]
 enum InFlightPrDisplay {
     /// gh `reviewDecision` == APPROVED — review done, awaiting merge.
@@ -78531,6 +79027,7 @@ enum InFlightPrDisplay {
     AwaitingReview,
 }
 
+// trace:BUG-229 | ai:claude
 /// BUG-229: map the three already-probed signals onto an
 /// [`InFlightPrDisplay`] stage. Pure — no `gh`, no `git` — so the full
 /// drain-pipeline matrix is unit-testable from synthesized inputs.
@@ -78540,7 +79037,6 @@ enum InFlightPrDisplay {
 /// reviewer lease; an active reviewer lease / story means review is
 /// running; only when no review has started does the CI probe decide
 /// between "CI still running" and "ready for review".
-/// trace:BUG-229 | ai:claude
 fn classify_open_pr_display(
     approved: Option<PrReviewDecision>,
     local_state: LocalReviewState,
@@ -78570,10 +79066,11 @@ fn classify_open_pr_display(
     }
 }
 
+// trace:BUG-229 | ai:claude
 /// BUG-229: the open-PR display matrix — `classify_open_pr_display` maps
 /// the three drain-pipeline signals onto one [`InFlightPrDisplay`] stage
 /// per row of the spec's state machine. Synthesized inputs, no `gh` /
-/// `git`. trace:BUG-229 | ai:claude
+/// `git`.
 #[cfg(test)]
 mod bug_229_display_matrix_tests {
     use super::*;
@@ -78687,6 +79184,7 @@ mod bug_229_display_matrix_tests {
     }
 }
 
+// trace:BUG-366 | ai:claude
 /// TASK-234: render the "Done — awaiting merge" body grouped by PR +
 /// state instead of as a flat list. [`classify_in_flight_specs`] does
 /// the git-only bucketing; this adds the `gh` PR-state lookups and
@@ -78698,15 +79196,16 @@ mod bug_229_display_matrix_tests {
 /// flags (`--auto-complete --no-human`) — and the auto-complete preflight
 /// can't resolve a PR number into a spec. Naming `--for reviewer` makes the
 /// reviewer intent explicit so the implementer-drain flags don't get bolted
-/// on to a review pickup. trace:BUG-366 | ai:claude
+/// on to a review pickup.
 fn review_pickup_hint(pr_number: u64) -> String {
     format!("aida queue work PR-{pr_number} --for reviewer")
 }
 
+// trace:TASK-234 TASK-250 | ai:claude
 /// TASK-250: each open-PR branch is sub-classified into one of four
 /// PR-lifecycle states — review not started / in progress / approved /
 /// merged-awaiting-pull — so the next-action hint matches reality
-/// instead of a blanket "merge PR-N". trace:TASK-234 TASK-250 | ai:claude
+/// instead of a blanket "merge PR-N".
 fn render_in_flight_grouped(
     specs: &[&aida_core::Requirement],
     all_reqs: &[aida_core::Requirement],
@@ -78961,14 +79460,16 @@ fn render_in_flight_grouped(
     }
 }
 
+// trace:TASK-241 | ai:claude
+// trace:BUG-380 | ai:claude
 /// TASK-241: surface git linkage for a spec inside `aida show` — the
 /// commits that reference it (AIDA commit format puts `(SPEC-ID)` in
-/// the message), the files carrying its `trace:` comments, the branch +
+/// the message), the files carrying its `trace` comments, the branch +
 /// worktree the work lives on, and PR state. Every sub-probe is
 /// best-effort: a missing `gh`, an absent `origin/main`, or zero
 /// matches degrades to a dim note rather than failing the show.
 /// `--no-git` skips the whole section; `--verbose` un-caps the commit
-/// list and adds per-commit diff stats. trace:TASK-241 | ai:claude
+/// list and adds per-commit diff stats.
 /// Resolve a refname for the default branch that is **known to exist**
 /// in `project_root`, so callers can pass it to `git merge-base
 /// --is-ancestor` without risking a `fatal: Not a valid object name <X>`
@@ -78982,7 +79483,6 @@ fn render_in_flight_grouped(
 /// Returns `None` when no candidate ref exists; callers should then
 /// skip the ancestor check rather than guess (the prior code passed
 /// `"main"` as a literal, which leaked stderr on master-default repos).
-/// trace:BUG-380 | ai:claude
 fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     use std::process::Command as PCmd;
     let git = |args: &[&str]| -> Option<String> {
@@ -79028,9 +79528,10 @@ fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> 
     None
 }
 
+// trace:TASK-241 | ai:claude
 /// TASK-241: the git-linkage data for a spec — extracted from
 /// [`print_git_linkage`] so the collection (git-only, never gh) is
-/// unit-testable against a temp repo. trace:TASK-241 | ai:claude
+/// unit-testable against a temp repo.
 // trace:STORY-82 | ai:claude — `pub(crate)` so the MCP `show_requirement`
 // tool can reuse the same git-linkage collection `aida show` renders.
 pub(crate) struct GitLinkage {
@@ -79048,15 +79549,16 @@ pub(crate) struct GitLinkage {
     pub(crate) shipped_pr: Option<u64>,
 }
 
+// trace:TASK-241 | ai:claude
 /// TASK-241: collect the git linkage for `ids` — commits referencing the
-/// AIDA `(SPEC-ID)` format, files carrying `trace:` comments, and
+/// AIDA `(SPEC-ID)` format, files carrying `trace` comments, and
 /// branch/worktree/shipped state. gh-free by design: the in-flight
 /// open-PR lookup happens later, in [`print_git_linkage`].
-/// trace:TASK-241 | ai:claude
 pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
     collect_git_linkage_opts(project_root, ids, true)
 }
 
+// trace:BUG-550 | ai:claude
 /// BUG-550: variant of [`collect_git_linkage`] with the full source-tree walk
 /// (`scan_trace_graph`, which populates `GitLinkage::files`) gated behind
 /// `scan_trace`. Surfaces that classify a spec's *review state* — the `aida
@@ -79065,7 +79567,7 @@ pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]
 /// `false` to skip the per-spec tree scan. That scan reads every source file
 /// in the repo; multiplying it by a widened candidate set is the dominant
 /// cost on this hot, offline command. With `scan_trace = false`, `files` is
-/// always empty. trace:BUG-550 | ai:claude
+/// always empty.
 pub(crate) fn collect_git_linkage_opts(
     project_root: &std::path::Path,
     ids: &[String],
@@ -79446,8 +79948,9 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
     }
 }
 
+// trace:TASK-94 | ai:claude
 /// `aida plan helpers <spec>` — render a `## Reusable helpers` section
-/// derived from the trace graph. trace:TASK-94 | ai:claude
+/// derived from the trace graph.
 fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> {
     let project_root = find_project_root()?;
     let store = load_store_for_lookup(&project_root)
@@ -79492,11 +79995,12 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
     Ok(())
 }
 
+// trace:TASK-94 TASK-113 | ai:claude
 /// Build the `## Reusable helpers` markdown section for `target` by walking
 /// the requirement graph (siblings / tag-mates / same-feature specs) and
-/// harvesting their `trace:` comments. Returns `None` when no related spec
+/// harvesting their `trace` comments. Returns `None` when no related spec
 /// contributes a named helper. Shared by `aida plan helpers` and the
-/// `aida ultraplan` prompt assembler. trace:TASK-94 TASK-113 | ai:claude
+/// `aida ultraplan` prompt assembler.
 fn build_reusable_helpers_section(
     store: &aida_core::RequirementsStore,
     project_root: &std::path::Path,
@@ -79705,8 +80209,9 @@ struct StaleCandidate {
     reason: String,
 }
 
+// trace:TASK-0418
 /// The assembled pre-plan scan for one spec. Serializable so `--json` can
-/// hand it to an external artifact generator. trace:TASK-0418
+/// hand it to an external artifact generator.
 #[derive(serde::Serialize)]
 struct PreplanScan {
     spec: String,
@@ -79733,10 +80238,10 @@ struct ScanStale {
     reason: String,
 }
 
+// trace:TASK-0418
 /// Collect every `path:line`-free file/symbol ref the spec prose names that
 /// looks like a real code path, and check each against the tree. Returns the
 /// ones that no longer resolve — the stale-assumption candidates. Read-only.
-/// trace:TASK-0418
 fn scan_stale_assumptions(
     project_root: &std::path::Path,
     description: &str,
@@ -79791,10 +80296,10 @@ fn scan_stale_assumptions(
     out
 }
 
+// trace:TASK-0418
 /// Assemble the read-only pre-plan scan for `target`: the trace-graph API
 /// surface, architectural-constraint notes, and stale-assumption candidates.
 /// Pure (no I/O beyond the read-only source scan) so it's unit-testable.
-/// trace:TASK-0418
 fn build_preplan_scan(
     store: &aida_core::RequirementsStore,
     project_root: &std::path::Path,
@@ -79919,9 +80424,10 @@ fn build_preplan_scan(
     }
 }
 
+// trace:TASK-0418
 /// Render a [`PreplanScan`] as the `## Pre-plan scan` markdown section —
 /// the provenance shape that prints, appends to a plan file, or attaches to
-/// the spec. trace:TASK-0418
+/// the spec.
 fn render_preplan_scan(scan: &PreplanScan) -> String {
     let mut md = String::new();
     md.push_str("## Pre-plan scan\n\n");
@@ -79984,8 +80490,8 @@ fn render_preplan_scan(scan: &PreplanScan) -> String {
     md
 }
 
+// trace:TASK-0418
 /// `aida plan scan <SPEC>` — the read-only pre-plan context-grounding pass.
-/// trace:TASK-0418
 fn plan_scan(
     spec_arg: &str,
     attach: bool,
@@ -80140,9 +80646,10 @@ struct GoalClause {
     verify: String,
 }
 
+// trace:TASK-242 | ai:claude
 /// Build the ordered list of `GoalClause`s from the `aida goal` flags.
 /// Pure — no store/IO — so the condition vocabulary is unit-testable.
-/// Bails when no condition flag is given. trace:TASK-242 | ai:claude
+/// Bails when no condition flag is given.
 fn build_goal_clauses(
     batch: Option<&str>,
     epic: Option<&str>,
@@ -80206,6 +80713,7 @@ fn build_goal_clauses(
     Ok(clauses)
 }
 
+// trace:STORY-132 STORY-137 STORY-244 | ai:claude
 /// EPIC-26: launch the AIDA TUI shell. Gated behind the `tui` feature
 /// (default-on as of STORY-137) — the `aida tui` subcommand stays visible
 /// in `--help` either way, but a binary built without the feature errors
@@ -80216,7 +80724,6 @@ fn build_goal_clauses(
 /// TUI is a dashboard that exits emitting one intent line on the
 /// configured fd; without it (and with `mode = "pty-host"`), the legacy
 /// STORY-132 PTY-host shell runs.
-/// trace:STORY-132 STORY-137 STORY-244 | ai:claude
 #[cfg(feature = "tui")]
 fn handle_tui_command(
     scope: Option<String>,
@@ -80240,8 +80747,8 @@ fn handle_tui_command(
     }
 }
 
+// trace:STORY-132 | ai:claude
 /// Stub for binaries built without the `tui` feature.
-/// trace:STORY-132 | ai:claude
 #[cfg(not(feature = "tui"))]
 fn handle_tui_command(
     _scope: Option<String>,
@@ -80256,9 +80763,10 @@ fn handle_tui_command(
     )
 }
 
+// trace:TASK-242 | ai:claude
 /// Join clauses into a single `/goal`-pasteable condition string. Each
 /// clause inlines its verification command so a Haiku-class evaluator
-/// can check it deterministically. trace:TASK-242 | ai:claude
+/// can check it deterministically.
 fn assemble_goal_condition(clauses: &[GoalClause]) -> String {
     clauses
         .iter()
@@ -80267,8 +80775,9 @@ fn assemble_goal_condition(clauses: &[GoalClause]) -> String {
         .join(" AND ")
 }
 
+// trace:TASK-242 | ai:claude
 /// `aida goal` handler — emit the condition framed, bare (`--invoke`),
-/// or to the clipboard (`--copy`). trace:TASK-242 | ai:claude
+/// or to the clipboard (`--copy`).
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn handle_goal_command(
@@ -80431,13 +80940,14 @@ fn ultraplan_spec_line(req: &aida_core::models::Requirement) -> String {
     format!("{} — {} [{}]", req.display_id(), req.title, req.status)
 }
 
+// trace:TASK-247 | ai:claude
 /// Build the `## Comments` section for the ultraplan prompt — the spec's
 /// enrichment comments, most recent first. `None` when the spec has no
 /// non-empty comments. Caps both the comment count and the total
 /// characters so a spec with a long discussion thread can't blow the
 /// prompt budget; the richest planning context (long enrichment
 /// comments) is exactly what TASK-247 exists to surface, so the budget
-/// is deliberately generous. trace:TASK-247 | ai:claude
+/// is deliberately generous.
 fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option<String> {
     const COMMENT_COUNT_CAP: usize = 20;
     const COMMENTS_CHAR_CAP: usize = 16_000;
@@ -80495,12 +81005,14 @@ fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option
     Some(s)
 }
 
+// trace:TASK-113 TASK-247 | ai:claude
+// trace:STORY-306 | ai:claude
 /// Assemble the `/ultraplan` prompt for `target`. `helpers_section` is the
 /// pre-built trace-graph reusable-helpers markdown (None when there is
 /// none — see TASK-94). `include_comments` pulls the spec's enrichment
 /// comments into a `## Comments` section (TASK-247). Returns the prompt
 /// and any warnings to surface. Pure over its inputs so it is
-/// unit-testable. trace:TASK-113 TASK-247 | ai:claude
+/// unit-testable.
 /// Assemble the rich, ultraplan-grade punt payload (STORY-306) a headless
 /// advisor judges. The structured fork fields come from the punted spec's
 /// recorded [`AttentionReason`](aida_core::AttentionReason) — what `aida
@@ -80509,7 +81021,7 @@ fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option
 /// `build_reusable_helpers_section`), so an advisor with **no session
 /// context** has everything the implementer's `/ultraplan` would have.
 /// Split out as a deterministic, unit-testable transform — no session, no
-/// subprocess. trace:STORY-306 | ai:claude
+/// subprocess.
 fn assemble_punt_payload(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
@@ -80905,11 +81417,12 @@ fn handle_ultraplan_command(
     Ok(())
 }
 
+// trace:STORY-659 | ai:claude
 /// Assemble the implementer brief a compete arm hands to a vendor: the rich
 /// spec context (reusing the `/ultraplan` assembly) wrapped in compete-specific
 /// marching orders — implement, build+test, commit on the CURRENT branch, no
 /// PR. The vendor runs headless in its own worktree, so "current branch" is the
-/// per-vendor branch we already checked out for it. trace:STORY-659 | ai:claude
+/// per-vendor branch we already checked out for it.
 fn assemble_compete_brief(
     store: &aida_core::RequirementsStore,
     target: &aida_core::models::Requirement,
@@ -80946,11 +81459,12 @@ fn assemble_compete_brief(
     brief
 }
 
+// trace:STORY-659 trace:STORY-660 | ai:claude
 /// `aida compete <SPEC> --vendors <csv> [--gate <cmd>]` — run one spec through N
 /// vendors headless, in isolated worktrees, then a deterministic objective gate;
 /// report a table, rank the gate-passers, optionally run a rubric LLM judge
 /// (`--judge`), and leave every branch in place. Report-only: it recommends a
-/// winner but never merges. trace:STORY-659 trace:STORY-660 | ai:claude
+/// winner but never merges.
 fn handle_compete_command(
     spec_arg: &str,
     vendors: &[String],
@@ -81199,6 +81713,7 @@ fn handle_compete_command(
     Ok(())
 }
 
+// trace:STORY-660 trace:TASK-869 | ai:claude
 /// Run the opt-in rubric LLM judge over the gate-passing candidates and print
 /// its verdict. REPORT-ONLY: it never merges. Gathers each gate-passing arm's
 /// diff, builds the judge prompt, spawns a one-shot judge (claude or codex,
@@ -81207,7 +81722,7 @@ fn handle_compete_command(
 /// executing model changes, which is what removes the self-evaluation caveat
 /// (a Codex judge over a Claude-vs-Codex bake-off is no longer Claude grading
 /// Claude). Any failure degrades gracefully to a note (the deterministic ranking
-/// still stands). trace:STORY-660 trace:TASK-869 | ai:claude
+/// still stands).
 fn run_compete_judge(
     project_root: &std::path::Path,
     spec_id: &str,
@@ -81308,10 +81823,11 @@ fn run_compete_judge(
     }
 }
 
+// trace:STORY-659
 /// Run a single headless vendor arm: create the worktree, spawn the vendor,
 /// ensure its work is committed, then run the objective gate and measure the
 /// diff. Returns the assembled [`compete::ArmResult`]. Any I/O failure bubbles
-/// up so the caller records the arm as `Failed` and continues. trace:STORY-659
+/// up so the caller records the arm as `Failed` and continues.
 fn run_compete_arm(
     project_root: &std::path::Path,
     vendor: &str,
@@ -81465,12 +81981,12 @@ fn run_compete_arm(
     ))
 }
 
+// trace:BUG-575 | ai:claude
 /// Where a compete run's per-vendor logs live — OUTSIDE every candidate
 /// worktree so they never get auto-committed into a vendor branch (BUG-575).
 /// Prefers `~/.aida/compete/<run>/`; falls back to a sibling temp dir next to
 /// the project when the home dir can't be resolved. `<run>` is derived from the
 /// branch (which is namespaced per spec+vendor) so concurrent runs don't clash.
-/// trace:BUG-575 | ai:claude
 fn compete_log_dir(project_root: &std::path::Path, branch: &str) -> std::path::PathBuf {
     let run_slug = branch.replace('/', "-");
     if let Some(home) = dirs::home_dir() {
@@ -81482,9 +81998,10 @@ fn compete_log_dir(project_root: &std::path::Path, branch: &str) -> std::path::P
         .join(format!("aida-compete-logs-{run_slug}"))
 }
 
+// trace:BUG-575 | ai:claude
 /// Belt-and-suspenders: add the legacy run-log glob to the worktree's private
 /// `.git/info/exclude` so a stray `.aida-compete-*.log` is never swept into the
-/// candidate's `git add -A` auto-commit. Idempotent. trace:BUG-575 | ai:claude
+/// candidate's `git add -A` auto-commit. Idempotent.
 fn exclude_compete_logs_in_worktree(worktree_dir: &std::path::Path) {
     // In a linked worktree, `.git` is a file pointing at the real gitdir; resolve
     // it via `git rev-parse --git-path info/exclude` so we write the right file.
@@ -81519,8 +82036,9 @@ fn exclude_compete_logs_in_worktree(worktree_dir: &std::path::Path) {
     let _ = std::fs::write(&abs, contents);
 }
 
+// trace:STORY-659
 /// Is `name` an executable on PATH? Cheap probe via `<name> --version`, matching
-/// every other launcher's availability check in this crate. trace:STORY-659
+/// every other launcher's availability check in this crate.
 fn binary_on_path(name: &str) -> bool {
     std::process::Command::new(name)
         .arg("--version")
@@ -81529,9 +82047,10 @@ fn binary_on_path(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+// trace:STORY-659
 /// Does the project's working tree have uncommitted changes? Conservative: any
 /// `git status --porcelain` output (excluding the gitignored store/cache noise
-/// git already omits) counts as dirty. trace:STORY-659
+/// git already omits) counts as dirty.
 fn working_tree_is_dirty(project_root: &std::path::Path) -> bool {
     std::process::Command::new("git")
         .args(["status", "--porcelain"])
@@ -81541,9 +82060,10 @@ fn working_tree_is_dirty(project_root: &std::path::Path) -> bool {
         .unwrap_or(false)
 }
 
+// trace:STORY-556
 /// The curated "Getting started" set — the core spec loop a newcomer needs to
 /// be productive on day one. Kept deliberately short so the default help reads
-/// as approachable, not as a 40-command wall. trace:STORY-556
+/// as approachable, not as a 40-command wall.
 const GETTING_STARTED: &[(&str, &str)] = &[
     ("init", "Set up AIDA in the current project"),
     ("add", "Add a new requirement"),
@@ -81557,10 +82077,11 @@ const GETTING_STARTED: &[(&str, &str)] = &[
     ),
 ];
 
+// trace:STORY-556
 /// The full grouped command surface, organized by function. Used by both the
 /// tiered help (group headings only, no command rows) and `aida help --all`
 /// (every row). Dev-only / orchestrator-internal commands live in their own
-/// trailing section so they stay out of the novice's eyeline. trace:STORY-556
+/// trailing section so they stay out of the novice's eyeline.
 fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'static str)])] {
     &[
         (
@@ -81728,9 +82249,10 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
     ]
 }
 
+// trace:STORY-556
 /// Bare `aida` and `aida help`: lead with the small "Getting started" set, then
 /// list the group headings so the depth is visible but not in the newcomer's
-/// face. Full rows are one step away via `aida help --all`. trace:STORY-556
+/// face. Full rows are one step away via `aida help --all`.
 fn print_tiered_help() {
     println!(
         "{}",
@@ -81807,11 +82329,11 @@ fn print_help_all() {
     println!("  - `aida dev shell-init --install` to wire up the `aida` shell wrapper");
 }
 
+// trace:TASK-861 | ai:claude
 /// Resolve a user-supplied `<topic>` to one command group. Matches a group name
 /// case-insensitively; falls back to a unique case-insensitive prefix so
 /// `aida help git` resolves "Git & lifecycle". Returns `Err(Vec)` (the valid
 /// topic names) when nothing matches or the prefix is ambiguous.
-/// trace:TASK-861 | ai:claude
 #[allow(clippy::type_complexity)]
 fn resolve_help_topic(
     topic: &str,
@@ -81837,11 +82359,11 @@ fn resolve_help_topic(
     Err(groups.iter().map(|(g, _)| *g).collect())
 }
 
+// trace:TASK-861 | ai:claude
 /// `aida help <topic>`: expand one command group — its commands + descriptions —
 /// the middle granularity between bare `aida help` (group names only) and
 /// `aida help --all` (every group). An unknown/ambiguous topic errors with the
 /// list of valid topic names rather than silently falling through.
-/// trace:TASK-861 | ai:claude
 fn print_help_topic(topic: &str) -> Result<()> {
     match resolve_help_topic(topic) {
         Ok((group, cmds)) => {
@@ -82281,8 +82803,9 @@ pub(crate) fn binary_embedded_sha(binary: &std::path::Path) -> Option<String> {
     parse_embedded_sha(&s)
 }
 
+// trace:TASK-221 | ai:claude
 /// Pure parser for the --version banner SHA. Split out so the unit tests
-/// don't need a real binary. trace:TASK-221 | ai:claude
+/// don't need a real binary.
 pub(crate) fn parse_embedded_sha(banner: &str) -> Option<String> {
     // Match "sha <HEX>" — accept 7+ hex chars; trim trailing "+dirty" or
     // ")" or whitespace.
@@ -82334,10 +82857,10 @@ pub(crate) fn classify_sha_match(
     }
 }
 
+// trace:FR-1-068 | ai:claude
 /// True when the inactive-side build at `<repo>/target/<other>/aida` is
 /// newer than the active-side build at `<repo>/target/<active>/aida`.
 /// Used for the stale-build warning + PS1 marker.
-/// trace:FR-1-068 | ai:claude
 fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
     let other = if active == "debug" {
         "release"
@@ -82808,6 +83331,7 @@ aida-tui() {
 }
 "#;
 
+// trace:TASK-294 | ai:claude
 /// TASK-294: the `aida-worker` autonomous-drain loop, emitted alongside the
 /// `aida()` wrapper by `aida dev shell-init`. The function reads directives
 /// from `.aida/worker.cmd` (a FIFO — one directive per line) and drives a
@@ -82838,7 +83362,6 @@ aida-tui() {
 /// MUST call `command aida …` (not bare `aida`) so it bypasses the `aida()`
 /// wrapper above and gets raw stdout/exit codes.
 ///
-/// trace:TASK-294 | ai:claude
 const WORKER_FUNCTION: &str = r#"
 # AIDA autonomous-drain worker (TASK-294).
 #
@@ -83349,9 +83872,10 @@ fn handle_dev_serve(
     Ok(())
 }
 
+// trace:STORY-472 | ai:claude
 /// STORY-472: resolve the bump kind from the mutually-exclusive
 /// `--patch`/`--minor`/`--major` flags. None set → "patch" (smallest, safe
-/// default); more than one set → a clean error. trace:STORY-472 | ai:claude
+/// default); more than one set → a clean error.
 fn resolve_release_bump(patch: bool, minor: bool, major: bool) -> Result<&'static str, String> {
     match (patch, minor, major) {
         (_, false, false) => Ok("patch"), // explicit --patch or nothing
@@ -83361,9 +83885,10 @@ fn resolve_release_bump(patch: bool, minor: bool, major: bool) -> Result<&'stati
     }
 }
 
+// trace:STORY-472 | ai:claude
 /// STORY-472: compute the next semver from `current` for a patch/minor/major
 /// bump (lower components reset to 0), for the `--check` preview. Returns None
-/// if `current` isn't a plain MAJOR.MINOR.PATCH. trace:STORY-472 | ai:claude
+/// if `current` isn't a plain MAJOR.MINOR.PATCH.
 fn preview_next_version(current: &str, bump: &str) -> Option<String> {
     let core = current.split(['-', '+']).next().unwrap_or(current);
     let mut it = core.split('.');
@@ -83380,10 +83905,12 @@ fn preview_next_version(current: &str, bump: &str) -> Option<String> {
     })
 }
 
+// trace:STORY-472 | ai:claude
+// trace:STORY-560 | ai:claude
 /// STORY-472: `aida release` — a memorable top-level verb over the dev release
 /// flow. `--check` previews the planned release (read-only); otherwise it
 /// delegates to `handle_dev_release`, forwarding `--skip-xplat-check` via the
-/// env the release script honors. trace:STORY-472 | ai:claude
+/// env the release script honors.
 /// STORY-527: `aida burndown` dispatch.
 /// STORY-560: `aida intake` — the headless advisor INTAKE pass. The
 /// advisor-side analog of `handle_burndown_run`: load the `[intake]` policy +
@@ -83393,7 +83920,6 @@ fn preview_next_version(current: &str, bump: &str) -> Option<String> {
 /// launch a headless `claude -p "/aida-assess [--apply]"` that reads the fenced
 /// set, proposes dispositions, and (under `--apply`) approves within the fence
 /// and grooms the queue. Propose-mode is the ultimate gate.
-/// trace:STORY-560 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_intake_command(
     apply: bool,
@@ -83645,10 +84171,11 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
     }
 }
 
+// trace:STORY-545 | ai:claude
 /// STORY-545: build the `/aida-burndown` slash-command string the headless
 /// session runs, from the selector + caps. Pure + unit-testable. The skill
 /// reads these args ($ARGUMENTS): `--status`, `--tag`, `--batch`, `--max`,
-/// `--concurrency`. trace:STORY-545 | ai:claude
+/// `--concurrency`.
 fn burndown_skill_prompt(
     status: &str,
     tag: Option<&str>,
@@ -83935,12 +84462,12 @@ mod burndown_run_tests {
     }
 }
 
+// trace:STORY-545 | ai:claude
 /// STORY-545: `aida burndown run` — kick off and walk away. Preflights the
 /// advisor-blessed ready set (the same gate `plan` shows), then launches a
 /// headless `claude -p "/aida-burndown <selector>"` that fans out
 /// worktree-isolated implementers, integrates PRs, and loops until drained.
 /// Strategy B (SPIKE-51): reuse the proven skill fan-out, don't reimplement it.
-/// trace:STORY-545 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_burndown_run(
     status: &str,
@@ -84142,6 +84669,7 @@ fn handle_burndown_run(
     }
 }
 
+// trace:TASK-804 | ai:claude
 /// TASK-804 (facet a of STORY-604): build the argv (after the `claude` program
 /// name) for the `--verbose` burndown drain. Identical base to the quiet launch
 /// (`-p <prompt> --permission-mode <mode>`) PLUS the stream-json flags so the
@@ -84149,7 +84677,7 @@ fn handle_burndown_run(
 /// CALLER-controlled (not the headless helper's baked-in `bypassPermissions`)
 /// because `--verbose` must only add visibility — it must never change the
 /// drain's permission posture or control flow. The prompt stays the trailing
-/// positional. Pure + unit-tested. trace:TASK-804 | ai:claude
+/// positional. Pure + unit-tested.
 fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<String> {
     vec![
         "-p".to_string(),
@@ -84163,10 +84691,11 @@ fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<String> {
     ]
 }
 
+// trace:TASK-804 | ai:claude
 /// TASK-804: the discoverable JSONL log path for a `--verbose` burndown drain:
 /// `.aida/burndown/<drain-id>.jsonl`. Gitignored by the deny-by-default
 /// `.aida/*` rule — pure per-clone runtime state. This is the path future
-/// drain-status tooling (TASK-806) will read. trace:TASK-804 | ai:claude
+/// drain-status tooling (TASK-806) will read.
 fn burndown_drain_log_path(project_root: &std::path::Path, drain_id: &str) -> std::path::PathBuf {
     project_root
         .join(".aida")
@@ -84174,12 +84703,12 @@ fn burndown_drain_log_path(project_root: &std::path::Path, drain_id: &str) -> st
         .join(format!("{drain_id}.jsonl"))
 }
 
+// trace:TASK-806 | ai:claude
 /// TASK-806: the most recent burndown event log under `.aida/burndown/`, if any.
 /// Drain ids are `%Y%m%dT%H%M%SZ-<uuid8>` (see [`run_burndown_verbose`]), so a
 /// lexicographic sort of the `*.jsonl` file names is chronological — the last
 /// entry is the newest run. The pointer is best-effort: a `--verbose` drain
 /// writes one of these, a quiet drain does not, so absence is normal.
-/// trace:TASK-806 | ai:claude
 fn latest_burndown_log(project_root: &std::path::Path) -> Option<std::path::PathBuf> {
     let dir = project_root.join(".aida").join("burndown");
     let mut logs: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
@@ -84192,27 +84721,29 @@ fn latest_burndown_log(project_root: &std::path::Path) -> Option<std::path::Path
     logs.pop()
 }
 
+// trace:TASK-806 | ai:claude
 /// TASK-806: one in-flight leased worktree the drain has fanned an implementer
 /// into — the read-side answer to "what specs are being worked right now".
 /// Derived from the live session leases (`.aida/sessions/*.toml`).
-/// trace:TASK-806 | ai:claude
 struct InFlightLease {
     scope: String,
     branch: String,
     role: String,
     worktree: String,
+    // trace:TASK-834
     /// TASK-834: most-recent activity in this lease's worktree (newest of the
     /// last commit time and the newest non-`.git`/non-`target` file mtime).
     /// `None` when the worktree is gone or git/fs probing failed — render the
-    /// row without the activity suffix rather than error. trace:TASK-834
+    /// row without the activity suffix rather than error.
     last_activity: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+// trace:TASK-805
 /// TASK-805: spec ids with a live (non-stale) session lease — "actively being
 /// worked" (the InProgress half of the running-drain marking). Reuses the same
 /// lease-liveness classification `aida session leases` uses. A lease's `scope`
 /// is the spec id for a single-spec session; epic/batch scopes simply won't
-/// match a spec id, which is the correct (no-mark) outcome. trace:TASK-805
+/// match a spec id, which is the correct (no-mark) outcome.
 fn leased_spec_ids(project_root: &std::path::Path) -> std::collections::HashSet<String> {
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
@@ -84223,13 +84754,14 @@ fn leased_spec_ids(project_root: &std::path::Path) -> std::collections::HashSet<
         .collect()
 }
 
+// trace:TASK-805
 /// TASK-805: a LIVE-drain overlay for the read views (`queue list`, `burndown
 /// plan`). When a `burndown run` / `queue work --auto-complete` drain holds the
 /// BUG-538 lock, these views mark the specs it owns: **in-flight** (an
 /// implementer is actively leased on it) vs **scheduled** (claimed by the
 /// drain's blessed/queued set, not yet picked up). Reads the SAME
 /// `.aida/drain.lock` (`drain_lock::probe_lock`) the drain writes — never a
-/// parallel liveness probe (advisor note 2026-06-14). trace:TASK-805
+/// parallel liveness probe (advisor note 2026-06-14).
 struct DrainOverlay {
     pid: u32,
     /// Spec ids with a live session lease — actively being worked.
@@ -84237,10 +84769,11 @@ struct DrainOverlay {
 }
 
 impl DrainOverlay {
+    // trace:TASK-805
     /// Probe the lock + live leases. `Some` only when a drain is ACTIVELY
     /// running (lock present + pid alive); `None` for no-drain or a stale lock
     /// — the marking is about a live drain, so a crashed lock adds no overlay
-    /// (a reader who wants the crash signal uses `burndown status`). trace:TASK-805
+    /// (a reader who wants the crash signal uses `burndown status`).
     fn probe(project_root: &std::path::Path) -> Option<DrainOverlay> {
         match drain_lock::probe_lock(project_root) {
             drain_lock::LockStatus::Running(l) => Some(DrainOverlay {
@@ -84251,9 +84784,10 @@ impl DrainOverlay {
         }
     }
 
+    // trace:TASK-805
     /// Partition `specs` (a set the caller is displaying) into (in_flight,
     /// scheduled): in_flight = has a live lease, scheduled = the rest. Both
-    /// sorted for stable output. trace:TASK-805
+    /// sorted for stable output.
     fn partition(&self, specs: &[String]) -> (Vec<String>, Vec<String>) {
         let (mut in_flight, mut scheduled): (Vec<String>, Vec<String>) = specs
             .iter()
@@ -84265,10 +84799,11 @@ impl DrainOverlay {
     }
 }
 
+// trace:TASK-805
 /// TASK-805: the "a drain is running" banner shared by `queue list` and
 /// `burndown plan`. Pure over its inputs (the spec ids already partitioned by
 /// the caller from the set it displays) so it renders identically in tests and
-/// at the terminal. trace:TASK-805
+/// at the terminal.
 fn drain_running_banner(pid: u32, in_flight: &[String], scheduled: &[String]) -> String {
     let cell = |label: &str, ids: &[String]| -> String {
         if ids.is_empty() {
@@ -84285,6 +84820,7 @@ fn drain_running_banner(pid: u32, in_flight: &[String], scheduled: &[String]) ->
     )
 }
 
+// trace:STORY-658 | ai:claude
 /// STORY-658: `aida health` — a fast, honest, at-a-glance vital-signs read.
 ///
 /// Gathers the inputs (open specs + their idle/blocked/in-flight state, recent
@@ -84292,7 +84828,6 @@ fn drain_running_banner(pid: u32, in_flight: &[String], scheduled: &[String]) ->
 /// drain lock, open findings, parked work), then feeds them to the pure scorers
 /// in [`crate::health`]. All the judgment lives in that module; this function is
 /// I/O + presentation only. Exits 0 on a successful read regardless of grade.
-/// trace:STORY-658 | ai:claude
 fn handle_health_vitals_command(json: bool, brief: bool) -> Result<()> {
     use crate::health::{
         backlog_vitals, coordination_vitals, Axis, CoordinationInputs, Grade, HealthReport,
@@ -84532,11 +85067,12 @@ fn handle_health_vitals_command(json: bool, brief: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-658 | ai:claude
 /// STORY-658: the ordinal day a spec reached Completed, for burn-down velocity.
 /// Walks the spec `history:` for the most recent `status` change whose
 /// `new_value` is `Completed`; falls back to `modified_at` for a currently-
 /// Completed spec with no such history row. `None` when the spec never
-/// completed. trace:STORY-658 | ai:claude
+/// completed.
 fn completed_day_for(r: &aida_core::Requirement) -> Option<i64> {
     use chrono::Datelike;
     let from_history = r
@@ -84559,12 +85095,13 @@ fn completed_day_for(r: &aida_core::Requirement) -> Option<i64> {
     }
 }
 
+// trace:TASK-806 | ai:claude
 /// TASK-806: `aida burndown status` — the read-side companion to `burndown
 /// run`. Answers, from the substrate alone: is a drain running (the BUG-538
 /// global drain lock + a PID-liveness probe), what is it working (the live
 /// session leases — the fanned-out implementer worktrees), and where is the
 /// live event log (`.aida/burndown/<drain-id>.jsonl`, TASK-804) to tail. Pure
-/// read; exits 0 whether or not a drain is running. trace:TASK-806 | ai:claude
+/// read; exits 0 whether or not a drain is running.
 fn handle_burndown_status(json: bool) -> Result<()> {
     // Resolve the shared `.aida/` root from any worktree so a child in a sibling
     // worktree reads the *orchestrator's* lock / leases — mirrors `aida drain
@@ -84649,12 +85186,12 @@ fn handle_burndown_status(json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-829 | ai:claude
 /// TASK-829: a one-line recent-activity heartbeat for `aida burndown status` /
 /// `aida list inflight` — specs that reached Completed in the last 24h, read
 /// from the store (`modified_at` is stamped on the status flip, incl. the
 /// auto-bump on merge). Proves the system is making progress even when no drain
 /// or lease is live. `None` only when the store can't be loaded.
-/// trace:TASK-829 | ai:claude
 fn recent_activity_line(
     project_root: &std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
@@ -84695,16 +85232,18 @@ fn recent_activity_line(
     ))
 }
 
+// trace:TASK-834
 /// TASK-834: idle threshold past which a still-alive lease is flagged "possibly
 /// stuck" — the process exists but nothing has moved in the worktree for a
-/// while. trace:TASK-834
+/// while.
 const ACTIVITY_STUCK_THRESHOLD_SECS: i64 = 10 * 60;
 
+// trace:TASK-834 | ai:claude
 /// TASK-834: best-effort last-activity timestamp for a lease's worktree. Returns
 /// the newest of (the worktree's `git log -1` commit time) and (the newest
 /// non-`.git`/non-`target` file mtime). `None` when the worktree is missing or
 /// every probe failed — callers render the row without an activity suffix rather
-/// than erroring. trace:TASK-834 | ai:claude
+/// than erroring.
 fn worktree_last_activity(worktree: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
     if worktree.as_os_str().is_empty() || !worktree.exists() {
         return None;
@@ -84746,9 +85285,9 @@ fn worktree_last_activity(worktree: &std::path::Path) -> Option<chrono::DateTime
     newest
 }
 
+// trace:TASK-834 | ai:claude
 /// TASK-834: newest file mtime under `dir`, skipping `.git` and `target`,
 /// bounded to `max_depth` levels. Best-effort: unreadable entries are skipped.
-/// trace:TASK-834 | ai:claude
 fn newest_file_mtime(
     dir: &std::path::Path,
     max_depth: usize,
@@ -84780,10 +85319,11 @@ fn newest_file_mtime(
     newest
 }
 
+// trace:TASK-834 | ai:claude
 /// TASK-834: format the per-agent activity label from a last-activity timestamp
 /// and the current time. Pure — the unit-tested core of the in-flight activity
 /// signal. `… active 15s ago` when recent; `… idle 15m possibly stuck` (with a warning) once
-/// the gap exceeds [`ACTIVITY_STUCK_THRESHOLD_SECS`]. trace:TASK-834 | ai:claude
+/// the gap exceeds [`ACTIVITY_STUCK_THRESHOLD_SECS`].
 fn format_activity_label(
     last_activity: chrono::DateTime<chrono::Utc>,
     now: chrono::DateTime<chrono::Utc>,
@@ -84803,8 +85343,9 @@ fn format_activity_label(
     }
 }
 
+// trace:TASK-834 | ai:claude
 /// TASK-834: compact `Ns`/`Nm`/`Nh`/`Nd` for an elapsed-seconds gap (no " ago"
-/// suffix — callers add their own framing). trace:TASK-834 | ai:claude
+/// suffix — callers add their own framing).
 fn humanize_idle(secs: i64) -> String {
     if secs < 60 {
         format!("{secs}s")
@@ -84817,9 +85358,9 @@ fn humanize_idle(secs: i64) -> String {
     }
 }
 
+// trace:TASK-806 | ai:claude
 /// TASK-806: human-readable `burndown status` summary. Pure over its inputs so
 /// the three lock states render identically in tests and at the terminal.
-/// trace:TASK-806 | ai:claude
 fn render_burndown_status_human(
     lock: &drain_lock::LockStatus,
     in_flight: &[InFlightLease],
@@ -84922,8 +85463,9 @@ fn render_burndown_status_human(
     out
 }
 
+// trace:TASK-806 | ai:claude
 /// TASK-806: render the start time as `local-time (Nm ago)`, falling back to the
-/// raw RFC-3339 string if it does not parse. trace:TASK-806 | ai:claude
+/// raw RFC-3339 string if it does not parse.
 fn burndown_lock_when(started_at_utc: &str) -> String {
     match chrono::DateTime::parse_from_rfc3339(started_at_utc) {
         Ok(dt) => {
@@ -84938,7 +85480,8 @@ fn burndown_lock_when(started_at_utc: &str) -> String {
     }
 }
 
-/// TASK-806: machine-readable `burndown status`. trace:TASK-806 | ai:claude
+// trace:TASK-806 | ai:claude
+/// TASK-806: machine-readable `burndown status`.
 fn render_burndown_status_json(
     lock: &drain_lock::LockStatus,
     in_flight: &[InFlightLease],
@@ -84991,13 +85534,14 @@ fn render_burndown_status_json(
     serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string())
 }
 
+// trace:TASK-804 | ai:claude
 /// TASK-804: launch the `--verbose` burndown drain. Same headless `claude -p`
 /// drain as the quiet path (same auto-proceed, same exit-code semantics), but
 /// the stream-json stdout is redirected to `.aida/burndown/<drain-id>.jsonl`
 /// and a background tee renders a human-readable progress line per event to
 /// stderr — so a long drain shows live progress instead of a silent terminal.
 /// Reuses the proven `headless_tee` machinery (TASK-307) rather than rolling a
-/// new renderer. trace:TASK-804 | ai:claude
+/// new renderer.
 fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitStatus> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -85056,10 +85600,11 @@ fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitSt
     status_code
 }
 
+// trace:STORY-547 | ai:claude
 /// STORY-547: build the [`burndown::OpenFacts`] for every OPEN spec in the store
 /// (non-archived, status not Completed/Rejected). Reasons are derived purely
 /// from store signals + the live lease set — no new stored field. Shared by
-/// `burndown explain` and `aida why`. trace:STORY-547 | ai:claude
+/// `burndown explain` and `aida why`.
 fn collect_open_facts(
     store: &aida_core::RequirementsStore,
     // BUG-511: lowercased live-lease scope → role, so the explainer can say
@@ -85184,11 +85729,12 @@ fn collect_open_facts(
     facts
 }
 
+// trace:TASK-723 | ai:claude
 /// TASK-723 (source #2): map UPPERCASE origin SPEC-ID → display-ids of the
 /// findings filed against it. A finding is a draft requirement carrying a
 /// `from-implementer:<SPEC>` or `from-advisor:<SPEC>` origin tag (and possibly
 /// extra `linked:<SPEC>` tags). Reuses the existing finding cohort so the
-/// explainer links — never recomputes — attempt outcomes. trace:TASK-723 | ai:claude
+/// explainer links — never recomputes — attempt outcomes.
 fn collect_findings_by_spec(
     store: &aida_core::RequirementsStore,
 ) -> std::collections::HashMap<String, Vec<String>> {
@@ -85240,10 +85786,11 @@ fn collect_findings_by_spec(
     by_spec
 }
 
+// trace:STORY-547 | ai:claude
 /// STORY-547: `aida burndown explain` — classify every open spec into its
 /// "why still open" bucket + one-line reason. The post-burndown companion to
 /// `plan`: where `plan` answers "what can I fan out?", `explain` answers "why
-/// is everything that's left still here?". trace:STORY-547 | ai:claude
+/// is everything that's left still here?".
 fn handle_burndown_explain(json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -85387,6 +85934,7 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-562 | ai:claude
 /// STORY-562: `aida list human` (and `aida list --human`) — the discoverable
 /// "what needs me?" view. The DATA already exists: `burndown explain`
 /// classifies every open spec into a bucket and flags which `needs_human()`.
@@ -85395,7 +85943,6 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
 /// grouped by reason so it reads as a triage list. We REUSE the
 /// [`burndown::explain_reasons`] classifier verbatim — no re-derived buckets.
 /// `short` prints just the IDs (composes with `aida list --short`).
-/// trace:STORY-562 | ai:claude
 /// `aida human` — the 'human' role-vector front door (SPIKE-57, Phase 2).
 ///
 /// Bare `aida human` surfaces the bottleneck view: every spec classified
@@ -85516,12 +86063,13 @@ mod bug_544_open_findings_count_tests {
             .len()
     }
 
+    // trace:BUG-544
     /// Regression for BUG-544: `aida human`'s open-findings count must equal
     /// `aida findings list`'s awaiting-triage count. Before the fix
     /// `collect_findings_by_spec` counted EVERY non-archived finding row
     /// (including resolved/escalated/decided ones that left draft), inflating
     /// the top-line "N open items" total while `findings list` correctly
-    /// showed 0. trace:BUG-544
+    /// showed 0.
     #[test]
     fn human_open_findings_matches_findings_list_awaiting() {
         let store = aida_core::RequirementsStore {
@@ -85603,11 +86151,11 @@ mod bug_556_deferred_excluded_from_open_facts_tests {
         r
     }
 
+    // trace:BUG-556
     /// Regression for BUG-556: `collect_open_facts` (the source for `aida human`
     /// and `burndown explain`) must drop structurally-deferred specs (the
     /// `aida defer` view-flag), exactly as it drops archived ones — otherwise a
     /// parked spec leaks back onto the human worklist as ungroomed/umbrella.
-    /// trace:BUG-556
     #[test]
     fn deferred_specs_are_excluded_from_open_facts() {
         let store = aida_core::RequirementsStore {
@@ -85642,10 +86190,11 @@ struct ReviewAwaiting {
     reviewed: bool,
 }
 
+// trace:STORY-611 | ai:claude
 /// STORY-611: classify whether an open PR already carries an Approved reviewer
 /// verdict (the State-3 "reviewed + approved → awaiting merge" signal). Reuses
 /// the same verdict-file convention the orchestrator-resume probe reads:
-/// `.aida/review-verdicts/PR-{n}.json`. trace:STORY-611 | ai:claude
+/// `.aida/review-verdicts/PR-{n}.json`.
 fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bool {
     let path = project_root
         .join(".aida")
@@ -85659,6 +86208,7 @@ fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bo
     )
 }
 
+// trace:BUG-550 | ai:claude
 /// BUG-550: the set of SPEC-IDs referenced by commits that exist on some ref
 /// but are NOT yet reachable from the default branch — i.e. specs with an
 /// in-flight (unmerged) review surface. This is the cheap prefilter that lets
@@ -85670,9 +86220,8 @@ fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bo
 /// merged (Shipped) and correctly absent — no false negatives for a genuinely
 /// open surface; the at-worst false positive (local default behind origin)
 /// is harmless, since the per-spec classifier re-checks and drops it. Ids are
-/// resolved through the same trailer / `trace:` parsers `collect_git_linkage`
+/// resolved through the same trailer / `trace` parsers `collect_git_linkage`
 /// uses, so membership matches what the classifier later confirms.
-/// trace:BUG-550 | ai:claude
 fn specs_with_unmerged_commits(
     project_root: &std::path::Path,
 ) -> std::collections::HashSet<String> {
@@ -85711,6 +86260,7 @@ fn specs_with_unmerged_commits(
     out
 }
 
+// trace:STORY-611 trace:BUG-550 | ai:claude
 /// STORY-611: enumerate the specs that have a code-review surface awaiting the
 /// human — branch / open-PR specs not yet merged, the SAME surface `aida
 /// review <SPEC>` locates. Candidate set (BUG-550) = every non-archived spec
@@ -85723,7 +86273,6 @@ fn specs_with_unmerged_commits(
 /// so the open-PR linkage — not the Done flag — is the real gate. Each row is
 /// tagged `reviewed` so the caller can split awaiting-review from the
 /// awaiting-MERGE micro-state (the REFINEMENT comment's case 3).
-/// trace:STORY-611 trace:BUG-550 | ai:claude
 fn reviews_awaiting_human(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
@@ -86276,6 +86825,7 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     Ok(())
 }
 
+// trace:STORY-618 | ai:claude
 /// STORY-618: bare `aida advisor` — the advisor's actionable worklist, the
 /// mirror of bare `aida human` but grouped by ADVISOR action. The seat
 /// complement of [`handle_list_human`]: the routine dispositions that need
@@ -86286,7 +86836,7 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
 ///   DISTILL  — under-specified specs to turn into pre-recorded questions
 ///   TRIAGE   — findings awaiting triage
 ///   BLESS    — approved-but-unqueued backlog ready to groom onto the queue
-/// Read-only; writes nothing. trace:STORY-618 | ai:claude
+/// Read-only; writes nothing.
 fn handle_advisor_worklist(
     short: bool,
     backend: &aida_core::CachedGitBackend,
@@ -86506,11 +87056,12 @@ fn handle_advisor_worklist(
     Ok(())
 }
 
+// trace:STORY-563 | ai:claude
 /// STORY-563: build [`burndown::UnblockFacts`] for every open spec — the input
 /// to the `aida human unblock` classifier. Mirrors [`collect_open_facts`] but
 /// adds the three signals the unblock lens needs that the explain lens doesn't:
 /// queue membership (advisor sign-off, ADR-3), acceptance-criteria presence,
-/// and implementable-type. Read-only. trace:STORY-563 | ai:claude
+/// and implementable-type. Read-only.
 fn collect_unblock_facts(
     store: &aida_core::RequirementsStore,
     in_flight_scopes: &std::collections::HashSet<String>,
@@ -86568,6 +87119,7 @@ fn collect_unblock_facts(
     facts
 }
 
+// trace:STORY-563 | ai:claude
 /// STORY-563: `aida human unblock` — the deterministic prompt-assembler that
 /// ends the recurring "how do I get open items into the burndown?" question by
 /// GENERATING the grooming question. Read-only + no LLM (the SPIKE-55
@@ -86575,7 +87127,7 @@ fn collect_unblock_facts(
 /// every open spec by what keeps it out of the burndown ready set, then assemble
 /// a paste-ready advisor prompt that routes each to queue / clarify-first /
 /// leave-parked. The advisor (the grooming skill / live session) is the actor
-/// the prompt drives. trace:STORY-563 | ai:claude
+/// the prompt drives.
 fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
     match cmd {
         // TASK-770: namespaced aliases over the existing top-level presence
@@ -86599,11 +87151,11 @@ fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
     }
 }
 
+// trace:STORY-611 | ai:claude
 /// STORY-611: which `aida human <sub>` verbs run WITHOUT a storage handle. The
 /// presence + unblock verbs do; the action aliases (`answer`/`review`/`decide`)
 /// delegate to backend-needing canonical verbs, so they fall through to the
 /// main dispatch instead of the early pre-storage return.
-/// trace:STORY-611 | ai:claude
 fn human_subcommand_needs_no_storage(cmd: &cli::HumanCommand) -> bool {
     matches!(
         cmd,
@@ -86657,7 +87209,8 @@ mod story_611_human_alias_tests {
     }
 }
 
-/// STORY-563: the `aida human unblock` body. trace:STORY-563 | ai:claude
+// trace:STORY-563 | ai:claude
+/// STORY-563: the `aida human unblock` body.
 fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -86776,6 +87329,7 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-656 | ai:claude
 /// STORY-631: `aida intent <ID>` — the cached, drift-stamped, AI-generated
 /// plain-terms comprehension of WHY a spec exists. Distinct from `aida why`
 /// (the deterministic state classifier): this is an LLM synthesis over the spec
@@ -86786,7 +87340,7 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
 /// and (with `--ai`) appends a headless AI gap report. The pure scorer +
 /// JSON/parse contracts are unit-tested in `dryrun.rs`; this is the integration
 /// boundary (store load + the gated `claude -p` spawn), mirroring how
-/// `handle_intent` pairs with `intent.rs`. trace:STORY-656 | ai:claude
+/// `handle_intent` pairs with `intent.rs`.
 fn handle_spec_dryrun(id: &str, ai: bool, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -86830,9 +87384,10 @@ fn handle_spec_dryrun(id: &str, ai: bool, json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-656 | ai:claude
 /// Render the human view of a dryrun verdict: the headline score, a pass/fail
 /// line per dimension with its reason, the failing-dimension callout, and (when
-/// present) the AI gap report. trace:STORY-656 | ai:claude
+/// present) the AI gap report.
 fn print_dryrun_human(
     disp: &str,
     title: &str,
@@ -86914,12 +87469,12 @@ fn print_dryrun_human(
     }
 }
 
+// trace:STORY-656 | ai:claude
 /// Run the gated headless `/aida-dryrun` AI pass: spawn `claude -p`, read the
 /// JSON sidecar it writes, and parse it into a [`dryrun::AiReport`]. The spawn
 /// is fenced behind a TTY / non-headless context exactly like `generate_intent`
 /// — without a human to authorize tools the pass has no value. The parse
 /// contract is unit-tested in `dryrun.rs`; tests never reach this function.
-/// trace:STORY-656 | ai:claude
 fn run_dryrun_ai_pass(project_root: &std::path::Path, disp: &str) -> Result<dryrun::AiReport> {
     let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     let headless = std::env::var("AIDA_HEADLESS").as_deref() == Ok("1");
@@ -86981,6 +87536,7 @@ fn run_dryrun_ai_pass(project_root: &std::path::Path, disp: &str) -> Result<dryr
     Ok(report)
 }
 
+// trace:STORY-657
 /// `aida spec interview <ID>` — resolve a spec's `dryrun` readiness gaps INTO
 /// the spec via clarifying questions.
 ///
@@ -86988,7 +87544,7 @@ fn run_dryrun_ai_pass(project_root: &std::path::Path, disp: &str) -> Result<dryr
 /// interview *resolves* them. The pure core lives in `interview.rs` (gap →
 /// question mapping + answer → spec-edit folding, fully unit-tested); this is
 /// the integration boundary — store load, the propose/apply split, TTY
-/// prompting, the headless JSON emit, and the actual write. trace:STORY-657
+/// prompting, the headless JSON emit, and the actual write.
 fn handle_spec_interview(
     id: &str,
     apply: bool,
@@ -87256,10 +87812,11 @@ fn handle_spec_interview(
     Ok(())
 }
 
+// trace:STORY-657 | ai:claude
 /// Interactive (TTY) interview: prompt for each gap in turn, reading one line of
 /// free-text per question from stdin. A blank line is a skip. Mirrors the
 /// line-read pattern used elsewhere (`read_line`); kept out of the pure core so
-/// tests never touch stdin. trace:STORY-657 | ai:claude
+/// tests never touch stdin.
 fn prompt_interview_answers(
     disp: &str,
     title: &str,
@@ -87311,8 +87868,8 @@ fn prompt_interview_answers(
     Ok(answers)
 }
 
+// trace:STORY-631 | ai:claude
 /// from cache otherwise, and marked STALE when the neighborhood drifted.
-/// trace:STORY-631 | ai:claude
 fn handle_intent(id: &str, audience: &str, refresh: bool, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -87383,9 +87940,10 @@ fn handle_intent(id: &str, audience: &str, refresh: bool, json: bool) -> Result<
     print_intent(&disp, audience, intent, stale, json)
 }
 
+// trace:STORY-631 | ai:claude
 /// Assemble the [`intent::NeighborhoodInputs`] for a spec: its own
 /// title/description/status, each immediate neighbor's id+title+status, and the
-/// comment count. trace:STORY-631 | ai:claude
+/// comment count.
 fn build_intent_neighborhood(req: &Requirement, all: &[Requirement]) -> intent::NeighborhoodInputs {
     let mut neighbors = Vec::new();
     for rel in &req.relationships {
@@ -87407,9 +87965,10 @@ fn build_intent_neighborhood(req: &Requirement, all: &[Requirement]) -> intent::
     }
 }
 
+// trace:STORY-631 | ai:claude
 /// Render the intent comprehension — JSON shape or the labelled human view.
 /// The human view ALWAYS labels the prose AI-generated so no reader mistakes it
-/// for hand-authored ground truth. trace:STORY-631 | ai:claude
+/// for hand-authored ground truth.
 fn print_intent(
     disp: &str,
     audience: &str,
@@ -87455,11 +88014,12 @@ fn print_intent(
     Ok(())
 }
 
+// trace:STORY-631 | ai:claude
 /// Run the headless `/aida-intent` skill via `claude -p` over the spec + its
 /// graph neighborhood, parse the sidecar, and fold it into a
 /// [`aida_core::SpecIntent`] stamped with generated_at + source_hash. The spawn
 /// is the integration boundary; the pure transforms are unit-tested in
-/// `intent.rs`. trace:STORY-631 | ai:claude
+/// `intent.rs`.
 fn generate_intent(
     project_root: &std::path::Path,
     _req: &Requirement,
@@ -87551,8 +88111,9 @@ fn generate_intent(
     })
 }
 
+// trace:STORY-547 | ai:claude
 /// STORY-547: `aida why <ID>` — single-spec drill-down using the same
-/// classifier as `burndown explain`. trace:STORY-547 | ai:claude
+/// classifier as `burndown explain`.
 fn handle_why(id: &str, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -87722,10 +88283,11 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-527 trace:STORY-546 trace:STORY-545
 /// STORY-545: resolve a selector to `(ready, awaiting_signoff, parked)` via the
 /// pickability gate + the STORY-546 queue gate. Shared by `burndown plan` (which
 /// renders it) and `burndown run` (which preflights + drains it) so the two can
-/// NEVER disagree on what's drainable. trace:STORY-527 trace:STORY-546 trace:STORY-545
+/// NEVER disagree on what's drainable.
 #[allow(clippy::type_complexity)]
 // trace:BUG-532 — the title map (display-id → title) is built from the SAME
 // single store load the set resolution already does, so `burndown plan`'s text
@@ -87879,6 +88441,7 @@ fn resolve_burndown_sets(
     Ok((ready, awaiting_signoff, parked, supervised, titles))
 }
 
+// trace:STORY-527 trace:STORY-546 | ai:claude
 /// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
 /// pure pickability gate. Read-only — the deterministic input the
 /// `/aida-burndown` skill fans out.
@@ -87888,7 +88451,7 @@ fn resolve_burndown_sets(
 /// / TASK-647), so burndown can never drain a spec the advisor didn't bless.
 /// Pickable-but-unqueued specs surface as "awaiting sign-off", and
 /// `--candidates` shows exactly that set (the advisor's "what to bless next"
-/// aid). trace:STORY-527 trace:STORY-546 | ai:claude
+/// aid).
 fn handle_burndown_plan(
     status: &str,
     tag: Option<&str>,
@@ -88251,9 +88814,9 @@ fn handle_release(
     handle_dev_release(bump)
 }
 
+// trace:STORY-472 | ai:claude
 /// TASK-693: argv for blocking on a PR's checks (`gh pr checks <N> --watch
 /// --fail-fast`) — exits 0 once all pass, non-zero the moment one fails.
-/// trace:STORY-472 | ai:claude
 fn build_after_pr_watch_args(pr: u64) -> Vec<String> {
     vec![
         "pr".into(),
@@ -88264,8 +88827,9 @@ fn build_after_pr_watch_args(pr: u64) -> Vec<String> {
     ]
 }
 
+// trace:STORY-472 | ai:claude
 /// TASK-693: argv to squash-merge a PR and delete its branch
-/// (`gh pr merge <N> --squash --delete-branch`). trace:STORY-472 | ai:claude
+/// (`gh pr merge <N> --squash --delete-branch`).
 fn build_after_pr_merge_args(pr: u64) -> Vec<String> {
     vec![
         "pr".into(),
@@ -88349,6 +88913,7 @@ mod release_verb_tests {
     }
 }
 
+// trace:EPIC-1-001 | ai:claude
 /// Stream a child's stdout/stderr to the parent's stderr with a prefix.
 /// `aida dev release [bump]` — the one-command release flow:
 /// 1. run scripts/release.sh (bumps version, tags, pushes, interactive)
@@ -88357,7 +88922,6 @@ mod release_verb_tests {
 /// 3. upgrade sibling installs to the new version (auto-yes)
 ///
 /// `aida dev patch` is a thin alias that calls this with bump = "patch".
-/// trace:EPIC-1-001 | ai:claude
 // trace:FR-2-004 | ai:claude
 fn handle_dev_release(bump: &str) -> Result<()> {
     // Locate the aida repo. Prefer PWD walk, then $AIDA_DEV_REPO.
@@ -88702,11 +89266,12 @@ pub(crate) fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
     })
 }
 
+// trace:BUG-100 | ai:claude
 /// Split a non-empty string into `(prefix, last_char_str)` on a valid
 /// UTF-8 char boundary. Cheaper than `chars().last()` for the parsing
 /// path because it avoids an extra allocation. The empty-string case is
 /// already guarded at every call site, so this returns `("", "")` for
-/// empty input rather than panicking. trace:BUG-100 | ai:claude
+/// empty input rather than panicking.
 fn split_last_char(s: &str) -> (&str, &str) {
     match s.char_indices().next_back() {
         Some((idx, _)) => s.split_at(idx),
@@ -88770,9 +89335,11 @@ fn aggregate_events(
 // `aida metrics agent-lift` — dogfood agent-lift report (STORY-477).
 // ----------------------------------------------------------------------------
 
-/// Dispatch the `aida metrics` subcommands. trace:STORY-477 | ai:claude
+// trace:STORY-477 | ai:claude
+// trace:SPIKE-67
+/// Dispatch the `aida metrics` subcommands.
 /// SPIKE-67 field-study command dispatch. `scan` harvests verdicts from the git
-/// log into the local study log; `report` aggregates it. trace:SPIKE-67
+/// log into the local study log; `report` aggregates it.
 fn handle_field_study_command(cmd: &crate::cli::FieldStudyCommand) -> Result<()> {
     let root =
         crate::find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -88872,10 +89439,11 @@ fn rate(num: usize, den: usize) -> f64 {
     }
 }
 
+// trace:TASK-891 | ai:claude
 /// Render the three slice-2 controls (vendor / drain / type) for one rule under
 /// the field-study report. Each control prints the cut plus a mechanical
 /// `rises`/`flat`/`falls` verdict so the reader can see whether the span effect
-/// survives the control. trace:TASK-891 | ai:claude
+/// survives the control.
 fn render_field_study_controls(c: &field_study::RuleControls) {
     let trend_str = |t: &Option<field_study::SpanTrend>| -> String {
         match t {
@@ -88945,8 +89513,9 @@ fn render_field_study_controls(c: &field_study::RuleControls) {
     );
 }
 
+// trace:TASK-891
 /// Build one rule's JSON object for `field-study report --json`: the existing
-/// overall + by_span figures plus the three slice-2 controls. trace:TASK-891
+/// overall + by_span figures plus the three slice-2 controls.
 fn field_study_rule_json(
     s: &field_study::RuleSummary,
     c: &field_study::RuleControls,
@@ -89009,8 +89578,8 @@ fn field_study_rule_json(
     })
 }
 
+// trace:TASK-891 | ai:claude
 /// JSON-encode a [`field_study::SpanTrend`] (or `null`) for the report payload.
-/// trace:TASK-891 | ai:claude
 fn field_study_trend_json(t: &Option<field_study::SpanTrend>) -> serde_json::Value {
     match t {
         Some(t) => serde_json::json!({
@@ -89035,9 +89604,10 @@ fn handle_metrics_command(cmd: &crate::cli::MetricsCommand) -> Result<()> {
     }
 }
 
+// trace:STORY-477 | ai:claude
 /// Compute + render the `agent-lift` report. Reads the two local telemetry
 /// logs, windows them to `--since`, computes the derivable signals, and
-/// renders them in the requested format. trace:STORY-477 | ai:claude
+/// renders them in the requested format.
 fn handle_metrics_agent_lift(since_raw: &str, markdown: bool, json_out: bool) -> Result<()> {
     let now = chrono::Utc::now();
     let since = now - parse_days_arg(since_raw)?;
@@ -89097,8 +89667,8 @@ fn handle_metrics_agent_lift(since_raw: &str, markdown: bool, json_out: bool) ->
     Ok(())
 }
 
+// trace:STORY-477 | ai:claude
 /// Terminal (colorized) rendering of the agent-lift report.
-/// trace:STORY-477 | ai:claude
 fn render_agent_lift_terminal(lift: &metrics::AgentLift, since_raw: &str) {
     println!(
         "{} dogfood signals over the last {}",
@@ -89170,8 +89740,9 @@ fn render_agent_lift_terminal(lift: &metrics::AgentLift, since_raw: &str) {
     );
 }
 
+// trace:STORY-477 | ai:claude
 /// Markdown rendering of the agent-lift report — paste-ready for release
-/// notes / case studies. trace:STORY-477 | ai:claude
+/// notes / case studies.
 fn render_agent_lift_markdown(lift: &metrics::AgentLift, since_raw: &str) {
     println!("## AIDA agent-lift (last {since_raw})\n");
     if lift.is_empty() {
@@ -89440,8 +90011,8 @@ fn handle_usage_command(
 // follow-up (see the spec's "add an MCP read counter" note), not this slice.
 // ----------------------------------------------------------------------------
 
+// trace:TASK-872 | ai:claude
 /// Aggregated graph reads vs writes over a telemetry window.
-/// trace:TASK-872 | ai:claude
 struct ReadWriteTally {
     reads: u64,
     writes: u64,
@@ -89459,8 +90030,9 @@ impl ReadWriteTally {
     }
 }
 
+// trace:TASK-872 | ai:claude
 /// Walk windowed events, classify each command shape, and tally reads/writes.
-/// Pure over its inputs so it can be unit-tested. trace:TASK-872 | ai:claude
+/// Pure over its inputs so it can be unit-tested.
 fn tally_read_write(
     events: &[usage::UsageEvent],
     since: chrono::DateTime<chrono::Utc>,
@@ -89667,10 +90239,11 @@ fn handle_digest_command(
 // run by `record_auto_complete_run`).
 // ----------------------------------------------------------------------------
 
+// trace:TASK-266 | ai:claude
 /// TASK-266: the `aida usage --auto-complete` view family. Bare
 /// `--auto-complete` prints a success/failure summary plus the most recent
 /// failures; `--failures` expands the full failure list; `--pattern` shows
-/// the per-phase failure histogram. trace:TASK-266 | ai:claude
+/// the per-phase failure histogram.
 fn handle_auto_complete_usage(
     since_raw: &str,
     failures: bool,
@@ -89731,11 +90304,12 @@ fn handle_auto_complete_usage(
     )
 }
 
+// trace:EPIC-36
 /// EPIC-36: compose the session-vs-drain misclassification gap from the drain
 /// summary (already computed over the auto-complete log) and the headless
 /// session logs under `<project_root>/.aida/headless-logs/`. Returns `None`
 /// when there's no project root (gap can't be located). Carries the session
-/// tally back so the caller can render the per-class breakdown. trace:EPIC-36
+/// tally back so the caller can render the per-class breakdown.
 fn compute_session_drain_gap(
     drain_summary: &auto_complete_telemetry::Summary,
     project_root: Option<&std::path::Path>,
@@ -89751,9 +90325,10 @@ fn compute_session_drain_gap(
     Some((gap, sessions))
 }
 
+// trace:TASK-266 | ai:claude
 /// Render the summary header + recent-failures list. `overview` (bare
 /// `--auto-complete`) caps the list short and adds navigation hints;
-/// `--failures` shows the full list up to `limit`. trace:TASK-266 | ai:claude
+/// `--failures` shows the full list up to `limit`.
 fn render_auto_complete_failures(
     events: &[auto_complete_telemetry::AutoCompleteEvent],
     json_out: bool,
@@ -89953,8 +90528,9 @@ fn render_auto_complete_failures(
     Ok(())
 }
 
+// trace:TASK-266 | ai:claude
 /// Render the per-phase failure histogram — the signal for where to invest
-/// orchestrator fixes. trace:TASK-266 | ai:claude
+/// orchestrator fixes.
 fn render_auto_complete_pattern(
     events: &[auto_complete_telemetry::AutoCompleteEvent],
     json_out: bool,
@@ -90015,14 +90591,16 @@ fn render_auto_complete_pattern(
 // handler is the thin I/O + presentation boundary.
 // ----------------------------------------------------------------------------
 
-/// Convert a `DateTime<Utc>` to an ordinal calendar day. trace:STORY-530
+// trace:STORY-530
+/// Convert a `DateTime<Utc>` to an ordinal calendar day.
 fn datetime_to_ordinal_day(t: chrono::DateTime<chrono::Utc>) -> i64 {
     use chrono::Datelike;
     t.date_naive().num_days_from_ce() as i64
 }
 
+// trace:STORY-530 | ai:claude
 /// STORY-530: render the deterministic Tier-1 health-metrics catalog. Both a
-/// human table and `--json`. Pure metrics, thin I/O. trace:STORY-530 | ai:claude
+/// human table and `--json`. Pure metrics, thin I/O.
 fn handle_health_command(
     since_raw: &str,
     json_out: bool,
@@ -90335,8 +90913,9 @@ fn handle_health_command(
     Ok(())
 }
 
+// trace:STORY-530 | ai:claude
 /// Humanize a duration given in seconds into a compact `Xd Yh`, `Xh Ym`,
-/// `Xm Ys`, or `Xs` string. trace:STORY-530 | ai:claude
+/// `Xm Ys`, or `Xs` string.
 fn humanize_secs(secs: f64) -> String {
     let s = secs.round() as i64;
     if s < 60 {
@@ -90350,9 +90929,9 @@ fn humanize_secs(secs: f64) -> String {
     }
 }
 
+// trace:TASK-266 | ai:claude
 /// Look up the current status label of a requirement by spec-id — used to
 /// annotate the drafted BUG in the `--auto-complete` failure list.
-/// trace:TASK-266 | ai:claude
 fn bug_status(store: &RequirementsStore, spec_id: &str) -> Option<String> {
     store
         .requirements
@@ -90366,12 +90945,12 @@ fn bug_status(store: &RequirementsStore, spec_id: &str) -> Option<String> {
 // trace:FR-264 | ai:claude
 // ----------------------------------------------------------------------------
 
+// trace:TASK-106 | ai:claude
 /// TASK-106: resolve the effective push scope. An explicit `--code-only`
 /// or `--store-only` always wins. When the user passes neither,
 /// `AIDA_PUSH_DEFAULT` can flip the default: `code`/`code-only` scopes
 /// to the code leg, `store`/`store-only` to the orphan store; anything
 /// else (including unset) keeps the historical both-legs default.
-/// trace:TASK-106 | ai:claude
 fn resolve_push_scope(code_only: bool, store_only: bool, env_value: Option<&str>) -> (bool, bool) {
     if code_only || store_only {
         return (code_only, store_only);
@@ -90392,8 +90971,9 @@ struct LegStatus {
     pending: bool,
 }
 
+// trace:TASK-106 | ai:claude
 /// TASK-106: describe what the code leg of `aida push` will do, without
-/// touching origin. trace:TASK-106 | ai:claude
+/// touching origin.
 fn push_code_leg_status(project_root: &std::path::Path) -> LegStatus {
     use aida_core::git_ops;
     if !git_ops::has_remote(project_root, "origin") {
@@ -90429,8 +91009,8 @@ fn push_code_leg_status(project_root: &std::path::Path) -> LegStatus {
     }
 }
 
+// trace:TASK-106 | ai:claude
 /// TASK-106: describe what the orphan-store leg of `aida push` will do.
-/// trace:TASK-106 | ai:claude
 fn push_store_leg_status(store_path: &std::path::Path) -> LegStatus {
     use aida_core::git_ops;
     if !git_ops::is_git_repo(store_path) {
@@ -90477,13 +91057,14 @@ fn push_store_leg_status(store_path: &std::path::Path) -> LegStatus {
     }
 }
 
+// trace:TASK-106 | ai:claude
 /// TASK-106: print the pre-push plan and, when BOTH legs have commits to
 /// push (the only genuinely ambiguous case), prompt for confirmation.
 /// A single-leg push is unsurprising and proceeds silently. The summary
 /// itself is shown only on an interactive stdin so scripted/CI output
 /// stays stable; the prompt is additionally gated on `!no_rebase_check`
 /// (the established "skip interactive checks" signal). Returns `false`
-/// when the user declines. trace:TASK-106 | ai:claude
+/// when the user declines.
 fn confirm_push_plan(legs: &[LegStatus], no_rebase_check: bool) -> bool {
     let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
     if !interactive {
@@ -90515,8 +91096,8 @@ fn confirm_push_plan(legs: &[LegStatus], no_rebase_check: bool) -> bool {
     }
 }
 
+// trace:TASK-108 | ai:claude
 /// TASK-108: count commits matching a git rev-list spec. 0 on failure.
-/// trace:TASK-108 | ai:claude
 fn commit_count(repo: &std::path::Path, spec: &[&str]) -> usize {
     let mut args = vec!["rev-list", "--count"];
     args.extend_from_slice(spec);
@@ -90531,8 +91112,9 @@ fn commit_count(repo: &std::path::Path, spec: &[&str]) -> usize {
         .unwrap_or(0)
 }
 
+// trace:TASK-108 | ai:claude
 /// TASK-108: list "shorthash subject" lines for a git rev-list spec,
-/// capped at `limit`. Empty on any git failure. trace:TASK-108 | ai:claude
+/// capped at `limit`. Empty on any git failure.
 fn commit_subjects(repo: &std::path::Path, spec: &[&str], limit: usize) -> Vec<String> {
     let limit_arg = format!("-n{}", limit);
     let mut args = vec!["log", "--format=%h %s", limit_arg.as_str()];
@@ -90561,8 +91143,9 @@ struct DryRunLeg {
     subjects: Vec<String>,
 }
 
+// trace:TASK-108 | ai:claude
 /// TASK-108: render the dry-run plan — human-readable by default, JSON
-/// with `--json`. trace:TASK-108 | ai:claude
+/// with `--json`.
 fn emit_dry_run(verb: &str, legs: &[DryRunLeg], json: bool) {
     if json {
         let arr: Vec<serde_json::Value> = legs
@@ -90676,11 +91259,12 @@ fn auto_push_store_best_effort(store_path: &std::path::Path, reason: &str) {
     }
 }
 
+// trace:STORY-493 | ai:claude
 /// Digest the local mailbox layer into the git-canonical orphan store and
 /// commit it locally. Shared by the manual `mailbox sync` command and the
 /// auto-triggers (session-end / drain-end). Returns the number of messages
 /// newly digested (0 = nothing new). Append-only/id-keyed, so this is
-/// idempotent — re-running digests nothing. trace:STORY-493 | ai:claude
+/// idempotent — re-running digests nothing.
 fn digest_mailbox_to_canonical(
     store_root: &std::path::Path,
     project_root: &std::path::Path,
@@ -90694,11 +91278,12 @@ fn digest_mailbox_to_canonical(
     Ok(n)
 }
 
+// trace:STORY-643
 /// STORY-643: project-wide opt-out for the auto mailbox sync wired into the
 /// `aida pull` / `aida push` store legs. Defaults to on; disable with
 /// `AIDA_MAILBOX_AUTOSYNC=0` (or `false` / `no` / `off`) or
 /// `[mailbox] autosync = false` in `.aida/config.toml`. The env knob wins over
-/// the config file (matching the rest of the AIDA_* surface). trace:STORY-643
+/// the config file (matching the rest of the AIDA_* surface).
 fn mailbox_autosync_enabled(project_root: &std::path::Path) -> bool {
     // Env first — an explicit AIDA_MAILBOX_AUTOSYNC overrides the config file.
     if let Ok(v) = std::env::var("AIDA_MAILBOX_AUTOSYNC") {
@@ -90720,6 +91305,7 @@ fn mailbox_autosync_enabled(project_root: &std::path::Path) -> bool {
     true
 }
 
+// trace:STORY-643 | ai:claude
 /// STORY-643: best-effort PUBLISH leg for the auto mailbox sync. Digests the
 /// local `.aida/mailbox/` layer into the canonical `<store>/mailbox/` WITHOUT
 /// committing — the caller's store leg already commits pending orphan changes,
@@ -90728,7 +91314,6 @@ fn mailbox_autosync_enabled(project_root: &std::path::Path) -> bool {
 /// `mailbox_autosync_enabled` opt-out and never errors out the host command:
 /// any failure is logged as a warning and swallowed. Returns the number of
 /// messages newly staged (0 = nothing new / disabled / no local layer).
-/// trace:STORY-643 | ai:claude
 fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reason: &str) -> usize {
     let Some(project_root) = store_path.parent() else {
         return 0;
@@ -90755,10 +91340,11 @@ fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reason: &str) ->
     }
 }
 
+// trace:STORY-493 | ai:claude
 /// Best-effort mailbox digest at a lifecycle boundary (session-end, drain-end).
 /// A digest failure must NOT abort session cleanup or break the drain, so any
 /// error is logged as a warning and swallowed. No-ops cleanly when there is no
-/// local mailbox layer / nothing new to digest. trace:STORY-493 | ai:claude
+/// local mailbox layer / nothing new to digest.
 fn maybe_digest_mailbox_best_effort(store_path: &std::path::Path, reason: &str) {
     let Some(project_root) = store_path.parent() else {
         return;
@@ -90887,9 +91473,10 @@ mod mailbox_digest_autotrigger_tests {
 
     // ── STORY-643: auto mailbox sync (publish leg) ────────────────────────
 
+    // trace:STORY-643 | ai:claude
     /// The publish leg writes the local layer into canonical WITHOUT committing
     /// (the store leg's own commit folds it in) and is idempotent + id-keyed:
-    /// re-running stages nothing new. trace:STORY-643 | ai:claude
+    /// re-running stages nothing new.
     #[test]
     fn publish_for_sync_stages_canonical_without_committing_and_is_idempotent() {
         let (proj, store_root) = project_with_store();
@@ -90910,7 +91497,8 @@ mod mailbox_digest_autotrigger_tests {
         assert_eq!(maybe_publish_mailbox_for_sync(&store_root, "test"), 0);
     }
 
-    /// The opt-out (env or config) disables the publish leg entirely. trace:STORY-643
+    // trace:STORY-643
+    /// The opt-out (env or config) disables the publish leg entirely.
     #[test]
     fn publish_for_sync_honors_the_opt_out() {
         let (proj, store_root) = project_with_store();
@@ -90969,8 +91557,9 @@ fn store_sync_config_project_root(storage: &Storage) -> std::path::PathBuf {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
 }
 
+// trace:TASK-108 | ai:claude
 /// TASK-108: `aida push --dry-run` — report what each in-scope leg would
-/// push without touching origin. trace:TASK-108 | ai:claude
+/// push without touching origin.
 fn handle_push_dry_run(
     store_path: &std::path::Path,
     code_only: bool,
@@ -91087,8 +91676,9 @@ fn handle_push_dry_run(
     Ok(())
 }
 
+// trace:TASK-108 | ai:claude
 /// TASK-108: `aida pull --dry-run` — fetch both in-scope legs, then
-/// report what each would pull without merging. trace:TASK-108 | ai:claude
+/// report what each would pull without merging.
 fn handle_pull_dry_run(
     store_path: &std::path::Path,
     code_only: bool,
@@ -91207,13 +91797,14 @@ fn handle_pull_dry_run(
     Ok(())
 }
 
+// trace:TASK-863 | ai:claude
 /// TASK-863: count uncommitted/unstaged changes in the code working tree via a
 /// single cheap `git status --porcelain`. Returns `Some(n)` when there are `n`
 /// changed entries (n > 0), `None` for a clean tree (so the caller stays
 /// silent) or when status can't be read (e.g. not a git repo) — we never
 /// fabricate a count or block on a status failure. Each porcelain line is one
 /// changed path (staged and/or unstaged), so the line count is the change
-/// count. trace:TASK-863 | ai:claude
+/// count.
 fn uncommitted_change_count(repo: &std::path::Path) -> Option<usize> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -91235,9 +91826,10 @@ fn uncommitted_change_count(repo: &std::path::Path) -> Option<usize> {
     }
 }
 
+// trace:TASK-863 | ai:claude
 /// TASK-863: the uncommitted-changes notice is suppressible via the
 /// `AIDA_PUSH_QUIET` env var (any non-empty, non-"0"/"false" value). The
-/// `--no-notice` flag is the per-invocation equivalent. trace:TASK-863 | ai:claude
+/// `--no-notice` flag is the per-invocation equivalent.
 fn push_notice_suppressed_by_env() -> bool {
     match std::env::var("AIDA_PUSH_QUIET") {
         Ok(v) => {
@@ -91531,12 +92123,13 @@ fn handle_push_command(
     Ok(())
 }
 
+// trace:TASK-106 | ai:claude
 /// TASK-106: print the pre-pull plan — which legs are in scope and the
 /// action each will take. Shown only on an interactive stdin. Unlike
 /// `aida push` there is no confirmation prompt: both legs are
 /// non-destructive (`--ff-only` for code, rebase-pull for the
 /// AIDA-managed orphan store), so there is no "surprise publish" to
-/// guard against. trace:TASK-106 | ai:claude
+/// guard against.
 fn print_pull_plan(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
@@ -91599,11 +92192,12 @@ fn print_pull_plan(
     }
 }
 
+// trace:TASK-43 | ai:claude
 /// `aida pull` — symmetric counterpart of `aida push`. Pulls both the
 /// current code branch (via `git pull --ff-only`) and the orphan store
 /// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
 /// leg skips cleanly when its remote isn't configured, so the command
-/// is safe to run in any project state. trace:TASK-43 | ai:claude
+/// is safe to run in any project state.
 fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -91994,6 +92588,7 @@ fn handle_pull_command(
     }
 }
 
+// trace:STORY-248 | ai:claude
 /// STORY-248: after `aida pull` lands new commits on main, rebase every
 /// stacked branch whose parent was just merged (= branch no longer
 /// exists locally or on origin) onto origin/main. Bottom-up: entries
@@ -92016,7 +92611,6 @@ fn handle_pull_command(
 ///     entry stays in the graph; `aida stack show --prune-stale` is the
 ///     way to clean it up.
 ///
-/// trace:STORY-248 | ai:claude
 fn cascade_rebase_stacked_branches(
     project_root: &std::path::Path,
     auto: bool,
@@ -92455,13 +93049,13 @@ mod cascade_rebase_tests {
     }
 }
 
+// trace:TASK-107 | ai:claude
 /// `aida fetch` — read-only refresh of remote refs for both legs (code
 /// branch + orphan store) in one shot. No merge, no rebase, no worktree
 /// change. Stamps `~/.aida/cache/last-fetch.toml` so the statusline
 /// freshness indicator picks up the fetch immediately (same cache key
 /// the STORY-79 background fetcher writes). Prints a one-line
 /// "N new commits visible on origin" summary per leg unless `--quiet`.
-/// trace:TASK-107 | ai:claude
 fn handle_fetch_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -92587,10 +93181,11 @@ fn handle_fetch_command(
     Ok(())
 }
 
+// trace:TASK-107 | ai:claude
 /// Run `git -C <repo> fetch origin <branch> --prune`. Returns Ok on
 /// success, Err with the first line of stderr on failure. Inherits stdio
 /// when not quiet so progress bars / hint lines reach the user; pipes
-/// stdio to null otherwise. trace:TASK-107 | ai:claude
+/// stdio to null otherwise.
 fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) -> Result<()> {
     let mut cmd = std::process::Command::new("git");
     cmd.arg("-C")
@@ -92618,10 +93213,10 @@ fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) -> Result<()>
     Ok(())
 }
 
+// trace:TASK-107 | ai:claude
 /// Best-effort `git rev-parse origin/<branch>`. Returns None when the
 /// ref doesn't exist locally yet (e.g. first ever fetch) or git fails;
 /// the caller uses None to mean "no comparison baseline".
-/// trace:TASK-107 | ai:claude
 fn rev_parse_remote(repo: &std::path::Path, branch: &str) -> Option<String> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -92640,11 +93235,11 @@ fn rev_parse_remote(repo: &std::path::Path, branch: &str) -> Option<String> {
     }
 }
 
+// trace:TASK-107 | ai:claude
 /// Print one line summarizing what landed on `origin/<branch>` since the
 /// pre-fetch snapshot. Silent when pre/post match (nothing new) or when
 /// we can't compute the count. Format keeps both legs visually distinct
 /// via the `<leg>:` prefix (`code:` or `store:`).
-/// trace:TASK-107 | ai:claude
 fn print_fetch_delta(
     repo: &std::path::Path,
     leg: &str,
@@ -92714,10 +93309,10 @@ fn print_fetch_delta(
     }
 }
 
+// trace:TASK-78 | ai:claude
 /// TASK-78: project-wide opt-out for the post-pull merge-gate. Defaults to
 /// on; set `AIDA_AUTO_MERGE_GATE=false` (or `0`, `no`, `off`) to disable.
 /// Mirrors the env-var convention used for `AIDA_BG_FETCH`.
-/// trace:TASK-78 | ai:claude
 fn auto_merge_gate_enabled() -> bool {
     match std::env::var("AIDA_AUTO_MERGE_GATE") {
         Ok(v) => !matches!(
@@ -92728,10 +93323,10 @@ fn auto_merge_gate_enabled() -> bool {
     }
 }
 
+// trace:STORY-86 | ai:claude
 /// STORY-86: project-wide opt-out for the post-pull `Done` → `Completed`
 /// auto-bump. Defaults to on; set `AIDA_AUTO_BUMP=false` (or `0`, `no`,
 /// `off`) to disable. Mirrors `auto_merge_gate_enabled` directly above.
-/// trace:STORY-86 | ai:claude
 fn auto_bump_enabled() -> bool {
     match std::env::var("AIDA_AUTO_BUMP") {
         Ok(v) => !matches!(
@@ -92742,6 +93337,7 @@ fn auto_bump_enabled() -> bool {
     }
 }
 
+// trace:TASK-740 | ai:claude trace:BUG-328 trace:BUG-405
 /// BUG-328: a commit on the default branch is authoritative evidence that
 /// approved/planned/in-flight/done work shipped. Draft preserves the approval
 /// signal; terminal statuses stay terminal. BUG-405 extends eligibility to a
@@ -92752,7 +93348,6 @@ fn auto_bump_enabled() -> bool {
 /// replay both ask the model so the eligibility set can't drift from the
 /// declared `Done → Completed` transition (the BUG-328 / BUG-405 rationale now
 /// lives on `lifecycle::git_merge_completes`).
-/// trace:TASK-740 | ai:claude trace:BUG-328 trace:BUG-405
 fn auto_bump_eligible_status(status: &RequirementStatus) -> bool {
     aida_core::lifecycle::git_merge_completes(aida_core::lifecycle::State::from_status(status))
 }
@@ -92774,6 +93369,7 @@ impl AutoBumpFlip {
     }
 }
 
+// trace:BUG-219 | ai:claude
 /// BUG-219 / TASK-246: collect review stories stranded short of
 /// `Completed` because their PR merged before the review lifecycle ever
 /// finished. `/aida-pr` auto-queues a `Review PR-N` story at `Approved`
@@ -92792,7 +93388,6 @@ impl AutoBumpFlip {
 /// prior_status)` of any review story still at `Approved`/`InProgress`,
 /// skipping specs already claimed by the caller's `flips` list (Done specs
 /// / Done review stories the commit-subject + BUG-102 scan handles).
-/// trace:BUG-219 | ai:claude
 fn collect_stale_review_story_flips(
     store: &aida_core::RequirementsStore,
     pr_to_sha: &std::collections::BTreeMap<u64, String>,
@@ -92832,10 +93427,11 @@ fn collect_stale_review_story_flips(
     out
 }
 
+// trace:BUG-219 | ai:claude
 /// BUG-219 / TASK-246: audit-comment text recorded on a review story the
 /// auto-bump completed because its PR merged before review finished. The
 /// wording names *why* review was skipped so the user can tell the work
-/// did not go through a reviewer session. trace:BUG-219 | ai:claude
+/// did not go through a reviewer session.
 fn stale_review_audit_comment(prior: &RequirementStatus, pr_n: u64) -> String {
     match prior {
         RequirementStatus::Approved => format!(
@@ -92851,6 +93447,7 @@ fn stale_review_audit_comment(prior: &RequirementStatus, pr_n: u64) -> String {
     }
 }
 
+// trace:BUG-113 | ai:claude
 /// BUG-113: a review story can be stranded at `Done` after its PR merges.
 /// The `(#N)`-in-`pr_to_sha` linkage (BUG-102 bumps the Done review story,
 /// BUG-106 bumps the specs it covers) only fires while the PR's `(#N)`
@@ -92879,7 +93476,7 @@ fn stale_review_audit_comment(prior: &RequirementStatus, pr_n: u64) -> String {
 /// commit (its recorded `completion_sha`, else the sha it is being
 /// completed with this pass); empty only when a covered spec was completed
 /// manually and carries no sha — the caller leaves `completion_sha` unset
-/// in that case. trace:BUG-113 | ai:claude
+/// in that case.
 fn collect_covers_completed_review_flips(
     store: &aida_core::RequirementsStore,
     flips: &[AutoBumpFlip],
@@ -92946,6 +93543,7 @@ fn collect_covers_completed_review_flips(
     out
 }
 
+// trace:STORY-582 | ai:claude
 /// STORY-86 / BUG-328: scan the **code repo's** default branch for newly-landed
 /// commits whose subject references a spec, and flip any eligible spec
 /// (Approved, Planned, InProgress, Done) to `Completed`. Stamps
@@ -92979,7 +93577,7 @@ fn collect_covers_completed_review_flips(
 /// Conservative, prefix/keyword-driven (NOT a long-run base64 sweep, which
 /// would eat legitimate SHAs): known token prefixes (`ghp_`, `sk-`, `AKIA…`,
 /// `xoxb-`, …), `Bearer <token>`, and `secret/token/password/api_key = VALUE`
-/// shapes collapse to `[REDACTED]`. trace:STORY-582 | ai:claude
+/// shapes collapse to `[REDACTED]`.
 fn redact_secrets(text: &str) -> String {
     let mut out: Vec<String> = Vec::with_capacity(text.split_whitespace().count());
     // Token-ish if it carries a known secret prefix OR is a long opaque run
@@ -93045,10 +93643,10 @@ fn redact_secrets(text: &str) -> String {
     out.join(" ")
 }
 
+// trace:STORY-582 | ai:claude
 /// STORY-582: read the reviewer verdict promoted into the durable record from
 /// the gitignored `.aida/review-verdicts/<SPEC>.json`. Returns the normalized
 /// verdict word plus the one-line summary, when the file exists + parses.
-/// trace:STORY-582 | ai:claude
 fn read_review_verdict_for_record(
     project_root: &std::path::Path,
     spec_id: &str,
@@ -93061,11 +93659,11 @@ fn read_review_verdict_for_record(
     reviewer_summary::parse_verdict_file(&body)
 }
 
+// trace:STORY-582 | ai:claude
 /// STORY-582: find the most recent brief (pending `.md` or acked
 /// `.md.acked`) routed for `spec_id`, across every agent mailbox dir.
 /// Returns `(project_relative_path, agent, generated_by)`. The brief is the
 /// otherwise-gitignored routing artifact we promote into the durable record.
-/// trace:STORY-582 | ai:claude
 fn latest_brief_for_spec(
     project_root: &std::path::Path,
     spec_id: &str,
@@ -93112,11 +93710,12 @@ fn latest_brief_for_spec(
     Some((rel, agent, generated_by))
 }
 
+// trace:STORY-582
 /// STORY-582: assemble the durable [`ProcessingRecord`] for a spec being
 /// completed — promoting the gitignored review verdict + brief artifacts and
 /// the punt ledger into a committed, queryable, secret-scrubbed audit row.
 /// Reuses existing capture points (AC-2): no new author burden. The PR number
-/// is best-effort from the verdict's review-comment URL. trace:STORY-582
+/// is best-effort from the verdict's review-comment URL.
 fn build_processing_record(
     project_root: &std::path::Path,
     spec_id: &str,
@@ -93191,8 +93790,9 @@ fn build_processing_record(
     record
 }
 
+// trace:STORY-582
 /// STORY-582: pull a PR/MR number out of a forge review-comment URL like
-/// `https://github.com/o/r/pull/123#issuecomment-…`. trace:STORY-582
+/// `https://github.com/o/r/pull/123#issuecomment-…`.
 fn parse_pr_number_from_url(url: &str) -> Option<u64> {
     let marker = url.find("/pull/").map(|i| i + "/pull/".len()).or_else(|| {
         url.find("/merge_requests/")
@@ -93206,7 +93806,7 @@ fn parse_pr_number_from_url(url: &str) -> Option<u64> {
         .ok()
 }
 
-/// trace:STORY-86 | ai:claude
+// trace:STORY-86 | ai:claude
 fn auto_bump_done_to_completed(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
@@ -93680,6 +94280,8 @@ fn auto_bump_done_to_completed(
     Ok(confirmed)
 }
 
+// trace:TASK-226 | ai:claude
+// trace:BUG-418 | ai:claude
 /// TASK-226: manual replay of the Done → Completed scan over a wider
 /// range than `aida pull` saw. Used to recover specs stranded at Done
 /// when:
@@ -93696,7 +94298,6 @@ fn auto_bump_done_to_completed(
 ///   `--since REF` for a bounded replay or default to a 200-commit window.
 ///   `--spec SPEC-ID` narrows the candidate set to a single requirement.
 ///   `--dry-run` previews without writing.
-///   trace:TASK-226 | ai:claude
 /// BUG-418: pick the message `reconcile-status` prints when nothing flipped.
 /// The misleading case it fixes: a referencing commit IS on the default branch
 /// but the spec is already `Completed` (a prior reconcile/pull graduated it).
@@ -93705,7 +94306,7 @@ fn auto_bump_done_to_completed(
 /// non-empty we say "already Completed — nothing to do"; otherwise we fall back
 /// to the genuine no-match guidance. `already_terminal` carries `(spec_id,
 /// status)` for each candidate whose referencing commit landed but is past an
-/// eligible status. trace:BUG-418 | ai:claude
+/// eligible status.
 fn reconcile_no_flip_message(
     spec: Option<&str>,
     already_terminal: &[(String, RequirementStatus)],
@@ -94189,9 +94790,9 @@ fn handle_db_reconcile_status(
     Ok(())
 }
 
+// trace:STORY-86 BUG-328 | ai:claude,codex
 /// STORY-86 / BUG-328: print the auto-bump summary line after a successful
 /// pull/reconcile. Stays out of the way when nothing flipped.
-/// trace:STORY-86 BUG-328 | ai:claude,codex
 fn print_auto_bump_summary(flips: &[AutoBumpFlip]) {
     if flips.is_empty() {
         return;
@@ -94240,13 +94841,13 @@ fn print_auto_bump_summary(flips: &[AutoBumpFlip]) {
     }
 }
 
+// trace:TASK-73 | ai:claude
 /// Walk `git log <pre-pull-sha>..HEAD` on the orphan store and print a
 /// per-category summary of what landed in this pull: specs added,
 /// modified (with status flips when detectable), deleted, plus a comment
 /// count. Stays out of the way when nothing changed and falls back
 /// quietly on any git failure (the pull itself already succeeded; we
 /// don't want a flaky summary to look like a failed pull).
-/// trace:TASK-73 | ai:claude
 fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     use std::collections::BTreeMap;
     use std::process::Command as ProcessCommand;
@@ -94462,8 +95063,9 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     );
 }
 
+// trace:TASK-75 | ai:claude
 /// TASK-75: a status transition extracted from a commit's YAML diff,
-/// annotated with where it came from. trace:TASK-75 | ai:claude
+/// annotated with where it came from.
 struct StatusTransition {
     spec_id: String,
     from: String,
@@ -94471,9 +95073,9 @@ struct StatusTransition {
     source: String,
 }
 
+// trace:TASK-75 | ai:claude
 /// TASK-75: classify a commit subject as a "PR-N merge" (squash via
 /// `(#N)` suffix), an explicit commit referencing a REQ-ID, or "manual".
-/// trace:TASK-75 | ai:claude
 fn classify_commit_source(subject: &str) -> String {
     let trimmed = subject.trim();
     // PR-N merge: trailing `(#N)`.
@@ -94497,9 +95099,10 @@ fn classify_commit_source(subject: &str) -> String {
     "manual".to_string()
 }
 
+// trace:TASK-75 | ai:claude
 /// TASK-75: parse each commit's diff to find status transitions in the
 /// modified YAML files. Returns one StatusTransition per (commit, spec)
-/// pair that actually changed status. trace:TASK-75 | ai:claude
+/// pair that actually changed status.
 fn extract_status_changes_from_commits(
     store_path: &std::path::Path,
     commits: &[(String, String, String)],
@@ -94536,11 +95139,12 @@ fn extract_status_changes_from_commits(
     out
 }
 
+// trace:TASK-75 | ai:claude
 /// TASK-75: scan unified-diff output for status transitions. Each YAML
 /// status change appears as a `-status: X` / `+status: Y` pair within a
 /// single file's hunk. We walk file-by-file: track which spec the hunk
 /// belongs to (via `diff --git a/objects/.../X.yaml`), then pair the
-/// `-status` and `+status` lines. trace:TASK-75 | ai:claude
+/// `-status` and `+status` lines.
 fn parse_status_transitions_from_diff(diff: &str) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     let mut current_spec: Option<String> = None;
@@ -94784,8 +95388,9 @@ mod queue_work_tests {
         assert!(warns.is_none());
     }
 
+    // trace:STORY-42 | ai:claude
     /// Empty cluster (no for_role on any entry) + PR-N scope → reviewer
-    /// default. trace:STORY-42 | ai:claude
+    /// default.
     #[test]
     fn role_scope_default_pr_is_reviewer() {
         let e = resolved("STORY-1", entry(Uuid::now_v7(), None, None));
@@ -94845,9 +95450,10 @@ mod queue_work_tests {
         );
     }
 
+    // trace:TASK-86 | ai:claude
     /// Implementer + cluster/head → `/aida-pickup --auto-first`
     /// (manifest carries the context; STORY-42 pre-flight is the consent
-    /// point so the skill skips its own confirm). trace:TASK-86 | ai:claude
+    /// point so the skill skips its own confirm).
     #[test]
     fn prompt_implementer_cluster_is_auto_first() {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
@@ -94858,10 +95464,10 @@ mod queue_work_tests {
         );
     }
 
+    // trace:TASK-86 | ai:claude
     /// Implementer + head mode → also `/aida-pickup --auto-first`.
     /// The no-arg invocation explicitly opts into queue-driven flow, so
     /// the confirm is the same friction-without-value as cluster mode.
-    /// trace:TASK-86 | ai:claude
     #[test]
     fn prompt_implementer_head_is_auto_first() {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
@@ -94967,8 +95573,9 @@ mod queue_work_tests {
         assert_eq!(scope, "BUG-1");
     }
 
+    // trace:STORY-42 | ai:claude
     /// spec_matches walks uuid, spec_id (case-insensitive), and
-    /// agreed_id (case-insensitive). trace:STORY-42 | ai:claude
+    /// agreed_id (case-insensitive).
     #[test]
     fn spec_matches_covers_uuid_and_ids() {
         let mut r = req("BUG-1-099", Some("BUG-42"), RequirementType::Bug);
@@ -94981,9 +95588,10 @@ mod queue_work_tests {
         assert!(!spec_matches(&r, "BUG-99"));
     }
 
+    // trace:BUG-366 | ai:claude
     /// BUG-366: the "awaiting review" hint must be an unambiguous reviewer
     /// pickup, not a bare `aida queue work PR-N` that invites implementer-drain
-    /// flags the PR-N path can't resolve. trace:BUG-366 | ai:claude
+    /// flags the PR-N path can't resolve.
     #[test]
     fn review_pickup_hint_names_reviewer_role() {
         assert_eq!(
@@ -95017,21 +95625,23 @@ mod queue_work_tests {
         }
     }
 
-    /// No leases → no conflict. trace:TASK-81 | ai:claude
+    // trace:TASK-81 | ai:claude
+    /// No leases → no conflict.
     #[test]
     fn lease_conflict_empty() {
         assert!(find_scope_lease_conflict(&[], "TASK-81").is_none());
     }
 
-    /// Lease on a different scope → no conflict. trace:TASK-81 | ai:claude
+    // trace:TASK-81 | ai:claude
+    /// Lease on a different scope → no conflict.
     #[test]
     fn lease_conflict_mismatched_scope() {
         let leases = vec![lease_for("aaaa", "EPIC-20", 10)];
         assert!(find_scope_lease_conflict(&leases, "TASK-81").is_none());
     }
 
+    // trace:TASK-81 | ai:claude
     /// Exact scope match → that lease is the conflict.
-    /// trace:TASK-81 | ai:claude
     #[test]
     fn lease_conflict_exact_match() {
         let leases = vec![lease_for("aaaa", "TASK-81", 10)];
@@ -95039,8 +95649,9 @@ mod queue_work_tests {
         assert_eq!(got.id, "aaaa");
     }
 
+    // trace:TASK-81 | ai:claude
     /// Case-insensitive scope match — `aida queue work task-81` should
-    /// still detect a lease owning `TASK-81`. trace:TASK-81 | ai:claude
+    /// still detect a lease owning `TASK-81`.
     #[test]
     fn lease_conflict_case_insensitive() {
         let leases = vec![lease_for("aaaa", "TASK-81", 10)];
@@ -95048,9 +95659,9 @@ mod queue_work_tests {
         assert_eq!(got.id, "aaaa");
     }
 
+    // trace:TASK-81 | ai:claude
     /// Multiple leases on the same scope → freshest (smallest age) wins,
     /// so `session_end` targets the live one rather than a stale ghost.
-    /// trace:TASK-81 | ai:claude
     #[test]
     fn lease_conflict_picks_freshest() {
         let leases = vec![
@@ -95061,8 +95672,8 @@ mod queue_work_tests {
         assert_eq!(got.id, "freshh");
     }
 
+    // trace:TASK-84 trace:STORY-495 | ai:claude
     /// --permission-mode flag beats everything else (incl. the bypass knob).
-    /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_flag_wins() {
         let (m, o) = resolve_queue_work_permission_mode(
@@ -95076,8 +95687,8 @@ mod queue_work_tests {
         assert_eq!(o, "--permission-mode flag");
     }
 
+    // trace:TASK-84 trace:STORY-495 | ai:claude
     /// AIDA_PERMISSION_MODE env wins over config + the bypass knob.
-    /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_env_beats_config() {
         let (m, o) =
@@ -95086,8 +95697,8 @@ mod queue_work_tests {
         assert_eq!(o, "AIDA_PERMISSION_MODE env");
     }
 
+    // trace:TASK-84 trace:STORY-495 | ai:claude
     /// config.toml [behavior] beats the bypass knob.
-    /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_config_beats_worktree_default() {
         let (m, o) =
@@ -95096,8 +95707,9 @@ mod queue_work_tests {
         assert_eq!(o, ".aida/config.toml");
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: the `[agents] bypass` knob (no other overrides) →
-    /// bypassPermissions. trace:STORY-495 | ai:claude
+    /// bypassPermissions.
     #[test]
     fn permission_mode_bypass_knob_injects_bypass() {
         let (m, o) = resolve_queue_work_permission_mode(None, None, None, true, false);
@@ -95105,9 +95717,9 @@ mod queue_work_tests {
         assert_eq!(o, "[agents] bypass knob");
     }
 
+    // trace:STORY-495 | ai:claude
     /// STORY-495: faithful default — no flag, no env, no config, knob off →
     /// native (None), so no `--permission-mode` is injected.
-    /// trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_faithful_default_is_native() {
         let (m, o) = resolve_queue_work_permission_mode(None, None, None, false, false);
@@ -95115,9 +95727,10 @@ mod queue_work_tests {
         assert_eq!(o, "native (faithful default)");
     }
 
+    // trace:TASK-84 trace:STORY-495 | ai:claude
     /// Empty string from flag/env/config is treated as absent (so an empty
     /// shell variable doesn't accidentally pin a mode); with the knob on the
-    /// resolution falls through to the bypass knob. trace:TASK-84 trace:STORY-495 | ai:claude
+    /// resolution falls through to the bypass knob.
     #[test]
     fn permission_mode_empty_strings_are_ignored() {
         let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true, false);
@@ -95127,30 +95740,30 @@ mod queue_work_tests {
 
     // --- AutonomyMode (STORY-287) -----------------------------------------
 
+    // trace:STORY-287 | ai:claude
     /// No flags → the human is driving; every prompt pauses.
-    /// trace:STORY-287 | ai:claude
     #[test]
     fn autonomy_mode_default_when_no_flags() {
         assert_eq!(resolve_autonomy_mode(false, false), AutonomyMode::Default);
     }
 
+    // trace:STORY-287 | ai:claude
     /// `--zen` alone → advisor-on-standby mode.
-    /// trace:STORY-287 | ai:claude
     #[test]
     fn autonomy_mode_zen_flag_alone() {
         assert_eq!(resolve_autonomy_mode(true, false), AutonomyMode::Zen);
     }
 
+    // trace:STORY-287 | ai:claude
     /// `--no-human` alone → the headless drain mode.
-    /// trace:STORY-287 | ai:claude
     #[test]
     fn autonomy_mode_no_human_alone() {
         assert_eq!(resolve_autonomy_mode(false, true), AutonomyMode::NoHuman);
     }
 
+    // trace:STORY-287 | ai:claude
     /// Precedence: `--no-human --zen` resolves to `NoHuman` — the stronger
     /// mode wins (the dispatch also warns and clears `AIDA_ZEN`).
-    /// trace:STORY-287 | ai:claude
     #[test]
     fn autonomy_mode_no_human_beats_zen() {
         assert_eq!(resolve_autonomy_mode(true, true), AutonomyMode::NoHuman);
@@ -95158,8 +95771,9 @@ mod queue_work_tests {
 
     // --- resolve_drain_alias (TASK-578) -----------------------------------
 
+    // trace:TASK-578 | ai:claude
     /// `--drain` off is a pure identity map — the operator's flags pass through
-    /// untouched. trace:TASK-578 | ai:claude
+    /// untouched.
     #[test]
     fn drain_alias_off_is_identity() {
         let r = resolve_drain_alias(
@@ -95179,8 +95793,9 @@ mod queue_work_tests {
         assert_eq!(empty.max, None);
     }
 
+    // trace:TASK-578 | ai:claude
     /// Bare `--drain` expands to the full headless drain bounded by the queue
-    /// size. trace:TASK-578 | ai:claude
+    /// size.
     #[test]
     fn drain_alias_bare_expands_to_full_headless_queue_sized() {
         let r = resolve_drain_alias(true, None, None, None, 7);
@@ -95189,16 +95804,17 @@ mod queue_work_tests {
         assert_eq!(r.max, Some(7));
     }
 
+    // trace:TASK-578 | ai:claude
     /// An unknown / empty queue size falls back to the spec's `--max 99`.
-    /// trace:TASK-578 | ai:claude
     #[test]
     fn drain_alias_unknown_queue_size_falls_back_to_99() {
         let r = resolve_drain_alias(true, None, None, None, 0);
         assert_eq!(r.max, Some(99));
     }
 
+    // trace:TASK-578 | ai:claude
     /// Explicit flags always win over the `--drain` defaults — the alias never
-    /// overwrites an operator-supplied value. trace:TASK-578 | ai:claude
+    /// overwrites an operator-supplied value.
     #[test]
     fn drain_alias_explicit_flags_override_defaults() {
         let r = resolve_drain_alias(
@@ -95213,8 +95829,9 @@ mod queue_work_tests {
         assert_eq!(r.max, Some(2));
     }
 
+    // trace:TASK-578 | ai:claude
     /// Mixed: `--drain --max 3` keeps the explicit cap but still defaults the
-    /// autonomy fields. trace:TASK-578 | ai:claude
+    /// autonomy fields.
     #[test]
     fn drain_alias_partial_override_keeps_other_defaults() {
         let r = resolve_drain_alias(true, None, None, Some(3), 50);
@@ -95225,19 +95842,20 @@ mod queue_work_tests {
 
     // --- TASK-306: --no-human kickoff gate --------------------------------
 
+    // trace:TASK-306, STORY-276
     /// STORY-276: the gate keys purely off acknowledgement — ack'd → proceed
     /// silently, otherwise the banner + prompt. `both` is no longer rejected
     /// (the headless implementer ships); it is acknowledged like any mode.
-    /// trace:TASK-306, STORY-276
     #[test]
     fn no_human_gate_keys_off_acknowledgement() {
         assert_eq!(classify_no_human_gate(false), NoHumanGate::NeedsAck);
         assert_eq!(classify_no_human_gate(true), NoHumanGate::Acknowledged);
     }
 
+    // trace:STORY-276
     /// STORY-276: the scope line differs by mode — `both` names the headless
     /// implementer + the punt safety net; `reviewer-only` says phase 1 stays
-    /// interactive. trace:STORY-276
+    /// interactive.
     #[test]
     fn no_human_scope_line_differs_by_mode() {
         let both = no_human_scope_line(auto_complete::NoHumanMode::Both);
@@ -95253,8 +95871,9 @@ mod queue_work_tests {
 
     // --- TASK-306: orchestrator-context statusline badge ------------------
 
+    // trace:TASK-306
     /// A corroborated phase-1 session shows the phase index, its name, and
-    /// the always-present pause cue. trace:TASK-306
+    /// the always-present pause cue.
     #[test]
     fn orchestrator_badge_shows_phase_and_name() {
         let b = OrchestratorBadge::build(Some(1), None);
@@ -95263,8 +95882,8 @@ mod queue_work_tests {
         assert_eq!(b.pause, "pause-here");
     }
 
+    // trace:TASK-306
     /// The `--no-human` scope is folded in when the env var is present.
-    /// trace:TASK-306
     #[test]
     fn orchestrator_badge_includes_no_human_scope() {
         let b = OrchestratorBadge::build(Some(3), Some("reviewer-only"));
@@ -95272,17 +95891,18 @@ mod queue_work_tests {
         assert_eq!(b.no_human.as_deref(), Some("no-human:reviewer-only"));
     }
 
+    // trace:TASK-306
     /// Defensive fallback: a missing phase env var renders `?`; an
-    /// out-of-range index keeps the number but drops the name. trace:TASK-306
+    /// out-of-range index keeps the number but drops the name.
     #[test]
     fn orchestrator_badge_falls_back_when_phase_unknown() {
         assert_eq!(OrchestratorBadge::build(None, None).phase, "auto:?/6");
         assert_eq!(OrchestratorBadge::build(Some(9), None).phase, "auto:9/6");
     }
 
+    // trace:TASK-84 | ai:claude
     /// `read_behavior_permission_mode` parses `[behavior]
     /// permission_mode = "..."` and ignores other sections.
-    /// trace:TASK-84 | ai:claude
     #[test]
     fn read_behavior_permission_mode_parses_value() {
         let tmp = std::env::temp_dir().join(format!(
@@ -95301,7 +95921,8 @@ mod queue_work_tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// Missing config file → None. trace:TASK-84 | ai:claude
+    // trace:TASK-84 | ai:claude
+    /// Missing config file → None.
     #[test]
     fn read_behavior_permission_mode_missing_is_none() {
         let tmp = std::env::temp_dir().join(format!(
@@ -95313,9 +95934,10 @@ mod queue_work_tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    // trace:TASK-85 | ai:claude
     /// `review_title_matches` accepts the canonical "Review PR-N: ..."
     /// shape, leading whitespace, and is case-insensitive on the prefix
-    /// but exact on the number. trace:TASK-85 | ai:claude
+    /// but exact on the number.
     #[test]
     fn review_title_matches_canonical() {
         assert!(review_title_matches(
@@ -95340,8 +95962,9 @@ mod queue_work_tests {
         ));
     }
 
+    // trace:TASK-85 | ai:claude
     /// Reject titles that aren't review stories, that name a different
-    /// number, or that name the wrong forge. trace:TASK-85 | ai:claude
+    /// number, or that name the wrong forge.
     #[test]
     fn review_title_matches_rejects_mismatches() {
         // Different PR number.
@@ -95376,16 +95999,17 @@ mod queue_work_tests {
         ));
     }
 
+    // trace:TASK-85 | ai:claude
     /// `format_review_label` produces the human-facing label that error
-    /// messages use. trace:TASK-85 | ai:claude
+    /// messages use.
     #[test]
     fn format_review_label_shapes() {
         assert_eq!(format_review_label(ReviewForge::GitHub, 14), "PR-14");
         assert_eq!(format_review_label(ReviewForge::GitLab, 7), "MR-7");
     }
 
+    // trace:TASK-84 | ai:claude
     /// Quote-aware inline-comment stripping for TOML lines.
-    /// trace:TASK-84 | ai:claude
     #[test]
     fn strip_toml_inline_comment_basics() {
         // No comment → unchanged.
@@ -95415,8 +96039,9 @@ mod queue_work_tests {
         );
     }
 
+    // trace:TASK-84 | ai:claude
     /// `read_behavior_permission_mode` honors inline TOML comments
-    /// (regression for ultrareview bug_002). trace:TASK-84 | ai:claude
+    /// (regression for ultrareview bug_002).
     #[test]
     fn read_behavior_permission_mode_strips_inline_comment() {
         let tmp = std::env::temp_dir().join(format!(
@@ -95435,8 +96060,8 @@ mod queue_work_tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    // trace:TASK-84 | ai:claude
     /// `[behavior]` section absent → None, even when other sections exist.
-    /// trace:TASK-84 | ai:claude
     #[test]
     fn read_behavior_permission_mode_section_absent() {
         let tmp = std::env::temp_dir().join(format!(
@@ -95604,9 +96229,10 @@ mod queue_work_tests {
         assert!(!quiet_of(&off), "quiet defaults to false");
     }
 
+    // trace:TASK-560
     /// TASK-560: --resume + --auto-complete must now PARSE (the clap conflict
     /// was lifted) so the handler can reject it with a helpful message instead
-    /// of clap's terse "cannot be used with". trace:TASK-560
+    /// of clap's terse "cannot be used with".
     #[test]
     fn queue_work_resume_plus_auto_complete_parses_for_handler_rejection() {
         let cli = Cli::try_parse_from([
@@ -95630,8 +96256,9 @@ mod queue_work_tests {
         }
     }
 
+    // trace:TASK-560
     /// TASK-560: the conflict message fires only for the pair, and carries the
-    /// WHY + both recovery paths. trace:TASK-560
+    /// WHY + both recovery paths.
     #[test]
     fn resume_autocomplete_conflict_message_explains_and_recovers() {
         assert!(resume_autocomplete_conflict_message(false, true).is_none());
@@ -95793,9 +96420,9 @@ mod queue_work_tests {
         assert_eq!(req.status, RequirementStatus::InProgress);
     }
 
+    // trace:TASK-547 | ai:antigravity
     /// TASK-547 acceptance: smart-default auto-queues an Approved-but-not-queued
     /// spec for the current role when resolving the queue work plan, unless `--strict` is set.
-    /// trace:TASK-547 | ai:antigravity
     #[test]
     fn resolve_queue_work_plan_auto_queues_when_not_strict() {
         let dir = tempfile::tempdir().unwrap();
@@ -95856,9 +96483,10 @@ mod queue_work_tests {
             .unwrap();
     }
 
+    // trace:STORY-501 | ai:claude
     /// STORY-501: the dispatch gate's signal — `queued_review_story_for_pr`
     /// detects a queued "Review PR-N" story (so the dispatch DEFERS PR→spec
-    /// resolution to the reviewer pickup). trace:STORY-501 | ai:claude
+    /// resolution to the reviewer pickup).
     #[test]
     fn queued_review_story_for_pr_detects_queued_story() {
         let dir = tempfile::tempdir().unwrap();
@@ -95879,10 +96507,11 @@ mod queue_work_tests {
         ));
     }
 
+    // trace:STORY-501 | ai:claude
     /// STORY-501: with a "Review PR-N" story queued, resolve_queue_work_plan
     /// routes `PR-N` to the reviewer (review_target set → `/aida-review --pr N`)
     /// — the path the dispatch gate now lets run instead of resolving
-    /// PR→backing-spec into an implementer pickup. trace:STORY-501 | ai:claude
+    /// PR→backing-spec into an implementer pickup.
     #[test]
     fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
         let dir = tempfile::tempdir().unwrap();
@@ -95901,12 +96530,13 @@ mod queue_work_tests {
         );
     }
 
+    // trace:TASK-630 | ai:claude
     /// TASK-630 (BUG-250 criterion 5): the held-state re-entry decision is a pure
     /// function, so it can be exercised exhaustively with no Storage, worktree,
     /// or launcher. A deliberate PR-hold parks the spec Done + dequeued with a
     /// marker; `--resume` against that combination is the ONLY case that may
     /// re-enter. Every other state, a missing marker, or a non-resume invocation
-    /// must NOT — those keep the existing recovery hints. trace:TASK-630 | ai:claude
+    /// must NOT — those keep the existing recovery hints.
     #[test]
     fn held_resume_reentry_only_for_resume_done_and_marked() {
         use RequirementStatus::*;
@@ -95950,11 +96580,11 @@ mod queue_work_tests {
         }
     }
 
+    // trace:TASK-630 | ai:claude
     /// TASK-630: a held-spec resume plan is an Item-mode pickup anchored on the
     /// spec itself (its own id is the lease scope — the implementer worktree the
     /// dormant session lives in), with exactly one entry. This is what lets the
     /// rest of `handle_queue_work` resume the session unchanged.
-    /// trace:TASK-630 | ai:claude
     #[test]
     fn held_resume_plan_is_item_scoped_to_the_spec() {
         let mut req = aida_core::Requirement::new("held work".to_string(), String::new());
@@ -95977,12 +96607,12 @@ mod queue_work_tests {
         assert_eq!(plan.entries[0].spec_id, "STORY-306");
     }
 
+    // trace:BUG-311 | ai:claude
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
     /// inner subprocess's error must name the lease + actual reason — not
     /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
     /// chain inline; the `--steal`-prefixed map_err in `handle_queue_work`
     /// guarantees the lease id + reason are in the primary line.
-    /// trace:BUG-311 | ai:claude
     #[test]
     fn steal_session_end_failure_surfaces_actual_reason_not_canned_message() {
         let lease_id = "019e4dec-abcd-7000-8000-000000000000";
@@ -96277,10 +96907,11 @@ mod ci_action_tests {
         assert_eq!(decide_ci_action(&probe, false, true), CiAction::Proceed);
     }
 
+    // trace:TASK-233 | ai:claude
     /// TASK-233: `--watch-ci` blocks exactly like `--wait-ci` — the
     /// caller passes `wait_ci || watch_ci`, so InProgress yields
     /// `CiAction::Wait` and the decision tree is identical once CI is
-    /// terminal. trace:TASK-233 | ai:claude
+    /// terminal.
     #[test]
     fn watch_ci_blocks_like_wait_ci_on_in_progress() {
         let probe = CiProbe::InProgress { pr_number: 26 };
@@ -96305,9 +96936,9 @@ mod ci_action_tests {
         ));
     }
 
+    // trace:BUG-273
     /// BUG-273: live `gh run watch` output is only safe in an interactive
     /// terminal. Headless drains and tee-captured logs must use quiet polling.
-    /// trace:BUG-273
     #[test]
     fn ci_watch_streams_only_for_interactive_non_headless_context() {
         assert!(should_stream_ci_watch(true, false));
@@ -96316,8 +96947,8 @@ mod ci_action_tests {
         assert!(!should_stream_ci_watch(false, true));
     }
 
+    // trace:TASK-233 | ai:claude
     /// TASK-233: run-id extraction from `gh run list --json databaseId`.
-    /// trace:TASK-233 | ai:claude
     #[test]
     fn first_run_id_from_gh_json_shapes() {
         assert_eq!(
@@ -96507,12 +97138,13 @@ mod ci_action_tests {
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
 
+// trace:TASK-220
 /// Distributed-mode status: read from CachedGitBackend so we get cache-backed
 /// counts, sync state, and recent activity.
 /// TASK-220: gathered facts for the unified `aida status` view. Each
 /// optional field's `None` means "section absent" (no session covering
 /// cwd, no PR open, gh missing) — call sites graceful-degrade per
-/// section without bailing on the whole command. trace:TASK-220
+/// section without bailing on the whole command.
 #[derive(Debug)]
 struct UserStatusContext {
     session: Option<SessionLease>,
@@ -96551,10 +97183,11 @@ enum GhStatus {
     Missing,
     Failed(String),
     Skipped,
+    // trace:BUG-560 | ai:claude
     /// BUG-560: the remote isn't GitHub, so `gh` is the wrong tool — we never
     /// spawned it. Carries the detected forge so the section can name the right
     /// CLI (`glab`) / degrade cleanly instead of leaking gh's "known GitHub
-    /// host" auth error to a GitLab/pure-git user. trace:BUG-560 | ai:claude
+    /// host" auth error to a GitLab/pure-git user.
     NotGitHub(forge::ForgeKind),
 }
 
@@ -96623,11 +97256,12 @@ fn collect_user_context(
     }
 }
 
+// trace:STORY-435 | ai:claude
 /// STORY-435: assemble the `AgentClassifyContext` `list_agent_views` needs
 /// to compute busy/idle. The live-lease snapshot reuses the same
 /// `probe_live_claude_sessions` that `aida session leases` shows under the
 /// ● live glyph so the two views agree about which scopes are "being
-/// worked." trace:STORY-435 | ai:claude
+/// worked."
 fn build_agent_classify_context(
     project_root: &std::path::Path,
     leases: &[SessionLease],
@@ -97043,11 +97677,11 @@ fn collect_queue_snapshot(
     (in_progress_rows, total)
 }
 
+// trace:TASK-756 | ai:claude
 /// TASK-756: a small additive presence line in `aida status`. Read-only —
 /// surfaces the effective operator presence (home/away) without changing any
 /// other section. Only the `away` state is loud enough to print; `home` is the
 /// boring default and stays quiet so the line appearing IS the signal.
-/// trace:TASK-756 | ai:claude
 fn print_status_presence_line(project_root: &std::path::Path) {
     let now = chrono::Utc::now();
     if !matches!(presence::current_presence(now), presence::Presence::Away) {
@@ -97070,12 +97704,14 @@ fn print_status_presence_line(project_root: &std::path::Path) {
     println!();
 }
 
+// trace:STORY-561 | ai:claude
 /// The keystone parking tag — work that is clear to build but reserved for the
 /// at-keyboard `--zen` lane (the supervised-build cohort). Mirrors the
 /// `needs-supervised-build` parking tag the burndown gate already excludes from
-/// the autonomous ready set. trace:STORY-561 | ai:claude
+/// the autonomous ready set.
 const KEYSTONE_TAG: &str = "needs-supervised-build";
 
+// trace:STORY-561 | ai:claude
 /// STORY-561 consumers (c) + (d) home-side: presence-gated surfacing in
 /// `aida status`. When the operator is HOME and `[presence] consumers = on`,
 /// surface (c) the decision inbox depth (`aida questions`) and — when
@@ -97085,7 +97721,7 @@ const KEYSTONE_TAG: &str = "needs-supervised-build";
 /// Display-only and advisory — changes no execution path. The away-side safety
 /// floor (keystone NOT offered for autonomous pickup) is already structural:
 /// `needs-supervised-build` is a parking tag, so the drain gate never picks it
-/// up regardless of presence. trace:STORY-561 | ai:claude
+/// up regardless of presence.
 fn print_status_presence_consumers(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
@@ -97322,10 +97958,11 @@ fn print_status_pr_section(ctx: &UserStatusContext, focused: bool) {
     println!();
 }
 
+// trace:TASK-490 | ai:claude
 /// TASK-490: pure split of the queue head into the two display groups, with
 /// the counter math the renderer needs ("X more" reflects only not-in-progress
 /// items). Lifted out of the renderer so the layout invariants can be tested
-/// without stdout capture. trace:TASK-490 | ai:claude
+/// without stdout capture.
 struct QueueViewSplit<'a> {
     in_progress_rows: Vec<&'a QueueRow>,
     next_up_rows: Vec<&'a QueueRow>,
@@ -97474,6 +98111,7 @@ fn print_status_agents_section(ctx: &UserStatusContext, show_stale: bool) {
     println!();
 }
 
+// trace:SPIKE-30 | ai:claude
 /// SPIKE-30: query `claude agents --json` and cross-reference live Claude
 /// Code sessions against AIDA's lease registry. Surfaces three signals the
 /// existing hygiene scan can't:
@@ -97486,7 +98124,6 @@ fn print_status_agents_section(ctx: &UserStatusContext, show_stale: bool) {
 /// Dormant leases (lease present, no Claude session) are intentionally
 /// NOT re-reported here — the Hygiene section already covers them via
 /// process_probe.rs; duplicating would dilute both signals.
-/// trace:SPIKE-30 | ai:claude
 fn print_status_claude_code_section(project_root: &std::path::Path) {
     let Some(entries) = claude_agents::list_agents() else {
         return;
@@ -98007,8 +98644,9 @@ mod bug_560_status_forge_tests {
         assert_eq!(facts.number, 0);
     }
 
+    // trace:BUG-560
     /// A pure-git / unknown remote also skips gh (no leak), reported as the
-    /// `None` forge. trace:BUG-560
+    /// `None` forge.
     #[test]
     fn collect_pr_facts_skips_gh_on_pure_git() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -98025,10 +98663,11 @@ mod bug_560_status_forge_tests {
         ));
     }
 
+    // trace:TASK-833
     /// TASK-833: `parse_open_pr_snapshot` turns a `gh pr list --json` payload
     /// into rows (number / title / head branch) without shelling out — the
     /// open-PR section of `aida burndown status` / `aida list inflight` rides
-    /// this. trace:TASK-833
+    /// this.
     #[test]
     fn parse_open_pr_snapshot_parses_number_title_branch() {
         let json = r#"[
@@ -98045,8 +98684,8 @@ mod bug_560_status_forge_tests {
         assert_eq!(b.number, 12);
     }
 
+    // trace:TASK-833
     /// Empty array → no rows; malformed JSON / missing number → skip silently.
-    /// trace:TASK-833
     #[test]
     fn parse_open_pr_snapshot_degrades_on_empty_and_malformed() {
         assert!(parse_open_pr_snapshot("[]").by_branch.is_empty());
@@ -98227,10 +98866,10 @@ mod task_490_status_in_progress_tests {
     }
 }
 
+// trace:STORY-385 | ai:claude
 /// One record from `git worktree list --porcelain`. The main worktree is
 /// always the first record; linked worktrees follow. Detached worktrees
 /// produce `None` for `branch`.
-/// trace:STORY-385 | ai:claude
 #[derive(Debug, Clone)]
 struct WorktreeRecord {
     path: std::path::PathBuf,
@@ -98275,11 +98914,11 @@ fn list_worktrees(project_root: &std::path::Path) -> Vec<WorktreeRecord> {
     records
 }
 
+// trace:STORY-385 | ai:claude
 /// Open-PR snapshot keyed by head branch — one `gh` invocation feeds the
 /// "open PRs" and "branches ahead with no PR" detectors. Empty when gh is
 /// missing or the call fails (every dependent detector silently
 /// degrades).
-/// trace:STORY-385 | ai:claude
 #[derive(Debug, Clone, Default)]
 struct OpenPrSnapshot {
     by_branch: std::collections::HashMap<String, status_cleanup::OpenPrItem>,
@@ -98313,8 +98952,9 @@ fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
     snapshot
 }
 
+// trace:BUG-613 | ai:claude
 /// BUG-613: the uncached single-`gh pr list` snapshot fetch behind the
-/// process-lifetime memo in [`collect_open_prs`]. trace:BUG-613 | ai:claude
+/// process-lifetime memo in [`collect_open_prs`].
 fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
     // TASK-833: mirror the `collect_pr_facts` forge-aware degrade (BUG-560) — on
     // a non-GitHub forge `gh` errors with a raw "not a known GitHub host" auth
@@ -98351,12 +98991,12 @@ fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenPrSnapshot {
     parse_open_pr_snapshot(&String::from_utf8_lossy(&out.stdout))
 }
 
+// trace:TASK-833 | ai:claude
 /// TASK-833: pure parse of a `gh pr list --json
 /// number,title,headRefName,statusCheckRollup,mergeable,reviewDecision` payload
 /// into an `OpenPrSnapshot`. Split out of `collect_open_prs` so it's
 /// unit-testable without shelling out; malformed JSON / a missing `number`
 /// field degrades silently (empty snapshot / skip the row).
-/// trace:TASK-833 | ai:claude
 fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
     let parsed: serde_json::Value = match serde_json::from_str(json.trim()) {
         Ok(v) => v,
@@ -98406,11 +99046,12 @@ fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
     OpenPrSnapshot { by_branch }
 }
 
+// trace:STORY-385 | ai:claude
 /// Every branch that has ever been a PR head, across all states
 /// (open / closed / merged). Used by the branches-ahead-no-PR detector
 /// to distinguish "never PR'd" branches from squash-merged ones that
 /// git still considers ahead. Empty when gh is missing or the call
-/// fails. trace:STORY-385 | ai:claude
+/// fails.
 fn collect_all_pr_head_branches(
     project_root: &std::path::Path,
 ) -> std::collections::HashSet<String> {
@@ -98493,12 +99134,12 @@ fn summarize_status_check_rollup(checks: &[serde_json::Value]) -> String {
     }
 }
 
+// trace:STORY-385 | ai:claude
 /// Walk recent default-branch commits and recover the `spec_id → sha`
 /// pairs that would auto-bump a Done spec to Completed. Returns the
 /// flips that *would* land — the caller filters them against current
 /// store state. Cheaper than `auto_bump_done_to_completed` because it
 /// doesn't require being checked out on main.
-/// trace:STORY-385 | ai:claude
 fn scan_default_branch_for_spec_landings(
     project_root: &std::path::Path,
     limit: u32,
@@ -98602,11 +99243,11 @@ fn gh_pr_is_merged(project_root: &std::path::Path, n: u64) -> Option<bool> {
     Some(s == "merged")
 }
 
+// trace:STORY-385 | ai:claude
 /// Scan `~/.claude/projects/` for project dirs whose recorded cwd no
 /// longer exists. Re-derived from the same detection logic as
 /// `session_prune_orphans` so the cleanup surface stays consistent with
 /// the cleanup command.
-/// trace:STORY-385 | ai:claude
 fn collect_orphan_project_dirs() -> Vec<status_cleanup::OrphanProjectDirItem> {
     let Some(home) = dirs::home_dir() else {
         return Vec::new();
@@ -98680,13 +99321,13 @@ fn parse_pr_scope(scope: &str) -> Option<u64> {
     rest.parse().ok()
 }
 
+// trace:STORY-385 | ai:claude
 /// True when `branch` matches the AIDA *work-branch* naming convention:
 /// `<type>-<n>` for spec types that drive an implementer session
 /// (`task`, `story`, `bug`, `epic`, `spike`, `spec`, `fr`, `nfr`,
 /// `user`, `sr`), optionally with a `-suffix` or `.suffix`. PR/MR
 /// branches (reviewer worktrees) are excluded — they surface via the
 /// stale-reviewer-on-merged detector.
-/// trace:STORY-385 | ai:claude
 fn is_work_spec_branch_name(branch: &str) -> bool {
     const PREFIXES: &[&str] = &[
         "task-", "story-", "bug-", "epic-", "spike-", "spec-", "fr-", "nfr-", "user-", "sr-",
@@ -98742,10 +99383,11 @@ mod is_work_spec_branch_name_tests {
     }
 }
 
+// trace:STORY-385 | ai:claude
 /// Build the full `CleanupReport` from the live project state. Each
 /// detector is independent — when one fails (gh missing, git invocation
 /// broken, store unreadable) it returns an empty vec rather than
-/// aborting the whole report. trace:STORY-385 | ai:claude
+/// aborting the whole report.
 fn collect_cleanup_report(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -99204,12 +99846,12 @@ fn collect_cleanup_report(
     }
 }
 
+// trace:STORY-465 | ai:claude
 /// Gather every "human-gate" item — mergeable PRs the operator still
 /// needs to merge, briefs filed for the running agent, findings awaiting
 /// triage, reviewer-queue verdicts, and `NeedsAttention` escalations —
 /// into the structured report rendered as the "Awaiting you" section.
 /// Empty (and so hidden) on a quiet day; that absence is the signal.
-/// trace:STORY-465 | ai:claude
 fn collect_awaiting_report(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
@@ -99737,11 +100379,12 @@ mod bug415_status_count_tests {
     }
 }
 
+// trace:STORY-640 | ai:claude
 /// Whether a command MUTATES the shared store / queue (so a shared `"default"`
 /// identity in a team context is genuinely hazardous — collides queues +
 /// attribution). Reads only get a warning; writes can be refused behind
 /// `AIDA_TEAM_REQUIRE_USER=1`. Conservative: anything not clearly a read is a
-/// write. trace:STORY-640 | ai:claude
+/// write.
 fn is_write_command(command: &Command) -> bool {
     matches!(
         command,
@@ -99758,10 +100401,10 @@ fn is_write_command(command: &Command) -> bool {
     )
 }
 
+// trace:STORY-640 | ai:claude
 /// STORY-640: the team distinct-identity guard + join-the-team onboarding hint.
 /// Both key off the shared node roster and are silent outside a team context.
 /// Best-effort — never returns an error except the explicit opt-in refusal.
-/// trace:STORY-640 | ai:claude
 fn maybe_team_identity_guard(store_path: &std::path::Path, command: &Command) -> Result<()> {
     // `aida team` surfaces the same facts; the JSON status path must stay clean
     // for machine consumers. Skip both so the guard never pollutes them.
@@ -99834,8 +100477,9 @@ fn maybe_team_identity_guard(store_path: &std::path::Path, command: &Command) ->
     Ok(())
 }
 
+// trace:STORY-640 | ai:claude
 /// `aida team` — the roster of every node/clone sharing this store, joined with
-/// the `coordination/` claims each currently holds. trace:STORY-640 | ai:claude
+/// the `coordination/` claims each currently holds.
 fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
     let our_clone = team::our_clone_path(store_path);
     let members = team::build_team_view(store_path, &our_clone);
@@ -99956,11 +100600,12 @@ fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-646 | ai:claude
 /// STORY-646: the canonical role names a `set-role` write is allowed to record —
 /// the core roles plus any role files installed under `~/.aida/roles/` (or the
 /// project roles dir). Validating against this catches a typo'd role before it
 /// lands in the durable roster. Best-effort: an unreadable roles dir still
-/// admits the core roles. trace:STORY-646 | ai:claude
+/// admits the core roles.
 fn known_role_names() -> std::collections::BTreeSet<String> {
     let mut names: std::collections::BTreeSet<String> = ["advisor", "implementer", HUMAN_ROUTE]
         .iter()
@@ -99976,9 +100621,10 @@ fn known_role_names() -> std::collections::BTreeSet<String> {
     names
 }
 
+// trace:STORY-646 | ai:claude
 /// `aida team set-role <user> --role <role>` (STORY-646). Validate the role
 /// against the known set, write `registry/team.toml` with a CAS push, and print
-/// the guardrail-not-security caveat once. trace:STORY-646 | ai:claude
+/// the guardrail-not-security caveat once.
 fn handle_team_set_role(store_path: &std::path::Path, user: &str, role: &str) -> Result<()> {
     let canonical = canonical_role_name(role.trim());
     if canonical.is_empty() {
@@ -100013,9 +100659,10 @@ fn handle_team_set_role(store_path: &std::path::Path, user: &str, role: &str) ->
     Ok(())
 }
 
+// trace:STORY-654 | ai:claude
 /// `aida team unset-role <user>` (STORY-654): remove a member entry from the
 /// roster (CAS push), to clean stray / duplicate keys. Friendly no-op if the
-/// user isn't present. trace:STORY-654 | ai:claude
+/// user isn't present.
 fn handle_team_unset_role(store_path: &std::path::Path, user: &str) -> Result<()> {
     let removed = team::unset_role_cas(store_path, user)?;
     if removed {
@@ -100030,8 +100677,9 @@ fn handle_team_unset_role(store_path: &std::path::Path, user: &str) -> Result<()
     Ok(())
 }
 
+// trace:STORY-646 | ai:claude
 /// `aida team my-role` (STORY-646): show the caller's effective role and where
-/// it resolved from (roster / env / default). trace:STORY-646 | ai:claude
+/// it resolved from (roster / env / default).
 fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> Result<()> {
     let user = current_user_id(None);
     let (role, source) = team::effective_role_for_user(store_path, &user);
@@ -100105,10 +100753,11 @@ fn requirement_breakdown_summary_line(
     line
 }
 
+// trace:STORY-640 | ai:claude
 /// `aida status` cross-clone coordination view (STORY-640, coordination slice
 /// 3): the ACTIVE `coordination/` claims (leases + drain + solo) held across
 /// all clones — distinct from the LOCAL leases section. Silent when there are
-/// no claims. trace:STORY-640 | ai:claude
+/// no claims.
 fn print_status_coordination_section(
     store_root: &std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
@@ -100784,12 +101433,12 @@ mod story_405_advisor_activity_tests {
     }
 }
 
+// trace:EPIC-1-001 | ai:claude
 /// Compare a project's `.claude/skills/`, `.claude/commands/`, `.claude/hooks/`
 /// (and CLAUDE.md / AGENTS.md / .mcp.json) against the templates embedded in
 /// the running aida binary. Reports counts of files that match exactly vs
 /// files that have drifted, and suggests `aida scaffold apply --force` if
 /// there's drift. Quiet when the project has no scaffolding at all.
-/// trace:EPIC-1-001 | ai:claude
 fn print_scaffolding_freshness(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -101044,12 +101693,12 @@ fn print_aida_dev_context(project_root: &std::path::Path) {
     println!();
 }
 
+// trace:STORY-673 | ai:claude
 /// STORY-673: terse one-line AIDA-dev-context for the default `aida status`.
 /// Shows the running binary + workspace version + commits-since-tag, and
 /// crucially SKIPS the cross-platform-CI network probe and template/lockfile
 /// checks the full block runs — so the default path stays cheap. `--full` /
 /// `--all` calls `print_aida_dev_context` for the complete picture.
-/// trace:STORY-673 | ai:claude
 fn print_aida_dev_context_summary(project_root: &std::path::Path) {
     let workspace_version = read_workspace_version(project_root).unwrap_or_else(|| "?".into());
     let latest_tag = git_describe_latest_tag(project_root).unwrap_or_else(|| "(none)".into());
@@ -101539,10 +102188,10 @@ fn build_git_dirty() -> bool {
     env!("AIDA_BUILD_GIT_DIRTY") == "1"
 }
 
+// trace:feedback_local_time | ai:claude
 /// Build time formatted in the user's local timezone — the banner is
 /// human-facing so we render it where the user reads it, not in UTC.
 /// On-disk fields (oplog, YAML created_at, etc.) stay UTC.
-/// trace:feedback_local_time | ai:claude
 fn build_time_iso() -> String {
     let secs: i64 = env!("AIDA_BUILD_UNIX_TIME").parse().unwrap_or(0);
     chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
@@ -102710,12 +103359,12 @@ fn handle_export_command(
     Ok(())
 }
 
+// trace:FR-1-002 | ai:claude
 /// Bulk-import helper for git-canonical stores (FR-1-002): drains an iterator
 /// of new requirements through a single `GitBackend::bulk_writer()` session
 /// so one git commit covers the whole batch. Falls back to the legacy
 /// `update_atomically` path for non-git backends (SQLite / YAML), since the
 /// bulk-writer's optimization only applies to the git path.
-/// trace:FR-1-002 | ai:claude
 fn bulk_import_via_writer<I>(storage: &Storage, commit_subject: &str, reqs: I) -> Result<usize>
 where
     I: IntoIterator<Item = Requirement>,
@@ -102871,21 +103520,22 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
     Ok(())
 }
 
+// trace:TASK-679 | ai:claude
 /// TASK-679: a parent/child edge is canonically BIDIRECTIONAL so both ends
 /// reflect the link — matching `aida add --parent`, which writes the parent's
 /// `Parent --> child` edge and the child's reciprocal `Child --> parent` edge.
 /// `aida rel add` previously wrote only the source-side edge for these types.
 /// Any other edge type keeps the explicit `--bidirectional` opt-in. Pure so
-/// the canonical-edge decision is unit-testable. trace:TASK-679 | ai:claude
+/// the canonical-edge decision is unit-testable.
 fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: bool) -> bool {
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
+// trace:TASK-887 | ai:claude
 /// The canonical user-facing spellings of the STANDARD relationship types — the
 /// ones `RelationshipType::from_str` recognizes and the graph queries
 /// (`--blocked-by`, `--blocks`, `--tree`, `--impact`) actually traverse. The
 /// did-you-mean lens for `aida rel add --type` is computed against this set.
-/// trace:TASK-887 | ai:claude
 const STANDARD_REL_TYPES: &[&str] = &[
     "parent",
     "child",
@@ -102897,9 +103547,10 @@ const STANDARD_REL_TYPES: &[&str] = &[
     "blocks",
 ];
 
+// trace:TASK-887 | ai:claude
 /// Plain Levenshtein edit distance between two strings (case folding is the
 /// caller's job). Small inputs only — relationship-type names are a handful of
-/// chars — so the O(n*m) DP is fine. trace:TASK-887 | ai:claude
+/// chars — so the O(n*m) DP is fine.
 fn levenshtein(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
@@ -102916,13 +103567,14 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev[b.len()]
 }
 
+// trace:TASK-887 | ai:claude
 /// TASK-887: when `aida rel add --type <x>` gets a value that ISN'T a known
 /// standard relationship type, it's stored as a `Custom` edge — which the graph
 /// traversals silently won't follow. Returns the nearest standard type when the
 /// input is a plausible typo of one (edit distance small relative to its
 /// length), for a "did you mean" hint. Returns `None` for an already-standard
 /// type or a value too far from any standard to be a typo (a genuine custom
-/// type). Pure → unit-testable. trace:TASK-887 | ai:claude
+/// type). Pure → unit-testable.
 fn nearest_standard_rel_type(input: &str) -> Option<&'static str> {
     let needle = input.trim().to_lowercase();
     if needle.is_empty() {
@@ -103289,10 +103941,11 @@ mod task_887_888_input_validation_tests {
     }
 }
 
+// trace:TASK-65 | ai:claude
 /// Modern `aida rel list` over the git-canonical backend. Supports three
 /// modes (global / outgoing / incoming) plus `--type`, `--dangling`, and
 /// `--all` filters. Output uses a uniform `FROM → TO   TITLE` row format
-/// across all modes for grep-friendly behavior. trace:TASK-65 | ai:claude
+/// across all modes for grep-friendly behavior.
 fn handle_rel_list_modern(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
@@ -103575,9 +104228,10 @@ struct RelRow {
     target_resolved: bool,
 }
 
+// trace:TASK-65 | ai:claude
 /// Compare a relationship-type from storage to a user-supplied filter.
 /// Canonical types match by Display name (case-insensitive); custom types
-/// match exact string. trace:TASK-65 | ai:claude
+/// match exact string.
 fn rel_type_matches(actual: &RelationshipType, want: &RelationshipType) -> bool {
     match (actual, want) {
         (RelationshipType::Custom(a), RelationshipType::Custom(b)) => a.eq_ignore_ascii_case(b),
@@ -103848,8 +104502,8 @@ fn list_comments(storage: &Storage, req_id: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-63 | ai:claude
 /// Result of the STORY-63 scope-fallback resolver.
-/// trace:STORY-63 | ai:claude
 struct ScopeFallback<'a> {
     /// Total number of Approved children of the scope (informational —
     /// we display this count in the rendered message).
@@ -103858,6 +104512,7 @@ struct ScopeFallback<'a> {
     pick: &'a Requirement,
 }
 
+// trace:STORY-63 | ai:claude
 /// Find the highest-priority approved child of `lease.scope` that no
 /// session is already mid-work on. Returns `None` when:
 ///   - the scope is a path-glob / free-form string we can't resolve to
@@ -103869,7 +104524,6 @@ struct ScopeFallback<'a> {
 /// Priority order: High > Medium > Low, then created_at ascending so
 /// the oldest approved item wins ties (closest to the project's
 /// implicit work order).
-/// trace:STORY-63 | ai:claude
 fn scope_fallback_pick<'a>(
     store: &'a RequirementsStore,
     lease: &SessionLease,
@@ -103959,9 +104613,9 @@ fn scope_fallback_pick<'a>(
     })
 }
 
+// trace:STORY-63 | ai:claude
 /// Sort key for priority — lower rank wins (High = 0, Medium = 1,
 /// Low = 2) so an ascending sort puts High first.
-/// trace:STORY-63 | ai:claude
 fn priority_rank(p: &RequirementPriority) -> u8 {
     match p {
         RequirementPriority::High => 0,
@@ -103970,13 +104624,13 @@ fn priority_rank(p: &RequirementPriority) -> u8 {
     }
 }
 
+// trace:STORY-62 | ai:claude
 /// Render `root` and its descendants as an indented tree, two spaces per
 /// level. Each node prints as `<status-glyph> <ID>  <Status>  <title>`.
 /// Children are walked via rel_type:Parent edges (AIDA's
 /// parent-points-at-child storage convention). Recursion stops at
 /// `max_depth` (the root is depth 0). Cycles are guarded by a visited
 /// set — defensive only; the data model shouldn't allow them.
-/// trace:STORY-62 | ai:claude
 fn render_tree(
     backend: &aida_core::CachedGitBackend,
     root: &Requirement,
@@ -104072,12 +104726,12 @@ fn print_comment(comment: &Comment, indent: usize) {
     }
 }
 
+// trace:SPIKE-2 | ai:claude
 /// Resolve a user-supplied comment identifier into a concrete Uuid by
 /// matching against the requirement's comment tree. Accepts:
 /// - a full UUID string (e.g., `019df478-7a34-7f92-8d46-b00e0d1eeda7`)
 /// - a UUID prefix (e.g., `019df478`) — must uniquely match one comment
 ///   Returns an error on no-match or ambiguous-prefix.
-///   trace:SPIKE-2 | ai:claude
 fn resolve_comment_uuid(req: &aida_core::Requirement, query: &str) -> Result<Uuid> {
     if let Ok(parsed) = Uuid::parse_str(query) {
         // Verify the exact UUID exists in the tree, even if parse succeeded.
@@ -105338,11 +105992,11 @@ fn trace_sweep(
 // `aida review` — review-workflow helpers (STORY-67)
 // ---------------------------------------------------------------------------
 
+// trace:STORY-67 | ai:claude
 /// Section headings the prompt-generator looks for in a requirement's
 /// description. The first match (case-insensitive) wins; everything from
 /// that heading until the next `## ` heading or end-of-string is the
 /// extracted body.
-/// trace:STORY-67 | ai:claude
 const ACCEPTANCE_SECTION_HEADINGS: &[&str] = &[
     "Acceptance",
     "Verify",
@@ -105351,7 +106005,8 @@ const ACCEPTANCE_SECTION_HEADINGS: &[&str] = &[
     "Verification",
 ];
 
-/// Density levels for the `aida show --card` spec card. trace:TASK-265
+// trace:TASK-265
+/// Density levels for the `aida show --card` spec card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CardDensity {
     /// One-line id/type/priority/status/title summary, no box. For
@@ -105365,9 +106020,10 @@ enum CardDensity {
     Full,
 }
 
+// trace:TASK-265 | ai:claude
 /// Map a relationship type to the field label the spec card buckets it
 /// under. AIDA's `RelationshipType` reads as "I am X to the target", so a
-/// `Child` edge means the target is this spec's parent. trace:TASK-265 | ai:claude
+/// `Child` edge means the target is this spec's parent.
 fn card_rel_label(rt: &RelationshipType) -> &'static str {
     match rt {
         // This spec is a child of the target → target is the parent.
@@ -105378,10 +106034,11 @@ fn card_rel_label(rt: &RelationshipType) -> &'static str {
     }
 }
 
+// trace:TASK-265 | ai:claude
 /// The lead prose of a requirement description — everything before the
 /// first `## ` section heading. AIDA descriptions front-load a plain
 /// summary, then break into `## Acceptance`, `## Origin`, etc.; the
-/// balanced card shows just that summary. trace:TASK-265 | ai:claude
+/// balanced card shows just that summary.
 fn card_lead_prose(description: &str) -> &str {
     let mut from = 0usize;
     while let Some(rel) = description[from..].find("## ") {
@@ -105395,11 +106052,12 @@ fn card_lead_prose(description: &str) -> &str {
     description.trim_end()
 }
 
+// trace:TASK-265 | ai:claude
 /// Truncate text to at most `max_paragraphs` blank-line-separated
 /// paragraphs and roughly `max_chars` characters, never cutting inside a
 /// paragraph (so the result never ends mid-sentence). The first paragraph
 /// is always kept even if it alone exceeds the char budget. Returns the
-/// kept text and whether anything was dropped. trace:TASK-265 | ai:claude
+/// kept text and whether anything was dropped.
 fn card_truncate_paragraphs(text: &str, max_paragraphs: usize, max_chars: usize) -> (String, bool) {
     let paragraphs: Vec<&str> = text
         .split("\n\n")
@@ -105422,8 +106080,8 @@ fn card_truncate_paragraphs(text: &str, max_paragraphs: usize, max_chars: usize)
     (kept.join("\n\n"), truncated)
 }
 
+// trace:TASK-265 | ai:claude
 /// Count `- [ ]` / `* [ ]` checklist items in an acceptance-section body.
-/// trace:TASK-265 | ai:claude
 fn card_count_acceptance(body: &str) -> usize {
     body.lines()
         .filter(|l| {
@@ -105433,6 +106091,7 @@ fn card_count_acceptance(body: &str) -> usize {
         .count()
 }
 
+// trace:TASK-838 | ai:claude
 /// Lead the spec card's brief with the spec's cached `aida intent`
 /// comprehension (TASK-838). When a FRESH comprehension exists, render its
 /// `llm` register at the top of the brief, clearly labeled AI-generated, ahead
@@ -105446,7 +106105,7 @@ fn card_count_acceptance(body: &str) -> usize {
 /// (or a spec never run through `aida intent`) takes the absent-note path with
 /// no other behavior change. Store-load failure is non-fatal — the card is a
 /// convenience surface, so we silently skip the intent block rather than abort
-/// the whole card. trace:TASK-838 | ai:claude
+/// the whole card.
 fn render_card_intent(req: &aida_core::Requirement, store_path: &std::path::Path) {
     let project_root = store_path
         .parent()
@@ -105497,6 +106156,7 @@ fn render_card_intent(req: &aida_core::Requirement, store_path: &std::path::Path
     }
 }
 
+// trace:TASK-265 | ai:claude
 /// Render a requirement as a compact, boxed "spec card" — the rendering
 /// behind `aida show --card`. The /aida-pickup skill calls this at session
 /// start so the spec's contract stays in terminal scrollback for the whole
@@ -105504,7 +106164,7 @@ fn render_card_intent(req: &aida_core::Requirement, store_path: &std::path::Path
 /// view remains the canonical detail surface.
 ///
 /// `rels` is the requirement's relationships already resolved by the
-/// caller to (label, display-id, title) triples. trace:TASK-265 | ai:claude
+/// caller to (label, display-id, title) triples.
 fn render_spec_card(
     req: &aida_core::Requirement,
     rels: &[(String, String, String)],
@@ -105792,11 +106452,12 @@ fn render_spec_card(
     println!("{}", rule.dimmed());
 }
 
+// trace:STORY-67 | ai:claude
 /// Extract the acceptance-criteria body from a requirement description.
 /// Returns the body text (without the heading line) when one of the
 /// recognized headings is found; None otherwise so the caller can render
 /// a "no acceptance criteria documented" placeholder instead of silently
-/// emitting an empty section. trace:STORY-67 | ai:claude
+/// emitting an empty section.
 fn extract_acceptance_section(description: &str) -> Option<String> {
     let lines: Vec<&str> = description.lines().collect();
     let mut start: Option<usize> = None;
@@ -105831,6 +106492,9 @@ fn extract_acceptance_section(description: &str) -> Option<String> {
     }
 }
 
+// trace:BUG-85 | ai:claude
+// trace:STORY-67 | ai:claude
+// trace:BUG-426 | ai:claude
 /// Pull `(REQ-ID)` trailers from a commit message **subject** only. AIDA's
 /// commit format wraps the requirement id in parens at end-of-subject:
 /// `[AI:tool] feat(scope): description (REQ-ID)`. Also tolerates the
@@ -105838,15 +106502,14 @@ fn extract_acceptance_section(description: &str) -> Option<String> {
 ///
 /// Body content is ignored — those IDs are "referenced" (trace comments,
 /// prose, sub-commit lines in squash bodies) and are returned by
-/// [`extract_referenced_spec_ids_from_commit`] instead. trace:BUG-85 | ai:claude
-/// trace:STORY-67 | ai:claude
+/// [`extract_referenced_spec_ids_from_commit`] instead.
 /// True when a commit subject is an AIDA *plan* commit — `docs(plans): …`
 /// or `docs(plan): …`, optionally behind an `[AI:tool]` authorship prefix
 /// (`[AI:claude] docs(plans): …`). Plan commits are pre-implementation
 /// artifacts (the plan template leaves the planned specs at Approved), so
 /// their trailing `(SPEC-ID …)` group names what the plan is FOR, not what
 /// shipped. The auto-bump completion-candidate scan skips them so a plan-only
-/// commit never false-completes the specs it plans. trace:BUG-426 | ai:claude
+/// commit never false-completes the specs it plans.
 fn is_plan_commit_subject(subject: &str) -> bool {
     let s = subject.trim();
     // Strip an optional leading `[AI:tool]` authorship tag.
@@ -105896,7 +106559,8 @@ pub(crate) fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
 // release / docs commits).
 // ============================================================================
 
-/// Why a trailer reference fails the validity gate. trace:STORY-498 | ai:claude
+// trace:STORY-498 | ai:claude
+/// Why a trailer reference fails the validity gate.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 enum TrailerVerdict {
@@ -105916,7 +106580,8 @@ impl TrailerVerdict {
     }
 }
 
-/// One offending `(SPEC-ID)` reference found by the gate. trace:STORY-498 | ai:claude
+// trace:STORY-498 | ai:claude
+/// One offending `(SPEC-ID)` reference found by the gate.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 struct TrailerViolation {
     /// Short SHA of the offending commit.
@@ -105928,9 +106593,9 @@ struct TrailerViolation {
     verdict: TrailerVerdict,
 }
 
+// trace:STORY-498 | ai:claude
 /// How a SPEC-ID resolves against the live requirement graph — the result the
 /// pure validation core consumes so it stays independent of the store/git.
-/// trace:STORY-498 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SpecResolution {
     /// Resolves to a live (non-rejected) spec — passes.
@@ -105941,6 +106606,7 @@ enum SpecResolution {
     Missing,
 }
 
+// trace:STORY-498 | ai:claude
 /// Pure, testable core of the validity gate: given commits as
 /// `(short_sha, subject)` pairs and a resolver that classifies each SPEC-ID
 /// against the graph, return every offending reference.
@@ -105951,7 +106617,6 @@ enum SpecResolution {
 /// - A commit with no `(SPEC-ID)` trailer is skipped — there is nothing to
 ///   validate (mechanical / release / docs commits with "no REQ-ID needed").
 ///
-/// trace:STORY-498 | ai:claude
 fn validate_trailer_references<F>(
     commits: &[(String, String)],
     mut resolve: F,
@@ -105981,11 +106646,11 @@ where
     violations
 }
 
+// trace:STORY-498 | ai:claude
 /// Resolve the commit range to scan. Explicit `--range` wins; otherwise scan
 /// the commits this branch adds over the default branch
 /// (`<default-branch>..HEAD`), falling back to `HEAD~20..HEAD` when no default
 /// branch resolves (e.g. a shallow CI checkout or a repo with no main).
-/// trace:STORY-498 | ai:claude
 fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> String {
     if let Some(r) = range {
         return r.to_string();
@@ -105997,13 +106662,13 @@ fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> St
     "HEAD~20..HEAD".to_string()
 }
 
+// trace:STORY-498 trace:STORY-469 | ai:claude
 /// Resolve a single SPEC-ID against a loaded store, mirroring the trace-gate
 /// resolver. When `store` is `None` (no requirement store reachable) every id
 /// resolves `Live` — failing every id would block legitimate ships on a
 /// checkout without store access, so the safe default is to surface the
 /// missing-store condition separately (callers warn) rather than refuse.
 /// Shared by `aida trace gate` (STORY-498) and the client-side ship/done guard.
-/// trace:STORY-498 trace:STORY-469 | ai:claude
 fn resolve_spec_in_store(store: Option<&aida_core::RequirementsStore>, id: &str) -> SpecResolution {
     let Some(store) = store else {
         return SpecResolution::Live;
@@ -106042,10 +106707,11 @@ fn resolve_spec_in_store(store: Option<&aida_core::RequirementsStore>, id: &str)
 // (the same resolution `aida show` and `trace gate` use). trace:TASK-868
 // ============================================================================
 
-/// How a single inline `// trace:SPEC-ID` marker resolves. A superset of
+// trace:TASK-868
+/// How a single inline `// trace` SPEC-ID marker resolves. A superset of
 /// `SpecResolution` that also splits out the archived-but-live case so the
 /// report can call it cheaply (an archived target is a softer rot signal than a
-/// deleted one — the spec still exists, just hidden). trace:TASK-868
+/// deleted one — the spec still exists, just hidden).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 enum TraceRotVerdict {
@@ -106084,10 +106750,11 @@ impl TraceRotVerdict {
     }
 }
 
+// trace:TASK-868
 /// Resolve a SPEC-ID against the store for the rot check, distinguishing
 /// archived from rejected from missing. When the store is unreachable, every id
 /// resolves `Live` (callers warn separately) so a checkout without store access
-/// doesn't flag the whole tree. trace:TASK-868
+/// doesn't flag the whole tree.
 fn resolve_trace_rot(store: Option<&aida_core::RequirementsStore>, id: &str) -> TraceRotVerdict {
     let Some(store) = store else {
         return TraceRotVerdict::Live;
@@ -106111,7 +106778,8 @@ fn resolve_trace_rot(store: Option<&aida_core::RequirementsStore>, id: &str) -> 
     }
 }
 
-/// One dangling (rotted) inline trace marker. trace:TASK-868
+// trace:TASK-868
+/// One dangling (rotted) inline trace marker.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 struct TraceRot {
     /// The referenced SPEC-ID that rotted.
@@ -106123,9 +106791,10 @@ struct TraceRot {
     verdict: TraceRotVerdict,
 }
 
-/// CLI handler for `aida trace check`. Scans inline `// trace:SPEC-ID` markers,
+// trace:TASK-868
+/// CLI handler for `aida trace check`. Scans inline `// trace` SPEC-ID markers,
 /// resolves each against the live graph, reports the rot, and exits non-zero
-/// (code 1) under `--block` when any dangling trace exists. trace:TASK-868
+/// (code 1) under `--block` when any dangling trace exists.
 fn handle_trace_check(path: Option<&str>, json: bool, block: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -106272,14 +106941,15 @@ fn handle_trace_check(path: Option<&str>, json: bool, block: bool) -> Result<()>
     Ok(())
 }
 
+// trace:STORY-498 | ai:claude
+// trace:STORY-498 trace:STORY-469 | ai:claude
 /// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
 /// pure validator against the live store, prints the result, and exits non-zero
 /// (code 1) when any commit references a dead/dangling SPEC-ID.
-/// trace:STORY-498 | ai:claude
 /// Read `(short_sha, subject)` rows for a git range. A unit separator keeps
 /// subjects with arbitrary punctuation intact. Returns an error only when git
 /// itself fails (bad range, no git). Shared by the trace gate and the
-/// client-side ship/done guard. trace:STORY-498 trace:STORY-469 | ai:claude
+/// client-side ship/done guard.
 fn read_commits_in_range(
     project_root: &std::path::Path,
     range: &str,
@@ -106321,10 +106991,10 @@ fn read_commits_in_range(
 // (`resolve_spec_in_store`) as the gate; only the call site differs.
 // ============================================================================
 
+// trace:STORY-469 | ai:claude
 /// Format the human-readable refusal lines for client-side trailer violations.
 /// Pure (takes pre-computed violations) so it's unit-testable in isolation.
 /// `surface` names the command for the message ("pr ship" / "queue done").
-/// trace:STORY-469 | ai:claude
 fn format_trailer_guard_refusal(surface: &str, violations: &[TrailerViolation]) -> Vec<String> {
     let mut lines = Vec::new();
     lines.push(format!(
@@ -106351,13 +107021,13 @@ fn format_trailer_guard_refusal(surface: &str, violations: &[TrailerViolation]) 
     lines
 }
 
+// trace:STORY-469 | ai:claude
 /// Guard 1: validate that every `(SPEC-ID)` trailer on the commits this branch
 /// adds over the default branch resolves to a live (non-rejected) spec. Refuses
 /// (exits 1) on any dead/dangling reference unless `force` is set. A no-op when
 /// the branch is the default branch (nothing to ship) or no store is reachable
 /// (cannot corroborate — surfaced as a soft warning, never a hard refusal, so a
 /// store-less checkout can still ship). `surface` names the calling command.
-/// trace:STORY-469 | ai:claude
 fn run_client_trailer_guard(project_root: &std::path::Path, surface: &str, force: bool) {
     if force {
         return;
@@ -106400,10 +107070,10 @@ fn run_client_trailer_guard(project_root: &std::path::Path, surface: &str, force
     std::process::exit(1);
 }
 
+// trace:STORY-498 | ai:claude
 /// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
 /// pure validator against the live store, prints the result, and exits non-zero
 /// (code 1) when any commit references a dead/dangling SPEC-ID.
-/// trace:STORY-498 | ai:claude
 fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -106502,9 +107172,9 @@ fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
 // the live graph and calls it. trace:STORY-499 | ai:claude
 // ============================================================================
 
+// trace:STORY-499 | ai:claude
 /// Why a coverable hunk is exempt from the coverage denominator. Every
 /// exemption is reported (never silently dropped) per SPIKE-47 §3.
-/// trace:STORY-499 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 enum CoverageExemption {
@@ -106541,22 +107211,24 @@ impl CoverageExemption {
     }
 }
 
+// trace:STORY-499 | ai:claude
 /// How a coverable hunk earned its coverage (SPIKE-47 §4.2). Cheapest-first.
-/// trace:STORY-499 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 enum CoverageSource {
-    /// A `// trace:<live-id>` appears in the hunk's added lines (§4.2.1).
+    /// A `// trace` marker for a live id appears in the hunk's added lines (§4.2.1).
     InHunkAnchor,
-    /// A `// trace:<live-id>` sits within N lines above the hunk (§4.2.2).
+    /// A `// trace` marker for a live id sits within N lines above the hunk (§4.2.2).
     ProximityAnchor,
-    /// A module-level `//! trace:<live-id>` covers the whole file (§4.2.3).
+    // trace:<live-id>` covers the whole file (§4.2.3).
+    /// A module-level `//!
     FileAnchor,
     /// The hunk's commit carries a live `(SPEC-ID)` trailer (§4.2.4 — the floor).
     CommitTrailer,
 }
 
-/// The classification of one changed hunk. trace:STORY-499 | ai:claude
+// trace:STORY-499 | ai:claude
+/// The classification of one changed hunk.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 struct HunkVerdict {
     /// File the hunk lives in (post-change path).
@@ -106582,7 +107254,8 @@ impl HunkVerdict {
     }
 }
 
-/// One parsed changed hunk fed into the pure core. trace:STORY-499 | ai:claude
+// trace:STORY-499 | ai:claude
+/// One parsed changed hunk fed into the pure core.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ParsedHunk {
     /// Post-change file path.
@@ -106595,7 +107268,8 @@ struct ParsedHunk {
     removed: Vec<String>,
 }
 
-/// Aggregate coverage result returned by the pure core. trace:STORY-499 | ai:claude
+// trace:STORY-499 | ai:claude
+/// Aggregate coverage result returned by the pure core.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 struct DiffCoverage {
     hunks: Vec<HunkVerdict>,
@@ -106620,8 +107294,9 @@ impl DiffCoverage {
             .filter(|h| h.is_uncovered_coverable())
             .collect()
     }
+    // trace:STORY-499 | ai:claude
     /// `covered / coverable`. 1.0 when there is nothing coverable (vacuously
-    /// fully covered — an all-exempt diff passes). trace:STORY-499 | ai:claude
+    /// fully covered — an all-exempt diff passes).
     fn ratio(&self) -> f64 {
         let coverable = self.coverable();
         if coverable == 0 {
@@ -106631,15 +107306,15 @@ impl DiffCoverage {
     }
 }
 
+// trace:STORY-499 | ai:claude
 /// Default source extensions that REQUIRE coverage. Mirrors `aida trace scan
 /// --extensions` default (`rs`); extensible per-repo (SPIKE-47 §2.1.2).
-/// trace:STORY-499 | ai:claude
 const COVERAGE_SOURCE_EXTENSIONS: &[&str] = &["rs", "py", "ts", "tsx", "js", "jsx", "go", "java"];
 
+// trace:STORY-499 | ai:claude
 /// SPIKE-47 §3.2 file/path-level exemption classifier. Returns `Some(reason)`
 /// when the whole file is exempt, `None` when its changed source hunks are
 /// coverable. Deterministic — globs/extensions only, no parsing. PURE.
-/// trace:STORY-499 | ai:claude
 fn classify_coverage_file(path: &str, generated_header: Option<&str>) -> Option<CoverageExemption> {
     let lower = path.to_ascii_lowercase();
     let segments: Vec<&str> = lower.split('/').collect();
@@ -106703,9 +107378,10 @@ fn classify_coverage_file(path: &str, generated_header: Option<&str>) -> Option<
     Some(CoverageExemption::DocOrProse)
 }
 
+// trace:STORY-499 | ai:claude
 /// True when a single source line is comment-only or blank, for the common
 /// comment leaders (`//`, `///`, `//!`, `#`, `*`, `/*`, `*/`, `<!--`). PURE.
-/// Used by the comment-only hunk exemption (SPIKE-47 H4). trace:STORY-499 | ai:claude
+/// Used by the comment-only hunk exemption (SPIKE-47 H4).
 fn coverage_line_is_comment_or_blank(line: &str) -> bool {
     let t = line.trim();
     if t.is_empty() {
@@ -106720,9 +107396,10 @@ fn coverage_line_is_comment_or_blank(line: &str) -> bool {
         || t.starts_with("-->")
 }
 
+// trace:STORY-499 | ai:claude
 /// SPIKE-47 §3.3 hunk-level exemption classifier. Returns `Some(reason)` when
 /// a hunk (in an already-coverable file) is exempt. `trivial_max_lines` is the
-/// configurable trivial-change floor (default 1). PURE. trace:STORY-499 | ai:claude
+/// configurable trivial-change floor (default 1). PURE.
 fn classify_coverage_hunk(
     hunk: &ParsedHunk,
     trivial_max_lines: usize,
@@ -106775,17 +107452,17 @@ fn classify_coverage_hunk(
     None
 }
 
+// trace:STORY-499 | ai:claude
 /// SPIKE-47 trace-anchor grammar (reused verbatim from `aida trace gate`):
-/// matches `trace:<SPEC-ID>` regardless of comment leader. PURE compile.
-/// trace:STORY-499 | ai:claude
+/// matches a `trace` marker plus `<SPEC-ID>` regardless of comment leader. PURE compile.
 fn coverage_anchor_re() -> regex::Regex {
     regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap()
 }
 
-/// True when `line` carries a `// trace:<id>` whose id resolves Live via
+// trace:STORY-499 | ai:claude
+/// True when `line` carries a `// trace` marker whose id resolves Live via
 /// `resolve`. Module-level `//!` anchors and `///` doc anchors all match (the
-/// regex keys off the `trace:` token, not the leader). PURE (resolver injected).
-/// trace:STORY-499 | ai:claude
+/// regex keys off the `trace` token, not the leader). PURE (resolver injected).
 fn coverage_line_has_live_anchor<F>(line: &str, re: &regex::Regex, resolve: &mut F) -> bool
 where
     F: FnMut(&str) -> SpecResolution,
@@ -106796,13 +107473,14 @@ where
     })
 }
 
+// trace:STORY-499 | ai:claude
 /// Attribute one hunk to a coverage source, per SPIKE-47 §4.2 (cheapest-first):
 ///   1. in-hunk anchor (added lines)
 ///   2. proximity anchor (≤ `proximity_lines` ABOVE the hunk in the post-change file)
 ///   3. file-level `//!` anchor anywhere in the file
 ///   4. commit-trailer fallback (the floor)
 ///      `post_change_lines` is the full post-change file (1-based logical, passed as a
-///      slice). PURE — resolver + content injected, no I/O. trace:STORY-499 | ai:claude
+///      slice). PURE — resolver + content injected, no I/O.
 fn attribute_hunk_coverage<F>(
     hunk: &ParsedHunk,
     post_change_lines: &[String],
@@ -106852,6 +107530,7 @@ where
     None
 }
 
+// trace:STORY-499 | ai:claude
 /// The PURE, fully-isolated core of the coverage gate. Given parsed hunks, the
 /// post-change content of each touched file, a per-file generated-header probe,
 /// a per-hunk commit-trailer-covered flag, and an anchor resolver, classify
@@ -106863,7 +107542,6 @@ where
 ///   probe); absent ⇒ probe skipped.
 /// `commit_trailer_covered`: per-file flag — does the file's commit carry a live
 ///   `(SPEC-ID)` trailer? (the §4.2.4 floor).
-/// trace:STORY-499 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn compute_diff_coverage<F>(
     hunks: &[ParsedHunk],
@@ -106935,10 +107613,11 @@ where
     DiffCoverage { hunks: out }
 }
 
+// trace:STORY-499 | ai:claude
 /// Parse `git diff --unified=0` output into `ParsedHunk`s. PURE (takes the raw
 /// diff text). Tracks the current `+++ b/<path>` file and each `@@ -a,b +c,d @@`
 /// header to assign `new_start` and split `+`/`-` line bodies. Skips
-/// `/dev/null` (deleted-file) targets. trace:STORY-499 | ai:claude
+/// `/dev/null` (deleted-file) targets.
 fn parse_unified_diff_hunks(diff: &str) -> Vec<ParsedHunk> {
     let hunk_re = regex::Regex::new(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@").unwrap();
     let mut hunks: Vec<ParsedHunk> = Vec::new();
@@ -106993,10 +107672,10 @@ fn parse_unified_diff_hunks(diff: &str) -> Vec<ParsedHunk> {
     hunks
 }
 
+// trace:STORY-499 | ai:claude
 /// Read the unified diff for a range, `git diff -M -w --unified=0 <base>..HEAD`.
 /// `-M` enables rename detection (renamed files emit no content hunks → §3.3 H3),
 /// `-w` ignores whitespace so fmt-only reflows produce no hunks (§3.3 H2).
-/// trace:STORY-499 | ai:claude
 fn read_diff_for_range(project_root: &std::path::Path, range: &str) -> Result<String> {
     use std::process::Command as PCmd;
     let output = PCmd::new("git")
@@ -107014,12 +107693,12 @@ fn read_diff_for_range(project_root: &std::path::Path, range: &str) -> Result<St
     }
 }
 
+// trace:STORY-499 | ai:claude
 /// Read the post-change content of a file at HEAD (or the working tree) as a
 /// line vector, for the proximity / file-level anchor scan (§4.2). Tries the
 /// on-disk file first (the merged tree in CI checkout), falling back to
 /// `git show HEAD:<path>`. Returns an empty vec when neither resolves (the hunk
 /// can still be covered by an in-hunk anchor or the commit trailer).
-/// trace:STORY-499 | ai:claude
 fn read_post_change_file(project_root: &std::path::Path, path: &str) -> Vec<String> {
     let on_disk = project_root.join(path);
     if let Ok(content) = std::fs::read_to_string(&on_disk) {
@@ -107042,10 +107721,11 @@ fn read_post_change_file(project_root: &std::path::Path, path: &str) -> Vec<Stri
     Vec::new()
 }
 
+// trace:STORY-499 | ai:claude
 /// For each touched file, determine whether ANY commit in `range` that touches
 /// it carries a live `(SPEC-ID)` trailer (the §4.2.4 floor). Conservative and
 /// cheap: if any non-plan commit referencing a live spec touched the file, its
-/// hunks get the trailer-floor. Returns a per-file flag map. trace:STORY-499 | ai:claude
+/// hunks get the trailer-floor. Returns a per-file flag map.
 fn compute_trailer_floor<F>(
     project_root: &std::path::Path,
     range: &str,
@@ -107089,11 +107769,12 @@ where
     out
 }
 
+// trace:STORY-499 | ai:claude
 /// CLI handler for `aida trace coverage`. Gathers the diff + post-change files +
 /// commit-trailer floor + live-graph resolver from git/the store, runs the pure
 /// `compute_diff_coverage` core, prints a report, and exits non-zero ONLY when
 /// `block` posture is active and a coverable hunk is uncovered. Default posture
-/// is report-only (CI-success regardless) per SPIKE-47 §5/§6. trace:STORY-499 | ai:claude
+/// is report-only (CI-success regardless) per SPIKE-47 §5/§6.
 fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -107224,9 +107905,10 @@ fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result
     Ok(())
 }
 
+// trace:BUG-102 | ai:claude
 /// Extract a trailing `(#N)` PR-number suffix from a commit subject (the
 /// shape `gh` writes when squash-merging a PR). Returns None when the
-/// subject doesn't end with `(#<digits>)`. trace:BUG-102 | ai:claude
+/// subject doesn't end with `(#<digits>)`.
 pub(crate) fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64> {
     let subject = message.lines().find(|l| !l.trim().is_empty())?;
     let trimmed = subject.trim();
@@ -107242,6 +107924,7 @@ pub(crate) fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64
     digits.parse::<u64>().ok()
 }
 
+// trace:TASK-579 | ai:claude
 /// True when `subject` references any of `ids` as a real spec-completion
 /// reference — i.e. the id appears in the commit's trailing `(REQ-ID)` group
 /// or leading `SPEC-ID:` prefix, the same shapes the auto-bump scan honours
@@ -107252,7 +107935,6 @@ pub(crate) fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64
 /// origin-ID may already have a merged fix referencing it (the fix shipped
 /// against the id the finding carried *before* it became real work). Matching
 /// is case-insensitive so `task-1-097` in a subject matches `TASK-1-097`.
-/// trace:TASK-579 | ai:claude
 fn commit_subject_references_id(subject: &str, ids: &[String]) -> bool {
     if is_plan_commit_subject(subject) {
         return false;
@@ -107265,6 +107947,7 @@ fn commit_subject_references_id(subject: &str, ids: &[String]) -> bool {
     })
 }
 
+// trace:TASK-579 | ai:claude
 /// Scan the default branch's recent git log for a merged commit that references
 /// any of `ids` (a finding's spec-id + agreed-id). Returns the first matching
 /// `(short_sha, subject)` — first as in newest-first git-log order, so the most
@@ -107273,7 +107956,7 @@ fn commit_subject_references_id(subject: &str, ids: &[String]) -> bool {
 ///
 /// Used by `aida findings promote` so a finding whose underlying fix already
 /// shipped against its origin-ID can warn / auto-complete instead of being
-/// queued as fresh (no-op) work. trace:TASK-579 | ai:claude
+/// queued as fresh (no-op) work.
 fn find_merged_commit_referencing_ids(
     project_root: &std::path::Path,
     ids: &[String],
@@ -107317,28 +108000,30 @@ fn find_merged_commit_referencing_ids(
     None
 }
 
+// trace:BUG-102 | ai:claude
 /// Parse the PR number out of a review-story title. Titles are filed by
 /// /aida-pr's auto-queue as `Review PR-<n>: <pr-title>` (see
 /// `aida_subcmd_add_review_story` callsite); anything not matching that
-/// shape returns None. trace:BUG-102 | ai:claude
+/// shape returns None.
 fn parse_review_story_pr_number(title: &str) -> Option<u64> {
     let rest = title.strip_prefix("Review PR-")?;
     let (num, _) = rest.split_once(':')?;
     num.trim().parse::<u64>().ok()
 }
 
+// trace:BUG-85 | ai:claude
+// trace:BUG-412 | ai:claude
 /// Pull spec-id-shaped `(REQ-ID)` parens from BODY lines of a commit message
 /// (i.e. everything after the subject). These are informational
 /// "referenced" specs — the commit's code touches their areas but doesn't
 /// deliver them per AIDA's "one (REQ-ID) trailer in the subject" convention.
 /// IDs already present in the subject are excluded so the two lists are
-/// disjoint. trace:BUG-85 | ai:claude
+/// disjoint.
 /// BUG-412: heuristic — does a commit-body line look like CODE rather than a
 /// prose/trace reference? Used to skip pasted snippets so `(PREFIX-NNN)` literals
 /// inside them aren't mined as bogus "referenced" specs. Conservative: only the
 /// markers that strongly imply code and don't appear in genuine reference lines
-/// (`trace:SPEC-ID`, `(SPEC-ID)` in prose, `- (SPEC-ID) …` bullets).
-/// trace:BUG-412 | ai:claude
+/// (a `trace` marker plus SPEC-ID, `(SPEC-ID)` in prose, `- (SPEC-ID) …` bullets).
 fn body_line_is_code_like(line: &str) -> bool {
     let t = line.trim();
     if t.is_empty() {
@@ -107361,15 +108046,17 @@ fn body_line_is_code_like(line: &str) -> bool {
     KW.iter().any(|k| t.starts_with(k))
 }
 
-/// BUG-546: harvest every spec-id named in a `trace:SPEC-ID` token anywhere in
+// trace:BUG-546
+/// BUG-546: harvest every spec-id named in a `trace` marker token anywhere in
 /// a commit message — the authoritative provenance marker AIDA writes in code
 /// comments and commit bodies. The `(SPEC-ID)` paren parser misses these; when
-/// a PR's subject paren is non-standard (`(A / B slice 1a)`) the body's
-/// `trace:` lines are the reliable spec↔PR link. Handles `trace:` and
-/// `trace: ` (with/without a space), comma/whitespace-separated runs
-/// (`trace:TASK-800 trace:STORY-610` or `trace:TASK-800,STORY-610`), and the
-/// `relates:`/`blocks:` qualifier forms (`trace:relates:STORY-611`) — the
-/// trailing `<ALPHA>-<DIGITS>` token is taken in each case. trace:BUG-546
+/// a PR's subject paren is non-standard (`(A / B slice 1a)`) the body's `trace`
+/// marker lines are the reliable spec↔PR link. Handles the `trace` keyword
+/// followed by a colon, with or without a trailing space, comma/whitespace-
+/// separated runs (`TASK-800 STORY-610` or `TASK-800,STORY-610` after the
+/// keyword), and the `relates:`/`blocks:` qualifier forms (the keyword plus
+/// `relates:STORY-611`) — the trailing `<ALPHA>-<DIGITS>` token is taken in
+/// each case.
 pub(crate) fn extract_trace_line_spec_ids(message: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for raw in message.split("trace:").skip(1) {
@@ -107426,6 +108113,7 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
     out
 }
 
+// trace:BUG-78 BUG-85 | ai:claude
 /// Walk one commit-message line for trailing `(REQ-ID[, REQ-ID...])`
 /// groups and push the spec-id-shaped tokens into `out`. Skips `(#N)`
 /// PR-number groups (squash commits). A group whose tokens aren't ALL
@@ -107438,7 +108126,6 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
 /// (#794)` names one group per shipped spec, and both the `aida pull`
 /// auto-bump scan and `aida db reconcile-status` must graduate each.
 /// IDs are pushed in left-to-right subject order.
-/// trace:BUG-78 BUG-85 | ai:claude
 // trace:BUG-506 | ai:claude
 fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
     let mut tail: &str = line.trim();
@@ -107580,8 +108267,9 @@ fn extract_all_spec_ids(text: &str) -> Vec<String> {
     out
 }
 
+// trace:BUG-431 | ai:claude
 /// Is `ancestor` a transitive parent of `node`, per a `child → parent uuids`
-/// map? trace:BUG-431 | ai:claude
+/// map?
 fn is_transitive_ancestor(
     parents: &std::collections::HashMap<uuid::Uuid, Vec<uuid::Uuid>>,
     ancestor: uuid::Uuid,
@@ -107602,13 +108290,14 @@ fn is_transitive_ancestor(
     false
 }
 
+// trace:BUG-431 | ai:claude
 /// BUG-431 #2: when a PR backs several specs that form a parent chain (an epic
 /// and its child story, say), the most-specific one IS the answer — the
 /// reviewer must not bail "multiple backing specs." Drop any spec in the set
 /// that is a proven transitive ANCESTOR of another spec in the set; keep the
 /// rest. Specs absent from the store, or genuinely unrelated to the others,
 /// are left intact, so the caller still bails on real ambiguity. Order-
-/// preserving. trace:BUG-431 | ai:claude
+/// preserving.
 fn reduce_to_most_specific_specs(store: &RequirementsStore, specs: &[String]) -> Vec<String> {
     if specs.len() < 2 {
         return specs.to_vec();
@@ -107662,12 +108351,13 @@ fn reduce_to_most_specific_specs(store: &RequirementsStore, specs: &[String]) ->
     out
 }
 
+// trace:STORY-501 | ai:claude
 /// STORY-501 / BUG-440: is a non-terminal "Review PR-N" story currently queued
 /// for this user? When one is, `aida queue work PR-N` must NOT be resolved to
 /// the PR's backing spec at the dispatch (TASK-518) — it must reach
 /// `resolve_queue_work_plan`'s review-story pickup (TASK-85) so it routes to the
 /// reviewer (`/aida-review` on a PR-scoped lease) instead of an implementer
-/// pickup that re-implements the spec. trace:STORY-501 | ai:claude
+/// pickup that re-implements the spec.
 fn queued_review_story_for_pr(
     storage: &Storage,
     user_id: &str,
@@ -107700,6 +108390,7 @@ enum PrSpecChoice {
     Ambiguous(Vec<String>),
 }
 
+// trace:BUG-440 | ai:claude
 /// BUG-440: pick the single spec a PR should be reviewed against, given the
 /// DELIVERED specs (subject `(SPEC-ID)` trailers + review-story covers
 /// relationships) and the broader REFERENCED specs (anything spec-id-shaped in
@@ -107709,7 +108400,7 @@ enum PrSpecChoice {
 /// a genuinely ambiguous *delivered* set — or, absent any delivery signal, an
 /// ambiguous referenced set — is reported as ambiguous. Both inputs are assumed
 /// already reduced to most-specific. Pure, so the precedence is unit-testable
-/// without `gh`. trace:BUG-440 | ai:claude
+/// without `gh`.
 fn pick_pr_spec(delivered: &[String], referenced: &[String]) -> PrSpecChoice {
     let pool = if !delivered.is_empty() {
         delivered
@@ -108049,11 +108740,11 @@ mod task_518_pr_to_spec_tests {
     }
 }
 
-/// trace:STORY-67 | ai:claude
+// trace:STORY-67 | ai:claude
+// trace:STORY-553 | ai:claude
 /// The review surface a held spec is sitting on — what `aida review <SPEC>`
 /// resolves the spec to before reviewing. NEVER asserts a closed/absent PR
 /// (the TASK-715 / BUG-493 failure mode); each variant is a verified state.
-/// trace:STORY-553 | ai:claude
 #[derive(Debug)]
 enum ReviewSurface {
     /// An OPEN change (PR/MR) exists for the spec's branch.
@@ -108072,13 +108763,13 @@ enum ReviewSurface {
     Local,
 }
 
+// trace:STORY-553 trace:BUG-493 | ai:claude
 /// Classify a spec's review surface from its git linkage + (optional) forge
 /// change-lookup. Pure: the side-effecting `collect_git_linkage` /
 /// `change_lookup_for_branch` run at the call site; this is the decision so
 /// it's unit-testable. Order matters — shipped wins over branch, and only a
 /// `ChangeLookup::Found` becomes `OpenChange` (a closed/absent/unreachable
 /// PR must NOT be asserted as open — the TASK-715 / BUG-493 failure mode).
-/// trace:STORY-553 trace:BUG-493 | ai:claude
 fn classify_review_surface(
     linkage: &GitLinkage,
     change: Option<crate::forge::ChangeLookup>,
@@ -108102,6 +108793,7 @@ fn classify_review_surface(
     }
 }
 
+// trace:BUG-582 | ai:claude
 /// BUG-582: the robust invariant guarding the `aida human` reviews-awaiting
 /// bucket — a finished spec can NEVER be resurrected onto the operator's seat
 /// by a lingering local branch / stale review surface.
@@ -108118,7 +108810,6 @@ fn classify_review_surface(
 /// bound (it reads the cache, which can be stale), while THIS is the
 /// load-bearing invariant — even a stale cache row that slipped through the
 /// pre-filter is dropped here. Pure ⇒ unit-testable without a repo/forge.
-/// trace:BUG-582 | ai:claude
 fn spec_eligible_for_review_awaiting(
     status: aida_core::RequirementStatus,
     surface: &ReviewSurface,
@@ -108141,12 +108832,13 @@ fn spec_eligible_for_review_awaiting(
     )
 }
 
+// trace:BUG-511 | ai:claude
 /// BUG-511: RAII release for the review-verb lease — removing the lease
 /// file on drop covers every exit path of [`handle_review_spec`] (verdict
 /// presented, surface bailed early, reviewer launch failed, `?` errors).
 /// A SIGKILL'd review leaks the file; the dead-PID reaping in
 /// [`acquire_review_lease`] / [`auto_release_decision_for_lease`] cleans
-/// that up on the next coordination touch. trace:BUG-511 | ai:claude
+/// that up on the next coordination touch.
 #[derive(Debug)]
 struct ReviewLeaseGuard {
     path: std::path::PathBuf,
@@ -108158,6 +108850,7 @@ impl Drop for ReviewLeaseGuard {
     }
 }
 
+// trace:BUG-511 | ai:claude
 /// BUG-511: take a session lease scoped to the spec for the duration of an
 /// `aida review <spec>` run — the same coordination substrate `aida queue
 /// work` uses (`.aida/sessions/`, [`find_scope_lease_conflict`], the
@@ -108165,7 +108858,7 @@ impl Drop for ReviewLeaseGuard {
 /// in flight ("being reviewed") and a second `aida review` / `queue work`
 /// on it refuses instead of double-starting. The lease is an advisory lock
 /// (empty `worktree_path`, the TASK-474 convention); its liveness signal
-/// is this process's PID. trace:BUG-511 | ai:claude
+/// is this process's PID.
 fn acquire_review_lease(
     project_root: &std::path::Path,
     spec_id: &str,
@@ -108278,7 +108971,7 @@ fn review_is_terminal_noop(status: &RequirementStatus) -> bool {
     )
 }
 
-/// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
+// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
 /// counterpart to `aida queue work`. Resolves the spec's review surface,
 /// runs the existing headless reviewer tier (`/aida-review`) over the diff
 /// against the spec's `## Acceptance` criteria, then presents the verdict
@@ -108753,7 +109446,7 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
     }
 }
 
-/// trace:STORY-67 | ai:claude
+// trace:STORY-67 | ai:claude
 fn generate_review_prompt(
     storage: &Storage,
     specs_csv: Option<&str>,
@@ -108893,7 +109586,7 @@ fn generate_review_prompt(
     Ok(())
 }
 
-/// trace:STORY-67 | ai:claude
+// trace:STORY-67 | ai:claude
 fn pr_base_head(
     project_root: &std::path::Path,
     forge: ReviewForge,
@@ -108981,9 +109674,10 @@ fn pr_base_head(
     Ok(("main".to_string(), head))
 }
 
+// trace:STORY-67 | ai:claude
 /// Cheap "extract \"key\": \"value\"" JSON field grep. Only handles
 /// string values without escapes — fine for branch names but not a
-/// general parser. trace:STORY-67 | ai:claude
+/// general parser.
 fn json_string_field(s: &str, key: &str) -> Option<String> {
     let needle = format!("\"{}\":\"", key);
     let start = s.find(&needle)? + needle.len();
@@ -108992,8 +109686,9 @@ fn json_string_field(s: &str, key: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
+// trace:STORY-67 | ai:claude
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
-/// each commit message as a separate string. trace:STORY-67 | ai:claude
+/// each commit message as a separate string.
 fn git_log_messages(project_root: &std::path::Path, base: &str, head: &str) -> Result<Vec<String>> {
     let range = format!("{}..{}", base, head);
     let out = std::process::Command::new("git")
@@ -109084,12 +109779,13 @@ fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &
     Ok(())
 }
 
+// trace:BUG-298 | ai:claude
 /// BUG-298: find `aida-*` entries under `.claude/{skills,commands,hooks}` that
 /// no longer correspond to a template the current binary ships — left behind
 /// when a template was renamed/consolidated/retired. Compared by base name, so
 /// a flat `aida-x.md` and a folder-form `aida-x/` both resolve to `aida-x`.
 /// Symlinks are skipped — the in-repo dogfood `.claude/` is per-file symlinks
-/// into the master templates and must never be pruned. trace:BUG-298 | ai:claude
+/// into the master templates and must never be pruned.
 fn detect_obe_aida_scaffold_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
     use std::collections::{HashMap, HashSet};
     const DIRS: [&str; 3] = ["skills", "commands", "hooks"];
@@ -109708,9 +110404,9 @@ fn handle_scaffold_command(
     Ok(())
 }
 
+// trace:FR-1-028 | ai:claude
 /// What `scaffold upgrade` should do for a single artifact, computed from
 /// its category + drift state.
-/// trace:FR-1-028 | ai:claude
 enum UpgradeAction {
     /// File missing on disk — create it.
     Create,
@@ -109721,14 +110417,14 @@ enum UpgradeAction {
     /// drifted — rewrite just the marked block, preserve user content
     /// outside the markers.
     RewriteAidaBlock,
+    // trace:BUG-1-065 | ai:claude
     /// CLAUDE.md exists but is missing the `@.claude/AIDA.md` import line.
     /// Insert it, preserving everything else.
-    /// trace:BUG-1-065 | ai:claude
     InsertClaudeImport,
+    // trace:FR-1-047 | ai:claude
     /// ManagedMerge file with AIDA-owned slot drift — replace just the
     /// declared slots, preserve everything else verbatim. The `Vec`
     /// records what changed for the per-row UI.
-    /// trace:FR-1-047 | ai:claude
     SlotMerge {
         changes: Vec<aida_core::SlotChange>,
         merged: serde_json::Value,
@@ -109740,12 +110436,12 @@ enum UpgradeAction {
     None,
 }
 
+// trace:FR-1-047 | ai:claude
 /// Pick an upgrade action for a managed-merge file by parsing both the
 /// on-disk JSON and the AIDA-rendered template, then running them
 /// through `slot_merge`. Falls back to `LeaveAlone` if either side fails
 /// to parse — bad JSON should be a user-facing error from elsewhere
 /// (e.g. `scaffold status` / `scaffold diff`), not a silent overwrite.
-/// trace:FR-1-047 | ai:claude
 fn decide_managed_merge(
     relative_path: &std::path::Path,
     on_disk_path: &std::path::Path,
@@ -109772,12 +110468,12 @@ fn decide_managed_merge(
     }
 }
 
+// trace:FR-1-028 | ai:claude
 /// Replace the content between `<!-- AIDA-AUTOGEN-BEGIN -->` and
 /// `<!-- AIDA-AUTOGEN-END -->` in `actual` with the corresponding block
 /// from `expected`. Preserves everything outside the markers verbatim.
 /// Falls back to `actual` if either side is missing markers (defensive
 /// — caller should only invoke this when both have markers).
-/// trace:FR-1-028 | ai:claude
 fn rewrite_aida_block(actual: &str, expected: &str) -> String {
     use aida_core::scaffolding::extract_aida_block;
     let Some(actual_block) = extract_aida_block(actual) else {
@@ -109792,12 +110488,12 @@ fn rewrite_aida_block(actual: &str, expected: &str) -> String {
     actual.replacen(actual_block, expected_block, 1)
 }
 
+// trace:FR-1-028 | ai:claude
 /// Mirror of `report.rs::file_matches_for_status`. Seeds (CLAUDE.md,
 /// AGENTS.md) use marker-presence semantics — CLAUDE.md is matching if
 /// the file exists at all; AGENTS.md only needs block-content comparison
 /// when AIDA-AUTOGEN markers are present (user can opt out by removing
 /// them). Templates and managed-merge use whole-content equality.
-/// trace:FR-1-028 | ai:claude
 fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -> bool {
     use aida_core::FileCategory;
     match FileCategory::from_path(path) {
@@ -109845,6 +110541,7 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
     }
 }
 
+// trace:FR-1-028 | ai:claude
 /// Category-aware scaffold upgrade. For each artifact, decide what to do
 /// based on its `FileCategory` and current drift state, then either
 /// write or leave alone. Output is grouped by category with per-file
@@ -109864,7 +110561,6 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
 /// drifted file regardless of category (parity with `apply --force`,
 /// just with cleaner output).
 ///
-/// trace:FR-1-028 | ai:claude
 fn run_scaffold_upgrade(
     project_root: &std::path::Path,
     preview: &aida_core::ScaffoldPreview,
@@ -110125,12 +110821,12 @@ fn run_scaffold_upgrade(
     Ok(())
 }
 
+// trace:FR-1-027 | ai:claude
 /// Walk the resolved artifact set, diffing each against its on-disk copy.
 /// Returns true if any drift was emitted (so the caller can set exit code).
 /// Files that are missing on disk are reported as a single header + note,
 /// not as a full diff (the unified-diff format isn't useful when actual is
 /// empty / nonexistent — `aida scaffold status` already covers that case).
-/// trace:FR-1-027 | ai:claude
 fn print_scaffold_diffs(
     project_root: &std::path::Path,
     artifacts: &[&aida_core::scaffolding::ScaffoldArtifact],
@@ -111051,6 +111747,7 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+// trace:BUG-89 | ai:claude
 /// Resolve the queue's "current user" identifier. Used by EVERY queue path
 /// (add, list, next, done, remove, move, work, role-show queue head, …) so
 /// items added in one shell are immediately visible in the same shell's
@@ -111068,7 +111765,6 @@ fn html_escape(s: &str) -> String {
 /// Those are different identity domains; mixing them caused BUG-89 (items
 /// invisible to their own queuer because list resolved to one identity and
 /// add resolved to another).
-/// trace:BUG-89 | ai:claude
 pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     user_override.map(str::to_string).unwrap_or_else(|| {
         std::env::var("AIDA_USER")
@@ -111078,13 +111774,14 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     })
 }
 
+// trace:BUG-605 | ai:claude
 /// The queue identity for DRAINABLE handoff work (`aida backlog groom`): the
 /// draining shell's `USER`, deliberately SKIPPING the agent's `AIDA_USER`
 /// mailbox id. An advisor agent grooming on the human's behalf must queue where
 /// the human's drain (`aida queue work` / `aida burndown run`, which resolve the
 /// queue off the shell `USER`) will actually look — keying it to the agent's own
 /// `AIDA_USER` made the groomed batch invisible to the drainer (BUG-605).
-/// `--user` still overrides for the explicit case. trace:BUG-605 | ai:claude
+/// `--user` still overrides for the explicit case.
 pub(crate) fn drain_queue_user_id(user_override: Option<&str>) -> String {
     user_override.map(str::to_string).unwrap_or_else(|| {
         std::env::var("USER")
@@ -111093,11 +111790,11 @@ pub(crate) fn drain_queue_user_id(user_override: Option<&str>) -> String {
     })
 }
 
+// trace:STORY-662 | ai:claude
 /// Resolve the `aida list --user <raw>` value into a concrete handle: the
 /// special token `me` (any casing) maps to `current_user`; every other value is
 /// a literal handle passed through unchanged. Pure so the `me` → current-user
 /// substitution is unit-testable without touching env vars.
-/// trace:STORY-662 | ai:claude
 fn resolve_list_user_filter(raw: &str, current_user: &str) -> String {
     if raw.eq_ignore_ascii_case("me") {
         current_user.to_string()
@@ -111106,6 +111803,7 @@ fn resolve_list_user_filter(raw: &str, current_user: &str) -> String {
     }
 }
 
+// trace:STORY-652 | ai:claude
 /// Resolve the friendly node name to record at registration (STORY-652).
 ///
 /// Resolution order:
@@ -111116,7 +111814,6 @@ fn resolve_list_user_filter(raw: &str, current_user: &str) -> String {
 ///
 /// The default is `<host>-<user>-<seq>` (e.g. `imac-joe-1`). The chosen name is
 /// validated with the same charset rule as node ids so it stays slug-clean.
-/// trace:STORY-652 | ai:claude
 fn resolve_node_name(flag: Option<&str>, hostname: &str, user: &str, seq: &str) -> Result<String> {
     let default = aida_core::node::default_node_name(hostname, user, seq);
     let chosen = match flag {
@@ -111145,6 +111842,7 @@ fn resolve_node_name(flag: Option<&str>, hostname: &str, user: &str, seq: &str) 
     Ok(chosen)
 }
 
+// trace:TASK-618 | ai:claude
 /// TASK-618: detect the silent cross-machine queue-collision hazard.
 ///
 /// The distributed queue shards per `user_id`: each writes
@@ -111172,7 +111870,6 @@ fn resolve_node_name(flag: Option<&str>, hostname: &str, user: &str, seq: &str) 
 /// Entries with no recorded fingerprint (`None` — pre-TASK-618 or non-CLI
 /// writers) are ignored: we can't attribute them to a machine, so they
 /// never trigger a false alarm.
-/// trace:TASK-618 | ai:claude
 fn default_queue_collision_fingerprint<'a, I>(
     user_id: &str,
     this_machine: &str,
@@ -111193,6 +111890,7 @@ where
     })
 }
 
+// trace:BUG-87 | ai:claude
 /// Resolve `--for <role>` / `--all` / active-session-role into the
 /// effective queue role filter. Returns `(role_filter, only_unrouted)`:
 /// `only_unrouted=true` means filter to entries with no `for_role`
@@ -111201,7 +111899,6 @@ where
 ///
 /// `--for X` (non-"any") takes precedence over `--all` — that flag only
 /// suppresses the *default* active-role filter, not an explicit override.
-/// trace:BUG-87 | ai:claude
 pub(crate) fn resolve_queue_role_filter(
     role: Option<&str>,
     all: bool,
@@ -111221,8 +111918,8 @@ pub(crate) fn resolve_queue_role_filter(
     }
 }
 
+// trace:BUG-87 | ai:claude
 /// Predicate: does a queue entry pass the resolved role filter?
-/// trace:BUG-87 | ai:claude
 pub(crate) fn entry_matches_role_filter(
     for_role: Option<&str>,
     role_filter: Option<&str>,
@@ -111237,6 +111934,7 @@ pub(crate) fn entry_matches_role_filter(
     }
 }
 
+// trace:STORY-333 | ai:claude
 /// STORY-333: print a one-line warning if placing `req` at `intended_position`
 /// inverts a `BlockedBy` ordering with any already-queued spec. Two shapes:
 ///
@@ -111251,7 +111949,7 @@ pub(crate) fn entry_matches_role_filter(
 /// deliberate (e.g. branching from the blocker's branch and building atop
 /// it). Caller passes the intended position so we can detect inversion
 /// against `i64::MAX` sentinel values (which `queue_add` resolves to
-/// "max+1000"). trace:STORY-333 | ai:claude
+/// "max+1000").
 fn warn_if_queued_ahead_of_blocker(
     req: &aida_core::Requirement,
     intended_position: i64,
@@ -111524,6 +112222,7 @@ fn handle_load_command(cmd: &LoadCommand, storage: &Storage) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-566 | ai:claude
 /// STORY-566: `aida queue advance` — a ROUTER over the queue. Walks each queued
 /// spec in order, classifies it via `burndown::explain_open`, and dispatches to
 /// the EXISTING flow for that bucket (review / `queue work [--zen]` / decision /
@@ -111532,7 +112231,7 @@ fn handle_load_command(cmd: &LoadCommand, storage: &Storage) -> Result<()> {
 /// same binary (or, for review/mutations, calls in-process) and continues the
 /// walk regardless of any sub-step's outcome. `--yes` auto-takes ONLY the
 /// unambiguous autonomous step (drain a ready spec, approve a groomed draft) and
-/// skips everything that needs a human. trace:STORY-566 | ai:claude
+/// skips everything that needs a human.
 fn handle_queue_advance(
     storage: &Storage,
     id: Option<&str>,
@@ -111694,9 +112393,10 @@ fn handle_queue_advance(
     Ok(())
 }
 
+// trace:STORY-566
 /// STORY-566: in-process construction of the cached git backend for the
 /// advance router's review + status mutations. Mirrors the
-/// `file_reviewer_verdict_unavailable_finding` pattern. trace:STORY-566
+/// `file_reviewer_verdict_unavailable_finding` pattern.
 fn advance_backend(store_path: &std::path::Path) -> Result<aida_core::CachedGitBackend> {
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
@@ -111704,11 +112404,12 @@ fn advance_backend(store_path: &std::path::Path) -> Result<aida_core::CachedGitB
     aida_core::CachedGitBackend::with_inner(inner, &cache_path)
 }
 
+// trace:STORY-566
 /// STORY-566: dispatch ONE advance action to the existing flow. Review and the
 /// status mutations (approve / reject / drop the `review:draft-only` tag) run
 /// in-process via the cached backend; the build/drain verbs shell out to the
 /// same binary so they stay interactive. A failed/abandoned sub-step just leaves
-/// the item unprocessed — the caller continues the walk. trace:STORY-566
+/// the item unprocessed — the caller continues the walk.
 fn advance_dispatch(
     action: burndown::AdvanceAction,
     display: &str,
@@ -111967,8 +112668,9 @@ fn advance_dispatch(
     Ok(())
 }
 
+// trace:STORY-566 | ai:claude
 /// STORY-566: report the exit status of a shelled-out advance sub-step without
-/// failing the walk. trace:STORY-566 | ai:claude
+/// failing the walk.
 fn advance_report_status(status: std::io::Result<std::process::ExitStatus>, display: &str) {
     match status {
         Ok(s) if s.success() => {}
@@ -112173,11 +112875,12 @@ fn render_all_users_queue(
     Ok(())
 }
 
+// trace:BUG-618 | ai:claude
 /// Handle queue commands
 ///
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
-/// than the legacy full YAML load. trace:BUG-618 | ai:claude
+/// than the legacy full YAML load.
 fn handle_queue_command(
     cmd: &QueueCommand,
     storage: &Storage,
@@ -115748,6 +116451,7 @@ fn handle_queue_command(
     Ok(())
 }
 
+// trace:TASK-218 | ai:claude
 /// TASK-218: smart status-transition table for `aida queue rework`.
 /// Returns `Some(target)` when the spec's current status maps to a flip
 /// per the table below, or `None` when the status is already in a
@@ -115763,7 +116467,6 @@ fn handle_queue_command(
 ///
 /// Pure function — separated from `handle_queue_rework` so the table
 /// can be unit-tested without spinning up a storage backend.
-/// trace:TASK-218 | ai:claude
 pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<RequirementStatus> {
     match current {
         RequirementStatus::Draft => None,
@@ -115778,6 +116481,7 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
     }
 }
 
+// trace:TASK-232 | ai:claude
 /// TASK-232: `aida queue progress` — show what a session has shipped so
 /// far alongside what remains, bucketed into Shipped / In flight /
 /// Working now / Remaining. Resolves the spec set from a session manifest
@@ -115786,7 +116490,6 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
 /// store; manifest timestamps are used only to compute the source set,
 /// not to classify status (which avoids drift — see
 /// `session_manifest::classify_item` for the precedent).
-/// trace:TASK-232 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProgressBucket {
     Shipped,
@@ -115809,6 +116512,7 @@ fn classify_progress_bucket(status: &aida_core::RequirementStatus) -> ProgressBu
     }
 }
 
+// trace:STORY-490 | ai:claude
 /// A spec is "shelved" when parked in `NeedsAttention` (a punt/escalation the
 /// drain could not auto-resolve). Surfaced as a distinct drain-legibility
 /// callout in `aida queue progress` — the "M shelved" half of the
@@ -115816,7 +116520,6 @@ fn classify_progress_bucket(status: &aida_core::RequirementStatus) -> ProgressBu
 /// is deliberately UNCHANGED (STORY-332): a shelved spec still counts in
 /// `Remaining` as work the batch must land; this only adds a visible count so
 /// the parked work is legible at a glance instead of hiding inside Remaining.
-/// trace:STORY-490 | ai:claude
 fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
     matches!(status, aida_core::RequirementStatus::NeedsAttention)
 }
@@ -116260,9 +116963,10 @@ mod queue_progress_tests {
         assert!(parse_since_arg("3z").is_err());
     }
 
+    // trace:BUG-100 | ai:claude
     /// BUG-100: a multi-byte trailing char (e.g. `2日`) used to crash
     /// the process via `split_at` on a non-char-boundary byte. After the
-    /// fix it returns a clean Err. trace:BUG-100 | ai:claude
+    /// fix it returns a clean Err.
     #[test]
     fn parse_since_does_not_panic_on_multibyte_unit() {
         // Inputs from the bug repro section.
@@ -116275,8 +116979,9 @@ mod queue_progress_tests {
         assert!(parse_since_arg("3日間").is_err());
     }
 
+    // trace:BUG-100 | ai:claude
     /// BUG-100: mirror coverage for parse_days_arg, which uses the same
-    /// split-last-char path. trace:BUG-100 | ai:claude
+    /// split-last-char path.
     #[test]
     fn parse_days_does_not_panic_on_multibyte_unit() {
         assert!(parse_days_arg("2日").is_err());
@@ -116284,8 +116989,9 @@ mod queue_progress_tests {
         assert!(parse_days_arg("日").is_err());
     }
 
+    // trace:BUG-100 | ai:claude
     /// BUG-100: the helper itself stays char-boundary-safe for both
-    /// ASCII and multi-byte trailers. trace:BUG-100 | ai:claude
+    /// ASCII and multi-byte trailers.
     #[test]
     fn split_last_char_is_char_boundary_safe() {
         assert_eq!(split_last_char("2d"), ("2", "d"));
@@ -116409,7 +117115,7 @@ mod queue_progress_tests {
     }
 }
 
-/// trace:BUG-225 | ai:claude
+// trace:BUG-225 | ai:claude
 #[cfg(test)]
 mod headless_hint_tests {
     use super::*;
@@ -116508,6 +117214,7 @@ mod headless_hint_tests {
         }
     }
 
+    // trace:BUG-342 trace:STORY-683 | ai:codex
     /// BUG-342: every unattended Claude launch must route through the shared
     /// headless argv builders. Those builders carry
     /// `--disallowed-tools AskUserQuestion`; direct `claude -p` construction
@@ -116515,7 +117222,7 @@ mod headless_hint_tests {
     /// STORY-683 added the vendor-neutral `headless_vendor_args` builder (which
     /// delegates to `claude_headless_args_with_posture` for the Claude arm and
     /// builds `codex exec` for the Codex arm), so it counts as a shared builder
-    /// too. trace:BUG-342 trace:STORY-683 | ai:codex
+    /// too.
     #[test]
     fn headless_env_launches_route_through_shared_argv_builders() {
         fn assert_env_setter_has_builder_context(file: &str, src: &str) {
@@ -116541,11 +117248,11 @@ mod headless_hint_tests {
         assert_env_setter_has_builder_context("main.rs", include_str!("main.rs"));
     }
 
+    // trace:BUG-342 | ai:codex
     /// BUG-342 regression for the actual bypass: `QueueWorkLaunch::Resume`
     /// used to ignore `no_human` and call plain `claude --resume`, so the
     /// BUG-327 builder-level AskUserQuestion denial never reached resumed
     /// implementer/reviewer sessions.
-    /// trace:BUG-342 | ai:codex
     #[test]
     fn no_human_resume_paths_use_headless_resume_launcher() {
         let src = include_str!("main.rs").replace("\r\n", "\n");
@@ -116564,11 +117271,11 @@ mod headless_hint_tests {
     }
 }
 
+// trace:TASK-218 | ai:claude
 /// TASK-218: shared implementation backing both `aida queue rework SPEC`
 /// and the top-level `aida rework SPEC` alias. Encapsulates the three-
 /// command rework sequence (status flip + queue add + optional session
 /// launch) so the implementer → reviewer → fixup loop is one verb.
-/// trace:TASK-218 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_queue_rework(
     storage: &Storage,
@@ -116779,9 +117486,9 @@ fn handle_queue_rework(
     Ok(())
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: resolved pickup plan — which queue entries we're working,
 /// in which mode, against which scope/branch, with which skill.
-/// trace:STORY-42 | ai:claude
 #[derive(Debug, Clone)]
 struct QueueWorkPlan {
     /// "head" (no arg), "item" (single queued entry), or "cluster"
@@ -116810,8 +117517,9 @@ struct QueueWorkPlan {
     anchor_title: String,
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: per-entry resolved view used by manifest writing and role
-/// tally. trace:STORY-42 | ai:claude
+/// tally.
 #[derive(Debug, Clone)]
 struct QueueWorkEntry {
     /// The underlying queue entry (carries position, for_role,
@@ -116831,6 +117539,8 @@ enum QueueWorkMode {
     Cluster,
 }
 
+// trace:STORY-42 | ai:claude
+// trace:TASK-560 | ai:claude
 /// STORY-42: resolve the user's queue-work argument into a concrete plan.
 ///
 ///   - `arg = None`            → head-pickup mode: top item from the
@@ -116843,13 +117553,13 @@ enum QueueWorkMode {
 ///     has queued children    derived parent EPIC == <id>.
 ///
 /// `type_filter` only applies in cluster mode (filters drained children
-/// by req type, case-insensitive). trace:STORY-42 | ai:claude
+/// by req type, case-insensitive).
 /// TASK-560: `--auto-complete` and `--resume` are mutually exclusive
 /// (auto-complete drives a FRESH implementer→CI→reviewer→merge pipeline;
 /// --resume continues an EXISTING session — the two can't both own the run).
 /// Returns the helpful rejection message when both are set, else `None`.
 /// Pure so the message (the WHY + both recovery paths) is unit-testable
-/// without running the launcher. trace:TASK-560 | ai:claude
+/// without running the launcher.
 fn resume_autocomplete_conflict_message(resume: bool, auto_complete: bool) -> Option<String> {
     if resume && auto_complete {
         Some(
@@ -117288,10 +117998,10 @@ fn resolve_queue_work_plan(
     })
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: zip a queue entry with its current requirement state so
 /// later steps (role tally, manifest write) don't need to re-look-up
 /// against a potentially-different Storage handle.
-/// trace:STORY-42 | ai:claude
 fn build_resolved_entry(
     queue: aida_core::QueueEntry,
     req: &aida_core::Requirement,
@@ -117309,10 +118019,10 @@ fn build_resolved_entry(
     }
 }
 
+// trace:TASK-217 | ai:claude
 /// TASK-217: build a status-aware recovery hint when `aida queue work <id>`
 /// resolves a spec but finds no queue entry. The current status of the
 /// resolved spec tells us which recovery path the user most likely wants.
-/// trace:TASK-217 | ai:claude
 fn format_queue_work_not_queued_error(
     display_id: &str,
     anchor_req: &aida_core::Requirement,
@@ -117377,6 +118087,7 @@ fn format_queue_work_not_queued_error(
     }
 }
 
+// trace:TASK-630 | ai:claude
 /// TASK-630: the held-state re-entry decision, isolated so it is unit-testable
 /// without a Storage handle, a worktree, or a launcher.
 ///
@@ -117393,7 +118104,7 @@ fn format_queue_work_not_queued_error(
 /// Done state (the state a deliberate hold parks it in), AND a hold marker is
 /// present. A queued / Completed / NeedsAttention spec, or a Done spec with no
 /// hold marker, is left to the existing recovery hints — a held re-entry is a
-/// distinct state, not a blanket "resume any Done spec". trace:TASK-630 | ai:claude
+/// distinct state, not a blanket "resume any Done spec".
 fn held_resume_reentry_allowed(
     resume: bool,
     status: &RequirementStatus,
@@ -117402,13 +118113,14 @@ fn held_resume_reentry_allowed(
     resume && hold_marker_present && *status == RequirementStatus::Done
 }
 
+// trace:TASK-630 | ai:claude
 /// TASK-630: build the Item-mode plan for a held-spec `--resume` re-entry.
 ///
 /// A held spec is Done + dequeued, so there is no real `QueueEntry` to anchor
 /// the plan on. We synthesise one (scoped to the spec's own id, matching the
 /// implementer worktree the held session lives in) so the rest of
 /// `handle_queue_work` — lease bookkeeping, worktree resolution, the
-/// `QueueWorkLaunch::Resume` re-entry — runs unchanged. trace:TASK-630 | ai:claude
+/// `QueueWorkLaunch::Resume` re-entry — runs unchanged.
 fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> QueueWorkPlan {
     let synthetic = aida_core::QueueEntry {
         user_id: user_id.to_string(),
@@ -117439,8 +118151,9 @@ fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> QueueWorkPla
     }
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: case-insensitive match against a requirement's uuid,
-/// spec_id, or agreed_id. trace:STORY-42 | ai:claude
+/// spec_id, or agreed_id.
 fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
     if let Ok(uuid) = uuid::Uuid::parse_str(query) {
         return req.id == uuid;
@@ -117459,6 +118172,7 @@ fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
     false
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: pick the scope string for a single queued entry.
 /// Preference order:
 ///   1. PR-N / MR-N parsed from "Review PR-N: …" title → "PR-N"
@@ -117466,7 +118180,6 @@ fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
 ///   3. fall back to the req's own display id
 ///      Also returns the parsed review target (if any) so the caller can
 ///      thread it into session_start without re-parsing.
-///      trace:STORY-42 | ai:claude
 // BUG-431 #1: a child story no longer inherits its parent epic's scope (the
 // removed step 3). Session scope is derived purely from the entry's
 // `for_scope`, the review-title shape, and the req's own id — so same-epic
@@ -117511,8 +118224,8 @@ fn derive_scope_from_entry(
     (fallback, target)
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: pick the role for a resolved queue-work plan.
-/// trace:STORY-42 | ai:claude
 fn infer_queue_work_role(
     plan: &QueueWorkPlan,
     override_role: Option<&str>,
@@ -117575,6 +118288,8 @@ fn infer_queue_work_role(
     (chosen.0, chosen.1, warns)
 }
 
+// trace:TASK-86 trace:TASK-548 | ai:claude
+// trace:STORY-42 | ai:claude
 /// STORY-42: build the initial-prompt string fed to `claude <prompt>`.
 /// Routes by role:
 ///   - reviewer → `/aida-review --pr N` (when scope parses as PR-N/MR-N)
@@ -117589,8 +118304,6 @@ fn infer_queue_work_role(
 ///     queue-work pre-flight summary as its consent point.
 ///     Only a bare `/aida-pickup` from the conversation (no
 ///     argument) still pauses to confirm.
-///     trace:TASK-86 trace:TASK-548 | ai:claude
-///     trace:STORY-42 | ai:claude
 fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str, plan_only: bool) -> String {
     let role_lower = role.to_ascii_lowercase();
     if role_lower == "reviewer" {
@@ -117617,6 +118330,7 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str, plan_only: bool) -
     "/aida-pickup --auto-first".to_string()
 }
 
+// trace:BUG-225 | ai:claude
 /// BUG-225: render the copy-pasteable `claude` command line for a
 /// headless launch deferred by `--no-launch`. Built from
 /// `session::claude_headless_args` — the exact argv `exec_claude_headless`
@@ -117624,7 +118338,6 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str, plan_only: bool) -
 /// launch (correct flag order, `--session-id` included, prompt last).
 /// STORY-278: prefix `AIDA_HEADLESS=1` so the copy-paste hint also sets
 /// the env var `exec_claude_headless` puts on the child via `.env(...)`.
-/// trace:BUG-225 | ai:claude
 fn headless_launch_hint(prompt: &str, session_id: &str, contained: bool) -> String {
     let argv = session::claude_headless_args_with_posture(prompt, session_id, contained);
     format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv))
@@ -117640,11 +118353,11 @@ fn claude_posture_display(permission_mode: Option<&str>, contained: bool) -> Str
     }
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
 /// runs session_start in non-launch mode (so we can write the manifest
 /// from the freshly minted lease), then either prints next-steps or
 /// chdirs + execs claude with the skill prompt.
-/// trace:STORY-42 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_queue_work(
     storage: &Storage,
@@ -118897,6 +119610,7 @@ fn handle_queue_work(
     }
 }
 
+// trace:BUG-226 | ai:claude
 /// BUG-226: drive a standalone `aida queue work <PR-N> --role reviewer`
 /// launch — spawn `claude` (not `exec`) so this process survives to read
 /// the verdict file + headless JSONL log and print an end-of-command
@@ -118907,7 +119621,6 @@ fn handle_queue_work(
 /// The `--auto-complete` orchestrator's phase-3 reviewer does NOT come
 /// here — it sets `AIDA_REVIEW_VERDICT_FILE`, which clears the standalone
 /// signal — so the orchestrator keeps owning its own progress output.
-/// trace:BUG-226 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn run_standalone_reviewer(
     project_root: &std::path::Path,
@@ -119089,26 +119802,29 @@ fn run_standalone_reviewer(
 // `gh` / `aida` / `cargo`. trace:STORY-246 | ai:claude
 // ===========================================================================
 
+// trace:STORY-246 | ai:claude
 /// Partial view of a `SessionLease` TOML — just the fields the orchestrator
-/// needs to discover after spawning a session. trace:STORY-246 | ai:claude
+/// needs to discover after spawning a session.
 #[derive(serde::Deserialize)]
 struct LeasePeek {
     id: String,
     branch: String,
+    // trace:BUG-223 | ai:claude
     /// Worktree path — re-read by the BUG-223 branch-swap reconciliation to
     /// recover the live branch when `/aida-pr` swapped it mid-phase.
     /// `#[serde(default)]` so a lease (or hand-written test fixture) without
-    /// the field still parses. trace:BUG-223 | ai:claude
+    /// the field still parses.
     #[serde(default)]
     worktree_path: std::path::PathBuf,
 }
 
+// trace:TASK-292 | ai:claude
 /// Statuses the `--auto-complete` orchestrator can drive from scratch
 /// (TASK-292). The orchestrator runs a full implementer → CI → reviewer →
 /// merge lifecycle starting at phase 1, so it can only begin a spec that
 /// hasn't started: Draft / Approved / Planned. In Progress and Done are
 /// mid-flight (someone is on it / it sits on a branch awaiting merge);
-/// Completed and Rejected are terminal. trace:TASK-292 | ai:claude
+/// Completed and Rejected are terminal.
 fn auto_complete_head_drivable(status: &RequirementStatus) -> bool {
     matches!(
         status,
@@ -119116,12 +119832,13 @@ fn auto_complete_head_drivable(status: &RequirementStatus) -> bool {
     )
 }
 
+// trace:TASK-292 | ai:claude
 /// Pure pickup-order resolution for the `aida queue work --auto-complete` head
 /// (TASK-292): given queued `(display_id, status)` pairs already in pickup
 /// order, return the first orchestrator-drivable spec together with the items
 /// skipped to reach it, or `Err(skipped)` when none is drivable. Split out of
 /// [`resolve_auto_complete_head`] so the skip / empty-queue logic is
-/// unit-testable without a storage fixture. trace:TASK-292 | ai:claude
+/// unit-testable without a storage fixture.
 #[allow(clippy::type_complexity)]
 fn pick_auto_complete_head(
     candidates: &[(String, RequirementStatus)],
@@ -119137,11 +119854,11 @@ fn pick_auto_complete_head(
     Err(skipped)
 }
 
+// trace:TASK-292 TASK-293 | ai:claude
 /// Build the `(display_id, status)` candidate list for the active role's
 /// queue in pickup order (queue position ascending, same as `aida queue
 /// next`) — the shared input to [`pick_auto_complete_head`] for both
 /// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
-/// trace:TASK-292 TASK-293 | ai:claude
 fn auto_complete_head_candidates(
     storage: &Storage,
     user_id: &str,
@@ -119173,13 +119890,14 @@ fn auto_complete_head_candidates(
         .collect())
 }
 
+// trace:TASK-292 | ai:claude
 /// Resolve the queue head for `aida queue work --auto-complete` invoked with no
 /// positional SPEC id (TASK-292) — the natural composition of the no-arg "pick
 /// the head" semantics with `--auto-complete`. Walks the active role's queue in
 /// pickup order (queue position ascending, same as `aida queue next`) and
 /// returns the first item the orchestrator can drive from scratch, skipping —
 /// with a note — any item already In Progress / Done / terminal. Errors when
-/// nothing drivable remains. trace:TASK-292 | ai:claude
+/// nothing drivable remains.
 fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String> {
     let role_label = std::env::var("AIDA_SESSION_ROLE")
         .ok()
@@ -119232,10 +119950,10 @@ fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String
     }
 }
 
+// trace:BUG-233 | ai:claude
 /// `aida orchestrator status` — print the corroborated orchestrator context
 /// of the current process. The bare status word goes to stdout (so a skill can
 /// branch on it cleanly); any informational note goes to stderr.
-/// trace:BUG-233 | ai:claude
 fn handle_orchestrator_command(cmd: &OrchestratorCommand) -> Result<()> {
     match cmd {
         OrchestratorCommand::Status { json } => {
@@ -119267,6 +119985,7 @@ fn handle_orchestrator_command(cmd: &OrchestratorCommand) -> Result<()> {
     }
 }
 
+// trace:TASK-391 | ai:claude
 /// `aida state-snapshot --spec <SPEC-ID>` — emit the seven-row
 /// finish-state preamble deterministically (TASK-391). Reads the spec from
 /// the git-canonical store, the branch + ahead/upstream facts from `git`,
@@ -119274,7 +119993,7 @@ fn handle_orchestrator_command(cmd: &OrchestratorCommand) -> Result<()> {
 /// `.aida/drain-state.json`, the orchestrator on/off from the same
 /// corroboration `aida orchestrator status` uses, and the plan path from
 /// the active session's manifest. Tests / fmt are caller-supplied (the
-/// skill knows what it just ran). trace:TASK-391 | ai:claude
+/// skill knows what it just ran).
 fn handle_state_snapshot_command(
     backend: &dyn aida_core::DatabaseBackend,
     store_path: &std::path::Path,
@@ -119371,11 +120090,11 @@ fn gather_state_snapshot(
     })
 }
 
+// trace:TASK-391 | ai:claude
 /// Classify the branch's push state versus its tracked upstream:
 ///   * `"pushed"`  — upstream tracks AND local has no commits ahead of it
 ///   * `"local"`   — no upstream, or local is ahead of upstream
 ///   * `"unknown"` — the upstream lookup itself failed (git error / detached)
-///     trace:TASK-391 | ai:claude
 fn describe_push_status(project_root: &std::path::Path, branch: &str) -> String {
     match upstream_ref_for(project_root, branch) {
         None => "local".to_string(),
@@ -119387,11 +120106,11 @@ fn describe_push_status(project_root: &std::path::Path, branch: &str) -> String 
     }
 }
 
+// trace:TASK-391 | ai:claude
 /// Build the Drain row from `.aida/drain-state.json` (the live
 /// `--auto-complete` orchestrator's record) plus the orchestrator
 /// corroboration check. Both inputs are best-effort: missing drain file
 /// → "interactive" mode; missing phase env → unknown phase number.
-/// trace:TASK-391 | ai:claude
 fn describe_drain_row(project_root: &std::path::Path) -> state_snapshot::DrainRow {
     let orchestrator = orchestrator::detect(project_root).is_orchestrated();
     let phase = std::env::var(orchestrator::PHASE_ENV)
@@ -119411,13 +120130,14 @@ fn describe_drain_row(project_root: &std::path::Path) -> state_snapshot::DrainRo
     }
 }
 
+// trace:TASK-391 trace:TASK-417 | ai:claude
 /// Build the "mode" portion of the Drain row — the human-readable
 /// descriptor right of `phase N/6` and left of `orchestrator on|off`:
 ///   * `"single (<spec>)"`
 ///   * `"batch <NAME> (<done>/<total> done, <queued> queued)"`
 ///   * `"next-N (<done>/<total> done, <queued> queued)"`
 ///     Lives in main.rs (not in `state_snapshot`) so the module stays free of
-///     `DrainState` coupling for tests. trace:TASK-391 trace:TASK-417 | ai:claude
+///     `DrainState` coupling for tests.
 fn describe_drain_mode(state: &drain_state::DrainState) -> String {
     let total = state.members.len();
     let done = state
@@ -119444,12 +120164,12 @@ fn describe_drain_mode(state: &drain_state::DrainState) -> String {
     }
 }
 
+// trace:TASK-391 | ai:claude
 /// Find the `docs/plans/` path attached to the active session's manifest,
 /// if any — the Plan row's value. Walks `active_lease_for_cwd` to find the
 /// session id, then loads `<project_root>/.aida/sessions/<id>.manifest.toml`
 /// and reads its `PlanContext`. Best-effort: returns `None` when no
 /// session is active, no manifest exists, or no plan was attached.
-/// trace:TASK-391 | ai:claude
 fn locate_plan_for_active_session(project_root: &std::path::Path) -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let lease = active_lease_for_cwd(project_root, &cwd)?;
@@ -119458,10 +120178,10 @@ fn locate_plan_for_active_session(project_root: &std::path::Path) -> Option<Stri
     manifest.plan.map(|p| p.plan_file)
 }
 
+// trace:BUG-237 | ai:claude
 /// `aida zen status` — print the corroborated zen context of the current
 /// process. The bare status word (`zen` / `interactive`) goes to stdout so a
 /// skill can branch on it cleanly; any informational note goes to stderr.
-/// trace:BUG-237 | ai:claude
 fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
     match cmd {
         ZenCommand::Status { json } => {
@@ -119611,11 +120331,12 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
     }
 }
 
+// trace:STORY-301
 /// `aida drain status` — show the active `aida queue work --auto-complete`
 /// drain (STORY-301). Reads `.aida/drain-state.json`, corroborates the recorded
 /// orchestrator PID against a liveness probe, and prints the human summary —
 /// or `No drain in progress.` (exit 0) when no drain is running. `--clear`
-/// removes a stale file left by a crashed orchestrator. trace:STORY-301
+/// removes a stale file left by a crashed orchestrator.
 fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
     match cmd {
         DrainCommand::Status { json, clear } => {
@@ -119659,13 +120380,13 @@ fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
     }
 }
 
+// trace:STORY-248 | ai:claude
 /// `aida stack {show,list}` (STORY-248). Reads `.aida/stacks.json` —
 /// no requirement-store dependency, so dispatches pre-storage like
 /// `aida drain status`. Prints "No stacked branches." (exit 0) on an
 /// empty graph so a quiet project never errors. `--prune-stale` (show
 /// only) drops entries whose branch no longer exists locally or on
 /// origin; the prune writes the graph back atomically.
-/// trace:STORY-248 | ai:claude
 fn handle_stack_command(cmd: &StackCommand) -> Result<()> {
     let project_root = find_main_worktree_root()
         .or_else(|_| std::env::current_dir())
@@ -119752,10 +120473,11 @@ fn handle_stack_command(cmd: &StackCommand) -> Result<()> {
     }
 }
 
+// trace:TASK-398
 /// `aida headless tail` — clean tailer for `.aida/headless-logs/<spec>-<lease>.jsonl`
 /// (TASK-398). Wraps the right JSONL filtering so the user doesn't have to
 /// remember (and debug) the non-obvious jq pipeline that picks text content
-/// out of multi-block assistant messages. trace:TASK-398
+/// out of multi-block assistant messages.
 fn handle_headless_command(cmd: &HeadlessCommand) -> Result<()> {
     match cmd {
         HeadlessCommand::Tail {
@@ -119791,12 +120513,13 @@ fn handle_headless_command(cmd: &HeadlessCommand) -> Result<()> {
     }
 }
 
+// trace:TASK-294 | ai:claude
 /// `aida worker directives` — list the FIFO of pending directives the
 /// `aida-worker` shell function will act on next (TASK-294). Reads
 /// `.aida/worker.cmd` only — no requirement-store dependency, so it
 /// dispatches pre-storage like `aida drain status`. Prints "No pending
 /// directives." (exit 0) when the file is empty or absent so a quiet
-/// project never errors. trace:TASK-294 | ai:claude
+/// project never errors.
 fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
     match cmd {
         WorkerCommand::Directives { json } => {
@@ -119819,10 +120542,11 @@ fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
     }
 }
 
+// trace:STORY-301 | ai:claude
 /// `aida drain status --clear` — remove a stale drain-state file. Refuses
 /// while the orchestrator is still live: a live orchestrator removes the file
 /// itself on a clean exit, so clearing it from under a running drain would
-/// only hide work in progress. trace:STORY-301 | ai:claude
+/// only hide work in progress.
 fn drain_clear(
     project_root: &std::path::Path,
     status: &drain_state::DrainStatus,
@@ -119897,13 +120621,14 @@ fn no_human_scope_line(mode: auto_complete::NoHumanMode) -> &'static str {
     }
 }
 
+// trace:TASK-306, STORY-276
 /// TASK-306: the pre-launch gate for `aida queue work --auto-complete
 /// --no-human`, run once per kickoff. It prints a loud scope banner — what
 /// runs unattended and what does not — and requires a one-time
 /// acknowledgement, either interactively or up front with
 /// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` for an unattended run. STORY-276: `both` is
 /// now a shipped mode, so it is acknowledged like `reviewer-only` rather than
-/// rejected; the banner wording differs by mode. trace:TASK-306, STORY-276
+/// rejected; the banner wording differs by mode.
 /// TASK-394: machine-wide `--no-human` acknowledgement marker
 /// (`~/.aida/no-human-acknowledged`) — persists across every project on the host.
 fn no_human_machine_marker() -> Option<std::path::PathBuf> {
@@ -119916,10 +120641,11 @@ fn no_human_project_marker() -> std::path::PathBuf {
     std::path::Path::new(".aida").join("no-human-acknowledged")
 }
 
+// trace:TASK-394 | ai:claude
 /// TASK-394: is `--no-human` acknowledged via any channel? Returns the source
 /// label for the reminder line. Checked order: env var (existing path) → machine
 /// marker → project marker. An overnight loop acks once (the marker) instead of
-/// re-exporting the env var per iteration. trace:TASK-394 | ai:claude
+/// re-exporting the env var per iteration.
 fn no_human_ack_source() -> Option<&'static str> {
     if std::env::var("AIDA_NO_HUMAN_ACKNOWLEDGED")
         .map(|v| v == "1")
@@ -119939,10 +120665,10 @@ fn no_human_ack_source() -> Option<&'static str> {
     None
 }
 
+// trace:TASK-394 | ai:claude
 /// TASK-394: `aida no-human acknowledge|revoke|status` — manage the persistent
 /// `--no-human` scope-acknowledgement marker so an unattended loop acks once
 /// rather than re-exporting AIDA_NO_HUMAN_ACKNOWLEDGED per iteration.
-/// trace:TASK-394 | ai:claude
 fn handle_no_human_command(cmd: &cli::NoHumanCommand) -> Result<()> {
     let marker_for = |project: bool| -> Result<std::path::PathBuf> {
         if project {
@@ -120087,6 +120813,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
     }
 }
 
+// trace:STORY-492 | ai:claude
 /// STORY-492: clamp a reconciled resume phase to one a *fresh* resume process
 /// can actually run. Phases 1-2 are coupled to the implementer session/lease,
 /// which a restarted process does not hold: phase 1 (branch absent) re-runs the
@@ -120094,7 +120821,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
 /// postcondition unmet — is bumped to the reviewer (phase 3), because the
 /// lease-coupled CI-end step cannot be replayed and the reviewer + merge phases
 /// re-establish gating (`gh pr merge` still respects required checks). Pure so
-/// the safety clamp is unit-pinned. trace:STORY-492 | ai:claude
+/// the safety clamp is unit-pinned.
 fn clamp_resume_start_phase(reconciled: auto_complete::Phase) -> auto_complete::Phase {
     if reconciled == auto_complete::Phase::Ci {
         auto_complete::Phase::Reviewer
@@ -120103,6 +120830,7 @@ fn clamp_resume_start_phase(reconciled: auto_complete::Phase) -> auto_complete::
     }
 }
 
+// trace:BUG-478 | ai:claude
 /// BUG-478: does the requirement for `spec` carry a `failure_reason` — the TRUE
 /// "deliberately shelved" signal? The shelve function (`finish_failure`) sets
 /// `req.failure_reason` (+ usually `NeedsAttention`) on a shelvable phase
@@ -120112,7 +120840,7 @@ fn clamp_resume_start_phase(reconciled: auto_complete::Phase) -> auto_complete::
 /// resolves `spec_completed` (matching `spec_id` OR `agreed_id`) so agreed/raw
 /// ids behave identically. Returns `false` when the store can't be loaded or the
 /// requirement isn't found — a missing req must not wedge resume into the
-/// LeaveShelved branch. trace:BUG-478 | ai:claude
+/// LeaveShelved branch.
 fn requirement_has_failure_reason(storage: &Storage, spec: &str) -> bool {
     storage
         .load()
@@ -120129,6 +120857,7 @@ fn requirement_has_failure_reason(storage: &Storage, spec: &str) -> bool {
         .unwrap_or(false)
 }
 
+// trace:STORY-492 | ai:claude
 /// STORY-492 (slice 2c): probe the real world for a crashed drain member's
 /// per-phase postconditions, returning the [`drain_resume::ResumeFacts`] plus
 /// the branch + PR the re-entry must seed into the driver.
@@ -120138,7 +120867,7 @@ fn requirement_has_failure_reason(storage: &Storage, spec: &str) -> bool {
 /// the BUG-241 reconcile, and CI / reviewer / build are idempotent — so the
 /// only postconditions that MUST be accurate are the ones gating the
 /// irreversible tail: `pr_merged` (don't re-merge) and `spec_completed` (don't
-/// re-pull). trace:STORY-492 | ai:claude
+/// re-pull).
 fn probe_resume_facts(
     project_root: &std::path::Path,
     storage: &Storage,
@@ -120224,12 +120953,13 @@ fn probe_resume_facts(
     (facts, branch, pr)
 }
 
+// trace:STORY-492 | ai:claude
 /// STORY-492 (slice 2d): the `--resume-drain` entry point. Reads the
 /// crashed-drain state, runs the PID-liveness gate (refuse if the original
 /// orchestrator is still alive — the catastrophic double-drive guard),
 /// reconciles the re-entry phase from probed git/PR/spec reality, prints the
 /// decision, and — unless `--dry-run` — re-enters the current member at the
-/// reconciled phase. Never returns. trace:STORY-492 | ai:claude
+/// reconciled phase. Never returns.
 #[allow(clippy::too_many_arguments)]
 fn handle_drain_resume(
     storage: &Storage,
@@ -120453,6 +121183,7 @@ fn handle_drain_resume(
     }
 }
 
+// trace:TASK-405 | ai:claude
 /// TASK-405: the `--from-pr` entry point — PR-only invocation. Implementation
 /// shipped OUTSIDE the orchestrator (a PR is already open for `spec`), so drive
 /// the remaining phases (reviewer → CI → merge → pull → build) WITHOUT
@@ -120464,7 +121195,6 @@ fn handle_drain_resume(
 /// Distinct from `handle_drain_resume`: there is no crashed drain-state file,
 /// no PID-liveness gate (the implementer ran elsewhere, possibly by hand), and
 /// the entry phase is computed straight from probed PR/spec reality.
-/// trace:TASK-405 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_from_pr(
     storage: &Storage,
@@ -120589,6 +121319,7 @@ fn handle_from_pr(
     }
 }
 
+// trace:STORY-384 | ai:claude
 /// STORY-384: `aida queue recover <id>` — the failed-phase-1 recovery wizard.
 ///
 /// Inspects the spec's recovery-relevant state (lease, branch, worktree, PR),
@@ -120601,7 +121332,6 @@ fn handle_from_pr(
 /// helpers the orchestrator and `aida session leases` use; the execution shells
 /// out to `aida` subcommands (`queue work --from-pr`, `pull`, `session end`,
 /// `queue add`) and `git` / `gh` rather than reimplementing them.
-/// trace:STORY-384 | ai:claude
 fn handle_queue_recover(
     storage: &Storage,
     user_id: &str,
@@ -120980,6 +121710,7 @@ fn handle_queue_recover(
     Ok(())
 }
 
+// trace:TASK-836
 /// TASK-836: probe the richer pre-merge facts for ONE ready integration
 /// candidate — CI rollup, RequestChanges (local verdict OR forge decision), and
 /// mergeability — and normalize them into the pure [`integrate::PrIntegrationState`]
@@ -120990,7 +121721,7 @@ fn handle_queue_recover(
 /// Conservative: anything we cannot tell degrades to the optimistic value
 /// (CI `None`, no RequestChanges, `Unknown` mergeable) — the `--from-pr` drive
 /// re-gates CI + merge before the irreversible step, so "couldn't tell" never
-/// ships something unsafe; it just doesn't pre-empt a park. trace:TASK-836
+/// ships something unsafe; it just doesn't pre-empt a park.
 fn probe_pr_integration_state(
     project_root: &std::path::Path,
     spec_id: &str,
@@ -121053,6 +121784,7 @@ fn probe_pr_integration_state(
     }
 }
 
+// trace:STORY-520 | ai:claude
 /// STORY-520: `aida queue integrate` — the thin integrator watch-loop.
 ///
 /// The consumer half of a producer/consumer split: parallel implementers
@@ -121066,7 +121798,6 @@ fn probe_pr_integration_state(
 /// (`aida queue work <id> --auto-complete --from-pr`) the resume/recover flows
 /// use. The serial-merge invariant (one merge authority over `main`) is
 /// preserved by driving each spec to completion before the next.
-/// trace:STORY-520 | ai:claude
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn handle_queue_integrate(
@@ -121650,9 +122381,9 @@ fn handle_queue_integrate(
     Ok(())
 }
 
+// trace:STORY-384 | ai:claude
 /// STORY-384: short human label for a recovery action (the recommendation
 /// headline). The longer "why" is [`queue_recover::RecoverAction::rationale`].
-/// trace:STORY-384 | ai:claude
 fn recover_action_label(action: queue_recover::RecoverAction) -> &'static str {
     use queue_recover::RecoverAction as A;
     match action {
@@ -121666,9 +122397,10 @@ fn recover_action_label(action: queue_recover::RecoverAction) -> &'static str {
     }
 }
 
+// trace:STORY-246 | ai:claude
 /// Entry point for `aida queue work <SPEC> --auto-complete`. Never returns:
 /// always terminates the process with an exit code (0 success, 1-6 = the
-/// 1-based index of the phase that failed). trace:STORY-246 | ai:claude
+/// 1-based index of the phase that failed).
 #[allow(clippy::too_many_arguments)]
 fn handle_auto_complete(
     storage: &Storage,
@@ -121718,6 +122450,7 @@ fn handle_auto_complete(
     std::process::exit(result.exit_code);
 }
 
+// trace:STORY-265 | ai:claude
 /// STORY-265 slice 3: execute the `--with-plan` PLAN PRELUDE for one spec —
 /// the plan phase that runs before the auto-complete drain's phase 1. Reuses
 /// slice 2's `aida queue work <spec> --plan-only` planning session (headless
@@ -121727,7 +122460,7 @@ fn handle_auto_complete(
 /// entered unchanged after this returns `Ok`; the Phase enum is untouched (the
 /// prelude is NOT a renumbered phase). Each step shells out to the current
 /// `aida` binary; a non-zero exit aborts the prelude so the caller skips the
-/// drain. trace:STORY-265 | ai:claude
+/// drain.
 fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Result<()> {
     use auto_complete::PlanPreludeStep;
     let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
@@ -121785,12 +122518,13 @@ fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Resul
     Ok(())
 }
 
+// trace:STORY-246, TASK-285 | ai:claude
 /// Run one `--auto-complete` orchestration and return its result *without*
 /// exiting the process — so a batch drain (TASK-285) can chain runs. Handles
 /// the preflight queue, the real driver, and the TASK-266 telemetry record.
 /// Hard environment errors (project root unresolvable, preflight queue-add
 /// failed) still exit the process directly — they would recur identically on
-/// every batch iteration. trace:STORY-246, TASK-285 | ai:claude
+/// every batch iteration.
 #[allow(clippy::too_many_arguments)]
 fn run_auto_complete(
     storage: &Storage,
@@ -122137,12 +122871,13 @@ fn run_auto_complete(
     result
 }
 
+// trace:BUG-438 | ai:claude
 /// BUG-438: should a finished single-spec drain clear its `drain-state.json`?
 /// Clear when this run owns the file AND it is not a *failed resume* — a resume
 /// that failed keeps the checkpoint so the operator can fix the blocker and
 /// `--resume-drain` again, rather than the checkpoint being consumed on
 /// failure. A successful resume (work done) and any non-resume drain clear as
-/// before. Pure so the rule is unit-pinned. trace:BUG-438 | ai:claude
+/// before. Pure so the rule is unit-pinned.
 fn should_clear_drain_state(owns_drain_state: bool, is_resume: bool, exit_code: i32) -> bool {
     owns_drain_state && !(is_resume && exit_code != 0)
 }
@@ -122179,11 +122914,12 @@ mod drain_state_clear_tests {
     }
 }
 
+// trace:TASK-229, TASK-285 | ai:claude
 /// Resolve the queued members of a `batch:NAME` tag in pickup order, filtered
 /// to the active role. Terminal items (Completed/Rejected) are dropped — they
 /// are already shipped. Returns `(entry, display_id, title, status)` tuples.
 /// Shared by the plain `--batch` head-pickup path and the TASK-285
-/// `--batch --auto-complete` drain. trace:TASK-229, TASK-285 | ai:claude
+/// `--batch --auto-complete` drain.
 fn resolve_batch_members(
     storage: &Storage,
     user_id: &str,
@@ -122286,9 +123022,10 @@ fn resolve_batch_members(
     Ok(members)
 }
 
+// trace:TASK-285 | ai:claude
 /// Real [`auto_complete::BatchDriver`] — re-resolves the `batch:NAME` head
 /// against the live queue and runs each member's full `--auto-complete`
-/// lifecycle. trace:TASK-285 | ai:claude
+/// lifecycle.
 struct RealBatchDriver<'a> {
     storage: &'a Storage,
     user_id: String,
@@ -122361,11 +123098,12 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
     }
 }
 
+// trace:TASK-285
 /// Entry point for `aida queue work --batch NAME --auto-complete` (TASK-285).
 /// Drains the whole batch — one full `--auto-complete` lifecycle per member,
 /// advancing the head after each — until the batch is empty, `--max` is
 /// reached, or a phase fails. Never returns: exits `0` on a clean drain, else
-/// the failed-phase index (per STORY-246's exit codes). trace:TASK-285
+/// the failed-phase index (per STORY-246's exit codes).
 #[allow(clippy::too_many_arguments)]
 fn handle_auto_complete_batch(
     storage: &Storage,
@@ -122585,9 +123323,10 @@ fn handle_auto_complete_batches(
     std::process::exit(exit_code);
 }
 
+// trace:TASK-310
 /// Print the closing summary for a multi-batch drain. Per-batch summaries are
 /// intentionally compact: empty batches are omitted from human output so an
-/// already-drained intermediate batch is a silent skip. trace:TASK-310
+/// already-drained intermediate batch is a silent skip.
 fn emit_batch_chain_summary(
     batch_names: &[String],
     result: &auto_complete::BatchChainDrainResult,
@@ -122889,11 +123628,12 @@ fn emit_batch_chain_summary(
     }
 }
 
+// trace:TASK-285
 /// Print the closing summary of a `--batch --auto-complete` drain: what
 /// shipped, where it stopped, and what is left queued. The per-spec failure
 /// epilogue + recovery hint are already printed by `orchestrate`; this adds
 /// the batch-level framing (which members shipped, queue-intact-for-retry).
-/// `exit_code` is the process's effective exit code (see caller). trace:TASK-285
+/// `exit_code` is the process's effective exit code (see caller).
 fn emit_batch_drain_summary(
     batch_name: &str,
     result: &auto_complete::BatchDrainResult,
@@ -123206,8 +123946,9 @@ fn emit_batch_drain_summary(
     }
 }
 
+// trace:TASK-293 | ai:claude
 /// TASK-293 — a parsed `next` / `nextN` keyword positional for `aida queue
-/// work`. trace:TASK-293 | ai:claude
+/// work`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NextKeyword {
     /// The positional is not a `next*` keyword — a spec-id, cluster anchor,
@@ -123218,6 +123959,7 @@ enum NextKeyword {
     Count(usize),
 }
 
+// trace:TASK-293 | ai:claude
 /// Parse the `aida queue work` positional(s) for the `next` / `nextN` keyword
 /// (TASK-293). `id` is the first positional, `count` the optional second (the
 /// spaced `next 3` form). `next` and `nextN` / `next N` resolve to a drain
@@ -123225,7 +123967,6 @@ enum NextKeyword {
 /// count with no `next`, a count alongside the compact `nextN`) are rejected.
 /// The keyword matches case-insensitively — a real spec-id always carries a
 /// `TYPE-N` hyphen, so `next` / `nextN` never collide with one.
-/// trace:TASK-293 | ai:claude
 fn parse_next_keyword(id: Option<&str>, count: Option<&str>) -> Result<NextKeyword> {
     let Some(raw) = id else {
         // No positional id. A trailing count with no `next` before it is not
@@ -123276,8 +124017,8 @@ fn parse_next_keyword(id: Option<&str>, count: Option<&str>) -> Result<NextKeywo
     )
 }
 
+// trace:TASK-293 | ai:claude
 /// Parse + validate the `N` of a `nextN` form: a positive whole number.
-/// trace:TASK-293 | ai:claude
 fn parse_next_count(raw: &str) -> Result<usize> {
     let n: usize = raw.trim().parse().map_err(|_| {
         anyhow::anyhow!(
@@ -123291,10 +124032,11 @@ fn parse_next_count(raw: &str) -> Result<usize> {
     Ok(n)
 }
 
+// trace:TASK-293
 /// Non-erroring queue-head resolver for the `nextN` drain (TASK-293): the
 /// drivable head of the active role's queue, or `None` when nothing drivable
 /// remains (the drain is then complete). A store/queue read failure is fatal —
-/// it is not "drained" and would recur on every iteration. trace:TASK-293
+/// it is not "drained" and would recur on every iteration.
 fn resolve_next_n_head(storage: &Storage, user_id: &str) -> Option<String> {
     match auto_complete_head_candidates(storage, user_id) {
         Ok(candidates) => pick_auto_complete_head(&candidates)
@@ -123311,9 +124053,10 @@ fn resolve_next_n_head(storage: &Storage, user_id: &str) -> Option<String> {
     }
 }
 
+// trace:TASK-293 | ai:claude
 /// Count the orchestrator-drivable items queued for the active role — used to
 /// surface the "only K items queued" note when a `nextN` asks for more than
-/// the queue holds. trace:TASK-293 | ai:claude
+/// the queue holds.
 fn drivable_queued_count(storage: &Storage, user_id: &str) -> Result<usize> {
     Ok(auto_complete_head_candidates(storage, user_id)?
         .iter()
@@ -123321,11 +124064,12 @@ fn drivable_queued_count(storage: &Storage, user_id: &str) -> Result<usize> {
         .count())
 }
 
+// trace:TASK-293
 /// Real [`auto_complete::BatchDriver`] for a `nextN` drain (TASK-293). Unlike
 /// [`RealBatchDriver`], the "members" are not a `batch:NAME` tag — they are
 /// simply the drivable queue head, re-resolved each call. A shipped spec
 /// leaves the queue, so the head advances naturally; `drain_batch`'s `--max`
-/// cap (pinned to `N`) stops the drain after N specs. trace:TASK-293
+/// cap (pinned to `N`) stops the drain after N specs.
 struct RealNextNDriver<'a> {
     storage: &'a Storage,
     user_id: String,
@@ -123373,12 +124117,12 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     }
 }
 
+// trace:TASK-293 | ai:claude
 /// Entry point for `aida queue work nextN --auto-complete` (TASK-293). Drains
 /// the next `N` items from the queue head — one full `--auto-complete`
 /// lifecycle per spec, advancing the head after each — until `N` specs ship,
 /// the queue is exhausted, or a phase fails. Never returns: exits `0` on a
 /// clean drain, else the failed-phase index (per STORY-246's exit codes).
-/// trace:TASK-293 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_auto_complete_next_n(
     storage: &Storage,
@@ -123476,10 +124220,11 @@ fn handle_auto_complete_next_n(
     std::process::exit(exit_code);
 }
 
+// trace:TASK-293 | ai:claude
 /// Print the closing summary of a `nextN --auto-complete` drain (TASK-293):
 /// what shipped, where it stopped, and what is left queued. The per-spec
 /// failure epilogue + recovery hint are already printed by `orchestrate`;
-/// this adds the drain-level framing. trace:TASK-293 | ai:claude
+/// this adds the drain-level framing.
 fn emit_next_n_drain_summary(
     n: usize,
     result: &auto_complete::BatchDrainResult,
@@ -123776,12 +124521,12 @@ fn emit_next_n_drain_summary(
     }
 }
 
+// trace:TASK-266 | ai:claude
 /// TASK-266: append this `--auto-complete` run to
 /// `~/.aida/auto-complete.jsonl` and, on a phase failure, auto-draft a Draft
 /// BUG for the failure. Honours the same opt-out as `aida usage`
 /// (`AIDA_TELEMETRY=0` / `[telemetry] enabled = false`). Best-effort
 /// throughout — telemetry must never break or delay the orchestrator exit.
-/// trace:TASK-266 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn record_auto_complete_run(
     driver: &RealPhaseDriver,
@@ -123870,10 +124615,11 @@ fn record_auto_complete_run(
     auto_complete_telemetry::append_event(&event);
 }
 
+// trace:TASK-266 | ai:claude
 /// TASK-266: find the Draft BUG already auto-filed for an identical recent
 /// failure — same spec, same phase, same failure kind, within the last 24h —
 /// so re-running a still-broken `--auto-complete` reuses one BUG instead of
-/// spamming the backlog. trace:TASK-266 | ai:claude
+/// spamming the backlog.
 fn existing_failure_bug(
     spec: &str,
     phase: auto_complete::Phase,
@@ -123899,12 +124645,13 @@ fn existing_failure_bug(
         .and_then(|ev| ev.drafted_bug)
 }
 
+// trace:TASK-266 | ai:claude
 /// TASK-266: auto-file a Draft BUG for an `--auto-complete` phase failure.
 /// The BUG is intentionally left in Draft and NOT queued — the user triages
 /// it and promotes it to Approved only if it is a real AIDA bug (vs a user
 /// error or a local environment issue). Returns the new BUG's spec-id, or
 /// `None` if the `aida add` subprocess could not run (best-effort — the
-/// JSONL log still captures the failure either way). trace:TASK-266 | ai:claude
+/// JSONL log still captures the failure either way).
 fn draft_auto_complete_failure_bug(
     spec: &str,
     phase: auto_complete::Phase,
@@ -123960,9 +124707,10 @@ operational.\n",
         .or_else(|| add_draft_bug(&exe, &title, &tags, &description, None))
 }
 
+// trace:TASK-266 | ai:claude
 /// Run `aida add` to file the Draft BUG, returning the new spec-id parsed
 /// from stdout. `NO_COLOR` is set on the child so the `ID:` line is plain
-/// text. trace:TASK-266 | ai:claude
+/// text.
 fn add_draft_bug(
     exe: &std::path::Path,
     title: &str,
@@ -124003,8 +124751,8 @@ fn add_draft_bug(
     parse_added_spec_id(&String::from_utf8_lossy(&out.stdout))
 }
 
+// trace:TASK-266 | ai:claude
 /// Parse the `ID: <SPEC-ID>` line that `aida add` prints on success.
-/// trace:TASK-266 | ai:claude
 fn parse_added_spec_id(stdout: &str) -> Option<String> {
     stdout
         .lines()
@@ -124060,9 +124808,10 @@ fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
     vec!["queue", "add", spec, "--for", "implementer", "--no-scope"]
 }
 
+// trace:STORY-246 | ai:claude
 /// Queue `spec` for the implementer role if it isn't already queued for the
 /// current user — the preflight that lets `--auto-complete` accept a
-/// freshly-added spec. trace:STORY-246 | ai:claude
+/// freshly-added spec.
 fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -> Result<()> {
     let store = storage.load()?;
     let req = store
@@ -124145,13 +124894,14 @@ fn resolve_lifecycle_skip(storage: &Storage, spec: &str) -> Result<auto_complete
     ))
 }
 
+// trace:TASK-827 | ai:claude
 /// TASK-827: classify this spec as keystone/architecture-class for the solo
 /// posture. Best-effort — if the spec can't be loaded we treat it as
 /// non-keystone so the posture errs toward the cheap error (a safe spec parked
 /// or proceeded), never the expensive one (shipping keystone unattended is
 /// guarded separately by the `supervised` drain exclusion). Returns the
 /// `(req_type, tags)` of a conservative classification via
-/// `presence::is_keystone_class`. trace:TASK-827 | ai:claude
+/// `presence::is_keystone_class`.
 fn solo_spec_is_keystone(storage: &Storage, spec: &str) -> bool {
     let Ok(store) = storage.load() else {
         return false;
@@ -124165,8 +124915,9 @@ fn solo_spec_is_keystone(storage: &Storage, spec: &str) -> bool {
     )
 }
 
+// trace:STORY-246 | ai:claude
 /// Best-effort lookup of the most recent workflow run id for `branch`, used
-/// to enrich the CI-failure recovery hint. trace:STORY-246 | ai:claude
+/// to enrich the CI-failure recovery hint.
 fn latest_run_id_for_branch(branch: &str) -> Option<String> {
     let gh = resolve_gh_binary()?;
     let out = std::process::Command::new(gh)
@@ -124188,6 +124939,7 @@ fn latest_run_id_for_branch(branch: &str) -> Option<String> {
     first_run_id_from_gh_json(&String::from_utf8_lossy(&out.stdout))
 }
 
+// trace:STORY-246, STORY-306 | ai:claude
 /// Read + parse a `.aida/review-verdicts/PR-N.json` verdict file written by
 /// the `/aida-review` skill.
 ///
@@ -124197,7 +124949,6 @@ fn latest_run_id_for_branch(branch: &str) -> Option<String> {
 /// (STORY-306) — and [`auto_complete::ReviewerOutcome::Verdict`] otherwise.
 /// The `merge` field is dominant: an escalation is honoured whatever the
 /// `verdict` field says, so the phase-3 handshake artifact always parses.
-/// trace:STORY-246, STORY-306 | ai:claude
 fn read_verdict_file(
     path: &std::path::Path,
 ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
@@ -124248,6 +124999,7 @@ fn read_verdict_file(
         })
 }
 
+// trace:STORY-439 | ai:claude
 /// STORY-439: pick the calibration review-slot fields out of a verdict
 /// file and upsert the per-spec capture record. The verdict file is
 /// already loaded by `read_verdict_file` for the orchestrator's PASS /
@@ -124255,7 +125007,6 @@ fn read_verdict_file(
 /// metadata (it never changes the decision). Best-effort — a missing
 /// file, missing fields, or write error all silently no-op. Called for
 /// each spec the PR credits; one PR populates N records.
-/// trace:STORY-439 | ai:claude
 fn capture_review_calibration_for_spec(
     project_root: &std::path::Path,
     verdict_path: &std::path::Path,
@@ -124302,6 +125053,7 @@ fn capture_review_calibration_for_spec(
     }
 }
 
+// trace:BUG-280 | ai:claude
 /// When phase 3 ends with [`auto_complete::FailureKind::NoVerdict`] under a
 /// headless `--no-human` drain, scan the reviewer's headless log for the
 /// BUG-280 signature: an `AskUserQuestion` event. The harness denies
@@ -124312,7 +125064,7 @@ fn capture_review_calibration_for_spec(
 /// Returns the original failure when no recent log can be located, when the
 /// log cannot be read, or when no AskUserQuestion event is found. On a hit,
 /// returns a NoVerdict failure whose `reason` names AskUserQuestion as the
-/// likely cause and points at the offending log file. trace:BUG-280 | ai:claude
+/// likely cause and points at the offending log file.
 fn enrich_no_verdict_with_headless_diagnostic(
     failure: auto_complete::PhaseFailure,
     project_root: &std::path::Path,
@@ -124554,9 +125306,10 @@ mod real_phase_driver_wiring_tests {
         find_orchestrated_lease, RealPhaseDriver,
     };
 
+    // trace:TASK-262 | ai:claude
     /// Mint a session lease + its manifest under `<root>/.aida/sessions/`,
     /// exactly as `aida queue work --session-id` would, so lease discovery has
-    /// something real to resolve against. trace:TASK-262 | ai:claude
+    /// something real to resolve against.
     fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: Option<&str>) {
         let sessions = root.join(".aida").join("sessions");
         std::fs::create_dir_all(&sessions).unwrap();
@@ -124583,9 +125336,10 @@ mod real_phase_driver_wiring_tests {
         .unwrap();
     }
 
+    // trace:TASK-262 | ai:claude
     /// Build a minimal interactive `RealPhaseDriver` rooted at an isolated
     /// tempdir. Reads only that tempdir's (absent) `[drain]` config, so it
-    /// never touches the real project. trace:TASK-262 | ai:claude
+    /// never touches the real project.
     fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
         RealPhaseDriver::new(
             root.to_path_buf(),
@@ -124723,11 +125477,12 @@ mod real_phase_driver_wiring_tests {
     }
 }
 
+// trace:BUG-241 | ai:claude
 /// Read a spec's current status straight from the git-canonical store —
 /// ground truth for the BUG-241 reconcile step. A spec the implementer (or a
 /// human) marked Completed needed no further work, even when the phase
 /// produced no PR (instance B: resolved-by-supersession). `None` when the
-/// store can't be opened or the spec isn't found. trace:BUG-241 | ai:claude
+/// store can't be opened or the spec isn't found.
 fn spec_status(project_root: &std::path::Path, spec: &str) -> Option<RequirementStatus> {
     use aida_core::DatabaseBackend;
     let store_path = project_root.join(".aida-store");
@@ -124736,6 +125491,7 @@ fn spec_status(project_root: &std::path::Path, spec: &str) -> Option<Requirement
     Some(req.status)
 }
 
+// trace:BUG-241 | ai:claude
 /// Pure decision for the BUG-241 reconcile (`RealPhaseDriver::reconcile_failure`):
 /// given the two ground-truth signals — a verified merged PR number, if one
 /// was found, and whether the spec reached Completed — decide whether a phase
@@ -124746,7 +125502,6 @@ fn spec_status(project_root: &std::path::Path, spec: &str) -> Option<Requirement
 /// miss instance A (the status auto-bump lags a human's out-of-band merge) and
 /// instance B (a no-work spec never gets a PR). Split out so the rule is
 /// unit-testable without `gh` or a store.
-/// trace:BUG-241 | ai:claude
 fn reconcile_verdict(
     verified_merged_pr: Option<u32>,
     spec_completed: bool,
@@ -124815,12 +125570,12 @@ mod reconcile_verdict_tests {
     }
 }
 
+// trace:BUG-114 | ai:claude
 /// Lease ids present in `.aida/sessions/` — `<id>.toml` files only, *not*
 /// the `<id>.activity.toml` / `<id>.manifest.toml` companions. A lease id is
 /// a dot-free UUID, so a real lease file's name has exactly one `.`; every
 /// companion file has two. (The old set-diff filter excluded only
 /// `.activity.toml`, so it miscounted `.manifest.toml` as a lease — BUG-114.)
-/// trace:BUG-114 | ai:claude
 fn lease_ids_in(sessions_dir: &std::path::Path) -> Vec<String> {
     let mut ids = Vec::new();
     if let Ok(rd) = std::fs::read_dir(sessions_dir) {
@@ -124838,6 +125593,7 @@ fn lease_ids_in(sessions_dir: &std::path::Path) -> Vec<String> {
     ids
 }
 
+// trace:BUG-114 trace:BUG-223 | ai:claude
 /// Find the session lease that `aida queue work --session-id <uuid>` created,
 /// by matching the orchestrator-minted `claude_session_id` against the value
 /// `aida queue work` records in each session manifest. This is the
@@ -124845,7 +125601,6 @@ fn lease_ids_in(sessions_dir: &std::path::Path) -> Vec<String> {
 /// orchestrated session by id, so concurrent leases (parallel user sessions,
 /// nested `/aida-pickup`) and the `.manifest.toml` companion file cannot
 /// confuse it. Returns `(lease_id, branch, worktree_path)`.
-/// trace:BUG-114 trace:BUG-223 | ai:claude
 fn find_orchestrated_lease(
     project_root: &std::path::Path,
     claude_session_id: &str,
@@ -124859,6 +125614,7 @@ fn find_orchestrated_lease(
     Some((peek.id, peek.branch, peek.worktree_path))
 }
 
+// trace:BUG-223 | ai:claude
 /// Decide whether the worktree's live branch represents a mid-phase swap
 /// away from the branch the lease recorded at session-start. Returns the
 /// new branch when a genuine swap is detected; `None` when the recorded
@@ -124866,7 +125622,7 @@ fn find_orchestrated_lease(
 /// --abbrev-ref` yields the literal `HEAD`), or the branch was
 /// undetectable (the worktree is gone). Pure — split from
 /// [`reconcile_orchestrated_branch`] so the swap rule is unit-testable
-/// without a git fixture. trace:BUG-223 | ai:claude
+/// without a git fixture.
 fn swapped_branch(live: Result<String>, recorded: &str) -> Option<String> {
     match live {
         Ok(b) if !b.is_empty() && b != "HEAD" && b != recorded => Some(b),
@@ -124874,12 +125630,13 @@ fn swapped_branch(live: Result<String>, recorded: &str) -> Option<String> {
     }
 }
 
+// trace:BUG-223 | ai:claude
 /// Rewrite the `branch` field of an existing session lease, leaving every
 /// other field intact. Used by the orchestrator when it detects a
 /// mid-phase branch swap (BUG-223). The orchestrated session has already
 /// exited by the time this runs, so there is no concurrent writer — but
 /// the write is still atomic for consistency with the other lease-file
-/// writers. trace:BUG-223 | ai:claude
+/// writers.
 fn update_lease_branch(project_root: &std::path::Path, lease_id: &str, branch: &str) -> Result<()> {
     let path = lease_path(project_root, lease_id);
     let body = std::fs::read_to_string(&path)
@@ -124892,12 +125649,12 @@ fn update_lease_branch(project_root: &std::path::Path, lease_id: &str, branch: &
     Ok(())
 }
 
+// trace:TASK-358 | ai:claude
 /// TASK-358: stamp the lease's `escalated_to_human` timestamp. The
 /// orchestrator's `--escalate-blocks` path calls this after the advisor
 /// escalates a punted design-fork to a human — the marker tells later
 /// cleanup paths (`aida edit --status` out of `NeedsAttention`,
 /// `aida session prune --escalations`) that this lease is safe to remove.
-/// trace:TASK-358 | ai:claude
 fn mark_lease_escalated_to_human(project_root: &std::path::Path, lease_id: &str) -> Result<()> {
     let path = lease_path(project_root, lease_id);
     let body = std::fs::read_to_string(&path)
@@ -124910,6 +125667,7 @@ fn mark_lease_escalated_to_human(project_root: &std::path::Path, lease_id: &str)
     Ok(())
 }
 
+// trace:BUG-223 | ai:claude
 /// Re-derive the worktree's current branch and, when it has drifted from
 /// the branch the lease recorded at session-start, rewrite the lease so
 /// every downstream consumer (`aida session end`, `aida session leases`)
@@ -124920,7 +125678,7 @@ fn mark_lease_escalated_to_human(project_root: &std::path::Path, lease_id: &str)
 /// commits to a fresh branch mid-implementer-phase. The lease's recorded
 /// branch then goes stale and the phase-1 `gh pr list --head <branch>`
 /// lookup reports a false "opened no PR". The worktree's live HEAD is the
-/// only ground truth. trace:BUG-223 | ai:claude
+/// only ground truth.
 fn reconcile_orchestrated_branch(
     project_root: &std::path::Path,
     lease_id: &str,
@@ -124952,6 +125710,7 @@ fn reconcile_orchestrated_branch(
     }
 }
 
+// trace:BUG-217 | ai:claude
 /// Resolve the aida binary path for orchestrator subprocess spawning, once
 /// at orchestrator construction time so a mid-flight binary replacement
 /// can't invalidate it.
@@ -124968,7 +125727,6 @@ fn reconcile_orchestrated_branch(
 /// Falls back to the bare "aida" name (PATH search) if `current_exe()`
 /// failed or the resolved path doesn't exist on disk.
 ///
-/// trace:BUG-217 | ai:claude
 fn resolve_aida_exe() -> std::path::PathBuf {
     if let Ok(p) = std::env::current_exe() {
         // Linux's `/proc/self/exe` can return "<path> (deleted)" when the
@@ -125283,16 +126041,16 @@ mod bug_376_implementer_exit_directive_tests {
     }
 }
 
+// trace:STORY-246 | ai:claude
+// trace:BUG-311 | ai:claude
 /// The real [`auto_complete::PhaseDriver`]. Holds the project root + the
 /// state discovered as phases run (branch, lease id, PR number).
-/// trace:STORY-246 | ai:claude
 /// BUG-311: build the argv for the orchestrator's phase-1 `aida queue work`
 /// subprocess. Pure helper so the steal-threading + headless flag rules are
 /// pinnable by unit test without spawning a process. The orchestrator always
 /// sets `--session-id` (so it can locate the phase's lease via
 /// `claude_session_id`), and conditionally appends `--steal`, `--no-human`,
 /// and `--permission-mode <m>`. Order matches the existing inline code.
-/// trace:BUG-311 | ai:claude
 fn build_implementer_phase_args(
     spec: &str,
     session_uuid: &str,
@@ -125345,12 +126103,12 @@ fn build_phase3_auto_rebase_args(pr_number: u64) -> Vec<String> {
     ]
 }
 
+// trace:STORY-335 | ai:claude
 /// STORY-335: the argv `aida queue integrate --rebase` hands to the `aida`
 /// subprocess to rebase a ready member's PR branch onto current main before
 /// merging it. Mirrors the phase-3 auto-rebase (`pr rebase <N> --no-smoke`):
 /// the local smoke is skipped because the subsequent `--from-pr` drive runs CI.
 /// Factored out so the subprocess contract is unit-testable without spawning.
-/// trace:STORY-335 | ai:claude
 fn build_integrate_rebase_args(pr_number: u32) -> Vec<String> {
     vec![
         "pr".into(),
@@ -125379,6 +126137,7 @@ fn build_auto_punt_args(spec: &str, reason: &str, lean: &str) -> Vec<String> {
     ]
 }
 
+// trace:TASK-136 BUG-420 | ai:claude
 /// TASK-136 / BUG-420: drain-reliability tunables for the orchestrator's phase
 /// loop. Resolved once per `RealPhaseDriver` from the `[drain]` section of
 /// `.aida/config.toml`, then overridden by env vars (which the `queue work`
@@ -125386,7 +126145,6 @@ fn build_auto_punt_args(spec: &str, reason: &str, lean: &str) -> Vec<String> {
 /// flags so the values compose across single-spec / batch / nextN drains
 /// without threading through every signature — the same env-var pattern
 /// `AIDA_CALIBRATE` uses). A `0`-minute value disables that watchdog check.
-/// trace:TASK-136 BUG-420 | ai:claude
 #[derive(Debug, Clone, Copy)]
 struct DrainTuning {
     /// TASK-136: how many times to retry the phase-1 GH PR-verify on a
@@ -125404,9 +126162,10 @@ struct DrainTuning {
 }
 
 impl DrainTuning {
+    // trace:TASK-136 BUG-420 | ai:claude
     /// Resolve from `[drain]` config then env overrides. Env wins so the
     /// per-invocation flags (mapped to env at dispatch) override the project
-    /// default. trace:TASK-136 BUG-420 | ai:claude
+    /// default.
     fn resolve(project_root: &std::path::Path) -> Self {
         let cfg = read_drain_config(project_root);
         let env_usize = |k: &str| -> Option<usize> {
@@ -125431,6 +126190,7 @@ impl DrainTuning {
     }
 }
 
+// trace:BUG-420 | ai:claude
 /// BUG-420: a phase-scoped no-progress + wall-clock-ceiling watchdog for a
 /// *headless* orchestrator phase. While the `claude -p` child runs, the
 /// orchestrator's [`exit_signal::spawn_and_wait_watched`] poll loop calls
@@ -125443,7 +126203,7 @@ impl DrainTuning {
 /// The worktree is created by the phase child, so it is not known at spawn
 /// time — `check` resolves it lazily from the session lease and, until it
 /// appears, treats the phase as "making progress" (startup grace) so a slow
-/// session launch never trips the watchdog. trace:BUG-420 | ai:claude
+/// session launch never trips the watchdog.
 struct PhaseWatchdog {
     project_root: std::path::PathBuf,
     session_id: String,
@@ -125458,9 +126218,10 @@ struct PhaseWatchdog {
 }
 
 impl PhaseWatchdog {
+    // trace:BUG-420 | ai:claude
     /// How often to actually shell out to git — far coarser than the
     /// `spawn_and_wait` poll cadence (which is ~100ms) so the watchdog never
-    /// spins git. trace:BUG-420 | ai:claude
+    /// spins git.
     const GIT_POLL: std::time::Duration = std::time::Duration::from_secs(30);
 
     fn new(
@@ -125484,11 +126245,11 @@ impl PhaseWatchdog {
         }
     }
 
+    // trace:BUG-420 | ai:claude
     /// A progress signature for the worktree: HEAD sha + a hash of the
     /// porcelain status + the newest mtime among changed files. A degenerate
     /// echo/sleep spin moves none of these; a real session commits, stages, or
     /// re-edits a file (advancing its mtime). `None` when git can't be read.
-    /// trace:BUG-420 | ai:claude
     fn progress_signature(worktree: &std::path::Path) -> Option<String> {
         let sha = git_capture(worktree, &["rev-parse", "HEAD"]).unwrap_or_default();
         let porcelain = git_capture(worktree, &["status", "--porcelain"]).unwrap_or_default();
@@ -125522,8 +126283,9 @@ impl PhaseWatchdog {
         Some(format!("{sha}|{}|{newest}", porcelain.len()))
     }
 
+    // trace:BUG-420 | ai:claude
     /// Probe (rate-limited) and return `Some(reason)` if the watchdog should
-    /// trip — the caller then reaps the child. trace:BUG-420 | ai:claude
+    /// trip — the caller then reaps the child.
     fn check(&mut self) -> Option<String> {
         // Both checks disabled → never trips.
         if self.no_progress.is_zero() && self.ceiling.is_zero() {
@@ -125614,8 +126376,9 @@ impl PhaseWatchdog {
     }
 }
 
+// trace:BUG-420 | ai:claude
 /// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
-/// spawn / non-zero / decode error. trace:BUG-420 | ai:claude
+/// spawn / non-zero / decode error.
 fn git_capture(worktree: &std::path::Path, args: &[&str]) -> Option<String> {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -125629,7 +126392,8 @@ fn git_capture(worktree: &std::path::Path, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// The `[drain]` config values, all optional. trace:TASK-136 BUG-420 | ai:claude
+// trace:TASK-136 BUG-420 | ai:claude
+/// The `[drain]` config values, all optional.
 #[derive(Debug, Default, Clone, Copy)]
 struct DrainConfigToml {
     gh_verify_retries: Option<usize>,
@@ -125637,10 +126401,10 @@ struct DrainConfigToml {
     phase_ceiling_minutes: Option<u64>,
 }
 
+// trace:TASK-136 BUG-420 | ai:claude
 /// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
 /// other section readers (e.g. `read_behavior_permission_mode`) so the crate
 /// stays serde-free for one small optional section. Unknown keys are ignored.
-/// trace:TASK-136 BUG-420 | ai:claude
 fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
     let mut out = DrainConfigToml::default();
     let config_path = project_dir.join(".aida").join("config.toml");
@@ -125683,11 +126447,12 @@ struct RealPhaseDriver {
     implementer_lease: Option<String>,
     pr_number: Option<u32>,
     ci_run_id: Option<String>,
+    // trace:BUG-217 | ai:claude
     /// Cached aida binary path, resolved once at construction. Re-resolving
     /// per-call broke in BUG-217 when the implementer's phase-1 `cargo build`
     /// replaced the running dev binary: `/proc/self/exe` then includes a
     /// " (deleted)" suffix, and `Command::new("<path> (deleted)").spawn()`
-    /// fails with ENOENT. trace:BUG-217 | ai:claude
+    /// fails with ENOENT.
     aida_exe: std::path::PathBuf,
     /// STORY-263: headless mode. `Some` → the reviewer phase is launched
     /// headless (`claude -p`); the implementer phase stays interactive in
@@ -125714,23 +126479,24 @@ struct RealPhaseDriver {
     /// so the resume must `current_dir(<this worktree>)`. `None` until
     /// `run_implementer` locates the lease.
     implementer_worktree: Option<std::path::PathBuf>,
+    // trace:BUG-311 | ai:claude
     /// BUG-311: thread the user's `aida queue work --auto-complete --steal`
     /// flag through to the phase-1 implementer subprocess. Without this the
     /// outer `--steal` is dropped on the floor — phase 1's `handle_queue_work`
     /// sees the dormant lease, bails with the canned "pass --steal" message,
     /// and the orchestrator reports a generic phase-1 failure even though
-    /// the user *did* pass --steal. trace:BUG-311 | ai:claude
+    /// the user *did* pass --steal.
     steal: bool,
     /// TASK-559: thread the user's `aida queue work --auto-complete
     /// --force-claim` flag through to the phase-1 implementer subprocess.
     force_claim: bool,
+    // trace:STORY-281 | ai:claude
     /// STORY-281: opt out of the reviewer pre-flight stale-base refusal.
     /// When false (default), phase 3 refuses to launch the reviewer if the
     /// PR's base is behind origin AND a file the PR touches has moved on
     /// the base since the PR forked. When true, the refusal becomes a
     /// warning so review-against-stale proceeds. Also propagated to the
     /// reviewer subprocess so its own pre-flight respects the opt-out.
-    /// trace:STORY-281 | ai:claude
     allow_stale_base: bool,
     /// STORY-429: opt out of phase-3 auto-rebase recovery.
     no_auto_rebase: bool,
@@ -125751,17 +126517,19 @@ enum Phase3StaleOverlapAction {
     Refuse(String),
 }
 
+// trace:TASK-136 | ai:claude
+// trace:BUG-444 | ai:claude
 /// TASK-136: the outcome of one phase-1 PR-verify attempt. The verify can
 /// settle definitively (a PR found, no PR, or a hard failure) or hit a
 /// *transient* GH-API outage that leaves it unable to confirm a PR — only the
 /// last case is retried (with the [`auto_complete::gh_verify_backoff_schedule`]
-/// backoff). trace:TASK-136 | ai:claude
+/// backoff).
 /// BUG-444: given that BOTH phase-1 PR lookups returned empty-but-successful,
 /// decide whether that's a *definitive* no-PR (the branch was never pushed) or a
 /// *retryable* eventual-consistency window (the branch is on origin, so a PR
 /// likely exists but isn't indexed yet). Only an `Absent` branch is a definitive
 /// NoPr; `Present` and `LsRemoteFailed` both retry. Pure so the keystone
-/// decision is unit-tested without gh/git. trace:BUG-444 | ai:claude
+/// decision is unit-tested without gh/git.
 fn empty_phase1_lookup_is_definitive_nopr(origin: &BranchOriginProbe) -> bool {
     matches!(origin, BranchOriginProbe::Absent)
 }
@@ -125779,11 +126547,11 @@ enum Phase1PrResolve {
     Retry(String),
 }
 
+// trace:STORY-492 | ai:claude
 /// STORY-492: a `--resume-drain` re-entry context for [`run_auto_complete`] —
 /// the reconciled phase to re-enter at plus the branch + PR to seed into the
 /// driver (the skipped earlier phases would have discovered these). `None`
 /// passed to `run_auto_complete` means a normal phase-1 drain.
-/// trace:STORY-492 | ai:claude
 struct ResumeEntry {
     start_phase: auto_complete::Phase,
     branch: Option<String>,
@@ -125958,6 +126726,7 @@ impl RealPhaseDriver {
         ))
     }
 
+    // trace:BUG-114 trace:TASK-271 | ai:claude
     /// Locate the session lease `aida queue work --session-id <uuid>` created
     /// for this orchestrator phase, pinned by the `claude_session_id` the
     /// orchestrator minted. Deterministic — unaffected by concurrent leases
@@ -125967,7 +126736,6 @@ impl RealPhaseDriver {
     /// the error suggests bare `--resume` (continues the most recent recorded
     /// claude session) and lists the candidate lease ids as diagnostic-only —
     /// they are lease ids, not `--resume` arguments (TASK-271).
-    /// trace:BUG-114 trace:TASK-271 | ai:claude
     fn discover_orchestrated_lease(
         &self,
         claude_session_id: &str,
@@ -125999,6 +126767,7 @@ impl RealPhaseDriver {
         })
     }
 
+    // trace:BUG-241, BUG-286, BUG-357 | ai:claude
     /// Ground-truth check for the BUG-241 reconcile: find a *merged* PR that
     /// credits the dispatched spec. BUG-357 makes the spec-credit check
     /// mandatory: an unrelated merged PR on the same/misattributed branch is
@@ -126007,7 +126776,6 @@ impl RealPhaseDriver {
     /// [`pr_is_merged_with_sink`]); otherwise looks one up by branch.
     /// `None` when no merged PR exists, the PR credits a different spec, or
     /// `gh` can't answer — all leave the original failure standing.
-    /// trace:BUG-241, BUG-286, BUG-357 | ai:claude
     fn detect_merged_pr(&self) -> Option<u32> {
         // BUG-286: route the orchestrator's reconcile-time `gh pr view`
         // through the retry helper with stderr + drain-state sinks. A
@@ -126063,14 +126831,15 @@ impl RealPhaseDriver {
         }
     }
 
+    // trace:STORY-301 | ai:claude
     /// STORY-301: stamp the drain-state file with the phase about to run, so
     /// `aida drain status` (and the `/aida-pickup` banner) show live progress.
     /// Best-effort — a missing file is a silent no-op, never blocks the phase.
-    /// trace:STORY-301 | ai:claude
     fn mark_drain_phase(&self, phase: auto_complete::Phase) {
         drain_state::set_phase(&self.project_root, &self.spec, phase.index(), phase.slug());
     }
 
+    // trace:STORY-347 | ai:claude
     /// STORY-347: spawn one headless advisor (cold-boot OR fork) against the
     /// already-written punt request and collect its [`punt::PuntResponse`] +
     /// JSONL log path. Factored out so the calibration loop can run two
@@ -126082,7 +126851,6 @@ impl RealPhaseDriver {
     /// `response_path` is the file the advisor will write to — distinct
     /// paths for the primary and shadow passes so they don't clobber. The
     /// caller is responsible for clearing any stale file beforehand.
-    /// trace:STORY-347 | ai:claude
     fn spawn_advisor_session(
         &self,
         pass: AdvisorPass,
@@ -126206,21 +126974,21 @@ impl RealPhaseDriver {
     }
 }
 
+// trace:STORY-347 | ai:claude
 /// STORY-347: which kind of advisor pass to spawn — a fresh cold-boot
 /// `claude -p` (substrate only) or a fork-from-live `claude --resume` on a
 /// copied JSONL. The orchestrator decides which up front; this enum is the
 /// internal type that flows into `spawn_advisor_session`.
-/// trace:STORY-347 | ai:claude
 enum AdvisorPass {
     ColdBoot,
     Fork(advisor::ForkPlan),
 }
 
+// trace:STORY-347 | ai:claude
 /// STORY-347: resolve the effective calibration mode for the current
 /// orchestrator run. The `AIDA_CALIBRATE=1`/`0` env var (set by the
 /// `--calibrate`/`--no-calibrate` queue-work flags) overrides
 /// `[advisor] calibration_mode` from `.aida/config.toml`.
-/// trace:STORY-347 | ai:claude
 fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::CalibrationMode {
     match std::env::var("AIDA_CALIBRATE").ok().as_deref() {
         Some("1") | Some("true") | Some("on") | Some("yes") => advisor::CalibrationMode::On,
@@ -126230,10 +126998,11 @@ fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::Calibrat
 }
 
 impl RealPhaseDriver {
+    // trace:STORY-492 | ai:claude
     /// STORY-492: seed the branch + PR a `--resume-drain` re-entry skipped
     /// phases would have discovered, so the resumed phases (CI / reviewer /
     /// merge / pull) have the context they need. Called once before
-    /// `orchestrate_with_resume` on a resume. trace:STORY-492 | ai:claude
+    /// `orchestrate_with_resume` on a resume.
     fn seed_resume_state(&mut self, branch: Option<String>, pr: Option<u32>) {
         if branch.is_some() {
             self.branch = branch;
@@ -126243,11 +127012,12 @@ impl RealPhaseDriver {
         }
     }
 
+    // trace:TASK-136
     /// TASK-136: one phase-1 PR-verify attempt, factored out of
     /// [`Self::run_implementer`] so the transient GH-unreachable case can be
     /// retried with a backoff. Encapsulates the BUG-223 branch-then-spec
     /// fallback and the BUG-257 `git ls-remote` narrowing. Mutates `self.branch`
-    /// when the spec-id search recovers a swapped branch. trace:TASK-136
+    /// when the spec-id search recovers a swapped branch.
     fn detect_phase1_pr(&mut self, branch: &str) -> Phase1PrResolve {
         // STORY-516: forge-routed branch lookup (view op). The inner spec-id
         // search (detect_open_pr_for_spec) is the LIST op — routed in a later
@@ -127390,13 +128160,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
     }
 
+    // trace:BUG-241 | ai:claude
     /// BUG-241: before the orchestrator declares a phase failed, check whether
     /// the spec shipped anyway. Two real cases this redeems:
     ///   - phase 1 produced no PR because the spec was already resolved by
     ///     supersession (instance B);
     ///   - phase 3 left no verdict file because the reviewer escalated and a
     ///     human merged the PR out-of-band (instance A).
-    ///     trace:BUG-241 | ai:claude
     fn reconcile_failure(
         &mut self,
         phase: auto_complete::Phase,
@@ -127434,13 +128204,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         reconcile_verdict(merged_pr, completed, &self.spec)
     }
 
+    // trace:BUG-245 | ai:claude
     /// BUG-245: read the PR's commit subjects to see which SPEC-ID they
     /// actually credit. Called by `orchestrate` after phase 1 confirms an
     /// open PR; on a dispatched≠credited mismatch the success epilogue
     /// credits the truth and the dispatched spec is left queued. Returns
     /// `None` when there is no PR yet, or `gh` cannot answer — "cannot
     /// determine" preserves the pre-BUG-245 behaviour (dispatched id is
-    /// credited). trace:BUG-245 | ai:claude
+    /// credited).
     fn shipped_spec_id(&mut self) -> Option<String> {
         let pr = self.pr_number?;
         // BUG-286: same retry treatment as `detect_merged_pr` — a transient
@@ -127460,12 +128231,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         pr_credited_spec_id_with_sink(&self.project_root, pr, &self.spec, &mut sink)
     }
 
+    // trace:STORY-306 | ai:claude
     /// STORY-306 advisor tier — spawn a headless advisor to judge the design-
     /// fork phase 1 punted on. Assembles the rich payload, writes the request
     /// file, runs `claude -p /aida-advise` in the advisor role, reads the
     /// response, appends a punt-ledger record, and — on an escalate — tags the
     /// spec `needs-human` + leaves the advisor's reasoning as a comment.
-    /// trace:STORY-306 | ai:claude
     fn run_advisor(
         &mut self,
     ) -> Result<auto_complete::AdvisorOutcome, auto_complete::PhaseFailure> {
@@ -127757,6 +128528,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
     }
 
+    // trace:STORY-306 | ai:claude
     /// STORY-306 advisor tier — resume the punted phase-1 implementer session
     /// with the advisor's judged `answer` (or, under `--escalate-defaults`, an
     /// authorization to ship the defensible default). `--resume`s the exact
@@ -127764,7 +128536,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     /// built before punting; the worktree survived because STORY-306's punt
     /// path no longer ends the session. Classifies the outcome from ground
     /// truth — a re-punt leaves the spec in `NeedsAttention`, a ship opens a
-    /// PR. trace:STORY-306 | ai:claude
+    /// PR.
     fn resume_implementer(
         &mut self,
         answer: &str,
@@ -127934,6 +128706,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
     }
 
+    // trace:TASK-358 | ai:claude
     /// TASK-358: stamp the phase-1 implementer's lease as
     /// `escalated_to_human` once the orchestrator's `--escalate-blocks`
     /// path has decided this punt will not be resumed. The marker is read
@@ -127941,7 +128714,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     /// `aida session prune --escalations` to know the lingering worktree
     /// is safe to remove. Best-effort: a stamp failure must not block the
     /// terminal `finish_escalated` — the cleanup just falls to the explicit
-    /// prune verb instead. trace:TASK-358 | ai:claude
+    /// prune verb instead.
     fn mark_implementer_lease_escalated(&mut self) {
         let Some(lease_id) = self.implementer_lease.clone() else {
             return;
@@ -127977,6 +128750,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     }
 }
 
+// trace:TASK-84 | ai:claude
+// trace:STORY-495
 /// TASK-84: pure resolver for `aida queue work` permission-mode.
 /// Order (first non-None wins):
 ///   1. `flag`   — `--permission-mode` on the command line
@@ -127988,7 +128763,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 ///   5. fallback → `acceptEdits` (safe default for non-AIDA cwd)
 ///      Returns the mode + a short origin string for the pre-flight summary.
 ///      Pure decision helper — kept separate so unit tests can pin the
-///      resolution order without env/config side effects. trace:TASK-84 | ai:claude
+///      resolution order without env/config side effects.
 ///      STORY-495: resolve the effective `--permission-mode` for an interactive
 ///      `aida queue work` launch. `None` → honor Claude's native posture (no flag
 ///      injected — the faithful default). Precedence, highest first:
@@ -128000,7 +128775,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 ///
 /// Pre-STORY-495 this defaulted to `bypassPermissions` inside an AIDA worktree
 /// and `acceptEdits` elsewhere; both auto-injections are gone — the uniform
-/// knob is the single place that restores bypass posture. trace:STORY-495
+/// knob is the single place that restores bypass posture.
 fn resolve_queue_work_permission_mode(
     flag: Option<&str>,
     env: Option<&str>,
@@ -128033,13 +128808,13 @@ fn resolve_queue_work_permission_mode(
     (None, "native (faithful default)")
 }
 
+// trace:STORY-287 | ai:claude
 /// STORY-287: the three-mode autonomy ladder for `aida queue work`. Aligns
 /// the human's role with the implementer's pause behavior:
 ///   - `Default`  — human is driving; every prompt pauses.
 ///   - `Zen`      — advisor on standby; mechanical `kind:confirmation`
 ///     prompts auto-resolve, `kind:design-fork` prompts pause.
 ///   - `NoHuman`  — nobody reachable; the headless drain (STORY-263).
-///     trace:STORY-287 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AutonomyMode {
     Default,
@@ -128047,12 +128822,13 @@ enum AutonomyMode {
     NoHuman,
 }
 
+// trace:STORY-287 | ai:claude
 /// Resolve the effective autonomy mode from the `--zen` flag and the
 /// presence of `--no-human`. Precedence is `--no-human` > `--zen` >
 /// default — when both `--zen` and `--no-human` are set, `--no-human`
 /// wins because it is the strictly stronger mode (it removes the human
 /// entirely). Pure, so the precedence rule is unit-testable without
-/// spawning a session. trace:STORY-287 | ai:claude
+/// spawning a session.
 fn resolve_autonomy_mode(zen_flag: bool, no_human: bool) -> AutonomyMode {
     match (no_human, zen_flag) {
         (true, _) => AutonomyMode::NoHuman,
@@ -128061,6 +128837,7 @@ fn resolve_autonomy_mode(zen_flag: bool, no_human: bool) -> AutonomyMode {
     }
 }
 
+// trace:TASK-578 | ai:claude
 /// Resolved flag values after expanding the `aida queue work --drain` alias
 /// (TASK-578). `--drain` is pure discoverability sugar: it sets the same
 /// internal state that `--auto-complete --no-human=both --max <queue-size>`
@@ -128068,7 +128845,6 @@ fn resolve_autonomy_mode(zen_flag: bool, no_human: bool) -> AutonomyMode {
 /// --no-human=reviewer-only` keeps `reviewer-only`,
 /// `--drain --auto-complete=through-ci` keeps the early stop, and an explicit
 /// `--max N` caps the drain instead of using the queue size.
-/// trace:TASK-578 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DrainResolution {
     auto_complete: Option<String>,
@@ -128076,6 +128852,7 @@ struct DrainResolution {
     max: Option<usize>,
 }
 
+// trace:TASK-578 | ai:claude
 /// Expand the `--drain` alias into the underlying auto-complete / no-human / max
 /// state. When `drain` is false this is an identity map over the caller's flags.
 /// When `drain` is true the unset fields take the drain defaults — full
@@ -128084,7 +128861,6 @@ struct DrainResolution {
 /// explicitly-supplied flag is never overwritten. `queue_size` is the number of
 /// drivable queued items the caller has already resolved (0 ⇒ unknown). The
 /// function is pure so the expansion can be unit-tested without a live queue.
-/// trace:TASK-578 | ai:claude
 fn resolve_drain_alias(
     drain: bool,
     auto_complete: Option<&str>,
@@ -128108,13 +128884,14 @@ fn resolve_drain_alias(
     }
 }
 
+// trace:TASK-84 | ai:claude
 /// TASK-84: quote-aware strip of an inline TOML comment.
 /// Returns the slice of `s` before the first unquoted `#`. Tracks both
 /// `"` and `'` so `key = "value with # inside"` round-trips correctly.
 /// Spec-compliant TOML allows trailing `# comment` on key/value lines;
 /// without this helper, a line like `permission_mode = "auto" # ...`
 /// would parse to the literal string `auto" # ...` and get rejected by
-/// `claude --permission-mode`. trace:TASK-84 | ai:claude
+/// `claude --permission-mode`.
 fn strip_toml_inline_comment(s: &str) -> &str {
     let mut in_dquote = false;
     let mut in_squote = false;
@@ -128129,12 +128906,12 @@ fn strip_toml_inline_comment(s: &str) -> &str {
     s
 }
 
+// trace:TASK-84 | ai:claude
 /// TASK-84: read `[behavior] permission_mode = "..."` from
 /// `.aida/config.toml`. Returns `None` when the file is missing, the
 /// section is absent, or the value is empty. We use a hand-rolled
 /// section-aware scan (rather than pulling in serde for one optional
 /// string) to stay consistent with `read_id_format_settings`.
-/// trace:TASK-84 | ai:claude
 fn read_behavior_permission_mode(project_dir: &std::path::Path) -> Option<String> {
     let config_path = project_dir.join(".aida").join("config.toml");
     let content = std::fs::read_to_string(&config_path).ok()?;
@@ -128167,12 +128944,13 @@ fn read_behavior_permission_mode(project_dir: &std::path::Path) -> Option<String
     None
 }
 
+// trace:TASK-81 | ai:claude
 /// TASK-81: search a lease list for any active lease whose scope matches
 /// the requested scope (case-insensitive). Returns the freshest match by
 /// `started_at` so the caller has a stable target for `session_end` even
 /// if multiple stale leases somehow share a scope. Pure decision helper —
 /// kept separate so the unit test in `queue_work_tests` doesn't need to
-/// touch disk. trace:TASK-81 | ai:claude
+/// touch disk.
 fn find_scope_lease_conflict(leases: &[SessionLease], scope: &str) -> Option<SessionLease> {
     leases
         .iter()
@@ -128181,12 +128959,13 @@ fn find_scope_lease_conflict(leases: &[SessionLease], scope: &str) -> Option<Ses
         .cloned()
 }
 
+// trace:BUG-307 | ai:claude
 /// BUG-307: gather the three independent liveness signals for `lease` and
 /// hand them to [`orchestrator::classify_for_auto_release`]. The classifier
 /// is pure; this wrapper is where we touch the process table, lease-file
 /// mtime, and `git status --porcelain`. Returns
 /// [`orchestrator::AutoReleaseDecision::Live`] when the feature is disabled
-/// so callers can branch uniformly. trace:BUG-307 | ai:claude
+/// so callers can branch uniformly.
 fn auto_release_decision_for_lease(
     project_root: &std::path::Path,
     lease: &SessionLease,
@@ -128270,6 +129049,7 @@ fn auto_release_decision_for_lease(
     )
 }
 
+// trace:BUG-438 | ai:claude
 /// BUG-438: on `--resume-drain`, proactively release the crashed orchestrator's
 /// lease(s) on `scope` whose creator process is dead — *independent of the
 /// staleness clock*. The time-based auto-release ([`auto_release_decision_for_lease`])
@@ -128280,7 +129060,7 @@ fn auto_release_decision_for_lease(
 /// dead — its child leases are too. We force `threshold = 0` so a dead-PID
 /// *clean-worktree* lease releases regardless of mtime, while a **dirty**
 /// worktree still classifies `DormantDirty` and is left untouched (no
-/// uncommitted work is lost — the operator handles it). trace:BUG-438 | ai:claude
+/// uncommitted work is lost — the operator handles it).
 fn release_dead_leases_for_resume(project_root: &std::path::Path, scope: &str) {
     let mut cfg = orchestrator::OrchestratorConfig::load(project_root);
     // Resume is a deliberate recovery — release the crashed lease even if the
@@ -128337,12 +129117,13 @@ fn humanize_secs_short(secs: i64) -> String {
     format!("{}d", days)
 }
 
+// trace:STORY-42 | ai:claude
 /// STORY-42: shell out to `aida db sync --pull`. We could refactor the
 /// inline implementation in main(), but it's deeply tangled with the
 /// dispatch and backend init — a child-process invocation is cheap
 /// (sub-second when there's nothing to fetch) and lets queue work
 /// reuse the canonical sync flow verbatim (conflict detection, cache
-/// rebuild, the works). trace:STORY-42 | ai:claude
+/// rebuild, the works).
 fn run_aida_db_sync_pull(store_path: &std::path::Path) -> Result<()> {
     eprintln!(
         "  {} pulling orphan-store via `aida db sync --pull` ...",
@@ -128366,11 +129147,11 @@ fn run_aida_db_sync_pull(store_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-42 STORY-98 | ai:claude
 /// STORY-42: write the session manifest from a queue-work plan so
 /// /aida-pickup can walk the cluster top-down on launch. Items carry
 /// the spec_id + status_at_plan that the resolver already computed,
 /// so this function does not re-load the store.
-/// trace:STORY-42 STORY-98 | ai:claude
 fn write_queue_work_manifest(
     project_root: &std::path::Path,
     lease: &SessionLease,
@@ -128410,9 +129191,9 @@ fn write_queue_work_manifest(
     Ok(())
 }
 
+// trace:TASK-112 | ai:claude
 /// TASK-112: how `aida queue work` should launch claude — a cold launch
 /// with a freshly-minted session id, or a resume of a recorded one.
-/// trace:TASK-112 | ai:claude
 #[derive(Debug)]
 enum QueueWorkLaunch {
     /// Cold launch; the `String` is a freshly-minted UUID passed as
@@ -128430,6 +129211,7 @@ impl QueueWorkLaunch {
     }
 }
 
+// trace:TASK-402 | ai:claude
 /// TASK-402: does `s` look like an AIDA *lease* id rather than a Claude
 /// *session* UUID? A lease id is a hyphenless hex run (e.g. `019e45cfc559`,
 /// the short form printed by `session … started` check line); a Claude session UUID
@@ -128438,7 +129220,6 @@ impl QueueWorkLaunch {
 /// `--resume <id>` is the #1 recovery papercut — it never prefix-matches a
 /// recorded session. Detect the shape so we can point at the right id form
 /// instead of the generic "no recorded session" miss. Pure + heuristic.
-/// trace:TASK-402 | ai:claude
 fn looks_like_lease_id(s: &str) -> bool {
     !s.is_empty()
         && !s.contains('-')
@@ -128446,10 +129227,11 @@ fn looks_like_lease_id(s: &str) -> bool {
         && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
+// trace:TASK-112 | ai:claude
 /// TASK-112: resolve a (possibly truncated) session id against the
 /// recorded sessions for a scope. Returns the full id on a unique match;
 /// a non-matching value of UUID-ish length is passed through verbatim
-/// (the user pasted a full id we didn't index). trace:TASK-112 | ai:claude
+/// (the user pasted a full id we didn't index).
 fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
     let matches: Vec<&String> = recorded
         .iter()
@@ -128483,6 +129265,7 @@ fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
     }
 }
 
+// trace:TASK-112, STORY-132 | ai:claude
 /// TASK-112: decide fresh-vs-resume for `aida queue work`. Called before
 /// the worktree is created so a bad `--resume` fails clean.
 ///   * `--session-id <uuid>` → cold launch with that caller-minted id
@@ -128492,7 +129275,6 @@ fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
 ///   * bare `--resume`     → resume the most recent recorded session
 ///   * neither, prior exists, interactive → prompt
 ///   * neither, otherwise  → cold launch
-///     trace:TASK-112, STORY-132 | ai:claude
 fn resolve_queue_work_launch(
     scope: &str,
     resume: Option<&str>,
@@ -128573,8 +129355,9 @@ fn resolve_queue_work_launch(
     }
 }
 
+// trace:TASK-112
 /// TASK-112: `aida queue work <scope> --list-sessions` — print recorded
-/// claude conversations for the scope, newest first. trace:TASK-112
+/// claude conversations for the scope, newest first.
 fn print_scope_sessions(scope: &str) -> Result<()> {
     let sessions = session::list_scope_sessions(scope)?;
     if sessions.is_empty() {
@@ -128621,6 +129404,7 @@ fn print_scope_sessions(scope: &str) -> Result<()> {
     Ok(())
 }
 
+// trace:TASK-402 | ai:claude
 /// TASK-402: assemble a single paste-ready resume command for a recorded
 /// session. Uses the FULL session UUID (`--resume` rejects the AIDA lease id
 /// and a truncated prefix can be ambiguous) and, when the session's recorded
@@ -128628,7 +129412,6 @@ fn print_scope_sessions(scope: &str) -> Result<()> {
 /// so a headless session launched in a sibling worktree (Claude's `--resume`
 /// is project-slug scoped — invisible from the main repo's cwd) resumes in one
 /// paste. Pure given the cwd argument resolved by the caller.
-/// trace:TASK-402 | ai:claude
 fn paste_ready_resume_command(scope: &str, m: &session::SessionMeta) -> String {
     let base = format!("aida queue work {} --resume {}", scope, m.id);
     let current = std::env::current_dir()
@@ -128637,10 +129420,10 @@ fn paste_ready_resume_command(scope: &str, m: &session::SessionMeta) -> String {
     resume_command_with_cwd(&base, m.last_cwd.as_deref(), current.as_deref())
 }
 
+// trace:TASK-402 | ai:claude
 /// TASK-402: pure helper — prepend a `cd <worktree> && ` step when the
 /// session's recorded worktree is known and differs from the current cwd.
 /// Keeps the cwd-resolution side effect out so it's unit-testable.
-/// trace:TASK-402 | ai:claude
 fn resume_command_with_cwd(base: &str, worktree: Option<&str>, current: Option<&str>) -> String {
     match worktree {
         Some(wt) if !wt.is_empty() && Some(wt) != current => {
@@ -130993,6 +131776,7 @@ mod story_255_discipline_pack_tests {
     //! trace:STORY-255 | STORY-443 | ai:claude
     use super::*;
 
+    // trace:TASK-465 | ai:claude
     /// Verifies the embedded discipline pack scaffolds the full set of canonical
     /// files into a new project's docs/aida/discipline/ directory.
     ///
@@ -131001,7 +131785,7 @@ mod story_255_discipline_pack_tests {
     /// — the `docs/aida/discipline/` keys in `EMBEDDED_TEMPLATES` — so adding a
     /// doc to the master template can never break this test (the prior hardcoded
     /// `assert_eq!(written, 16)` + hand-maintained file list broke on every pack
-    /// addition, e.g. PR-193). trace:TASK-465 | ai:claude
+    /// addition, e.g. PR-193).
     #[test]
     fn discipline_pack_scaffolds_full_set() {
         use aida_core::templates::EMBEDDED_TEMPLATES;
@@ -131143,10 +131927,10 @@ mod story_255_discipline_pack_tests {
         assert!(index.contains("](feedback_run_help_before_suggesting_flags.md)"));
     }
 
+    // trace:STORY-362 | ai:claude
     /// STORY-362: the `--focus <subsystem>` loading filter. A memory tagged
     /// `subsystem: X` loads only under `--focus X`; an untagged memory is
     /// universal and loads regardless of focus (or its absence).
-    /// trace:STORY-362 | ai:claude
     #[test]
     fn memory_focus_filter_loads_universal_plus_matching_subsystem() {
         // Hand-built templates — fully isolated, no embedded pack, no $HOME,
@@ -131185,9 +131969,9 @@ mod story_255_discipline_pack_tests {
         assert!(memory_matches_focus("no frontmatter here", Some("storage")));
     }
 
+    // trace:STORY-362 | ai:claude
     /// STORY-362: end-to-end through the scaffold writer — only universal +
     /// matching-subsystem memories land on disk under `--focus`.
-    /// trace:STORY-362 | ai:claude
     #[test]
     fn memory_pack_focus_scopes_written_files() {
         let dir = tempfile::tempdir().unwrap();
@@ -131337,9 +132121,10 @@ mod story_255_discipline_pack_tests {
 
     // ── STORY-410: existing-project substrate-drift discovery ──────────────
 
+    // trace:STORY-410 | ai:claude
     /// A fresh dir that never scaffolded the pack reports every master member
     /// as Missing — `behind()` equals the full master count and nothing is
-    /// up-to-date / edited / user-owned. trace:STORY-410 | ai:claude
+    /// up-to-date / edited / user-owned.
     #[test]
     fn drift_empty_dir_reports_all_missing() {
         let dir = tempfile::tempdir().unwrap();
@@ -131359,8 +132144,9 @@ mod story_255_discipline_pack_tests {
         assert_eq!(report.user_owned(), 0);
     }
 
+    // trace:STORY-410 | ai:claude
     /// A freshly-scaffolded dir is fully up to date: zero drift, every member
-    /// matches the master byte-for-byte. trace:STORY-410 | ai:claude
+    /// matches the master byte-for-byte.
     #[test]
     fn drift_freshly_scaffolded_dir_is_current() {
         let dir = tempfile::tempdir().unwrap();
@@ -131379,10 +132165,11 @@ mod story_255_discipline_pack_tests {
         );
     }
 
+    // trace:STORY-410 | ai:claude
     /// The three drift dispositions are classified correctly: a deleted file
     /// → Missing, a body-edited file → Edited (kept by refresh), an unmarked
     /// user file → UserOwned, a benign-frontmatter-mutated pristine file →
-    /// Stale (refresh would overlay it). trace:STORY-410 | ai:claude
+    /// Stale (refresh would overlay it).
     #[test]
     fn drift_classifies_missing_stale_edited_and_user_owned() {
         let dir = tempfile::tempdir().unwrap();
@@ -131447,9 +132234,9 @@ mod story_255_discipline_pack_tests {
         assert_eq!(report.behind(), 2);
     }
 
+    // trace:STORY-410 | ai:claude
     /// Every drift row carries a label + (usually) a description sourced from
     /// the master template's frontmatter, so the report is human-readable.
-    /// trace:STORY-410 | ai:claude
     #[test]
     fn drift_rows_carry_labels_and_descriptions() {
         let dir = tempfile::tempdir().unwrap();
@@ -131472,10 +132259,10 @@ mod story_255_discipline_pack_tests {
     }
 }
 
+// trace:STORY-127 | ai:claude
 /// STORY-127: unit tests for the Scope-B runtime anti-pattern detector
 /// predicates. Each predicate is pure over its inputs so the warning
 /// conditions are exercised without git/forge/queue I/O.
-/// trace:STORY-127 | ai:claude
 #[cfg(test)]
 mod story_127_antipattern_detectors {
     use super::*;
@@ -131705,7 +132492,7 @@ mod task_0414_statusline_setup {
     }
 }
 
-/// trace:STORY-582 | ai:claude — durable processing-record audit trail.
+// trace:STORY-582 | ai:claude — durable processing-record audit trail.
 #[cfg(test)]
 mod story_582_processing_record_tests {
     use super::*;
@@ -131938,9 +132725,10 @@ mod bug_533_config_show_tests {
         );
     }
 
+    // trace:TASK-793
     /// Every emitted section must carry at least one knob row — an empty section
     /// header in `config show` is a bug (the renderer would print a bare
-    /// `[section]` with nothing under it). trace:TASK-793
+    /// `[section]` with nothing under it).
     #[test]
     fn policy_registry_sections_have_rows() {
         let dir = tempfile::tempdir().unwrap();
@@ -131975,10 +132763,11 @@ mod bug_533_config_show_tests {
         }
     }
 
+    // trace:STORY-671
     /// The formerly-drifted `[field_study] enabled` knob (SPIKE-67) must now
     /// appear in `aida config show` — regression guard for STORY-671 acceptance
     /// criterion 3. It was invisible before because it was never added to the
-    /// old hand-maintained lists. trace:STORY-671
+    /// old hand-maintained lists.
     #[test]
     fn field_study_enabled_appears_in_config_show() {
         let dir = tempfile::tempdir().unwrap();
@@ -132018,9 +132807,10 @@ mod bug_533_config_show_tests {
 mod story_671_edit_kind_tests {
     use super::*;
 
+    // trace:STORY-671
     /// `config_knob_edit_kind` must derive from the registry: every editable
     /// `EditSafety` variant maps to the matching `EditKind`, and read-only /
-    /// undeclared knobs map to `ReadOnly`. trace:STORY-671
+    /// undeclared knobs map to `ReadOnly`.
     #[test]
     fn edit_kind_derives_from_registry() {
         // Bool.
@@ -132062,9 +132852,10 @@ mod story_671_edit_kind_tests {
         );
     }
 
+    // trace:STORY-671
     /// `config_knob_meta` (the editor's write-back gate) returns the editable
     /// variants only — a read-only declaration yields `None` so the editor
-    /// refuses it, preserving the STORY-669/677 read-only set. trace:STORY-671
+    /// refuses it, preserving the STORY-669/677 read-only set.
     #[test]
     fn config_knob_meta_filters_read_only() {
         assert!(matches!(

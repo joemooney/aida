@@ -15,14 +15,15 @@ use std::time::Instant;
 
 use colored::Colorize;
 
+// trace:TASK-840 | ai:claude
 /// Render a registry glyph honoring the active profile. Default Unicode profile
-/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+/// reproduces the historical literals byte-for-byte.
 fn glyph(g: crate::glyphs::Glyph) -> &'static str {
     crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
 }
 
+// trace:STORY-246 | ai:claude
 /// Which subset of the six phases an invocation runs.
-/// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AutoCompleteVariant {
     /// All six phases (default — bare `--auto-complete`).
@@ -70,8 +71,9 @@ impl AutoCompleteVariant {
         }
     }
 
+    // trace:TASK-266 | ai:claude
     /// Stable machine slug for telemetry — the same spelling `parse`
-    /// accepts. trace:TASK-266 | ai:claude
+    /// accepts.
     pub(crate) fn slug(self) -> &'static str {
         match self {
             Self::Full => "full",
@@ -82,10 +84,10 @@ impl AutoCompleteVariant {
     }
 }
 
+// trace:STORY-442 | ai:codex
 /// Per-spec lifecycle short-circuit switches resolved from `lifecycle:*`
 /// tags. These skip only non-integrity phases: CI wait, reviewer, and local
 /// build. Merge and pull/auto-bump are deliberately not skippable.
-/// trace:STORY-442 | ai:codex
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct LifecycleSkip {
     pub(crate) no_ci_wait: bool,
@@ -120,10 +122,11 @@ impl LifecycleSkip {
         !self.no_ci_wait && !self.no_review && !self.no_build
     }
 
+    // trace:TASK-525 | ai:claude
     /// TASK-525: the active short-circuit tokens (`no-ci-wait`, `no-review`,
     /// `no-build`) for telemetry — recorded on the auto-complete JSONL event so
     /// retro analysis can see how often fast-track tags fire and on what.
-    /// Empty when no skip is active. trace:TASK-525 | ai:claude
+    /// Empty when no skip is active.
     pub(crate) fn active_tokens(self) -> Vec<String> {
         let mut v = Vec::new();
         if self.no_ci_wait {
@@ -139,10 +142,11 @@ impl LifecycleSkip {
     }
 }
 
+// trace:TASK-524 | ai:claude
 /// The lifecycle short-circuit tags AIDA recognizes (STORY-442). Used both by
 /// `LifecycleSkip::from_tags` and by the `aida edit`/`aida add` typo guard
 /// (TASK-524) so a misspelled `lifecycle:*` tag is flagged instead of silently
-/// no-op'ing. trace:TASK-524 | ai:claude
+/// no-op'ing.
 pub(crate) const RECOGNIZED_LIFECYCLE_TAGS: &[&str] = &[
     "lifecycle:no-ci-wait",
     "lifecycle:no-review",
@@ -177,6 +181,7 @@ impl LifecycleSkip {
     }
 }
 
+// trace:STORY-263, TASK-306 | ai:claude
 /// Which phases an `--auto-complete --no-human` run drives headless.
 ///
 /// `--no-human` makes the orchestrator launch a phase's Claude session with
@@ -187,12 +192,13 @@ impl LifecycleSkip {
 /// not shipped: `--no-human=both` is rejected at kickoff until STORY-276
 /// wires the phase-1 headless launch. Bare `--no-human` therefore resolves
 /// to [`ReviewerOnly`](Self::ReviewerOnly) — the honest default of what the
-/// flag actually does today. trace:STORY-263, TASK-306 | ai:claude
+/// flag actually does today.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NoHumanMode {
+    // trace:TASK-306
     /// Headless reviewer (phase 3) only; the implementer (phase 1) stays
     /// interactive. Bare `--no-human` and `--no-human=reviewer-only` both
-    /// resolve here. trace:TASK-306
+    /// resolve here.
     ReviewerOnly,
     /// Headless implementer + reviewer. The headless implementer is STORY-276
     /// — until it lands, `--no-human=both` is rejected at kickoff. The variant
@@ -201,9 +207,10 @@ pub(crate) enum NoHumanMode {
 }
 
 impl NoHumanMode {
+    // trace:TASK-306 | ai:claude
     /// Parse the `--no-human[=MODE]` value. Bare `--no-human` arrives as
     /// `"reviewer-only"` (clap `default_missing_value`); an empty string maps
-    /// there too. trace:TASK-306 | ai:claude
+    /// there too.
     pub(crate) fn parse(s: &str) -> Result<Self, String> {
         match s.trim().to_ascii_lowercase().as_str() {
             "" | "reviewer-only" | "reviewer_only" | "revieweronly" | "reviewer" => {
@@ -216,10 +223,10 @@ impl NoHumanMode {
         }
     }
 
+    // trace:TASK-306 | ai:claude
     /// Stable slug — the spelling [`parse`](Self::parse) accepts, and the
     /// value the orchestrator propagates to phase children as
     /// `AIDA_NO_HUMAN_MODE` so the statusline can show the headless scope.
-    /// trace:TASK-306 | ai:claude
     pub(crate) fn slug(self) -> &'static str {
         match self {
             Self::ReviewerOnly => "reviewer-only",
@@ -235,6 +242,7 @@ impl NoHumanMode {
     }
 }
 
+// trace:STORY-306 | ai:claude
 /// How a `--no-human=both` drain handles an advisor *escalation* — when the
 /// headless advisor judges a punted design-fork un-resolvable and kicks it
 /// to a human (STORY-306).
@@ -243,7 +251,6 @@ impl NoHumanMode {
 /// overnight default is worse than a paused spec, so the default escalate
 /// behaviour is "pause, don't guess". `Defaults` exists for mechanical
 /// batches where throughput beats per-spec correctness.
-/// trace:STORY-306 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EscalateMode {
     /// Leave the spec parked (`NeedsAttention`), file the `needs-human`
@@ -257,11 +264,11 @@ pub(crate) enum EscalateMode {
 }
 
 impl EscalateMode {
+    // trace:STORY-306 | ai:claude
     /// Resolve the mode from the `--escalate-defaults` flag — absent ⇒ the
     /// conservative [`Blocks`](Self::Blocks) default. (`--escalate-blocks` is
     /// the explicit spelling of that default; clap's `conflicts_with` keeps
     /// the two flags mutually exclusive, so a single bool resolves it.)
-    /// trace:STORY-306 | ai:claude
     pub(crate) fn from_flags(escalate_defaults: bool) -> Self {
         if escalate_defaults {
             Self::Defaults
@@ -271,9 +278,9 @@ impl EscalateMode {
     }
 }
 
+// trace:STORY-246 | ai:claude
 /// One lifecycle phase. The integer value doubles as the process exit code
 /// for a failure in that phase (success is always 0).
-/// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Phase {
     Implementer,
@@ -297,9 +304,10 @@ impl Phase {
         }
     }
 
+    // trace:TASK-266 | ai:claude
     /// Inverse of [`Phase::index`] — resolve a 1-based phase number back to
     /// its variant. Used by the `--auto-complete` telemetry views to name a
-    /// logged failed-phase integer. trace:TASK-266 | ai:claude
+    /// logged failed-phase integer.
     pub(crate) fn from_index(i: i32) -> Option<Self> {
         match i {
             1 => Some(Self::Implementer),
@@ -337,13 +345,13 @@ impl Phase {
     }
 }
 
+// trace:BUG-218 | ai:claude
 /// Why a phase failed — picks which recovery hint the user sees. The same
 /// phase fails in several distinct ways (the orchestrator spawns subprocesses,
 /// polls CI, reads verdict files), and a one-size-fits-all hint mis-routes the
 /// user: a subprocess spawn ENOENT is *not* a red CI run, yet phase 2 reported
 /// both as "CI is red". The driver tags each [`PhaseFailure`] with a kind so
 /// [`recovery_hint`] can name the layer that actually broke.
-/// trace:BUG-218 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FailureKind {
     /// A subprocess could not be spawned at all (ENOENT / EACCES / …). The
@@ -365,19 +373,21 @@ pub(crate) enum FailureKind {
     /// Phase 3: the reviewer session wrote no verdict file, or an unreadable
     /// one — the review never produced a usable decision.
     NoVerdict,
+    // trace:TASK-136 | ai:claude
     /// TASK-136: phase 1 ended *inconclusively* — the orchestrator could not
     /// confirm or deny a PR (a transient GH-API outage) even after the bounded
     /// `gh_verify_backoff_schedule` retry. In a *batch* drain this is shelved
     /// (parked for retry) rather than pausing the whole batch; the shelve
     /// carries this kind so triage knows the spec is retry-pending, not broken.
-    /// trace:TASK-136 | ai:claude
     PrVerificationInconclusive,
+    // trace:BUG-420 | ai:claude
     /// BUG-420: a headless phase tripped the no-progress / wall-clock-ceiling
     /// watchdog — it made no commit or file-change for the no-progress window
     /// (likely a degenerate echo/sleep spin) or exceeded the phase ceiling. The
     /// orchestrator killed the child and shelved the spec for a human to look
-    /// at. trace:BUG-420 | ai:claude
+    /// at.
     Watchdog,
+    // trace:BUG-455 | ai:claude
     /// BUG-455: a phase failed because the SQLite cache (`.aida/cache.db`) was
     /// locked by another concurrent `aida` process (a sibling drain, an
     /// interactive shell, or a bulk op like a mass `archive`/`edit` sweep).
@@ -387,7 +397,7 @@ pub(crate) enum FailureKind {
     /// broken install — so it is classified *shelvable*: a batch drain parks
     /// the spec and continues rather than hard-stopping the whole batch, the
     /// same way a transient GH-API blip ([`Self::PrVerificationInconclusive`])
-    /// is shelved. trace:BUG-455 | ai:claude
+    /// is shelved.
     CacheLocked,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
@@ -395,8 +405,9 @@ pub(crate) enum FailureKind {
 }
 
 impl FailureKind {
+    // trace:BUG-218 | ai:claude
     /// Stable machine slug for `--json` failure events (failure-pattern
-    /// telemetry — TASK-266 refines hints from these). trace:BUG-218 | ai:claude
+    /// telemetry — TASK-266 refines hints from these).
     pub(crate) fn slug(self) -> &'static str {
         match self {
             Self::Spawn => "spawn",
@@ -413,6 +424,7 @@ impl FailureKind {
         }
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: should an `--auto-complete` batch drain shelve a spec
     /// on this failure kind, or stop the batch entirely?
     ///
@@ -430,7 +442,6 @@ impl FailureKind {
     ///   environment is broken would be worse than stopping — every
     ///   future member would hit the same wall. Historical
     ///   `BatchDrainOutcome::Failed` stop applies.
-    ///   trace:EPIC-28 | ai:claude
     pub(crate) fn is_shelvable(self) -> bool {
         matches!(
             self,
@@ -446,8 +457,8 @@ impl FailureKind {
     }
 }
 
+// trace:STORY-246 | ai:claude
 /// A reviewer's verdict, read from `.aida/review-verdicts/PR-N.json`.
-/// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Verdict {
     Approved,
@@ -483,11 +494,11 @@ impl Verdict {
     }
 }
 
+// trace:STORY-246 | ai:claude
 /// A phase failed. `reason` is the one-line "what went wrong" shown to the
 /// user; `kind` classifies it so the "what to do next" hint can name the
 /// layer that broke. The hint is derived separately via [`recovery_hint`] so
 /// it can be unit-tested independent of the driver.
-/// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct PhaseFailure {
     pub(crate) reason: String,
@@ -505,10 +516,10 @@ impl PhaseFailure {
         }
     }
 
+    // trace:BUG-218 | ai:claude
     /// A failure of a specific [`FailureKind`] — used where the driver can
     /// tell a spawn ENOENT from a red CI run from an internal invariant, so
     /// [`recovery_hint`] routes the user to the right layer.
-    /// trace:BUG-218 | ai:claude
     pub(crate) fn of(kind: FailureKind, reason: impl Into<String>) -> Self {
         Self {
             reason: reason.into(),
@@ -516,6 +527,7 @@ impl PhaseFailure {
         }
     }
 
+    // trace:BUG-455 | ai:claude
     /// BUG-455: upgrade a failure that is really transient SQLite cache-lock
     /// contention to [`FailureKind::CacheLocked`] (a *shelvable* kind) so a
     /// batch drain parks the spec and continues instead of hard-stopping.
@@ -531,7 +543,7 @@ impl PhaseFailure {
     /// Only the message text is consulted (via [`is_database_locked_message`]),
     /// not the original kind, so it catches the condition wherever a cache
     /// write surfaced it. Idempotent — a failure already classified
-    /// `CacheLocked` is left as-is. trace:BUG-455 | ai:claude
+    /// `CacheLocked` is left as-is.
     pub(crate) fn reclassify_transient(mut self) -> Self {
         if self.kind != FailureKind::CacheLocked && is_database_locked_message(&self.reason) {
             self.kind = FailureKind::CacheLocked;
@@ -540,23 +552,24 @@ impl PhaseFailure {
     }
 }
 
+// trace:BUG-455 | ai:claude
 /// BUG-455: does a failure `reason` describe a SQLite cache-lock contention
 /// (a transient "database is locked" / "database table is locked" / SQLITE_BUSY
 /// surfaced through the cache layer)? Pure, case-insensitive, and fully
 /// isolated so the classification rule is unit-testable without a driver.
-/// trace:BUG-455 | ai:claude
 pub(crate) fn is_database_locked_message(reason: &str) -> bool {
     let lower = reason.to_ascii_lowercase();
     lower.contains("database is locked") || lower.contains("database table is locked")
 }
 
+// trace:BUG-241 | ai:claude
 /// The verdict of the BUG-241 reconcile step: when a phase ends without the
 /// artifact the orchestrator polls for (an open PR, a verdict file), did the
 /// phase genuinely fail — or did the spec ship anyway, merged out-of-band by a
 /// human or resolved by supersession so no code was ever needed? The
 /// orchestrator asks the driver this *before declaring any phase a failure*,
 /// so a phase that ended abnormally-but-successfully can never crash the batch
-/// with a false "shipped 0". trace:BUG-241 | ai:claude
+/// with a false "shipped 0".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PhaseReconcile {
     /// Ground truth confirms the failure — nothing shipped. The phase failure
@@ -571,9 +584,9 @@ pub(crate) enum PhaseReconcile {
     ShippedOutOfBand { reason: String },
 }
 
+// trace:STORY-246 | ai:claude
 /// Everything a recovery hint might need to name a concrete next command.
 /// The driver fills in whatever it has discovered so far.
-/// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone, Default)]
 pub(crate) struct HintContext {
     pub(crate) spec: String,
@@ -587,13 +600,16 @@ pub(crate) struct HintContext {
     pub(crate) forge: crate::forge::ForgeKind,
 }
 
+// trace:STORY-276 | ai:claude
+// trace:BUG-257 | ai:claude
+// trace:BUG-266 | ai:claude
 /// The outcome of phase 1 — the implementer session. The implementer either
 /// opens a PR (the normal path), or, under a headless `--no-human=both`
 /// drain, hits a design-fork it cannot safely resolve and invokes
 /// `/aida-punt`, which parks the spec in `NeedsAttention`. A punt is neither a
 /// failure (nothing broke) nor a ship (no PR), so it is a first-class third
 /// outcome of phase 1: the orchestrator stops the pipeline cleanly and a
-/// batch drain advances to the next member. trace:STORY-276 | ai:claude
+/// batch drain advances to the next member.
 ///
 /// BUG-257 adds a fourth outcome: *Inconclusive*. When the orchestrator can
 /// neither confirm a PR nor confirm its absence — a transient GH-API
@@ -601,7 +617,6 @@ pub(crate) struct HintContext {
 /// without ruling either way. The drain *pauses* (exit `0`, no
 /// `failed_phase`) rather than crashing the batch with a false "no PR"
 /// failure; the spec stays where it is, and the next drain retries.
-/// trace:BUG-257 | ai:claude
 ///
 /// BUG-266 extends the same outcome to the *Anthropic-API* leg: when the
 /// headless implementer's `claude -p` subprocess exits non-zero because the
@@ -610,7 +625,6 @@ pub(crate) struct HintContext {
 /// terms — the work the implementer did was real, the substrate just went
 /// out from under it. Both legs share the `Inconclusive` variant and the
 /// `finish_inconclusive` terminal path; only the `retry_hint` differs.
-/// trace:BUG-266 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ImplementerOutcome {
     /// The implementer opened a PR — the pipeline continues to CI (phase 2).
@@ -619,6 +633,7 @@ pub(crate) enum ImplementerOutcome {
     /// summary (category + detail) surfaced in the run epilogue. The punt is
     /// already durably recorded by `aida punt` (status flip + ledger).
     Punted { reason: String },
+    // trace:BUG-257 BUG-266 | ai:claude
     /// BUG-257 / BUG-266: the orchestrator could not determine whether a PR
     /// was opened — either a transient GH-API network error during the
     /// post-implementer PR lookup (BUG-257) or a transient Anthropic-API
@@ -629,11 +644,12 @@ pub(crate) enum ImplementerOutcome {
     /// work <spec> --resume <session-id>` hint that recovers the exact
     /// session the API outage interrupted). `None` keeps the BUG-257
     /// default. The drain pauses, the spec is left in its current state
-    /// for retry. trace:BUG-257 BUG-266 | ai:claude
+    /// for retry.
     Inconclusive {
         reason: String,
         retry_hint: Option<String>,
     },
+    // trace:BUG-250 | ai:claude
     /// BUG-250: the implementer deliberately *held* the PR — branch pushed,
     /// PR intentionally not opened, pending a manual gate (a smoke test, an
     /// out-of-band review, an operator decision). Signalled by `aida pr hold`
@@ -644,17 +660,17 @@ pub(crate) enum ImplementerOutcome {
     /// `deliberate-hold` outcome and the correct hint (open the PR when the
     /// gate passes, then route it to the reviewer). `reason` is the operator's
     /// "why"; `branch` is the pushed branch the PR will be opened from.
-    /// trace:BUG-250 | ai:claude
     Held {
         reason: Option<String>,
         branch: String,
     },
 }
 
+// trace:BUG-420 | ai:claude
 /// BUG-420: which watchdog tripped on a degenerate headless phase. The
 /// no-progress signal (no commit + no file-change for N minutes) is the
 /// precise catch for the echo/sleep filler-spin; the wall-clock ceiling is a
-/// hard backstop. trace:BUG-420 | ai:claude
+/// hard backstop.
 #[allow(dead_code)] // decision core; wired into the phase spawn-wait by slice 2
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WatchdogTrip {
@@ -662,12 +678,12 @@ pub(crate) enum WatchdogTrip {
     Ceiling,
 }
 
+// trace:BUG-420 | ai:claude
 /// Pure decision core for the BUG-420 phase watchdog. `since_progress` is the
 /// time since the last observed commit/file-change in the phase's worktree;
 /// `total` is wall-clock since the phase started. A limit of `0` disables that
 /// check. No-progress takes precedence (it's the precise signal). The caller
 /// polls the worktree and feeds these in; this stays pure + unit-testable.
-/// trace:BUG-420 | ai:claude
 #[allow(dead_code)] // wired into the phase spawn-wait by slice 2
 pub(crate) fn watchdog_verdict(
     since_progress: std::time::Duration,
@@ -684,10 +700,11 @@ pub(crate) fn watchdog_verdict(
     None
 }
 
+// trace:TASK-136 | ai:claude
 /// TASK-136: the GH PR-verification retry backoff schedule — `retries` waits at
 /// 30s, 1m, 5m, then 15m for any beyond. A transient GH blip clears within
 /// these; a persistent outage falls through to shelve-and-advance. Pure so the
-/// schedule is pinned by a test. trace:TASK-136 | ai:claude
+/// schedule is pinned by a test.
 #[allow(dead_code)] // wired by slice 2
 pub(crate) fn gh_verify_backoff_schedule(retries: usize) -> Vec<std::time::Duration> {
     const STEPS: [u64; 3] = [30, 60, 300];
@@ -696,6 +713,7 @@ pub(crate) fn gh_verify_backoff_schedule(retries: usize) -> Vec<std::time::Durat
         .collect()
 }
 
+// trace:STORY-306 | ai:claude
 /// The outcome of phase 3 — the reviewer session. The reviewer either
 /// reaches a [`Verdict`] (the normal path — `Approved` continues to merge,
 /// anything else stops the pipeline), or *escalates the merge decision to a
@@ -706,7 +724,7 @@ pub(crate) fn gh_verify_backoff_schedule(retries: usize) -> Vec<std::time::Durat
 /// — exit `0`, no merge, no failure — leaving the PR for a human. An
 /// escalation is the reviewer's honest "I will not auto-merge this": it is
 /// neither a crash nor a `RequestChanges`, so it is a first-class third
-/// outcome of phase 3 (BUG-241 items 4-5). trace:STORY-306 | ai:claude
+/// outcome of phase 3 (BUG-241 items 4-5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReviewerOutcome {
     /// The reviewer reached a verdict — phase 3 proceeds on it.
@@ -716,13 +734,13 @@ pub(crate) enum ReviewerOutcome {
     EscalatedToHuman { reason: String },
 }
 
+// trace:STORY-306 | ai:claude
 /// Which tier escalated a decision to a human — selects the
 /// [`finish_escalated`] epilogue wording. An escalated *merge* decision (the
 /// reviewer would not auto-merge) and an escalated *design-fork* (the
 /// headless advisor would not resolve a punt) are the same orchestration
 /// outcome — exit `0`, the drain advances, a human triages — so they share
 /// one terminal path, distinguished only for the epilogue wording.
-/// trace:STORY-306 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EscalationKind {
     /// The reviewer escalated a merge decision (phase 3).
@@ -731,11 +749,11 @@ pub(crate) enum EscalationKind {
     DesignFork,
 }
 
+// trace:STORY-306 | ai:claude
 /// Set on an [`OrchestrationResult`] when the run ended in an escalation — a
 /// first-class non-failure stop (BUG-241 items 4-5, STORY-306). Mirrors
 /// STORY-276's `punt_reason`: the run exits `0` with no `failed_phase`, and
 /// this is the field that distinguishes an escalation from a clean ship.
-/// trace:STORY-306 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct EscalationSummary {
     /// Which tier escalated — picks the epilogue wording.
@@ -744,12 +762,13 @@ pub(crate) struct EscalationSummary {
     pub(crate) reason: String,
 }
 
+// trace:STORY-306 | ai:claude
 /// The headless advisor's verdict on a punted design-fork (STORY-306). The
 /// advisor either *resolves* the fork — it was confident enough to judge it
 /// — or *escalates* it to a human. The conservative-escalation bias (resolve
 /// only what is provably grounded, escalate everything else) lives in the
 /// `/aida-advise` skill prompt; this enum is just the orchestrator's view of
-/// the answer it wrote back. trace:STORY-306 | ai:claude
+/// the answer it wrote back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AdvisorOutcome {
     /// The advisor judged the fork. `answer` is the decision the implementer
@@ -762,11 +781,11 @@ pub(crate) enum AdvisorOutcome {
     Escalated { reason: String, category: String },
 }
 
+// trace:TASK-266 | ai:claude
 /// Outcome of an [`orchestrate`] run — the process exit code plus the
 /// telemetry the caller needs to log the run and, on failure, auto-draft a
 /// BUG. Returning this instead of a bare `i32` keeps `orchestrate` pure: it
 /// computes the result, and `handle_auto_complete` does the file I/O.
-/// trace:TASK-266 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct OrchestrationResult {
     /// Process exit code: `0` on success, else the 1-based failed-phase index.
@@ -784,6 +803,7 @@ pub(crate) struct OrchestrationResult {
     /// is *not* a failure (`exit_code` is `0`, `failed_phase` is `None`), so
     /// this is the only field that distinguishes a punt from a clean ship.
     pub(crate) punt_reason: Option<String>,
+    // trace:BUG-245 | ai:claude
     /// BUG-245: when phase 1's PR credits a *different* spec than the
     /// dispatched id (e.g., the dispatched spec was blocked and the
     /// implementer pragmatically shipped a release blocker instead), this
@@ -792,22 +812,24 @@ pub(crate) struct OrchestrationResult {
     /// dispatched spec stays queued with an accurate reason rather than a
     /// false `shipped` line. `None` when dispatched == shipped (the common path)
     /// or when the driver could not determine an id from the PR's commits.
-    /// trace:BUG-245 | ai:claude
     pub(crate) shipped_spec_id: Option<String>,
+    // trace:STORY-306 | ai:claude
     /// STORY-306: set when the run ended in an escalation — the reviewer would
     /// not auto-merge, or the headless advisor would not resolve a punted
     /// design-fork. Like `punt_reason` this is a non-failure stop (`exit_code`
     /// `0`, `failed_phase` `None`); it carries the escalation kind + reason so
     /// the caller can log the run and a batch drain can sort the spec apart
-    /// from a clean ship. trace:STORY-306 | ai:claude
+    /// from a clean ship.
     pub(crate) escalation: Option<EscalationSummary>,
+    // trace:BUG-257 | ai:claude
     /// BUG-257: set when phase 1 ended *inconclusively* — the orchestrator
     /// could not determine whether a PR exists (a transient GH-API network
     /// error). Like `punt_reason` this is a non-failure stop (`exit_code` `0`,
     /// `failed_phase` `None`); the spec is left in its current state for the
     /// next drain to retry. A batch drain stops at the spec without claiming
-    /// it shipped, punted, or failed. trace:BUG-257 | ai:claude
+    /// it shipped, punted, or failed.
     pub(crate) inconclusive_reason: Option<String>,
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: set when [`finish_failure`] shelved the spec — flipped its
     /// status to `NeedsAttention` and wrote the structured `FailureReason`.
     /// A shelved run is still an exit-non-zero *failure* at the
@@ -815,24 +837,26 @@ pub(crate) struct OrchestrationResult {
     /// unchanged), but the *batch drain* uses this field to decide
     /// "the failure is recoverable — shelve, skip dependents, continue"
     /// vs "the failure could not be shelved — stop the batch". `None`
-    /// on every non-failure path. trace:EPIC-28 | ai:claude
+    /// on every non-failure path.
     pub(crate) shelved_reason: Option<aida_core::FailureReason>,
+    // trace:BUG-250 | ai:claude
     /// BUG-250: set when phase 1 ended in a deliberate *PR-hold* — the
     /// implementer pushed the branch but intentionally did not open the PR,
     /// pending a manual gate. Like `punt_reason` / `inconclusive_reason` this
     /// is a non-failure stop (`exit_code` `0`, `failed_phase` `None`); the spec
     /// is left in its current state and the operator opens the PR when ready.
     /// Carries the one-line hold summary for the run epilogue + batch summary.
-    /// `None` on every other path. trace:BUG-250 | ai:claude
+    /// `None` on every other path.
     pub(crate) held_reason: Option<String>,
 }
 
 impl OrchestrationResult {
+    // trace:STORY-265 | ai:claude
     /// STORY-265 slice 3: a `--with-plan` prelude failure terminal result.
     /// The plan phase failed before the drain's phase 1 ran, so the run exits
     /// non-zero keyed to the given `phase` (the implementer phase the drain
     /// would have entered) with every non-failure field cleared — no PR was
-    /// opened, no spec shipped or punted. trace:STORY-265 | ai:claude
+    /// opened, no spec shipped or punted.
     pub(crate) fn failed(phase: Phase) -> Self {
         Self {
             exit_code: phase.index(),
@@ -850,10 +874,10 @@ impl OrchestrationResult {
     }
 }
 
+// trace:STORY-246 | ai:claude
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
 /// against a mock. The real implementation spawns Claude sessions, polls CI,
 /// and shells out to `gh` / `cargo`.
-/// trace:STORY-246 | ai:claude
 pub(crate) trait PhaseDriver {
     /// Phase 1 — run the implementer Claude session. Returns
     /// [`ImplementerOutcome::PrOpened`] once a PR is verified, or
@@ -877,6 +901,7 @@ pub(crate) trait PhaseDriver {
     fn build(&mut self) -> Result<(), PhaseFailure>;
     /// Snapshot of what the driver has discovered, for the recovery hint.
     fn hint_context(&self) -> HintContext;
+    // trace:BUG-241 | ai:claude
     /// Phase-agnostic reality check (BUG-241). Before the orchestrator
     /// declares `phase` a failure, it asks the driver whether ground truth — a
     /// merged PR, a Completed spec — shows the work shipped anyway. Two real
@@ -885,10 +910,11 @@ pub(crate) trait PhaseDriver {
     /// resolved by supersession (phase 1 correctly produces no PR). The
     /// default is [`PhaseReconcile::GenuineFailure`] — a driver with no way to
     /// check reality leaves every failure standing, so the reconcile step can
-    /// only ever ratify a success, never invent one. trace:BUG-241 | ai:claude
+    /// only ever ratify a success, never invent one.
     fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
         PhaseReconcile::GenuineFailure
     }
+    // trace:BUG-245 | ai:claude
     /// BUG-245: the spec id the PR's commits actually credit (the `(SPEC-ID)`
     /// at the end of each commit subject), or `None` when the PR cannot be
     /// inspected or its commits name no spec. The orchestrator calls this
@@ -900,17 +926,18 @@ pub(crate) trait PhaseDriver {
     /// behaviour). An implementation that finds the dispatched id among the
     /// PR's commit credits should return `Some(<dispatched>)` so no mismatch
     /// fires; only return a different id when the PR genuinely credits a
-    /// different spec. trace:BUG-245 | ai:claude
+    /// different spec.
     fn shipped_spec_id(&mut self) -> Option<String> {
         None
     }
 
+    // trace:STORY-306 | ai:claude
     /// STORY-306 advisor tier — judge a punted design-fork. When phase 1
     /// punts, the orchestrator assembles a rich payload and spawns a headless
     /// advisor, which either resolves the fork or escalates it to a human.
     /// The default impl errors with [`FailureKind::Internal`] — a driver that
     /// supports the advisor tier overrides it; a driver that does not (a mock
-    /// for a non-advisor test) never reaches it. trace:STORY-306 | ai:claude
+    /// for a non-advisor test) never reaches it.
     fn run_advisor(&mut self) -> Result<AdvisorOutcome, PhaseFailure> {
         Err(PhaseFailure::of(
             FailureKind::Internal,
@@ -918,13 +945,13 @@ pub(crate) trait PhaseDriver {
         ))
     }
 
+    // trace:STORY-306 | ai:claude
     /// STORY-306 advisor tier — resume the punted phase-1 implementer session
     /// with `answer` (the advisor's judged decision, or, under
     /// `--escalate-defaults`, an authorization to proceed with the defensible
     /// default). Returns the implementer's outcome on resume — a PR opened,
     /// or a fresh punt (terminal: one advisor round per spec). The default
     /// impl errors; overridden by a driver that supports it.
-    /// trace:STORY-306 | ai:claude
     fn resume_implementer(&mut self, _answer: &str) -> Result<ImplementerOutcome, PhaseFailure> {
         Err(PhaseFailure::of(
             FailureKind::Internal,
@@ -932,6 +959,7 @@ pub(crate) trait PhaseDriver {
         ))
     }
 
+    // trace:TASK-358 | ai:claude
     /// TASK-358: stamp the phase-1 implementer's session lease as
     /// `escalated_to_human` — the marker a later triage (`aida edit --status`
     /// out of `NeedsAttention`) or explicit prune
@@ -940,9 +968,9 @@ pub(crate) trait PhaseDriver {
     /// of [`resolve_punt_via_advisor`] before `finish_escalated` stops the
     /// run. The default impl is a no-op so test drivers without a real lease
     /// stay simple; `RealPhaseDriver` implements it.
-    /// trace:TASK-358 | ai:claude
     fn mark_implementer_lease_escalated(&mut self) {}
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: park a failed spec in `NeedsAttention` with a structured
     /// `FailureReason` so a batch drain can continue past the failure
     /// rather than halting the whole batch. Called from `finish_failure`
@@ -961,7 +989,6 @@ pub(crate) trait PhaseDriver {
     ///
     /// The default impl is `Ok(None)` so test drivers without a real
     /// store stay simple; `RealPhaseDriver` implements it.
-    /// trace:EPIC-28 | ai:claude
     fn shelve_on_failure(
         &mut self,
         _spec: &str,
@@ -973,8 +1000,8 @@ pub(crate) trait PhaseDriver {
     }
 }
 
+// trace:STORY-246 | ai:claude
 /// Build a `--json` phase-transition event line. Pure — unit-tested directly.
-/// trace:STORY-246 | ai:claude
 pub(crate) fn phase_event(
     phase: &str,
     status: &str,
@@ -1029,11 +1056,11 @@ fn forge_cli_missing_hint(forge: crate::forge::ForgeKind, action: &str, retry: &
     }
 }
 
+// trace:STORY-246 | ai:claude
+// trace:BUG-218 | ai:claude
 /// Pick the recovery hint for a failed phase. Pure — each branch names a
 /// concrete next command, parameterised by the failure `kind` (so a spawn
 /// ENOENT is never reported as red CI) and whatever the driver discovered.
-/// trace:STORY-246 | ai:claude
-/// trace:BUG-218 | ai:claude
 pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) -> String {
     let spec = if ctx.spec.is_empty() {
         "<SPEC>"
@@ -1265,11 +1292,11 @@ fn emit_done(phase: Phase, spec: &str, json: bool, elapsed: u128) {
     }
 }
 
+// trace:BUG-245 | ai:claude
 /// BUG-245: announce that phase 1's PR credits a different spec than the
 /// dispatched id. The orchestrator continues phases 2-6 against the same PR
 /// (those are PR-anchored, not spec-anchored) and `finish_success` will credit
 /// `shipped`; the dispatched spec is left queued for its own future pickup.
-/// trace:BUG-245 | ai:claude
 fn emit_shipped_mismatch(dispatched: &str, shipped: &str, json: bool, elapsed: u128) {
     if json {
         println!(
@@ -1296,6 +1323,7 @@ fn emit_shipped_mismatch(dispatched: &str, shipped: &str, json: bool, elapsed: u
     }
 }
 
+// trace:BUG-245 | ai:claude
 /// Print the success epilogue and build the success [`OrchestrationResult`].
 ///
 /// `dispatched` is the spec the orchestrator was launched for; `credited` is
@@ -1303,7 +1331,6 @@ fn emit_shipped_mismatch(dispatched: &str, shipped: &str, json: bool, elapsed: u
 /// mismatch case — phase 1's PR named a different spec than the dispatched id
 /// — so on a match (the common path) the caller passes `dispatched` for both
 /// and the JSON event + epilogue read exactly as pre-BUG-245.
-/// trace:BUG-245 | ai:claude
 fn finish_success(
     dispatched: &str,
     credited: &str,
@@ -1353,6 +1380,7 @@ fn finish_success(
     }
 }
 
+// trace:STORY-276 | ai:claude
 /// Print the punt epilogue and build a *non-failure* terminal
 /// [`OrchestrationResult`] (STORY-276). A headless implementer that hits a
 /// design-fork it cannot safely resolve invokes `/aida-punt`, parking the
@@ -1362,7 +1390,7 @@ fn finish_success(
 /// spec drops out of the queue on its own, `NeedsAttention` not being
 /// drivable). The punt itself is already durably recorded by `aida punt`
 /// (status flip + `.aida/punts.jsonl` ledger); `punt_reason` only carries it
-/// into the run epilogue and telemetry. trace:STORY-276 | ai:claude
+/// into the run epilogue and telemetry.
 fn finish_punted(
     spec: &str,
     json: bool,
@@ -1429,6 +1457,7 @@ fn finish_punted(
     }
 }
 
+// trace:STORY-306 | ai:claude
 /// Print the escalation epilogue and build a *non-failure* terminal
 /// [`OrchestrationResult`] (STORY-306). Two tiers escalate to a human and
 /// share this path: the reviewer that will not auto-merge a PR
@@ -1438,7 +1467,7 @@ fn finish_punted(
 /// the run exits `0` with no `failed_phase`, the PR / spec is left for a
 /// human, and a batch drain advances. `escalation` is the field that
 /// distinguishes the run from a clean ship; the human triages it via
-/// `aida findings`. trace:STORY-306 | ai:claude
+/// `aida findings`.
 fn finish_escalated(
     spec: &str,
     json: bool,
@@ -1515,6 +1544,7 @@ fn finish_escalated(
     }
 }
 
+// trace:BUG-257 | ai:claude
 /// Print the inconclusive epilogue and build a *non-failure* terminal
 /// [`OrchestrationResult`] (BUG-257). When phase 1 ends and the orchestrator's
 /// PR lookup hits a transient GH-API network error, it cannot tell whether a
@@ -1524,7 +1554,6 @@ fn finish_escalated(
 /// halts cleanly (exit `0`, no `failed_phase`), the spec is left in its
 /// current state, the batch drain pauses at this spec (it neither shipped nor
 /// failed), and the next drain retries once the API is reachable.
-/// trace:BUG-257 | ai:claude
 fn finish_inconclusive(
     spec: &str,
     json: bool,
@@ -1595,6 +1624,7 @@ fn finish_inconclusive(
     }
 }
 
+// trace:TASK-136 | ai:claude
 /// TASK-136: phase 1 ended *inconclusively* (GH unreachable through the whole
 /// `gh_verify_backoff_schedule` retry) inside a **batch** drain — *shelve* the
 /// spec instead of pausing. Routing it through [`PhaseDriver::shelve_on_failure`]
@@ -1605,7 +1635,7 @@ fn finish_inconclusive(
 /// `aida findings list`. The single-spec path keeps the [`finish_inconclusive`]
 /// pause (reasonable when nothing is queued behind it). The epilogue says
 /// *shelved, not failed* — this is a transient-network park, not a botched
-/// implementation. trace:TASK-136 | ai:claude
+/// implementation.
 fn finish_inconclusive_shelved(
     driver: &mut dyn PhaseDriver,
     spec: &str,
@@ -1690,6 +1720,7 @@ fn finish_inconclusive_shelved(
     }
 }
 
+// trace:BUG-250 | ai:claude
 /// BUG-250: print the deliberate-PR-hold epilogue and build a clean *non-
 /// failure* [`OrchestrationResult`]. When phase 1 ends with the branch pushed
 /// but the PR deliberately held (the `aida pr hold` signal), the pre-BUG-250
@@ -1698,7 +1729,7 @@ fn finish_inconclusive_shelved(
 /// The honest outcome is *Held*: the run halts cleanly (exit `0`, no
 /// `failed_phase`), the spec is left in its current state, and the hint matches
 /// the actual state — open the PR once the manual gate passes, then route it to
-/// the reviewer. trace:BUG-250 | ai:claude
+/// the reviewer.
 fn finish_held(
     spec: &str,
     json: bool,
@@ -1869,12 +1900,13 @@ fn finish_failure(
     }
 }
 
+// trace:BUG-241 | ai:claude
 /// Print the reconciled-success epilogue and build a *success*
 /// [`OrchestrationResult`]. Used when the BUG-241 reconcile step finds that a
 /// phase which ended without its expected artifact actually shipped — the PR
 /// merged out-of-band, or the spec legitimately needed no code. The run
 /// counts as a success (exit `0`, no `failed_phase`): the batch advances and
-/// the spec is *not* mis-reported as un-shipped. trace:BUG-241 | ai:claude
+/// the spec is *not* mis-reported as un-shipped.
 fn finish_reconciled(
     spec: &str,
     json: bool,
@@ -1939,6 +1971,7 @@ fn finish_reconciled(
     }
 }
 
+// trace:BUG-241 | ai:claude
 /// Resolve a phase `Err` through the BUG-241 reconcile step. The orchestrator
 /// asks the driver — via [`PhaseDriver::reconcile_failure`] — whether ground
 /// truth shows the spec shipped despite the missing artifact. If it did, the
@@ -1948,7 +1981,7 @@ fn finish_reconciled(
 ///
 /// This is the phase-agnostic seam: every failure site in [`orchestrate`]
 /// routes through here, so reconciliation is one principle applied at every
-/// phase, not a per-phase patch. trace:BUG-241 | ai:claude
+/// phase, not a per-phase patch.
 fn resolve_phase_failure(
     driver: &mut dyn PhaseDriver,
     phase: Phase,
@@ -1974,12 +2007,13 @@ fn resolve_phase_failure(
     }
 }
 
+// trace:STORY-306 | ai:claude
 /// The result of routing a phase-1 punt through the advisor tier
 /// ([`resolve_punt_via_advisor`]). Either the drain *proceeds* — the advisor
 /// resolved the fork and the resumed implementer opened a PR, so phases 2-6
 /// run — or it is *terminal*: the orchestration ended inside the advisor tier
 /// (escalated, re-punted, or a phase failed) and the carried result is what
-/// `orchestrate` returns. trace:STORY-306 | ai:claude
+/// `orchestrate` returns.
 enum PuntFlow {
     /// The advisor resolved the punt and the implementer resumed with a PR —
     /// `orchestrate` continues to phase 2.
@@ -1988,16 +2022,17 @@ enum PuntFlow {
     Terminal(Box<OrchestrationResult>),
 }
 
+// trace:STORY-306 | ai:claude
 /// The instruction handed to a resumed implementer under `--escalate-defaults`
 /// when the advisor escalated rather than resolved: there is no judged
 /// answer, so proceed with the defensible default rather than punting again.
-/// trace:STORY-306 | ai:claude
 const ADVISOR_DEFAULT_PROMPT: &str =
     "No advisor judgment is available for this design-fork — the headless \
      advisor escalated it and `--escalate-defaults` is in effect. Proceed with \
      your stated lean, or, if you gave no lean, the most defensible reading of \
      the spec. Do not punt again; ship the defensible default.";
 
+// trace:STORY-306 | ai:claude
 /// STORY-306 advisor tier — route a phase-1 punt through a headless advisor
 /// before it reaches a human. Spawns the advisor ([`PhaseDriver::run_advisor`]);
 /// on a resolve, resumes the implementer with the judged answer; on an
@@ -2005,7 +2040,7 @@ const ADVISOR_DEFAULT_PROMPT: &str =
 /// defensible default ([`EscalateMode::Defaults`]). A re-punt after a resume is
 /// terminal — one advisor round per spec per drain. Returns
 /// [`PuntFlow::Proceed`] only when the resumed implementer opened a PR; every
-/// other outcome is [`PuntFlow::Terminal`]. trace:STORY-306 | ai:claude
+/// other outcome is [`PuntFlow::Terminal`].
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn resolve_punt_via_advisor(
@@ -2092,11 +2127,12 @@ fn resolve_punt_via_advisor(
     }
 }
 
+// trace:STORY-306 | ai:claude
 /// The resume leg shared by the advisor's resolve path and the
 /// `--escalate-defaults` path: resume the implementer with `answer`, then
 /// classify the outcome. A PR opened ⇒ [`PuntFlow::Proceed`]; a re-punt is
 /// terminal ([`finish_punted`] — one advisor round per spec); a failure routes
-/// through the BUG-241 reconcile. trace:STORY-306 | ai:claude
+/// through the BUG-241 reconcile.
 fn resume_after_advisor(
     driver: &mut dyn PhaseDriver,
     spec: &str,
@@ -2168,6 +2204,7 @@ fn resume_after_advisor(
     }
 }
 
+// trace:TASK-133 | ai:claude
 /// TASK-133: should the orchestrator parent compensate its pre-spawn phase-1
 /// status bump?
 ///
@@ -2191,7 +2228,6 @@ fn resume_after_advisor(
 /// - `failed_phase == Some(Phase::Implementer)` — phase 1 is what failed (a
 ///   later-phase failure means the implementer shipped a PR, so the bump was
 ///   legitimate; a success / punt / inconclusive is not a failure at all).
-///   trace:TASK-133 | ai:claude
 pub(crate) fn should_compensate_phase1_bump(
     bumped: bool,
     lease_acquired: bool,
@@ -2260,12 +2296,12 @@ pub(crate) fn plan_prelude_steps(
     ]
 }
 
+// trace:STORY-246 | ai:claude
+// trace:TASK-266 | ai:claude
 /// Drive the phases in order, stopping at the variant's last phase or at the
 /// first failure. Returns an [`OrchestrationResult`] — the process exit code
 /// (`0` on success, else the 1-based index of the phase that failed) plus
 /// the per-phase timing the telemetry layer (TASK-266) records.
-/// trace:STORY-246 | ai:claude
-/// trace:TASK-266 | ai:claude
 // TASK-552: retained as the public no-skip orchestration entry point; current
 // CLI paths use the lifecycle-aware wrapper but tests/future callers need this
 // stable facade.
@@ -2290,13 +2326,14 @@ pub(crate) fn orchestrate(
     )
 }
 
+// trace:TASK-136
 /// TASK-136: `batch` selects how a still-inconclusive phase-1 verify (GH
 /// unreachable through the retry backoff) is handled. In a **batch** drain it
 /// is *shelved* — parked in `NeedsAttention` so the batch loop advances past it
 /// (the existing EPIC-28 shelve→advance path) rather than the whole batch
 /// pausing at the head. In a **single-spec** drain it stays an Inconclusive
 /// pause (the historical behaviour) — pausing one spec to retry later is
-/// reasonable when there is nothing else queued behind it. trace:TASK-136
+/// reasonable when there is nothing else queued behind it.
 pub(crate) fn orchestrate_with_lifecycle_skip(
     driver: &mut dyn PhaseDriver,
     spec: &str,
@@ -2319,6 +2356,7 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
     )
 }
 
+// trace:STORY-492 | ai:claude
 /// STORY-492: the orchestration loop with a `start_phase` — used by `--resume`
 /// to re-enter a crashed drain at the first phase whose effect is *not* yet
 /// present in the world (computed by `drain_resume::reconcile_resume_phase`
@@ -2334,7 +2372,6 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
 /// (`detect_merged_pr` → `ShippedOutOfBand` → success), and CI/reviewer/build
 /// are idempotent. The catastrophic case (double-drive) is prevented *before*
 /// this is called, by the PID-liveness gate in the resume handler.
-/// trace:STORY-492 | ai:claude
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn orchestrate_with_resume(
@@ -2662,7 +2699,8 @@ pub(crate) fn orchestrate_with_resume(
 // guard) is unit-tested with a mock instead of spawning real orchestrations.
 // trace:TASK-285 | ai:claude
 
-/// Why a [`drain_batch`] run stopped. trace:TASK-285 | ai:claude
+// trace:TASK-285 | ai:claude
+/// Why a [`drain_batch`] run stopped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BatchDrainOutcome {
     /// The batch is empty for the role — every queued member shipped.
@@ -2674,20 +2712,23 @@ pub(crate) enum BatchDrainOutcome {
     /// A run reported success but the head did not advance — stopped to
     /// avoid an infinite loop on the same spec.
     Stalled,
+    // trace:BUG-245 | ai:claude
     /// BUG-245: phase 1's PR shipped a *different* spec than the dispatched
     /// head (the implementer pragmatically worked another spec — typically a
     /// release blocker). The drain credits the truth in `shipped`, leaves
     /// `dispatched` queued for the next pickup, and stops so the operator
     /// can inspect rather than loop on the un-advanced head. `dispatched`
-    /// equals the run's `stopped_at`. trace:BUG-245 | ai:claude
+    /// equals the run's `stopped_at`.
     Mismatched { dispatched: String, shipped: String },
+    // trace:BUG-257 | ai:claude
     /// BUG-257: phase 1 ended *inconclusively* — the orchestrator could not
     /// determine whether a PR was opened (transient GH-API network error).
     /// The drain pauses at this spec (it is left in its current state for
     /// retry); the next drain re-attempts once the API is reachable. Exit
     /// `0`: a network blip is not a phase failure, so the batch summary does
-    /// not crash with a false "shipped 0". trace:BUG-257 | ai:claude
+    /// not crash with a false "shipped 0".
     Inconclusive,
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: the batch *fully drained* (no member remained pickable),
     /// but at least one member was shelved by a phase failure or skipped
     /// because its blocker had been shelved earlier in the drain. The
@@ -2695,21 +2736,21 @@ pub(crate) enum BatchDrainOutcome {
     /// independents shipped — and the summary points the operator at
     /// `aida findings list` for triage. Exit code is **2** (distinct
     /// from `0` clean drain, `1` stall, and `3..=8` phase failures).
-    /// trace:EPIC-28 | ai:claude
     DrainedWithShelved,
+    // trace:BUG-250 | ai:claude
     /// BUG-250: a batch member ended in a deliberate *PR-hold* — the
     /// implementer pushed the branch but intentionally held the PR for a manual
     /// gate. Like [`Inconclusive`](Self::Inconclusive) this pauses the drain at
     /// the held spec (it is left in its current state; the operator opens the
     /// PR when the gate passes) and exits `0` — a deliberate hold is not a
     /// failure, so the batch summary must not crash with a false "shipped 0".
-    /// trace:BUG-250 | ai:claude
     Held,
 }
 
+// trace:TASK-285 | ai:claude
 /// Outcome of a [`drain_batch`] run — what shipped, where it stopped, and the
 /// process exit code (`0` drained / max-reached, else the failed phase index
-/// or `1` for a stall). trace:TASK-285 | ai:claude
+/// or `1` for a stall).
 #[derive(Debug, Clone)]
 pub(crate) struct BatchDrainResult {
     /// Spec-ids that completed their full `--auto-complete` lifecycle, in
@@ -2725,13 +2766,15 @@ pub(crate) struct BatchDrainResult {
     /// resolve a punted design-fork. Like `punted`, an escalation advances the
     /// drain but did not ship; kept apart so the batch summary is honest.
     pub(crate) escalated: Vec<String>,
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: spec-ids the drain *shelved* on a phase failure, in drain
     /// order. The orchestrator flipped each to `NeedsAttention` with a
     /// structured `FailureReason`; the drain continued past them rather
     /// than halting the whole batch. Kept apart from `shipped` / `punted`
     /// / `escalated` so the summary points the operator at the right
-    /// triage path. trace:EPIC-28 | ai:claude
+    /// triage path.
     pub(crate) shelved: Vec<String>,
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: members the drain skipped because they were blocked by a
     /// just-shelved (or already-`NeedsAttention`) spec. Each entry is
     /// `(display_id, reason_label)` where `reason_label` is the same
@@ -2739,7 +2782,7 @@ pub(crate) struct BatchDrainResult {
     /// [`drain_batch`] cannot fill this — the mock has no relationship
     /// graph — so it stays empty here; the real CLI surface
     /// (`resolve_batch_members`) records skips and populates this field
-    /// after the fact. trace:EPIC-28 | ai:claude
+    /// after the fact.
     pub(crate) skipped: Vec<(String, String)>,
     /// The spec the drain stopped on — set for `Failed` / `Stalled`, `None`
     /// for a clean `Drained` / `MaxReached`.
@@ -2752,7 +2795,8 @@ pub(crate) struct BatchDrainResult {
     pub(crate) exit_code: i32,
 }
 
-/// One completed segment of a multi-batch drain. trace:TASK-310 | ai:codex
+// trace:TASK-310 | ai:codex
+/// One completed segment of a multi-batch drain.
 #[derive(Debug, Clone)]
 pub(crate) struct BatchChainStep {
     // TASK-552: retained for per-batch telemetry/rendering once the chain
@@ -2765,10 +2809,10 @@ pub(crate) struct BatchChainStep {
     pub(crate) result: BatchDrainResult,
 }
 
+// trace:TASK-310 | ai:codex
 /// Aggregated result for `aida queue work --batches A,B,C --auto-complete`.
 /// The individual [`BatchDrainResult`] values stay available so the CLI can
 /// render per-batch summaries without losing where the chain stopped.
-/// trace:TASK-310 | ai:codex
 #[derive(Debug, Clone)]
 pub(crate) struct BatchChainDrainResult {
     // TASK-552: retained for future detailed rendering of each chained batch;
@@ -2778,11 +2822,13 @@ pub(crate) struct BatchChainDrainResult {
     pub(crate) shipped: Vec<String>,
     pub(crate) punted: Vec<String>,
     pub(crate) escalated: Vec<String>,
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: spec-ids shelved across every batch in the chain, in chain
-    /// order. trace:EPIC-28 | ai:claude
+    /// order.
     pub(crate) shelved: Vec<String>,
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: dependents the chain skipped across every batch, in chain
-    /// order. trace:EPIC-28 | ai:claude
+    /// order.
     pub(crate) skipped: Vec<(String, String)>,
     pub(crate) stopped_batch: Option<String>,
     pub(crate) stopped_at: Option<String>,
@@ -2790,10 +2836,11 @@ pub(crate) struct BatchChainDrainResult {
     pub(crate) exit_code: i32,
 }
 
+// trace:TASK-285 | ai:claude
 /// Drives a batch drain: yields the current batch head and runs one spec's
 /// full `--auto-complete` orchestration. The real implementation re-resolves
 /// the `batch:NAME` tag against the queue and calls `run_auto_complete`; the
-/// mock stands in for both so the loop is testable. trace:TASK-285 | ai:claude
+/// mock stands in for both so the loop is testable.
 pub(crate) trait BatchDriver {
     /// The current batch head spec-id, or `None` when the batch is drained.
     /// Re-resolved each call — a completed spec leaves the queue, so the head
@@ -2803,6 +2850,7 @@ pub(crate) trait BatchDriver {
     fn run_spec(&mut self, spec: &str) -> OrchestrationResult;
 }
 
+// trace:TASK-285 EPIC-28 | ai:claude
 /// Drain a batch: run `orchestrate` per member until the batch is empty, the
 /// `--max` cap is hit, or a phase fails un-shelvably. EPIC-28 changes the
 /// failure rule: a *shelvable* phase failure (the implementer/CI/reviewer
@@ -2816,7 +2864,6 @@ pub(crate) trait BatchDriver {
 ///     hit — every future member would hit the same wall.
 ///
 /// Pure sequencing; the I/O lives in the [`BatchDriver`].
-/// trace:TASK-285 EPIC-28 | ai:claude
 pub(crate) fn drain_batch(
     driver: &mut dyn BatchDriver,
     max: Option<usize>,
@@ -2989,6 +3036,7 @@ pub(crate) fn drain_batch(
     }
 }
 
+// trace:TASK-310 EPIC-28
 /// Drain multiple named batches left-to-right. Each batch is exhausted before
 /// the next starts; any non-clean stop (failed phase, stall, mismatch,
 /// inconclusive) stops the chain at that batch. Empty batches are clean
@@ -2998,7 +3046,7 @@ pub(crate) fn drain_batch(
 /// shipped + punted + escalated + shelved members toward its cap, this helper
 /// carries the remaining allowance into each subsequent batch.
 /// `max_failures` is **per-batch** (not per-chain) — a chain `A,B,C` keeps an
-/// independent failure budget for each batch. trace:TASK-310 EPIC-28
+/// independent failure budget for each batch.
 pub(crate) fn drain_batch_chain<'a, F>(
     batch_names: &[String],
     max: Option<usize>,
@@ -3162,9 +3210,10 @@ where
 mod tests {
     use super::*;
 
+    // trace:STORY-265
     /// STORY-265 slice 3: with `--with-plan`, the prelude is a plan session
     /// THEN a promote — ordered, before the drain. Fully isolated: pure
-    /// function, no driver, no filesystem. trace:STORY-265
+    /// function, no driver, no filesystem.
     #[test]
     fn with_plan_prelude_is_plan_session_then_promote() {
         let steps = plan_prelude_steps("STORY-265", true, false);
@@ -3183,9 +3232,10 @@ mod tests {
         );
     }
 
+    // trace:STORY-265
     /// STORY-265 slice 3: without `--with-plan`, there is NO prelude — the
     /// drain runs alone, exactly the historical default (unchanged per the
-    /// operator's slice-1 opt-in decision). trace:STORY-265
+    /// operator's slice-1 opt-in decision).
     #[test]
     fn without_with_plan_prelude_is_empty_drain_only() {
         assert!(
@@ -3196,9 +3246,9 @@ mod tests {
         assert!(plan_prelude_steps("STORY-265", false, true).is_empty());
     }
 
+    // trace:STORY-265
     /// STORY-265 slice 3: a headless drain (`--no-human=both`) runs the plan
     /// session headless too, mirroring how the phase-1 implementer launches.
-    /// trace:STORY-265
     #[test]
     fn with_plan_prelude_propagates_headless_to_plan_session() {
         let steps = plan_prelude_steps("STORY-265", true, true);
@@ -3219,9 +3269,10 @@ mod tests {
         );
     }
 
+    // trace:BUG-455
     /// BUG-455: a "database is locked" message is recognised (case-insensitive,
     /// both SQLite lock spellings) and nothing else trips the classifier.
-    /// Pure-function test — no driver, no filesystem. trace:BUG-455
+    /// Pure-function test — no driver, no filesystem.
     #[test]
     fn database_locked_message_is_recognised() {
         assert!(is_database_locked_message(
@@ -3237,10 +3288,11 @@ mod tests {
         assert!(!is_database_locked_message(""));
     }
 
+    // trace:BUG-455
     /// BUG-455: a transient cache-lock failure is reclassified to the shelvable
     /// `CacheLocked` kind, so a batch drain parks the spec and continues instead
     /// of hard-stopping; an unrelated failure keeps its kind. Idempotent.
-    /// Pure-function test — fully isolated. trace:BUG-455
+    /// Pure-function test — fully isolated.
     #[test]
     fn cache_lock_failure_reclassifies_to_shelvable() {
         // A reviewer phase that surfaced a cache lock comes in with the default
@@ -3272,8 +3324,9 @@ mod tests {
         assert!(!spawn.kind.is_shelvable());
     }
 
+    // trace:BUG-420
     /// BUG-420: the watchdog trips on no-progress first, ceiling as backstop;
-    /// 0 disables a check. trace:BUG-420
+    /// 0 disables a check.
     #[test]
     fn watchdog_verdict_no_progress_then_ceiling() {
         use std::time::Duration;
@@ -3315,7 +3368,8 @@ mod tests {
         );
     }
 
-    /// TASK-136: backoff schedule is 30s/1m/5m, then 15m for any beyond. trace:TASK-136
+    // trace:TASK-136
+    /// TASK-136: backoff schedule is 30s/1m/5m, then 15m for any beyond.
     #[test]
     fn gh_verify_backoff_schedule_steps() {
         use std::time::Duration;
@@ -3975,6 +4029,7 @@ mod tests {
         );
     }
 
+    // trace:TASK-358 | ai:claude
     /// A punt the advisor cannot safely judge, under `--escalate-blocks`: the
     /// advisor escalates, the run stops clean after phase 1 — phases 2-6 never
     /// run — exits `0`, and the result carries the escalation.
@@ -3983,7 +4038,7 @@ mod tests {
     /// (`mark_implementer_lease_escalated`) exactly once on this path — the
     /// marker is what `aida edit --status` out of `NeedsAttention` and
     /// `aida session prune --escalations` later use to clean up the
-    /// otherwise-lingering worktree. trace:TASK-358 | ai:claude
+    /// otherwise-lingering worktree.
     #[test]
     fn orchestrate_punt_advisor_escalates_blocks_skips_phases_2_to_6() {
         let mut driver = MockPhaseDriver::punting_at_implementer("project-strategy fork")
@@ -4009,6 +4064,7 @@ mod tests {
         );
     }
 
+    // trace:TASK-358 | ai:claude
     /// A punt the advisor escalates, under `--escalate-defaults`: instead of
     /// stopping, the implementer is resumed with the defensible-default
     /// instruction, opens a PR, and the full pipeline runs.
@@ -4017,7 +4073,7 @@ mod tests {
     /// escalated_to_human on this path — the resume needs the worktree alive,
     /// and a stray marker would have a later triage out of NeedsAttention
     /// (the implementer's own `aida edit --status in-progress` on resume)
-    /// nuke the worktree under its feet. trace:TASK-358 | ai:claude
+    /// nuke the worktree under its feet.
     #[test]
     fn orchestrate_punt_advisor_escalates_defaults_resumes_with_default() {
         let mut driver = MockPhaseDriver::punting_at_implementer("flag-naming fork")
@@ -4094,8 +4150,9 @@ mod tests {
     // a first-class non-failure outcome: the run exits 0, no `failed_phase`,
     // `inconclusive_reason` is set, and no later phase runs.
 
+    // trace:BUG-257 | ai:claude
     /// Acceptance #4 — "Test with a mocked API failure: orchestrator reports
-    /// `Inconclusive`, drain pauses (not fails)." trace:BUG-257 | ai:claude
+    /// `Inconclusive`, drain pauses (not fails)."
     #[test]
     fn orchestrate_inconclusive_at_phase1_is_not_a_failure() {
         let mut driver = MockPhaseDriver::inconclusive_at_implementer(
@@ -4131,10 +4188,11 @@ mod tests {
 
     // --- TASK-136: inconclusive → shelve-and-advance in a batch drain -----
 
+    // trace:TASK-136 | ai:claude
     /// TASK-136 acceptance: a phase-1 Inconclusive in BATCH mode shelves the
     /// spec (stamps `shelved_reason`, exit = phase-1 index) so `drain_batch`'s
     /// EPIC-28 shelve→advance path carries it — the whole batch does not pause
-    /// at the head. trace:TASK-136 | ai:claude
+    /// at the head.
     #[test]
     fn inconclusive_after_retries_shelves_and_advances_in_batch() {
         let mut driver =
@@ -4170,9 +4228,10 @@ mod tests {
         assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
 
+    // trace:TASK-136 | ai:claude
     /// TASK-136: the single-spec path is UNCHANGED — the same driver pauses
     /// (exit 0, `inconclusive_reason` set, nothing shelved). The `batch` flag,
-    /// not the driver, picks the behaviour. trace:TASK-136 | ai:claude
+    /// not the driver, picks the behaviour.
     #[test]
     fn single_spec_inconclusive_still_pauses() {
         let mut driver = MockPhaseDriver::inconclusive_and_shelves("GH unreachable");
@@ -4230,10 +4289,11 @@ mod tests {
         );
     }
 
+    // trace:STORY-492 | ai:claude
     /// STORY-492: re-entering at Merge skips implementer / CI / reviewer — their
     /// effects already exist (the resume handler seeded branch + PR) — and runs
     /// merge → pull → build. The implementer is NEVER re-run, so no PR is
-    /// re-opened. trace:STORY-492 | ai:claude
+    /// re-opened.
     #[test]
     fn resume_at_merge_skips_implementer_ci_reviewer() {
         let mut driver = MockPhaseDriver::all_ok();
@@ -4255,8 +4315,9 @@ mod tests {
         );
     }
 
+    // trace:STORY-492
     /// STORY-492: re-entering at Pull (crashed after the merge landed but before
-    /// the auto-bump) runs only pull → build — never re-merges. trace:STORY-492
+    /// the auto-bump) runs only pull → build — never re-merges.
     #[test]
     fn resume_at_pull_runs_only_pull_and_build() {
         let mut driver = MockPhaseDriver::all_ok();
@@ -4282,8 +4343,9 @@ mod tests {
     // non-failure stop: exit 0, no `failed_phase`, `held_reason` set, no later
     // phase runs.
 
+    // trace:BUG-250 | ai:claude
     /// BUG-250 acceptance #1/#2/#4 — a held PR reports `Held`, not a phase-1
-    /// failure; the drain halts cleanly at phase 1. trace:BUG-250 | ai:claude
+    /// failure; the drain halts cleanly at phase 1.
     #[test]
     fn orchestrate_held_at_phase1_is_not_a_failure() {
         let mut driver =
@@ -4316,9 +4378,10 @@ mod tests {
         assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
 
+    // trace:BUG-250 | ai:claude
     /// `BatchDrainOutcome::Held` — a batch member that deliberately holds its
     /// PR pauses the drain at that spec (does not falsely count it shipped),
-    /// exits 0. trace:BUG-250 | ai:claude
+    /// exits 0.
     #[test]
     fn drain_batch_held_pauses_without_shipping() {
         struct OneHeldDriver {
@@ -4359,10 +4422,11 @@ mod tests {
         assert_eq!(driver.ran, vec!["STORY-306".to_string()]);
     }
 
+    // trace:BUG-257 | ai:claude
     /// `BatchDrainOutcome::Inconclusive` — a batch drain that hits a phase-1
     /// inconclusive run stops at that spec without claiming ship / punt /
     /// fail, leaves the head un-advanced, and exits 0 so the next drain
-    /// retries once the API is reachable. trace:BUG-257 | ai:claude
+    /// retries once the API is reachable.
     #[test]
     fn drain_batch_inconclusive_pauses_without_advancing() {
         struct OneInconclusiveDriver {
@@ -4406,13 +4470,13 @@ mod tests {
         assert_eq!(driver.ran, vec!["BUG-257"]);
     }
 
+    // trace:BUG-266 | ai:claude
     /// BUG-266: when the orchestrator-level Inconclusive carries a leg-
     /// specific retry hint (the Anthropic-API path), the hint flows through
     /// the variant and replaces BUG-257's default GH-flavored hint. This is
     /// the only spot that exercises the new `retry_hint` field at the
     /// orchestrator boundary — the classifier itself is unit-tested in
     /// `main.rs::bug_266_anthropic_api_outage_classifier_tests`.
-    /// trace:BUG-266 | ai:claude
     #[test]
     fn inconclusive_with_anthropic_hint_overrides_default() {
         let mut driver = MockPhaseDriver::base();
@@ -4449,9 +4513,10 @@ mod tests {
         assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
 
+    // trace:BUG-257 | ai:claude
     /// A re-punt on the resumed implementer is terminal; symmetrically, an
     /// inconclusive on the resumed implementer is also terminal — the drain
-    /// pauses, no second advisor round. trace:BUG-257 | ai:claude
+    /// pauses, no second advisor round.
     #[test]
     fn orchestrate_resume_inconclusive_is_terminal_pause() {
         let mut driver =
@@ -5486,9 +5551,10 @@ mod tests {
         }
     }
 
+    // trace:BUG-245 | ai:claude
     /// BUG-245: a success [`OrchestrationResult`] where phase 1 credited a
     /// different spec than the dispatched id — the shape `finish_success`
-    /// returns on a dispatched≠shipped mismatch. trace:BUG-245 | ai:claude
+    /// returns on a dispatched≠shipped mismatch.
     fn mismatch_result(shipped: &str) -> OrchestrationResult {
         OrchestrationResult {
             exit_code: 0,
@@ -5505,11 +5571,11 @@ mod tests {
         }
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: a *shelved* failure [`OrchestrationResult`] — the failure
     /// fields stay set (exit code = phase index, `failed_phase` populated),
     /// but `shelved_reason` is `Some` so `drain_batch` recognises it as a
     /// recoverable failure and continues to the next member.
-    /// trace:EPIC-28 | ai:claude
     fn shelve_result(phase: Phase) -> OrchestrationResult {
         let fr = aida_core::FailureReason {
             phase: phase.slug().to_string(),
@@ -5567,24 +5633,26 @@ mod tests {
         fail_at: Option<(String, Phase)>,
         stall_spec: Option<String>,
         punt_spec: Option<String>,
+        // trace:BUG-245 | ai:claude
         /// BUG-245: when `run_spec` is called for `dispatched`, return a
         /// success result crediting `shipped` instead. The dispatched head
         /// stays in `heads` (matching reality — the implementer dequeued the
-        /// shipped spec, not the dispatched one). trace:BUG-245 | ai:claude
+        /// shipped spec, not the dispatched one).
         mismatch: Option<(String, String)>,
         escalate_spec: Option<String>,
+        // trace:EPIC-28 | ai:claude
         /// EPIC-28: specs that should return a shelvable failure (the
         /// orchestrator wrote a `FailureReason` to the store). A drain that
         /// hits one in this set parks it and continues to the next head
         /// (mirroring the punt path) rather than stopping. The mock
         /// consumes the head on shelving, mirroring the
         /// `resolve_batch_members` filter that would skip the freshly-
-        /// shelved spec on the next iteration. trace:EPIC-28 | ai:claude
+        /// shelved spec on the next iteration.
         shelve_at: Vec<(String, Phase)>,
+        // trace:EPIC-28 | ai:claude
         /// EPIC-28: specs the *test* wants treated as blocked-by a
         /// just-shelved spec. The mock drops them from `heads` *after* the
         /// named blocker is shelved, and records each as a skipped row.
-        /// trace:EPIC-28 | ai:claude
         skip_dependent_of: Vec<(String, String, String)>, // (dependent, blocker, reason)
         skipped: Vec<(String, String)>,
         runs: Vec<String>,
@@ -5621,10 +5689,11 @@ mod tests {
             self
         }
 
+        // trace:BUG-245 | ai:claude
         /// BUG-245: when `run_spec` runs `dispatched`, return a success that
         /// credits `shipped`. The dispatched head is *not* consumed — that
         /// mirrors a real run where the implementer worked a different spec
-        /// and the dispatched one is still queued. trace:BUG-245 | ai:claude
+        /// and the dispatched one is still queued.
         fn mismatching(mut self, dispatched: &str, shipped: &str) -> Self {
             self.mismatch = Some((dispatched.to_string(), shipped.to_string()));
             self
@@ -5909,9 +5978,9 @@ mod tests {
 
     // --- EPIC-28: shelve on failure + dependency-aware skip --------------
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: a shelvable phase failure parks the spec in NeedsAttention
     /// and the drain continues — independents after the failure still ship.
-    /// trace:EPIC-28 | ai:claude
     #[test]
     fn drain_batch_shelves_failure_and_continues_to_next_member() {
         let mut driver =
@@ -5928,10 +5997,11 @@ mod tests {
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: when a shelving event also makes a downstream member
     /// un-pickable (BlockedBy → shelved), the dependent is skipped — never
     /// run — and shows up in `skipped`, while independents after it still
-    /// ship. trace:EPIC-28 | ai:claude
+    /// ship.
     #[test]
     fn drain_batch_skips_dependent_when_blocker_shelved() {
         let mut driver = MockBatchDriver::new(&["TASK-A", "TASK-B", "TASK-D", "TASK-E"])
@@ -5960,10 +6030,11 @@ mod tests {
         );
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: the `max_failures` safety cap stops the drain when too
     /// many specs shelve in a row — the environment is probably broken.
     /// `max_failures = 2` means the third shelvable failure flips back
-    /// to the historical `Failed(phase)` stop. trace:EPIC-28 | ai:claude
+    /// to the historical `Failed(phase)` stop.
     #[test]
     fn drain_batch_caps_at_max_failures_and_stops() {
         let mut driver = MockBatchDriver::new(&["A", "B", "C", "D", "E"])
@@ -5981,9 +6052,10 @@ mod tests {
         assert!(!driver.runs.iter().any(|s| s == "E"));
     }
 
+    // trace:EPIC-28
     /// EPIC-28: regression — a clean drain (nothing shelved, nothing
     /// skipped) keeps the historical `Drained` outcome + exit 0, even
-    /// though `DrainedWithShelved` is now reachable. trace:EPIC-28
+    /// though `DrainedWithShelved` is now reachable.
     #[test]
     fn drain_batch_clean_drain_without_shelved_still_returns_drained_exit_0() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
@@ -5994,9 +6066,9 @@ mod tests {
         assert!(result.skipped.is_empty());
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: punts and shelvings can both happen in one drain, and the
     /// summary keeps them sorted — neither leaks into `shipped`.
-    /// trace:EPIC-28 | ai:claude
     #[test]
     fn drain_batch_punt_and_shelve_in_same_drain_both_counted_separately() {
         let mut driver = MockBatchDriver::new(&["P", "S", "Q", "R"])
@@ -6010,10 +6082,11 @@ mod tests {
         assert_eq!(result.shipped, vec!["Q", "R"]);
     }
 
+    // trace:EPIC-28 | ai:claude
     /// EPIC-28: an un-shelvable failure (the mock's default `failing` path —
     /// `shelved_reason: None`) still stops the drain at the historical
     /// `Failed(phase)` outcome. Confirms the routing rule: only shelvable
-    /// failures continue. trace:EPIC-28 | ai:claude
+    /// failures continue.
     #[test]
     fn drain_batch_unshelvable_failure_still_stops_the_drain() {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"])
@@ -6045,11 +6118,12 @@ mod tests {
 
     // --- BUG-245: dispatched≠shipped attribution ---------------------------
 
+    // trace:BUG-245 | ai:claude
     /// Acceptance: dispatch phase-1 for STORY-A; phase 1 produces a PR
     /// crediting STORY-B (the implementer pragmatically worked a release
     /// blocker). The orchestrator credits B in the success epilogue and
     /// carries the mismatch into `OrchestrationResult::shipped_spec_id` so
-    /// the batch drain records the truth. trace:BUG-245 | ai:claude
+    /// the batch drain records the truth.
     #[test]
     fn orchestrate_credits_shipped_when_pr_mismatches_dispatched() {
         let mut driver = MockPhaseDriver::all_ok().shipping_as("BUG-244");
@@ -6079,11 +6153,12 @@ mod tests {
         );
     }
 
+    // trace:BUG-245 | ai:claude
     /// When phase 1's PR credits the dispatched spec (the common path), no
     /// mismatch fires and the result carries no `shipped_spec_id`. A driver
     /// that explicitly reports the dispatched id behaves the same as one
     /// that returns `None` — both mean "the dispatched spec is what
-    /// shipped". trace:BUG-245 | ai:claude
+    /// shipped".
     #[test]
     fn orchestrate_no_mismatch_when_pr_credits_dispatched() {
         // The default driver returns `None` for shipped_spec_id — no
@@ -6110,11 +6185,12 @@ mod tests {
         assert_eq!(result.shipped_spec_id, None);
     }
 
+    // trace:BUG-245 | ai:claude
     /// Acceptance test from BUG-245's description: a batch drain whose head
     /// is dispatched but ships a different spec. The drain credits the
     /// actual shipped id in `shipped`, leaves the dispatched id queued
     /// (still in `heads`), and stops with `Mismatched` rather than looping
-    /// on the un-advanced head. trace:BUG-245 | ai:claude
+    /// on the un-advanced head.
     #[test]
     fn drain_batch_credits_actual_shipped_on_mismatch() {
         let mut driver =
@@ -6138,12 +6214,12 @@ mod tests {
         assert!(driver.heads.contains(&"STORY-276".to_string()));
     }
 
+    // trace:BUG-245 | ai:claude
     /// Self-consistency invariant from BUG-245's acceptance: the drain
     /// summary must never claim a spec shipped *and* report it stayed at
     /// the head in the same run. The mismatch outcome credits the actual
     /// shipped id (not the dispatched one) in `shipped`, so a reader cannot
     /// see "X shipped" alongside "X stayed at head" for the same X.
-    /// trace:BUG-245 | ai:claude
     #[test]
     fn drain_batch_mismatch_summary_is_self_consistent() {
         let mut driver = MockBatchDriver::new(&["STORY-276"]).mismatching("STORY-276", "BUG-244");

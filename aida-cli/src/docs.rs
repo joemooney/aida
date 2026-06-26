@@ -407,10 +407,10 @@ fn filter_type<'a>(store: &'a RequirementsStore, t: &RequirementType) -> Vec<&'a
         .collect()
 }
 
+// trace:BUG-20 | ai:claude
 /// Filter by type AND sort by spec_id ascending so the projected docs list
 /// PRIN-1 before PRIN-2, ADR-1 before ADR-2, etc. Without this, the order
 /// is `store.requirements` insertion order, which surprises readers.
-/// trace:BUG-20 | ai:claude
 fn filter_type_sorted<'a>(
     store: &'a RequirementsStore,
     t: &RequirementType,

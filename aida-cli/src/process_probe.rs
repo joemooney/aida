@@ -52,6 +52,7 @@ pub struct LiveSession {
 /// inter-tool-call gap.
 pub const RECENT_JSONL_WINDOW: Duration = Duration::from_secs(60);
 
+// trace:BUG-613 | ai:claude
 /// Enumerate live `claude` Claude Code processes on this host.
 ///
 /// Returns an empty vec on platforms where sysinfo can't read process info
@@ -67,7 +68,7 @@ pub const RECENT_JSONL_WINDOW: Duration = Duration::from_secs(60);
 /// one short-lived CLI run, so we memoize the first result for the lifetime of
 /// the process and hand every later caller a cheap clone. The uncached walk is
 /// still available as [`probe_live_claude_sessions_uncached`] for the rare
-/// caller that must observe fresh state. trace:BUG-613 | ai:claude
+/// caller that must observe fresh state.
 pub fn probe_live_claude_sessions() -> Vec<LiveSession> {
     use std::sync::OnceLock;
     static CACHE: OnceLock<Vec<LiveSession>> = OnceLock::new();
@@ -76,9 +77,10 @@ pub fn probe_live_claude_sessions() -> Vec<LiveSession> {
         .clone()
 }
 
+// trace:BUG-613
 /// BUG-613: the uncached single-walk probe. Prefer [`probe_live_claude_sessions`]
 /// (process-lifetime memoized) on the read-mostly status/listing paths; reach
-/// for this only when fresh liveness is required mid-process. trace:BUG-613
+/// for this only when fresh liveness is required mid-process.
 pub fn probe_live_claude_sessions_uncached() -> Vec<LiveSession> {
     // One refresh, not two: `new_with_specifics` already performs the initial
     // process walk for the given `RefreshKind`, so the previous extra
@@ -244,6 +246,7 @@ pub fn walk_ancestor_pids(start: u32) -> Vec<u32> {
     chain
 }
 
+// trace:BUG-233 | ai:claude
 /// Is process `pid` currently alive? A thin wrapper over `sysinfo`'s process
 /// table — `true` iff the kernel still has an entry for `pid`.
 ///
@@ -251,11 +254,11 @@ pub fn walk_ancestor_pids(start: u32) -> Vec<u32> {
 /// `AIDA_AUTO_COMPLETE_TOKEN` only when the marker file it names records a PID
 /// that is still running. Returns `false` on platforms where the process table
 /// can't be read — corroboration fails safe (treat as not-orchestrated).
-/// trace:BUG-233 | ai:claude
 pub fn pid_is_alive(pid: u32) -> bool {
     pid_is_alive_impl(pid)
 }
 
+// trace:BUG-613 | ai:claude
 /// BUG-613: liveness must be O(1), not a full process-table walk. The old
 /// implementation built a fresh `sysinfo::System` and refreshed EVERY process
 /// (and, on Linux, every thread via `/proc/<pid>/task/<tid>/...`) just to test
@@ -272,7 +275,6 @@ pub fn pid_is_alive(pid: u32) -> bool {
 /// treated as not-alive (fail-safe, matching the prior platform-degrade
 /// contract). `pid == 0` is rejected up front — `kill(0, …)` addresses the
 /// caller's whole process group on Unix, which is never the intent here.
-/// trace:BUG-613 | ai:claude
 #[cfg(unix)]
 fn pid_is_alive_impl(pid: u32) -> bool {
     if pid == 0 {
@@ -287,9 +289,10 @@ fn pid_is_alive_impl(pid: u32) -> bool {
     std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
+// trace:BUG-613 | ai:claude
 /// Non-Unix fallback: refresh ONLY the target pid rather than the whole table.
 /// `refresh_pids_specifics` (sysinfo 0.30) scopes the scan to the single pid,
-/// so this stays O(1) on Windows too. trace:BUG-613 | ai:claude
+/// so this stays O(1) on Windows too.
 #[cfg(not(unix))]
 fn pid_is_alive_impl(pid: u32) -> bool {
     use sysinfo::{Pid, ProcessRefreshKind, System};

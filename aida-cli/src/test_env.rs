@@ -42,10 +42,11 @@ pub(crate) struct EnvVarGuard {
     _guard: MutexGuard<'static, ()>,
 }
 
+// trace:TASK-818
 /// Multi-key variant of [`EnvVarGuard`] for tests that need SEVERAL env
 /// vars set simultaneously. `EnvVarGuard` holds `ENV_LOCK` for its whole
 /// lifetime, so two `EnvVarGuard::set` calls deadlock — this acquires the
-/// lock ONCE and sets/restores every key under it. trace:TASK-818
+/// lock ONCE and sets/restores every key under it.
 pub(crate) struct EnvVarsGuard {
     prev: Vec<(&'static str, Option<OsString>)>,
     _guard: MutexGuard<'static, ()>,

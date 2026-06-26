@@ -70,6 +70,7 @@ fn spec_id_from_subject(subject: &str) -> Option<String> {
         .next()
 }
 
+// trace:STORY-452 | ai:claude
 /// Infer recent remote agent activity from commit-trailer provenance.
 ///
 /// Keeps the most-recent agent-attributed commit per branch, restricted to
@@ -81,7 +82,6 @@ fn spec_id_from_subject(subject: &str) -> Option<String> {
 /// commits aren't "agent activity"). The result is sorted newest-first, then by
 /// branch for stable ordering of timestamp-less commits, and capped at `limit`.
 ///
-/// trace:STORY-452 | ai:claude
 pub(crate) fn infer_remote_activity(
     commits: &[RemoteCommit],
     lease_branches: &[String],

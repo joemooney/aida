@@ -71,8 +71,9 @@ impl RiskLevel {
         }
     }
 
+    // trace:STORY-560
     /// Plain (uncolored) lowercase token — for env passing + machine output,
-    /// where the ANSI-colored [`RiskLevel::chip`] would be noise. trace:STORY-560
+    /// where the ANSI-colored [`RiskLevel::chip`] would be noise.
     pub(crate) fn token(self) -> &'static str {
         match self {
             RiskLevel::Low => "low",
@@ -82,10 +83,10 @@ impl RiskLevel {
         }
     }
 
+    // trace:STORY-554 | ai:claude
     /// Ordering for the `--risk <max>` ceiling. Higher = riskier / less safe to
     /// auto-select. `Unknown` ranks above `Medium` (we don't know its blast
     /// radius, so admit it only when the operator explicitly allows `high`).
-    /// trace:STORY-554 | ai:claude
     fn rank(self) -> u8 {
         match self {
             RiskLevel::Low => 0,
@@ -153,13 +154,14 @@ pub(crate) struct AnalyzeReport {
     pub pairs: Vec<AnalyzePair>,
 }
 
+// trace:BUG-595 | ai:claude
 /// BUG-595: is this spec well-specified — does it carry the structure a ready
 /// spec has (an `## Acceptance` section and a substantive description body, not
 /// a one-line title-restatement)? A well-specified spec is LOWER risk for the
 /// advisor to act on, not higher: the work is bounded and the success condition
 /// is written down. The old heuristic had NO quality signal — it rated a Story
 /// High purely for being a Story, so a complete spec was fenced while an empty
-/// one-liner passed. trace:BUG-595 | ai:claude
+/// one-liner passed.
 fn is_well_specified(req: &Requirement) -> bool {
     let body = req.description.trim();
     let has_acceptance = {
@@ -173,19 +175,21 @@ fn is_well_specified(req: &Requirement) -> bool {
     has_acceptance && substantive
 }
 
+// trace:STORY-444 trace:BUG-595 | ai:claude
 /// Classify a backlog candidate's blast radius from its type, priority, tags,
 /// relationships, AND its specification quality. Heuristic, not gating —
 /// `groom` always defers to the operator. Thin wrapper over
-/// [`classify_risk_with_reason`]. trace:STORY-444 trace:BUG-595 | ai:claude
+/// [`classify_risk_with_reason`].
 pub(crate) fn classify_risk(req: &Requirement, has_plan: bool) -> RiskLevel {
     classify_risk_with_reason(req, has_plan).0
 }
 
+// trace:BUG-595 | ai:claude
 /// BUG-595: classify risk AND return a one-line human reason so the advisor's
 /// disposition is legible (`aida assess` surfaces it per fenced spec). The
 /// quality signal is the headline fix: specification completeness LOWERS risk;
 /// a thin/empty draft (no acceptance, ~one line) RAISES it — the inverse of the
-/// old behavior that admitted only the worst specs. trace:BUG-595 | ai:claude
+/// old behavior that admitted only the worst specs.
 pub(crate) fn classify_risk_with_reason(req: &Requirement, has_plan: bool) -> (RiskLevel, String) {
     let high_priority = matches!(req.priority, RequirementPriority::High);
     let blocked_by_or_child = req.relationships.iter().any(|r: &Relationship| {
@@ -714,12 +718,12 @@ fn pair_verdict_from(p: &AnalyzePair) -> PairVerdict {
     }
 }
 
+// trace:TASK-754 | ai:claude
 /// Place one already-resolved, eligibility-checked requirement onto the
 /// caller's queue, mirroring the `aida backlog groom` enqueue (user resolution
 /// via `current_user_id`, `AIDA_SESSION_ROLE` routing, optional note, optional
 /// `batch:NAME` tag). Shared between `aida backlog groom` and `aida add
 /// --queue` so the two surfaces stay byte-for-byte consistent.
-/// trace:TASK-754 | ai:claude
 pub(crate) fn enqueue_groomed(
     storage: &Storage,
     req: &Requirement,
@@ -931,10 +935,10 @@ fn print_groom_line(req: &Requirement, batch: Option<&str>) {
     );
 }
 
+// trace:STORY-554 | ai:claude
 /// One backlog item paired with its advisory risk chip and the already-probed
 /// burndown gate facts. The pure [`select_pickable`] consumes a slice of these
 /// so the auto-selection logic is filesystem-free and unit-testable.
-/// trace:STORY-554 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct PickableItem {
     pub id: String,
@@ -949,10 +953,10 @@ pub(crate) enum ParkReason {
     /// / parking-tag). Carries the gate's own human-readable reason — single
     /// source of truth with the burndown.
     Gate(String),
+    // trace:BUG-594 | ai:claude
     /// BUG-594: keystone / supervised work the operator reserved for human
     /// judgment — fenced INDEPENDENT of the risk ceiling, the same invariant
     /// `aida queue integrate` + `aida assess` enforce. Carries the marker.
-    /// trace:BUG-594 | ai:claude
     Keystone(String),
     /// Passed the gate but is riskier than the `--risk <max>` ceiling.
     RiskCeiling(RiskLevel),
@@ -972,11 +976,12 @@ impl ParkReason {
     }
 }
 
+// trace:STORY-554 trace:BUG-594
 /// Pure auto-selection: apply the burndown pickability gate (reused verbatim via
 /// [`burndown::classify`]) then the keystone/supervised fence (BUG-594), then
 /// the `--risk <max>` ceiling, partitioning the backlog into the would-groom ids
 /// and the would-park items with reasons. Order-preserving so output mirrors the
-/// input ranking. trace:STORY-554 trace:BUG-594
+/// input ranking.
 pub(crate) fn select_pickable(
     items: &[PickableItem],
     max_risk: RiskLevel,
@@ -1015,8 +1020,9 @@ pub(crate) fn select_pickable(
     (groom, park)
 }
 
+// trace:BUG-594 | ai:claude
 /// BUG-594: the most-informative keystone marker for the park reason — the
-/// triggering tag, or `epic` for the umbrella type. trace:BUG-594 | ai:claude
+/// triggering tag, or `epic` for the umbrella type.
 fn keystone_marker_label(req_type: &str, tags: &[String]) -> String {
     if req_type.trim().eq_ignore_ascii_case("epic") {
         return "epic".to_string();

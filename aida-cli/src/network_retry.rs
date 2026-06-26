@@ -133,11 +133,11 @@ pub struct RetryEvent {
     pub stderr_snippet: String,
 }
 
+// trace:STORY-516 | ai:claude
 /// Where retry events go. The orchestrator wires a [`DualSink`] of
 /// [`StderrSink`] + drain-state sink so post-hoc analysis can correlate.
 /// `pub` (not `pub(crate)`) so it can appear in the `Forge::merge_change`
 /// signature — STORY-516 routes the orchestrator merge's DualSink through it.
-/// trace:STORY-516 | ai:claude
 pub trait RetrySink {
     fn on_retry(&mut self, ev: &RetryEvent);
 }

@@ -93,6 +93,7 @@ use crate::punt::{
 const VALID_MCP_REQUIREMENT_TYPES: &str =
     "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc";
 
+// trace:BUG-591 | ai:claude
 /// BUG-591: the archive (STORY-441) + deferred (STORY-584) view-tier predicate,
 /// shared by `list_requirements` and `search_requirements` so the MCP read
 /// surface hides filed-away specs by default exactly like `aida list` /
@@ -107,7 +108,6 @@ const VALID_MCP_REQUIREMENT_TYPES: &str =
 /// - `deferred`: admit only deferred rows
 /// - `all` (highest precedence): admit every tier
 ///
-/// trace:BUG-591 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ViewTierFilter {
     /// Active rows only — neither archived nor deferred (the default view).
@@ -422,8 +422,9 @@ impl McpErrorCode {
     }
 }
 
+// trace:STORY-401 | ai:claude
 /// A structured MCP tool error: a stable `code`, a one-line `message`, the
-/// originating `tool`, and a `recoverable` hint. trace:STORY-401 | ai:claude
+/// originating `tool`, and a `recoverable` hint.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct McpError {
     code: McpErrorCode,
@@ -605,6 +606,7 @@ fn canonicalize_worktree_arg(raw: &str) -> String {
         .to_string()
 }
 
+// trace:TASK-712
 /// Shell-quote a value for safe interpolation into a `Run:` command string
 /// returned by the PEEK tools. These command strings are DISPLAY-ONLY (the MCP
 /// server never executes them) — but the user copy-pastes them into a shell, so
@@ -613,7 +615,7 @@ fn canonicalize_worktree_arg(raw: &str) -> String {
 /// POSIX single-quote rule: wrap in `'...'`, and escape any embedded single
 /// quote as `'\''`. A value that is already a "safe word" (alphanumerics plus a
 /// small set of shell-neutral punctuation) is returned bare to keep the common
-/// case readable. trace:TASK-712
+/// case readable.
 fn shell_quote_arg(s: &str) -> String {
     let safe = !s.is_empty()
         && s.bytes()
@@ -699,9 +701,10 @@ struct LightRole {
     system_prompt: Option<String>,
 }
 
+// trace:EPIC-27
 /// Canonicalize a role name, mirroring main.rs's `canonical_role_name`:
 /// TASK-586 made `advisor` the canonical identifier; `dialog` is a deprecated,
-/// silently-accepted alias. trace:EPIC-27
+/// silently-accepted alias.
 fn canonical_light_role_name(raw: &str) -> String {
     if raw.eq_ignore_ascii_case("dialog") {
         "advisor".to_string()
@@ -710,10 +713,10 @@ fn canonical_light_role_name(raw: &str) -> String {
     }
 }
 
+// trace:EPIC-27
 /// The active shell role, read from `AIDA_SESSION_ROLE` (canonicalized). This is
 /// the *MCP server process's* environment — it reflects the launching shell's
 /// role only when the agent's `aida mcp-serve` was started under an active role.
-/// trace:EPIC-27
 fn role_active_env() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
         .ok()
@@ -729,8 +732,9 @@ fn global_roles_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".aida").join("roles"))
 }
 
+// trace:EPIC-27
 /// List all roles for the project (and any global roles), newest-active first,
-/// de-duplicated by canonical name. Mirrors main.rs `list_roles`. trace:EPIC-27
+/// de-duplicated by canonical name. Mirrors main.rs `list_roles`.
 fn list_light_roles(project_root: &Path) -> Vec<LightRole> {
     let mut roles: Vec<LightRole> = Vec::new();
     for dir in [Some(project_roles_dir(project_root)), global_roles_dir()]
@@ -764,9 +768,10 @@ fn list_light_roles(project_root: &Path) -> Vec<LightRole> {
     roles
 }
 
+// trace:EPIC-27
 /// Load a single role by (already-canonicalized) name, checking the project dir
 /// first, then the global dir; the legacy `dialog.toml` is accepted as the
-/// advisor role. trace:EPIC-27
+/// advisor role.
 fn load_light_role(project_root: &Path, canonical: &str) -> Option<LightRole> {
     let mut candidates = vec![canonical.to_string()];
     if canonical == "advisor" {
@@ -790,9 +795,9 @@ fn load_light_role(project_root: &Path, canonical: &str) -> Option<LightRole> {
     None
 }
 
+// trace:EPIC-27
 /// Best-effort "N ago" for an RFC3339 timestamp string, mirroring main.rs's
 /// `humanize_relative`. Falls back to the raw string when it won't parse.
-/// trace:EPIC-27
 fn light_role_relative(rfc3339: &str) -> String {
     let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(rfc3339) else {
         return rfc3339.to_string();
@@ -826,8 +831,8 @@ struct McpServer<'a> {
     storage: &'a Storage,
     /// Project root for resolving `.aida/` coordination files. STORY-361.
     project_root: PathBuf,
+    // trace:STORY-474 | ai:claude
     /// Active tool profile governing which tools are advertised + callable.
-    /// trace:STORY-474 | ai:claude
     profile: McpProfile,
 }
 
@@ -904,8 +909,9 @@ impl<'a> McpServer<'a> {
         }
     }
 
+    // trace:STORY-474
     /// Construct with an explicit profile, bypassing env/config resolution.
-    /// Used by tests and any future CLI `--profile` override. trace:STORY-474
+    /// Used by tests and any future CLI `--profile` override.
     #[cfg(test)]
     fn with_profile(storage: &'a Storage, project_root: PathBuf, profile: McpProfile) -> Self {
         Self {
@@ -1196,12 +1202,13 @@ impl<'a> McpServer<'a> {
         )
     }
 
+    // trace:STORY-535 trace:EPIC-27
     /// EPIC-27 (STORY-535): advertise the parameterized live-state resources as
     /// RFC-6570 URI templates. The MCP protocol carries these on a distinct
     /// `resources/templates/list` method (separate from the concrete-URI
     /// `resources/list`), so clients that understand templates can expand
     /// `aida://pr/{n}` / `aida://batch/{name}` themselves; the matching read
-    /// logic lives in `handle_resources_read`. trace:STORY-535 trace:EPIC-27
+    /// logic lives in `handle_resources_read`.
     fn handle_resources_templates_list(&self, id: &Value) -> JsonRpcResponse {
         JsonRpcResponse::success(
             id.clone(),
@@ -3242,14 +3249,15 @@ impl<'a> McpServer<'a> {
     // same queue (BUG-89 identity rule). trace:EPIC-27
     // ========================================================================
 
+    // trace:EPIC-27
     /// Resolve the queue `user_id` the same way every CLI queue path does:
-    /// `user` arg → AIDA_USER → USER → USERNAME → "default". trace:EPIC-27
+    /// `user` arg → AIDA_USER → USER → USERNAME → "default".
     fn queue_user_id(&self, args: &Value) -> String {
         crate::current_user_id(args.get("user").and_then(|v| v.as_str()))
     }
 
+    // trace:EPIC-27
     /// Resolve a requirement by UUID or SPEC-ID (the CLI's two-step lookup).
-    /// trace:EPIC-27
     fn resolve_requirement<'s>(
         store: &'s aida_core::RequirementsStore,
         id: &str,
@@ -3933,8 +3941,9 @@ impl<'a> McpServer<'a> {
     // trace:EPIC-27
     // ========================================================================
 
+    // trace:EPIC-27
     /// Resolve a `LightLease` by 8-char (or longer) id prefix, mirroring the
-    /// CLI's `find_lease_by_id_prefix`. trace:EPIC-27
+    /// CLI's `find_lease_by_id_prefix`.
     fn resolve_lease_by_prefix<'l>(
         leases: &'l [LightLease],
         query: &str,
@@ -4907,6 +4916,7 @@ impl<'a> McpServer<'a> {
         ))
     }
 
+    // trace:TASK-715 | ai:claude
     /// TASK-715: `schema` tool — read-only introspection of the storable
     /// substrate for MCP clients that consume tools rather than resources. With
     /// no `object`, returns the storable-object catalog; with `object`, returns
@@ -4915,7 +4925,6 @@ impl<'a> McpServer<'a> {
     /// controlled-vocabulary enums). Mirrors `aida schema [<object>] --json` and the
     /// `aida://schema[/{object}]` resources — all back onto
     /// `crate::schema::{catalog_json, object_json}` so the surfaces can't drift.
-    /// trace:TASK-715 | ai:claude
     fn tool_schema(&self, args: &Value) -> Result<String, String> {
         let object = args
             .get("object")
@@ -5037,10 +5046,11 @@ impl<'a> McpServer<'a> {
     // trace:STORY-535 trace:EPIC-27
     // ========================================================================
 
+    // trace:STORY-535
     /// `aida://queue/in-flight` — specs the queue considers actively in flight:
     /// those held by a live session/MCP-claim lease (the `--in-flight-only`
     /// axis), plus the Done-awaiting-merge bucket `aida queue list` appends so
-    /// freshly-shipped work stays visible until auto-bump. trace:STORY-535
+    /// freshly-shipped work stays visible until auto-bump.
     fn resource_queue_in_flight(&self) -> Result<String, String> {
         let store = self.storage.load().map_err(|e| e.to_string())?;
 
@@ -5083,8 +5093,9 @@ impl<'a> McpServer<'a> {
         Ok(output)
     }
 
+    // trace:STORY-535
     /// `aida://session/leases` — active scoped session leases. Mirrors
-    /// `tool_list_active_leases` / `aida session leases`. trace:STORY-535
+    /// `tool_list_active_leases` / `aida session leases`.
     fn resource_session_leases(&self) -> Result<String, String> {
         let leases = list_leases(&self.project_root);
         let mut output = "# Session leases\n\n".to_string();
@@ -5104,19 +5115,21 @@ impl<'a> McpServer<'a> {
         Ok(output)
     }
 
+    // trace:TASK-715 | ai:claude
     /// `aida://schema` — the storable-object catalog as pretty JSON. Mirrors
     /// `aida schema --json`; backs onto `crate::schema::catalog_json` so the
-    /// MCP surface can't drift from the CLI. trace:TASK-715 | ai:claude
+    /// MCP surface can't drift from the CLI.
     fn resource_schema_catalog(&self) -> Result<String, String> {
         serde_json::to_string_pretty(&crate::schema::catalog_json())
             .map_err(|e| format!("failed to serialize schema catalog: {}", e))
     }
 
+    // trace:TASK-715 | ai:claude
     /// `aida://schema/{object}` — per-object schema detail as pretty JSON.
     /// Every catalog kind returns its reflection-derived field table;
     /// `requirement` additionally carries the four controlled-vocabulary
     /// enums; an unknown name is a -32602 error. Mirrors
-    /// `aida schema <object> --json`. trace:TASK-715 | ai:claude
+    /// `aida schema <object> --json`.
     fn resource_schema_object(&self, object: &str) -> Result<String, String> {
         match crate::schema::object_json(object) {
             Some(v) => serde_json::to_string_pretty(&v)
@@ -5128,13 +5141,14 @@ impl<'a> McpServer<'a> {
         }
     }
 
+    // trace:STORY-535
     /// `aida://pr/{n}` — git-canonical, gh-free PR linkage for PR number N.
     /// Resolves the spec(s) tied to the PR two ways, both substrate-local:
     ///   1. squash-merge subject `(#N)` → the `(SPEC-ID)` in the same commit
     ///      (via `crate::collect_git_linkage`'s `shipped_pr`), and
     ///   2. review findings tagged `from-review:PR-N`.
     ///      This mirrors the PR pointer `aida show <spec>` surfaces, without ever
-    ///      shelling out to `gh`. trace:STORY-535
+    ///      shelling out to `gh`.
     fn resource_pr(&self, raw: &str) -> Result<String, String> {
         let n: u64 = raw
             .trim()
@@ -5201,9 +5215,10 @@ impl<'a> McpServer<'a> {
         Ok(output)
     }
 
+    // trace:STORY-535
     /// `aida://batch/{name}` — progress for the `batch:<name>` tag set, bucketed
     /// by live status exactly like `tool_queue_progress` / `aida queue progress
-    /// --batch`. trace:STORY-535
+    /// --batch`.
     fn resource_batch(&self, raw: &str) -> Result<String, String> {
         let name = raw.trim();
         if name.is_empty() {
@@ -5285,6 +5300,7 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
     }
 }
 
+// trace:BUG-486 | ai:claude
 /// BUG-486: whether the current MCP caller holds advisor authority, routed
 /// through the SAME predicate the CLI uses (`advisor_authority_from`) so the two
 /// surfaces can't drift — the CLI↔MCP inconsistency *was* the bug. The MCP
@@ -5295,7 +5311,7 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
 /// is a peek that sets exactly that shell env, so the entered session role and
 /// the env fallback are one and the same value seen by this process. An agent
 /// that has not entered an advisor role resolves to non-advisor and is refused,
-/// matching the headless / non-TTY default. trace:BUG-486 | ai:claude
+/// matching the headless / non-TTY default.
 fn mcp_caller_has_advisor_authority() -> bool {
     // trace:BUG-486
     let role = role_active_env().unwrap_or_default();
@@ -5303,6 +5319,7 @@ fn mcp_caller_has_advisor_authority() -> bool {
     crate::advisor_authority_from(&role, false, false)
 }
 
+// trace:BUG-486 trace:BUG-480 | ai:claude
 /// BUG-480 / BUG-486: the refusal message for MCP queue-for-execution tools
 /// (`queue_add` / `queue_rework`). Queuing a spec for work is an
 /// advisor-authority act (the CLI gates it on `has_advisor_authority()`).
@@ -5310,15 +5327,15 @@ fn mcp_caller_has_advisor_authority() -> bool {
 /// MCP session that has entered an advisor role IS advisor authority and may
 /// queue, exactly as the CLI does under `AIDA_SESSION_ROLE=advisor`. A
 /// non-advisor caller still gets the refusal, told to file the spec for advisor
-/// triage. Returns `None` when the caller may proceed. trace:BUG-486 trace:BUG-480 | ai:claude
+/// triage. Returns `None` when the caller may proceed.
 fn mcp_queue_authority_message() -> Option<String> {
     mcp_queue_authority_message_for(mcp_caller_has_advisor_authority())
 }
 
+// trace:BUG-486 | ai:claude
 /// Pure core of [`mcp_queue_authority_message`] (BUG-486): the queue-authority
 /// decision over an explicit `caller_is_advisor`, so it is unit-testable without
 /// mutating the process-global `AIDA_SESSION_ROLE` env. `None` = may proceed.
-/// trace:BUG-486 | ai:claude
 fn mcp_queue_authority_message_for(caller_is_advisor: bool) -> Option<String> {
     if caller_is_advisor {
         return None;
@@ -5332,6 +5349,7 @@ fn mcp_queue_authority_message_for(caller_is_advisor: bool) -> Option<String> {
     )
 }
 
+// trace:BUG-449 trace:BUG-481 trace:BUG-486 | ai:claude
 /// BUG-449 / BUG-481 / BUG-486: status transitions an MCP caller may NOT make
 /// itself, with the message explaining why. `None` = the transition is allowed.
 /// Mirrors the `add_requirement` intake gate (TASK-647 / ADR-3) on the update
@@ -5357,16 +5375,15 @@ fn mcp_queue_authority_message_for(caller_is_advisor: bool) -> Option<String> {
 /// everyone. `Completed` is **always** refused via MCP regardless of role — it
 /// is merge-driven (set by a `(SPEC-ID)` commit landing on the default branch),
 /// not a hand-set advisor act, so advisor authority does not unlock it.
-/// trace:BUG-449 trace:BUG-481 trace:BUG-486 | ai:claude
 fn mcp_status_gate_message(from: &RequirementStatus, to: &RequirementStatus) -> Option<String> {
     mcp_status_gate_message_for(from, to, mcp_caller_has_advisor_authority())
 }
 
+// trace:BUG-486 | ai:claude
 /// Pure core of [`mcp_status_gate_message`] (BUG-486): the status-authority
 /// decision over an explicit `caller_is_advisor`, so the gate is unit-testable
 /// without mutating the process-global `AIDA_SESSION_ROLE` env. The wrapper
 /// resolves the caller's role via `mcp_caller_has_advisor_authority`.
-/// trace:BUG-486 | ai:claude
 fn mcp_status_gate_message_for(
     from: &RequirementStatus,
     to: &RequirementStatus,
@@ -5647,8 +5664,9 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 // `tools/call` REJECTS an out-of-profile tool with a stable error even if a
 // client calls it by name anyway.
 
+// trace:STORY-474 | ai:claude
 /// Capability tier governing which MCP tools are exposed. Ordered low→high;
-/// each tier admits every tool of the tiers below it. trace:STORY-474 | ai:claude
+/// each tier admits every tool of the tiers below it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum McpProfile {
     /// Pure reads only — the conservative safe default for untrusted clients.
@@ -5703,13 +5721,14 @@ impl Default for McpProfile {
     }
 }
 
+// trace:STORY-474 | ai:claude
 /// The minimum profile tier at which a given tool (by name) becomes available.
 /// This is the single source of truth for the profile→toolset mapping, kept as
 /// a pure fn so the selection logic is unit-testable without a server.
 ///
 /// Unknown tool names map to `Admin` (the most restrictive non-`full` tier) so a
 /// newly-added tool is never accidentally exposed to a `read-only` client before
-/// it has been deliberately classified here. trace:STORY-474 | ai:claude
+/// it has been deliberately classified here.
 pub fn tool_min_profile(tool_name: &str) -> McpProfile {
     match tool_name {
         // ---- Pure reads (read-only tier) ----
@@ -5797,14 +5816,16 @@ pub fn tool_min_profile(tool_name: &str) -> McpProfile {
     }
 }
 
-/// True when `tool_name` is exposed under `profile`. trace:STORY-474 | ai:claude
+// trace:STORY-474 | ai:claude
+/// True when `tool_name` is exposed under `profile`.
 pub fn tool_in_profile(tool_name: &str, profile: McpProfile) -> bool {
     profile >= tool_min_profile(tool_name)
 }
 
+// trace:STORY-474 | ai:claude
 /// True when `tool_name` is a tool AIDA actually serves (appears in
 /// `tool_descriptors()`). Used to distinguish "above your profile" from "no such
-/// tool" at call time. trace:STORY-474 | ai:claude
+/// tool" at call time.
 pub fn is_known_tool(tool_name: &str) -> bool {
     tool_descriptors()
         .as_array()
@@ -5815,9 +5836,10 @@ pub fn is_known_tool(tool_name: &str) -> bool {
         .unwrap_or(false)
 }
 
+// trace:STORY-474 | ai:claude
 /// The set of tool names (in `tool_descriptors()` order) exposed under
 /// `profile`. Pure fn over the descriptor list — the unit-tested core of the
-/// profile→toolset selection. trace:STORY-474 | ai:claude
+/// profile→toolset selection.
 // why: unit-tested pure core of profile→toolset selection; the production path filters descriptors inline, so the named helper is test-only today.
 #[allow(dead_code)]
 pub fn tool_names_for_profile(profile: McpProfile) -> Vec<String> {
@@ -5833,9 +5855,10 @@ pub fn tool_names_for_profile(profile: McpProfile) -> Vec<String> {
         .unwrap_or_default()
 }
 
+// trace:STORY-474 | ai:claude
 /// `tool_descriptors()` filtered to `profile`, with a `"profile"` metadata field
 /// added to each descriptor naming its minimum tier so schema-driven clients can
-/// see why a tool is (or isn't) present. trace:STORY-474 | ai:claude
+/// see why a tool is (or isn't) present.
 pub fn tool_descriptors_for_profile(profile: McpProfile) -> Value {
     let arr = tool_descriptors()
         .as_array()
@@ -5860,11 +5883,12 @@ pub fn tool_descriptors_for_profile(profile: McpProfile) -> Value {
     json!(filtered)
 }
 
+// trace:STORY-474 | ai:claude
 /// Resolve the active MCP profile from (in order) an explicit override, the
 /// `AIDA_MCP_PROFILE` env var, `[mcp] profile` in `.aida/config.toml`, then the
 /// built-in default. An unknown token at any layer is ignored (falls through to
 /// the next source) so a typo never silently opens a wider surface than
-/// intended — it just keeps the previous resolution. trace:STORY-474 | ai:claude
+/// intended — it just keeps the previous resolution.
 pub fn resolve_mcp_profile(project_root: &Path, override_token: Option<&str>) -> McpProfile {
     if let Some(p) = override_token.and_then(McpProfile::from_token) {
         return p;
@@ -8564,8 +8588,9 @@ mod tests {
         assert!(!out.contains(&stray_id), "stray must not show: {out}");
     }
 
+    // trace:BUG-591 | ai:claude
     /// Set the `archived` view-flag directly in the store, bypassing the gate —
-    /// mirrors `aida archive <ID>`. trace:BUG-591 | ai:claude
+    /// mirrors `aida archive <ID>`.
     fn force_archive(server: &McpServer<'static>, spec_id: &str) {
         let mut store = server.storage.load().unwrap();
         let req = store
@@ -8575,8 +8600,9 @@ mod tests {
         server.storage.save(&store).unwrap();
     }
 
+    // trace:BUG-591 | ai:claude
     /// Set the `deferred` view-flag directly in the store — mirrors
-    /// `aida defer <ID>`. trace:BUG-591 | ai:claude
+    /// `aida defer <ID>`.
     fn force_defer(server: &McpServer<'static>, spec_id: &str) {
         let mut store = server.storage.load().unwrap();
         let req = store
@@ -9019,10 +9045,10 @@ mod tests {
     }
 
     // trace:STORY-489 | ai:claude
+    // trace:STORY-493 | ai:claude
     /// query_graph walks the typed relationship graph: a spec blocked-by
     /// another surfaces that blocker in the `blocked-by` mode result, and the
     /// JSON carries the count + node id. Regression for the MCP half of the
-    // trace:STORY-493 | ai:claude
     /// send_message → read_inbox round-trip: a direct message and a broadcast
     /// both land in the recipient's inbox; the sender's own message does not.
     #[test]
@@ -10015,6 +10041,7 @@ mod tests {
         assert!(!listed_after.contains("STORY-CLAIM"), "{}", listed_after);
     }
 
+    // trace:TASK-474 TASK-504 | ai:claude
     /// TASK-474: when the agent passes `worktree_path`, the lease records
     /// that explicit sibling worktree so consumers (`active_lease_for_cwd`
     /// in main.rs) route hints correctly — instead of misattributing the
@@ -10022,7 +10049,6 @@ mod tests {
     /// before the arg existed: `worktree_path` was hardcoded to
     /// `self.project_root`). TASK-504 canonicalizes the path at write-time
     /// so later cwd comparisons are stable.
-    /// trace:TASK-474 TASK-504 | ai:claude
     #[test]
     fn claim_task_records_explicit_worktree_path() {
         let dir = tempdir().unwrap();
@@ -10059,10 +10085,10 @@ mod tests {
         );
     }
 
+    // trace:TASK-504 | ai:codex
     /// TASK-504: claim_task canonicalizes the recorded `worktree_path` so a
     /// non-canonical input path (for example, containing `..`) still matches
     /// the canonical cwd used by `lease_covers_cwd`.
-    /// trace:TASK-504 | ai:codex
     #[test]
     fn claim_task_canonicalizes_explicit_worktree_path() {
         let dir = tempdir().unwrap();
@@ -10094,11 +10120,11 @@ mod tests {
         );
     }
 
+    // trace:TASK-474 | ai:claude
     /// TASK-474: when `worktree_path` is omitted, the lease's worktree field
     /// is the empty string — which `lease_covers_cwd` in main.rs treats as
     /// "no session context, can't cover any cwd," preventing the misrouted
     /// scope hint that was the original symptom.
-    /// trace:TASK-474 | ai:claude
     #[test]
     fn claim_task_omits_worktree_when_arg_absent() {
         let dir = tempdir().unwrap();
@@ -10118,10 +10144,10 @@ mod tests {
         );
     }
 
+    // trace:TASK-474 | ai:claude
     /// TASK-474: an empty-string `worktree_path` arg behaves the same as
     /// omitting the arg — both signal "no session context, advisory lock
     /// only," and both result in an empty `worktree_path` on the lease.
-    /// trace:TASK-474 | ai:claude
     #[test]
     fn claim_task_treats_empty_worktree_arg_as_absent() {
         let dir = tempdir().unwrap();
@@ -10304,9 +10330,9 @@ mod tests {
         assert!(err.contains("reading brief"), "{}", err);
     }
 
+    // trace:STORY-361 | ai:claude
     /// Concurrent-write contention test: many threads append punt records
     /// in parallel; the ledger must contain exactly N parseable lines.
-    /// trace:STORY-361 | ai:claude
     #[test]
     fn concurrent_punt_appends_dont_corrupt_ledger() {
         let dir = tempdir().unwrap();
@@ -10348,8 +10374,9 @@ mod tests {
         assert_eq!(specs.len(), N, "each spec must appear exactly once");
     }
 
+    // trace:STORY-361 | ai:claude
     /// Concurrent directive posts must not interleave / corrupt the worker.cmd
-    /// file. trace:STORY-361 | ai:claude
+    /// file.
     #[test]
     fn concurrent_directive_posts_dont_corrupt_worker_cmd() {
         let dir = tempdir().unwrap();
@@ -10377,10 +10404,11 @@ mod tests {
         assert_eq!(unique.len(), N);
     }
 
+    // trace:TASK-438 | ai:claude
     /// Concurrent claim_task calls on the same spec must elect exactly one
     /// winner — the others must see `already_claimed`. Regression test for
     /// the pre-fix TOCTOU race between the existence check and the lease
-    /// write. trace:TASK-438 | ai:claude
+    /// write.
     #[test]
     fn concurrent_claim_task_on_same_spec_elects_one_winner() {
         let dir = tempdir().unwrap();
@@ -10440,9 +10468,10 @@ mod tests {
         assert_eq!(matching.len(), 1, "exactly one lease file on disk");
     }
 
+    // trace:STORY-361 | ai:claude
     /// Crash-mid-write recovery: a punt-ledger truncated mid-line must still
     /// yield every valid record before the corruption, and the file must
-    /// remain appendable after recovery. trace:STORY-361 | ai:claude
+    /// remain appendable after recovery.
     #[test]
     fn ledger_with_partial_trailing_line_reads_valid_records() {
         let dir = tempdir().unwrap();
@@ -10512,8 +10541,9 @@ mod tests {
         assert!(records2.iter().any(|r| r.spec == "STORY-C"));
     }
 
+    // trace:STORY-361 | ai:claude
     /// Crash-mid-write recovery for a TOML lease: a write_atomic interrupted
-    /// before rename leaves the original file intact. trace:STORY-361 | ai:claude
+    /// before rename leaves the original file intact.
     #[test]
     fn write_atomic_leaves_original_intact_on_failed_rename() {
         let dir = tempdir().unwrap();
@@ -10535,12 +10565,12 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"updated2");
     }
 
+    // trace:BUG-310 | ai:claude
     /// BUG-310: an MCP `add_requirement` against a Storage pointing at the
     /// git-canonical store directory must be visible to a fresh GitBackend
     /// load — that is, to the next CLI invocation. The pre-fix MCP startup
     /// wrote to a private YAML snapshot, so this roundtrip silently dropped
     /// every MCP write.
-    /// trace:BUG-310 | ai:claude
     #[test]
     fn mcp_add_requirement_is_visible_to_cli_via_git_backend() {
         use aida_core::db::{DatabaseBackend, GitBackend};
@@ -10587,10 +10617,11 @@ mod tests {
     // STORY-474: tool profiles + safe-default surface
     // ========================================================================
 
+    // trace:STORY-474 | ai:claude
     /// Every name in `tool_descriptors()` must be classified explicitly — no
     /// tool may fall through to the `Admin` catch-all in `tool_min_profile`. A
     /// new tool added without a classification line is a bug (it would silently
-    /// be admin-only). trace:STORY-474 | ai:claude
+    /// be admin-only).
     #[test]
     fn every_tool_is_explicitly_classified() {
         let names: Vec<String> = tool_descriptors()
@@ -10753,8 +10784,9 @@ mod tests {
         assert_eq!(lr["profile"], json!("read-only"));
     }
 
+    // trace:STORY-474 | ai:claude
     /// `tools/call` rejects an out-of-profile (but known) tool with a permission
-    /// error, even when the client calls it directly. trace:STORY-474 | ai:claude
+    /// error, even when the client calls it directly.
     #[test]
     fn tools_call_rejects_out_of_profile_tool() {
         let dir = tempdir().unwrap();
@@ -10855,9 +10887,10 @@ mod tests {
     // STORY-532 (EPIC-27): queue MCP tools
     // =====================================================================
 
+    // trace:EPIC-27
     /// A git-canonical-backed server — the queue layer (`Storage::queue_*`)
     /// only works against a SQLite or directory backend, so the queue tests
-    /// need this rather than the plain-YAML `mk_server`. trace:EPIC-27
+    /// need this rather than the plain-YAML `mk_server`.
     fn mk_git_server(dir: &Path) -> McpServer<'static> {
         use aida_core::db::{DatabaseBackend, GitBackend};
         let store_dir = dir.join(".aida-store");
@@ -10868,8 +10901,9 @@ mod tests {
         McpServer::new(storage, dir.to_path_buf())
     }
 
+    // trace:EPIC-27
     /// Seed a requirement via the MCP add tool (works against the git store)
-    /// and return its SPEC-ID. trace:EPIC-27
+    /// and return its SPEC-ID.
     fn seed_req(server: &McpServer<'static>, title: &str) -> String {
         let resp = server
             .tool_add_requirement(&json!({
@@ -11310,8 +11344,9 @@ mod tests {
     // STORY-533 (EPIC-27): session MCP tools
     // =====================================================================
 
+    // trace:EPIC-27
     /// Write a minimal lease TOML under `.aida/sessions/<id>.toml` matching
-    /// the `LightLease` shape the session tools read. trace:EPIC-27
+    /// the `LightLease` shape the session tools read.
     fn seed_lease(dir: &Path, id: &str, scope: &str, role: &str) {
         let sessions = dir.join(".aida").join("sessions");
         std::fs::create_dir_all(&sessions).unwrap();
@@ -11552,8 +11587,9 @@ mod tests {
     // STORY-534 (EPIC-27): role MCP tools
     // =====================================================================
 
+    // trace:EPIC-27
     /// Write a minimal role TOML under `.aida/roles/<name>.toml` matching the
-    /// `LightRole` shape the role tools read. trace:EPIC-27
+    /// `LightRole` shape the role tools read.
     fn seed_role(dir: &Path, name: &str, purpose: &str) {
         let roles = dir.join(".aida").join("roles");
         std::fs::create_dir_all(&roles).unwrap();

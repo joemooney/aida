@@ -141,10 +141,11 @@ pub fn update_parent_sha(graph: &mut StackGraph, parent: &str, new_sha: &str) {
     }
 }
 
+// trace:BUG-434 | ai:claude
 /// Branch names whose recorded `parent_branch` is `parent` — the stacked
 /// children that would be orphaned (and whose PRs GitHub auto-closes) if
 /// `parent` were deleted. Sorted for stable output. Used by `aida pr ship`'s
-/// `--delete-branch` guard. trace:BUG-434 | ai:claude
+/// `--delete-branch` guard.
 pub fn children_of<'a>(graph: &'a StackGraph, parent: &str) -> Vec<&'a str> {
     let mut out: Vec<&str> = graph
         .entries

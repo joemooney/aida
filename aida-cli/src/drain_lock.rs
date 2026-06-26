@@ -47,10 +47,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::process_probe;
 
+// trace:STORY-638 | ai:claude
 /// How often the background heartbeat thread refreshes the shared drain claim.
 /// Comfortably under the TTL ([`DEFAULT_STALE_SECS`]) so a long drain phase
 /// never lets the claim age out and get reclaimed by another clone.
-/// trace:STORY-638 | ai:claude
 const HEARTBEAT_INTERVAL_SECS: u64 = 300;
 
 /// File name under `.aida/` holding the live drain's lock. Gitignored by the
@@ -101,12 +101,12 @@ impl DrainLock {
     }
 }
 
+// trace:BUG-538 | ai:claude
 /// The pure decision: given the lock currently on disk (if any), should a new
 /// drain ACQUIRE (write its own, possibly reclaiming a stale one) or be
 /// REFUSED? Liveness is injected as a predicate so the three paths
 /// (no-lock / live-refuse / stale-reclaim) are unit-testable without spawning
 /// real processes — mirrors `triage_lease::live_leases_reaping`.
-/// trace:BUG-538 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum LockDecision {
     /// No live lock stands in the way — write ours.
@@ -165,6 +165,7 @@ fn force_requested() -> bool {
         .unwrap_or(false)
 }
 
+// trace:BUG-538 | ai:claude
 /// Acquire the global drain lock for `project_root`, launched as `command`.
 ///
 /// On success returns a [`DrainGuard`] that removes the lock on `Drop`. On a
@@ -173,7 +174,7 @@ fn force_requested() -> bool {
 ///
 /// Both drain entry points (`aida burndown run` and `aida queue work
 /// --auto-complete`) call this at the top so they are mutually exclusive
-/// against each other — see the module docs. trace:BUG-538 | ai:claude
+/// against each other — see the module docs.
 pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<DrainGuard> {
     let path = drain_lock_path(project_root);
     let existing = read_lock(&path);
@@ -323,11 +324,11 @@ fn hostname() -> String {
     sysinfo::System::host_name().unwrap_or_default()
 }
 
+// trace:TASK-806 | ai:claude
 /// Liveness-corroborated read of the drain lock for read-side tooling
 /// (`aida burndown status`, TASK-806). Mirrors [`crate::drain_state::probe`]:
 /// the on-disk lock is classified against a PID-liveness probe so callers can
 /// tell a live drain from a crashed one without re-implementing the read.
-/// trace:TASK-806 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum LockStatus {
     /// No lock file — no drain is (or recently was) running.
@@ -340,9 +341,10 @@ pub(crate) enum LockStatus {
     Stale(DrainLock),
 }
 
+// trace:TASK-806 | ai:claude
 /// Read `.aida/drain.lock` and corroborate the recorded `pid` against a
 /// liveness probe. A missing or corrupt lock is [`LockStatus::None`] — the same
-/// fail-safe `read_lock` applies on the acquire path. trace:TASK-806 | ai:claude
+/// fail-safe `read_lock` applies on the acquire path.
 pub(crate) fn probe_lock(project_root: &Path) -> LockStatus {
     classify_lock(
         read_lock(&drain_lock_path(project_root)),
@@ -350,9 +352,9 @@ pub(crate) fn probe_lock(project_root: &Path) -> LockStatus {
     )
 }
 
+// trace:TASK-806 | ai:claude
 /// Pure classifier: split from [`probe_lock`] so the three paths
 /// (none / running / stale) are unit-testable without a real lock or pid.
-/// trace:TASK-806 | ai:claude
 fn classify_lock(existing: Option<DrainLock>, is_alive: impl Fn(u32) -> bool) -> LockStatus {
     match existing {
         None => LockStatus::None,
@@ -366,10 +368,11 @@ fn classify_lock(existing: Option<DrainLock>, is_alive: impl Fn(u32) -> bool) ->
     }
 }
 
+// trace:BUG-538 | ai:claude
 /// RAII handle: while held, this process owns the global drain lock. `Drop`
 /// removes the lock file — but ONLY if it still records THIS process's pid, so
 /// a guard that outlives a stale-reclaim by a successor never deletes the
-/// successor's live lock. trace:BUG-538 | ai:claude
+/// successor's live lock.
 /// Background heartbeat thread handle for the shared drain claim (STORY-638).
 /// Its `stop` flag is flipped on guard drop so the thread exits promptly.
 #[derive(Debug)]
@@ -382,14 +385,15 @@ struct Heartbeat {
 pub(crate) struct DrainGuard {
     path: PathBuf,
     pid: u32,
+    // trace:STORY-638 | ai:claude
     /// Set when we hold the SHARED cross-clone drain claim on the store (STORY-638).
     /// `None` when cross-clone coordination was unavailable (local-only). The
     /// project root is kept separately so a moved cwd doesn't break release.
-    /// trace:STORY-638 | ai:claude
     store_root: Option<PathBuf>,
     project_root: PathBuf,
+    // trace:STORY-638 | ai:claude
     /// Background thread refreshing the shared claim's heartbeat. `None` when
-    /// local-only. trace:STORY-638 | ai:claude
+    /// local-only.
     heartbeat: Option<Heartbeat>,
 }
 

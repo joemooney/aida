@@ -15,11 +15,11 @@
 
 use std::path::Path;
 
+// trace:STORY-560 | ai:claude
 /// P1 — `intake.disposition_bias`: the cold-boot worth-doing posture. The
 /// headless advisor is a COLD-BOOT `claude -p`, not the operator's live
 /// session, so the bias tunes how aggressively it blesses autonomy-eligible
 /// work. Propose-mode-by-default remains the ultimate gate regardless.
-/// trace:STORY-560 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DispositionBias {
     /// DEFAULT: propose approve for every autonomy-eligible spec; the
@@ -55,9 +55,10 @@ impl DispositionBias {
     }
 }
 
+// trace:STORY-560 | ai:claude
 /// P3 — `intake.on_apply`: what `--apply` does after queuing. Bounds the
 /// compounding unattended authority (cold-boot approve + implementer drain in
-/// one shot). trace:STORY-560 | ai:claude
+/// one shot).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnApply {
     /// DEFAULT: stop at queuing; draining is a separate explicit
@@ -84,10 +85,11 @@ impl OnApply {
     }
 }
 
+// trace:STORY-560 | ai:claude
 /// The default P2 do-not-approve classes: strategic + knowledge-graph types
 /// (advisor-authored, not implementer work). The agent can NEVER propose
 /// approve for these, even with `--apply` — they are fenced out of the
-/// candidate set by the launcher. trace:STORY-560 | ai:claude
+/// candidate set by the launcher.
 pub const DEFAULT_DO_NOT_APPROVE_CLASSES: &[&str] = &[
     "vision",
     "epic",
@@ -97,14 +99,15 @@ pub const DEFAULT_DO_NOT_APPROVE_CLASSES: &[&str] = &[
     "term",
 ];
 
+// trace:STORY-560 | ai:claude
 /// The always-on tag exclusions: a spec tagged `needs-human` or `strategic` is
 /// never the agent's to bless, regardless of the configurable class list.
-/// trace:STORY-560 | ai:claude
 pub const ALWAYS_EXCLUDE_TAGS: &[&str] = &["needs-human", "strategic"];
 
+// trace:STORY-560 | ai:claude
 /// `[intake]` section in `.aida/config.toml`. Each field has a safe default so
 /// `aida intake` works out-of-the-box with no config (propose-mode is always
-/// the gate). trace:STORY-560 | ai:claude
+/// the gate).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntakeConfig {
     /// P1 — the cold-boot worth-doing posture.
@@ -130,9 +133,10 @@ impl Default for IntakeConfig {
 }
 
 impl IntakeConfig {
+    // trace:STORY-560
     /// Load `[intake]` from `<project_root>/.aida/config.toml`. Missing file /
     /// section / keys all fall through to defaults — a config error never
-    /// blocks intake. trace:STORY-560
+    /// blocks intake.
     pub fn load(project_root: &Path) -> Self {
         let Ok(content) = std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
         else {
@@ -191,9 +195,10 @@ fn apply_key(cfg: &mut IntakeConfig, key: &str, val: &str) {
     }
 }
 
+// trace:STORY-560
 /// Extract `key = value` pairs from `[intake]`. Section-aware; stops at the
 /// next `[section]`. Mirrors the hand-rolled scanner used by `[advisor]` /
-/// `workflow_hints` so we don't pull a serde-toml dependency. trace:STORY-560
+/// `workflow_hints` so we don't pull a serde-toml dependency.
 fn scan_intake_section(content: &str) -> Vec<(String, String)> {
     let mut pairs = Vec::new();
     let mut in_intake = false;
@@ -216,8 +221,9 @@ fn scan_intake_section(content: &str) -> Vec<(String, String)> {
     pairs
 }
 
+// trace:STORY-560
 /// Strip a `#` inline comment that is not inside quotes. Shared shape with
-/// `advisor::strip_inline_comment`. trace:STORY-560
+/// `advisor::strip_inline_comment`.
 fn strip_inline_comment(s: &str) -> &str {
     let (mut dq, mut sq) = (false, false);
     for (i, c) in s.char_indices() {
@@ -231,8 +237,9 @@ fn strip_inline_comment(s: &str) -> &str {
     s
 }
 
+// trace:STORY-560
 /// One open spec's already-probed facts, built in `main.rs` from the store.
-/// Consumed by the pure [`select_intake_candidates`]. trace:STORY-560
+/// Consumed by the pure [`select_intake_candidates`].
 #[derive(Debug, Clone)]
 pub struct IntakeSpec {
     /// Display SPEC-ID (e.g. `STORY-560`).
@@ -241,26 +248,29 @@ pub struct IntakeSpec {
     pub req_type: String,
     /// The spec's tags (case-insensitive checks).
     pub tags: Vec<String>,
+    // trace:BUG-561 | ai:claude
     /// Whether the spec is in the operator's DEFERRED tier (STORY-584): either
     /// the deferred view-flag is set OR it carries a legacy `deferred:*` parking
     /// tag. Deferred specs are fenced out — re-blessing the operator's deferral
     /// shelf would undo the curation the deferred tier exists to protect.
     /// Computed by [`is_deferred`] in the launcher (mirrors the `aida list`
-    /// honor-both predicate). trace:BUG-561 | ai:claude
+    /// honor-both predicate).
     pub deferred: bool,
     /// Advisory risk token (`low` / `medium` / `high` / `unknown`) — the same
     /// chip `aida backlog list` shows. Used for the `--risk` ceiling.
     pub risk: crate::backlog::RiskLevel,
+    // trace:BUG-595 | ai:claude
     /// BUG-595: the one-line reason the risk level was assigned, so a fenced
     /// spec's disposition is legible ("risk above ceiling (unknown) —
-    /// under-specified …") rather than an opaque chip. trace:BUG-595 | ai:claude
+    /// under-specified …") rather than an opaque chip.
     pub risk_reason: String,
 }
 
+// trace:BUG-561 | ai:claude
 /// The canonical "is this spec in the deferred tier?" predicate, shared so the
 /// intake fence matches `aida list` exactly (STORY-584 honor-both): the deferred
 /// view-flag is set, OR the spec carries any legacy `deferred:*` parking tag.
-/// The launcher computes [`IntakeSpec::deferred`] through this. trace:BUG-561 | ai:claude
+/// The launcher computes [`IntakeSpec::deferred`] through this.
 pub fn is_deferred(deferred_flag: bool, tags: &[String]) -> bool {
     deferred_flag
         || tags
@@ -278,15 +288,16 @@ pub enum FenceReason {
     ExcludedTag(String),
     /// `--only-tag` is set and this spec doesn't carry it.
     NotOnlyTag(String),
+    // trace:BUG-561
     /// In the operator's DEFERRED tier (STORY-584): deferred view-flag set or a
     /// legacy `deferred:*` parking tag. Re-blessing it would undo the operator's
-    /// deferral curation. trace:BUG-561
+    /// deferral curation.
     Deferred,
+    // trace:BUG-594 | ai:claude
     /// BUG-594: keystone / supervised work the operator explicitly reserved for
     /// human judgment (`keystone` / `supervised` / `architecture` / `security` /
     /// epic, etc.). Fenced INDEPENDENT of the risk ceiling — the same invariant
     /// `aida queue integrate` enforces (TASK-813). Carries the matched marker.
-    /// trace:BUG-594 | ai:claude
     Keystone(String),
     /// Risk above the `--risk` ceiling. BUG-595: carries the per-spec risk
     /// reason so the disposition is legible, not just the chip.
@@ -312,8 +323,9 @@ impl FenceReason {
     }
 }
 
+// trace:STORY-560
 /// Per-run guardrail filters layered on top of the `[intake]` config. Flags
-/// override config for a single run (acceptance #3). trace:STORY-560
+/// override config for a single run (acceptance #3).
 #[derive(Debug, Clone)]
 pub struct IntakeFilters {
     /// Only consider specs carrying this tag.
@@ -339,13 +351,13 @@ fn tags_contain(tags: &[String], name: &str) -> bool {
     tags.iter().any(|t| t.trim().eq_ignore_ascii_case(name))
 }
 
+// trace:BUG-594 | ai:claude
 /// BUG-594: is this spec keystone / supervised — work the operator reserved for
 /// human judgment? Reuses the canonical [`crate::presence::is_keystone_class`]
 /// detector (epic type, or any `keystone` / `architecture` / `security` /
 /// `supervised` / `needs-supervised-build` / `blast-radius:high` / `risk:high`
 /// tag) so assess can never disagree with the drain / `queue integrate` on what
 /// keystone means. Returns the matched marker for the fence reason.
-/// trace:BUG-594 | ai:claude
 fn keystone_marker(req_type: &str, tags: &[String]) -> Option<String> {
     if !crate::presence::is_keystone_class(req_type, tags.iter().map(|s| s.as_str())) {
         return None;
@@ -372,13 +384,13 @@ fn keystone_marker(req_type: &str, tags: &[String]) -> Option<String> {
         .or_else(|| Some("keystone".to_string()))
 }
 
+// trace:STORY-560 | ai:claude
 /// Pure candidate FENCE. Partition the open specs into `(eligible, fenced)`:
 /// the eligible set is what the headless advisor may act on; the fenced set is
 /// excluded with a reason. The P2 do-not-approve classes and the always-on tag
 /// exclusions are applied HERE — the agent never sees a fenced spec as
 /// actionable (substrate-as-bouncer for the HARD authority bound).
 /// Order-preserving + side-effect-free so it is exhaustively unit-testable.
-/// trace:STORY-560 | ai:claude
 pub fn select_intake_candidates(
     specs: &[IntakeSpec],
     cfg: &IntakeConfig,
@@ -450,10 +462,11 @@ pub fn select_intake_candidates(
     (eligible, fenced)
 }
 
+// trace:STORY-560
 /// Build the `/aida-assess` slash-command string the headless session runs.
 /// Propose-by-default; `--apply` executes. Pure + unit-testable. The policy and
 /// the bounded candidate fence are passed via env (`AIDA_INTAKE_*`), not the
-/// prompt, so the prompt stays the human-facing surface. trace:STORY-560
+/// prompt, so the prompt stays the human-facing surface.
 pub fn intake_skill_prompt(apply: bool) -> String {
     if apply {
         "/aida-assess --apply".to_string()
@@ -462,13 +475,14 @@ pub fn intake_skill_prompt(apply: bool) -> String {
     }
 }
 
+// trace:STORY-626 | ai:claude
 /// Relative path (under the project root) of the live advisor's context-seed
 /// file. The LIVE advisor maintains this file directly; the cold-boot launcher
 /// reads it and prepends it to the `/aida-assess` prompt. `.aida/*` is
 /// gitignored deny-by-default, so this is per-clone runtime state.
-/// trace:STORY-626 | ai:claude
 pub const ADVISOR_CONTEXT_SEED_REL: &str = ".aida/advisor-context.md";
 
+// trace:STORY-626 | ai:claude
 /// Build the cold-boot `/aida-assess` prompt, seeded with the live advisor's
 /// context file when one is present and non-empty. The headless cold-boot
 /// advisor otherwise starts context-poor and re-derives priorities every run;
@@ -478,15 +492,15 @@ pub const ADVISOR_CONTEXT_SEED_REL: &str = ".aida/advisor-context.md";
 /// returned prompt is the seed wrapped in a `## Live advisor context (seed …)`
 /// heading, a `---` rule, then the bare `/aida-assess [--apply]`. With no seed
 /// (or an empty file) it returns the bare `intake_skill_prompt(apply)` form.
-/// trace:STORY-626 | ai:claude
 pub fn seeded_assess_prompt(project_root: &std::path::Path, apply: bool) -> String {
     seed_skill_prompt(project_root, &intake_skill_prompt(apply))
 }
 
+// trace:STORY-626 | ai:claude
 /// Wrap ANY bare cold-boot skill invocation with the live advisor context seed —
 /// the shared core behind both the assess and the burndown `/aida-advise`
 /// cold-boots (STORY-626). Returns `bare` unchanged when
-/// `.aida/advisor-context.md` is absent or empty. trace:STORY-626 | ai:claude
+/// `.aida/advisor-context.md` is absent or empty.
 pub fn seed_skill_prompt(project_root: &std::path::Path, bare: &str) -> String {
     let seed_path = project_root.join(ADVISOR_CONTEXT_SEED_REL);
     let seed = match std::fs::read_to_string(&seed_path) {
@@ -501,10 +515,10 @@ pub fn seed_skill_prompt(project_root: &std::path::Path, bare: &str) -> String {
     )
 }
 
+// trace:STORY-626 | ai:claude
 /// The cold-boot `/aida-advise` prompt, seeded like the assess prompt. The
 /// burndown advisor tier launches this on a punt cold-boot; the fork branch
 /// gets live context via `--resume`, so only the cold-boot needs the seed.
-/// trace:STORY-626 | ai:claude
 pub fn seeded_advise_prompt(project_root: &std::path::Path) -> String {
     seed_skill_prompt(project_root, "/aida-advise")
 }

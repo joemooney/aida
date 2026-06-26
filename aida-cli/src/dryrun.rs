@@ -83,19 +83,20 @@ impl SpecSnapshot {
     }
 }
 
+// trace:TASK-849 | ai:claude
 /// One scored dimension of readiness: did it pass, and the one-line why.
 ///
 /// Serialize-only: the `name` is a `&'static str` (a compile-time constant, never
 /// allocated per score), which cannot be the target of a `Deserialize`. These
 /// verdicts are only ever *produced* here and rendered to JSON/human output; no
 /// code path parses them back, so dropping `Deserialize` is non-behavioral.
-/// trace:TASK-849 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Dimension {
+    // trace:TASK-849 | ai:claude
     /// Stable machine name (`"description"`, `"acceptance"`, …) — usable as a
     /// JSON key / filter token; never localized. A compile-time constant: these
     /// names are fixed in source, so `&'static str` avoids a per-score
-    /// allocation. trace:TASK-849 | ai:claude
+    /// allocation.
     pub name: &'static str,
     /// Whether this dimension is satisfied.
     pub pass: bool,
@@ -105,11 +106,12 @@ pub struct Dimension {
     pub weight: u32,
 }
 
+// trace:TASK-849 | ai:claude
 /// The full deterministic readiness verdict for one spec.
 ///
 /// Serialize-only for the same reason as [`Dimension`]: it owns `Dimension`s
 /// whose `&'static str` names rule out `Deserialize`, and nothing parses a
-/// verdict back. trace:TASK-849 | ai:claude
+/// verdict back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Readiness {
     /// 0-100 readiness score: sum of passing dimensions' weights (weights sum

@@ -181,11 +181,12 @@ fn assemble_message(
     out
 }
 
+// trace:STORY-663
 /// Validate the assembled first line against the same rules the commit-msg hook
 /// enforces. Returns Err(reason) when the hook would reject it (strict-mode
 /// semantics: feat/fix without a REQ-ID is rejected; an AI-traced commit without
 /// the `[AI:tool]` prefix is rejected). Mirrors
-/// `aida-core/templates/hooks/aida-commit-msg`. trace:STORY-663
+/// `aida-core/templates/hooks/aida-commit-msg`.
 pub(crate) fn validate_message(message: &str, has_ai_trace: bool) -> Result<(), String> {
     let first_line = message.lines().next().unwrap_or("");
 
@@ -235,7 +236,7 @@ fn normalize_spec(s: &str) -> String {
         .to_uppercase()
 }
 
-/// Collect the distinct SPEC-IDs referenced by `trace:` comments in the staged
+/// Collect the distinct SPEC-IDs referenced by `trace` comments in the staged
 /// diff. With `all`, also considers unstaged tracked changes (since `-a` will
 /// commit them). Returns upper-cased ids.
 fn staged_trace_specs(root: &Path, all: bool) -> BTreeSet<String> {
@@ -256,8 +257,9 @@ fn staged_trace_specs(root: &Path, all: bool) -> BTreeSet<String> {
     out
 }
 
-/// True when the staged diff contains an AI-authored trace (`trace:ID | ai:...`),
-/// which is what the hook keys the `[AI:tool]` requirement off of.
+/// True when the staged diff contains an AI-authored trace (a `trace` marker
+/// carrying an `ai:` author tag), which is what the hook keys the `[AI:tool]`
+/// requirement off of.
 fn staged_trace_has_ai(root: &Path, all: bool) -> bool {
     let diff = diff_text(root, all);
     let re = Regex::new(r"(?i)trace:[A-Z]+(-[A-Z0-9_]+)?-[0-9]+\s*\|\s*ai:")

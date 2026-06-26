@@ -28,9 +28,10 @@
 //! handler gathers the inputs (cache summaries, leases, drain lock, findings)
 //! and feeds them in. trace:STORY-658 | ai:claude
 
+// trace:STORY-658 | ai:claude
 /// The grade a single vital — or the project overall — earns. Ordered so
 /// `max()` over a set yields the worst (most-severe) grade, which is exactly the
-/// worst-anchored rollup. trace:STORY-658 | ai:claude
+/// worst-anchored rollup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Grade {
     /// Nothing to act on; the signal is in a good place.
@@ -57,8 +58,8 @@ impl Grade {
     }
 }
 
+// trace:STORY-658 | ai:claude
 /// Which axis a vital belongs to — the two halves of the read.
-/// trace:STORY-658 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Axis {
     /// Backlog state: the requirement graph's flow and hygiene.
@@ -76,9 +77,9 @@ impl Axis {
     }
 }
 
+// trace:STORY-658 | ai:claude
 /// A single measured vital sign: its grade, a short measured-value phrase, the
 /// meaning, and (when not healthy) the one command that acts on it.
-/// trace:STORY-658 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Vital {
     pub axis: Axis,
@@ -96,9 +97,10 @@ pub struct Vital {
     pub remedy: Option<&'static str>,
 }
 
+// trace:STORY-658 | ai:claude
 /// The thresholds that turn raw counts into grades. Held as a struct (not magic
 /// numbers scattered through the scorers) so the policy is in one place and the
-/// tests pin it. trace:STORY-658 | ai:claude
+/// tests pin it.
 #[derive(Debug, Clone, Copy)]
 pub struct Thresholds {
     /// Days after which an open spec with no activity is "stale".
@@ -141,8 +143,8 @@ impl Default for Thresholds {
     }
 }
 
+// trace:STORY-658 | ai:claude
 /// Map a count to a grade given watch/critical step thresholds (inclusive).
-/// trace:STORY-658 | ai:claude
 fn grade_count(n: usize, watch: usize, critical: usize) -> Grade {
     if n >= critical {
         Grade::Critical
@@ -153,10 +155,10 @@ fn grade_count(n: usize, watch: usize, critical: usize) -> Grade {
     }
 }
 
+// trace:STORY-658 | ai:claude
 /// One open spec, reduced to exactly what the backlog scorers need. The handler
 /// builds these from cache summaries; keeping the scorer over this tiny struct
 /// (not `RequirementSummary`) is what keeps the logic pure and testable.
-/// trace:STORY-658 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenSpec {
     /// Canonical status token, e.g. `Approved`, `InProgress`, `NeedsAttention`.
@@ -175,8 +177,8 @@ impl OpenSpec {
     }
 }
 
+// trace:STORY-658 | ai:claude
 /// The coordination-side inputs the handler probes from the runtime substrate.
-/// trace:STORY-658 | ai:claude
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CoordinationInputs {
     /// Implementer-queue depth for the current user.
@@ -195,9 +197,10 @@ pub struct CoordinationInputs {
     pub needs_attention: usize,
 }
 
+// trace:STORY-658 | ai:claude
 /// Compute the backlog-axis vitals from the open specs + a velocity reading.
 /// `net_per_day` is the burn-down net (completed − added) per day over a recent
-/// window; `None` when unknown. trace:STORY-658 | ai:claude
+/// window; `None` when unknown.
 pub fn backlog_vitals(specs: &[OpenSpec], net_per_day: Option<f64>, t: &Thresholds) -> Vec<Vital> {
     let approved = specs
         .iter()
@@ -278,8 +281,8 @@ pub fn backlog_vitals(specs: &[OpenSpec], net_per_day: Option<f64>, t: &Threshol
     vitals
 }
 
+// trace:STORY-658 | ai:claude
 /// Compute the coordination-axis vitals from the runtime substrate inputs.
-/// trace:STORY-658 | ai:claude
 pub fn coordination_vitals(c: &CoordinationInputs, t: &Thresholds) -> Vec<Vital> {
     let mut vitals = Vec::new();
 
@@ -356,8 +359,8 @@ pub fn coordination_vitals(c: &CoordinationInputs, t: &Thresholds) -> Vec<Vital>
     vitals
 }
 
+// trace:STORY-658 | ai:claude
 /// The overall health read: the rolled-up grade plus every vital.
-/// trace:STORY-658 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HealthReport {
     pub overall: Grade,
@@ -365,9 +368,10 @@ pub struct HealthReport {
 }
 
 impl HealthReport {
+    // trace:STORY-658
     /// Build the report from both axes' vitals, rolling the overall grade up as
     /// the **worst** vital (worst-anchored — see module docs). An empty vital
-    /// set is Healthy (nothing measured = nothing wrong). trace:STORY-658
+    /// set is Healthy (nothing measured = nothing wrong).
     pub fn build(mut backlog: Vec<Vital>, coordination: Vec<Vital>) -> HealthReport {
         backlog.extend(coordination);
         let overall = backlog
@@ -388,8 +392,8 @@ impl HealthReport {
         }
     }
 
+    // trace:STORY-658 | ai:claude
     /// Count of vitals at each grade — drives the one-line summary.
-    /// trace:STORY-658 | ai:claude
     pub fn counts(&self) -> (usize, usize, usize) {
         let mut healthy = 0;
         let mut watch = 0;
@@ -404,8 +408,9 @@ impl HealthReport {
         (healthy, watch, critical)
     }
 
+    // trace:STORY-658
     /// The honest one-line headline. Leads with the worst, names the count, so a
-    /// once-a-day glance gets the truth in one sentence. trace:STORY-658
+    /// once-a-day glance gets the truth in one sentence.
     pub fn headline(&self) -> String {
         let (_, watch, critical) = self.counts();
         match self.overall {

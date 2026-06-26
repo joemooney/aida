@@ -20,12 +20,12 @@
 //!
 //! trace:STORY-384 | ai:claude
 
+// trace:STORY-384 | ai:claude
 /// The probed state of a spec under recovery. The caller gathers these from
 /// session leases (`list_leases` + `classify_lease_state`), git (`git status
 /// --porcelain`, `branch_commits_ahead_main`, `probe_branch_on_origin`), and
 /// the forge (`detect_open_pr_for_spec_via_forge`, `pr_is_merged`). This struct
 /// is the *whole* input to the decision — nothing else is consulted.
-/// trace:STORY-384 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct RecoverState {
     /// The spec is already `Completed` — the merge already promoted it. The
@@ -48,9 +48,10 @@ pub(crate) struct RecoverState {
     pub lease_held: bool,
 }
 
+// trace:STORY-384 | ai:claude
 /// The recommended recovery path the wizard presents as the default. Each
 /// variant maps to a concrete sequence of primitives the execution step runs
-/// (with confirmation on destructive ops). trace:STORY-384 | ai:claude
+/// (with confirmation on destructive ops).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RecoverAction {
     /// The spec is already `Completed` — nothing to recover. Surface the state
@@ -112,6 +113,7 @@ impl RecoverAction {
     }
 }
 
+// trace:STORY-384 | ai:claude
 /// Decide the recommended recovery action from the probed state. **Pure.**
 ///
 /// Precedence (most-final state first, so the operator sees the most accurate
@@ -130,7 +132,7 @@ impl RecoverAction {
 /// Note the PR branches dominate the commits/worktree branches: once a PR is
 /// open, the right move is to drive it regardless of local worktree noise (the
 /// branch already carries the work). The commits/worktree branches only matter
-/// when no PR exists yet. trace:STORY-384 | ai:claude
+/// when no PR exists yet.
 pub(crate) fn recommend(state: &RecoverState) -> RecoverAction {
     if state.spec_completed {
         return RecoverAction::AlreadyCompleted;

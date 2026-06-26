@@ -119,19 +119,19 @@ pub(crate) struct DrainState {
     /// true.
     #[serde(default, skip_serializing_if = "is_false")]
     pub(crate) zen: bool,
+    // trace:BUG-286 | ai:claude
     /// BUG-286: orchestrator-side gh/git retry attempts during phases 3-6,
     /// one entry per retried attempt. Lets post-hoc analysis correlate
     /// drain stalls with transient-API health. Omitted when empty so a
     /// blip-free drain leaves the file untouched.
-    /// trace:BUG-286 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) retries: Vec<DrainRetry>,
 }
 
+// trace:BUG-286 | ai:claude
 /// BUG-286: one orchestrator-side retry event recorded against the drain.
 /// Mirrors the [`crate::network_retry::RetryEvent`] shape with the spec /
 /// phase context the orchestrator carries.
-/// trace:BUG-286 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct DrainRetry {
     /// Subprocess label, e.g. `gh pr merge 157 --squash --delete-branch`.
@@ -160,11 +160,12 @@ fn is_false(b: &bool) -> bool {
 }
 
 impl DrainState {
+    // trace:TASK-336 | ai:claude
     /// Initial state for a single-spec drain (`aida queue work <SPEC>
     /// --auto-complete`). The `run_uuid` + `zen` fields are baked in at
     /// creation time so phase children spawned by this run can corroborate
     /// `AIDA_AUTO_COMPLETE_TOKEN` against the drain-state file from the
-    /// first phase onward. trace:TASK-336 | ai:claude
+    /// first phase onward.
     pub(crate) fn new_single(spec: &str, run_uuid: &str, zen: bool) -> Self {
         Self {
             command: launch_command(),
@@ -305,6 +306,7 @@ fn predict_next_n(n: usize) -> String {
     )
 }
 
+// trace:TASK-336 | ai:claude
 /// TASK-336: record the orchestrator run that is starting for `spec` — its
 /// per-run UUID (the BUG-233 corroboration token) and its `--zen` flag (the
 /// BUG-237 zen-provenance anchor). A phase child carrying
@@ -312,7 +314,7 @@ fn predict_next_n(n: usize) -> String {
 /// run_uuid`] read back from the file; the [`DrainState::zen`] flag plays the
 /// same role [`crate::orchestrator::RunMarker::zen`] used to play for
 /// `AIDA_ZEN`. Best-effort — a missing file is a no-op (the drain still runs,
-/// just unobservable). trace:TASK-336 | ai:claude
+/// just unobservable).
 pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
@@ -323,13 +325,14 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
     let _ = state.write(project_root);
 }
 
+// trace:TASK-336 | ai:claude
 /// TASK-336: clear the run-scoped fields a child uses to corroborate — the
 /// per-run UUID and the `--zen` flag — when the current spec's orchestration
 /// returns. Between batch members the drain-state file lives on, but a
 /// would-be child carrying a now-stale token must no longer corroborate
 /// against it (it was minted by a sibling member that has finished).
 /// `current_phase` is also cleared so a stale phase string does not outlive
-/// the run that set it. Best-effort. trace:TASK-336 | ai:claude
+/// the run that set it. Best-effort.
 pub(crate) fn clear_run(project_root: &Path) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
@@ -340,10 +343,11 @@ pub(crate) fn clear_run(project_root: &Path) {
     let _ = state.write(project_root);
 }
 
+// trace:STORY-301 | ai:claude
 /// Record that the current member entered phase `phase_index` (`phase_slug` is
 /// the phase's machine name, e.g. `implementer`). Updates the top-level
 /// `current_phase` and flips the member's own state to `in-phase-N`.
-/// Best-effort — a missing file is a no-op. trace:STORY-301 | ai:claude
+/// Best-effort — a missing file is a no-op.
 pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase_slug: &str) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
@@ -356,11 +360,11 @@ pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase
     let _ = state.write(project_root);
 }
 
+// trace:BUG-286 | ai:claude
 /// BUG-286: append a retry event to the live drain-state file. Best-effort —
 /// a missing drain-state file silently no-ops so non-orchestrator paths
 /// (`aida pull`, `aida push`, manual `gh pr view`) that piggy-back on
 /// `network_retry` outside a drain do not need to know whether one exists.
-/// trace:BUG-286 | ai:claude
 pub(crate) fn append_retry(project_root: &Path, retry: DrainRetry) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
@@ -369,12 +373,12 @@ pub(crate) fn append_retry(project_root: &Path, retry: DrainRetry) {
     let _ = state.write(project_root);
 }
 
+// trace:BUG-286 | ai:claude
 /// BUG-286: [`crate::network_retry::RetrySink`] that records each retry into
 /// the live drain-state file. The orchestrator pairs this with
 /// [`crate::network_retry::StderrSink`] via [`crate::network_retry::DualSink`]
 /// so retries surface both to the user inspecting the live drain *and* to
 /// post-hoc analysis reading `.aida/drain-state.json`.
-/// trace:BUG-286 | ai:claude
 pub(crate) struct DrainStateSink<'a> {
     pub(crate) project_root: &'a Path,
     pub(crate) spec: String,
@@ -399,9 +403,10 @@ impl crate::network_retry::RetrySink for DrainStateSink<'_> {
     }
 }
 
+// trace:STORY-301 | ai:claude
 /// Record a member's terminal outcome — `completed` (its full lifecycle
 /// shipped) or `failed` (a phase failed) — and its PR number if one was
-/// discovered. Best-effort. trace:STORY-301 | ai:claude
+/// discovered. Best-effort.
 pub(crate) fn set_member_outcome(
     project_root: &Path,
     spec: &str,
@@ -469,8 +474,9 @@ fn fmt_local(rfc3339: &str) -> String {
     }
 }
 
+// trace:TASK-840 | ai:claude
 /// Render a registry glyph honoring the active profile. Default Unicode profile
-/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+/// reproduces the historical literals byte-for-byte.
 fn glyph(g: crate::glyphs::Glyph) -> &'static str {
     crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
 }

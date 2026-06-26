@@ -70,6 +70,7 @@ pub(crate) fn status_glyph_for_profile(
     glyph.render(profile)
 }
 
+// trace:STORY-628 | ai:claude
 /// Glyph for a requirement status. Always safe to print — plain Unicode, no
 /// ANSI — so it survives `NO_COLOR` and copy-paste. Unknown / project-specific
 /// `custom_status` values get a neutral bullet rather than nothing, so the
@@ -78,7 +79,7 @@ pub(crate) fn status_glyph_for_profile(
 /// Honors the EPIC-45 glyph profile (proof site): with `[ui] glyphs = "ascii"`
 /// or `AIDA_GLYPHS=ascii` the canonical statuses downgrade to ASCII. The
 /// default profile is Unicode, which reproduces the historical literals
-/// byte-for-byte. trace:STORY-628 | ai:claude
+/// byte-for-byte.
 pub(crate) fn status_glyph(status: &str) -> &'static str {
     let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
     if profile != crate::glyphs::GlyphProfile::Unicode {
@@ -87,9 +88,10 @@ pub(crate) fn status_glyph(status: &str) -> &'static str {
     status_glyph_literal(status)
 }
 
+// trace:STORY-628 | ai:claude
 /// The historical literal status→glyph map. Kept as the Unicode source of
 /// truth for [`status_glyph_for_profile`]'s unmapped fallback and for tests
-/// that assert the default rendering. trace:STORY-628 | ai:claude
+/// that assert the default rendering.
 fn status_glyph_literal(status: &str) -> &'static str {
     match normalize(status).as_str() {
         "draft" => "◯",
@@ -142,27 +144,31 @@ pub(crate) fn status_badge(status: &str) -> String {
     format!("{} {}", status_glyph(status), paint_status(status, status))
 }
 
+// trace:TASK-315 | ai:claude
 /// A fixed-width status cell for list tables: `"<glyph> <coloured label>"` with
 /// the PLAIN label left-padded to `label_width` BEFORE colouring (ANSI escapes
 /// would otherwise inflate `{:<}` byte counts and break column alignment). The
 /// cell occupies `label_width + 2` visible columns — glyph (1) + space (1) +
 /// label. Use this where `aida show`/badges aren't appropriate but a glyph in
-/// the column is still wanted (TASK-315). trace:TASK-315 | ai:claude
+/// the column is still wanted (TASK-315).
 pub(crate) fn status_cell(status: &str, label_width: usize) -> String {
     let padded = format!("{:<width$}", status, width = label_width);
     format!("{} {}", status_glyph(status), paint_status(&padded, status))
 }
 
+// trace:TASK-670 | ai:claude
 /// TASK-670: a fixed-width status cell with NO leading glyph — the padded,
 /// coloured label only, occupying `width` visible columns. Used by `aida list
 /// --no-glyph`, which strips every glyph (status + work-routing) for plain-text
 /// / grep / non-Unicode output. (Colour still auto-degrades under NO_COLOR / a
-/// non-TTY, so the plain-text path is honoured for free.) trace:TASK-670 | ai:claude
+/// non-TTY, so the plain-text path is honoured for free.)
 pub(crate) fn status_cell_no_glyph(status: &str, width: usize) -> String {
     let padded = format!("{:<width$}", status, width = width);
     paint_status(&padded, status).to_string()
 }
 
+// trace:TASK-670 | ai:claude
+// trace:TASK-835 | ai:claude
 /// TASK-670: the leading **work-routing** glyph for an `aida list` row. This
 /// axis is ORTHOGONAL to status (Draft/NeedsAttention already carry glyphs via
 /// [`status_glyph`], so they're deliberately NOT duplicated here) — it answers
@@ -181,13 +187,11 @@ pub(crate) fn status_cell_no_glyph(status: &str, width: usize) -> String {
 ///   caller only sets this behind `--blocked`).
 /// - `↑` queued — present in a role queue, not yet started.
 ///
-/// trace:TASK-670 | ai:claude
 ///
 /// Profile-aware (TASK-835): the three routing markers route through the glyph
 /// registry so `[ui] glyphs = "ascii"` / `AIDA_GLYPHS=ascii` / a custom
 /// `[glyphs]` override applies here too. The default Unicode profile reproduces
 /// the historical literals (▶ / ⊘ / ↑) byte-for-byte; idle stays a bare space.
-/// trace:TASK-835 | ai:claude
 pub(crate) fn flow_glyph(in_flight: bool, blocked: bool, queued: bool) -> &'static str {
     use crate::glyphs::Glyph;
     let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
@@ -310,9 +314,10 @@ mod tests {
         assert_eq!(wide, "◐ In Progress", "cell: {wide:?}");
     }
 
+    // trace:TASK-670 | ai:claude
     /// TASK-670: the work-routing glyph obeys the in-flight > blocked > queued
     /// priority, and falls back to a single space (column stays aligned) when
-    /// nothing applies. trace:TASK-670 | ai:claude
+    /// nothing applies.
     #[test]
     fn flow_glyph_priority_and_idle() {
         // Idle: no routing state.

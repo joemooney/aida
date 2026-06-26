@@ -100,10 +100,11 @@ impl PresenceFile {
     }
 }
 
+// trace:TASK-756 | ai:claude
 /// PURE: compute effective presence from the stored facts. A `home` state is
 /// always `Home`. An `away` state is `Away` only while `set_at + ttl >= now`;
 /// once it expires it reads as `Home` (the operator never told us they came
-/// back, but the away window lapsed). trace:TASK-756 | ai:claude
+/// back, but the away window lapsed).
 pub(crate) fn effective_presence(
     stored: Presence,
     set_at: DateTime<Utc>,
@@ -184,19 +185,21 @@ pub(crate) fn current_presence(now: DateTime<Utc>) -> Presence {
     }
 }
 
+// trace:TASK-783
 /// Seconds of away-TTL remaining right now, or `None` when the effective
 /// presence is `Home` (no file, stored home, or the away-window already
 /// lapsed). READ-ONLY: reads the presence file but never writes it — the
 /// statusline must NOT auto-flip the operator home just by rendering, which is
 /// why this goes through `current_presence`/`effective_presence` and never
-/// `auto_flip_if_interactive`. trace:TASK-783
+/// `auto_flip_if_interactive`.
 pub(crate) fn current_away_remaining_secs(now: DateTime<Utc>) -> Option<u64> {
     away_remaining_secs(read_presence_file().as_ref(), now)
 }
 
+// trace:TASK-783
 /// PURE: away-TTL-remaining (seconds) from a borrowed record, or `None` when
 /// effective presence is `Home`. Borrows the record — never mutates it — so the
-/// statusline read is provably non-flipping. trace:TASK-783
+/// statusline read is provably non-flipping.
 fn away_remaining_secs(file: Option<&PresenceFile>, now: DateTime<Utc>) -> Option<u64> {
     let f = file?;
     let set_at = f.set_at_utc().unwrap_or(now);
@@ -207,10 +210,10 @@ fn away_remaining_secs(file: Option<&PresenceFile>, now: DateTime<Utc>) -> Optio
     Some(f.ttl_secs.saturating_sub(elapsed))
 }
 
+// trace:TASK-783
 /// Compact away-TTL-remaining label for the statusline (e.g. `"2h"`), or
 /// `None` when home. Mirrors the cache-freshness "only render the non-default
 /// state" contract — `home` is the boring default and stays quiet.
-/// trace:TASK-783
 pub(crate) fn statusline_away_remaining(now: DateTime<Utc>) -> Option<String> {
     current_away_remaining_secs(now).map(|secs| humanize_secs(secs as i64))
 }
@@ -285,8 +288,9 @@ pub(crate) fn clear_solo() -> Result<()> {
     })
 }
 
+// trace:STORY-624
 /// PURE: effective solo state — active AND still within its TTL window. An
-/// expired flag (or `active = false`, or no file) reads as off. trace:STORY-624
+/// expired flag (or `active = false`, or no file) reads as off.
 pub(crate) fn effective_solo(
     active: bool,
     set_at: DateTime<Utc>,
@@ -314,17 +318,18 @@ pub(crate) fn current_solo(now: DateTime<Utc>) -> bool {
     }
 }
 
+// trace:TASK-880 | ai:claude
 /// PURE: build the compact solo marker from a resolved glyph + effective-solo
 /// bool. `None` when solo is off (the quiet default, matching the away segment).
 /// Split out from `statusline_solo_marker` so the rendered marker string is
 /// unit-testable without touching `~/.aida/solo.toml` or the glyph registry.
-/// trace:TASK-880 | ai:claude
 pub(crate) fn solo_marker_label(solo_glyph: &str, active: bool) -> Option<String> {
     active.then(|| format!("{solo_glyph} solo"))
 }
 
+// trace:STORY-624 trace:TASK-880
 /// Compact statusline marker when solo is active, else `None` (off is the quiet
-/// default, matching the away-segment contract). trace:STORY-624 trace:TASK-880
+/// default, matching the away-segment contract).
 pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
     // trace:TASK-840 | ai:claude — route the solo marker through the registry.
     let solo = crate::glyphs::get(
@@ -352,6 +357,7 @@ pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
 // `current_solo` + classifies the spec and feeds them in. trace:TASK-827
 // ---------------------------------------------------------------------------
 
+// trace:TASK-827 | ai:claude
 /// PURE: is this spec keystone / architecture-class — the work solo mode must
 /// PARK for the human rather than ship on a default?
 ///
@@ -360,7 +366,6 @@ pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
 /// the cheap one). Reuses the existing `supervised` convention (`burndown.rs`)
 /// and adds the small documented heuristic the spec calls for: `epic` type, or
 /// any `keystone` / `architecture` / `security` / high-blast-radius tag.
-/// trace:TASK-827 | ai:claude
 pub(crate) fn is_keystone_class<'a, I>(req_type: &str, tags: I) -> bool
 where
     I: IntoIterator<Item = &'a str>,
@@ -405,19 +410,21 @@ impl SoloPosture {
         !matches!(self, SoloPosture::Inactive)
     }
 
+    // trace:TASK-827
     /// Whether this posture wants the escalate-on-fork behaviour to ship the
     /// defensible default (`true`) or park (`false`). Only consulted when
-    /// `is_active()`. trace:TASK-827
+    /// `is_active()`.
     pub(crate) fn escalate_defaults(self) -> bool {
         matches!(self, SoloPosture::ProceedOnDefault)
     }
 }
 
+// trace:TASK-827 | ai:claude
 /// PURE: resolve the solo posture for one design-fork from solo state +
 /// keystone classification. **Solo inactive → `Inactive`** (baseline behaviour
 /// unchanged, the load-bearing "do not change behaviour when solo is off"
 /// guarantee). Solo active biases toward PROCEED on safe work and PARK on
-/// keystone work. trace:TASK-827 | ai:claude
+/// keystone work.
 pub(crate) fn resolve_solo_posture(solo_active: bool, is_keystone: bool) -> SoloPosture {
     if !solo_active {
         return SoloPosture::Inactive;
@@ -429,6 +436,7 @@ pub(crate) fn resolve_solo_posture(solo_active: bool, is_keystone: bool) -> Solo
     }
 }
 
+// trace:TASK-756 | ai:claude
 /// Read `[presence] away_ttl` from a project's `.aida/config.toml`, falling
 /// back to the 8h default. Accepts an integer (seconds) or a humantime-ish
 /// string (`"8h"`, `"30m"`, `"2h30m"`). Unparseable / absent → default.
@@ -436,7 +444,7 @@ pub(crate) fn resolve_solo_posture(solo_active: bool, is_keystone: bool) -> Solo
 /// NOTE: presence state lives in `~/.aida/` (machine-global) while config is
 /// per-project; this reads the project the command runs in for its TTL. A
 /// machine-global TTL would need a `~/.aida/config.toml` convention that does
-/// not exist yet. trace:TASK-756 | ai:claude
+/// not exist yet.
 pub(crate) fn away_ttl_secs(config_path: &Path) -> u64 {
     read_away_ttl_from_config(config_path).unwrap_or(DEFAULT_AWAY_TTL_SECS)
 }
@@ -476,10 +484,11 @@ pub(crate) enum ConsumersMode {
     Off,
 }
 
+// trace:STORY-561
 /// P1 — `presence.away_drain`: the default drain mode when away. All three are
 /// fully headless (nobody is supervising); they differ in punt handling. The
 /// mapping onto the code's two axes (`--no-human` mode × escalate mode) is
-/// operator-confirmed "by behavior" (2026-06-12). trace:STORY-561
+/// operator-confirmed "by behavior" (2026-06-12).
 // The shared `Headless` prefix is intentional — every away-drain mode is fully
 // headless (nobody is supervising); the suffix names the punt-handling.
 #[allow(clippy::enum_variant_names)]
@@ -551,9 +560,10 @@ impl HomeOffer {
     }
 }
 
+// trace:STORY-561 | ai:claude
 /// Read the `[presence]` consumer policy from a project's `.aida/config.toml`,
 /// falling back to safe defaults for any absent / unparseable key. A missing
-/// file or `[presence]` block → all defaults. trace:STORY-561 | ai:claude
+/// file or `[presence]` block → all defaults.
 pub(crate) fn read_presence_config(config_path: &Path) -> PresenceConfig {
     let mut cfg = PresenceConfig::default();
     let Ok(body) = std::fs::read_to_string(config_path) else {
@@ -598,6 +608,7 @@ pub(crate) struct DrainModeResolution {
     pub presence_applied: bool,
 }
 
+// trace:STORY-561 | ai:claude
 /// PURE: resolve the effective `queue work --auto-complete` drain mode from the
 /// explicit flags + current presence + config. **Explicit flags ALWAYS win**
 /// (acceptance #5): if the operator passed `--no-human` or an escalate flag,
@@ -605,7 +616,7 @@ pub(crate) struct DrainModeResolution {
 /// and only when away + consumers are on. Home is the interactive default
 /// (presence supplies nothing — today's behavior). This never bypasses the
 /// kickoff scope-ack or any integrity gate; it only chooses a default mode
-/// (acceptance #4). trace:STORY-561 | ai:claude
+/// (acceptance #4).
 pub(crate) fn resolve_drain_mode(
     explicit_no_human: Option<&str>,
     explicit_escalate_blocks: bool,
@@ -640,10 +651,11 @@ pub(crate) fn resolve_drain_mode(
     }
 }
 
+// trace:TASK-756 | ai:claude
 /// Parse a small humantime-ish duration string into seconds. Supports a bare
 /// integer (`"3600"` = seconds) and `h`/`m`/`s` suffixed components that may be
 /// concatenated (`"8h"`, `"30m"`, `"2h30m"`, `"1h30m15s"`). Returns `None` on
-/// anything it doesn't recognize. trace:TASK-756 | ai:claude
+/// anything it doesn't recognize.
 pub(crate) fn parse_duration_secs(input: &str) -> Option<u64> {
     let s = input.trim();
     if s.is_empty() {
@@ -707,8 +719,9 @@ pub(crate) fn ttl_remaining_label(
     }
 }
 
+// trace:TASK-756 | ai:claude
 /// Same threshold ladder as `agent_registry::humanize_elapsed` (kept local so
-/// presence has no cross-module coupling). trace:TASK-756 | ai:claude
+/// presence has no cross-module coupling).
 fn humanize_secs(secs: i64) -> String {
     let secs = secs.max(0);
     if secs < 60 {
@@ -722,11 +735,12 @@ fn humanize_secs(secs: i64) -> String {
     }
 }
 
+// trace:TASK-756 | ai:claude
 /// TTY auto-flip: if presence is STORED `away` and this is an interactive
 /// session (stdout + stdin are a TTY), the operator is demonstrably back —
 /// rewrite the file to `home`. Cheap: only touches the file when a flip is
 /// actually needed. NON-fatal: any error is swallowed so a presence-file
-/// problem never breaks the real command. trace:TASK-756 | ai:claude
+/// problem never breaks the real command.
 pub(crate) fn auto_flip_if_interactive() {
     use std::io::IsTerminal;
     if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
@@ -984,9 +998,10 @@ mod tests {
         assert_eq!(away_remaining_secs(Some(&file), now), None);
     }
 
+    // trace:TASK-783
     /// The remaining computation borrows the record and returns owned data — it
     /// cannot mutate presence state. Rendering the statusline must never flip
-    /// the operator home. trace:TASK-783
+    /// the operator home.
     #[test]
     fn away_remaining_does_not_mutate_record() {
         let set_at = t0();
@@ -1004,10 +1019,11 @@ mod tests {
 
     // --- TASK-880: statusline solo marker renders when solo is active --------
 
+    // trace:TASK-880
     /// When solo is active the statusline gets a compact `<glyph> solo` segment;
     /// when it's off the marker is `None` (the segment stays quiet). The glyph is
     /// resolved through the registry (no raw literal) so the assertion matches the
-    /// same `Glyph::Solo` the real `statusline_solo_marker` renders. trace:TASK-880
+    /// same `Glyph::Solo` the real `statusline_solo_marker` renders.
     #[test]
     fn solo_marker_present_when_active_absent_when_off() {
         let solo = crate::glyphs::get(crate::glyphs::Glyph::Solo, None);
@@ -1027,8 +1043,9 @@ mod tests {
         assert_eq!(solo_marker_label(solo, false), None);
     }
 
+    // trace:TASK-880
     /// The marker honors whatever glyph the registry resolves (ascii fallback,
-    /// custom override, …) — the label is glyph-agnostic. trace:TASK-880
+    /// custom override, …) — the label is glyph-agnostic.
     #[test]
     fn solo_marker_uses_the_supplied_glyph() {
         assert_eq!(solo_marker_label("*", true), Some("* solo".to_string()));

@@ -87,11 +87,12 @@ impl AgentLift {
     }
 }
 
+// trace:STORY-477 | ai:claude
 /// Compute the agent-lift signals from already-windowed event slices.
 ///
 /// Both slices are assumed pre-filtered to the reporting window by the
 /// caller — this function does no time filtering of its own so it stays a
-/// pure fixtures→numbers transform for testing. trace:STORY-477 | ai:claude
+/// pure fixtures→numbers transform for testing.
 pub fn compute_agent_lift(
     auto_complete_events: &[AutoCompleteEvent],
     usage_events: &[UsageEvent],

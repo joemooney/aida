@@ -50,13 +50,14 @@ pub struct ResultEvent {
     pub result_text: Option<String>,
 }
 
+// trace:BUG-226 | ai:claude
 /// Parse the final `result` event out of a `stream-json` JSONL log.
 ///
 /// The log is newline-delimited JSON; the run's tally is the *last* line
 /// whose `type` is `result`. Scans from the end so a truncated/partial
 /// trailing line can't mask a complete earlier one. Returns `None` when
 /// no `result` event is present (run crashed before emitting one, or the
-/// log is empty). trace:BUG-226 | ai:claude
+/// log is empty).
 pub fn parse_result_event(jsonl: &str) -> Option<ResultEvent> {
     for line in jsonl.lines().rev() {
         let line = line.trim();
@@ -84,12 +85,13 @@ pub fn parse_result_event(jsonl: &str) -> Option<ResultEvent> {
     None
 }
 
+// trace:STORY-306 | ai:claude
 /// The `merge` field value a reviewer writes into its verdict file when it
 /// escalates the merge decision to a human rather than auto-deciding it.
 /// The orchestrator's phase-3 handshake keys off this exact string.
-/// trace:STORY-306 | ai:claude
 pub const MERGE_ESCALATED_TO_HUMAN: &str = "escalated-to-human";
 
+// trace:BUG-226 | ai:claude
 /// The `/aida-review` skill's view of the `.aida/review-verdicts/PR-N.json`
 /// verdict file — the fields the standalone summary renders.
 ///
@@ -100,7 +102,6 @@ pub const MERGE_ESCALATED_TO_HUMAN: &str = "escalated-to-human";
 /// standalone file), so it is not deserialized here. serde ignores it.
 /// The `verdict` field is the load-bearing one; the orchestrator's
 /// `read_verdict_file` additionally honours `merge` (STORY-306).
-/// trace:BUG-226 | ai:claude
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct VerdictFile {
     /// `Approved` | `RequestChanges` | `Rejected`.
@@ -114,33 +115,36 @@ pub struct VerdictFile {
     /// IDs of follow-up TASKs a headless drain filed (STORY-278).
     #[serde(default)]
     pub findings_filed: Option<Vec<String>>,
+    // trace:STORY-306 | ai:claude
     /// STORY-306: `escalated-to-human` when the reviewer escalated the *merge*
     /// decision to a human rather than auto-deciding it (uncertain zen
     /// provenance, an irreversible call). Absent — or any other value — means
     /// the reviewer reached a normal verdict. The `--auto-complete`
     /// orchestrator reads this to stop cleanly (exit `0`, no merge), leaving
     /// the PR for a person; the verdict file always exists so the phase-3
-    /// handshake artifact is never missing. trace:STORY-306 | ai:claude
+    /// handshake artifact is never missing.
     #[serde(default)]
     pub merge: Option<String>,
+    // trace:STORY-439 | ai:claude
     /// STORY-439: the diff-grounded complexity the reviewer assessed —
     /// `low` / `med` / `high`. Advisory only (not part of the
     /// PASS/CHANGES/FAIL decision); fuels the three-way calibration
     /// view. Absent on older verdict files and on interactive reviews
-    /// where the reviewer skipped the field. trace:STORY-439 | ai:claude
+    /// where the reviewer skipped the field.
     #[serde(default)]
     pub implementation_complexity: Option<String>,
+    // trace:STORY-439 | ai:claude
     /// STORY-439: the reviewer's call on whether the implementer's
     /// ship-side complexity estimate matched the diff —
     /// `matched` / `implementer-underestimated` / `implementer-overestimated`.
     /// Absent when no ship-side estimate existed to compare against, or
-    /// when the reviewer didn't volunteer one. trace:STORY-439 | ai:claude
+    /// when the reviewer didn't volunteer one.
     #[serde(default)]
     pub complexity_agreement: Option<String>,
+    // trace:STORY-451 | ai:codex
     /// STORY-451: reviewer's effort estimate from the observed diff.
     /// Advisory only; captured into `.aida/effort-calibration/<SPEC>.yaml`
     /// as the review touchpoint. Buckets: `15m`, `1h`, `4h`, `1d`, `1w`.
-    /// trace:STORY-451 | ai:codex
     #[serde(default)]
     pub implementation_effort: Option<String>,
 }
@@ -151,10 +155,11 @@ pub fn parse_verdict_file(json: &str) -> Option<VerdictFile> {
     serde_json::from_str(json).ok()
 }
 
+// trace:BUG-226 | ai:claude
 /// Map a verdict-file `verdict` string to the PASS / CHANGES REQUESTED /
 /// FAIL vocabulary the per-spec checklist uses. Case-tolerant. Returns
 /// `None` for an unrecognised verdict so the caller can surface the raw
-/// string. trace:BUG-226 | ai:claude
+/// string.
 fn verdict_label(raw: &str) -> Option<&'static str> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "approved" | "approve" | "pass" => Some("PASS"),
@@ -210,6 +215,7 @@ fn metrics_line(result: Option<&ResultEvent>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(", "))
 }
 
+// trace:BUG-226 | ai:claude
 /// Assemble the end-of-command summary for a standalone reviewer run.
 ///
 /// - `pr` — the reviewed PR number (for the recovery hint).
@@ -221,7 +227,6 @@ fn metrics_line(result: Option<&ResultEvent>) -> Option<String> {
 /// - `exit_code` — `claude`'s exit code; a non-zero value flips the
 ///   summary to the failure shape even without an `is_error` result event.
 ///
-/// trace:BUG-226 | ai:claude
 pub fn format_reviewer_summary(
     pr: u64,
     verdict_json: Option<&str>,

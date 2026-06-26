@@ -229,6 +229,7 @@ impl AwaitingReport {
     }
 }
 
+// trace:STORY-465 | ai:claude
 /// Classify a single open PR as "awaiting you." The aida-chat motivating
 /// case (5 mergeable PRs OPEN for hours) lives or dies on this filter:
 ///   - `mergeable == "MERGEABLE"` (excludes CONFLICTING / UNKNOWN)
@@ -237,7 +238,6 @@ impl AwaitingReport {
 ///
 /// A `REVIEW_REQUIRED` PR still qualifies: if the operator is the only
 /// reviewer on a solo project, the human merge button is the only gate.
-/// trace:STORY-465 | ai:claude
 pub(crate) fn is_awaiting_you(pr: &OpenPrItem) -> bool {
     let mergeable = pr.mergeable.as_deref().unwrap_or("");
     if !mergeable.eq_ignore_ascii_case("MERGEABLE") {

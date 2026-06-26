@@ -22,9 +22,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+// trace:TASK-307
 /// Polling cadence for the tail thread. Short enough to feel live, long
 /// enough that a stalled headless run doesn't spin the CPU. Matches
-/// `headless_tail::FOLLOW_POLL`. trace:TASK-307
+/// `headless_tail::FOLLOW_POLL`.
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Truncation width for a tool-use input preview (mirrors
@@ -57,10 +58,11 @@ impl TeeOptions {
         Self::resolve(no_tee_flag, env_value.as_deref())
     }
 
+    // trace:TASK-426
     /// Pure policy: flag + env-var value → `TeeOptions`. Split out from
     /// `from_env_and_flag` so the precedence rules can be exercised in
     /// tests without mutating process-wide env state (which races other
-    /// tests in the same binary). trace:TASK-426
+    /// tests in the same binary).
     fn resolve(no_tee_flag: bool, env_value: Option<&str>) -> Self {
         let env_off = env_value
             .map(|v| matches!(v.trim(), "0" | "false" | "off" | "no"))

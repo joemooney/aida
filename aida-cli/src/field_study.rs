@@ -59,18 +59,19 @@ pub struct RuleObservation {
     /// Repo-size bucket at scan time (`small`/`medium`/`large`/`huge`). Lets a
     /// later cross-repo harvest correlate adherence with repo size.
     pub repo_bucket: String,
+    // trace:TASK-891 | ai:claude
     /// The AI vendor that authored the commit, parsed from the `[AI:tool]`
     /// subject tag (`claude`, `codex`, `antigravity+claude`, …); `None` for an
     /// untagged / human commit. A structural identifier (the same token already
     /// public in the commit subject), never message content. The axis that asks
-    /// "do prose rules port across vendors?" (EPIC-48). trace:TASK-891 | ai:claude
+    /// "do prose rules port across vendors?" (EPIC-48).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vendor: Option<String>,
+    // trace:TASK-891 | ai:claude
     /// The conventional-commit type, parsed from the subject (`feat`, `fix`,
     /// `docs`, …); `None` if the subject isn't conventional. A structural label
     /// (a category, like `repo_bucket`), never message content. Lets the report
     /// control for commit type so span stops masquerading as the cause.
-    /// trace:TASK-891 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit_type: Option<String>,
 }
@@ -192,9 +193,9 @@ pub fn read_observations() -> Vec<RuleObservation> {
 pub struct CommitFacts {
     /// First line of the commit message.
     pub subject: String,
-    /// Distinct SPEC-IDs referenced by `trace:` comments in the diff.
+    /// Distinct SPEC-IDs referenced by `trace` comments in the diff.
     pub trace_specs: BTreeSet<String>,
-    /// Whether the diff carries an AI-authored trace (`trace:ID | ai:...`).
+    /// Whether the diff carries an AI-authored `trace` marker with an `ai:` tag.
     pub has_ai_trace: bool,
     /// Number of changed files whose extension is a code extension.
     pub changed_code_files: usize,
@@ -246,13 +247,14 @@ fn single_spec(specs: &BTreeSet<String>) -> Option<String> {
     }
 }
 
+// trace:TASK-891 | ai:claude
 /// Parse the AI vendor from a commit subject's leading `[AI:tool]` tag.
 ///
 /// Handles the documented forms: `[AI:claude]`, `[AI:claude:med]` (trailing
 /// confidence stripped), and `[AI:antigravity+claude]` / `[AI:tool1+tool2:med]`
 /// (multi-agent authorship kept whole). Returns the lowercased tool token(s),
 /// or `None` when the subject carries no `[AI:…]` tag (an untagged/human
-/// commit). Pure — used at scan time. trace:TASK-891 | ai:claude
+/// commit). Pure — used at scan time.
 pub fn parse_vendor(subject: &str) -> Option<String> {
     let s = subject.trim_start();
     let rest = s.strip_prefix("[AI:").or_else(|| s.strip_prefix("[ai:"))?;
@@ -267,11 +269,11 @@ pub fn parse_vendor(subject: &str) -> Option<String> {
     }
 }
 
+// trace:TASK-891 | ai:claude
 /// Parse the conventional-commit type from a subject, skipping any leading
 /// `[AI:tool]` tag. `feat(scope): …` / `fix!: …` / `docs: …` → `feat`/`fix`/
 /// `docs`. Returns the lowercased type word, or `None` when the subject isn't
 /// conventional (no `type:` / `type(scope):` prefix). Pure — used at scan time.
-/// trace:TASK-891 | ai:claude
 pub fn parse_commit_type(subject: &str) -> Option<String> {
     let mut s = subject.trim_start();
     // Skip a leading [AI:...] tag if present.
@@ -290,6 +292,7 @@ pub fn parse_commit_type(subject: &str) -> Option<String> {
     }
 }
 
+// trace:TASK-891 | ai:claude
 /// Strip a trailing ` (#1234)` GitHub squash-merge PR-number suffix from a
 /// commit subject.
 ///
@@ -303,7 +306,6 @@ pub fn parse_commit_type(subject: &str) -> Option<String> {
 /// measures rule-adherence at authoring time rather than GitHub's rewrite — and
 /// it never masks a real miss (a genuinely REQ-ID-less subject still fails after
 /// the strip). The real hook is untouched; this normalization is study-local.
-/// trace:TASK-891 | ai:claude
 pub fn strip_pr_suffix(subject: &str) -> String {
     let trimmed = subject.trim_end();
     if let Some(open) = trimmed.rfind("(#") {
@@ -516,9 +518,10 @@ fn rate(num: usize, den: usize) -> f64 {
     }
 }
 
+// trace:TASK-891 | ai:claude
 /// Build the (span-bucket, total, would_block) curve over an arbitrary row
 /// slice, dropping empty buckets. The shared kernel behind every span lens —
-/// overall, per-vendor, and feat/fix-only. trace:TASK-891 | ai:claude
+/// overall, per-vendor, and feat/fix-only.
 pub fn span_curve(rows: &[&RuleObservation]) -> Vec<(&'static str, usize, usize)> {
     SPAN_BUCKETS
         .iter()
@@ -611,12 +614,12 @@ pub fn auto_complete_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
 }
 
+// trace:TASK-891 | ai:claude
 /// The set of SPEC-IDs that appear as a drained spec in `auto-complete.jsonl`
 /// (uppercased for case-insensitive join). Best-effort: a missing/garbled log
 /// yields an empty set (every commit then classifies `interactive`). This is
 /// **spec-level** attribution — the spec was driven by an `--auto-complete`
 /// orchestrator at some point — not commit-level session attribution.
-/// trace:TASK-891 | ai:claude
 pub fn drain_spec_set() -> BTreeSet<String> {
     let Some(path) = auto_complete_path() else {
         return BTreeSet::new();
@@ -689,9 +692,9 @@ fn is_feat_or_fix(o: &RuleObservation) -> bool {
     matches!(o.commit_type.as_deref(), Some("feat") | Some("fix"))
 }
 
+// trace:TASK-891 | ai:claude
 /// Compute the three slice-2 controls for one rule. `drain_specs` is the join
 /// set from [`drain_spec_set`]; passed in so the analysis is pure/testable.
-/// trace:TASK-891 | ai:claude
 pub fn controls_for(
     obs: &[RuleObservation],
     rule: &str,

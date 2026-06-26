@@ -23,9 +23,10 @@
 //!
 //! trace:STORY-520 | ai:claude
 
+// trace:STORY-520 | ai:claude
 /// Already-probed facts about one candidate spec the integrator considers.
 /// Built in `main.rs` from the store status + a forge PR lookup; consumed by
-/// the pure [`classify_candidate`] below. trace:STORY-520 | ai:claude
+/// the pure [`classify_candidate`] below.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct IntegrationCandidate {
     /// The display SPEC-ID (e.g. `STORY-520`) — for messaging only.
@@ -34,25 +35,29 @@ pub(crate) struct IntegrationCandidate {
     pub is_done: bool,
     /// True when an OPEN PR was found for this spec via the forge.
     pub has_open_pr: bool,
+    // trace:STORY-520 | ai:claude
     /// True when the spec's PR (open or by-branch) is already merged. A merged
     /// PR means integration already happened — only the auto-bump pull is left,
     /// which the integrator does NOT own (TASK-405 refuses an already-merged
-    /// drive). trace:STORY-520 | ai:claude
+    /// drive).
     pub pr_merged: bool,
+    // trace:STORY-520
     /// True when the PR lookup was INCONCLUSIVE (gh missing, auth failure,
     /// transient network error) rather than a clean "no PR". The integrator
     /// must not treat "couldn't tell" as "no PR" — it skips and reports, so a
-    /// flaky probe never silently strands a mergeable spec. trace:STORY-520
+    /// flaky probe never silently strands a mergeable spec.
     pub pr_lookup_inconclusive: bool,
+    // trace:TASK-813 | ai:claude
     /// TASK-813: the spec is keystone work the human must review — tagged
     /// `supervised` (excluded from the drain) or `review:draft-only`. The
     /// integrator PARKS it (leaves the PR for the operator) instead of
     /// auto-merging, so solo mode works the SAFE backlog and never ships
-    /// keystone/security unattended. trace:TASK-813 | ai:claude
+    /// keystone/security unattended.
     pub held_for_human: bool,
 }
 
-/// What the integrator should do with one candidate. trace:STORY-520 | ai:claude
+// trace:STORY-520 | ai:claude
+/// What the integrator should do with one candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CandidateVerdict {
     /// Done + open, unmerged PR — drive the TASK-405 `--from-pr` phases.
@@ -65,15 +70,17 @@ pub(crate) enum CandidateVerdict {
     SkipAlreadyMerged,
     /// Status is not Done — not in the ready-for-integration set at all.
     SkipNotDone,
+    // trace:STORY-520 | ai:claude
     /// The PR probe was inconclusive (gh missing / auth / network). Skip and
-    /// surface, never guess. trace:STORY-520 | ai:claude
+    /// surface, never guess.
     SkipProbeInconclusive,
+    // trace:TASK-813 | ai:claude
     /// TASK-813: keystone work (`supervised` / `review:draft-only`) — PARK it
     /// for the operator's review; the integrator never auto-merges keystone.
-    /// trace:TASK-813 | ai:claude
     SkipHeldForHuman,
 }
 
+// trace:STORY-520 | ai:claude
 /// The pure heart of the integrator: classify ONE candidate from probed facts.
 ///
 /// The ready-for-integration set is exactly "Done + open PR + not merged". An
@@ -81,7 +88,7 @@ pub(crate) enum CandidateVerdict {
 /// strand a mergeable spec OR — worse — drive a merged one). Order matters:
 /// non-Done is filtered first (the cheapest, broadest exclusion), then the
 /// inconclusive guard (we can't trust the PR facts), then merged (irreversible
-/// already happened), then the open-PR gate. trace:STORY-520 | ai:claude
+/// already happened), then the open-PR gate.
 pub(crate) fn classify_candidate(c: &IntegrationCandidate) -> CandidateVerdict {
     if !c.is_done {
         return CandidateVerdict::SkipNotDone;
@@ -105,13 +112,13 @@ pub(crate) fn classify_candidate(c: &IntegrationCandidate) -> CandidateVerdict {
     CandidateVerdict::SkipNoPr
 }
 
+// trace:STORY-520 | ai:claude
 /// The integration-ready subset of a candidate batch, in input order — the
 /// specs the watch-loop will drive this pass. Pure projection over
 /// [`classify_candidate`] so the "which specs merge this pass, in what order"
 /// decision is testable without any forge/store I/O. The serial-merge invariant
 /// (one merge at a time over the shared `main`) is enforced by the CALLER
 /// driving these in turn; this only decides the membership + order.
-/// trace:STORY-520 | ai:claude
 pub(crate) fn ready_for_integration(
     candidates: &[IntegrationCandidate],
 ) -> Vec<&IntegrationCandidate> {
@@ -141,12 +148,13 @@ pub(crate) fn ready_for_integration(
 // the handle-vs-park policy is exhaustively unit-testable with zero forge/store
 // I/O, the same discipline `classify_candidate` follows. trace:TASK-836
 
+// trace:TASK-836 | ai:claude
 /// The richer, normalized PR facts the pre-merge gate decides on. Built in
 /// `main.rs` from the forge probe (`gh pr list` rollup + per-spec lookup) and
 /// the local review-verdict file. Every field is a normalized
 /// already-interpreted signal so the decision stays pure + trivially testable —
 /// the messy string-parsing of `gh` output lives at the probe boundary, not
-/// here. trace:TASK-836 | ai:claude
+/// here.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct PrIntegrationState {
     /// CI rollup for the PR head, as interpreted from the forge.
@@ -155,17 +163,19 @@ pub(crate) struct PrIntegrationState {
     /// Sourced from BOTH the local `.aida/review-verdicts/` file AND the forge's
     /// `reviewDecision` (`CHANGES_REQUESTED`) — either one is a hard stop.
     pub request_changes_pending: bool,
+    // trace:TASK-836
     /// Whether the PR is mergeable per the forge. `Mergeable` = clean,
     /// `Conflicting` = real merge conflict (never auto-resolve), `Unknown` = the
     /// forge hasn't computed it (or we couldn't tell). The behind-base scenario
     /// (branch behind base, no conflict) is NOT a gate input — the forge merges
     /// behind-base branches via a merge commit, and the caller's `--rebase` step
     /// owns rebasing the branch onto current main before the merge — so it never
-    /// reaches this gate as a distinct state. trace:TASK-836
+    /// reaches this gate as a distinct state.
     pub mergeable: MergeableState,
 }
 
-/// CI rollup state for a PR head, normalized from the forge. trace:TASK-836
+// trace:TASK-836
+/// CI rollup state for a PR head, normalized from the forge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum CiState {
     /// All required checks passed.
@@ -179,7 +189,8 @@ pub(crate) enum CiState {
     None,
 }
 
-/// Mergeability of a PR per the forge. trace:TASK-836
+// trace:TASK-836
+/// Mergeability of a PR per the forge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum MergeableState {
     /// Forge reports the PR merges cleanly.
@@ -193,25 +204,28 @@ pub(crate) enum MergeableState {
     Unknown,
 }
 
+// trace:TASK-836 | ai:claude
 /// What the pre-merge gate decides for one already-admitted candidate.
-/// trace:TASK-836 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum IntegrationAction {
     /// Facts are clean (CI passing/none/unknown, no RequestChanges, mergeable or
     /// unknown) — drive the `--from-pr` merge now.
     Merge,
+    // trace:TASK-836
     /// CI is still running — skip this pass + report; a `--watch` re-scan will
     /// re-decide once CI reaches a terminal state. Bounded by NOT blocking the
-    /// serial loop on a single PR. trace:TASK-836
+    /// serial loop on a single PR.
     WaitCi,
+    // trace:TASK-836
     /// A shelvable scenario: park the spec + report ONE legible line, then
     /// continue the loop (resilient-drain park-and-continue). The string is the
-    /// human-facing reason. trace:TASK-836
+    /// human-facing reason.
     Park(ParkReason),
 }
 
+// trace:TASK-836
 /// Why the pre-merge gate parked a member — kept structured so the message + the
-/// exit-code accounting stay legible and testable. trace:TASK-836
+/// exit-code accounting stay legible and testable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ParkReason {
     /// CI failed — never merge a red PR.
@@ -238,6 +252,7 @@ impl ParkReason {
     }
 }
 
+// trace:TASK-836 | ai:claude
 /// The pure pre-merge gate: given the richer probed PR facts for one
 /// already-admitted candidate, decide whether to merge now, wait for CI, or
 /// park. Order matters and encodes the safety priority:
@@ -251,7 +266,6 @@ impl ParkReason {
 ///      before this gate, and the `--from-pr` drive re-gates the merge, so an
 ///      Unknown-mergeable case is safe to let through (merge refuses, never
 ///      corrupts).
-/// trace:TASK-836 | ai:claude
 pub(crate) fn classify_integration_action(s: &PrIntegrationState) -> IntegrationAction {
     if s.request_changes_pending {
         return IntegrationAction::Park(ParkReason::RequestChanges);
@@ -310,11 +324,11 @@ pub(crate) struct ForecastSummary {
     pub conflicting_ids: Vec<String>,
 }
 
+// trace:STORY-335 | ai:claude
 /// Parse the conflicted file paths from `git merge-tree --write-tree
 /// --name-only` output. On conflict (git exits 1) the first line is the written
 /// tree OID and the conflicted paths follow until the first blank line; the
 /// informational "Auto-merging/CONFLICT" messages come after that blank.
-/// trace:STORY-335 | ai:claude
 pub(crate) fn parse_merge_tree_conflict_files(stdout: &str) -> Vec<String> {
     stdout
         .lines()
@@ -362,10 +376,11 @@ pub(crate) enum IntegrateStrategy {
     Stacked,
 }
 
+// trace:STORY-335 | ai:claude
 /// A clean "not built yet" message for strategies accepted on the CLI but not
 /// yet implemented, or `None` for the supported `per-item` strategy. Lets the
 /// flag accept all three values from day one while refusing the unbuilt ones
-/// with a pointer rather than a silent no-op. trace:STORY-335 | ai:claude
+/// with a pointer rather than a silent no-op.
 pub(crate) fn strategy_unsupported_message(strategy: IntegrateStrategy) -> Option<String> {
     match strategy {
         IntegrateStrategy::PerItem => None,
@@ -383,8 +398,9 @@ pub(crate) fn strategy_unsupported_message(strategy: IntegrateStrategy) -> Optio
     }
 }
 
+// trace:TASK-691 | ai:claude
 /// Parse a strategy from its CLI/config string form (`per-item`, `one-branch`,
-/// `stacked`; underscores tolerated). trace:TASK-691 | ai:claude
+/// `stacked`; underscores tolerated).
 pub(crate) fn parse_strategy(s: &str) -> Option<IntegrateStrategy> {
     match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
         "per-item" => Some(IntegrateStrategy::PerItem),
@@ -394,13 +410,13 @@ pub(crate) fn parse_strategy(s: &str) -> Option<IntegrateStrategy> {
     }
 }
 
+// trace:TASK-691 | ai:claude
 /// TASK-691: read the project-default accumulation strategy from a
 /// `.aida/config.toml` body — the `strategy` key under `[integrate]`. Pure
 /// (takes the file content) + section-aware, mirroring the hand-rolled scanner
 /// the `[advisor]` config uses so we don't pull a serde-TOML dep for one
 /// scalar. Returns None when the section/key is absent or the value is
 /// unrecognized; the caller falls back to the `per-item` default.
-/// trace:TASK-691 | ai:claude
 pub(crate) fn integrate_strategy_from_config(content: &str) -> Option<IntegrateStrategy> {
     let mut in_integrate = false;
     for raw in content.lines() {
@@ -446,10 +462,11 @@ pub(crate) fn integrate_strategy_from_config(content: &str) -> Option<IntegrateS
 // discipline `classify_candidate` / `classify_integration_action` follow.
 // trace:TASK-843
 
+// trace:TASK-843 | ai:claude
 /// One open PR found for a spec, reduced to the two facts the canonical-pick
 /// needs: its number (the newest-wins key) and whether it is mergeable (clean /
 /// admissible this pass). The richer per-PR gate ([`classify_integration_action`])
-/// still runs on the chosen PR afterwards. trace:TASK-843 | ai:claude
+/// still runs on the chosen PR afterwards.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PrCandidate {
     /// The forge PR number — also the newest-canonical tiebreak (higher = newer).
@@ -460,27 +477,30 @@ pub(crate) struct PrCandidate {
     pub mergeable: bool,
 }
 
-/// What to do when a spec has one-or-more open PRs. trace:TASK-843 | ai:claude
+// trace:TASK-843 | ai:claude
+/// What to do when a spec has one-or-more open PRs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CanonicalPrDecision {
     /// No open PRs at all — nothing to integrate (the caller skips quietly,
     /// matching `CandidateVerdict::SkipNoPr`).
     NoPr,
+    // trace:TASK-843
     /// Integrate `chosen` (the newest mergeable PR). `ignored` lists the OTHER
     /// open PR numbers this pass skipped (empty in the common single-PR case),
     /// in descending order, so the caller can emit one legible "ignored #N, #M"
-    /// line. trace:TASK-843
+    /// line.
     Integrate { chosen: u64, ignored: Vec<u64> },
     /// One-or-more open PRs but NONE are mergeable — park + report the
     /// candidates (descending order). Reuses the existing Park path.
     Park { candidates: Vec<u64> },
 }
 
+// trace:TASK-843 | ai:claude
 /// Pure newest-canonical policy for a spec's open PRs. Given the candidate PR
 /// list (any order), pick the newest mergeable PR as canonical, report the rest
 /// as ignored, or park when none are mergeable. Order of the returned
 /// `ignored` / `candidates` lists is descending by PR number (newest first) for
-/// stable, legible output. trace:TASK-843 | ai:claude
+/// stable, legible output.
 pub(crate) fn select_canonical_pr(prs: &[PrCandidate]) -> CanonicalPrDecision {
     if prs.is_empty() {
         return CanonicalPrDecision::NoPr;
@@ -529,22 +549,23 @@ pub(crate) fn select_canonical_pr(prs: &[PrCandidate]) -> CanonicalPrDecision {
 // Pure over the (pr_number, spec_ids) recognition rows so it is unit-testable
 // with synthetic trailer sets. trace:TASK-842
 
+// trace:TASK-842 | ai:claude
 /// One PR recognized as completing one-or-more specs on merge. `spec_ids` is the
 /// full trailer set the PR references (deduped, in first-seen order).
-/// trace:TASK-842 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PrCompletion {
     pub number: u64,
     pub spec_ids: Vec<String>,
 }
 
+// trace:TASK-842 | ai:claude
 /// Collapse per-spec recognition rows into one [`PrCompletion`] per PR number,
 /// so a multi-spec cluster PR — which the Done-spec scan surfaces once per member
 /// spec — is integrated ONCE, not N times. Input is `(pr_number, spec_ids)` rows
 /// (one per Done spec the scan considered); output is one row per distinct PR
 /// number, with the UNION of every spec the PR's trailers reference (first-seen
 /// order across rows preserved, case-insensitive de-dup). PR rows are returned
-/// in first-seen order so the report is stable. trace:TASK-842 | ai:claude
+/// in first-seen order so the report is stable.
 pub(crate) fn dedupe_pr_completions(rows: &[(u64, Vec<String>)]) -> Vec<PrCompletion> {
     let mut order: Vec<u64> = Vec::new();
     let mut by_number: std::collections::HashMap<u64, Vec<String>> =
@@ -573,10 +594,11 @@ pub(crate) fn dedupe_pr_completions(rows: &[(u64, Vec<String>)]) -> Vec<PrComple
         .collect()
 }
 
+// trace:TASK-842 | ai:claude
 /// One legible, SPEC-ID-bearing line for a multi-spec PR completion — the
 /// "integrating PR #N → completes BUG-566, BUG-567" report. The spec ids ARE the
 /// payload here (developer-facing integrator output that names what the merge
-/// completes), so they stay in the line. trace:TASK-842 | ai:claude
+/// completes), so they stay in the line.
 pub(crate) fn describe_pr_completion(c: &PrCompletion) -> String {
     if c.spec_ids.is_empty() {
         format!(
