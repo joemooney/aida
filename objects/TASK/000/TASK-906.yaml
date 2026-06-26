@@ -1,0 +1,16 @@
+id: 019f02ed-7b4f-7593-b495-c0f65e15727f
+spec_id: TASK-906
+agreed_id: TASK-906
+title: 'aida-fasttrack skill: express tier, eligibility litmus, punt-out discipline'
+description: 'Followup C of TASK-0438 design. Extend the /aida-fasttrack skill and its master template (aida-core/templates/skills/aida-fasttrack.md) with: the two-tier split (trivial vs quick-fix express), the express-eligibility litmus (bounded/low-blast-radius/reversible/excluded-classes-absent), and the explicit punt-out step (non-trivial discovery -> NeedsAttention + drop the batch tag). Glyph-lint gate; sync-templates symlinks. See docs/plans/2026-06-26-task-0438-fasttrack-lane.md.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T07:55:45.871294004Z
+modified_at: 2026-06-26T07:55:45.871294004Z
+req_type: Task
+tags:
+- express
+- fasttrack
+- parent:TASK-0438
