@@ -22145,5 +22145,17 @@ operations:
     req_type: Task
     status: Draft
     priority: High
-clock: 2094
+- id: 019f0642-c093-77c2-938d-e6e6c2230d8c
+  target_id: 019f0642-b5ec-7153-a57e-4ac99337c62e
+  author: aida
+  node_id: '1'
+  lamport: 2095
+  timestamp: 2026-06-26T23:27:45.811964912Z
+  kind: !Create
+    title: 'TUI gap: live refresh (key ''r'') — re-fetch scope/focus/status in-process to witness state changes'
+    description: 'GAP #4: the in-process reads are point-in-time, so a spec moving through states does not update live. Add a refresh key (r) that re-fetches the current scope items, the focus set, and statuses from the store in-process (the SpecStore opens the backend once — refresh re-queries; if needed, reopen to pick up external writes/cache rebuilds). Optional: a periodic auto-refresh. ACCEPTANCE: pressing r re-reads the store so externally-changed statuses appear without relaunch; gates green; redesign module.'
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2095
 node_id: '1'
