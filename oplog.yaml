@@ -21722,5 +21722,35 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 2061
+- id: 019f053c-215a-79c0-998c-cac348f2e5de
+  target_id: 019f053c-1e40-72a2-9c3b-d84615d38c05
+  author: aida
+  node_id: '1'
+  lamport: 2062
+  timestamp: 2026-06-26T18:40:54.618647215Z
+  kind: !Create
+    title: 'aida tui: context-sensitive ''?'' help popup (and reassign quit off ''?'')'
+    description: |-
+      Add a context-sensitive '?' help hotkey to the redesign TUI: pressing '?' opens a help popup whose content depends on WHERE you are and WHAT is selected.
+
+      EXAMPLES:
+      - On the verbs list with "groom" highlighted, '?' -> popup explaining what groom does (and what set it operates on).
+      - On the scopes list with a scope highlighted -> what that scope shows.
+      - On the items list with a spec focused -> the item-level actions / status meaning.
+      Generally: header (where you are) + the focused element's help + the keys available in this context.
+
+      CONTENT SOURCE: verbs already carry a `hint` field, scopes have hints — reuse/expand these into proper help strings. Each scope and verb gets a help string; '?' renders the one for the currently-focused element (plus a short key legend for the current context).
+
+      CRITICAL PREREQUISITE: '?' is currently the QUIT key in the prototype (chosen because 'q' collides with fuzzy-filter typing). Freeing '?' for help REQUIRES reassigning quit. Pick a clean quit: Ctrl-C should always quit; additionally a top-level quit (e.g. 'q' only when NOT typing a filter, or Esc-at-the-top-level with the existing Esc-pop semantics). Document the chosen quit key in the help popup itself.
+
+      ACCEPTANCE:
+      - '?' opens a context-sensitive help popup keyed to the focused panel + selected element (scope/verb/item); shows that element's help + a context key legend.
+      - quit is reassigned off '?' to a clean key (Ctrl-C always; plus a documented top-level quit); '?' no longer quits.
+      - the help content for verbs/scopes comes from their hint/help strings (pure, data-driven), unit-tested (the right help string is selected for a given focus state).
+      - Esc/'?' closes the help popup.
+      - build/test/fmt/clippy green; redesign module; --no-verify.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2062
 node_id: '1'
