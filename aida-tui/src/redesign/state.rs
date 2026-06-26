@@ -681,6 +681,15 @@ impl RedesignState {
         }
     }
 
+    /// Open the item modal independent of which panel has focus — used by the
+    /// Open scope's `show` verb (run from top focus), whose loaded spec lives
+    /// in the parent module's `loaded_spec`, not in `self.items`. The stored
+    /// index is a sentinel ("a modal is open"); the parent renders from the
+    /// loaded spec, not from this index. trace:STORY-693 | ai:claude
+    pub fn open_modal_external(&mut self) {
+        self.modal = Some(usize::MAX);
+    }
+
     pub fn close_modal(&mut self) {
         self.modal = None;
         self.verb_modal = None;

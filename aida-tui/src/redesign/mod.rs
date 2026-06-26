@@ -20,11 +20,12 @@
 //! trace:STORY-690 | ai:claude
 
 mod state;
+mod store;
 
 pub use state::{RedesignState, RunOutcome, Scope, TargetItem, Verb};
 use std::collections::HashMap;
+use store::{LoadedSpec, SpecStore};
 
-use crate::dashboard;
 use crate::term;
 use crate::theme::Theme;
 use anyhow::Result;
@@ -51,17 +52,35 @@ pub fn enabled() -> bool {
 /// Launch the redesign prototype. Owns the terminal via the same RAII
 /// guard the rest of the TUI uses, so a panic or a normal exit never
 /// strands the terminal in raw mode.
-pub fn run(theme: Theme) -> Result<()> {
+///
+/// `project_root` is the directory holding `.aida/config.toml` (resolved by
+/// the launcher). It opens the cache-backed git backend ONCE
+/// ([`SpecStore`]) so every scope-list + show-modal read is in-process —
+/// no per-read `aida` subprocess cold-start. trace:STORY-693 | ai:claude
+pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
     term::install_panic_hook();
     term::install_signal_handler()?;
 
-    let items = fetch_scope_items(Scope::Backlog);
+    // Open the in-process read backend once. If the store can't be attached
+    // (offline, missing, etc.) the prototype still runs — the scope lists are
+    // empty and the modal reports the failure — rather than crashing.
+    // trace:STORY-693 | ai:claude
+    let store = SpecStore::open(project_root);
+
+    let items = store
+        .as_ref()
+        .map(|s| s.scope_items(Scope::Backlog))
+        .unwrap_or_default();
     let mut st = RedesignState::new(items, resolve_role());
     st.theme = theme;
-    st.status = Some("Slice 1 prototype — Backlog / Open scopes. ? exits.".to_string());
+    st.status = Some(if store.is_some() {
+        "Slice 1 prototype — Backlog / Open scopes. ? exits.".to_string()
+    } else {
+        "Slice 1 prototype — store unavailable (no in-process data). ? exits.".to_string()
+    });
 
     // Per-scope item-set cache so the bottom panel can follow the
-    // highlighted scope without re-shelling on every cursor move.
+    // highlighted scope without re-querying on every cursor move.
     // trace:STORY-690 | ai:claude
     let mut item_cache: HashMap<Scope, Vec<TargetItem>> = HashMap::new();
     item_cache.insert(Scope::Backlog, st.items.clone());
@@ -71,7 +90,13 @@ pub fn run(theme: Theme) -> Result<()> {
     let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
     terminal.clear()?;
 
-    event_loop(&mut terminal, &mut st, &mut item_cache, &mut loaded_scope)?;
+    event_loop(
+        &mut terminal,
+        &mut st,
+        store.as_ref(),
+        &mut item_cache,
+        &mut loaded_scope,
+    )?;
     Ok(())
 }
 
@@ -87,9 +112,11 @@ fn active_item_scope(st: &RedesignState) -> Option<Scope> {
 }
 
 /// Keep the bottom panel's items in sync with the active scope, fetching
-/// (and caching) on first visit. trace:STORY-690 | ai:claude
+/// (and caching) on first visit. The fetch is now an in-process cache read
+/// via the open [`SpecStore`] — no subprocess. trace:STORY-690 trace:STORY-693
 fn sync_scope_items(
     st: &mut RedesignState,
+    store: Option<&SpecStore>,
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
     loaded: &mut Scope,
 ) {
@@ -101,7 +128,7 @@ fn sync_scope_items(
     }
     let items = cache
         .entry(scope)
-        .or_insert_with(|| fetch_scope_items(scope))
+        .or_insert_with(|| store.map(|s| s.scope_items(scope)).unwrap_or_default())
         .clone();
     st.set_items(items);
     *loaded = scope;
@@ -116,91 +143,56 @@ fn resolve_role() -> String {
         .unwrap_or_else(|| "advisor".to_string())
 }
 
-/// Load a functional scope's target set via the same cache-fast data path
-/// the dashboard uses (`aida list … --json`). We reuse
-/// [`dashboard::parse_list_json`] rather than re-shelling `aida show` per
-/// row (the §7 anti-pattern); the per-item body is fetched lazily, only
-/// when its modal opens. The Open scope fetches `aida list open --json`;
-/// Backlog fetches the approved+planned slice. trace:STORY-690 | ai:claude
-fn fetch_scope_items(scope: Scope) -> Vec<TargetItem> {
-    let args: &[&str] = match scope {
-        Scope::Open => &["list", "open", "--json"],
-        // Backlog (and any other functional scope) keeps the original slice.
-        _ => &["list", "--status", "approved,planned", "--json"],
-    };
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
-    cmd.args(args);
-    if let Ok(cwd) = std::env::current_dir() {
-        cmd.current_dir(cwd);
+/// Load the focused item's full spec for the show modal — in-process, via the
+/// open [`SpecStore`] (no `aida show` subprocess). The loaded record is held in
+/// `loaded_spec` and rendered natively by [`render_modal`]. Fires only on
+/// modal-open, never on cursor move. trace:STORY-693 | ai:claude
+fn load_focused_spec(st: &RedesignState, store: Option<&SpecStore>) -> Option<LoadedSpec> {
+    let idxs = st.bottom_indices();
+    let real = *idxs.get(st.bottom_idx)?;
+    let id = st.items.get(real)?.id.clone();
+    match store {
+        Some(s) => s.load_spec(&id).or_else(|| Some(missing_spec(&id))),
+        None => Some(missing_spec(&id)),
     }
-    let Ok(out) = cmd.output() else {
-        return Vec::new();
-    };
-    if !out.status.success() {
-        return Vec::new();
-    }
-    dashboard::parse_list_json(&out.stdout)
-        .into_iter()
-        .map(|r| TargetItem {
-            id: r.spec_id,
-            title: r.title,
-            req_type: r.req_type,
-            status: r.status,
-            // The cache-fast `aida list --json` does not carry priority
-            // today (BUG-/STORY follow-up); left empty rather than re-shell.
-            priority: String::new(),
-            // Body is fetched on demand when the modal opens; empty until
-            // then so cursor movement never shells out.
-            body: String::new(),
-        })
-        .collect()
 }
 
-/// Lazily fill an item's body for the modal (single `aida show <id>`,
-/// cached into the item). Cheap because it only fires on modal-open, never
-/// on cursor move. trace:STORY-690 | ai:claude
-fn ensure_body(st: &mut RedesignState, idx: usize) {
-    let Some(item) = st.items.get(idx) else {
-        return;
-    };
-    if !item.body.is_empty() {
-        return;
-    }
-    let id = item.id.clone();
-    let exe = crate::app::aida_exe();
-    let mut cmd = Command::new(&exe);
-    cmd.args(["show", &id, "--no-git"]);
-    if let Ok(cwd) = std::env::current_dir() {
-        cmd.current_dir(cwd);
-    }
-    let body = match cmd.output() {
-        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).into_owned(),
-        _ => format!("(could not load body for {id})"),
-    };
-    if let Some(item) = st.items.get_mut(idx) {
-        item.body = body;
+/// A placeholder spec for the modal when the store is unavailable or the id
+/// can't be found — rendered the same way as a real one. trace:STORY-693
+fn missing_spec(id: &str) -> LoadedSpec {
+    LoadedSpec {
+        id: id.to_string(),
+        title: String::new(),
+        req_type: String::new(),
+        status: String::new(),
+        priority: String::new(),
+        tags: Vec::new(),
+        description: format!("(could not load {id} from the store)"),
     }
 }
 
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
+    store: Option<&SpecStore>,
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
     loaded: &mut Scope,
 ) -> Result<()> {
+    // The spec currently shown in the item modal (loaded in-process on open,
+    // cleared on close). trace:STORY-693 | ai:claude
+    let mut loaded_spec: Option<LoadedSpec> = None;
     loop {
         // Keep the bottom panel's target set following the active scope
         // (highlighted at the scope level, drilled-into at the verb level).
-        sync_scope_items(st, cache, loaded);
-        terminal.draw(|f| render(f, st))?;
+        sync_scope_items(st, store, cache, loaded);
+        terminal.draw(|f| render(f, st, loaded_spec.as_ref()))?;
         let Event::Key(key) = crossterm::event::read()? else {
             continue;
         };
         if !matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
             continue;
         }
-        if handle_key(terminal, st, key)? {
+        if handle_key(terminal, st, store, &mut loaded_spec, key)? {
             break;
         }
     }
@@ -211,6 +203,8 @@ fn event_loop(
 fn handle_key(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
+    store: Option<&SpecStore>,
+    loaded_spec: &mut Option<LoadedSpec>,
     key: KeyEvent,
 ) -> Result<bool> {
     // Ctrl-C always quits.
@@ -223,7 +217,7 @@ fn handle_key(
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                 let outcome = st.resolve_confirm(true);
-                apply_outcome(terminal, st, outcome)?;
+                apply_outcome(terminal, st, store, loaded_spec, outcome)?;
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                 st.resolve_confirm(false);
@@ -242,6 +236,7 @@ fn handle_key(
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('p')
         ) {
             st.close_modal();
+            *loaded_spec = None;
         }
         return Ok(false);
     }
@@ -263,7 +258,7 @@ fn handle_key(
 
         KeyCode::Char('p') => {
             if st.focus == Focus::Bottom {
-                open_modal_with_body(st);
+                open_modal_with_body(st, store, loaded_spec);
             }
         }
 
@@ -282,12 +277,12 @@ fn handle_key(
             // Verb level, top focus: Enter runs the verb.
             (Focus::Top, Level::Verbs) => {
                 let outcome = st.run_verb();
-                apply_outcome(terminal, st, outcome)?;
+                apply_outcome(terminal, st, store, loaded_spec, outcome)?;
             }
             // Bottom focus: Enter on an item opens its modal (the N=1
             // "preview this spec" case of the same protocol).
             (Focus::Bottom, _) => {
-                open_modal_with_body(st);
+                open_modal_with_body(st, store, loaded_spec);
             }
         },
 
@@ -303,11 +298,15 @@ fn handle_key(
     Ok(false)
 }
 
-fn open_modal_with_body(st: &mut RedesignState) {
-    let idxs = st.bottom_indices();
-    if let Some(&real) = idxs.get(st.bottom_idx) {
-        ensure_body(st, real);
-    }
+/// Open the item modal for the focused row, loading its full spec in-process
+/// (via the open [`SpecStore`]) into `loaded_spec` for native rendering. No
+/// `aida show` subprocess. trace:STORY-693 | ai:claude
+fn open_modal_with_body(
+    st: &mut RedesignState,
+    store: Option<&SpecStore>,
+    loaded_spec: &mut Option<LoadedSpec>,
+) {
+    *loaded_spec = load_focused_spec(st, store);
     st.open_modal();
 }
 
@@ -318,6 +317,8 @@ fn open_modal_with_body(st: &mut RedesignState) {
 fn apply_outcome(
     _terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
+    store: Option<&SpecStore>,
+    loaded_spec: &mut Option<LoadedSpec>,
     outcome: RunOutcome,
 ) -> Result<()> {
     match outcome {
@@ -341,14 +342,25 @@ fn apply_outcome(
                 verb.label(),
             ));
         }
-        RunOutcome::ShowItem { verb, id } => {
-            // Item-level one-shot verb (show / why): capturing stdout for a
-            // deliberate single invocation is fine here — this is NOT the
-            // per-cursor-move anti-pattern. Result lands in the modal.
-            // trace:STORY-690 | ai:claude
-            let (out, title) = run_item_verb(verb, &id);
-            st.open_verb_modal(title, out);
-        }
+        RunOutcome::ShowItem { verb, id } => match verb {
+            // `show` is now in-process: load the spec from the open backend and
+            // render its structured fields + body natively in the item modal
+            // (no `aida show` subprocess). trace:STORY-693 | ai:claude
+            Verb::Show => {
+                *loaded_spec = store
+                    .map(|s| s.load_spec(&id).unwrap_or_else(|| missing_spec(&id)))
+                    .or_else(|| Some(missing_spec(&id)));
+                st.open_modal_external();
+            }
+            // `why` MAY remain a shell-out for now — its classifier lives in
+            // aida-cli/burndown.rs (not aida-core), so making it in-process is
+            // a separate task. TODO(why in-process). Result lands in the
+            // captured-stdout verb modal. trace:STORY-693 | ai:claude
+            _ => {
+                let (out, title) = run_item_verb(verb, &id);
+                st.open_verb_modal(title, out);
+            }
+        },
         RunOutcome::RequestApproval { drafts, skipped } => {
             // Route each draft to the advisor queue via the RELIABLE path
             // (`aida queue add --for advisor <id>`) — not the mailbox.
@@ -370,23 +382,26 @@ fn apply_outcome(
     Ok(())
 }
 
-/// Shell out for an item-level verb and return `(stdout_or_error, title)`.
-/// `show` → `aida show <id> --no-git`; `why` → `aida why <id>`.
-/// trace:STORY-690 | ai:claude
+/// Shell out for the `why` verb and return `(stdout_or_error, title)`.
+///
+/// `why` is the ONE remaining read-style shell-out in this module:
+/// `aida why <id>`. Its state classifier lives in `aida-cli/burndown.rs` (not
+/// in `aida-core`), so making it in-process is a separate task —
+/// TODO(why in-process). `show` and the scope lists are now in-process via
+/// [`SpecStore`] and never reach here. trace:STORY-693 | ai:claude
 fn run_item_verb(verb: Verb, id: &str) -> (String, String) {
-    let args: Vec<&str> = match verb {
-        Verb::Show => vec!["show", id, "--no-git"],
-        Verb::Why => vec!["why", id],
-        // Only show / why are item-level; defensive fallthrough.
-        _ => return (String::new(), format!("{id} — {}", verb.label())),
-    };
+    let title = format!("{id} — {}", verb.label());
+    // Only `why` is shelled out now; any other verb is a defensive no-op
+    // (item-level `show` is intercepted upstream and served in-process).
+    if verb != Verb::Why {
+        return (String::new(), title);
+    }
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
-    cmd.args(&args);
+    cmd.args(["why", id]);
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
-    let title = format!("{id} — {}", verb.label());
     let body = match cmd.output() {
         Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).into_owned(),
         Ok(out) => {
@@ -448,7 +463,7 @@ fn request_approval_status(routed: &[String], failed: &[String], skipped: &[Stri
 // Render
 // ---------------------------------------------------------------------------
 
-fn render(f: &mut Frame, st: &RedesignState) {
+fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
     let theme = &st.theme;
 
     let rows = Layout::vertical([
@@ -464,8 +479,12 @@ fn render(f: &mut Frame, st: &RedesignState) {
     render_bottom(f, rows[2], st, theme);
     render_hint(f, rows[3], st, theme);
 
-    if let Some(idx) = st.modal {
-        render_modal(f, f.area(), st, theme, idx);
+    // The item modal renders the spec loaded IN-PROCESS (`loaded_spec`):
+    // structured fields + native body. trace:STORY-693 | ai:claude
+    if st.modal.is_some() {
+        if let Some(spec) = loaded_spec {
+            render_modal(f, f.area(), theme, spec);
+        }
     }
     if let Some(vm) = &st.verb_modal {
         render_verb_modal(f, f.area(), theme, &vm.title, &vm.body);
@@ -639,27 +658,86 @@ fn render_hint(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
     );
 }
 
-fn render_modal(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme, idx: usize) {
-    let Some(item) = st.items.get(idx) else {
-        return;
-    };
+/// Render the item modal from a spec loaded IN-PROCESS — a native render of
+/// the structured fields (type / status / priority / tags) plus the
+/// description body, replacing the old captured `aida show` stdout blob.
+/// Full markdown styling is a later slice; for now the body renders readably
+/// line-by-line rather than as one raw paragraph. trace:STORY-693 | ai:claude
+fn render_modal(f: &mut Frame, area: Rect, theme: &Theme, spec: &LoadedSpec) {
     let popup = centered(area, 80, 80);
     f.render_widget(Clear, popup);
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.accent))
-        .title(format!(" {} — {} ", item.id, item.status));
-    // Slice 1: a plain Paragraph. STORY-689 makes this markdown + field
-    // color-coding (Slice 4). trace:STORY-690 | ai:claude
-    let body = if item.body.is_empty() {
-        format!("{}\n\n(loading…)", item.title)
-    } else {
-        item.body.clone()
+        .title(format!(" {} (Esc/q/p to close) ", spec.id));
+    f.render_widget(spec_lines(spec, theme).block(block), popup);
+}
+
+/// Build the native modal body: a structured header (title + a color-coded
+/// field row + tags) then the description rendered line-by-line. Pure (no IO)
+/// so it is render-smoke / unit testable. trace:STORY-693 | ai:claude
+fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Paragraph<'a> {
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Title.
+    if !spec.title.is_empty() {
+        lines.push(Line::from(Span::styled(
+            spec.title.clone(),
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+        )));
+    }
+
+    // Field row: type · status · priority — each a labelled, dimmed pair.
+    let mut field_spans: Vec<Span> = Vec::new();
+    let push_field = |spans: &mut Vec<Span>, label: &str, value: &str| {
+        if value.is_empty() {
+            return;
+        }
+        if !spans.is_empty() {
+            spans.push(Span::styled("  ·  ", Style::default().fg(theme.dim)));
+        }
+        spans.push(Span::styled(
+            format!("{label}: "),
+            Style::default().fg(theme.dim),
+        ));
+        spans.push(Span::styled(
+            value.to_string(),
+            Style::default().fg(theme.info),
+        ));
     };
-    let para = Paragraph::new(body)
-        .block(block)
-        .wrap(Wrap { trim: false })
-        .style(Style::default().fg(theme.fg));
-    f.render_widget(para, popup);
+    push_field(&mut field_spans, "type", &spec.req_type);
+    push_field(&mut field_spans, "status", &spec.status);
+    push_field(&mut field_spans, "priority", &spec.priority);
+    if !field_spans.is_empty() {
+        lines.push(Line::from(field_spans));
+    }
+
+    // Tags.
+    if !spec.tags.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("tags: ", Style::default().fg(theme.dim)),
+            Span::styled(spec.tags.join(", "), Style::default().fg(theme.accent)),
+        ]));
+    }
+
+    // Separator before the body.
+    lines.push(Line::from(""));
+
+    // Description body, line-by-line (readable, not one raw blob).
+    if spec.description.trim().is_empty() {
+        lines.push(Line::from(Span::styled(
+            "(no description)",
+            Style::default().fg(theme.dim),
+        )));
+    } else {
+        for raw in spec.description.lines() {
+            lines.push(Line::from(Span::styled(
+                raw.to_string(),
+                Style::default().fg(theme.fg),
+            )));
+        }
+    }
+
+    Paragraph::new(lines).wrap(Wrap { trim: false })
 }
 
 /// Render a verb-output modal (the captured stdout of `show` / `why`).
@@ -773,8 +851,24 @@ mod render_tests {
     }
 
     fn draw(st: &RedesignState, w: u16, h: u16) {
+        draw_with_spec(st, None, w, h);
+    }
+
+    fn draw_with_spec(st: &RedesignState, spec: Option<&LoadedSpec>, w: u16, h: u16) {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("test backend");
-        terminal.draw(|f| render(f, st)).expect("render");
+        terminal.draw(|f| render(f, st, spec)).expect("render");
+    }
+
+    fn sample_spec() -> LoadedSpec {
+        LoadedSpec {
+            id: "STORY-1".into(),
+            title: "a sample spec".into(),
+            req_type: "Story".into(),
+            status: "Approved".into(),
+            priority: "High".into(),
+            tags: vec!["performance".into(), "tui".into()],
+            description: "Line one.\n\nLine two of the body.".into(),
+        }
     }
 
     #[test]
@@ -798,7 +892,22 @@ mod render_tests {
         st.drill();
         st.focus_bottom();
         st.open_modal();
-        draw(&st, 100, 30);
+        // The modal now renders the spec loaded in-process (structured fields
+        // + native body), not the captured stdout. trace:STORY-693
+        let spec = sample_spec();
+        draw_with_spec(&st, Some(&spec), 100, 30);
+    }
+
+    #[test]
+    fn renders_native_spec_fields_and_body() {
+        // The in-process modal paints the structured field row + tags + the
+        // line-by-line body without panicking. trace:STORY-693
+        let mut st = sample(5);
+        st.open_modal_external();
+        let spec = sample_spec();
+        draw_with_spec(&st, Some(&spec), 100, 30);
+        // Tiny terminal too.
+        draw_with_spec(&st, Some(&spec), 20, 6);
     }
 
     #[test]

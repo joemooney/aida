@@ -124,7 +124,7 @@ pub fn run(opts: TuiOptions) -> Result<()> {
     // opt-in via `AIDA_TUI_REDESIGN=1`. When on, it owns the terminal and
     // the existing PTY-host shell below is never reached. trace:STORY-690
     if redesign::enabled() {
-        return redesign::run(config.theme.theme());
+        return redesign::run(config.theme.theme(), &project_root);
     }
     term::install_panic_hook();
     // SIGTERM / SIGINT (Unix) and CTRL_C_EVENT / CTRL_BREAK_EVENT

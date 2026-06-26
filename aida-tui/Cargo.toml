@@ -24,6 +24,13 @@ ratatui = { workspace = true }
 # lockfile via aida-cli — no new external crate enters the build graph.
 clap = { workspace = true }
 
+# In-process spec/list reads via the cache-backed git backend — no per-read
+# `aida` subprocess cold-start (STORY-693). Default features only (`native`:
+# rusqlite + fs2 + dirs); the read path needs neither `postgres` nor the forge
+# features (github/gitlab/jira). Already in the workspace lockfile via aida-cli.
+# trace:STORY-693
+aida-core = { version = "0.14", path = "../aida-core" }
+
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

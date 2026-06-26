@@ -140,6 +140,7 @@ dependencies = [
 name = "aida-tui"
 version = "0.14.0"
 dependencies = [
+ "aida-core",
  "anyhow",
  "chrono",
  "clap",
