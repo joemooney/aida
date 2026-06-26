@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:53:18.176392457Z
-modified_at: 2026-06-26T18:54:23.329172059Z
+modified_at: 2026-06-26T18:56:00.852384834Z
 req_type: Task
 tags:
 - markdown
@@ -26,8 +26,3 @@ tags:
 - preview
 - redesign
 - tui
-relationships:
-- rel_type: Child
-  target_id: 019efd94-6b4b-71f1-a22f-328b407720be
-  created_at: 2026-06-26T18:54:23.329166304Z
-  created_by: joe
