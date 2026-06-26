@@ -15452,6 +15452,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     // the cache (recomputed on rebuild from the relationship
                     // graph; never stored in YAML). trace:STORY-632 | ai:claude
                     let degrees = backend.degrees(&req.id).unwrap_or_default();
+                    // BUG-626: an EPIC's status is the read-only rollup of its
+                    // children, not the stored field. Derive it from the full
+                    // store (a one-shot load on a single-spec view — not a hot
+                    // loop) so `aida show <epic>` agrees with `aida list` and
+                    // `aida graph --tree`. Non-epics keep `effective_status()`.
+                    // trace:BUG-626 | ai:claude
+                    let effective_status_str: String = if req.req_type == RequirementType::Epic {
+                        backend
+                            .load()
+                            .ok()
+                            .and_then(|store| aida_core::rollup::derive_epic_status(&store, req.id))
+                            .map(|s| format!("{s}"))
+                            .unwrap_or_else(|| format!("{}", req.effective_status()))
+                    } else {
+                        format!("{}", req.effective_status())
+                    };
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
@@ -15480,7 +15496,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             title: &req.title,
                             description: &req.description,
                             req_type: format!("{:?}", req.req_type),
-                            status: format!("{}", req.effective_status()),
+                            // BUG-626: derived rollup for epics. trace:BUG-626
+                            status: effective_status_str.clone(),
                             priority: format!("{}", req.effective_priority()),
                             owner: &req.owner,
                             feature: &req.feature,
@@ -15557,7 +15574,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     // TASK-269: colour-code Status inline so a quick scan
                     // catches it; the same value is reprinted at the foot
                     // of the output below. trace:TASK-269 | ai:claude
-                    let status = req.effective_status();
+                    // BUG-626: derived rollup status for epics. trace:BUG-626
+                    let status = effective_status_str.clone();
                     println!(
                         "{}: {}",
                         "Status".bold(),
@@ -16030,6 +16048,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let mut left_needs_attention = false;
             if let Some(s) = status {
                 let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
+                // BUG-626: an EPIC's status is a read-only ROLLUP of its
+                // children, not a manually-set field. Reject ALL manual epic
+                // status edits (substrate-as-bouncer — this is exactly the
+                // hygiene drift a confident setter reintroduces: childless epics
+                // left In Progress, shipping-children epics left Draft). The
+                // displayed status is derived everywhere (list/show/why/status);
+                // `--force` is the recovery escape. This generalizes the
+                // pre-existing "Epic specs cannot be promoted to Approved" guard
+                // (TASK-761) to every transition. trace:BUG-626 | ai:claude
+                if manual_epic_status_edit_forbidden(&req.req_type, *force) {
+                    anyhow::bail!(
+                        "an epic's status is a read-only rollup of its children, not set by \
+                         hand — it moves to In Progress when a child starts, to Done/Completed \
+                         when all children finish, and back to Draft when it has no active \
+                         children. Change the children's statuses instead (`aida graph {} --tree` \
+                         shows the rollup). Use --force only for recovery.",
+                        req.agreed_id
+                            .clone()
+                            .or_else(|| req.spec_id.clone())
+                            .unwrap_or_else(|| req.id.to_string())
+                    );
+                }
                 // STORY-332: enforce the NeedsAttention transition rules —
                 // into it only from In Progress (use `aida punt`), out of it
                 // only to Approved / In Progress / Rejected. Every other
@@ -23577,6 +23617,25 @@ fn read_external_ref_base_urls(
     map
 }
 
+/// The status to DISPLAY for a requirement. For an EPIC this is the read-only
+/// rollup of its children (`derive_epic_status`), so the full-store display
+/// surfaces (`aida show`, `aida why`, `aida status`) agree with the cache-backed
+/// `aida list`, whose `status` column already holds the derived value. For every
+/// non-epic, and for an epic whose only children are Rejected (the derivation
+/// declines to auto-reject), this is the stored status.
+// trace:BUG-626 | ai:claude
+fn effective_display_status(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::models::Requirement,
+) -> RequirementStatus {
+    if req.req_type == RequirementType::Epic {
+        if let Some(derived) = aida_core::rollup::derive_epic_status(store, req.id) {
+            return derived;
+        }
+    }
+    req.status.clone()
+}
+
 fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     // Load requirements first (needed for SPEC-ID lookup)
     let store = storage.load()?;
@@ -23597,7 +23656,10 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     println!("{}: {}", "Title".blue(), req.title);
     println!("{}: {}", "Description".blue(), req.description);
 
-    let status_str = match req.status {
+    // BUG-626: an epic's displayed status is the read-only rollup of its
+    // children, not the stored field. trace:BUG-626 | ai:claude
+    let display_status = effective_display_status(&store, req);
+    let status_str = match display_status {
         RequirementStatus::Draft => "Draft".yellow(),
         RequirementStatus::Approved => "Approved".blue(),
         RequirementStatus::Planned => "Planned".cyan(),
@@ -61984,6 +62046,49 @@ mod statusline_tests {
         }
     }
 
+    // A manual epic status edit is rejected (status is a read-only rollup), but
+    // `--force` recovers and non-epics are never gated by this rule.
+    // trace:BUG-626 | ai:claude
+    #[test]
+    fn manual_epic_status_edit_is_forbidden_without_force() {
+        use super::manual_epic_status_edit_forbidden as forbidden;
+        use aida_core::models::RequirementType as T;
+
+        // An epic edit is rejected without --force, allowed with it.
+        assert!(
+            forbidden(&T::Epic, false),
+            "epic status edit must be rejected"
+        );
+        assert!(!forbidden(&T::Epic, true), "--force must recover");
+
+        // Every non-epic type is unaffected by this rule (with or without force).
+        for req_type in [
+            T::Functional,
+            T::NonFunctional,
+            T::System,
+            T::User,
+            T::ChangeRequest,
+            T::Bug,
+            T::Story,
+            T::Task,
+            T::Spike,
+            T::Sprint,
+            T::Folder,
+            T::Meta,
+            T::Doc,
+            T::Vision,
+            T::Principle,
+            T::Constraint,
+            T::Decision,
+            T::Term,
+        ] {
+            assert!(
+                !forbidden(&req_type, false),
+                "{req_type} must not be gated by the epic-rollup rule"
+            );
+        }
+    }
+
     /// TASK-739: exhaustive parity — `status_requires_advisor_authority` (now
     /// delegating to `lifecycle::target_requires_advisor_authority`) matches the
     /// pre-migration hand-coded predicate over every status. trace:TASK-739
@@ -75207,6 +75312,15 @@ pub(crate) fn status_advance_requires_advisor_authority(
         == GuardKind::RequiresAdvisorAuthority
 }
 
+/// A manual `aida edit <epic> --status <X>` is forbidden — an epic's status is a
+/// read-only rollup of its children. This generalizes the earlier "epics cannot
+/// be promoted to Approved" rule to EVERY transition; `--force` is the recovery
+/// escape.
+// trace:BUG-626 trace:TASK-761 | ai:claude
+fn manual_epic_status_edit_forbidden(req_type: &RequirementType, force: bool) -> bool {
+    *req_type == RequirementType::Epic && !force
+}
+
 fn approval_forbidden_for_type(req_type: &RequirementType) -> bool {
     // trace:TASK-761 | ai:codex
     matches!(
@@ -88364,12 +88478,18 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         return Ok(());
     }
 
+    // BUG-626: for an epic, classify by its derived rollup status so `aida why`
+    // agrees with the rest of the surface (a fully-completed epic is closed; a
+    // childless one reads Draft, handled by the open-facts path below).
+    // trace:BUG-626 | ai:claude
+    let eff_status = effective_display_status(&store, req);
+
     // Terminal specs aren't "open" — answer plainly rather than forcing a bucket.
     if matches!(
-        req.status,
+        eff_status,
         aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
     ) {
-        let status = format!("{:?}", req.status);
+        let status = format!("{:?}", eff_status);
         if json {
             println!(
                 "{}",
