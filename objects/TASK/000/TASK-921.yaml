@@ -6,12 +6,12 @@ description: |-
   Add a "defer" verb to the redesign TUI — park not-ready items off the active view with a revisit trigger. Lifecycle hygiene: clears noise so the genuinely-ready work is visible.
   BEHAVIOR: "defer" is set-level, applies to any open spec (not status-conditional). Runs `aida defer <id> --until "<trigger>"`. For the prototype, prompt for the --until trigger via a small input modal (or a sensible default trigger placeholder the operator edits). Reports deferred ids on the status line. Mirror the existing set-level verb execution shape.
   ACCEPTANCE: defer verb routes selected specs via `aida defer <id> --until <trigger>`; a way to enter the trigger; status-line report; pure selection logic tested; build/test/fmt/clippy green; --no-verify; trace this task.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:24:39.682628288Z
-modified_at: 2026-06-26T18:24:39.682628288Z
+modified_at: 2026-06-26T18:25:01.130183033Z
 req_type: Task
 tags:
 - lifecycle
