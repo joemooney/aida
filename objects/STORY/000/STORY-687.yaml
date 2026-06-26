@@ -1,0 +1,17 @@
+id: 019f0241-eb93-73f1-a14d-4d704c35ca9e
+spec_id: STORY-687
+agreed_id: STORY-687
+title: 'Cross-human collaboration: request commentary from another human/role on an item'
+description: 'Beyond the role mailbox: a primitive to request commentary/review from another HUMAN user (or role) on a specific item — e.g. something for human review, advisor-analyzed, or product-propositioned that the operator wants a second human to weigh in on. New state (review-requested + who) distinct from the role queue. Deferred: lighter-path choice (single-user cockpit first); revisit once the single-user board proves out or the operator hits a concrete multi-human handoff.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T04:48:22.419720981Z
+modified_at: 2026-06-26T04:48:22.419720981Z
+req_type: Story
+tags:
+- cockpit
+- collaboration
+- deferred:cockpit-phase2
+- tui
