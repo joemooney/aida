@@ -113,6 +113,11 @@ pub enum RowKind {
     ReasonNeedsAnswer,
     /// Needs-approval (Draft) spec — Enter approves via `aida edit … --status approved`.
     ReasonNeedsApproval,
+    /// Advisor-backlog spec — Approved-but-not-queued, the advisor's pending
+    /// queue surfaced in the needs-approval group (TASK-901). Enter routes it
+    /// to the work queue (`aida queue add <id>`) rather than approving it (it
+    /// is already approved). trace:TASK-901 | ai:claude
+    ReasonAdvisorBacklog,
     /// Deferred spec — Enter undefers it (`aida undefer <id>`).
     ReasonDeferred,
 }
@@ -268,6 +273,7 @@ impl DashboardModel {
                 title: pr.title.clone(),
                 status: pr.status.clone(),
                 reason: crate::board::Reason::AwaitingReview,
+                advisor_backlog: false,
             });
         }
         self.reason_counts = crate::board::counts(&self.board)
@@ -716,6 +722,7 @@ pub fn ensure_preview(model: &mut DashboardModel) {
         | RowKind::ReasonAwaitingReview
         | RowKind::ReasonNeedsAnswer
         | RowKind::ReasonNeedsApproval
+        | RowKind::ReasonAdvisorBacklog
         | RowKind::ReasonDeferred => {
             if let Some(num) = row.id.strip_prefix("pr:") {
                 preview_via_gh_pr(num)

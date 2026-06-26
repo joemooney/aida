@@ -245,6 +245,9 @@ pub fn act_on_row(row: &dashboard::ListRow, role: RoleTab, section: NavSection) 
         RowKind::ReasonNeedsApproval => {
             Intent::Launch(format!("aida edit {} --status approved", row.id))
         }
+        // Advisor backlog → the spec is already Approved; the unblock is to
+        // route it to the work queue, not approve it again. trace:TASK-901
+        RowKind::ReasonAdvisorBacklog => Intent::Launch(format!("aida queue add {}", row.id)),
         // Needs an answer → open the decision-inbox flow for this spec.
         RowKind::ReasonNeedsAnswer => Intent::Launch(format!("aida questions answer {}", row.id)),
         // Needs attention → show the parked spec (its punt reason / decision
@@ -998,6 +1001,11 @@ mod tests {
                 RowKind::ReasonNeedsApproval,
                 Reason::NeedsApproval,
             ),
+            (
+                "STORY-8",
+                RowKind::ReasonAdvisorBacklog,
+                Reason::NeedsApproval,
+            ),
             ("BUG-9", RowKind::ReasonNeedsAnswer, Reason::NeedsAnswer),
             (
                 "STORY-4",
@@ -1023,6 +1031,28 @@ mod tests {
                 "intent for {id:?} must serialize safely: {intent:?}"
             );
         }
+    }
+
+    #[test]
+    fn advisor_backlog_dispatches_to_queue_add() {
+        // TASK-901: an advisor-backlog row (Approved-but-not-queued) is already
+        // approved, so its unblock routes it to the queue rather than
+        // re-approving it. A draft row still approves. trace:TASK-901
+        let backlog = act_on_row(
+            &reason_row("STORY-8", RowKind::ReasonAdvisorBacklog),
+            RoleTab::Implementer,
+            NavSection::Reason(crate::board::Reason::NeedsApproval),
+        );
+        assert_eq!(backlog, Intent::Launch("aida queue add STORY-8".into()));
+        let draft = act_on_row(
+            &reason_row("STORY-3", RowKind::ReasonNeedsApproval),
+            RoleTab::Implementer,
+            NavSection::Reason(crate::board::Reason::NeedsApproval),
+        );
+        assert_eq!(
+            draft,
+            Intent::Launch("aida edit STORY-3 --status approved".into())
+        );
     }
 
     #[test]
