@@ -27,10 +27,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:57:44.481303272Z
-modified_at: 2026-06-26T05:15:34.136019424Z
+modified_at: 2026-06-26T06:58:45.083764743Z
 req_type: Bug
 tags:
 - papercut
 - performance
 - tui
 - ux
+comments:
+- id: 019f02b9-48db-7fb3-b521-3d2969fad6ac
+  author: joe
+  content: Commit d5b429603 references this requirement
+  created_at: 2026-06-26T06:58:45.083764743Z
+  modified_at: 2026-06-26T06:58:45.083764743Z
