@@ -12,12 +12,12 @@ description: |-
   - aida status Queue block gains a one-line fleet summary (e.g. "fleet: N queued across M roles/users") OR a hint pointing at the all-users view, so the bird's-eye is discoverable from status.
   - Legibility: the default queue list footer hints how to see the fleet view (the question that prompted this — the per-identity scoping was not obvious).
   - Verify against the primary caller: an implementer drain still sees only its own queue; only the explicit flag widens it.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:03:08.583846448Z
-modified_at: 2026-06-24T04:03:08.583846448Z
+modified_at: 2026-06-26T06:49:28.064671691Z
 req_type: Story
 tags:
 - fleet-coordination
