@@ -22273,5 +22273,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2108
+- id: 019f0658-c699-7663-91c3-e20aeb514564
+  target_id: 019f0658-ba7b-7820-bf26-e7e0b9a518c9
+  author: aida
+  node_id: '1'
+  lamport: 2109
+  timestamp: 2026-06-26T23:51:49.145736566Z
+  kind: !Create
+    title: Mailbox reason-group + send-mail action in the cockpit board
+    description: Add a Mail reason-group sourced from read_inbox (unread count, you-owner); Enter on a message replies; a :mail send <agent> palette verb launches send_message. The operators see-mail/send-mail want, today only an act_on_mail config toggle with no in-board surface.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2109
 node_id: '1'
