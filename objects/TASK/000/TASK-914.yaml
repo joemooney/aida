@@ -16,6 +16,10 @@ description: |-
   - Priority shown (now available in-process) and color-coded if the CLI does.
   - Pure formatting (column layout + status->glyph/color mapping) is unit-tested; render smoke test for a multi-row list.
   - build/test/fmt/clippy green; redesign module only; existing TUI untouched.
+
+  ## Test Plan
+
+  1. Go to the **Open** scope → **expect** rows in aligned columns **ID · Type · Status · Priority · Title**, with the same status glyphs (◯/▸/◐/✓/✗) and colors as `aida list`.
 status: Draft
 priority: Medium
 owner: ''
