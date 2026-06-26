@@ -13,7 +13,7 @@
 //! trace:STORY-132 | ai:claude
 
 use crate::actions::{self, ActivityEntry, QuickAction};
-use crate::config::TuiConfig;
+use crate::config::{TabVendor, TuiConfig};
 use crate::event::TuiEvent;
 use crate::help;
 use crate::overlay::{self, OverlayModel};
@@ -926,33 +926,18 @@ impl App {
     }
 
     /// Spawn a hosted session for `scope` in a fresh tab. The child is
-    /// always `aida queue work` (never `claude` directly — all lease /
+    /// always `aida queue work` (never the vendor CLI directly — all lease /
     /// worktree / manifest logic is inherited); `launch` selects between
-    /// a fresh `--session-id` conversation and a `--resume` of a recorded
-    /// one. trace:STORY-132 STORY-134 | ai:claude
+    /// a fresh conversation and a `--resume` of a recorded one. The vendor
+    /// (Claude default, or Codex when `[tui] vendor = "codex"`) selects which
+    /// CLI `aida queue work` hosts and how the session is threaded.
+    // trace:STORY-132 STORY-134 trace:TASK-895 | ai:claude
     fn spawn_tab(&mut self, scope: &str, launch: TabLaunch, tx: Sender<TuiEvent>) -> Result<()> {
         let tab_id = self.next_tab_id;
         self.next_tab_id += 1;
 
-        let mut argv = vec![
-            aida_exe().to_string_lossy().into_owned(),
-            "queue".to_string(),
-            "work".to_string(),
-            scope.to_string(),
-        ];
-        let session_id = match launch {
-            TabLaunch::Fresh => {
-                let sid = uuid::Uuid::now_v7().to_string();
-                argv.push("--session-id".to_string());
-                argv.push(sid.clone());
-                sid
-            }
-            TabLaunch::Resume(sid) => {
-                argv.push("--resume".to_string());
-                argv.push(sid.clone());
-                sid
-            }
-        };
+        let exe = aida_exe().to_string_lossy().into_owned();
+        let (argv, session_id) = queue_work_argv(&exe, scope, launch, self.config.vendor);
 
         let (cols, rows) = self.term_size;
         let pty = PtyHost::spawn(&argv, pty_rows(rows), cols, tab_id, tx)?;
@@ -1134,6 +1119,63 @@ impl ExitKind {
 /// executable, so a dev build hosts (and queries) the same dev build.
 pub(crate) fn aida_exe() -> PathBuf {
     std::env::current_exe().unwrap_or_else(|_| PathBuf::from("aida"))
+}
+
+/// Build the `aida queue work` argv (program + args) a hosted tab spawns, plus
+/// the session id the TUI records for the tab. Pure — exhaustively
+/// unit-testable without spawning a PTY.
+///
+/// The vendor selects which CLI `aida queue work` ultimately hosts and how the
+/// session is threaded:
+///   - `Claude` — byte-identical to the prior path: a fresh launch mints a
+///     caller-side UUID and threads `--session-id <uuid>`; a resume threads
+///     `--resume <session-id>`. The minted/resumed id is tracked so the TUI can
+///     re-attach the conversation.
+///   - `Codex` — adds `--vendor codex`. Codex's interactive CLI has no
+///     caller-minted `--session-id` and no addressable resume from the TUI's
+///     side, so a Codex tab always hosts a *fresh* session (a `Resume` launch
+///     falls back to fresh) and threads no `--session-id`/`--resume`. The
+///     returned session id is empty, which suppresses the (claude-only) resume
+///     hint at exit. Codex resume-parity is a follow-up.
+// trace:TASK-895 | ai:claude
+fn queue_work_argv(
+    exe: &str,
+    scope: &str,
+    launch: TabLaunch,
+    vendor: TabVendor,
+) -> (Vec<String>, String) {
+    let mut argv = vec![
+        exe.to_string(),
+        "queue".to_string(),
+        "work".to_string(),
+        scope.to_string(),
+    ];
+    match vendor {
+        TabVendor::Claude => {
+            let session_id = match launch {
+                TabLaunch::Fresh => {
+                    let sid = uuid::Uuid::now_v7().to_string();
+                    argv.push("--session-id".to_string());
+                    argv.push(sid.clone());
+                    sid
+                }
+                TabLaunch::Resume(sid) => {
+                    argv.push("--resume".to_string());
+                    argv.push(sid.clone());
+                    sid
+                }
+            };
+            (argv, session_id)
+        }
+        TabVendor::Codex => {
+            // Codex has no caller-minted session id and no TUI-addressable
+            // resume, so always host a fresh session (drop any `Resume` id) and
+            // route `aida queue work` to the codex interactive CLI.
+            argv.push("--vendor".to_string());
+            argv.push(TabVendor::Codex.as_str().to_string());
+            (argv, String::new())
+        }
+    }
 }
 
 /// Spawn the overlay's background refresh: one CI-inclusive
@@ -1626,5 +1668,62 @@ mod tests {
             encode_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::ALT)),
             vec![0x1b, b'x']
         );
+    }
+
+    // TASK-895: the hosted-tab argv must be vendor-correct — Claude threads
+    // `--session-id`/`--resume` (byte-identical to before), Codex routes
+    // `aida queue work --vendor codex` with no session threading.
+    #[test]
+    fn queue_work_argv_claude_fresh_threads_session_id() {
+        let (argv, sid) = queue_work_argv("aida", "TASK-1", TabLaunch::Fresh, TabVendor::Claude);
+        assert_eq!(argv[0..4], ["aida", "queue", "work", "TASK-1"]);
+        // `--session-id <uuid>` is threaded, and the returned id matches it.
+        let pos = argv.iter().position(|a| a == "--session-id").unwrap();
+        assert_eq!(argv[pos + 1], sid);
+        assert!(!sid.is_empty());
+        assert!(!argv.iter().any(|a| a == "--vendor"));
+        assert!(!argv.iter().any(|a| a == "--resume"));
+    }
+
+    #[test]
+    fn queue_work_argv_claude_resume_threads_resume_id() {
+        let (argv, sid) = queue_work_argv(
+            "aida",
+            "TASK-1",
+            TabLaunch::Resume("abc-123".to_string()),
+            TabVendor::Claude,
+        );
+        assert_eq!(sid, "abc-123");
+        let pos = argv.iter().position(|a| a == "--resume").unwrap();
+        assert_eq!(argv[pos + 1], "abc-123");
+        assert!(!argv.iter().any(|a| a == "--vendor"));
+        assert!(!argv.iter().any(|a| a == "--session-id"));
+    }
+
+    #[test]
+    fn queue_work_argv_codex_routes_vendor_and_no_session_threading() {
+        let (argv, sid) = queue_work_argv("aida", "TASK-1", TabLaunch::Fresh, TabVendor::Codex);
+        assert_eq!(argv[0..4], ["aida", "queue", "work", "TASK-1"]);
+        let pos = argv.iter().position(|a| a == "--vendor").unwrap();
+        assert_eq!(argv[pos + 1], "codex");
+        // Codex has no caller-minted session id / TUI-addressable resume.
+        assert!(sid.is_empty());
+        assert!(!argv.iter().any(|a| a == "--session-id"));
+        assert!(!argv.iter().any(|a| a == "--resume"));
+    }
+
+    #[test]
+    fn queue_work_argv_codex_resume_falls_back_to_fresh() {
+        // A `Resume` launch on Codex must drop the id (Codex can't resume from
+        // the TUI) and still host a fresh session with no resume threading.
+        let (argv, sid) = queue_work_argv(
+            "aida",
+            "TASK-1",
+            TabLaunch::Resume("ignored".to_string()),
+            TabVendor::Codex,
+        );
+        assert!(sid.is_empty());
+        assert!(!argv.iter().any(|a| a == "--resume"));
+        assert!(argv.iter().any(|a| a == "--vendor"));
     }
 }

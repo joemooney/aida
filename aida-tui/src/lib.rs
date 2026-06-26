@@ -125,6 +125,12 @@ pub fn run(opts: TuiOptions) -> Result<()> {
 
     println!("{}", exit.notice());
     for (scope, session_id) in resume_hints {
+        // TASK-895: a Codex tab records an empty session id (Codex's
+        // interactive CLI has no caller-minted/TUI-addressable session id), so
+        // there is no `--resume` hint to print for it.
+        if session_id.is_empty() {
+            continue;
+        }
         println!(
             "  {}: aida queue work {} --resume {}",
             scope, scope, session_id

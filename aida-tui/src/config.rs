@@ -35,6 +35,48 @@ pub enum TuiMode {
     PtyHost,
 }
 
+/// Which vendor CLI a hosted tab launches behind `aida queue work`. The TUI's
+/// PtyHost is argv-agnostic, but `spawn_tab` historically hosted a Claude-only
+/// `aida queue work` (it threaded Claude's `--session-id`/`--resume`). This
+/// enum lets a tab host a Codex session instead — the interactive analogue of
+/// the STORY-683 headless `HeadlessVendor`.
+///
+/// `Claude` is the default everywhere, so an un-configured TUI is byte-identical
+/// to before; `Codex` is the explicit opt-in (`[tui] vendor = "codex"` or
+/// `AIDA_TUI_VENDOR=codex`). Codex's interactive CLI has no caller-minted
+/// `--session-id`, so a Codex tab hosts a fresh session and does not thread
+/// `--session-id`/`--resume` (resume-parity is a follow-up).
+// trace:TASK-895 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TabVendor {
+    #[default]
+    Claude,
+    Codex,
+}
+
+impl TabVendor {
+    /// The canonical lowercase token (`claude` / `codex`).
+    // trace:TASK-895 | ai:claude
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TabVendor::Claude => "claude",
+            TabVendor::Codex => "codex",
+        }
+    }
+
+    /// Parse a vendor token. Case-insensitive, surrounding whitespace tolerated.
+    /// `None` for an unrecognized token so the caller keeps the Claude default
+    /// rather than route to an unknown CLI.
+    // trace:TASK-895 | ai:claude
+    pub fn parse(raw: &str) -> Option<TabVendor> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "claude" => Some(TabVendor::Claude),
+            "codex" => Some(TabVendor::Codex),
+            _ => None,
+        }
+    }
+}
+
 /// Resolved `[tui]` settings for one `aida tui` run.
 #[derive(Debug, Clone)]
 pub struct TuiConfig {
@@ -45,6 +87,11 @@ pub struct TuiConfig {
     /// defaults to [`ThemeName::default`] (Catppuccin Mocha). An unknown
     /// token keeps the default. trace:TASK-256 | ai:claude
     pub theme: ThemeName,
+    /// Which vendor CLI a hosted tab launches. `[tui] vendor = "codex"` (or
+    /// `AIDA_TUI_VENDOR=codex`) opts a tab into hosting Codex instead of
+    /// Claude; defaults to [`TabVendor::Claude`].
+    // trace:TASK-895 | ai:claude
+    pub vendor: TabVendor,
 }
 
 impl Default for TuiConfig {
@@ -55,6 +102,7 @@ impl Default for TuiConfig {
             max_tabs: crate::tab::MAX_TABS,
             mode: TuiMode::default(),
             theme: ThemeName::default(),
+            vendor: TabVendor::default(),
         }
     }
 }
@@ -94,7 +142,21 @@ impl TuiConfig {
                         cfg.theme = t;
                     }
                 }
+                // trace:TASK-895 | ai:claude
+                "vendor" => {
+                    if let Some(v) = TabVendor::parse(&val) {
+                        cfg.vendor = v;
+                    }
+                }
                 _ => {}
+            }
+        }
+        // TASK-895: `AIDA_TUI_VENDOR` overrides the config block, mirroring the
+        // STORY-683 `AIDA_HEADLESS_VENDOR` precedence convention (env beats
+        // config). An unrecognized token is ignored, keeping the prior value.
+        if let Ok(raw) = std::env::var("AIDA_TUI_VENDOR") {
+            if let Some(v) = TabVendor::parse(&raw) {
+                cfg.vendor = v;
             }
         }
         cfg
@@ -254,6 +316,22 @@ permission_mode = \"auto\"
         // Unknown spelling falls back to caller's default.
         assert_eq!(parse_mode("bogus"), None);
         assert_eq!(parse_mode(""), None);
+    }
+
+    // TASK-895: vendor defaults to Claude; parse is case/whitespace-tolerant.
+    #[test]
+    fn vendor_default_is_claude() {
+        assert_eq!(TuiConfig::default().vendor, TabVendor::Claude);
+    }
+
+    #[test]
+    fn vendor_parses_known_tokens() {
+        assert_eq!(TabVendor::parse("claude"), Some(TabVendor::Claude));
+        assert_eq!(TabVendor::parse("CODEX"), Some(TabVendor::Codex));
+        assert_eq!(TabVendor::parse("  codex  "), Some(TabVendor::Codex));
+        // Unknown token keeps the caller's default.
+        assert_eq!(TabVendor::parse("gemini"), None);
+        assert_eq!(TabVendor::parse(""), None);
     }
 
     #[test]
