@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:56:00.991383827Z
-modified_at: 2026-06-26T18:54:12.832840781Z
+modified_at: 2026-06-26T18:56:00.317719204Z
 req_type: Task
 tags:
 - glyphs
@@ -29,8 +29,3 @@ tags:
 - preview
 - redesign
 - tui
-relationships:
-- rel_type: Child
-  target_id: 019efd94-6b4b-71f1-a22f-328b407720be
-  created_at: 2026-06-26T18:54:12.832834586Z
-  created_by: joe
