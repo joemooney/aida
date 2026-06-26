@@ -21,6 +21,11 @@ description: |-
   - the help content for verbs/scopes comes from their hint/help strings (pure, data-driven), unit-tested (the right help string is selected for a given focus state).
   - Esc/'?' closes the help popup.
   - build/test/fmt/clippy green; redesign module; --no-verify.
+
+  ## Test Plan
+
+  1. Press **?** on the `groom` verb → **expect** a popup explaining groom + a key legend. Press **?** on a scope, and on an item → **expect** context-appropriate help each time.
+  2. Confirm **`?` no longer quits** — quit is **q** (at top level) / **Esc** / **Ctrl-C**, documented in the help legend.
 status: Done
 priority: High
 owner: ''
