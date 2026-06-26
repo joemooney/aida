@@ -589,6 +589,33 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
     .unwrap_or(false)
 }
 
+/// Resolve `<remote>/<branch>`'s head SHA via a single `git ls-remote` query,
+/// WITHOUT fetching any objects. One cheap network round-trip (refs only, no
+/// object transfer) — the building block for "is my local store already current
+/// with the remote?" decisions that can skip a full `pull --rebase`.
+///
+/// Returns `Some(sha)` on success, `None` on any git error (offline,
+/// unreachable remote, branch absent) so callers can treat "can't tell" as
+/// "fall back to the heavier path".
+// trace:TASK-857 | ai:claude
+pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option<String> {
+    let r = git(
+        repo,
+        &["ls-remote", remote, &format!("refs/heads/{}", branch)],
+    )
+    .ok()?;
+    if !r.success {
+        return None;
+    }
+    // Output line is `<sha>\t<ref>`; take the first whitespace-delimited token.
+    let sha = r.stdout.split_whitespace().next()?.to_string();
+    if sha.is_empty() {
+        None
+    } else {
+        Some(sha)
+    }
+}
+
 /// Fetch a single branch from a remote into a local tracking branch.
 /// Equivalent to `git fetch <remote> <branch>:<branch>` — creates the
 /// local branch if missing, fast-forwards otherwise.
@@ -1765,6 +1792,54 @@ mod tests {
         commit(&work, "second commit").unwrap();
         let pushed = push(&work, "origin", &branch).unwrap();
         assert!(pushed);
+    }
+
+    // TASK-857: `remote_branch_head_sha` is the lighter `aida add` network
+    // floor — it resolves the remote branch head via `ls-remote` (no object
+    // transfer) so the add path can SKIP a full `pull --rebase` when the local
+    // store is already current. Verifies the three decision outcomes:
+    //   * fresh after push → remote head == local HEAD (skip-the-pull case)
+    //   * after a local-only commit → remote head != local HEAD (must-pull case)
+    //   * unreachable remote → None (offline-tolerant case)
+    // trace:TASK-857 | ai:claude
+    #[test]
+    fn test_remote_branch_head_sha() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_bare, work, branch) = setup_remote_and_clone(dir.path(), "head-sha-test");
+
+        // Just-pushed: the remote branch head must equal the local HEAD SHA,
+        // and must be the full 40-char SHA (the comparison key the add path
+        // uses). This is the steady-state "already current → skip pull" case.
+        let local = head_sha(&work).unwrap();
+        let remote = remote_branch_head_sha(&work, "origin", &branch)
+            .expect("ls-remote should resolve the just-pushed branch head");
+        assert_eq!(remote.len(), 40, "remote head SHA must be full length");
+        assert_eq!(
+            remote, local,
+            "remote head must match local HEAD after push"
+        );
+
+        // Commit locally WITHOUT pushing → local HEAD advances, remote stays
+        // put → the SHAs diverge, signalling the add path to do the heavy pull.
+        std::fs::write(work.join("local-only.txt"), "ahead").unwrap();
+        add(&work, &["local-only.txt"]).unwrap();
+        commit(&work, "local only commit").unwrap();
+        let local2 = head_sha(&work).unwrap();
+        let remote2 = remote_branch_head_sha(&work, "origin", &branch).unwrap();
+        assert_ne!(local2, remote2, "local HEAD advanced; remote unchanged");
+        assert_eq!(
+            remote2, remote,
+            "remote head is unchanged until we actually push"
+        );
+
+        // Unreachable remote → None, so the add path treats it as "can't tell"
+        // and degrades to a local-only file rather than erroring offline.
+        let missing = dir.path().join("does-not-exist.git");
+        git(&work, &["remote", "add", "void", missing.to_str().unwrap()]).unwrap();
+        assert!(
+            remote_branch_head_sha(&work, "void", &branch).is_none(),
+            "an unreachable remote must yield None, not an error"
+        );
     }
 
     #[test]
