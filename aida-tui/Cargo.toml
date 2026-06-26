@@ -31,6 +31,13 @@ clap = { workspace = true }
 # trace:STORY-693
 aida-core = { version = "0.14", path = "../aida-core" }
 
+# Markdown rendering of the show-modal body. Parsed into styled ratatui
+# Lines/Spans ourselves (no tui-markdown — workspace ratatui is 0.30, which
+# tui-markdown does not track). Pinned to the version already resolved in
+# Cargo.lock (via other crates) so no new version enters the dependency graph.
+# trace:TASK-913
+pulldown-cmark = "0.9.6"
+
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

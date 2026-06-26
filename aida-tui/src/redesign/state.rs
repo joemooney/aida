@@ -254,6 +254,10 @@ pub struct RedesignState {
     pub filter: String,
     /// Open item modal (full body preview), if any — holds the item index.
     pub modal: Option<usize>,
+    /// Vertical scroll offset (in rendered lines) for the open item modal, so
+    /// a body taller than the popup can be paged with Up/Down/PageUp/PageDown.
+    /// Reset to 0 whenever a modal opens or closes. trace:TASK-913 | ai:claude
+    pub modal_scroll: u16,
     /// Verb-output modal content, if any — the captured stdout of a deliberate
     /// one-shot item verb (`show` / `why`) plus a title. Distinct from
     /// [`Self::modal`] (which previews an item's cached body); this carries
@@ -286,6 +290,7 @@ impl RedesignState {
             selected,
             filter: String::new(),
             modal: None,
+            modal_scroll: 0,
             verb_modal: None,
             confirm: None,
             role: role.into(),
@@ -302,6 +307,7 @@ impl RedesignState {
         self.items = items;
         self.bottom_idx = 0;
         self.modal = None;
+        self.modal_scroll = 0;
         self.verb_modal = None;
     }
 
@@ -678,6 +684,7 @@ impl RedesignState {
         let idxs = self.bottom_indices();
         if let Some(&real) = idxs.get(self.bottom_idx) {
             self.modal = Some(real);
+            self.modal_scroll = 0;
         }
     }
 
@@ -688,11 +695,26 @@ impl RedesignState {
     /// loaded spec, not from this index. trace:STORY-693 | ai:claude
     pub fn open_modal_external(&mut self) {
         self.modal = Some(usize::MAX);
+        self.modal_scroll = 0;
     }
 
     pub fn close_modal(&mut self) {
         self.modal = None;
+        self.modal_scroll = 0;
         self.verb_modal = None;
+    }
+
+    /// Scroll the open item modal down by `n` lines. The render clamps the
+    /// offset to the body height, so an over-scroll simply pins to the last
+    /// page rather than going blank. trace:TASK-913 | ai:claude
+    pub fn modal_scroll_down(&mut self, n: u16) {
+        self.modal_scroll = self.modal_scroll.saturating_add(n);
+    }
+
+    /// Scroll the open item modal up by `n` lines (floored at the top).
+    /// trace:TASK-913 | ai:claude
+    pub fn modal_scroll_up(&mut self, n: u16) {
+        self.modal_scroll = self.modal_scroll.saturating_sub(n);
     }
 
     /// Show a verb's captured stdout in the modal (`show` / `why` output).
@@ -1014,6 +1036,25 @@ mod tests {
         assert_eq!(s.modal, Some(1));
         s.close_modal();
         assert_eq!(s.modal, None);
+    }
+
+    #[test]
+    fn modal_scroll_floors_at_top_and_resets_on_open() {
+        // trace:TASK-913
+        let mut s = state(3);
+        s.drill();
+        s.focus_bottom();
+        s.modal_scroll = 5;
+        s.open_modal(); // opening resets the offset
+        assert_eq!(s.modal_scroll, 0);
+        s.modal_scroll_up(3); // already at top → floored, no underflow
+        assert_eq!(s.modal_scroll, 0);
+        s.modal_scroll_down(4);
+        assert_eq!(s.modal_scroll, 4);
+        s.modal_scroll_up(1);
+        assert_eq!(s.modal_scroll, 3);
+        s.close_modal(); // closing also resets
+        assert_eq!(s.modal_scroll, 0);
     }
 
     #[test]

@@ -149,6 +149,7 @@ dependencies = [
  "dirs",
  "libc",
  "portable-pty",
+ "pulldown-cmark",
  "ratatui",
  "serde",
  "serde_json",

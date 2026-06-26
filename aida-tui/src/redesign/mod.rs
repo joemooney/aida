@@ -40,6 +40,10 @@ use state::{Focus, Level};
 use std::io::Stdout;
 use std::process::Command;
 
+/// Lines scrolled per PageUp / PageDown (and Space) in the item modal.
+/// trace:TASK-913 | ai:claude
+const MODAL_PAGE: u16 = 10;
+
 /// Is the redesign prototype toggled on? Checked by `aida_tui::run` so the
 /// existing TUI is the default and the prototype is strictly opt-in.
 pub fn enabled() -> bool {
@@ -228,15 +232,20 @@ fn handle_key(
         return Ok(false);
     }
 
-    // A modal (item-body or verb-output) captures Esc / q / p (close) and
-    // nothing else mutating.
+    // A modal (item-body or verb-output) captures Esc / q / p (close) plus the
+    // scroll keys so a body taller than the popup can be paged; nothing else
+    // mutating leaks through. trace:TASK-913 | ai:claude
     if st.modal_open() {
-        if matches!(
-            key.code,
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('p')
-        ) {
-            st.close_modal();
-            *loaded_spec = None;
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('p') => {
+                st.close_modal();
+                *loaded_spec = None;
+            }
+            KeyCode::Down | KeyCode::Char('j') => st.modal_scroll_down(1),
+            KeyCode::Up | KeyCode::Char('k') => st.modal_scroll_up(1),
+            KeyCode::PageDown | KeyCode::Char(' ') => st.modal_scroll_down(MODAL_PAGE),
+            KeyCode::PageUp => st.modal_scroll_up(MODAL_PAGE),
+            _ => {}
         }
         return Ok(false);
     }
@@ -483,7 +492,7 @@ fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
     // structured fields + native body. trace:STORY-693 | ai:claude
     if st.modal.is_some() {
         if let Some(spec) = loaded_spec {
-            render_modal(f, f.area(), theme, spec);
+            render_modal(f, f.area(), theme, spec, st.modal_scroll);
         }
     }
     if let Some(vm) = &st.verb_modal {
@@ -660,22 +669,38 @@ fn render_hint(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
 
 /// Render the item modal from a spec loaded IN-PROCESS — a native render of
 /// the structured fields (type / status / priority / tags) plus the
-/// description body, replacing the old captured `aida show` stdout blob.
-/// Full markdown styling is a later slice; for now the body renders readably
-/// line-by-line rather than as one raw paragraph. trace:STORY-693 | ai:claude
-fn render_modal(f: &mut Frame, area: Rect, theme: &Theme, spec: &LoadedSpec) {
+/// description body rendered as MARKDOWN. `scroll` is the vertical line
+/// offset (clamped here so an over-scroll pins to the last page rather than
+/// scrolling the body off the top). trace:STORY-693 trace:TASK-913 | ai:claude
+fn render_modal(f: &mut Frame, area: Rect, theme: &Theme, spec: &LoadedSpec, scroll: u16) {
     let popup = centered(area, 80, 80);
     f.render_widget(Clear, popup);
+    let lines = spec_lines(spec, theme);
+    // Clamp the scroll so the last line can reach the top of the inner area
+    // but no further — past that the modal would render blank.
+    let inner_h = popup.height.saturating_sub(2);
+    let max_scroll = (lines.len() as u16).saturating_sub(inner_h.max(1));
+    let scroll = scroll.min(max_scroll);
+    let scrollable = max_scroll > 0;
+    let title = if scrollable {
+        format!(" {} (↑↓/PgUp/PgDn scroll · Esc/q/p close) ", spec.id)
+    } else {
+        format!(" {} (Esc/q/p to close) ", spec.id)
+    };
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.accent))
-        .title(format!(" {} (Esc/q/p to close) ", spec.id));
-    f.render_widget(spec_lines(spec, theme).block(block), popup);
+        .title(title);
+    let para = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((scroll, 0))
+        .block(block);
+    f.render_widget(para, popup);
 }
 
 /// Build the native modal body: a structured header (title + a color-coded
-/// field row + tags) then the description rendered line-by-line. Pure (no IO)
-/// so it is render-smoke / unit testable. trace:STORY-693 | ai:claude
-fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Paragraph<'a> {
+/// field row + tags) then the description rendered as markdown. Pure (no IO)
+/// so it is render-smoke / unit testable. trace:STORY-693 trace:TASK-913
+fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Vec<Line<'a>> {
     let mut lines: Vec<Line> = Vec::new();
 
     // Title.
@@ -722,22 +747,207 @@ fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Paragraph<'a> {
     // Separator before the body.
     lines.push(Line::from(""));
 
-    // Description body, line-by-line (readable, not one raw blob).
+    // Description body, rendered as markdown (headings, bold/italic, inline
+    // code, fenced code blocks, lists, paragraph spacing).
     if spec.description.trim().is_empty() {
         lines.push(Line::from(Span::styled(
             "(no description)",
             Style::default().fg(theme.dim),
         )));
     } else {
-        for raw in spec.description.lines() {
-            lines.push(Line::from(Span::styled(
-                raw.to_string(),
-                Style::default().fg(theme.fg),
-            )));
-        }
+        lines.extend(markdown_to_lines(&spec.description, theme));
     }
 
-    Paragraph::new(lines).wrap(Wrap { trim: false })
+    lines
+}
+
+/// Parse a markdown body into styled ratatui [`Line`]s — a PURE function (no
+/// terminal, no IO) so it is unit-testable. Honors the user's [`Theme`] for
+/// every style. Handled elements:
+///
+/// - Headings → bold, prefixed with the original `#` markers for level cue.
+/// - `**bold**` / `*italic*` inline emphasis.
+/// - inline `` `code` `` → a distinct accent-coloured style.
+/// - fenced code blocks → dim accent, preserved verbatim line-by-line.
+/// - unordered (`- `) and ordered (`1. `) list items → bullet/number + indent.
+/// - paragraphs → plain `fg` text with a blank line between blocks.
+///
+/// Anything unrecognised degrades to plain `fg` text; the parser never panics.
+/// trace:TASK-913 | ai:claude
+fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
+    use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
+
+    let code_style = Style::default().fg(theme.accent);
+    let heading_style = Style::default().fg(theme.fg).add_modifier(Modifier::BOLD);
+    let plain_style = Style::default().fg(theme.fg);
+
+    let mut lines: Vec<Line> = Vec::new();
+    // Spans accumulating into the current (non-code-block) line.
+    let mut current: Vec<Span> = Vec::new();
+    // Inline emphasis nesting counters.
+    let mut bold = 0u8;
+    let mut italic = 0u8;
+    // Heading-in-progress flag.
+    let mut in_heading = false;
+    // Fenced/indented code-block state.
+    let mut in_code_block = false;
+    // List context stack: each entry is `Some(next_number)` for an ordered
+    // list, `None` for an unordered one. Depth = indent level.
+    let mut list_stack: Vec<Option<u64>> = Vec::new();
+    // Whether a list-item marker is still pending for the next text.
+    let mut item_prefix: Option<String> = None;
+
+    // Push the accumulated `current` spans as a finished line, then clear.
+    // A macro (not a closure) so it doesn't introduce a borrow that fights
+    // the `'a` lifetime variance on `Vec<Line<'a>>`.
+    macro_rules! flush {
+        () => {
+            if !current.is_empty() {
+                lines.push(Line::from(std::mem::take(&mut current)));
+            }
+        };
+    }
+
+    let inline_style = |bold: u8, italic: u8| -> Style {
+        let mut s = plain_style;
+        if bold > 0 {
+            s = s.add_modifier(Modifier::BOLD);
+        }
+        if italic > 0 {
+            s = s.add_modifier(Modifier::ITALIC);
+        }
+        s
+    };
+
+    let heading_marker = |level: HeadingLevel| -> String {
+        let n = match level {
+            HeadingLevel::H1 => 1,
+            HeadingLevel::H2 => 2,
+            HeadingLevel::H3 => 3,
+            HeadingLevel::H4 => 4,
+            HeadingLevel::H5 => 5,
+            HeadingLevel::H6 => 6,
+        };
+        "#".repeat(n)
+    };
+
+    for event in Parser::new(src) {
+        match event {
+            Event::Start(Tag::Heading(level, _, _)) => {
+                flush!();
+                in_heading = true;
+                current.push(Span::styled(
+                    format!("{} ", heading_marker(level)),
+                    heading_style,
+                ));
+            }
+            Event::End(Tag::Heading(_, _, _)) => {
+                flush!();
+                in_heading = false;
+                lines.push(Line::from(""));
+            }
+            Event::Start(Tag::Strong) => bold = bold.saturating_add(1),
+            Event::End(Tag::Strong) => bold = bold.saturating_sub(1),
+            Event::Start(Tag::Emphasis) => italic = italic.saturating_add(1),
+            Event::End(Tag::Emphasis) => italic = italic.saturating_sub(1),
+            Event::Start(Tag::Paragraph) => { /* spans accumulate until End */ }
+            Event::End(Tag::Paragraph) => {
+                flush!();
+                lines.push(Line::from(""));
+            }
+            // Both fenced (```lang) and indented code blocks land here.
+            Event::Start(Tag::CodeBlock(_)) => {
+                flush!();
+                in_code_block = true;
+            }
+            Event::End(Tag::CodeBlock(_)) => {
+                flush!();
+                in_code_block = false;
+                lines.push(Line::from(""));
+            }
+            Event::Start(Tag::List(first)) => {
+                flush!();
+                list_stack.push(first);
+            }
+            Event::End(Tag::List(_)) => {
+                list_stack.pop();
+            }
+            Event::Start(Tag::Item) => {
+                flush!();
+                let depth = list_stack.len().saturating_sub(1);
+                let indent = "  ".repeat(depth);
+                let marker = match list_stack.last_mut() {
+                    Some(Some(n)) => {
+                        let m = format!("{indent}{n}. ");
+                        *n += 1;
+                        m
+                    }
+                    _ => format!("{indent}• "),
+                };
+                item_prefix = Some(marker);
+            }
+            Event::End(Tag::Item) => {
+                flush!();
+            }
+            Event::Code(text) => {
+                if let Some(prefix) = item_prefix.take() {
+                    current.push(Span::styled(prefix, plain_style));
+                }
+                current.push(Span::styled(text.into_string(), code_style));
+            }
+            Event::Text(text) => {
+                if in_code_block {
+                    // Preserve verbatim, line-by-line, with the code style.
+                    for (i, raw) in text.split('\n').enumerate() {
+                        if i > 0 {
+                            flush!();
+                        }
+                        current.push(Span::styled(raw.to_string(), code_style));
+                    }
+                    continue;
+                }
+                if let Some(prefix) = item_prefix.take() {
+                    current.push(Span::styled(prefix, plain_style));
+                }
+                let style = if in_heading {
+                    heading_style
+                } else {
+                    inline_style(bold, italic)
+                };
+                current.push(Span::styled(text.into_string(), style));
+            }
+            Event::SoftBreak | Event::HardBreak => {
+                if in_code_block {
+                    flush!();
+                } else {
+                    current.push(Span::styled(" ", plain_style));
+                }
+            }
+            Event::Rule => {
+                flush!();
+                lines.push(Line::from(Span::styled(
+                    "─".repeat(8),
+                    Style::default().fg(theme.dim),
+                )));
+            }
+            // Unknown / unsupported nodes (tables, html, footnotes, …) degrade
+            // to whatever text they carry; never panic.
+            _ => {}
+        }
+    }
+    flush!();
+
+    // Collapse a trailing blank line for a tidy bottom edge.
+    while matches!(lines.last(), Some(l) if line_is_blank(l)) {
+        lines.pop();
+    }
+    lines
+}
+
+/// Is a [`Line`] visually blank (no spans, or only empty-content spans)? Used
+/// to trim trailing blank lines from rendered markdown. trace:TASK-913
+fn line_is_blank(line: &Line) -> bool {
+    line.spans.iter().all(|s| s.content.is_empty())
 }
 
 /// Render a verb-output modal (the captured stdout of `show` / `why`).
@@ -962,5 +1172,170 @@ mod render_tests {
         // Empty case.
         let empty = request_approval_status(&[], &[], &[]);
         assert!(empty.contains("nothing to route"));
+    }
+
+    // --- Markdown body rendering (TASK-913) -------------------------------
+
+    /// Concatenate a line's span contents back into a plain string.
+    fn line_text(line: &Line) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    /// Does any span on the line carry the given modifier?
+    fn line_has_modifier(line: &Line, m: Modifier) -> bool {
+        line.spans.iter().any(|s| s.style.add_modifier.contains(m))
+    }
+
+    /// Does any span on the line render in the code style (theme accent fg)?
+    fn line_has_code_style(line: &Line, theme: &Theme) -> bool {
+        line.spans.iter().any(|s| s.style.fg == Some(theme.accent))
+    }
+
+    #[test]
+    fn markdown_heading_is_bold() {
+        let theme = Theme::default();
+        let lines = markdown_to_lines("# Title here", &theme);
+        let heading = lines
+            .iter()
+            .find(|l| line_text(l).contains("Title here"))
+            .expect("heading line present");
+        assert!(line_text(heading).starts_with('#'), "keeps a # level cue");
+        assert!(
+            line_has_modifier(heading, Modifier::BOLD),
+            "heading span is bold"
+        );
+    }
+
+    #[test]
+    fn markdown_list_item_starts_with_bullet() {
+        let theme = Theme::default();
+        let lines = markdown_to_lines("- first\n- second", &theme);
+        let first = lines
+            .iter()
+            .find(|l| line_text(l).contains("first"))
+            .expect("first item present");
+        assert!(
+            line_text(first).trim_start().starts_with('•'),
+            "unordered item leads with a bullet, got {:?}",
+            line_text(first)
+        );
+    }
+
+    #[test]
+    fn markdown_ordered_list_is_numbered() {
+        let theme = Theme::default();
+        let lines = markdown_to_lines("1. alpha\n2. beta", &theme);
+        let beta = lines
+            .iter()
+            .find(|l| line_text(l).contains("beta"))
+            .expect("second item present");
+        assert!(
+            line_text(beta).trim_start().starts_with("2."),
+            "ordered item keeps its number, got {:?}",
+            line_text(beta)
+        );
+    }
+
+    #[test]
+    fn markdown_inline_code_carries_code_style() {
+        let theme = Theme::default();
+        let lines = markdown_to_lines("call `aida show` now", &theme);
+        let line = lines
+            .iter()
+            .find(|l| line_text(l).contains("aida show"))
+            .expect("line with inline code");
+        // The inline-code span specifically must be code-styled.
+        let code_span = line
+            .spans
+            .iter()
+            .find(|s| s.content.contains("aida show"))
+            .expect("code span");
+        assert_eq!(code_span.style.fg, Some(theme.accent), "inline code styled");
+    }
+
+    #[test]
+    fn markdown_fenced_code_block_is_verbatim_and_styled() {
+        let theme = Theme::default();
+        let src = "```\nlet x = 1;\n  indented();\n```";
+        let lines = markdown_to_lines(src, &theme);
+        let code_line = lines
+            .iter()
+            .find(|l| line_text(l).contains("let x = 1;"))
+            .expect("first code line");
+        assert_eq!(line_text(code_line), "let x = 1;", "preserved verbatim");
+        assert!(line_has_code_style(code_line, &theme), "code-styled");
+        // The indented second line keeps its leading whitespace verbatim.
+        let indented = lines
+            .iter()
+            .find(|l| line_text(l).contains("indented();"))
+            .expect("second code line");
+        assert!(
+            line_text(indented).starts_with("  indented();"),
+            "indentation preserved, got {:?}",
+            line_text(indented)
+        );
+    }
+
+    #[test]
+    fn markdown_plain_text_passes_through() {
+        let theme = Theme::default();
+        let lines = markdown_to_lines("just a plain paragraph", &theme);
+        assert!(
+            lines
+                .iter()
+                .any(|l| line_text(l) == "just a plain paragraph"),
+            "plain text survives intact"
+        );
+    }
+
+    #[test]
+    fn markdown_unknown_nodes_do_not_panic() {
+        let theme = Theme::default();
+        // Tables + raw HTML + a setext rule — none specially handled.
+        let src = "| a | b |\n|---|---|\n| 1 | 2 |\n\n<div>raw</div>\n\n---\n";
+        let _ = markdown_to_lines(src, &theme); // must not panic
+    }
+
+    #[test]
+    fn renders_markdown_body_smoke() {
+        // A representative multi-element body drives the full modal render
+        // over a TestBackend without panicking. trace:TASK-913
+        let mut st = sample(5);
+        st.open_modal_external();
+        let spec = LoadedSpec {
+            id: "TASK-913".into(),
+            title: "Markdown body".into(),
+            req_type: "Task".into(),
+            status: "Draft".into(),
+            priority: "Medium".into(),
+            tags: vec!["markdown".into()],
+            description: "# Heading\n\nA paragraph with **bold**, *italic*, and \
+                 `inline code`.\n\n- bullet one\n- bullet two\n\n1. step one\n2. step \
+                 two\n\n```\nfenced();\n```\n"
+                .into(),
+        };
+        draw_with_spec(&st, Some(&spec), 100, 30);
+        // Tiny terminal must not panic either.
+        draw_with_spec(&st, Some(&spec), 20, 6);
+    }
+
+    #[test]
+    fn modal_scroll_clamps_and_renders() {
+        // A long body scrolled past its end pins to the last page (render
+        // never blanks / panics). trace:TASK-913
+        let mut st = sample(5);
+        st.open_modal_external();
+        let body: String = (0..200).map(|i| format!("line {i}\n")).collect();
+        let spec = LoadedSpec {
+            id: "TASK-913".into(),
+            title: "Long".into(),
+            req_type: "Task".into(),
+            status: "Draft".into(),
+            priority: String::new(),
+            tags: vec![],
+            description: body,
+        };
+        st.modal_scroll = 9999; // way past the end
+        draw_with_spec(&st, Some(&spec), 100, 30);
     }
 }
