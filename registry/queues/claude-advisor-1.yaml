@@ -5,3 +5,11 @@
   added_at: 2026-06-20T19:29:40.556445327Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 019efdbe-d36a-7dc0-86c2-2e204480c168
+  position: 2000
+  added_by: claude-advisor-1
+  added_at: 2026-06-26T18:04:52.739319463Z
+  for_role: advisor
+  for_scope: harness-worktree
+  added_by_machine: imac
