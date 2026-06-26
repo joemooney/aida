@@ -712,8 +712,34 @@ fn short_id(s: &str) -> String {
 pub enum PreviewBody {
     /// Raw markdown source (a spec body); rendered via `tui_markdown`.
     Markdown(String),
+    /// A spec preview with its STRUCTURED fields kept separate from the body
+    /// so the fields can be color-coded with semantic colors and the body
+    /// still rendered through the markdown renderer.
+    //
+    // trace:STORY-691 | ai:claude
+    Spec(SpecPreview),
     /// Pre-split plain-text lines, rendered verbatim.
     Plain(Vec<String>),
+}
+
+/// The structured fields + markdown body of a spec, sourced from
+/// `aida show <id> --json --no-git` (typed fields, not a re-parse of the
+/// human `aida show` stdout). `--no-git` preserves the BUG-616 preview-perf
+/// floor.
+//
+// trace:STORY-691 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct SpecPreview {
+    pub spec_id: String,
+    pub title: String,
+    pub status: String,
+    #[serde(default)]
+    pub priority: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// The markdown body (spec description), rendered below the header fields.
+    #[serde(default)]
+    pub description: String,
 }
 
 /// Run `aida show <id>` for the currently-highlighted row and cache the
@@ -761,24 +787,37 @@ fn preview_via_show(id: &str) -> PreviewBody {
     // BUG-613-adjacent: the row preview only needs the cached spec body, not the
     // per-spec git-linkage walk (commits/files/branch/PR) that makes `aida show`
     // ~1-2s per uncached row. `--no-git` drops it to sub-200ms. trace:BUG-616 | ai:claude
-    cmd.args(["show", id, "--no-git"]);
+    //
+    // STORY-691: fetch the TYPED fields via `--json` (not a re-parse of the
+    // human `aida show` stdout) so the structured header (status / priority /
+    // tags) can be color-coded with semantic, themeable colors above the
+    // markdown body. trace:STORY-691 | ai:claude
+    cmd.args(["show", id, "--no-git", "--json"]);
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
     match cmd.output() {
-        // The spec body is treated as markdown: descriptions/acceptance use
-        // headings, bold, lists, and fenced code, so render it through the
-        // markdown renderer instead of as verbatim CLI text. Plain prose with
-        // no markdown syntax round-trips unchanged. trace:STORY-689 | ai:claude
-        Ok(o) if o.status.success() => {
-            PreviewBody::Markdown(String::from_utf8_lossy(&o.stdout).into_owned())
-        }
+        Ok(o) if o.status.success() => parse_spec_preview(&o.stdout).map_or_else(
+            // A JSON shape mismatch degrades to the raw stdout as markdown
+            // rather than dropping the preview entirely.
+            || PreviewBody::Markdown(String::from_utf8_lossy(&o.stdout).into_owned()),
+            PreviewBody::Spec,
+        ),
         Ok(o) => PreviewBody::Plain(vec![
             format!("`aida show {id}` failed:"),
             String::from_utf8_lossy(&o.stderr).to_string(),
         ]),
         Err(e) => PreviewBody::Plain(vec![format!("could not run `aida show`: {e}")]),
     }
+}
+
+/// Parse `aida show <id> --json` output into a [`SpecPreview`]. Tolerant: a
+/// JSON shape mismatch returns `None` so the caller can degrade gracefully
+/// rather than crash the launcher.
+//
+// trace:STORY-691 | ai:claude
+fn parse_spec_preview(bytes: &[u8]) -> Option<SpecPreview> {
+    serde_json::from_slice(bytes).ok()
 }
 
 fn preview_via_gh_pr(number: &str) -> Vec<String> {
@@ -959,12 +998,84 @@ fn preview_text<'a>(body: &'a PreviewBody, theme: &Theme) -> Text<'a> {
                 tui_markdown::from_str(src)
             }
         }
+        PreviewBody::Spec(spec) => spec_preview_text(spec, theme),
         PreviewBody::Plain(lines) => Text::from(
             lines
                 .iter()
                 .map(|s| Line::from(s.clone()))
                 .collect::<Vec<_>>(),
         ),
+    }
+}
+
+/// Render a [`SpecPreview`] as the color-coded structured header (id + title,
+/// then status / priority / tags painted with semantic THEMEABLE colors) above
+/// the markdown-rendered body. The status and priority values resolve their
+/// color through [`Theme::status_color`] / [`Theme::priority_color`], which
+/// mirror the CLI's `paint_status` palette but route through the active theme
+/// so a custom palette recolors them. Degrades gracefully on empty/missing
+/// fields.
+//
+// trace:STORY-691 | ai:claude
+fn spec_preview_text<'a>(spec: &'a SpecPreview, theme: &Theme) -> Text<'a> {
+    let mut lines: Vec<Line<'a>> = Vec::new();
+
+    // id + title header.
+    lines.push(Line::from(vec![
+        Span::styled(
+            spec.spec_id.as_str(),
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(spec.title.as_str(), Style::default().fg(theme.fg)),
+    ]));
+
+    // Field label color — dim, so the colored VALUE carries the signal.
+    let label = Style::default().fg(theme.dim);
+
+    if !spec.status.trim().is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("Status:   ", label),
+            Span::styled(
+                spec.status.as_str(),
+                Style::default()
+                    .fg(theme.status_color(&spec.status))
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
+    }
+    if !spec.priority.trim().is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("Priority: ", label),
+            Span::styled(
+                spec.priority.as_str(),
+                Style::default().fg(theme.priority_color(&spec.priority)),
+            ),
+        ]));
+    }
+    if !spec.tags.is_empty() {
+        let mut spans: Vec<Span<'a>> = vec![Span::styled("Tags:     ", label)];
+        for (i, tag) in spec.tags.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw(" "));
+            }
+            spans.push(Span::styled(tag.as_str(), Style::default().fg(theme.info)));
+        }
+        lines.push(Line::from(spans));
+    }
+
+    // Blank separator before the markdown body, then the body itself rendered
+    // through the same markdown path as a plain Markdown preview.
+    let body = spec.description.trim();
+    if !body.is_empty() {
+        lines.push(Line::default());
+        let mut text = Text::from(lines);
+        text.extend(tui_markdown::from_str(body));
+        text
+    } else {
+        Text::from(lines)
     }
 }
 
@@ -1295,5 +1406,116 @@ mod tests {
             lines,
             vec!["PR #21".to_string(), "# not a heading".to_string()]
         );
+    }
+
+    // --- STORY-691 slice 2: color-coded structured fields ---
+
+    fn sample_spec() -> SpecPreview {
+        SpecPreview {
+            spec_id: "STORY-691".into(),
+            title: "color the preview".into(),
+            status: "In Progress".into(),
+            priority: "High".into(),
+            tags: vec!["tui".into(), "theme".into()],
+            description: "# Body\n\nSome **bold** prose.\n".into(),
+        }
+    }
+
+    // Find the painted style of the first span whose content contains `needle`.
+    fn span_fg(text: &Text, needle: &str) -> Option<ratatui::style::Color> {
+        text.lines.iter().find_map(|line| {
+            line.spans
+                .iter()
+                .find(|s| s.content.contains(needle))
+                .and_then(|s| s.style.fg)
+        })
+    }
+
+    #[test]
+    fn spec_preview_colors_fields_with_theme_semantics() {
+        // The structured status / priority values resolve to the active
+        // theme's semantic color (the same map the CLI uses), and the markdown
+        // body still renders below. trace:STORY-691
+        let theme = crate::theme::DARK;
+        let body = PreviewBody::Spec(sample_spec());
+        let text = preview_text(&body, &theme);
+
+        // status value painted with the in-progress slot; priority with high.
+        assert_eq!(
+            span_fg(&text, "In Progress"),
+            Some(theme.status_color("In Progress")),
+            "status value carries the themed status color",
+        );
+        assert_eq!(
+            span_fg(&text, "High"),
+            Some(theme.priority_color("High")),
+            "priority value carries the themed priority color",
+        );
+
+        // The markdown body rendered below: heading text + emphasized word
+        // survive (delimiters consumed).
+        let joined = text_to_lines(&text).join("\n");
+        assert!(joined.contains("Body"), "body heading survives: {joined:?}");
+        assert!(
+            joined.contains("tui") && joined.contains("theme"),
+            "tags shown"
+        );
+        assert!(!joined.contains("**bold**"), "bold markers consumed");
+    }
+
+    #[test]
+    fn spec_preview_status_color_is_themeable() {
+        // Switching themes recolors the same status — proving the color is not
+        // hardcoded but resolved through the palette. trace:STORY-691
+        let dark_body = PreviewBody::Spec(sample_spec());
+        let mocha_body = PreviewBody::Spec(sample_spec());
+        let dark = preview_text(&dark_body, &crate::theme::DARK);
+        let mocha = preview_text(&mocha_body, &crate::theme::CATPPUCCIN_MOCHA);
+        assert_ne!(
+            span_fg(&dark, "In Progress"),
+            span_fg(&mocha, "In Progress"),
+            "the status color tracks the active theme",
+        );
+    }
+
+    #[test]
+    fn spec_preview_degrades_on_missing_fields() {
+        // Empty priority/tags/body are simply omitted — no blank "Priority:"
+        // line, no crash. trace:STORY-691
+        let theme = crate::theme::DARK;
+        let spec = SpecPreview {
+            spec_id: "TASK-1".into(),
+            title: "bare".into(),
+            status: "Draft".into(),
+            priority: String::new(),
+            tags: vec![],
+            description: String::new(),
+        };
+        let lines = text_to_lines(&preview_text(&PreviewBody::Spec(spec), &theme));
+        let joined = lines.join("\n");
+        assert!(joined.contains("Status:"), "status still shown: {joined:?}");
+        assert!(!joined.contains("Priority:"), "no empty priority line");
+        assert!(!joined.contains("Tags:"), "no empty tags line");
+    }
+
+    #[test]
+    fn parse_spec_preview_reads_show_json() {
+        // The `aida show --json` shape parses into the typed fields the
+        // preview needs. trace:STORY-691
+        let json = br#"{
+            "spec_id": "STORY-691",
+            "title": "t",
+            "status": "Approved",
+            "priority": "Medium",
+            "tags": ["a", "b"],
+            "description": "body"
+        }"#;
+        let spec = parse_spec_preview(json).expect("parses");
+        assert_eq!(spec.spec_id, "STORY-691");
+        assert_eq!(spec.status, "Approved");
+        assert_eq!(spec.priority, "Medium");
+        assert_eq!(spec.tags, vec!["a".to_string(), "b".to_string()]);
+        // A shape mismatch returns None (caller degrades gracefully).
+        assert!(parse_spec_preview(b"not json").is_none());
     }
 }
