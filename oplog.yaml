@@ -22297,5 +22297,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 2110
+- id: 019f0659-6068-7193-99e2-adc235fe57d4
+  target_id: 019f0659-4ed2-7b50-bc31-2ea0a3a6df8f
+  author: aida
+  node_id: '1'
+  lamport: 2111
+  timestamp: 2026-06-26T23:52:28.520899861Z
+  kind: !Create
+    title: 'Advisor-backlog opacity panel: surface WHY the advisor parked each item'
+    description: The epic names advisor-as-bottleneck as opacity. Surface each parked/deferred items reason (revisit trigger, finding, punt note) inline + total advisor-queue depth, so the operator sees the advisor backlog and why each item is stuck. Visibility-first; provides the measurement before any STORY-688 role-split.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2111
 node_id: '1'
