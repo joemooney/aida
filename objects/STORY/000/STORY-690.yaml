@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T06:52:59.975232154Z
-modified_at: 2026-06-26T06:52:59.975232154Z
+modified_at: 2026-06-26T18:46:25.794269995Z
 req_type: Story
 tags:
 - parent:EPIC
@@ -35,3 +35,8 @@ tags:
 - redesign
 - tui
 - ux
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-26T18:46:25.794264551Z
+  created_by: joe
