@@ -1,0 +1,16 @@
+id: 019f02ed-34cf-7591-b57e-bcc72b561b9c
+spec_id: TASK-905
+agreed_id: TASK-905
+title: 'aida fasttrack status: lane projection (requested to shipped)'
+description: Followup B of TASK-0438 design. Read-only `aida fasttrack status` view mapping batch:fasttrack / batch:express rows onto requested->accepted->queued->running->blocked->punted->shipped->rejected, derived from existing status+tags (NeedsAttention -> blocked/punted, Done/Completed -> shipped). A projection over the cache; no new store. See docs/plans/2026-06-26-task-0438-fasttrack-lane.md.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T07:55:27.823259187Z
+modified_at: 2026-06-26T07:55:27.823259187Z
+req_type: Task
+tags:
+- express
+- fasttrack
+- parent:TASK-0438
