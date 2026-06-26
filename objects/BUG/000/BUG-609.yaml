@@ -14,12 +14,12 @@ description: |-
   - Worktrees: abandoned worktree-agent-* with no lease and no unmerged work are reaped by doctor heal (conservative: leave dirty / unmerged / leased worktrees alone), and the status default summarizes the count rather than listing all 45.
   - No change to STORY-496 reaper semantics (conservative pid-liveness; reused-pid left alone).
   - On a host with K dead-PID registrations + M abandoned worktrees, the status headline drops by K and the worktree list collapses to a count by default; doctor heal removes the reapable ones.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:03:13.861603135Z
-modified_at: 2026-06-24T04:07:28.370183170Z
+modified_at: 2026-06-26T05:15:36.640932625Z
 req_type: Bug
 tags:
 - fleet-coordination
