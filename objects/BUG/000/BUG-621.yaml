@@ -1,0 +1,37 @@
+id: 019f025a-b072-77b0-9b97-8f6de7d64eb9
+spec_id: BUG-621
+agreed_id: BUG-621
+title: 'aida queue footer self-contradicts: ''needs you: ... nothing to do'' for in-flight items (render_path_to_empty)'
+description: |-
+  SYMPTOM (operator, 2026-06-25): the "To empty this queue:" footer on aida queue prints a self-contradictory line for in-flight items:
+    TASK-894   needs you: resolves through normal flow — nothing to do
+  "needs you" and "nothing to do" contradict each other, on a daily-driver command. The operator could not tell what action (if any) was expected.
+
+  ROOT CAUSE (code-grounded): aida-cli/src/burndown.rs:render_path_to_empty (line ~1377) loops over EVERY non-Actionable item and unconditionally formats "{id} needs you: {advance_action_sentence}". For the self-resolving bucket (AdvanceAction::None — an In-Progress / in-flight spec that clears via the normal lifecycle), advance_action_sentence returns "resolves through normal flow — nothing to do" (burndown.rs:1333). Pairing the unconditional "needs you:" prefix with that message produces the contradiction. The classifier already distinguishes "need a human nudge" vs "self-resolve through normal flow" (see main.rs ~84762), but the per-item explainer does not honor that split.
+
+  EXPECTED: items that need no operator action are not labeled "needs you".
+
+  FIX: in render_path_to_empty, split the non-Actionable items by whether they actually need the operator. Genuinely-parked/blocked/held items keep the "needs you:" prefix; self-resolving in-flight items (AdvanceAction::None) go in their own group with a non-"needs you" lead-in, e.g.:
+    In flight — nothing for you to do, clears when shipped: TASK-894
+  or are summarized as a count ("1 in flight — no action; clears when shipped"). Either way, never print "needs you: ... nothing to do".
+
+  SECONDARY NOTE (out of scope but worth a glance): "resolves through normal flow" assumes the in-flight item is actually being worked. An In-Progress spec with NO active lease (drift) would not self-resolve — if the bucketing can't tell, the wording should not promise resolution. Cross-check against the In-Progress-without-lease hygiene signal.
+
+  ACCEPTANCE:
+  - No queue footer line ever pairs "needs you" with "nothing to do".
+  - In-flight / self-resolving items are presented as requiring no operator action (separate group or count), distinct from items that genuinely need a human nudge.
+  - Genuinely-parked/blocked/held items still show their single next action under a "needs you" heading.
+  - Verify against the primary caller: aida queue with one In-Progress item reads as "in flight, nothing to do" with no contradiction.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T05:15:25.682956568Z
+modified_at: 2026-06-26T05:15:25.682956568Z
+req_type: Bug
+tags:
+- legibility
+- papercut
+- queue
+- user-facing-text
+- ux
