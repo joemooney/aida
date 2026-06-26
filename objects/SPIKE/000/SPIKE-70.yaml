@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:24:24.238621261Z
-modified_at: 2026-06-26T18:24:24.238621261Z
+modified_at: 2026-06-26T18:46:31.738366807Z
 req_type: Spike
 tags:
 - autonomy
@@ -23,4 +23,9 @@ tags:
 - finding
 - orchestration
 - probe
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-26T18:46:31.738361280Z
+  created_by: joe
 human_only: true
