@@ -3,12 +3,12 @@ spec_id: TASK-933
 agreed_id: TASK-933
 title: 'TUI gap: ''accept'' verb — implementation approval (reviewer-gated, Done → Completed)'
 description: 'GAP #3 (the big one): the TUI approve verb is SPEC-approval (Draft->Approved); there is no IMPLEMENTATION-approval. Add an "accept" verb, status-conditional on Done specs (the symmetric reviewer counterpart to the advisor approve), representing the reviewer accepting the implementation. It transitions Done -> Completed (run with reviewer authority, e.g. AIDA_SESSION_ROLE=reviewer on the spawned command) and records a "reviewed/accepted" comment. (Note: in the full flow Done->Completed is merge-driven; for the walkthrough the reviewer accept completes it.) Distinct from approve. ACCEPTANCE: accept appears only for Done focus; completes the spec + comments it; non-Done skipped; pure conditional/target logic tested; gates green; redesign module.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:35.943313832Z
-modified_at: 2026-06-26T23:27:35.943313832Z
+modified_at: 2026-06-26T23:28:35.352517984Z
 req_type: Task
 tags:
 - gap
