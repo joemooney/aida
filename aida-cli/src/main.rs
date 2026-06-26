@@ -1044,9 +1044,14 @@ mod story_423_asciinema_tests {
             .unwrap()
             .command
         {
-            Command::Fasttrack { title, r#type } => {
-                assert_eq!(title, "fix a typo");
+            Command::Fasttrack {
+                title,
+                r#type,
+                command,
+            } => {
+                assert_eq!(title.as_deref(), Some("fix a typo"));
                 assert_eq!(r#type, "task");
+                assert!(command.is_none());
             }
             other => panic!("expected fasttrack, got {other:?}"),
         }
@@ -1055,12 +1060,94 @@ mod story_423_asciinema_tests {
             .unwrap()
             .command
         {
-            Command::Fasttrack { title, r#type } => {
-                assert_eq!(title, "papercut");
+            Command::Fasttrack {
+                title,
+                r#type,
+                command,
+            } => {
+                assert_eq!(title.as_deref(), Some("papercut"));
                 assert_eq!(r#type, "bug");
+                assert!(command.is_none());
             }
             other => panic!("expected fasttrack, got {other:?}"),
         }
+
+        // TASK-905: `aida fasttrack status` parses as the lane-status
+        // subcommand, not a titled file. trace:TASK-905
+        match Cli::try_parse_from(["aida", "fasttrack", "status"])
+            .unwrap()
+            .command
+        {
+            Command::Fasttrack { title, command, .. } => {
+                assert!(title.is_none(), "`status` must not be read as a title");
+                assert!(matches!(
+                    command,
+                    Some(crate::cli::FasttrackCommand::Status { json: false })
+                ));
+            }
+            other => panic!("expected fasttrack status, got {other:?}"),
+        }
+
+        match Cli::try_parse_from(["aida", "fasttrack", "status", "--json"])
+            .unwrap()
+            .command
+        {
+            Command::Fasttrack { command, .. } => {
+                assert!(matches!(
+                    command,
+                    Some(crate::cli::FasttrackCommand::Status { json: true })
+                ));
+            }
+            other => panic!("expected fasttrack status --json, got {other:?}"),
+        }
+    }
+
+    // TASK-905: the lane stage projection maps fixture lane items onto the
+    // right stage from their status + routing signals. Pure function — no
+    // store, queue dir, or lease probe. trace:TASK-905
+    #[test]
+    fn task_905_fasttrack_stage_projection_maps_fixtures() {
+        use FasttrackStage::*;
+        // (status_str, is_queued, is_running, has_punt) → expected stage.
+        let cases: &[(&str, bool, bool, bool, FasttrackStage)] = &[
+            // Draft is always "requested", regardless of stray signals.
+            ("Draft", false, false, false, Requested),
+            // Approved: accepted by default, queued on a queue, running under a lease.
+            ("Approved", false, false, false, Accepted),
+            ("Approved", true, false, false, Queued),
+            ("Approved", true, true, false, Running),
+            // Planned: queued, or running once a lease holds it.
+            ("Planned", false, false, false, Queued),
+            ("Planned", false, true, false, Running),
+            // InProgress is always running.
+            ("InProgress", false, false, false, Running),
+            // NeedsAttention splits punted (has a punt record) vs blocked.
+            ("NeedsAttention", false, false, false, Blocked),
+            ("NeedsAttention", false, false, true, Punted),
+            // Done / Completed both project to shipped.
+            ("Done", false, false, false, Shipped),
+            ("Completed", false, false, false, Shipped),
+            // Rejected.
+            ("Rejected", false, false, false, Rejected),
+            // Case-insensitive on the stored Debug string.
+            ("approved", true, false, false, Queued),
+            // Unknown / custom status falls back via routing signals.
+            ("Blocked-by-design", false, false, false, Requested),
+            ("Blocked-by-design", true, false, false, Queued),
+            ("Blocked-by-design", false, true, false, Running),
+        ];
+        for (status, q, r, p, expected) in cases {
+            assert_eq!(
+                project_fasttrack_stage(status, *q, *r, *p),
+                *expected,
+                "status={status} queued={q} running={r} punt={p}",
+            );
+        }
+        // The shipped state wins even if a stale lease still names it.
+        assert_eq!(
+            project_fasttrack_stage("Completed", false, true, false),
+            Shipped
+        );
     }
 
     #[test]
@@ -14282,7 +14369,26 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         // It rewrites to the equivalent `Command::Add` and recurses, reusing
         // the entire add+queue path. The lane skips human review only; CI still
         // gates merge (lifecycle:no-review, never no-ci-wait). trace:TASK-777
-        Command::Fasttrack { title, r#type } => {
+        Command::Fasttrack {
+            title,
+            r#type,
+            command,
+        } => {
+            // TASK-905: the `status` subcommand is a read-only lane projection,
+            // not a filing. Dispatch it before the Add delegation.
+            // trace:TASK-905 | ai:claude
+            if let Some(crate::cli::FasttrackCommand::Status { json }) = command {
+                return handle_fasttrack_status(store_path, &backend, *json);
+            }
+            // Bare `aida fasttrack <title>` files a trivial change. With the
+            // title now optional (so `status` parses as a subcommand), guard the
+            // missing-title case with the same guidance `aida add` gives.
+            let title = title.clone().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "title is required — `aida fasttrack \"<one-line change>\"`. \
+                     For the lane view, run `aida fasttrack status`."
+                )
+            })?;
             let add = Command::Add {
                 title: Some(title.clone()),
                 title_positional: None,
@@ -44152,6 +44258,261 @@ pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -
 /// case-insensitive match against a row's spec/agreed id. trace:TASK-670 | ai:claude
 fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
     in_flight_lease_role_map(project_root).into_keys().collect()
+}
+
+// The eight lane stages a fasttrack/express item can occupy, in roughly
+// request-to-ship order. This is a *projection* — there is no new store; the
+// stage is derived from the spec's existing status, queue membership, active
+// lease, punt ledger, and merged (Completed) state.
+// trace:TASK-905 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FasttrackStage {
+    /// Draft — filed, not yet dispositioned.
+    Requested,
+    /// Approved — blessed but not yet on a queue.
+    Accepted,
+    /// Approved/Planned and sitting in a role queue, awaiting a drain owner.
+    Queued,
+    /// InProgress, or a live lease holds the spec (a drain is working it).
+    Running,
+    /// NeedsAttention with no punt record — parked, but not a recorded punt.
+    Blocked,
+    /// NeedsAttention with a punt record — left the lane loudly (the punt-out
+    /// invariant: non-trivial discovery parks + records a punt).
+    Punted,
+    /// Done or Completed — work finished (Completed == merged to main).
+    Shipped,
+    /// Rejected — declined; will not be done.
+    Rejected,
+}
+
+impl FasttrackStage {
+    /// Lowercase slug used in CLI output and the `--json` `stage` field.
+    fn slug(self) -> &'static str {
+        match self {
+            FasttrackStage::Requested => "requested",
+            FasttrackStage::Accepted => "accepted",
+            FasttrackStage::Queued => "queued",
+            FasttrackStage::Running => "running",
+            FasttrackStage::Blocked => "blocked",
+            FasttrackStage::Punted => "punted",
+            FasttrackStage::Shipped => "shipped",
+            FasttrackStage::Rejected => "rejected",
+        }
+    }
+}
+
+/// Pure stage projection for a single lane item. Kept side-effect-free (takes
+/// already-derived booleans, returns the stage) so it is unit-testable without
+/// a store, a queue dir, or a lease probe.
+///
+/// `status_str` is the cache's status string (the `Debug` form of
+/// `RequirementStatus` — `Draft`, `Approved`, `Planned`, `InProgress`, `Done`,
+/// `Completed`, `Rejected`, `NeedsAttention`); matching is case-insensitive so a
+/// `custom_status` row degrades gracefully (unknown → its closest status, else
+/// `requested`). `is_queued` = in some role queue; `is_running` = a live lease
+/// holds it; `has_punt` = an (unresolved) punt record names it.
+///
+/// Mapping (per the fasttrack-lane design's status→stage table):
+///   Draft            → requested
+///   Approved         → accepted, or queued (in a queue), or running (live lease)
+///   Planned          → queued, or running (live lease)
+///   InProgress       → running
+///   NeedsAttention   → punted (has a punt record) else blocked
+///   Done | Completed → shipped
+///   Rejected         → rejected
+// trace:TASK-905 | ai:claude — see docs/plans/2026-06-26-task-0438-fasttrack-lane.md
+fn project_fasttrack_stage(
+    status_str: &str,
+    is_queued: bool,
+    is_running: bool,
+    has_punt: bool,
+) -> FasttrackStage {
+    match status_str.to_ascii_lowercase().as_str() {
+        "draft" => FasttrackStage::Requested,
+        "approved" => {
+            if is_running {
+                FasttrackStage::Running
+            } else if is_queued {
+                FasttrackStage::Queued
+            } else {
+                FasttrackStage::Accepted
+            }
+        }
+        "planned" => {
+            if is_running {
+                FasttrackStage::Running
+            } else {
+                FasttrackStage::Queued
+            }
+        }
+        "inprogress" => FasttrackStage::Running,
+        "needsattention" => {
+            if has_punt {
+                FasttrackStage::Punted
+            } else {
+                FasttrackStage::Blocked
+            }
+        }
+        "done" | "completed" => FasttrackStage::Shipped,
+        "rejected" => FasttrackStage::Rejected,
+        // Unknown / custom status: a live lease or queue membership still tells
+        // us where it is; otherwise treat it as the entry stage.
+        _ => {
+            if is_running {
+                FasttrackStage::Running
+            } else if is_queued {
+                FasttrackStage::Queued
+            } else {
+                FasttrackStage::Requested
+            }
+        }
+    }
+}
+
+/// `aida fasttrack status` — the lane stage projection.
+///
+/// Cache-fast: it reuses `backend.list_summaries` (the same projection
+/// `aida list` reads) for the `batch:fasttrack` and `batch:express` buckets, and
+/// the cheap queue-dir scan + live-lease probe + punt-ledger read the list view
+/// already uses for its routing glyphs — NOT the full-store `aida status` scan.
+// trace:TASK-905 | ai:claude
+fn handle_fasttrack_status(
+    store_path: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+    json: bool,
+) -> Result<()> {
+    // Each lane bucket is one tag filter. The cache's tag filter is AND-only, so
+    // we run one query per bucket (with archive/defer set to Both so a
+    // parked/archived lane item still surfaces in its own status surface) and
+    // tag each row with the bucket it came from. A row carrying BOTH tags is
+    // kept once, under fasttrack (the more-trivial tier) — fasttrack is listed
+    // first so the de-dup HashSet skips the express copy.
+    let mut rows: Vec<(&'static str, aida_core::RequirementSummary)> = Vec::new();
+    let mut seen: HashSet<Uuid> = HashSet::new();
+    for (bucket, tag) in [
+        ("fasttrack", "batch:fasttrack"),
+        ("express", "batch:express"),
+    ] {
+        let filter = aida_core::ListFilter {
+            tags: vec![tag.to_string()],
+            archive: aida_core::ArchiveFilter::Both,
+            defer: aida_core::DeferFilter::Both,
+            ..Default::default()
+        };
+        for s in backend.list_summaries(&filter)? {
+            if seen.insert(s.id) {
+                rows.push((bucket, s));
+            }
+        }
+    }
+
+    // Routing signals — the same cheap reads `aida list` uses for its flow
+    // glyphs. project root = parent of the `.aida-store` worktree.
+    let routing_root = store_path.parent().map(|p| p.to_path_buf());
+    let queued_ids: HashSet<Uuid> = routing_root
+        .as_deref()
+        .map(all_queued_requirement_ids)
+        .unwrap_or_default();
+    let in_flight_scopes: HashSet<String> = routing_root
+        .as_deref()
+        .map(in_flight_lease_scopes)
+        .unwrap_or_default();
+    // Specs named by an unresolved punt record (distinguishes punted vs blocked
+    // within NeedsAttention). `read_ledger` is a single JSONL read.
+    let punted_specs: HashSet<String> = routing_root
+        .as_deref()
+        .map(|root| {
+            punt::read_ledger(root)
+                .into_iter()
+                .map(|r| r.spec.to_ascii_lowercase())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let stage_of = |bucket: &str, r: &aida_core::RequirementSummary| -> FasttrackStage {
+        let is_queued = queued_ids.contains(&r.id);
+        let is_running = [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|id| in_flight_scopes.contains(&id.to_ascii_lowercase()));
+        let has_punt = [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|id| punted_specs.contains(&id.to_ascii_lowercase()));
+        let _ = bucket;
+        project_fasttrack_stage(&r.status, is_queued, is_running, has_punt)
+    };
+
+    if json {
+        let items: Vec<serde_json::Value> = rows
+            .iter()
+            .map(|(bucket, r)| {
+                let stage = stage_of(bucket, r);
+                serde_json::json!({
+                    "spec_id": r.spec_id.as_deref().or(r.agreed_id.as_deref()),
+                    "title": r.title,
+                    "tier": bucket,
+                    "status": r.status,
+                    "stage": stage.slug(),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&items)?);
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!(
+            "{}",
+            "No fasttrack-lane items (batch:fasttrack / batch:express).".yellow()
+        );
+        return Ok(());
+    }
+
+    // Order rows by lane progression so the surface reads request → ship.
+    let stage_rank = |s: FasttrackStage| -> u8 {
+        match s {
+            FasttrackStage::Requested => 0,
+            FasttrackStage::Accepted => 1,
+            FasttrackStage::Queued => 2,
+            FasttrackStage::Running => 3,
+            FasttrackStage::Blocked => 4,
+            FasttrackStage::Punted => 5,
+            FasttrackStage::Shipped => 6,
+            FasttrackStage::Rejected => 7,
+        }
+    };
+    let mut ordered: Vec<(&'static str, &aida_core::RequirementSummary, FasttrackStage)> = rows
+        .iter()
+        .map(|(bucket, r)| (*bucket, r, stage_of(bucket, r)))
+        .collect();
+    ordered.sort_by_key(|(_, _, stage)| stage_rank(*stage));
+
+    println!("{}  {} item(s)", "Fasttrack lane".bold(), ordered.len());
+    println!(
+        "{}",
+        "requested → accepted → queued → running → blocked → punted → shipped → rejected".dimmed()
+    );
+    println!("{}", "─".repeat(72));
+    for (bucket, r, stage) in &ordered {
+        let id = r
+            .spec_id
+            .as_deref()
+            .or(r.agreed_id.as_deref())
+            .unwrap_or("-");
+        let stage_disp = match stage {
+            FasttrackStage::Requested => stage.slug().yellow(),
+            FasttrackStage::Accepted => stage.slug().blue(),
+            FasttrackStage::Queued => stage.slug().cyan(),
+            FasttrackStage::Running => stage.slug().magenta(),
+            FasttrackStage::Blocked | FasttrackStage::Punted => stage.slug().red().bold(),
+            FasttrackStage::Shipped => stage.slug().green(),
+            FasttrackStage::Rejected => stage.slug().red(),
+        };
+        println!("{:<10} {:<11} [{}] {}", id, stage_disp, bucket, r.title);
+    }
+    Ok(())
 }
 
 /// BUG-511: like [`in_flight_lease_scopes`] but keeps each live lease's
