@@ -871,6 +871,43 @@ pub fn spawn_claude_resume(
     cmd.status().context("failed to spawn claude")
 }
 
+/// TASK-895: build the argv (after the `codex` program name) for an interactive
+/// Codex session hosted in an `aida tui` tab. Codex's interactive CLI takes the
+/// initial prompt as a trailing positional (`codex [PROMPT]`) — the analogue of
+/// claude's positional first message. Unlike claude there is no caller-minted
+/// `--session-id` and no AIDA-addressable `--resume`, so the argv carries only
+/// the prompt; AIDA hosts a fresh Codex session per tab (resume-parity is a
+/// follow-up). Faithful-launcher posture: no forced approval/sandbox bypass —
+/// Codex prompts natively, matching the STORY-495 native default. Pure — the
+/// flag set is unit-tested without spawning codex.
+// trace:TASK-895 | ai:claude
+pub fn codex_session_args(initial_prompt: &str) -> Vec<String> {
+    vec![initial_prompt.to_string()]
+}
+
+/// TASK-895: replace this process with an interactive `codex <prompt>` session —
+/// the Codex analogue of [`exec_claude_with_session`], for a Codex tab hosted by
+/// the AIDA TUI. The hosted `aida queue work` process is replaced by `codex`, so
+/// all lease / worktree / manifest setup has already run by the time this is
+/// reached.
+// trace:TASK-895 | ai:claude
+pub fn exec_codex_session(initial_prompt: &str) -> Result<()> {
+    use std::process::Command;
+    let mut cmd = Command::new("codex");
+    cmd.args(codex_session_args(initial_prompt));
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = cmd.exec();
+        anyhow::bail!("failed to exec codex: {}", err);
+    }
+    #[cfg(not(unix))]
+    {
+        let status = cmd.status().context("failed to spawn codex")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
+}
+
 /// STORY-683: which vendor's headless CLI drives an orchestrator drain phase.
 /// The autonomous drain (`burndown` / `queue work --auto-complete --no-human`)
 /// used to hardcode `claude -p`; this enum lets the same spawn path launch
@@ -3214,6 +3251,24 @@ mod tests {
         assert_eq!(
             args.get(pos + 1).map(String::as_str),
             Some("bypassPermissions")
+        );
+    }
+
+    // TASK-895: the interactive Codex argv is just the prompt positional —
+    // Codex has no caller-minted `--session-id` / TUI-addressable `--resume`,
+    // and the faithful-launcher default forces no approval/sandbox bypass.
+    // trace:TASK-895 | ai:claude
+    #[test]
+    fn codex_session_args_is_just_the_prompt_positional() {
+        let args = codex_session_args("/aida-pickup");
+        assert_eq!(args, vec!["/aida-pickup".to_string()]);
+        assert!(!args.iter().any(|a| a == "--session-id"), "{args:?}");
+        assert!(!args.iter().any(|a| a == "--resume"), "{args:?}");
+        assert!(
+            !args
+                .iter()
+                .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"),
+            "interactive codex must not force the bypass: {args:?}"
         );
     }
 

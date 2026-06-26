@@ -114610,6 +114610,7 @@ fn handle_queue_command(
             fresh,
             list_sessions,
             session_id,
+            vendor,
             auto_complete,
             drain,
             json,
@@ -115335,6 +115336,9 @@ fn handle_queue_command(
                 *fresh,
                 *list_sessions,
                 session_id.as_deref(),
+                // TASK-895: which vendor CLI hosts the interactive session
+                // (`claude` default / `codex`). trace:TASK-895 | ai:claude
+                vendor,
                 // STORY-263: presence of `--no-human` (any value) launches
                 // this session headless. The orchestrator appends a bare
                 // `--no-human` to its reviewer subprocess.
@@ -116457,6 +116461,7 @@ fn handle_queue_rework(
             /* fresh */ false,
             /* list_sessions */ false,
             /* session_id */ None,
+            /* vendor */ "claude",
             /* no_human */ false,
             /* batch_name */ None,
             /* quiet */ false,
@@ -117375,6 +117380,11 @@ fn handle_queue_work(
     fresh: bool,
     list_sessions: bool,
     session_id: Option<&str>,
+    // TASK-895: which vendor CLI hosts the interactive session — `claude`
+    // (default) or `codex`. The AIDA TUI passes `codex` to host a Codex tab.
+    // Only affects the interactive (non-headless) launch path; the headless
+    // drain resolves its own vendor via STORY-683. trace:TASK-895 | ai:claude
+    vendor: &str,
     no_human: bool,
     // TASK-272: the batch this pickup belongs to, when resolved from
     // `aida queue work --batch NAME`. Recorded on the session manifest so
@@ -118451,6 +118461,27 @@ fn handle_queue_work(
             &verdict_path,
             contained,
         );
+    }
+    // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
+    // no caller-minted session id / AIDA-addressable resume, and the interactive
+    // tab launch is never `--no-human` (the headless drain resolves its own
+    // vendor via STORY-683), so this branch handles only the interactive Codex
+    // launch and leaves the entire Claude `match launch` below byte-identical.
+    // trace:TASK-895 | ai:claude
+    if vendor.eq_ignore_ascii_case("codex") && !no_human {
+        eprintln!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::FlowActive)
+                .green()
+                .bold(),
+            format!(
+                "launching codex in {} (prompt `{}`)",
+                lease.worktree_path.display(),
+                prompt
+            )
+            .cyan()
+        );
+        return session::exec_codex_session(&prompt);
     }
     match launch {
         QueueWorkLaunch::Resume(id) => {
