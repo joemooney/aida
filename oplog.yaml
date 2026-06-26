@@ -21195,5 +21195,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 2020
+- id: 019f02db-52ea-7ad2-82c6-4bb2a40d19a2
+  target_id: 019f02db-3d77-7f93-845d-95e296095301
+  author: aida
+  node_id: '1'
+  lamport: 2021
+  timestamp: 2026-06-26T07:35:55.882164702Z
+  kind: !Create
+    title: Surface live aida intake proposals in the cockpit board (TASK-901 follow-up)
+    description: 'TASK-901 surfaced the cache-fast advisor BACKLOG (Approved-but-not-queued) in the board needs-approval group. The LIVE aida intake proposal set (approve/reject/park/queue dispositions) was deferred: aida intake/assess spawns a heavyweight cold-boot claude -p advisor pass (seconds-to-minutes), far over the board paint budget. Options to explore: (1) cache the last intake run output to disk (aida intake --json written by a separate cadence) and read it cheaply in the board, like the brief/findings surfaces; (2) a background async fill like the gh pr list awaiting-review lane; (3) an explicit operator keystroke that fires intake on demand. Compose only cache-fast or async-off-thread sources; never block the cursor.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2021
 node_id: '1'
