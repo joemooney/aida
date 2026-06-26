@@ -21653,5 +21653,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2056
+- id: 019f0531-dd37-7542-a428-e2656960c35e
+  target_id: 019f0531-d2e7-7cd2-b44b-ce273079e54b
+  author: aida
+  node_id: '1'
+  lamport: 2057
+  timestamp: 2026-06-26T18:29:41.815256972Z
+  kind: !Create
+    title: 'aida status <spec>: liveness for in-progress work — show linked session/pid/worktree/started/elapsed + a live-vs-STALE verdict'
+    description: "OPERATOR ASK (the core legibility keystone): for a spec marked In-Progress, how do I know there is an ACTUAL live session/process working it on my machine, vs a stale flag? Today there is NO spec->process path: aida why <spec> says \"in-progress\" purely from the status flag (not a live check), fanned agents take generic harness-worktree leases (not spec-scoped), and aida show has no session section. This is the TASK-894 failure generalized — an In-Progress flag that is not liveness-backed.\n\nDELIVER: aida status <spec> (and/or a live section on aida show / aida why) that, for an in-progress spec, shows: linked session/agent id, worktree path, started-at, ELAPSED, and a LIVENESS VERDICT — \"live\" (a process is using the worktree / holder pid alive) vs \"STALE — no live process, N elapsed; the In-Progress flag is orphaned\". \n\nREQUIRES a spec<->session link recorded when work begins: extend the lease/session registry to carry the spec_id, OR write a link (spec -> session-id/worktree/started) at the point work starts and the status flips to In-Progress. Liveness check: is a process alive in/using that worktree (pid liveness like BUG-609 pid_is_alive, or lsof/ps on the worktree path). \n\nSUBSUMES BUG-623 (aida why should flag stalled-in-flight) — that flag IS this commands STALE verdict surfaced in aida why. Makes the flip-to-In-Progress discipline TRUSTWORTHY (flag + verifiable live session) and the aida list --status in-progress view honest. trace candidate."
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 2057
 node_id: '1'
