@@ -1,0 +1,17 @@
+id: 019f053a-3d2e-7873-910b-33ac40767efc
+spec_id: BUG-627
+agreed_id: BUG-627
+title: Cache freshness check is SHA-based and schema-blind — a schema change (e.g. blocked column) leaves a FRESH-but-stale cache that hard-errors instead of self-healing
+description: 'Operator hit: aida show <spec> -> "table requirements_cache has no column named blocked". aida cache status reported Status: FRESH (cache HEAD SHA == store HEAD SHA) yet the table lacked the blocked column (TASK-902). The staleness/auto-rebuild path keys ONLY on HEAD-SHA equality, NOT on cache schema version, so a schema change that does not move the orphan-store HEAD SHA (or a cache last built at the current SHA by an older-schema binary) is considered FRESH and is never rebuilt -> the next query that references the new column hard-errors. TASK-902 was supposed to bump SCHEMA_VERSION so old caches self-heal (drop+rebuild on next read); that self-heal does NOT fire here. FIX: store the cache schema version (e.g. PRAGMA user_version or a meta row) and, on EVERY read-path open, compare the binary SCHEMA_VERSION to the caches stored version; on mismatch, drop+rebuild BEFORE querying — independent of HEAD-SHA freshness. A schema change must never surface as a raw SQL error to the user. Add a test: open a cache with an old schema version + matching HEAD SHA -> auto-rebuild, no error. Aggravating factor: concurrent worktree-isolated agents running different-SHA binaries can build the shared cache at inconsistent schemas.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T18:38:50.670851418Z
+modified_at: 2026-06-26T18:38:50.670851418Z
+req_type: Bug
+tags:
+- cache
+- from-operator
+- reliability
+- schema
