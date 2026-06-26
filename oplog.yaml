@@ -21025,5 +21025,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2007
+- id: 019f0260-0502-7ef0-ba60-73b901224a8c
+  target_id: 019f025f-f690-7281-ac13-206df93a0a8d
+  author: aida
+  node_id: '1'
+  lamport: 2008
+  timestamp: 2026-06-26T05:21:15.010180064Z
+  kind: !Create
+    title: Real `aida list --limit` + load-more pagination (TASK-897 follow-up)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2008
 node_id: '1'
