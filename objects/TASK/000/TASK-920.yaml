@@ -7,6 +7,13 @@ description: |-
 
   BEHAVIOR: "approve" is Draft-conditional (appears only when the focused/selected spec is Draft), set-level (operates on marked drafts / focused draft). Executes the approval transition: `aida edit <id> --status approved` run under advisor authority (the redesign already knows it shells out; the approval transition is advisor-gated, so the verb should run it in a way that carries advisor authority, e.g. AIDA_SESSION_ROLE=advisor on the spawned command, OR document that it only works when the TUI's session role is advisor). Skips non-drafts; reports approved/skipped on the status line. This complements "request approval" (route to advisor) with "approve" (do it, when you ARE the advisor).
   ACCEPTANCE: Draft-conditional verb; runs the approved-status transition with advisor authority; non-drafts skipped; pure conditional/selection logic unit-tested; build/test/fmt/clippy green; --no-verify; trace this task.
+
+  ## Test Plan
+
+  1. On **Open**, drill to verbs while a **Draft** spec is focused → **expect** `approve` and `request approval` appear. Focus an **Approved** spec → **expect** `queue` appears (and the draft-only verbs don't).
+  2. **queue** → routes the selected Approved specs to the implementer queue (`aida queue add --for implementer`); status line reports routed/skipped.
+  3. **approve** → transitions selected Drafts → Approved (runs with advisor authority).
+  4. **defer** → opens a one-line **trigger input**; type a revisit condition, Enter → runs `aida defer … --until "<trigger>"`; status line reports deferred ids.
 status: Done
 priority: Medium
 owner: ''
