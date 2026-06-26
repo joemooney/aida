@@ -3,12 +3,12 @@ spec_id: BUG-612
 agreed_id: BUG-612
 title: aida tui will not launch standalone — errors on the fd-3 intent channel, requires the aida-tui shell wrapper (not installed without a shell reload)
 description: 'Operator hit this 2026-06-25 trying to test the EPIC-51 pause feature: `aida tui` -> "Error: the launchers intent fd 3 is the same kernel object as stdout/stderr. Run via the aida-tui shell wrapper... or pass --intent-fd". Then `aida dev shell-init --install` installed helpers but `aida-tui` -> command not found (the shell function needs `source ~/.bashrc`). So the out-of-box flow is broken: aida tui fails standalone + the wrapper isnt available without a shell reload. Root: aida-tui/src/intent.rs rejects when fd 3 == stdout/stderr (it expects a bash wrapper to wire the intent pipe + dispatch). FIX (= EPIC-52 Slice 1): move dispatch IN-PROCESS so aida tui Just Works from any shell, no fd-3/wrapper. Keyboard-verify the launch.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:36:18.004606013Z
-modified_at: 2026-06-26T02:47:46.293644349Z
+modified_at: 2026-06-26T03:04:06.623533167Z
 req_type: Bug
 tags:
 - aida:tui
@@ -26,3 +26,21 @@ comments:
   content: Commit 788b76a24 references this requirement
   created_at: 2026-06-26T02:47:46.293644349Z
   modified_at: 2026-06-26T02:47:46.293644349Z
+history:
+- id: 019f01e2-768e-72e2-bfa8-a278992e7f06
+  author: aida-auto-bump
+  timestamp: 2026-06-26T03:04:06.542513733Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f01e2-76df-7713-8c1d-642e59ada38d
+  timestamp: 2026-06-26T03:04:06.623526974Z
+  agent: aida
+  commit_sha: 81976dea3204a01bbc82189907be162ed01ae25f
+  summary: Completed via merge 81976dea
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T03:04:05.569177138Z
+  completion_sha: 81976dea3204a01bbc82189907be162ed01ae25f
