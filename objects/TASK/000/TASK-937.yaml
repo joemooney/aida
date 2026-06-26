@@ -1,0 +1,12 @@
+id: 019f0659-956b-71f0-becc-56d497525329
+spec_id: TASK-937
+agreed_id: TASK-937
+title: Batch-approve from the needs-approval group
+description: 'Multi-select in the needs-approval list (drafts + intake proposals) and approve/queue the selection in one action, vs Enter-dispatching aida edit --status approved one PTY round-trip at a time. The approve-backlog-items want at backlog scale. NOTE: a natural EPIC-54 verb.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T23:52:42.091111394Z
+modified_at: 2026-06-26T23:52:42.091111394Z
+req_type: Task
