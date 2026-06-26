@@ -226,11 +226,11 @@ pub fn refetch_rows(
 }
 
 /// Queue section rows: shell out to the cache-fast `aida queue list --json`
-/// (BUG-616) rather than `overlay::fetch`, which ran the full `aida status`
+/// rather than `overlay::fetch`, which ran the full `aida status`
 /// worktree/process scan (~3s) just for the queue head. `queue list --json`
 /// reads straight from the cache (sub-100ms) and emits the same
 /// {spec_id,title,status} shape `parse_list_json` already handles.
-/// trace:BUG-616 | ai:claude
+// trace:BUG-616 | ai:claude
 fn fetch_queue(model: &mut DashboardModel) -> Vec<ListRow> {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
