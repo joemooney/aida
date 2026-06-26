@@ -1,0 +1,16 @@
+id: 019f0237-5b94-7ab3-aab5-69c927be2842
+spec_id: TASK-897
+agreed_id: TASK-897
+title: 'TUI panels: cap Backlog/History rows to most-recent N (e.g. 100) to keep the list light to build/render/scroll'
+description: 'aida list --status completed --json returns all Completed (699 today, grows). The CLI query is fast (0.26s) but building/rendering/scrolling hundreds of TUI rows is heavy and clutters the panel. Cap fetch_status to the most-recent PANEL_ROW_LIMIT (CLI already returns recency-first), show a "showing N of M — aida list for all" notice when truncated. Full set stays available via aida list. Queue panel is already small. Follow-up if wanted: a real aida list --limit flag + TUI load-more pagination.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T04:36:50.196773510Z
+modified_at: 2026-06-26T04:36:50.196773510Z
+req_type: Task
+tags:
+- from-operator-testing
+- perf
+- tui
