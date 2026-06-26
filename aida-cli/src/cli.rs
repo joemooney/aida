@@ -3645,6 +3645,17 @@ pub enum QueueCommand {
         // trace:STORY-672
         #[clap(long)]
         all_users: bool,
+        /// Narrow the listing to items whose spec is in this epic's
+        /// TRANSITIVE descendant tree — the epic itself plus all its
+        /// children and grandchildren, computed in-process from the
+        /// requirement graph (the same hierarchy closure `aida graph
+        /// <ID> --tree` walks). Filters the single queue; it does NOT
+        /// create a per-epic queue. ANDs with the role / scope filters
+        /// (`--for`, `--all`, `--global`, `--local`). `--parent` is an
+        /// alias.
+        // trace:TASK-923 | ai:claude
+        #[clap(long, visible_alias = "parent", value_name = "ID")]
+        epic: Option<String>,
     },
     /// Add a requirement to your queue
     Add {
