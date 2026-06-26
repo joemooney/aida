@@ -15,3 +15,7 @@ tags:
 - epic
 - from-operator-vision
 - tui
+relationships:
+- rel_type: Parent
+  target_id: 019f0241-cb59-7fd3-9845-b5c38be2eb1c
+  created_at: 2026-06-26T04:48:18.889673028Z
