@@ -1,0 +1,12 @@
+id: 019f052b-7b81-7f41-83c4-87d6ffd50507
+spec_id: TASK-919
+agreed_id: TASK-919
+title: '**Promote a recurring rule to a gate.** When a rule recurs in the violations log past a threshold, that is the signal to ship its programmatic gate (the BUG-624 / STORY-684 move), and to retire the pr'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T18:22:43.585217658Z
+modified_at: 2026-06-26T18:22:43.585217658Z
+req_type: Task
