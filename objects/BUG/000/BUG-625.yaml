@@ -3,14 +3,32 @@ spec_id: BUG-625
 agreed_id: BUG-625
 title: Statusline inbox count never clears — out of sync with read-watermark
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:12:11.189498690Z
-modified_at: 2026-06-26T18:12:11.189498690Z
+modified_at: 2026-06-26T18:42:51.901018977Z
 req_type: Bug
 tags:
 - legibility
 - mailbox
 - statusline
+history:
+- id: 019f053d-eb27-7831-befb-3532847c3697
+  author: aida-auto-bump
+  timestamp: 2026-06-26T18:42:51.815767431Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f053d-eb7d-74a1-a708-2182c695f601
+  timestamp: 2026-06-26T18:42:51.901012107Z
+  agent: aida
+  commit_sha: ec7468382aab58643c0fbae72663fc12f5c3f4e5
+  summary: Completed via merge ec746838
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T18:42:50.818314590Z
+  completion_sha: ec7468382aab58643c0fbae72663fc12f5c3f4e5
