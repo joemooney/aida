@@ -39,6 +39,14 @@ impl TargetItem {
     pub fn is_draft(&self) -> bool {
         self.status.eq_ignore_ascii_case("draft")
     }
+
+    /// Is this item in the Approved state? The mirror of [`Self::is_draft`]
+    /// for the `queue` verb, which only routes Approved specs to the
+    /// implementer queue. Matched case-insensitively.
+    /// trace:TASK-915 | ai:claude
+    pub fn is_approved(&self) -> bool {
+        self.status.eq_ignore_ascii_case("approved")
+    }
 }
 
 /// A scope is a noun with children (its verbs). At launch the top panel
@@ -132,6 +140,15 @@ pub fn verb_list_for(scope: Scope, focused_status: Option<&str>) -> Vec<Verb> {
         if focused_is_draft {
             verbs.push(Verb::RequestApproval);
         }
+        // `queue` is the Approved-conditional mirror of `request approval`:
+        // it routes the focused/selected Approved specs to the implementer
+        // queue, closing the lifecycle loop. trace:TASK-915 | ai:claude
+        let focused_is_approved = focused_status
+            .map(|s| s.eq_ignore_ascii_case("approved"))
+            .unwrap_or(false);
+        if focused_is_approved {
+            verbs.push(Verb::Queue);
+        }
     }
     verbs
 }
@@ -149,6 +166,10 @@ pub enum Verb {
     /// Open scope, Draft-only: route the selected drafts to the advisor
     /// queue via `aida queue add --for advisor`. trace:STORY-690
     RequestApproval,
+    /// Open scope, Approved-only: route the selected Approved specs to the
+    /// implementer queue via `aida queue add --for implementer`. The mirror
+    /// of [`Verb::RequestApproval`]. trace:TASK-915
+    Queue,
 }
 
 impl Verb {
@@ -160,6 +181,7 @@ impl Verb {
             Verb::Show => "show",
             Verb::Why => "why",
             Verb::RequestApproval => "request approval",
+            Verb::Queue => "queue",
         }
     }
 
@@ -171,6 +193,7 @@ impl Verb {
             Verb::Show => "show this spec (aida show --no-git)",
             Verb::Why => "why is this spec still open? (aida why)",
             Verb::RequestApproval => "route selected drafts to the advisor queue",
+            Verb::Queue => "route selected Approved specs to the implementer queue",
         }
     }
 
@@ -188,7 +211,7 @@ impl Verb {
     pub fn is_functional(self) -> bool {
         matches!(
             self,
-            Verb::Groom | Verb::Show | Verb::Why | Verb::RequestApproval
+            Verb::Groom | Verb::Show | Verb::Why | Verb::RequestApproval | Verb::Queue
         )
     }
 }
@@ -608,6 +631,38 @@ impl RedesignState {
         (drafts, skipped)
     }
 
+    /// The ids of the currently-selected items that are Approved, with the
+    /// ids of any selected non-Approved that were skipped. If nothing is
+    /// selected, the focused item stands in (the N=1 default) when it is
+    /// itself Approved. The mirror of [`Self::draft_selection`], used by the
+    /// `queue` verb, which only routes Approved specs.
+    /// Returns `(approved_ids, skipped_non_approved_ids)`. trace:TASK-915
+    pub fn approved_selection(&self) -> (Vec<String>, Vec<String>) {
+        let selected: Vec<&TargetItem> = self
+            .items
+            .iter()
+            .zip(self.selected.iter())
+            .filter(|(_, &s)| s)
+            .map(|(item, _)| item)
+            .collect();
+        let targets: Vec<&TargetItem> = if selected.is_empty() {
+            // None selected → the focused item is the N=1 default.
+            self.focused_item().into_iter().collect()
+        } else {
+            selected
+        };
+        let mut approved = Vec::new();
+        let mut skipped = Vec::new();
+        for item in targets {
+            if item.is_approved() {
+                approved.push(item.id.clone());
+            } else {
+                skipped.push(item.id.clone());
+            }
+        }
+        (approved, skipped)
+    }
+
     /// Enter on a verb → decide what IO the parent should perform.
     ///
     /// Three shapes:
@@ -644,6 +699,13 @@ impl RedesignState {
         if verb == Verb::RequestApproval {
             let (drafts, skipped) = self.draft_selection();
             return RunOutcome::RequestApproval { drafts, skipped };
+        }
+
+        // queue: route the marked Approved specs (or focused Approved item)
+        // to the implementer queue. trace:TASK-915
+        if verb == Verb::Queue {
+            let (approved, skipped) = self.approved_selection();
+            return RunOutcome::Queue { approved, skipped };
         }
 
         // Set-level verbs (groom, …) operate on the selection.
@@ -780,6 +842,13 @@ pub enum RunOutcome {
     /// advisor queue, report `skipped` non-drafts. trace:STORY-690
     RequestApproval {
         drafts: Vec<String>,
+        skipped: Vec<String>,
+    },
+    /// `queue` on the Approved selection: route `approved` specs to the
+    /// implementer queue, report `skipped` non-Approved. The mirror of
+    /// [`Self::RequestApproval`]. trace:TASK-915
+    Queue {
+        approved: Vec<String>,
         skipped: Vec<String>,
     },
 }
@@ -1144,10 +1213,11 @@ mod tests {
             verb_list_for(Scope::Open, Some("draft")),
             vec![Verb::Show, Verb::Why, Verb::RequestApproval]
         );
-        // Focused on a non-Draft → only show / why.
+        // Focused on Approved → queue (not request approval); see
+        // `verb_list_for_adds_queue_only_on_approved`. trace:TASK-915
         assert_eq!(
             verb_list_for(Scope::Open, Some("Approved")),
-            vec![Verb::Show, Verb::Why]
+            vec![Verb::Show, Verb::Why, Verb::Queue]
         );
         // No focused item → only show / why.
         assert_eq!(
@@ -1171,8 +1241,8 @@ mod tests {
             s.current_verbs(),
             vec![Verb::Show, Verb::Why, Verb::RequestApproval]
         );
-        s.move_down(); // → TASK-1 (Approved)
-        assert_eq!(s.current_verbs(), vec![Verb::Show, Verb::Why]);
+        s.move_down(); // → TASK-1 (Approved) → queue present (trace:TASK-915)
+        assert_eq!(s.current_verbs(), vec![Verb::Show, Verb::Why, Verb::Queue]);
         s.move_down(); // → TASK-2 (Draft)
         assert_eq!(
             s.current_verbs(),
@@ -1254,6 +1324,82 @@ mod tests {
             s.run_verb(),
             RunOutcome::RequestApproval {
                 drafts: vec!["TASK-0".to_string()],
+                skipped: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn verb_list_for_adds_queue_only_on_approved() {
+        // Focused on an Approved → queue is present (third verb).
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("Approved")),
+            vec![Verb::Show, Verb::Why, Verb::Queue]
+        );
+        // Case-insensitive.
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("approved")),
+            vec![Verb::Show, Verb::Why, Verb::Queue]
+        );
+        // Focused on a Draft → request approval, not queue.
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("Draft")),
+            vec![Verb::Show, Verb::Why, Verb::RequestApproval]
+        );
+        // No focused item → only show / why.
+        assert_eq!(
+            verb_list_for(Scope::Open, None),
+            vec![Verb::Show, Verb::Why]
+        );
+        // Other scopes ignore the status argument.
+        assert_eq!(
+            verb_list_for(Scope::Backlog, Some("Approved")),
+            vec![Verb::Groom, Verb::Approve, Verb::Archive]
+        );
+    }
+
+    #[test]
+    fn queue_targets_selected_approved_skips_non_approved() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.move_down();
+        s.toggle_select(); // TASK-1 (Approved)
+        s.move_down();
+        s.toggle_select(); // TASK-2 (Draft — should be skipped)
+        s.move_down();
+        s.toggle_select(); // TASK-3 (Approved)
+                           // Focus back to TASK-1 (Approved) so the verb list includes the
+                           // verb, then move the top highlight onto `queue` (idx 2).
+        s.focus_bottom();
+        s.move_down(); // → TASK-1 (Approved)
+        s.focus_top();
+        s.move_down();
+        s.move_down();
+        assert_eq!(s.top_verb(), Some(Verb::Queue));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Queue {
+                approved: vec!["TASK-1".to_string(), "TASK-3".to_string()],
+                skipped: vec!["TASK-2".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn queue_with_no_selection_uses_focused_approved() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.move_down(); // focus TASK-1 (Approved), nothing selected
+        s.focus_top();
+        s.move_down();
+        s.move_down(); // → queue
+        assert_eq!(s.top_verb(), Some(Verb::Queue));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Queue {
+                approved: vec!["TASK-1".to_string()],
                 skipped: vec![],
             }
         );

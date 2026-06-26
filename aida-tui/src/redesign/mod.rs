@@ -386,6 +386,22 @@ fn apply_outcome(
             }
             st.status = Some(request_approval_status(&routed, &failed, &skipped));
         }
+        RunOutcome::Queue { approved, skipped } => {
+            // Route each Approved spec to the implementer queue via the
+            // RELIABLE path (`aida queue add --for implementer <id>`) — the
+            // Approved-conditional mirror of request approval.
+            // trace:TASK-915 | ai:claude
+            let mut routed = Vec::new();
+            let mut failed = Vec::new();
+            for id in &approved {
+                if queue_for_implementer(id) {
+                    routed.push(id.clone());
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+            st.status = Some(queue_status(&routed, &failed, &skipped));
+        }
         RunOutcome::NeedsConfirm(_) => { /* popup already raised by run_verb */ }
         RunOutcome::None => {}
     }
@@ -465,6 +481,48 @@ fn request_approval_status(routed: &[String], failed: &[String], skipped: &[Stri
     }
     if parts.is_empty() {
         return "request approval: nothing to route (no drafts selected)".to_string();
+    }
+    parts.join(" · ")
+}
+
+/// Route one Approved spec to the implementer queue. Returns `true` on
+/// success. Uses `aida queue add --for implementer <id>` — the reliable
+/// routing path, the mirror of [`queue_for_advisor`]. trace:TASK-915 | ai:claude
+fn queue_for_implementer(id: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["queue", "add", "--for", "implementer", id]);
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    matches!(cmd.output(), Ok(out) if out.status.success())
+}
+
+/// The status-line confirmation for a `queue` run: which ids were routed to
+/// the implementer queue, which failed to route, and which were skipped as
+/// non-Approved. Pure (no IO) so it is unit testable. The mirror of
+/// [`request_approval_status`]. trace:TASK-915 | ai:claude
+fn queue_status(routed: &[String], failed: &[String], skipped: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !routed.is_empty() {
+        parts.push(format!(
+            "queued {} to implementer: {}",
+            routed.len(),
+            routed.join(", ")
+        ));
+    }
+    if !failed.is_empty() {
+        parts.push(format!("FAILED to queue: {}", failed.join(", ")));
+    }
+    if !skipped.is_empty() {
+        parts.push(format!(
+            "skipped {} non-approved: {}",
+            skipped.len(),
+            skipped.join(", ")
+        ));
+    }
+    if parts.is_empty() {
+        return "queue: nothing to route (no approved specs selected)".to_string();
     }
     parts.join(" · ")
 }
@@ -1248,6 +1306,23 @@ mod render_tests {
         assert!(s.contains("skipped 1"));
         // Empty case.
         let empty = request_approval_status(&[], &[], &[]);
+        assert!(empty.contains("nothing to route"));
+    }
+
+    #[test]
+    fn queue_status_lists_routed_skipped_failed() {
+        let s = queue_status(
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &["TASK-3".to_string()],
+            &["TASK-4".to_string()],
+        );
+        assert!(s.contains("queued 2"));
+        assert!(s.contains("implementer"));
+        assert!(s.contains("TASK-1"));
+        assert!(s.contains("FAILED"));
+        assert!(s.contains("skipped 1"));
+        // Empty case.
+        let empty = queue_status(&[], &[], &[]);
         assert!(empty.contains("nothing to route"));
     }
 
