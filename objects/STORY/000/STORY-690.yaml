@@ -22,6 +22,12 @@ description: |-
   - The core state machine (scope/verb/target focus + selection + nav stack) has unit tests, pure (no terminal).
   - cargo build -p aida-tui and cargo test -p aida-tui are green; cargo fmt --all -- --check and clippy clean.
   - It is a PROTOTYPE: groom execution may be stubbed/shelled with a TODO; the goal is to FEEL the gesture grammar.
+
+  ## Test Plan
+
+  1. Launch → **expect** two stacked panels (scopes on top, items below) + a status line, and **no role tabs**.
+  2. Highlight **Backlog**, press **Enter** → **expect** the top panel becomes Backlog's verbs; breadcrumb reads `Backlog › …`.
+  3. **Tab** to the item list, **Space** a couple items → **expect** `[x]` toggles. Press **Enter** on `groom` with nothing selected → **expect** a "groom all N?" confirm popup. **Esc** → **expect** you pop back a level.
 status: Draft
 priority: High
 owner: ''
