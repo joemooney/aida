@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:08.981883198Z
-modified_at: 2026-06-26T18:27:41.599176527Z
+modified_at: 2026-06-26T23:49:48.174385514Z
 req_type: Epic
 tags:
 - parent:EPIC-48
@@ -20,3 +20,8 @@ comments:
   content: 'GROOMING RECONCILE (advisor pass, 2026-06-20, grounded in origin/main git log). The loop has executed most of this EPIC by filing+shipping children while the parent sat in Draft. SHIPPED and laddering here: trace-rot detector aida trace check (TASK-868); trace-read-rate audit (TASK-872); compete --judge-vendor removes the self-eval caveat (TASK-869); aida compete competitive-eval feature (STORY-659/660); RYO-friction + cross-vendor portability evidence (TASK-870/871); compete-as-QA n=3 (TASK-874); open-brief bake-off (SPIKE-64); the gate-vs-rule ablation series to its terminus (STORY-655 — five cells, one ceiling). GENUINELY-LIVE REMAINDER: field instrumentation — the ablation terminus itself concluded this is the ONLY open P1 path (a clean ablation can''t reproduce rule-dropping; only real-fleet instrumentation can answer ''when does a gate beat a rule''). Recommend: this EPIC is ~80% delivered — file field-instrumentation as the one live child, then move EPIC-50 out of Draft (it is not ungroomed, it is nearly done).'
   created_at: 2026-06-20T18:09:32.391388340Z
   modified_at: 2026-06-20T18:09:32.391388340Z
+- id: 019f0656-ee0e-75e2-be83-c8f92a3beeee
+  author: joe
+  content: 'Decomposition (advisor, 2026-06-26): ~80% delivered; open children SPIKE-69 (ablation) + STORY-664 (Beads importer) already exist; the named live remainder (field instrumentation) shipped via SPIKE-67. No new children warranted. OPERATOR DECISION NEEDED: (a) run SPIKE-69 and write the closing verdict, or (b) declare evidence sufficient and close EPIC-50 now. Grooming note: the epics own evidence tilts away from AIDA-the-artifact. STORY-664 is repositioning/distribution work (EPIC-39, parked behind stabilization) — do NOT pull forward under EPIC-50.'
+  created_at: 2026-06-26T23:49:48.174385514Z
+  modified_at: 2026-06-26T23:49:48.174385514Z
