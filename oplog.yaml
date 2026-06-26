@@ -20809,5 +20809,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1994
+- id: 019f0241-5b56-7523-a6d7-f5434c7fac1d
+  target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
+  author: aida
+  node_id: '1'
+  lamport: 1995
+  timestamp: 2026-06-26T04:47:45.494311960Z
+  kind: !Create
+    title: 'TUI flow cockpit: surface what is stuck, why, and who must act — move work forward'
+    description: 'Re-orient the TUI from a status BROWSER (specs grouped by state: Queue/Backlog/History/PRs) to a flow COCKPIT whose primary purpose is moving work forward and surfacing why work is blocked. Operator vision (2026-06-25): see/send mail, answer questions, approve backlog items, see the aida list perspectives, and above all understand why things are not moving and who must act (human / advisor / role). Keystone is the blocked/waiting board (see child STORY). The advisor-as-bottleneck pain is primarily an OPACITY problem (cannot see the advisor backlog or why it parked something), not only a throughput one — so visibility-first before any new role. Relates to EPIC-26 (TUI is the product). Design forks settled lighter-on-all-three: single-user first, visibility-first (no new product role yet), read-cockpit-that-dispatches (launch aida subcommands, do not reimplement). Build constraint: compose only cache-fast sources (aida list ~0.26s, queue list --json, questions, findings, leases, gh pr list) — never the ~3.75s aida status scan.'
+    req_type: Epic
+    status: Approved
+    priority: Medium
+clock: 1995
 node_id: '1'
