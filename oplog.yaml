@@ -22036,5 +22036,29 @@ operations:
   timestamp: 2026-06-26T20:34:44.667184448Z
   kind: !SetStatus
     status: Approved
-clock: 2087
+- id: 019f05e5-a892-78a2-96da-e5b51798e08f
+  target_id: 019f05e5-9a5a-7992-b1ca-ec795a4b78f7
+  author: aida
+  node_id: '1'
+  lamport: 2088
+  timestamp: 2026-06-26T21:46:04.818316544Z
+  kind: !Create
+    title: 'Human test plan per spec: capture builder''s verification steps + aggregate into PR bodies'
+    description: |-
+      Specs should carry a HUMAN TEST PLAN — "do this → expect that" steps a person can follow to verify the work WITHOUT reading code — distinct from acceptance criteria ("what must be true") and `aida goal` ("machine-checkable condition"). Surfaced 2026-06-26 reviewing the TUI redesign PR: a human reviewer of autonomous work needs a verification script, not just a contract.
+
+      KEY INSIGHT: implementers ALREADY produce this — every agent report ends with "launch X, press Y, expect Z." The PR #1145 per-spec test plan was hand-assembled from exactly that. The substrate just doesn't capture it. So the leverage is CAPTURE, not authoring.
+
+      SHAPE:
+      1. A `## Test Plan` section / `verification` field on specs (concise do→expect steps; human-runnable; notes which steps MUTATE state).
+      2. Populated by the IMPLEMENTER at done-time (it knows how to exercise what it built), or the author at file-time; could derive a skeleton from acceptance criteria.
+      3. AGGREGATED INTO PR BODIES automatically — generate the per-spec test plan section from the specs a PR closes (turn the hand-written #1145 walkthrough into one command). Pairs with the (SPEC-ID)-trailer→auto-complete machinery.
+
+      WHY IT MATTERS: making agent-built work human-verifiable is core agent-collaboration value (the probe thesis: a human must be able to check what agents built). Complements aida goal (machine) + acceptance (contract) with the missing human-verification layer.
+
+      ACCEPTANCE (when built): a spec can carry a test plan; an implementer/done flow can capture it; a PR-body generator aggregates the test plans of closed specs.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2088
 node_id: '1'
