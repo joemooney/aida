@@ -1047,10 +1047,12 @@ mod story_423_asciinema_tests {
             Command::Fasttrack {
                 title,
                 r#type,
+                express,
                 command,
             } => {
                 assert_eq!(title.as_deref(), Some("fix a typo"));
                 assert_eq!(r#type, "task");
+                assert!(!express, "trivial tier is the default — no --express");
                 assert!(command.is_none());
             }
             other => panic!("expected fasttrack, got {other:?}"),
@@ -1063,10 +1065,12 @@ mod story_423_asciinema_tests {
             Command::Fasttrack {
                 title,
                 r#type,
+                express,
                 command,
             } => {
                 assert_eq!(title.as_deref(), Some("papercut"));
                 assert_eq!(r#type, "bug");
+                assert!(!express);
                 assert!(command.is_none());
             }
             other => panic!("expected fasttrack, got {other:?}"),
@@ -1100,6 +1104,65 @@ mod story_423_asciinema_tests {
             }
             other => panic!("expected fasttrack status --json, got {other:?}"),
         }
+
+        // STORY-692: `--express` parses as the express tier; the title still
+        // files and the lane subcommand stays absent. trace:STORY-692
+        match Cli::try_parse_from(["aida", "fasttrack", "fix an easy bug", "--express"])
+            .unwrap()
+            .command
+        {
+            Command::Fasttrack {
+                title,
+                express,
+                command,
+                ..
+            } => {
+                assert_eq!(title.as_deref(), Some("fix an easy bug"));
+                assert!(express, "--express must select the express tier");
+                assert!(command.is_none());
+            }
+            other => panic!("expected fasttrack --express, got {other:?}"),
+        }
+    }
+
+    // STORY-692: the express-tier filing tags `batch:express`, queues
+    // (status approved + the Add `queue: true` path), and crucially carries NO
+    // `lifecycle:*` skip tag — so the full CI + reviewer + build gate runs. The
+    // trivial tier, by contrast, rides `batch:fasttrack` + `lifecycle:no-review`.
+    // Pinned against the shared `fasttrack_lane_filing` helper the handler uses,
+    // so the invariant can't drift without this test catching it.
+    // trace:STORY-692 | ai:claude
+    #[test]
+    fn fasttrack_express_files_approved_queued_with_batch_express_no_lifecycle() {
+        // Express tier: batch:express + NO lifecycle skip (full gate).
+        let (bucket, lane_tags) = fasttrack_lane_filing(true);
+        assert_eq!(
+            bucket, "express",
+            "express tier rides the batch:express bucket"
+        );
+        assert!(
+            lane_tags.is_none(),
+            "express tier must carry NO lifecycle:* skip tag — got {lane_tags:?}"
+        );
+
+        // Trivial tier (default): batch:fasttrack + lifecycle:no-review.
+        let (bucket, lane_tags) = fasttrack_lane_filing(false);
+        assert_eq!(bucket, "fasttrack");
+        assert_eq!(lane_tags.as_deref(), Some("lifecycle:no-review"));
+    }
+
+    // STORY-692: the express invariant, stated as the negative the design names —
+    // the express tier never sets ANY `lifecycle:*` skip tag (no-review,
+    // no-ci-wait, no-build, trivial). "Fast because reliably routed, not because
+    // less gated." trace:STORY-692
+    #[test]
+    fn fasttrack_express_carries_no_lifecycle_skip_tag() {
+        let (_bucket, lane_tags) = fasttrack_lane_filing(true);
+        let tags = lane_tags.unwrap_or_default();
+        assert!(
+            !tags.contains("lifecycle:"),
+            "express tier must not skip any lifecycle phase — got tags {tags:?}"
+        );
     }
 
     // TASK-905: the lane stage projection maps fixture lane items onto the
@@ -14369,9 +14432,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         // It rewrites to the equivalent `Command::Add` and recurses, reusing
         // the entire add+queue path. The lane skips human review only; CI still
         // gates merge (lifecycle:no-review, never no-ci-wait). trace:TASK-777
+        //
+        // STORY-692: `--express` files the EXPRESS tier instead — same
+        // one-shot Approved + queued filing, but tagged `batch:express` and
+        // carrying NO `lifecycle:*` tag, so the full CI + reviewer + build gate
+        // runs (TASK-907 forces the full gate for batch:express anyway). The
+        // express tier is fast because it is reliably routed, not because it is
+        // less gated. Reuses the same Add+queue path; only the bucket tag and
+        // the (absent) lifecycle skip differ from the trivial tier. trace:STORY-692
         Command::Fasttrack {
             title,
             r#type,
+            express,
             command,
         } => {
             // TASK-905: the `status` subcommand is a read-only lane projection,
@@ -14380,7 +14452,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if let Some(crate::cli::FasttrackCommand::Status { json }) = command {
                 return handle_fasttrack_status(store_path, &backend, *json);
             }
-            // Bare `aida fasttrack <title>` files a trivial change. With the
+            // Bare `aida fasttrack <title>` files a small change. With the
             // title now optional (so `status` parses as a subcommand), guard the
             // missing-title case with the same guidance `aida add` gives.
             let title = title.clone().ok_or_else(|| {
@@ -14389,6 +14461,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                      For the lane view, run `aida fasttrack status`."
                 )
             })?;
+            // STORY-692: the express tier rides batch:express with NO lifecycle
+            // skip (full gate); the trivial tier rides batch:fasttrack +
+            // lifecycle:no-review (review skipped). One axis differs.
+            // trace:STORY-692 | ai:claude
+            let (batch_bucket, lane_tags) = fasttrack_lane_filing(*express);
             let add = Command::Add {
                 title: Some(title.clone()),
                 title_positional: None,
@@ -14400,7 +14477,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 r#type: Some(r#type.clone()),
                 owner: None,
                 feature: None,
-                tags: Some("lifecycle:no-review".to_string()),
+                tags: lane_tags,
                 prefix: None,
                 parent: None,
                 blocked_by: Vec::new(),
@@ -14410,7 +14487,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 human_only: false,
                 no_human_only: false,
                 queue: true,
-                batch: Some("fasttrack".to_string()),
+                batch: Some(batch_bucket),
                 // BUG-528: route to the implementer queue by default (the
                 // common target for filed work). trace:BUG-528 | ai:claude
                 r#for: None,
@@ -44258,6 +44335,27 @@ pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -
 /// case-insensitive match against a row's spec/agreed id. trace:TASK-670 | ai:claude
 fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
     in_flight_lease_role_map(project_root).into_keys().collect()
+}
+
+// STORY-692: the filing convention for the two fasttrack tiers, in ONE place.
+// Returns `(batch_bucket, lane_tags)` for an `aida fasttrack` filing given the
+// `--express` flag. Kept side-effect-free so the tier invariant is unit-tested
+// without a store or queue:
+//   - trivial (default): `batch:fasttrack` + `lifecycle:no-review` (review
+//     skipped; CI still gates).
+//   - express (`--express`): `batch:express` + NO `lifecycle:*` tag — the full
+//     CI + reviewer + build gate runs (TASK-907 forces it for batch:express).
+//     Fast because reliably routed, not because less gated.
+// trace:STORY-692 | ai:claude — see docs/plans/2026-06-26-task-0438-fasttrack-lane.md
+fn fasttrack_lane_filing(express: bool) -> (String, Option<String>) {
+    if express {
+        ("express".to_string(), None)
+    } else {
+        (
+            "fasttrack".to_string(),
+            Some("lifecycle:no-review".to_string()),
+        )
+    }
 }
 
 // The eight lane stages a fasttrack/express item can occupy, in roughly

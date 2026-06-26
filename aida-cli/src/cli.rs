@@ -5956,25 +5956,34 @@ pub enum Command {
         r#for: Option<String>,
     },
 
-    /// File a trivial change into the fasttrack lane in one shot
+    /// File a small change into the fasttrack lane in one shot
     ///
-    /// The low-ceremony entry for genuinely trivial work — a doc tweak, a
+    /// Two tiers on one lane. The default **trivial** tier is the
+    /// low-ceremony entry for genuinely trivial work — a doc tweak, a
     /// one-line UX papercut, a string fix. Files the spec Approved, queues
     /// it, and tags it for the fasttrack bucket (`batch:fasttrack` +
     /// `lifecycle:no-review`) so the human-review round-trip is skipped.
+    ///
+    /// The **express** tier (`--express`) is for an easy bug or a small
+    /// single-purpose feature: same one-shot Approved + queued filing, but
+    /// tagged `batch:express` and carrying NO lifecycle skip — so the full
+    /// CI + reviewer + build gate runs. Fast because it is reliably routed,
+    /// not because it is less gated.
+    ///
     /// This is a thin wrapper over `aida add ... --status approved --queue`
     /// — it owns the lane's filing convention in one place so the
     /// `/aida-fasttrack` skill can call it instead of re-typing the tags.
     ///
-    /// CI is NOT skipped. The lane drops the human-review ceremony only;
-    /// CI still runs and must be green before merge.
+    /// CI is NOT skipped in either tier. The trivial tier drops the
+    /// human-review ceremony only; the express tier keeps every gate.
     // trace:TASK-777 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:TASK-905 | ai:claude — `status` subcommand added below; the bare
     // `aida fasttrack <title>` filing form stays the default (title optional so
     // `aida fasttrack status` parses as the subcommand, not a titled file).
+    // trace:STORY-692 | ai:claude — `--express` files batch:express + full gate.
     #[clap(args_conflicts_with_subcommands = true)]
     Fasttrack {
-        /// One-line description of the trivial change (becomes the title).
+        /// One-line description of the small change (becomes the title).
         ///
         /// Omit it (and pass no subcommand) and you get a usage error; pass a
         /// subcommand instead (`aida fasttrack status`) for the lane view.
@@ -5986,8 +5995,16 @@ pub enum Command {
         #[clap(long, default_value = "task")]
         r#type: String,
 
+        /// File into the express tier: an easy bug or small feature that gets
+        /// the FULL CI + reviewer + build gate (tagged `batch:express`, no
+        /// lifecycle skip), rather than the trivial tier's review-skipped
+        /// default. Fast because reliably routed, not because less gated.
+        // trace:STORY-692 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        express: bool,
+
         /// Lane-introspection subcommand (e.g. `status`). When absent, the
-        /// positional title files a trivial change as before.
+        /// positional title files a small change as before.
         #[clap(subcommand)]
         command: Option<FasttrackCommand>,
     },
