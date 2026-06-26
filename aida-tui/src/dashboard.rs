@@ -43,6 +43,18 @@ impl RoleTab {
         }
     }
 
+    // User-facing tab label. Distinct from `as_str()` (the role IDENTIFIER passed
+    // to `--role`, where the deprecated `dialog` alias must keep working): the
+    // canonical display token is `advisor` per TASK-586, so the Dialog tab renders
+    // as "advisor" everywhere it is shown to a human.
+    // trace:BUG-620
+    pub fn label(self) -> &'static str {
+        match self {
+            RoleTab::Dialog => "advisor",
+            other => other.as_str(),
+        }
+    }
+
     pub fn cycle_next(self) -> RoleTab {
         match self {
             RoleTab::Implementer => RoleTab::Reviewer,
@@ -686,7 +698,7 @@ fn render_tabs(frame: &mut Frame, area: Rect, model: &DashboardModel) {
     let theme = &model.theme;
     let mut spans: Vec<Span> = Vec::new();
     for r in [RoleTab::Implementer, RoleTab::Reviewer, RoleTab::Dialog] {
-        let label = format!("  {}  ", r.as_str());
+        let label = format!("  {}  ", r.label());
         if r == model.role {
             spans.push(Span::styled(
                 format!("[{}]", label.trim()),
@@ -854,6 +866,18 @@ mod tests {
         assert_eq!(RoleTab::Reviewer.cycle_next(), RoleTab::Dialog);
         assert_eq!(RoleTab::Dialog.cycle_next(), RoleTab::Implementer);
         assert_eq!(RoleTab::Implementer.cycle_prev(), RoleTab::Dialog);
+    }
+
+    #[test]
+    fn dialog_tab_displays_advisor_but_keeps_identifier() {
+        // The user-facing tab label is the canonical "advisor" (TASK-586)...
+        assert_eq!(RoleTab::Dialog.label(), "advisor");
+        assert_eq!(RoleTab::Implementer.label(), "implementer");
+        assert_eq!(RoleTab::Reviewer.label(), "reviewer");
+        // ...while the role IDENTIFIER passed to `--role` stays the deprecated
+        // alias so back-compat routing keeps working.
+        // trace:BUG-620
+        assert_eq!(RoleTab::Dialog.as_str(), "dialog");
     }
 
     #[test]
