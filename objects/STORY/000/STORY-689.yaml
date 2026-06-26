@@ -23,12 +23,12 @@ description: |-
   - The color scheme is customizable (a theme/config surface), not hardcoded.
   - No regression: preview stays fast (still cached per-row; rendering is off the hot path) and degrades gracefully if content is empty or not markdown.
   - Verify against the primary caller: a human cursoring through specs in aida tui sees rendered markdown + colored fields, not captured CLI text.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T05:19:47.971537267Z
-modified_at: 2026-06-26T05:19:47.971537267Z
+modified_at: 2026-06-26T06:09:45.685316101Z
 req_type: Story
 tags:
 - legibility
