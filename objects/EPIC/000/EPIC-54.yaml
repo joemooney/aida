@@ -8,12 +8,12 @@ description: |-
   Full design, gesture grammar, role-relocation, locked decisions, open forks, and the prototype-first slice plan: docs/plans/2026-06-25-tui-action-target-redesign.md.
 
   Slices (only Slice 1 filed; 2-5 gated on the prototype validating the protocol): 1 prototype the loop on the Backlog scope; 2 generalize scopes+verbs; 3 role as ambient context (remove role tabs); 4 item modal = STORY-689 markdown/field-colored preview; 5 fuzzy palette polish.
-status: Rejected
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T06:52:56.629549430Z
-modified_at: 2026-06-26T18:56:03.080161066Z
+modified_at: 2026-06-26T18:56:35.455973953Z
 req_type: Epic
 tags:
 - product
