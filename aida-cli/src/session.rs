@@ -778,6 +778,30 @@ pub fn spawn_claude_headless(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
+    // STORY-683: resolve the vendor (default Claude) and delegate. Keeping the
+    // `spawn_claude_headless` name + signature means every existing call site is
+    // unchanged and an un-configured drain is byte-identical to before — the
+    // vendor only diverges when `AIDA_HEADLESS_VENDOR` / `[orchestrator]
+    // headless_vendor` selects Codex. trace:STORY-683 | ai:claude
+    let vendor = resolve_headless_vendor(&headless_worktree_root());
+    spawn_vendor_headless(vendor, prompt, session_id, log_path, tee_opts, contained)
+}
+
+/// STORY-683: spawn (not exec) a headless run of `vendor`'s CLI and wait,
+/// returning the exit status. The vendor-neutral generalization of
+/// [`spawn_claude_headless`]: it builds the right argv per vendor
+/// ([`headless_vendor_args`] — `claude -p …` vs `codex exec …`), applies the
+/// opt-in OS-boundary wrapper (`bwrap`, STORY-612) around whichever program, and
+/// sets `AIDA_HEADLESS=1` in the env. The Claude path is unchanged from the
+/// pre-STORY-683 behavior. trace:STORY-683 | ai:claude
+pub fn spawn_vendor_headless(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
@@ -786,19 +810,32 @@ pub fn spawn_claude_headless(
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
+    // STORY-683: surface a non-default vendor so an operator watching a drain
+    // knows it is running on Codex, not Claude. The default (Claude) launch
+    // stays silent so existing output is unchanged. trace:STORY-683 | ai:claude
+    if vendor != HeadlessVendor::Claude {
+        eprintln!(
+            "{} headless drain phase on vendor `{}`",
+            "Vendor:".cyan().bold(),
+            vendor.as_str()
+        );
+    }
     // STORY-612: apply the opt-in OS-boundary wrapper (`bwrap`) around the whole
-    // headless process when `[contained] os_wrap` is on. trace:STORY-612 | ai:claude
+    // headless process when `[contained] os_wrap` is on. STORY-683: the wrapped
+    // program is the vendor binary (`claude` / `codex`), not hardcoded `claude`.
+    // trace:STORY-612 trace:STORY-683 | ai:claude
     let worktree = headless_worktree_root();
-    let (program, args) = claude_program_and_args(
+    let (program, args) = os_wrapped_program_and_args(
         &worktree,
-        claude_headless_args_with_posture(prompt, session_id, contained),
+        vendor.program(),
+        headless_vendor_args(vendor, prompt, session_id, contained),
     )?;
     let status = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
-        .context("failed to spawn claude")?;
+        .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     Ok(status)
 }
@@ -832,6 +869,108 @@ pub fn spawn_claude_resume(
         cmd.args(claude_contained_flags());
     }
     cmd.status().context("failed to spawn claude")
+}
+
+/// STORY-683: which vendor's headless CLI drives an orchestrator drain phase.
+/// The autonomous drain (`burndown` / `queue work --auto-complete --no-human`)
+/// used to hardcode `claude -p`; this enum lets the same spawn path launch
+/// `codex exec` instead, so a sustained headless drain can run on Codex.
+///
+/// `Claude` is the default everywhere — selecting `Codex` is an explicit opt-in
+/// (via `AIDA_HEADLESS_VENDOR=codex` or `[orchestrator] headless_vendor =
+/// "codex"`), so an un-configured drain is byte-identical to the pre-STORY-683
+/// behavior. Prior art for the `codex exec` adapter is `compete.rs::vendor_adapter`.
+/// trace:STORY-683 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeadlessVendor {
+    /// `claude -p …` — the default. The SPIKE-7 mandatory flag set.
+    Claude,
+    /// `codex exec …` — the Codex headless CLI. trace:STORY-683
+    Codex,
+}
+
+impl HeadlessVendor {
+    /// The PATH binary this vendor spawns (`claude` / `codex`).
+    pub fn program(self) -> &'static str {
+        match self {
+            HeadlessVendor::Claude => "claude",
+            HeadlessVendor::Codex => "codex",
+        }
+    }
+
+    /// The canonical lowercase token (`claude` / `codex`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HeadlessVendor::Claude => "claude",
+            HeadlessVendor::Codex => "codex",
+        }
+    }
+
+    /// Parse a vendor token. Case-insensitive, surrounding whitespace tolerated.
+    /// `None` for an unrecognized token so the caller can fall through to the
+    /// default rather than launch an unknown binary. trace:STORY-683 | ai:claude
+    pub fn parse(raw: &str) -> Option<HeadlessVendor> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "claude" => Some(HeadlessVendor::Claude),
+            "codex" => Some(HeadlessVendor::Codex),
+            _ => None,
+        }
+    }
+}
+
+/// STORY-683: resolve the vendor a headless drain spawn should use. Resolution
+/// order, highest precedence first:
+///   1. `AIDA_HEADLESS_VENDOR` env (per-host / per-invocation override) — mirrors
+///      the `AIDA_OS_WRAP` precedence convention; an unrecognized value is ignored.
+///   2. `[orchestrator] headless_vendor` in the project config.
+///   3. `Claude` (default) — so an un-configured drain is unchanged.
+/// `worktree_root` roots the config read. trace:STORY-683 | ai:claude
+pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
+    if let Some(raw) = std::env::var("AIDA_HEADLESS_VENDOR").ok() {
+        if let Some(v) = HeadlessVendor::parse(&raw) {
+            return v;
+        }
+    }
+    let cfg = crate::read_project_config_value(worktree_root);
+    crate::config_lookup(cfg.as_ref(), "orchestrator", "headless_vendor")
+        .and_then(|v| v.as_str())
+        .and_then(HeadlessVendor::parse)
+        .unwrap_or(HeadlessVendor::Claude)
+}
+
+/// STORY-683: build the argv (after the program name) for a headless launch of
+/// the given vendor. `Claude` reuses the SPIKE-7 mandatory flag set
+/// ([`claude_headless_args_with_posture`]); `Codex` builds the `codex exec`
+/// argv (prior art: `compete.rs::vendor_adapter`), with the prompt as the final
+/// positional. Pure — both arms are unit-tested without spawning. The `contained`
+/// posture only affects the Claude arm today (Codex carries its own sandbox via
+/// `--dangerously-bypass-approvals-and-sandbox`). trace:STORY-683 | ai:claude
+pub fn headless_vendor_args(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> Vec<String> {
+    match vendor {
+        HeadlessVendor::Claude => claude_headless_args_with_posture(prompt, session_id, contained),
+        HeadlessVendor::Codex => codex_headless_args(prompt),
+    }
+}
+
+/// STORY-683: the `codex exec` argv (after the `codex` program name) for a
+/// one-shot headless run. Mirrors the working `compete.rs` adapter:
+/// `exec --dangerously-bypass-approvals-and-sandbox <prompt>`. Codex's headless
+/// `exec` is single-shot and exits on its own (the orchestrator analogue of
+/// claude's `-p`); approvals are bypassed so the run is unattended. The prompt
+/// is the final positional. Unlike claude there is no `--session-id` /
+/// `--output-format stream-json` (codex has no matching resumable session model),
+/// so the codex arm does not thread `session_id`. trace:STORY-683 | ai:claude
+pub fn codex_headless_args(prompt: &str) -> Vec<String> {
+    vec![
+        "exec".to_string(),
+        "--dangerously-bypass-approvals-and-sandbox".to_string(),
+        prompt.to_string(),
+    ]
 }
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
@@ -3131,6 +3270,135 @@ mod tests {
             .contains(&serde_json::Value::String(
                 "Bash(git reset --hard *)".to_string()
             )));
+    }
+
+    // STORY-683: serialize the tests that mutate the process-global
+    // `AIDA_HEADLESS_VENDOR` env var — same parallel-env hazard as the os_wrap
+    // tests (BUG-581). trace:STORY-683 | ai:claude
+    static HEADLESS_VENDOR_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct HeadlessVendorEnvGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        saved: Option<std::ffi::OsString>,
+    }
+
+    impl HeadlessVendorEnvGuard {
+        fn acquire() -> Self {
+            let lock = HEADLESS_VENDOR_ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let saved = std::env::var_os("AIDA_HEADLESS_VENDOR");
+            std::env::remove_var("AIDA_HEADLESS_VENDOR");
+            Self { _lock: lock, saved }
+        }
+    }
+
+    impl Drop for HeadlessVendorEnvGuard {
+        fn drop(&mut self) {
+            match &self.saved {
+                Some(v) => std::env::set_var("AIDA_HEADLESS_VENDOR", v),
+                None => std::env::remove_var("AIDA_HEADLESS_VENDOR"),
+            }
+        }
+    }
+
+    /// STORY-683: the vendor selector builds the correct command for each vendor.
+    /// Claude reuses the SPIKE-7 `claude -p` flag set; Codex builds `codex exec`.
+    /// This is the core vendor-dispatch invariant. trace:STORY-683 | ai:claude
+    #[test]
+    fn headless_vendor_args_builds_correct_command_per_vendor() {
+        let prompt = "/aida-review --pr 7";
+        let sid = "019e0000-0000-7000-8000-000000000000";
+
+        // Claude arm: -p print mode + the prompt survives, NOT a codex command.
+        let claude = headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false);
+        assert!(claude.contains(&"-p".to_string()), "claude -p: {claude:?}");
+        assert!(
+            claude.contains(&"bypassPermissions".to_string()),
+            "claude bypass: {claude:?}"
+        );
+        assert!(claude.contains(&prompt.to_string()), "{claude:?}");
+        assert!(
+            !claude.contains(&"exec".to_string()),
+            "claude arm must not be a codex exec: {claude:?}"
+        );
+        // Identical to the dedicated claude builder — the default path is unchanged.
+        assert_eq!(
+            claude,
+            claude_headless_args_with_posture(prompt, sid, false)
+        );
+
+        // Codex arm: `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`,
+        // with the prompt as the final positional and NO claude `-p`.
+        let codex = headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false);
+        assert_eq!(codex.first().map(String::as_str), Some("exec"), "{codex:?}");
+        assert!(
+            codex.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()),
+            "codex bypass: {codex:?}"
+        );
+        assert_eq!(codex.last().map(String::as_str), Some(prompt), "{codex:?}");
+        assert!(
+            !codex.contains(&"-p".to_string()),
+            "codex arm must not carry claude's -p: {codex:?}"
+        );
+    }
+
+    /// STORY-683: the program a vendor spawns is its own binary.
+    /// trace:STORY-683 | ai:claude
+    #[test]
+    fn headless_vendor_program_maps_to_binary() {
+        assert_eq!(HeadlessVendor::Claude.program(), "claude");
+        assert_eq!(HeadlessVendor::Codex.program(), "codex");
+    }
+
+    /// STORY-683: vendor-token parsing is case-insensitive, whitespace-tolerant,
+    /// and rejects unknowns (so the caller falls through to the default).
+    /// trace:STORY-683 | ai:claude
+    #[test]
+    fn headless_vendor_parse_is_lenient_and_rejects_unknown() {
+        assert_eq!(
+            HeadlessVendor::parse("claude"),
+            Some(HeadlessVendor::Claude)
+        );
+        assert_eq!(
+            HeadlessVendor::parse(" Codex "),
+            Some(HeadlessVendor::Codex)
+        );
+        assert_eq!(HeadlessVendor::parse("CODEX"), Some(HeadlessVendor::Codex));
+        assert_eq!(HeadlessVendor::parse("gemini"), None);
+        assert_eq!(HeadlessVendor::parse(""), None);
+    }
+
+    /// STORY-683: with no env override and no config, the resolver defaults to
+    /// Claude — an un-configured drain is byte-identical to the pre-STORY-683
+    /// behavior. trace:STORY-683 | ai:claude
+    #[test]
+    fn resolve_headless_vendor_defaults_to_claude() {
+        let _env = HeadlessVendorEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
+    }
+
+    /// STORY-683: `AIDA_HEADLESS_VENDOR=codex` selects Codex (env precedence);
+    /// an unrecognized value is ignored and falls through to the Claude default.
+    /// trace:STORY-683 | ai:claude
+    #[test]
+    fn resolve_headless_vendor_env_override() {
+        let _env = HeadlessVendorEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+
+        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
+
+        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
+
+        std::env::set_var("AIDA_HEADLESS_VENDOR", "nonsense");
+        assert_eq!(
+            resolve_headless_vendor(tmp.path()),
+            HeadlessVendor::Claude,
+            "unrecognized env value must fall through to the default"
+        );
     }
 
     /// `--bare` strips OAuth/keychain auth and breaks login (spike Q1) — the

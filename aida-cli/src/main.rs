@@ -115908,7 +115908,10 @@ mod headless_hint_tests {
     /// headless argv builders. Those builders carry
     /// `--disallowed-tools AskUserQuestion`; direct `claude -p` construction
     /// or plain `claude --resume` under no-human mode is the bypass class.
-    /// trace:BUG-342 | ai:codex
+    /// STORY-683 added the vendor-neutral `headless_vendor_args` builder (which
+    /// delegates to `claude_headless_args_with_posture` for the Claude arm and
+    /// builds `codex exec` for the Codex arm), so it counts as a shared builder
+    /// too. trace:BUG-342 trace:STORY-683 | ai:codex
     #[test]
     fn headless_env_launches_route_through_shared_argv_builders() {
         fn assert_env_setter_has_builder_context(file: &str, src: &str) {
@@ -115922,7 +115925,8 @@ mod headless_hint_tests {
                 let window = lines[start..end].join("\n");
                 assert!(
                     window.contains("claude_headless_args")
-                        || window.contains("claude_headless_resume_args"),
+                        || window.contains("claude_headless_resume_args")
+                        || window.contains("headless_vendor_args"),
                     "{file}: AIDA_HEADLESS claude launch at line {} does not use a shared headless argv builder:\n{window}",
                     idx + 1
                 );
