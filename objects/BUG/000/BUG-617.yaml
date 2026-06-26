@@ -1,0 +1,15 @@
+id: 019f01d0-7cc9-7f72-8ecf-b118e08e9f58
+spec_id: BUG-617
+agreed_id: BUG-617
+title: TUI Nav<->List arrow keys reversed from operator intent (STORY-685 follow-up)
+description: 'STORY-685 shipped Enter/Left = Nav->List and Right/Esc = List->Nav. Operator intent (live testing): RIGHT should enter the List from Nav, LEFT should return to Nav from the List (Enter still enters, Esc still backs out). Swap the route_key Left/Right arms + the on-screen hint + the doc comment.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T02:44:28.489142655Z
+modified_at: 2026-06-26T02:44:28.489142655Z
+req_type: Bug
+tags:
+- from-operator-testing
+- tui
