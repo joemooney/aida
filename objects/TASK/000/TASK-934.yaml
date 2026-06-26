@@ -3,12 +3,12 @@ spec_id: TASK-934
 agreed_id: TASK-934
 title: 'TUI gap: live refresh (key ''r'') — re-fetch scope/focus/status in-process to witness state changes'
 description: 'GAP #4: the in-process reads are point-in-time, so a spec moving through states does not update live. Add a refresh key (r) that re-fetches the current scope items, the focus set, and statuses from the store in-process (the SpecStore opens the backend once — refresh re-queries; if needed, reopen to pick up external writes/cache rebuilds). Optional: a periodic auto-refresh. ACCEPTANCE: pressing r re-reads the store so externally-changed statuses appear without relaunch; gates green; redesign module.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:43.084302425Z
-modified_at: 2026-06-26T23:27:43.084302425Z
+modified_at: 2026-06-26T23:28:57.811310360Z
 req_type: Task
 tags:
 - gap
