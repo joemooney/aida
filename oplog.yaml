@@ -22345,5 +22345,17 @@ operations:
     req_type: Spike
     status: Draft
     priority: Medium
-clock: 2114
+- id: 019f065b-506c-72b1-a690-7b851f69db6b
+  target_id: 019f065b-39b2-7f00-b425-9c8fdb9eca3b
+  author: aida
+  node_id: '1'
+  lamport: 2115
+  timestamp: 2026-06-26T23:54:35.501001166Z
+  kind: !Create
+    title: Auto-generated tutorial structure from aida doc entries + spec metadata
+    description: Walk Doc entries (--about edges) + emit one tutorial page per feature cluster; read-only projection, regenerable, idempotent like aida changelog refresh. (Living-docs followup; EPIC-24 closed.)
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2115
 node_id: '1'
