@@ -20,6 +20,10 @@
 
 mod actions;
 mod app;
+/// Blocked/waiting board — the TUI flow-cockpit home view (STORY-686). The
+/// reason taxonomy, the precedence classifier, and the cache-fast source
+/// fetchers that compose it. trace:STORY-686 | ai:claude
+mod board;
 /// Pure fuzzy command-palette core (STORY-682): clap-surface enumeration plus a
 /// dependency-free subsequence fuzzy matcher. No TUI wiring lives here — the
 /// rendering/launcher integration is a separate slice.

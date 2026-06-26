@@ -212,6 +212,13 @@ pub fn key_to_section(key: KeyEvent) -> Option<NavSection> {
 }
 
 /// Translate a row + role + active nav section into the Intent to emit.
+///
+/// The blocked-board reason rows (STORY-686) each dispatch the *lightest
+/// sensible* unblock action for their reason: approve a draft, open the
+/// questions flow, triage a finding, view a PR, undefer, or just show the
+/// spec (in-flight / blocked are informational — Enter shows the spec /
+/// jumps to it). Synthetic awaiting-review PR rows carry a `pr:<n>` id and
+/// open the PR. trace:STORY-686 | ai:claude
 pub fn act_on_row(row: &dashboard::ListRow, role: RoleTab, section: NavSection) -> Intent {
     match row.kind {
         RowKind::Queued | RowKind::Backlog => Intent::Launch(format!("aida queue work {}", row.id)),
@@ -225,6 +232,33 @@ pub fn act_on_row(row: &dashboard::ListRow, role: RoleTab, section: NavSection) 
             }
             _ => Intent::Quit,
         },
+        // --- Blocked-board reason dispatch. trace:STORY-686 | ai:claude
+        // Needs approval → approve the draft (reject/clarify stay as the
+        // existing commands the operator runs explicitly).
+        RowKind::ReasonNeedsApproval => {
+            Intent::Launch(format!("aida edit {} --status approved", row.id))
+        }
+        // Needs an answer → open the decision-inbox flow for this spec.
+        RowKind::ReasonNeedsAnswer => Intent::Launch(format!("aida questions answer {}", row.id)),
+        // Needs attention → show the parked spec (its punt reason / decision
+        // request lives on the spec body, which `aida show` surfaces); the
+        // operator triages from there (`aida findings list`, `aida questions`,
+        // or resume). trace:STORY-686 | ai:claude
+        RowKind::ReasonNeedsAttention => Intent::Launch(format!("aida show {}", row.id)),
+        // Awaiting review → open the PR (synthetic `pr:<n>` rows) or show
+        // the Done-on-branch spec.
+        RowKind::ReasonAwaitingReview => match row.id.strip_prefix("pr:") {
+            Some(num) => Intent::Shell(format!("gh pr view {num}")),
+            None => Intent::Launch(format!("aida show {}", row.id)),
+        },
+        // Deferred → restore it to the active view.
+        RowKind::ReasonDeferred => Intent::Launch(format!("aida undefer {}", row.id)),
+        // In-flight / blocked are informational — Enter shows the spec
+        // (in-flight: lease holder + body; blocked: the blocked spec, from
+        // where the operator reads its BlockedBy chain).
+        RowKind::ReasonInFlight | RowKind::ReasonBlocked => {
+            Intent::Launch(format!("aida show {}", row.id))
+        }
     }
 }
 
@@ -260,9 +294,11 @@ pub fn run(opts: LauncherOptions) -> Result<()> {
     let intent_to_emit = {
         let _guard = term::TermGuard::enter()?;
         let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
+        // STORY-686: the blocked/waiting board is the default home view —
+        // land on the first reason-group rather than the Queue perspective.
         let mut model = dashboard::fetch(
             RoleTab::default(),
-            NavSection::Queue,
+            NavSection::Reason(crate::board::Reason::all()[0]),
             opts.scope.as_deref(),
             dialog_id.as_deref(),
         );
@@ -367,6 +403,11 @@ fn event_loop(
                 paint(terminal, &model)?;
             }
             LauncherAction::Refetch => {
+                // `g` is an explicit refresh: invalidate the cached board so
+                // the reason-groups recompose from fresh cache-fast reads (and
+                // re-run the lazy PR fill). trace:STORY-686 | ai:claude
+                model.board_loaded = false;
+                model.prs_filled = false;
                 dashboard::refetch_rows(&mut model, launch_scope, dialog_id);
                 dashboard::ensure_preview(&mut model);
                 paint(terminal, &model)?;
@@ -823,6 +864,140 @@ mod tests {
         };
         let intent = act_on_row(&row, RoleTab::Implementer, NavSection::History);
         assert_eq!(intent, Intent::Launch("aida show STORY-1".into()));
+    }
+
+    // --- STORY-686 blocked-board reason dispatch -------------------------
+
+    /// Build a reason row of a given kind for the dispatch-Intent tests.
+    fn reason_row(id: &str, kind: RowKind) -> ListRow {
+        ListRow {
+            id: id.into(),
+            title: "row".into(),
+            status: "—".into(),
+            kind,
+        }
+    }
+
+    #[test]
+    fn enter_on_reason_rows_dispatches_the_unblock_action() {
+        use crate::board::Reason;
+        let sect = |r: Reason| NavSection::Reason(r);
+
+        // needs approval → approve the draft.
+        assert_eq!(
+            act_on_row(
+                &reason_row("STORY-3", RowKind::ReasonNeedsApproval),
+                RoleTab::Implementer,
+                sect(Reason::NeedsApproval),
+            ),
+            Intent::Launch("aida edit STORY-3 --status approved".into())
+        );
+        // needs an answer → the decision-inbox flow.
+        assert_eq!(
+            act_on_row(
+                &reason_row("BUG-9", RowKind::ReasonNeedsAnswer),
+                RoleTab::Implementer,
+                sect(Reason::NeedsAnswer),
+            ),
+            Intent::Launch("aida questions answer BUG-9".into())
+        );
+        // needs attention → show the parked spec.
+        assert_eq!(
+            act_on_row(
+                &reason_row("STORY-4", RowKind::ReasonNeedsAttention),
+                RoleTab::Implementer,
+                sect(Reason::NeedsAttention),
+            ),
+            Intent::Launch("aida show STORY-4".into())
+        );
+        // deferred → undefer.
+        assert_eq!(
+            act_on_row(
+                &reason_row("STORY-6", RowKind::ReasonDeferred),
+                RoleTab::Implementer,
+                sect(Reason::Deferred),
+            ),
+            Intent::Launch("aida undefer STORY-6".into())
+        );
+        // in-flight / blocked → info (show the spec).
+        assert_eq!(
+            act_on_row(
+                &reason_row("STORY-1", RowKind::ReasonInFlight),
+                RoleTab::Implementer,
+                sect(Reason::InFlight),
+            ),
+            Intent::Launch("aida show STORY-1".into())
+        );
+        assert_eq!(
+            act_on_row(
+                &reason_row("STORY-2", RowKind::ReasonBlocked),
+                RoleTab::Implementer,
+                sect(Reason::Blocked),
+            ),
+            Intent::Launch("aida show STORY-2".into())
+        );
+    }
+
+    #[test]
+    fn enter_on_awaiting_review_opens_pr_or_shows_spec() {
+        use crate::board::Reason;
+        let sect = NavSection::Reason(Reason::AwaitingReview);
+        // A synthetic PR row (`pr:<n>`) opens the PR.
+        assert_eq!(
+            act_on_row(
+                &reason_row("pr:42", RowKind::ReasonAwaitingReview),
+                RoleTab::Reviewer,
+                sect,
+            ),
+            Intent::Shell("gh pr view 42".into())
+        );
+        // A Done-on-branch spec without a PR row shows the spec.
+        assert_eq!(
+            act_on_row(
+                &reason_row("STORY-5", RowKind::ReasonAwaitingReview),
+                RoleTab::Reviewer,
+                sect,
+            ),
+            Intent::Launch("aida show STORY-5".into())
+        );
+    }
+
+    #[test]
+    fn reason_dispatch_intents_are_shell_safe() {
+        // Every reason-dispatch Intent must pass the wire-format safety
+        // gate (the wrapper eval's it). trace:STORY-686 | ai:claude
+        use crate::board::Reason;
+        for (id, kind, reason) in [
+            (
+                "STORY-3",
+                RowKind::ReasonNeedsApproval,
+                Reason::NeedsApproval,
+            ),
+            ("BUG-9", RowKind::ReasonNeedsAnswer, Reason::NeedsAnswer),
+            (
+                "STORY-4",
+                RowKind::ReasonNeedsAttention,
+                Reason::NeedsAttention,
+            ),
+            ("STORY-6", RowKind::ReasonDeferred, Reason::Deferred),
+            ("STORY-1", RowKind::ReasonInFlight, Reason::InFlight),
+            ("STORY-2", RowKind::ReasonBlocked, Reason::Blocked),
+            (
+                "pr:42",
+                RowKind::ReasonAwaitingReview,
+                Reason::AwaitingReview,
+            ),
+        ] {
+            let intent = act_on_row(
+                &reason_row(id, kind),
+                RoleTab::Implementer,
+                NavSection::Reason(reason),
+            );
+            assert!(
+                crate::intent::serialize(&intent).is_ok(),
+                "intent for {id:?} must serialize safely: {intent:?}"
+            );
+        }
     }
 
     #[test]
