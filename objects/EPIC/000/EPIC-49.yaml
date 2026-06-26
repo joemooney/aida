@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:28:18.420024972Z
-modified_at: 2026-06-26T18:27:38.440277820Z
+modified_at: 2026-06-26T23:49:02.631491153Z
 req_type: Epic
 tags:
 - from-advisor
@@ -16,6 +16,11 @@ tags:
 - niche
 - product
 - streamlining
+relationships:
+- rel_type: Parent
+  target_id: 019f0656-0140-7a92-a627-c38b8fa6fdcc
+  created_at: 2026-06-26T23:49:02.631485163Z
+  created_by: joe
 comments:
 - id: 019edbf8-aef9-7cc1-82fa-5e92fd1c195e
   author: joe
