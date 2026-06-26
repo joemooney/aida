@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:36:02.471013081Z
-modified_at: 2026-06-26T18:00:49.297680206Z
+modified_at: 2026-06-26T18:54:27.678784802Z
 req_type: Epic
 tags:
 - aida:tui
@@ -27,3 +27,8 @@ comments:
   content: Commit 4781bd7b1 references this requirement
   created_at: 2026-06-25T07:38:22.522985654Z
   modified_at: 2026-06-25T07:38:22.522985654Z
+- id: 019f0548-895e-7bc2-8fd2-6cbbe11a93fc
+  author: joe
+  content: Duplicate of EPIC-54 (same TUI redesign), folded into EPIC-51. Rejecting.
+  created_at: 2026-06-26T18:54:27.678784802Z
+  modified_at: 2026-06-26T18:54:27.678784802Z
