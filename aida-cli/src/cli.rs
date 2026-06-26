@@ -341,6 +341,17 @@ pub enum FieldStudyCommand {
         #[clap(long)]
         json: bool,
     },
+    /// Report the live drain-observed stated-rule violations — the real-time
+    /// gate-vs-rule signal: which stated rules a real drain broke (CI red on
+    /// fmt/clippy/provenance, a punt, a reviewer flag) with no gate to stop
+    /// them.
+    // trace:SPIKE-67 | ai:claude
+    Violations {
+        /// Emit a JSON object for machine consumers.
+        // trace:SPIKE-67 | ai:claude
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Starter-memory-pack substrate-drift discovery.

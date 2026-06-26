@@ -29,6 +29,8 @@ mod digest;
 mod docs;
 mod drain_lock;
 mod field_study;
+// trace:SPIKE-67 | ai:claude
+mod rule_violation;
 // trace:STORY-656 | ai:claude
 mod drain_resume;
 mod drain_state;
@@ -89221,6 +89223,50 @@ fn handle_field_study_command(cmd: &crate::cli::FieldStudyCommand) -> Result<()>
             );
             Ok(())
         }
+        crate::cli::FieldStudyCommand::Violations { json } => {
+            let events = rule_violation::read_events();
+            let by_rule = rule_violation::by_rule(&events);
+            let (headless, supervised) = rule_violation::headless_split(&events);
+            if *json {
+                let payload = serde_json::json!({
+                    "violations": events.len(),
+                    "headless": headless,
+                    "supervised": supervised,
+                    "by_rule": by_rule.iter()
+                        .map(|(rule, count)| serde_json::json!({ "rule": rule, "count": count }))
+                        .collect::<Vec<_>>(),
+                });
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+                return Ok(());
+            }
+            if events.is_empty() {
+                println!(
+                    "No drain-observed stated-rule violations recorded yet. The sensor logs \
+                     during real `aida queue work --auto-complete` drains when CI / a punt / a \
+                     reviewer trips a stated rule (fmt, clippy, the /// SPEC-ID leak, …) with no \
+                     gate to stop it. Opt in with AIDA_FIELD_STUDY=1; honors AIDA_TELEMETRY=0."
+                );
+                return Ok(());
+            }
+            println!(
+                "{} Stated-rule violations observed in real drains — {} event(s) \
+                 ({} headless / {} supervised)",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                events.len(),
+                headless,
+                supervised,
+            );
+            println!("\n  by rule (which stated rule needs a gate?):");
+            for (rule, count) in &by_rule {
+                println!("    {:>18}: {:>3}", rule.bold(), count);
+            }
+            println!(
+                "\n  Gate-vs-rule lens: each event is a stated rule a confident agent broke that \
+                 a programmatic GATE would have caught before the commit (SPIKE-67). A rule \
+                 recurring here is a substrate-as-bouncer candidate."
+            );
+            Ok(())
+        }
     }
 }
 
@@ -124233,6 +124279,26 @@ fn record_auto_complete_run(
     }
 
     auto_complete_telemetry::append_event(&event);
+
+    // SPIKE-67 slice 3: record any stated-rule violation this drain observed
+    // (CI red on fmt/clippy/provenance, a reviewer RequestChanges on a rule, or
+    // a punt citing a rule) — the real-time gate-vs-rule evidence path. Reuses
+    // the failure the orchestrator already classified; observe-only, opt-in,
+    // privacy-floor-preserving, best-effort. trace:SPIKE-67 | ai:claude
+    let outcome = rule_violation::DrainOutcome {
+        failed_phase_slug: result.failed_phase.map(|p| p.slug()),
+        failure_kind: result.failure.as_ref().map(|f| f.kind.slug()),
+        failure_message: result.failure.as_ref().map(|f| f.reason.as_str()),
+        punt_reason: result.punt_reason.as_deref(),
+    };
+    rule_violation::record(
+        project_root,
+        &outcome,
+        spec,
+        driver.no_human.is_some(),
+        variant.slug(),
+        build_sha_short(),
+    );
 }
 
 /// TASK-266: find the Draft BUG already auto-filed for an identical recent
