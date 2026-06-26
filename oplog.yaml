@@ -21523,5 +21523,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2045
+- id: 019f052b-25a4-71b3-978a-26c376f441d2
+  target_id: 019f052b-116f-7af2-a65f-78373c5db0ad
+  author: aida
+  node_id: '1'
+  lamport: 2046
+  timestamp: 2026-06-26T18:22:21.604167786Z
+  kind: !Create
+    title: '**`--no-verify` direct detection.** Today a `--no-verify` bypass is caught indirectly (it surfaces as CI red on the bypassed check). A direct pre-commit-hook-side detector (record when `--no-verify` w'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2046
 node_id: '1'
