@@ -21037,5 +21037,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2008
+- id: 019f0260-228f-7f40-8c15-0d772c5eaffe
+  target_id: 019f0260-1429-7001-97b0-3bd5bed71187
+  author: aida
+  node_id: '1'
+  lamport: 2009
+  timestamp: 2026-06-26T05:21:22.575944807Z
+  kind: !Create
+    title: Surface `aida intake` proposals + advisor backlog explicitly in "needs approval"
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2009
 node_id: '1'
