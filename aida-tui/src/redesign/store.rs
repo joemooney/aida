@@ -41,6 +41,48 @@ pub struct LoadedSpec {
     pub tags: Vec<String>,
     /// The raw description (markdown) body.
     pub description: String,
+    /// The spec's comments (author + short time + markdown text), surfaced in
+    /// the preview modal so the human can READ the advisor's disposition
+    /// ("approved because X") inside the TUI. trace:TASK-932 | ai:claude
+    pub comments: Vec<LoadedComment>,
+}
+
+/// One comment on a spec, projected for the TUI preview: who wrote it, a short
+/// timestamp, and the (markdown) body. The disposition the advisor records on a
+/// spec lives here, so surfacing these is what makes "approved because X"
+/// readable in the TUI. trace:TASK-932 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedComment {
+    pub author: String,
+    /// A short, human-readable timestamp (local time, `YYYY-MM-DD HH:MM`).
+    pub when: String,
+    /// The comment body (markdown).
+    pub content: String,
+}
+
+/// Project a requirement's comments into the TUI's [`LoadedComment`] rows —
+/// author, short local timestamp, and body, in stored order. A PURE function of
+/// the requirement (no IO) so the extraction/format mapping is unit-testable:
+/// a requirement with N comments yields N rows; an empty list yields none.
+/// trace:TASK-932 | ai:claude
+pub fn comments_from_requirement(req: &aida_core::Requirement) -> Vec<LoadedComment> {
+    req.comments
+        .iter()
+        .map(|c| LoadedComment {
+            author: c.author.clone(),
+            when: format_comment_time(c.created_at),
+            content: c.content.clone(),
+        })
+        .collect()
+}
+
+/// Format a comment's creation time as a short local-time stamp
+/// (`YYYY-MM-DD HH:MM`). Timestamps render in the user's local timezone for
+/// surface output (UTC stays on disk). trace:TASK-932 | ai:claude
+fn format_comment_time(ts: chrono::DateTime<chrono::Utc>) -> String {
+    ts.with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
 }
 
 /// The in-process read handle: a cache-backed git backend opened once from the
@@ -172,6 +214,7 @@ impl SpecStore {
             priority: format!("{:?}", req.priority),
             tags,
             description: req.description.clone(),
+            comments: comments_from_requirement(&req),
         })
     }
 
@@ -1124,6 +1167,38 @@ docs: mentions (lowercase-7) but not an id";
         assert!(!is_spec_id("STORY-")); // empty number
         assert!(!is_spec_id("-7")); // empty prefix
         assert!(!is_spec_id("lowercase-7"));
+    }
+
+    // --- Comment projection (TASK-932) -----------------------------------
+
+    #[test]
+    fn comments_from_requirement_maps_each_comment() {
+        let mut req = aida_core::Requirement::new("TASK-932".to_string(), String::new());
+        req.comments.push(aida_core::Comment::new(
+            "advisor".to_string(),
+            "approved because the slice is well-bounded".to_string(),
+        ));
+        req.comments.push(aida_core::Comment::new(
+            "claude".to_string(),
+            "implemented in-process".to_string(),
+        ));
+        let rows = comments_from_requirement(&req);
+        assert_eq!(rows.len(), 2, "N comments → N rows, in order");
+        assert_eq!(rows[0].author, "advisor");
+        assert_eq!(
+            rows[0].content,
+            "approved because the slice is well-bounded"
+        );
+        assert_eq!(rows[1].author, "claude");
+        assert_eq!(rows[1].content, "implemented in-process");
+        // Each row carries a non-empty short timestamp.
+        assert!(!rows[0].when.is_empty());
+    }
+
+    #[test]
+    fn comments_from_requirement_is_empty_when_none() {
+        let req = aida_core::Requirement::new("TASK-1".to_string(), String::new());
+        assert!(comments_from_requirement(&req).is_empty());
     }
 
     #[test]

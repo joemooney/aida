@@ -25,7 +25,7 @@ mod store;
 
 pub use state::{RedesignState, RunOutcome, Scope, TargetItem, Verb};
 use std::collections::HashMap;
-use store::{LoadedSpec, SpecStore};
+use store::{LoadedComment, LoadedSpec, SpecStore};
 
 use crate::term;
 use crate::theme::Theme;
@@ -357,6 +357,7 @@ fn missing_spec(id: &str) -> LoadedSpec {
         priority: String::new(),
         tags: Vec::new(),
         description: format!("(could not load {id} from the store)"),
+        comments: Vec::new(),
     }
 }
 
@@ -1493,6 +1494,62 @@ fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Vec<Line<'a>> {
         lines.extend(markdown_to_lines(&spec.description, theme));
     }
 
+    // Comments / advisor disposition section (TASK-932): surfaced below the
+    // body so the human can READ "approved because X" inside the TUI. Always
+    // present (even with no comments) so the disposition affordance is
+    // discoverable.
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "── Comments / Disposition ──",
+        Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
+    )));
+    lines.extend(comment_lines(&spec.comments, theme));
+
+    lines
+}
+
+/// Render a spec's comments as styled modal lines: one `author · time` header
+/// per comment followed by its markdown body, blank-line separated; an empty
+/// list renders a single dim "No comments." line. A PURE function (no IO) so
+/// the comment→lines mapping is render-smoke testable: N comments produce N
+/// headers, empty produces the empty-state message. trace:TASK-932 | ai:claude
+fn comment_lines<'a>(comments: &'a [LoadedComment], theme: &Theme) -> Vec<Line<'a>> {
+    if comments.is_empty() {
+        return vec![Line::from(Span::styled(
+            "No comments.",
+            Style::default().fg(theme.dim),
+        ))];
+    }
+    let mut lines: Vec<Line> = Vec::new();
+    for (i, c) in comments.iter().enumerate() {
+        if i > 0 {
+            lines.push(Line::from(""));
+        }
+        // Header: author (accent) · short time (dim).
+        let mut header: Vec<Span> = vec![Span::styled(
+            c.author.clone(),
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        )];
+        if !c.when.is_empty() {
+            header.push(Span::styled(
+                format!("  ·  {}", c.when),
+                Style::default().fg(theme.dim),
+            ));
+        }
+        lines.push(Line::from(header));
+        // Body, rendered as markdown (so disposition prose / lists / code read
+        // nicely); an empty body degrades to nothing.
+        if c.content.trim().is_empty() {
+            lines.push(Line::from(Span::styled(
+                "(empty)",
+                Style::default().fg(theme.dim),
+            )));
+        } else {
+            lines.extend(markdown_to_lines(&c.content, theme));
+        }
+    }
     lines
 }
 
@@ -1948,6 +2005,7 @@ mod render_tests {
             priority: "High".into(),
             tags: vec!["performance".into(), "tui".into()],
             description: "Line one.\n\nLine two of the body.".into(),
+            comments: vec![],
         }
     }
 
@@ -2002,6 +2060,7 @@ mod render_tests {
             priority: "High".into(),
             tags: vec![],
             description: "Intro paragraph.\n\n## Test Plan\n1. do X → expect Y".into(),
+            comments: vec![],
         };
         // Not in the Test scope → untouched (full description).
         let untouched = test_plan_view(&st, spec.clone());
@@ -2382,6 +2441,11 @@ mod render_tests {
                  `inline code`.\n\n- bullet one\n- bullet two\n\n1. step one\n2. step \
                  two\n\n```\nfenced();\n```\n"
                 .into(),
+            comments: vec![LoadedComment {
+                author: "advisor".into(),
+                when: "2026-06-26 16:27".into(),
+                content: "approved because the slice is well-bounded".into(),
+            }],
         };
         draw_with_spec(&st, Some(&spec), 100, 30);
         // Tiny terminal must not panic either.
@@ -2425,8 +2489,74 @@ mod render_tests {
             priority: String::new(),
             tags: vec![],
             description: body,
+            comments: vec![],
         };
         st.modal_scroll = 9999; // way past the end
         draw_with_spec(&st, Some(&spec), 100, 30);
+    }
+
+    /// `comment_lines` (TASK-932): N comments → N author headers + bodies;
+    /// an empty list → the "No comments." empty-state line. trace:TASK-932
+    #[test]
+    fn comment_lines_maps_each_and_empty_state() {
+        let theme = Theme::default();
+        // Empty → the empty-state message.
+        let empty = comment_lines(&[], &theme);
+        assert_eq!(empty.len(), 1);
+        assert_eq!(line_text(&empty[0]), "No comments.");
+
+        // Two comments → both authors + both bodies appear.
+        let comments = vec![
+            LoadedComment {
+                author: "advisor".into(),
+                when: "2026-06-26 16:27".into(),
+                content: "approved because the slice is bounded".into(),
+            },
+            LoadedComment {
+                author: "claude".into(),
+                when: "2026-06-26 17:00".into(),
+                content: "implemented in-process".into(),
+            },
+        ];
+        let lines = comment_lines(&comments, &theme);
+        let blob: String = lines.iter().map(line_text).collect::<Vec<_>>().join("\n");
+        assert!(blob.contains("advisor"), "first author present");
+        assert!(blob.contains("claude"), "second author present");
+        assert!(blob.contains("approved because the slice is bounded"));
+        assert!(blob.contains("implemented in-process"));
+        // The short time stamp rides the header.
+        assert!(blob.contains("2026-06-26 16:27"));
+    }
+
+    /// The disposition section is appended to the preview modal body (TASK-932):
+    /// `spec_lines` includes the comment header below the description.
+    #[test]
+    fn spec_lines_appends_disposition_section() {
+        let theme = Theme::default();
+        let mut spec = sample_spec();
+        spec.comments = vec![LoadedComment {
+            author: "advisor".into(),
+            when: "2026-06-26 16:27".into(),
+            content: "approved because X".into(),
+        }];
+        let lines = spec_lines(&spec, &theme);
+        let blob: String = lines.iter().map(line_text).collect::<Vec<_>>().join("\n");
+        assert!(
+            blob.contains("Comments / Disposition"),
+            "section header shown"
+        );
+        assert!(blob.contains("advisor"), "comment author shown");
+        assert!(
+            blob.contains("approved because X"),
+            "disposition text shown"
+        );
+        // No comments → the empty-state still renders the section.
+        let bare = sample_spec();
+        let bare_blob: String = spec_lines(&bare, &theme)
+            .iter()
+            .map(line_text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(bare_blob.contains("No comments."));
     }
 }
