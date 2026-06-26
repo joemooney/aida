@@ -6815,8 +6815,30 @@ pub enum Command {
     ///   Cache    — orphan-store cache freshness
     ///   Project  — storage mode, requirement counts (existing view)
     ///
+    /// With a SPEC argument (`aida status <spec>`), switch to the per-spec
+    /// liveness view: the spec's lifecycle status plus a LIVENESS section
+    /// answering "is a live session actually working this, or is the
+    /// In-Progress flag orphaned?". For a spec-scoped session lease it shows
+    /// the session id, role, worktree, started-at, elapsed, and a verdict:
+    /// live (the holder process is alive) vs STALE (no live process — the
+    /// flag is orphaned). An In-Progress spec with no spec-scoped lease reads
+    /// flag-only (the status is not liveness-backed).
+    ///
     // trace:TASK-220 | ai:claude
     Status {
+        /// Optional spec id (SPEC-ID / agreed id). When given, show the
+        /// per-spec liveness view (status + live/STALE/flag-only verdict)
+        /// instead of the project-wide "where am I" snapshot.
+        // The trace marker stays a plain `//` comment so this SPEC-ID never
+        // leaks into `--help` output (the provenance convention).
+        // trace:STORY-694
+        spec: Option<String>,
+        /// With a SPEC argument: minutes of idle a spec-scoped lease may sit
+        /// with a live process but no spec movement before it is reported as
+        /// STALLED rather than live. Default 180 (3h). Ignored without a SPEC.
+        // trace:BUG-623
+        #[clap(long, default_value_t = 180)]
+        idle_minutes: u64,
         /// Suppress the AIDA-development-context section even when running
         /// inside the aida repo
         #[clap(long)]

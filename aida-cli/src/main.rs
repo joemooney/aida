@@ -1976,6 +1976,22 @@ fn run() -> Result<()> {
         return handle_why(id, *json);
     }
 
+    // STORY-694: `aida status <spec>` is the per-spec liveness view — it reads
+    // the local session leases + probes pid liveness and self-loads the store
+    // read-only for the spec's lifecycle status. Like `aida why` it needs no
+    // shared storage handle, so dispatch early (before storage init). The
+    // bare `aida status` (no spec) still flows through the normal dispatch.
+    // trace:STORY-694 | ai:claude
+    if let Command::Status {
+        spec: Some(spec),
+        idle_minutes,
+        json,
+        ..
+    } = &cli.command
+    {
+        return handle_status_spec(spec, *idle_minutes, *json);
+    }
+
     // STORY-631: `aida intent <ID>` self-loads the store (read for cache-print,
     // read+write for generate), and may shell out to a headless `claude -p`
     // running `/aida-intent`. Like `aida why` / `aida intake`, it needs no
@@ -2976,6 +2992,8 @@ fn run() -> Result<()> {
             );
         }
         Command::Status {
+            spec: _,
+            idle_minutes: _,
             no_dev_context,
             short: _,
             json: _,
@@ -13411,6 +13429,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             );
         }
         Command::Status {
+            // The `spec` form is dispatched early (before storage init), like
+            // `aida why` — see the early-dispatch block. By the time control
+            // reaches here `spec` is always `None`. trace:STORY-694
+            spec: _,
+            idle_minutes: _,
             no_dev_context,
             short,
             json,
@@ -58100,6 +58123,127 @@ mod bug_511_review_lease_tests {
     }
 }
 
+// The per-spec liveness verdict (`aida status <spec>`) and the `aida why`
+// STALLED surfacing. trace:STORY-694 trace:BUG-623 | ai:claude
+#[cfg(test)]
+mod story_694_spec_liveness_tests {
+    use super::*;
+
+    fn spec_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".into(),
+            worktree_path: worktree,
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+        }
+    }
+
+    /// A live lease (its holder process is alive) → the In-Progress flag is
+    /// liveness-backed: verdict `Live`.
+    #[test]
+    fn live_lease_yields_live_verdict() {
+        assert_eq!(
+            classify_spec_liveness(Some(LeaseState::Live), true),
+            SpecLiveness::Live
+        );
+    }
+
+    /// A dead-pid lease (worktree gone / no live claude) classifies Stale, and
+    /// a Dormant lease (worktree present but no live process) also reads Stale —
+    /// the operator asked specifically "is a LIVE process working it?".
+    #[test]
+    fn dead_or_dormant_lease_yields_stale_verdict() {
+        assert_eq!(
+            classify_spec_liveness(Some(LeaseState::Stale), true),
+            SpecLiveness::Stale
+        );
+        assert_eq!(
+            classify_spec_liveness(Some(LeaseState::Dormant), true),
+            SpecLiveness::Stale
+        );
+    }
+
+    /// In-Progress with NO spec-scoped lease → flag-only: the status flag is
+    /// not liveness-backed (the advisor Agent-tool fan-out case, correctly).
+    #[test]
+    fn in_progress_without_lease_yields_flag_only() {
+        assert_eq!(classify_spec_liveness(None, true), SpecLiveness::FlagOnly);
+    }
+
+    /// Not In-Progress with no lease → no active session expected.
+    #[test]
+    fn not_in_progress_without_lease_yields_no_session() {
+        assert_eq!(classify_spec_liveness(None, false), SpecLiveness::NoSession);
+    }
+
+    /// The spec→session link: a lease whose scope IS the spec id is found
+    /// (case-insensitively, matching agreed OR spec id); a generic
+    /// `harness-worktree` fan-out lease is NOT — that absence is the honest
+    /// flag-only signal.
+    #[test]
+    fn spec_scoped_lease_matches_spec_id_not_harness_scope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let owned = spec_lease("l-task894", "TASK-894", tmp.path().to_path_buf());
+        let harness = spec_lease("l-harness", "harness-worktree", tmp.path().to_path_buf());
+        let leases = vec![harness, owned];
+
+        let found = spec_scoped_lease(&leases, &["TASK-894", "task-894"]);
+        assert!(
+            found.is_some(),
+            "spec-scoped lease must be found by spec id"
+        );
+        assert_eq!(found.unwrap().scope, "TASK-894");
+
+        // A spec with only a harness fan-out lease present has no spec link.
+        assert!(
+            spec_scoped_lease(&leases, &["TASK-700"]).is_none(),
+            "a spec with no scope-matching lease reads flag-only"
+        );
+    }
+
+    // The `aida why` STALLED decision (BUG-623) — a spec-scoped lease whose
+    // worktree is GONE classifies as Stale (not Live), which drives the
+    // "in-flight but STALLED — no live process" branch instead of the
+    // "being worked now" line. (A live lease would classify Live and keep the
+    // genuine in-flight message.)
+    #[test]
+    fn why_stale_path_triggers_when_lease_not_live() {
+        let now = chrono::Utc::now();
+        // Worktree path that does not exist → classify_lease_state → Stale.
+        let gone = spec_lease(
+            "l-gone",
+            "TASK-894",
+            std::path::PathBuf::from("/nonexistent/aida-task-894"),
+        );
+        let state = lease_state_for(&gone, &[], now);
+        assert!(
+            !matches!(state, LeaseState::Live),
+            "a lease with a missing worktree must not be Live: {state:?}"
+        );
+        // … which is exactly the condition the `why` STALLED branch keys on.
+        assert_eq!(
+            classify_spec_liveness(Some(state), true),
+            SpecLiveness::Stale
+        );
+    }
+}
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 mod task_358_escalation_cleanup_tests {
@@ -88097,6 +88241,69 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         return Ok(());
     }
 
+    // BUG-623 (subsumed by STORY-694): a spec with a spec-scoped lease whose
+    // holder process is NOT live (pid dead, or idle past threshold) is in-flight
+    // but STALLED — a hung/abandoned session reads as active otherwise. The Live
+    // case still falls through to `collect_open_facts` → `OpenBucket::InFlight`
+    // ("being worked now"); only the stale case is rewritten here, so a genuine
+    // live session is never mislabeled. trace:BUG-623 | ai:claude
+    {
+        let leases = list_leases(&project_root);
+        let mut ids: Vec<String> = Vec::new();
+        if let Some(a) = req.agreed_id.as_deref() {
+            ids.push(a.to_string());
+        }
+        if let Some(s) = req.spec_id.as_deref() {
+            ids.push(s.to_string());
+        }
+        let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+        if let Some(lease) = spec_scoped_lease(&leases, &id_refs) {
+            let now = chrono::Utc::now();
+            let live = process_probe::probe_live_claude_sessions();
+            if !matches!(lease_state_for(lease, &live, now), LeaseState::Live) {
+                let elapsed = now
+                    .signed_duration_since(lease.started_at)
+                    .num_seconds()
+                    .max(0) as u64;
+                let reason = format!(
+                    "in-flight but STALLED — {} elapsed, no live process working it (`aida session end {}` to release)",
+                    humanize_duration_secs(elapsed),
+                    short_lease_id(lease, &leases)
+                );
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "spec": disp,
+                            "bucket": "stalled",
+                            "reason": reason,
+                            "needs_human": true,
+                        }))?
+                    );
+                } else {
+                    println!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+                        disp.cyan().bold()
+                    );
+                    // The bucket label already says "stalled"; the text reason
+                    // drops the redundant "in-flight but STALLED — " prefix the
+                    // JSON keeps for a self-contained machine string.
+                    let text_reason = reason
+                        .strip_prefix("in-flight but STALLED — ")
+                        .unwrap_or(&reason);
+                    println!(
+                        "  {} {} — in-flight but {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        "stalled".bold(),
+                        text_reason
+                    );
+                }
+                return Ok(());
+            }
+        }
+    }
+
     let in_flight_scopes = in_flight_lease_role_map(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
     let Some(f) = facts.iter().find(|f| f.id.eq_ignore_ascii_case(&want)) else {
@@ -88181,6 +88388,290 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         println!("    {} {}", tag, r.text.dimmed());
     }
     Ok(())
+}
+
+/// The liveness verdict for a spec, derived from its spec-scoped session lease
+/// (if any) and the spec's own lifecycle status. This is the operator's #1
+/// legibility ask: for an In-Progress spec, is a LIVE process actually working
+/// it, or is the flag orphaned?
+// trace:STORY-694 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SpecLiveness {
+    /// A spec-scoped lease exists and its holder process is alive (a live
+    /// claude is in the worktree). The In-Progress flag is liveness-backed.
+    Live,
+    /// A spec-scoped lease exists but no live process backs it (pid dead, or
+    /// the worktree has gone idle past the threshold with no spec movement).
+    /// The In-Progress flag is orphaned.
+    // trace:BUG-623
+    Stale,
+    /// No spec-scoped lease is linked to this spec. When the spec is
+    /// In-Progress this is DRIFT — the status flag is not liveness-backed.
+    /// This is also the CORRECT honest signal for advisor Agent-tool
+    /// fan-outs, which take generic `harness-worktree`-scoped leases that are
+    /// NOT spec-linked (making the spec-to-session link is a documented
+    /// follow-up, not this change).
+    // trace:STORY-694
+    FlagOnly,
+    /// The spec is not In-Progress — no live session is expected.
+    NoSession,
+}
+
+/// Pure verdict — given the spec-scoped lease's classified [`LeaseState`] (when
+/// one was found) and whether the spec is In-Progress, decide the
+/// [`SpecLiveness`]. Kept side-effect-free so the matrix (live lease → Live;
+/// dead/stale lease → Stale; in-progress + no lease → FlagOnly; not-in-progress
+/// → NoSession) is unit-testable without a store, a lease dir, or a real
+/// process. A `Dormant` lease (worktree present, no live claude, <24h) counts
+/// as Stale here: the operator asked specifically "is a LIVE process working
+/// it?", and dormant means no live process.
+// trace:STORY-694 | ai:claude
+fn classify_spec_liveness(lease_state: Option<LeaseState>, in_progress: bool) -> SpecLiveness {
+    match lease_state {
+        Some(LeaseState::Live) => SpecLiveness::Live,
+        Some(LeaseState::Dormant) | Some(LeaseState::Stale) => SpecLiveness::Stale,
+        None if in_progress => SpecLiveness::FlagOnly,
+        None => SpecLiveness::NoSession,
+    }
+}
+
+/// Find the LOCAL session lease whose scope is this spec — the happy-path link
+/// for AIDA-launched work (`aida queue work`, `aida agent new`) where the lease
+/// scope IS the spec id. Matches the spec's agreed id OR its raw spec id,
+/// case-insensitively, against each lease's raw `--owns` scope. Returns `None`
+/// for advisor Agent-tool fan-outs (generic `harness-worktree` scopes) — that
+/// absence is the honest `flag-only` signal.
+// trace:STORY-694 | ai:claude
+fn spec_scoped_lease<'a>(
+    leases: &'a [SessionLease],
+    spec_ids: &[&str],
+) -> Option<&'a SessionLease> {
+    leases.iter().find(|l| {
+        spec_ids
+            .iter()
+            .any(|id| !id.is_empty() && l.scope.eq_ignore_ascii_case(id))
+    })
+}
+
+/// `aida status <spec>` — the per-spec liveness view. Shows the spec's
+/// lifecycle status and a LIVENESS section answering "is a live session
+/// actually working this, or is the In-Progress flag orphaned?". Reuses the
+/// session-lease store ([`list_leases`]), the lease-state classifier
+/// ([`lease_state_for`], which already folds in pid/worktree liveness), and the
+/// elapsed-from-started helper ([`humanize_duration_secs`]).
+// trace:STORY-694 | ai:claude
+fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+
+    let want = spec.trim().to_ascii_uppercase();
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| {
+            [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| s.eq_ignore_ascii_case(&want))
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!("no spec found matching `{spec}` — check the ID with `aida list`.")
+        })?;
+
+    let disp = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| req.id.to_string());
+    let status_label = req.status.to_string();
+    let in_progress = matches!(req.status, aida_core::RequirementStatus::InProgress);
+
+    // Find the spec-scoped lease (the happy path for AIDA-launched work) and
+    // classify its liveness off the SAME machinery `aida session leases` uses.
+    let leases = list_leases(&project_root);
+    let mut id_owned: Vec<String> = Vec::new();
+    if let Some(a) = req.agreed_id.as_deref() {
+        id_owned.push(a.to_string());
+    }
+    if let Some(s) = req.spec_id.as_deref() {
+        id_owned.push(s.to_string());
+    }
+    let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
+    let lease = spec_scoped_lease(&leases, &id_refs);
+
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let lease_state = lease.map(|l| lease_state_for(l, &live, now));
+    let mut verdict = classify_spec_liveness(lease_state, in_progress);
+
+    // BUG-623: an idle backstop on top of pid-liveness. A lease whose process
+    // is alive but whose worktree has sat idle past the threshold with no spec
+    // movement (no `modified_at` bump) is a hung/abandoned session — demote the
+    // `Live` verdict to `Stale`. (TASK-894 was alive-but-idle for ~26h.)
+    let elapsed_secs = lease
+        .map(|l| now.signed_duration_since(l.started_at).num_seconds().max(0) as u64)
+        .unwrap_or(0);
+    let idle_secs = now
+        .signed_duration_since(req.modified_at)
+        .num_seconds()
+        .max(0) as u64;
+    let idle_threshold_secs = idle_minutes.saturating_mul(60);
+    let idle_stalled =
+        verdict == SpecLiveness::Live && idle_threshold_secs > 0 && idle_secs > idle_threshold_secs;
+    if idle_stalled {
+        verdict = SpecLiveness::Stale;
+    }
+
+    if json {
+        let lease_json = lease.map(|l| {
+            serde_json::json!({
+                "session_id": l.id,
+                "scope": l.scope,
+                "role": l.role,
+                "worktree": l.worktree_path.display().to_string(),
+                "branch": l.branch,
+                "started_at": l.started_at.to_rfc3339(),
+                "elapsed_secs": elapsed_secs,
+            })
+        });
+        let verdict_key = match verdict {
+            SpecLiveness::Live => "live",
+            SpecLiveness::Stale => "stale",
+            SpecLiveness::FlagOnly => "flag-only",
+            SpecLiveness::NoSession => "no-session",
+        };
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "spec": disp,
+                "status": status_label,
+                "in_progress": in_progress,
+                "liveness": verdict_key,
+                "live": verdict == SpecLiveness::Live,
+                "idle_secs": idle_secs,
+                "idle_stalled": idle_stalled,
+                "session": lease_json,
+            }))?
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {}  {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        disp.cyan().bold(),
+        status_display::status_badge(&status_label),
+    );
+    println!();
+    println!("{}", "Liveness".bold());
+
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    match verdict {
+        SpecLiveness::Live => {
+            let l = lease.expect("Live verdict implies a lease");
+            println!(
+                "  {} {}",
+                "● live".green().bold(),
+                "a live process is working this".dimmed()
+            );
+            print_lease_detail(l, elapsed_secs);
+        }
+        SpecLiveness::Stale => {
+            let l = lease.expect("Stale verdict implies a lease");
+            let why = if idle_stalled {
+                format!(
+                    "idle {} with no spec movement",
+                    humanize_duration_secs(idle_secs)
+                )
+            } else {
+                "no live process".to_string()
+            };
+            println!(
+                "{}",
+                format!(
+                    "  {warn} STALE — {why}, {} elapsed; the In-Progress flag is orphaned",
+                    humanize_duration_secs(elapsed_secs)
+                )
+                .yellow()
+            );
+            print_lease_detail(l, elapsed_secs);
+            println!(
+                "  {} {}",
+                "clear it:".dimmed(),
+                format!("aida session end {}", short_lease_id(l, &leases)).cyan()
+            );
+        }
+        SpecLiveness::FlagOnly => {
+            println!(
+                "{}",
+                format!(
+                    "  {warn} flag-only — status is In-Progress but no live session is linked to \
+                     this spec (the flag is not liveness-backed)"
+                )
+                .yellow()
+            );
+            println!(
+                "{}",
+                "  (advisor Agent-tool fan-outs take generic harness-worktree leases — not \
+                 spec-linked — so they correctly read flag-only)"
+                    .dimmed()
+            );
+        }
+        SpecLiveness::NoSession => {
+            println!(
+                "  {} (status: {})",
+                "no active session".dimmed(),
+                status_label
+            );
+        }
+    }
+    Ok(())
+}
+
+/// The indented session-detail block shared by the live + stale renderings of
+/// `aida status <spec>`.
+// trace:STORY-694 | ai:claude
+fn print_lease_detail(l: &SessionLease, elapsed_secs: u64) {
+    println!("  {:<12} {}", "session:".dimmed(), l.id);
+    println!(
+        "  {:<12} {}",
+        "role:".dimmed(),
+        l.role.as_deref().unwrap_or("-")
+    );
+    println!(
+        "  {:<12} {}",
+        "worktree:".dimmed(),
+        l.worktree_path.display()
+    );
+    println!(
+        "  {:<12} {}",
+        "started:".dimmed(),
+        l.started_at
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d %H:%M")
+    );
+    println!(
+        "  {:<12} {}",
+        "elapsed:".dimmed(),
+        humanize_duration_secs(elapsed_secs)
+    );
+}
+
+/// The shortest unambiguous prefix of a lease id, for the `aida session end
+/// <id>` hint. Reuses the same disambiguation helper the `aida session leases`
+/// table uses.
+// trace:STORY-694 | ai:claude
+fn short_lease_id(l: &SessionLease, all: &[SessionLease]) -> String {
+    let ids: Vec<&str> = all.iter().map(|x| x.id.as_str()).collect();
+    let n = unique_prefix_len(&l.id, &ids, 8);
+    l.id[..n.min(l.id.len())].to_string()
 }
 
 /// STORY-545: resolve a selector to `(ready, awaiting_signoff, parked)` via the
