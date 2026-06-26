@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T05:20:45.324878801Z
-modified_at: 2026-06-26T05:20:45.324878801Z
+modified_at: 2026-06-26T06:12:16.918331339Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f0241-cb59-7fd3-9845-b5c38be2eb1c
   created_at: 2026-06-26T05:20:49.740626761Z
+comments:
+- id: 019f028e-bd96-7de3-8b9e-7840aa99e41d
+  author: joe
+  content: Duplicate of the deferred STORY-687/688 (filed + deferred with triggers under EPIC-53). Rejecting the auto-followup dupe.
+  created_at: 2026-06-26T06:12:16.918331339Z
+  modified_at: 2026-06-26T06:12:16.918331339Z
