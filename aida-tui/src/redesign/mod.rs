@@ -217,6 +217,33 @@ fn handle_key(
         return Ok(true);
     }
 
+    // The defer revisit-trigger input modal captures all typing until the
+    // operator confirms (Enter → run the defer with the typed trigger) or
+    // cancels (Esc). Printable chars append; Backspace edits. trace:TASK-921
+    if st.defer_input_open() {
+        match key.code {
+            KeyCode::Enter => {
+                if let Some((ids, trigger)) = st.take_defer_input() {
+                    apply_outcome(
+                        terminal,
+                        st,
+                        store,
+                        loaded_spec,
+                        RunOutcome::Defer { ids, trigger },
+                    )?;
+                }
+            }
+            KeyCode::Esc => {
+                st.cancel_defer_input();
+                st.status = Some("defer cancelled".to_string());
+            }
+            KeyCode::Backspace => st.pop_defer_char(),
+            KeyCode::Char(c) if !c.is_control() => st.push_defer_char(c),
+            _ => {}
+        }
+        return Ok(false);
+    }
+
     // A confirmation popup captures input until resolved.
     if st.confirm.is_some() {
         match key.code {
@@ -417,6 +444,31 @@ fn apply_outcome(
             }
             st.status = Some(queue_status(&routed, &failed, &skipped));
         }
+        RunOutcome::OpenDeferInput { ids } => {
+            // `defer` needs the operator-supplied `--until` trigger before it
+            // can run: open the single-line input modal over the targets. The
+            // defer itself fires on Enter (the input-modal confirm path emits
+            // RunOutcome::Defer). trace:TASK-921 | ai:claude
+            if ids.is_empty() {
+                st.status = Some("defer: nothing to park (no specs selected)".to_string());
+            } else {
+                st.open_defer_input(ids);
+            }
+        }
+        RunOutcome::Defer { ids, trigger } => {
+            // Park each spec off the active view with the captured revisit
+            // trigger via `aida defer <id> --until "<trigger>"`. trace:TASK-921
+            let mut deferred = Vec::new();
+            let mut failed = Vec::new();
+            for id in &ids {
+                if defer_spec(id, &trigger) {
+                    deferred.push(id.clone());
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+            st.status = Some(defer_status(&deferred, &failed, &trigger));
+        }
         RunOutcome::NeedsConfirm(_) => { /* popup already raised by run_verb */ }
         RunOutcome::None => {}
     }
@@ -588,6 +640,41 @@ fn approve_status(approved: &[String], failed: &[String], skipped: &[String]) ->
     parts.join(" · ")
 }
 
+/// Park one spec off the active view with a revisit trigger. Returns `true` on
+/// success. Runs `aida defer <id> --until "<trigger>"` — the trigger is passed
+/// as a single argument (no shell), so embedded spaces are safe. trace:TASK-921 | ai:claude
+fn defer_spec(id: &str, trigger: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["defer", id, "--until", trigger]);
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    matches!(cmd.output(), Ok(out) if out.status.success())
+}
+
+/// The status-line confirmation for a `defer` run: which ids were parked (with
+/// the revisit trigger) and which failed. Pure (no IO) so it is unit testable.
+/// The mirror of [`approve_status`]. trace:TASK-921 | ai:claude
+fn defer_status(deferred: &[String], failed: &[String], trigger: &str) -> String {
+    let mut parts = Vec::new();
+    if !deferred.is_empty() {
+        parts.push(format!(
+            "deferred {} until \"{}\": {}",
+            deferred.len(),
+            trigger,
+            deferred.join(", ")
+        ));
+    }
+    if !failed.is_empty() {
+        parts.push(format!("FAILED to defer: {}", failed.join(", ")));
+    }
+    if parts.is_empty() {
+        return "defer: nothing parked".to_string();
+    }
+    parts.join(" · ")
+}
+
 // ---------------------------------------------------------------------------
 // Render
 // ---------------------------------------------------------------------------
@@ -620,6 +707,10 @@ fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
     }
     if let Some(c) = st.confirm {
         render_confirm(f, f.area(), theme, c.verb, c.count);
+    }
+    // The defer revisit-trigger input overlays everything else. trace:TASK-921
+    if let Some(di) = &st.defer_input {
+        render_defer_input(f, f.area(), theme, di);
     }
 }
 
@@ -1165,6 +1256,42 @@ fn render_confirm(f: &mut Frame, area: Rect, theme: &Theme, verb: Verb, count: u
     );
 }
 
+/// Render the single-line revisit-trigger input modal for the `defer` verb:
+/// a prompt, the typed buffer with a block cursor, the target count, and the
+/// confirm/cancel keys. trace:TASK-921 | ai:claude
+fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::DeferInput) {
+    let popup = centered(area, 60, 25);
+    f.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.accent))
+        .title(format!(
+            " defer {} spec(s) — revisit trigger ",
+            di.targets.len()
+        ));
+    let lines = vec![
+        Line::from(Span::styled(
+            "Revisit when…  (the --until trigger)",
+            Style::default().fg(theme.dim),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("> ", Style::default().fg(theme.accent)),
+            Span::styled(
+                di.buffer.clone(),
+                Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+            ),
+            // A block cursor at the end of the input.
+            Span::styled("█", Style::default().fg(theme.accent)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Enter = defer   ·   Esc = cancel",
+            Style::default().fg(theme.dim),
+        )),
+    ];
+    f.render_widget(Paragraph::new(lines).block(block), popup);
+}
+
 // --- small render helpers --------------------------------------------------
 
 fn panel_block(title: String, focused: bool, theme: &Theme) -> Block<'static> {
@@ -1343,7 +1470,13 @@ mod render_tests {
         draw(&st, 100, 30);
         assert_eq!(
             st.current_verbs(),
-            vec![Verb::Show, Verb::Why, Verb::RequestApproval, Verb::Approve]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::RequestApproval,
+                Verb::Approve,
+                Verb::Defer
+            ]
         );
     }
 
@@ -1403,6 +1536,42 @@ mod render_tests {
         // Empty case.
         let empty = approve_status(&[], &[], &[]);
         assert!(empty.contains("nothing to approve"));
+    }
+
+    #[test]
+    fn defer_status_lists_deferred_failed_with_trigger() {
+        // trace:TASK-921
+        let s = defer_status(
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &["TASK-3".to_string()],
+            "when the shelf grows",
+        );
+        assert!(s.contains("deferred 2"));
+        assert!(s.contains("when the shelf grows"));
+        assert!(s.contains("TASK-1"));
+        assert!(s.contains("FAILED"));
+        assert!(s.contains("TASK-3"));
+        // Empty case.
+        let empty = defer_status(&[], &[], "x");
+        assert!(empty.contains("nothing parked"));
+    }
+
+    #[test]
+    fn renders_defer_input_modal() {
+        // The single-line revisit-trigger input modal paints over the backend
+        // (with and without typed text), at a realistic and a tiny size, no
+        // panic. trace:TASK-921
+        let mut st = sample(5);
+        drill_open(&mut st);
+        st.open_defer_input(vec!["TASK-0".to_string(), "TASK-2".to_string()]);
+        draw(&st, 100, 30);
+        // With typed trigger text.
+        st.push_defer_char('w');
+        st.push_defer_char('e');
+        st.push_defer_char('n');
+        draw(&st, 100, 30);
+        // Tiny terminal.
+        draw(&st, 20, 6);
     }
 
     // --- Markdown body rendering (TASK-913) -------------------------------

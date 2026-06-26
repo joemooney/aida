@@ -155,6 +155,11 @@ pub fn verb_list_for(scope: Scope, focused_status: Option<&str>) -> Vec<Verb> {
         if focused_is_approved {
             verbs.push(Verb::Queue);
         }
+        // `defer` is NOT status-conditional — it parks ANY open spec off the
+        // active view with a revisit trigger, so it is appended for every
+        // Open-scope focus (drafts, approved, or no focus). Ordered last so the
+        // existing draft/approved verb indices are undisturbed. trace:TASK-921
+        verbs.push(Verb::Defer);
     }
     verbs
 }
@@ -181,6 +186,11 @@ pub enum Verb {
     /// implementer queue via `aida queue add --for implementer`. The mirror
     /// of [`Verb::RequestApproval`]. trace:TASK-915
     Queue,
+    /// Open scope, any open spec (NOT status-conditional): park the selected
+    /// specs off the active view with a revisit trigger via
+    /// `aida defer <id> --until "<trigger>"`. Set-level; the trigger is
+    /// captured by a single-line input modal before execution. trace:TASK-921
+    Defer,
 }
 
 impl Verb {
@@ -193,6 +203,7 @@ impl Verb {
             Verb::Why => "why",
             Verb::RequestApproval => "request approval",
             Verb::Queue => "queue",
+            Verb::Defer => "defer",
         }
     }
 
@@ -205,6 +216,7 @@ impl Verb {
             Verb::Why => "why is this spec still open? (aida why)",
             Verb::RequestApproval => "route selected drafts to the advisor queue",
             Verb::Queue => "route selected Approved specs to the implementer queue",
+            Verb::Defer => "park selected specs off the active view with a revisit trigger",
         }
     }
 
@@ -217,8 +229,9 @@ impl Verb {
     }
 
     /// Is this verb wired to do real work? `groom` (stubbed), `show`, `why`,
-    /// `request approval`, `queue`, and `approve` execute; `archive` is still
-    /// present-but-stubbed to prove the verb list + breadcrumb. trace:TASK-920
+    /// `request approval`, `queue`, `approve`, and `defer` execute; `archive`
+    /// is still present-but-stubbed to prove the verb list + breadcrumb.
+    /// trace:TASK-920 trace:TASK-921
     pub fn is_functional(self) -> bool {
         matches!(
             self,
@@ -228,6 +241,7 @@ impl Verb {
                 | Verb::Why
                 | Verb::RequestApproval
                 | Verb::Queue
+                | Verb::Defer
         )
     }
 }
@@ -269,6 +283,52 @@ pub struct VerbModal {
     pub body: String,
 }
 
+/// A pending single-line text-input modal for the `defer` verb's revisit
+/// trigger. Holds the typed-so-far `buffer` and the `targets` the trigger
+/// will apply to (captured at the moment `defer` was run, before the input
+/// opened). Enter confirms (runs the defer on `targets` with `buffer`); Esc
+/// cancels. Kept pure (push_char / backspace / take) so it is unit-testable
+/// without a terminal. trace:TASK-921 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeferInput {
+    /// The revisit-trigger text typed so far.
+    pub buffer: String,
+    /// The spec ids the trigger will be applied to on confirm.
+    pub targets: Vec<String>,
+}
+
+impl DeferInput {
+    /// Open a fresh input over the given target ids with an empty buffer.
+    pub fn new(targets: Vec<String>) -> Self {
+        DeferInput {
+            buffer: String::new(),
+            targets,
+        }
+    }
+
+    /// Append a typed char to the trigger buffer.
+    pub fn push_char(&mut self, c: char) {
+        self.buffer.push(c);
+    }
+
+    /// Backspace the trigger buffer (no-op when empty).
+    pub fn backspace(&mut self) {
+        self.buffer.pop();
+    }
+
+    /// The trigger to use on confirm: the typed buffer, or — when the operator
+    /// confirmed without typing anything — a sensible default so the defer
+    /// still records a revisit condition rather than an empty string.
+    pub fn trigger(&self) -> String {
+        let t = self.buffer.trim();
+        if t.is_empty() {
+            "revisit later".to_string()
+        } else {
+            t.to_string()
+        }
+    }
+}
+
 /// The full pure UI state for the redesign prototype.
 #[derive(Debug, Clone)]
 pub struct RedesignState {
@@ -304,6 +364,10 @@ pub struct RedesignState {
     pub verb_modal: Option<VerbModal>,
     /// Pending "apply to all?" confirmation, if any.
     pub confirm: Option<ConfirmAll>,
+    /// Pending revisit-trigger input for the `defer` verb, if open. Holds the
+    /// typed buffer + the target ids captured when `defer` was run.
+    /// trace:TASK-921 | ai:claude
+    pub defer_input: Option<DeferInput>,
     /// Ambient context shown in the status line.
     pub role: String,
     /// Transient status message (last executed action / stub notice).
@@ -332,6 +396,7 @@ impl RedesignState {
             modal_scroll: 0,
             verb_modal: None,
             confirm: None,
+            defer_input: None,
             role: role.into(),
             status: None,
             theme: crate::theme::Theme::default(),
@@ -679,6 +744,64 @@ impl RedesignState {
         (approved, skipped)
     }
 
+    /// The ids `defer` will target: the marked selection, or — when nothing is
+    /// selected — the focused item (the N=1 default). Unlike
+    /// [`Self::draft_selection`] / [`Self::approved_selection`], `defer` is NOT
+    /// status-conditional, so every target is kept (no skip set). trace:TASK-921
+    pub fn defer_selection(&self) -> Vec<String> {
+        let selected = self.selected_ids();
+        if !selected.is_empty() {
+            return selected;
+        }
+        // None selected → the focused item is the N=1 default.
+        self.focused_item()
+            .map(|i| i.id.clone())
+            .into_iter()
+            .collect()
+    }
+
+    // --- Defer input modal ------------------------------------------------
+
+    /// Open the revisit-trigger input modal over the given target ids. The
+    /// parent calls this when `defer` is run; the buffer starts empty and the
+    /// operator types the `--until` trigger. trace:TASK-921 | ai:claude
+    pub fn open_defer_input(&mut self, targets: Vec<String>) {
+        self.defer_input = Some(DeferInput::new(targets));
+    }
+
+    /// Is the defer-trigger input modal open? trace:TASK-921
+    pub fn defer_input_open(&self) -> bool {
+        self.defer_input.is_some()
+    }
+
+    /// Append a char to the open defer-trigger buffer (no-op when closed).
+    pub fn push_defer_char(&mut self, c: char) {
+        if let Some(di) = &mut self.defer_input {
+            di.push_char(c);
+        }
+    }
+
+    /// Backspace the open defer-trigger buffer (no-op when closed).
+    pub fn pop_defer_char(&mut self) {
+        if let Some(di) = &mut self.defer_input {
+            di.backspace();
+        }
+    }
+
+    /// Cancel the defer input (Esc) — discards the buffer and targets.
+    pub fn cancel_defer_input(&mut self) {
+        self.defer_input = None;
+    }
+
+    /// Confirm the defer input (Enter) — take the pending input out and return
+    /// the `(targets, trigger)` for the parent to execute, closing the modal.
+    /// `None` when no input is open. trace:TASK-921 | ai:claude
+    pub fn take_defer_input(&mut self) -> Option<(Vec<String>, String)> {
+        self.defer_input
+            .take()
+            .map(|di| (di.targets.clone(), di.trigger()))
+    }
+
     /// Enter on a verb → decide what IO the parent should perform.
     ///
     /// Three shapes:
@@ -731,6 +854,15 @@ impl RedesignState {
         if verb == Verb::Queue {
             let (approved, skipped) = self.approved_selection();
             return RunOutcome::Queue { approved, skipped };
+        }
+
+        // defer: park the marked specs (or focused item) — but first capture
+        // the revisit trigger. The pure machine only decides WHO to defer; the
+        // parent opens the input modal and shells out on confirm. Any open spec
+        // qualifies (not status-conditional). trace:TASK-921
+        if verb == Verb::Defer {
+            let ids = self.defer_selection();
+            return RunOutcome::OpenDeferInput { ids };
         }
 
         // Set-level verbs (groom, …) operate on the selection.
@@ -884,6 +1016,15 @@ pub enum RunOutcome {
         approved: Vec<String>,
         skipped: Vec<String>,
     },
+    /// `defer` on the selection: the parent should OPEN the revisit-trigger
+    /// input modal over these `ids` (the defer itself runs on Enter, via
+    /// [`Self::Defer`]). Two-step because `defer` needs the operator-supplied
+    /// `--until` trigger before it can run. trace:TASK-921
+    OpenDeferInput { ids: Vec<String> },
+    /// Confirmed `defer`: park each id in `ids` with the captured `trigger`
+    /// via `aida defer <id> --until "<trigger>"`. Emitted by the parent's
+    /// input-modal confirm path, not by `run_verb`. trace:TASK-921
+    Defer { ids: Vec<String>, trigger: String },
 }
 
 #[cfg(test)]
@@ -1242,26 +1383,39 @@ mod tests {
     fn verb_list_for_open_adds_request_approval_only_on_draft() {
         // Focused on a Draft → request approval + approve are present (the
         // Draft-conditional verbs); approve is ordered after request approval.
-        // trace:TASK-920
+        // `defer` (TASK-921, status-unconditional) is appended last on every
+        // Open focus. trace:TASK-920
         assert_eq!(
             verb_list_for(Scope::Open, Some("Draft")),
-            vec![Verb::Show, Verb::Why, Verb::RequestApproval, Verb::Approve]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::RequestApproval,
+                Verb::Approve,
+                Verb::Defer
+            ]
         );
         // Case-insensitive.
         assert_eq!(
             verb_list_for(Scope::Open, Some("draft")),
-            vec![Verb::Show, Verb::Why, Verb::RequestApproval, Verb::Approve]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::RequestApproval,
+                Verb::Approve,
+                Verb::Defer
+            ]
         );
         // Focused on Approved → queue (not request approval); see
         // `verb_list_for_adds_queue_only_on_approved`. trace:TASK-915
         assert_eq!(
             verb_list_for(Scope::Open, Some("Approved")),
-            vec![Verb::Show, Verb::Why, Verb::Queue]
+            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
         );
-        // No focused item → only show / why.
+        // No focused item → show / why / defer.
         assert_eq!(
             verb_list_for(Scope::Open, None),
-            vec![Verb::Show, Verb::Why]
+            vec![Verb::Show, Verb::Why, Verb::Defer]
         );
         // Other scopes ignore the status argument.
         assert_eq!(
@@ -1275,17 +1429,32 @@ mod tests {
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom();
-        // bottom_idx 0 = TASK-0 (Draft) → request approval + approve present.
+        // bottom_idx 0 = TASK-0 (Draft) → request approval + approve + defer.
         assert_eq!(
             s.current_verbs(),
-            vec![Verb::Show, Verb::Why, Verb::RequestApproval, Verb::Approve]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::RequestApproval,
+                Verb::Approve,
+                Verb::Defer
+            ]
         );
-        s.move_down(); // → TASK-1 (Approved) → queue present (trace:TASK-915)
-        assert_eq!(s.current_verbs(), vec![Verb::Show, Verb::Why, Verb::Queue]);
+        s.move_down(); // → TASK-1 (Approved) → queue + defer (trace:TASK-915)
+        assert_eq!(
+            s.current_verbs(),
+            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
+        );
         s.move_down(); // → TASK-2 (Draft)
         assert_eq!(
             s.current_verbs(),
-            vec![Verb::Show, Verb::Why, Verb::RequestApproval, Verb::Approve]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::RequestApproval,
+                Verb::Approve,
+                Verb::Defer
+            ]
         );
     }
 
@@ -1370,25 +1539,31 @@ mod tests {
 
     #[test]
     fn verb_list_for_adds_queue_only_on_approved() {
-        // Focused on an Approved → queue is present (third verb).
+        // Focused on an Approved → queue is present (third verb); defer last.
         assert_eq!(
             verb_list_for(Scope::Open, Some("Approved")),
-            vec![Verb::Show, Verb::Why, Verb::Queue]
+            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
         );
         // Case-insensitive.
         assert_eq!(
             verb_list_for(Scope::Open, Some("approved")),
-            vec![Verb::Show, Verb::Why, Verb::Queue]
+            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
         );
         // Focused on a Draft → request approval + approve, not queue.
         assert_eq!(
             verb_list_for(Scope::Open, Some("Draft")),
-            vec![Verb::Show, Verb::Why, Verb::RequestApproval, Verb::Approve]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::RequestApproval,
+                Verb::Approve,
+                Verb::Defer
+            ]
         );
-        // No focused item → only show / why.
+        // No focused item → show / why / defer.
         assert_eq!(
             verb_list_for(Scope::Open, None),
-            vec![Verb::Show, Verb::Why]
+            vec![Verb::Show, Verb::Why, Verb::Defer]
         );
         // Other scopes ignore the status argument.
         assert_eq!(
@@ -1520,5 +1695,128 @@ mod tests {
         s.close_modal();
         assert!(!s.modal_open());
         assert!(s.verb_modal.is_none());
+    }
+
+    // --- Defer verb (TASK-921) -------------------------------------------
+
+    #[test]
+    fn defer_present_on_open_scope_for_any_status() {
+        // `defer` is NOT status-conditional — it appears for drafts, approved,
+        // and no-focus on the Open scope. trace:TASK-921
+        assert!(verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Defer));
+        assert!(verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Defer));
+        assert!(verb_list_for(Scope::Open, None).contains(&Verb::Defer));
+        // It is the LAST verb (appended after the status-conditional ones), so
+        // the existing draft/approved indices are undisturbed.
+        let drafts = verb_list_for(Scope::Open, Some("Draft"));
+        assert_eq!(drafts.last(), Some(&Verb::Defer));
+        // Other scopes do not expose defer.
+        assert!(!verb_list_for(Scope::Backlog, Some("Draft")).contains(&Verb::Defer));
+    }
+
+    #[test]
+    fn defer_is_functional_set_level() {
+        assert!(Verb::Defer.is_functional());
+        assert!(!Verb::Defer.is_item_level());
+    }
+
+    #[test]
+    fn defer_selection_uses_marked_specs() {
+        // defer targets the marked selection regardless of status (any open
+        // spec qualifies). trace:TASK-921
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.toggle_select(); // TASK-0 (Draft)
+        s.move_down();
+        s.move_down();
+        s.toggle_select(); // TASK-2 (Draft)
+        assert_eq!(s.defer_selection(), vec!["TASK-0", "TASK-2"]);
+    }
+
+    #[test]
+    fn defer_selection_falls_back_to_focused_item() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.move_down(); // focus TASK-1, nothing selected
+        assert_eq!(s.defer_selection(), vec!["TASK-1"]);
+    }
+
+    #[test]
+    fn run_defer_opens_input_over_targets() {
+        // Enter on the `defer` verb yields OpenDeferInput over the selection,
+        // NOT an immediate Defer — the trigger must be captured first.
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.toggle_select(); // TASK-0
+        s.focus_top();
+        // Move the top highlight onto `defer` (last verb on the Open Draft
+        // list: show, why, request approval, approve, defer → idx 4).
+        for _ in 0..4 {
+            s.move_down();
+        }
+        assert_eq!(s.top_verb(), Some(Verb::Defer));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::OpenDeferInput {
+                ids: vec!["TASK-0".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn defer_input_push_backspace_take() {
+        // The pure input buffer: type, backspace, and take out (targets +
+        // trigger), closing the modal. trace:TASK-921
+        let mut s = RedesignState::new(open_items(), "advisor");
+        assert!(!s.defer_input_open());
+        s.open_defer_input(vec!["TASK-0".to_string(), "TASK-1".to_string()]);
+        assert!(s.defer_input_open());
+        s.push_defer_char('w');
+        s.push_defer_char('e');
+        s.push_defer_char('n');
+        s.push_defer_char('x'); // typo
+        s.pop_defer_char(); // backspace the typo
+        s.push_defer_char(' ');
+        s.push_defer_char('Y');
+        // buffer is "wen Y"
+        assert_eq!(s.defer_input.as_ref().unwrap().buffer, "wen Y");
+        let taken = s.take_defer_input();
+        assert_eq!(
+            taken,
+            Some((
+                vec!["TASK-0".to_string(), "TASK-1".to_string()],
+                "wen Y".to_string()
+            ))
+        );
+        // Taking closes the modal.
+        assert!(!s.defer_input_open());
+        assert!(s.take_defer_input().is_none());
+    }
+
+    #[test]
+    fn defer_input_empty_trigger_uses_default() {
+        // Confirming with an empty / whitespace-only buffer still records a
+        // sensible default trigger rather than an empty string. trace:TASK-921
+        let mut di = DeferInput::new(vec!["TASK-0".to_string()]);
+        assert_eq!(di.trigger(), "revisit later");
+        di.push_char(' ');
+        di.push_char(' ');
+        assert_eq!(di.trigger(), "revisit later");
+        di.push_char('q');
+        // Trigger trims surrounding whitespace.
+        assert_eq!(di.trigger(), "q");
+    }
+
+    #[test]
+    fn defer_input_cancel_discards() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        s.open_defer_input(vec!["TASK-0".to_string()]);
+        s.push_defer_char('x');
+        s.cancel_defer_input();
+        assert!(!s.defer_input_open());
+        assert!(s.take_defer_input().is_none());
     }
 }
