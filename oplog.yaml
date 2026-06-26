@@ -21933,5 +21933,32 @@ operations:
   timestamp: 2026-06-26T19:37:36.810396526Z
   kind: !SetStatus
     status: Approved
-clock: 2080
+- id: 019f057d-795b-79a3-b396-7f1292cdbad4
+  target_id: 019f057d-6a5e-7d91-8c53-46da890ebe76
+  author: aida
+  node_id: '1'
+  lamport: 2081
+  timestamp: 2026-06-26T19:52:16.987322410Z
+  kind: !Create
+    title: 'Graph parentage unreliable: parent: tag != edge, one-directional edges, stale cache (focus-lens dogfooding finding)'
+    description: |-
+      DOGFOODING FINDING (surfaced building STORY-695, the TUI epic focus lens, 2026-06-26). EPIC-54's children did not reliably appear in graph-derived views (`aida graph --tree`, and the in-process focus-lens closure). Investigation found a MIX of causes — capturing with honest uncertainty rather than asserting one root cause:
+
+      1) TAG != EDGE: 5 specs (STORY-695, TASK-915/920/921/922) were filed with `aida add --tags "parent:EPIC-54"`. That created the parent:EPIC-54 TAG but NO relationship edge — `aida rel add` reported "Added relationship" (brand new) for all 5. So the documented `parent:<EPIC>` tag convention does NOT create graph parentage; graph views miss the spec entirely.
+
+      2) ONE-DIRECTIONAL EDGES + STALE CACHE: other children (STORY-689/693) HAD a Parent edge (EPIC-54 --[Parent]--> child) but were still absent from `--tree` until the inverse Child edge (child --[Child]--> EPIC-54) was added AND/OR the cache was rebuilt. `--tree` appears to walk CHILD edges while the focus-lens closure was written to walk PARENT edges — so the two views can DISAGREE on the same epic. And the cache (.aida/cache.db) did not reflect existing edges until `aida cache rebuild`.
+
+      FIX APPLIED: backfilled bidirectional parent edges for all 10 EPIC-54 children + `aida cache rebuild` → consistent 12-total tree.
+
+      WHY IT MATTERS: the new focus lens reads the cache in-process; if relationship writes don't reliably invalidate the cache, or if Parent/Child edges are one-directional, the lens shows an INCOMPLETE block-of-work view (it showed 4 of ~10). This is a substrate-integrity issue, not a TUI bug.
+
+      NEEDS INVESTIGATION / CANDIDATE FIXES:
+      - Should `aida add --tags parent:X` (or any `parent:` tag) AUTO-CREATE the bidirectional parent edge, so tag and graph can't diverge? (substrate-as-bouncer)
+      - Should `aida rel add --type parent` ALWAYS create the inverse by default (bidirectional), so Parent/Child edges can't be one-directional?
+      - Do `--tree` and the focus-closure walk different edge directions? Align them (or make the closure direction-agnostic).
+      - Do relationship writes reliably invalidate/rebuild .aida/cache.db? If not, graph-derived reads (including the focus lens) can be stale.
+    req_type: Spike
+    status: Draft
+    priority: High
+clock: 2081
 node_id: '1'
