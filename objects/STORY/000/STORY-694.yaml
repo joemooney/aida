@@ -3,15 +3,33 @@ spec_id: STORY-694
 agreed_id: STORY-694
 title: 'aida status <spec>: liveness for in-progress work — show linked session/pid/worktree/started/elapsed + a live-vs-STALE verdict'
 description: "OPERATOR ASK (the core legibility keystone): for a spec marked In-Progress, how do I know there is an ACTUAL live session/process working it on my machine, vs a stale flag? Today there is NO spec->process path: aida why <spec> says \"in-progress\" purely from the status flag (not a live check), fanned agents take generic harness-worktree leases (not spec-scoped), and aida show has no session section. This is the TASK-894 failure generalized — an In-Progress flag that is not liveness-backed.\n\nDELIVER: aida status <spec> (and/or a live section on aida show / aida why) that, for an in-progress spec, shows: linked session/agent id, worktree path, started-at, ELAPSED, and a LIVENESS VERDICT — \"live\" (a process is using the worktree / holder pid alive) vs \"STALE — no live process, N elapsed; the In-Progress flag is orphaned\". \n\nREQUIRES a spec<->session link recorded when work begins: extend the lease/session registry to carry the spec_id, OR write a link (spec -> session-id/worktree/started) at the point work starts and the status flips to In-Progress. Liveness check: is a process alive in/using that worktree (pid liveness like BUG-609 pid_is_alive, or lsof/ps on the worktree path). \n\nSUBSUMES BUG-623 (aida why should flag stalled-in-flight) — that flag IS this commands STALE verdict surfaced in aida why. Makes the flip-to-In-Progress discipline TRUSTWORTHY (flag + verifiable live session) and the aida list --status in-progress view honest. trace candidate."
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:29:39.175822153Z
-modified_at: 2026-06-26T18:31:07.053418808Z
+modified_at: 2026-06-26T19:03:35.514841818Z
 req_type: Story
 tags:
 - from-operator
 - legibility
 - liveness
 - session
+history:
+- id: 019f0550-e504-77e3-b907-9701f3724d6b
+  author: aida-auto-bump
+  timestamp: 2026-06-26T19:03:35.428331977Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f0550-e55a-7150-9692-4c6a52abe85a
+  timestamp: 2026-06-26T19:03:35.514835377Z
+  agent: aida
+  commit_sha: eca79c4616c65b68053b97c573d239c22f397fa9
+  summary: Completed via merge eca79c46
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T19:03:34.342343115Z
+  completion_sha: eca79c4616c65b68053b97c573d239c22f397fa9

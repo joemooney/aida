@@ -3,15 +3,33 @@ spec_id: BUG-623
 agreed_id: BUG-623
 title: aida why / session leases report a long-idle in-flight lease as 'being worked now' — a hung/abandoned session reads as active
 description: 'A lease whose holder process is ALIVE but IDLE (no spec movement for hours) is reported by aida why as "in-flight — a live session lease is working this now" and shown as active in aida session leases. Observed: TASK-894 held by pid 1062421 in /home/joe/ai/aida-task-894 for ~26h with ZERO spec movement, no TASK-894 commits, nothing uncommitted — a hung/abandoned session. The operator twice could not tell stuck-from-working. A liveness check (process exists) is necessary but not sufficient. Add stalled-in-flight detection: when an in-flight lease is older than a threshold (e.g. lease age / last-spec-modified > Nh) with no progress, surface "in-flight but STALLED — lease Nh old, no progress; aida session end <id> to release" instead of "being worked now". This is the core legibility ask (why isnt it moving / is it really being worked). trace:BUG-623 candidate.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T16:50:24.946780656Z
-modified_at: 2026-06-26T16:50:24.946780656Z
+modified_at: 2026-06-26T19:03:35.428077560Z
 req_type: Bug
 tags:
 - from-operator
 - legibility
 - session
 - why
+history:
+- id: 019f0550-e4ad-7b32-a59b-bdf5b15a9fae
+  author: aida-auto-bump
+  timestamp: 2026-06-26T19:03:35.341346066Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f0550-e504-77e3-b907-96f5501191d6
+  timestamp: 2026-06-26T19:03:35.428070983Z
+  agent: aida
+  commit_sha: eca79c4616c65b68053b97c573d239c22f397fa9
+  summary: Completed via merge eca79c46
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T19:03:34.342343115Z
+  completion_sha: eca79c4616c65b68053b97c573d239c22f397fa9
