@@ -3,12 +3,12 @@ spec_id: BUG-617
 agreed_id: BUG-617
 title: TUI Nav<->List arrow keys reversed from operator intent (STORY-685 follow-up)
 description: 'STORY-685 shipped Enter/Left = Nav->List and Right/Esc = List->Nav. Operator intent (live testing): RIGHT should enter the List from Nav, LEFT should return to Nav from the List (Enter still enters, Esc still backs out). Swap the route_key Left/Right arms + the on-screen hint + the doc comment.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T02:44:28.489142655Z
-modified_at: 2026-06-26T02:47:51.078821968Z
+modified_at: 2026-06-26T03:04:06.786025968Z
 req_type: Bug
 tags:
 - from-operator-testing
@@ -19,3 +19,21 @@ comments:
   content: Commit 788b76a24 references this requirement
   created_at: 2026-06-26T02:47:51.078821968Z
   modified_at: 2026-06-26T02:47:51.078821968Z
+history:
+- id: 019f01e2-7730-75e1-93b3-2cccbdb8addc
+  author: aida-auto-bump
+  timestamp: 2026-06-26T03:04:06.704744828Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f01e2-7782-73f0-aec0-6fe036b95fed
+  timestamp: 2026-06-26T03:04:06.786020196Z
+  agent: aida
+  commit_sha: 81976dea3204a01bbc82189907be162ed01ae25f
+  summary: Completed via merge 81976dea
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T03:04:05.569177138Z
+  completion_sha: 81976dea3204a01bbc82189907be162ed01ae25f

@@ -3,12 +3,12 @@ spec_id: BUG-616
 agreed_id: BUG-616
 title: TUI panel reads use full-scan paths — queue panel ran aida status (~3.75s), row preview ran aida show with git-linkage (~1s/item)
 description: 'The aida tui dashboard fetched the Queue panel via overlay::fetch -> aida status --json (the full worktree/process scan, ~3.75s) and the per-row preview via aida show WITH git-linkage (~1s uncached per row). Both only need cache data. Fix: queue panel uses a new cache-fast aida queue list --json (3.75s->1s; further 0.2s follow-up to resolve titles via SQLite cache summaries instead of the legacy YAML storage.load); row preview uses aida show --no-git (1s->0.13s). Operator-reported during live TUI testing.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T02:44:18.339982045Z
-modified_at: 2026-06-26T02:56:37.931704806Z
+modified_at: 2026-06-26T03:04:06.704548289Z
 req_type: Bug
 tags:
 - from-operator-testing
@@ -25,3 +25,21 @@ comments:
   content: Commit 0c6c6228f references this requirement
   created_at: 2026-06-26T02:56:37.931704806Z
   modified_at: 2026-06-26T02:56:37.931704806Z
+history:
+- id: 019f01e2-76df-7713-8c1d-643a977e8989
+  author: aida-auto-bump
+  timestamp: 2026-06-26T03:04:06.623741442Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f01e2-7730-75e1-93b3-2cb09b3e5b2e
+  timestamp: 2026-06-26T03:04:06.704541962Z
+  agent: aida
+  commit_sha: 81976dea3204a01bbc82189907be162ed01ae25f
+  summary: Completed via merge 81976dea
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T03:04:05.569177138Z
+  completion_sha: 81976dea3204a01bbc82189907be162ed01ae25f
