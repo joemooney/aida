@@ -1,0 +1,15 @@
+{
+  "id": "7e7b8f5c-2851-41e0-923b-25b6c7e7e1e2",
+  "thread_id": "7e7b8f5c-2851-41e0-923b-25b6c7e7e1e2",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1782454137654,
+  "body": "BATCH HANDOFF — 4 daily-driver UX papercuts/features filed by the product seat this session (2026-06-25), all from real operator friction at the keyboard. Theme: \"make the surface not janky when someone digs in\" (the Trojan-horse quiet-depth principle applied to the TUI + queue). All code-grounded with root cause + acceptance criteria. Recommended dispositions:\n\n1. BUG-619 (Medium) — aida tui lags navigating to PRs; fetch_prs() is a synchronous gh call per navigation (dashboard.rs:210/328). Want async load + refreshing-notice, never block the cursor. RECO: approve + queue implementer. [NOTE: already sent to you individually earlier — included here only for the complete picture; do not double-file.]\n\n2. BUG-620 (Low) — aida tui tab still labeled \"dialog\"; should display \"advisor\" (canonical per TASK-586; dialog is the deprecated alias). Minimal fix is a one-line label change at dashboard.rs:42. RECO: /aida-fasttrack candidate (trivial, CI-only gate). Optional internal enum/field rename is a separate, back-compat-sensitive follow-up.\n\n3. BUG-621 (Low) — aida queue \"To empty this queue\" footer self-contradicts: prints \"needs you: ... nothing to do\" for in-flight items (render_path_to_empty hardcodes the \"needs you\" prefix for the self-resolving bucket too, burndown.rs:1377). RECO: small fix, fasttrack/queue. Secondary note in the spec: \"resolves through normal flow\" assumes the item is actually being worked — In-Progress-without-lease drift would make it falsely reassuring; worth honoring that split.\n\n4. STORY-689 (Medium) — aida tui: render the preview as markdown (tui-markdown) + color-code structured fields (themeable), instead of piping aida show stdout as raw text. Real feature with design captured + a 2-slice plan (Slice 1 markdown body; Slice 2 themeable field colors). RECO: NOT fasttrack — approve + decompose into the two slices, Slice 1 first.\n\nFiled by the product seat (propose-only); disposition is yours.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
