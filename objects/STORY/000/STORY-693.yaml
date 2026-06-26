@@ -21,12 +21,12 @@ description: |-
   - the show modal renders the spec's structured fields + body natively (not captured `aida show` stdout).
   - build/test/fmt/clippy green; in-process load covered by a test where feasible.
   - existing TUI (non-redesign path) unchanged.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:22:51.116048161Z
-modified_at: 2026-06-26T17:22:51.116048161Z
+modified_at: 2026-06-26T18:46:13.922036984Z
 req_type: Story
 tags:
 - architecture
