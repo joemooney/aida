@@ -1741,6 +1741,57 @@ pub fn claude_headless_resume_args_with_posture(
     args
 }
 
+/// TASK-894: build the `(program, args)` for one launch of the headless
+/// **advisor tier** (`/aida-advise`) the orchestrator spawns to resolve an
+/// implementer's punt under `--auto-complete --no-human=both`. Vendor-neutral
+/// generalization of the STORY-306 spawn, mirroring STORY-683's drain-phase
+/// generalization.
+///
+/// - `is_fork` is the orchestrator's fork-from-live decision for the Claude
+///   path: when `true` the Claude arm resumes the forked live-advisor session
+///   (`claude … --resume <advisor_uuid> /aida-advise`, the context-rich path);
+///   when `false` it cold-boots with the substrate-seeded prompt.
+/// - `seeded_prompt` is the cold-boot prompt (the live-advisor-context prepend
+///   the assess cold-boot uses); `advisor_uuid` is the resume/session id.
+///
+/// **Codex has no `--resume` / session model** (see [`codex_headless_args`]), so
+/// a Codex advisor tier ignores `is_fork` and always hosts a *fresh* `codex exec`
+/// per punt against the seeded prompt — no resume, the per-punt-fresh-spawn
+/// trade-off noted in STORY-683's follow-ups. The caller is responsible for
+/// forcing the pass to cold-boot for a non-Claude vendor so the fork-from-live
+/// JSONL machinery (Claude-specific) is never exercised.
+///
+/// Claude's `is_fork`/cold-boot arms are byte-identical to the pre-existing
+/// inline construction, so an un-configured drain (vendor = Claude) is unchanged.
+/// Pure — both arms are unit-tested without spawning.
+// trace:TASK-894 | ai:claude
+pub fn advisor_tier_program_and_args(
+    vendor: HeadlessVendor,
+    is_fork: bool,
+    seeded_prompt: &str,
+    advisor_uuid: &str,
+) -> (String, Vec<String>) {
+    match vendor {
+        HeadlessVendor::Claude => {
+            let args = if is_fork {
+                // Fork branch inherits the live advisor's context via --resume.
+                claude_headless_resume_args("/aida-advise", advisor_uuid)
+            } else {
+                claude_headless_args(seeded_prompt, advisor_uuid)
+            };
+            (HeadlessVendor::Claude.program().to_string(), args)
+        }
+        HeadlessVendor::Codex => {
+            // No resume model — a fresh spawn per punt against the seeded prompt.
+            // `is_fork` is intentionally ignored here. trace:TASK-894 | ai:claude
+            (
+                HeadlessVendor::Codex.program().to_string(),
+                codex_headless_args(seeded_prompt),
+            )
+        }
+    }
+}
+
 /// STORY-306: spawn a headless `claude -p --resume <id>` run and wait,
 /// returning the exit status. The spawn-and-wait counterpart of
 /// [`spawn_claude_headless`] for the orchestrator's advisor-resume leg — the
@@ -3396,6 +3447,54 @@ mod tests {
             !codex.contains(&"-p".to_string()),
             "codex arm must not carry claude's -p: {codex:?}"
         );
+    }
+
+    /// TASK-894: the advisor-tier spawn builds the correct command per vendor.
+    /// Claude resumes the fork (`--resume <uuid> /aida-advise`) or cold-boots the
+    /// seeded prompt; Codex always hosts a fresh `codex exec <seeded>` (no resume,
+    /// `is_fork` ignored). The Claude arms are byte-identical to the dedicated
+    /// builders so an un-configured drain is unchanged.
+    // trace:TASK-894 | ai:claude
+    #[test]
+    fn advisor_tier_program_and_args_builds_correct_command_per_vendor() {
+        let seeded = "advisor-context\n\n/aida-advise";
+        let advisor_uuid = "019e0000-0000-7000-8000-000000000aaa";
+
+        // Claude cold-boot: `claude` + the seeded prompt via the dedicated builder.
+        let (prog, args) =
+            advisor_tier_program_and_args(HeadlessVendor::Claude, false, seeded, advisor_uuid);
+        assert_eq!(prog, "claude");
+        assert_eq!(args, claude_headless_args(seeded, advisor_uuid));
+        assert!(args.contains(&"-p".to_string()), "{args:?}");
+        assert!(args.contains(&seeded.to_string()), "{args:?}");
+        assert!(!args.contains(&"--resume".to_string()), "{args:?}");
+
+        // Claude fork: `claude … --resume <uuid> /aida-advise`, NOT the seeded prompt.
+        let (prog, args) =
+            advisor_tier_program_and_args(HeadlessVendor::Claude, true, seeded, advisor_uuid);
+        assert_eq!(prog, "claude");
+        assert_eq!(
+            args,
+            claude_headless_resume_args("/aida-advise", advisor_uuid)
+        );
+        assert!(args.contains(&"--resume".to_string()), "{args:?}");
+        assert!(args.contains(&advisor_uuid.to_string()), "{args:?}");
+        assert!(args.contains(&"/aida-advise".to_string()), "{args:?}");
+
+        // Codex: a fresh `codex exec <seeded>` per punt, ignoring `is_fork` —
+        // codex has no resume model. trace:TASK-894
+        for is_fork in [false, true] {
+            let (prog, args) =
+                advisor_tier_program_and_args(HeadlessVendor::Codex, is_fork, seeded, advisor_uuid);
+            assert_eq!(prog, "codex", "is_fork={is_fork}");
+            assert_eq!(args, codex_headless_args(seeded), "is_fork={is_fork}");
+            assert_eq!(args.first().map(String::as_str), Some("exec"), "{args:?}");
+            assert_eq!(args.last().map(String::as_str), Some(seeded), "{args:?}");
+            // Never carries claude's resume / session flags.
+            assert!(!args.contains(&"--resume".to_string()), "{args:?}");
+            assert!(!args.contains(&advisor_uuid.to_string()), "{args:?}");
+            assert!(!args.contains(&"-p".to_string()), "{args:?}");
+        }
     }
 
     /// STORY-683: the program a vendor spawns is its own binary.
