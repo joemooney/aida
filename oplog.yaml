@@ -22309,5 +22309,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 2111
+- id: 019f0659-a19b-7962-998a-d63713c02629
+  target_id: 019f0659-956b-71f0-becc-56d497525329
+  author: aida
+  node_id: '1'
+  lamport: 2112
+  timestamp: 2026-06-26T23:52:45.211773028Z
+  kind: !Create
+    title: Batch-approve from the needs-approval group
+    description: 'Multi-select in the needs-approval list (drafts + intake proposals) and approve/queue the selection in one action, vs Enter-dispatching aida edit --status approved one PTY round-trip at a time. The approve-backlog-items want at backlog scale. NOTE: a natural EPIC-54 verb.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2112
 node_id: '1'
