@@ -2824,6 +2824,8 @@ fn run() -> Result<()> {
             awaiting: _,
             verbose: _,
             no_hygiene: _,
+            all: _,
+            stale: _,
         } => {
             handle_status_command(*no_dev_context, None, &storage)?;
         }
@@ -13255,6 +13257,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             awaiting,
             verbose,
             no_hygiene,
+            all,
+            stale,
         } => {
             return handle_status_command_distributed(
                 *no_dev_context,
@@ -13269,6 +13273,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *awaiting,
                 *verbose,
                 *no_hygiene,
+                *all,
+                *stale,
                 store_path,
                 &backend,
             );
@@ -48011,6 +48017,95 @@ fn assemble_worktree_status_rows(
     rows
 }
 
+/// BUG-609: above this many worktree rows the default `aida status` collapses
+/// the section to a one-line summary instead of listing every row — fanned-out
+/// agent worktrees accumulate (observed ~45, many abandoned) and the full list
+/// drowns the rest of the status surface. `--all` always lists. Below the
+/// threshold the list is short enough to print in full. trace:BUG-609
+const WORKTREE_SUMMARY_THRESHOLD: usize = 8;
+
+/// BUG-609: render one worktree row's display line (display-only; no I/O).
+/// Pulled out of `print_status_worktrees_section` so the full-list path and any
+/// future caller share one formatter. trace:BUG-609 | ai:claude
+fn format_worktree_status_line(row: &WorktreeStatusRow) -> String {
+    let dirty_part = if row.dirty_count == 0 {
+        "clean".to_string()
+    } else {
+        format!("dirty({})", row.dirty_count).yellow().to_string()
+    };
+    let lease_part = match &row.lease_scope {
+        Some(scope) => format!("lease:{scope}"),
+        None => "no-lease".to_string(),
+    };
+    let live_part = if row.has_live {
+        "live".green().to_string()
+    } else if row.lease_scope.is_some() {
+        "dormant".yellow().to_string()
+    } else {
+        String::new()
+    };
+
+    let mut line = format!(
+        "  {} ({}) — {} · {}",
+        row.path.display(),
+        row.branch.cyan(),
+        dirty_part,
+        lease_part
+    );
+    if !live_part.is_empty() {
+        line.push_str(&format!(" · {live_part}"));
+    }
+    if let Some(ahead) = row.ahead {
+        if ahead > 0 {
+            line.push_str(&format!(
+                " · {ahead}{}main",
+                crate::glyph(crate::glyphs::Glyph::FlowQueued)
+            ));
+        }
+    }
+    if let Some(n) = row.pr_number {
+        let ci = row.pr_ci.as_deref().unwrap_or("?");
+        line.push_str(&format!(" · {}", format!("PR #{n} [CI:{ci}]").cyan()));
+    }
+    // Verdict marker: in flight / obsolete — <recovery command>.
+    if row.obsolete {
+        line.push_str(
+            &format!(
+                "  {} obsolete — `git worktree remove`",
+                crate::glyph(crate::glyphs::Glyph::Warning)
+            )
+            .dimmed()
+            .to_string(),
+        );
+    } else {
+        line.push_str(
+            &format!("  {} in flight", crate::glyph(crate::glyphs::Glyph::Check))
+                .dimmed()
+                .to_string(),
+        );
+    }
+    line
+}
+
+/// BUG-609: assemble the collapsed one-line summary the default (non-`--all`)
+/// worktree section prints once the roster crosses `WORKTREE_SUMMARY_THRESHOLD`.
+/// Pure (no I/O) so the collapse copy is unit-testable: "Worktrees: M
+/// (K obsolete — `aida session gc` to reap)". The reaping itself lives in
+/// `aida session gc` / `aida doctor heal` (already built — BUG-614); status
+/// only summarizes. trace:BUG-609 | ai:claude
+fn worktree_summary_line(rows: &[WorktreeStatusRow]) -> String {
+    let total = rows.len();
+    let obsolete = rows.iter().filter(|r| r.obsolete).count();
+    let mut s = format!("  Worktrees: {total}");
+    if obsolete > 0 {
+        s.push_str(&format!(
+            " ({obsolete} obsolete — `aida session gc` to reap)"
+        ));
+    }
+    s.push_str(" · `aida status --all` to list");
+    s
+}
+
 /// STORY-456: `aida status` Worktrees section. Display-only — lists each
 /// non-main, non-store worktree with its branch, tied spec, clean/dirty
 /// state, the session lease covering it, live/dormant status, commits-ahead
@@ -48019,73 +48114,157 @@ fn assemble_worktree_status_rows(
 /// Silent when only the main worktree exists. The open-PR fields come from a
 /// single batched `gh pr list` snapshot — one gh call regardless of worktree
 /// count. trace:STORY-456 | ai:claude
-fn print_status_worktrees_section(project_root: &std::path::Path) {
+///
+/// BUG-609: `show_all` (from `aida status --all`) forces the full list. By
+/// default a roster larger than `WORKTREE_SUMMARY_THRESHOLD` collapses to a
+/// one-line count + obsolete tally so abandoned fanned-out worktrees stop
+/// drowning the surface. trace:BUG-609 | ai:claude
+fn print_status_worktrees_section(project_root: &std::path::Path, show_all: bool) {
     let main_root = main_worktree_root_from(project_root);
     let rows = collect_worktree_status_rows(&main_root);
     if rows.is_empty() {
         return;
     }
     println!("{}", "─── Worktrees ───".bold());
+    if !show_all && rows.len() > WORKTREE_SUMMARY_THRESHOLD {
+        println!("{}", worktree_summary_line(&rows).dimmed());
+        println!();
+        return;
+    }
     for row in &rows {
-        let dirty_part = if row.dirty_count == 0 {
-            "clean".to_string()
-        } else {
-            format!("dirty({})", row.dirty_count).yellow().to_string()
-        };
-        let lease_part = match &row.lease_scope {
-            Some(scope) => format!("lease:{scope}"),
-            None => "no-lease".to_string(),
-        };
-        let live_part = if row.has_live {
-            "live".green().to_string()
-        } else if row.lease_scope.is_some() {
-            "dormant".yellow().to_string()
-        } else {
-            String::new()
-        };
-
-        let mut line = format!(
-            "  {} ({}) — {} · {}",
-            row.path.display(),
-            row.branch.cyan(),
-            dirty_part,
-            lease_part
-        );
-        if !live_part.is_empty() {
-            line.push_str(&format!(" · {live_part}"));
-        }
-        if let Some(ahead) = row.ahead {
-            if ahead > 0 {
-                line.push_str(&format!(
-                    " · {ahead}{}main",
-                    crate::glyph(crate::glyphs::Glyph::FlowQueued)
-                ));
-            }
-        }
-        if let Some(n) = row.pr_number {
-            let ci = row.pr_ci.as_deref().unwrap_or("?");
-            line.push_str(&format!(" · {}", format!("PR #{n} [CI:{ci}]").cyan()));
-        }
-        // Verdict marker: in flight / obsolete — <recovery command>.
-        if row.obsolete {
-            line.push_str(
-                &format!(
-                    "  {} obsolete — `git worktree remove`",
-                    crate::glyph(crate::glyphs::Glyph::Warning)
-                )
-                .dimmed()
-                .to_string(),
-            );
-        } else {
-            line.push_str(
-                &format!("  {} in flight", crate::glyph(crate::glyphs::Glyph::Check))
-                    .dimmed()
-                    .to_string(),
-            );
-        }
-        println!("{line}");
+        println!("{}", format_worktree_status_line(row));
     }
     println!();
+}
+
+// BUG-609: fleet-state hygiene — the agent roster's headline counts only LIVE
+// agents (dead-PID corpses partitioned out), and the worktree section collapses
+// a large roster to a one-line summary by default. trace:BUG-609 | ai:claude
+#[cfg(test)]
+mod fleet_state_hygiene_tests {
+    use super::*;
+
+    fn agent_view(
+        id: &str,
+        status: agent_registry::AgentStatus,
+    ) -> agent_registry::AgentRegistryView {
+        let now = chrono::Utc::now();
+        agent_registry::AgentRegistryView {
+            id: id.to_string(),
+            agent_type: "claude".to_string(),
+            pid: 4242,
+            name: None,
+            tty: None,
+            started_at: now,
+            last_active_at: now,
+            role: Some("implementer".to_string()),
+            current_spec: None,
+            worktree_path: std::path::PathBuf::from("/tmp/aida-fixture"),
+            source: "mcp".to_string(),
+            binary_version: None,
+            build_sha: None,
+            status,
+            availability: agent_registry::Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
+        }
+    }
+
+    fn wt_row(branch: &str, obsolete: bool) -> WorktreeStatusRow {
+        WorktreeStatusRow {
+            path: std::path::PathBuf::from(format!("/tmp/wt/{branch}")),
+            branch: branch.to_string(),
+            tied_spec: None,
+            lease_scope: None,
+            has_live: false,
+            dirty_count: 0,
+            ahead: None,
+            pr_number: None,
+            pr_ci: None,
+            pr_mergeable: None,
+            obsolete,
+        }
+    }
+
+    #[test]
+    fn agent_count_excludes_dead_pid_corpses() {
+        // Fixture roster: 2 live (Busy/Idle) + 3 stale (dead-PID) corpses.
+        let roster = vec![
+            agent_view("live-busy", agent_registry::AgentStatus::Busy),
+            agent_view("corpse-1", agent_registry::AgentStatus::Stale),
+            agent_view("live-idle", agent_registry::AgentStatus::Idle),
+            agent_view("corpse-2", agent_registry::AgentStatus::Stale),
+            agent_view("corpse-3", agent_registry::AgentStatus::Stale),
+        ];
+        let (live, stale) = partition_agents_by_liveness(&roster);
+        // Headline counts only the live partition (the 2 non-stale), not the 5
+        // raw registrations — the dead-PID corpses are excluded.
+        assert_eq!(live.len(), 2, "headline must count only live agents");
+        assert_eq!(stale.len(), 3, "dead-PID corpses partitioned into stale");
+        assert!(live
+            .iter()
+            .all(|a| a.status != agent_registry::AgentStatus::Stale));
+        assert!(stale
+            .iter()
+            .all(|a| a.status == agent_registry::AgentStatus::Stale));
+    }
+
+    #[test]
+    fn agent_partition_all_live_yields_no_stale_footer() {
+        let roster = vec![
+            agent_view("a", agent_registry::AgentStatus::Busy),
+            agent_view("b", agent_registry::AgentStatus::Idle),
+        ];
+        let (live, stale) = partition_agents_by_liveness(&roster);
+        assert_eq!(live.len(), 2);
+        assert!(stale.is_empty(), "no stale → no footer count");
+    }
+
+    #[test]
+    fn worktree_summary_collapses_above_threshold() {
+        // A roster larger than the threshold collapses to a one-line summary
+        // that reports the total + obsolete count + the `aida session gc` hint.
+        let mut rows = Vec::new();
+        for i in 0..(WORKTREE_SUMMARY_THRESHOLD + 5) {
+            // Mark roughly half obsolete to exercise the tally.
+            rows.push(wt_row(&format!("task-{i}"), i % 2 == 0));
+        }
+        let total = rows.len();
+        let obsolete = rows.iter().filter(|r| r.obsolete).count();
+        let line = worktree_summary_line(&rows);
+        assert!(
+            line.contains(&format!("Worktrees: {total}")),
+            "summary reports the total count, got: {line}"
+        );
+        assert!(
+            line.contains(&format!("{obsolete} obsolete")),
+            "summary reports the obsolete tally, got: {line}"
+        );
+        assert!(
+            line.contains("aida session gc"),
+            "summary points at the reaper, got: {line}"
+        );
+        assert!(
+            line.contains("--all"),
+            "summary tells the operator how to see the full list, got: {line}"
+        );
+        // The collapse threshold itself: this many rows is over the line.
+        assert!(rows.len() > WORKTREE_SUMMARY_THRESHOLD);
+    }
+
+    #[test]
+    fn worktree_summary_omits_obsolete_clause_when_none() {
+        let rows: Vec<_> = (0..(WORKTREE_SUMMARY_THRESHOLD + 2))
+            .map(|i| wt_row(&format!("task-{i}"), false))
+            .collect();
+        let line = worktree_summary_line(&rows);
+        assert!(line.contains(&format!("Worktrees: {}", rows.len())));
+        assert!(
+            !line.contains("obsolete"),
+            "no obsolete worktrees → no obsolete clause, got: {line}"
+        );
+    }
 }
 
 /// STORY-456: I/O wrapper that gathers the inputs (worktrees, leases, live
@@ -96871,16 +97050,55 @@ fn print_status_queue_section(ctx: &UserStatusContext, _focused: bool) {
     println!();
 }
 
-fn print_status_agents_section(ctx: &UserStatusContext) {
+/// BUG-609: partition an agent roster into (live, stale). An agent is "stale"
+/// when its classified status is `Stale` — which `agent_registry::classify_status`
+/// sets iff the registry pid failed the `process_probe::pid_is_alive` liveness
+/// probe (or a lease-derived view's lease itself went stale). The headline
+/// "Active agents (N)" must count only the live partition so dead-PID corpses
+/// (observed 89 registrations where ~9 were live, the rest stale 8-16 days)
+/// stop inflating the fleet roster. Reuses the already-probed verdict carried on
+/// the view — no second per-agent scan, so the BUG-613 status-timing win holds.
+// trace:BUG-609 | ai:claude
+fn partition_agents_by_liveness(
+    agents: &[agent_registry::AgentRegistryView],
+) -> (
+    Vec<agent_registry::AgentRegistryView>,
+    Vec<agent_registry::AgentRegistryView>,
+) {
+    agents
+        .iter()
+        .cloned()
+        .partition(|a| a.status != agent_registry::AgentStatus::Stale)
+}
+
+/// `show_stale` (from `aida status --all`/`--stale`) reveals the dead-PID
+/// corpses the default view hides behind a footer count.
+// trace:BUG-609 | ai:claude
+fn print_status_agents_section(ctx: &UserStatusContext, show_stale: bool) {
     if ctx.agents.is_empty() {
         return;
     }
+    let (live, stale) = partition_agents_by_liveness(&ctx.agents);
+    // Even when every agent is stale, render the section (headline "(0)" plus
+    // the footer) so the operator sees that the roster is all corpses rather
+    // than the section silently vanishing.
     println!(
         "{}",
-        format!("─── Active agents ({}) ───", ctx.agents.len()).bold()
+        format!("─── Active agents ({}) ───", live.len()).bold()
     );
-    for line in agent_registry::format_agent_status_lines(&ctx.agents) {
+    let shown: &[agent_registry::AgentRegistryView] = if show_stale { &ctx.agents } else { &live };
+    for line in agent_registry::format_agent_status_lines(shown) {
         println!("{line}");
+    }
+    if !stale.is_empty() && !show_stale {
+        println!(
+            "  {}",
+            format!(
+                "+{} stale (dead PID) — `aida status --all` to show, `aida doctor heal` to reap",
+                stale.len()
+            )
+            .dimmed()
+        );
     }
     println!();
 }
@@ -99532,6 +99750,8 @@ fn handle_status_command_distributed(
     awaiting: bool,
     verbose: bool,
     no_hygiene: bool,
+    all: bool,
+    stale: bool,
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
@@ -99539,6 +99759,13 @@ fn handle_status_command_distributed(
 
     let store = backend.load()?;
     let project_root = std::env::current_dir()?;
+
+    // BUG-609: `--all` reveals stale agents AND lists every worktree; `--stale`
+    // is the narrow form that only reveals the dead-PID agent corpses. Both feed
+    // the agent section's `show_stale`; only `--all` expands the worktree list.
+    // trace:BUG-609 | ai:claude
+    let show_all = all;
+    let show_stale_agents = all || stale;
 
     // STORY-385: `--cleanup` focuses on the "Needs attention" section.
     // `--cleanup --json` emits the structured report; otherwise we render
@@ -99699,7 +99926,7 @@ fn handle_status_command_distributed(
         println!();
     }
 
-    print_status_agents_section(&user_ctx);
+    print_status_agents_section(&user_ctx, show_stale_agents);
     print_status_claude_code_section(&project_root);
 
     // STORY-456: unified worktrees + open-PRs + recently-merged panes —
@@ -99708,7 +99935,7 @@ fn handle_status_command_distributed(
     // orientation. All display-only; each silent when empty. The PR data is a
     // single batched gh snapshot per section, not a call per row.
     // trace:STORY-456 | ai:claude
-    print_status_worktrees_section(&project_root);
+    print_status_worktrees_section(&project_root, show_all);
     print_status_open_prs_section(&project_root);
     print_status_recently_merged_section(&project_root, 5);
 
