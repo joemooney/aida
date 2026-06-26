@@ -141,7 +141,14 @@ pub struct AmbientState {
 }
 
 /// Per-launcher-run dashboard model.
-#[derive(Debug, Clone, Default)]
+///
+/// Not `Clone`: it now owns an in-flight `gh pr list` channel
+/// ([`Self::pr_rx`], a `Receiver` that is intentionally non-cloneable) so
+/// the PRs panel can fill asynchronously without ever blocking the cursor.
+/// The model is mutated in place by the launcher loop and never cloned, so
+/// dropping the derive costs nothing.
+// trace:BUG-619 | ai:claude
+#[derive(Debug, Default)]
 pub struct DashboardModel {
     pub role: RoleTab,
     pub nav: NavState,
@@ -179,6 +186,20 @@ pub struct DashboardModel {
     /// current board snapshot. The cheap rows paint first; the PR rows merge
     /// in on the next refetch of the awaiting-review group. trace:STORY-686
     pub prs_filled: bool,
+    /// Last-known open-PR rows, fetched off the UI thread. The PRs panel and
+    /// the board's awaiting-review group both read from this cache so a
+    /// single async `gh pr list` feeds both surfaces. Painted immediately on
+    /// navigation; refreshed when the background fetch lands. trace:BUG-619
+    pub pr_cache: Vec<ListRow>,
+    /// In-flight `gh pr list` receiver. Present while a background fetch is
+    /// running; the launcher polls [`Self::poll_prs`] to merge the result and
+    /// clear it. `None` means no fetch is in flight. trace:BUG-619
+    pub pr_rx: Option<std::sync::mpsc::Receiver<Vec<ListRow>>>,
+    /// Whether the open-PR cache has been populated at least once this run.
+    /// Drives the "loading…" vs "refreshing…" notice wording and lets the
+    /// PRs panel avoid re-spawning a fetch that is already cached + idle.
+    /// trace:BUG-619
+    pub pr_loaded: bool,
 }
 
 impl DashboardModel {
@@ -223,35 +244,107 @@ impl DashboardModel {
         self.prs_filled = false;
     }
 
-    /// Lazy-fill the awaiting-review group with open PRs from `gh pr list`
-    /// (the one ~1s network source). Idempotent per board snapshot via
-    /// `prs_filled`; PR rows are appended to the classified set as
-    /// awaiting-review items not already represented by a Done-on-branch
-    /// row, then the counts are recomputed. trace:STORY-686 | ai:claude
+    /// Merge the async-loaded open PRs into the awaiting-review board group.
+    /// Idempotent per board snapshot via `prs_filled`; reads the rows from
+    /// the off-thread [`Self::pr_cache`] (never shells out itself, so the
+    /// cursor is never blocked) and kicks the background fetch when the cache
+    /// has not been populated yet. PR rows are appended to the classified set
+    /// as awaiting-review items, then the counts are recomputed.
+    /// trace:STORY-686 trace:BUG-619 | ai:claude
     pub fn lazy_fill_prs(&mut self) {
-        if self.prs_filled {
+        // Make sure a fetch is running / has run; the cursor never waits on it.
+        self.ensure_prs_loading();
+        if self.prs_filled || self.pr_cache.is_empty() {
             return;
         }
         self.prs_filled = true;
-        let pr_rows = crate::board::fetch_open_pr_rows();
-        if pr_rows.is_empty() {
-            return;
-        }
-        // A PR row's `id` is the PR number; key the de-dupe on the head-ref
-        // SPEC mention is not available here, so we surface every open PR as
-        // an awaiting-review item. Existing Done-on-branch rows stay; PRs are
-        // appended with a `pr:<n>` synthetic id so Enter opens the PR.
-        for pr in pr_rows {
+        // A PR row's `id` is the PR number; the head-ref SPEC mention is not
+        // available here, so we surface every open PR as an awaiting-review
+        // item. Existing Done-on-branch rows stay; PRs are appended with a
+        // `pr:<n>` synthetic id so Enter opens the PR.
+        for pr in &self.pr_cache {
             self.board.push(crate::board::ClassifiedItem {
                 spec_id: format!("pr:{}", pr.id),
-                title: pr.title,
-                status: pr.status,
+                title: pr.title.clone(),
+                status: pr.status.clone(),
                 reason: crate::board::Reason::AwaitingReview,
             });
         }
         self.reason_counts = crate::board::counts(&self.board)
             .into_iter()
             .collect::<HashMap<_, _>>();
+    }
+
+    /// Kick a background `gh pr list` fetch off the UI thread, unless one is
+    /// already in flight or the cache has already been populated this run.
+    /// The cursor never waits on the spawn — it returns immediately and the
+    /// result lands later via [`Self::poll_prs`]. trace:BUG-619 | ai:claude
+    pub fn ensure_prs_loading(&mut self) {
+        if self.pr_rx.is_some() || self.pr_loaded {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            // `fetch_open_pr_rows` already time-limits the `gh` shell-out, so
+            // an offline / wedged `gh` yields an empty Vec rather than hanging
+            // the worker. The receiver may have been dropped (re-entry); the
+            // send error is benign.
+            let _ = tx.send(crate::board::fetch_open_pr_rows());
+        });
+        self.pr_rx = Some(rx);
+    }
+
+    /// Force a fresh background `gh pr list` fetch — clears the cached rows,
+    /// the "loaded" flag, and the awaiting-review fill marker so the next
+    /// poll re-merges. Used by the launcher's explicit `g` refresh.
+    /// trace:BUG-619 | ai:claude
+    pub fn invalidate_prs(&mut self) {
+        self.pr_loaded = false;
+        self.prs_filled = false;
+        self.pr_rx = None;
+        self.ensure_prs_loading();
+    }
+
+    /// Non-blocking drain of the in-flight `gh pr list` fetch. Returns `true`
+    /// when a result was just consumed (so the caller repaints): the rows are
+    /// cached, the awaiting-review board fill is re-armed, and the PRs panel
+    /// rows + notice are refreshed if that section is current. Returns `false`
+    /// when no fetch is in flight or it has not finished yet — the cursor is
+    /// never blocked on the `gh` round-trip. trace:BUG-619 | ai:claude
+    pub fn poll_prs(&mut self) -> bool {
+        let Some(rx) = self.pr_rx.as_ref() else {
+            return false;
+        };
+        match rx.try_recv() {
+            Ok(rows) => {
+                self.pr_cache = rows;
+                self.pr_loaded = true;
+                self.pr_rx = None;
+                // Re-arm the awaiting-review merge so the now-loaded PRs land
+                // in the board group on its next read.
+                self.prs_filled = false;
+                // If the PRs panel is the live section, refresh its rows +
+                // notice in place so the freshly-loaded PRs appear without a
+                // navigation. trace:BUG-619 | ai:claude
+                if self.nav.current() == NavSection::Prs {
+                    self.rows = self.pr_cache.clone();
+                    self.notice = if self.pr_cache.is_empty() {
+                        Some("no open PRs (or `gh` unavailable)".into())
+                    } else {
+                        None
+                    };
+                }
+                true
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                // Worker died without sending (should not happen — the closure
+                // always sends). Treat as an empty result so we stop polling.
+                self.pr_loaded = true;
+                self.pr_rx = None;
+                false
+            }
+        }
     }
 }
 
@@ -293,6 +386,16 @@ pub fn refetch_rows(
 ) {
     model.notice = None;
     let section = model.nav.current();
+    // PRs panel: paint immediately from the off-thread cache and kick a
+    // background `gh pr list` if needed — never a synchronous shell-out, so
+    // navigating into the panel never blocks the cursor. The rows fill in
+    // when the worker lands (drained by the launcher's `poll_prs`). The notice
+    // reflects loading vs refreshing vs ready. Handled before the match so the
+    // (slow, network) path can never reach the UI thread. trace:BUG-619
+    if section == NavSection::Prs {
+        refetch_prs(model);
+        return;
+    }
     model.rows = match section {
         // Blocked-board reason-group: read from the cached classification,
         // loading it on first touch. The awaiting-review group triggers the
@@ -310,13 +413,6 @@ pub fn refetch_rows(
         NavSection::Queue => fetch_queue(model),
         NavSection::Backlog => fetch_status(model, &["approved", "planned"]),
         NavSection::History => fetch_status(model, &["completed"]),
-        NavSection::Prs => match fetch_prs() {
-            Ok(rows) => rows,
-            Err(e) => {
-                model.notice = Some(format!("`gh` failed — {e}"));
-                Vec::new()
-            }
-        },
         NavSection::Sessions => fetch_sessions(launch_scope, dialog_session_id),
         _ => Vec::new(),
     };
@@ -326,6 +422,30 @@ pub fn refetch_rows(
         .iter()
         .filter(|r| r.kind == RowKind::Queued)
         .count();
+}
+
+/// Paint the PRs panel from the off-thread cache and arm a background fetch
+/// when needed — the cursor-non-blocking replacement for the old synchronous
+/// `fetch_prs()` shell-out. The notice distinguishes the first load
+/// ("loading PRs…") from a re-fetch over stale rows ("refreshing PRs…") from
+/// a settled-but-empty result ("no open PRs…"). The actual rows land later via
+/// [`DashboardModel::poll_prs`]. trace:BUG-619 | ai:claude
+fn refetch_prs(model: &mut DashboardModel) {
+    model.ensure_prs_loading();
+    model.notice = if model.pr_rx.is_some() {
+        Some(if model.pr_loaded {
+            "refreshing PRs…".into()
+        } else {
+            "loading PRs…".into()
+        })
+    } else if model.pr_cache.is_empty() {
+        Some("no open PRs (or `gh` unavailable)".into())
+    } else {
+        None
+    };
+    model.rows = model.pr_cache.clone();
+    model.reset_selection();
+    model.ambient.queue_depth = 0;
 }
 
 /// Queue section rows: shell out to the cache-fast `aida queue list --json`
@@ -435,30 +555,10 @@ pub fn parse_list_json(bytes: &[u8]) -> Vec<ListJsonRow> {
     serde_json::from_slice(bytes).unwrap_or_default()
 }
 
-/// PRs section rows: `gh pr list --state open --json …`. The launcher
-/// time-limits the `gh` shell-out at 5s so an offline / unauth shell
-/// doesn't stall the dashboard. trace:STORY-244 risk #7 | ai:claude
-fn fetch_prs() -> Result<Vec<ListRow>> {
-    let out = run_with_timeout(
-        Command::new("gh").args([
-            "pr",
-            "list",
-            "--state",
-            "open",
-            "--json",
-            "number,title,headRefName,statusCheckRollup",
-        ]),
-        Duration::from_secs(5),
-    )?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "gh exited {}: {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(parse_pr_json(&out.stdout))
-}
+// The PRs panel no longer shells out to `gh pr list` on the UI thread. The
+// fetch runs off-thread via [`crate::board::fetch_open_pr_rows`] (kicked by
+// `DashboardModel::ensure_prs_loading`) and lands through `poll_prs`, so
+// navigating into the panel never blocks the cursor. trace:BUG-619 | ai:claude
 
 #[derive(Debug, Clone, Deserialize)]
 struct PrJson {
@@ -967,5 +1067,102 @@ mod tests {
         assert_eq!(m.role, RoleTab::Reviewer);
         m.ambient.role = m.role.as_str().to_string();
         assert_eq!(m.ambient.role, "reviewer");
+    }
+
+    fn pr_row(n: u64) -> ListRow {
+        ListRow {
+            id: n.to_string(),
+            title: format!("PR #{n}  thing  (feat/x)"),
+            status: "green".into(),
+            kind: RowKind::Pr,
+        }
+    }
+
+    // BUG-619: navigating into the PRs panel must paint immediately from the
+    // off-thread cache and never shell out on the UI thread. `refetch_prs`
+    // pre-loaded (so `ensure_prs_loading` no-ops) paints the cached rows and
+    // clears the notice without blocking. trace:BUG-619
+    #[test]
+    fn refetch_prs_paints_cache_without_blocking() {
+        let mut m = fixture_model(vec![]);
+        m.nav.select(NavSection::Prs);
+        // Simulate a prior async fetch that already landed.
+        m.pr_cache = vec![pr_row(7), pr_row(8)];
+        m.pr_loaded = true;
+        m.pr_rx = None;
+        refetch_prs(&mut m);
+        assert_eq!(m.rows, m.pr_cache);
+        assert!(m.notice.is_none(), "ready cache shows no notice");
+        assert_eq!(m.selected, 0);
+    }
+
+    // A loaded-but-empty result degrades to an "unavailable" notice, never a
+    // hang. trace:BUG-619
+    #[test]
+    fn refetch_prs_empty_cache_shows_unavailable_notice() {
+        let mut m = fixture_model(vec![]);
+        m.nav.select(NavSection::Prs);
+        m.pr_loaded = true; // ensure_prs_loading no-ops; no thread spawned
+        m.pr_rx = None;
+        refetch_prs(&mut m);
+        assert!(m.rows.is_empty());
+        assert_eq!(
+            m.notice.as_deref(),
+            Some("no open PRs (or `gh` unavailable)")
+        );
+    }
+
+    // `poll_prs` is a non-blocking channel drain: a landed result is cached,
+    // the awaiting-review fill is re-armed, and (when the PRs panel is live)
+    // the rows + notice refresh in place. trace:BUG-619
+    #[test]
+    fn poll_prs_merges_landed_result_on_prs_panel() {
+        let mut m = fixture_model(vec![]);
+        m.nav.select(NavSection::Prs);
+        let (tx, rx) = std::sync::mpsc::channel();
+        m.pr_rx = Some(rx);
+        m.prs_filled = true; // pretend a prior (empty) fill ran
+
+        // Nothing sent yet → no consume, cursor not blocked.
+        assert!(!m.poll_prs());
+        assert!(m.pr_rx.is_some());
+
+        // Worker lands → consumed, cached, panel refreshed, fill re-armed.
+        tx.send(vec![pr_row(11)]).unwrap();
+        assert!(m.poll_prs());
+        assert!(m.pr_rx.is_none());
+        assert!(m.pr_loaded);
+        assert!(!m.prs_filled, "awaiting-review fill is re-armed");
+        assert_eq!(m.pr_cache.len(), 1);
+        assert_eq!(m.rows, m.pr_cache);
+        assert!(m.notice.is_none());
+    }
+
+    // With no fetch in flight, polling is a cheap no-op. trace:BUG-619
+    #[test]
+    fn poll_prs_no_fetch_is_noop() {
+        let mut m = fixture_model(vec![]);
+        assert!(!m.poll_prs());
+    }
+
+    // The awaiting-review board group merges the async-loaded PR cache
+    // (never shelling out on the read path) into the classified set as
+    // `pr:<n>` awaiting-review items. trace:BUG-619 trace:STORY-686
+    #[test]
+    fn lazy_fill_prs_merges_cached_rows_into_board() {
+        let mut m = fixture_model(vec![]);
+        m.pr_loaded = true; // ensure_prs_loading no-ops; no gh thread
+        m.pr_cache = vec![pr_row(21)];
+        m.lazy_fill_prs();
+        assert!(m.prs_filled);
+        assert!(
+            m.board
+                .iter()
+                .any(|c| c.spec_id == "pr:21" && c.reason == crate::board::Reason::AwaitingReview),
+            "cached PR surfaces as an awaiting-review board item"
+        );
+        // Idempotent: a second fill does not duplicate.
+        m.lazy_fill_prs();
+        assert_eq!(m.board.iter().filter(|c| c.spec_id == "pr:21").count(), 1);
     }
 }
