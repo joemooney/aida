@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T05:19:47.971537267Z
-modified_at: 2026-06-26T07:46:18.236238040Z
+modified_at: 2026-06-26T18:59:42.835123298Z
 req_type: Story
 tags:
 - legibility
@@ -41,6 +41,10 @@ relationships:
 - rel_type: Parent
   target_id: 019f02d9-a62e-7c02-a75e-0835967f6d5d
   created_at: 2026-06-26T07:35:56.952213129Z
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-26T18:59:42.835120635Z
+  created_by: joe
 history:
 - id: 019f02e4-d1aa-76b2-bfc8-b7cc6e4a100d
   author: aida-auto-bump
