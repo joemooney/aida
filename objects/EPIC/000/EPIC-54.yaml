@@ -1,0 +1,22 @@
+id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+spec_id: EPIC-54
+agreed_id: EPIC-54
+title: 'aida tui redesign: action->target command-palette model'
+description: |-
+  Rework aida tui around a single interaction protocol: identify an ACTION (verb) and a SET of ITEMS (targets) to apply it to. Navigation is scope -> action -> targets -> execute; item-level actions are the N=1 case. Replaces the role-tabbed, persistent-right-pane TUI (which does not scale to AIDA's ~47-skill surface and reads as overwhelming, cf. STORY-673).
+
+  Full design, gesture grammar, role-relocation, locked decisions, open forks, and the prototype-first slice plan: docs/plans/2026-06-25-tui-action-target-redesign.md.
+
+  Slices (only Slice 1 filed; 2-5 gated on the prototype validating the protocol): 1 prototype the loop on the Backlog scope; 2 generalize scopes+verbs; 3 role as ambient context (remove role tabs); 4 item modal = STORY-689 markdown/field-colored preview; 5 fuzzy palette polish.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T06:52:56.629549430Z
+modified_at: 2026-06-26T06:52:56.629549430Z
+req_type: Epic
+tags:
+- product
+- redesign
+- tui
+- ux
