@@ -116515,7 +116515,10 @@ mod headless_hint_tests {
     /// STORY-683 added the vendor-neutral `headless_vendor_args` builder (which
     /// delegates to `claude_headless_args_with_posture` for the Claude arm and
     /// builds `codex exec` for the Codex arm), so it counts as a shared builder
-    /// too. trace:BUG-342 trace:STORY-683 | ai:codex
+    /// too. TASK-894 added `advisor_tier_program_and_args` — the advisor-tier
+    /// analogue that delegates to the same Claude builders (resume/cold-boot)
+    /// and to `codex_headless_args` — so it counts as a shared builder too.
+    // trace:BUG-342 trace:STORY-683 trace:TASK-894 | ai:codex
     #[test]
     fn headless_env_launches_route_through_shared_argv_builders() {
         fn assert_env_setter_has_builder_context(file: &str, src: &str) {
@@ -116530,7 +116533,8 @@ mod headless_hint_tests {
                 assert!(
                     window.contains("claude_headless_args")
                         || window.contains("claude_headless_resume_args")
-                        || window.contains("headless_vendor_args"),
+                        || window.contains("headless_vendor_args")
+                        || window.contains("advisor_tier_program_and_args"),
                     "{file}: AIDA_HEADLESS claude launch at line {} does not use a shared headless argv builder:\n{window}",
                     idx + 1
                 );
@@ -126092,6 +126096,28 @@ impl RealPhaseDriver {
     ) -> Result<(punt::PuntResponse, std::path::PathBuf), auto_complete::PhaseFailure> {
         use auto_complete::{FailureKind, PhaseFailure};
 
+        // TASK-894: resolve the vendor that hosts the advisor tier. Default is
+        // Claude — selecting Codex (via `AIDA_HEADLESS_VENDOR=codex` or
+        // `[orchestrator] headless_vendor = "codex"`) is the explicit opt-in,
+        // mirroring STORY-683's drain-phase generalization. A non-Claude vendor
+        // has no `--resume` / session model, so the fork-from-live JSONL
+        // machinery (Claude-specific) must not run; force the pass to cold-boot
+        // and host a fresh spawn per punt. trace:TASK-894 | ai:claude
+        let vendor = session::resolve_headless_vendor(&self.project_root);
+        let pass = match pass {
+            AdvisorPass::Fork(_) if vendor != session::HeadlessVendor::Claude => {
+                if !self.json {
+                    eprintln!(
+                        "  {} vendor `{}` has no resumable session — hosting a fresh advisor per punt (no fork).",
+                        "◆".dimmed(),
+                        vendor.as_str()
+                    );
+                }
+                AdvisorPass::ColdBoot
+            }
+            other => other,
+        };
+
         let (advisor_uuid, forked_from) = match &pass {
             AdvisorPass::Fork(plan) => match advisor::execute_fork(plan) {
                 Ok(_) => (plan.fork_uuid.clone(), Some(plan.live.clone())),
@@ -126148,19 +126174,20 @@ impl RealPhaseDriver {
         let tee_opts =
             crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label(tee_label);
         let tee_handle = crate::headless_tee::start_tee(&log_path, &tee_opts);
-        let claude_args = if is_fork {
-            // Fork branch already inherits the live advisor's context via --resume.
-            session::claude_headless_resume_args("/aida-advise", &advisor_uuid)
-        } else {
-            // STORY-626: the cold-boot branch is context-poor — seed it with the
-            // live advisor context file (same prepend the assess cold-boot uses),
-            // so unattended punt decisions match the live session. trace:STORY-626
-            let seeded = crate::intake::seeded_advise_prompt(&self.project_root);
-            session::claude_headless_args(&seeded, &advisor_uuid)
-        };
-        let status = std::process::Command::new("claude")
+        // STORY-626: the cold-boot branch is context-poor — seed it with the
+        // live advisor context file (same prepend the assess cold-boot uses),
+        // so unattended punt decisions match the live session. trace:STORY-626
+        // TASK-894: build the per-vendor `(program, args)` — Claude resumes the
+        // forked session or cold-boots; Codex always hosts a fresh `codex exec`
+        // (no resume). `is_fork` is always false for a non-Claude vendor (the
+        // pass was forced to cold-boot above), so the fork JSONL is never read.
+        // trace:TASK-894 | ai:claude
+        let seeded = crate::intake::seeded_advise_prompt(&self.project_root);
+        let (program, advisor_args) =
+            session::advisor_tier_program_and_args(vendor, is_fork, &seeded, &advisor_uuid);
+        let status = std::process::Command::new(&program)
             .current_dir(&self.project_root)
-            .args(claude_args)
+            .args(advisor_args)
             .env("AIDA_HEADLESS", "1")
             .env(punt::REQUEST_FILE_ENV, request_path)
             .env(punt::RESPONSE_FILE_ENV, response_path)
@@ -127462,10 +127489,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     /// STORY-306 advisor tier — spawn a headless advisor to judge the design-
     /// fork phase 1 punted on. Assembles the rich payload, writes the request
-    /// file, runs `claude -p /aida-advise` in the advisor role, reads the
-    /// response, appends a punt-ledger record, and — on an escalate — tags the
-    /// spec `needs-human` + leaves the advisor's reasoning as a comment.
-    /// trace:STORY-306 | ai:claude
+    /// file, runs `/aida-advise` in the advisor role on the resolved headless
+    /// vendor (Claude by default; Codex via `AIDA_HEADLESS_VENDOR`/config —
+    /// TASK-894), reads the response, appends a punt-ledger record, and — on an
+    /// escalate — tags the spec `needs-human` + leaves the advisor's reasoning
+    /// as a comment.
+    // trace:STORY-306 trace:TASK-894 | ai:claude
     fn run_advisor(
         &mut self,
     ) -> Result<auto_complete::AdvisorOutcome, auto_complete::PhaseFailure> {
