@@ -311,6 +311,17 @@ impl App {
                 if key_matches(key, prefix) {
                     self.mode = Mode::Command;
                     Routing::EnteredCommand
+                } else if self.ctrl_d_opens_palette(key) {
+                    // EPIC-51's literal entry point: a raw `Ctrl-D` from the
+                    // hosted chat opens the deterministic action palette — the
+                    // exact surface `prefix p` opens, via the same `Pause`
+                    // route (SIGSTOP the child + open the palette). Opt-in
+                    // (`[tui] ctrl_d_palette = true`) and only with a child
+                    // focused, so the EOF byte (0x04) still passes through
+                    // untouched by default; see `ctrl_d_opens_palette`.
+                    // trace:TASK-909 | ai:claude
+                    self.mode = Mode::Paused;
+                    Routing::Pause
                 } else if self.tabs.is_empty() && is_help_key(key) {
                     // Empty shell — no hosted child to receive the `?`,
                     // so a bare `?` opens the cheatsheet (BUG-109). With
@@ -364,6 +375,28 @@ impl App {
             // resumes the conversation. trace:STORY-678 trace:STORY-679
             Mode::Paused => self.route_palette_key(key),
         }
+    }
+
+    /// Whether this keystroke is a raw `Ctrl-D` that should open the action
+    /// palette instead of reaching the child as the EOF byte (0x04).
+    ///
+    /// Guarded three ways, because `Ctrl-D` is EOF and breaking legitimate
+    /// EOF use is the real hazard here:
+    ///
+    /// 1. **Opt-in.** Off unless `[tui] ctrl_d_palette = true`. With the
+    ///    default off, `Ctrl-D` falls through to `Passthrough` unchanged.
+    /// 2. **A child must be focused.** "From the hosted chat" — with an empty
+    ///    shell there is nothing to suspend, so `Ctrl-D` is left alone.
+    /// 3. **Exactly `Ctrl-D`.** `Char('d')` + the CONTROL modifier and no
+    ///    others (no Alt), mirroring the `Ctrl-Y` test in `route_palette_key`.
+    ///
+    /// `prefix p` remains the always-available, EOF-free trigger; this is the
+    /// alternate, opt-in entry point the immediate-response vision frames as
+    /// the literal one.
+    //
+    // trace:TASK-909 trace:EPIC-51 | ai:claude
+    fn ctrl_d_opens_palette(&self, key: KeyEvent) -> bool {
+        ctrl_d_palette_trigger(self.config.ctrl_d_palette, !self.tabs.is_empty(), key)
     }
 
     /// Route a keystroke while the suspended-chat action palette is open.
@@ -1411,6 +1444,23 @@ fn key_matches(a: KeyEvent, b: KeyEvent) -> bool {
     a.code == b.code && a.modifiers == b.modifiers
 }
 
+/// Pure decision for the `Ctrl-D` → action-palette trigger: true
+/// only when the feature is `enabled` (`[tui] ctrl_d_palette = true`), a chat
+/// child is hosted (`has_child`), and `key` is exactly `Ctrl-D` (`Char('d')` +
+/// CONTROL, no Alt). Off by default so the EOF byte (0x04) passes straight
+/// through to the child; `prefix p` stays the always-available, EOF-free
+/// trigger. Extracted as a free function so the guard is exhaustively
+/// unit-testable without a live PTY tab.
+//
+// trace:TASK-909 | ai:claude
+fn ctrl_d_palette_trigger(enabled: bool, has_child: bool, key: KeyEvent) -> bool {
+    enabled
+        && has_child
+        && matches!(key.code, KeyCode::Char('d'))
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && !key.modifiers.contains(KeyModifiers::ALT)
+}
+
 /// A short human label for a key, for the status-strip hint (`^a`).
 fn describe_key(key: KeyEvent) -> String {
     let mut s = String::new();
@@ -1602,6 +1652,70 @@ mod tests {
         app.route_key(prefix);
         assert!(matches!(app.route_key(plain('p')), Routing::Pause));
         assert_eq!(app.mode, Mode::Paused);
+    }
+
+    fn ctrl_d() -> KeyEvent {
+        KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL)
+    }
+
+    #[test]
+    fn ctrl_d_passes_through_by_default() {
+        // TASK-909: with the opt-in off (the default), a raw `Ctrl-D` is the
+        // terminal EOF byte (0x04) and must reach the child unchanged — not
+        // open the palette. Guards legitimate EOF use in the hosted chat.
+        let mut app = App::new(TuiConfig::default());
+        assert!(!app.config.ctrl_d_palette);
+        match app.route_key(ctrl_d()) {
+            Routing::Passthrough(bytes) => assert_eq!(bytes, vec![0x04]),
+            other => panic!("expected EOF passthrough, got {:?}", other),
+        }
+        assert_eq!(app.mode, Mode::Focused);
+    }
+
+    #[test]
+    fn ctrl_d_palette_trigger_honors_opt_in_child_and_exact_key() {
+        // The pure guard (TASK-909): true only when enabled + a child is
+        // hosted + the key is exactly Ctrl-D.
+        let alt_d = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT);
+        let ctrl_e = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
+
+        // Enabled + child + Ctrl-D → fires.
+        assert!(ctrl_d_palette_trigger(true, true, ctrl_d()));
+        // Disabled → never fires (default posture: EOF passes through).
+        assert!(!ctrl_d_palette_trigger(false, true, ctrl_d()));
+        // No hosted child → nothing to suspend, leave Ctrl-D alone.
+        assert!(!ctrl_d_palette_trigger(true, false, ctrl_d()));
+        // Wrong modifier (Alt-D) or wrong char (Ctrl-E) → not a Ctrl-D.
+        assert!(!ctrl_d_palette_trigger(true, true, alt_d));
+        assert!(!ctrl_d_palette_trigger(true, true, ctrl_e));
+        // A plain `d` is filter/chat text, never the palette trigger.
+        assert!(!ctrl_d_palette_trigger(true, true, plain('d')));
+    }
+
+    #[test]
+    fn ctrl_d_opens_palette_when_enabled_and_child_hosted() {
+        // TASK-909: with the opt-in on AND a child focused, Ctrl-D routes the
+        // same `Pause` as `prefix p` (SIGSTOP + open the palette). The empty
+        // shell here has no child, so we exercise the pure guard directly for
+        // the child-present case (a live tab needs a PTY) and confirm the
+        // empty-shell App leaves Ctrl-D as a passthrough.
+        let cfg = TuiConfig {
+            ctrl_d_palette: true,
+            ..TuiConfig::default()
+        };
+        let mut app = App::new(cfg);
+        // Empty shell: no child to suspend, so Ctrl-D still passes through.
+        assert!(app.tabs.is_empty());
+        match app.route_key(ctrl_d()) {
+            Routing::Passthrough(bytes) => assert_eq!(bytes, vec![0x04]),
+            other => panic!("expected passthrough with no child, got {:?}", other),
+        }
+        // With a child hosted, the guard fires and the route is `Pause`.
+        assert!(ctrl_d_palette_trigger(
+            app.config.ctrl_d_palette,
+            /* has_child */ true,
+            ctrl_d()
+        ));
     }
 
     #[test]
