@@ -22237,5 +22237,17 @@ operations:
   timestamp: 2026-06-26T23:42:38.632536190Z
   kind: !SetStatus
     status: Approved
-clock: 2105
+- id: 019f0656-0eb5-7820-bca5-205cd238b361
+  target_id: 019f0656-0140-7a92-a627-c38b8fa6fdcc
+  author: aida
+  node_id: '1'
+  lamport: 2106
+  timestamp: 2026-06-26T23:48:50.997697923Z
+  kind: !Create
+    title: Second usage-grounded streamlining pass (W2)
+    description: Run aida usage --unused 30d + aida usage --errors; cut/hide/merge the next tranche of zero-/rare-call verbs and near-duplicate skills; record before/after top-level command count. Pure subtraction; data-grounded successor to TASK-850/851/852.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2106
 node_id: '1'
