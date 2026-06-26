@@ -22133,5 +22133,17 @@ operations:
     req_type: Task
     status: Draft
     priority: High
-clock: 2093
+- id: 019f0642-a769-7611-87fa-4a90c1d5d760
+  target_id: 019f0642-9a07-7c81-9672-24258709f611
+  author: aida
+  node_id: '1'
+  lamport: 2094
+  timestamp: 2026-06-26T23:27:39.369824003Z
+  kind: !Create
+    title: 'TUI gap: ''accept'' verb — implementation approval (reviewer-gated, Done → Completed)'
+    description: 'GAP #3 (the big one): the TUI approve verb is SPEC-approval (Draft->Approved); there is no IMPLEMENTATION-approval. Add an "accept" verb, status-conditional on Done specs (the symmetric reviewer counterpart to the advisor approve), representing the reviewer accepting the implementation. It transitions Done -> Completed (run with reviewer authority, e.g. AIDA_SESSION_ROLE=reviewer on the spawned command) and records a "reviewed/accepted" comment. (Note: in the full flow Done->Completed is merge-driven; for the walkthrough the reviewer accept completes it.) Distinct from approve. ACCEPTANCE: accept appears only for Done focus; completes the spec + comments it; non-Done skipped; pure conditional/target logic tested; gates green; redesign module.'
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2094
 node_id: '1'
