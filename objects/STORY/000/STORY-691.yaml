@@ -1,0 +1,33 @@
+id: 019f02d9-a62e-7c02-a75e-0835967f6d5d
+spec_id: STORY-691
+agreed_id: STORY-691
+title: 'aida tui: color-code structured preview fields (status/priority/tags) with a themeable color map'
+description: |-
+  Slice 2 of STORY-689 (slice 1 landed markdown body rendering). The preview pane still pipes the structured spec fields (status, priority, tags) as part of the captured `aida show --no-git` markdown body, so they render with markdown styling but no SEMANTIC color.
+
+  GOAL: render the spec's STRUCTURED fields as styled ratatui Lines with a semantic status->Color map — Completed green, In-Progress yellow, Rejected red, etc. — consistent with the CLI, and make the color map THEMEABLE (a `[tui.theme]`/config surface, not hardcoded) so the operator can customize it.
+
+  DESIGN NOTES (from STORY-689):
+  - This is NOT markdown — it is field-level styling. The enabling change is to fetch the structured spec (fields + body separately) rather than re-parsing the captured `aida show` stdout. Consider `aida show <id> --json` (or an MCP/library call) to get typed fields, then render fields as colored Lines above the markdown body.
+  - Reuse the semantics already in aida-cli/src/status_display.rs (paint_status) and glyphs.rs, ported to ratatui Color (the CLI uses the `colored` crate; the TUI needs ratatui Style/Color). Add the semantic color slots to aida-tui/src/theme.rs (Theme) so they resolve through the existing themeable palette.
+
+  ACCEPTANCE:
+  - Structured fields (at minimum status and priority) are color-coded with semantic colors consistent with the CLI.
+  - The color scheme is customizable via the theme/config surface, not hardcoded.
+  - No regression: preview stays fast (cached per row, --no-git) and degrades gracefully on empty/missing fields.
+
+  Slice 1 (markdown body, tui-markdown) shipped in: aida-tui/src/dashboard.rs preview_text / PreviewBody.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T07:34:06.126093294Z
+modified_at: 2026-06-26T07:34:06.126093294Z
+req_type: Story
+tags:
+- color
+- parent:STORY-689
+- preview
+- theme
+- tui
+- ux
