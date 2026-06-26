@@ -1,0 +1,12 @@
+id: 019f025f-f690-7281-ac13-206df93a0a8d
+spec_id: TASK-900
+agreed_id: TASK-900
+title: Real `aida list --limit` + load-more pagination (TASK-897 follow-up)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T05:21:11.312658822Z
+modified_at: 2026-06-26T05:21:11.312658822Z
+req_type: Task
