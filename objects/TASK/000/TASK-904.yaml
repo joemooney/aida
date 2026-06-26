@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T07:35:50.391822128Z
-modified_at: 2026-06-26T07:35:50.391822128Z
+modified_at: 2026-06-26T17:02:43.513964275Z
 req_type: Task
 tags:
 - advisor
 - cockpit
 - parent:STORY-686
 - tui
+comments:
+- id: 019f04e2-3d39-76b3-bf4e-6f2c545b7d71
+  author: joe
+  content: Commit 3f9a2304b references this requirement
+  created_at: 2026-06-26T17:02:43.513964275Z
+  modified_at: 2026-06-26T17:02:43.513964275Z
