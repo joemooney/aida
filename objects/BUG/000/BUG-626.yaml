@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:27:43.311777743Z
-modified_at: 2026-06-26T18:27:43.311777743Z
+modified_at: 2026-06-26T18:50:55.498456194Z
 req_type: Bug
 tags:
 - epic
@@ -16,3 +16,9 @@ tags:
 - hygiene
 - lifecycle
 - substrate
+comments:
+- id: 019f0545-4c8a-7e03-8c19-37f2154989a5
+  author: joe
+  content: 'GENERALIZED (operator insight): the real fix is not just ''block In-Progress childless epics'' — it is that an EPICS STATUS MUST BE DERIVED (read-only rollup) from its children, not set manually. Both observed symptoms are the same root cause: (1) EPIC-49/50 = In-Progress with NO children (false active); (2) EPIC-51 = Draft while its children ship (false not-started). Desired derivation: no children -> empty/draft; >=1 child In-Progress (or some done, some not) -> In Progress; all children Done/Completed -> Done/Completed; children all blocked/none-active -> Blocked. The rollup is ALREADY computed (aida graph <epic> --tree prints ''Rollup: N total, N completed, N in progress, N remaining'') — it just does not drive the status field. FIX: make epic status a computed projection of the child rollup; reject manual status edits on epics (extend the existing ''epics cannot be promoted to Approved'' rule to all manual transitions). Then ''start work on a child'' auto-moves the epic to In-Progress and the aida list/in-progress/why views stay truthful for epics with zero hand-maintenance. This supersedes the narrow childless-In-Progress framing in the title.'
+  created_at: 2026-06-26T18:50:55.498456194Z
+  modified_at: 2026-06-26T18:50:55.498456194Z
