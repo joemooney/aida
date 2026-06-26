@@ -148,6 +148,16 @@ if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || 
     exit 0
 fi
 
+# 2b. Advisor-no-code-write gate (STORY-684) — vendor-agnostic substrate
+# enforcement at the commit boundary (runs for ANY vendor's commit). Delegates
+# to the binary so the rule lives in one place; falls open if aida isn't on PATH.
+# trace:STORY-684
+if command -v aida >/dev/null 2>&1; then
+    if ! aida internal advisor-code-gate; then
+        exit 1
+    fi
+fi
+
 # 3. Auto-fmt staged Rust files before commit so cargo fmt --check (in CI)
 # never catches drift after a local commit lands.
 # Emergency skip: pass --no-verify to git commit.

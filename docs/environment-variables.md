@@ -100,6 +100,7 @@ close.
 | `AIDA_TEE_HEADLESS` | Streams a headless child's chatter to the console (failures always stream regardless). | enabled. Opt-out with `0`/`false`/`off`. | user (`--no-tee-headless`) | process env |
 | `AIDA_ALLOW_INTERMEDIATE_ONLY` | Opts out of the reproducibility check for intermediate-only base diffs. | unset = check enabled. Enabled with `1`/`true`. | launch-path (`--allow-intermediate-only`) | process env |
 | `AIDA_ALLOW_INTERMEDIATE` | Bypasses the gitignored-file substrate-as-bouncer pre-commit hook gate. | unset = gate enforces. Enabled with `1`. | user | process env |
+| `AIDA_ALLOW_ADVISOR_CODE` | Audited escape hatch for the vendor-agnostic advisor-no-code-write commit gate (STORY-684): lets an advisor-role session commit code for this process. | unset = gate enforces for advisor sessions. Enabled with `1`/`true`. | user | process env |
 | `AIDA_PHASE_CEILING_MINUTES` | Phase watchdog ceiling (minutes). | `45`. | launch-path (`--phase-ceiling-minutes`) | process env |
 | `AIDA_NO_PROGRESS_MINUTES` | No-progress watchdog threshold (minutes). | `10`. | launch-path (`--no-progress-minutes`) | process env |
 | `AIDA_WORKER_SPEC_TIMEOUT` | Per-spec watchdog timeout (seconds) for the bash `timeout` wrapper in a drain loop. | `1800`. | user (drain script) | process env |
