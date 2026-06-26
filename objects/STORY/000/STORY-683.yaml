@@ -3,12 +3,12 @@ spec_id: STORY-683
 agreed_id: STORY-683
 title: Headless orchestrator drain on Codex — generalize spawn_claude_headless to spawn_vendor_headless (codex exec)
 description: Uncovered gap from the TASK-0421 inventory (HIGH — autonomy keystone). session::spawn_claude_headless + auto_complete.rs drain phases hardcode `claude -p`, so sustained autonomous drains (burndown / --no-human) are Claude-only. compete.rs already has a working `codex exec` vendor adapter — reusable prior art. Generalize to spawn_vendor_headless(vendor) so the orchestrator drain + --no-human run on Codex too. trace:TASK-0421
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:45:37.836975819Z
-modified_at: 2026-06-25T08:23:08.998632866Z
+modified_at: 2026-06-26T07:11:55.296147411Z
 req_type: Story
 tags:
 - autonomy
@@ -22,3 +22,21 @@ comments:
   content: Commit afccd8030 references this requirement
   created_at: 2026-06-25T08:23:08.998632866Z
   modified_at: 2026-06-25T08:23:08.998632866Z
+history:
+- id: 019f02c5-56bf-77b3-8757-87f98314e66d
+  author: aida-auto-bump
+  timestamp: 2026-06-26T07:11:55.071043702Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f02c5-57a0-7dd3-ab8b-89dcad16a268
+  timestamp: 2026-06-26T07:11:55.296138462Z
+  agent: aida
+  commit_sha: 7355cf99b7590877c906bf0839cf9a58ac9e1854
+  summary: Completed via merge 7355cf99
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T07:11:53.431857768Z
+  completion_sha: 7355cf99b7590877c906bf0839cf9a58ac9e1854
