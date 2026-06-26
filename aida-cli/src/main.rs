@@ -67677,6 +67677,136 @@ mod bug_231_findings_promote_tests {
             "error must name the failed route and the not-promoted outcome: {msg}"
         );
     }
+
+    // ── BUG-625: statusline mailbox count clears when the inbox is read ──────
+    //
+    // The operator's #1 recurring frustration: the statusline kept showing a
+    // high urgent-mailbox count that never cleared, no matter how many times the
+    // inbox was read. Root cause: `read_urgent_unread_count` (the statusline)
+    // read only the LOCAL `.aida/mailbox/` layer, while `aida mailbox inbox`
+    // reads the MERGED (local + canonical orphan-store) set and advances each
+    // identity's watermark against the MERGED newest. When the sets differed the
+    // watermark a read advanced could not clear a count computed over a
+    // different set. These tests pin: (1) the count SEES a canonical-only urgent
+    // message (proving the merge), and (2) advancing the watermark to the
+    // merged-newest — exactly what the inbox-read does — drives the count to 0.
+    // trace:BUG-625 | ai:claude
+
+    /// Build an urgent broadcast `Message` with the given id, sender, timestamp.
+    fn urgent_broadcast(id: &str, from: &str, ts: i64) -> aida_core::mailbox::Message {
+        aida_core::mailbox::Message {
+            id: id.to_string(),
+            thread_id: id.to_string(),
+            from: from.to_string(),
+            to: aida_core::mailbox::Recipient::Broadcast,
+            timestamp: ts,
+            in_reply_to: None,
+            body: "URGENT: stop the drain".to_string(),
+            urgent: true,
+            intent: aida_core::mailbox::Intent::Request,
+            retracted: false,
+            deleted: false,
+        }
+    }
+
+    /// An urgent broadcast that lives ONLY in the canonical orphan-store layer
+    /// (`.aida-store/mailbox/`) — not the local fast layer — is still counted by
+    /// the statusline. The pre-fix local-only read missed it, so the statusline
+    /// and `aida mailbox inbox` (which merges both layers) disagreed about
+    /// whether there was unread urgent mail. (Repro #1.)
+    // trace:BUG-625 | ai:claude
+    #[test]
+    fn read_urgent_unread_count_sees_canonical_only_message() {
+        let proj = tempfile::tempdir().unwrap();
+        let root = proj.path();
+        let store_root = root.join(".aida-store");
+        // Seed an urgent broadcast in the CANONICAL layer only.
+        let cdir = mailbox_store::canonical_dir(&store_root);
+        std::fs::create_dir_all(&cdir).unwrap();
+        let msg = urgent_broadcast("c1", "codex", 1_000);
+        std::fs::write(
+            cdir.join("c1.json"),
+            serde_json::to_string_pretty(&msg).unwrap(),
+        )
+        .unwrap();
+
+        // Identity that did NOT send the message, no watermark yet → unread.
+        let _g = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_USER", "operator"),
+            ("AIDA_AGENT_TYPE", ""),
+            ("AIDA_SESSION_ROLE", ""),
+        ]);
+        assert_eq!(
+            read_urgent_unread_count(root),
+            Some(1),
+            "a canonical-only urgent broadcast must be counted (merge, not local-only)"
+        );
+    }
+
+    /// The reproduction the operator hit. Seed an urgent broadcast, confirm the
+    /// statusline count is > 0, then advance the reader's watermark to the
+    /// merged-newest exactly as `aida mailbox inbox`'s mark-seen does, and assert
+    /// the count drops to 0. Before the fix the count was computed over a
+    /// different (local-only) set, so the inbox-read's watermark advance could
+    /// not clear it and the nag stuck forever. (Repro #2.)
+    // trace:BUG-625 | ai:claude
+    #[test]
+    fn read_urgent_unread_count_clears_after_inbox_read_advances_watermark() {
+        let proj = tempfile::tempdir().unwrap();
+        let root = proj.path();
+        let store_root = root.join(".aida-store");
+
+        // The urgent broadcast is in the canonical layer (digested); a second,
+        // newer fyi broadcast is still local-only — together they exercise the
+        // merge + per-identity max-watermark "newest" the inbox-read advances to.
+        let cdir = mailbox_store::canonical_dir(&store_root);
+        std::fs::create_dir_all(&cdir).unwrap();
+        let urgent = urgent_broadcast("u1", "codex", 1_000);
+        std::fs::write(
+            cdir.join("u1.json"),
+            serde_json::to_string_pretty(&urgent).unwrap(),
+        )
+        .unwrap();
+        let mut later = urgent_broadcast("u2", "codex", 2_000);
+        later.urgent = false;
+        later.intent = aida_core::mailbox::Intent::Fyi;
+        mailbox_store::write_message(root, &later).unwrap();
+
+        let _g = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_USER", "operator"),
+            ("AIDA_AGENT_TYPE", ""),
+            ("AIDA_SESSION_ROLE", ""),
+        ]);
+
+        // Before reading: the urgent broadcast is unread.
+        assert_eq!(
+            read_urgent_unread_count(root),
+            Some(1),
+            "urgent broadcast is unread before the inbox is read"
+        );
+
+        // Simulate `aida mailbox inbox`'s mark-seen: advance the reader identity's
+        // watermark to the MERGED inbox newest (the same computation the command
+        // does at the mark-seen step). The reader is `operator`, which did not
+        // send either message, so both are in its inbox.
+        let local = mailbox_store::read_local_messages(root).unwrap();
+        let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap();
+        let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+        let newest = aida_core::mailbox::inbox_for("operator", &merged)
+            .iter()
+            .map(|m| m.timestamp)
+            .max()
+            .expect("operator has merged inbox mail");
+        mailbox_store::set_watermark(root, "operator", newest).unwrap();
+
+        // After the read advanced the watermark, the statusline count is 0 —
+        // the two surfaces now agree. This is the regression the operator hit.
+        assert_eq!(
+            read_urgent_unread_count(root),
+            Some(0),
+            "reading the inbox (advancing the watermark) must clear the statusline count"
+        );
+    }
 }
 
 /// BUG-574: reliability papercuts — spurious non-zero exits on the idempotent
@@ -74421,25 +74551,45 @@ fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
     .unwrap_or(0)
 }
 
-/// STORY-539: count URGENT unread mailbox messages for the current shell user,
-/// for the statusline nag. Reads only the LOCAL fast layer (`.aida/mailbox/`)
-/// plus the local read-watermark — no git / orphan-store I/O — to honor the
-/// statusline's cache-only contract. Returns `None` when there is no mailbox
-/// dir at all (nothing to count, stay silent). trace:STORY-539 | ai:claude
+/// Count URGENT unread mailbox messages for the current shell user, for the
+/// statusline nag. Returns `None` when there is no mailbox to count (stay
+/// silent), `Some(0)` when caught up.
+///
+/// This MUST agree with `aida mailbox inbox` — the statusline count and the read
+/// command are two surfaces of one "unread" state, so reading the inbox has to
+/// drive the count to 0. The divergence that left a high count stuck forever was
+/// that this read only the LOCAL `.aida/mailbox/` layer while `aida mailbox
+/// inbox` reads the MERGED (local + canonical orphan-store) set and advances each
+/// identity's watermark to the MERGED per-identity newest. When the two message
+/// sets differed, the watermark the inbox-read advanced could not clear a count
+/// computed over a different set. The fix reads the SAME merged set and the same
+/// identity union, so the surfaces compute "unread" over identical inputs and a
+/// read clears the count. Reading the canonical layer is a plain directory read
+/// of the already-checked-out `.aida-store/mailbox/` — pure file I/O, no git
+/// spawn — so the statusline's no-git contract still holds.
+// trace:STORY-539 trace:BUG-625 | ai:claude
 fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
     let local = mailbox_store::read_local_messages(project_root).ok()?;
-    if local.is_empty() {
+    // Merge in the canonical (orphan-store) layer so this sees exactly what
+    // `aida mailbox inbox` reads (and advances watermarks against). Best-effort:
+    // a missing/unreadable canonical dir degrades to the local layer rather than
+    // silencing the nag. trace:BUG-625
+    let store_root = project_root.join(".aida-store");
+    let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
+    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+    if merged.is_empty() {
         return None;
     }
-    // Scope to the same identity union the agent-facing notice uses (shell user
-    // + session role), so a role-addressed urgent message isn't invisible here
-    // while the notice surfaces it. build_notice dedups a broadcast across
-    // identities and counts urgent across the unread set. trace:STORY-585
+    // Scope to the same identity union the agent-facing notice and the inbox-read
+    // use (shell user + session role + agent type), so a role-/type-addressed
+    // urgent message isn't invisible here while the notice surfaces it.
+    // build_notice dedups a broadcast across identities and counts urgent across
+    // the unread set. trace:STORY-585 trace:BUG-625
     let identities = inbox_identities();
     let watermarks = mailbox_store::read_all_watermarks(project_root).ok()?;
     let summary = aida_core::mailbox::build_notice(
         identities.iter().map(String::as_str),
-        &local,
+        &merged,
         &watermarks,
         aida_core::mailbox::NOTICE_DEFAULT_CAP,
     );
