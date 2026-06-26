@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:47:42.338439443Z
-modified_at: 2026-06-26T04:47:42.338439443Z
+modified_at: 2026-06-26T04:53:02.462825715Z
 req_type: Epic
 tags:
 - cockpit
@@ -25,3 +25,9 @@ relationships:
 - rel_type: Parent
   target_id: 019f0242-0cc6-79d0-b0e4-aae9a35dc705
   created_at: 2026-06-26T04:48:35.410641586Z
+comments:
+- id: 019f0246-317e-7433-9051-43fd5bae719c
+  author: joe
+  content: Commit bac53b6d5 references this requirement
+  created_at: 2026-06-26T04:53:02.462825715Z
+  modified_at: 2026-06-26T04:53:02.462825715Z
