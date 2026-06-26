@@ -1,0 +1,31 @@
+id: 019f05a4-0c62-70c1-9bf6-559bf713cc46
+spec_id: TASK-928
+agreed_id: TASK-928
+title: 'SPIKE-71 source fix: parent/child rel-add bidirectional by default + tag-to-edge + cache invalidation'
+description: |-
+  SPIKE-71 SOURCE-SIDE FIX — make hierarchical parentage robust so graph views (--tree, focus lens, --epic filter) can't show incomplete trees. Three parts:
+
+  A) `aida rel add --type parent|child` creates the INVERSE edge BY DEFAULT (currently bidirectional is opt-in via -b). For the hierarchical parent/child relationship, a one-directional edge is the bug — Parent without Child inverse (or vice versa) caused --tree and the focus-lens closure to disagree. Make parent/child rel-adds always write both directions (keep -b as a no-op/explicit; consider whether other rel types should stay opt-in — only parent/child need the default-bidirectional).
+
+  B) `aida add` (and `aida edit --tags`) AUTO-CREATES the parent relationship edge when a `parent:<SPEC-ID>` tag is present. Today --tags "parent:EPIC-54" creates only the TAG, not the edge, so the spec is orphaned from the graph (this is the exact trap that broke EPIC-54's tree). When a parent:<ID> tag is added and the target resolves, create the real bidirectional parent edge. Additive: the tag may remain; the edge is what graph walks need. (Canonical --parent already creates the edge; this makes the documented tag convention actually work.)
+
+  D) VERIFY (and fix if broken) that `aida rel add` writes invalidate/rebuild the cache so graph-derived reads aren't stale. During the SPIKE-71 incident, edges existed in the store but --tree/the in-process focus lens didn't see them until a manual `aida cache rebuild`. Confirm the stale-detection (cache HEAD vs orphan-branch HEAD) fires after a rel-add commit; if rel-add doesn't bump what the cache compares against, fix it.
+
+  ACCEPTANCE:
+  - `aida rel add --type parent X Y` (no -b) creates BOTH EPIC->child and child->EPIC edges; verified by reading them back.
+  - `aida add --tags parent:EPIC-X` creates a real parent edge (the spec appears in `aida graph EPIC-X --tree` without a manual rel add).
+  - a rel-add is reflected in `aida graph --tree` WITHOUT a manual `aida cache rebuild` (cache invalidation works), OR the fix that makes it so.
+  - pure logic unit-tested; aida-cli/aida-core; gates green (build/test/fmt/clippy); MAIN-codebase feature on its own branch off main.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T20:34:24.994769096Z
+modified_at: 2026-06-26T20:34:24.994769096Z
+req_type: Task
+tags:
+- cache
+- fix
+- graph
+- relationships
+- substrate
