@@ -1,0 +1,39 @@
+id: 019f025e-b103-7723-ae7c-7c991413e07b
+spec_id: STORY-689
+agreed_id: STORY-689
+title: 'aida tui: render preview as markdown + color-coded structured fields (themeable), not captured CLI text'
+description: |-
+  GOAL (operator, 2026-06-25): make the aida tui preview pane render spec content nicely — markdown rendered (not raw text) and structured fields color-coded (e.g. status/state, priority) — with the color scheme customizable.
+
+  CURRENT STATE (code-grounded): the preview pane captures `aida show <id>` STDOUT into a Vec<String> and renders it as plain text (aida-tui/src/dashboard.rs:494 preview_via_show, cached in preview_cache). So there is no markdown structure and no ratatui-native field styling — it is captured CLI text.
+
+  TWO MECHANISMS (do not conflate):
+  - Markdown body: needs a markdown -> ratatui Text renderer. tui-markdown (ratatui-native, parses via pulldown-cmark) is the quickest fit; pulldown-cmark -> hand-built Text gives full control. Avoid termimad (draws its own areas, does not compose with the ratatui layout).
+  - Field color-coding (status/state, priority, tags): NOT markdown — render the spec's STRUCTURED fields as styled ratatui Lines with a semantic status->Color map. Reuse the semantics already in aida-cli/src/status_display.rs (paint_status) and glyphs.rs, ported to ratatui Color (the CLI uses the `colored` crate; the TUI needs ratatui Style/Color).
+
+  THE ARCHITECTURAL SHIFT: stop piping `aida show` stdout. Fetch the structured spec (fields + markdown body separately); render fields with color and the body through the markdown renderer. This is the enabling change for both asks.
+
+  SLICING (smallest valuable first):
+  - Slice 1: render the description BODY as markdown in the preview (tui-markdown), fields unchanged. Immediate "nicely rendered" win.
+  - Slice 2: render structured fields as color-coded ratatui Lines (status/priority/tags), reusing status_display semantics; make the color map THEMEABLE (config/theme table, not hardcoded) so the operator can customize.
+
+  ACCEPTANCE:
+  - The preview pane renders markdown (headings, bold/italic, code, lists) instead of raw text, for spec descriptions.
+  - Structured fields (at minimum status and priority) are color-coded with semantic colors consistent with the CLI (Completed green, In-Progress yellow, etc.).
+  - The color scheme is customizable (a theme/config surface), not hardcoded.
+  - No regression: preview stays fast (still cached per-row; rendering is off the hot path) and degrades gracefully if content is empty or not markdown.
+  - Verify against the primary caller: a human cursoring through specs in aida tui sees rendered markdown + colored fields, not captured CLI text.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T05:19:47.971537267Z
+modified_at: 2026-06-26T05:19:47.971537267Z
+req_type: Story
+tags:
+- legibility
+- markdown
+- preview
+- theme
+- tui
+- ux
