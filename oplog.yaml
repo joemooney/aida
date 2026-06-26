@@ -21511,5 +21511,17 @@ operations:
   timestamp: 2026-06-26T18:21:15.931295677Z
   kind: !SetStatus
     status: In Progress
-clock: 2044
+- id: 019f052a-ffc7-7f90-b0db-a1679f0e1b83
+  target_id: 019f052a-ed9b-7292-8d30-10a170e1f357
+  author: aida
+  node_id: '1'
+  lamport: 2045
+  timestamp: 2026-06-26T18:22:11.911800559Z
+  kind: !Create
+    title: '**Harvest (the actual study).** Run real opt-in drains over weeks; periodically `aida field-study violations`. The deliverable is the *data*, not just the sensor'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2045
 node_id: '1'
