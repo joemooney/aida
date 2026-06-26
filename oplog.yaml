@@ -20773,5 +20773,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1991
+- id: 019f01d0-875e-7a52-be98-aaf9c92e2a01
+  target_id: 019f01d0-7cc9-7f72-8ecf-b118e08e9f58
+  author: aida
+  node_id: '1'
+  lamport: 1992
+  timestamp: 2026-06-26T02:44:31.198864209Z
+  kind: !Create
+    title: TUI Nav<->List arrow keys reversed from operator intent (STORY-685 follow-up)
+    description: 'STORY-685 shipped Enter/Left = Nav->List and Right/Esc = List->Nav. Operator intent (live testing): RIGHT should enter the List from Nav, LEFT should return to Nav from the List (Enter still enters, Esc still backs out). Swap the route_key Left/Right arms + the on-screen hint + the doc comment.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1992
 node_id: '1'
