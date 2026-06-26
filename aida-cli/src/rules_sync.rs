@@ -642,6 +642,8 @@ mod tests {
             in_degree: 0,
             out_degree: 0,
             heft: 0,
+            // trace:TASK-902 | ai:claude
+            blocked: false,
             yaml_path: String::new(),
         }
     }

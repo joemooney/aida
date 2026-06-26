@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     in_degree INTEGER NOT NULL DEFAULT 0,
     out_degree INTEGER NOT NULL DEFAULT 0,
     heft INTEGER NOT NULL DEFAULT 0,
+    -- TASK-902: "has an incomplete BlockedBy edge" projected into the cache so
+    -- `aida list --blocked` (and the `blocked` field of `--json`) reads the
+    -- cache like --status/--archived instead of a full backend.load() over
+    -- every object. Graph-derived (depends on each BlockedBy target's status),
+    -- so authoritative only after a full rebuild — same rebuildable-projection
+    -- contract as in_degree/heft. NEVER stored in canonical YAML.
+    blocked INTEGER NOT NULL DEFAULT 0,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 
@@ -50,6 +57,8 @@ CREATE INDEX IF NOT EXISTS idx_cache_deferred ON requirements_cache(deferred);
 CREATE INDEX IF NOT EXISTS idx_cache_deferred_at ON requirements_cache(deferred_at);
 -- STORY-632: index heft so `aida list --sort heft` orders without a table scan.
 CREATE INDEX IF NOT EXISTS idx_cache_heft ON requirements_cache(heft);
+-- TASK-902: index blocked so `aida list --blocked` filters without a table scan.
+CREATE INDEX IF NOT EXISTS idx_cache_blocked ON requirements_cache(blocked);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS requirements_fts USING fts5(
     id UNINDEXED,

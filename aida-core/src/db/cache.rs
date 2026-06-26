@@ -15,7 +15,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::models::{Relationship, RelationshipType, Requirement, RequirementsStore};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Lightweight projection of a Requirement, sourced from the cache rather
 /// than from canonical YAML. Contains just the fields needed for list /
@@ -54,6 +54,12 @@ pub struct RequirementSummary {
     pub out_degree: u32,
     /// Type-weighted combined heft score (inbound + outbound). trace:STORY-632 | ai:claude
     pub heft: u32,
+    /// Whether this spec has an incomplete BlockedBy edge (a blocker that hasn't
+    /// reached Completed, or a dangling blocker). Projected into the cache so
+    /// `aida list --blocked` / the `blocked` JSON field read the cache instead of
+    /// a full backend.load() — same rebuildable-projection contract as the
+    /// degree fields. trace:TASK-902 | ai:claude
+    pub blocked: bool,
     pub yaml_path: String,
 }
 
@@ -137,6 +143,27 @@ fn own_outbound(relationships: &[Relationship]) -> (u32, u32) {
         heft += edge_weight(&rel.rel_type);
     }
     (out_degree, heft)
+}
+
+/// TASK-902: compute the set of requirement UUIDs that have an incomplete
+/// BlockedBy edge, over the WHOLE store. A spec is "blocked" when any of its
+/// BlockedBy targets hasn't reached Completed (or is a dangling edge) — exactly
+/// `pickability::blocked_by_incomplete`, the same predicate the CLI's
+/// `--blocked` overlay used to run inline against a full `backend.load()`.
+/// Computing it once over the loaded store and materializing it into the cache
+/// lets `aida list --blocked` read the cache like every other filter.
+///
+/// Like degree/heft, this is authoritative only after a full rebuild: it depends
+/// on each blocker's status, so a status flip on a blocker changes its
+/// dependents' blocked flag — captured on the next rebuild, same
+/// rebuildable-projection contract. trace:TASK-902 | ai:claude
+pub fn compute_blocked(store: &RequirementsStore) -> HashSet<Uuid> {
+    store
+        .requirements
+        .iter()
+        .filter(|req| crate::pickability::blocked_by_incomplete(req, store))
+        .map(|req| req.id)
+        .collect()
 }
 
 /// Three-way filter for the archive axis. STORY-441 introduces archive as
@@ -234,6 +261,10 @@ pub struct ListFilter {
     pub defer: DeferFilter,
     /// Result ordering. Default `ModifiedDesc`. trace:STORY-632 | ai:claude
     pub sort: SortOrder,
+    /// When `Some(true)`, restrict to specs whose cached `blocked` flag is set
+    /// (an incomplete BlockedBy edge); `Some(false)` restricts to unblocked.
+    /// `None` (default) applies no blocked filter. trace:TASK-902 | ai:claude
+    pub blocked: Option<bool>,
     /// Optional cap on returned rows (after ordering).
     pub limit: Option<usize>,
 }
@@ -280,7 +311,10 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // centrality columns were added (computed-on-rebuild from the relationship
 // graph, never stored in YAML).
 // trace:STORY-639 | ai:claude — bumped to 6 for the `assignee` column.
-const SCHEMA_VERSION: &str = "6";
+// TASK-902: bumped to "7" when the `blocked` column was added (computed-on-rebuild
+// from the BlockedBy graph, never stored in YAML — parallel to in_degree/heft).
+// trace:TASK-902 | ai:claude
+const SCHEMA_VERSION: &str = "7";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -680,6 +714,11 @@ impl Cache {
         // graph, so compute it once over the full store before the row inserts.
         // trace:STORY-632 | ai:claude
         let degrees = compute_degrees(store);
+        // TASK-902: blocked is likewise a whole-graph fact (depends on each
+        // BlockedBy target's status), so compute the blocked set once here and
+        // project it per row. This is the authoritative recompute on rebuild.
+        // trace:TASK-902 | ai:claude
+        let blocked = compute_blocked(store);
         let count = {
             let conn = self.conn.lock().unwrap();
             with_cache_write(&self.path, "rebuild cache", || {
@@ -688,7 +727,7 @@ impl Cache {
                 let mut count = 0usize;
                 for req in &store.requirements {
                     let d = degrees.get(&req.id).copied().unwrap_or_default();
-                    insert_one(&tx, req, d)?;
+                    insert_one(&tx, req, d, blocked.contains(&req.id))?;
                     count += 1;
                 }
                 tx.commit()?;
@@ -710,6 +749,14 @@ impl Cache {
     /// the rebuildable-projection contract: centrality is authoritative after a
     /// rebuild; per-write upserts keep the touched row's own outbound axis fresh.
     /// trace:STORY-632 | ai:claude
+    ///
+    /// TASK-902: the `blocked` flag is the same shape — the edited row's OWN
+    /// blocked state is recomputed from its BlockedBy targets' statuses as
+    /// recorded in the cache (cheap, one indexed lookup per blocker), so the
+    /// touched row stays fresh. A status flip on a blocker that should flip its
+    /// *dependents'* blocked flags is NOT propagated here (a single-row write has
+    /// no view of who depends on it) — that's recovered on the next full rebuild,
+    /// the same contract as the inbound-degree axis. trace:TASK-902 | ai:claude
     pub fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         with_cache_write(&self.path, "upsert cached requirement", || {
@@ -733,8 +780,13 @@ impl Cache {
                 out_degree,
                 heft: out_heft + prior_in,
             };
+            // TASK-902: recompute THIS row's blocked flag from its BlockedBy
+            // targets' cached statuses. Mirrors pickability::blocked_by_incomplete:
+            // any BlockedBy target that isn't Completed (or is unresolvable in the
+            // cache) leaves the row blocked. trace:TASK-902 | ai:claude
+            let blocked = blocked_from_cache(&conn, req);
             delete_one_uncommitted(&conn, &req.id)?;
-            insert_one(&conn, req, degrees)?;
+            insert_one(&conn, req, degrees, blocked)?;
             Ok(())
         })?;
         Ok(())
@@ -758,7 +810,7 @@ impl Cache {
             "SELECT id, spec_id, agreed_id, title, description, status, priority,
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
-                    in_degree, out_degree, heft, yaml_path, assignee
+                    in_degree, out_degree, heft, yaml_path, assignee, blocked
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -838,6 +890,16 @@ impl Cache {
         if let Some(f) = &filter.feature {
             sql.push_str(" AND feature = ?");
             args.push(f.clone());
+        }
+        // TASK-902: blocked axis pushed down to the indexed cache column so
+        // `aida list --blocked` filters without a full backend.load().
+        // trace:TASK-902 | ai:claude
+        if let Some(b) = filter.blocked {
+            sql.push_str(if b {
+                " AND blocked = 1"
+            } else {
+                " AND blocked = 0"
+            });
         }
         // trace:TASK-1-021 | ai:claude
         // tags_json is a JSON array text column; bracket each tag with quotes
@@ -919,7 +981,8 @@ impl Cache {
                           c.status, c.priority, c.owner, c.feature, c.req_type,
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
-                          c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee
+                          c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
+                          c.blocked
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1009,7 +1072,35 @@ fn fts_schema_drifted(conn: &Connection) -> bool {
 
 // ---------------------------------------------------------------- row helpers
 
-fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees) -> Result<()> {
+/// TASK-902: compute one requirement's `blocked` flag from the BlockedBy targets'
+/// statuses as currently recorded in the cache — the single-row analog of
+/// `pickability::blocked_by_incomplete`. A BlockedBy target whose cached status
+/// is anything other than `Completed`, OR that has no cache row at all (dangling /
+/// not-yet-projected), leaves the row blocked (defensive: don't silently
+/// un-block). Used by the write-through upsert path which has no whole-store
+/// view. trace:TASK-902 | ai:claude
+fn blocked_from_cache(conn: &Connection, req: &Requirement) -> bool {
+    req.relationships
+        .iter()
+        .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
+        .any(|rel| {
+            let target_status: Option<String> = conn
+                .query_row(
+                    "SELECT status FROM requirements_cache WHERE id = ?1",
+                    params![rel.target_id.to_string()],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok();
+            match target_status {
+                // Resolvable blocker that hasn't reached Completed → blocked.
+                Some(status) => status != "Completed",
+                // Unresolvable in the cache → treat as unsatisfied.
+                None => true,
+            }
+        })
+}
+
+fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees, blocked: bool) -> Result<()> {
     let yaml_path = yaml_path_for(req);
     let tags_json = serde_json::to_string(&req.tags).unwrap_or_else(|_| "[]".into());
     let archived = if req.archived { 1 } else { 0 };
@@ -1034,8 +1125,8 @@ fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees) -> Result<
             id, spec_id, agreed_id, title, description, status, priority,
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
-            in_degree, out_degree, heft, yaml_path, assignee
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+            in_degree, out_degree, heft, blocked, yaml_path, assignee
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -1058,6 +1149,8 @@ fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees) -> Result<
             degrees.in_degree,
             degrees.out_degree,
             degrees.heft,
+            // trace:TASK-902 | ai:claude
+            if blocked { 1 } else { 0 },
             yaml_path,
             // trace:STORY-639 | ai:claude
             req.assignee,
@@ -1119,6 +1212,8 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         yaml_path: row.get(21)?,
         // trace:STORY-639 | ai:claude — column index 22, nullable.
         assignee: row.get(22)?,
+        // trace:TASK-902 | ai:claude — column index 23, INTEGER 0/1.
+        blocked: row.get::<_, i64>(23)? != 0,
     })
 }
 
@@ -1225,6 +1320,125 @@ mod tests {
         assert_eq!(out1_d.in_degree, 1);
         assert_eq!(out1_d.out_degree, 0);
         assert_eq!(out1_d.heft, 3); // the inbound Blocks edge, weight 3
+    }
+
+    /// TASK-902: the cache-projected `blocked` flag matches the edge-walk
+    /// result. A fixture with BlockedBy chains — an incomplete blocker, a
+    /// Completed blocker, a dangling blocker, and an unblocked spec — is
+    /// rebuilt into the cache; every row's cached `blocked` flag must equal
+    /// both `compute_blocked` and `pickability::blocked_by_incomplete` over the
+    /// full store (correctness: same WHICH-is-blocked set, just cache-fast).
+    #[test]
+    fn cache_blocked_flag_matches_edge_walk() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // lone: no edges → never blocked.
+        let lone = sample_req("FR-1-001", "lone");
+        // blocker_open: an Approved spec used as a live blocker.
+        let mut blocker_open = sample_req("FR-1-002", "blocker-open");
+        blocker_open.status = RequirementStatus::Approved;
+        // blocker_done: a Completed spec — blocking it does NOT block.
+        let mut blocker_done = sample_req("FR-1-003", "blocker-done");
+        blocker_done.status = RequirementStatus::Completed;
+
+        let (open_id, done_id) = (blocker_open.id, blocker_done.id);
+        // A target id with no requirement in the store → dangling edge.
+        let dangling_id = Uuid::new_v4();
+
+        // dep_open: blocked by an incomplete blocker → BLOCKED.
+        let mut dep_open = sample_req("FR-1-010", "dep-open");
+        dep_open
+            .relationships
+            .push(rel(RelationshipType::BlockedBy, open_id));
+        // dep_done: blocked only by a Completed blocker → NOT blocked.
+        let mut dep_done = sample_req("FR-1-011", "dep-done");
+        dep_done
+            .relationships
+            .push(rel(RelationshipType::BlockedBy, done_id));
+        // dep_mixed: blocked by both a Completed and an incomplete blocker →
+        // BLOCKED (any incomplete blocker blocks).
+        let mut dep_mixed = sample_req("FR-1-012", "dep-mixed");
+        dep_mixed
+            .relationships
+            .push(rel(RelationshipType::BlockedBy, done_id));
+        dep_mixed
+            .relationships
+            .push(rel(RelationshipType::BlockedBy, open_id));
+        // dep_dangling: blocked by an unresolvable target → BLOCKED (defensive).
+        let mut dep_dangling = sample_req("FR-1-013", "dep-dangling");
+        dep_dangling
+            .relationships
+            .push(rel(RelationshipType::BlockedBy, dangling_id));
+        // dep_blocks_only: carries a Blocks edge (not BlockedBy) → NOT blocked.
+        let mut dep_blocks_only = sample_req("FR-1-014", "dep-blocks-only");
+        dep_blocks_only
+            .relationships
+            .push(rel(RelationshipType::Blocks, open_id));
+
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([
+            lone,
+            blocker_open,
+            blocker_done,
+            dep_open,
+            dep_done,
+            dep_mixed,
+            dep_dangling,
+            dep_blocks_only,
+        ]);
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Ground truth: the edge-walk over the full store.
+        let expected = compute_blocked(&store);
+
+        // Read every row's cached blocked flag (Both = ignore archive/defer).
+        let filter = ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            ..Default::default()
+        };
+        let rows = cache.list_summaries(&filter).unwrap();
+        assert_eq!(rows.len(), store.requirements.len());
+
+        for row in &rows {
+            let want = expected.contains(&row.id);
+            assert_eq!(
+                row.blocked, want,
+                "cache blocked flag for {:?} disagrees with compute_blocked",
+                row.spec_id
+            );
+            // And cross-check directly against the pickability predicate.
+            let req = store.requirements.iter().find(|r| r.id == row.id).unwrap();
+            assert_eq!(
+                row.blocked,
+                crate::pickability::blocked_by_incomplete(req, &store),
+                "cache blocked flag for {:?} disagrees with blocked_by_incomplete",
+                row.spec_id
+            );
+        }
+
+        // The blocked-axis filter pushes down to the cache: only the three
+        // genuinely-blocked specs come back.
+        let blocked_filter = ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            blocked: Some(true),
+            ..Default::default()
+        };
+        let blocked_rows = cache.list_summaries(&blocked_filter).unwrap();
+        let blocked_specs: std::collections::HashSet<String> = blocked_rows
+            .iter()
+            .filter_map(|r| r.spec_id.clone())
+            .collect();
+        assert_eq!(
+            blocked_specs,
+            ["FR-1-010", "FR-1-012", "FR-1-013"]
+                .into_iter()
+                .map(String::from)
+                .collect::<std::collections::HashSet<_>>(),
+        );
     }
 
     /// STORY-632: the static type-weight table matches the operator-agreed

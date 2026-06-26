@@ -6100,11 +6100,12 @@ pub enum Command {
         #[clap(long)]
         show_tags: bool,
 
-        /// Also walk BlockedBy edges and mark specs blocked behind an
-        /// incomplete blocker with a leading ⊘ glyph. Off by default —
-        /// it needs a one-shot full-store load (the cheap queued ↑ /
-        /// in-flight ▶ overlay is always on).
+        /// Also mark specs blocked behind an incomplete blocker with a leading
+        /// ⊘ glyph. Off by default; the cheap queued ↑ / in-flight ▶ overlay is
+        /// always on.
         // trace:TASK-670 | ai:claude
+        // trace:TASK-902 | ai:claude — blocked is now read from the cache (a
+        // projected column), no longer a full-store load.
         #[clap(long)]
         blocked: bool,
 
