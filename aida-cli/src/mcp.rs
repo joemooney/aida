@@ -1392,7 +1392,8 @@ impl<'a> McpServer<'a> {
             .iter()
             .filter(|r| {
                 if let Some(status) = status_filter {
-                    if !mcp_filter_eq(&r.status.to_string(), status) {
+                    // BUG-626: filter epics by their derived rollup status.
+                    if !mcp_filter_eq(&mcp_effective_status(&store, r).to_string(), status) {
                         return false;
                     }
                 }
@@ -1474,7 +1475,8 @@ impl<'a> McpServer<'a> {
                 "- [{}] {} (Status: {}, Priority: {}, Type: {})\n",
                 spec_id(r),
                 r.title,
-                r.status,
+                // BUG-626: surface the epic's derived rollup status.
+                mcp_effective_status(&store, r),
                 r.priority,
                 r.req_type
             ));
@@ -1513,7 +1515,8 @@ impl<'a> McpServer<'a> {
              **Type:** {}\n",
             spec_id(req),
             req.title,
-            req.status,
+            // BUG-626: surface the epic's derived rollup status.
+            mcp_effective_status(&store, req),
             req.priority,
             req.req_type
         );
@@ -1982,7 +1985,8 @@ impl<'a> McpServer<'a> {
                     }
                 }
                 if let Some(status) = status_filter {
-                    if !mcp_filter_eq(&r.status.to_string(), status) {
+                    // BUG-626: filter epics by their derived rollup status.
+                    if !mcp_filter_eq(&mcp_effective_status(&store, r).to_string(), status) {
                         return false;
                     }
                 }
@@ -5269,6 +5273,23 @@ fn normalize_mcp_filter_token(s: &str) -> String {
 
 fn mcp_filter_eq(stored: &str, filter: &str) -> bool {
     normalize_mcp_filter_token(stored) == normalize_mcp_filter_token(filter)
+}
+
+/// The status to surface for a requirement over MCP. For an EPIC this is the
+/// read-only rollup of its children (mirrors the CLI `effective_display_status`
+/// and the cache projection), so `list_requirements` / `show_requirement` agree
+/// with `aida list`. Every non-epic returns its stored status.
+// trace:BUG-626 | ai:claude
+fn mcp_effective_status(
+    store: &aida_core::RequirementsStore,
+    r: &Requirement,
+) -> RequirementStatus {
+    if r.req_type == RequirementType::Epic {
+        if let Some(derived) = aida_core::rollup::derive_epic_status(store, r.id) {
+            return derived;
+        }
+    }
+    r.status.clone()
 }
 
 fn parse_status(s: &str) -> Option<RequirementStatus> {
