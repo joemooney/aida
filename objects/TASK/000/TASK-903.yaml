@@ -1,0 +1,17 @@
+id: 019f02cb-0255-7170-af0f-2efc51135be9
+spec_id: TASK-903
+agreed_id: TASK-903
+title: 'Pre-commit gate: block bare SPEC-IDs in cli.rs /// doc comments (the recurring --help-leak trap)'
+description: 'The cli::tests source_doc_comments_carry_no_spec_id_provenance / help_text_carries_no_trace_markers tests catch bare SPEC-IDs / trace: in cli.rs /// doc comments (they leak into --help), but only at CI — costing a full ~7min red cycle each time. It has bitten repeatedly (#1105, #1116). Substrate-as-bouncer fix: a FAST pre-commit hook (grep-based, no compile) that runs the same criterion (a /// line in cli.rs matching a concrete SPEC-ID/trace: and not containing e.g.) and blocks the commit with the same guidance. Add to the scaffolded git hooks + the dev pre-commit. Cheap, deterministic, kills the recurring red cycle.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T07:18:06.677277098Z
+modified_at: 2026-06-26T07:18:06.677277098Z
+req_type: Task
+tags:
+- ci
+- dx
+- papercut
+- substrate-gate
