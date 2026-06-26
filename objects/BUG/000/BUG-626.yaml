@@ -3,12 +3,12 @@ spec_id: BUG-626
 agreed_id: BUG-626
 title: An epic should not be In-Progress with no children — derive epic status from child rollup, or warn/block the manual set
 description: 'Operator found EPIC-49/EPIC-50 at status In-Progress with ZERO children — a false ''actively being worked'' signal that pollutes aida list --status in-progress (the live what-is-being-worked view). aida why already says ''decompose — an epic with no children yet''. An epics status should reflect its children (rollup), not be set independently: an epic with no in-progress children cannot itself be In-Progress. FIX OPTIONS (implementer picks): (a) aida edit <epic> --status in-progress warns or blocks when the epic has no children; (b) epic status auto-derives from child rollup so it cannot drift; (c) an aida doctor / lint check flags In-Progress childless epics. Prefer a programmatic guard (substrate-as-bouncer) over a rule, since this is exactly the kind of hygiene drift a confident setter will reintroduce.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:27:43.311777743Z
-modified_at: 2026-06-26T19:37:36.620734488Z
+modified_at: 2026-06-26T20:03:57.192856458Z
 req_type: Bug
 tags:
 - epic
@@ -22,3 +22,21 @@ comments:
   content: 'GENERALIZED (operator insight): the real fix is not just ''block In-Progress childless epics'' — it is that an EPICS STATUS MUST BE DERIVED (read-only rollup) from its children, not set manually. Both observed symptoms are the same root cause: (1) EPIC-49/50 = In-Progress with NO children (false active); (2) EPIC-51 = Draft while its children ship (false not-started). Desired derivation: no children -> empty/draft; >=1 child In-Progress (or some done, some not) -> In Progress; all children Done/Completed -> Done/Completed; children all blocked/none-active -> Blocked. The rollup is ALREADY computed (aida graph <epic> --tree prints ''Rollup: N total, N completed, N in progress, N remaining'') — it just does not drive the status field. FIX: make epic status a computed projection of the child rollup; reject manual status edits on epics (extend the existing ''epics cannot be promoted to Approved'' rule to all manual transitions). Then ''start work on a child'' auto-moves the epic to In-Progress and the aida list/in-progress/why views stay truthful for epics with zero hand-maintenance. This supersedes the narrow childless-In-Progress framing in the title.'
   created_at: 2026-06-26T18:50:55.498456194Z
   modified_at: 2026-06-26T18:50:55.498456194Z
+history:
+- id: 019f0588-2830-7991-ad80-a0f166539d6d
+  author: aida-auto-bump
+  timestamp: 2026-06-26T20:03:57.104560109Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f0588-2888-7582-9872-07f8fc5ae2e9
+  timestamp: 2026-06-26T20:03:57.192844499Z
+  agent: aida
+  commit_sha: c845ab1adffcc07ced715e313f1d136a7fa619e5
+  summary: Completed via merge c845ab1a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T20:03:56.118202724Z
+  completion_sha: c845ab1adffcc07ced715e313f1d136a7fa619e5
