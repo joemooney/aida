@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:57:44.481303272Z
-modified_at: 2026-06-26T06:58:45.083764743Z
+modified_at: 2026-06-26T07:00:10.457429598Z
 req_type: Bug
 tags:
 - papercut
@@ -40,3 +40,8 @@ comments:
   content: Commit d5b429603 references this requirement
   created_at: 2026-06-26T06:58:45.083764743Z
   modified_at: 2026-06-26T06:58:45.083764743Z
+- id: 019f02ba-9659-77f0-bd64-eeb7afdd903b
+  author: joe
+  content: 'Fixed in PR #1114 (branch worktree-agent-a54d6e9d8738ebb47): PRs panel now loads async off-thread (DashboardModel::ensure_prs_loading spawns gh pr list into an mpsc channel; poll_prs drains it non-blocking), reusing the STORY-686 board''s fetch_open_pr_rows source. Navigating into PRs paints from pr_cache immediately + shows loading/refreshing notice; never blocks the cursor. g invalidates for a fresh fetch. 5 new tests.'
+  created_at: 2026-06-26T07:00:10.457429598Z
+  modified_at: 2026-06-26T07:00:10.457429598Z
