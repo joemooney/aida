@@ -20,11 +20,18 @@ use crate::nav::NavSection;
 use crate::state::{self, TuiState};
 use crate::term;
 use anyhow::{Context, Result};
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::Stdout;
 use std::path::PathBuf;
+use std::time::Duration;
+
+/// How long the event loop blocks waiting for a keystroke before waking to
+/// drain the async PR fetch. Short enough that a landed `gh pr list` paints
+/// near-instantly, long enough to keep the loop near-idle while waiting on
+/// the user. trace:BUG-619 | ai:claude
+const PR_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Options for one launcher run.
 pub struct LauncherOptions {
@@ -347,7 +354,23 @@ fn event_loop(
     paint(terminal, &model)?;
 
     loop {
-        let Event::Key(key) = crossterm::event::read()? else {
+        // Wake periodically (rather than blocking on `read()`) so a landed
+        // async `gh pr list` paints without a keystroke. The poll is cheap and
+        // the cursor stays responsive: `poll_prs` is a non-blocking channel
+        // drain. trace:BUG-619 | ai:claude
+        if !event::poll(PR_POLL_INTERVAL)? {
+            if model.poll_prs() {
+                dashboard::ensure_preview(&mut model);
+                paint(terminal, &model)?;
+            }
+            continue;
+        }
+        // A real event is queued — drain any landed PRs first so this frame
+        // already reflects them, then handle the event. trace:BUG-619
+        if model.poll_prs() {
+            dashboard::ensure_preview(&mut model);
+        }
+        let Event::Key(key) = event::read()? else {
             paint(terminal, &model)?;
             continue;
         };
@@ -404,10 +427,12 @@ fn event_loop(
             }
             LauncherAction::Refetch => {
                 // `g` is an explicit refresh: invalidate the cached board so
-                // the reason-groups recompose from fresh cache-fast reads (and
-                // re-run the lazy PR fill). trace:STORY-686 | ai:claude
+                // the reason-groups recompose from fresh cache-fast reads, and
+                // force a fresh off-thread `gh pr list` so the PRs panel /
+                // awaiting-review group re-fill without blocking the cursor.
+                // trace:STORY-686 trace:BUG-619 | ai:claude
                 model.board_loaded = false;
-                model.prs_filled = false;
+                model.invalidate_prs();
                 dashboard::refetch_rows(&mut model, launch_scope, dialog_id);
                 dashboard::ensure_preview(&mut model);
                 paint(terminal, &model)?;
