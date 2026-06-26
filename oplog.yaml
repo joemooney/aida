@@ -21578,5 +21578,21 @@ operations:
     req_type: Spike
     status: Draft
     priority: Medium
-clock: 2049
+- id: 019f052d-3448-7133-8a2f-af13dfde8800
+  target_id: 019f052d-30c2-74a3-83aa-86fb15f45e78
+  author: aida
+  node_id: '1'
+  lamport: 2050
+  timestamp: 2026-06-26T18:24:36.424512390Z
+  kind: !Create
+    title: Add 'approve' verb (Draft-conditional advisor direct-approve) to the redesign TUI
+    description: |-
+      Add an "approve" verb to the redesign TUI — the advisor's direct-approve, completing the lifecycle verb set. Mirror the existing conditional verbs.
+
+      BEHAVIOR: "approve" is Draft-conditional (appears only when the focused/selected spec is Draft), set-level (operates on marked drafts / focused draft). Executes the approval transition: `aida edit <id> --status approved` run under advisor authority (the redesign already knows it shells out; the approval transition is advisor-gated, so the verb should run it in a way that carries advisor authority, e.g. AIDA_SESSION_ROLE=advisor on the spawned command, OR document that it only works when the TUI's session role is advisor). Skips non-drafts; reports approved/skipped on the status line. This complements "request approval" (route to advisor) with "approve" (do it, when you ARE the advisor).
+      ACCEPTANCE: Draft-conditional verb; runs the approved-status transition with advisor authority; non-drafts skipped; pure conditional/selection logic unit-tested; build/test/fmt/clippy green; --no-verify; trace this task.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2050
 node_id: '1'
