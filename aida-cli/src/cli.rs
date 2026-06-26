@@ -8121,10 +8121,10 @@ pub enum Command {
         #[clap(long)]
         launcher: bool,
         /// Power-user / legacy hook: emit one intent line to this file
-        /// descriptor and exit (the STORY-244 single-shot fd-3 protocol an
+        /// descriptor and exit (the legacy single-shot fd-3 protocol an
         /// external dispatcher consumes) instead of dispatching the intent
         /// in-process. Omit it — bare `aida tui` is self-sufficient and
-        /// needs no fd-3 pipe or `aida-tui` shell wrapper (STORY-681).
+        /// needs no fd-3 pipe or `aida-tui` shell wrapper.
         // trace:STORY-244 STORY-681 | ai:claude
         #[clap(long, value_name = "FD", hide = true)]
         intent_fd: Option<u32>,
