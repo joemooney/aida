@@ -16,12 +16,12 @@ description: |-
   - `aida add --tags parent:EPIC-X` creates a real parent edge (the spec appears in `aida graph EPIC-X --tree` without a manual rel add).
   - a rel-add is reflected in `aida graph --tree` WITHOUT a manual `aida cache rebuild` (cache invalidation works), OR the fix that makes it so.
   - pure logic unit-tested; aida-cli/aida-core; gates green (build/test/fmt/clippy); MAIN-codebase feature on its own branch off main.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T20:34:24.994769096Z
-modified_at: 2026-06-26T20:34:41.750944904Z
+modified_at: 2026-06-26T21:13:14.279635384Z
 req_type: Task
 tags:
 - cache
@@ -34,3 +34,21 @@ relationships:
   target_id: 019f057d-6a5e-7d91-8c53-46da890ebe76
   created_at: 2026-06-26T20:34:41.750938965Z
   created_by: joe
+history:
+- id: 019f05c7-96d0-7d30-9588-4476aa32d31a
+  author: aida-auto-bump
+  timestamp: 2026-06-26T21:13:14.192532963Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f05c7-9727-7c73-b88c-c1a2a324f196
+  timestamp: 2026-06-26T21:13:14.279629804Z
+  agent: aida
+  commit_sha: 75bb8f1fe9283d9afb9b360fba627ca32bb673a6
+  summary: Completed via merge 75bb8f1f
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T21:13:13.115036409Z
+  completion_sha: 75bb8f1fe9283d9afb9b360fba627ca32bb673a6
