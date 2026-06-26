@@ -22,7 +22,9 @@ mod actions;
 mod app;
 /// Blocked/waiting board — the TUI flow-cockpit home view (STORY-686). The
 /// reason taxonomy, the precedence classifier, and the cache-fast source
-/// fetchers that compose it. trace:STORY-686 | ai:claude
+/// fetchers that compose it.
+//
+// trace:STORY-686 | ai:claude
 mod board;
 /// Pure fuzzy command-palette core (STORY-682): clap-surface enumeration plus a
 /// dependency-free subsequence fuzzy matcher. No TUI wiring lives here — the
@@ -43,6 +45,13 @@ mod intent;
 mod launcher;
 mod nav;
 mod overlay;
+/// Deterministic AIDA action palette shown while the hosted chat is
+/// suspended (EPIC-51 slice 2). A fuzzy-filtered list of curated actions that
+/// each run a fixed `aida …` subprocess and render the result inline —
+/// zero LLM round-trip.
+//
+// trace:STORY-679 | ai:claude
+mod palette;
 mod picker;
 mod pty;
 mod state;
@@ -65,7 +74,7 @@ pub use theme::{Theme, ThemeName};
 /// public API — gated on `cfg(any(test, feature = "test-internals"))`
 /// would be cleaner once the feature lands; for now we expose it
 /// always, named with a `__` prefix to signal "internal use only".
-/// trace:STORY-244 | ai:claude
+// trace:STORY-244 | ai:claude
 #[doc(hidden)]
 pub mod __test_only {
     // STORY-681: the in-process dispatch planner + child runner, so
