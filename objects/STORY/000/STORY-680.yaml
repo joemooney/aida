@@ -3,14 +3,32 @@ spec_id: STORY-680
 agreed_id: STORY-680
 title: 'EPIC-51 Slice 3: inject a palette result into the chat via PTY stdin on resume'
 description: 'Third slice: on resume, optionally type a chosen palette result (formatted context block) into the chat childs PTY stdin (reuse the STORY-136 inject-into-focused-PTY mechanism), so the result becomes a user message the conversation can see. NOT JSONL surgery (D2). Depends on Slice 1+2.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:06:26.864100593Z
-modified_at: 2026-06-25T07:06:26.864100593Z
+modified_at: 2026-06-26T17:39:43.558844410Z
 req_type: Story
 tags:
 - aida:tui
 - from-operator
 - parent:EPIC-51
+history:
+- id: 019f0504-1cf3-7c23-ae7f-d9873b3165a1
+  author: aida-auto-bump
+  timestamp: 2026-06-26T17:39:43.475456896Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f0504-1d46-7f03-b4eb-3bf8a56c9c26
+  timestamp: 2026-06-26T17:39:43.558838507Z
+  agent: aida
+  commit_sha: 2503d095acf2b6dd5a78c256055c01e04d2533c5
+  summary: Completed via merge 2503d095
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T17:39:42.467648804Z
+  completion_sha: 2503d095acf2b6dd5a78c256055c01e04d2533c5
