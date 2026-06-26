@@ -3,14 +3,32 @@ spec_id: STORY-679
 agreed_id: STORY-679
 title: 'EPIC-51 Slice 2: deterministic AIDA action palette (no LLM) while the chat is suspended'
 description: 'Second slice: while the chat is SIGSTOP-paused (Slice 1), show a deterministic command palette (extend the STORY-244 Launcher : palette) that runs aida ... --json subprocesses and renders results inline — :queue :punts :findings :spec <ID> :run <cmd> — zero LLM round-trip. Depends on Slice 1.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:06:02.332848181Z
-modified_at: 2026-06-25T07:06:02.332848181Z
+modified_at: 2026-06-26T17:18:11.607780179Z
 req_type: Story
 tags:
 - aida:tui
 - from-operator
 - parent:EPIC-51
+history:
+- id: 019f04f0-6644-79d3-ace3-8e58d7380853
+  author: aida-auto-bump
+  timestamp: 2026-06-26T17:18:11.524588382Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f04f0-6697-79b1-a208-a59b32838d65
+  timestamp: 2026-06-26T17:18:11.607773912Z
+  agent: aida
+  commit_sha: 44551f52681fc2370e1e081af43a03bc65b5dd08
+  summary: Completed via merge 44551f52
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T17:18:10.525485152Z
+  completion_sha: 44551f52681fc2370e1e081af43a03bc65b5dd08
