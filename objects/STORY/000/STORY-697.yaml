@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T20:26:16.892766589Z
-modified_at: 2026-06-26T20:26:28.249656790Z
+modified_at: 2026-06-26T20:26:40.901007341Z
 req_type: Story
 tags:
 - focus
@@ -16,3 +16,8 @@ tags:
 - redesign
 - tui
 - worktree
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-26T20:26:40.901002661Z
+  created_by: joe
