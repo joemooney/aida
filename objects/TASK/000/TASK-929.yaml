@@ -6,6 +6,10 @@ description: |-
   SPIKE-71 TUI FIX — the focus-lens descendants closure (aida-tui/src/redesign/store.rs SpecStore::descendants_of) walks ONLY Parent edges, so one-directional edges make it show an incomplete tree (it showed 4 of ~10 EPIC-54 children). Port it to the same DIRECTION-ROBUST walk used by `aida graph --tree` and `aida queue list --epic` (TASK-923): aida_core::graph_walk::walk_union over [(Child, Parent), Outgoing] with the root re-inserted. Then the TUI focus lens, --tree, and the CLI --epic filter all agree and tolerate one-directional edges.
   DEPENDS ON: STORY-697 (same files — build after it lands).
   ACCEPTANCE: descendants_of uses walk_union(Child,Parent); focus lens shows the SAME set as `aida graph EPIC-54 --tree` (12 children); pure logic tested; gates green; redesign module.
+
+  ## Test Plan
+
+  1. Focus EPIC-54 in the TUI, and separately run `aida graph EPIC-54 --tree` → **expect** the lens shows the **same** set of children as the tree (it no longer truncates when an edge is one-directional). This is the reader half of SPIKE-71; the source half (tag→edge) is already on main.
 status: Done
 priority: High
 owner: ''
