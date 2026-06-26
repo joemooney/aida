@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use aida_core::{
     ArchiveFilter, CachedGitBackend, DatabaseBackend, DeferFilter, ListFilter, RelationshipType,
-    RequirementSummary,
+    RequirementSummary, RequirementsStore,
 };
 
 use super::state::{EpicRow, Scope, TargetItem};
@@ -110,11 +110,17 @@ impl SpecStore {
     /// spec_id), so the focus lens can be applied to the [`TargetItem`] rows
     /// (which carry the same display id).
     ///
-    /// Loads every requirement once (each carries its `Parent`-type
-    /// relationships — a parent → child edge) and builds a parent→children
-    /// index from them, then BFS-walks the index from the epic. All in-process
-    /// via the open backend (no subprocess). Returns an empty set when the epic
-    /// can't be resolved or the store can't be read. trace:STORY-695 | ai:claude
+    /// Direction-robust (TASK-929): the closure is computed with the SAME union
+    /// walk `aida graph --tree` and `aida queue list --epic` use —
+    /// [`aida_core::graph_walk::walk_union`] over OUTGOING `Child` + `Parent`
+    /// edges — so a one-directional epic→child edge (recorded as only `Child`
+    /// OR only `Parent`, with no inverse) is still traversed. The previous
+    /// implementation walked `Parent` edges ALONE, so it missed children whose
+    /// edge was stored only as `Child` and showed an incomplete block-of-work
+    /// view (4 of ~10 EPIC-54 children). Loads every requirement once,
+    /// reconstitutes an in-memory store, and walks it. Returns an empty set
+    /// when the epic can't be resolved or the store can't be read.
+    /// trace:STORY-695 trace:TASK-929 | ai:claude
     pub fn descendants_of(&self, epic_id: &str) -> HashSet<String> {
         // Resolve the focus epic's UUID (it may be given as a spec_id or an
         // agreed id) so the closure walk keys off the canonical uuid edges.
@@ -126,24 +132,11 @@ impl SpecStore {
             Ok(reqs) => reqs,
             Err(_) => return HashSet::new(),
         };
-        let nodes: Vec<ClosureNode> = all
-            .into_iter()
-            .map(|req| ClosureNode {
-                id: req.id,
-                display_id: req
-                    .spec_id
-                    .clone()
-                    .or_else(|| req.agreed_id.clone())
-                    .unwrap_or_default(),
-                children: req
-                    .relationships
-                    .iter()
-                    .filter(|r| r.rel_type == RelationshipType::Parent)
-                    .map(|r| r.target_id)
-                    .collect(),
-            })
-            .collect();
-        compute_descendants(&nodes, root)
+        let store = RequirementsStore {
+            requirements: all,
+            ..RequirementsStore::new()
+        };
+        descendant_closure(&store, root)
     }
 
     /// Load one spec's full record (structured fields + description body) for
@@ -192,10 +185,17 @@ impl SpecStore {
 
     /// Map each spec display-id in `spec_ids` to its parent EPIC's display-id,
     /// for the branch-inference focus fallback (STORY-697 stretch). Loads every
-    /// requirement once, builds a child-uuid → parent-uuid index from the same
-    /// `Parent`-type edges [`Self::descendants_of`] walks, and resolves each
-    /// input id whose parent is itself an Epic. Ids with no Epic parent are
-    /// dropped. trace:STORY-697 | ai:claude
+    /// requirement once and resolves each input id to an Epic-typed hierarchy
+    /// neighbor. Ids with no Epic neighbor are dropped. trace:STORY-697 | ai:claude
+    ///
+    /// Direction-robust (TASK-929): the same one-directional-edge fragility that
+    /// broke [`Self::descendants_of`] applies here — a parent↔child link can be
+    /// recorded on EITHER endpoint and as EITHER a `Parent` or a `Child` edge.
+    /// So instead of indexing only `Parent` edges in one orientation, treat every
+    /// `Parent`/`Child` relationship as an UNDIRECTED hierarchy link and a spec's
+    /// parent epic is simply an Epic-typed hierarchy neighbor. This tolerates the
+    /// inverse-missing edge the same way `walk_union` does for the closure.
+    /// trace:TASK-929 | ai:claude
     pub fn parent_epics_of(&self, spec_ids: &[String]) -> Vec<String> {
         let all = match self.backend.list_requirements(true) {
             Ok(reqs) => reqs,
@@ -205,8 +205,10 @@ impl SpecStore {
         let mut display_to_uuid: HashMap<String, uuid::Uuid> = HashMap::new();
         let mut uuid_display: HashMap<uuid::Uuid, String> = HashMap::new();
         let mut uuid_is_epic: HashMap<uuid::Uuid, bool> = HashMap::new();
-        // child-uuid → parent-uuid (a parent holds a `Parent` edge → child).
-        let mut child_parent: HashMap<uuid::Uuid, uuid::Uuid> = HashMap::new();
+        // Undirected hierarchy adjacency over every Parent/Child edge, recorded
+        // on both endpoints so a one-directional edge is still seen from the
+        // child side. trace:TASK-929 | ai:claude
+        let mut adjacency: HashMap<uuid::Uuid, Vec<uuid::Uuid>> = HashMap::new();
         for req in &all {
             let display = req
                 .spec_id
@@ -222,8 +224,12 @@ impl SpecStore {
                 format!("{:?}", req.req_type).eq_ignore_ascii_case("epic"),
             );
             for rel in &req.relationships {
-                if rel.rel_type == RelationshipType::Parent {
-                    child_parent.insert(rel.target_id, req.id);
+                if matches!(
+                    rel.rel_type,
+                    RelationshipType::Parent | RelationshipType::Child
+                ) {
+                    adjacency.entry(req.id).or_default().push(rel.target_id);
+                    adjacency.entry(rel.target_id).or_default().push(req.id);
                 }
             }
         }
@@ -232,10 +238,14 @@ impl SpecStore {
             let Some(&uuid) = display_to_uuid.get(id) else {
                 continue;
             };
-            let Some(&parent) = child_parent.get(&uuid) else {
+            let Some(neighbors) = adjacency.get(&uuid) else {
                 continue;
             };
-            if uuid_is_epic.get(&parent).copied().unwrap_or(false) {
+            let parent = neighbors
+                .iter()
+                .copied()
+                .find(|n| uuid_is_epic.get(n).copied().unwrap_or(false));
+            if let Some(parent) = parent {
                 if let Some(display) = uuid_display.get(&parent) {
                     out.push(display.clone());
                 }
@@ -307,49 +317,45 @@ fn summary_to_item(s: RequirementSummary) -> TargetItem {
     }
 }
 
-/// One spec reduced to what the descendant-closure walk needs: its uuid, its
-/// display id (for the returned set), and the uuids of its direct children
-/// (its `Parent`-type relationship targets). Pure input to
-/// [`compute_descendants`] so the closure logic is unit-testable without a
-/// store. trace:STORY-695 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClosureNode {
-    pub id: uuid::Uuid,
-    pub display_id: String,
-    pub children: Vec<uuid::Uuid>,
-}
-
-/// Compute the transitive descendant closure of `root` over the parent→child
-/// graph described by `nodes`: BFS from the root, following each node's
-/// `children` edges, collecting every reached node's `display_id` (including
-/// the root's). A pure function of its inputs — no store, no IO — so the
-/// closure logic (epic + direct + grandchild in, unrelated specs out, cycle
-/// safety) is unit-testable. Empty display ids are dropped. trace:STORY-695 | ai:claude
-pub fn compute_descendants(nodes: &[ClosureNode], root: uuid::Uuid) -> HashSet<String> {
-    let by_id: HashMap<uuid::Uuid, &ClosureNode> = nodes.iter().map(|n| (n.id, n)).collect();
-    let mut result: HashSet<String> = HashSet::new();
-    let mut visited: HashSet<uuid::Uuid> = HashSet::new();
-    let mut queue: Vec<uuid::Uuid> = vec![root];
-    while let Some(uuid) = queue.pop() {
-        if !visited.insert(uuid) {
-            continue; // already walked — guards against cycles.
-        }
-        if let Some(node) = by_id.get(&uuid) {
-            if !node.display_id.is_empty() {
-                result.insert(node.display_id.clone());
-            }
-            for &child in &node.children {
-                if !visited.contains(&child) {
-                    queue.push(child);
-                }
-            }
+/// Compute the transitive descendant display-id closure of `root` over `store`,
+/// using the SAME direction-robust union walk `aida graph --tree` (and
+/// `aida queue list --epic`) use: [`aida_core::graph_walk::walk_union`] over
+/// OUTGOING `Child` + `Parent` edges. Unioning both relationship types in the
+/// outgoing direction traverses the hierarchy whichever side recorded the edge,
+/// so a one-directional epic→child link (only `Child`, or only `Parent`, with no
+/// inverse) is still followed — the fragility a `Parent`-only walk missed
+/// (TASK-929 / SPIKE-71). The queried `root` is re-inserted because
+/// `walk_union` excludes it, matching what `--tree` prints (the queried epic
+/// leads its own subtree). Display ids prefer `spec_id` then `agreed_id` to line
+/// up with [`summary_to_item`]'s [`TargetItem`] row ids; empty ids are dropped.
+///
+/// A pure function of `(store, root)` — no IO — so the closure logic (one-
+/// directional Parent-only / Child-only edges found, unrelated excluded, root
+/// included, cycle safety via `walk_union`'s visited set) is unit-testable.
+/// The result equals the node set `aida graph <root> --tree` walks.
+/// trace:STORY-695 trace:TASK-929 | ai:claude
+pub fn descendant_closure(store: &RequirementsStore, root: uuid::Uuid) -> HashSet<String> {
+    use aida_core::graph_walk::{walk_union, Direction};
+    let specs = [(
+        vec![RelationshipType::Child, RelationshipType::Parent],
+        Direction::Outgoing,
+    )];
+    let result = walk_union(store, root, &specs, None);
+    let mut out: HashSet<String> = HashSet::new();
+    for id in std::iter::once(&root).chain(result.nodes.iter()) {
+        if let Some(display) = store
+            .get_requirement_by_id(id)
+            .and_then(|r| r.spec_id.clone().or_else(|| r.agreed_id.clone()))
+            .filter(|d| !d.is_empty())
+        {
+            out.insert(display);
         }
     }
-    result
+    out
 }
 
 /// Does the EPIC focus lens `set` include this target row? The lens matches on
-/// the row's display id (the same id [`ClosureNode::display_id`] carries). Pure
+/// the row's display id (the same id [`descendant_closure`] returns). Pure
 /// so the filter narrowing is unit-testable. trace:STORY-695 | ai:claude
 fn focus_includes(set: &HashSet<String>, item: &TargetItem) -> bool {
     set.contains(&item.id)
@@ -690,13 +696,32 @@ mod tests {
         assert!(!scope_includes(Scope::Prs, "Open"));
     }
 
-    // --- EPIC focus lens (STORY-695) -------------------------------------
+    // --- EPIC focus lens (STORY-695 / TASK-929) --------------------------
 
-    fn node(id: u128, display: &str, children: &[u128]) -> ClosureNode {
-        ClosureNode {
-            id: uuid::Uuid::from_u128(id),
-            display_id: display.to_string(),
-            children: children.iter().map(|&c| uuid::Uuid::from_u128(c)).collect(),
+    /// A requirement with a fixed uuid + spec_id (so edges can target it
+    /// deterministically) and no relationships. trace:TASK-929 | ai:claude
+    fn rreq(id: u128, spec: &str) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new(spec.to_string(), String::new());
+        r.id = uuid::Uuid::from_u128(id);
+        r.spec_id = Some(spec.to_string());
+        r
+    }
+
+    /// An outgoing relationship of `rt` from the holder to the uuid `target`.
+    /// trace:TASK-929 | ai:claude
+    fn edge(rt: RelationshipType, target: u128) -> aida_core::Relationship {
+        aida_core::Relationship {
+            rel_type: rt,
+            target_id: uuid::Uuid::from_u128(target),
+            created_at: None,
+            created_by: None,
+        }
+    }
+
+    fn store_of(reqs: Vec<aida_core::Requirement>) -> RequirementsStore {
+        RequirementsStore {
+            requirements: reqs,
+            ..RequirementsStore::new()
         }
     }
 
@@ -713,26 +738,77 @@ mod tests {
 
     #[test]
     fn closure_includes_epic_direct_and_grandchild_excludes_unrelated() {
-        // EPIC(1) → STORY(2) → TASK(3); plus an unrelated STORY(9).
-        let nodes = vec![
-            node(1, "EPIC-54", &[2]),
-            node(2, "STORY-695", &[3]),
-            node(3, "TASK-913", &[]),
-            node(9, "STORY-999", &[]),
-        ];
-        let set = compute_descendants(&nodes, uuid::Uuid::from_u128(1));
-        assert!(set.contains("EPIC-54"), "epic itself is in the closure");
+        // EPIC(1) --Child--> STORY(2) --Child--> TASK(3); unrelated STORY(9).
+        let mut epic = rreq(1, "EPIC-54");
+        epic.relationships.push(edge(RelationshipType::Child, 2));
+        let mut story = rreq(2, "STORY-695");
+        story.relationships.push(edge(RelationshipType::Child, 3));
+        let task = rreq(3, "TASK-913");
+        let unrelated = rreq(9, "STORY-999");
+        let store = store_of(vec![epic, story, task, unrelated]);
+
+        let set = descendant_closure(&store, uuid::Uuid::from_u128(1));
+        assert!(
+            set.contains("EPIC-54"),
+            "epic itself (root) is in the closure"
+        );
         assert!(set.contains("STORY-695"), "direct child is in");
         assert!(set.contains("TASK-913"), "transitive grandchild is in");
         assert!(!set.contains("STORY-999"), "unrelated spec is out");
         assert_eq!(set.len(), 3);
     }
 
+    /// THE REGRESSION TASK-929 TARGETS: the epic→child edge is recorded only as
+    /// a `Parent` edge with NO `Child` inverse. The old `Parent`-only-walk found
+    /// this form, but a direction-robust walk must too. trace:TASK-929
+    #[test]
+    fn closure_finds_child_via_parent_only_edge() {
+        // EPIC(1) --Parent--> STORY(2)  (no Child inverse anywhere).
+        let mut epic = rreq(1, "EPIC-54");
+        epic.relationships.push(edge(RelationshipType::Parent, 2));
+        let story = rreq(2, "STORY-695");
+        let store = store_of(vec![epic, story]);
+
+        let set = descendant_closure(&store, uuid::Uuid::from_u128(1));
+        assert!(set.contains("EPIC-54"), "root included");
+        assert!(
+            set.contains("STORY-695"),
+            "child reached via a Parent-only edge (no Child inverse)"
+        );
+        assert_eq!(set.len(), 2);
+    }
+
+    /// THE OTHER HALF OF THE REGRESSION: the edge is recorded only as a `Child`
+    /// edge with NO `Parent` inverse — exactly what the OLD Parent-only walk
+    /// MISSED (it showed 4 of ~10 EPIC-54 children). The union walk now finds it.
+    /// trace:TASK-929
+    #[test]
+    fn closure_finds_child_via_child_only_edge() {
+        // EPIC(1) --Child--> STORY(2)  (no Parent inverse anywhere).
+        let mut epic = rreq(1, "EPIC-54");
+        epic.relationships.push(edge(RelationshipType::Child, 2));
+        let story = rreq(2, "STORY-695");
+        let store = store_of(vec![epic, story]);
+
+        let set = descendant_closure(&store, uuid::Uuid::from_u128(1));
+        assert!(set.contains("EPIC-54"), "root included");
+        assert!(
+            set.contains("STORY-695"),
+            "child reached via a Child-only edge (no Parent inverse) — the missed case"
+        );
+        assert_eq!(set.len(), 2);
+    }
+
     #[test]
     fn closure_is_cycle_safe() {
-        // A pathological parent cycle 1→2→1 must terminate.
-        let nodes = vec![node(1, "EPIC-1", &[2]), node(2, "STORY-2", &[1])];
-        let set = compute_descendants(&nodes, uuid::Uuid::from_u128(1));
+        // A pathological hierarchy cycle 1<->2 must terminate.
+        let mut a = rreq(1, "EPIC-1");
+        a.relationships.push(edge(RelationshipType::Child, 2));
+        let mut b = rreq(2, "STORY-2");
+        b.relationships.push(edge(RelationshipType::Child, 1));
+        let store = store_of(vec![a, b]);
+
+        let set = descendant_closure(&store, uuid::Uuid::from_u128(1));
         assert!(set.contains("EPIC-1"));
         assert!(set.contains("STORY-2"));
         assert_eq!(set.len(), 2);
@@ -740,8 +816,8 @@ mod tests {
 
     #[test]
     fn closure_of_missing_root_is_empty() {
-        let nodes = vec![node(1, "EPIC-1", &[])];
-        let set = compute_descendants(&nodes, uuid::Uuid::from_u128(42));
+        let store = store_of(vec![rreq(1, "EPIC-1")]);
+        let set = descendant_closure(&store, uuid::Uuid::from_u128(42));
         assert!(set.is_empty());
     }
 
