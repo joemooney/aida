@@ -35,6 +35,15 @@ chrono = { workspace = true }
 # (Unix) and CTRL_C_EVENT/CTRL_BREAK_EVENT (Windows). BUG-110.
 ctrlc = { workspace = true }
 
+# Render the row-preview body as markdown (headings/bold/italic/code/lists)
+# instead of piping raw `aida show` stdout as plain text (STORY-689 slice 1).
+# Ratatui-native: parses via pulldown-cmark and emits a ratatui `Text`, so it
+# composes with the existing Paragraph/Wrap layout. `default-features = false`
+# drops the heavy `highlight-code` feature (syntect + the native `onig_sys` C
+# library) — fenced code still renders as a styled block, just without
+# language-aware syntax highlighting, which the preview pane doesn't need.
+tui-markdown = { version = "0.3.7", default-features = false }
+
 # POSIX SIGSTOP/SIGCONT for `prefix p` pause/resume of the hosted child's
 # process group (STORY-678). Unix-only — the signal calls are `#[cfg(unix)]`
 # gated, so the dep is scoped to unix targets to stay unused-warning-clean on

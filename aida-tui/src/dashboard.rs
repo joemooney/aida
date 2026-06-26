@@ -15,7 +15,7 @@ use crate::theme::Theme;
 use anyhow::Result;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
 use serde::Deserialize;
@@ -164,9 +164,12 @@ pub struct DashboardModel {
     pub rows: Vec<ListRow>,
     pub selected: usize,
     pub ambient: AmbientState,
-    /// Cached `aida show <id>` preview text, keyed by row id. Filled on
-    /// first paint per row and reused for subsequent moves.
-    pub preview_cache: HashMap<String, Vec<String>>,
+    /// Cached preview body, keyed by row id. Filled on first paint per row
+    /// and reused for subsequent moves. Spec rows cache the raw `aida show`
+    /// body as [`PreviewBody::Markdown`] so the pane renders headings/bold/
+    /// lists/code instead of verbatim CLI text (STORY-689 slice 1); PR,
+    /// session, action, and error previews stay [`PreviewBody::Plain`].
+    pub preview_cache: HashMap<String, PreviewBody>,
     /// Notice line above the middle list (e.g. "loading PRs…", "`gh`
     /// failed — empty PR list"). Cleared on a successful refetch.
     pub notice: Option<String>,
@@ -695,6 +698,24 @@ fn short_id(s: &str) -> String {
     s.chars().take(8).collect()
 }
 
+/// A cached preview body. Spec rows hold their raw `aida show --no-git`
+/// stdout as [`PreviewBody::Markdown`] so the pane renders it through the
+/// markdown renderer; everything else (PR/session/action text, error
+/// messages) stays [`PreviewBody::Plain`] and renders verbatim.
+//
+// The markdown variant deliberately stores the *raw* string, not a
+// pre-built ratatui `Text`: `tui_markdown::from_str` returns a `Text`
+// borrowed from its input, so the owning `String` has to live in the
+// cache and the `Text` is rebuilt (cheaply) at paint time in
+// `render_preview`. trace:STORY-689 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PreviewBody {
+    /// Raw markdown source (a spec body); rendered via `tui_markdown`.
+    Markdown(String),
+    /// Pre-split plain-text lines, rendered verbatim.
+    Plain(Vec<String>),
+}
+
 /// Run `aida show <id>` for the currently-highlighted row and cache the
 /// stdout into the preview pane. Called once per cursor move; cached
 /// for the lifetime of the dashboard model.
@@ -705,15 +726,15 @@ pub fn ensure_preview(model: &mut DashboardModel) {
     if model.preview_cache.contains_key(&row.id) {
         return;
     }
-    let lines = match row.kind {
+    let body = match row.kind {
         RowKind::Queued | RowKind::Backlog | RowKind::History => preview_via_show(&row.id),
-        RowKind::Pr => preview_via_gh_pr(&row.id),
-        RowKind::Session => vec![
+        RowKind::Pr => PreviewBody::Plain(preview_via_gh_pr(&row.id)),
+        RowKind::Session => PreviewBody::Plain(vec![
             format!("Session id: {}", row.id),
             String::new(),
             "Enter resumes this conversation via `claude --resume`.".into(),
-        ],
-        RowKind::Action => vec![row.title.clone()],
+        ]),
+        RowKind::Action => PreviewBody::Plain(vec![row.title.clone()]),
         // Blocked-board reason rows preview the spec body, except the
         // synthetic PR rows (`pr:<n>`) which preview the PR. trace:STORY-686
         RowKind::ReasonInFlight
@@ -725,16 +746,16 @@ pub fn ensure_preview(model: &mut DashboardModel) {
         | RowKind::ReasonAdvisorBacklog
         | RowKind::ReasonDeferred => {
             if let Some(num) = row.id.strip_prefix("pr:") {
-                preview_via_gh_pr(num)
+                PreviewBody::Plain(preview_via_gh_pr(num))
             } else {
                 preview_via_show(&row.id)
             }
         }
     };
-    model.preview_cache.insert(row.id, lines);
+    model.preview_cache.insert(row.id, body);
 }
 
-fn preview_via_show(id: &str) -> Vec<String> {
+fn preview_via_show(id: &str) -> PreviewBody {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     // BUG-613-adjacent: the row preview only needs the cached spec body, not the
@@ -745,15 +766,18 @@ fn preview_via_show(id: &str) -> Vec<String> {
         cmd.current_dir(cwd);
     }
     match cmd.output() {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
-            .lines()
-            .map(|s| s.to_string())
-            .collect(),
-        Ok(o) => vec![
+        // The spec body is treated as markdown: descriptions/acceptance use
+        // headings, bold, lists, and fenced code, so render it through the
+        // markdown renderer instead of as verbatim CLI text. Plain prose with
+        // no markdown syntax round-trips unchanged. trace:STORY-689 | ai:claude
+        Ok(o) if o.status.success() => {
+            PreviewBody::Markdown(String::from_utf8_lossy(&o.stdout).into_owned())
+        }
+        Ok(o) => PreviewBody::Plain(vec![
             format!("`aida show {id}` failed:"),
             String::from_utf8_lossy(&o.stderr).to_string(),
-        ],
-        Err(e) => vec![format!("could not run `aida show`: {e}")],
+        ]),
+        Err(e) => PreviewBody::Plain(vec![format!("could not run `aida show`: {e}")]),
     }
 }
 
@@ -901,22 +925,47 @@ fn render_preview(frame: &mut Frame, area: Rect, model: &DashboardModel) {
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.border))
         .title(" Preview ");
-    let lines: Vec<Line> = match model
+    let text = match model
         .current_row()
         .and_then(|r| model.preview_cache.get(&r.id))
     {
-        Some(buf) => buf.iter().map(|s| Line::from(s.clone())).collect(),
-        None => vec![Line::from(Span::styled(
+        Some(body) => preview_text(body, theme),
+        None => Text::from(Line::from(Span::styled(
             "(no selection)",
             Style::default().fg(theme.dim),
-        ))],
+        ))),
     };
     frame.render_widget(
-        Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: false }),
+        Paragraph::new(text).block(block).wrap(Wrap { trim: false }),
         area,
     );
+}
+
+/// Convert a cached [`PreviewBody`] into the ratatui [`Text`] the preview
+/// pane renders. Markdown bodies go through `tui_markdown` (headings, bold/
+/// italic, lists, fenced code → styled spans); plain bodies render verbatim,
+/// one [`Line`] per stored string. An empty markdown body degrades to a dim
+/// placeholder rather than a blank pane.
+// trace:STORY-689 | ai:claude
+fn preview_text<'a>(body: &'a PreviewBody, theme: &Theme) -> Text<'a> {
+    match body {
+        PreviewBody::Markdown(src) => {
+            if src.trim().is_empty() {
+                Text::from(Line::from(Span::styled(
+                    "(empty)",
+                    Style::default().fg(theme.dim),
+                )))
+            } else {
+                tui_markdown::from_str(src)
+            }
+        }
+        PreviewBody::Plain(lines) => Text::from(
+            lines
+                .iter()
+                .map(|s| Line::from(s.clone()))
+                .collect::<Vec<_>>(),
+        ),
+    }
 }
 
 fn render_hint_row(frame: &mut Frame, area: Rect, model: &DashboardModel) {
@@ -1171,5 +1220,80 @@ mod tests {
         // Idempotent: a second fill does not duplicate.
         m.lazy_fill_prs();
         assert_eq!(m.board.iter().filter(|c| c.spec_id == "pr:21").count(), 1);
+    }
+
+    // --- STORY-689 slice 1: markdown preview rendering ---
+
+    // Flatten a rendered `Text` back to one plain string per line so a test can
+    // assert on the *content* the renderer kept, independent of styling.
+    fn text_to_lines(text: &Text) -> Vec<String> {
+        text.lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn markdown_preview_renders_structure() {
+        // A markdown body is parsed into ratatui `Text`: the heading text and
+        // list items survive, the inline emphasis delimiters (`**`) are
+        // consumed (the word keeps a BOLD modifier instead), and a bullet
+        // marker is emitted for the list. This proves the body went through
+        // the markdown renderer rather than being shown verbatim.
+        // trace:STORY-689
+        let body =
+            PreviewBody::Markdown("# Title\n\nSome **bold** prose.\n\n- first\n- second\n".into());
+        let theme = Theme::default();
+        let text = preview_text(&body, &theme);
+        let lines = text_to_lines(&text);
+        let joined = lines.join("\n");
+        assert!(
+            joined.contains("Title"),
+            "heading text survives: {joined:?}"
+        );
+        assert!(
+            joined.contains("first") && joined.contains("second"),
+            "list items survive: {joined:?}"
+        );
+        // The bold delimiters are consumed — the literal `**bold**` is gone,
+        // but the word remains, carrying a BOLD style modifier.
+        assert!(
+            !joined.contains("**bold**"),
+            "bold markers consumed: {joined:?}"
+        );
+        let bold_span_exists = text.lines.iter().any(|line| {
+            line.spans.iter().any(|s| {
+                s.content.contains("bold") && s.style.add_modifier.contains(Modifier::BOLD)
+            })
+        });
+        assert!(bold_span_exists, "emphasized word carries a BOLD modifier");
+    }
+
+    #[test]
+    fn empty_markdown_preview_degrades_gracefully() {
+        // An empty/whitespace body yields a dim placeholder rather than a
+        // blank pane. trace:STORY-689
+        let body = PreviewBody::Markdown("   \n  ".to_string());
+        let theme = Theme::default();
+        let lines = text_to_lines(&preview_text(&body, &theme));
+        assert_eq!(lines, vec!["(empty)".to_string()]);
+    }
+
+    #[test]
+    fn plain_preview_renders_verbatim() {
+        // Non-spec previews (PR/session/error) keep their lines exactly,
+        // including markdown-looking characters. trace:STORY-689
+        let body = PreviewBody::Plain(vec!["PR #21".to_string(), "# not a heading".to_string()]);
+        let theme = Theme::default();
+        let lines = text_to_lines(&preview_text(&body, &theme));
+        assert_eq!(
+            lines,
+            vec!["PR #21".to_string(), "# not a heading".to_string()]
+        );
     }
 }
