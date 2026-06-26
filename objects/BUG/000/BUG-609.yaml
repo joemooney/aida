@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-24T04:03:13.861603135Z
-modified_at: 2026-06-26T05:15:36.640932625Z
+modified_at: 2026-06-26T06:07:38.107161491Z
 req_type: Bug
 tags:
 - fleet-coordination
@@ -28,3 +28,9 @@ tags:
 - papercut
 - status
 - worktrees
+comments:
+- id: 019f028a-7c7b-78a0-89b6-70b2f8054cb0
+  author: joe
+  content: 'PR #1108 opened (worktree-agent-ab8e12a20fb93dad5). Active-agents headline now counts only live agents (Stale/dead-PID corpses partitioned out, hidden behind a ''+K stale'' footer pointing at doctor heal); --all/--stale reveal them. Worktrees collapse to a one-line summary above 8 rows (with obsolete tally + ''aida session gc'' hint); --all lists. Reused the BUG-613 memoized liveness verdict on AgentRegistryView.status + the STORY-456 obsolete verdict — no new per-agent/per-worktree scan, so the BUG-613 timing win holds. Awaiting CI; left unmerged for the lead.'
+  created_at: 2026-06-26T06:07:38.107161491Z
+  modified_at: 2026-06-26T06:07:38.107161491Z
