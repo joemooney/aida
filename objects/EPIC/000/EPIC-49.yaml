@@ -3,12 +3,12 @@ spec_id: EPIC-49
 agreed_id: EPIC-49
 title: 'AIDA streamlined + niche-fit: pare the surface, sharpen the wedge, make the niche legible'
 description: 'Product spine of the autonomous long-loop (north star: docs/plans/2026-06-18-north-star-streamlined-niche.md). Make AIDA the best version of itself: W2 streamline the surface (usage-grounded cut/hide/merge of low-value commands+skills; collapse near-duplicates), W3 sharpen the niche (spec-quality loop, competitive-eval feature, cross-vendor briefs, the trace loop), W5 legibility/onboarding (first-run, README/OVERVIEW, TUI quiet-depth). Children filed as the audit + experiments surface them. Subtraction counts as progress. Paired with EPIC-48 (the research half).'
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:28:18.420024972Z
-modified_at: 2026-06-20T19:29:30.059192629Z
+modified_at: 2026-06-26T18:27:38.440277820Z
 req_type: Epic
 tags:
 - from-advisor
