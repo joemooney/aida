@@ -1,0 +1,12 @@
+id: 019f0658-f185-7122-a403-56fda9a26b4a
+spec_id: STORY-702
+agreed_id: STORY-702
+title: 'Who-must-act lens: pivot the board by owner (you / advisor / role)'
+description: 'Cross-cutting view toggle that re-groups classified items by owner instead of reason — one on-YOUR-plate bucket (needs-approval + needs-answer + mail), one advisor, one implementer/reviewer — so the operator answers "what must I act on now" without scanning 7 groups. Pure re-projection. NOTE: gesture grammar may be absorbed by EPIC-54 redesign shell.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T23:52:00.133019412Z
+modified_at: 2026-06-26T23:52:00.133019412Z
+req_type: Story
