@@ -20724,6 +20724,26 @@ fn ensure_no_spec_id_collisions(store_path: &std::path::Path) -> Result<()> {
     );
 }
 
+// TASK-857: opt-out for the pre-allocation remote sync. `aida add`'s remaining
+// multi-second cost is the unconditional network round-trips guarding the
+// cross-clone duplicate-id race. Setting AIDA_ADD_NO_REMOTE_SYNC truthy makes
+// every store-syncing step on the add path purely local — no ls-remote probe,
+// no pull --rebase, no push. The local collision check still runs, so the
+// in-clone duplicate guard is preserved; the cross-clone guard degrades to
+// "reconverge on the next online add / `aida db sync`". For fully-offline or
+// solo-clone workflows where the network floor is pure latency.
+// trace:TASK-857 | ai:claude
+fn add_remote_sync_disabled() -> bool {
+    std::env::var("AIDA_ADD_NO_REMOTE_SYNC")
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
 fn pull_store_before_id_allocation(
     store_path: &std::path::Path,
     project_root: &std::path::Path,
@@ -20734,6 +20754,13 @@ fn pull_store_before_id_allocation(
         ensure_no_spec_id_collisions(store_path)?;
         return Ok(());
     }
+
+    // TASK-857: explicit purely-local mode — skip every network leg, keep the
+    // local collision guard. trace:TASK-857 | ai:claude
+    if add_remote_sync_disabled() {
+        return ensure_no_spec_id_collisions(store_path);
+    }
+
     if git_ops::has_changes(store_path).unwrap_or(false) {
         let _ = git_ops::add(store_path, &["."]);
         let _ = git_ops::commit(
@@ -20744,6 +20771,45 @@ fn pull_store_before_id_allocation(
 
     let cfg = read_store_allocation_config(project_root)?;
     let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
+
+    // TASK-857 (option a): the network floor. Instead of an UNCONDITIONAL full
+    // `pull --rebase` (fetch + rebase the whole orphan store) on every add,
+    // first ask the remote for just the branch head SHA via a single
+    // `ls-remote` (refs only, no object transfer). Three outcomes:
+    //
+    //   * remote head == local HEAD  → the local store already contains the
+    //     remote's latest state. Allocating from it is provably safe, so SKIP
+    //     the heavy pull entirely and just run the local collision check. This
+    //     is the common steady-state case and the whole latency win.
+    //   * remote head != local HEAD  → the remote moved; fall through to the
+    //     existing pull --rebase retry loop to converge before allocating
+    //     (duplicate-id guarantee preserved exactly as before).
+    //   * ls-remote returns None     → remote unreachable (offline). Rather
+    //     than hard-failing every add while offline, degrade gracefully: warn
+    //     once and allocate from local state under the local collision guard.
+    //     The push-after-allocation leg re-converges with the remote (and is
+    //     itself offline-tolerant), so a sibling clone reconciles on its next
+    //     online add. trace:TASK-857 | ai:claude
+    match git_ops::remote_branch_head_sha(store_path, "origin", &branch) {
+        Some(remote_sha) => {
+            if let Ok(local_sha) = git_ops::head_sha(store_path) {
+                if remote_sha == local_sha {
+                    // Already current with origin — no objects to fetch.
+                    return ensure_no_spec_id_collisions(store_path);
+                }
+            }
+            // Remote diverged (or couldn't read local HEAD) → heavy pull below.
+        }
+        None => {
+            // Offline / unreachable: file locally, reconverge later.
+            eprintln!(
+                "{} origin unreachable — filing offline; the new id syncs on the next online `aida add` or `aida db sync --push`.",
+                "ℹ".cyan()
+            );
+            return ensure_no_spec_id_collisions(store_path);
+        }
+    }
+
     for attempt in 0..cfg.retry_max {
         match git_ops::pull_rebase(store_path, "origin", &branch) {
             Ok(()) => return ensure_no_spec_id_collisions(store_path),
@@ -20781,6 +20847,13 @@ fn push_store_after_id_allocation(
         return Ok(());
     }
 
+    // TASK-857: explicit purely-local mode — the new id is committed locally and
+    // will publish on the next online `aida add` / `aida db sync --push`.
+    // trace:TASK-857 | ai:claude
+    if add_remote_sync_disabled() {
+        return Ok(());
+    }
+
     let cfg = read_store_allocation_config(project_root)?;
     let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
     for attempt in 0..cfg.retry_max {
@@ -20807,12 +20880,23 @@ fn push_store_after_id_allocation(
                     cfg.retry_max
                 );
             }
-            Err(e) => anyhow::bail!(
-                "store push failed after allocating {}: {}\n\
-                 Your local store still has the new spec commit; retry with `aida db sync --push` after the network recovers.",
-                spec_id,
-                e
-            ),
+            // TASK-857: a push that ERRORS (vs is rejected) is the offline /
+            // network-down case. A spec is already filed and committed locally;
+            // the duplicate-id guarantee only requires the publish to land
+            // *eventually* (a sibling clone reconciles when it next pulls). So
+            // DEFER rather than fail the whole `aida add`: warn and return Ok.
+            // The CAS-reject retry above is untouched — that's the real
+            // serialize-the-winners guard and only fires when online.
+            // trace:TASK-857 | ai:claude
+            Err(_) => {
+                eprintln!(
+                    "{} {} filed locally but not yet published (origin unreachable). \
+                     It syncs on the next online `aida add` or `aida db sync --push`.",
+                    "ℹ".cyan(),
+                    spec_id
+                );
+                return Ok(());
+            }
         }
     }
     Ok(())
