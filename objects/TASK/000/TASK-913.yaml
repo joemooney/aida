@@ -13,6 +13,10 @@ description: |-
   - Long bodies SCROLL within the modal (verify the modal has scroll; add if missing).
   - Pure markdown->Lines mapping is unit-tested (e.g. a heading line gets bold, a list item gets a bullet); render smoke test for a representative body.
   - build/test/fmt/clippy green; the redesign module only; existing TUI untouched.
+
+  ## Test Plan
+
+  1. Press **p** on a spec with a rich description → **expect** the body renders as **markdown** (headings bold, `**bold**`/`*italic*`, inline + fenced `code`, bullet/numbered lists), and **scrolls** (↑/↓ or j/k, PageUp/Down). Esc/q/p closes it.
 status: Approved
 priority: Medium
 owner: ''
