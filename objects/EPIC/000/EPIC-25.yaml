@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:30:02.426947902Z
-modified_at: 2026-06-06T13:39:27.538952052Z
+modified_at: 2026-06-26T23:51:12.063457402Z
 req_type: Epic
 comments:
 - id: 019e9c13-3527-75f0-9c25-58091616adc1
@@ -27,3 +27,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): REJECT the release-as-queueable-composite + documenter-role machinery as over-engineered for a solo/small-team flow (scripts/release.sh + aida changelog refresh + the existing pipeline already deliver the practical value). SALVAGED the one valuable insight as a new bounded TASK (release-time doc-coverage gate) — see linked task.'
   created_at: 2026-06-06T13:39:23.174272156Z
   modified_at: 2026-06-06T13:39:23.174272156Z
+- id: 019f0658-35bf-7602-a731-70a24d555b26
+  author: joe
+  content: 'Reject (advisor 2026-06-26): operator REJECTED release-as-queueable-composite + documenter-role as over-engineered for solo/small-team (2026-06-06). The one valuable slice (release-time doc-coverage gate, TASK-680) already shipped as aida doc coverage. scripts/release.sh + aida changelog deliver the practical value.'
+  created_at: 2026-06-26T23:51:12.063457402Z
+  modified_at: 2026-06-26T23:51:12.063457402Z
