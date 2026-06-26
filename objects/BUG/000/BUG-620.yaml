@@ -17,12 +17,12 @@ description: |-
   - The aida tui tab displays "advisor"; no user-facing "dialog" token remains in the TUI.
   - Tab cycling / selection behavior is unchanged (only the label changes).
   - Existing persisted launcher state (dialog_session_id) still loads — back-compat preserved.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T05:01:15.073081781Z
-modified_at: 2026-06-26T05:15:31.632477266Z
+modified_at: 2026-06-26T06:25:14.483756520Z
 req_type: Bug
 tags:
 - consistency
@@ -30,3 +30,21 @@ tags:
 - papercut
 - tui
 - user-facing-text
+history:
+- id: 019f029a-9a94-74d1-8813-747698e13756
+  author: aida-auto-bump
+  timestamp: 2026-06-26T06:25:14.388553172Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f029a-9af3-7be2-b1af-25fab2d32dac
+  timestamp: 2026-06-26T06:25:14.483748569Z
+  agent: aida
+  commit_sha: 6bc911562d3690534407c1baa054c434118e58e5
+  summary: Completed via merge 6bc91156
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T06:25:13.121320018Z
+  completion_sha: 6bc911562d3690534407c1baa054c434118e58e5
