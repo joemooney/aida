@@ -6838,6 +6838,19 @@ pub enum Command {
         // trace:BUG-609 | ai:claude
         #[clap(long)]
         stale: bool,
+        /// Reproduce the exhaustive dump: expand every section the terse
+        /// default collapses to a one-line summary (open-PR roster, recently
+        /// merged, inferred remote activity, cross-clone coordination, the
+        /// recent-activity feed, the per-status requirement breakdown, and the
+        /// AIDA-dev-context block). By default `aida status` leads with the
+        /// answer — session / branch / PR / queue / what-needs-you — and folds
+        /// the long-tail rosters behind one-liners so the orientation command
+        /// fits roughly one screen. `--all` implies `--full` (and also reveals
+        /// the fleet roster). Use `--full` when you want the full picture
+        /// without the stale-agent / worktree expansion `--all` adds.
+        // trace:STORY-673 | ai:claude
+        #[clap(long)]
+        full: bool,
     },
 
     /// List the team: every registered node/clone sharing this store
