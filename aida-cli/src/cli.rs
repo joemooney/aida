@@ -52,6 +52,19 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// Hidden substrate machinery invoked by hooks / scaffolding, not by humans.
+// trace:STORY-684
+#[derive(Subcommand, Debug)]
+pub enum InternalCommand {
+    /// Enforce the advisor-no-code-write invariant at the commit boundary.
+    /// Called by the scaffolded git pre-commit hook so the gate binds any
+    /// vendor's commit (Codex, raw terminal, headless), not just Claude. Exits
+    /// non-zero (aborting the commit) when an advisor session stages code with
+    /// no sanctioned-coding context.
+    // trace:STORY-684
+    AdvisorCodeGate,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum ServerCommand {
     /// Check server status
@@ -7060,6 +7073,16 @@ pub enum Command {
         /// print. Useful for background callers (statusline, hooks).
         #[clap(long, short = 'q')]
         quiet: bool,
+    },
+
+    /// Substrate machinery invoked by hooks / scaffolding, not by humans.
+    /// Hidden from `--help`. Currently carries the vendor-agnostic
+    /// advisor-no-code-write gate the git pre-commit hook calls.
+    // trace:STORY-684
+    #[clap(hide = true)]
+    Internal {
+        #[clap(subcommand)]
+        command: InternalCommand,
     },
 
     /// Author a conventional-format-compliant commit and run `git commit`.
