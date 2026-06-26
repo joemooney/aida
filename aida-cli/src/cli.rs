@@ -6137,6 +6137,15 @@ pub enum Command {
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
 
+        /// Cap the output at the first N rows, applied AFTER sorting — so
+        /// `--limit N` returns the N most-recent (with the default
+        /// `--sort modified`) or the N most-connected (`--sort heft`).
+        /// Composes with every filter; applies to both the human table and
+        /// `--json`. Omit for the full (filtered) listing.
+        // trace:TASK-900 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "N")]
+        limit: Option<usize>,
+
         /// Show only specs assigned to you (assignee == your shell identity).
         /// Composes with every other filter. Mutually exclusive with
         /// `--assigned`.
@@ -9590,6 +9599,63 @@ mod tests {
         // `--human` conflicts with `--status` / `--json` / `--tree` at the clap layer.
         assert!(Cli::try_parse_from(["aida", "list", "--human", "--json"]).is_err());
         assert!(Cli::try_parse_from(["aida", "list", "--human", "--status", "draft"]).is_err());
+    }
+
+    // trace:TASK-900 — `aida list --limit N` parses into the optional
+    // `limit` field; absent it is None (full listing). The handler applies
+    // the cap AFTER the recency-first sort, so N most-recent come back.
+    #[test]
+    fn list_limit_flag_parses() {
+        // Absent → None (no cap).
+        let cli = Cli::try_parse_from(["aida", "list"]).unwrap();
+        match cli.command {
+            Command::List { limit, .. } => assert_eq!(limit, None),
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // Present → Some(N).
+        let cli = Cli::try_parse_from(["aida", "list", "--limit", "5"]).unwrap();
+        match cli.command {
+            Command::List { limit, .. } => assert_eq!(limit, Some(5)),
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // Composes with other filters.
+        let cli =
+            Cli::try_parse_from(["aida", "list", "--status", "open", "--limit", "3"]).unwrap();
+        match cli.command {
+            Command::List { limit, status, .. } => {
+                assert_eq!(limit, Some(3));
+                assert_eq!(status.as_deref(), Some("open"));
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // Non-numeric value is a parse error.
+        assert!(Cli::try_parse_from(["aida", "list", "--limit", "notanumber"]).is_err());
+    }
+
+    // trace:TASK-900 — the truncation semantics the list handler relies on:
+    // `Vec::truncate(N)` keeps the FIRST N of the already-sorted (recency-first)
+    // vector, i.e. the N most-recent. `N >= len` is a no-op (full listing).
+    #[test]
+    fn list_limit_truncates_to_n_most_recent() {
+        // Stand-in for the recency-first `reqs` vector (freshest first).
+        let sorted = vec!["newest", "newer", "mid", "older", "oldest"];
+
+        let mut got = sorted.clone();
+        got.truncate(3);
+        assert_eq!(got, vec!["newest", "newer", "mid"]);
+
+        // limit >= len → unchanged.
+        let mut all = sorted.clone();
+        all.truncate(99);
+        assert_eq!(all, sorted);
+
+        // limit 0 → empty.
+        let mut none = sorted.clone();
+        none.truncate(0);
+        assert!(none.is_empty());
     }
 
     // trace:TASK-770 | ai:codex

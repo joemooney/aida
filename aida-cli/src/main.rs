@@ -13512,6 +13512,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             mine,
             assigned,
             user,
+            limit,
             ..
         } => {
             // STORY-562: `aida list human` (positional alias) and `aida list
@@ -13777,6 +13778,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 .unwrap_or(false);
             if !*all && !user_asked_for_standing_type {
                 reqs.retain(|r| !is_standing_artifact_type(&r.req_type));
+            }
+
+            // TASK-900: cap the result at the first N rows AFTER the sort
+            // (list_summaries already ordered by --sort; default is
+            // recency-first) and after the parent / meta / standing-type
+            // retain passes — so `--limit N` is the N most-recent of the
+            // fully-filtered set. Applied here, before the --short early
+            // return and the json / table / tree rendering, so every output
+            // shape sees the same bounded row set.
+            // trace:TASK-900 | ai:claude
+            if let Some(n) = limit {
+                reqs.truncate(*n);
             }
 
             // TASK-743: --short emits one bare canonical spec ID per line —
