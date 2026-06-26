@@ -22,6 +22,24 @@ if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || 
     exit 0
 fi
 
+# 2b. Advisor-no-code-write gate (STORY-684). VENDOR-AGNOSTIC substrate
+# enforcement: this git pre-commit hook runs no matter which agent drove the
+# commit (Claude, Codex, a raw terminal, a headless child), so the invariant
+# "the advisor seat does specs/routing/review, NOT code" holds even where the
+# Claude-only PreToolUse hook never fires. Delegates the decision to the binary
+# (`aida internal advisor-code-gate`) so the rule lives in ONE place shared with
+# the `aida commit` CLI path. Refuses (exit 1, aborting the commit) when an
+# advisor session stages code with no sanctioned context; silent otherwise.
+# Carve-outs (AIDA_AUTO_COMPLETE, solo mode, AIDA_ALLOW_ADVISOR_CODE=1) and the
+# git-native --no-verify are the escape hatches. Falls open if `aida` isn't on
+# PATH (this hook ships to repos that may not have the binary installed).
+# trace:STORY-684
+if command -v aida >/dev/null 2>&1; then
+    if ! aida internal advisor-code-gate; then
+        exit 1
+    fi
+fi
+
 # 3. Auto-fmt staged Rust files before commit so cargo fmt --check (in CI)
 # never catches drift after a local commit lands.
 # Emergency skip: pass --no-verify to git commit.

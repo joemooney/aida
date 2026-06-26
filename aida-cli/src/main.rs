@@ -4,6 +4,7 @@
 #![recursion_limit = "256"]
 
 mod advisor;
+mod advisor_code_gate;
 mod advisor_watch;
 mod agent_registry;
 mod alias;
@@ -2127,6 +2128,17 @@ fn run() -> Result<()> {
         });
     }
 
+    // `aida internal advisor-code-gate` is the vendor-agnostic substrate
+    // enforcement of the advisor-no-code-write invariant (STORY-684). The
+    // scaffolded git pre-commit hook shells out to it so ANY vendor's
+    // `git commit` (Codex, raw terminal, headless) hits the same gate the
+    // Claude PreToolUse hook only ever gave Claude. Self-contained (git diff +
+    // env + the solo marker), so it dispatches before storage init.
+    // trace:STORY-684
+    if let Command::Internal { command } = &cli.command {
+        return handle_internal_command(command);
+    }
+
     // `aida goal` is a pure condition generator — no store needed.
     // trace:TASK-242 | ai:claude
     if let Command::Goal {
@@ -2943,6 +2955,7 @@ fn run() -> Result<()> {
         Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Commit { .. } => unreachable!("commit is dispatched before storage init"),
+        Command::Internal { .. } => unreachable!("internal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -13465,6 +13478,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Commit { .. } => unreachable!("commit is dispatched before storage init"),
+        Command::Internal { .. } => unreachable!("internal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -74048,6 +74062,25 @@ fn effective_role_with_roster() -> (String, team::RoleSource) {
         }
         // No attached store → fall straight through to env / default.
         _ => team::resolve_effective_role(None, std::env::var("AIDA_SESSION_ROLE").ok().as_deref()),
+    }
+}
+
+/// Dispatch for the hidden `aida internal <…>` family — substrate machinery
+/// invoked by hooks/scaffolding, not by humans. Today it carries the
+/// vendor-agnostic advisor-code-write gate (STORY-684). trace:STORY-684
+fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
+    match command {
+        // Called by the git pre-commit hook: enforce the advisor-no-code-write
+        // invariant at the commit boundary for ANY vendor. Exits non-zero (the
+        // bail) when an advisor session stages code with no sanctioned context,
+        // which fails the pre-commit hook and aborts the commit. git has already
+        // staged everything by the time the hook runs, so we read the staged
+        // index (include_unstaged = false). trace:STORY-684
+        cli::InternalCommand::AdvisorCodeGate => {
+            let root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            advisor_code_gate::enforce_at_commit(&root, false)
+        }
     }
 }
 

@@ -108,6 +108,11 @@ jobs:
       - name: Run advisor-code-guard hook test
         run: bash tests/test_advisor_code_guard.sh
 
+      # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
+      # boundary (the substrate counterpart to the Claude-only hook above).
+      - name: Run advisor-code-gate substrate test
+        run: bash tests/test_advisor_code_gate.sh
+
       # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
       # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
       - name: Run distributed / sibling-store integration tests

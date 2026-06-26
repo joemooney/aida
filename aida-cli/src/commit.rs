@@ -127,6 +127,14 @@ pub(crate) fn handle_commit_command(args: &CommitArgs) -> Result<()> {
         );
     }
 
+    // STORY-684: vendor-agnostic advisor-no-code-write gate. The `aida commit`
+    // CLI path is one of the two enforcement points (the scaffolded git
+    // pre-commit hook is the other, so even a raw `git commit` from any vendor
+    // hits it). Refuse an advisor-seat commit that stages code; the gate is
+    // silent for non-advisor roles and the sanctioned-coding carve-outs.
+    // trace:STORY-684
+    crate::advisor_code_gate::enforce_at_commit(&root, args.all)?;
+
     run_git_commit(&root, &message, args.all)?;
     println!(
         "{} committed: {}",
