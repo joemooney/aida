@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T19:52:13.150481811Z
-modified_at: 2026-06-26T20:34:45.475516662Z
+modified_at: 2026-06-26T20:59:41.028625653Z
 req_type: Spike
 tags:
 - cache
@@ -47,4 +47,13 @@ comments:
   content: 'CONCRETE FIX IDENTIFIED (2026-06-26): the CLI ''aida queue list --epic'' (TASK-923) reuses aida_core::graph_walk::walk_union over BOTH (Child,Parent) edges — the same closure aida graph --tree uses (BUG-543/BUG-448) — so it AGREES with the tree and is robust to one-directional edges. The TUI focus-lens closure (STORY-695, SpecStore::descendants_of) was written to walk ONLY Parent edges, which is exactly why it showed 4 of ~10 children. FIX: port the focus lens to the same walk_union(Child,Parent) pattern so the TUI lens, --tree, and the CLI --epic filter all agree and are direction-robust. That aligns the three views and removes the focus lens''s dependence on perfectly-bidirectional edges.'
   created_at: 2026-06-26T20:09:42.804501622Z
   modified_at: 2026-06-26T20:09:42.804501622Z
+- id: 019f05bb-2e64-7260-87be-4f22998f09ec
+  author: joe
+  content: |-
+    RESOLVED (2026-06-26), both layers, verified independently:
+    - SOURCE (TASK-928, branch fix/spike71-parentage, commit 70c3d5531): (A) parent/child rel-add was ALREADY bidirectional-by-default (TASK-679, rel_should_write_inverse) — confirmed, no change. (B) NEW: ensure_parent_edge_from_tag auto-creates the real bidirectional edge when a parent:<ID> tag is present, wired into aida add AND aida edit — closes the orphan-tag trap. (D) the 'stale cache' was a MISDIAGNOSIS: relationship reads go through backend.load() (full YAML), not the SQLite cache (which omits relationships); the incident's missing children were the one-directional-edge problem read from the wrong endpoint, not staleness. 4 new tests, 3020 pass.
+    - READER (TASK-929, branch feat/tui-action-target-redesign, commit 91fd78189): focus-lens descendants_of + parent_epics_of now use walk_union(Child,Parent) — direction-robust, parity-proven equal to 'aida graph --tree'. Regression test: a Child-only edge is now found.
+    Net: bad edges can't be created (source) AND readers tolerate them anyway (reader). Both fixes on branches off main, pending merge. The earlier manual backfill of EPIC-54's edges + cache rebuild already corrected the live data.
+  created_at: 2026-06-26T20:59:41.028625653Z
+  modified_at: 2026-06-26T20:59:41.028625653Z
 human_only: true
