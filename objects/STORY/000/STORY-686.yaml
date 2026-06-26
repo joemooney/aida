@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:48:14.169670962Z
-modified_at: 2026-06-26T05:20:38.275788642Z
+modified_at: 2026-06-26T05:21:26.675003080Z
 req_type: Story
 tags:
 - cockpit
@@ -36,6 +36,13 @@ comments:
   content: Commit 5764bac16 references this requirement
   created_at: 2026-06-26T05:12:30.882404625Z
   modified_at: 2026-06-26T05:12:30.882404625Z
+- id: 019f0260-3663-72b3-a507-0ddd41eabccd
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-25-story-686-blocked-board.md
+    filed 4 task(s): TASK-898, TASK-899, TASK-900, TASK-901
+  created_at: 2026-06-26T05:21:27.651598774Z
+  modified_at: 2026-06-26T05:21:27.651598774Z
 history:
 - id: 019f025f-7531-7003-a811-5e176bae5a65
   author: aida-auto-bump
