@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T02:44:18.339982045Z
-modified_at: 2026-06-26T02:44:18.339982045Z
+modified_at: 2026-06-26T02:47:48.683429285Z
 req_type: Bug
 tags:
 - from-operator-testing
 - perf
 - tui
+comments:
+- id: 019f01d3-8acb-7de0-a297-f4aaa62c3dd7
+  author: joe
+  content: Commit 788b76a24 references this requirement
+  created_at: 2026-06-26T02:47:48.683429285Z
+  modified_at: 2026-06-26T02:47:48.683429285Z
