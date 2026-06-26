@@ -3,14 +3,32 @@ spec_id: TASK-900
 agreed_id: TASK-900
 title: Real `aida list --limit` + load-more pagination (TASK-897 follow-up)
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T05:21:11.312658822Z
-modified_at: 2026-06-26T05:21:11.312658822Z
+modified_at: 2026-06-26T06:29:41.980825241Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f0241-cb59-7fd3-9845-b5c38be2eb1c
   created_at: 2026-06-26T05:21:15.617661317Z
+history:
+- id: 019f029e-af8a-7661-9ef1-57a1bacc6b46
+  author: aida-auto-bump
+  timestamp: 2026-06-26T06:29:41.898516600Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f029e-afdc-7352-ba1e-5eaaf4a64924
+  timestamp: 2026-06-26T06:29:41.980819442Z
+  agent: aida
+  commit_sha: 6114d5d61923ba8c9132d73b61a2550cdf8760a1
+  summary: Completed via merge 6114d5d6
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T06:29:40.925488603Z
+  completion_sha: 6114d5d61923ba8c9132d73b61a2550cdf8760a1
