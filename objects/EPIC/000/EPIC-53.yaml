@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:47:42.338439443Z
-modified_at: 2026-06-26T23:52:14.213687497Z
+modified_at: 2026-06-26T23:52:37.186617410Z
 req_type: Epic
 tags:
 - cockpit
@@ -35,6 +35,10 @@ relationships:
 - rel_type: Parent
   target_id: 019f0658-f185-7122-a403-56fda9a26b4a
   created_at: 2026-06-26T23:52:14.213682746Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 019f0659-4ed2-7b50-bc31-2ea0a3a6df8f
+  created_at: 2026-06-26T23:52:37.186613450Z
   created_by: joe
 comments:
 - id: 019f0246-317e-7433-9051-43fd5bae719c
