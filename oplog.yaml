@@ -21013,5 +21013,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2006
+- id: 019f025f-e58c-7392-ac5c-e318af789c54
+  target_id: 019f025f-af64-7992-99f4-4b820e523218
+  author: aida
+  node_id: '1'
+  lamport: 2007
+  timestamp: 2026-06-26T05:21:06.956632328Z
+  kind: !Create
+    title: STORY-688 (product/advisor role-split) — deferred until visibility shows the
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2007
 node_id: '1'
