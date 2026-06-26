@@ -82,6 +82,77 @@ fn launcher_serializes_resume_intent_for_session() {
     assert_eq!(out, "resume:019e2d4f-7777-7abc\n");
 }
 
+// --- STORY-681 in-process dispatch ------------------------------------
+//
+// The launcher no longer needs the fd-3 wire format / bash wrapper to act
+// on an Intent: it plans the Intent into a spawnable command and runs it
+// in-process. These tests assert that Intent → command mapping (the Rust
+// equivalent of the wrapper's `case "$_intent"` dispatch) end-to-end
+// through the public test surface. trace:STORY-681 | ai:claude
+
+#[test]
+fn in_process_quit_plans_to_quit() {
+    use aida_tui::__test_only::{dispatch_plan, Dispatch, Intent};
+    assert_eq!(dispatch_plan(&Intent::Quit).unwrap(), Dispatch::Quit);
+}
+
+#[test]
+fn in_process_launch_plans_to_run_aida_queue_work() {
+    use aida_tui::__test_only::{dispatch_plan, Dispatch, Intent};
+    // The board's most common Intent: `launch:aida queue work <SPEC>`.
+    // The bash wrapper `eval`'d this; in-process we spawn `aida` directly.
+    let d = dispatch_plan(&Intent::Launch("aida queue work STORY-244".to_string())).unwrap();
+    assert_eq!(
+        d,
+        Dispatch::Run {
+            program: "aida".to_string(),
+            args: vec![
+                "queue".to_string(),
+                "work".to_string(),
+                "STORY-244".to_string()
+            ],
+        }
+    );
+}
+
+#[test]
+fn in_process_resume_plans_to_claude_resume() {
+    use aida_tui::__test_only::{dispatch_plan, Dispatch, Intent};
+    // `resume:<id>` → the wrapper ran `claude --resume <id>`; in-process
+    // we spawn the same.
+    let d = dispatch_plan(&Intent::Resume("019e2d4f-7777-7abc".to_string())).unwrap();
+    assert_eq!(
+        d,
+        Dispatch::Run {
+            program: "claude".to_string(),
+            args: vec!["--resume".to_string(), "019e2d4f-7777-7abc".to_string()],
+        }
+    );
+}
+
+#[test]
+fn in_process_shell_plans_to_run_gh() {
+    use aida_tui::__test_only::{dispatch_plan, Dispatch, Intent};
+    let d = dispatch_plan(&Intent::Shell("gh pr view 42".to_string())).unwrap();
+    assert_eq!(
+        d,
+        Dispatch::Run {
+            program: "gh".to_string(),
+            args: vec!["pr".to_string(), "view".to_string(), "42".to_string()],
+        }
+    );
+}
+
+#[test]
+fn in_process_run_child_spawns_waits_and_reports_status() {
+    use aida_tui::__test_only::dispatch_run_child;
+    // Proves the in-process path actually spawns + waits + reports the
+    // child's exit status (the loop branches on this to decide whether to
+    // sanitize the terminal). `true`/`false` are portable Unix stand-ins.
+    assert!(dispatch_run_child("true", &[]).unwrap().success());
+    assert!(!dispatch_run_child("false", &[]).unwrap().success());
+}
+
 #[test]
 fn launcher_rejects_shell_metacharacters() {
     let f = temp_intent_file();

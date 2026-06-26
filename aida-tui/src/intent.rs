@@ -40,8 +40,14 @@ pub enum Intent {
 /// depth — a SPEC-ID will never legitimately contain shell metacharacters,
 /// and the wrapper `eval`s the line, so anything outside this class is
 /// refused. Excludes `;` `|` `&` `$` `` ` `` `<` `>` `(` `)` newlines etc.
+/// In-process dispatch (STORY-681) spawns the command directly without a
+/// shell, so the `eval` injection vector is gone — but the loop still
+/// re-checks payloads through this gate as defense in depth before
+/// spawning, so a malformed Intent can never reach `Command::new`.
 /// trace:STORY-244 risk #8 | ai:claude
-fn is_safe_payload(s: &str) -> bool {
+//
+// trace:STORY-681 | ai:claude
+pub(crate) fn is_safe_payload(s: &str) -> bool {
     !s.is_empty()
         && s.chars().all(|c| {
             c.is_ascii_alphanumeric()
