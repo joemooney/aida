@@ -13,3 +13,11 @@
   for_role: advisor
   for_scope: harness-worktree
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 019f04d6-f832-7e42-9fbb-9cd7a86b0a3d
+  position: 3000
+  added_by: claude-advisor-1
+  added_at: 2026-06-26T18:04:57.868206158Z
+  for_role: advisor
+  for_scope: harness-worktree
+  added_by_machine: imac
