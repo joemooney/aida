@@ -3,15 +3,33 @@ spec_id: BUG-622
 agreed_id: BUG-622
 title: STORY-684 advisor-code-gate false-blocks worktree implementer agents — AIDA_SESSION_ROLE=advisor leaks from parent session into agent env
 description: 'The STORY-684 advisor-no-code-write commit gate refuses a commit when the effective role resolves to advisor. But a worktree implementer agent fanned from an advisor session INHERITS AIDA_SESSION_ROLE=advisor in its env (same leak class as the role-gated-test issue), so the gate FALSE-BLOCKS legitimate implementer commits. Observed: the TASK-895 agent had to commit under AIDA_SESSION_ROLE=implementer / --no-verify. This is friction on every fanned agent + a footgun (--no-verify bypasses ALL hooks). Fix options: (a) the agent-launch path resets/unsets AIDA_SESSION_ROLE for implementer agents; (b) the gate distinguishes an agent-worktree context from the human advisor seat; (c) document the requirement that fanned agents commit with AIDA_SESSION_ROLE=implementer. Pick the robust substrate fix, not just docs.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T08:15:52.477523448Z
-modified_at: 2026-06-26T08:15:52.477523448Z
+modified_at: 2026-06-26T08:43:10.072197223Z
 req_type: Bug
 tags:
 - advisor-role
 - agent-launch
 - from-drive
 - substrate-gate
+history:
+- id: 019f0318-e126-76b1-8d62-65e69f867a19
+  author: aida-auto-bump
+  timestamp: 2026-06-26T08:43:09.990074220Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f0318-e178-7590-ad56-934c256f042a
+  timestamp: 2026-06-26T08:43:10.072191034Z
+  agent: aida
+  commit_sha: 3f9a2304b95212a06c820042ee1a315f8598ba14
+  summary: Completed via merge 3f9a2304
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T08:43:09.010085209Z
+  completion_sha: 3f9a2304b95212a06c820042ee1a315f8598ba14
