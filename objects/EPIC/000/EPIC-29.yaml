@@ -121,7 +121,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:18:18.917955429Z
-modified_at: 2026-06-06T13:45:12.671643073Z
+modified_at: 2026-06-26T23:51:01.984203464Z
 req_type: Epic
 tags:
 - aida:tui
@@ -180,3 +180,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): REJECT the aida-tui repo split — keep the TUI in the monorepo (extracting it contradicts the shipped ''TUI is the product'' positioning, EPIC-26/STORY-137). Children 267/268/269/270 rejected with it. STORY-266 (public-API audit) salvaged as standalone hygiene work.'
   created_at: 2026-06-06T13:45:08.496251619Z
   modified_at: 2026-06-06T13:45:08.496251619Z
+- id: 019f0658-0e60-7a10-bfbc-081887b982e1
+  author: joe
+  content: 'Reject (advisor 2026-06-26): operator REJECTED the aida-tui repo split 2026-06-06 (contradicts the shipped "TUI is the product" positioning, EPIC-26). TUI work pivoted in-monorepo to EPIC-54; STORY-266 public-API audit salvaged + Completed; STORY-693 delivers in-process aida-core access WITHOUT extraction. Nothing left to decompose under the split framing.'
+  created_at: 2026-06-26T23:51:01.984203464Z
+  modified_at: 2026-06-26T23:51:01.984203464Z
