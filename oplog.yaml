@@ -21905,5 +21905,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2077
+- id: 019f054c-caba-7763-a13f-e802d50ce088
+  target_id: 019f054c-b8c2-7133-87ef-94a09145b6bb
+  author: aida
+  node_id: '1'
+  lamport: 2078
+  timestamp: 2026-06-26T18:59:06.554431392Z
+  kind: !Create
+    title: '(Followup C) skill lint: glyph-lint + `aida plan verify` on any plan ref'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2078
 node_id: '1'
