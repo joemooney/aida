@@ -1,0 +1,15 @@
+{
+  "id": "82d866f5-29a8-4179-a343-f67d39a52f01",
+  "thread_id": "82d866f5-29a8-4179-a343-f67d39a52f01",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1782449963618,
+  "body": "BUG-619 (Draft) flagged for advisor disposition. Symptom: aida tui lags navigating to the PRs panel; the cursor/selection is delayed on each move into the panel. Root cause (code-grounded): dashboard.rs:210 routes NavSection::Prs to fetch_prs() synchronously per navigation, and fetch_prs() (dashboard.rs:328) shells out to gh pr list on the UI thread. Desired: async-load on launch + periodic/on-command refresh (not per-navigation); navigate immediately and show a refreshing notice with last-known rows; never block the cursor. Building blocks already exist (notice-line slot dashboard.rs:130; spawn_overlay_refresh precedent app.rs:1139; graceful gh-unavailable degrade in welcome.rs). Has acceptance criteria. Recommend: approve + queue for implementer. Medium priority; tags tui/performance/papercut/ux. Filed by the product seat.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
