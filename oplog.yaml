@@ -21275,5 +21275,17 @@ operations:
   timestamp: 2026-06-26T16:33:33.625537940Z
   kind: !SetStatus
     status: Approved
-clock: 2027
+- id: 019f04d7-063e-7cb0-9b93-497d2dfc2603
+  target_id: 019f04d6-f832-7e42-9fbb-9cd7a86b0a3d
+  author: aida
+  node_id: '1'
+  lamport: 2028
+  timestamp: 2026-06-26T16:50:28.542375428Z
+  kind: !Create
+    title: aida why / session leases report a long-idle in-flight lease as 'being worked now' — a hung/abandoned session reads as active
+    description: 'A lease whose holder process is ALIVE but IDLE (no spec movement for hours) is reported by aida why as "in-flight — a live session lease is working this now" and shown as active in aida session leases. Observed: TASK-894 held by pid 1062421 in /home/joe/ai/aida-task-894 for ~26h with ZERO spec movement, no TASK-894 commits, nothing uncommitted — a hung/abandoned session. The operator twice could not tell stuck-from-working. A liveness check (process exists) is necessary but not sufficient. Add stalled-in-flight detection: when an in-flight lease is older than a threshold (e.g. lease age / last-spec-modified > Nh) with no progress, surface "in-flight but STALLED — lease Nh old, no progress; aida session end <id> to release" instead of "being worked now". This is the core legibility ask (why isnt it moving / is it really being worked). trace:BUG-623 candidate.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 2028
 node_id: '1'
