@@ -20821,5 +20821,17 @@ operations:
     req_type: Epic
     status: Approved
     priority: Medium
-clock: 1995
+- id: 019f0241-da14-7953-b41f-47d4c02fc4d2
+  target_id: 019f0241-cb59-7fd3-9845-b5c38be2eb1c
+  author: aida
+  node_id: '1'
+  lamport: 1996
+  timestamp: 2026-06-26T04:48:17.940768872Z
+  kind: !Create
+    title: Blocked/waiting board as TUI home view — why-not-moving taxonomy grouped by reason, owner, action
+    description: 'The keystone of EPIC-53. A new TUI home view that synthesizes one board: each open spec grouped by WHY it is not moving -> WHO must act -> the UNBLOCK action. Reason taxonomy (data source): needs-approval (draft + approved-not-queued), needs-answer (aida questions open), blocked-by-dep (BlockedBy edges / queue blocked flag), needs-attention (findings / NeedsAttention), awaiting-review (open PRs + Done-awaiting-merge), in-flight (session leases — not stuck), deferred (deferred shelf + trigger). Each row expands to its items; one keystroke dispatches the unblock action (approve, jump to aida questions, review PR, etc.) to the relevant subcommand — read-cockpit-that-dispatches, single-user. MUST compose cache-fast sources only (no aida status ~3.75s). Acceptance: from the home view the operator can in one screen see every open item that is not progressing, the reason, the responsible role/human, and act on the most common reasons (approve a draft, open an unanswered question, open a review) without leaving for a separate command first. Also surfaces the advisor backlog + intake proposals (the visibility-first answer to the advisor-bottleneck).'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 1996
 node_id: '1'

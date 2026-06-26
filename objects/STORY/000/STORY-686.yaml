@@ -1,0 +1,16 @@
+id: 019f0241-cb59-7fd3-9845-b5c38be2eb1c
+spec_id: STORY-686
+agreed_id: STORY-686
+title: Blocked/waiting board as TUI home view — why-not-moving taxonomy grouped by reason, owner, action
+description: 'The keystone of EPIC-53. A new TUI home view that synthesizes one board: each open spec grouped by WHY it is not moving -> WHO must act -> the UNBLOCK action. Reason taxonomy (data source): needs-approval (draft + approved-not-queued), needs-answer (aida questions open), blocked-by-dep (BlockedBy edges / queue blocked flag), needs-attention (findings / NeedsAttention), awaiting-review (open PRs + Done-awaiting-merge), in-flight (session leases — not stuck), deferred (deferred shelf + trigger). Each row expands to its items; one keystroke dispatches the unblock action (approve, jump to aida questions, review PR, etc.) to the relevant subcommand — read-cockpit-that-dispatches, single-user. MUST compose cache-fast sources only (no aida status ~3.75s). Acceptance: from the home view the operator can in one screen see every open item that is not progressing, the reason, the responsible role/human, and act on the most common reasons (approve a draft, open an unanswered question, open a review) without leaving for a separate command first. Also surfaces the advisor backlog + intake proposals (the visibility-first answer to the advisor-bottleneck).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T04:48:14.169670962Z
+modified_at: 2026-06-26T04:48:14.169670962Z
+req_type: Story
+tags:
+- cockpit
+- keystone
+- tui
