@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:29:15.599437866Z
-modified_at: 2026-06-24T03:36:27.824361681Z
+modified_at: 2026-06-26T07:56:24.372783514Z
 req_type: Task
 tags:
 - advisor-autopilot
@@ -34,3 +34,7 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
   created_at: 2026-06-24T03:29:15.599477428Z
+- rel_type: Parent
+  target_id: 019f02ec-f319-7213-83e8-944bb634b305
+  created_at: 2026-06-26T07:56:24.372779299Z
+  created_by: joe
