@@ -18,10 +18,12 @@
 //!
 //! trace:STORY-693 | ai:claude
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use aida_core::{
-    ArchiveFilter, CachedGitBackend, DatabaseBackend, DeferFilter, ListFilter, RequirementSummary,
+    ArchiveFilter, CachedGitBackend, DatabaseBackend, DeferFilter, ListFilter, RelationshipType,
+    RequirementSummary,
 };
 
 use super::state::{Scope, TargetItem};
@@ -71,8 +73,14 @@ impl SpecStore {
     /// * [`Scope::Open`]    → every non-terminal spec (not Completed/Rejected),
     ///   mirroring `aida list open`.
     ///
-    /// Non-functional scopes return an empty set. trace:STORY-693 | ai:claude
-    pub fn scope_items(&self, scope: Scope) -> Vec<TargetItem> {
+    /// Non-functional scopes return an empty set.
+    ///
+    /// `focus` is the optional EPIC focus lens (STORY-695): when `Some`, the
+    /// scope's item set is narrowed to specs in that set (the focus epic + its
+    /// transitive children, as computed by [`Self::descendants_of`]). When
+    /// `None`, behavior is unchanged (every scope-matching spec).
+    /// trace:STORY-693 trace:STORY-695 | ai:claude
+    pub fn scope_items(&self, scope: Scope, focus: Option<&HashSet<String>>) -> Vec<TargetItem> {
         let filter = ListFilter {
             // Backlog/Open both default to the active view (archived + deferred
             // rows hidden), matching the CLI `list` defaults.
@@ -84,11 +92,58 @@ impl SpecStore {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
-        summaries
+        let items = summaries
             .into_iter()
             .filter(|s| scope_includes(scope, &s.status))
-            .map(summary_to_item)
-            .collect()
+            .map(summary_to_item);
+        // Apply the EPIC focus lens (if set) — a PURE narrow over the produced
+        // rows. trace:STORY-695 | ai:claude
+        match focus {
+            Some(set) => items.filter(|it| focus_includes(set, it)).collect(),
+            None => items.collect(),
+        }
+    }
+
+    /// The transitive descendant closure of `epic_id` (STORY-695): the epic
+    /// itself plus every spec whose parent chain reaches it. Returned as the
+    /// set of the descendants' display ids (spec_id, or agreed_id when no
+    /// spec_id), so the focus lens can be applied to the [`TargetItem`] rows
+    /// (which carry the same display id).
+    ///
+    /// Loads every requirement once (each carries its `Parent`-type
+    /// relationships — a parent → child edge) and builds a parent→children
+    /// index from them, then BFS-walks the index from the epic. All in-process
+    /// via the open backend (no subprocess). Returns an empty set when the epic
+    /// can't be resolved or the store can't be read. trace:STORY-695 | ai:claude
+    pub fn descendants_of(&self, epic_id: &str) -> HashSet<String> {
+        // Resolve the focus epic's UUID (it may be given as a spec_id or an
+        // agreed id) so the closure walk keys off the canonical uuid edges.
+        let root = match self.backend.get_requirement_by_spec_id(epic_id) {
+            Ok(Some(req)) => req.id,
+            _ => return HashSet::new(),
+        };
+        let all = match self.backend.list_requirements(true) {
+            Ok(reqs) => reqs,
+            Err(_) => return HashSet::new(),
+        };
+        let nodes: Vec<ClosureNode> = all
+            .into_iter()
+            .map(|req| ClosureNode {
+                id: req.id,
+                display_id: req
+                    .spec_id
+                    .clone()
+                    .or_else(|| req.agreed_id.clone())
+                    .unwrap_or_default(),
+                children: req
+                    .relationships
+                    .iter()
+                    .filter(|r| r.rel_type == RelationshipType::Parent)
+                    .map(|r| r.target_id)
+                    .collect(),
+            })
+            .collect();
+        compute_descendants(&nodes, root)
     }
 
     /// Load one spec's full record (structured fields + description body) for
@@ -152,6 +207,155 @@ fn summary_to_item(s: RequirementSummary) -> TargetItem {
         status: s.status,
         priority: s.priority,
         body: String::new(),
+    }
+}
+
+/// One spec reduced to what the descendant-closure walk needs: its uuid, its
+/// display id (for the returned set), and the uuids of its direct children
+/// (its `Parent`-type relationship targets). Pure input to
+/// [`compute_descendants`] so the closure logic is unit-testable without a
+/// store. trace:STORY-695 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClosureNode {
+    pub id: uuid::Uuid,
+    pub display_id: String,
+    pub children: Vec<uuid::Uuid>,
+}
+
+/// Compute the transitive descendant closure of `root` over the parent→child
+/// graph described by `nodes`: BFS from the root, following each node's
+/// `children` edges, collecting every reached node's `display_id` (including
+/// the root's). A pure function of its inputs — no store, no IO — so the
+/// closure logic (epic + direct + grandchild in, unrelated specs out, cycle
+/// safety) is unit-testable. Empty display ids are dropped. trace:STORY-695 | ai:claude
+pub fn compute_descendants(nodes: &[ClosureNode], root: uuid::Uuid) -> HashSet<String> {
+    let by_id: HashMap<uuid::Uuid, &ClosureNode> = nodes.iter().map(|n| (n.id, n)).collect();
+    let mut result: HashSet<String> = HashSet::new();
+    let mut visited: HashSet<uuid::Uuid> = HashSet::new();
+    let mut queue: Vec<uuid::Uuid> = vec![root];
+    while let Some(uuid) = queue.pop() {
+        if !visited.insert(uuid) {
+            continue; // already walked — guards against cycles.
+        }
+        if let Some(node) = by_id.get(&uuid) {
+            if !node.display_id.is_empty() {
+                result.insert(node.display_id.clone());
+            }
+            for &child in &node.children {
+                if !visited.contains(&child) {
+                    queue.push(child);
+                }
+            }
+        }
+    }
+    result
+}
+
+/// Does the EPIC focus lens `set` include this target row? The lens matches on
+/// the row's display id (the same id [`ClosureNode::display_id`] carries). Pure
+/// so the filter narrowing is unit-testable. trace:STORY-695 | ai:claude
+fn focus_includes(set: &HashSet<String>, item: &TargetItem) -> bool {
+    set.contains(&item.id)
+}
+
+/// A coarse lifecycle-bucket tally of a focus set's specs, for the status-line
+/// progress summary (e.g. "6 done · 1 queued · 2 approved · 3 draft"). Buckets:
+///
+/// * `done`     — Done or Completed (finished work).
+/// * `in_progress` — InProgress or NeedsAttention (active / parked work).
+/// * `approved` — Approved or Planned (groomed, ready to pick up).
+/// * `draft`    — Draft (ungroomed).
+///
+/// Other statuses (e.g. Rejected) fall in none. Pure over the (status-string)
+/// inputs so it is unit-testable. trace:STORY-695 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FocusProgress {
+    pub done: usize,
+    pub in_progress: usize,
+    pub approved: usize,
+    pub draft: usize,
+}
+
+impl FocusProgress {
+    /// Tally a focus set's specs into the lifecycle buckets, given an iterator
+    /// of their status strings (cache Debug form — "Draft", "InProgress", …).
+    /// Matched case-insensitively. trace:STORY-695 | ai:claude
+    pub fn tally<'a, I: IntoIterator<Item = &'a str>>(statuses: I) -> Self {
+        let mut p = FocusProgress::default();
+        for status in statuses {
+            let s = status.trim();
+            if s.eq_ignore_ascii_case("done") || s.eq_ignore_ascii_case("completed") {
+                p.done += 1;
+            } else if s.eq_ignore_ascii_case("inprogress")
+                || s.eq_ignore_ascii_case("in-progress")
+                || s.eq_ignore_ascii_case("needsattention")
+                || s.eq_ignore_ascii_case("needs-attention")
+            {
+                p.in_progress += 1;
+            } else if s.eq_ignore_ascii_case("approved") || s.eq_ignore_ascii_case("planned") {
+                p.approved += 1;
+            } else if s.eq_ignore_ascii_case("draft") {
+                p.draft += 1;
+            }
+        }
+        p
+    }
+
+    /// A concise one-line summary of the non-zero buckets, e.g.
+    /// "6 done · 1 in-progress · 2 approved · 3 draft". Empty buckets are
+    /// dropped; an all-empty tally renders "no specs". trace:STORY-695 | ai:claude
+    pub fn summary(&self) -> String {
+        let mut parts = Vec::new();
+        if self.done > 0 {
+            parts.push(format!("{} done", self.done));
+        }
+        if self.in_progress > 0 {
+            parts.push(format!("{} in-progress", self.in_progress));
+        }
+        if self.approved > 0 {
+            parts.push(format!("{} approved", self.approved));
+        }
+        if self.draft > 0 {
+            parts.push(format!("{} draft", self.draft));
+        }
+        if parts.is_empty() {
+            "no specs".to_string()
+        } else {
+            parts.join(" · ")
+        }
+    }
+}
+
+/// The lifecycle-bucket progress summary for an EPIC focus set, read in-process
+/// from the cache. Loads the active (non-archived, non-deferred) spec summaries
+/// once, keeps those in `focus`, and tallies them via [`FocusProgress::tally`].
+/// Returns the `(FocusProgress, total)` so the caller can render
+/// "<EPIC>: <summary>". trace:STORY-695 | ai:claude
+impl SpecStore {
+    pub fn focus_progress(&self, focus: &HashSet<String>) -> (FocusProgress, usize) {
+        let filter = ListFilter {
+            archive: ArchiveFilter::NonArchivedOnly,
+            defer: DeferFilter::NonDeferredOnly,
+            ..Default::default()
+        };
+        let summaries = match self.backend.list_summaries(&filter) {
+            Ok(s) => s,
+            Err(_) => return (FocusProgress::default(), 0),
+        };
+        let in_focus: Vec<String> = summaries
+            .into_iter()
+            .filter(|s| {
+                let id = s
+                    .spec_id
+                    .clone()
+                    .or_else(|| s.agreed_id.clone())
+                    .unwrap_or_default();
+                focus.contains(&id)
+            })
+            .map(|s| s.status)
+            .collect();
+        let progress = FocusProgress::tally(in_focus.iter().map(|s| s.as_str()));
+        (progress, in_focus.len())
     }
 }
 
@@ -272,6 +476,111 @@ mod tests {
     fn non_functional_scopes_have_no_in_process_set() {
         assert!(!scope_includes(Scope::Queue, "Approved"));
         assert!(!scope_includes(Scope::Prs, "Open"));
+    }
+
+    // --- EPIC focus lens (STORY-695) -------------------------------------
+
+    fn node(id: u128, display: &str, children: &[u128]) -> ClosureNode {
+        ClosureNode {
+            id: uuid::Uuid::from_u128(id),
+            display_id: display.to_string(),
+            children: children.iter().map(|&c| uuid::Uuid::from_u128(c)).collect(),
+        }
+    }
+
+    fn target(id: &str, status: &str) -> TargetItem {
+        TargetItem {
+            id: id.to_string(),
+            title: String::new(),
+            req_type: "Task".into(),
+            status: status.to_string(),
+            priority: String::new(),
+            body: String::new(),
+        }
+    }
+
+    #[test]
+    fn closure_includes_epic_direct_and_grandchild_excludes_unrelated() {
+        // EPIC(1) → STORY(2) → TASK(3); plus an unrelated STORY(9).
+        let nodes = vec![
+            node(1, "EPIC-54", &[2]),
+            node(2, "STORY-695", &[3]),
+            node(3, "TASK-913", &[]),
+            node(9, "STORY-999", &[]),
+        ];
+        let set = compute_descendants(&nodes, uuid::Uuid::from_u128(1));
+        assert!(set.contains("EPIC-54"), "epic itself is in the closure");
+        assert!(set.contains("STORY-695"), "direct child is in");
+        assert!(set.contains("TASK-913"), "transitive grandchild is in");
+        assert!(!set.contains("STORY-999"), "unrelated spec is out");
+        assert_eq!(set.len(), 3);
+    }
+
+    #[test]
+    fn closure_is_cycle_safe() {
+        // A pathological parent cycle 1→2→1 must terminate.
+        let nodes = vec![node(1, "EPIC-1", &[2]), node(2, "STORY-2", &[1])];
+        let set = compute_descendants(&nodes, uuid::Uuid::from_u128(1));
+        assert!(set.contains("EPIC-1"));
+        assert!(set.contains("STORY-2"));
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn closure_of_missing_root_is_empty() {
+        let nodes = vec![node(1, "EPIC-1", &[])];
+        let set = compute_descendants(&nodes, uuid::Uuid::from_u128(42));
+        assert!(set.is_empty());
+    }
+
+    #[test]
+    fn focus_filter_narrows_a_scope_list() {
+        let mut set = HashSet::new();
+        set.insert("STORY-695".to_string());
+        set.insert("TASK-913".to_string());
+        let items = [
+            target("STORY-695", "Approved"),
+            target("TASK-913", "Draft"),
+            target("STORY-999", "Approved"), // not in focus
+        ];
+        let kept: Vec<&str> = items
+            .iter()
+            .filter(|it| focus_includes(&set, it))
+            .map(|it| it.id.as_str())
+            .collect();
+        assert_eq!(kept, vec!["STORY-695", "TASK-913"]);
+    }
+
+    #[test]
+    fn progress_summary_counts_buckets() {
+        let statuses = [
+            "Done",
+            "Completed",
+            "InProgress",
+            "Approved",
+            "Planned",
+            "Draft",
+            "Draft",
+            "Rejected", // counted in no bucket
+        ];
+        let p = FocusProgress::tally(statuses.iter().copied());
+        assert_eq!(p.done, 2, "Done + Completed");
+        assert_eq!(p.in_progress, 1);
+        assert_eq!(p.approved, 2, "Approved + Planned");
+        assert_eq!(p.draft, 2);
+        let s = p.summary();
+        assert!(s.contains("2 done"));
+        assert!(s.contains("1 in-progress"));
+        assert!(s.contains("2 approved"));
+        assert!(s.contains("2 draft"));
+    }
+
+    #[test]
+    fn progress_summary_drops_empty_buckets_and_handles_none() {
+        let p = FocusProgress::tally(["Draft", "Draft"].iter().copied());
+        assert_eq!(p.summary(), "2 draft");
+        let empty = FocusProgress::tally(std::iter::empty::<&str>());
+        assert_eq!(empty.summary(), "no specs");
     }
 
     #[test]

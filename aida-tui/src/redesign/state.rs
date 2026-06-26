@@ -398,6 +398,49 @@ impl DeferInput {
     }
 }
 
+/// A pending single-line text-input modal for the change-focus key (STORY-695):
+/// the operator types a new EPIC id to focus the whole TUI on. Mirrors
+/// [`DeferInput`] — a typed `buffer`; Enter applies it as the new focus epic,
+/// Esc cancels. Kept pure (push_char / backspace / take) so it is
+/// unit-testable without a terminal. trace:STORY-695 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusInput {
+    /// The epic id typed so far.
+    pub buffer: String,
+}
+
+impl FocusInput {
+    /// Open a fresh input pre-filled with `initial` (the current focus epic, so
+    /// "change" starts from the existing value; empty when first focusing).
+    pub fn new(initial: &str) -> Self {
+        FocusInput {
+            buffer: initial.to_string(),
+        }
+    }
+
+    /// Append a typed char to the epic-id buffer.
+    pub fn push_char(&mut self, c: char) {
+        self.buffer.push(c);
+    }
+
+    /// Backspace the buffer (no-op when empty).
+    pub fn backspace(&mut self) {
+        self.buffer.pop();
+    }
+
+    /// The trimmed epic id to focus on confirm, or `None` when the buffer is
+    /// blank (confirming an empty buffer clears the focus rather than focusing
+    /// on nothing). trace:STORY-695 | ai:claude
+    pub fn epic_id(&self) -> Option<String> {
+        let t = self.buffer.trim();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
+        }
+    }
+}
+
 /// The full pure UI state for the redesign prototype.
 #[derive(Debug, Clone)]
 pub struct RedesignState {
@@ -437,6 +480,20 @@ pub struct RedesignState {
     /// typed buffer + the target ids captured when `defer` was run.
     /// trace:TASK-921 | ai:claude
     pub defer_input: Option<DeferInput>,
+    /// The EPIC focus lens (STORY-695): when `Some`, the whole TUI is scoped to
+    /// this epic id + its transitive children. Set from `AIDA_TUI_EPIC` at
+    /// launch or by the change-focus key; cleared by the clear-focus key.
+    /// Ambient context the status line shows; every scope-list fetch respects
+    /// it. trace:STORY-695 | ai:claude
+    pub focus_epic: Option<String>,
+    /// A short progress summary of the focus set (e.g. "6 done · 2 draft"),
+    /// computed by the parent from the filtered set when the focus is set.
+    /// `None` when unfocused. trace:STORY-695 | ai:claude
+    pub focus_summary: Option<String>,
+    /// Pending epic-id input for the change-focus key, if open. Mirrors
+    /// [`DeferInput`]: the operator types a new epic id; Enter applies it as the
+    /// focus, Esc cancels. trace:STORY-695 | ai:claude
+    pub focus_input: Option<FocusInput>,
     /// Is the context-sensitive '?' help popup open? Its content is derived
     /// purely from the current focus via [`Self::help_content`]; the popup
     /// only tracks that it is showing. trace:TASK-922 | ai:claude
@@ -470,6 +527,9 @@ impl RedesignState {
             verb_modal: None,
             confirm: None,
             defer_input: None,
+            focus_epic: None,
+            focus_summary: None,
+            focus_input: None,
             help: false,
             role: role.into(),
             status: None,
@@ -876,6 +936,61 @@ impl RedesignState {
             .map(|di| (di.targets.clone(), di.trigger()))
     }
 
+    // --- EPIC focus lens (STORY-695) -------------------------------------
+
+    /// Is an EPIC focus lens active? trace:STORY-695 | ai:claude
+    pub fn focused(&self) -> bool {
+        self.focus_epic.is_some()
+    }
+
+    /// Clear the EPIC focus lens (back to all items). The parent re-fetches the
+    /// unfiltered scope set after this. trace:STORY-695 | ai:claude
+    pub fn clear_focus(&mut self) {
+        self.focus_epic = None;
+        self.focus_summary = None;
+    }
+
+    /// Open the change-focus input modal, pre-filled with the current focus
+    /// epic (so "change" edits the existing value; empty when first focusing).
+    /// trace:STORY-695 | ai:claude
+    pub fn open_focus_input(&mut self) {
+        let initial = self.focus_epic.clone().unwrap_or_default();
+        self.focus_input = Some(FocusInput::new(&initial));
+    }
+
+    /// Is the change-focus input modal open? trace:STORY-695 | ai:claude
+    pub fn focus_input_open(&self) -> bool {
+        self.focus_input.is_some()
+    }
+
+    /// Append a char to the open focus-epic buffer (no-op when closed).
+    pub fn push_focus_char(&mut self, c: char) {
+        if let Some(fi) = &mut self.focus_input {
+            fi.push_char(c);
+        }
+    }
+
+    /// Backspace the open focus-epic buffer (no-op when closed).
+    pub fn pop_focus_char(&mut self) {
+        if let Some(fi) = &mut self.focus_input {
+            fi.backspace();
+        }
+    }
+
+    /// Cancel the focus input (Esc) — discards the buffer, leaves the current
+    /// focus unchanged. trace:STORY-695 | ai:claude
+    pub fn cancel_focus_input(&mut self) {
+        self.focus_input = None;
+    }
+
+    /// Confirm the focus input (Enter) — take the pending input out and return
+    /// the epic id to focus on (`Some`), or `None` when the buffer was blank
+    /// (which the parent treats as a clear-focus). Closes the modal either way.
+    /// trace:STORY-695 | ai:claude
+    pub fn take_focus_input(&mut self) -> Option<String> {
+        self.focus_input.take().and_then(|fi| fi.epic_id())
+    }
+
     // --- Help popup (TASK-922) -------------------------------------------
 
     /// Open the context-sensitive '?' help popup. trace:TASK-922 | ai:claude
@@ -1161,6 +1276,12 @@ pub enum RunOutcome {
 /// asks for help. trace:TASK-922 | ai:claude
 pub const QUIT_KEY_LABEL: &str = "q (or Esc at the top) / Ctrl-C: quit";
 
+/// The EPIC focus-lens key legend entry, surfaced in every '?' help context so
+/// the ambient lens is discoverable wherever the operator asks for help.
+/// trace:STORY-695 | ai:claude
+pub const FOCUS_KEY_LABEL: &str =
+    "F: focus the whole TUI on an EPIC (+ its children) · C: clear the focus";
+
 /// The element the '?' help popup should describe, distilled from the focus
 /// state. A pure value so [`help_for`] is a total, unit-testable function.
 /// trace:TASK-922 | ai:claude
@@ -1256,6 +1377,7 @@ fn scope_legend() -> Vec<String> {
         "Tab: focus the items panel".to_string(),
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
+        FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
 }
@@ -1269,6 +1391,7 @@ fn verb_legend() -> Vec<String> {
         "Esc: back to scopes".to_string(),
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
+        FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
 }
@@ -1282,6 +1405,7 @@ fn item_legend() -> Vec<String> {
         "⇧Tab / Esc: back to the verbs panel".to_string(),
         "type: fuzzy-filter the items".to_string(),
         "?: toggle this help".to_string(),
+        FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
 }
@@ -2189,5 +2313,58 @@ mod tests {
         assert!(s.help_open());
         s.close_help();
         assert!(!s.help_open());
+    }
+
+    // --- EPIC focus lens (STORY-695) -------------------------------------
+
+    #[test]
+    fn focus_clear_resets_epic_and_summary() {
+        let mut s = state(3);
+        s.focus_epic = Some("EPIC-54".to_string());
+        s.focus_summary = Some("3 draft".to_string());
+        assert!(s.focused());
+        s.clear_focus();
+        assert!(!s.focused());
+        assert!(s.focus_epic.is_none());
+        assert!(s.focus_summary.is_none());
+    }
+
+    #[test]
+    fn focus_input_prefills_with_current_epic_and_confirms() {
+        let mut s = state(3);
+        s.focus_epic = Some("EPIC-54".to_string());
+        s.open_focus_input();
+        assert!(s.focus_input_open());
+        // Pre-filled with the current focus epic.
+        assert_eq!(s.focus_input.as_ref().unwrap().buffer, "EPIC-54");
+        // Edit it to a new epic.
+        for _ in 0..2 {
+            s.pop_focus_char();
+        }
+        s.push_focus_char('9');
+        s.push_focus_char('9');
+        assert_eq!(s.take_focus_input(), Some("EPIC-99".to_string()));
+        assert!(!s.focus_input_open(), "taking closes the modal");
+    }
+
+    #[test]
+    fn focus_input_blank_buffer_confirms_to_none() {
+        let mut s = state(3);
+        s.open_focus_input();
+        assert_eq!(s.focus_input.as_ref().unwrap().buffer, "");
+        // Confirming an empty buffer yields None (parent treats as clear).
+        assert_eq!(s.take_focus_input(), None);
+    }
+
+    #[test]
+    fn focus_input_cancel_leaves_focus_unchanged() {
+        let mut s = state(3);
+        s.focus_epic = Some("EPIC-54".to_string());
+        s.open_focus_input();
+        s.push_focus_char('x');
+        s.cancel_focus_input();
+        assert!(!s.focus_input_open());
+        // Focus epic is untouched by a cancelled edit.
+        assert_eq!(s.focus_epic, Some("EPIC-54".to_string()));
     }
 }
