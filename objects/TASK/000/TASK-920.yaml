@@ -12,13 +12,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:24:35.522688398Z
-modified_at: 2026-06-26T18:32:40.485182822Z
+modified_at: 2026-06-26T19:50:41.120318236Z
 req_type: Task
 tags:
 - lifecycle
 - parent:EPIC-54
 - redesign
 - tui
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-26T19:50:41.120310666Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-06-26T18:32:40.485182822Z
