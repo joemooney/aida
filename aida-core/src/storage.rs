@@ -1531,6 +1531,13 @@ impl Storage {
         self.queue_backend()?.queue_list(user_id, include_completed)
     }
 
+    /// List every user id with a persisted queue (read-only). Powers the
+    /// fleet-wide `aida queue list --all-users` aggregate view.
+    // trace:STORY-672
+    pub fn queue_users(&self) -> Result<Vec<String>> {
+        self.queue_backend()?.queue_users()
+    }
+
     /// Add an entry to a user's queue
     pub fn queue_add(&self, entry: crate::models::QueueEntry) -> Result<()> {
         self.queue_backend()?.queue_add(entry)

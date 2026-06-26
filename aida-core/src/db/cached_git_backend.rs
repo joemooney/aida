@@ -343,6 +343,11 @@ impl DatabaseBackend for CachedGitBackend {
         self.inner.queue_list(user_id, include_completed)
     }
 
+    // trace:STORY-672
+    fn queue_users(&self) -> Result<Vec<String>> {
+        self.inner.queue_users()
+    }
+
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         self.inner.queue_add(entry)
     }
