@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:05:50.716865287Z
-modified_at: 2026-06-26T17:29:45.659382401Z
+modified_at: 2026-06-26T17:31:34.348354257Z
 req_type: Story
 tags:
 - aida:tui
@@ -21,6 +21,11 @@ comments:
   content: Commit 44551f526 references this requirement
   created_at: 2026-06-26T17:29:45.659382401Z
   modified_at: 2026-06-26T17:29:45.659382401Z
+- id: 019f04fc-a64c-7c43-9c86-297d9b500bf3
+  author: joe
+  content: Commit 72791255b references this requirement
+  created_at: 2026-06-26T17:31:34.348354257Z
+  modified_at: 2026-06-26T17:31:34.348354257Z
 history:
 - id: 019efdab-9844-7090-b8ff-266c476affbd
   author: aida-auto-bump
