@@ -8,10 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:35.943313832Z
-modified_at: 2026-06-26T23:28:35.352517984Z
+modified_at: 2026-06-26T23:28:43.936517890Z
 req_type: Task
 tags:
 - gap
 - lifecycle
 - redesign
 - tui
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-26T23:28:43.936513344Z
+  created_by: joe
