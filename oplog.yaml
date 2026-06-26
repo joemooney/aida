@@ -22357,5 +22357,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 2115
+- id: 019f065b-8064-7f13-acc7-144d4c6ed3ab
+  target_id: 019f065b-6f74-7682-859c-b8dfe86e9d1e
+  author: aida
+  node_id: '1'
+  lamport: 2116
+  timestamp: 2026-06-26T23:54:47.780489441Z
+  kind: !Create
+    title: 'Book-chapter composition: group feature clusters into chapters with cross-refs'
+    description: Roll child stories + their Doc entries under each EPIC into a chapter index; render uses/composes-with edges as in-page links. Consumes the same Doc-entry read path as the tutorial projection.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2116
 node_id: '1'
