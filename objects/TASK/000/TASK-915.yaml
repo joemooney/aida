@@ -14,12 +14,12 @@ description: |-
   - "queue" verb appears only for Approved focus; routes selected Approved specs via `aida queue add --for implementer`; non-Approved skipped with a clear status message.
   - Pure target-selection + conditional-verb logic unit-tested.
   - build/test/fmt/clippy green (clippy --no-deps); redesign module only; commit --no-verify with trace:TASK-915.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:20:40.219589639Z
-modified_at: 2026-06-26T18:20:40.219589639Z
+modified_at: 2026-06-26T18:46:23.454328492Z
 req_type: Task
 tags:
 - lifecycle
