@@ -13,12 +13,12 @@ description: |-
   - Long bodies SCROLL within the modal (verify the modal has scroll; add if missing).
   - Pure markdown->Lines mapping is unit-tested (e.g. a heading line gets bold, a list item gets a bullet); render smoke test for a representative body.
   - build/test/fmt/clippy green; the redesign module only; existing TUI untouched.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:53:18.176392457Z
-modified_at: 2026-06-26T17:53:18.176392457Z
+modified_at: 2026-06-26T18:46:16.920734996Z
 req_type: Task
 tags:
 - markdown
