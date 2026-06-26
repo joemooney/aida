@@ -118,6 +118,12 @@ pub enum RowKind {
     /// to the work queue (`aida queue add <id>`) rather than approving it (it
     /// is already approved). trace:TASK-901 | ai:claude
     ReasonAdvisorBacklog,
+    /// Live intake-proposal spec — a candidate in the headless `aida intake`
+    /// fence, filled async / on demand (TASK-904). Enter fires `aida intake`
+    /// scoped to that spec so the operator runs the actual cold-boot advisor
+    /// disposition.
+    // trace:TASK-904 | ai:claude
+    ReasonIntakeProposal,
     /// Deferred spec — Enter undefers it (`aida undefer <id>`).
     ReasonDeferred,
 }
@@ -208,6 +214,26 @@ pub struct DashboardModel {
     /// PRs panel avoid re-spawning a fetch that is already cached + idle.
     /// trace:BUG-619
     pub pr_loaded: bool,
+    /// Last-known live `aida intake` candidate ids, fetched off the UI thread
+    /// (TASK-904). The needs-approval group merges these in as intake-proposal
+    /// rows. Populated by the on-demand `i` keystroke; empty until then.
+    // trace:TASK-904
+    pub intake_cache: Vec<String>,
+    /// In-flight `aida intake --dry-run` receiver. Present while a background
+    /// intake fence fetch is running; the launcher polls [`Self::poll_intake`]
+    /// to merge the result and clear it. `None` means no fetch is in flight.
+    // trace:TASK-904
+    pub intake_rx: Option<std::sync::mpsc::Receiver<Vec<String>>>,
+    /// Whether the intake candidate cache has been populated at least once this
+    /// run — drives the "running…" vs "refreshing…" notice and the idempotent
+    /// merge guard.
+    // trace:TASK-904
+    pub intake_loaded: bool,
+    /// Whether the loaded intake candidates have been merged into the current
+    /// board snapshot. Cleared on a board refresh / a fresh fetch so the
+    /// proposals re-merge.
+    // trace:TASK-904
+    pub intake_filled: bool,
 }
 
 impl DashboardModel {
@@ -250,6 +276,9 @@ impl DashboardModel {
             .collect::<HashMap<_, _>>();
         self.board_loaded = true;
         self.prs_filled = false;
+        // A fresh board snapshot drops the prior intake-proposal merge; re-arm
+        // it so the cached candidates re-merge on the next read. trace:TASK-904
+        self.intake_filled = false;
     }
 
     /// Merge the async-loaded open PRs into the awaiting-review board group.
@@ -277,6 +306,7 @@ impl DashboardModel {
                 status: pr.status.clone(),
                 reason: crate::board::Reason::AwaitingReview,
                 advisor_backlog: false,
+                intake_proposal: false,
             });
         }
         self.reason_counts = crate::board::counts(&self.board)
@@ -355,6 +385,100 @@ impl DashboardModel {
             }
         }
     }
+
+    // --- Live intake-proposal source (TASK-904). The heavyweight `aida intake`
+    // candidate fence (`aida intake --dry-run`, ~1s store-load) is fetched off
+    // the UI thread, mirroring the `gh pr list` awaiting-review lazy fill. The
+    // cursor never waits on it. trace:TASK-904 | ai:claude
+
+    /// Merge the async-loaded intake candidate ids into the needs-approval
+    /// board group. Idempotent per board snapshot via `intake_filled`; reads
+    /// the ids from the off-thread [`Self::intake_cache`] (never shells out
+    /// itself). Recomputes the per-reason counts after merging.
+    // trace:TASK-904 | ai:claude
+    pub fn merge_intake(&mut self) {
+        if self.intake_filled || self.intake_cache.is_empty() {
+            return;
+        }
+        self.intake_filled = true;
+        crate::board::merge_intake_proposals(&mut self.board, &self.intake_cache);
+        self.reason_counts = crate::board::counts(&self.board)
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+    }
+
+    /// Kick a background `aida intake --dry-run` fetch off the UI thread,
+    /// unless one is already in flight. Unlike the PR fetch (armed on
+    /// navigation), this is armed only by the explicit `i` keystroke so the
+    /// heavyweight pass never fires on its own. The cursor returns immediately;
+    /// the result lands via [`Self::poll_intake`].
+    // trace:TASK-904 | ai:claude
+    pub fn request_intake(&mut self) {
+        if self.intake_rx.is_some() {
+            return;
+        }
+        // A re-request re-arms the merge so refreshed candidates re-land.
+        self.intake_filled = false;
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            // The receiver may have been dropped (re-entry); the send error is
+            // benign.
+            let _ = tx.send(crate::board::fetch_intake_proposal_ids());
+        });
+        self.intake_rx = Some(rx);
+        self.notice = Some(if self.intake_loaded {
+            "refreshing intake proposals… (heavyweight advisor fence)".into()
+        } else {
+            "running intake fence… (heavyweight advisor pass, ~1s)".into()
+        });
+    }
+
+    /// Non-blocking drain of the in-flight `aida intake` fetch. Returns `true`
+    /// when a result was just consumed (so the caller repaints): the candidate
+    /// ids are cached, the needs-approval merge is re-armed and applied, and
+    /// the notice is updated. Returns `false` when no fetch is in flight or it
+    /// has not finished yet — the cursor is never blocked.
+    // trace:TASK-904
+    pub fn poll_intake(&mut self) -> bool {
+        let Some(rx) = self.intake_rx.as_ref() else {
+            return false;
+        };
+        match rx.try_recv() {
+            Ok(ids) => {
+                self.intake_cache = ids;
+                self.intake_loaded = true;
+                self.intake_rx = None;
+                self.intake_filled = false;
+                // Make sure the board exists, then merge in place so the
+                // proposals appear without a navigation. trace:TASK-904
+                if !self.board_loaded {
+                    self.refresh_board();
+                }
+                self.merge_intake();
+                self.notice = Some(if self.intake_cache.is_empty() {
+                    "intake fence empty — nothing for the advisor to weigh".into()
+                } else {
+                    format!(
+                        "{} live intake proposal(s) merged into needs-approval",
+                        self.intake_cache.len()
+                    )
+                });
+                // If the needs-approval group is the live section, re-read its
+                // rows so the merged proposals show immediately. trace:TASK-904
+                if self.nav.current() == NavSection::Reason(crate::board::Reason::NeedsApproval) {
+                    self.rows =
+                        crate::board::rows_for(&self.board, crate::board::Reason::NeedsApproval);
+                }
+                true
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.intake_loaded = true;
+                self.intake_rx = None;
+                false
+            }
+        }
+    }
 }
 
 /// Fetch the rows for `section` and assemble a fresh dashboard model. The
@@ -416,6 +540,12 @@ pub fn refetch_rows(
             }
             if reason == crate::board::Reason::AwaitingReview {
                 model.lazy_fill_prs();
+            }
+            // The needs-approval group folds in any already-loaded live intake
+            // proposals (TASK-904); the heavyweight fetch itself is armed only
+            // by the `i` keystroke, never here, so navigation stays cheap.
+            if reason == crate::board::Reason::NeedsApproval {
+                model.merge_intake();
             }
             crate::board::rows_for(&model.board, reason)
         }
@@ -770,6 +900,7 @@ pub fn ensure_preview(model: &mut DashboardModel) {
         | RowKind::ReasonNeedsAnswer
         | RowKind::ReasonNeedsApproval
         | RowKind::ReasonAdvisorBacklog
+        | RowKind::ReasonIntakeProposal
         | RowKind::ReasonDeferred => {
             if let Some(num) = row.id.strip_prefix("pr:") {
                 PreviewBody::Plain(preview_via_gh_pr(num))
@@ -1331,6 +1462,86 @@ mod tests {
         // Idempotent: a second fill does not duplicate.
         m.lazy_fill_prs();
         assert_eq!(m.board.iter().filter(|c| c.spec_id == "pr:21").count(), 1);
+    }
+
+    // --- Live intake-proposal source (TASK-904). ---
+
+    // `request_intake` arms an off-thread fetch and shows a running notice;
+    // re-requesting while in flight is a no-op (no second worker). trace:TASK-904
+    #[test]
+    fn request_intake_arms_once() {
+        let mut m = fixture_model(vec![]);
+        m.request_intake();
+        assert!(m.intake_rx.is_some());
+        assert!(m.notice.as_deref().unwrap().contains("intake"));
+        // Re-request while in flight keeps the same receiver (no second spawn).
+        let ptr_before = m.intake_rx.as_ref().map(|r| r as *const _);
+        m.request_intake();
+        let ptr_after = m.intake_rx.as_ref().map(|r| r as *const _);
+        assert_eq!(ptr_before, ptr_after);
+    }
+
+    // `poll_intake` is a non-blocking channel drain: a landed candidate set is
+    // cached, merged into the needs-approval group, and the notice updated.
+    // trace:TASK-904
+    #[test]
+    fn poll_intake_merges_landed_candidates_into_needs_approval() {
+        let mut m = fixture_model(vec![]);
+        // A draft already on the board that the intake fence also weighs.
+        m.board = vec![crate::board::ClassifiedItem {
+            spec_id: "STORY-1".into(),
+            title: "t".into(),
+            status: "Draft".into(),
+            reason: crate::board::Reason::NeedsApproval,
+            advisor_backlog: false,
+            intake_proposal: false,
+        }];
+        m.board_loaded = true;
+        let (tx, rx) = std::sync::mpsc::channel();
+        m.intake_rx = Some(rx);
+
+        // Nothing sent yet → no consume.
+        assert!(!m.poll_intake());
+        assert!(m.intake_rx.is_some());
+
+        // Worker lands → consumed, cached, merged.
+        tx.send(vec!["STORY-1".to_string(), "STORY-2".to_string()])
+            .unwrap();
+        assert!(m.poll_intake());
+        assert!(m.intake_rx.is_none());
+        assert!(m.intake_loaded);
+        assert_eq!(m.intake_cache.len(), 2);
+        // STORY-1 upgraded in place; STORY-2 appended as a fresh proposal.
+        let upgraded = m.board.iter().find(|c| c.spec_id == "STORY-1").unwrap();
+        assert!(upgraded.intake_proposal);
+        assert!(m
+            .board
+            .iter()
+            .any(|c| c.spec_id == "STORY-2" && c.intake_proposal));
+        assert!(m.notice.as_deref().unwrap().contains("intake proposal"));
+    }
+
+    // An empty fence lands a clear notice and merges nothing. trace:TASK-904
+    #[test]
+    fn poll_intake_empty_fence_notice() {
+        let mut m = fixture_model(vec![]);
+        m.board_loaded = true;
+        let (tx, rx) = std::sync::mpsc::channel();
+        m.intake_rx = Some(rx);
+        tx.send(vec![]).unwrap();
+        assert!(m.poll_intake());
+        assert!(m.intake_cache.is_empty());
+        assert_eq!(
+            m.notice.as_deref(),
+            Some("intake fence empty — nothing for the advisor to weigh")
+        );
+    }
+
+    // With no fetch in flight, polling is a cheap no-op. trace:TASK-904
+    #[test]
+    fn poll_intake_no_fetch_is_noop() {
+        let mut m = fixture_model(vec![]);
+        assert!(!m.poll_intake());
     }
 
     // --- STORY-689 slice 1: markdown preview rendering ---
