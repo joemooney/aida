@@ -22,12 +22,12 @@ description: |-
   - While a fetch is in flight the panel renders immediately with a "refreshing…" notice (existing notice line) plus last-known rows (or an empty state) — the cursor is never blocked.
   - `gh` failure or absence degrades to an "unavailable" notice without hanging the UI.
   - Verify against the primary caller: a human cycling tabs in `aida tui` perceives instant panel switching; the PR data fills in asynchronously.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:57:44.481303272Z
-modified_at: 2026-06-26T07:00:10.457429598Z
+modified_at: 2026-06-26T07:07:35.942437465Z
 req_type: Bug
 tags:
 - papercut
@@ -45,3 +45,21 @@ comments:
   content: 'Fixed in PR #1114 (branch worktree-agent-a54d6e9d8738ebb47): PRs panel now loads async off-thread (DashboardModel::ensure_prs_loading spawns gh pr list into an mpsc channel; poll_prs drains it non-blocking), reusing the STORY-686 board''s fetch_open_pr_rows source. Navigating into PRs paints from pr_cache immediately + shows loading/refreshing notice; never blocks the cursor. g invalidates for a fresh fetch. 5 new tests.'
   created_at: 2026-06-26T07:00:10.457429598Z
   modified_at: 2026-06-26T07:00:10.457429598Z
+history:
+- id: 019f02c1-6233-7322-95bc-f74ea1b2c5d6
+  author: aida-auto-bump
+  timestamp: 2026-06-26T07:07:35.859694985Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f02c1-6286-71d0-a773-1821bd841d8f
+  timestamp: 2026-06-26T07:07:35.942431175Z
+  agent: aida
+  commit_sha: ab36facfda818e36c1279dd9297f938674b45ee3
+  summary: Completed via merge ab36facf
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-26T07:07:34.874829589Z
+  completion_sha: ab36facfda818e36c1279dd9297f938674b45ee3
