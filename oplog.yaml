@@ -21081,5 +21081,17 @@ operations:
   timestamp: 2026-06-26T06:15:39.803640959Z
   kind: !SetStatus
     status: Approved
-clock: 2013
+- id: 019f02a8-17df-72c2-846e-2cebf3f509bb
+  target_id: 019f02a8-06dc-7211-8d30-8e200bd376a0
+  author: aida
+  node_id: '1'
+  lamport: 2014
+  timestamp: 2026-06-26T06:39:58.431326852Z
+  kind: !Create
+    title: 'Cockpit paint floor: aida list --blocked does a full backend.load (~1.4s) — cache-project the blocked flag'
+    description: 'The blocked/waiting board (STORY-686) paints in ~1.4s debug, gated by its slowest leg: aida list --json --blocked, which does a full backend.load() to walk BlockedBy edges. BUG-618 fixed the QUEUE panel (storage.load -> cache summaries) but NOT this --blocked leg. To get the cockpit sub-second: cache-project the blocked flag (compute BlockedBy-incomplete into the SQLite cache at write time so --blocked reads the cache like other list filters), or a lighter blocked-walk that avoids loading all objects. The board fires legs concurrently so paint = slowest leg; this is the one to cut.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2014
 node_id: '1'
