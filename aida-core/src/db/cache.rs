@@ -981,7 +981,8 @@ impl Cache {
                           c.status, c.priority, c.owner, c.feature, c.req_type,
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
-                          c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee
+                          c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
+                          c.blocked
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
