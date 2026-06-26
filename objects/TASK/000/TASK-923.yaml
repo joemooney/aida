@@ -1,0 +1,30 @@
+id: 019f0548-ed1a-7ca3-8786-d66786a321ab
+spec_id: TASK-923
+agreed_id: TASK-923
+title: 'aida queue list --epic/--parent <ID>: filter the queue to an epic + its children'
+description: |-
+  Add an --epic <ID> (and --parent <ID> alias) filter to `aida queue list` so the queue can be narrowed to a single block of work — the epic + its TRANSITIVE children. Today the queue is keyed user × role × local/global; there is no way to view "the queue for EPIC-54". The items already carry parent:<EPIC> tags and the requirement graph is available in-process, so this is a FILTER over the existing one queue (filter, don't fragment — no separate per-epic queue storage).
+
+  BEHAVIOR:
+  - `aida queue list --epic EPIC-54` shows only queued items whose spec is in EPIC-54's descendant tree (epic + transitive children), computed via the in-process requirement graph closure (the same closure the TUI focus lens uses).
+  - `--parent <ID>` is an alias.
+  - Composes with --for / --all / --global / --local (epic-filter AND role-filter).
+  - Empty result prints a clear "no queued items under <ID>" rather than the generic empty message.
+
+  ACCEPTANCE:
+  - `aida queue list --epic <ID>` filters to the epic's descendant closure; composes with --for.
+  - closure is transitive (epic + children + grandchildren), computed in-process (no per-spec shell-out).
+  - pure closure + filter logic unit-tested; build/test/fmt/clippy green.
+  - this is a MAIN-codebase CLI feature (aida-cli) — own branch off main, NOT the TUI redesign branch.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-26T18:54:53.210043649Z
+modified_at: 2026-06-26T18:54:53.210043649Z
+req_type: Task
+tags:
+- cli
+- filter
+- focus
+- queue
