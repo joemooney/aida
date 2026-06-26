@@ -17,6 +17,7 @@ use crate::config::{TabVendor, TuiConfig};
 use crate::event::TuiEvent;
 use crate::help;
 use crate::overlay::{self, OverlayModel};
+use crate::palette::{self, Dispatched, PaletteState};
 use crate::picker::{self, PickerState};
 use crate::pty::PtyHost;
 use crate::state::{self, TabRecord, TuiState};
@@ -48,23 +49,30 @@ pub enum Mode {
     /// The `prefix o` status overlay is open — keystrokes drive the
     /// overlay (selection / actions / close), never the hosted child,
     /// and the child's PTY output is buffered (not blitted) until the
-    /// overlay closes. trace:STORY-133 | ai:claude
+    /// overlay closes.
+    //
+    // trace:STORY-133 | ai:claude
     Overlay,
     /// The `prefix n` new-session picker is open — keystrokes drive the
     /// picker (select / open / cancel). Like `Overlay`, the focused
     /// child's PTY output is buffered until the picker closes.
-    /// trace:STORY-134 | ai:claude
+    // trace:STORY-134 | ai:claude
     Picker,
     /// The `prefix ?` keybinding cheatsheet is open — keystrokes either
     /// close it (Esc / `q` / `?`) or are ignored, and like the other
     /// modals the focused child's PTY output is buffered until it
-    /// closes. trace:BUG-109 | ai:claude
+    /// closes.
+    //
+    // trace:BUG-109 | ai:claude
     Help,
-    /// The `prefix p` pause overlay is up — the focused child's process
-    /// group is `SIGSTOP`ped, its PTY output is buffered (not blitted, and
-    /// near-silent anyway since the frozen child emits nothing), and ANY
-    /// keystroke drives the resume (`SIGCONT` + repaint), never the child.
-    /// Semantically a modal like `Overlay` / `Help`. trace:STORY-678
+    /// The `prefix p` pause surface is up — the focused child's process
+    /// group is `SIGSTOP`ped (STORY-678) and its PTY output is buffered.
+    /// While paused, a **deterministic AIDA action palette** owns the
+    /// screen (STORY-679, EPIC-51 slice 2): keystrokes type/filter/select
+    /// curated actions that run `aida … --json` subprocesses inline — zero
+    /// LLM round-trip — never reaching the frozen child. `Esc` drives the
+    /// resume (`SIGCONT` + repaint). Semantically a modal like `Overlay`.
+    // trace:STORY-678 trace:STORY-679 | ai:claude
     Paused,
 }
 
@@ -115,15 +123,29 @@ pub enum Routing {
     /// A cheatsheet keystroke with no binding — an idempotent redraw.
     HelpRedraw,
     /// `prefix p` — pause the focused child (`SIGSTOP` its process group)
-    /// and show the paused overlay. trace:STORY-678
+    /// and open the deterministic action palette.
+    //
+    // trace:STORY-678 STORY-679
     Pause,
-    /// Any key while paused — resume the focused child (`SIGCONT`) and
-    /// repaint it from its snapshot. trace:STORY-678
+    /// `Esc` while paused — resume the focused child (`SIGCONT`) and
+    /// repaint it from its snapshot.
+    //
+    // trace:STORY-678
     Resume,
+    /// A palette keystroke that only changed palette state (a typed/erased
+    /// character, a moved selection) — repaint the palette.
+    //
+    // trace:STORY-679
+    PaletteRedraw,
+    /// `Enter` in the palette — run the highlighted (or typed `spec`/`run`)
+    /// deterministic action as a captured subprocess.
+    //
+    // trace:STORY-679
+    RunPaletteAction,
 }
 
 /// How a new tab's hosted `aida queue work` child should launch.
-/// trace:STORY-134 | ai:claude
+// trace:STORY-134 | ai:claude
 enum TabLaunch {
     /// Cold launch with a fresh, caller-minted `--session-id` UUID — the
     /// TUI tracks the conversation deterministically.
@@ -142,7 +164,9 @@ pub struct App {
     /// Terminal size as `(cols, rows)`.
     term_size: (u16, u16),
     /// Index into the status strip's rotating discovery hints, advanced
-    /// by [`TuiEvent::Tick`] every ~3s. trace:BUG-109 | ai:claude
+    /// by [`TuiEvent::Tick`] every ~3s.
+    //
+    // trace:BUG-109 | ai:claude
     hint_index: usize,
     /// Monotonic source of stable tab ids.
     next_tab_id: usize,
@@ -160,23 +184,37 @@ pub struct App {
     activity: Vec<ActivityEntry>,
     /// State for the `prefix n` new-session picker (STORY-134).
     picker: PickerState,
+    /// State for the suspended-chat deterministic action palette
+    /// (STORY-679, EPIC-51 slice 2) — the typed query + highlighted
+    /// candidate. Live only while [`Mode::Paused`].
+    //
+    // trace:STORY-679
+    paused_palette: PaletteState,
     /// The scope the TUI was launched with, if any — the picker offers
-    /// resumable conversations for it. trace:STORY-134 | ai:claude
+    /// resumable conversations for it.
+    //
+    // trace:STORY-134 | ai:claude
     launch_scope: Option<String>,
     /// Project root (holds `.aida/`) — where the crash-recovery state
-    /// file lives. trace:STORY-135 | ai:claude
+    /// file lives.
+    //
+    // trace:STORY-135 | ai:claude
     project_root: PathBuf,
     /// `ratatui` terminal, created lazily on the first modal open and
     /// reused for every subsequent draw of the overlay or picker. The
     /// supervisor's passthrough rendering writes raw bytes; this is only
-    /// ever used while a modal owns the screen. trace:STORY-133 STORY-134
+    /// ever used while a modal owns the screen.
+    //
+    // trace:STORY-133 STORY-134
     ratatui_term: Option<Terminal<CrosstermBackend<Stdout>>>,
     /// Cached mission-control snapshot (queue head + open-PR count) for the
     /// empty-state welcome panel. Fetched lazily on the first empty-shell
     /// repaint and invalidated to `None` whenever a session ends (so re-
     /// entering the empty shell re-reads the now-changed queue). Keeping it
     /// cached avoids the `gh` shell-out firing on every repaint (resize,
-    /// modal close). trace:TASK-255 | ai:claude
+    /// modal close).
+    //
+    // trace:TASK-255 | ai:claude
     mission: Option<welcome::MissionData>,
 }
 
@@ -238,6 +276,7 @@ impl App {
             overlay: OverlayState::new(),
             activity: Vec::new(),
             picker: PickerState::empty(),
+            paused_palette: PaletteState::new(),
             launch_scope: None,
             project_root: PathBuf::new(),
             ratatui_term: None,
@@ -312,18 +351,54 @@ impl App {
             Mode::Overlay => self.route_overlay_key(key),
             Mode::Picker => self.route_picker_key(key),
             Mode::Help => self.route_help_key(key),
-            // Paused: any keystroke resumes the conversation — none reach
-            // the frozen child. trace:STORY-678
-            Mode::Paused => {
+            // Paused: the deterministic action palette owns the screen.
+            // Keystrokes drive it; none reach the frozen child. Only `Esc`
+            // resumes the conversation. trace:STORY-678 trace:STORY-679
+            Mode::Paused => self.route_palette_key(key),
+        }
+    }
+
+    /// Route a keystroke while the suspended-chat action palette is open
+    /// (STORY-679). `Esc` resumes the frozen conversation; `Enter` runs the
+    /// highlighted (or typed `spec`/`run`) deterministic action; printable
+    /// characters / Backspace edit the filter query; arrows / Tab move the
+    /// selection. Every path is deterministic — no keystroke ever reaches
+    /// the `SIGSTOP`ped child, and nothing here spawns an LLM.
+    //
+    // trace:STORY-679 | ai:claude
+    fn route_palette_key(&mut self, key: KeyEvent) -> Routing {
+        match key.code {
+            KeyCode::Esc => {
                 self.mode = Mode::Focused;
                 Routing::Resume
             }
+            KeyCode::Enter => Routing::RunPaletteAction,
+            KeyCode::Up => {
+                self.paused_palette.select_prev();
+                Routing::PaletteRedraw
+            }
+            KeyCode::Down | KeyCode::Tab => {
+                self.paused_palette.select_next();
+                Routing::PaletteRedraw
+            }
+            KeyCode::Backspace => {
+                self.paused_palette.backspace();
+                Routing::PaletteRedraw
+            }
+            KeyCode::Char(c) => {
+                self.paused_palette.push_char(c);
+                Routing::PaletteRedraw
+            }
+            // Any other key is a no-op; an idempotent redraw is harmless.
+            _ => Routing::PaletteRedraw,
         }
     }
 
     /// Route a keystroke while the `prefix ?` keybinding cheatsheet is
     /// open: Esc / `q` / `?` close it, every other key is an idempotent
-    /// redraw. trace:BUG-109 | ai:claude
+    /// redraw.
+    //
+    // trace:BUG-109 | ai:claude
     fn route_help_key(&mut self, key: KeyEvent) -> Routing {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => {
@@ -378,7 +453,7 @@ impl App {
     /// Route a keystroke while the new-session picker is open: arrows /
     /// `j` / `k` move the selection, Enter opens the highlighted session
     /// in a new tab, and Esc / `q` / `n` close the picker.
-    /// trace:STORY-134 | ai:claude
+    // trace:STORY-134 | ai:claude
     fn route_picker_key(&mut self, key: KeyEvent) -> Routing {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('n') => {
@@ -662,6 +737,8 @@ impl App {
                 }
                 self.full_repaint(out)?;
             }
+            Routing::PaletteRedraw => self.draw_paused()?,
+            Routing::RunPaletteAction => self.run_palette_action()?,
         }
         Ok(None)
     }
@@ -690,7 +767,9 @@ impl App {
     }
 
     /// Open the new-session picker: gather queued specs + resumable
-    /// conversations for the launch scope, then draw it. trace:STORY-134
+    /// conversations for the launch scope, then draw it.
+    //
+    // trace:STORY-134
     fn open_picker(&mut self) -> Result<()> {
         let open_ids: Vec<String> = self.tabs.iter().map(|t| t.session_id.clone()).collect();
         self.picker = picker::fetch(self.launch_scope.as_deref(), &open_ids);
@@ -718,7 +797,9 @@ impl App {
 
     /// Spawn the picker's highlighted session in a new tab, then close
     /// the picker. A full tab manager keeps the picker open with a note
-    /// instead — the user must free a slot first. trace:STORY-134
+    /// instead — the user must free a slot first.
+    //
+    // trace:STORY-134
     fn spawn_from_picker(&mut self, tx: Sender<TuiEvent>, out: &mut Stdout) -> Result<()> {
         let Some(entry) = self.picker.selected_entry().cloned() else {
             // Empty picker — nothing to spawn; just close it.
@@ -772,15 +853,20 @@ impl App {
         Ok(())
     }
 
-    /// Open the `prefix p` pause overlay (STORY-678): `SIGSTOP` the
-    /// focused child's process group, then paint a minimal centered
-    /// "paused" strip. `clear()` forces a full redraw over the frozen
-    /// child's screen. No-op (just a repaint) when no session is focused.
-    /// trace:STORY-678 | ai:claude
+    /// Open the `prefix p` pause surface: `SIGSTOP` the focused child's
+    /// process group (STORY-678), reset the deterministic action palette to
+    /// a fresh empty query (STORY-679), then paint it. `clear()` forces a
+    /// full redraw over the frozen child's screen. The pause still works
+    /// with no session focused — the palette is usable standalone (its
+    /// actions are independent `aida` subprocesses), which is also how a
+    /// future `Ctrl-D`-suspend trigger will reach it.
+    //
+    // trace:STORY-678 trace:STORY-679 | ai:claude
     fn open_paused(&mut self) -> Result<()> {
         if let Some(tab) = self.tabs.focused() {
             tab.pty.suspend();
         }
+        self.paused_palette = PaletteState::new();
         self.ensure_ratatui_term()?;
         if let Some(term) = self.ratatui_term.as_mut() {
             term.clear()?;
@@ -789,36 +875,41 @@ impl App {
         self.draw_paused()
     }
 
-    /// Draw the minimal paused overlay into the `ratatui` terminal — a
-    /// single centered line. ASCII-only so it bypasses no glyph registry
-    /// (`scripts/glyph-lint.sh`). trace:STORY-678 | ai:claude
+    /// Draw the suspended-chat deterministic action palette (STORY-679)
+    /// into the `ratatui` terminal: the `:` query line, the fuzzy-ranked
+    /// candidate list, the last result, and the key hints. Disjoint-field
+    /// borrows — palette state + the last activity entry are borrowed before
+    /// `ratatui_term` is borrowed mutably.
+    //
+    // trace:STORY-679 | ai:claude
     fn draw_paused(&mut self) -> Result<()> {
-        use ratatui::layout::{Alignment, Constraint, Layout};
-        use ratatui::style::{Modifier, Style};
-        use ratatui::text::{Line, Span};
-        use ratatui::widgets::Paragraph;
-
         self.ensure_ratatui_term()?;
+        let state = &self.paused_palette;
+        let last = self.activity.last();
         let term = self
             .ratatui_term
             .as_mut()
             .expect("ratatui terminal initialized above");
-        term.draw(|frame| {
-            let area = frame.area();
-            // Vertically center a single-row strip.
-            let rows = Layout::vertical([
-                Constraint::Fill(1),
-                Constraint::Length(1),
-                Constraint::Fill(1),
-            ])
-            .split(area);
-            let line = Line::from(vec![Span::styled(
-                "[paused] AIDA-side -- press any key to resume the conversation",
-                Style::default().add_modifier(Modifier::BOLD),
-            )]);
-            frame.render_widget(Paragraph::new(line).alignment(Alignment::Center), rows[1]);
-        })?;
+        term.draw(|frame| palette::render(frame, state, last))?;
         Ok(())
+    }
+
+    /// Run the palette's current selection as a captured `aida … --json`
+    /// subprocess (STORY-679) and land the result in the activity log, then
+    /// repaint the palette so the output shows inline. The palette stays
+    /// open — the frozen chat is resumed only by `Esc`. Deterministic: the
+    /// argv comes from [`crate::palette::PaletteState::dispatch`], never an
+    /// LLM. A refused line (empty / unsafe `spec`/`run`) becomes a note.
+    //
+    // trace:STORY-679 | ai:claude
+    fn run_palette_action(&mut self) -> Result<()> {
+        let exe = aida_exe().to_string_lossy().into_owned();
+        let entry = match self.paused_palette.dispatch(&exe) {
+            Dispatched::Run { label, argv } => actions::run_argv(&label, &argv),
+            Dispatched::Refused(note) => ActivityEntry::note("palette", &note),
+        };
+        self.push_activity(entry);
+        self.draw_paused()
     }
 
     /// Build the `ratatui` terminal on first use (overlay, picker, help).
@@ -881,7 +972,9 @@ impl App {
     /// autonomous-drain buttons use this (STORY-136): the drain runs
     /// *inside* the hosted conversation, not as a TUI subprocess, and
     /// the drain text comes from `/aida-drain-queue`, never hand-written
-    /// `/goal`. trace:STORY-136 | ai:claude
+    /// `/goal`.
+    //
+    // trace:STORY-136 | ai:claude
     fn inject_to_focused(&mut self, text: &str, out: &mut Stdout) -> Result<()> {
         self.overlay.confirm = None;
         self.mode = Mode::Focused;
@@ -958,7 +1051,9 @@ impl App {
     /// Write the live tab set to `.aida/tui-state.json` so a crash or
     /// `prefix d` detach can re-attach the sessions on the next launch.
     /// Preserves `dialog_session_id` if a prior launcher run wrote one —
-    /// the launcher and PTY-host paths share the file. trace:STORY-135
+    /// the launcher and PTY-host paths share the file.
+    //
+    // trace:STORY-135
     /// STORY-244 | ai:claude
     fn persist_state(&self) {
         let tabs = self
@@ -1208,7 +1303,9 @@ fn spawn_input_thread(tx: Sender<TuiEvent>) {
 /// Spawn the strip-rotation ticker: one [`TuiEvent::Tick`] every ~3s,
 /// driving the status strip's rotating discovery hint (BUG-109).
 /// Detached and fire-and-forget — it ends once the supervisor's receiver
-/// is dropped. trace:BUG-109 | ai:claude
+/// is dropped.
+//
+// trace:BUG-109 | ai:claude
 fn spawn_tick_thread(tx: Sender<TuiEvent>) {
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(3));
@@ -1243,7 +1340,9 @@ fn describe_key(key: KeyEvent) -> String {
 
 /// A long human label for a key (`Ctrl-A`, `Alt-B`) — for the welcome
 /// panel and help cheatsheet, where `describe_key`'s terse `^a` reads
-/// worse. trace:BUG-109 | ai:claude
+/// worse.
+//
+// trace:BUG-109 | ai:claude
 pub(crate) fn describe_key_long(key: KeyEvent) -> String {
     let mut s = String::new();
     if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -1261,7 +1360,9 @@ pub(crate) fn describe_key_long(key: KeyEvent) -> String {
 
 /// Whether `key` is a bare `?` (Shift permitted; Ctrl / Alt not) — the
 /// empty-shell help shortcut. With a session focused `?` belongs to the
-/// hosted child, so only `prefix ?` opens help there. trace:BUG-109
+/// hosted child, so only `prefix ?` opens help there.
+//
+// trace:BUG-109
 fn is_help_key(key: KeyEvent) -> bool {
     key.code == KeyCode::Char('?')
         && !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -1270,7 +1371,9 @@ fn is_help_key(key: KeyEvent) -> bool {
 
 /// The verbs the status strip's right-side hint rotates through — a
 /// small set so a first-time user discovers the key vocabulary without
-/// a busy, static strip. trace:BUG-109 | ai:claude
+/// a busy, static strip.
+//
+// trace:BUG-109 | ai:claude
 const HINT_VERBS: [&str; 4] = [
     "N new session",
     "O status overlay",
@@ -1280,7 +1383,9 @@ const HINT_VERBS: [&str; 4] = [
 
 /// The status strip's right-side discovery hint for `Focused` mode —
 /// the prefix label plus one of [`HINT_VERBS`], selected by `index`
-/// (advanced ~3s by [`TuiEvent::Tick`]). trace:BUG-109 | ai:claude
+/// (advanced ~3s by [`TuiEvent::Tick`]).
+//
+// trace:BUG-109 | ai:claude
 fn rotating_hint(prefix: KeyEvent, index: usize) -> String {
     format!(
         "{} {}",
@@ -1398,34 +1503,74 @@ mod tests {
     }
 
     #[test]
-    fn prefix_p_routes_pause_and_any_key_resumes() {
+    fn prefix_p_opens_the_action_palette() {
+        // STORY-678 suspends the chat; STORY-679 fills the paused surface
+        // with the deterministic action palette. `prefix p` enters Paused
+        // mode and routes a Pause (which SIGSTOPs + opens the palette).
         let mut app = App::new(TuiConfig::default());
         let prefix = config::default_prefix_key();
 
-        // `prefix p` enters Paused mode and routes a Pause.
         app.route_key(prefix);
         assert!(matches!(app.route_key(plain('p')), Routing::Pause));
         assert_eq!(app.mode, Mode::Paused);
-
-        // ANY key while paused resumes and returns to Focused.
-        match app.route_key(plain('x')) {
-            Routing::Resume => {}
-            other => panic!("expected Resume, got {:?}", other),
-        }
-        assert_eq!(app.mode, Mode::Focused);
     }
 
     #[test]
-    fn paused_resumes_on_non_char_keys_too() {
+    fn palette_typing_filters_and_stays_paused() {
+        // While paused, printable keys drive the palette's filter — they do
+        // NOT resume (and never reach the frozen child). trace:STORY-679
         let mut app = App::new(TuiConfig::default());
         let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('p'));
 
+        // Type into the palette: each keystroke is a redraw, not a resume.
+        for c in "find".chars() {
+            assert!(matches!(app.route_key(plain(c)), Routing::PaletteRedraw));
+            assert_eq!(app.mode, Mode::Paused);
+        }
+        assert_eq!(app.paused_palette.query, "find");
+        // The filter narrowed to the single matching action.
+        assert_eq!(
+            app.paused_palette
+                .ranked()
+                .iter()
+                .map(|r| r.action.keyword())
+                .collect::<Vec<_>>(),
+            vec!["findings"]
+        );
+    }
+
+    #[test]
+    fn palette_arrows_move_selection_enter_runs() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
+        app.route_key(prefix);
+        app.route_key(plain('p'));
+
+        // Down moves the selection; the palette stays open.
+        let down = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        assert!(matches!(app.route_key(down), Routing::PaletteRedraw));
+        assert_eq!(app.paused_palette.selected, 1);
+        assert_eq!(app.mode, Mode::Paused);
+
+        // Enter runs the highlighted deterministic action (no LLM).
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(matches!(app.route_key(enter), Routing::RunPaletteAction));
+        // Still paused — only Esc resumes the conversation.
+        assert_eq!(app.mode, Mode::Paused);
+    }
+
+    #[test]
+    fn palette_esc_resumes_the_conversation() {
+        let mut app = App::new(TuiConfig::default());
+        let prefix = config::default_prefix_key();
         app.route_key(prefix);
         app.route_key(plain('p'));
         assert_eq!(app.mode, Mode::Paused);
 
-        // Even Enter / Esc / the prefix itself resume — nothing reaches
-        // the frozen child. trace:STORY-678
+        // Only Esc resumes (SIGCONT + repaint) — nothing reaches the frozen
+        // child. trace:STORY-678 trace:STORY-679
         let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         assert!(matches!(app.route_key(esc), Routing::Resume));
         assert_eq!(app.mode, Mode::Focused);
