@@ -745,6 +745,23 @@ fn apply_outcome(
             }
             st.status = Some(queue_status(&routed, &failed, &skipped));
         }
+        RunOutcome::Accept { done, skipped } => {
+            // The reviewer accepts each finished Done spec: run the
+            // implementation-approval transition (`aida edit <id> --status
+            // completed`, carrying reviewer authority) and record a reviewer-
+            // acceptance comment. The Done-status mirror of Approve.
+            // trace:TASK-933 | ai:claude
+            let mut accepted = Vec::new();
+            let mut failed = Vec::new();
+            for id in &done {
+                if accept_spec(id) {
+                    accepted.push(id.clone());
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+            st.status = Some(accept_status(&accepted, &failed, &skipped));
+        }
         RunOutcome::OpenDeferInput { ids } => {
             // `defer` needs the operator-supplied `--until` trigger before it
             // can run: open the single-line input modal over the targets. The
@@ -937,6 +954,104 @@ fn approve_status(approved: &[String], failed: &[String], skipped: &[String]) ->
     }
     if parts.is_empty() {
         return "approve: nothing to approve (no drafts selected)".to_string();
+    }
+    parts.join(" · ")
+}
+
+/// The argument vector for the reviewer's implementation-approval transition:
+/// `aida edit <id> --status completed`. The Done-status counterpart to
+/// `approve`'s `--status approved`. Kept as a pure arg vector (passed to
+/// `Command::args`, never a shell string) so the id — and the verb shape — are
+/// unit-testable without spawning. trace:TASK-933 | ai:claude
+fn accept_edit_args(id: &str) -> Vec<&str> {
+    vec!["edit", id, "--status", "completed"]
+}
+
+/// The argument vector for the reviewer-acceptance comment recorded alongside
+/// the accept transition: `aida comment add <id> "<note>"`. The note is a
+/// SINGLE arg-vector element, so it is never shell-parsed (no command
+/// substitution, no globbing). Pure so it is unit-testable. trace:TASK-933 | ai:claude
+fn accept_comment_args(id: &str) -> [&str; 4] {
+    [
+        "comment",
+        "add",
+        id,
+        "accepted by reviewer: implementation reviewed and accepted (Done -> Completed)",
+    ]
+}
+
+/// Accept one finished Done spec as the reviewer. Returns `true` when the
+/// Done → Completed transition succeeded.
+///
+/// WRINKLE (investigated TASK-933): `completed` is documented as merge-driven —
+/// auto-bumped by `aida pull` when a `(SPEC-ID)`-trailered commit lands on the
+/// default branch. But a *manual* `Done → Completed` edit is NOT hard-gated:
+/// the lifecycle `transition_guard` only requires advisor authority for
+/// `from ∈ {Draft, NeedsAttention}` (un-triaged/punted intent), so a
+/// `Done → Completed` flip is an un-gated, implementer-legitimate transition
+/// (the same path `aida done` rides). So `accept` runs the real transition
+/// rather than faking it. The spawned command carries `AIDA_SESSION_ROLE=reviewer`
+/// to record reviewer provenance (and to mirror `approve_spec`'s authority env).
+/// The reviewer-acceptance comment is best-effort (recorded after a successful
+/// transition); the transition itself is the load-bearing result.
+///
+/// NUANCE: in the *full* multi-machine flow, final Completed still comes from
+/// the merge auto-bump on `aida pull`; this in-TUI accept completes the spec for
+/// the reviewer-at-the-keyboard walkthrough. The Done-status mirror of
+/// [`approve_spec`]. trace:TASK-933 | ai:claude
+fn accept_spec(id: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let cwd = std::env::current_dir().ok();
+    let mut edit = Command::new(&exe);
+    edit.args(accept_edit_args(id));
+    // The Done → Completed transition is reviewer work — carry reviewer
+    // authority on the spawned command for provenance (and role activity).
+    edit.env("AIDA_SESSION_ROLE", "reviewer");
+    if let Some(cwd) = cwd.as_ref() {
+        edit.current_dir(cwd);
+    }
+    let completed = matches!(edit.output(), Ok(out) if out.status.success());
+    if !completed {
+        return false;
+    }
+    // Best-effort: record the reviewer-acceptance comment. A failed comment
+    // does NOT un-accept the spec — the transition above is the load-bearing
+    // result — so the accept is still reported as succeeded.
+    let mut note = Command::new(&exe);
+    note.args(accept_comment_args(id));
+    note.env("AIDA_SESSION_ROLE", "reviewer");
+    if let Some(cwd) = cwd.as_ref() {
+        note.current_dir(cwd);
+    }
+    let _ = note.output();
+    true
+}
+
+/// The status-line confirmation for an `accept` run: which ids the reviewer
+/// accepted (Done → Completed), which failed the transition, and which were
+/// skipped as non-Done. Pure (no IO) so it is unit testable. The mirror of
+/// [`approve_status`]. trace:TASK-933 | ai:claude
+fn accept_status(accepted: &[String], failed: &[String], skipped: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !accepted.is_empty() {
+        parts.push(format!(
+            "accepted {} (Done → Completed): {}",
+            accepted.len(),
+            accepted.join(", ")
+        ));
+    }
+    if !failed.is_empty() {
+        parts.push(format!("FAILED to accept: {}", failed.join(", ")));
+    }
+    if !skipped.is_empty() {
+        parts.push(format!(
+            "skipped {} non-done: {}",
+            skipped.len(),
+            skipped.join(", ")
+        ));
+    }
+    if parts.is_empty() {
+        return "accept: nothing to accept (no Done specs selected)".to_string();
     }
     parts.join(" · ")
 }
@@ -2205,6 +2320,47 @@ mod render_tests {
         // Empty case.
         let empty = approve_status(&[], &[], &[]);
         assert!(empty.contains("nothing to approve"));
+    }
+
+    #[test]
+    fn accept_status_lists_accepted_skipped_failed() {
+        // trace:TASK-933
+        let s = accept_status(
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &["TASK-3".to_string()],
+            &["TASK-4".to_string()],
+        );
+        assert!(s.contains("accepted 2"));
+        assert!(s.contains("Completed"));
+        assert!(s.contains("TASK-1"));
+        assert!(s.contains("FAILED"));
+        assert!(s.contains("skipped 1"));
+        // Empty case.
+        let empty = accept_status(&[], &[], &[]);
+        assert!(empty.contains("nothing to accept"));
+    }
+
+    #[test]
+    fn accept_edit_args_builds_completed_transition() {
+        // accept runs the real Done → Completed transition (NOT a fake): the
+        // arg vector is `edit <id> --status completed`, the Done-status mirror
+        // of approve's `--status approved`. trace:TASK-933
+        let args = accept_edit_args("TASK-7");
+        assert_eq!(args, vec!["edit", "TASK-7", "--status", "completed"]);
+    }
+
+    #[test]
+    fn accept_comment_args_is_single_safe_note_element() {
+        // The reviewer-acceptance note is exactly one arg-vector element, so it
+        // is never shell-parsed. trace:TASK-933
+        let args = accept_comment_args("TASK-7");
+        assert_eq!(args[0], "comment");
+        assert_eq!(args[1], "add");
+        assert_eq!(args[2], "TASK-7");
+        assert!(args[3].contains("accepted by reviewer"));
+        // No shell metacharacters that would be dangerous if (mistakenly) shelled.
+        assert!(!args[3].contains('`'));
+        assert!(!args[3].contains('$'));
     }
 
     #[test]

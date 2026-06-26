@@ -52,6 +52,14 @@ impl TargetItem {
     pub fn is_approved(&self) -> bool {
         self.status.eq_ignore_ascii_case("approved")
     }
+
+    /// Is this item in the Done state? The mirror of [`Self::is_approved`] for
+    /// the `accept` verb — the reviewer's implementation-approval, which only
+    /// applies to finished-on-a-branch (Done) work. Matched case-insensitively.
+    /// trace:TASK-933 | ai:claude
+    pub fn is_done(&self) -> bool {
+        self.status.eq_ignore_ascii_case("done")
+    }
 }
 
 /// A scope is a noun with children (its verbs). At launch the top panel
@@ -198,6 +206,18 @@ pub fn verb_list_for(scope: Scope, focused_status: Option<&str>) -> Vec<Verb> {
         if focused_is_approved {
             verbs.push(Verb::Queue);
         }
+        // `accept` is the Done-conditional reviewer counterpart to `approve`:
+        // implementation-approval (the reviewer accepting finished work),
+        // driving the spec Done → Completed. The symmetric mirror of `queue`
+        // one lifecycle stage later. Ordered after `queue` (and before the
+        // always-on `defer`) so the existing draft/approved verb indices are
+        // undisturbed. trace:TASK-933 | ai:claude
+        let focused_is_done = focused_status
+            .map(|s| s.eq_ignore_ascii_case("done"))
+            .unwrap_or(false);
+        if focused_is_done {
+            verbs.push(Verb::Accept);
+        }
         // `defer` is NOT status-conditional — it parks ANY open spec off the
         // active view with a revisit trigger, so it is appended for every
         // Open-scope focus (drafts, approved, or no focus). Ordered last so the
@@ -229,6 +249,13 @@ pub enum Verb {
     /// implementer queue via `aida queue add --for implementer`. The mirror
     /// of [`Verb::RequestApproval`]. trace:TASK-915
     Queue,
+    /// Open scope, Done-only: the reviewer's IMPLEMENTATION-approval — accept
+    /// the finished work on the selected Done specs, driving them Done →
+    /// Completed (`aida edit <id> --status completed`, run with reviewer
+    /// authority) and recording a reviewer-acceptance comment. The Done-status
+    /// counterpart to [`Verb::Approve`] (which is SPEC-approval, Draft →
+    /// Approved). Distinct from `approve`. trace:TASK-933
+    Accept,
     /// Open scope, any open spec (NOT status-conditional): park the selected
     /// specs off the active view with a revisit trigger via
     /// `aida defer <id> --until "<trigger>"`. Set-level; the trigger is
@@ -246,6 +273,7 @@ impl Verb {
             Verb::Why => "why",
             Verb::RequestApproval => "request approval",
             Verb::Queue => "queue",
+            Verb::Accept => "accept",
             Verb::Defer => "defer",
         }
     }
@@ -259,6 +287,7 @@ impl Verb {
             Verb::Why => "why is this spec still open? (aida why)",
             Verb::RequestApproval => "route selected drafts to the advisor queue",
             Verb::Queue => "route selected Approved specs to the implementer queue",
+            Verb::Accept => "reviewer: accept finished work (Done → Completed)",
             Verb::Defer => "park selected specs off the active view with a revisit trigger",
         }
     }
@@ -301,6 +330,14 @@ impl Verb {
                  Approved-only, set-level (non-approved skipped); falls back to \
                  the focused approved spec when nothing is selected."
             }
+            Verb::Accept => {
+                "Reviewer's implementation-approval: accept the finished work \
+                 and drive the spec Done → Completed, recording a reviewer \
+                 acceptance comment. Done-only, set-level (non-Done skipped); \
+                 falls back to the focused Done spec when nothing is selected. \
+                 Note: in the full flow Completed is merge-driven — this is the \
+                 reviewer's accept for the walkthrough."
+            }
             Verb::Defer => {
                 "Park the selected specs off the active view with a revisit \
                  trigger (aida defer --until). Any open spec qualifies (not \
@@ -318,9 +355,9 @@ impl Verb {
     }
 
     /// Is this verb wired to do real work? `groom` (stubbed), `show`, `why`,
-    /// `request approval`, `queue`, `approve`, and `defer` execute; `archive`
-    /// is still present-but-stubbed to prove the verb list + breadcrumb.
-    /// trace:TASK-920 trace:TASK-921
+    /// `request approval`, `queue`, `approve`, `accept`, and `defer` execute;
+    /// `archive` is still present-but-stubbed to prove the verb list +
+    /// breadcrumb. trace:TASK-920 trace:TASK-921 trace:TASK-933
     pub fn is_functional(self) -> bool {
         matches!(
             self,
@@ -330,6 +367,7 @@ impl Verb {
                 | Verb::Why
                 | Verb::RequestApproval
                 | Verb::Queue
+                | Verb::Accept
                 | Verb::Defer
         )
     }
@@ -1005,6 +1043,38 @@ impl RedesignState {
         (approved, skipped)
     }
 
+    /// The ids of the currently-selected items that are Done, with the ids of
+    /// any selected non-Done that were skipped. If nothing is selected, the
+    /// focused item stands in (the N=1 default) when it is itself Done. The
+    /// mirror of [`Self::approved_selection`], used by the `accept` verb (the
+    /// reviewer's implementation-approval), which only accepts Done specs.
+    /// Returns `(done_ids, skipped_non_done_ids)`. trace:TASK-933 | ai:claude
+    pub fn done_selection(&self) -> (Vec<String>, Vec<String>) {
+        let selected: Vec<&TargetItem> = self
+            .items
+            .iter()
+            .zip(self.selected.iter())
+            .filter(|(_, &s)| s)
+            .map(|(item, _)| item)
+            .collect();
+        let targets: Vec<&TargetItem> = if selected.is_empty() {
+            // None selected → the focused item is the N=1 default.
+            self.focused_item().into_iter().collect()
+        } else {
+            selected
+        };
+        let mut done = Vec::new();
+        let mut skipped = Vec::new();
+        for item in targets {
+            if item.is_done() {
+                done.push(item.id.clone());
+            } else {
+                skipped.push(item.id.clone());
+            }
+        }
+        (done, skipped)
+    }
+
     /// The ids `defer` will target: the marked selection, or — when nothing is
     /// selected — the focused item (the N=1 default). Unlike
     /// [`Self::draft_selection`] / [`Self::approved_selection`], `defer` is NOT
@@ -1278,6 +1348,15 @@ impl RedesignState {
             return RunOutcome::Queue { approved, skipped };
         }
 
+        // accept: the reviewer accepts the finished work on the marked Done
+        // specs (or focused Done item), driving them Done → Completed and
+        // recording a reviewer-acceptance comment; non-Done are skipped.
+        // trace:TASK-933
+        if verb == Verb::Accept {
+            let (done, skipped) = self.done_selection();
+            return RunOutcome::Accept { done, skipped };
+        }
+
         // defer: park the marked specs (or focused item) — but first capture
         // the revisit trigger. The pure machine only decides WHO to defer; the
         // parent opens the input modal and shells out on confirm. Any open spec
@@ -1436,6 +1515,15 @@ pub enum RunOutcome {
     /// [`Self::RequestApproval`]. trace:TASK-915
     Queue {
         approved: Vec<String>,
+        skipped: Vec<String>,
+    },
+    /// `accept` on the Done selection: the reviewer accepts the finished work
+    /// on `done` (the `aida edit <id> --status completed` transition, run with
+    /// reviewer authority, plus a reviewer-acceptance comment), reporting
+    /// `skipped` non-Done. The Done-status mirror of [`Self::Approve`].
+    /// trace:TASK-933
+    Accept {
+        done: Vec<String>,
         skipped: Vec<String>,
     },
     /// `defer` on the selection: the parent should OPEN the revisit-trigger
@@ -2253,6 +2341,121 @@ mod tests {
         assert!(!verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Approve));
         assert!(!verb_list_for(Scope::Open, None).contains(&Verb::Approve));
         assert!(verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Approve));
+    }
+
+    // --- Accept verb (TASK-933) ------------------------------------------
+
+    /// Items for the accept tests: a Done spec mixed with non-Done so the
+    /// Done-conditional verb + the done-selection filtering can be exercised.
+    /// Index 0 + 2 are Done; 1 is Approved, 3 is Draft. trace:TASK-933
+    fn accept_items() -> Vec<TargetItem> {
+        ["Done", "Approved", "Done", "Draft"]
+            .iter()
+            .enumerate()
+            .map(|(i, status)| TargetItem {
+                id: format!("TASK-{i}"),
+                title: format!("open item {i}"),
+                req_type: "Task".into(),
+                status: (*status).into(),
+                priority: "high".into(),
+                body: String::new(),
+                has_test_plan: false,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn verb_list_for_adds_accept_only_on_done() {
+        // Focused on a Done → accept is present (after show / why), defer last.
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("Done")),
+            vec![Verb::Show, Verb::Why, Verb::Accept, Verb::Defer]
+        );
+        // Case-insensitive.
+        assert_eq!(
+            verb_list_for(Scope::Open, Some("done")),
+            vec![Verb::Show, Verb::Why, Verb::Accept, Verb::Defer]
+        );
+        // accept is Done-only: Draft / Approved / no-focus do NOT expose it.
+        assert!(!verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Accept));
+        assert!(!verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Accept));
+        assert!(!verb_list_for(Scope::Open, None).contains(&Verb::Accept));
+        // Other scopes ignore the status argument (no accept).
+        assert!(!verb_list_for(Scope::Backlog, Some("Done")).contains(&Verb::Accept));
+        // accept is the LAST status-conditional verb (before the always-on
+        // defer), so the existing draft/approved indices are undisturbed.
+        let done = verb_list_for(Scope::Open, Some("Done"));
+        assert_eq!(done.last(), Some(&Verb::Defer));
+    }
+
+    #[test]
+    fn accept_is_functional_set_level() {
+        assert!(Verb::Accept.is_functional());
+        assert!(!Verb::Accept.is_item_level());
+    }
+
+    #[test]
+    fn accept_targets_selected_done_skips_non_done() {
+        // The mirror of `queue_targets_selected_approved...`, but on the
+        // `accept` verb over Done specs. trace:TASK-933
+        let mut s = RedesignState::new(accept_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.toggle_select(); // TASK-0 (Done)
+        s.move_down();
+        s.toggle_select(); // TASK-1 (Approved — should be skipped)
+        s.move_down();
+        s.toggle_select(); // TASK-2 (Done)
+                           // Focus back to TASK-0 (Done) so the verb list includes the verb,
+                           // then move the top highlight onto `accept` (idx 2).
+        s.focus_bottom();
+        s.move_up();
+        s.move_up(); // → TASK-0 (Done)
+        s.focus_top();
+        s.move_down();
+        s.move_down();
+        assert_eq!(s.top_verb(), Some(Verb::Accept));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Accept {
+                done: vec!["TASK-0".to_string(), "TASK-2".to_string()],
+                skipped: vec!["TASK-1".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn accept_with_no_selection_uses_focused_done() {
+        // trace:TASK-933
+        let mut s = RedesignState::new(accept_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom(); // focus TASK-0 (Done), nothing selected
+        s.focus_top();
+        s.move_down();
+        s.move_down(); // → accept (idx 2)
+        assert_eq!(s.top_verb(), Some(Verb::Accept));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Accept {
+                done: vec!["TASK-0".to_string()],
+                skipped: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn done_selection_skips_non_done_targets() {
+        // Marking a Done + an Approved spec yields the Done in `done` and the
+        // Approved in `skipped`. trace:TASK-933
+        let mut s = RedesignState::new(accept_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.toggle_select(); // TASK-0 (Done)
+        s.move_down();
+        s.toggle_select(); // TASK-1 (Approved)
+        let (done, skipped) = s.done_selection();
+        assert_eq!(done, vec!["TASK-0"]);
+        assert_eq!(skipped, vec!["TASK-1"]);
     }
 
     #[test]
