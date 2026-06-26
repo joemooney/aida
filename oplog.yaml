@@ -21419,5 +21419,30 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2037
+- id: 019f0513-0d05-7ad0-8ecd-f552d5d4c612
+  target_id: 019f0513-075f-79a3-bdac-ec7b1e8c932d
+  author: aida
+  node_id: '1'
+  lamport: 2038
+  timestamp: 2026-06-26T17:56:02.437439621Z
+  kind: !Create
+    title: Render the redesign scope list in the CLI columnar colorized glyph format (aligned ID/Type/Status/Priority/Title)
+    description: |-
+      The redesign TUI bottom-panel scope list (Backlog/Open) renders rows plainly (id / type / status / title). Make it match the CLI `aida list` look: ALIGNED COLUMNS (ID · Type · Status · Priority · Title) with the same STATUS GLYPH (◯ Draft, ▸ Approved, ◐ InProgress, ✓ Completed, ▶ active, ↑ blocked, etc.) and the same SEMANTIC COLORS the CLI uses.
+
+      DATA: rows already carry status/priority/type in-process (STORY-693), so the fields are available — this is purely a rendering change.
+
+      GLYPH + COLOR SEMANTICS: live in aida-cli/src/glyphs.rs and aida-cli/src/status_display.rs (paint_status uses the `colored` crate; the TUI uses ratatui Style/Color). aida-tui must not depend on aida-cli, so replicate the status->glyph and status->ratatui-Color mapping in the TUI as a small pure table that MATCHES the CLI's appearance. Honor the glyph mode (nerd-font/unicode/ascii) and the user's theme where applicable.
+      NOTE (follow-up, not this task): the right long-term home for the status->glyph/color mapping is ONE shared place (aida-core) so CLI and TUI never drift; replication is acceptable for now — leave a comment.
+
+      ACCEPTANCE:
+      - Scope list rows render in aligned columns (ID, Type, Status, Priority, Title) — widths computed so columns line up across rows, like `aida list`.
+      - Status renders with the matching glyph + semantic color (Completed green, InProgress yellow/active, Draft dim, Rejected red, etc., matching status_display.rs).
+      - Priority shown (now available in-process) and color-coded if the CLI does.
+      - Pure formatting (column layout + status->glyph/color mapping) is unit-tested; render smoke test for a multi-row list.
+      - build/test/fmt/clippy green; redesign module only; existing TUI untouched.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2038
 node_id: '1'
