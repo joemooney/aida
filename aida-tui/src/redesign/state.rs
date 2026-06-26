@@ -418,6 +418,49 @@ impl DeferInput {
     }
 }
 
+/// A pending single-line text-input modal for the `new` action — the title of
+/// a fresh Draft spec. Holds only the typed-so-far `buffer` (no targets, unlike
+/// [`DeferInput`]). Enter confirms (creates the Draft from the trimmed title);
+/// Esc cancels; an empty/whitespace title cancels without creating. Kept pure
+/// (push_char / backspace / title) so it is unit-testable without a terminal.
+/// trace:TASK-931 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct NewSpecInput {
+    /// The spec title typed so far.
+    pub buffer: String,
+}
+
+impl NewSpecInput {
+    /// Open a fresh input with an empty buffer.
+    pub fn new() -> Self {
+        NewSpecInput {
+            buffer: String::new(),
+        }
+    }
+
+    /// Append a typed char to the title buffer.
+    pub fn push_char(&mut self, c: char) {
+        self.buffer.push(c);
+    }
+
+    /// Backspace the title buffer (no-op when empty).
+    pub fn backspace(&mut self) {
+        self.buffer.pop();
+    }
+
+    /// The trimmed title to create with, or `None` when nothing meaningful was
+    /// typed — so the confirm path cancels rather than creating an empty-titled
+    /// draft. trace:TASK-931 | ai:claude
+    pub fn title(&self) -> Option<String> {
+        let t = self.buffer.trim();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
+        }
+    }
+}
+
 /// One selectable row in the EPIC focus picker (STORY-697): an open epic's
 /// display id + title (+ its status, carried for an optional progress hint).
 /// The picker fuzzy-filters over `id` + `title`. trace:STORY-697 | ai:claude
@@ -559,6 +602,10 @@ pub struct RedesignState {
     /// typed buffer + the target ids captured when `defer` was run.
     /// trace:TASK-921 | ai:claude
     pub defer_input: Option<DeferInput>,
+    /// Pending new-spec title input for the `new` action, if open. Holds the
+    /// typed title buffer; Enter creates a Draft from it, Esc (or an empty
+    /// title) cancels. trace:TASK-931 | ai:claude
+    pub new_input: Option<NewSpecInput>,
     /// The EPIC focus lens (STORY-695): when `Some`, the whole TUI is scoped to
     /// this epic id + its transitive children. Set from `AIDA_TUI_EPIC` at
     /// launch or by the change-focus key; cleared by the clear-focus key.
@@ -606,6 +653,7 @@ impl RedesignState {
             verb_modal: None,
             confirm: None,
             defer_input: None,
+            new_input: None,
             focus_epic: None,
             focus_summary: None,
             epic_picker: None,
@@ -1015,6 +1063,47 @@ impl RedesignState {
             .map(|di| (di.targets.clone(), di.trigger()))
     }
 
+    // --- New-spec title input modal (TASK-931) ---------------------------
+
+    /// Open the new-spec title input modal with an empty buffer. The parent
+    /// calls this when the `new` key is pressed; the operator types the title
+    /// and Enter creates a Draft. trace:TASK-931 | ai:claude
+    pub fn open_new_input(&mut self) {
+        self.new_input = Some(NewSpecInput::new());
+    }
+
+    /// Is the new-spec title input modal open? trace:TASK-931
+    pub fn new_input_open(&self) -> bool {
+        self.new_input.is_some()
+    }
+
+    /// Append a char to the open new-spec title buffer (no-op when closed).
+    pub fn push_new_char(&mut self, c: char) {
+        if let Some(ni) = &mut self.new_input {
+            ni.push_char(c);
+        }
+    }
+
+    /// Backspace the open new-spec title buffer (no-op when closed).
+    pub fn pop_new_char(&mut self) {
+        if let Some(ni) = &mut self.new_input {
+            ni.backspace();
+        }
+    }
+
+    /// Cancel the new-spec input (Esc) — discards the buffer.
+    pub fn cancel_new_input(&mut self) {
+        self.new_input = None;
+    }
+
+    /// Confirm the new-spec input (Enter) — take the pending input out and
+    /// return the trimmed title for the parent to create, closing the modal.
+    /// `None` when the buffer is empty/whitespace (cancel — no creation) or no
+    /// input is open. trace:TASK-931 | ai:claude
+    pub fn take_new_input(&mut self) -> Option<String> {
+        self.new_input.take().and_then(|ni| ni.title())
+    }
+
     // --- EPIC focus lens (STORY-695) -------------------------------------
 
     /// Is an EPIC focus lens active? trace:STORY-695 | ai:claude
@@ -1375,6 +1464,11 @@ pub const QUIT_KEY_LABEL: &str = "q (or Esc at the top) / Ctrl-C: quit";
 pub const FOCUS_KEY_LABEL: &str =
     "F: pick an EPIC to focus the whole TUI on (+ its children) · C: clear the focus";
 
+/// The `new` action key legend entry — surfaced in every '?' help context so
+/// creating a Draft spec is discoverable wherever the operator asks for help.
+/// trace:TASK-931 | ai:claude
+pub const NEW_KEY_LABEL: &str = "n: new — create a Draft spec (opens a title input)";
+
 /// The element the '?' help popup should describe, distilled from the focus
 /// state. A pure value so [`help_for`] is a total, unit-testable function.
 /// trace:TASK-922 | ai:claude
@@ -1470,6 +1564,7 @@ fn scope_legend() -> Vec<String> {
         "Tab: focus the items panel".to_string(),
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
+        NEW_KEY_LABEL.to_string(),
         FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
@@ -1484,6 +1579,7 @@ fn verb_legend() -> Vec<String> {
         "Esc: back to scopes".to_string(),
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
+        NEW_KEY_LABEL.to_string(),
         FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
@@ -1498,6 +1594,7 @@ fn item_legend() -> Vec<String> {
         "⇧Tab / Esc: back to the verbs panel".to_string(),
         "type: fuzzy-filter the items".to_string(),
         "?: toggle this help".to_string(),
+        NEW_KEY_LABEL.to_string(),
         FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
@@ -2297,6 +2394,61 @@ mod tests {
         s.cancel_defer_input();
         assert!(!s.defer_input_open());
         assert!(s.take_defer_input().is_none());
+    }
+
+    // --- New-spec title input (TASK-931) ---------------------------------
+
+    #[test]
+    fn new_input_push_backspace_take() {
+        // Open, type a title (with an edit), confirm: take returns the trimmed
+        // title and closes the modal. trace:TASK-931
+        let mut s = RedesignState::new(open_items(), "advisor");
+        assert!(!s.new_input_open());
+        s.open_new_input();
+        assert!(s.new_input_open());
+        s.push_new_char('h');
+        s.push_new_char('i');
+        s.push_new_char('x'); // typo
+        s.pop_new_char(); // backspace the typo
+        s.push_new_char(' ');
+        s.push_new_char('t');
+        // buffer is "hi t" (surrounding whitespace is trimmed on take)
+        assert_eq!(s.new_input.as_ref().unwrap().buffer, "hi t");
+        let taken = s.take_new_input();
+        assert_eq!(taken, Some("hi t".to_string()));
+        // Taking closes the modal.
+        assert!(!s.new_input_open());
+        assert!(s.take_new_input().is_none());
+    }
+
+    #[test]
+    fn new_input_empty_title_cancels() {
+        // Confirming with an empty / whitespace-only buffer yields None (cancel
+        // — no creation) and still closes the modal. trace:TASK-931
+        let mut s = RedesignState::new(open_items(), "advisor");
+        s.open_new_input();
+        s.push_new_char(' ');
+        s.push_new_char(' ');
+        assert_eq!(s.take_new_input(), None);
+        assert!(!s.new_input_open());
+        // A title with surrounding whitespace trims to the inner text.
+        let mut ni = NewSpecInput::new();
+        ni.push_char(' ');
+        ni.push_char('a');
+        ni.push_char(' ');
+        assert_eq!(ni.title(), Some("a".to_string()));
+        // An untouched / whitespace buffer has no title.
+        assert_eq!(NewSpecInput::new().title(), None);
+    }
+
+    #[test]
+    fn new_input_cancel_discards() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        s.open_new_input();
+        s.push_new_char('x');
+        s.cancel_new_input();
+        assert!(!s.new_input_open());
+        assert!(s.take_new_input().is_none());
     }
 
     // --- '?' help popup (TASK-922) ---------------------------------------

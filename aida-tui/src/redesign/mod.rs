@@ -456,6 +456,27 @@ fn handle_key(
         return Ok(false);
     }
 
+    // The new-spec TITLE input modal captures all typing until the operator
+    // confirms (Enter → create a Draft from the typed title) or cancels (Esc).
+    // An empty/whitespace title cancels without creating. Printable chars
+    // append; Backspace edits. trace:TASK-931 | ai:claude
+    if st.new_input_open() {
+        match key.code {
+            KeyCode::Enter => match st.take_new_input() {
+                Some(title) => create_new_spec(st, store, cache, loaded, &title),
+                None => st.status = Some("new: cancelled (empty title)".to_string()),
+            },
+            KeyCode::Esc => {
+                st.cancel_new_input();
+                st.status = Some("new spec cancelled".to_string());
+            }
+            KeyCode::Backspace => st.pop_new_char(),
+            KeyCode::Char(c) if !c.is_control() => st.push_new_char(c),
+            _ => {}
+        }
+        return Ok(false);
+    }
+
     // The EPIC focus picker captures all keys while open (STORY-697): ↑/↓
     // navigate the (fuzzy-filtered) list; printable chars fuzzy-filter it;
     // Backspace edits the filter; Enter focuses the highlighted epic (and saves
@@ -528,6 +549,12 @@ fn handle_key(
             None => st.status = Some("store unavailable — cannot list epics".to_string()),
         },
         KeyCode::Char('C') => clear_focus(st, cache, loaded, focus_set, project_root),
+
+        // `n` opens the new-spec TITLE input modal (create a Draft) — but ONLY
+        // when no fuzzy filter is being typed; with an active filter buffer a
+        // bare `n` is a literal filter character, so it falls through to the
+        // filter arm below (the same guard `q` uses). trace:TASK-931 | ai:claude
+        KeyCode::Char('n') if st.filter.is_empty() => st.open_new_input(),
 
         // `q` quits — but ONLY when no fuzzy filter is being typed; with an
         // active filter buffer a bare `q` is a literal filter character, so it
@@ -948,6 +975,91 @@ fn defer_status(deferred: &[String], failed: &[String], trigger: &str) -> String
     parts.join(" · ")
 }
 
+/// The argument vector for creating a Draft spec — passed to `Command::args`
+/// so each element (notably the operator-typed `title`) is an OS-level argument
+/// that is NEVER shell-parsed. A title with backticks, quotes, or `$` is inert
+/// (no command substitution, no globbing) because there is no shell in the
+/// pipeline. Pure (no IO) so the safe arg vector is unit-testable without
+/// spawning. trace:TASK-931 | ai:claude
+fn new_spec_args(title: &str) -> Vec<&str> {
+    vec![
+        "add", "--title", title, "--type", "task", "--status", "draft",
+    ]
+}
+
+/// Parse the spec id out of `aida add`'s success line (`Added: TASK-932 - …`).
+/// Returns `None` when no such line is present (or the id is the `?` placeholder
+/// the CLI prints when a spec_id wasn't assigned). Pure so it is unit-testable.
+/// trace:TASK-931 | ai:claude
+fn parse_created_spec_id(stdout: &str) -> Option<String> {
+    stdout.lines().find_map(|l| {
+        let rest = l.strip_prefix("Added: ")?;
+        let id = rest.split(" - ").next()?.trim();
+        if id.is_empty() || id == "?" {
+            None
+        } else {
+            Some(id.to_string())
+        }
+    })
+}
+
+/// The status-line confirmation for a `new` create: the created spec id (when
+/// the CLI reported one) plus a truncated title. Pure (no IO) so it is unit
+/// testable. trace:TASK-931 | ai:claude
+fn create_status(created: Option<&str>, title: &str) -> String {
+    let short: String = if title.chars().count() > 50 {
+        format!("{}…", title.chars().take(50).collect::<String>())
+    } else {
+        title.to_string()
+    };
+    match created {
+        Some(id) => format!("created {id} (Draft): {short}"),
+        None => format!("created Draft spec: {short}"),
+    }
+}
+
+/// Create a fresh Draft spec from the operator-typed `title` via
+/// `aida add --title <title> --type task --status draft`. The title is passed as
+/// a SINGLE arg-vector element (see [`new_spec_args`]) — never a shell string —
+/// so embedded backticks/quotes/`$` are safe. On success the active scope's
+/// item cache is invalidated so the next [`sync_scope_items`] re-fetches
+/// in-process and the new draft appears if it is in view; the created spec id is
+/// reported on the status line. trace:TASK-931 | ai:claude
+fn create_new_spec(
+    st: &mut RedesignState,
+    _store: Option<&SpecStore>,
+    cache: &mut HashMap<Scope, Vec<TargetItem>>,
+    loaded: &mut Scope,
+    title: &str,
+) {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(new_spec_args(title));
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    match cmd.output() {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let created = parse_created_spec_id(&stdout);
+            // Refresh the active scope so the new draft shows if it is in view
+            // (e.g. the Open scope, which includes drafts). The fetch is the
+            // same in-process cache read the rest of the TUI uses; clearing the
+            // per-scope cache + resetting the `loaded` sentinel forces it on the
+            // next loop iteration. trace:TASK-931 | ai:claude
+            invalidate_scope_cache(cache, loaded);
+            st.status = Some(create_status(created.as_deref(), title));
+        }
+        Ok(out) => {
+            let err = String::from_utf8_lossy(&out.stderr);
+            st.status = Some(format!("new: aida add failed: {}", err.trim()));
+        }
+        Err(e) => {
+            st.status = Some(format!("new: could not run aida add: {e}"));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Render
 // ---------------------------------------------------------------------------
@@ -984,6 +1096,10 @@ fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
     // The defer revisit-trigger input overlays everything else. trace:TASK-921
     if let Some(di) = &st.defer_input {
         render_defer_input(f, f.area(), theme, di);
+    }
+    // The new-spec title input overlays everything else. trace:TASK-931
+    if let Some(ni) = &st.new_input {
+        render_new_input(f, f.area(), theme, ni);
     }
     // The EPIC focus picker overlays everything else. trace:STORY-697
     if let Some(p) = &st.epic_picker {
@@ -1645,6 +1761,40 @@ fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::Defe
     f.render_widget(Paragraph::new(lines).block(block), popup);
 }
 
+/// Render the new-spec TITLE input modal (TASK-931): a single-line prompt with
+/// a block cursor for the title of a fresh Draft spec. Mirrors the defer-input
+/// modal's shape. Enter creates; Esc (or an empty title) cancels.
+/// trace:TASK-931 | ai:claude
+fn render_new_input(f: &mut Frame, area: Rect, theme: &Theme, ni: &state::NewSpecInput) {
+    let popup = centered(area, 60, 25);
+    f.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.accent))
+        .title(" new — create a Draft spec ");
+    let lines = vec![
+        Line::from(Span::styled(
+            "Title for the new Draft spec",
+            Style::default().fg(theme.dim),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("> ", Style::default().fg(theme.accent)),
+            Span::styled(
+                ni.buffer.clone(),
+                Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+            ),
+            // A block cursor at the end of the input.
+            Span::styled("█", Style::default().fg(theme.accent)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Enter = create   ·   Esc = cancel",
+            Style::default().fg(theme.dim),
+        )),
+    ];
+    f.render_widget(Paragraph::new(lines).block(block), popup);
+}
+
 /// Render the EPIC focus PICKER modal (STORY-697): a fuzzy-filter prompt with a
 /// block cursor, then the (filtered) open-epic list — one row per epic showing
 /// its id + title + status, with the highlighted row reverse-styled. Mirrors
@@ -2014,6 +2164,65 @@ mod render_tests {
         // Empty case.
         let empty = defer_status(&[], &[], "x");
         assert!(empty.contains("nothing parked"));
+    }
+
+    // --- New-spec create (TASK-931) ---------------------------------------
+
+    #[test]
+    fn new_spec_args_builds_safe_arg_vector() {
+        // The title is a SINGLE arg-vector element — even with backticks, quotes
+        // and `$`, which would be shell-dangerous in a shell string but are
+        // inert as an OS argument. trace:TASK-931
+        let title = "fix the `rm -rf $HOME` \"quote\" bug";
+        let args = new_spec_args(title);
+        assert_eq!(
+            args,
+            vec!["add", "--title", title, "--type", "task", "--status", "draft"],
+        );
+        // The whole title is exactly one element (not split on spaces/specials).
+        assert_eq!(args.iter().filter(|a| **a == title).count(), 1);
+    }
+
+    #[test]
+    fn parse_created_spec_id_extracts_from_added_line() {
+        // The CLI prints `Added: <SPEC-ID> - <title>` on success.
+        assert_eq!(
+            parse_created_spec_id("Added: TASK-932 - my new title\n"),
+            Some("TASK-932".to_string()),
+        );
+        // No Added line → None (e.g. unexpected output).
+        assert_eq!(parse_created_spec_id("something else entirely"), None);
+        // The `?` placeholder (no spec_id assigned) is not a real id.
+        assert_eq!(parse_created_spec_id("Added: ? - title"), None);
+    }
+
+    #[test]
+    fn create_status_reports_id_and_title() {
+        let with_id = create_status(Some("TASK-9"), "do the thing");
+        assert!(with_id.contains("TASK-9"));
+        assert!(with_id.contains("do the thing"));
+        // Without an id we still confirm a Draft was created.
+        let no_id = create_status(None, "do the thing");
+        assert!(no_id.contains("Draft"));
+        // Long titles are truncated with an ellipsis.
+        let long = "x".repeat(80);
+        assert!(create_status(Some("TASK-1"), &long).contains('…'));
+    }
+
+    #[test]
+    fn renders_new_input_modal() {
+        // The single-line title input modal paints over the backend (empty and
+        // with typed text), at a realistic and a tiny size, no panic. trace:TASK-931
+        let mut st = sample(5);
+        drill_open(&mut st);
+        st.open_new_input();
+        draw(&st, 100, 30);
+        // With typed title text.
+        st.push_new_char('h');
+        st.push_new_char('i');
+        draw(&st, 100, 30);
+        // Tiny terminal.
+        draw(&st, 20, 6);
     }
 
     #[test]
