@@ -22321,5 +22321,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2112
+- id: 019f0659-f42c-7581-8326-f6b78cb8c6d9
+  target_id: 019f0659-e83f-7882-9ff5-78062356547f
+  author: aida
+  node_id: '1'
+  lamport: 2113
+  timestamp: 2026-06-26T23:53:06.348880729Z
+  kind: !Create
+    title: MU-60x concurrent-same-clone harness case
+    description: 'New scripts/multi-clone-harness.sh case: two agents (different-SHA binaries) hammer aida list/add against ONE shared .aida/cache.db concurrently; assert no SQLITE_BUSY hard-error, no missing-column schema error, cache self-heals. Closes the harness blind spot (tests cross-clone MU-50x + rebuild MU-301 but never same-clone contention).'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2113
 node_id: '1'
