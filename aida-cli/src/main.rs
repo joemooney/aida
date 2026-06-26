@@ -81340,7 +81340,15 @@ fn handle_tui_command(
 ) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let cfg = aida_tui::TuiConfig::load(&cwd);
-    let use_launcher = launcher || cfg.mode == aida_tui::TuiMode::Launcher;
+    // STORY-690: the action->target redesign prototype owns the terminal
+    // directly (like the PTY-host `run()` path), so it must bypass the launcher
+    // intent-fd/shell-wrapper handshake. When `AIDA_TUI_REDESIGN` is on, force
+    // the direct `run()` path — which then dispatches to `redesign::run()`.
+    // trace:STORY-690 | ai:claude
+    let redesign = std::env::var("AIDA_TUI_REDESIGN")
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+    let use_launcher = !redesign && (launcher || cfg.mode == aida_tui::TuiMode::Launcher);
     if use_launcher {
         // STORY-681: bare `aida tui` dispatches intents IN-PROCESS and
         // re-enters in a loop — self-sufficient, no fd-3 pipe, no `aida-tui`
