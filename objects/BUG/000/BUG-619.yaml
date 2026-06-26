@@ -22,12 +22,12 @@ description: |-
   - While a fetch is in flight the panel renders immediately with a "refreshing…" notice (existing notice line) plus last-known rows (or an empty state) — the cursor is never blocked.
   - `gh` failure or absence degrades to an "unavailable" notice without hanging the UI.
   - Verify against the primary caller: a human cycling tabs in `aida tui` perceives instant panel switching; the PR data fills in asynchronously.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:57:44.481303272Z
-modified_at: 2026-06-26T04:57:44.481303272Z
+modified_at: 2026-06-26T05:15:34.136019424Z
 req_type: Bug
 tags:
 - papercut
