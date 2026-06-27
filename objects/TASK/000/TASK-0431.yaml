@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:39.167328282Z
-modified_at: 2026-06-24T03:36:24.179086305Z
+modified_at: 2026-06-27T16:40:35.493698926Z
 req_type: Task
 tags:
 - advisor-autopilot
@@ -25,3 +25,6 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
   created_at: 2026-06-24T03:17:39.167368150Z
+deferred: true
+deferred_at: 2026-06-27T16:40:35.493698926Z
+deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
