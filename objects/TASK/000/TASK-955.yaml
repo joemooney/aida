@@ -14,12 +14,12 @@ description: |-
   ACCEPTANCE: aida list open --parent EPIC-51 --recursive returns the subtrees open items (≈40 nodes deep vs 6 direct); --recursive without --parent errors with a clear message; composes with [STATUS]/--type/--tags; --json works; cache-fast (no backend.load()). Unit/integration test: a 3-level fixture (epic->story->task) where --parent shows 1 and --recursive shows all descendants.
 
   FILES: aida-cli/src/cli.rs (the --recursive flag on List), aida-cli/src/main.rs (the list handler / the --parent filter), aida-core/src/db/cache.rs (the recursive-descendant query).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T06:21:13.383726249Z
-modified_at: 2026-06-27T06:21:13.383726249Z
+modified_at: 2026-06-27T06:21:34.043880258Z
 req_type: Task
 tags:
 - cli
