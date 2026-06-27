@@ -272,6 +272,53 @@ fn clear_focus(
     st.status = Some("focus cleared (.aida/tui-focus removed)".to_string());
 }
 
+/// Live-refresh (the `r` key): re-read the store in-process so state changes
+/// made OUTSIDE the TUI (a status flip via the CLI or another agent) appear
+/// without relaunch.
+///
+/// Mechanics: [`invalidate_scope_cache`] drops the in-memory per-scope item
+/// cache and resets the `loaded` sentinel, so the next [`sync_scope_items`]
+/// (run at the top of the event loop, before the next draw) re-fetches the
+/// active scope. The re-fetch goes through [`SpecStore::scope_items`] →
+/// `CachedGitBackend::list_summaries`, which **stale-checks the SQLite cache
+/// against the orphan-branch HEAD on every call and rebuilds when behind**. So
+/// an external write — which advances the `.aida-store` worktree HEAD when its
+/// targeted `update SPEC-ID` commit lands — is surfaced WITHOUT reopening the
+/// backend: the backend reads HEAD fresh from disk per read and never memoizes
+/// it. (The focus-progress + descendant reads use the same fresh `list_*`
+/// paths.) Reopening the backend is therefore unnecessary.
+///
+/// When focused on an epic, the descendant closure + progress summary are also
+/// recomputed so a child added or a status flipped inside the focus epic is
+/// reflected. trace:TASK-934 | ai:claude
+fn refresh(
+    st: &mut RedesignState,
+    store: Option<&SpecStore>,
+    cache: &mut HashMap<Scope, Vec<TargetItem>>,
+    loaded: &mut Scope,
+    focus_set: &mut Option<std::collections::HashSet<String>>,
+) {
+    invalidate_scope_cache(cache, loaded);
+    // Recompute the focus closure + progress so externally-added children and
+    // status flips inside the focus epic surface too. A now-empty closure
+    // leaves the existing focus untouched (mirrors apply_focus's guard).
+    // trace:TASK-934 | ai:claude
+    if let (Some(epic), Some(s)) = (st.focus_epic.clone(), store) {
+        let set = s.descendants_of(&epic);
+        if !set.is_empty() {
+            *focus_set = Some(set);
+            if let Some(set) = focus_set.as_ref() {
+                refresh_focus_summary(st, s, set);
+            }
+        }
+    }
+    st.status = Some(if store.is_some() {
+        "refreshed".to_string()
+    } else {
+        "refresh: store unavailable".to_string()
+    });
+}
+
 /// Drop the per-scope item cache and reset the `loaded` sentinel to a value no
 /// functional scope equals, so the next [`sync_scope_items`] re-fetches the
 /// active scope under the new focus. trace:STORY-695 | ai:claude
@@ -556,6 +603,15 @@ fn handle_key(
         // bare `n` is a literal filter character, so it falls through to the
         // filter arm below (the same guard `q` uses). trace:TASK-931 | ai:claude
         KeyCode::Char('n') if st.filter.is_empty() => st.open_new_input(),
+
+        // `r` live-refreshes — re-read the store in-process so state changes
+        // made OUTSIDE the TUI (a status flip via the CLI / another agent)
+        // appear without relaunch. Guarded `if st.filter.is_empty()` (like
+        // `n`/`q`) so a bare `r` stays a literal filter character while typing.
+        // trace:TASK-934 | ai:claude
+        KeyCode::Char('r') if st.filter.is_empty() => {
+            refresh(st, store, cache, loaded, focus_set);
+        }
 
         // `q` quits — but ONLY when no fuzzy filter is being typed; with an
         // active filter buffer a bare `q` is a literal filter character, so it
@@ -2065,6 +2121,72 @@ fn centered(area: Rect, pct_w: u16, pct_h: u16) -> Rect {
         Constraint::Percentage((100 - pct_w) / 2),
     ])
     .split(vert[1])[1]
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    //! Pure tests for the `r` live-refresh (TASK-934): the parts that don't
+    //! need a terminal or an attached store. The store re-read itself rides
+    //! `CachedGitBackend`'s per-call stale-check (covered by aida-core), so
+    //! here we prove refresh drops the in-memory scope cache + resets the
+    //! sentinel (forcing the next `sync_scope_items` to re-fetch) and reports
+    //! status without a store. trace:TASK-934 | ai:claude
+    use super::*;
+
+    fn item(id: &str) -> TargetItem {
+        TargetItem {
+            id: id.to_string(),
+            title: String::new(),
+            req_type: "Task".into(),
+            status: "Approved".into(),
+            priority: String::new(),
+            body: String::new(),
+            has_test_plan: false,
+        }
+    }
+
+    #[test]
+    fn refresh_clears_the_scope_cache_and_resets_the_sentinel() {
+        let mut st = RedesignState::new(vec![item("TASK-1")], "advisor");
+        let mut cache: HashMap<Scope, Vec<TargetItem>> = HashMap::new();
+        cache.insert(Scope::Backlog, vec![item("TASK-1")]);
+        cache.insert(Scope::Open, vec![item("TASK-2")]);
+        let mut loaded = Scope::Backlog;
+        let mut focus_set: Option<std::collections::HashSet<String>> = None;
+
+        refresh(&mut st, None, &mut cache, &mut loaded, &mut focus_set);
+
+        // The in-memory scope rows are dropped so the next sync re-fetches…
+        assert!(cache.is_empty(), "scope cache emptied");
+        // …and the sentinel is reset to the non-functional Sessions scope, which
+        // can never equal the active functional scope, forcing a re-fetch.
+        assert_eq!(loaded, Scope::Sessions);
+    }
+
+    #[test]
+    fn refresh_without_store_reports_unavailable() {
+        let mut st = RedesignState::new(vec![], "advisor");
+        let mut cache: HashMap<Scope, Vec<TargetItem>> = HashMap::new();
+        let mut loaded = Scope::Backlog;
+        let mut focus_set: Option<std::collections::HashSet<String>> = None;
+
+        refresh(&mut st, None, &mut cache, &mut loaded, &mut focus_set);
+
+        assert_eq!(st.status.as_deref(), Some("refresh: store unavailable"));
+        // With no store the focus closure recompute is skipped, leaving the lens
+        // untouched. trace:TASK-934
+        assert!(focus_set.is_none());
+    }
+
+    #[test]
+    fn invalidate_scope_cache_empties_and_resets() {
+        let mut cache: HashMap<Scope, Vec<TargetItem>> = HashMap::new();
+        cache.insert(Scope::Open, vec![item("TASK-9")]);
+        let mut loaded = Scope::Open;
+        invalidate_scope_cache(&mut cache, &mut loaded);
+        assert!(cache.is_empty());
+        assert_eq!(loaded, Scope::Sessions);
+    }
 }
 
 #[cfg(test)]

@@ -1557,6 +1557,11 @@ pub const FOCUS_KEY_LABEL: &str =
 /// trace:TASK-931 | ai:claude
 pub const NEW_KEY_LABEL: &str = "n: new — create a Draft spec (opens a title input)";
 
+/// The live-refresh key legend entry — surfaced in every '?' help context so
+/// re-reading the store (to witness state changes made outside the TUI) is
+/// discoverable wherever the operator asks for help. trace:TASK-934 | ai:claude
+pub const REFRESH_KEY_LABEL: &str = "r: refresh — re-read the store (pick up external changes)";
+
 /// The element the '?' help popup should describe, distilled from the focus
 /// state. A pure value so [`help_for`] is a total, unit-testable function.
 /// trace:TASK-922 | ai:claude
@@ -1653,6 +1658,7 @@ fn scope_legend() -> Vec<String> {
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
+        REFRESH_KEY_LABEL.to_string(),
         FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
@@ -1668,6 +1674,7 @@ fn verb_legend() -> Vec<String> {
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
+        REFRESH_KEY_LABEL.to_string(),
         FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
@@ -1683,6 +1690,7 @@ fn item_legend() -> Vec<String> {
         "type: fuzzy-filter the items".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
+        REFRESH_KEY_LABEL.to_string(),
         FOCUS_KEY_LABEL.to_string(),
         QUIT_KEY_LABEL.to_string(),
     ]
