@@ -535,6 +535,12 @@ pub struct ScaffoldConfig {
     pub include_commit_msg_hook: bool,
     /// Include pre-commit hook for trace comment validation
     pub include_pre_commit_hook: bool,
+    // trace:TASK-917
+    /// Include the post-commit hook that DIRECTLY detects a `git commit
+    /// --no-verify` bypass (the pre-commit hook was skipped) and records it to
+    /// the field-study rule-violation log. Default true; observe-only and inert
+    /// unless `AIDA_FIELD_STUDY=1`.
+    pub include_post_commit_hook: bool,
     /// Include prepare-commit-msg hook that pins the orphan-store HEAD
     /// SHA into every code commit's `Aida-Store:` trailer. Default true
     /// — enables `aida store status` time-travel semantics.
@@ -603,7 +609,8 @@ impl Default for ScaffoldConfig {
             include_aida_backlog_groom_skill: true,
             generate_git_hooks: true,
             include_commit_msg_hook: true,
-            include_pre_commit_hook: true, // Enabled by default
+            include_pre_commit_hook: true,  // Enabled by default
+            include_post_commit_hook: true, // TASK-917: direct --no-verify detection
             include_store_pair_hook: true,
             generate_claude_code_hooks: true,
             include_validate_commit_hook: true,
@@ -1882,6 +1889,33 @@ impl Scaffolder {
                     path.clone(),
                     self.generate_pre_commit_hook(),
                     "Git hook for validating trace comments before commit".to_string(),
+                    true, // shell script
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // post-commit hook — direct `--no-verify` bypass detection: notices
+            // (via the pre-commit sentinel) when a commit skipped the pre-commit
+            // hook and records it to the field-study rule-violation log.
+            // Observe-only; inert unless AIDA_FIELD_STUDY=1. trace:TASK-917
+            if self.config.include_post_commit_hook {
+                let path = PathBuf::from(".git/hooks/post-commit");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_post_commit_hook(),
+                    "Git hook detecting --no-verify pre-commit bypass (field study)".to_string(),
                     true, // shell script
                 );
 
