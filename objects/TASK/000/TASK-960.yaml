@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:41:23.494753579Z
-modified_at: 2026-06-27T16:41:27.628999142Z
+modified_at: 2026-06-27T16:41:36.233809239Z
 req_type: Task
 tags:
 - multi-clone
@@ -19,3 +19,7 @@ relationships:
 - rel_type: Child
   target_id: 019ed2f1-d1ca-7212-9df1-56394d8ba3db
   created_at: 2026-06-27T16:41:27.628999142Z
+- rel_type: Parent
+  target_id: 019ed2f1-d1ca-7212-9df1-56394d8ba3db
+  created_at: 2026-06-27T16:41:36.233805273Z
+  created_by: joe
