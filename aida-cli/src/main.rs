@@ -2111,6 +2111,18 @@ fn run() -> Result<()> {
         return handle_ps(*json, *all);
     }
 
+    // TASK-957: `aida claim` / `aida unclaim` self-load the store read-only to
+    // resolve the spec id forms, then write/remove a lightweight advisory lease
+    // under `.aida/sessions/`. Like `aida ps` / `aida status <spec>` they touch
+    // only the local lease dir + a cache-backed lookup, so they need no shared
+    // storage handle — dispatch early. trace:TASK-957 | ai:claude
+    if let Command::Claim { spec, worktree } = &cli.command {
+        return handle_claim(spec, worktree.as_deref());
+    }
+    if let Command::Unclaim { spec } = &cli.command {
+        return handle_unclaim(spec);
+    }
+
     // STORY-631: `aida intent <ID>` self-loads the store (read for cache-print,
     // read+write for generate), and may shell out to a headless `claude -p`
     // running `/aida-intent`. Like `aida why` / `aida intake`, it needs no
@@ -3256,6 +3268,9 @@ fn run() -> Result<()> {
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
+        // trace:TASK-957
+        Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
+        Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -13816,6 +13831,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
+        // trace:TASK-957
+        Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
+        Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -20723,6 +20741,7 @@ mod story_569_review_brief_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
 
         // Handoff disabled → None, no side effects.
@@ -44920,6 +44939,19 @@ pub(crate) struct SessionLease {
     /// trace:BUG-511 | ai:claude
     #[serde(default)]
     review_verb: bool,
+    /// TASK-957: marks a lease minted by `aida claim <spec>` — a spec-scoped
+    /// ADVISORY claim that makes advisor-fanned work (an Agent-tool subagent,
+    /// which otherwise takes only a generic `harness-worktree` lease) visible
+    /// to BUG-637's duplicate-dispatch gates. Like a review lease it has no
+    /// worktree of its own (`worktree_path` may be empty when no `--worktree`
+    /// was given), so its liveness signal is the claiming process recorded in
+    /// `creator_pid`: alive → the claim still holds; dead → stale and ignored
+    /// by every gate (no crash-deadlock). The scope IS the spec id, so the
+    /// claim matches `live_spec_claim_by_other` / `lease_owning_spec` /
+    /// `spec_scoped_lease` exactly like an AIDA-launched spec lease.
+    // trace:TASK-957 | ai:claude
+    #[serde(default)]
+    claim_verb: bool,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -45006,6 +45038,7 @@ fn session_harness_worktree_register(
         parent_branch: None,
         parent_branch_sha: None,
         review_verb: false,
+        claim_verb: false,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -45548,7 +45581,13 @@ fn lease_state_for(
     live_sessions: &[process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
 ) -> LeaseState {
-    if l.review_verb {
+    // BUG-511 review leases AND TASK-957 claim leases are advisory locks with
+    // no worktree of their own — the standard worktree/claude/age matrix would
+    // always call them stale. Their real liveness signal is the process that
+    // minted them, recorded in `creator_pid`: alive → Live, dead/absent →
+    // Stale (never Dormant; an advisory lock's lifetime is exactly its
+    // process's lifetime). trace:BUG-511 trace:TASK-957 | ai:claude
+    if l.review_verb || l.claim_verb {
         let alive = l
             .creator_pid
             .map(process_probe::pid_is_alive)
@@ -45639,6 +45678,7 @@ mod lease_covers_cwd_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -48787,6 +48827,7 @@ fn session_start(
         parent_branch: stack_parent_branch.clone(),
         parent_branch_sha: stack_parent_sha.clone(),
         review_verb: false,
+        claim_verb: false,
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -50398,6 +50439,7 @@ mod story_456_status_worktrees_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -59028,6 +59070,7 @@ mod bug_511_review_lease_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: true,
+            claim_verb: false,
         }
     }
 
@@ -59184,6 +59227,7 @@ mod story_694_spec_liveness_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -59309,6 +59353,7 @@ mod bug_637_spec_claim_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -59426,6 +59471,162 @@ mod bug_637_spec_claim_tests {
     }
 }
 
+/// TASK-957: `aida claim` / `aida unclaim` — the advisor-fan-out claim that
+/// closes the BUG-637 gap. A claim is a spec-scoped advisory lease
+/// (`claim_verb = true`, no worktree, pid-based liveness) that the BUG-637 gates
+/// pick up exactly like an AIDA-launched lease.
+// trace:TASK-957 | ai:claude
+#[cfg(test)]
+mod task_957_claim_tests {
+    use super::*;
+
+    /// Build a TASK-957 claim lease for `scope`, keyed to `pid` (the advisory
+    /// liveness signal). No worktree — exactly what `aida claim` writes.
+    fn claim(id: &str, scope: &str, pid: Option<u32>) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".into(),
+            worktree_path: std::path::PathBuf::new(),
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("advisor".into()),
+            creator_pid: pid,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+            claim_verb: true,
+        }
+    }
+
+    /// A claim with a LIVE creator pid classifies Live even with NO worktree —
+    /// the advisory-lock path shared with BUG-511 review leases. This is what
+    /// makes the claim block the gates.
+    #[test]
+    fn claim_with_live_pid_is_live() {
+        let now = chrono::Utc::now();
+        let alive = claim("c1", "TASK-957", Some(std::process::id()));
+        assert!(
+            matches!(lease_state_for(&alive, &[], now), LeaseState::Live),
+            "a claim held by a live process must read Live (no worktree needed)"
+        );
+    }
+
+    /// A claim whose creator pid is dead/absent classifies Stale — a dead
+    /// claimer's claim is ignored by every gate (no crash-deadlock).
+    #[test]
+    fn claim_with_dead_pid_is_stale() {
+        let now = chrono::Utc::now();
+        let dead = claim("c2", "TASK-957", None);
+        assert!(
+            matches!(lease_state_for(&dead, &[], now), LeaseState::Stale),
+            "a claim with no live process must read Stale"
+        );
+    }
+
+    /// ACCEPTANCE: after `aida claim SPEC-N`, a foreign `aida queue work SPEC-N`
+    /// refuses — the claim is caught by the pre-pickup gate exactly like an
+    /// AIDA-launched lease, with liveness driven by the claim's pid.
+    #[test]
+    fn live_claim_makes_foreign_pickup_refuse() {
+        let now = chrono::Utc::now();
+        let leases = vec![claim("c-live", "BUG-631", Some(std::process::id()))];
+        let blocked =
+            live_spec_claim_by_other(&leases, None, &["BUG-631"], lease_is_live(&[], now));
+        assert!(
+            blocked.is_some(),
+            "a live claim must make a foreign pickup refuse"
+        );
+        assert_eq!(blocked.unwrap().id, "c-live");
+    }
+
+    /// ACCEPTANCE: a STALE-claimer's claim is ignored — a dead advisor session
+    /// must not lock the spec, so the foreign pickup proceeds.
+    #[test]
+    fn stale_claim_does_not_block_pickup() {
+        let now = chrono::Utc::now();
+        // pid None → dead → lease_is_live returns false for it.
+        let leases = vec![claim("c-dead", "BUG-631", None)];
+        let blocked =
+            live_spec_claim_by_other(&leases, None, &["BUG-631"], lease_is_live(&[], now));
+        assert!(
+            blocked.is_none(),
+            "a stale claimer's claim must be ignored (no crash-deadlock)"
+        );
+    }
+
+    /// `is_own_claim` is the idempotency / unclaim key: same scope + same
+    /// creator pid + claim kind. A self-claim is a no-op refresh (matches); a
+    /// different pid, a different scope, or a non-claim lease does not.
+    #[test]
+    fn is_own_claim_matches_only_same_pid_scope_and_kind() {
+        let mine = claim("c-mine", "TASK-957", Some(4242));
+        assert!(
+            is_own_claim(&mine, "TASK-957", Some(4242)),
+            "same scope + pid + claim kind ⇒ own claim (idempotent refresh)"
+        );
+        // case-insensitive scope.
+        assert!(is_own_claim(&mine, "task-957", Some(4242)));
+        // different pid ⇒ a DIFFERENT session's claim, not mine.
+        assert!(!is_own_claim(&mine, "TASK-957", Some(9999)));
+        // different scope ⇒ not this spec.
+        assert!(!is_own_claim(&mine, "BUG-631", Some(4242)));
+        // a non-claim lease (e.g. a real session lease) is never an own-claim.
+        let mut session = mine.clone();
+        session.claim_verb = false;
+        assert!(!is_own_claim(&session, "TASK-957", Some(4242)));
+    }
+
+    /// End-to-end at the lease-dir level: write a claim lease, confirm the gate
+    /// catches it via `list_leases`, then remove the caller's claim (the
+    /// `unclaim` core) and confirm the gate no longer fires.
+    #[test]
+    fn write_then_unclaim_round_trips_through_the_gate() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let now = chrono::Utc::now();
+        let my_pid = Some(std::process::id());
+
+        // `aida claim BUG-631` core: write a live claim into the lease dir.
+        let lease = claim("c-rt", "BUG-631", my_pid);
+        std::fs::create_dir_all(leases_dir(root)).unwrap();
+        std::fs::write(
+            lease_path(root, &lease.id),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+
+        let leases = list_leases(root);
+        assert!(
+            live_spec_claim_by_other(&leases, None, &["BUG-631"], lease_is_live(&[], now))
+                .is_some(),
+            "the written claim must be seen by the pre-pickup gate"
+        );
+
+        // `aida unclaim BUG-631` core: remove the caller's own claim.
+        for l in leases.iter().filter(|l| is_own_claim(l, "BUG-631", my_pid)) {
+            std::fs::remove_file(lease_path(root, &l.id)).unwrap();
+        }
+
+        let leases = list_leases(root);
+        assert!(
+            live_spec_claim_by_other(&leases, None, &["BUG-631"], lease_is_live(&[], now))
+                .is_none(),
+            "after unclaim the gate must no longer fire"
+        );
+    }
+}
+
 // The global running-work table (`aida ps`). trace:STORY-696 | ai:claude
 #[cfg(test)]
 mod story_696_ps_tests {
@@ -59453,6 +59654,7 @@ mod story_696_ps_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -59623,6 +59825,7 @@ mod task_358_escalation_cleanup_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
         let path = sessions.join(format!("{id}.toml"));
         std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
@@ -66944,6 +67147,7 @@ reason = "reserved by docs build"
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
 
         // No routing tags = visible everywhere.
@@ -67266,6 +67470,7 @@ hostname = "h"
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
         std::fs::write(
             leases.join("abcdef123456.toml"),
@@ -69516,6 +69721,7 @@ mod bug_574_spurious_exit_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -69586,6 +69792,7 @@ mod lease_enforcement_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -69994,6 +70201,7 @@ mod lease_enforcement_tests {
                 parent_branch: None,
                 parent_branch_sha: None,
                 review_verb: false,
+                claim_verb: false,
             }
         }
         let leases = vec![
@@ -70049,6 +70257,7 @@ mod scope_fallback_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -70658,6 +70867,7 @@ mod session_end_resolution_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -81214,6 +81424,7 @@ mod task_250_review_state_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
         std::fs::write(
             dir.join(format!("{}.toml", id)),
@@ -90730,6 +90941,208 @@ fn spec_scoped_lease<'a>(
     })
 }
 
+/// TASK-957: resolve a `<spec>` argument (SPEC-ID, agreed-id, or UUID) to the
+/// matching requirement, loading the store read-only. Shared by `aida claim`
+/// and `aida unclaim`.
+// trace:TASK-957 | ai:claude
+fn resolve_spec_for_claim(spec: &str) -> Result<(std::path::PathBuf, Requirement)> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+    let want = spec.trim();
+    let want_uc = want.to_ascii_uppercase();
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| {
+            // UUID match (the form `aida show` prints), or any id form.
+            r.id.to_string().eq_ignore_ascii_case(want)
+                || [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|s| s.eq_ignore_ascii_case(&want_uc))
+        })
+        .cloned()
+        .ok_or_else(|| {
+            anyhow::anyhow!("no spec found matching `{spec}` — check the ID with `aida list`.")
+        })?;
+    Ok((project_root, req))
+}
+
+/// The canonical display id (agreed id preferred, else spec id) used as a
+/// claim's scope so it matches the BUG-637 gates exactly like an AIDA-launched
+/// spec lease.
+// trace:TASK-957 | ai:claude
+fn claim_scope_id(req: &Requirement) -> String {
+    req.agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| req.id.to_string())
+}
+
+/// True iff `lease` is a TASK-957 claim minted by THIS caller for `scope` — same
+/// scope (case-insensitive), same advisory-claim kind, and the same creator pid.
+/// Used for idempotency (re-claim = refresh) and for `aida unclaim` (remove only
+/// the caller's own claim).
+// trace:TASK-957 | ai:claude
+fn is_own_claim(lease: &SessionLease, scope: &str, my_pid: Option<u32>) -> bool {
+    lease.claim_verb && lease.scope.eq_ignore_ascii_case(scope) && lease.creator_pid == my_pid
+}
+
+/// `aida claim <spec>` — record a spec-scoped advisory CLAIM so advisor-fanned
+/// work (a Claude Agent-tool subagent, which otherwise takes only a generic
+/// `harness-worktree` lease) is visible to the BUG-637 duplicate-dispatch gates.
+///
+/// Writes a lightweight [`SessionLease`] whose scope IS the spec id, with no
+/// worktree of its own — its liveness signal is the claiming process recorded in
+/// `creator_pid` (the [`lease_state_for`] advisory-lock path, shared with
+/// BUG-511 review leases). Because the scope matches the spec id, the claim is
+/// picked up by [`live_spec_claim_by_other`] (pre-pickup),
+/// [`lease_owning_spec`] (pre-edit), and [`spec_scoped_lease`]
+/// (`aida status <spec>` / `aida ps`) exactly like an AIDA-launched lease.
+///
+/// Idempotent: re-claiming a spec this caller already claims is a no-op refresh
+/// (it rewrites the same lease with a fresh `started_at`).
+// trace:TASK-957 | ai:claude
+fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
+    let (project_root, req) = resolve_spec_for_claim(spec)?;
+    let scope = claim_scope_id(&req);
+    let my_pid = creator_shell_pid();
+
+    // Idempotency: if THIS caller already holds a live claim for this scope,
+    // refresh it in place rather than minting a second lease. trace:TASK-957
+    let leases = list_leases(&project_root);
+    let existing = leases.iter().find(|l| is_own_claim(l, &scope, my_pid));
+
+    let worktree_path = worktree
+        .map(|w| {
+            let p = std::path::PathBuf::from(w);
+            p.canonicalize().unwrap_or(p)
+        })
+        .unwrap_or_default();
+
+    let branch = current_branch_at(&project_root).unwrap_or_default();
+    let owner = aida_core::git_ops::git_config_get("user.email")
+        .ok()
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let id = match existing {
+        Some(l) => l.id.clone(),
+        None => uuid::Uuid::now_v7().to_string().replace('-', "")[..12].to_string(),
+    };
+    let refreshed = existing.is_some();
+
+    let lease = SessionLease {
+        id: id.clone(),
+        scope: scope.clone(),
+        slug: slugify(&scope),
+        owner,
+        worktree_path,
+        branch,
+        started_at: chrono::Utc::now(),
+        hostname: hostname(),
+        role: std::env::var("AIDA_SESSION_ROLE").ok(),
+        creator_pid: my_pid,
+        cargo_target_dir: None,
+        parent_project_root: Some(
+            project_root
+                .canonicalize()
+                .unwrap_or_else(|_| project_root.clone()),
+        ),
+        pr_head_sha: None,
+        pr_base_sha: None,
+        pr_base_ref: None,
+        zen_intent_token: None,
+        escalated_to_human: None,
+        parent_branch: None,
+        parent_branch_sha: None,
+        review_verb: false,
+        claim_verb: true,
+    };
+
+    std::fs::create_dir_all(leases_dir(&project_root))?;
+    std::fs::write(
+        lease_path(&project_root, &id),
+        toml::to_string_pretty(&lease)?,
+    )?;
+
+    let id_short: String = id.chars().take(8).collect();
+    if refreshed {
+        println!(
+            "{} refreshed claim on {} (session {})",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            scope.cyan().bold(),
+            id_short.dimmed(),
+        );
+    } else {
+        println!(
+            "{} claimed {} (session {}) — a fresh `aida queue work {}` from another \
+             session will now refuse, and `aida edit {}` will warn.",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            scope.cyan().bold(),
+            id_short.dimmed(),
+            scope,
+            scope,
+        );
+        println!(
+            "  {}",
+            format!("release it with `aida unclaim {}`", scope).dimmed()
+        );
+    }
+    Ok(())
+}
+
+/// `aida unclaim <spec>` — remove THIS caller's spec-scoped claim (matched by
+/// scope + creator pid), so a fresh `aida queue work <spec>` / `aida edit
+/// <spec>` no longer sees it. Removing a claim the caller doesn't hold is a
+/// no-op (not an error).
+// trace:TASK-957 | ai:claude
+fn handle_unclaim(spec: &str) -> Result<()> {
+    let (project_root, req) = resolve_spec_for_claim(spec)?;
+    let scope = claim_scope_id(&req);
+    let my_pid = creator_shell_pid();
+
+    let leases = list_leases(&project_root);
+    let mine: Vec<&SessionLease> = leases
+        .iter()
+        .filter(|l| is_own_claim(l, &scope, my_pid))
+        .collect();
+
+    if mine.is_empty() {
+        println!(
+            "{} no claim by this session on {} — nothing to release.",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            scope.cyan(),
+        );
+        return Ok(());
+    }
+
+    let mut removed = 0usize;
+    for l in &mine {
+        let path = lease_path(&project_root, &l.id);
+        match std::fs::remove_file(&path) {
+            Ok(()) => removed += 1,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e).with_context(|| format!("removing {}", path.display())),
+        }
+    }
+    println!(
+        "{} released claim on {} ({} lease{} removed)",
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+        scope.cyan().bold(),
+        removed,
+        if removed == 1 { "" } else { "s" },
+    );
+    Ok(())
+}
+
 /// `aida status <spec>` — the per-spec liveness view. Shows the spec's
 /// lifecycle status and a LIVENESS section answering "is a live session
 /// actually working this, or is the In-Progress flag orphaned?". Reuses the
@@ -96308,6 +96721,7 @@ mod cascade_rebase_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
         std::fs::write(
             leases.join(format!("{}.toml", lease.id)),
@@ -99006,6 +99420,7 @@ mod queue_work_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -103474,6 +103889,7 @@ mod task_515_status_agent_lease_fallback_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         }
     }
 
@@ -113151,6 +113567,7 @@ fn acquire_review_lease(
         parent_branch: None,
         parent_branch_sha: None,
         review_verb: true,
+        claim_verb: false,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);
@@ -133974,6 +134391,7 @@ mod queue_work_resume_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
         std::fs::write(
             sessions.join("019eabcd-1234.toml"),
@@ -134041,6 +134459,7 @@ mod queue_work_resume_tests {
             parent_branch: None,
             parent_branch_sha: None,
             review_verb: false,
+            claim_verb: false,
         };
         std::fs::write(
             sessions.join("019eaaaa-bbbb.toml"),
