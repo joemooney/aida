@@ -11,12 +11,12 @@ description: |-
   - The redesign TUI reads the same .aida/focus (unify with the existing .aida/tui-focus from STORY-697).
 
   ACCEPTANCE: aida focus set/show/clear works + persists per-worktree; read commands scope to the focus tree (with --all escape); aida add auto-links to focus; every focus-scoped output is clearly labeled; the TUI honors the shared focus.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:36:50.334595154Z
-modified_at: 2026-06-27T01:42:53.550545181Z
+modified_at: 2026-06-27T16:36:10.681237900Z
 req_type: Story
 tags:
 - cli
