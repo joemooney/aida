@@ -71,7 +71,7 @@ This table is the spine; almost every case is a consequence of it.
 - **Steps:** A pushes first; B pushes (rejected) → `pull_rebase` → push.
 - **Expected:** B's specs rebase on top of A's; `ensure_no_spec_id_collisions` confirms no duplicate spec ids.
 - **Validates:** Rebase reconciliation + collision guard.
-- **Status:** 🟡 — `ensure_no_spec_id_collisions` / `find_spec_id_collisions` exist; no two-clone end-to-end test.
+- **Status:** ✅ — `ensure_no_spec_id_collisions` / `find_spec_id_collisions`; pinned two-clone by harness `case_MU-104` (EXPECT=pass): both clones add offline, A pushes first, B pull-rebases + re-pushes, both specs survive in both clones with no duplicate-id error. trace:TASK-960
 
 ### MU-105 — merge-gate assigns agreed ids across both clones' specs
 - **Setup:** Both clones created node-aware specs; run `aida db merge-gate`.
@@ -193,7 +193,7 @@ This table is the spine; almost every case is a consequence of it.
 
 ### MU-403 — queue add in A visible in B only after sync
 - **Expected:** Because the queue lives on the store branch, B sees A's add only after A pushes and B pulls. Before sync → invisible.
-- **Status:** 🟡 — consequence of shared-via-store; document as expected (not instantaneous).
+- **Status:** ✅ — consequence of shared-via-store; pinned two-clone by harness `case_MU-403` (EXPECT=pass): B's `queue list` does NOT show A's add before sync and DOES after push+pull. trace:TASK-960
 
 ### MU-404 — two machines both `"default"` user → collision
 - **Setup:** Two clones, neither sets `$USER`/`AIDA_USER` → both `current_user_id()="default"` → both write `queues/default.yaml`.
@@ -203,7 +203,7 @@ This table is the spine; almost every case is a consequence of it.
 ### MU-405 — concurrent queue add from two same-user clones
 - **Setup:** A and B (same user) both `aida queue add` different specs, both push.
 - **Expected:** Second push rebases; both entries survive (YAML list append at different positions usually merges; same-position edits → conflict like MU-203).
-- **Status:** 🟡 — untested; possible conflict surface worth pinning.
+- **Status:** 🐛 **known gap (documented, not fixed)** — a fresh `aida queue add` always appends at the SAME default `position: 1000`, so two concurrent same-user adds write the SAME list slot in `registry/queues/<user>.yaml`. The store-leg auto-merger (`conflict::merge_spec_three_way`) only unions **spec objects + the oplog** — it has **no union rule for queue files** — so B's pull-rebase hits a genuine git conflict and is left mid-rebase, one entry stranded (NOT a clean both-survive merge). This is the **queue-file analog of the MU-203 non-mergeable boundary** and the same coordination class as MU-504/505/506: a shared-store artifact the auto-merger does not yet reconcile. Harness `case_MU-405` is `EXPECT=known-gap` — it ASSERTS the current conflict-surfacing behavior and FLAGS ("GAP CLOSED — flip EXPECT to pass") if a queue-file union rule later lands. Disposition is an EPIC-46 follow-on (a `position`-keyed or append-by-id union for queue files). trace:TASK-960
 
 ---
 
@@ -273,9 +273,10 @@ This table is the spine; almost every case is a consequence of it.
 
 ## Suggested next steps (for discussion)
 
-- **Decide MU-504/505/506** — shared coordination vs documented single-driver. This is the one that actually bites multi-user dogfooding.
-- **Build a same-host harness** — `scripts/multi-clone-harness.sh`: create N clones of a throwaway origin, parameterize `AIDA_USER`/node id, run a named case, assert. Each MU-### above maps to one harness scenario.
-- **Lift the ✅/🟡 cases into automated tests** — the 🟡 (untested) two-clone flows are the highest-value automation targets.
-- **File specs for the 🐛 gaps** — MU-204 (history union-merge), MU-504/505/506 (cross-clone coordination), and confirm MU-404/BUG-89 disposition.
+- **~~Decide MU-504/505/506~~ — DONE.** Resolved in favour of shared coordination: STORY-637 (leases) + STORY-638 (drain/solo locks) put a shared registry on the `aida-store` branch; all three are now `EXPECT=pass` in the harness. They were the cross-clone analog of the per-clone spec-claim work (BUG-637 / TASK-957); their cross-clone disposition is closed.
+- **~~Build a same-host harness~~ — DONE.** `scripts/multi-clone-harness.sh` exists (STORY-636) and now runs 27 MU-### cases against two real clones of a throwaway origin under an isolated `$HOME`.
+- **Lift the remaining 🟡 cases into the harness** — the highest-value works-untested two-clone flows are now pinned: MU-104 (offline-add reconcile + collision guard), MU-403 (queue-add visible only after sync). Still-untested flow candidates: MU-206 (offline push-reject recovery), MU-601/602 (cross-clone Done→Completed auto-bump — note the *catalog* MU-601 id is reused by the harness for the BUG-636 cache-contention case; resolve the id clash when automating the auto-bump flow).
+- **MU-405 queue-file concurrent-add gap (open follow-on)** — `case_MU-405` documents (does not fix) the gap: concurrent same-user `queue add`s land at the same default `position: 1000`, and the store-leg auto-merger has no union rule for `registry/queues/*.yaml`, so the second pull conflicts. Disposition: a `position`-keyed or append-by-id union for queue files (queue-file analog of the STORY-641/645 spec-object union). EPIC-46 follow-on.
+- **Confirm MU-404/BUG-89 disposition** — the `"default"`-user cross-machine collision remains warn-only by operator decision.
 
 <!-- trace:multi-user-test-catalog | ai:claude -->

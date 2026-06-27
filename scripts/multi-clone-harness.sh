@@ -311,6 +311,55 @@ case_MU-103() {
     fi
 }
 
+# --- MU-104: offline add on BOTH clones, both push -> rebase reconciles --
+# Catalog WORKS-UNTESTED flow: each clone adds a spec while the other is
+# unaware (offline-style), then both publish. A pushes first; B's store push is
+# a non-ff reject, so B pull-rebases A's spec under its own and re-pushes. The
+# end state must carry BOTH specs in BOTH clones with NO duplicate spec id —
+# this exercises rebase reconciliation + the `ensure_no_spec_id_collisions`
+# collision guard end-to-end across two real clones (node-namespaced ids mean
+# the two adds never collide even before the pull). trace:TASK-960
+case_MU-104() {
+    EXPECT=pass
+    # Converge both clones first so "offline" means "diverged after a sync".
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    push_from "$CLONE_B"; pull_into "$CLONE_A"
+    # Each clone adds a spec WITHOUT syncing in between (simulates offline work).
+    local id_a id_b
+    id_a="$(add_spec "$CLONE_A" "mu104 offline from A" task)"
+    id_b="$(add_spec "$CLONE_B" "mu104 offline from B" task)"
+    # A publishes first.
+    push_from "$CLONE_A"
+    # B publishes second: its store push is non-ff -> aida pull (rebase) folds
+    # A's spec under B's, then push succeeds. Mirror the catalog steps with an
+    # explicit pull-then-push.
+    pull_into "$CLONE_B"
+    push_from "$CLONE_B"
+    # Converge both clones.
+    pull_into "$CLONE_A"
+    pull_into "$CLONE_B"
+    local la lb
+    la="$(aida_in "$CLONE_A" list 2>&1 || true)"
+    lb="$(aida_in "$CLONE_B" list 2>&1 || true)"
+    # The collision guard must NOT have had to fire (ids are node-namespaced);
+    # a surfaced "duplicate spec id" error means reconciliation went wrong.
+    local collide=0
+    if [[ "$la" == *"duplicate spec id"* || "$lb" == *"duplicate spec id"* ]]; then collide=1; fi
+    CASE_DETAIL="both offline adds reconcile ($id_a + $id_b), no dup id"
+    if assert_ne "" "$id_a" "A produced a spec id" \
+        && assert_ne "" "$id_b" "B produced a spec id" \
+        && assert_ne "$id_a" "$id_b" "node-namespaced ids do not collide" \
+        && assert_eq "0" "$collide" "no duplicate-spec-id error surfaced" \
+        && assert_contains "$la" "$id_a" "A sees own offline spec" \
+        && assert_contains "$la" "$id_b" "A sees B's offline spec after reconcile" \
+        && assert_contains "$lb" "$id_a" "B sees A's offline spec after reconcile" \
+        && assert_contains "$lb" "$id_b" "B sees own offline spec"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+    fi
+}
+
 # --- MU-201: A adds + push; B pull -> B's list shows it ------------------
 case_MU-201() {
     EXPECT=pass
@@ -697,6 +746,115 @@ case_MU-402() {
         CASE_OK=0
         CASE_DETAIL="bob saw alice's item $id; out=[${qlist_bob:0:120}]"
     fi
+}
+
+# --- MU-403: queue add in A is visible in B ONLY AFTER sync -------------
+# Catalog WORKS-UNTESTED flow: because the queue lives on the shared store
+# branch, B sees A's queue add only after A pushes AND B pulls — it is NOT
+# instantaneous. This pins the shared-via-store, OS-user-keyed semantics in
+# both directions: invisible-before-sync, visible-after-sync. trace:TASK-960
+case_MU-403() {
+    EXPECT=pass
+    local id qlist_before qlist_after
+    id="$(add_spec "$CLONE_A" "mu403 deferred-visibility spec" task)"
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    # A queues it but does NOT publish yet (advisor role lets non-TTY add through).
+    ( cd "$CLONE_A" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor "$AIDA_BIN" queue add "$id" >/dev/null 2>&1 ) || true
+    # BEFORE A pushes / B pulls: B must NOT yet see the queued item.
+    qlist_before="$(aida_in "$CLONE_B" queue list 2>&1 || true)"
+    # Now A publishes and B pulls.
+    push_from "$CLONE_A"
+    pull_into "$CLONE_B"
+    qlist_after="$(aida_in "$CLONE_B" queue list 2>&1 || true)"
+    CASE_DETAIL="$id invisible before sync, visible after (shared-via-store)"
+    if assert_ne "" "$id" "spec id" \
+        && assert_not_contains "$qlist_before" "$id" "B does NOT see the queue add before sync" \
+        && assert_contains "$qlist_after" "$id" "B sees the queue add after push+pull"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="before=[${qlist_before:0:80}] after=[${qlist_after:0:80}]"
+    fi
+}
+
+# --- MU-405: concurrent queue add from two same-user clones (KNOWN GAP) --
+# Catalog flow whose status text hedged: "YAML list append at different
+# positions usually merges; same-position edits -> conflict like MU-203."
+# This harness case PROVES the second half is the real-world outcome: a fresh
+# `aida queue add` appends at the SAME default `position: 1000`, so two
+# concurrent same-user adds write the SAME list slot in registry/queues/<user>
+# .yaml. The store-leg auto-merger (conflict::merge_spec_three_way) only unions
+# SPEC objects + the oplog — it has NO union rule for queue files — so B's
+# pull-rebase hits a genuine git conflict and B is left mid-rebase with one
+# clone's queue entry stranded (NOT a clean both-survive merge).
+#
+# This is the QUEUE-FILE analog of the MU-203 non-mergeable boundary and the
+# cross-clone coordination class of MU-504/505/506: a shared-store artifact the
+# auto-merger does not (yet) reconcile. EXPECT=known-gap so the harness FLAGS if
+# the behavior changes (e.g. a queue-file union rule lands -> GAP CLOSED), but a
+# concurrent-add conflict does NOT fail the suite today. trace:TASK-960
+case_MU-405() {
+    EXPECT=known-gap
+    # Two distinct specs, both visible in both clones first.
+    local id_a id_b
+    id_a="$(add_spec "$CLONE_A" "mu405 queue spec A" task)"
+    id_b="$(add_spec "$CLONE_B" "mu405 queue spec B" task)"
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    push_from "$CLONE_B"; pull_into "$CLONE_A"
+    # Each clone queues its own spec WITHOUT syncing in between (concurrent add,
+    # both landing at the same default queue position).
+    ( cd "$CLONE_A" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor "$AIDA_BIN" queue add "$id_a" >/dev/null 2>&1 ) || true
+    ( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor "$AIDA_BIN" queue add "$id_b" >/dev/null 2>&1 ) || true
+    # A publishes first; B's store push is non-ff -> B pull-rebases.
+    push_from "$CLONE_A"
+    local pull_out pull_rc
+    set +e
+    pull_out="$(aida_in "$CLONE_B" pull 2>&1)"
+    pull_rc=$?
+    set -e
+    # DOCUMENTED current (gap) behavior: B's store-leg rebase conflicts on the
+    # queue file (same-position append, no union rule) and leaves B mid-rebase
+    # with conflict markers in registry/queues/*.yaml -> the entries are NOT
+    # cleanly union-merged. We assert the GAP holds (a conflict surfaced).
+    local mid_rebase="no" qfile_conflicted=0
+    if run_in "$CLONE_B" git -C .aida-store status 2>/dev/null | grep -q "rebase in progress"; then
+        mid_rebase="yes"
+    fi
+    # Conflict markers present in the queue file == the gap (no auto-union).
+    if run_in "$CLONE_B" sh -c 'grep -rql "^<<<<<<<" .aida-store/registry/queues/ 2>/dev/null'; then
+        qfile_conflicted=1
+    fi
+    local gap_holds=0
+    if [[ "$mid_rebase" == "yes" || "$qfile_conflicted" == "1" || $pull_rc -ne 0 ]]; then
+        gap_holds=1
+    fi
+    # CASE_OK semantics for EXPECT=known-gap: CASE_OK=1 means the gap CLOSED
+    # (clean auto-merge, both entries survive, no conflict) -> reported "GAP
+    # CLOSED, flip EXPECT to pass". CASE_OK=0 means the gap STILL holds (a
+    # conflict surfaced) -> reported as an expected GAP. So invert gap_holds.
+    if [[ "$gap_holds" == "1" ]]; then
+        CASE_OK=0
+        CASE_DETAIL="concurrent same-user queue add -> conflict (mid_rebase=$mid_rebase qfile_conflict=$qfile_conflicted rc=$pull_rc); queue file has no auto-union rule (MU-203 class)"
+    else
+        # No conflict surfaced -> a union rule may have landed. Confirm both
+        # entries actually survived before calling it closed.
+        push_from "$CLONE_B"; pull_into "$CLONE_A"; pull_into "$CLONE_B"
+        local qa qb
+        qa="$(aida_in "$CLONE_A" queue list 2>&1 || true)"
+        qb="$(aida_in "$CLONE_B" queue list 2>&1 || true)"
+        if [[ "$qa" == *"$id_a"* && "$qa" == *"$id_b"* && "$qb" == *"$id_a"* && "$qb" == *"$id_b"* ]]; then
+            CASE_OK=1
+            CASE_DETAIL="queue file now auto-unions concurrent adds (both $id_a + $id_b survive) -- gap closed"
+        else
+            CASE_OK=0
+            CASE_DETAIL="no conflict but a write was lost (A=[${qa:0:60}] B=[${qb:0:60}]) -- still a gap"
+        fi
+    fi
+    # Recover B so later cases aren't wedged mid-rebase (adopt A's queue, the
+    # push-race winner — the documented recovery for the unmergeable case).
+    recover_store_rebase "$CLONE_B"
+    push_from "$CLONE_A"
+    pull_into "$CLONE_B"
 }
 
 # --- MU-504: two clones lease the SAME spec -> REFUSED (STORY-637) --------
@@ -1407,7 +1565,7 @@ case_MU-553() {
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-601 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521 MU-551 MU-552 MU-553)
+ALL_CASES=(MU-101 MU-103 MU-104 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-601 MU-401 MU-402 MU-403 MU-405 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521 MU-551 MU-552 MU-553)
 
 list_cases() {
     echo "Available cases:"
