@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:36:50.334595154Z
-modified_at: 2026-06-27T18:03:45.176478370Z
+modified_at: 2026-06-27T18:04:28.033157550Z
 req_type: Story
 tags:
 - cli
@@ -43,3 +43,8 @@ comments:
   content: Commit 67b5b7e97 references this requirement
   created_at: 2026-06-27T18:03:45.176478370Z
   modified_at: 2026-06-27T18:03:45.176478370Z
+- id: 019f0a41-2001-7541-950d-49c3c074b8d2
+  author: joe
+  content: Commit 67b5b7e97 references this requirement
+  created_at: 2026-06-27T18:04:28.033157550Z
+  modified_at: 2026-06-27T18:04:28.033157550Z
