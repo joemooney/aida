@@ -23388,5 +23388,13 @@ operations:
   timestamp: 2026-06-27T03:43:12.698328077Z
   kind: !SetPriority
     priority: Low
-clock: 2214
+- id: 019f072c-aa47-7ef1-a105-1841ad2341f5
+  target_id: 019f0716-0049-79a1-bca3-0162e911d4a3
+  author: aida
+  node_id: '1'
+  lamport: 2215
+  timestamp: 2026-06-27T03:43:15.527335470Z
+  kind: !SetPriority
+    priority: High
+clock: 2215
 node_id: '1'
