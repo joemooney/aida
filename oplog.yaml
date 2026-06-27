@@ -23835,5 +23835,17 @@ operations:
   timestamp: 2026-06-27T15:55:26.207739571Z
   kind: !SetStatus
     status: In Progress
-clock: 2265
+- id: 019f09d2-9be5-77d2-9222-f4d82b81fabc
+  target_id: 019f09d2-88ef-7311-8d10-0f013fc39747
+  author: aida
+  node_id: '1'
+  lamport: 2266
+  timestamp: 2026-06-27T16:03:45.253651286Z
+  kind: !Create
+    title: Agent-tool fan-out leases are generic `harness-worktree` scopes, not spec-scoped —
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2266
 node_id: '1'

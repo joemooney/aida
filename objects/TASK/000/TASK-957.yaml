@@ -1,0 +1,12 @@
+id: 019f09d2-88ef-7311-8d10-0f013fc39747
+spec_id: TASK-957
+agreed_id: TASK-957
+title: Agent-tool fan-out leases are generic `harness-worktree` scopes, not spec-scoped —
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-27T16:03:40.399179705Z
+modified_at: 2026-06-27T16:03:40.399179705Z
+req_type: Task
