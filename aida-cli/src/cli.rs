@@ -9128,6 +9128,31 @@ pub enum SkillCommand {
         /// The name of the skill to render (e.g. `agent-contract`).
         name: String,
     },
+
+    /// Lint skills that reference an implementation plan. Scans every skill
+    /// under `.claude/skills/` for plan references (`docs/plans/*.md`
+    /// paths); for each skill that references a plan it runs the same
+    /// checks `aida plan verify` runs on each referenced plan (drifted
+    /// refs / missing files / absent sections) and a raw-glyph check on
+    /// the skill body. A skill pointing at a drifted or missing plan is
+    /// an error. Read-only; never rewrites. Exits non-zero on any error so
+    /// it can run as a CI gate.
+    // trace:TASK-927 | ai:claude
+    Lint {
+        /// Lint a single skill file instead of the whole `.claude/skills/`
+        /// tree. Path may be absolute or relative to the project root.
+        #[clap(value_name = "SKILL")]
+        skill: Option<PathBuf>,
+
+        /// Emit the result as JSON for agents / scripts.
+        #[clap(long)]
+        json: bool,
+
+        /// Suppress per-skill OK lines; print only warnings, errors, and
+        /// the final verdict. Useful for CI logs.
+        #[clap(long, short = 'q')]
+        quiet: bool,
+    },
 }
 
 /// Dependency-inference tooling. Read-only: surfaces likely dependency

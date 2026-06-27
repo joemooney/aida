@@ -1936,6 +1936,12 @@ fn run() -> Result<()> {
                 }
                 return Ok(());
             }
+            // `aida skill lint` reads `.claude/skills/*.md` and the plan files
+            // they reference — purely filesystem, no store handle. Dispatch it
+            // here alongside the other skill tooling. trace:TASK-927 | ai:claude
+            SkillCommand::Lint { skill, json, quiet } => {
+                return lint_skills(skill.as_deref(), *json, *quiet);
+            }
         }
     }
 
@@ -66858,6 +66864,67 @@ hostname = "h"
         assert!(lease.pr_base_sha.is_none());
         assert!(lease.pr_base_ref.is_none());
     }
+
+    // --- `aida skill lint` plan-ref extraction (TASK-927). ---
+
+    /// A real plan path — bare, in a markdown link, or in backticks — is
+    /// extracted; duplicates collapse; order is first-seen.
+    // trace:TASK-927 | ai:claude
+    #[test]
+    fn skill_lint_extracts_real_plan_refs() {
+        let body = "\
+See the plan at docs/plans/2026-06-01-foo.md for details.
+Also [the design](docs/plans/2026-06-01-foo.md) and `docs/plans/_TEMPLATE.md`.
+";
+        let refs = extract_plan_refs(body);
+        assert_eq!(
+            refs,
+            vec![
+                "docs/plans/2026-06-01-foo.md".to_string(),
+                "docs/plans/_TEMPLATE.md".to_string(),
+            ]
+        );
+    }
+
+    /// Illustrative placeholders — glob, ellipsis, angle-bracket template
+    /// markers — must NOT be treated as real plan refs.
+    // trace:TASK-927 | ai:claude
+    #[test]
+    fn skill_lint_skips_placeholder_refs() {
+        let body = "\
+- **Plan docs**: docs/plans/*.md (skip these)
+  Plan:    <docs/plans/...md>   |  none
+historical: docs/plans/...md
+";
+        assert!(extract_plan_refs(body).is_empty());
+    }
+
+    /// A trailing sentence period is trimmed, and the bare `docs/plans/`
+    /// prefix with nothing after it is not a ref.
+    // trace:TASK-927 | ai:claude
+    #[test]
+    fn skill_lint_trims_period_and_ignores_bare_prefix() {
+        let body = "Implemented per docs/plans/2026-06-01-foo.md. The dir is docs/plans/.";
+        assert_eq!(
+            extract_plan_refs(body),
+            vec!["docs/plans/2026-06-01-foo.md".to_string()]
+        );
+    }
+
+    /// The glyph counter is derived from the registry, so a body with no
+    /// registry glyphs scores 0 and one with several counts them all.
+    // trace:TASK-927 | ai:claude
+    #[test]
+    fn skill_lint_counts_registry_glyphs() {
+        assert_eq!(count_registry_glyphs("plain ascii text, no glyphs"), 0);
+        // Build the glyph string from the registry itself so this test file
+        // carries no raw glyph literal (which would trip the glyph-lint gate).
+        let mut body = String::from("status markers: ");
+        body.push_str(crate::glyphs::Glyph::Check.unicode());
+        body.push_str(crate::glyphs::Glyph::Cross.unicode());
+        body.push_str(crate::glyphs::Glyph::Check.unicode());
+        assert_eq!(count_registry_glyphs(&body), 3);
+    }
 }
 
 #[cfg(test)]
@@ -79509,6 +79576,324 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
     println!("{} {}", "Verdict:".bold(), verdict);
 
     if errors > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+// `aida skill lint` — the forward-guard for skills that reference an
+// implementation plan. A skill under `.claude/skills/` that points at a
+// `docs/plans/*.md` file can rot when that plan drifts or is removed; this
+// scans each skill for plan references, runs the same checks `aida plan
+// verify` runs on each referenced plan (drifted refs / missing files / absent
+// sections), and raw-glyph-checks the skill body. Read-only; never rewrites a
+// plan or a skill. trace:TASK-927 | ai:claude
+
+/// Count raw registry-glyph occurrences in a skill body. The set is derived
+/// from `Glyph::ALL`'s unicode renderings — the same source `glyphs.rs` and
+/// `scripts/glyph-lint.sh` track — so it stays in sync with the registry
+/// automatically (and carries no raw glyph literal in this file, which would
+/// itself trip the glyph-lint gate). A glyph in a skill body is a warning, not
+/// an error: emoji in skill prose is allowed by design (the plan-ref check
+/// owns the errors).
+// trace:TASK-927 | ai:claude
+fn count_registry_glyphs(content: &str) -> usize {
+    crate::glyphs::Glyph::ALL
+        .iter()
+        .map(|g| content.matches(g.unicode()).count())
+        .sum()
+}
+
+/// One referenced-plan or glyph finding for a single skill.
+struct SkillPlanRefFinding {
+    /// The repo-relative plan path as written in the skill.
+    plan_ref: String,
+    /// `Ok` if the plan exists and `aida plan verify` finds no errors;
+    /// `Error` otherwise (missing file or verify errors). Glyph notes use
+    /// `Warn`.
+    level: PlanFindingLevel,
+    /// Human-readable detail (e.g. "missing: docs/plans/x.md" or "3 plan
+    /// error(s), 1 warning(s)").
+    msg: String,
+}
+
+/// Extract every `docs/plans/...md` reference from a skill body. Matches the
+/// path anywhere on a line — bare, in a markdown link, in backticks, or in
+/// prose. De-duplicates while preserving first-seen order.
+// trace:TASK-927 | ai:claude
+fn extract_plan_refs(content: &str) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut refs = Vec::new();
+    let bytes = content.as_bytes();
+    let needle = b"docs/plans/";
+    let mut i = 0;
+    while i + needle.len() <= bytes.len() {
+        if &bytes[i..i + needle.len()] == needle {
+            // Walk forward to the end of the path token. A path char is
+            // anything that isn't whitespace or a delimiter that markdown /
+            // prose uses to close a path (backtick, paren, angle bracket,
+            // quote, comma, etc.).
+            let start = i;
+            let mut j = i + needle.len();
+            while j < bytes.len() {
+                let c = bytes[j] as char;
+                if c.is_whitespace()
+                    || matches!(c, '`' | ')' | '>' | '"' | '\'' | ',' | ']' | '(' | '<')
+                {
+                    break;
+                }
+                j += 1;
+            }
+            let mut path = content[start..j].to_string();
+            // Trim a trailing sentence period that isn't part of `.md`.
+            if path.ends_with('.') {
+                path.pop();
+            }
+            // Skip illustrative placeholders, not real plan paths: glob
+            // patterns (`docs/plans/*.md`), ellipsis stand-ins
+            // (`docs/plans/...md`), and angle-bracket template markers
+            // (`<docs/plans/...md>`). These appear in skill help text /
+            // examples and must not be verified. trace:TASK-927
+            let is_placeholder = path.contains('*') || path.contains("...");
+            // Only keep things that actually look like a real plan markdown
+            // file (ends in `.md`, longer than the bare `docs/plans/` prefix).
+            if !is_placeholder
+                && path.ends_with(".md")
+                && path.len() > needle.len() + 3
+                && seen.insert(path.clone())
+            {
+                refs.push(path);
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    refs
+}
+
+/// Resolve the set of skill files to lint. With an explicit path, lint just
+/// that file; otherwise every `*.md` under `.claude/skills/` (sorted, and
+/// skipping `*.local.md` overrides which are merged at render time, not linted
+/// on their own).
+// trace:TASK-927 | ai:claude
+fn resolve_skill_files(
+    explicit: Option<&std::path::Path>,
+    project_root: &std::path::Path,
+) -> Result<Vec<std::path::PathBuf>> {
+    if let Some(p) = explicit {
+        let resolved = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            project_root.join(p)
+        };
+        if !resolved.exists() {
+            anyhow::bail!("skill file not found: {}", resolved.display());
+        }
+        return Ok(vec![resolved]);
+    }
+    let skills_dir = project_root.join(".claude").join("skills");
+    if !skills_dir.is_dir() {
+        anyhow::bail!(
+            "no skills directory at {} — run `aida init` to scaffold skills",
+            skills_dir.display()
+        );
+    }
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(&skills_dir)
+        .with_context(|| format!("could not read {}", skills_dir.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.ends_with(".md") && !name.ends_with(".local.md") {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// Lint each skill: for skills that reference a `docs/plans/*.md` file, verify
+/// each referenced plan (reusing `compute_plan_report`, the same engine `aida
+/// plan verify` uses) and raw-glyph-check the skill body. Prints a grouped
+/// per-skill report (or JSON), and exits non-zero when any plan ref is missing
+/// or its plan has verify errors.
+// trace:TASK-927 | ai:claude
+fn lint_skills(skill: Option<&std::path::Path>, json: bool, quiet: bool) -> Result<()> {
+    let project_root = find_project_root().or_else(|_| std::env::current_dir())?;
+    let skill_files = resolve_skill_files(skill, &project_root)?;
+
+    // Per-skill collected findings, keyed by display label.
+    struct SkillReport {
+        label: String,
+        findings: Vec<SkillPlanRefFinding>,
+    }
+    let mut reports: Vec<SkillReport> = Vec::new();
+    let mut total_errors = 0usize;
+    let mut total_warns = 0usize;
+    let mut skills_with_refs = 0usize;
+
+    for skill_path in &skill_files {
+        let content = std::fs::read_to_string(skill_path)
+            .with_context(|| format!("could not read skill {}", skill_path.display()))?;
+        let plan_refs = extract_plan_refs(&content);
+        if plan_refs.is_empty() {
+            // Skills without a plan reference are out of scope — the lint
+            // only fires on the plan-pointing subset. trace:TASK-927
+            continue;
+        }
+        skills_with_refs += 1;
+        let label = skill_path
+            .strip_prefix(&project_root)
+            .unwrap_or(skill_path)
+            .display()
+            .to_string();
+        let mut findings = Vec::new();
+
+        // 1. Verify each referenced plan with the plan-verify engine.
+        for plan_ref in &plan_refs {
+            let plan_path = project_root.join(plan_ref);
+            if !plan_path.exists() {
+                total_errors += 1;
+                findings.push(SkillPlanRefFinding {
+                    plan_ref: plan_ref.clone(),
+                    level: PlanFindingLevel::Error,
+                    msg: format!("referenced plan not found: {plan_ref}"),
+                });
+                continue;
+            }
+            let plan_content = match std::fs::read_to_string(&plan_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    total_errors += 1;
+                    findings.push(SkillPlanRefFinding {
+                        plan_ref: plan_ref.clone(),
+                        level: PlanFindingLevel::Error,
+                        msg: format!("could not read referenced plan {plan_ref}: {e}"),
+                    });
+                    continue;
+                }
+            };
+            let root = plan_repo_root(&plan_path);
+            let report = compute_plan_report(&plan_content, &root);
+            let perrs = report.error_count();
+            let pwarns = report.warn_count();
+            if perrs > 0 {
+                total_errors += 1;
+                findings.push(SkillPlanRefFinding {
+                    plan_ref: plan_ref.clone(),
+                    level: PlanFindingLevel::Error,
+                    msg: format!(
+                        "plan verify failed: {perrs} error(s), {pwarns} warning(s) \
+                         — run `aida plan verify {plan_ref}`"
+                    ),
+                });
+            } else if pwarns > 0 {
+                total_warns += 1;
+                findings.push(SkillPlanRefFinding {
+                    plan_ref: plan_ref.clone(),
+                    level: PlanFindingLevel::Warn,
+                    msg: format!("plan verify: 0 errors, {pwarns} warning(s)"),
+                });
+            } else {
+                findings.push(SkillPlanRefFinding {
+                    plan_ref: plan_ref.clone(),
+                    level: PlanFindingLevel::Ok,
+                    msg: format!("plan verify clean: {plan_ref}"),
+                });
+            }
+        }
+
+        // 2. Raw-glyph check on the skill body (warning-only — emoji in
+        // skill prose is allowed by design).
+        let glyph_count = count_registry_glyphs(&content);
+        if glyph_count > 0 {
+            total_warns += 1;
+            findings.push(SkillPlanRefFinding {
+                plan_ref: String::new(),
+                level: PlanFindingLevel::Warn,
+                msg: format!(
+                    "{glyph_count} raw registry glyph literal(s) in skill body \
+                     (allowed in prose; flagged for awareness)"
+                ),
+            });
+        }
+
+        reports.push(SkillReport { label, findings });
+    }
+
+    if json {
+        let arr: Vec<serde_json::Value> = reports
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "skill": r.label,
+                    "findings": r.findings.iter().map(|f| serde_json::json!({
+                        "plan_ref": f.plan_ref,
+                        "level": match f.level {
+                            PlanFindingLevel::Ok => "ok",
+                            PlanFindingLevel::Warn => "warn",
+                            PlanFindingLevel::Error => "error",
+                        },
+                        "message": f.msg,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        let out = serde_json::json!({
+            "skills_scanned": skill_files.len(),
+            "skills_with_plan_refs": skills_with_refs,
+            "errors": total_errors,
+            "warnings": total_warns,
+            "results": arr,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        if total_errors > 0 {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    println!(
+        "{} {} skill(s) scanned, {} reference a plan",
+        "Linting skills:".bold(),
+        skill_files.len(),
+        skills_with_refs
+    );
+    println!();
+
+    for r in &reports {
+        println!("{}", r.label.cyan().bold());
+        for f in &r.findings {
+            if quiet && f.level == PlanFindingLevel::Ok {
+                continue;
+            }
+            let tag = match f.level {
+                PlanFindingLevel::Ok => "  OK   ".green(),
+                PlanFindingLevel::Warn => "  WARN ".yellow(),
+                PlanFindingLevel::Error => "  ERROR".red().bold(),
+            };
+            println!("{} {}", tag, f.msg);
+        }
+        println!();
+    }
+
+    let verdict = if total_errors > 0 {
+        format!("{total_errors} error(s), {total_warns} warning(s) — FAIL")
+            .red()
+            .bold()
+            .to_string()
+    } else if total_warns > 0 {
+        format!("0 errors, {total_warns} warning(s) — PASS")
+            .yellow()
+            .to_string()
+    } else {
+        "all checks passed — PASS".green().bold().to_string()
+    };
+    println!("{} {}", "Verdict:".bold(), verdict);
+
+    if total_errors > 0 {
         std::process::exit(1);
     }
     Ok(())
@@ -128784,6 +129169,11 @@ fn handle_mcp_command(cmd: &McpCommand) -> Result<()> {
                 print!("{}", stock_content);
             }
             Ok(())
+        }
+        // `skill lint` is a read-only filesystem check; route it through the
+        // same engine the CLI uses. trace:TASK-927 | ai:claude
+        McpCommand::Skill(SkillCommand::Lint { skill, json, quiet }) => {
+            lint_skills(skill.as_deref(), *json, *quiet)
         }
     }
 }
