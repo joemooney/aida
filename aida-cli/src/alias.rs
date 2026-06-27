@@ -5,8 +5,9 @@
 //! `aida list` status lenses (`open` / `closed`) and status-token shortcuts
 //! (`aida list approved` == `--status approved`), the `aida list <lens>` argv
 //! rewrites (`queue` / `why` / `human` / `inflight` / `me` / `user:<name>`),
-//! and the command-level aliases (`intake` -> `assess`, `advisor assess` ->
-//! `assess`, bare `aida agent` -> `aida agent new`). This command enumerates
+//! and the command-level aliases (`assess` / `intake` -> `groom`, `advisor
+//! assess` -> `groom`, bare `aida agent` -> `aida agent new`). This command
+//! enumerates
 //! them ALL, grouped by surface, each row carrying the alias, its canonical
 //! expansion, and a one-line meaning. `--json` for machine consumers.
 //!
@@ -151,14 +152,19 @@ pub fn registry() -> Vec<AliasGroup> {
     // --- Command aliases (clap aliases + top-level argv rewrites) -----------
     let command_rows = vec![
         row(
-            "aida intake",
             "aida assess",
-            "deprecated alias for the headless advisor INTAKE pass",
+            "aida groom",
+            "deprecated alias for the headless advisor disposition pass",
+        ),
+        row(
+            "aida intake",
+            "aida groom",
+            "deprecated alias for the headless advisor disposition pass",
         ),
         row(
             "aida advisor assess",
-            "aida assess",
-            "the advisor-seat spelling of `aida assess`",
+            "aida groom",
+            "the advisor-seat spelling of `aida groom`",
         ),
         row(
             "aida agent <args>",
@@ -369,9 +375,9 @@ mod tests {
     }
 
     /// The command-alias rows must agree with the live resolvers: the
-    /// `advisor assess` -> `assess` rewrite, the bare `agent` -> `agent new`
-    /// default, and clap's `intake` alias on the `Assess` variant.
-    /// trace:STORY-667
+    /// `advisor assess` -> `groom` rewrite, the bare `agent` -> `agent new`
+    /// default, and clap's `intake` alias on the `Groom` variant (STORY-708).
+    // trace:STORY-667 trace:STORY-708
     #[test]
     fn command_aliases_agree_with_resolvers() {
         use crate::cli::{Cli, Command};
@@ -379,10 +385,10 @@ mod tests {
 
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
 
-        // advisor assess -> assess
+        // advisor assess -> groom (STORY-708: canonical disposition verb)
         assert_eq!(
             crate::rewrite_advisor_assess(&s(&["aida", "advisor", "assess"])),
-            s(&["aida", "assess"]),
+            s(&["aida", "groom"]),
         );
         // bare `aida agent` -> `aida agent new`
         assert_eq!(
@@ -394,10 +400,11 @@ mod tests {
             crate::rewrite_queue_default_list(&s(&["aida", "queue"])),
             s(&["aida", "queue", "list"]),
         );
-        // clap `intake` alias reaches the Assess command
+        // clap `intake` alias reaches the Groom command (STORY-708: groom is
+        // canonical; assess/intake are deprecated aliases)
         assert!(matches!(
             Cli::try_parse_from(["aida", "intake"]).unwrap().command,
-            Command::Assess { .. }
+            Command::Groom { .. }
         ));
         // TASK-862: the personal-view shortcuts must rewrite exactly as the
         // registry advertises (`mylist` -> `list me`, `myqueue` -> `queue list`).
