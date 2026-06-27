@@ -22,12 +22,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019ede9c-ecab-7151-995c-0a366e134b4f
-  timestamp: 2026-06-19T06:41:26.699392336Z
-  agent: reviewer
-  commit_sha: fdef91fc4f2a41c121f69c7eb6fc7d1e630d708e
-  summary: Completed via merge fdef91fc
 implementation_info:
   implemented: false
   completed_at: 2026-06-19T06:41:26.528505484Z

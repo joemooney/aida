@@ -17,6 +17,3 @@ tags:
 - interop
 - parent:EPIC-50
 - tilt-verdict
-deferred: true
-deferred_at: 2026-06-19T08:41:48.961696759Z
-deferred_until: bd (Beads CLI) installed so the live 'bd export' / issues.jsonl schema can be verified before building the importer (it churns — building blind is wrong)

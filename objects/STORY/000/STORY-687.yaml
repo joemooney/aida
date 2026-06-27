@@ -19,6 +19,3 @@ relationships:
 - rel_type: Child
   target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
   created_at: 2026-06-26T04:48:26.853688998Z
-deferred: true
-deferred_at: 2026-06-26T04:48:39.702724632Z
-deferred_until: single-user blocked-board (EPIC-53 keystone) proves out, or operator hits a concrete multi-human handoff

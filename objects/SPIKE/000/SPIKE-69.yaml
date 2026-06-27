@@ -17,7 +17,4 @@ tags:
 - parent:EPIC-50
 - probe
 - tilt-verdict
-deferred: true
-deferred_at: 2026-06-19T06:49:45.773640169Z
-deferred_until: operator green-lights running the P3 substrate-richness ablation (an experiment that consumes headless-run cycles)
 human_only: true

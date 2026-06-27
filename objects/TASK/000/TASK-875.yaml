@@ -31,15 +31,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f006e-ed94-7592-948e-4d2767dcbbce
-  timestamp: 2026-06-25T20:18:17.620729042Z
-  agent: aida
-  commit_sha: df659982180adc1edd14e5709d81e2ef4cbbcceb
-  summary: Completed via merge df659982
-deferred: true
-deferred_at: 2026-06-19T08:41:49.680000197Z
-deferred_until: GitHub spec-kit (specify) installed so the scaffold→import→graph seam can be demoed against the real tool, not a mock
 implementation_info:
   implemented: false
   completed_at: 2026-06-25T20:18:16.554241753Z

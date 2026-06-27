@@ -23,14 +23,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019ec40a-e36c-71a3-b039-b743b0363c0f
-  timestamp: 2026-06-14T02:51:48.460262366Z
-  agent: reviewer
-  commit_sha: 57a71a2c15fc662ba37080345e9d35cf96f7f042
-  pr: 879
-  summary: 'BUG-549 PASS: implementer subagent now runs aida queue done after PR (step 2) so the Done->Completed auto-bump fires; reconcile-status reframed as fallback (step 3). Skill-prose only, edits master template, CI green.'
-  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:37:22.661924639Z

@@ -24,14 +24,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019ec7ad-d09e-7d41-bd95-8b45009ae7ba
-  timestamp: 2026-06-14T19:48:37.662410168Z
-  agent: reviewer
-  commit_sha: a1b6bfeaeea8a7edd2de1421b6f12e28e221eea8
-  pr: 909
-  summary: Docs-only dated evidence artifact; immutability honored (thesis untouched), BUG-558 caveat + reproducible recipe present, all CLI commands verified real, CI CLEAN
-  review_verdict: Approved
 implementation_info:
   implemented: false
   completed_at: 2026-06-14T19:48:37.485527682Z

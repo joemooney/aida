@@ -60,13 +60,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019ec336-4633-76c2-ac8f-daa84996362a
-  timestamp: 2026-06-13T22:59:34.579598526Z
-  agent: reviewer
-  commit_sha: a47727d2e35112bd39dc679ed4713cc19686671f
-  summary: Keystone-safe opt-in egress allowlist; empty-unchanged invariant unit-tested, mechanism correct. Section-naming ([contained] vs [agents]) flagged for operator decision before merge.
-  review_verdict: Approved
 implementation_info:
   implemented: false
   completed_at: 2026-06-13T22:59:34.427649104Z

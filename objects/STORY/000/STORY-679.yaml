@@ -51,12 +51,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f04f0-6697-79b1-a208-a59b32838d65
-  timestamp: 2026-06-26T17:18:11.607773912Z
-  agent: aida
-  commit_sha: 44551f52681fc2370e1e081af43a03bc65b5dd08
-  summary: Completed via merge 44551f52
 implementation_info:
   implemented: false
   completed_at: 2026-06-26T17:18:10.525485152Z

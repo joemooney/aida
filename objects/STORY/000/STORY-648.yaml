@@ -6,7 +6,6 @@ description: Slice A of the team dashboard (design docs/plans/2026-06-17-team-da
 status: Completed
 priority: High
 owner: ''
-assignee: joe
 feature: Uncategorized
 created_at: 2026-06-17T07:32:22.980237253Z
 modified_at: 2026-06-17T16:39:23.787162308Z
@@ -30,12 +29,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019ed497-0e83-7ae1-915d-100b885be6ed
-  timestamp: 2026-06-17T07:58:49.987546467Z
-  agent: aida
-  commit_sha: 452929715beb1b57555321d6a10141f83f2b9624
-  summary: Completed via merge 45292971
 implementation_info:
   implemented: false
   completed_at: 2026-06-17T07:58:49.826809398Z

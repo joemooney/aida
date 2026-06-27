@@ -28,6 +28,3 @@ implementation_info:
   implemented_by: joe
   completed_at: 2026-06-13T03:50:52.196970369Z
   completion_sha: d6d4c03bdedfbcd722699fa7ef3b6b60525dae96
-interface_changes:
-  cli:
-  - Added `aida human away`, `aida human home`, `aida human presence`, and `aida human status` as aliases over existing presence verbs; top-level `aida away`, `aida home`, and `aida presence` continue to work.

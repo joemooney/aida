@@ -47,19 +47,6 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
-processing_record:
-- id: 019ecc0b-c7a0-7b12-99ba-09c928f79ec4
-  timestamp: 2026-06-15T16:09:44.608731348Z
-  agent: reviewer
-  commit_sha: fe1118cf182769b16bce11fa13bfea55801d7a00
-  summary: The /aida-assess intake cold-boot half is clean, tested, and correct; but the burndown /aida-advise advisor tier cold-boot (main.rs:111856) + aida-advise.md note — both named in the spec title/description — are unaddressed. Merging auto-completes STORY-626 while half its titled scope is unbuilt.
-  review_verdict: RequestChanges
-- id: 019ecc1b-63c3-7d73-ba61-da3df367981e
-  timestamp: 2026-06-15T16:26:47.619585612Z
-  agent: reviewer
-  commit_sha: 3e94933d22b6223ad96831aae56df018ff2b1d5b
-  summary: 'Both cold-boot halves now seeded: the /aida-assess intake launcher (original commit) and the burndown /aida-advise advisor tier cold-boot branch (extend commit 23e9ee705). Fork-from-live stays bare (resume carries context). Tests/fmt/clippy green. STORY-626 fully covers its titled scope.'
-  review_verdict: Approved
 implementation_info:
   implemented: false
   completed_at: 2026-06-15T16:09:44.446808294Z

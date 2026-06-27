@@ -17,6 +17,3 @@ tags:
 - gitlab
 - needs-human
 - parent:EPIC-44
-deferred: true
-deferred_at: 2026-06-14T22:18:57.994701004Z
-deferred_until: open-issue backlog cleared AND operator prioritizes the canonical cutover (gitlab-origin is explicitly not-immediate per operator 2026-06-14)

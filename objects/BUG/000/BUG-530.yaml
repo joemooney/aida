@@ -105,29 +105,7 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019ec3a9-d756-76a1-a977-1a70027ec50a
-  timestamp: 2026-06-14T01:05:48.374326554Z
-  agent: reviewer
-  commit_sha: ed9d67a1f208066ece7cb84797b96551ec840303
-  pr: 865
-  summary: BUG-530 syncs the orphan store via maybe_sync_pull before the burndown preflight reads it (operator-chosen approach A); mechanism verified against code, never-fails. Branch rebuilt onto main, book.toml scope-bleed stripped per operator. Awaiting re-triggered CI.
-  review_verdict: Approved
 implementation_info:
   implemented: false
   completed_at: 2026-06-14T01:05:48.217395891Z
   completion_sha: ed9d67a1f208066ece7cb84797b96551ec840303
-decision_request:
-  question: 'BUG-530 fix approach: how should the burndown preflight avoid reading a stale local store?'
-  choices:
-  - label: Reuse maybe_sync_pull (fetch+rebase) before the preflight
-    consequence: Proven, never-fails; ~1 network pull per 'burndown run' (not a hot loop)
-    resolution: noop
-  - label: Lightweight no-network local-ref behind-check + ff-the-worktree
-    consequence: Cheaper, but needs new delicate orphan-worktree git plumbing (store-corruption risk); leans on the bg fetcher
-    resolution: noop
-  recommended: 0
-  rationale: A = correctness+safety now, trivial cost for occasional runs; B = an optimization once pull latency is actually felt.
-  answered: 0
-  asked_at: 2026-06-13T23:02:59.035546810Z
-  answered_at: 2026-06-13T23:20:30.615779559Z

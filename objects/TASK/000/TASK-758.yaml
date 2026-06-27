@@ -40,6 +40,3 @@ implementation_info:
   implemented_by: joe
   completed_at: 2026-06-13T02:32:38.232030906Z
   completion_sha: 616e37192ce00857ebe18e60be3078f650219329
-interface_changes:
-  cli:
-  - '`aida zen finish` now treats explicit/effective operator home presence as an advisory soft pause and away/no-opinion as clean auto-exit, without overriding hard integrity gates.'
