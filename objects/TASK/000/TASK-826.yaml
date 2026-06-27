@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:51.972669614Z
-modified_at: 2026-06-14T22:18:57.994701004Z
+modified_at: 2026-06-27T16:40:43.600244896Z
 req_type: Task
 tags:
 - batch:gitlab-canonical
@@ -17,3 +17,6 @@ tags:
 - gitlab
 - needs-human
 - parent:EPIC-44
+deferred: true
+deferred_at: 2026-06-27T16:40:43.600244896Z
+deferred_until: STORY-621 forge migration done AND operator signs off the EPIC-44 GitLab cutover
