@@ -22441,5 +22441,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 2123
+- id: 019f06a9-477a-7820-af4b-d617d8993e40
+  target_id: 019f06a9-3cfb-7200-a888-219783e128a6
+  author: aida
+  node_id: '1'
+  lamport: 2124
+  timestamp: 2026-06-27T01:19:45.019003789Z
+  kind: !Create
+    title: This is a spec to reject, it is no good
+    description: ''
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2124
 node_id: '1'
