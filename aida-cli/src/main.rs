@@ -767,36 +767,68 @@ mod story_423_asciinema_tests {
         );
     }
 
-    /// STORY-623: `aida assess` is canonical, `aida intake` is the clap alias,
-    /// and `aida advisor assess` rewrites to `aida assess` — all three reach the
-    /// same Assess command with flags passed through.
+    /// STORY-708: `aida groom` is canonical; `aida assess` / `aida intake` are
+    /// deprecated aliases (clap alias + pre-clap normalization), and `aida
+    /// advisor assess` rewrites straight to `aida groom` — all reach the same
+    /// Groom command with flags passed through.
     #[test]
-    fn assess_intake_and_advisor_assess_all_reach_assess() {
+    fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
 
         // canonical
         assert!(matches!(
-            Cli::try_parse_from(["aida", "assess", "--apply"])
+            Cli::try_parse_from(["aida", "groom", "--apply"])
                 .unwrap()
                 .command,
-            Command::Assess { apply: true, .. }
+            Command::Groom { apply: true, .. }
         ));
-        // clap visible alias
+        // clap visible aliases still parse to Groom
         assert!(matches!(
             Cli::try_parse_from(["aida", "intake"]).unwrap().command,
-            Command::Assess { .. }
+            Command::Groom { .. }
         ));
-        // advisor-seat spelling rewrites to the top-level assess
-        let out = rewrite_advisor_assess(&s(&["aida", "advisor", "assess", "--dry-run"]));
-        assert_eq!(out, s(&["aida", "assess", "--dry-run"]));
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "assess"]).unwrap().command,
+            Command::Groom { .. }
+        ));
+
+        // STORY-708: the pre-clap normalization rewrites the deprecated verbs to
+        // the canonical `groom` and reports which deprecated spelling was seen.
+        let (out, dep) = rewrite_groom_alias(&s(&["aida", "assess", "--apply"]));
+        assert_eq!(out, s(&["aida", "groom", "--apply"]));
+        assert_eq!(dep.as_deref(), Some("assess"));
         assert!(matches!(
             Cli::try_parse_from(out).unwrap().command,
-            Command::Assess { dry_run: true, .. }
+            Command::Groom { apply: true, .. }
+        ));
+        let (out, dep) = rewrite_groom_alias(&s(&["aida", "intake", "--dry-run"]));
+        assert_eq!(out, s(&["aida", "groom", "--dry-run"]));
+        assert_eq!(dep.as_deref(), Some("intake"));
+        assert!(matches!(
+            Cli::try_parse_from(out).unwrap().command,
+            Command::Groom { dry_run: true, .. }
+        ));
+        // canonical `groom` is NOT flagged as deprecated.
+        let (out, dep) = rewrite_groom_alias(&s(&["aida", "groom"]));
+        assert_eq!(out, s(&["aida", "groom"]));
+        assert_eq!(dep, None);
+
+        // advisor-seat spelling rewrites straight to the canonical top-level groom
+        let out = rewrite_advisor_assess(&s(&["aida", "advisor", "assess", "--dry-run"]));
+        assert_eq!(out, s(&["aida", "groom", "--dry-run"]));
+        assert!(matches!(
+            Cli::try_parse_from(out).unwrap().command,
+            Command::Groom { dry_run: true, .. }
         ));
         // unrelated advisor subcommands untouched
         assert_eq!(
             rewrite_advisor_assess(&s(&["aida", "advisor", "status"])),
             s(&["aida", "advisor", "status"])
+        );
+        // a positional value that reads `assess` (not the subcommand) is left alone
+        assert_eq!(
+            rewrite_groom_alias(&s(&["aida", "search", "assess"])).0,
+            s(&["aida", "search", "assess"])
         );
     }
 
@@ -1404,19 +1436,45 @@ mod story_423_asciinema_tests {
 /// target may be one token (`aida advisor`) or two (`aida queue list`). Unmatched
 /// input is returned unchanged. `args[0]` is the binary name.
 /// trace:TASK-822 trace:TASK-824 trace:TASK-828 trace:TASK-831
-/// STORY-623: rewrite `aida advisor assess [args]` → `aida assess [args]` before
+/// STORY-623: rewrite `aida advisor assess [args]` → `aida groom [args]` before
 /// clap, so the advisor's draft-disposition verb is reachable under its seat
-/// while the implementation stays the single `assess` (aka `intake`) command.
-/// Unmatched input is returned unchanged. trace:STORY-623 | ai:claude
+/// while the implementation stays the single `groom` (aka deprecated `assess` /
+/// `intake`) command. STORY-708: the canonical target is now `groom` — the
+/// advisor-seat spelling normalizes straight to the canonical verb.
+/// Unmatched input is returned unchanged.
+// trace:STORY-623 trace:STORY-708 | ai:claude
 fn rewrite_advisor_assess(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "advisor" && args[2] == "assess" {
         let mut out = Vec::with_capacity(args.len() - 1);
         out.push(args[0].clone());
-        out.push("assess".to_string());
+        out.push("groom".to_string());
         out.extend_from_slice(&args[3..]);
         return out;
     }
     args.to_vec()
+}
+
+/// STORY-708: `groom` is the canonical advisor-disposition verb; `assess` and
+/// `intake` are deprecated aliases. clap still accepts both (the `Groom` command
+/// carries `#[command(alias = "assess", alias = "intake")]`), but we normalize a
+/// top-level `aida assess`/`aida intake` to `aida groom` BEFORE clap so the
+/// dispatch sees one canonical token, and we print a one-line, non-blocking
+/// deprecation hint to stderr pointing at `aida groom`. The rewrite only fires
+/// when the deprecated verb is the SUBCOMMAND (argv[1]) — a later positional or
+/// flag value that happens to read `assess`/`intake` is left untouched. Returns
+/// (rewritten argv, deprecated-verb-seen) so the caller can emit the hint after
+/// argv parsing succeeds.
+// trace:STORY-708 | ai:claude
+fn rewrite_groom_alias(args: &[String]) -> (Vec<String>, Option<String>) {
+    if args.len() >= 2 && (args[1] == "assess" || args[1] == "intake") {
+        let deprecated = args[1].clone();
+        let mut out = Vec::with_capacity(args.len());
+        out.push(args[0].clone());
+        out.push("groom".to_string());
+        out.extend_from_slice(&args[2..]);
+        return (out, Some(deprecated));
+    }
+    (args.to_vec(), None)
 }
 
 /// TASK-858: bare `aida agent` (no recognized subcommand) defaults to
@@ -1668,11 +1726,23 @@ fn run() -> Result<()> {
     // canonical surface every vendor sees is never reshaped by a user alias.
     // trace:TASK-877 | ai:claude
     let expanded = user_alias::expand(&raw_args);
-    let mut cli = Cli::parse_from(rewrite_queue_default_list(&rewrite_agent_default_new(
-        &rewrite_list_alias(&rewrite_advisor_assess(&rewrite_personal_view_alias(
-            &expanded,
+    // STORY-708: normalize the deprecated `aida assess` / `aida intake` verbs to
+    // the canonical `aida groom` before clap, and capture which deprecated
+    // spelling (if any) the operator typed so we can print a non-blocking hint
+    // once argv parsing succeeds. trace:STORY-708 | ai:claude
+    let (after_alias_rewrites, groom_deprecated_verb) = rewrite_groom_alias(
+        &rewrite_queue_default_list(&rewrite_agent_default_new(&rewrite_list_alias(
+            &rewrite_advisor_assess(&rewrite_personal_view_alias(&expanded)),
         ))),
-    )));
+    );
+    let mut cli = Cli::parse_from(after_alias_rewrites);
+
+    // STORY-708: one-line, non-blocking deprecation hint. Printed to stderr (so
+    // it never pollutes machine-readable stdout) only when the operator reached
+    // groom via a deprecated alias. trace:STORY-708 | ai:claude
+    if let Some(verb) = &groom_deprecated_verb {
+        eprintln!("note: `aida {verb}` is deprecated — use `aida groom` (the canonical disposition verb).");
+    }
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
         if let Some(exit_code) = maybe_run_asciinema_wrapper(&raw_args, &cli)? {
@@ -1983,10 +2053,11 @@ fn run() -> Result<()> {
         return handle_health_vitals_command(*json, *brief);
     }
 
-    // STORY-560: `aida intake` self-loads the store to compute its candidate
+    // STORY-560: `aida groom` (canonical; `assess`/`intake` are deprecated
+    // aliases — STORY-708) self-loads the store to compute its candidate
     // fence and then launches a headless `claude -p` — no shared storage handle
-    // needed. Dispatch early, like burndown. trace:STORY-560 | ai:claude
-    if let Command::Assess {
+    // needed. Dispatch early, like burndown. trace:STORY-560 trace:STORY-708 | ai:claude
+    if let Command::Groom {
         apply,
         max_approvals,
         only_tag,
@@ -3169,7 +3240,9 @@ fn run() -> Result<()> {
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
-        Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
+        Command::Groom { .. } => {
+            unreachable!("groom (assess/intake) is dispatched before storage init")
+        }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
@@ -13719,7 +13792,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
-        Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
+        Command::Groom { .. } => {
+            unreachable!("groom (assess/intake) is dispatched before storage init")
+        }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
