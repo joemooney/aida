@@ -3,12 +3,12 @@ spec_id: TASK-896
 agreed_id: TASK-896
 title: In-agent status-footer parity for Codex (statusline richness survives only in shell prompt/tmux)
 description: Uncovered gap (TASK-0421 inventory, low/UX). Codex in-agent footer is a fixed field set; AIDA statusline richness survives only in the shell prompt/tmux, not in-agent. trace:TASK-0421
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:46:42.154593709Z
-modified_at: 2026-06-25T07:46:42.154593709Z
+modified_at: 2026-06-27T00:11:35.109730635Z
 req_type: Task
 tags:
 - codex
