@@ -39,6 +39,7 @@ mod effort_calibration;
 mod exit_signal;
 mod external_import_bleed;
 mod findings;
+mod focus;
 mod forge;
 mod global_queue;
 mod interview;
@@ -2881,6 +2882,14 @@ fn run() -> Result<()> {
                  --centralized mode, use `aida add \"<title>\" --status approved`."
             );
         }
+        // STORY-706: `aida focus` scopes reads by walking the requirement
+        // hierarchy graph — a distributed-mode (cache-backed) concept.
+        Command::Focus { .. } => {
+            anyhow::bail!(
+                "`aida focus` is available in the default (distributed) mode. Legacy \
+                 --centralized mode has no per-worktree focus context."
+            );
+        }
         Command::Add {
             title,
             title_positional,
@@ -3149,6 +3158,7 @@ fn run() -> Result<()> {
             all: _,
             stale: _,
             full: _,
+            no_focus: _,
         } => {
             handle_status_command(*no_dev_context, None, &storage)?;
         }
@@ -13623,7 +13633,38 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             all,
             stale,
             full,
+            no_focus,
         } => {
+            // STORY-706: surface the active focus loudly at the top of the
+            // orientation snapshot, so a focused worktree never reads `aida
+            // status` as the whole-project picture. Text modes only (JSON
+            // consumers parse structured sections); `--no-focus` suppresses it.
+            //
+            if !*json && !*no_focus {
+                if let Some(focus_ref) = find_project_root()
+                    .ok()
+                    .and_then(|r| crate::focus::resolve_focus(&r))
+                {
+                    if let Ok(Some(focus_req)) = backend.get_requirement_by_spec_id(&focus_ref) {
+                        let n = backend
+                            .descendant_ids(&focus_req.id)
+                            .map(|s| s.len())
+                            .unwrap_or(0);
+                        println!(
+                            "{}",
+                            format!(
+                                "\u{25b8} focused: {} \u{2014} {} item{} in subtree  \
+                                 (--no-focus to widen)",
+                                focus_req.display_id(),
+                                n,
+                                if n == 1 { "" } else { "s" },
+                            )
+                            .cyan()
+                            .bold()
+                        );
+                    }
+                }
+            }
             return handle_status_command_distributed(
                 *no_dev_context,
                 *short,
@@ -13643,6 +13684,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 store_path,
                 &backend,
             );
+        }
+        // — `aida focus` set/show/clear.
+        Command::Focus {
+            target,
+            clear,
+            show,
+        } => {
+            return handle_focus_command(target.as_deref(), *clear, *show, &backend);
         }
         Command::Team { json, cmd } => {
             // trace:STORY-640 | ai:claude
@@ -13903,6 +13952,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             assigned,
             user,
             limit,
+            no_focus,
             ..
         } => {
             // STORY-562: `aida list human` (positional alias) and `aida list
@@ -14175,6 +14225,51 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
             }
 
+            // STORY-706: a persistent focus scopes `aida list` to the focused
+            // spec's transitive subtree — the SAME cache-fast closure
+            // `--parent <id> --recursive` uses (`backend.descendant_ids`), with
+            // the focus as the implicit parent. Skipped when an explicit
+            // `--parent` already scopes the view, when `--all` widens to
+            // everything (incl. archived/deferred), or via the focus-specific
+            // `--no-focus` escape. The header below makes the scoping LOUD so a
+            // focused subset is never mistaken for the whole project (the
+            // kubectl-namespace footgun).
+            let mut focus_banner: Option<String> = None;
+            if parent.is_none() && !*all && !*no_focus {
+                if let Some(focus_ref) = find_project_root()
+                    .ok()
+                    .and_then(|root| crate::focus::resolve_focus(&root))
+                {
+                    match backend.get_requirement_by_spec_id(&focus_ref)? {
+                        Some(focus_req) => {
+                            let total_pre_focus = reqs.len();
+                            let subtree_ids = backend.descendant_ids(&focus_req.id)?;
+                            reqs.retain(|r| subtree_ids.contains(&r.id));
+                            focus_banner = Some(
+                                crate::focus::focus_header(
+                                    &focus_req.display_id(),
+                                    reqs.len(),
+                                    total_pre_focus,
+                                )
+                                .cyan()
+                                .bold()
+                                .to_string(),
+                            );
+                        }
+                        None => {
+                            // A focus pointing at a now-missing spec must not
+                            // silently hide everything — warn and widen.
+                            eprintln!(
+                                "{} focus `{}` no longer resolves to a spec; showing all. \
+                                 Run `aida focus --clear` or re-set it.",
+                                "Note:".yellow(),
+                                focus_ref,
+                            );
+                        }
+                    }
+                }
+            }
+
             // Hide META reqs (AI prompt customization seeded by init) from
             // the default view — they're plumbing, not user-authored work.
             // The user can still see them via `--type meta` (which forces
@@ -14397,6 +14492,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&out)?);
                 return Ok(());
+            }
+
+            // STORY-706: print the loud focus header above the human output
+            // (table or --tree). Placed after the `--short` / `--json` early
+            // returns so those machine surfaces stay header-free.
+            //
+            if let Some(banner) = &focus_banner {
+                println!("{banner}");
             }
 
             // TASK-568: --tree groups the (already-filtered) listing by
@@ -77563,6 +77666,20 @@ fn handle_statusline_command(color: &str, title: bool) -> Result<()> {
             parts.push(badge.pause.red().bold().to_string());
         }
     }
+    // STORY-706: surface the active focus loudly on every prompt — a
+    // persistent focus silently scoping reads is the kubectl-namespace
+    // footgun, so the statusline is the always-on reminder. Reads
+    // `AIDA_FOCUS` env > `.aida/focus` marker; absent → no segment.
+    //
+    if let Some(focus) = crate::focus::resolve_focus(&project_root) {
+        parts.push(
+            format!("focus:{}", truncate(&focus, SCOPE_LABEL_MAX))
+                .magenta()
+                .bold()
+                .to_string(),
+        );
+    }
+
     // Resolve the active session lease once: both the @SPEC fallback and
     // the dedicated sess: segment use it, and we want a single canonicalize
     // + read-dir per render. trace:STORY-53 | ai:claude
@@ -91150,6 +91267,128 @@ fn handle_unclaim(spec: &str) -> Result<()> {
 /// ([`lease_state_for`], which already folds in pid/worktree liveness), and the
 /// elapsed-from-started helper ([`humanize_duration_secs`]).
 // trace:STORY-694 | ai:claude
+/// `aida focus [<spec>] [--clear] [--show]` — the per-worktree focus context.
+/// Set (a spec given), show (no args / `--show`), or clear (`--clear`) the
+/// focus persisted in `.aida/focus`.
+fn handle_focus_command(
+    target: Option<&str>,
+    clear: bool,
+    _show: bool,
+    backend: &aida_core::CachedGitBackend,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    if clear {
+        if crate::focus::clear_focus_marker(&project_root) {
+            println!(
+                "{} focus cleared.",
+                crate::glyph(crate::glyphs::Glyph::Check)
+            );
+        } else {
+            println!("No focus was set.");
+        }
+        return Ok(());
+    }
+
+    if let Some(raw) = target {
+        // Set: validate the target resolves to a real spec, then persist its
+        // canonical display id so later reads resolve unambiguously.
+        let req = backend.get_requirement_by_spec_id(raw)?.ok_or_else(|| {
+            anyhow::anyhow!(
+                "focus target `{}` not found. Pass an existing epic or spec id (try `aida list`).",
+                raw
+            )
+        })?;
+        let label = req.display_id();
+        crate::focus::write_focus_marker(&project_root, &label)?;
+        println!(
+            "{} focused on {} — {}",
+            crate::glyph(crate::glyphs::Glyph::Check),
+            label.cyan().bold(),
+            req.title,
+        );
+        print_focus_rollup(backend, &req)?;
+        println!(
+            "Read commands (list / status / queue list) now scope to this subtree. \
+             `aida focus --clear` to drop it; `--all` / `--no-focus` per-command to widen."
+        );
+        return Ok(());
+    }
+
+    // Show (no target, or --show): the current focus + a rollup, or a hint.
+    match crate::focus::resolve_focus(&project_root) {
+        Some(focus_ref) => match backend.get_requirement_by_spec_id(&focus_ref)? {
+            Some(req) => {
+                let env_override = std::env::var(crate::focus::FOCUS_ENV)
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                    .is_some();
+                println!(
+                    "{} focused on {} — {}",
+                    crate::glyph(crate::glyphs::Glyph::Bullet),
+                    req.display_id().cyan().bold(),
+                    req.title,
+                );
+                if env_override {
+                    println!(
+                        "  (from {} env override — unset it to fall back to .aida/focus)",
+                        crate::focus::FOCUS_ENV
+                    );
+                }
+                print_focus_rollup(backend, &req)?;
+            }
+            None => {
+                println!(
+                    "{} focus `{}` no longer resolves to a spec. \
+                     Run `aida focus --clear` or re-set it.",
+                    "Note:".yellow(),
+                    focus_ref,
+                );
+            }
+        },
+        None => {
+            println!("No focus set.");
+            println!("  Set one with `aida focus <epic-or-spec>` to scope list / status / queue.");
+        }
+    }
+    Ok(())
+}
+
+/// Print a one-line status rollup of the focus spec's transitive subtree
+/// (cache-fast: one descendant-id closure + one summary read).
+///
+fn print_focus_rollup(
+    backend: &aida_core::CachedGitBackend,
+    focus_req: &aida_core::Requirement,
+) -> Result<()> {
+    let subtree = backend.descendant_ids(&focus_req.id)?;
+    let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
+    let mut total = 0usize;
+    let mut completed = 0usize;
+    let mut in_progress = 0usize;
+    let mut open = 0usize;
+    for s in &summaries {
+        if !subtree.contains(&s.id) || s.id == focus_req.id {
+            continue;
+        }
+        total += 1;
+        match s.status.to_ascii_lowercase().as_str() {
+            "completed" | "done" => completed += 1,
+            "inprogress" | "in-progress" | "in_progress" => in_progress += 1,
+            _ => open += 1,
+        }
+    }
+    println!(
+        "  subtree: {} item{} ({} completed · {} in-progress · {} open)",
+        total,
+        if total == 1 { "" } else { "s" },
+        completed,
+        in_progress,
+        open,
+    );
+    Ok(())
+}
+
 fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -117564,8 +117803,28 @@ fn handle_queue_command(
             json,
             all_users,
             epic: epic_filter,
+            no_focus,
         } => {
             let user_id = get_user(user);
+
+            // STORY-706: a persistent focus defaults the `--epic` narrowing to
+            // the focused subtree, so a plain `aida queue list` under a focus
+            // shows only that epic's queued work. An explicit `--epic`, the
+            // `--no-focus` escape, or the fleet-wide `--all-users` view all
+            // bypass it. We reuse the TASK-923 `--epic` closure wholesale —
+            // focus is just its default source — and print a loud header below
+            // so the scoping is never silent.
+            let focus_active = epic_filter.is_none() && !*no_focus && !*all_users;
+            let focus_target = if focus_active {
+                find_project_root()
+                    .ok()
+                    .and_then(|root| crate::focus::resolve_focus(&root))
+            } else {
+                None
+            };
+            let epic_filter: Option<String> = epic_filter.clone().or_else(|| focus_target.clone());
+            let epic_filter = epic_filter.as_ref();
+            let focus_drove_epic = focus_target.is_some();
 
             // STORY-672: fleet-wide bird's-eye. `--all-users` aggregates every
             // user's queue (not just this shell's `current_user_id()`),
@@ -117854,6 +118113,10 @@ fn handle_queue_command(
                 })
                 .collect();
 
+            // STORY-706: row count before the focus/epic narrowing, for the
+            // focus header's "showing N of M".
+            let total_pre_focus = entries.len();
+
             // TASK-923: --epic / --parent — narrow to the epic's TRANSITIVE
             // descendant tree (epic + children + grandchildren). Resolve the
             // id to its UUID, compute the closure once via the shared
@@ -117888,6 +118151,20 @@ fn handle_queue_command(
                 } else {
                     (entries, None)
                 };
+
+            // STORY-706: when a persistent focus (not an explicit `--epic`)
+            // drove the narrowing, announce it loudly so the scoped queue view
+            // is never mistaken for the whole queue.
+            if focus_drove_epic {
+                if let Some(label) = &epic_label {
+                    println!(
+                        "{}",
+                        crate::focus::focus_header(label, entries.len(), total_pre_focus)
+                            .cyan()
+                            .bold()
+                    );
+                }
+            }
 
             // STORY-333: split `entries` into pickable + blocked. Blocked
             // entries render in a sibling "Blocked" section (below
