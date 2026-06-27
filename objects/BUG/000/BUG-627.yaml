@@ -3,12 +3,12 @@ spec_id: BUG-627
 agreed_id: BUG-627
 title: Cache freshness check is SHA-based and schema-blind — a schema change (e.g. blocked column) leaves a FRESH-but-stale cache that hard-errors instead of self-healing
 description: 'Operator hit: aida show <spec> -> "table requirements_cache has no column named blocked". aida cache status reported Status: FRESH (cache HEAD SHA == store HEAD SHA) yet the table lacked the blocked column (TASK-902). The staleness/auto-rebuild path keys ONLY on HEAD-SHA equality, NOT on cache schema version, so a schema change that does not move the orphan-store HEAD SHA (or a cache last built at the current SHA by an older-schema binary) is considered FRESH and is never rebuilt -> the next query that references the new column hard-errors. TASK-902 was supposed to bump SCHEMA_VERSION so old caches self-heal (drop+rebuild on next read); that self-heal does NOT fire here. FIX: store the cache schema version (e.g. PRAGMA user_version or a meta row) and, on EVERY read-path open, compare the binary SCHEMA_VERSION to the caches stored version; on mismatch, drop+rebuild BEFORE querying — independent of HEAD-SHA freshness. A schema change must never surface as a raw SQL error to the user. Add a test: open a cache with an old schema version + matching HEAD SHA -> auto-rebuild, no error. Aggravating factor: concurrent worktree-isolated agents running different-SHA binaries can build the shared cache at inconsistent schemas.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:38:50.670851418Z
-modified_at: 2026-06-26T23:41:38.648326982Z
+modified_at: 2026-06-27T00:09:44.400212990Z
 req_type: Bug
 tags:
 - cache
@@ -21,3 +21,21 @@ comments:
   content: 'Diagnosis refined: the self-heal mechanism is schema-VERSION-based and correct (cache.rs SCHEMA_VERSION=7 + META_KEY_SCHEMA_VERSION + STORY-441 drop-and-rebuild on mismatch) — NOT SHA-based as I first wrote. The actual bug: the ''blocked'' column (TASK-902) was added to the schema WITHOUT bumping SCHEMA_VERSION, so a cache at version 7-without-blocked is indistinguishable from version 7-with-blocked and never rebuilds. FIX: (1) immediate — bump SCHEMA_VERSION to 8 so all stale caches self-heal; (2) robust/prevention — derive SCHEMA_VERSION from a hash of the schema SQL (or assert in a test that the schema fingerprint matches the version), so a column add can NEVER ship without an auto-bump. Substrate-as-bouncer: you cannot rely on remembering to bump.'
   created_at: 2026-06-26T18:39:47.763963977Z
   modified_at: 2026-06-26T18:39:47.763963977Z
+history:
+- id: 019f0669-2e74-7f21-8921-14188f3f5dd6
+  author: aida-auto-bump
+  timestamp: 2026-06-27T00:09:44.308826574Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f0669-2ed0-7061-9075-7e2550418a77
+  timestamp: 2026-06-27T00:09:44.400202640Z
+  agent: aida
+  commit_sha: 1dcab2b0e9eb1d0d8abb87a8826f0900fc873d10
+  summary: Completed via merge 1dcab2b0
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T00:09:43.317649173Z
+  completion_sha: 1dcab2b0e9eb1d0d8abb87a8826f0900fc873d10
