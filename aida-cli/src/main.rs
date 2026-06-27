@@ -15336,9 +15336,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 //     refused with guidance rather than silently queued.
                 // trace:TASK-754 | ai:claude
                 if *queue {
-                    if let Some(reason) =
-                        queue_at_filing_refusal(&last.status, intake_downgraded_from.is_some())
-                    {
+                    if let Some(reason) = queue_at_filing_refusal(
+                        &last.status,
+                        intake_downgraded_from.is_some(),
+                        r#for.as_deref(),
+                    ) {
                         let did = last.spec_id.as_deref().unwrap_or("?");
                         match reason {
                             QueueAtFilingRefusal::Downgraded => anyhow::bail!(
@@ -67828,7 +67830,7 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn queue_at_filing_allows_approved() {
         assert_eq!(
-            queue_at_filing_refusal(&RequirementStatus::Approved, false),
+            queue_at_filing_refusal(&RequirementStatus::Approved, false, None),
             None
         );
     }
@@ -67866,7 +67868,7 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn queue_at_filing_refuses_downgraded_as_authority() {
         assert_eq!(
-            queue_at_filing_refusal(&RequirementStatus::Draft, true),
+            queue_at_filing_refusal(&RequirementStatus::Draft, true, None),
             Some(QueueAtFilingRefusal::Downgraded)
         );
     }
@@ -67876,7 +67878,7 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn queue_at_filing_refuses_explicit_draft() {
         assert_eq!(
-            queue_at_filing_refusal(&RequirementStatus::Draft, false),
+            queue_at_filing_refusal(&RequirementStatus::Draft, false, None),
             Some(QueueAtFilingRefusal::NotApproved)
         );
     }
@@ -67886,8 +67888,70 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn queue_at_filing_refuses_non_approved_status() {
         assert_eq!(
-            queue_at_filing_refusal(&RequirementStatus::Planned, false),
+            queue_at_filing_refusal(&RequirementStatus::Planned, false, None),
             Some(QueueAtFilingRefusal::NotApproved)
+        );
+    }
+
+    // ---- BUG-631: dispatch-vs-request route classification ----
+
+    /// The request/review routes (advisor / human / reviewer, plus the
+    /// `dialog`→`advisor` and casing aliases) are exempt from the
+    /// dispatch-for-execution advisor-authority gate.
+    #[test]
+    fn request_routes_are_exempt_from_dispatch_gate() {
+        for route in [
+            "advisor", "human", "reviewer", "dialog", "Human", "REVIEWER",
+        ] {
+            assert!(
+                !for_target_requires_dispatch_authority(Some(route)),
+                "{route} should be a request route (exempt)"
+            );
+            assert!(
+                for_route_is_request_only(route),
+                "{route} should classify as request-only"
+            );
+        }
+    }
+
+    /// Execution-dispatch routes (implementer, unknown/custom roles) and the
+    /// unrouted cases (`--for any`, no `--for`) stay gated.
+    #[test]
+    fn dispatch_and_unrouted_targets_require_authority() {
+        for route in ["implementer", "architect", "integrator", "whoknows"] {
+            assert!(
+                for_target_requires_dispatch_authority(Some(route)),
+                "{route} should require dispatch authority"
+            );
+            assert!(
+                !for_route_is_request_only(route),
+                "{route} should not classify as request-only"
+            );
+        }
+        // Unrouted: explicit `--for any` and the absent default both gated.
+        assert!(for_target_requires_dispatch_authority(Some("any")));
+        assert!(for_target_requires_dispatch_authority(None));
+    }
+
+    // trace:BUG-631
+    /// At the filing surface: a draft routed `--for advisor` is allowed onto the
+    /// queue even after the authority gate downgraded it, while the same
+    /// downgraded draft with no request route stays refused.
+    #[test]
+    fn queue_at_filing_request_route_bypasses_downgrade() {
+        // Request route → allowed despite the downgrade and non-Approved status.
+        assert_eq!(
+            queue_at_filing_refusal(&RequirementStatus::Draft, true, Some("advisor")),
+            None
+        );
+        assert_eq!(
+            queue_at_filing_refusal(&RequirementStatus::Draft, false, Some("reviewer")),
+            None
+        );
+        // Execution route → still gated as before.
+        assert_eq!(
+            queue_at_filing_refusal(&RequirementStatus::Draft, true, Some("implementer")),
+            Some(QueueAtFilingRefusal::Downgraded)
         );
     }
 
@@ -76072,15 +76136,28 @@ enum QueueAtFilingRefusal {
     NotApproved,
 }
 
+// trace:TASK-754 trace:BUG-631 | ai:claude
 /// `None` ⇒ enqueue is allowed. `Some(reason)` ⇒ refuse with the matching
 /// message. AC2 + AC5 collapse to one rule: the new spec must end up Approved,
 /// and a downgrade (the authority gate having fired) is reported distinctly so
 /// the operator knows to re-run as the advisor rather than just fix the status.
-/// trace:TASK-754 | ai:claude
+///
+/// The `route` (the `--for` target, before defaulting) carves out the
+/// request-for-review case. Routing a freshly-filed draft `--for advisor`
+/// (or `--for human`/`--for reviewer`) is a REQUEST for review/triage, open to
+/// any role — so it is never refused here regardless of status, mirroring the
+/// standalone `aida queue add --for advisor`, which enqueues any non-terminal
+/// status. Only execution-dispatch routes carry the Approved-only / authority
+/// gate.
 fn queue_at_filing_refusal(
     final_status: &RequirementStatus,
     intake_downgraded: bool,
+    route: Option<&str>,
 ) -> Option<QueueAtFilingRefusal> {
+    // BUG-631: a request-for-review route bypasses the dispatch gate entirely.
+    if !for_target_requires_dispatch_authority(route) {
+        return None;
+    }
     if matches!(final_status, RequirementStatus::Approved) {
         return None;
     }
@@ -76107,6 +76184,43 @@ fn add_queue_route_role(r#for: Option<&str>) -> Option<String> {
         Some("any") => None,
         Some(role) => Some(canonical_role_name(role)),
         None => Some(canonical_role_name("implementer")),
+    }
+}
+
+// BUG-631: is a `--for <role>` queue route a REQUEST-for-review/triage route
+// (open to any role) rather than a DISPATCH-for-execution route?
+//
+// The advisor-authority gate (TASK-647 / ADR-3) exists to stop a non-advisor
+// committing the team to BUILD work. Routing a draft to the advisor / human /
+// reviewer is the opposite act: a REQUEST for review or triage. It does not
+// dispatch execution and does not bypass approval — the advisor/reviewer still
+// decides. So those three targets are exempt from the gate; `implementer` and
+// every other (execution or unknown/custom) role stay gated. The exempt set is
+// the closed list of review/triage seats: widen it deliberately, never by
+// default, so an unrecognized role leans toward the safer (gated) behavior.
+// trace:BUG-631 | ai:claude
+fn for_route_is_request_only(for_role: &str) -> bool {
+    // `canonical_role_name` lowercases only `human`/`dialog`; other roles pass
+    // through with their original casing, so compare case-insensitively to
+    // accept `--for Reviewer` / `--for ADVISOR` the same as the lowercase forms.
+    let canonical = canonical_role_name(for_role).to_ascii_lowercase();
+    matches!(canonical.as_str(), "advisor" | "human" | "reviewer")
+}
+
+// BUG-631: does this queue-add `--for` target require advisor authority?
+//
+// TRUE (gated) for dispatch-for-execution routes — `implementer`, any
+// unknown/custom role, and the unrouted cases (`--for any` or no `--for` at
+// all), both of which imply execution intent. FALSE (exempt) only for the
+// request/review routes classified by `for_route_is_request_only`
+// (advisor / human / reviewer). This scopes the TASK-647 gate to the act it was
+// meant to guard — committing the team to build — and lets `aida queue add
+// --for advisor` (a request for review) succeed from any role. trace:BUG-631
+fn for_target_requires_dispatch_authority(for_role: Option<&str>) -> bool {
+    match for_role {
+        Some("any") => true,
+        Some(role) => !for_route_is_request_only(role),
+        None => true,
     }
 }
 
@@ -116284,11 +116398,21 @@ fn handle_queue_command(
             // file drafts and let the advisor triage + queue. Internal Rust
             // callers (orchestrator) use `storage.queue_add()` directly and
             // bypass this CLI gate. trace:TASK-647 | ai:claude
-            if !has_advisor_authority() {
+            //
+            // BUG-631: scope the gate to DISPATCH-for-execution targets only.
+            // Routing a draft `--for advisor` (or `--for human`/`--for reviewer`)
+            // is a REQUEST for review/triage — open to any role, since it does
+            // not dispatch execution and the advisor/reviewer still decides.
+            // Only execution-dispatch routes (implementer, unknown/custom roles,
+            // and the unrouted `--for any`/no-`--for` cases) stay gated.
+            // trace:BUG-631 | ai:claude
+            if for_target_requires_dispatch_authority(r#for.as_deref()) && !has_advisor_authority()
+            {
                 anyhow::bail!(
                     "queuing work for execution needs advisor authority (advisor role or an \
                      interactive session). File the spec for advisor triage instead, or run \
-                     as the advisor."
+                     as the advisor. (Routing for review — `--for advisor`/`--for human`/\
+                     `--for reviewer` — needs no advisor authority.)"
                 );
             }
             // BUG-498: queuing work is advisor-style — nudge the operator to

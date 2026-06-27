@@ -3370,8 +3370,18 @@ impl<'a> McpServer<'a> {
         // The queue mechanics live in `tool_queue_add_inner` so tests (and any
         // future advisor-corroborated caller) can seed the queue out-of-band,
         // mirroring the `force_status` precedent. trace:BUG-480 | ai:claude
-        if let Some(msg) = mcp_queue_authority_message() {
-            return Err(msg);
+        //
+        // BUG-631: scope the gate to DISPATCH-for-execution targets, matching the
+        // CLI `aida queue add`. Routing `for: advisor` (or `human`/`reviewer`) is
+        // a REQUEST for review/triage — open to any caller, since it does not
+        // dispatch execution. Only execution-dispatch routes (implementer,
+        // unknown/custom roles, and the unrouted default) keep the MCP gate.
+        // trace:BUG-631 | ai:claude
+        let for_arg = args.get("for").and_then(|v| v.as_str());
+        if crate::for_target_requires_dispatch_authority(for_arg) {
+            if let Some(msg) = mcp_queue_authority_message() {
+                return Err(msg);
+            }
         }
         self.tool_queue_add_inner(args)
     }
