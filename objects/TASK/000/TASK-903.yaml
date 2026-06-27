@@ -21,6 +21,3 @@ comments:
   content: 'PR #1123 fails on its own gate test + the STORY-684 pre-commit hook already does ///-adjacent checking (it flagged pre-existing main.rs /// debt during the TASK-895 commit). Park for rework: reconcile TASK-903''s cli.rs-/// gate with STORY-684''s hook (extend it, don''t add a competing check) + handle the pre-existing main.rs /// debt (it would block all commits). Needs a fresh, scoped approach.'
   created_at: 2026-06-26T08:17:12.046437594Z
   modified_at: 2026-06-26T08:17:12.046437594Z
-deferred: true
-deferred_at: 2026-06-26T17:26:25.467854602Z
-deferred_until: BUG-624 (diff-scoped hook) merges + the drive is quiet enough to land a 67-file cleanup without conflict churn

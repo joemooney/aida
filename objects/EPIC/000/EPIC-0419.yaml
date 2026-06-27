@@ -56,6 +56,3 @@ comments:
   content: 'Operator confirmed (2026-06-23) this is a near-term direction, not speculative. Approved the foundational slice (TASK-0420 review the existing porting guide / TASK-0421 inventory Claude-specific surfaces / TASK-0425 validation runbook); deferred the implementation follow-on (0422-0427) until the slice confirms the approach. Cross-vendor portability is AIDAs defensible niche, so this is defensible investment even mid-stabilization. PUBLIC-REPO RULE: all Codex specs/docs stay framed as generic cross-vendor migration — no employer/workplace identifiers, ever.'
   created_at: 2026-06-24T03:44:25.213117338Z
   modified_at: 2026-06-24T03:44:25.213117338Z
-deferred: true
-deferred_at: 2026-06-26T18:46:24.911752420Z
-deferred_until: past stabilization; Codex-migration prioritized

@@ -26,14 +26,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019ec420-8336-7e31-89fe-7c5afc21c4d2
-  timestamp: 2026-06-14T03:15:25.622377523Z
-  agent: reviewer
-  commit_sha: 7f69f82a29aa288cc5c65be72e01b4efc3ef4f3b
-  pr: 881
-  summary: 'BUG-551 PASS: supervised collection moved after status/tag/batch filters so Done/Completed supervised specs no longer leak into the keyboard section; CI green, mergeStateStatus CLEAN'
-  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:50:48.069955885Z

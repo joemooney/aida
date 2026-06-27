@@ -72,13 +72,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019ec1df-eeab-7e33-8b2e-1e2ac1377475
-  timestamp: 2026-06-13T16:45:38.859411880Z
-  agent: 5fac59be-3ec5-40d8-814b-7781e0107f31
-  brief_ref: .aida/agent-briefs/claude/STORY-585-2026-06-13T034404Z.md
-  commit_sha: 256261fc25d82cc52aba664f5ef0127efaf2c62f
-  summary: Completed via merge 256261fc
 implementation_info:
   implemented: false
   completed_at: 2026-06-13T16:45:38.706619914Z

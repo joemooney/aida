@@ -53,22 +53,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019ecfcb-a7a3-7422-be79-ff0c63ae1f95
-  timestamp: 2026-06-16T09:38:10.979407885Z
-  agent: aida
-  commit_sha: fae11f755ecc4f4ff489b178bfddf6b5d7582bc6
-  summary: Completed via merge fae11f75
-- id: 019ed0b4-0e03-7593-a9cc-cc81f19fd44f
-  timestamp: 2026-06-16T13:52:01.539280207Z
-  agent: aida
-  commit_sha: cd123fa36884fa80676381ef6935fd42965d1fbb
-  summary: Completed via merge cd123fa3
-- id: 019ed116-d1f3-7443-b529-50461eaeaae7
-  timestamp: 2026-06-16T15:39:54.227898644Z
-  agent: aida
-  commit_sha: a1d9b4fdefcb5b4475604a17e68b5321d6a7f01d
-  summary: Completed via merge a1d9b4fd
 implementation_info:
   implemented: false
   completed_at: 2026-06-16T09:38:10.815692330Z

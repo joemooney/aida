@@ -26,16 +26,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019ec41b-1e07-73e0-8f79-545c072828da
-  timestamp: 2026-06-14T03:09:32.039013637Z
-  agent: reviewer
-  commit_sha: 6aae18dcbe458ebafca8ba6a1a3cf11eacecf1f1
-  pr: 882
-  summary: 'BUG-548 fully met: force-push (incl --force-with-lease) to protected branches now blocked; incident case verified; CI green. Two non-blocking deep-pass notes (one pre-existing, one conservative false-positive).'
-  punted:
-  - 'follow-up: BUG-552'
-  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:56:56.848645565Z

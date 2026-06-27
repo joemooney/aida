@@ -24,15 +24,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019ed144-02b6-7321-b666-92b9d651b880
-  timestamp: 2026-06-16T16:29:15.830398098Z
-  agent: aida
-  commit_sha: de45a3b93bd7bf1d2d9e6ee7ae85ad5f3a300862
-  summary: Completed via merge de45a3b9
-deferred: true
-deferred_at: 2026-06-13T19:14:01.521719582Z
-deferred_until: config show drifts again, or the next config knob is added without it appearing
 implementation_info:
   implemented: false
   completed_at: 2026-06-16T16:29:15.658920177Z

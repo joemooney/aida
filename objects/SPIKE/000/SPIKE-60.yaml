@@ -15,7 +15,4 @@ tags:
 - autonomy
 - deferred:design
 - parent:STORY-586
-deferred: true
-deferred_at: 2026-06-15T02:30:49.157167225Z
-deferred_until: machine-asleep durable advisor-watch is prioritized (research spike, parked)
 human_only: true

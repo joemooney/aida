@@ -111,7 +111,3 @@ implementation_info:
   completed_at: 2026-06-13T02:32:38.232030906Z
   completion_sha: acecb58c95615df71af43877a7b728f7d93f5fc7
 human_only: true
-interface_changes:
-  cli:
-  - '`aida status` now shows a recent advisor activity footer when `.aida/advisor-activity.jsonl` has recent entries.'
-  - '`aida status --activity` lists recorded advisor activity, and `--since <duration|RFC3339>` filters it.'

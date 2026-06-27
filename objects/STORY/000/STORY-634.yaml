@@ -17,6 +17,3 @@ tags:
 - multi-repo
 - parent:SPIKE-62
 - schema
-deferred: true
-deferred_at: 2026-06-16T07:40:53.493721629Z
-deferred_until: operator signs off SPIKE-62 D1-D5

@@ -29,34 +29,9 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019ec428-635b-7282-a09a-6f8837d73e41
-  timestamp: 2026-06-14T03:24:01.755197949Z
-  agent: reviewer
-  commit_sha: 5bf24fae2b9bbd9ab9850e3997a65c9814a6aebb
-  pr: 880
-  summary: 'TASK-798 PASS: [contained] enable accepted as last-wins alias of [agents] contained; test green, fmt/clippy clean, CI CLEAN'
-  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:43:16.252458936Z
   implemented_by: joe
   completed_at: 2026-06-14T03:24:01.600952725Z
   completion_sha: 5bf24fae2b9bbd9ab9850e3997a65c9814a6aebb
-decision_request:
-  question: The 'contained' agent posture has its enable toggle at [agents] contained (agents.toml, machine-global, next to bypass) but its egress allowlist at [contained] allowed_hosts (project config.toml) — two sections for one feature. How should they be unified? (Feature is default-off; no operator configs exist yet, so any choice is non-breaking.)
-  choices:
-  - label: Unify under [contained]
-    consequence: 'enable joins the allowlist: accept [contained] enable as an alias of [agents] contained, so an operator writes one [contained] block in config.toml. Pulls ''enable'' out of the agents.toml launch-posture model.'
-    resolution: noop
-  - label: Unify under [agents]
-    consequence: 'allowlist joins the posture: read [agents] allowed_hosts as an alias of [contained] allowed_hosts, keeping all containment knobs in the agents.toml posture block next to bypass.'
-    resolution: noop
-  - label: Leave split, document it
-    consequence: no code change; clearly document the two sections. Lowest risk (default-off), but the two-file split can bite operators writing configs later.
-    resolution: noop
-  recommended: 0
-  rationale: Option 1 matches the user-facing posture NAME (--contained → [contained]), keeps containment config together in one project file, and avoids the [agents]-spans-agents.toml-and-config.toml ambiguity. Accepting it as an ALIAS keeps the existing [agents] contained working (non-breaking).
-  answered: 0
-  asked_at: 2026-06-14T02:31:02.619135604Z
-  answered_at: 2026-06-14T02:32:43.583533263Z

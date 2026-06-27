@@ -24,6 +24,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-06-13T02:14:41.423604614Z
   implemented_by: joe
-interface_changes:
-  cli:
-  - '`aida human` remains the bare human-attention view and now shares the namespaced human role vector with presence aliases.'

@@ -15,6 +15,3 @@ tags:
 - parent:EPIC-48
 - probe
 - research
-deferred: true
-deferred_at: 2026-06-19T00:45:48.119111834Z
-deferred_until: snapshot >30d old (after ~2026-07-17) OR a named competitor ships a cross-vendor coordination move (Beads/Gas Town/spec-kit/Kiro/GNAP)
