@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:05:21.250018799Z
-modified_at: 2026-06-27T16:05:21.250018799Z
+modified_at: 2026-06-27T16:29:37.957868195Z
 req_type: Task
 tags:
 - coordination
 - follow-on
 - from:BUG-637
+comments:
+- id: 019f09ea-4d25-7883-9f56-d47429d50d86
+  author: joe
+  content: Rejected as a DUPLICATE of TASK-957 (which already captured making advisor Agent-tool fan-out leases spec-scoped / claimable). Filed 2026-06-27 without spotting the pre-existing TASK-957 — exactly the duplicate-capture the BUG-637 spec-claim is meant to prevent. Consolidating on TASK-957.
+  created_at: 2026-06-27T16:29:37.957868195Z
+  modified_at: 2026-06-27T16:29:37.957868195Z
