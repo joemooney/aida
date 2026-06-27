@@ -106868,6 +106868,15 @@ fn add_relationship(
 
     // BUG-64: terminal-status guard on the parent end of a parent/child
     // edge. Same logic as the git-canonical path. trace:BUG-64 | ai:claude
+    //
+    // BUG-628: read the parent's EFFECTIVE (display) status, not its stored
+    // status. For an epic the displayed status is the read-only rollup of its
+    // children (`effective_display_status` → `derive_epic_status`), so a guard
+    // keyed off the raw stored status disagreed with what `aida show` / the
+    // cache report — e.g. an epic deriving to Draft but carrying a stale stored
+    // `Completed` was wrongly guarded as "is Completed". Unifying the guard onto
+    // the derived value makes the guard and the display agree.
+    // trace:BUG-628 | ai:claude
     if !force_parent {
         let parent_for_guard = match &rel_type {
             RelationshipType::Child => Some(&to_req),
@@ -106875,12 +106884,14 @@ fn add_relationship(
             _ => None,
         };
         if let Some(p) = parent_for_guard {
-            if is_terminal_status(&p.status) {
+            let p: &aida_core::models::Requirement = p;
+            let effective = effective_display_status(&store, p);
+            if is_terminal_status(&effective) {
                 anyhow::bail!(
                     "parent {} is {} — adding new children to a closed parent is usually a mistake. \
                      Pass `--force-parent` to override.",
                     p.spec_id.as_deref().unwrap_or("?"),
-                    p.status,
+                    effective,
                 );
             }
         }
@@ -106976,8 +106987,10 @@ fn remove_relationship(
 // trace:TASK-679 | ai:claude
 #[cfg(test)]
 mod task_679_canonical_rel_tests {
-    use super::rel_should_write_inverse;
-    use aida_core::models::{RelationshipType, Requirement, RequirementStatus, RequirementsStore};
+    use super::{effective_display_status, is_terminal_status, rel_should_write_inverse};
+    use aida_core::models::{
+        RelationshipType, Requirement, RequirementStatus, RequirementType, RequirementsStore,
+    };
 
     fn store_with_two() -> (RequirementsStore, uuid::Uuid, uuid::Uuid) {
         let mut store = RequirementsStore::new();
@@ -107055,6 +107068,94 @@ mod task_679_canonical_rel_tests {
             .filter(|r| r.rel_type == RelationshipType::Parent && r.target_id == cid)
             .count();
         assert_eq!(count, 1, "only one Parent edge after a repeat");
+    }
+
+    // BUG-628: the rel-add completed-parent guard must read the EFFECTIVE
+    // (derived-for-epic) status, the same value `aida show` and the cache
+    // display — not the epic's stale STORED status. Previously the guard read
+    // `parent.status`, so an epic carrying a stale stored `Completed` (while its
+    // children derive to Draft/InProgress) was wrongly blocked as "is
+    // Completed", contradicting the display. This asserts the exact guard
+    // composition `is_terminal_status(effective_display_status(...))` tracks the
+    // children, not the stored field. trace:BUG-628 | ai:claude
+    #[test]
+    fn rel_add_guard_reads_derived_epic_status_not_stored() {
+        let mut store = RequirementsStore::new();
+
+        // Epic with a stale stored `Completed` but an InProgress child → the
+        // rollup derives InProgress (non-terminal), so the guard must NOT block.
+        let mut epic = Requirement::new("Epic".into(), "desc".into());
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Completed; // stale stored value
+        let mut child = Requirement::new("Child".into(), "desc".into());
+        child.status = RequirementStatus::InProgress;
+        epic.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: child.id,
+            created_at: None,
+            created_by: None,
+        });
+        child.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: epic.id,
+            created_at: None,
+            created_by: None,
+        });
+        let epic_ref_id = epic.id;
+        store.requirements.push(epic);
+        store.requirements.push(child);
+
+        let epic = store.get_requirement_by_id(&epic_ref_id).unwrap();
+        let effective = effective_display_status(&store, epic);
+        assert_eq!(
+            effective,
+            RequirementStatus::InProgress,
+            "guard reads the DERIVED rollup (InProgress), not stored Completed"
+        );
+        assert!(
+            !is_terminal_status(&effective),
+            "a derived-InProgress epic is NOT a terminal parent — guard allows the edge"
+        );
+        // Sanity: the STORED status WOULD have wrongly tripped the guard.
+        assert!(
+            is_terminal_status(&epic.status),
+            "stale stored Completed would have wrongly blocked under the old guard"
+        );
+    }
+
+    // BUG-628: the inverse — a genuinely-finished epic (all children Completed)
+    // derives Completed and the guard still fires, so unifying onto the derived
+    // value doesn't weaken the real protection. trace:BUG-628 | ai:claude
+    #[test]
+    fn rel_add_guard_still_blocks_a_truly_completed_epic() {
+        let mut store = RequirementsStore::new();
+        let mut epic = Requirement::new("Epic".into(), "desc".into());
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Draft; // stored Draft, but children all done
+        let mut c1 = Requirement::new("Child 1".into(), "desc".into());
+        c1.status = RequirementStatus::Completed;
+        let mut c2 = Requirement::new("Child 2".into(), "desc".into());
+        c2.status = RequirementStatus::Completed;
+        for c in [&mut c1, &mut c2] {
+            epic.relationships.push(aida_core::models::Relationship {
+                rel_type: RelationshipType::Parent,
+                target_id: c.id,
+                created_at: None,
+                created_by: None,
+            });
+        }
+        let epic_ref_id = epic.id;
+        store.requirements.push(epic);
+        store.requirements.push(c1);
+        store.requirements.push(c2);
+
+        let epic = store.get_requirement_by_id(&epic_ref_id).unwrap();
+        let effective = effective_display_status(&store, epic);
+        assert_eq!(effective, RequirementStatus::Completed);
+        assert!(
+            is_terminal_status(&effective),
+            "an epic whose children are all Completed derives Completed — guard fires"
+        );
     }
 
     #[test]
