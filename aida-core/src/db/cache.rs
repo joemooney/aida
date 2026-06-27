@@ -145,6 +145,32 @@ fn own_outbound(relationships: &[Relationship]) -> (u32, u32) {
     (out_degree, heft)
 }
 
+/// Extract the parent->child hierarchy edges a single requirement contributes,
+/// normalized so the first element is always the PARENT and the second the
+/// CHILD. The spec hierarchy edge can live on EITHER endpoint. In THIS store the
+/// rel_type names the OTHER node's role relative to `req` (the same convention
+/// `aida list --parent` direct-children filtering already relies on, and what
+/// `aida add --parent` writes): a `Parent` edge on `req` points at `req`'s CHILD
+/// (req is the parent), while a `Child` edge on `req` points at `req`'s PARENT
+/// (req is the child). Unioning both forms — normalized to (parent, child) —
+/// captures the hierarchy from whichever endpoint recorded the edge, the same
+/// either-endpoint union `aida graph --tree` traverses, letting `--recursive`
+/// walk the subtree from a cache CTE.
+// trace:TASK-955 | ai:claude — the either-endpoint union mirrors BUG-448.
+fn hierarchy_edges_for(req: &Requirement) -> Vec<(Uuid, Uuid)> {
+    let mut edges = Vec::new();
+    for rel in &req.relationships {
+        match rel.rel_type {
+            // `req` is the parent; target is its child.
+            RelationshipType::Parent => edges.push((req.id, rel.target_id)),
+            // `req` is the child; target is its parent.
+            RelationshipType::Child => edges.push((rel.target_id, req.id)),
+            _ => {}
+        }
+    }
+    edges
+}
+
 /// TASK-902: compute the set of requirement UUIDs that have an incomplete
 /// BlockedBy edge, over the WHOLE store. A spec is "blocked" when any of its
 /// BlockedBy targets hasn't reached Completed (or is a dangling edge) — exactly
@@ -336,7 +362,12 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // TASK-902: bumped to "7" when the `blocked` column was added (computed-on-rebuild
 // from the BlockedBy graph, never stored in YAML — parallel to in_degree/heft).
 // trace:TASK-902 | ai:claude
-const SCHEMA_VERSION: &str = "7";
+// TASK-955: bumped to "8" when the `hierarchy_edges` parent->child edge table was
+// added (computed-on-rebuild from the relationship graph, never stored in YAML),
+// so `aida list --parent <id> --recursive` can walk the transitive subtree with a
+// WITH RECURSIVE query instead of a full backend.load().
+// trace:TASK-955 | ai:claude
+const SCHEMA_VERSION: &str = "8";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -757,12 +788,18 @@ impl Cache {
             let conn = self.conn.lock().unwrap();
             with_cache_write(&self.path, "rebuild cache", || {
                 let tx = conn.unchecked_transaction()?;
-                tx.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
+                tx.execute_batch(
+                    "DELETE FROM requirements_cache; DELETE FROM requirements_fts; DELETE FROM hierarchy_edges;",
+                )?;
                 let mut count = 0usize;
                 for req in &store.requirements {
                     let d = degrees.get(&req.id).copied().unwrap_or_default();
                     let status_override = epic_status.get(&req.id).map(String::as_str);
                     insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
+                    // TASK-955: materialize this spec's parent->child hierarchy
+                    // edges so the recursive-descendant CTE has its substrate.
+                    // trace:TASK-955 | ai:claude
+                    insert_edges(&tx, req)?;
                     count += 1;
                 }
                 tx.commit()?;
@@ -832,6 +869,13 @@ impl Cache {
             let epic_override = epic_status_override_from_cache(&conn, req);
             delete_one_uncommitted(&conn, &req.id)?;
             insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
+            // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
+            // the inbound-degree axis, an edge recorded on the OTHER endpoint
+            // (a child carrying `Parent -> this`) is only re-derived on a full
+            // rebuild — same rebuildable-projection contract. delete_one_uncommitted
+            // already cleared this row's outbound edges before the re-insert.
+            // trace:TASK-955 | ai:claude
+            insert_edges(&conn, req)?;
             Ok(())
         })?;
         Ok(())
@@ -1146,6 +1190,37 @@ impl Cache {
             Some(s) => Ok(Uuid::parse_str(&s).ok()),
             None => Ok(None),
         }
+    }
+
+    /// The FULL transitive descendant id-set of `root` — the root itself plus
+    /// every spec reachable by following parent->child edges, of any depth —
+    /// read from the materialized `hierarchy_edges` table with a single
+    /// `WITH RECURSIVE` query (no `backend.load()`, so `aida list --recursive`
+    /// stays cache-fast). The included root lets the caller apply the existing
+    /// list filters to the whole subtree closure. The CTE's UNION (not UNION ALL)
+    /// dedups, so a diamond / cycle in the edge set terminates rather than
+    /// looping.
+    // trace:TASK-955 | ai:claude
+    pub fn descendant_ids(&self, root: &Uuid) -> Result<HashSet<Uuid>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "WITH RECURSIVE subtree(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT e.child_id
+                   FROM hierarchy_edges e
+                   JOIN subtree s ON e.parent_id = s.id
+             )
+             SELECT id FROM subtree",
+        )?;
+        let rows = stmt
+            .query_map(params![root.to_string()], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        let ids = rows
+            .into_iter()
+            .filter_map(|s| Uuid::parse_str(&s).ok())
+            .collect();
+        Ok(ids)
     }
 }
 
@@ -1489,6 +1564,31 @@ fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
         "DELETE FROM requirements_fts WHERE id = ?1",
         params![id_str],
     )?;
+    // TASK-955: clear the OUTBOUND hierarchy edges this row contributed (the
+    // ones where it is the parent, plus the parent->this rows it authored as a
+    // child via a `Parent` edge). insert_edges re-derives them from the fresh
+    // record. Edges authored by OTHER specs that target this id survive — they
+    // belong to that endpoint's row and are refreshed when it is rewritten / on
+    // the next full rebuild. trace:TASK-955 | ai:claude
+    conn.execute(
+        "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
+        params![id_str],
+    )?;
+    Ok(())
+}
+
+/// Write a single spec's parent->child hierarchy edges into the
+/// `hierarchy_edges` table. Idempotent via the (parent_id, child_id) primary
+/// key (`INSERT OR IGNORE`), so a re-insert after delete_one_uncommitted — or a
+/// duplicate edge recorded on both endpoints — never errors.
+// trace:TASK-955 | ai:claude
+fn insert_edges(conn: &Connection, req: &Requirement) -> Result<()> {
+    for (parent, child) in hierarchy_edges_for(req) {
+        conn.execute(
+            "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id) VALUES (?1, ?2)",
+            params![parent.to_string(), child.to_string()],
+        )?;
+    }
     Ok(())
 }
 
@@ -3100,5 +3200,100 @@ mod tests {
         assert_eq!(cached_status(&cache, child_id), "InProgress");
         cache.upsert_requirement(&epic).unwrap();
         assert_eq!(cached_status(&cache, epic_id), "InProgress");
+    }
+
+    // TASK-955: a 3-level hierarchy (epic -> story -> task) where --parent shows
+    // only the direct child but --recursive (descendant_ids) shows the whole
+    // subtree. Mirrors the edge convention this store actually uses: a `Parent`
+    // rel_type on a node points at that node's CHILD. trace:TASK-955 | ai:claude
+    #[test]
+    fn descendant_ids_walks_transitive_subtree() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut epic = sample_req("EPIC-1", "epic");
+        epic.req_type = RequirementType::Epic;
+        let mut story = sample_req("STORY-1", "story");
+        story.req_type = RequirementType::Story;
+        let mut task = sample_req("TASK-1", "task");
+        task.req_type = RequirementType::Task;
+        // A sibling of the epic with no link — must NOT appear in the subtree.
+        let mut unrelated = sample_req("TASK-2", "unrelated");
+        unrelated.req_type = RequirementType::Task;
+
+        let (epic_id, story_id, task_id, unrelated_id) = (epic.id, story.id, task.id, unrelated.id);
+
+        // Parent edges point DOWN at the child (this store's convention).
+        epic.relationships
+            .push(rel(RelationshipType::Parent, story_id));
+        story
+            .relationships
+            .push(rel(RelationshipType::Parent, task_id));
+
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, story, task, unrelated]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Direct children of the epic: just the story (the STORY-62 filter).
+        // The transitive subtree: epic + story + task (the root is included).
+        let subtree = cache.descendant_ids(&epic_id).unwrap();
+        assert!(subtree.contains(&epic_id), "subtree includes the root epic");
+        assert!(subtree.contains(&story_id), "subtree includes the story");
+        assert!(
+            subtree.contains(&task_id),
+            "subtree includes the transitively-nested task"
+        );
+        assert!(
+            !subtree.contains(&unrelated_id),
+            "an unlinked sibling is NOT in the subtree"
+        );
+        assert_eq!(subtree.len(), 3, "exactly epic + story + task");
+
+        // Walking from the story finds story + task but not the epic above it.
+        let story_subtree = cache.descendant_ids(&story_id).unwrap();
+        assert!(story_subtree.contains(&story_id));
+        assert!(story_subtree.contains(&task_id));
+        assert!(
+            !story_subtree.contains(&epic_id),
+            "descendant walk does not climb to the parent"
+        );
+        assert_eq!(story_subtree.len(), 2);
+
+        // A leaf's subtree is just itself.
+        let leaf_subtree = cache.descendant_ids(&task_id).unwrap();
+        assert_eq!(leaf_subtree.len(), 1);
+        assert!(leaf_subtree.contains(&task_id));
+    }
+
+    // TASK-955: the child may record the hierarchy edge instead of the parent
+    // (a `Child` rel_type on a node points UP at its parent). descendant_ids
+    // must reach the child whichever endpoint authored the edge — the same
+    // either-endpoint union `aida graph --tree` walks (BUG-448). trace:TASK-955
+    #[test]
+    fn descendant_ids_handles_child_authored_edge() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut epic = sample_req("EPIC-1", "epic");
+        epic.req_type = RequirementType::Epic;
+        let mut story = sample_req("STORY-1", "story");
+        story.req_type = RequirementType::Story;
+        let (epic_id, story_id) = (epic.id, story.id);
+
+        // The CHILD records the edge pointing UP at its parent (Child -> parent).
+        story
+            .relationships
+            .push(rel(RelationshipType::Child, epic_id));
+
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, story]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let subtree = cache.descendant_ids(&epic_id).unwrap();
+        assert!(
+            subtree.contains(&story_id),
+            "child-authored edge still places the story under the epic"
+        );
+        assert_eq!(subtree.len(), 2);
     }
 }

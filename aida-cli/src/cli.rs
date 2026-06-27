@@ -6135,11 +6135,23 @@ pub enum Command {
         /// Restrict the listing to direct children of <id> (UUID or
         /// SPEC-ID). Composes with --status / --type / --tags etc., so
         /// e.g. `aida list --parent <epic-id> --status approved` shows
-        /// what's still open under that EPIC.
+        /// what's still open under that EPIC. Add --recursive to widen this
+        /// to the WHOLE transitive subtree instead of just direct children.
         // trace:STORY-62 | ai:claude
         // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "ID")]
         parent: Option<String>,
+
+        /// Widen --parent from direct children to the WHOLE transitive subtree:
+        /// the parent plus every descendant via parent->child edges, at any
+        /// depth. So `aida list open --parent <epic> --recursive` returns the
+        /// open items across the epic's entire subtree, not just its direct
+        /// children. Requires --parent; composes with the [STATUS] positional,
+        /// --status / --type / --tags. Cache-fast (a single recursive query over
+        /// the materialized edge graph, no full-store load).
+        // trace:TASK-955 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, visible_alias = "subtree", requires = "parent")]
+        recursive: bool,
 
         /// Pull from `origin/aida-store` before listing. Opt-in
         /// freshness for collaborators / multi-session workflows;
@@ -9783,6 +9795,46 @@ mod tests {
             }
             other => panic!("expected List, got {other:?}"),
         }
+    }
+
+    // TASK-955: `--recursive` parses only WITH `--parent` (clap `requires`),
+    // composes with the positional [STATUS], and the `--subtree` alias resolves
+    // to the same flag. trace:TASK-955
+    #[test]
+    fn list_recursive_requires_parent() {
+        // --recursive + --parent + a status positional: parses, recursive=true.
+        let cli =
+            Cli::try_parse_from(["aida", "list", "open", "--parent", "EPIC-51", "--recursive"])
+                .unwrap();
+        match cli.command {
+            Command::List {
+                shortcut,
+                parent,
+                recursive,
+                ..
+            } => {
+                assert_eq!(shortcut.as_deref(), Some("open"));
+                assert_eq!(parent.as_deref(), Some("EPIC-51"));
+                assert!(recursive);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // The `--subtree` alias resolves to the same `recursive` field.
+        let cli =
+            Cli::try_parse_from(["aida", "list", "--parent", "EPIC-51", "--subtree"]).unwrap();
+        match cli.command {
+            Command::List { recursive, .. } => assert!(recursive),
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // --recursive WITHOUT --parent errors (the requires-parent guard).
+        let err = Cli::try_parse_from(["aida", "list", "--recursive"]).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("--parent"),
+            "error should name the missing --parent requirement: {msg}"
+        );
     }
 
     // trace:STORY-562 — `aida list human` parses as the positional shortcut and

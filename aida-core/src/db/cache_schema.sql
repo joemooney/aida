@@ -60,6 +60,21 @@ CREATE INDEX IF NOT EXISTS idx_cache_heft ON requirements_cache(heft);
 -- TASK-902: index blocked so `aida list --blocked` filters without a table scan.
 CREATE INDEX IF NOT EXISTS idx_cache_blocked ON requirements_cache(blocked);
 
+-- TASK-955: parent->child hierarchy edges, materialized at rebuild from the
+-- relationship graph so `aida list --parent <id> --recursive` can walk the full
+-- transitive subtree with one WITH RECURSIVE query instead of a backend.load().
+-- The hierarchy edge can live on EITHER endpoint (a parent carries Child->child,
+-- a child carries Parent->parent), so both are normalized to parent->child here
+-- — the same union `aida graph --tree` walks (BUG-448). Rebuildable projection,
+-- NEVER stored in canonical YAML; authoritative after a full cache rebuild.
+CREATE TABLE IF NOT EXISTS hierarchy_edges (
+    parent_id TEXT NOT NULL,               -- UUID of the parent (epic/story)
+    child_id TEXT NOT NULL,                -- UUID of the child
+    PRIMARY KEY (parent_id, child_id)
+);
+CREATE INDEX IF NOT EXISTS idx_edges_parent ON hierarchy_edges(parent_id);
+CREATE INDEX IF NOT EXISTS idx_edges_child ON hierarchy_edges(child_id);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS requirements_fts USING fts5(
     id UNINDEXED,
     spec_id,
