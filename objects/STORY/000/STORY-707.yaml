@@ -19,15 +19,19 @@ description: |-
   - aida status --full / --ci preserve the current rich output (opt-in, backward-compatible).
 
   FILES: aida-cli/src/main.rs (handle_status_command_distributed, collect_user_context, collect_pr_facts, the doctor handler), aida-cli/src/cli.rs.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:06:55.073453756Z
-modified_at: 2026-06-27T02:07:17.865345594Z
+modified_at: 2026-06-27T02:43:42.417550236Z
 req_type: Story
 tags:
 - doctor
 - from-operator
 - performance
 - status
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T02:43:42.417550236Z
+  completion_sha: 2d3433c40ffe359b08828933a41e3088ae878f1f
