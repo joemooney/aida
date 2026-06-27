@@ -23540,5 +23540,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 2232
+- id: 019f0748-e32f-74a0-850c-bb7d443a7df2
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2233
+  timestamp: 2026-06-27T04:14:05.103551504Z
+  kind: !Create
+    title: 'STORY-710 part B: grey out UPDATE verbs when nothing is selected (require explicit selection)'
+    description: 'Part B of STORY-710 (part A, the carousel, shipped in commit 4d37e487c). UPDATE verbs (approve/queue/accept/defer/request-approval) require >=1 explicitly SELECTED item; when nothing is selected they render GREYED OUT (dimmed, non-selectable, hint ''select item(s) first''). READ verbs (show/why/status) stay always-available (''none = all'' is safe for reads, dangerous for updates). This is a SECOND grey-out axis on top of TASK-947 (status-applicability): a verb is enabled iff status-applicable AND (if UPDATE) has a selection. The read/update classification is a property of each Verb. Prevents accidentally mutating the focused item.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2233
 node_id: '1'
