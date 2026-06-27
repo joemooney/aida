@@ -22533,5 +22533,26 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 2132
+- id: 019f06b8-de1c-74a0-be7d-01fd6e12d37e
+  target_id: 019f06b8-d0d7-7580-8bae-fbdf2204d81d
+  author: aida
+  node_id: '1'
+  lamport: 2133
+  timestamp: 2026-06-27T01:36:46.620202122Z
+  kind: !Create
+    title: 'aida focus: first-class focus/workspace context (CLI + TUI unified)'
+    description: |-
+      A first-class `aida focus [<spec>]` context: set a current focus (an epic/story/spec) that scopes ALL aida queries and commands, persisted per-worktree, surfaced loudly. Generalizes the TUI focus lens (STORY-695/697) from a TUI-only feature into a universal CLI+TUI context. Follows the proven current-context pattern (kubectl namespace, gcloud config, aws profile).
+
+      UNIFIES today's scattered scoping (aida list --parent, aida queue list --epic, AIDA_TUI_EPIC) into one `aida focus`. SOLVES TASK-942 (aida add under a focus auto-links the new spec to the focus epic — at the source). The TUI lens becomes a client of the same `.aida/focus` context.
+
+      Two decoupled layers:
+      - FOCUS (the context/lens) — build first, useful standalone.
+      - WORKSPACE (associate the focus with a git worktree + branch; auto-create/enter) — a much bigger follow-on layer; keep decoupled, defer.
+
+      THE make-or-break constraint: a silent persistent focus is a footgun (the kubectl-namespace trap — you forget you're scoped and read a subset as if it's everything). It MUST be loud: statusline + a per-command header showing the active focus and "showing N of M".
+    req_type: Epic
+    status: Draft
+    priority: Medium
+clock: 2133
 node_id: '1'
