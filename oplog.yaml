@@ -22845,5 +22845,17 @@ operations:
   timestamp: 2026-06-27T02:53:53.766295129Z
   kind: !SetStatus
     status: Done
-clock: 2153
+- id: 019f0700-34a8-7043-bd74-e03abadb6a65
+  target_id: 019f0700-2884-7c03-9f3a-e72bcba8eb54
+  author: aida
+  node_id: '1'
+  lamport: 2154
+  timestamp: 2026-06-27T02:54:41.832925413Z
+  kind: !Create
+    title: 'Flaky test: queue_add_then_list_same_shell_is_consistent (false CI red under --workspace parallelism)'
+    description: '2026-06-27: this test FAILED on PR #1151''s CI (''cargo test --workspace'') but PASSED on the post-merge main CI re-run, and passes 3/3 locally in isolation. Flaky — almost certainly shared queue state (the queue is a per-user file; parallel tests in --workspace mutate the same user''s queue, so ''add then list consistency'' gets disrupted by a concurrent add/remove). Caused a false CI red that (combined with a human merging on red) put a red-CI PR onto main — though main itself stayed green. FIX: isolate the queue per-test (unique AIDA_USER / temp store dir) so it can''t see other tests'' queue mutations.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 2154
 node_id: '1'
