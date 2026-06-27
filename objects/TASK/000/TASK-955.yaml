@@ -1,0 +1,28 @@
+id: 019f07bd-4927-7e21-aebb-e084759d876f
+spec_id: TASK-955
+agreed_id: TASK-955
+title: 'aida list --parent <id> --recursive: transitive subtree filter (epic + ALL descendants), composes with status/open'
+description: |-
+  Operator wants "open items for an epic AND its children" (transitively). Today aida list --parent <id> is DIRECT-children-only — for a deep epic it misses descendants (EPIC-51: 6 direct vs 40 in the subtree). Add a transitive option.
+
+  SYNTAX: aida list --parent <id> --recursive (extends the existing --parent flag; minimal new surface). Optionally also accept --under <id> as a transitive-by-name alias if trivial. --recursive requires --parent (clap conflict/requires). Composes with the existing positional [STATUS] (open/draft/...) and --status/--type/--tags filters — they apply to the descendant set.
+
+  BEHAVIOR: --recursive walks the FULL subtree of <id> (the spec + all transitive descendants via the parent->child edges), then applies the other filters. So `aida list open --parent EPIC-51 --recursive` returns the open items across EPIC-51s whole subtree, not just its 6 direct children.
+
+  IMPLEMENTATION: the parent edges live in the cache (.aida/cache.db). Use a SQLite recursive CTE (WITH RECURSIVE) over the parent/child edge table to compute the transitive descendant id set in one query, then apply the existing list filters — do NOT full-load the store (keep it cache-fast, like aida list already is). Reuse the same edge source aida graph --tree uses for the subtree.
+
+  ACCEPTANCE: aida list open --parent EPIC-51 --recursive returns the subtrees open items (≈40 nodes deep vs 6 direct); --recursive without --parent errors with a clear message; composes with [STATUS]/--type/--tags; --json works; cache-fast (no backend.load()). Unit/integration test: a 3-level fixture (epic->story->task) where --parent shows 1 and --recursive shows all descendants.
+
+  FILES: aida-cli/src/cli.rs (the --recursive flag on List), aida-cli/src/main.rs (the list handler / the --parent filter), aida-core/src/db/cache.rs (the recursive-descendant query).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-27T06:21:13.383726249Z
+modified_at: 2026-06-27T06:21:13.383726249Z
+req_type: Task
+tags:
+- cli
+- from-operator
+- graph
+- list
