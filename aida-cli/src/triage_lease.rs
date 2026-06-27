@@ -88,7 +88,14 @@ pub fn decide_acquire(
 ) -> AcquireDecision {
     match live_leases.iter().find(|l| l.scope == new_lease.scope) {
         None => AcquireDecision::Granted(new_lease),
-        Some(existing) if existing.owner == new_lease.owner && existing.pid == new_lease.pid => {
+        // trace:TASK-951 | ai:claude — owner equality folds case so the same
+        // human re-acquiring from a shell reporting different casing is still
+        // recognised as the holder.
+        Some(existing)
+            if aida_core::node::canonical_user_id(&existing.owner)
+                == aida_core::node::canonical_user_id(&new_lease.owner)
+                && existing.pid == new_lease.pid =>
+        {
             AcquireDecision::AlreadyHeld(existing.clone())
         }
         Some(existing) => AcquireDecision::Refused(existing.clone()),
@@ -200,7 +207,10 @@ pub fn release(project_root: &Path, slug: &str, owner: &str) -> Result<bool> {
     let Ok(lease) = toml::from_str::<DispositionLease>(&content) else {
         return Ok(false);
     };
-    if lease.owner != owner {
+    // trace:TASK-951 | ai:claude — owner match folds case so the holder can
+    // release from a shell whose casing differs.
+    if aida_core::node::canonical_user_id(&lease.owner) != aida_core::node::canonical_user_id(owner)
+    {
         return Ok(false);
     }
     std::fs::remove_file(&path)?;

@@ -530,20 +530,23 @@ pub fn build_team_members(store_root: &Path) -> Vec<TeamMemberDto> {
             .unwrap_or_default();
         let registered = node.registered.to_rfc3339();
 
-        let entry = by_user
-            .entry(user_id.clone())
-            .or_insert_with(|| TeamMemberDto {
-                user_id: user_id.clone(),
-                // Default the display label to the person key; a node carrying an
-                // email upgrades it below (first email wins).
-                display_label: user_id.clone(),
-                node_names: Vec::new(),
-                role: roles.role_for(&user_id).map(canonical_role),
-                hosts: Vec::new(),
-                clone_paths: Vec::new(),
-                last_seen: None,
-                active_claim: None,
-            });
+        // trace:TASK-951 | ai:claude — dedup the roster on the case-folded person
+        // key so the same human whose clones report `Joe` on one machine and `joe`
+        // on another collapses into ONE row. The DTO keeps the first-seen original
+        // casing for display + role lookup; only the GROUPING key is folded.
+        let dedup_key = crate::node::canonical_user_id(&user_id);
+        let entry = by_user.entry(dedup_key).or_insert_with(|| TeamMemberDto {
+            user_id: user_id.clone(),
+            // Default the display label to the person key; a node carrying an
+            // email upgrades it below (first email wins).
+            display_label: user_id.clone(),
+            node_names: Vec::new(),
+            role: roles.role_for(&user_id).map(canonical_role),
+            hosts: Vec::new(),
+            clone_paths: Vec::new(),
+            last_seen: None,
+            active_claim: None,
+        });
 
         // Prefer an email as the friendly display label (e.g.
         // `joe.mooney@gmail.com`); fall back to the person key. trace:STORY-653
@@ -737,6 +740,47 @@ registered = "2026-06-17T02:00:00Z"
         );
         assert_eq!(m.node_names, vec!["imac-joe-1", "spock-joe-2"]);
         assert_eq!(m.hosts.len(), 2);
+    }
+
+    // trace:TASK-951 | ai:claude — case-variant person keys (`Joe` vs `joe`) for
+    // one human across two machines collapse into a single roster row.
+    #[test]
+    fn members_dedup_across_case_variant_person_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &dir.path().join("registry/nodes.toml"),
+            r#"
+[[nodes]]
+id = "1"
+user_id = 1
+user = "Joe"
+name = "imac-joe-1"
+hostname = "imac"
+clone_path = "/home/joe/ai/aida"
+registered = "2026-06-17T01:00:00Z"
+
+[[nodes]]
+id = "2"
+user_id = 5
+user = "joe"
+name = "spock-joe-2"
+hostname = "spock"
+clone_path = "/home/joe/ai/aida-b"
+registered = "2026-06-17T02:00:00Z"
+"#,
+        );
+
+        let members = build_team_members(dir.path());
+        assert_eq!(
+            members.len(),
+            1,
+            "Joe and joe are one human — folded to a single roster row"
+        );
+        let m = &members[0];
+        // The first-seen original casing is preserved for display (not lowercased).
+        assert_eq!(m.user_id, "Joe", "display keeps first-seen original casing");
+        assert_eq!(m.hosts.len(), 2, "both machines' hosts roll up");
+        assert_eq!(m.node_names, vec!["imac-joe-1", "spock-joe-2"]);
     }
 
     #[test]

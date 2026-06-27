@@ -322,6 +322,25 @@ pub struct NodeRegistryEntry {
 /// collapse every other run into a single `-`, and trim leading/trailing `-`.
 /// Used to derive `<host>-<user>-<seq>` from raw hostname / user strings.
 /// trace:STORY-652 | ai:claude
+/// Fold a user-identity string to its canonical comparison form: trimmed and
+/// lowercased (Unicode `to_lowercase`, so non-ASCII names fold too). This is the
+/// COMPARISON key only — it is never stored or displayed. Two identities that
+/// differ only in case (`Joe` vs `joe`, `Joe.Mooney@x` vs `joe.mooney@x`) share
+/// one canonical form, so a single human is no longer split across machines
+/// whose shells report different casing.
+///
+/// Safety: the queue is keyed off the raw shell `$USER` string and that stored
+/// key is left untouched — callers fold only at the equality/lookup boundary,
+/// never the value they persist or print. Case-variant aliases are all this
+/// collapses; genuinely-different strings (`joe` vs `joe.mooney@gmail.com`) still
+/// need the explicit alias mapping (a separate effort).
+//
+// BUG-89 (keyed off raw shell user; storage unchanged), alias mapping TASK-845.
+// trace:TASK-951 | ai:claude
+pub fn canonical_user_id(raw: &str) -> String {
+    raw.trim().to_lowercase()
+}
+
 pub fn slug_component(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut last_dash = false;
@@ -1128,6 +1147,29 @@ impl DeploymentMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-951 | ai:claude
+    #[test]
+    fn canonical_user_id_folds_case_and_trims() {
+        // Case-variant aliases collapse to one canonical form.
+        assert_eq!(canonical_user_id("Joe"), "joe");
+        assert_eq!(canonical_user_id("joe"), "joe");
+        assert_eq!(canonical_user_id("JOE"), "joe");
+        assert_eq!(canonical_user_id("Joe"), canonical_user_id("joe"));
+        // Email-shaped ids fold the same way.
+        assert_eq!(
+            canonical_user_id("Joe.Mooney@work.example"),
+            "joe.mooney@work.example"
+        );
+        assert_eq!(
+            canonical_user_id("Joe.Mooney@work.example"),
+            canonical_user_id("joe.mooney@work.example")
+        );
+        // Surrounding whitespace is stripped before folding.
+        assert_eq!(canonical_user_id("  Joe  "), "joe");
+        // Genuinely-different strings stay distinct (TASK-845's job, not ours).
+        assert_ne!(canonical_user_id("joe"), canonical_user_id("joe.mooney@x"));
+    }
 
     #[test]
     fn test_node_registry_sequential_ids() {

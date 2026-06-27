@@ -946,19 +946,23 @@ impl Cache {
             sql.push_str(" AND LOWER(priority) = LOWER(?)");
             args.push(p.clone());
         }
+        // trace:TASK-951 | ai:claude — owner/assignee matching is case-insensitive
+        // (`LOWER(...) = LOWER(?)`) so `Joe` matches a spec owned by `joe`. The
+        // stored value keeps its original casing; only the COMPARISON folds.
         if let Some(o) = &filter.owner {
-            sql.push_str(" AND owner = ?");
+            sql.push_str(" AND LOWER(owner) = LOWER(?)");
             args.push(o.clone());
         }
-        // trace:STORY-639 | ai:claude
+        // trace:STORY-639 trace:TASK-951 | ai:claude
         if let Some(a) = &filter.assignee {
-            sql.push_str(" AND assignee = ?");
+            sql.push_str(" AND LOWER(assignee) = LOWER(?)");
             args.push(a.clone());
         }
-        // trace:STORY-662 | ai:claude — `--user <name>` / `me` / `user:<name>`
-        // matches owner OR assignee, so a person sees specs they own OR are on.
+        // trace:STORY-662 trace:TASK-951 | ai:claude — `--user <name>` / `me` /
+        // `user:<name>` matches owner OR assignee, so a person sees specs they own
+        // OR are on; the match folds case (TASK-951).
         if let Some(u) = &filter.owner_or_assignee {
-            sql.push_str(" AND (owner = ? OR assignee = ?)");
+            sql.push_str(" AND (LOWER(owner) = LOWER(?) OR LOWER(assignee) = LOWER(?))");
             args.push(u.clone());
             args.push(u.clone());
         }
