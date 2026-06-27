@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:39:22.781982403Z
-modified_at: 2026-06-27T02:39:22.781982403Z
+modified_at: 2026-06-27T02:39:49.489612744Z
 req_type: Task
 tags:
 - finding
@@ -17,3 +17,8 @@ tags:
 - redesign
 - tui
 - visibility
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-27T02:39:49.489603484Z
+  created_by: joe
