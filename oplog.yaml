@@ -22554,5 +22554,25 @@ operations:
     req_type: Epic
     status: Draft
     priority: Medium
-clock: 2133
+- id: 019f06b8-f796-7621-9b2a-14c6c038560f
+  target_id: 019f06b8-ec9e-7650-bc0e-f34cdaffc45a
+  author: aida
+  node_id: '1'
+  lamport: 2134
+  timestamp: 2026-06-27T01:36:53.142242682Z
+  kind: !Create
+    title: 'aida focus core: set/show/clear + scope reads + auto-link adds + loud visibility'
+    description: |-
+      First slice of aida focus (the context/lens; workspace deferred). Build:
+      - `aida focus <spec>` writes the focus to .aida/focus (per-worktree); `aida focus` shows current focus + progress rollup; `aida focus --clear` drops it. Precedence: AIDA_FOCUS env > .aida/focus > none (mirror the TUI focus resolution).
+      - READ commands (list, queue list, search, history, findings) filter to the focus's transitive descendant tree (reuse aida_core::graph_walk::walk_union — the SPIKE-71-robust closure). `--all` / `--no-focus` per-command escape hatch.
+      - WRITE: `aida add` links the new spec into the focus tree (bidirectional parent edge) — solves TASK-942.
+      - LOUD VISIBILITY (the critical constraint): the statusline shows the active focus; focus-scoped command output carries a header like "▸ focused: EPIC-54 — showing 13 of 2400". Never silently subset.
+      - The redesign TUI reads the same .aida/focus (unify with the existing .aida/tui-focus from STORY-697).
+
+      ACCEPTANCE: aida focus set/show/clear works + persists per-worktree; read commands scope to the focus tree (with --all escape); aida add auto-links to focus; every focus-scoped output is clearly labeled; the TUI honors the shared focus.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2134
 node_id: '1'
