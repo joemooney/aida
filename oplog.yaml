@@ -22429,5 +22429,17 @@ operations:
   timestamp: 2026-06-27T00:11:35.262441834Z
   kind: !SetStatus
     status: In Progress
-clock: 2122
+- id: 019f0685-62e4-7c33-9cb5-e732f16e62df
+  target_id: 019f0685-55c8-7de3-9378-c9a53b364cf1
+  author: aida
+  node_id: '1'
+  lamport: 2123
+  timestamp: 2026-06-27T00:40:32.740253336Z
+  kind: !Create
+    title: 'Pre-commit /// gate rejects ANY SPEC-ID token in a doc comment, not just trace: markers — over-broad vs documented rule'
+    description: 'The BUG-624 diff-scoped /// gate rejects any added /// doc-comment line containing a SPEC-ID token (SPIKE-N/TASK-N/etc.), even descriptive prose like "/// reads the SPIKE-67 field-study log" with no trace: marker. Multiple agents this session had to demote legitimate descriptive /// lines. The documented rule is "no trace: marker / bare SPEC-ID provenance on a /// clap-doc line" (to avoid --help leaks); a descriptive mention of a SPEC-ID in prose is not a provenance leak. Tighten the criterion: reject only /// lines that look like provenance (contain trace: OR are a bare SPEC-ID with no surrounding prose), not any SPEC-ID mention. Low priority papercut.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 2123
 node_id: '1'
