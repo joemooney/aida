@@ -8,12 +8,12 @@ description: |-
   This is the DEMO SPEC for an end-to-end lifecycle walkthrough (Draft -> advisor approval -> implementation -> human test-plan verification -> reviewer accept -> Completed) driven through the redesign TUI. Left as a Draft; the implementer will write its ## Test Plan during implementation.
 
   ACCEPTANCE: `aida queue list` ends with a summary footer showing total / routed / unrouted counts; counts are correct; no footer when the queue is empty (the existing empty message stands).
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:01.331691676Z
-modified_at: 2026-06-27T01:30:19.779837395Z
+modified_at: 2026-06-27T01:30:30.566430737Z
 req_type: Task
 tags:
 - cli
@@ -31,3 +31,7 @@ comments:
   content: 'ADVISOR DISPOSITION (2026-06-26): APPROVED. Small, well-scoped, and genuinely testable — a one-line footer (total / routed / unrouted) adds at-a-glance queue legibility, consistent with the redesign''s quiet-depth goal. Acceptance is concrete and verifiable by running ''aida queue list''. No overlap with existing work, low blast radius. Routing to implementation.'
   created_at: 2026-06-27T01:30:05.947182495Z
   modified_at: 2026-06-27T01:30:05.947182495Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-27T01:30:30.566430737Z
+  implemented_by: joe
