@@ -3,12 +3,12 @@ spec_id: TASK-960
 agreed_id: TASK-960
 title: 'Same-host two-clone test harness: automate the untested two-clone flows from the multi-user-test-cases.md catalog'
 description: EPIC-46 Phase-1 concrete slice. The catalog (docs/testing/multi-user-test-cases.md) classifies multi-user/multi-clone cases as works / works-untested / accepted-limitation / gap. Lift the WORKS-UNTESTED two-clone flows into an automated harness (two clones of one aida-store, exercise concurrent list/add/edit/queue, assert consistency + no double-apply). Ground each in the catalog case id (MU-xxx). This makes the untested-but-working cases regression-proof and sets up disposition of the coordination gaps (MU-504/505/506 = cross-clone double-lease/double-drain — the cross-clone analog of the BUG-637/TASK-957 per-clone spec-claim).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:41:23.494753579Z
-modified_at: 2026-06-27T16:41:36.233809239Z
+modified_at: 2026-06-27T16:41:39.513054040Z
 req_type: Task
 tags:
 - multi-clone
