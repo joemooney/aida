@@ -2415,6 +2415,50 @@ pub enum TeamCommand {
     },
 }
 
+/// Manage the shared person-alias registry (`registry/aliases.toml` on the
+/// `aida-store` branch). One human routinely registers under several identity
+/// strings across machines (`joe`, `joe.mooney`, `joe.mooney@gmail.com`); each
+/// host mints its own ids, so the queue, the team roster, and the block list
+/// otherwise show one person as several owners. Linking the strings collapses
+/// them to one canonical person at every comparison/display boundary.
+///
+/// Composes with the case-fold (`Joe` vs `joe` already merge): the alias map is
+/// the SECOND normalization layer, for the genuinely-different strings.
+// trace:TASK-845 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum IdentityCommand {
+    /// Link two identity strings as the same canonical person (bidirectional,
+    /// idempotent). Writes `registry/aliases.toml` with a CAS push-wins loop.
+    /// After linking, all the surfaces resolve both strings to one person.
+    // trace:TASK-845 | ai:claude
+    Link {
+        /// The first identity string (e.g. `joe`).
+        a: String,
+        /// The second identity string (e.g. `joe.mooney@gmail.com`).
+        b: String,
+    },
+
+    /// List the recorded person links: one block per canonical person with the
+    /// aliases that resolve to them.
+    // trace:TASK-845 | ai:claude
+    List {
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Show the canonical person an identity string resolves to, plus all the
+    /// aliases that share it (after case-fold + alias-resolve).
+    // trace:TASK-845 | ai:claude
+    Show {
+        /// The identity string to resolve (e.g. `Joe.Mooney@gd-ms.com`).
+        id: String,
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum NodeCommand {
     /// List all nodes registered in the shared registry. The current node
@@ -7023,6 +7067,16 @@ pub enum Command {
         json: bool,
         #[clap(subcommand)]
         cmd: Option<TeamCommand>,
+    },
+
+    /// Manage the shared person-alias registry — link the different identity
+    /// strings one human registers under across machines (`joe`,
+    /// `joe.mooney@gmail.com`) so the queue, team roster, and block list
+    /// collapse them to one canonical person. Composes with the case-fold.
+    // trace:TASK-845 | ai:claude
+    Identity {
+        #[clap(subcommand)]
+        cmd: IdentityCommand,
     },
 
     /// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`

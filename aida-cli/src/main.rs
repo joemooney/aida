@@ -171,13 +171,13 @@ use crate::cli::{
     AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
     BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
     DbCommand, DepsCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
-    FindingsCommand, GitHubCommand, GitLabCommand, GlyphCommand, HeadlessCommand, JiraCommand,
-    LoadCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand,
-    PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
-    RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand, TeamCommand,
-    TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
+    FindingsCommand, GitHubCommand, GitLabCommand, GlyphCommand, HeadlessCommand, IdentityCommand,
+    JiraCommand, LoadCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand,
+    OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand,
+    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand,
+    SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
+    TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3148,6 +3148,15 @@ fn run() -> Result<()> {
                 "`aida team` is available in the default (distributed) mode — it lists the \
                  nodes sharing the orphan `aida-store` branch. Legacy --centralized mode has \
                  no node roster."
+            );
+        }
+        // TASK-845: the person-alias registry lives on the orphan `aida-store`
+        // branch — a distributed-mode concept. trace:TASK-845 | ai:claude
+        Command::Identity { .. } => {
+            anyhow::bail!(
+                "`aida identity` is available in the default (distributed) mode — it manages the \
+                 shared person-alias registry on the orphan `aida-store` branch. Legacy \
+                 --centralized mode has no shared registry."
             );
         }
         Command::Usage {
@@ -13632,6 +13641,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 Some(TeamCommand::UnsetRole { user }) => handle_team_unset_role(store_path, user),
             };
         }
+        // trace:TASK-845 | ai:claude — the shared person-alias registry.
+        Command::Identity { cmd } => {
+            return match cmd {
+                IdentityCommand::Link { a, b } => handle_identity_link(store_path, a, b),
+                IdentityCommand::List { json } => handle_identity_list(store_path, *json),
+                IdentityCommand::Show { id, json } => handle_identity_show(store_path, id, *json),
+            };
+        }
         Command::Usage {
             since,
             unused,
@@ -14066,6 +14083,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 assigned.clone()
             };
+            // trace:TASK-845 | ai:claude — expand the assignee filter to the
+            // canonical person's full alias set so `--mine` / `--assigned`
+            // surfaces specs assigned under any of this human's cross-host owner
+            // strings. Empty by default (no aliases linked) → plain match.
+            let assignee_aliases: Vec<String> = match &assignee_filter {
+                Some(a) => {
+                    let registry = aida_core::alias::AliasRegistry::load(store_path);
+                    let folded = aida_core::node::canonical_user_id(a);
+                    registry
+                        .members_of(a)
+                        .into_iter()
+                        .filter(|m| *m != folded)
+                        .collect()
+                }
+                None => Vec::new(),
+            };
             let filter = aida_core::ListFilter {
                 status: effective_status.clone(),
                 req_type: r#type.clone(),
@@ -14078,6 +14111,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 defer,
                 sort: sort_order,
                 assignee: assignee_filter,
+                assignee_aliases,
                 // trace:STORY-662 | ai:claude — `--user` / `me` / `user:<name>`.
                 owner_or_assignee: user_filter.clone(),
                 ..Default::default()
@@ -28179,9 +28213,26 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 return Ok(());
             }
 
+            // TASK-845: resolve each block's owner to its CANONICAL person on an
+            // in-memory copy before merging, so a person's blocks claimed under
+            // several owner strings across hosts (case-variants via TASK-951
+            // plus the operator-curated alias map) group/show under ONE owner.
+            // The stored `blocks.yaml` owner strings are left untouched — this is
+            // a display-only normalization (like the queue/team resolution).
+            let aliases = aida_core::alias::AliasRegistry::load(store_path);
+            let display_blocks: Vec<aida_core::AgreedIdBlock> = registry
+                .blocks
+                .iter()
+                .cloned()
+                .map(|mut b| {
+                    b.owner = aliases.resolve(&b.owner);
+                    b
+                })
+                .collect();
+
             // Merge contiguous same-node/type/owner sub-blocks into one row.
-            // trace:TASK-950 | ai:claude
-            let rows = merge_contiguous_blocks(&registry.blocks);
+            // trace:TASK-950 trace:TASK-845 | ai:claude
+            let rows = merge_contiguous_blocks(&display_blocks);
 
             // Build the plain cell text first so per-column max widths are
             // computed without ANSI color codes throwing off the math; the
@@ -103785,6 +103836,43 @@ fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
         println!("  {} nodes registered.", n.to_string().bold());
     }
 
+    // TASK-845: the person view — one row per CANONICAL person, collapsing a
+    // human's several clones/owner-strings (case-variants via TASK-951, plus the
+    // operator-curated alias map) into a single member. Surfaced only when the
+    // person count differs from the node count (i.e. some collapse happened) so
+    // the table stays uncluttered on a one-node-per-person store.
+    let people = aida_core::team::build_team_members(store_path);
+    if people.len() < members.len() {
+        println!();
+        println!("{}", "People".bold());
+        println!();
+        for p in &people {
+            let hosts = if p.hosts.is_empty() {
+                "-".dimmed().to_string()
+            } else {
+                p.hosts.join(", ")
+            };
+            let role_suffix = p
+                .role
+                .as_deref()
+                .map(|r| format!("  [{}]", r.cyan()))
+                .unwrap_or_default();
+            println!(
+                "  {:<24} {}{}",
+                p.display_label.bold(),
+                hosts.dimmed(),
+                role_suffix
+            );
+        }
+        println!();
+        println!(
+            "  {}",
+            "One row per person — clones/aliases of the same human are collapsed. \
+             Link aliases with `aida identity link <a> <b>`."
+                .dimmed()
+        );
+    }
+
     // STORY-646: per-user role roster (RBAC guardrail). Only shown when at
     // least one role is recorded — a fresh store has none and stays uncluttered.
     if !roles.is_empty() {
@@ -103910,6 +103998,153 @@ fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> Result<()> {
         role.cyan().bold(),
         source_str
     );
+    Ok(())
+}
+
+/// `aida identity link <a> <b>` (TASK-845): link two identity strings as one
+/// canonical person in `registry/aliases.toml` on the store (CAS push). After
+/// this, the queue / team roster / block list all resolve both strings to one
+/// person. Idempotent — a redundant link reports "already linked" and commits
+/// nothing.
+// trace:TASK-845 | ai:claude
+fn handle_identity_link(store_path: &std::path::Path, a: &str, b: &str) -> Result<()> {
+    let fa = aida_core::node::canonical_user_id(a);
+    let fb = aida_core::node::canonical_user_id(b);
+    if fa.is_empty() || fb.is_empty() {
+        anyhow::bail!("both identity strings must be non-empty");
+    }
+    if fa == fb {
+        println!(
+            "{} {} and {} are the same identity (after case-fold) — nothing to link.",
+            "No change:".yellow().bold(),
+            a.bold(),
+            b.bold()
+        );
+        return Ok(());
+    }
+    let changed = aida_core::alias::link_cas(store_path, a, b)
+        .map_err(|e| anyhow::anyhow!("could not write the identity link: {e}"))?;
+    // Resolve to show the canonical person the two now share.
+    let registry = aida_core::alias::AliasRegistry::load(store_path);
+    let canonical = registry.resolve(a);
+    if changed {
+        println!(
+            "{} {} {} {}  (canonical person: {})",
+            "Linked:".green().bold(),
+            a.bold(),
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            b.bold(),
+            canonical.cyan().bold()
+        );
+        println!(
+            "  {}",
+            "The queue, `aida team`, and `aida db block list` now resolve both to one person."
+                .dimmed()
+        );
+    } else {
+        println!(
+            "{} {} and {} already resolve to one person ({}).",
+            "Already linked:".yellow().bold(),
+            a.bold(),
+            b.bold(),
+            canonical.cyan()
+        );
+    }
+    Ok(())
+}
+
+/// `aida identity list` (TASK-845): show the recorded person links — one block
+/// per canonical person with the aliases that resolve to them.
+// trace:TASK-845 | ai:claude
+fn handle_identity_list(store_path: &std::path::Path, json: bool) -> Result<()> {
+    let registry = aida_core::alias::AliasRegistry::load(store_path);
+    let people = registry.people();
+    if json {
+        let rows: Vec<serde_json::Value> = people
+            .iter()
+            .map(|(canonical, aliases)| {
+                serde_json::json!({ "person": canonical, "aliases": aliases })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!(rows))?
+        );
+        return Ok(());
+    }
+    if people.is_empty() {
+        println!("{}", "Identity links".bold());
+        println!();
+        println!(
+            "  No links yet. Link a person's identity strings with {}.",
+            "aida identity link <a> <b>".cyan()
+        );
+        return Ok(());
+    }
+    println!("{}", "Identity links".bold());
+    println!();
+    for (canonical, aliases) in &people {
+        println!("  {}", canonical.cyan().bold());
+        for alias in aliases {
+            println!(
+                "    {} {}",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                alias
+            );
+        }
+    }
+    println!();
+    println!(
+        "  {}",
+        "Each block is one person; the listed aliases all resolve to the canonical id.".dimmed()
+    );
+    Ok(())
+}
+
+/// `aida identity show <id>` (TASK-845): show the canonical person an identity
+/// resolves to (case-fold then alias-resolve) plus every alias that shares it.
+// trace:TASK-845 | ai:claude
+fn handle_identity_show(store_path: &std::path::Path, id: &str, json: bool) -> Result<()> {
+    let registry = aida_core::alias::AliasRegistry::load(store_path);
+    let canonical = registry.resolve(id);
+    let members = registry.members_of(id);
+    if json {
+        let out = serde_json::json!({
+            "input": id,
+            "canonical": canonical,
+            "members": members,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+    println!(
+        "{} {} {} {}",
+        format!("{}", id).bold(),
+        "→".dimmed(),
+        "canonical person:".dimmed(),
+        canonical.cyan().bold()
+    );
+    if members.len() > 1 {
+        println!("  {}", "aliases:".dimmed());
+        for m in &members {
+            let marker = if *m == canonical {
+                " (canonical)".dimmed().to_string()
+            } else {
+                String::new()
+            };
+            println!(
+                "    {} {}{}",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                m,
+                marker
+            );
+        }
+    } else {
+        println!(
+            "  {}",
+            "Not linked to any other identity — resolves to itself.".dimmed()
+        );
+    }
     Ok(())
 }
 
