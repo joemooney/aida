@@ -3,12 +3,12 @@ spec_id: TASK-927
 agreed_id: TASK-927
 title: '(Followup C) skill lint: glyph-lint + `aida plan verify` on any plan ref'
 description: ''
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:59:01.954270216Z
-modified_at: 2026-06-26T18:59:01.954270216Z
+modified_at: 2026-06-27T06:51:35.964083798Z
 req_type: Task
 relationships:
 - rel_type: Child
