@@ -2,13 +2,22 @@ id: 019f0658-ba7b-7820-bf26-e7e0b9a518c9
 spec_id: STORY-701
 agreed_id: STORY-701
 title: Mailbox reason-group + send-mail action in the cockpit board
-description: Add a Mail reason-group sourced from read_inbox (unread count, you-owner); Enter on a message replies; a :mail send <agent> palette verb launches send_message. The operators see-mail/send-mail want, today only an act_on_mail config toggle with no in-board surface.
+description: |-
+  Mailbox reason-group + send-mail action in the cockpit. EPIC-53 content layer.
+
+  ## Acceptance
+  - A Mail group appears sourced from unread_inbox (owner=you, unread count); updates as mail arrives.
+  - A send action (wraps send_message) is exposed as a row action_fn per the seam contract.
+  - The mail source (rows from unread_inbox) and the send action are PURE/registerable (unit-testable without the shell).
+
+  ## Seam
+  EPIC-53 owns the mail source + send action. EPIC-54 owns the selection/dispatch gesture (how you pick a message + trigger reply/send). See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:51:46.043502311Z
-modified_at: 2026-06-26T23:51:52.818933749Z
+modified_at: 2026-06-27T02:00:56.587038888Z
 req_type: Story
 relationships:
 - rel_type: Child
