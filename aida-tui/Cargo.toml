@@ -17,7 +17,10 @@ portable-pty = { workspace = true }
 vt100 = { workspace = true }
 # Declared now so a fetch failure surfaces in this story's first build;
 # the status overlay (STORY-133) is the first heavy consumer.
-ratatui = { workspace = true }
+# `unstable-rendered-line-info` un-gates `Paragraph::line_count(width)`, which
+# we use to clamp modal scroll against the WRAPPED (post-word-wrap) row count
+# rather than the logical line count — see render_modal. trace:BUG-635
+ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
 
 # Command-surface enumeration walks the real `aida` clap `Command` tree so the
 # fuzzy palette never drifts from the CLI (STORY-682). Already in the workspace

@@ -35,10 +35,12 @@ use crate::theme::Theme;
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Margin, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
+use ratatui::widgets::{
+    Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+};
 use ratatui::{Frame, Terminal};
 use state::{Focus, Level};
 use std::io::Stdout;
@@ -1478,7 +1480,7 @@ fn render(
         }
     }
     if let Some(vm) = &st.verb_modal {
-        render_verb_modal(f, f.area(), theme, &vm.title, &vm.body);
+        render_verb_modal(f, f.area(), theme, &vm.title, &vm.body, st.modal_scroll);
     }
     if let Some(c) = st.confirm {
         render_confirm(f, f.area(), theme, c.verb, c.count);
@@ -1829,10 +1831,16 @@ fn render_modal(f: &mut Frame, area: Rect, theme: &Theme, spec: &LoadedSpec, scr
     let popup = centered(area, 80, 80);
     f.render_widget(Clear, popup);
     let lines = spec_lines(spec, theme);
-    // Clamp the scroll so the last line can reach the top of the inner area
-    // but no further — past that the modal would render blank.
+    // The inner text area is the popup minus its two border columns/rows. The
+    // scrollbar overlays the right border, so it does NOT steal a text column.
+    let inner_w = popup.width.saturating_sub(2);
     let inner_h = popup.height.saturating_sub(2);
-    let max_scroll = (lines.len() as u16).saturating_sub(inner_h.max(1));
+    // Clamp against the WRAPPED row count, not the logical line count: the
+    // Paragraph wraps each long line (Wrap { trim: false }) into many visual
+    // rows, so `lines.len()` drastically under-counts the real height and
+    // PageDown would stop short. `line_count` is the post-word-wrap row count.
+    // trace:BUG-635 | ai:claude
+    let max_scroll = modal_max_scroll(&lines, inner_w, inner_h);
     let scroll = scroll.min(max_scroll);
     let scrollable = max_scroll > 0;
     let title = if scrollable {
@@ -1848,6 +1856,45 @@ fn render_modal(f: &mut Frame, area: Rect, theme: &Theme, spec: &LoadedSpec, scr
         .scroll((scroll, 0))
         .block(block);
     f.render_widget(para, popup);
+    render_modal_scrollbar(f, popup, theme, max_scroll, scroll);
+}
+
+/// Compute the maximum vertical scroll offset for a modal whose `lines` are
+/// rendered into a bordered, `Wrap { trim: false }` Paragraph of inner size
+/// `inner_w` x `inner_h`. The clamp is against the WRAPPED row count (what the
+/// Paragraph actually paints) rather than `lines.len()` (the logical count),
+/// because long lines wrap into many visual rows. trace:BUG-635 | ai:claude
+fn modal_max_scroll(lines: &[Line], inner_w: u16, inner_h: u16) -> u16 {
+    // `Paragraph::line_count(width)` returns the wrapped row count PLUS the
+    // block's vertical space (top+bottom borders = 2). We pass the same
+    // bordered Paragraph shape and subtract those 2 border rows to get the
+    // pure text-row count, then subtract the visible height.
+    let para = Paragraph::new(lines.to_vec())
+        .wrap(Wrap { trim: false })
+        .block(Block::bordered());
+    let wrapped_rows = (para.line_count(inner_w) as u16).saturating_sub(2);
+    wrapped_rows.saturating_sub(inner_h.max(1))
+}
+
+/// Render the modal's vertical scrollbar on the right inner edge — only when
+/// the content actually overflows (`max_scroll > 0`). `content_length` is the
+/// scrollable range and `position` the current offset, so the thumb tracks
+/// where the body is. trace:BUG-635 | ai:claude
+fn render_modal_scrollbar(f: &mut Frame, popup: Rect, theme: &Theme, max_scroll: u16, scroll: u16) {
+    if max_scroll == 0 {
+        return;
+    }
+    let mut sb_state = ScrollbarState::new(max_scroll as usize).position(scroll as usize);
+    let sb = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+        .style(Style::default().fg(theme.accent));
+    // Inset vertically by one row so the thumb track sits between the top and
+    // bottom borders (not over the corner glyphs); horizontal margin 0 keeps
+    // it on the right border column.
+    let sb_area = popup.inner(Margin {
+        vertical: 1,
+        horizontal: 0,
+    });
+    f.render_stateful_widget(sb, sb_area, &mut sb_state);
 }
 
 /// Build the native modal body: a structured header (title + a color-coded
@@ -2161,17 +2208,39 @@ fn line_is_blank(line: &Line) -> bool {
 
 /// Render a verb-output modal (the captured stdout of `show` / `why`).
 /// trace:STORY-690 | ai:claude
-fn render_verb_modal(f: &mut Frame, area: Rect, theme: &Theme, title: &str, body: &str) {
+fn render_verb_modal(
+    f: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    title: &str,
+    body: &str,
+    scroll: u16,
+) {
     let popup = centered(area, 80, 80);
     f.render_widget(Clear, popup);
+    // Same wrapped-row clamp + scrollbar as render_modal so long `why` /
+    // captured-output bodies scroll instead of truncating. trace:BUG-635
+    let lines: Vec<Line> = body.lines().map(|l| Line::from(l.to_string())).collect();
+    let inner_w = popup.width.saturating_sub(2);
+    let inner_h = popup.height.saturating_sub(2);
+    let max_scroll = modal_max_scroll(&lines, inner_w, inner_h);
+    let scroll = scroll.min(max_scroll);
+    let scrollable = max_scroll > 0;
+    let hint = if scrollable {
+        format!(" {title} (↑↓/PgUp/PgDn scroll · Esc/q to close) ")
+    } else {
+        format!(" {title} (Esc/q to close) ")
+    };
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.accent))
-        .title(format!(" {title} (Esc/q to close) "));
-    let para = Paragraph::new(body.to_string())
+        .title(hint);
+    let para = Paragraph::new(lines)
         .block(block)
         .wrap(Wrap { trim: false })
+        .scroll((scroll, 0))
         .style(Style::default().fg(theme.fg));
     f.render_widget(para, popup);
+    render_modal_scrollbar(f, popup, theme, max_scroll, scroll);
 }
 
 fn render_confirm(f: &mut Frame, area: Rect, theme: &Theme, verb: Verb, count: usize) {
@@ -3181,6 +3250,58 @@ mod render_tests {
         };
         st.modal_scroll = 9999; // way past the end
         draw_with_spec(&st, Some(&spec), 100, 30);
+    }
+
+    /// The wrapped-height clamp (BUG-635): a body of long lines wraps into many
+    /// visual rows, so the scroll range computed from the WRAPPED row count must
+    /// be larger than the old buggy clamp computed from the LOGICAL line count —
+    /// otherwise PageDown stops short and the body bottom is unreachable.
+    /// trace:BUG-635 | ai:claude
+    #[test]
+    fn modal_max_scroll_uses_wrapped_not_logical_count() {
+        let theme = Theme::default();
+        // Each body line is ~300 cols — far wider than the 40-col inner width —
+        // so every logical line wraps into ~8 visual rows.
+        let long = "word ".repeat(60);
+        let body: String = (0..10).map(|i| format!("{long} {i}\n")).collect();
+        let spec = LoadedSpec {
+            id: "BUG-635".into(),
+            title: "Long wrapping body".into(),
+            req_type: "Bug".into(),
+            status: "Draft".into(),
+            priority: String::new(),
+            tags: vec![],
+            description: body,
+            comments: vec![],
+        };
+        let lines = spec_lines(&spec, &theme);
+        let inner_w = 40u16;
+        let inner_h = 20u16;
+        // The old (buggy) clamp: logical line count minus the visible height.
+        let logical_max = (lines.len() as u16).saturating_sub(inner_h.max(1));
+        // The fixed clamp: wrapped row count minus the visible height.
+        let wrapped_max = modal_max_scroll(&lines, inner_w, inner_h);
+        assert!(
+            wrapped_max > logical_max,
+            "wrapped clamp {wrapped_max} must exceed logical clamp {logical_max}"
+        );
+        // The body genuinely overflows at this width/height → it is scrollable.
+        assert!(wrapped_max > 0, "long wrapping body must be scrollable");
+    }
+
+    /// The verb-output modal now scrolls long captured output instead of
+    /// truncating it — a long body scrolled past its end pins to the last page
+    /// and never panics. trace:BUG-635 | ai:claude
+    #[test]
+    fn verb_modal_scrolls_long_output() {
+        let mut st = sample(5);
+        let body: String = (0..200)
+            .map(|i| format!("captured output line {i}\n"))
+            .collect();
+        st.open_verb_modal("TASK-0 — show", body);
+        st.modal_scroll = 9999; // way past the end → clamps internally
+        draw(&st, 100, 30);
+        assert!(st.modal_open());
     }
 
     /// `comment_lines` (TASK-932): N comments → N author headers + bodies;
