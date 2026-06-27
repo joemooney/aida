@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:54:42.446804290Z
-modified_at: 2026-06-27T01:54:42.446804290Z
+modified_at: 2026-06-27T01:54:46.499238301Z
 req_type: Task
 tags:
 - keyboard
@@ -25,3 +25,7 @@ tags:
 - redesign
 - tui
 - ux
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-06-27T01:54:46.499238301Z
