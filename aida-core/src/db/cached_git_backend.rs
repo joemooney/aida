@@ -247,6 +247,17 @@ impl CachedGitBackend {
         self.cache.degrees_for_id(id)
     }
 
+    /// The transitive descendant id-set of `root` (root + all parent->child
+    /// descendants, any depth), read from the cache's materialized hierarchy
+    /// edges via one WITH RECURSIVE query. Triggers a stale-check first so the
+    /// edge set reflects the latest committed graph. Backs
+    /// `aida list --parent <id> --recursive`.
+    // trace:TASK-955 | ai:claude
+    pub fn descendant_ids(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
+        self.ensure_cache_fresh()?;
+        self.cache.descendant_ids(root)
+    }
+
     /// Cache-backed FTS5 search across spec_id, agreed_id, title, description.
     /// `archive` controls the archive axis (STORY-441); `defer` the defer axis
     /// (STORY-584).

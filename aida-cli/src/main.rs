@@ -13769,6 +13769,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             show_origin,
             include_meta,
             parent,
+            recursive,
             sync,
             all,
             archived,
@@ -14008,6 +14009,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // relationships array, which is fast enough for the
             // interactive `aida list` cadence.
             // trace:STORY-62 | ai:claude
+            //
+            // TASK-955: --recursive widens this to the WHOLE transitive subtree
+            // (the parent + every descendant via parent->child edges, any depth)
+            // instead of direct children. It reads the materialized hierarchy
+            // edges with a single WITH RECURSIVE query over the cache — no
+            // backend.load() — so the deep-epic view stays as cache-fast as the
+            // direct-children view. clap's `requires = "parent"` guarantees we
+            // only land here with a --parent value. trace:TASK-955 | ai:claude
             if let Some(parent_ref) = parent {
                 let parent_req =
                     backend
@@ -14015,13 +14024,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         .ok_or_else(|| {
                             anyhow::anyhow!("--parent {}: requirement not found", parent_ref)
                         })?;
-                let child_ids: HashSet<Uuid> = parent_req
-                    .relationships
-                    .iter()
-                    .filter(|r| r.rel_type == RelationshipType::Parent)
-                    .map(|r| r.target_id)
-                    .collect();
-                reqs.retain(|r| child_ids.contains(&r.id));
+                if *recursive {
+                    // Full transitive subtree closure from the cache's edge graph.
+                    // The set includes the root; the existing list filters
+                    // (STATUS / --type / --tags) then apply to the whole subtree.
+                    // trace:TASK-955 | ai:claude
+                    let subtree_ids = backend.descendant_ids(&parent_req.id)?;
+                    reqs.retain(|r| subtree_ids.contains(&r.id));
+                } else {
+                    let child_ids: HashSet<Uuid> = parent_req
+                        .relationships
+                        .iter()
+                        .filter(|r| r.rel_type == RelationshipType::Parent)
+                        .map(|r| r.target_id)
+                        .collect();
+                    reqs.retain(|r| child_ids.contains(&r.id));
+                }
             }
 
             // Hide META reqs (AI prompt customization seeded by init) from
