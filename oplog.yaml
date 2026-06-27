@@ -22961,5 +22961,32 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 2166
+- id: 019f070c-ed37-7280-a5cf-e12675033551
+  target_id: 019f070c-cdb2-7b32-88ce-29151f29d395
+  author: aida
+  node_id: '1'
+  lamport: 2167
+  timestamp: 2026-06-27T03:08:35.511731184Z
+  kind: !Create
+    title: 'PERF: single-spec writes take ~13-20s — write path full-scans all 2488 YAML (backend.load + find_by_uuid)'
+    description: |-
+      PERF: every single-spec write (aida edit / queue add / any status change) takes ~13-20s because the write path does FULL-STORE SCANS of all ~2488 YAML objects. Confirmed via telemetry (edit durations 12.7-14.5s) and code:
+
+      ROOT CAUSE (two full scans per write):
+      1. The `aida edit` handler calls `backend.load()` (aida-cli/src/main.rs:16038 and :16098) -> CachedGitBackend/GitBackend `load()` (git_backend.rs:491) -> `object_store::load_all_objects` (parses ALL 2488 YAML) — just to resolve + validate ONE spec. The store worktree is clean and `git status` is instant (0.00s), so it is NOT git/dirty-worktree — it is the YAML parse.
+      2. `object_store::find_by_uuid` (object_store.rs:337) iterates EVERY object file ('for (_spec_id, path) in &files') — no uuid->spec_id index — and it's on the git write path (git_backend.update_requirement).
+
+      So flipping one status reads the entire store from disk ~twice. This affects EVERY write on CLI and TUI. It is the root cause behind BUG-633 (the TUI freeze) — async/spinner mitigates the symptom; this is the cure.
+
+      FIX:
+      - The write commands (edit, etc.) should resolve + validate the TARGET spec via the CACHE (.aida/cache.db has it by id, with uuid<->spec_id) and/or load only the ONE target object (object_store::find_by_spec_id / read the single YAML), NOT `backend.load()` the whole store.
+      - Give `find_by_uuid` a uuid->spec_id lookup via the cache (or load by spec_id), eliminating the all-objects scan.
+      - The git WRITE itself is already targeted (one YAML, one commit via auto_commit_paths) — keep that.
+      Expected: ~13s -> sub-second per write. Verify with telemetry duration_ms before/after.
+
+      PRIORITY: highest-leverage perf fix in the codebase — makes the whole tool feel interactive.
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 2167
 node_id: '1'
