@@ -4,11 +4,11 @@ agreed_id: TASK-952
 title: PERF throwaway scratch spec for BUG-634 timing
 description: ''
 status: Draft
-priority: Low
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:18:30.217073201Z
-modified_at: 2026-06-27T03:19:01.227245998Z
+modified_at: 2026-06-27T03:22:38.918043299Z
 req_type: Task
 tags:
 - bug634-scratch

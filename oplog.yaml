@@ -23088,5 +23088,13 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 2177
+- id: 019f0719-cc66-7a00-8014-4403afac3222
+  target_id: 019f0716-0049-79a1-bca3-0162e911d4a3
+  author: aida
+  node_id: '1'
+  lamport: 2178
+  timestamp: 2026-06-27T03:22:39.078972512Z
+  kind: !SetPriority
+    priority: High
+clock: 2178
 node_id: '1'
