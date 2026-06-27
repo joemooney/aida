@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T18:25:03.299616594Z
-modified_at: 2026-06-27T18:44:30.606892339Z
+modified_at: 2026-06-27T18:45:20.820073436Z
 req_type: Bug
 tags:
 - depends-on:STORY-621
@@ -17,3 +17,9 @@ relationships:
 - rel_type: Child
   target_id: 019e9333-7505-78f1-a063-06851ee7f85c
   created_at: 2026-06-27T18:25:07.101381622Z
+comments:
+- id: 019f0a66-8d34-7b03-93c6-cbb9efd898ca
+  author: joe
+  content: 'Fixed + live-validated against gitlab.joemooney.com (glab 1.36.0) in the Slice-1 PR. GitLabForge MR reads (change_for_branch/change_for_spec/merged_change_for_branch/list_changes/change_status) now go through ''glab api -X GET projects/:id/merge_requests[...]''; parsers unchanged. End-to-end proof: ''aida pr ship --dry-run'' on a real GitLab repo found the open MR via the actual routed code path; create/merge/merged-lookup/list/view all exercised live. CI read-path (glab ci list -F json) split out to TASK-962 (Slice 3).'
+  created_at: 2026-06-27T18:45:20.820073436Z
+  modified_at: 2026-06-27T18:45:20.820073436Z
