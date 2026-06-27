@@ -523,6 +523,64 @@ mod tests {
         assert!(r.total > 0 && r.completed == r.total);
     }
 
+    // BUG-628: archived is a VIEW flag, not a status — it must not change the
+    // rollup math. A fully-shipped epic whose Completed children were archived
+    // must still roll up to all-Completed (so `derive_epic_status` reports
+    // Completed, not Draft). Locks in that `status_rollup` counts archived
+    // children rather than excluding them. trace:BUG-628 | ai:claude
+    #[test]
+    fn child_status_rollup_counts_archived_completed_children() {
+        let mut epic = make_req("EPIC-X", RequirementStatus::Draft);
+        let mut s1 = make_req("STORY-1", RequirementStatus::Completed);
+        s1.archived = true;
+        let mut s2 = make_req("STORY-2", RequirementStatus::Completed);
+        s2.archived = true;
+        // Mixed orientation, like the real store.
+        link(&mut epic, RelationshipType::Child, s1.id);
+        link(&mut s1, RelationshipType::Parent, epic.id);
+        link(&mut epic, RelationshipType::Parent, s2.id);
+        link(&mut s2, RelationshipType::Parent, epic.id);
+        let eid = epic.id;
+        let store = store_with(vec![epic, s1, s2]);
+
+        let r = child_status_rollup(&store, eid);
+        assert_eq!(r.total, 2, "archived children are still counted");
+        assert_eq!(r.completed, 2, "archived-Completed counts toward completed");
+        assert_eq!(
+            crate::rollup::derive_epic_status_from_rollup(&r),
+            Some(RequirementStatus::Completed),
+            "an epic whose only children are Completed-but-archived derives Completed"
+        );
+    }
+
+    // BUG-628: archived-Done children count toward the done rollup too — a fully
+    // finished-on-branch epic whose children were archived derives Done.
+    // trace:BUG-628 | ai:claude
+    #[test]
+    fn child_status_rollup_counts_archived_done_children() {
+        let mut epic = make_req("EPIC-X", RequirementStatus::Draft);
+        let mut s1 = make_req("STORY-1", RequirementStatus::Done);
+        s1.archived = true;
+        let mut s2 = make_req("STORY-2", RequirementStatus::Completed);
+        s2.archived = true;
+        for s in [&mut s1, &mut s2] {
+            link(&mut epic, RelationshipType::Child, s.id);
+            link(s, RelationshipType::Parent, epic.id);
+        }
+        let eid = epic.id;
+        let store = store_with(vec![epic, s1, s2]);
+
+        let r = child_status_rollup(&store, eid);
+        assert_eq!(r.total, 2);
+        assert_eq!(r.done, 1);
+        assert_eq!(r.completed, 1);
+        assert_eq!(
+            crate::rollup::derive_epic_status_from_rollup(&r),
+            Some(RequirementStatus::Done),
+            "archived done+completed children derive Done, not Draft"
+        );
+    }
+
     // BUG-543: an epic with no children has an empty rollup — NOT ready to close
     // (nothing delivered), so the `total > 0` guard excludes it.
     #[test]
