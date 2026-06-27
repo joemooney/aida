@@ -7082,6 +7082,31 @@ pub enum Command {
         // `--help` output (TASK-268).
         #[clap(long = "read-write", conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health"])]
         read_write: bool,
+        /// Performance lens: rank command shapes by latency (p50/p95/max +
+        /// call count), slowest-first, from the captured `duration_ms`. The
+        /// perf-debug view — e.g. `status` topped it at ~26s before its
+        /// latency fix landed. Honors --since/--limit/--json.
+        // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
+        // `--help` output (TASK-268).
+        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write"])]
+        slowest: bool,
+        /// Raw recent event stream: each invocation's ts, cmd, duration_ms,
+        /// and exit_code, newest-first. Filter with --cmd / --slower-than;
+        /// cap with --limit (default 25). Honors --since/--json.
+        // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
+        // `--help` output (TASK-268).
+        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write", "slowest"])]
+        events: bool,
+        /// With --events: keep only events for this exact command shape
+        /// (e.g. `queue list`).
+        // trace:STORY-709 | ai:claude
+        #[clap(long, value_name = "shape", requires = "events")]
+        cmd: Option<String>,
+        /// With --events: keep only events whose `duration_ms` is at or
+        /// above this threshold.
+        // trace:STORY-709 | ai:claude
+        #[clap(long, value_name = "Nms", requires = "events")]
+        slower_than: Option<u64>,
     },
 
     /// Dogfood agent-lift metrics over the recorded telemetry substrate.
