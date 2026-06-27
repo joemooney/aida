@@ -33763,6 +33763,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         render_doctor_report(&report, opts.heal)?;
+        // STORY-707: `aida doctor` is the check-everything home. The heavy
+        // orientation diagnostics that used to ride bare `aida status` — PR/CI
+        // (a `gh` network call), live-session/lease liveness, worktree probes,
+        // the full fleet roster, and cross-clone coordination — now surface
+        // HERE, not on the fast default `aida status`. Gated to the full,
+        // unfiltered text run (no `--category` narrow filter) so a targeted
+        // `aida doctor check --category X` stays focused. trace:STORY-707
+        if opts.category.is_none() {
+            print_doctor_status_diagnostics(&project_root, &store);
+        }
     }
 
     // BUG-471: heal now continues past a single finding's failure (no more
@@ -35722,6 +35732,56 @@ fn resolve_completed_since_cutoff(
         ));
     }
     None
+}
+
+/// The heavy orientation diagnostics moved off bare `aida status`
+/// and onto `aida doctor`. Prints the PR/CI status (a `gh` network call),
+/// live-session/lease liveness + fleet roster, the Claude Code presence line,
+/// the worktree pane, the open-PR roster, and cross-clone coordination claims —
+/// the same section printers `aida status --full` uses. Constructs the cached
+/// backend on demand (the doctor's own load goes through the legacy `Storage`
+/// path) so `collect_user_context` has the cache-backed handle it needs. Each
+/// section graceful-degrades on its own data; best-effort — a backend that can't
+/// be opened simply prints nothing here rather than failing the doctor run.
+// trace:STORY-707 | ai:claude
+fn print_doctor_status_diagnostics(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+) {
+    let store_path = project_root.join(".aida-store");
+    let Ok(dispenser) = load_dispenser(&store_path) else {
+        return;
+    };
+    let Ok(inner) = aida_core::GitBackend::new(&store_path).map(|b| b.with_dispenser(dispenser))
+    else {
+        return;
+    };
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let Ok(backend) = aida_core::CachedGitBackend::with_inner(inner, &cache_path) else {
+        return;
+    };
+
+    println!();
+    println!("{}", "─── Status diagnostics ───".bold());
+    println!(
+        "  {}",
+        "(moved off `aida status` so the default snapshot stays instant — STORY-707)".dimmed()
+    );
+    println!();
+
+    // The full user-context gather: PR/CI (gh), branch facts, queue snapshot,
+    // and the live-session-probed agent roster. This is the ~16s the fast
+    // `aida status` no longer pays — it lives here now.
+    let user_ctx = collect_user_context(project_root, store, &backend, false);
+
+    print_status_pr_section(&user_ctx, false);
+    print_status_queue_section(&user_ctx, false);
+    print_status_presence_line(project_root);
+    print_status_agents_section(&user_ctx, true);
+    print_status_claude_code_section(project_root);
+    print_status_worktrees_section(project_root, true);
+    print_status_open_prs_section(project_root, true);
+    print_status_coordination_section(&store_path, chrono::Utc::now(), true);
 }
 
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
@@ -102337,6 +102397,309 @@ fn print_status_coordination_section(
     println!();
 }
 
+// ─── STORY-707: fast cache-backed `aida status` default ────────────────────
+//
+// The bare `aida status` (no flags) is an ORIENTATION command — it must be
+// instant. The historic heavy path (`handle_status_command_distributed`) loads
+// the FULL store, makes `gh` PR/CI NETWORK calls (~16s), and probes live Claude
+// sessions before any of the --short/--queue branches, so every form paid that
+// cost. The fast path below answers "where am I right now" from cache-cheap
+// inputs ONLY: role (env/default), current git branch, queue depth (the queue
+// dir scan), and key requirement counts sourced from `.aida/cache.db` — the SAME
+// cache that powers sub-ms `aida list`. No `backend.load()`, no `gh`, no
+// live-session probe. The rich view is preserved opt-in via `aida status --full`
+// / `--ci` (which route through the heavy path); the moved diagnostics (PR/CI,
+// liveness, worktrees, roster, coordination, hygiene) now live in `aida doctor`.
+// trace:STORY-707 | ai:claude
+
+/// The cache-sourced inputs the fast `aida status` snapshot renders. Kept a
+/// plain data struct — assembled by [`collect_fast_status_snapshot`] (which does
+/// the cache/git/queue reads) and counted by [`fast_status_counts`] (a pure
+/// function) — so the "no network / no full load" contract is unit-testable
+/// without spawning git or `gh`.
+// trace:STORY-707 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct FastStatusSnapshot {
+    role: String,
+    role_is_default: bool,
+    branch: Option<String>,
+    queue_depth: usize,
+    counts: FastStatusCounts,
+    cache_present: bool,
+}
+
+/// Key requirement tallies for the fast snapshot, derived purely from the
+/// cache's `(status, req_type)` rows (non-archived only). `open` = everything
+/// not in a terminal state (not completed/rejected/released) — the actionable
+/// backlog.
+// trace:STORY-707 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct FastStatusCounts {
+    open: usize,
+    in_progress: usize,
+    draft: usize,
+    total: usize,
+}
+
+/// Pure counter over non-archived cache rows: each tuple is `(status,
+/// req_type)`. META and other standing-artifact types are excluded the same way
+/// `aida list` hides them, so the tallies agree with the list/triage surfaces.
+/// Status matching is case-insensitive (the cache stores the Debug form, e.g.
+/// "InProgress"/"Draft").
+// trace:STORY-707 | ai:claude
+fn fast_status_counts<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> FastStatusCounts {
+    let mut c = FastStatusCounts::default();
+    for (status, req_type) in rows {
+        if !is_real_requirement_summary(req_type) || is_standing_artifact_type(req_type) {
+            continue;
+        }
+        c.total += 1;
+        let terminal = status.eq_ignore_ascii_case("completed")
+            || status.eq_ignore_ascii_case("rejected")
+            || status.eq_ignore_ascii_case("released");
+        if !terminal {
+            c.open += 1;
+        }
+        if status.eq_ignore_ascii_case("inprogress")
+            || status.eq_ignore_ascii_case("in-progress")
+            || status.eq_ignore_ascii_case("in_progress")
+        {
+            c.in_progress += 1;
+        }
+        if status.eq_ignore_ascii_case("draft") {
+            c.draft += 1;
+        }
+    }
+    c
+}
+
+/// Read `(status, req_type)` for every non-archived row straight from the cache
+/// DB (read-only sqlite), then count via [`fast_status_counts`]. This is the
+/// same read-only cache `read_draft_inbox_depth` uses — NO `backend.load()`, no
+/// git spawn. Returns zeroed counts when the cache is absent/unreadable (a fresh
+/// `aida init` with no reads yet).
+// trace:STORY-707 | ai:claude
+fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCounts {
+    if !cache_path.exists() {
+        return FastStatusCounts::default();
+    }
+    let conn = match rusqlite::Connection::open_with_flags(
+        cache_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
+        Ok(c) => c,
+        Err(_) => return FastStatusCounts::default(),
+    };
+    let mut stmt =
+        match conn.prepare("SELECT status, req_type FROM requirements_cache WHERE archived = 0") {
+            Ok(s) => s,
+            Err(_) => return FastStatusCounts::default(),
+        };
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    });
+    let Ok(rows) = rows else {
+        return FastStatusCounts::default();
+    };
+    let collected: Vec<(String, String)> = rows.flatten().collect();
+    fast_status_counts(collected.iter().map(|(s, t)| (s.as_str(), t.as_str())))
+}
+
+/// Assemble the fast snapshot from cache-cheap inputs: role from
+/// `AIDA_SESSION_ROLE` (implementer default), current git branch (one cheap
+/// `git symbolic-ref`), queue depth (the queue dir scan the statusline uses),
+/// and key counts from the read-only cache. No `gh`, no full store load, no
+/// live-session probe.
+// trace:STORY-707 | ai:claude
+fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSnapshot {
+    let (role, role_is_default) = effective_role_resolved();
+    let branch = current_branch_at(project_root);
+    let queue_depth = read_queue_depth(project_root, Some(role.as_str())).unwrap_or(0);
+    let cache_path = project_root.join(".aida/cache.db");
+    let cache_present = cache_path.exists();
+    let counts = fast_status_counts_from_cache(&cache_path);
+    FastStatusSnapshot {
+        role,
+        role_is_default,
+        branch,
+        queue_depth,
+        counts,
+        cache_present,
+    }
+}
+
+/// Render the fast `aida status` snapshot. One compact screen: role, branch,
+/// queue depth, and the cache-sourced key counts, plus a footer pointing at the
+/// rich/diagnostic surfaces (`--full`, `aida doctor`).
+// trace:STORY-707 | ai:claude
+fn print_fast_status(snap: &FastStatusSnapshot) {
+    println!("{}", "─── Status ───".bold());
+    let role_cell = if snap.role_is_default {
+        format!("{} (default)", snap.role)
+    } else {
+        snap.role.clone()
+    };
+    println!("  {:<10} {}", "role:".bold(), role_cell.cyan());
+    match &snap.branch {
+        Some(b) => println!("  {:<10} {}", "branch:".bold(), b.cyan()),
+        None => println!(
+            "  {:<10} {}",
+            "branch:".bold(),
+            "(not a git branch)".dimmed()
+        ),
+    }
+    println!(
+        "  {:<10} {} routed to role:{}",
+        "queue:".bold(),
+        snap.queue_depth,
+        snap.role
+    );
+    println!();
+
+    println!("{}", "─── Requirements (cache) ───".bold());
+    if snap.cache_present {
+        let c = &snap.counts;
+        println!(
+            "  {} open · {} in-progress · {} draft · {} total",
+            c.open, c.in_progress, c.draft, c.total
+        );
+    } else {
+        println!(
+            "  {}",
+            "(no cache yet — run `aida list` to build it)".dimmed()
+        );
+    }
+    println!();
+
+    // Point at the heavy surfaces the fast default deliberately omits. The PR/CI,
+    // live-session/lease liveness, worktree, roster, coordination, and hygiene
+    // diagnostics moved to `aida doctor`; the full rich snapshot stays opt-in
+    // behind `aida status --full`. trace:STORY-707 | ai:claude
+    println!(
+        "  {}",
+        "PR/CI, agents, worktrees, hygiene → `aida doctor` · full snapshot → `aida status --full`"
+            .dimmed()
+    );
+    println!();
+}
+
+#[cfg(test)]
+mod story707_fast_status_tests {
+    use super::*;
+
+    // The pure counter excludes META + standing-artifact types, treats
+    // completed/rejected/released as terminal (not "open"), and matches the
+    // in-progress / draft statuses case-insensitively across the Debug-form and
+    // hyphen/underscore variants the cache may store. trace:STORY-707
+    #[test]
+    fn fast_status_counts_partitions_open_inprogress_draft() {
+        let rows = vec![
+            ("Draft", "Story"),
+            ("Approved", "Task"),
+            ("InProgress", "Bug"),
+            ("in-progress", "Feature"),
+            ("Completed", "Story"),
+            ("Rejected", "Task"),
+            ("Released", "Story"),
+            // Excluded entirely — not real / standing-artifact types.
+            ("Draft", "Meta"),
+            ("Approved", "Vision"),
+            ("InProgress", "Principle"),
+        ];
+        let c = fast_status_counts(rows.iter().map(|(s, t)| (*s, *t)));
+        // 7 real rows counted (3 META/standing excluded).
+        assert_eq!(c.total, 7);
+        // open = not terminal: Draft, Approved, InProgress, in-progress = 4.
+        assert_eq!(c.open, 4);
+        // in_progress matches "InProgress" + "in-progress" = 2.
+        assert_eq!(c.in_progress, 2);
+        // draft = 1 (the Meta draft is excluded).
+        assert_eq!(c.draft, 1);
+    }
+
+    #[test]
+    fn fast_status_counts_empty_is_zeroed() {
+        let c = fast_status_counts(std::iter::empty());
+        assert_eq!(c, FastStatusCounts::default());
+    }
+
+    // Build a real cache DB with known rows and assert the fast snapshot reads
+    // its counts FROM THE CACHE — `fast_status_counts_from_cache` opens the
+    // sqlite read-only, never `backend.load()`. trace:STORY-707
+    #[test]
+    fn fast_status_counts_from_cache_reads_only_the_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let conn = rusqlite::Connection::open(&cache_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE requirements_cache (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 status TEXT NOT NULL,
+                 req_type TEXT NOT NULL,
+                 archived INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO requirements_cache VALUES ('a','Draft','Story',0);
+             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0);
+             INSERT INTO requirements_cache VALUES ('c','Completed','Bug',0);
+             -- archived rows are excluded by the WHERE archived = 0 filter
+             INSERT INTO requirements_cache VALUES ('d','Draft','Story',1);
+             -- META is excluded by the pure counter
+             INSERT INTO requirements_cache VALUES ('e','Draft','Meta',0);",
+        )
+        .unwrap();
+        drop(conn);
+
+        let c = fast_status_counts_from_cache(&cache_path);
+        // Counted: a (Draft/Story), b (InProgress/Task), c (Completed/Bug).
+        assert_eq!(c.total, 3);
+        assert_eq!(c.open, 2); // a + b (c is terminal)
+        assert_eq!(c.in_progress, 1); // b
+        assert_eq!(c.draft, 1); // a
+    }
+
+    // A missing cache yields zeroed counts (no panic) — the fresh-`aida init`
+    // case where no read has built `.aida/cache.db` yet. trace:STORY-707
+    #[test]
+    fn fast_status_counts_from_cache_absent_is_zeroed() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = fast_status_counts_from_cache(&dir.path().join("nope.db"));
+        assert_eq!(c, FastStatusCounts::default());
+    }
+
+    // The fast snapshot's collector takes ONLY a project_root — it has no
+    // `CachedGitBackend` parameter and never loads the full store. This test
+    // runs it against a dir with NO `.aida-store/objects` (so a full
+    // `backend.load()` would FAIL), proving the snapshot is sourced purely from
+    // the read-only cache + cheap fs/git reads. trace:STORY-707
+    #[test]
+    fn collect_fast_status_snapshot_works_without_a_loadable_store() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        let cache_path = dir.path().join(".aida/cache.db");
+        let conn = rusqlite::Connection::open(&cache_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE requirements_cache (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 status TEXT NOT NULL,
+                 req_type TEXT NOT NULL,
+                 archived INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO requirements_cache VALUES ('a','Approved','Story',0);
+             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0);",
+        )
+        .unwrap();
+        drop(conn);
+
+        // No .aida-store/objects → no loadable full store. The snapshot must
+        // still come back populated from the cache.
+        let snap = collect_fast_status_snapshot(dir.path());
+        assert!(snap.cache_present);
+        assert_eq!(snap.counts.total, 2);
+        assert_eq!(snap.counts.open, 2);
+        assert_eq!(snap.counts.in_progress, 1);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
@@ -102358,6 +102721,32 @@ fn handle_status_command_distributed(
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
     use aida_core::DatabaseBackend;
+
+    // STORY-707: the BARE `aida status` (no flags) takes the FAST cache-backed
+    // path — sub-second, NO `backend.load()`, NO `gh`/network, NO live-session
+    // probe. Every focus/rich flag (`--short`, `--json`, `--queue`, `--ci`,
+    // `--cleanup`, `--activity`, `--awaiting`, `--full`, `--all`, `--stale`)
+    // routes to the heavy path below, so the opt-in rich view and the existing
+    // focus-mode semantics are fully preserved. The heavy diagnostics (PR/CI,
+    // liveness, worktrees, roster, coordination, hygiene) moved to `aida doctor`.
+    // The `spec` form is dispatched even earlier (before storage init).
+    // trace:STORY-707 | ai:claude
+    let any_flag = short
+        || json
+        || queue_only
+        || ci_only
+        || cleanup
+        || activity
+        || awaiting
+        || full
+        || all
+        || stale;
+    if !any_flag {
+        let project_root = std::env::current_dir()?;
+        let snap = collect_fast_status_snapshot(&project_root);
+        print_fast_status(&snap);
+        return Ok(());
+    }
 
     let store = backend.load()?;
     let project_root = std::env::current_dir()?;
