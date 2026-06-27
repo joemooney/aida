@@ -2,13 +2,21 @@ id: 019f0658-f185-7122-a403-56fda9a26b4a
 spec_id: STORY-702
 agreed_id: STORY-702
 title: 'Who-must-act lens: pivot the board by owner (you / advisor / role)'
-description: 'Cross-cutting view toggle that re-groups classified items by owner instead of reason — one on-YOUR-plate bucket (needs-approval + needs-answer + mail), one advisor, one implementer/reviewer — so the operator answers "what must I act on now" without scanning 7 groups. Pure re-projection. NOTE: gesture grammar may be absorbed by EPIC-54 redesign shell.'
+description: |-
+  Who-must-act lens: re-group the cockpit by owner (you / advisor / role). GESTURE — EPIC-54 absorbs the toggle; EPIC-53 provides classification only.
+
+  ## Acceptance
+  - Reason::owner() covers the full owner set; a pure "you-plate" aggregation groups needs-approval + needs-answer + mail (unit-tested).
+  - EPIC-53 ships the owner CLASSIFICATION + aggregation only. The lens/toggle GESTURE is NOT built here (it is an EPIC-54 action->target verb).
+
+  ## Seam
+  EPIC-53 = owner classification (Reason::owner already exists, extend to full set). EPIC-54 = the lens/toggle gesture. Do NOT build the toggle in EPIC-53. See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:52:00.133019412Z
-modified_at: 2026-06-26T23:52:06.919029730Z
+modified_at: 2026-06-27T02:01:11.864989581Z
 req_type: Story
 relationships:
 - rel_type: Child
