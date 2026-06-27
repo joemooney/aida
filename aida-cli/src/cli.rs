@@ -7804,6 +7804,21 @@ pub enum Command {
         #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
         color: String,
 
+        /// Emit the one-liner wrapped in an OSC terminal-title escape
+        /// sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the
+        /// body, so the AIDA role/queue/inbox segment rides the terminal
+        /// title bar / tmux window name. This is the in-agent parity surface
+        /// for clients (e.g. Codex CLI) whose built-in footer is a fixed
+        /// field set and cannot run `aida statusline` as a command: wire
+        /// `aida statusline --title` into the shell prompt
+        /// (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the
+        /// terminal title during the agent session. Forces color off (an
+        /// OSC title string carries no ANSI). Mutually exclusive with the
+        /// `setup` subcommand.
+        // trace:TASK-896
+        #[clap(long)]
+        title: bool,
+
         /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
         /// renders the one-liner (the default, quiet behavior); the
         /// `setup` subcommand prints (or installs) client-appropriate
