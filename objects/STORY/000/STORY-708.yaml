@@ -19,12 +19,12 @@ description: |-
   NAMING NOTE: "groom" colloquially blends refinement + disposition; assess/intake lean pure disposition. Choose consciously (groom is recognizable + matches the operator's model; alternatives: keep assess, or triage).
 
   ACCEPTANCE: `aida groom [<spec>...|<epic>]` runs the advisor disposition pass scoped to the targets (all-open default); assess/intake/backlog-groom reconciled (one canonical "groom", aliases deprecated); epic targets use the transitive closure; existing flags preserved; TUI groom verb can shell to it.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:21:04.124832287Z
-modified_at: 2026-06-27T15:35:47.011990409Z
+modified_at: 2026-06-27T16:00:27.565023897Z
 req_type: Story
 tags:
 - assess
@@ -52,3 +52,21 @@ comments:
   content: 'DECISION (operator 2026-06-27): groom is the CANONICAL advisor-disposition verb. assess/intake become deprecated aliases (silently accepted, normalized to groom). Drive the rename: aida groom as the primary, assess/intake aliased. TASK-946 (EPIC-54-tree wiring) follows the same naming.'
   created_at: 2026-06-27T15:35:42.101857171Z
   modified_at: 2026-06-27T15:35:42.101857171Z
+history:
+- id: 019f09cf-974b-77a0-9b6a-d0c639d9162f
+  author: aida-auto-bump
+  timestamp: 2026-06-27T16:00:27.467818094Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f09cf-97ad-7031-8472-92149e3973e8
+  timestamp: 2026-06-27T16:00:27.565018447Z
+  agent: aida
+  commit_sha: 84324681c1a4b9d055c3e342d7f0d4bbc7a6050b
+  summary: Completed via merge 84324681
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T16:00:26.461285855Z
+  completion_sha: 84324681c1a4b9d055c3e342d7f0d4bbc7a6050b
