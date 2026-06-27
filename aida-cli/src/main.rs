@@ -27845,6 +27845,104 @@ fn handle_db_check_collisions(
     std::process::exit(1);
 }
 
+/// One row of `aida db block list` after contiguous same-node/type/owner
+/// sub-blocks have been merged. The `Next`/`Remaining` of the row come from
+/// the live frontier sub-block (the first non-exhausted one); when every
+/// merged sub-block is exhausted the row is `full` (`remaining == 0`).
+// trace:TASK-950 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MergedBlockRow {
+    node_id: String,
+    owner: String,
+    type_prefix: String,
+    range_start: u32,
+    range_end: u32,
+    /// Next id to dispense, from the live frontier sub-block.
+    next: u32,
+    /// Remaining ids in the live frontier sub-block; 0 means the whole
+    /// merged span is exhausted (rendered as `full`).
+    remaining: u32,
+}
+
+/// Merge contiguous agreed-id blocks for `aida db block list`.
+///
+/// Groups by `(node_id, type_prefix, owner)`, sorts each group by
+/// `range_start`, and folds runs of blocks where `prev.range_end + 1 ==
+/// next.range_start` into a single [`MergedBlockRow`] spanning
+/// `first.range_start..=last.range_end`. A gap, or a different
+/// node/type/owner, starts a new row.
+///
+/// The merged row's `next`/`remaining` are taken from the LIVE frontier:
+/// the first sub-block in the run that still has ids to dispense
+/// (`remaining() > 0`). If every sub-block in the run is exhausted the row
+/// reports `remaining == 0` (the caller renders this as `full`) and `next`
+/// is carried from the last sub-block.
+///
+/// Pure: input order within a group does not matter (it is sorted); the
+/// returned rows preserve first-seen group order so the listing stays
+/// stable across runs.
+// trace:TASK-950 | ai:claude
+fn merge_contiguous_blocks(blocks: &[aida_core::AgreedIdBlock]) -> Vec<MergedBlockRow> {
+    use std::collections::BTreeMap;
+
+    // Preserve first-seen order of groups for a stable listing.
+    let mut group_order: Vec<(String, String, String)> = Vec::new();
+    let mut groups: BTreeMap<(String, String, String), Vec<&aida_core::AgreedIdBlock>> =
+        BTreeMap::new();
+    for b in blocks {
+        let key = (b.node_id.clone(), b.type_prefix.clone(), b.owner.clone());
+        if !groups.contains_key(&key) {
+            group_order.push(key.clone());
+        }
+        groups.entry(key).or_default().push(b);
+    }
+
+    let mut rows: Vec<MergedBlockRow> = Vec::new();
+    for key in &group_order {
+        let mut members = groups.remove(key).unwrap_or_default();
+        members.sort_by_key(|b| b.range_start);
+
+        let mut run: Vec<&aida_core::AgreedIdBlock> = Vec::new();
+        for b in members {
+            match run.last() {
+                Some(prev) if prev.range_end + 1 == b.range_start => run.push(b),
+                Some(_) => {
+                    rows.push(fold_run(&run));
+                    run = vec![b];
+                }
+                None => run.push(b),
+            }
+        }
+        if !run.is_empty() {
+            rows.push(fold_run(&run));
+        }
+    }
+    rows
+}
+
+/// Fold a contiguous run of sub-blocks into a single [`MergedBlockRow`].
+/// `run` must be non-empty and sorted ascending by `range_start`.
+// trace:TASK-950 | ai:claude
+fn fold_run(run: &[&aida_core::AgreedIdBlock]) -> MergedBlockRow {
+    let first = run[0];
+    let last = run[run.len() - 1];
+    // Live frontier: first sub-block with ids left; else the last (exhausted).
+    let frontier = run
+        .iter()
+        .find(|b| !b.is_exhausted())
+        .copied()
+        .unwrap_or(last);
+    MergedBlockRow {
+        node_id: first.node_id.clone(),
+        owner: first.owner.clone(),
+        type_prefix: first.type_prefix.clone(),
+        range_start: first.range_start,
+        range_end: last.range_end,
+        next: frontier.next,
+        remaining: frontier.remaining(),
+    }
+}
+
 fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Result<()> {
     use aida_core::BlockRegistry;
 
@@ -27936,30 +28034,99 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 println!("No blocks claimed yet. Run `aida db block claim` to allocate one.");
                 return Ok(());
             }
+
+            // Merge contiguous same-node/type/owner sub-blocks into one row.
+            // trace:TASK-950 | ai:claude
+            let rows = merge_contiguous_blocks(&registry.blocks);
+
+            // Build the plain cell text first so per-column max widths are
+            // computed without ANSI color codes throwing off the math; the
+            // Remaining color is applied after padding. trace:TASK-950 | ai:claude
+            struct Cells {
+                node: String,
+                ty: String,
+                range: String,
+                next: String,
+                // Plain (uncolored) remaining text used for width; "full"
+                // when the merged span is exhausted. trace:TASK-950 | ai:claude
+                remaining: String,
+                is_full: bool,
+                is_low: bool,
+                owner: String,
+            }
+            let cells: Vec<Cells> = rows
+                .iter()
+                .map(|r| {
+                    let is_full = r.remaining == 0;
+                    Cells {
+                        node: r.node_id.clone(),
+                        ty: r.type_prefix.clone(),
+                        range: format!("{}-{}..{}", r.type_prefix, r.range_start, r.range_end),
+                        next: format!("{}-{}", r.type_prefix, r.next),
+                        remaining: if is_full {
+                            "full".to_string()
+                        } else {
+                            r.remaining.to_string()
+                        },
+                        is_full,
+                        is_low: !is_full && r.remaining <= aida_core::AgreedIdBlock::LOW_THRESHOLD,
+                        owner: r.owner.clone(),
+                    }
+                })
+                .collect();
+
+            // Per-column max width, including the header label.
+            let w_node = cells
+                .iter()
+                .map(|c| c.node.len())
+                .chain(["Node".len()])
+                .max()
+                .unwrap_or(0);
+            let w_type = cells
+                .iter()
+                .map(|c| c.ty.len())
+                .chain(["Type".len()])
+                .max()
+                .unwrap_or(0);
+            let w_range = cells
+                .iter()
+                .map(|c| c.range.len())
+                .chain(["Range".len()])
+                .max()
+                .unwrap_or(0);
+            let w_next = cells
+                .iter()
+                .map(|c| c.next.len())
+                .chain(["Next".len()])
+                .max()
+                .unwrap_or(0);
+            let w_rem = cells
+                .iter()
+                .map(|c| c.remaining.len())
+                .chain(["Remaining".len()])
+                .max()
+                .unwrap_or(0);
+
             println!(
-                "{:<8}  {:<6}  {:<12}  {:<12}  {:<10}  Owner",
-                "Node", "Type", "Range", "Next", "Remaining"
+                "{:<w_node$}  {:<w_type$}  {:<w_range$}  {:<w_next$}  {:>w_rem$}  Owner",
+                "Node", "Type", "Range", "Next", "Remaining",
             );
-            println!("{}", "─".repeat(70));
-            for b in &registry.blocks {
-                let remaining = b.remaining();
-                let remaining_str = if b.is_exhausted() {
-                    "exhausted".red().to_string()
-                } else if b.is_low() {
-                    format!("{}", remaining).yellow().to_string()
+            let rule_width = w_node + w_type + w_range + w_next + w_rem + "Owner".len() + 2 * 5;
+            println!("{}", "─".repeat(rule_width));
+            for c in &cells {
+                // Pad the plain remaining text to width, THEN color, so the
+                // ANSI codes never affect alignment. trace:TASK-950 | ai:claude
+                let remaining_padded = format!("{:>w_rem$}", c.remaining);
+                let remaining_str = if c.is_full {
+                    remaining_padded.red().to_string()
+                } else if c.is_low {
+                    remaining_padded.yellow().to_string()
                 } else {
-                    format!("{}", remaining)
+                    remaining_padded
                 };
                 println!(
-                    "{:<8}  {:<6}  {}-{}..{}  {:<12}  {:<10}  {}",
-                    b.node_id,
-                    b.type_prefix,
-                    b.type_prefix,
-                    b.range_start,
-                    b.range_end,
-                    format!("{}-{}", b.type_prefix, b.next),
-                    remaining_str,
-                    b.owner
+                    "{:<w_node$}  {:<w_type$}  {:<w_range$}  {:<w_next$}  {}  {}",
+                    c.node, c.ty, c.range, c.next, remaining_str, c.owner,
                 );
             }
         }
@@ -135363,5 +135530,114 @@ mod queue_json_rows_tests {
         let summaries = vec![summary(id, None, None)];
         let rows = queue_json_rows(&[entry(id, None)], &summaries);
         assert_eq!(rows[0]["spec_id"], "?");
+    }
+}
+
+#[cfg(test)]
+mod merge_contiguous_blocks_tests {
+    use super::*;
+
+    fn block(
+        node: &str,
+        owner: &str,
+        ty: &str,
+        start: u32,
+        end: u32,
+        next: u32,
+    ) -> aida_core::AgreedIdBlock {
+        aida_core::AgreedIdBlock {
+            node_id: node.to_string(),
+            owner: owner.to_string(),
+            hostname: "host".to_string(),
+            type_prefix: ty.to_string(),
+            range_start: start,
+            range_end: end,
+            next,
+            allocated_at: chrono::Utc::now(),
+        }
+    }
+
+    // Contiguous same-node/type/owner blocks fold into ONE row spanning the
+    // full start..end; the live frontier supplies next/remaining.
+    // trace:TASK-950 | ai:claude
+    #[test]
+    fn contiguous_blocks_merge_into_one_row() {
+        // Mirrors the live store: node 1 BUG 317..916 across four exhausted
+        // sub-blocks plus a live tail (next 632, remaining 285).
+        let blocks = vec![
+            block("1", "joe", "BUG", 317, 416, 417), // exhausted
+            block("1", "joe", "BUG", 417, 516, 517), // exhausted
+            block("1", "joe", "BUG", 517, 616, 617), // exhausted
+            block("1", "joe", "BUG", 617, 916, 632), // live frontier
+        ];
+        let rows = merge_contiguous_blocks(&blocks);
+        assert_eq!(rows.len(), 1);
+        let r = &rows[0];
+        assert_eq!(r.range_start, 317);
+        assert_eq!(r.range_end, 916);
+        assert_eq!(r.next, 632);
+        assert_eq!(r.remaining, 285);
+    }
+
+    // A gap in the range starts a new row.
+    // trace:TASK-950 | ai:claude
+    #[test]
+    fn non_contiguous_blocks_stay_separate() {
+        // node 1 BUG 17..116 then 317..916 — gap 117..316 keeps them apart.
+        let blocks = vec![
+            block("1", "joe", "BUG", 17, 116, 117), // exhausted, isolated
+            block("1", "joe", "BUG", 317, 416, 417),
+            block("1", "joe", "BUG", 417, 916, 632),
+        ];
+        let rows = merge_contiguous_blocks(&blocks);
+        assert_eq!(rows.len(), 2);
+        assert_eq!((rows[0].range_start, rows[0].range_end), (17, 116));
+        assert_eq!((rows[1].range_start, rows[1].range_end), (317, 916));
+    }
+
+    // Different owner / type / node never merge even when ranges touch.
+    // trace:TASK-950 | ai:claude
+    #[test]
+    fn different_owner_type_or_node_do_not_merge() {
+        let blocks = vec![
+            // Same node+type, contiguous range, but DIFFERENT owner.
+            block("1", "alice", "BUG", 1, 100, 50),
+            block("1", "bob", "BUG", 101, 200, 150),
+            // Same node+owner, contiguous range, but DIFFERENT type.
+            block("2", "joe", "FR", 1, 100, 50),
+            block("2", "joe", "TASK", 101, 200, 150),
+            // Same owner+type, contiguous range, but DIFFERENT node.
+            block("3", "joe", "EPIC", 1, 100, 50),
+            block("4", "joe", "EPIC", 101, 200, 150),
+        ];
+        let rows = merge_contiguous_blocks(&blocks);
+        // None of the three pairs may collapse.
+        assert_eq!(rows.len(), 6);
+    }
+
+    // All sub-blocks exhausted => row is "full" (remaining 0); a live
+    // frontier in the run => remaining from that frontier.
+    // trace:TASK-950 | ai:claude
+    #[test]
+    fn full_vs_live_frontier_remaining() {
+        // Every sub-block exhausted (next > range_end) -> full.
+        let all_exhausted = vec![
+            block("1", "joe", "TASK", 1, 100, 101),
+            block("1", "joe", "TASK", 101, 200, 201),
+        ];
+        let rows = merge_contiguous_blocks(&all_exhausted);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].remaining, 0, "all-exhausted run renders as full");
+        assert_eq!(rows[0].range_end, 200);
+
+        // First sub-block live -> frontier is the first, not the last.
+        let live_front = vec![
+            block("1", "joe", "STORY", 1, 100, 40), // live: remaining 61
+            block("1", "joe", "STORY", 101, 200, 201), // exhausted
+        ];
+        let rows = merge_contiguous_blocks(&live_front);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].next, 40);
+        assert_eq!(rows[0].remaining, 61);
     }
 }
