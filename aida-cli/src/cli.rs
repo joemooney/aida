@@ -7470,25 +7470,28 @@ pub enum Command {
         brief: bool,
     },
 
-    // trace:STORY-560 trace:STORY-623 | ai:claude
-    /// ASSESS the open specs: fire a cold-boot advisor agent that reads all open
+    // trace:STORY-560 trace:STORY-623 trace:STORY-708 | ai:claude
+    /// GROOM the open specs: fire a cold-boot advisor agent that reads all open
     /// specs, applies worth-doing judgment, and proposes approve/reject/park/
-    /// queue per spec. ASSESS is the advisor's verb for deciding a draft's fate
-    /// (distinct from REVIEW, which is code review of a PR). PROPOSE-MODE BY
-    /// DEFAULT — writes NOTHING until `--apply`. The advisor-side analog of
-    /// `aida burndown run` (which fires implementer agents). Policy knobs live
-    /// under `[intake]` in `.aida/config.toml`; the safe defaults work with zero
-    /// config. Also reachable as `aida advisor assess`; `aida intake` is the
-    /// retained (deprecated) alias.
+    /// queue per spec. GROOM is the advisor's canonical verb for deciding a
+    /// draft's fate (distinct from REVIEW, which is code review of a PR).
+    /// PROPOSE-MODE BY DEFAULT — writes NOTHING until `--apply`. The advisor-side
+    /// analog of `aida burndown run` (which fires implementer agents). Policy
+    /// knobs live under `[intake]` in `.aida/config.toml`; the safe defaults work
+    /// with zero config. Also reachable as `aida advisor assess`; `aida assess`
+    /// and `aida intake` are the retained (deprecated) aliases — both normalize
+    /// to `groom`.
     ///
     /// Caveat: the headless advisor is a COLD-BOOT `claude -p`, not your live
     /// session — same model, less context. Autonomy-eligible is not the same as
     /// worth-doing; keep the propose-mode review load-bearing before `--apply`.
-    // `intake` is the deprecated alias of `assess`; kept working for back-compat
-    // but hidden from top-level help so only `assess` (canonical) is advertised.
-    // trace:TASK-850 | ai:claude
-    #[command(alias = "intake")]
-    Assess {
+    // `assess` / `intake` are the deprecated aliases of `groom` (STORY-708):
+    // kept working for back-compat but hidden from top-level help so only
+    // `groom` (canonical) is advertised. The pre-clap rewrite normalizes both
+    // to `groom` and prints a one-line deprecation hint.
+    // trace:TASK-850 trace:STORY-708 | ai:claude
+    #[command(alias = "assess", alias = "intake")]
+    Groom {
         /// Execute the proposed approvals + queue groom. Without it, `intake`
         /// is propose-only (the value judgment stays reviewable). Even with
         /// `--apply`, the do-not-approve classes and `needs-human`/`strategic`
