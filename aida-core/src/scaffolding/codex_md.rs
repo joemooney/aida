@@ -119,6 +119,23 @@ status_line = ["model-with-reasoning", "context-remaining", "git-branch", "curre
 Put that in `~/.codex/config.toml` for a personal default, or in a trusted
 project's `.codex/config.toml` if the whole team wants the same footer.
 
+The built-in footer fields cannot host AIDA's role / queue-depth / inbox-depth
+segment, so for in-agent parity wire `aida statusline --title` into your shell
+prompt: it emits the same one-liner wrapped in an OSC terminal-title escape, so
+the AIDA segment rides the terminal title bar / tmux window name during the
+Codex session — the in-agent analog of the command-backed footer Claude Code
+runs in `.claude/settings.json`.
+
+```bash
+# bash (~/.bashrc)
+PROMPT_COMMAND='aida statusline --title 2>/dev/null; '"$PROMPT_COMMAND"
+
+# zsh (~/.zshrc)
+precmd() {{ aida statusline --title 2>/dev/null }}
+```
+
+Run `aida statusline setup --client codex` for the copy-paste version of both.
+
 ### MCP Coordination
 
 Use AIDA MCP for substrate operations: `show_requirement`,
@@ -298,6 +315,10 @@ mod tests {
         assert!(md.contains("status_line = [\"model-with-reasoning\""));
         assert!(md.contains("without forcing a"));
         assert!(md.contains("does not run `aida statusline`"));
+        // trace:TASK-896 — the in-agent parity path (OSC terminal-title via
+        // `aida statusline --title` wired into the shell prompt) is documented.
+        assert!(md.contains("aida statusline --title"));
+        assert!(md.contains("terminal title"));
         assert!(md.contains("SPEC-410"));
         assert!(md.contains("BUG-345"));
         assert!(md.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
