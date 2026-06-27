@@ -1,0 +1,33 @@
+id: 019f06d4-7661-7362-bb14-982a52dcc52f
+spec_id: STORY-707
+agreed_id: STORY-707
+title: 'Fast aida status: a sub-second cache snapshot; move heavy diagnostics (PR/CI/liveness/hygiene) to aida doctor'
+description: |-
+  aida status takes ~26s (real 26.5s vs ~10.6s CPU -> ~16s is NETWORK WAIT on gh PR/CI calls). A bad match for an orientation command that should be instant.
+
+  ROOT CAUSE (handle_status_command_distributed, main.rs ~102341): (1) backend.load() loads the FULL store (2466 specs); (2) collect_user_context -> collect_pr_facts makes gh PR/CI NETWORK calls (the ~16s wait); (3) probe_live_claude_sessions liveness probe. All run before even the --short branch, so every form is slow.
+
+  DESIGN:
+  - DEFAULT aida status = FAST cache-backed snapshot: role, current git branch, queue depth, key counts — all from .aida/cache.db (already powers sub-ms aida list) + cheap git branch + role. NO gh/network, NO full store load, NO live-session probe. Target: sub-second.
+  - MOVE the heavy diagnostics into aida doctor (the check-everything command): PR/CI status (gh), live-session/lease liveness, worktree probes, hygiene checks, full roster, cross-clone coordination, per-status breakdown.
+  - KEEP an opt-in for the rich view: aida status --full (and --ci) preserve current behavior for those who want it; the default no longer pays for it.
+
+  ACCEPTANCE:
+  - Bare aida status returns under ~1s on a 2466-spec repo (NO gh network call, NO full store load, NO live-session probe) — assert via a test that the fast path issues no gh/network call and does not call backend.load().
+  - The snapshot shows role + branch + queue depth + key counts (cache-sourced).
+  - The moved diagnostics are reachable via aida doctor (and/or aida status --full).
+  - aida status --full / --ci preserve the current rich output (opt-in, backward-compatible).
+
+  FILES: aida-cli/src/main.rs (handle_status_command_distributed, collect_user_context, collect_pr_facts, the doctor handler), aida-cli/src/cli.rs.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-27T02:06:55.073453756Z
+modified_at: 2026-06-27T02:06:55.073453756Z
+req_type: Story
+tags:
+- doctor
+- from-operator
+- performance
+- status
