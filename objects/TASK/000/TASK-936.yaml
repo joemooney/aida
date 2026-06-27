@@ -3,12 +3,12 @@ spec_id: TASK-936
 agreed_id: TASK-936
 title: TUI quiet-depth reveal (W5)
 description: 'Address SPIKE-66 finding (flagship TUI unused 33d): make the graph/traces/lifecycle depth discoverable from the TUI without adding surface complexity — one progressive-disclosure affordance (a "whats underneath" peek).'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:26.855950173Z
-modified_at: 2026-06-27T03:59:54.019471084Z
+modified_at: 2026-06-27T16:36:12.725859141Z
 req_type: Task
 relationships:
 - rel_type: Child
