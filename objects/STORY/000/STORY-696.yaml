@@ -3,12 +3,12 @@ spec_id: STORY-696
 agreed_id: STORY-696
 title: 'aida ps: global running-work table — every active session/agent with spec, role, pid, started, elapsed, live-vs-STALE (companion to aida status <spec>)'
 description: "Companion to STORY-694 (aida status <spec> = per-spec). aida ps is the GLOBAL ps/docker-ps-style view: one row per active session/agent across the project. Columns: session-id, spec (scope), role, worktree, pid, started, ELAPSED, liveness (● live / ⚠ STALE). \n\nToday the closest is aida session leases, but it shows generic harness-worktree scope (no spec link), no pid/elapsed/liveness. aida ps should: (1) list every live session lease with the STORY-694 liveness machinery (pid_is_alive, elapsed from started); (2) ALSO surface ORPHANED In-Progress specs — specs at status In-Progress with NO live session backing them (the flag-only case) — so the operator sees both \"what is genuinely running\" and \"what claims to be running but is not\"; (3) --json. \n\nReuse STORY-694s helpers (lease read, pid liveness, elapsed, STALE verdict) — build this AFTER STORY-694 lands so it shares one implementation. This + aida status <spec> together close the \"how do I know what is actively working on my machine\" legibility gap the operator has raised repeatedly. trace candidate."
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:43:35.572089662Z
-modified_at: 2026-06-26T23:58:11.978155276Z
+modified_at: 2026-06-27T00:07:38.797076020Z
 req_type: Story
 tags:
 - from-operator
@@ -22,3 +22,21 @@ comments:
   content: Commit 36bd96b92 references this requirement
   created_at: 2026-06-26T23:58:11.978155276Z
   modified_at: 2026-06-26T23:58:11.978155276Z
+history:
+- id: 019f0667-43d0-7fe1-9c6c-4389cd6d8926
+  author: aida-auto-bump
+  timestamp: 2026-06-27T00:07:38.704390904Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f0667-442d-7cc2-be3b-58c4ce11b30f
+  timestamp: 2026-06-27T00:07:38.797070248Z
+  agent: aida
+  commit_sha: e4a6cb7641d0c02d4580bb37cdfa9acd7a8b810f
+  summary: Completed via merge e4a6cb76
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T00:07:37.699686303Z
+  completion_sha: e4a6cb7641d0c02d4580bb37cdfa9acd7a8b810f
