@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T04:11:48.963689887Z
-modified_at: 2026-06-27T16:03:36.043603431Z
+modified_at: 2026-06-27T16:04:16.187594458Z
 req_type: Bug
 tags:
 - coordination
@@ -29,6 +29,13 @@ comments:
   content: 'DESIGN AGREED (operator 2026-06-27): the claim is a SPEC-SCOPED LEASE (reuse the session-lease registry .aida/sessions/, not a new store). On work-start, record a lease scoped to SPEC-N with {agent/session id, advisor, started-at, worktree}. AIDA-launched work (aida queue work / aida agent new) already spec-scopes its lease; the gap is advisor Agent-tool fan-outs which take generic harness-worktree leases — so the fan/work-start path writes the spec-claim. TWO check points (substrate-as-bouncer): (a) pre-pickup — dispatch refuses/skips a spec already claimed by a LIVE agent; (b) pre-edit — the advisor is warned/blocked before editing or rejecting a claimed spec (the EPIC-54-reject fix). LIVENESS: reuse STORY-694 aida status / pid_is_alive — a claim whose holder is DEAD is stale and auto-released (no deadlock on crash); the claim surfaces in aida ps / aida status <spec>. Drive as PR-for-operator-review (coordination-foundational).'
   created_at: 2026-06-27T15:25:59.837960801Z
   modified_at: 2026-06-27T15:25:59.837960801Z
+- id: 019f09d3-1b16-7090-a559-3328f87c84ca
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-27-bug-637-spec-scoped-claim.md
+    filed 2 task(s): TASK-957, TASK-958
+  created_at: 2026-06-27T16:04:17.814591772Z
+  modified_at: 2026-06-27T16:04:17.814591772Z
 history:
 - id: 019f09d2-7787-7331-b721-f43fa2528613
   author: aida-auto-bump
