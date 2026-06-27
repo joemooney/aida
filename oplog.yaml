@@ -22988,5 +22988,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 2167
+- id: 019f070e-80fc-7fd3-aec8-cdf35e7673de
+  target_id: 019f070e-74b6-7093-ad9b-f63577a5b95e
+  author: aida
+  node_id: '1'
+  lamport: 2168
+  timestamp: 2026-06-27T03:10:18.876540067Z
+  kind: !Create
+    title: 'aida usage performance lens: --slowest (latency by command) + --events (raw event stream with durations)'
+    description: "We already CAPTURE per-command latency: ~/.aida/usage.jsonl (STORY-122) logs {cmd, args_count, exit_code, duration_ms, role, binary_sha, ts} per invocation (~130K events). aida usage VIEWS it but only via frequency/error lenses (--unused/--errors/--health) — there is NO latency/performance view. Add the perf lens (reuse the existing usage.jsonl reader in handle_usage_command; do NOT add new capture):\n\n1. aida usage --slowest [--limit N] [--since Nd] [--json]: aggregate latency PER COMMAND from duration_ms — p50, p95, max, and call count — sorted slowest-first (by p95 or max). This is the perf-debug view; e.g. status would surface at the top (it was 26s before STORY-707). \n\n2. aida usage --events [--cmd <shape>] [--slower-than <Nms>] [--limit N] [--since Nd] [--json]: the RAW recent event stream (ts, cmd, duration_ms, exit_code), newest-first, filterable by command shape and a duration threshold, capped by --limit. This is the \"aida events\" raw log the operator imagined, delivered as a usage lens (NOT a new top-level command — avoid surface duplication).\n\nACCEPTANCE:\n- aida usage --slowest ranks commands by latency (p50/p95/max + count), slowest first; honors --since/--limit/--json.\n- aida usage --events streams recent raw events with durations; --cmd filters by command shape; --slower-than Nms filters by threshold; --limit caps; --json emits the rows.\n- Both REUSE the existing usage.jsonl parse path (no new capture, no new file).\n- Unit tests: the percentile (p50/p95/max) computation over a fixture, and the --events filter (by cmd + slower-than).\n\nFILES: aida-cli/src/cli.rs (new --slowest / --events / --slower-than flags on Usage), aida-cli/src/main.rs (handle_usage_command). Distinct from handle_block_command (TASK-950) + current_user_id (TASK-951)."
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 2168
 node_id: '1'
