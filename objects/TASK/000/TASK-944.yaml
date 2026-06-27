@@ -1,0 +1,27 @@
+id: 019f06c9-488e-73c2-9212-7587606f76fb
+spec_id: TASK-944
+agreed_id: TASK-944
+title: 'TUI keyboard model: Enter descends, Right opens verbs (scope + item), Left goes back'
+description: |-
+  Keyboard-model refinement for the redesign TUI (operator, 2026-06-26): make navigation directional (Right = deeper, Left = back, Enter = descend), instead of Enter-drills-to-verbs.
+
+  NEW BINDINGS:
+  - SCOPES panel (top): Enter (and Tab, as today) DESCENDS to the items/Targets panel. Right Arrow OPENS THE VERBS (drills into the scope's verbs) — this replaces Enter-drills-to-verbs.
+  - ITEMS panel (bottom): Right Arrow OPENS THE VERBS for the focused/selected target item (drill to verbs with that item as the target). Left Arrow (and Esc) goes BACK to the scopes. Enter (and p) still previews the focused item; Space still selects.
+  - VERBS panel: Enter runs (as today); Left Arrow (and Esc) goes back.
+  - Principle: Right = go deeper (scope→verbs), Left = back, Enter = descend/run. Keep Tab/Shift-Tab/Space/?/q working.
+
+  ACCEPTANCE: Enter on a scope descends to items (not verbs); Right on a scope opens its verbs; Right on an item opens the verbs for that item; Left goes back a level everywhere; existing keys still work; pure key-routing logic unit-tested; gates green; redesign module. Update the ? help legends.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-27T01:54:42.446804290Z
+modified_at: 2026-06-27T01:54:42.446804290Z
+req_type: Task
+tags:
+- keyboard
+- parent:EPIC-54
+- redesign
+- tui
+- ux
