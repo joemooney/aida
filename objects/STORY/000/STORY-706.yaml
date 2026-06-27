@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:36:50.334595154Z
-modified_at: 2026-06-27T16:40:45.243848835Z
+modified_at: 2026-06-27T18:03:01.235758597Z
 req_type: Story
 tags:
 - cli
@@ -33,3 +33,8 @@ comments:
   content: 'OPERATOR INSIGHT (2026-06-26): focus must propagate to QUEUE operations, not just reads. Machinery already exists: ''aida queue add --scope <epic>'' restricts routing to sessions whose lease scope matches (auto-populated from session scope), and ''aida queue work EPIC-54'' drains the epic''s CLUSTER (its queued children via the parent edge). So NO redundant queue tag is needed — the scope + parent edge already encode it. THE GAP: queuing under a focus does not currently carry the scope — the TUI queue verb runs ''aida queue add --for implementer'' WITHOUT --scope, so the item lands in the general queue unprotected (a drain scoped elsewhere can sweep it). FIX (part of aida focus): under a focus, queue add gets --scope <focus-epic> and queue work scopes to the epic''s cluster — so focus-queued work is drained only in the epic''s context (protected from outside drains by the lease-scope restriction), with no extra tagging.'
   created_at: 2026-06-27T01:42:53.550545181Z
   modified_at: 2026-06-27T01:42:53.550545181Z
+- id: 019f0a3f-ccf3-7c63-80b7-d8d5b6a0e97f
+  author: joe
+  content: Commit 67b5b7e97 references this requirement
+  created_at: 2026-06-27T18:03:01.235758597Z
+  modified_at: 2026-06-27T18:03:01.235758597Z
