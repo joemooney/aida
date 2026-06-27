@@ -12,12 +12,12 @@ description: |-
   - Principle: Right = go deeper (scope→verbs), Left = back, Enter = descend/run. Keep Tab/Shift-Tab/Space/?/q working.
 
   ACCEPTANCE: Enter on a scope descends to items (not verbs); Right on a scope opens its verbs; Right on an item opens the verbs for that item; Left goes back a level everywhere; existing keys still work; pure key-routing logic unit-tested; gates green; redesign module. Update the ? help legends.
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:54:42.446804290Z
-modified_at: 2026-06-27T01:54:46.499238301Z
+modified_at: 2026-06-27T02:53:23.111544025Z
 req_type: Task
 tags:
 - keyboard
