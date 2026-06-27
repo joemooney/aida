@@ -24119,5 +24119,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2298
+- id: 019f0a54-055c-72c2-8692-7b070f9104cf
+  target_id: 019f0a53-f943-7502-b0b9-d6cfb4255446
+  author: aida
+  node_id: '1'
+  lamport: 2299
+  timestamp: 2026-06-27T18:25:06.396693365Z
+  kind: !Create
+    title: GitLabForge JSON-read methods use non-existent glab flags (--output/-F json) — broken vs real glab 1.36.0
+    description: 'Live validation against gitlab.joemooney.com (glab 1.36.0) found that every GitLabForge method that reads JSON invokes a glab flag that does not exist: glab mr list ... --output json (change_for_branch, change_for_spec, merged_change_for_branch, list_changes), glab mr view <iid> --output json (change_status), and glab ci list -F json (ci_status, ci_probe_for_branch). All return "unknown flag" and the methods fail. EPIC-35 unit tests never caught this because they feed fixture JSON straight to the pure parsers and never invoke glab. Write paths are fine: mr create, mr merge -s -d -m -y, mr note -m, ci status -b/--live all exist and mr create was validated live (MR !1). Fix: route the JSON reads through glab api (validated working: glab api "projects/:id/merge_requests?source_branch=X&state=opened" and projects/:id/merge_requests/<iid> return the GitLab REST JSON the existing pure parsers — change_ref_from_glab_mr, parse_glab_mr_status, parse_glab_mr_list — already consume; the :id placeholder resolves the project from the repo remote). No trait/type/parser change; provider invocation only. This is the load-bearing reason EPIC-35 was plumbed-not-wired AND the wiring would not have worked: the provider read-path was non-functional against real glab. trace marker stays plain. Found during STORY-621 Slice 1 live validation.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2299
 node_id: '1'
