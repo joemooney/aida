@@ -3,12 +3,12 @@ spec_id: BUG-631
 agreed_id: BUG-631
 title: 'queue-add advisor-authority gate is too broad: ''aida queue add --for advisor'' shouldn''t need advisor authority'
 description: 'Operator insight (2026-06-26, walkthrough): the TASK-647 gate (''queuing work for execution needs advisor authority'') applies to ALL aida queue add, but it should NOT apply to --for advisor. Routing a draft TO the advisor is a REQUEST FOR REVIEW (request-approval / triage), which any role should be able to do — it does not dispatch work for execution and does not bypass approval (the advisor still decides). The gate conflates two opposite things: (1) REQUEST routing (--for advisor, --for human) = open to any role; (2) DISPATCH-for-execution routing (--for implementer / execution roles) = legitimately advisor-gated (you''re committing the team to do work). FIX: scope the advisor-authority requirement to execution-dispatch targets only; exempt --for advisor (and --for human). This is the ROOT fix for the TUI request-approval failure (BUG-630) — with the gate fixed, request-approval works from any role with no role-env hack. (The TUI queue verb, which dispatches --for implementer, legitimately still needs advisor authority.)'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:32:38.459070583Z
-modified_at: 2026-06-27T15:35:44.468432504Z
+modified_at: 2026-06-27T15:37:28.923847694Z
 req_type: Bug
 tags:
 - finding
@@ -20,3 +20,21 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-27T01:32:54.707761017Z
   created_by: joe
+history:
+- id: 019f09ba-8dec-70c1-8c7f-9abd1a36859f
+  author: aida-reconcile
+  timestamp: 2026-06-27T15:37:28.812215156Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f09ba-8e5b-7260-97c0-abd819864017
+  timestamp: 2026-06-27T15:37:28.923838695Z
+  agent: aida
+  commit_sha: 3f1760866e496c2a0f75b4a0a29cc2c418172868
+  summary: Completed via merge 3f176086
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T15:37:26.985915188Z
+  completion_sha: 3f1760866e496c2a0f75b4a0a29cc2c418172868
