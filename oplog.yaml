@@ -23520,5 +23520,13 @@ operations:
   timestamp: 2026-06-27T03:59:54.179345892Z
   kind: !SetPriority
     priority: High
-clock: 2230
+- id: 019f073d-ec74-7182-b0f8-4f08b5060c17
+  target_id: 019f0716-0049-79a1-bca3-0162e911d4a3
+  author: aida
+  node_id: '1'
+  lamport: 2231
+  timestamp: 2026-06-27T04:02:06.580891786Z
+  kind: !SetStatus
+    status: Rejected
+clock: 2231
 node_id: '1'
