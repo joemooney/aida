@@ -11,12 +11,12 @@ description: |-
 
   ## Seam
   EPIC-53 = approvable-set + batch action. EPIC-54 = multi-select gesture. Do NOT build multi-select UI in EPIC-53. See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:52:42.091111394Z
-modified_at: 2026-06-27T02:01:28.278328932Z
+modified_at: 2026-06-27T16:36:08.576103705Z
 req_type: Task
 relationships:
 - rel_type: Child
