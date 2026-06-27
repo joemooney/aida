@@ -22726,5 +22726,17 @@ operations:
   timestamp: 2026-06-27T02:07:25.207365967Z
   kind: !SetStatus
     status: Done
-clock: 2144
+- id: 019f06da-6c44-7581-bb60-e49e62224c3b
+  target_id: 019f06da-5f43-7f23-b810-6c5451947767
+  author: aida
+  node_id: '1'
+  lamport: 2145
+  timestamp: 2026-06-27T02:13:25.700788454Z
+  kind: !Create
+    title: 'groom verb: stubbed + semantically ambiguous — define it (intake disposition vs backlog-groom queue) and wire it'
+    description: 'Operator question (2026-06-26) exposed two issues with the groom verb: (1) it is STUBBED (mod.rs:758 logs to the status line; never wired). (2) ''groom'' is SEMANTICALLY AMBIGUOUS in AIDA itself: ''aida backlog groom'' = narrow (move approved backlog items onto the queue = just the queue step), while ''aida intake'' (ASSESS) = broad (advisor reads all open specs, proposes approve/reject/park/queue = the full disposition pass). The operator''s intuition (groom = review -> approve -> queue) matches INTAKE, not backlog-groom. DECIDE what the TUI groom verb means and wire it: most likely groom = the advisor''s composite disposition pass (intake) — the batch op that contains approve+queue — distinct from the atomic request-approval/approve/queue verbs. Then shell out to the chosen command (aida intake / aida backlog groom). Also reconcile the naming so ''groom'' isn''t overloaded.'
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2145
 node_id: '1'
