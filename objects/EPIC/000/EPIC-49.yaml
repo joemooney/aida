@@ -3,12 +3,12 @@ spec_id: EPIC-49
 agreed_id: EPIC-49
 title: 'AIDA streamlined + niche-fit: pare the surface, sharpen the wedge, make the niche legible'
 description: 'Product spine of the autonomous long-loop (north star: docs/plans/2026-06-18-north-star-streamlined-niche.md). Make AIDA the best version of itself: W2 streamline the surface (usage-grounded cut/hide/merge of low-value commands+skills; collapse near-duplicates), W3 sharpen the niche (spec-quality loop, competitive-eval feature, cross-vendor briefs, the trace loop), W5 legibility/onboarding (first-run, README/OVERVIEW, TUI quiet-depth). Children filed as the audit + experiments surface them. Subtraction counts as progress. Paired with EPIC-48 (the research half).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:28:18.420024972Z
-modified_at: 2026-06-26T23:49:44.515309561Z
+modified_at: 2026-06-27T16:29:33.146652374Z
 req_type: Epic
 tags:
 - from-advisor
@@ -40,3 +40,21 @@ comments:
   content: 'GROOMING RECONCILE (advisor pass, 2026-06-20, grounded in origin/main git log). Like EPIC-50, executed-by-doing while parked in Draft. SHIPPED, laddering to the workstreams: W2 streamline — hid rare top-level commands + cut orphaned zero-call verbs + collapsed presence/identity verbs (TASK-850/851/852), hid the deprecated intake alias; W3 sharpen-niche — aida compete shipped (STORY-659/660), --judge-vendor (TASK-869); W5 legibility — OVERVIEW ''the niche, concretely'' doc (c2533e5c5), onboarding front-door fix (BUG-597/TASK-886). GENUINELY-LIVE REMAINDER: more W2 (a usage-grounded second streamlining pass via aida usage --unused), and W5 first-run experience + the TUI quiet-depth reveal. Recommend: move EPIC-49 out of Draft (it is active, not ungroomed) and let the loop keep picking highest-leverage W2/W5 moves per the north-star.'
   created_at: 2026-06-20T18:09:33.005217981Z
   modified_at: 2026-06-20T18:09:33.005217981Z
+history:
+- id: 019f09ea-39f9-74f2-8367-44a15bc4804d
+  author: aida-reconcile
+  timestamp: 2026-06-27T16:29:33.049745711Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f09ea-3a5a-7653-a567-a8a84fc94235
+  timestamp: 2026-06-27T16:29:33.146646562Z
+  agent: aida
+  commit_sha: c2533e5c5d59e1c6c8c43f2ecfb0e354532c6c4d
+  summary: Completed via merge c2533e5c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T16:29:32.053746620Z
+  completion_sha: c2533e5c5d59e1c6c8c43f2ecfb0e354532c6c4d
