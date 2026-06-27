@@ -1215,6 +1215,39 @@ mod story_423_asciinema_tests {
         );
     }
 
+    // TASK-926 (Followup B of TASK-0438/TASK-905): a spec parked at
+    // NeedsAttention projects to "punted" when a punt record names it and to
+    // "blocked" otherwise. The punt record is the only signal that distinguishes
+    // the two — queue/lease signals are irrelevant in the NeedsAttention arm.
+    // trace:TASK-926
+    #[test]
+    fn lane_status_maps_needsattention_to_blocked_or_punted() {
+        // A punt record naming the spec → punted.
+        assert_eq!(
+            project_fasttrack_stage("NeedsAttention", false, false, true),
+            FasttrackStage::Punted,
+            "NeedsAttention with a punt record should project to Punted",
+        );
+        // No punt record → blocked.
+        assert_eq!(
+            project_fasttrack_stage("NeedsAttention", false, false, false),
+            FasttrackStage::Blocked,
+            "NeedsAttention without a punt record should project to Blocked",
+        );
+        // The has_punt flag is the sole discriminator: stray queue/lease signals
+        // do not change the blocked-vs-punted verdict in the NeedsAttention arm.
+        assert_eq!(
+            project_fasttrack_stage("NeedsAttention", true, true, true),
+            FasttrackStage::Punted,
+            "a punt record wins over queue/lease signals at NeedsAttention",
+        );
+        assert_eq!(
+            project_fasttrack_stage("NeedsAttention", true, true, false),
+            FasttrackStage::Blocked,
+            "no punt record stays Blocked even with queue/lease signals",
+        );
+    }
+
     #[test]
     fn strip_wrapper_flags_preserves_inner_command() {
         let raw = vec![
