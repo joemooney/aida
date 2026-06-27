@@ -1100,6 +1100,28 @@ impl Cache {
             .unwrap_or_default();
         Ok(d)
     }
+
+    // BUG-634: resolve a requirement UUID to its canonical `spec_id` using only
+    // an indexed single-row cache lookup — the targeted-read substitute for
+    // `object_store::find_by_uuid`, which scans EVERY object file. Returns
+    // `Ok(None)` when the UUID isn't in the cache (e.g. a not-yet-rebuilt row);
+    // the caller then degrades gracefully rather than full-scanning. Used by the
+    // single-spec write paths (the lease ancestor walk) so a write reads only
+    // the specs on the target's parent chain instead of the whole store.
+    // trace:BUG-634 | ai:claude
+    pub fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let spec_id = conn
+            .query_row(
+                "SELECT spec_id FROM requirements_cache WHERE id = ?1",
+                params![id.to_string()],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty());
+        Ok(spec_id)
+    }
 }
 
 // --------------------------------------------------------------- schema drift

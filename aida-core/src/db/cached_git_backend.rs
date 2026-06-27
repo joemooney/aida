@@ -114,6 +114,34 @@ impl CachedGitBackend {
         self.cache.degrees_for_id(id)
     }
 
+    /// Resolve a requirement UUID to its `Requirement` by reading ONLY
+    /// the one target YAML — the targeted-read substitute for `get_requirement`
+    /// (which delegates to `object_store::find_by_uuid`, a scan of EVERY object
+    /// file). The UUID → `spec_id` mapping comes from the cache (an indexed
+    /// single-row lookup); the canonical record is then read from git by
+    /// `spec_id` so the returned `Requirement` is always sourced from the
+    /// git-canonical YAML, never the cache projection.
+    ///
+    /// Does NOT trigger a stale-rebuild: callers use this on the single-spec
+    /// write path right after the backend was opened (which already ran
+    /// `ensure_cache_fresh`), and a miss here degrades gracefully to `Ok(None)`
+    /// rather than forcing a full scan — the opposite of the bug being fixed.
+    /// Returns `Ok(None)` when the UUID isn't in the cache (not-yet-rebuilt row)
+    /// or its YAML is gone.
+    // trace:BUG-634 | ai:claude
+    pub fn get_requirement_by_uuid_targeted(&self, id: &Uuid) -> Result<Option<Requirement>> {
+        let Some(spec_id) = self.cache.spec_id_for_uuid(id)? else {
+            return Ok(None);
+        };
+        // Read the canonical record from git by spec_id (one YAML), then verify
+        // the UUID matches — a cache row could be stale if a spec_id was reused,
+        // so the UUID check keeps the resolution exact.
+        match self.inner.get_requirement_by_spec_id(&spec_id)? {
+            Some(req) if req.id == *id => Ok(Some(req)),
+            _ => Ok(None),
+        }
+    }
+
     /// Cache-backed FTS5 search across spec_id, agreed_id, title, description.
     /// `archive` controls the archive axis (STORY-441); `defer` the defer axis
     /// (STORY-584).
@@ -505,6 +533,65 @@ mod tests {
         // Delete → cache row gone.
         backend.delete_requirement(&req_id).unwrap();
         assert_eq!(backend.cache().requirement_count().unwrap(), 0);
+    }
+
+    // `get_requirement_by_uuid_targeted` resolves a UUID to its canonical record
+    // by reading ONLY the one target YAML (cache lookup for UUID -> spec_id, then
+    // a single-spec git read) — never a full scan. It must return the same record
+    // `get_requirement` (the full-scan path) returns for a present UUID, `None`
+    // for an unknown UUID, and must source the record from git (so a stale cache
+    // row never masquerades as the canonical value). trace:BUG-634 | ai:claude
+    #[test]
+    fn get_requirement_by_uuid_targeted_resolves_only_the_target() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+
+        let a = backend
+            .add_requirement(sample_req("FR-1-001", "alpha"))
+            .unwrap();
+        let b = backend
+            .add_requirement(sample_req("FR-1-002", "bravo"))
+            .unwrap();
+
+        // Present UUID → same record the full-scan resolver returns.
+        let targeted = backend.get_requirement_by_uuid_targeted(&a.id).unwrap();
+        let scanned = backend.get_requirement(&a.id).unwrap();
+        assert_eq!(targeted.as_ref().map(|r| r.id), Some(a.id));
+        assert_eq!(
+            targeted.as_ref().map(|r| r.spec_id.clone()),
+            scanned.as_ref().map(|r| r.spec_id.clone()),
+            "targeted resolve must match the full-scan resolve"
+        );
+        assert_eq!(targeted.unwrap().title, "alpha");
+
+        // The other spec resolves independently.
+        assert_eq!(
+            backend
+                .get_requirement_by_uuid_targeted(&b.id)
+                .unwrap()
+                .map(|r| r.title),
+            Some("bravo".to_string())
+        );
+
+        // Unknown UUID → None (not an error, not a stray hit).
+        assert!(backend
+            .get_requirement_by_uuid_targeted(&uuid::Uuid::now_v7())
+            .unwrap()
+            .is_none());
+
+        // The cache's UUID → spec_id mapping underpins the resolver.
+        assert_eq!(
+            backend.cache().spec_id_for_uuid(&a.id).unwrap().as_deref(),
+            Some("FR-1-001")
+        );
+        assert!(backend
+            .cache()
+            .spec_id_for_uuid(&uuid::Uuid::now_v7())
+            .unwrap()
+            .is_none());
     }
 
     /// BUG-425: CachedGitBackend::bulk_update must write through to the cache

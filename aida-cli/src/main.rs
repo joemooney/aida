@@ -14882,11 +14882,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 if let Ok(project_root) = find_project_root() {
                     if !list_leases(&project_root).is_empty() {
-                        let store = backend.load()?;
+                        // BUG-634: targeted ancestor walk (cache + single-YAML
+                        // reads) instead of a full `backend.load()`.
+                        // trace:BUG-634 | ai:claude
                         enforce_session_lease(
                             &project_root,
                             pr,
-                            &store,
+                            &backend,
                             "aida add --parent",
                             false,
                         )?;
@@ -16088,15 +16090,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
 
             // STORY-48: lease enforcement. Find leases relative to the git
-            // project root (parent of the orphan store), load the full
-            // store once for ancestor walking, and consult the
-            // [session].enforcement knob. Best-effort — if we can't even
-            // find a project root, skip enforcement rather than break edit.
-            // trace:STORY-48 | ai:claude
+            // project root (parent of the orphan store) and consult the
+            // [session].enforcement knob. Best-effort — if we can't even find a
+            // project root, skip enforcement rather than break edit.
+            // BUG-634: the ancestor walk now reads only the target's parent
+            // chain (cache + single-YAML reads) instead of a full `backend.load()`
+            // of the whole store — that full load was the dominant write-path
+            // cost on every edit while any lease was active.
+            // trace:STORY-48 trace:BUG-634 | ai:claude
             if let Ok(project_root) = find_project_root() {
                 if !list_leases(&project_root).is_empty() {
-                    let store = backend.load()?;
-                    enforce_session_lease(&project_root, &req, &store, "aida edit", *strict)?;
+                    enforce_session_lease(&project_root, &req, &backend, "aida edit", *strict)?;
                 }
             }
             // BUG-68: all validation gates passed → safe to record the
@@ -45769,12 +45773,52 @@ fn session_enforcement(project_root: &std::path::Path) -> SessionEnforcement {
         .unwrap_or(SessionEnforcement::Warn)
 }
 
+/// Match the precomputed ancestor id-forms (lower-cased spec_ids + agreed_ids of
+/// the target and all its ancestors) against the lease scopes. Excludes
+/// `self_lease`. Returns the owning lease, or `None` for path-glob / free-form
+/// scopes that don't resolve to any ancestor id. Shared by the store-backed and
+/// targeted ancestor walks so their matching logic can't drift.
+// trace:STORY-48 trace:BUG-634 | ai:claude
+fn match_lease_for_ancestor_ids(
+    leases: &[SessionLease],
+    self_lease: Option<&SessionLease>,
+    ancestor_ids: &HashSet<String>,
+    target_spec_id: Option<&str>,
+) -> Option<SessionLease> {
+    for lease in leases {
+        if let Some(self_l) = self_lease {
+            if lease.id == self_l.id {
+                continue;
+            }
+        }
+        let scope_lc = lease.scope.to_ascii_lowercase();
+        // Direct id-form match (handles SPEC-ID + agreed-id forms).
+        if ancestor_ids.contains(&scope_lc) {
+            return Some(lease.clone());
+        }
+        // The provided target_spec_id might equal the scope verbatim even
+        // when ancestor walking doesn't pick it up (e.g. agreed_id stripped).
+        if let Some(tid) = target_spec_id {
+            if tid.eq_ignore_ascii_case(&lease.scope) {
+                return Some(lease.clone());
+            }
+        }
+        // Path globs / free-form tags: no ancestry to walk → don't enforce.
+    }
+    None
+}
+
 /// Returns the lease that "owns" `target_uuid` — i.e. the spec is itself
 /// the scope, OR is a descendant of the scope's spec via Parent
 /// relationships. Excludes `self_lease` (the caller's own session) so a
 /// session can freely edit specs in its own scope. Returns `None` for
 /// path-glob / free-form scopes that we can't resolve to a spec id.
-/// trace:STORY-48 | ai:claude
+///
+/// STORE-BACKED variant: for callers that ALREADY hold a fully-loaded store
+/// (e.g. `aida queue next`, which loads the store for pickability anyway). The
+/// single-spec WRITE paths use the targeted variant instead.
+// trace:STORY-48 — the targeted variant (lease_owning_spec_targeted) was added
+// for the single-spec write paths so they don't full-load the store. trace:BUG-634
 fn lease_owning_spec(
     leases: &[SessionLease],
     self_lease: Option<&SessionLease>,
@@ -45818,27 +45862,71 @@ fn lease_owning_spec(
         })
         .collect();
 
-    for lease in leases {
-        if let Some(self_l) = self_lease {
-            if lease.id == self_l.id {
-                continue;
-            }
-        }
-        let scope_lc = lease.scope.to_ascii_lowercase();
-        // Direct id-form match (handles SPEC-ID + agreed-id forms).
-        if ancestor_ids.contains(&scope_lc) {
-            return Some(lease.clone());
-        }
-        // The provided target_spec_id might equal the scope verbatim even
-        // when ancestor walking doesn't pick it up (e.g. agreed_id stripped).
-        if let Some(tid) = target_spec_id {
-            if tid.eq_ignore_ascii_case(&lease.scope) {
-                return Some(lease.clone());
-            }
-        }
-        // Path globs / free-form tags: no ancestry to walk → don't enforce.
+    match_lease_for_ancestor_ids(leases, self_lease, &ancestor_ids, target_spec_id)
+}
+
+/// TARGETED variant of `lease_owning_spec` for the single-spec WRITE paths:
+/// walks the target's ancestor chain by single-YAML reads (cache UUID->spec_id,
+/// then read that one YAML) instead of a full store load. Behaviorally identical
+/// to the store-backed variant (shared `match_lease_for_ancestor_ids`).
+//
+// The write paths (`aida edit`, `aida add --parent`) used to call the
+// store-backed `lease_owning_spec`, which required a fully-loaded
+// `RequirementsStore` — a scan + parse of all ~2500 object YAMLs — just to walk
+// ONE spec's ancestor chain. With any lease active, that full load fired on
+// EVERY write and was the dominant ~13-20s write-path cost. This variant starts
+// from the already-loaded `target` (whose id-forms and outbound `Child` edges
+// seed the walk) and resolves each further ancestor UUID via the cache, reading
+// one YAML each — typically 1-5 reads instead of 2500. An ancestor the cache
+// can't resolve is skipped, matching the graceful degradation the store-backed
+// `find` produced for an absent node.
+// trace:BUG-634 trace:STORY-48 | ai:claude
+fn lease_owning_spec_targeted(
+    leases: &[SessionLease],
+    self_lease: Option<&SessionLease>,
+    target: &Requirement,
+    backend: &aida_core::CachedGitBackend,
+) -> Option<SessionLease> {
+    if leases.is_empty() {
+        return None;
     }
-    None
+
+    let mut visited: HashSet<Uuid> = HashSet::new();
+    visited.insert(target.id);
+    let mut ancestor_ids: HashSet<String> = HashSet::new();
+    for s in [target.spec_id.as_deref(), target.agreed_id.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        ancestor_ids.insert(s.to_ascii_lowercase());
+    }
+    let mut frontier: Vec<Uuid> = target
+        .relationships
+        .iter()
+        .filter(|rel| rel.rel_type == RelationshipType::Child)
+        .map(|rel| rel.target_id)
+        .collect();
+    while let Some(curr) = frontier.pop() {
+        if !visited.insert(curr) {
+            continue;
+        }
+        let Ok(Some(req)) = backend.get_requirement_by_uuid_targeted(&curr) else {
+            continue;
+        };
+        for s in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            ancestor_ids.insert(s.to_ascii_lowercase());
+        }
+        for rel in &req.relationships {
+            if rel.rel_type == RelationshipType::Child {
+                frontier.push(rel.target_id);
+            }
+        }
+    }
+
+    match_lease_for_ancestor_ids(leases, self_lease, &ancestor_ids, target.spec_id.as_deref())
 }
 
 /// Enforce a session lease for an outbound mutation on `target`. Returns
@@ -45850,7 +45938,7 @@ fn lease_owning_spec(
 fn enforce_session_lease(
     project_root: &std::path::Path,
     target: &Requirement,
-    store: &RequirementsStore,
+    backend: &aida_core::CachedGitBackend,
     operation: &str,
     force_block: bool,
 ) -> Result<()> {
@@ -45861,13 +45949,10 @@ fn enforce_session_lease(
     let self_lease = std::env::current_dir()
         .ok()
         .and_then(|cwd| active_lease_for_cwd(project_root, &cwd));
-    let owner = lease_owning_spec(
-        &leases,
-        self_lease.as_ref(),
-        target.id,
-        target.spec_id.as_deref(),
-        store,
-    );
+    // BUG-634: targeted ancestor walk via the backend (cache + single-YAML
+    // reads) instead of a full `backend.load()` of the whole store.
+    // trace:BUG-634 | ai:claude
+    let owner = lease_owning_spec_targeted(&leases, self_lease.as_ref(), target, backend);
     let Some(owner) = owner else { return Ok(()) };
 
     let mut mode = session_enforcement(project_root);
@@ -68911,15 +68996,38 @@ mod lease_enforcement_tests {
         r
     }
 
+    // Write a slice of fixture requirements into a fresh store dir and return a
+    // `CachedGitBackend` whose cache reflects them. The lease ancestor walk now
+    // resolves ancestor UUIDs through the cache + single-YAML reads (no full
+    // `backend.load()`), so the tests must persist their fixtures and let the
+    // cache rebuild from them — building the backend over a seeded store runs
+    // `ensure_cache_fresh`, which populates the UUID -> spec_id mapping the
+    // resolver reads. trace:BUG-634 | ai:claude
+    fn seed_lease_backend(
+        root: &std::path::Path,
+        reqs: &[Requirement],
+    ) -> aida_core::CachedGitBackend {
+        use aida_core::DatabaseBackend;
+        let inner = aida_core::GitBackend::new(root).unwrap();
+        let mut store = RequirementsStore::new();
+        for r in reqs {
+            store.requirements.push(r.clone());
+        }
+        inner.save(&store).unwrap();
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(root);
+        aida_core::CachedGitBackend::with_inner(inner, &cache_path).unwrap()
+    }
+
     /// Direct spec-id ownership: lease scope == target spec id.
     /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owns_direct_spec_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
         let target = req_with_parents("STORY-48", &[]);
-        let mut store = RequirementsStore::new();
-        store.requirements.push(target.clone());
+        let backend = seed_lease_backend(&root, &[target.clone()]);
         let leases = vec![lease("STORY-48", "abc123")];
-        let owner = lease_owning_spec(&leases, None, target.id, target.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec_targeted(&leases, None, &target, &backend);
         assert!(owner.is_some());
         assert_eq!(owner.unwrap().scope, "STORY-48");
     }
@@ -68928,13 +69036,13 @@ mod lease_enforcement_tests {
     /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owns_via_parent_chain() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
         let epic = req_with_parents("EPIC-20", &[]);
         let story = req_with_parents("STORY-48", &[epic.id]);
-        let mut store = RequirementsStore::new();
-        store.requirements.push(epic.clone());
-        store.requirements.push(story.clone());
+        let backend = seed_lease_backend(&root, &[epic.clone(), story.clone()]);
         let leases = vec![lease("EPIC-20", "epic")];
-        let owner = lease_owning_spec(&leases, None, story.id, story.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec_targeted(&leases, None, &story, &backend);
         assert!(
             owner.is_some(),
             "EPIC-scope lease should own descendant story"
@@ -68947,18 +69055,13 @@ mod lease_enforcement_tests {
     /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owning_skips_self() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
         let target = req_with_parents("STORY-48", &[]);
-        let mut store = RequirementsStore::new();
-        store.requirements.push(target.clone());
+        let backend = seed_lease_backend(&root, &[target.clone()]);
         let mine = lease("STORY-48", "self");
         let leases = vec![mine.clone()];
-        let owner = lease_owning_spec(
-            &leases,
-            Some(&mine),
-            target.id,
-            target.spec_id.as_deref(),
-            &store,
-        );
+        let owner = lease_owning_spec_targeted(&leases, Some(&mine), &target, &backend);
         assert!(owner.is_none(), "should not flag the caller's own lease");
     }
 
@@ -68970,20 +69073,14 @@ mod lease_enforcement_tests {
     /// trace:BUG-54 | ai:claude
     #[test]
     fn lease_owning_skips_self_via_parent_chain() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
         let epic = req_with_parents("EPIC-20", &[]);
         let story = req_with_parents("STORY-55", &[epic.id]);
-        let mut store = RequirementsStore::new();
-        store.requirements.push(epic.clone());
-        store.requirements.push(story.clone());
+        let backend = seed_lease_backend(&root, &[epic.clone(), story.clone()]);
         let mine = lease("EPIC-20", "ownsepic");
         let leases = vec![mine.clone()];
-        let owner = lease_owning_spec(
-            &leases,
-            Some(&mine),
-            story.id,
-            story.spec_id.as_deref(),
-            &store,
-        );
+        let owner = lease_owning_spec_targeted(&leases, Some(&mine), &story, &backend);
         assert!(
             owner.is_none(),
             "owner-of-EPIC-X session must be allowed to edit children of EPIC-X"
@@ -68995,11 +69092,12 @@ mod lease_enforcement_tests {
     /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owning_ignores_unresolved_scopes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
         let target = req_with_parents("STORY-48", &[]);
-        let mut store = RequirementsStore::new();
-        store.requirements.push(target.clone());
+        let backend = seed_lease_backend(&root, &[target.clone()]);
         let leases = vec![lease("src/scaffolding/**", "glob")];
-        let owner = lease_owning_spec(&leases, None, target.id, target.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec_targeted(&leases, None, &target, &backend);
         assert!(owner.is_none());
     }
 
@@ -69007,8 +69105,12 @@ mod lease_enforcement_tests {
     /// trace:STORY-48 | ai:claude
     #[test]
     fn lease_owning_handles_parent_cycle() {
-        let mut a = req_with_parents("FR-A", &[]);
-        let mut b = req_with_parents("FR-B", &[]);
+        // BUG-634: spec_ids must be well-formed (TYPE-SEQ, numeric seq) now that
+        // the fixtures are persisted to a real store — `FR-A`/`FR-B` parsed fine
+        // for the old in-memory store but `object_path` rejects a non-numeric
+        // sequence. trace:BUG-634 | ai:claude
+        let mut a = req_with_parents("FR-1", &[]);
+        let mut b = req_with_parents("FR-2", &[]);
         // Cycle uses `Child` edges (the climb-toward-root direction in
         // AIDA's storage convention). Each side points at the other as
         // its "parent" — pathological, but lease_owning_spec must
@@ -69025,12 +69127,12 @@ mod lease_enforcement_tests {
             created_at: Some(chrono::Utc::now()),
             created_by: None,
         }];
-        let mut store = RequirementsStore::new();
-        store.requirements.push(a.clone());
-        store.requirements.push(b.clone());
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = seed_lease_backend(&root, &[a.clone(), b.clone()]);
         // No lease covers either; the call must terminate.
         let leases: Vec<SessionLease> = vec![];
-        let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec_targeted(&leases, None, &a, &backend);
         assert!(owner.is_none());
     }
 
