@@ -19,12 +19,12 @@ description: |-
   NAMING NOTE: "groom" colloquially blends refinement + disposition; assess/intake lean pure disposition. Choose consciously (groom is recognizable + matches the operator's model; alternatives: keep assess, or triage).
 
   ACCEPTANCE: `aida groom [<spec>...|<epic>]` runs the advisor disposition pass scoped to the targets (all-open default); assess/intake/backlog-groom reconciled (one canonical "groom", aliases deprecated); epic targets use the transitive closure; existing flags preserved; TUI groom verb can shell to it.
-status: Draft
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:21:04.124832287Z
-modified_at: 2026-06-27T15:35:42.101857171Z
+modified_at: 2026-06-27T15:35:47.011990409Z
 req_type: Story
 tags:
 - assess
