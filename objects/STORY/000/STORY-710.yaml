@@ -1,0 +1,23 @@
+id: 019f0719-3244-7283-87e2-e26528b6a2f2
+spec_id: STORY-710
+agreed_id: STORY-710
+title: 'TUI: READ vs UPDATE verb model — reads carousel + always-available; updates require a selection (greyed otherwise)'
+description: |-
+  Operator design (2026-06-26): classify verbs as READ (show/why/status) vs UPDATE (approve/queue/accept/defer/request-approval). Two behaviors follow:
+  (A) CAROUSEL: a READ verb on a multi-selection — or none (= all) — opens the modal and Left/Right arrow moves through the items (review N specs without close/reopen). The modal captures Left/Right while open, so no conflict with the directional nav (TASK-944). For a single focused item, Left/Right moves through the list.
+  (B) UPDATE GREY-OUT: UPDATE verbs require >=1 explicitly SELECTED item; when nothing is selected they are GREYED OUT (dimmed, non-selectable, hint says 'select item(s) first'). 'none implies all' is safe for reads, dangerous for updates — so reads broaden to all, updates demand an explicit pick. This prevents accidentally mutating the focused item.
+  This adds a SECOND grey-out axis to TASK-947 (status-applicability): a verb is enabled iff status-applicable AND (if UPDATE) has a selection. ACCEPTANCE: read verbs carousel via Left/Right over the selection (or all); update verbs greyed + non-selectable with no selection; the read/update classification is a property of each Verb; pure logic tested.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-27T03:21:59.620090932Z
+modified_at: 2026-06-27T03:21:59.620090932Z
+req_type: Story
+tags:
+- parent:EPIC-54
+- redesign
+- selection
+- tui
+- ux
+- verb-model
