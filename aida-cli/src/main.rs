@@ -3084,6 +3084,10 @@ fn run() -> Result<()> {
             pattern,
             health,
             read_write,
+            slowest,
+            events,
+            cmd,
+            slower_than,
         } => {
             // TASK-266: only the `--auto-complete` view needs the store
             // (to resolve drafted-BUG statuses) — keep plain `aida usage`
@@ -3105,6 +3109,10 @@ fn run() -> Result<()> {
                 *pattern,
                 *health,
                 *read_write,
+                *slowest,
+                *events,
+                cmd.as_deref(),
+                *slower_than,
                 store.as_ref(),
             )?;
         }
@@ -13556,6 +13564,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             pattern,
             health,
             read_write,
+            slowest,
+            events,
+            cmd,
+            slower_than,
         } => {
             // TASK-266: load the store only for the `--auto-complete` view,
             // which resolves drafted-BUG statuses; plain usage stays cheap.
@@ -13576,6 +13588,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *pattern,
                 *health,
                 *read_write,
+                *slowest,
+                *events,
+                cmd.as_deref(),
+                *slower_than,
                 store.as_ref(),
             );
         }
@@ -91237,6 +91253,397 @@ fn aggregate_events(
 }
 
 // ----------------------------------------------------------------------------
+// `aida usage --slowest` + `aida usage --events` — the performance lens
+// (STORY-709). Both read the SAME `~/.aida/usage.jsonl` log via
+// `usage::read_events()` and the same `UsageEvent` struct (cmd + duration_ms +
+// exit_code + ts) — no new capture, no new file. `--slowest` aggregates
+// latency per command shape; `--events` streams the raw rows.
+// ----------------------------------------------------------------------------
+
+/// Latency aggregate for one command shape over a telemetry window.
+// trace:STORY-709 | ai:claude
+struct LatencyRow {
+    cmd: String,
+    count: u64,
+    p50: u64,
+    p95: u64,
+    max: u64,
+}
+
+/// Nearest-rank percentile over a slice of `duration_ms` samples.
+///
+/// `pct` is a fraction in `[0.0, 1.0]` (e.g. 0.5 for p50, 0.95 for p95).
+/// Returns 0 for an empty input. The samples are sorted internally; the
+/// nearest-rank index is `ceil(pct * n) - 1`, clamped into bounds — so
+/// `percentile(.., 1.0)` is the max and `percentile(.., 0.0)` is the min.
+/// Pure over its input so it can be unit-tested.
+// trace:STORY-709 | ai:claude
+fn percentile(durations: &[u64], pct: f64) -> u64 {
+    if durations.is_empty() {
+        return 0;
+    }
+    let mut sorted = durations.to_vec();
+    sorted.sort_unstable();
+    let n = sorted.len();
+    // Nearest-rank: rank = ceil(pct * n), 1-indexed, clamped to [1, n].
+    let rank = (pct * n as f64).ceil() as usize;
+    let idx = rank.clamp(1, n) - 1;
+    sorted[idx]
+}
+
+/// Group windowed events by command shape and compute p50/p95/max + count
+/// of `duration_ms` per shape. Pure over its inputs (testable). Sorted
+/// slowest-first by p95, tie-broken by max.
+// trace:STORY-709 | ai:claude
+fn aggregate_latency(
+    events: &[usage::UsageEvent],
+    since: chrono::DateTime<chrono::Utc>,
+) -> Vec<LatencyRow> {
+    let mut by_cmd: std::collections::HashMap<String, Vec<u64>> = std::collections::HashMap::new();
+    for ev in events {
+        let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) else {
+            continue;
+        };
+        if ts.with_timezone(&chrono::Utc) < since {
+            continue;
+        }
+        by_cmd
+            .entry(ev.cmd.clone())
+            .or_default()
+            .push(ev.duration_ms);
+    }
+    let mut rows: Vec<LatencyRow> = by_cmd
+        .into_iter()
+        .map(|(cmd, durations)| {
+            let max = durations.iter().copied().max().unwrap_or(0);
+            LatencyRow {
+                cmd,
+                count: durations.len() as u64,
+                p50: percentile(&durations, 0.50),
+                p95: percentile(&durations, 0.95),
+                max,
+            }
+        })
+        .collect();
+    // Slowest-first: rank by p95, tie-break by max, then count (stable enough).
+    rows.sort_by(|a, b| {
+        b.p95
+            .cmp(&a.p95)
+            .then_with(|| b.max.cmp(&a.max))
+            .then_with(|| b.count.cmp(&a.count))
+    });
+    rows
+}
+
+/// Filter raw events to a window + optional command-shape + optional
+/// duration-threshold, then return them NEWEST-first. Pure over its inputs
+/// (testable).
+// trace:STORY-709 | ai:claude
+fn filter_events<'a>(
+    events: &'a [usage::UsageEvent],
+    since: chrono::DateTime<chrono::Utc>,
+    cmd_filter: Option<&str>,
+    slower_than: Option<u64>,
+) -> Vec<&'a usage::UsageEvent> {
+    let mut matched: Vec<&usage::UsageEvent> = events
+        .iter()
+        .filter(|ev| {
+            let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) else {
+                return false;
+            };
+            if ts.with_timezone(&chrono::Utc) < since {
+                return false;
+            }
+            if let Some(want) = cmd_filter {
+                if ev.cmd != want {
+                    return false;
+                }
+            }
+            if let Some(threshold) = slower_than {
+                if ev.duration_ms < threshold {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+    // Newest-first. The log is append-order; sort by ts descending so we don't
+    // assume strict monotonicity (clock skew / concurrent writers).
+    matched.sort_by(|a, b| b.ts.cmp(&a.ts));
+    matched
+}
+
+/// `aida usage --slowest`: rank command shapes by latency, slowest-first.
+// trace:STORY-709 | ai:claude
+fn handle_usage_slowest(since_raw: &str, json_out: bool, limit: usize) -> Result<()> {
+    let now = chrono::Utc::now();
+    let since = now - parse_days_arg(since_raw)?;
+    let events = usage::read_events();
+    let rows = aggregate_latency(&events, since);
+
+    if json_out {
+        let arr: Vec<serde_json::Value> = rows
+            .iter()
+            .take(limit)
+            .map(|r| {
+                serde_json::json!({
+                    "cmd": r.cmd,
+                    "count": r.count,
+                    "p50_ms": r.p50,
+                    "p95_ms": r.p95,
+                    "max_ms": r.max,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr)?);
+        return Ok(());
+    }
+
+    println!(
+        "{} slowest commands in the last {} (by p95 latency)",
+        "Usage:".bold(),
+        since_raw.cyan()
+    );
+    println!(
+        "  {:<24} {:>6} {:>8} {:>8} {:>8}",
+        "cmd".dimmed(),
+        "count".dimmed(),
+        "p50_ms".dimmed(),
+        "p95_ms".dimmed(),
+        "max_ms".dimmed()
+    );
+    if rows.is_empty() {
+        println!("  (no qualifying events in the window — try `--since 90d` or run more commands)");
+        return Ok(());
+    }
+    for row in rows.iter().take(limit) {
+        println!(
+            "  {:<24} {:>6} {:>8} {:>8} {:>8}",
+            row.cmd.bold(),
+            row.count,
+            row.p50,
+            row.p95,
+            row.max
+        );
+    }
+    if rows.len() > limit {
+        println!(
+            "  {} {} more (pass --limit N to expand)",
+            "…".dimmed(),
+            (rows.len() - limit).to_string().dimmed()
+        );
+    }
+    Ok(())
+}
+
+/// `aida usage --events`: stream raw recent events, newest-first, filterable.
+// trace:STORY-709 | ai:claude
+fn handle_usage_events(
+    since_raw: &str,
+    json_out: bool,
+    limit: usize,
+    cmd_filter: Option<&str>,
+    slower_than: Option<u64>,
+) -> Result<()> {
+    let now = chrono::Utc::now();
+    let since = now - parse_days_arg(since_raw)?;
+    let events = usage::read_events();
+    let matched = filter_events(&events, since, cmd_filter, slower_than);
+
+    if json_out {
+        let arr: Vec<serde_json::Value> = matched
+            .iter()
+            .take(limit)
+            .map(|ev| {
+                serde_json::json!({
+                    "ts": ev.ts,
+                    "cmd": ev.cmd,
+                    "duration_ms": ev.duration_ms,
+                    "exit_code": ev.exit_code,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr)?);
+        return Ok(());
+    }
+
+    let mut header = format!(
+        "{} recent events in the last {}",
+        "Usage:".bold(),
+        since_raw.cyan()
+    );
+    if let Some(c) = cmd_filter {
+        header.push_str(&format!(" (cmd = {})", c.cyan()));
+    }
+    if let Some(t) = slower_than {
+        header.push_str(&format!(" (slower than {}ms)", t.to_string().cyan()));
+    }
+    println!("{}", header);
+    println!(
+        "  {:<25} {:<24} {:>10} {:>5}",
+        "ts".dimmed(),
+        "cmd".dimmed(),
+        "duration_ms".dimmed(),
+        "exit".dimmed()
+    );
+    if matched.is_empty() {
+        println!("  (no matching events in the window — widen --since or relax the filters)");
+        return Ok(());
+    }
+    for ev in matched.iter().take(limit) {
+        let exit_cell = if ev.exit_code == 0 {
+            "0".dimmed().to_string()
+        } else {
+            ev.exit_code.to_string().yellow().to_string()
+        };
+        println!(
+            "  {:<25} {:<24} {:>10} {:>5}",
+            ev.ts.dimmed(),
+            ev.cmd.bold(),
+            ev.duration_ms,
+            exit_cell
+        );
+    }
+    if matched.len() > limit {
+        println!(
+            "  {} {} more (pass --limit N to expand)",
+            "…".dimmed(),
+            (matched.len() - limit).to_string().dimmed()
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod usage_perf_lens_tests {
+    // trace:STORY-709 | ai:claude
+    use super::*;
+
+    fn ev(ts: &str, cmd: &str, duration_ms: u64, exit_code: i32) -> usage::UsageEvent {
+        usage::UsageEvent {
+            ts: ts.to_string(),
+            cmd: cmd.to_string(),
+            args_count: 0,
+            exit_code,
+            duration_ms,
+            binary_sha: None,
+            role: None,
+            scope: None,
+        }
+    }
+
+    #[test]
+    fn percentile_basic_p50_p95_max() {
+        // 1..=10: nearest-rank.
+        let d: Vec<u64> = (1..=10).collect();
+        // p50 → ceil(0.5*10)=5 → index 4 → value 5.
+        assert_eq!(percentile(&d, 0.50), 5);
+        // p95 → ceil(0.95*10)=10 → index 9 → value 10.
+        assert_eq!(percentile(&d, 0.95), 10);
+        // p100 → max.
+        assert_eq!(percentile(&d, 1.0), 10);
+        // p0 → ceil(0)=0 → clamped to rank 1 → min.
+        assert_eq!(percentile(&d, 0.0), 1);
+    }
+
+    #[test]
+    fn percentile_empty_is_zero() {
+        assert_eq!(percentile(&[], 0.5), 0);
+        assert_eq!(percentile(&[], 0.95), 0);
+    }
+
+    #[test]
+    fn percentile_single_sample() {
+        assert_eq!(percentile(&[42], 0.50), 42);
+        assert_eq!(percentile(&[42], 0.95), 42);
+        assert_eq!(percentile(&[42], 1.0), 42);
+    }
+
+    #[test]
+    fn percentile_unsorted_input() {
+        // Same multiset as 1..=10, scrambled — must match the sorted result.
+        let d = vec![10u64, 3, 7, 1, 9, 2, 8, 4, 6, 5];
+        assert_eq!(percentile(&d, 0.50), 5);
+        assert_eq!(percentile(&d, 0.95), 10);
+    }
+
+    #[test]
+    fn aggregate_latency_ranks_slowest_first() {
+        let since = chrono::Utc::now() - chrono::Duration::days(30);
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut events = Vec::new();
+        // "slow" — three calls, max 9000.
+        for ms in [1000u64, 5000, 9000] {
+            events.push(ev(&now, "slow cmd", ms, 0));
+        }
+        // "fast" — three calls, max 300.
+        for ms in [100u64, 200, 300] {
+            events.push(ev(&now, "fast cmd", ms, 0));
+        }
+        let rows = aggregate_latency(&events, since);
+        assert_eq!(rows.len(), 2);
+        // Slowest (higher p95) first.
+        assert_eq!(rows[0].cmd, "slow cmd");
+        assert_eq!(rows[0].count, 3);
+        assert_eq!(rows[0].max, 9000);
+        assert_eq!(rows[1].cmd, "fast cmd");
+        assert_eq!(rows[1].max, 300);
+    }
+
+    #[test]
+    fn aggregate_latency_excludes_out_of_window() {
+        let since = chrono::Utc::now() - chrono::Duration::days(7);
+        let recent = chrono::Utc::now().to_rfc3339();
+        let old = (chrono::Utc::now() - chrono::Duration::days(30)).to_rfc3339();
+        let events = vec![
+            ev(&recent, "in window", 500, 0),
+            ev(&old, "out of window", 9999, 0),
+        ];
+        let rows = aggregate_latency(&events, since);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].cmd, "in window");
+    }
+
+    #[test]
+    fn filter_events_by_cmd_and_slower_than() {
+        let since = chrono::Utc::now() - chrono::Duration::days(30);
+        let t = chrono::Utc::now().to_rfc3339();
+        let events = vec![
+            ev(&t, "queue list", 100, 0),
+            ev(&t, "queue list", 5000, 0),
+            ev(&t, "status", 26000, 0),
+            ev(&t, "queue work", 800, 1),
+        ];
+        // --cmd "queue list" → two events.
+        let by_cmd = filter_events(&events, since, Some("queue list"), None);
+        assert_eq!(by_cmd.len(), 2);
+        assert!(by_cmd.iter().all(|e| e.cmd == "queue list"));
+
+        // --slower-than 1000 → the 5000 and 26000 ones.
+        let slow = filter_events(&events, since, None, Some(1000));
+        assert_eq!(slow.len(), 2);
+        assert!(slow.iter().all(|e| e.duration_ms >= 1000));
+
+        // Both together: "queue list" AND >= 1000 → just the 5000 one.
+        let both = filter_events(&events, since, Some("queue list"), Some(1000));
+        assert_eq!(both.len(), 1);
+        assert_eq!(both[0].duration_ms, 5000);
+    }
+
+    #[test]
+    fn filter_events_newest_first() {
+        let since = chrono::Utc::now() - chrono::Duration::days(30);
+        let older = (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc3339();
+        let newer = (chrono::Utc::now() - chrono::Duration::minutes(2)).to_rfc3339();
+        // Insert older first to prove the sort, not insertion order, governs.
+        let events = vec![ev(&older, "a", 1, 0), ev(&newer, "b", 1, 0)];
+        let out = filter_events(&events, since, None, None);
+        assert_eq!(out[0].ts, newer);
+        assert_eq!(out[1].ts, older);
+    }
+}
+
+// ----------------------------------------------------------------------------
 // `aida metrics agent-lift` — dogfood agent-lift report (STORY-477).
 // ----------------------------------------------------------------------------
 
@@ -91735,6 +92142,10 @@ fn handle_usage_command(
     pattern: bool,
     health: bool,
     read_write: bool,
+    slowest: bool,
+    events_lens: bool,
+    cmd_filter: Option<&str>,
+    slower_than: Option<u64>,
     store: Option<&RequirementsStore>,
 ) -> Result<()> {
     // TASK-872: `--read-write` runs the trace-read-rate audit — classify the
@@ -91742,6 +92153,20 @@ fn handle_usage_command(
     // Its own source-shape (the usage log, classified), so its own handler.
     if read_write {
         return handle_usage_read_write(since_raw, json_out, limit);
+    }
+
+    // STORY-709: `--slowest` is the performance lens — aggregate per-command
+    // latency (p50/p95/max + count) from the same usage log and rank
+    // slowest-first. Reuses the existing read/parse path; no new capture.
+    if slowest {
+        return handle_usage_slowest(since_raw, json_out, limit);
+    }
+
+    // STORY-709: `--events` streams the raw recent event log (ts, cmd,
+    // duration_ms, exit_code), newest-first, filterable by --cmd and
+    // --slower-than. The "aida events" raw log, delivered as a usage lens.
+    if events_lens {
+        return handle_usage_events(since_raw, json_out, limit, cmd_filter, slower_than);
     }
 
     // STORY-530: `--health` renders the deterministic Tier-1 health catalog
