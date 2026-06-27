@@ -24055,5 +24055,13 @@ operations:
   timestamp: 2026-06-27T16:36:22.755772966Z
   kind: !SetStatus
     status: Approved
-clock: 2291
+- id: 019f09f0-8456-7c03-9ec8-7ea87317eaa6
+  target_id: 019f06da-5f43-7f23-b810-6c5451947767
+  author: aida
+  node_id: '1'
+  lamport: 2292
+  timestamp: 2026-06-27T16:36:25.302642674Z
+  kind: !SetStatus
+    status: Rejected
+clock: 2292
 node_id: '1'
