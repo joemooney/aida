@@ -18,12 +18,12 @@ description: |-
   - Should `aida rel add --type parent` ALWAYS create the inverse by default (bidirectional), so Parent/Child edges can't be one-directional?
   - Do `--tree` and the focus-closure walk different edge directions? Align them (or make the closure direction-agnostic).
   - Do relationship writes reliably invalidate/rebuild .aida/cache.db? If not, graph-derived reads (including the focus lens) can be stale.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T19:52:13.150481811Z
-modified_at: 2026-06-27T16:36:26.726480476Z
+modified_at: 2026-06-27T16:36:28.199101725Z
 req_type: Spike
 tags:
 - cache
