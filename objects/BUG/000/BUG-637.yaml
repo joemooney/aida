@@ -3,12 +3,12 @@ spec_id: BUG-637
 agreed_id: BUG-637
 title: 'Duplicate dispatch: two agents worked the same In-Progress spec (BUG-634) with no spec-scoped claim — add a claim/lock fan-outs respect'
 description: 'During the 2026-06-26 perf drive, BUG-634 was picked up + fully implemented by TWO agents concurrently (my Agent-tool fan-out AND a sibling agent who landed PR #1156). Both found the same root cause + fix; the second closed its duplicate (no work lost, but wasted effort + a near-miss on conflicting PRs). Root cause: a spec being In-Progress does NOT prevent another agent from picking it up — Agent-tool fan-outs take generic harness-worktree leases (not spec-scoped), so neither agent could SEE the other had claimed BUG-634. Same legibility gap as the EPIC-54 reject incident. FIX: a spec-scoped CLAIM (lease) created when an implementer starts work, that the dispatch path + other agents check BEFORE picking up (refuse/skip an already-claimed spec). Relates to STORY-696 (aida ps) + the spec-linkable-fanouts follow-up. The flip-to-In-Progress discipline marks status but does not LOCK; a real claim is needed for multi-agent + operator-agent co-driving.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T04:11:48.963689887Z
-modified_at: 2026-06-27T15:25:59.837960801Z
+modified_at: 2026-06-27T15:26:01.506859199Z
 req_type: Bug
 tags:
 - coordination
