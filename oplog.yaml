@@ -24107,5 +24107,17 @@ operations:
   timestamp: 2026-06-27T17:41:58.413583275Z
   kind: !SetStatus
     status: In Progress
-clock: 2297
+- id: 019f0a3f-14de-76a1-8bc3-4502a40a49b5
+  target_id: 019f0a3e-f339-7c32-a22c-8fbbee5a46ad
+  author: aida
+  node_id: '1'
+  lamport: 2298
+  timestamp: 2026-06-27T18:02:14.110734315Z
+  kind: !Create
+    title: 'STORY-621 Slice 1: route-only forge wiring (pr ship lookup + merged-lookup + child-PRs + queue-recover create)'
+    description: 'Route the 4 clean route-only gh call sites through the existing Forge trait so GitLab works on the keyboard pr-ship + queue-recover paths. No trait change (uses existing methods + pr_ship title/body derivation). Sites (de-drifted 2026-06-27): pr_ship_handler open-PR lookup -> change_lookup_for_branch; latest_merged_pr_for_branch -> detect_merged_pr_for_branch_via_forge; open_child_prs -> list_changes(base filter); queue recover two gh pr create --fill arms -> derive title/body + open_change. GitHub byte-equivalent; validate live on gitlab.joemooney.com. Release --after-pr merge deliberately deferred to Slice 3 (CI-watch sibling; release stays GitHub-coupled). Parent STORY-621.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2298
 node_id: '1'
