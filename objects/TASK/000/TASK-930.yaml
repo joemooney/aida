@@ -8,6 +8,20 @@ description: |-
   This is the DEMO SPEC for an end-to-end lifecycle walkthrough (Draft -> advisor approval -> implementation -> human test-plan verification -> reviewer accept -> Completed) driven through the redesign TUI. Left as a Draft; the implementer will write its ## Test Plan during implementation.
 
   ACCEPTANCE: `aida queue list` ends with a summary footer showing total / routed / unrouted counts; counts are correct; no footer when the queue is empty (the existing empty message stands).
+
+  ## Test Plan
+
+  Build the worktree binary: `cargo build -p aida-cli` (binary at /home/joe/ai/aida-task930/target/debug/aida).
+
+  1. Non-empty queue, mixed routing — Run `/home/joe/ai/aida-task930/target/debug/aida queue list`. Expect: after the numbered item list (and before any "Done — awaiting merge" section) a single dimmed footer line of the form `N items · M routed · K unrouted`. Verify N equals the number of listed queue items, M equals the count routed to a role (queued via --for), K = N - M, and the separator is " · " (matching the title row).
+
+  2. Counts are correct — Cross-check against the listed entries: every entry shown with a [for:ROLE] / role chip is "routed"; entries with no role target are "unrouted". M + K must equal N. Singular form: a one-item queue reads `1 item · ...` (not `1 items`).
+
+  3. Empty queue — Run `/home/joe/ai/aida-task930/target/debug/aida queue list --for nonexistentrole` (or any filter that yields no items). Expect: NO footer line; the existing empty message ("Your queue is empty." / "Your queue (no items routed to role ...)") stands unchanged.
+
+  4. Regression — The footer must not appear in the in-flight-only view (`--in-flight-only`) and must not disturb the existing terminal-status-hidden hint, the tree/by-batch grouped views, or the ultraplan/out-of-order-blocker hints.
+
+  Automated coverage: pure formatter `queue_summary_footer(total, routed)` is unit-tested in mod `task_930_queue_summary_footer_tests` (empty → None; all-routed; all-unrouted; mixed; singular; saturating). Run `env -u AIDA_SESSION_ROLE cargo test -p aida-cli task_930`.
 status: InProgress
 priority: Low
 owner: ''
