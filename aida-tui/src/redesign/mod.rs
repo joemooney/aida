@@ -892,6 +892,11 @@ fn queue_for_advisor(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["queue", "add", "--for", "advisor", id]);
+    // BUG-630: carry advisor authority on the spawned command (like approve_spec
+    // / accept), so `aida queue add` isn't refused by the TASK-647 gate. Once
+    // BUG-631 lands (the gate exempts --for advisor), this becomes unnecessary
+    // for the advisor-routing case. trace:BUG-630 | ai:claude
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -933,6 +938,10 @@ fn queue_for_implementer(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["queue", "add", "--for", "implementer", id]);
+    // BUG-630: dispatching to the implementer queue needs advisor authority
+    // (the TASK-647 gate, correctly — this commits the team to execute). Carry
+    // it on the spawned command, mirroring approve_spec/accept. trace:BUG-630
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
