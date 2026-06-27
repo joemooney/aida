@@ -3,12 +3,12 @@ spec_id: TASK-935
 agreed_id: TASK-935
 title: Second usage-grounded streamlining pass (W2)
 description: Run aida usage --unused 30d + aida usage --errors; cut/hide/merge the next tranche of zero-/rare-call verbs and near-duplicate skills; record before/after top-level command count. Pure subtraction; data-grounded successor to TASK-850/851/852.
-status: Draft
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:48:47.552272878Z
-modified_at: 2026-06-26T23:48:58.772482546Z
+modified_at: 2026-06-27T15:35:49.223242694Z
 req_type: Task
 relationships:
 - rel_type: Child
