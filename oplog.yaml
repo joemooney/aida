@@ -24151,5 +24151,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2301
+- id: 019f0a84-784c-7a73-93eb-9a39aa621337
+  target_id: 019f0a84-6bad-7261-a2c9-d95c5d108655
+  author: aida
+  node_id: '1'
+  lamport: 2302
+  timestamp: 2026-06-27T19:18:01.548354921Z
+  kind: !Create
+    title: 'STORY-621 Slice 2: Forge::change_metadata + reviewer-preflight/reconcile metadata-read consolidation'
+    description: 'Add Forge::change_metadata (+ change_commit_headlines, change_reviews) to route ~19 gh pr view/list --json metadata-read sites through the trait so the drain reconcile + reviewer pre-flight phases work on GitLab. Three-method design (scalar object + commits + reviews) so callers pay only for what they read; GitLab REST-first per BUG-639. CI rollup excluded (Slice 3 / TASK-962). Sketch for master sign-off: docs/plans/2026-06-27-story-621-slice2-change-metadata-sketch.md. Status draft = trait signature awaiting master-advisor sign-off before implementation (sketch-first boundary). Open questions: list-vs-single, change_status overlap, GitLab reviewDecision-from-approvals mapping, cross-repo derivation.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2302
 node_id: '1'
