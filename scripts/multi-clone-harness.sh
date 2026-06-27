@@ -551,6 +551,111 @@ case_MU-301() {
     fi
 }
 
+# --- MU-601: concurrent SAME-CLONE cache contention (BUG-636 / BUG-627) ----
+# The harness's original blind spot: it covered cross-clone sync (MU-2xx) and a
+# single-clone cache rebuild after a pull (MU-301), but NEVER two agents hitting
+# ONE shared .aida/cache.db at the same time. A real session hit exactly that --
+# two concurrent `aida` invocations in the same clone racing reads + writes on
+# the one cache db. This case reproduces that contention and pins three
+# guarantees the cache-concurrency work (the SQLite busy-lock + retry, BUG-636's
+# incremental update, BUG-627's schema self-heal) must hold:
+#   1. no HARD `SQLITE_BUSY` / "database is locked" error -- the lock + retry must
+#      serialize concurrent writers/readers, not crash one of them;
+#   2. no "no such column" / schema-drift hard error -- BUG-627's open-time column
+#      verification self-heals a drifted cache instead of erroring;
+#   3. the cache stays consistent / self-heals -- after the storm, `aida cache
+#      status` reports FRESH and a cache-backed `aida list` succeeds and shows
+#      the writes.
+#
+# Mechanism: TWO concurrent worker processes each loop N times in CLONE A doing
+# add (write) + list/search/cache-status (reads), all against the SAME clone's
+# single .aida/cache.db. Both workers append their combined stdout+stderr to a
+# per-worker log; after they join, we scan the merged logs for the forbidden
+# hard-error substrings and assert the post-storm cache is FRESH + queryable. We
+# do NOT run a real drain or anything that parks specs -- just concurrent
+# reads+writes.
+#
+# Two same-build invocations suffice to exercise the lock; a different-SHA pair
+# (the ideal: one agent mid-upgrade) is a strict superset and noted as a followup
+# (would also exercise BUG-627's schema self-heal under contention, but needs a
+# second binary the harness doesn't build). trace:TASK-938
+case_MU-601() {
+    EXPECT=pass
+    local iters="${MU601_ITERS:-12}"
+    local log_dir="$WORKDIR/mu601-logs"
+    mkdir -p "$log_dir"
+    rm -f "$log_dir"/worker-*.log 2>/dev/null || true
+
+    # One concurrent worker: loop `iters` times, each iteration writing a spec
+    # then doing a spread of cache-backed reads, all in CLONE A against the one
+    # shared cache db. add lands Approved via the inline advisor role (TASK-647)
+    # so a non-TTY add is not downgraded to Draft. Combined stdout+stderr is
+    # captured so the post-join scan sees any hard error text.
+    mu601_worker() {
+        local tag="$1" n="$2" log="$3"
+        local i
+        for (( i = 0; i < n; i++ )); do
+            ( cd "$CLONE_A" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor \
+                "$AIDA_BIN" add --title "mu601-$tag-$i" --type task --status approved ) >>"$log" 2>&1 || true
+            ( cd "$CLONE_A" && HOME="$WORKDIR/home" "$AIDA_BIN" list ) >>"$log" 2>&1 || true
+            ( cd "$CLONE_A" && HOME="$WORKDIR/home" "$AIDA_BIN" search "mu601" ) >>"$log" 2>&1 || true
+            ( cd "$CLONE_A" && HOME="$WORKDIR/home" "$AIDA_BIN" cache status ) >>"$log" 2>&1 || true
+        done
+    }
+
+    # Fire two workers concurrently against the SAME clone's cache db.
+    local log_a="$log_dir/worker-a.log" log_b="$log_dir/worker-b.log"
+    mu601_worker A "$iters" "$log_a" &
+    local pid_a=$!
+    mu601_worker B "$iters" "$log_b" &
+    local pid_b=$!
+    # Join both; never let a worker non-zero abort the harness (set -e).
+    wait "$pid_a" 2>/dev/null || true
+    wait "$pid_b" 2>/dev/null || true
+
+    # Merge the two worker logs and scan for the forbidden HARD errors.
+    local merged
+    merged="$(cat "$log_a" "$log_b" 2>/dev/null || true)"
+
+    # 1+2: no hard SQLITE_BUSY / lock error, no schema-drift "no such column".
+    local busy_hit=0 schema_hit=0
+    if [[ "$merged" == *"database is locked"* || "$merged" == *"SQLITE_BUSY"* || "$merged" == *"database table is locked"* ]]; then
+        busy_hit=1
+    fi
+    if [[ "$merged" == *"no such column"* || "$merged" == *"no such table"* ]]; then
+        schema_hit=1
+    fi
+
+    # 3: after the storm the cache must be FRESH and a read must succeed + show
+    # the concurrent writes. `aida cache status` prints an up-to-date / in-sync
+    # marker when cache HEAD == store HEAD; accept the common phrasings.
+    local post_status post_list
+    post_status="$(aida_in "$CLONE_A" cache status 2>&1 || true)"
+    post_list="$(aida_in "$CLONE_A" list 2>&1 || true)"
+    local cache_fresh=0
+    if [[ "$post_status" == *"up to date"* || "$post_status" == *"up-to-date"* \
+        || "$post_status" == *"in sync"* || "$post_status" == *"in-sync"* \
+        || "$post_status" == *FRESH* || "$post_status" == *fresh* ]]; then
+        cache_fresh=1
+    fi
+    # At least one of each worker's writes must be queryable post-storm.
+    local list_has_writes=0
+    if [[ "$post_list" == *"mu601-A-"* && "$post_list" == *"mu601-B-"* ]]; then
+        list_has_writes=1
+    fi
+
+    CASE_DETAIL="iters=$iters busy=$busy_hit schema=$schema_hit fresh=$cache_fresh writes=$list_has_writes"
+    if assert_eq "$busy_hit" "0" "no SQLITE_BUSY/database-is-locked hard error under same-clone contention" \
+        && assert_eq "$schema_hit" "0" "no schema-drift (no such column/table) hard error (BUG-627 self-heal)" \
+        && assert_eq "$cache_fresh" "1" "cache self-heals: cache status FRESH after the storm" \
+        && assert_eq "$list_has_writes" "1" "cache-backed list shows both concurrent workers' writes"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="contention left a hard error or stale cache: $CASE_DETAIL; status=[${post_status:0:160}]"
+    fi
+}
+
 # --- MU-401: same OS user, two clones -> shared queue -------------------
 case_MU-401() {
     EXPECT=pass
@@ -1302,7 +1407,7 @@ case_MU-553() {
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521 MU-551 MU-552 MU-553)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-601 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521 MU-551 MU-552 MU-553)
 
 list_cases() {
     echo "Available cases:"
