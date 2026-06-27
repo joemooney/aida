@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:24:24.238621261Z
-modified_at: 2026-06-26T18:57:01.570007245Z
+modified_at: 2026-06-27T16:40:42.830280037Z
 req_type: Spike
 tags:
 - autonomy
@@ -28,4 +28,7 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-26T18:57:01.570001946Z
   created_by: joe
+deferred: true
+deferred_at: 2026-06-27T16:40:42.830280037Z
+deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
 human_only: true
