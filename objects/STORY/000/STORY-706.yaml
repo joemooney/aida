@@ -11,12 +11,12 @@ description: |-
   - The redesign TUI reads the same .aida/focus (unify with the existing .aida/tui-focus from STORY-697).
 
   ACCEPTANCE: aida focus set/show/clear works + persists per-worktree; read commands scope to the focus tree (with --all escape); aida add auto-links to focus; every focus-scoped output is clearly labeled; the TUI honors the shared focus.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:36:50.334595154Z
-modified_at: 2026-06-27T18:04:28.033157550Z
+modified_at: 2026-06-27T18:39:28.773895277Z
 req_type: Story
 tags:
 - cli
@@ -48,3 +48,21 @@ comments:
   content: Commit 67b5b7e97 references this requirement
   created_at: 2026-06-27T18:04:28.033157550Z
   modified_at: 2026-06-27T18:04:28.033157550Z
+history:
+- id: 019f0a61-2da3-7622-b986-2a22153b11e6
+  author: aida-auto-bump
+  timestamp: 2026-06-27T18:39:28.675254035Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f0a61-2e05-7982-8918-4c44b267ae81
+  timestamp: 2026-06-27T18:39:28.773888789Z
+  agent: aida
+  commit_sha: d27929900045209e2aacbd27e15723c959cceb29
+  summary: Completed via merge d2792990
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T18:39:27.670742152Z
+  completion_sha: d27929900045209e2aacbd27e15723c959cceb29
