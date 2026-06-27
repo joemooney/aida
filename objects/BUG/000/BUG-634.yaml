@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:08:27.442206837Z
-modified_at: 2026-06-27T03:59:13.098917459Z
+modified_at: 2026-06-27T04:06:43.052813774Z
 req_type: Bug
 tags:
 - cli
@@ -41,6 +41,12 @@ relationships:
   target_id: 019f0734-8cb8-7f90-b79a-ec0f40932691
   created_at: 2026-06-27T03:52:11.029879137Z
   created_by: joe
+comments:
+- id: 019f0742-246c-7cc3-8998-7847540d39a3
+  author: joe
+  content: Commit 4186bc8fa references this requirement
+  created_at: 2026-06-27T04:06:43.052813774Z
+  modified_at: 2026-06-27T04:06:43.052813774Z
 history:
 - id: 019f073b-4669-7071-bb75-50ddfc54004c
   author: aida-auto-bump
