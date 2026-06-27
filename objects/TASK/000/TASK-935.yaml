@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:48:47.552272878Z
-modified_at: 2026-06-27T15:35:49.223242694Z
+modified_at: 2026-06-27T15:42:31.561649863Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019edaeb-0ef4-7720-a85d-3483f15c856e
   created_at: 2026-06-26T23:48:58.772472383Z
   created_by: joe
+comments:
+- id: 019f09bf-2c89-7a23-ac39-24cf52ef5612
+  author: joe
+  content: 'W2 cut-list delivered for operator review: docs/plans/2026-06-27-task-935-surface-cut-list.md (PR #1168, branch task-935-cut-list). Proposal only — nothing removed in code. Headline: visible top-level commands 84 -> proposed-after 78 (-6, all HIDE not remove). Top candidates: HIDE 6 zero-call parents (punts/load/worker/headless/scaffold/skill), MERGE changelog generate->refresh + doctor fsck->doctor check, HIDE doctor verify-relationships/queue load/role repair. KEEP machine-driven zero-call verbs (queue rework, session manifest, advisor/agent/mcp register, plan helpers). rel list 50pct error = BUG-573 artifact, not a cut. No skill deletions this tranche.'
+  created_at: 2026-06-27T15:42:31.561649863Z
+  modified_at: 2026-06-27T15:42:31.561649863Z
