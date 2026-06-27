@@ -2402,12 +2402,21 @@ fn run() -> Result<()> {
     if let Command::Role(role_cmd) = &cli.command {
         return handle_role_command(role_cmd);
     }
-    if let Command::Statusline { color, action } = &cli.command {
+    if let Command::Statusline {
+        color,
+        title,
+        action,
+    } = &cli.command
+    {
         // trace:TASK-0414 — the opt-in `setup` subcommand bootstraps the
         // statusline; with no subcommand we render the one-liner (default).
+        // trace:TASK-896 — `--title` emits the same one-liner wrapped in an
+        // OSC terminal-title escape so the AIDA segment rides the terminal
+        // title bar (the in-agent parity surface for clients without a
+        // command-backed footer, e.g. Codex CLI).
         match action {
             Some(act) => return handle_statusline_setup_command(act),
-            None => return handle_statusline_command(color),
+            None => return handle_statusline_command(color, *title),
         }
     }
     // STORY-79: hidden background-fetch worker spawned by statusline.
@@ -75997,9 +76006,11 @@ fn role_segment_text(
     }
 }
 
-fn handle_statusline_command(color: &str) -> Result<()> {
+fn handle_statusline_command(color: &str, title: bool) -> Result<()> {
     // trace:FR-1-041 | ai:claude
-    apply_color_mode(color);
+    // trace:TASK-896 — an OSC terminal-title string carries no ANSI, so
+    // `--title` forces color off no matter what `--color` requested.
+    apply_color_mode(if title { "never" } else { color });
 
     let project_root = statusline_project_root();
     let project_name = project_root
@@ -76336,8 +76347,30 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     if let Some(marker) = presence::statusline_solo_marker(chrono::Utc::now()) {
         parts.push(marker.magenta().bold().to_string());
     }
-    println!("{}", parts.join(&separator));
+    let line = parts.join(&separator);
+    if title {
+        // trace:TASK-896 — emit the (plain) one-liner as an OSC 2 set-window-title
+        // escape. No trailing newline / body text: a prompt that runs
+        // `aida statusline --title` updates only the terminal title bar / tmux
+        // window name, giving a Codex (or any non-command-footer) session the same
+        // AIDA role/queue/inbox context Claude Code shows in its statusLine footer.
+        print!("{}", osc_terminal_title(&line));
+    } else {
+        println!("{line}");
+    }
     Ok(())
+}
+
+/// Wrap a status line in an OSC 2 set-window-title escape sequence
+/// (`ESC ] 2 ; <text> BEL`). Control chars are stripped — they would
+/// prematurely terminate the OSC string or corrupt the terminal — so the
+/// title carries only the printable AIDA segment. This is the in-agent
+/// parity surface for clients whose footer cannot run `aida statusline`
+/// directly (e.g. Codex CLI): the AIDA segment rides the terminal title.
+// trace:TASK-896
+fn osc_terminal_title(line: &str) -> String {
+    let safe: String = line.chars().filter(|c| !c.is_control()).collect();
+    format!("\x1b]2;{safe}\x07")
 }
 
 // ----------------------------------------------------------------------------
@@ -76399,9 +76432,11 @@ fn print_claude_statusline_setup(settings_path: &std::path::Path) {
 
 /// Print the Codex TUI footer guidance. Codex's footer renders built-in
 /// item IDs only — it does NOT run `aida statusline` as a command — so we
-/// configure companion built-in fields and point at the shell statusline
-/// for the AIDA-aware segment.
+/// configure companion built-in fields, give the in-agent parity path
+/// (the OSC terminal-title segment via `aida statusline --title`), and
+/// point at the shell statusline for the full AIDA-aware segment.
 // trace:TASK-0414
+// trace:TASK-896
 fn print_codex_statusline_setup() {
     println!("Codex CLI — built-in TUI footer");
     println!("  Codex's footer renders built-in item IDs; it does not run");
@@ -76414,10 +76449,23 @@ fn print_codex_statusline_setup() {
         "  status_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\", \"current-dir\"]"
     );
     println!();
-    println!("  For the AIDA-aware segment itself, run `aida statusline --color=always`");
-    println!("  anywhere your shell, multiplexer, or terminal supports a command-backed");
-    println!("  status line. To disable later, remove the `[tui] status_line` line (or");
-    println!("  the whole `[tui]` block) from your Codex config.toml.");
+    println!("  In-agent parity (role / queue depth / inbox depth): Codex's footer");
+    println!("  cannot host the `aida statusline` segment, but it honors the terminal");
+    println!("  title. Wire `aida statusline --title` into your shell prompt so the");
+    println!("  AIDA segment rides the terminal title bar / tmux window name during the");
+    println!("  Codex session:");
+    println!();
+    println!("    # bash (~/.bashrc)");
+    println!("    PROMPT_COMMAND='aida statusline --title 2>/dev/null; '\"$PROMPT_COMMAND\"");
+    println!();
+    println!("    # zsh (~/.zshrc)");
+    println!("    precmd() {{ aida statusline --title 2>/dev/null }}");
+    println!();
+    println!("  For the full AIDA-aware segment as visible text, run");
+    println!("  `aida statusline --color=always` anywhere your shell, multiplexer, or");
+    println!("  terminal supports a command-backed status line. To disable later, remove");
+    println!("  the `[tui] status_line` line (or the whole `[tui]` block) from your Codex");
+    println!("  config.toml and drop the `aida statusline --title` prompt hook.");
 }
 
 /// Merge the AIDA `statusLine` block into `.claude/settings.json`,
@@ -134059,6 +134107,44 @@ mod task_0414_statusline_setup {
         assert!(err.to_string().contains("valid JSON"));
         // The original bytes are untouched.
         assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{ not json");
+    }
+
+    // trace:TASK-896 — `--title` parity surface for clients (e.g. Codex CLI)
+    // whose footer cannot run `aida statusline` as a command.
+
+    /// `osc_terminal_title` wraps the line in `ESC ] 2 ; <text> BEL` so the
+    /// AIDA segment lands in the terminal title bar / tmux window name.
+    #[test]
+    fn osc_title_wraps_in_set_window_title_escape() {
+        let out = osc_terminal_title("aida \u{3b1}\u{3b9}\u{3b4}\u{3b1} role:advisor q:4 inbox:43");
+        assert!(out.starts_with("\x1b]2;"), "must open with OSC 2: {out:?}");
+        assert!(out.ends_with('\x07'), "must terminate with BEL: {out:?}");
+        // The payload survives intact between the markers.
+        assert!(out.contains("role:advisor q:4 inbox:43"));
+        // No trailing newline — a prompt hook updates only the title.
+        assert!(!out.ends_with('\n'));
+    }
+
+    /// Control chars (newlines, embedded ESC/BEL) are stripped so a crafted
+    /// project name can't break out of the OSC string or corrupt the terminal.
+    #[test]
+    fn osc_title_strips_control_chars() {
+        let out = osc_terminal_title("safe\nname\x07\x1b]0;evil\x07tail");
+        // Exactly one opening OSC and one closing BEL — no smuggled escapes.
+        assert_eq!(
+            out.matches('\x07').count(),
+            1,
+            "only the closing BEL: {out:?}"
+        );
+        assert_eq!(
+            out.matches('\x1b').count(),
+            1,
+            "only the opening ESC: {out:?}"
+        );
+        assert!(!out.contains('\n'));
+        // Printable text is preserved (concatenated, control chars removed).
+        assert!(out.contains("safename"));
+        assert!(out.contains("0;eviltail"));
     }
 }
 
