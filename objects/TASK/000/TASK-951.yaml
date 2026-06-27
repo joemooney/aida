@@ -3,12 +3,12 @@ spec_id: TASK-951
 agreed_id: TASK-951
 title: Case-insensitive user identity matching in queue/queries/owner comparisons
 description: "Operator: user matching in queries should be case-insensitive. Today current_user_id() resolves the shell USER and surfaces compare it case-SENSITIVELY, so Joe != joe, Joe.Mooney != joe.mooney — splitting one person. This is the cheap normalization layer UNDER the fuller alias mapping (TASK-845): case-folding collapses case-variant aliases (joe/Joe, joe.mooney/Joe.Mooney@work.example share the joe.mooney stem) but NOT genuinely-different strings (joe vs joe.mooney@gmail.com need TASK-845 explicit links).\n\nSCOPE: fold user identity to a canonical (lowercase / Unicode case-fold) form at every COMPARISON boundary — queue filter (add/list/next/done/remove/move, the current_user_id matches), block owner matching (aida db block list / dispenser owner compares), assignment (--mine/--assigned), team roster dedup. PRESERVE the original casing for DISPLAY and storage (only the comparison is case-insensitive). \n\nCAREFUL: BUG-89 — the queue is keyed off the shell user identity; the fold is at COMPARISON, not at the stored key, so existing queues keep working but Joe now matches joe.\n\nACCEPTANCE: queue/owner/assignment comparisons match across case (Joe == joe, Joe.Mooney@x == joe.mooney@x); display keeps original casing; a unit test for the canonical-fold + the queue/owner match. FILES: aida-cli current_user_id + queue compare paths; the block-owner/dispenser compare."
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:57:02.097180008Z
-modified_at: 2026-06-27T02:57:31.531115347Z
+modified_at: 2026-06-27T03:31:34.474402300Z
 req_type: Task
 tags:
 - from-operator
@@ -20,3 +20,21 @@ relationships:
   target_id: 019ed5fd-1119-78f0-88e2-3459faaafb2f
   created_at: 2026-06-27T02:57:31.531107444Z
   created_by: joe
+history:
+- id: 019f0721-f656-7043-ad7d-a61ef720bd24
+  author: aida-auto-bump
+  timestamp: 2026-06-27T03:31:34.102897157Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f0721-f7ca-7211-92dc-32bc03cb0ecd
+  timestamp: 2026-06-27T03:31:34.474376719Z
+  agent: aida
+  commit_sha: 07c7f60ff46408e5889adcec94d44b8e3cdfd748
+  summary: Completed via merge 07c7f60f
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T03:31:33.097776856Z
+  completion_sha: 07c7f60ff46408e5889adcec94d44b8e3cdfd748
