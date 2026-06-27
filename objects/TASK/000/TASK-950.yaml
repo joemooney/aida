@@ -1,0 +1,32 @@
+id: 019f06fe-d40e-7370-ab67-ec9ebb597980
+spec_id: TASK-950
+agreed_id: TASK-950
+title: 'aida db block list: column-align, merge contiguous ranges, rename exhausted -> full'
+description: |-
+  Three display improvements to aida db block list (handle_block_command, main.rs ~27848; rows are AgreedIdBlock { node_id, owner, type_prefix, range_start, range_end, next } from aida-core/src/node.rs):
+
+  1. COLUMN ALIGNMENT: pad every column to its max width so the table aligns (today the Range column drifts because FR-1..100 vs FR-256..355 differ in width). Compute per-column max width, left-pad/right-pad consistently.
+
+  2. MERGE CONTIGUOUS RANGES: group rows by (node_id, type_prefix, owner); sort by range_start; merge consecutive blocks where prev.range_end + 1 == next.range_start into ONE row spanning first.range_start..last.range_end. The merged rows Next + Remaining come from the LIVE frontier sub-block (the one not exhausted); if ALL merged sub-blocks are exhausted, the row shows full. Non-contiguous ranges, or different owner/type/node, stay separate rows. Example: node 1 BUG 317..416 + 417..516 + 517..616 + 617..916 are contiguous -> one row BUG-317..916 (next 632, remaining 285 from the last sub-block); BUG-17..116 stays separate (gap 117-316).
+
+  3. RENAME: the Remaining column shows "full" instead of "exhausted".
+
+  ACCEPTANCE:
+  - Columns align (each padded to its max width); the table reads cleanly.
+  - Contiguous same-node/type/owner ranges merge into one row spanning start..end; Next/Remaining from the live frontier; "full" if all exhausted.
+  - "exhausted" is replaced by "full" everywhere in this LIST output (do not change the internal is_exhausted() logic or other commands messages — only the list rendering label).
+  - A pure merge_contiguous helper + a unit test (contiguous merge; non-contiguous stay separate; different owner/type/node do not merge; full vs live-frontier remaining).
+
+  FILES: aida-cli/src/main.rs (handle_block_command list path). Pure merge fn is unit-testable.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-27T02:53:11.566495194Z
+modified_at: 2026-06-27T02:53:11.566495194Z
+req_type: Task
+tags:
+- cli
+- from-operator
+- id-blocks
+- ux
