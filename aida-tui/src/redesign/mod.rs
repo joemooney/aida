@@ -677,12 +677,19 @@ fn handle_key(
     // A modal (item-body or verb-output) captures Esc / q / p (close) plus the
     // scroll keys so a body taller than the popup can be paged; nothing else
     // mutating leaks through. trace:TASK-913 | ai:claude
+    //
+    // CAROUSEL (STORY-710 part A): while an item-body modal is open, Left/Right
+    // move to the prev/next spec WITHOUT closing — re-loading that spec into the
+    // modal in-process and resetting the scroll. Up/Down/j/k/PgUp/PgDn stay
+    // SCROLL within the current spec; Esc/q/p still close. trace:STORY-710
     if st.modal_open() {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('p') => {
                 st.close_modal();
                 *loaded_spec = None;
             }
+            KeyCode::Right => carousel_modal(st, store, loaded_spec, 1),
+            KeyCode::Left => carousel_modal(st, store, loaded_spec, -1),
             KeyCode::Down | KeyCode::Char('j') => st.modal_scroll_down(1),
             KeyCode::Up | KeyCode::Char('k') => st.modal_scroll_up(1),
             KeyCode::PageDown | KeyCode::Char(' ') => st.modal_scroll_down(MODAL_PAGE),
@@ -845,6 +852,67 @@ fn open_modal_with_body(
 ) {
     *loaded_spec = load_focused_spec(st, store).map(|spec| test_plan_view(st, spec));
     st.open_modal();
+}
+
+/// Pure carousel index math. Given the bottom-panel list `all` (real item
+/// indices, in list order), the `selected` real indices, and the real index
+/// `current` the modal is showing, return the real index of the next
+/// (`dir > 0`) or previous (`dir < 0`) item — CLAMPED at the ends (no wrap,
+/// chosen for predictability).
+///
+/// The set carouselled over is the SELECTED subset when anything is selected,
+/// otherwise the full `all` list (the list the modal was opened from). Returns
+/// `None` when the resolved set is empty or `current` isn't a member (e.g. an
+/// externally-opened modal with no real list position).
+// trace:STORY-710 | ai:claude
+fn carousel_target(current: usize, all: &[usize], selected: &[usize], dir: i32) -> Option<usize> {
+    let set: &[usize] = if selected.is_empty() { all } else { selected };
+    let pos = set.iter().position(|&i| i == current)?;
+    let new_pos = if dir > 0 {
+        (pos + 1).min(set.len().saturating_sub(1))
+    } else {
+        pos.saturating_sub(1)
+    };
+    set.get(new_pos).copied()
+}
+
+/// Carousel the open item-body modal to the prev/next spec without closing it.
+/// Moves through the SELECTED subset if anything is selected, else through the
+/// whole bottom-panel list; clamps at the ends; re-loads the new item's spec
+/// IN-PROCESS (same path as `p`/open_modal) and resets the scroll. No-op for the
+/// externally-opened `show` modal (sentinel index, no real list position).
+// trace:STORY-710 | ai:claude
+fn carousel_modal(
+    st: &mut RedesignState,
+    store: Option<&SpecStore>,
+    loaded_spec: &mut Option<LoadedSpec>,
+    dir: i32,
+) {
+    let Some(current) = st.modal else {
+        return; // verb-output modal (show/why stdout) — nothing to carousel.
+    };
+    // TODO(STORY-710): carousel the external `show`-verb modal from the focused
+    // item's list position. It carries a sentinel index (no real list slot), so
+    // for now leave it unchanged rather than break it.
+    if current == usize::MAX {
+        return;
+    }
+    let all = st.bottom_indices();
+    let selected: Vec<usize> = (0..st.items.len()).filter(|&i| st.selected[i]).collect();
+    let Some(next) = carousel_target(current, &all, &selected, dir) else {
+        return;
+    };
+    if next == current {
+        return; // already at the clamped end — keep the current spec loaded.
+    }
+    st.modal = Some(next);
+    st.modal_scroll = 0;
+    let id = st.items[next].id.clone();
+    let spec = match store {
+        Some(s) => s.load_spec(&id).unwrap_or_else(|| missing_spec(&id)),
+        None => missing_spec(&id),
+    };
+    *loaded_spec = Some(test_plan_view(st, spec));
 }
 
 /// For a Test-scope preview (STORY-699), swap the loaded spec's description for
@@ -1476,7 +1544,18 @@ fn render(
     // structured fields + native body. trace:STORY-693 | ai:claude
     if st.modal.is_some() {
         if let Some(spec) = loaded_spec {
-            render_modal(f, f.area(), theme, spec, st.modal_scroll);
+            // Carousel is offered only when the set has more than one item to
+            // move through (the selected subset, else the whole bottom list),
+            // and never for the externally-opened `show` modal. trace:STORY-710
+            let carousel = st.modal != Some(usize::MAX) && {
+                let set_len = if st.selected_count() > 0 {
+                    st.selected_count()
+                } else {
+                    st.bottom_len()
+                };
+                set_len > 1
+            };
+            render_modal(f, f.area(), theme, spec, st.modal_scroll, carousel);
         }
     }
     if let Some(vm) = &st.verb_modal {
@@ -1827,7 +1906,14 @@ fn render_hint(
 /// description body rendered as MARKDOWN. `scroll` is the vertical line
 /// offset (clamped here so an over-scroll pins to the last page rather than
 /// scrolling the body off the top). trace:STORY-693 trace:TASK-913 | ai:claude
-fn render_modal(f: &mut Frame, area: Rect, theme: &Theme, spec: &LoadedSpec, scroll: u16) {
+fn render_modal(
+    f: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    spec: &LoadedSpec,
+    scroll: u16,
+    carousel: bool,
+) {
     let popup = centered(area, 80, 80);
     f.render_widget(Clear, popup);
     let lines = spec_lines(spec, theme);
@@ -1843,10 +1929,17 @@ fn render_modal(f: &mut Frame, area: Rect, theme: &Theme, spec: &LoadedSpec, scr
     let max_scroll = modal_max_scroll(&lines, inner_w, inner_h);
     let scroll = scroll.min(max_scroll);
     let scrollable = max_scroll > 0;
-    let title = if scrollable {
-        format!(" {} (↑↓/PgUp/PgDn scroll · Esc/q/p close) ", spec.id)
-    } else {
-        format!(" {} (Esc/q/p to close) ", spec.id)
+    // The title hint advertises the carousel (←/→ prev/next) only when there is
+    // more than one item to move through, the scroll keys only when the body
+    // overflows, and always the close keys. trace:STORY-710 | ai:claude
+    let title = match (carousel, scrollable) {
+        (true, true) => format!(
+            " {} (←/→ prev/next · ↑↓/PgUp/PgDn scroll · Esc/q/p close) ",
+            spec.id
+        ),
+        (true, false) => format!(" {} (←/→ prev/next · Esc/q/p close) ", spec.id),
+        (false, true) => format!(" {} (↑↓/PgUp/PgDn scroll · Esc/q/p close) ", spec.id),
+        (false, false) => format!(" {} (Esc/q/p to close) ", spec.id),
     };
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.accent))
@@ -2598,6 +2691,67 @@ mod refresh_tests {
 }
 
 #[cfg(test)]
+mod carousel_tests {
+    //! Pure tests for the modal carousel index math (STORY-710 part A): next/
+    //! prev clamp at the ends, and the set is the SELECTED subset when anything
+    //! is selected, else the whole bottom-panel list. trace:STORY-710 | ai:claude
+    use super::carousel_target;
+
+    #[test]
+    fn next_and_prev_move_through_all_when_nothing_selected() {
+        let all = [0usize, 1, 2, 3];
+        let selected: [usize; 0] = [];
+        // Forward steps one item at a time.
+        assert_eq!(carousel_target(0, &all, &selected, 1), Some(1));
+        assert_eq!(carousel_target(1, &all, &selected, 1), Some(2));
+        // Backward likewise.
+        assert_eq!(carousel_target(2, &all, &selected, -1), Some(1));
+        assert_eq!(carousel_target(1, &all, &selected, -1), Some(0));
+    }
+
+    #[test]
+    fn clamps_at_both_ends_no_wrap() {
+        let all = [0usize, 1, 2];
+        let selected: [usize; 0] = [];
+        // Next at the last item stays put (clamp, not wrap).
+        assert_eq!(carousel_target(2, &all, &selected, 1), Some(2));
+        // Prev at the first item stays put.
+        assert_eq!(carousel_target(0, &all, &selected, -1), Some(0));
+    }
+
+    #[test]
+    fn moves_over_the_selection_when_items_are_selected() {
+        // The bottom list is 0..5 but only 1, 3, 4 are selected; the carousel
+        // walks the SELECTED subset (skipping 2) and clamps at its ends.
+        let all = [0usize, 1, 2, 3, 4];
+        let selected = [1usize, 3, 4];
+        assert_eq!(carousel_target(1, &all, &selected, 1), Some(3));
+        assert_eq!(carousel_target(3, &all, &selected, 1), Some(4));
+        assert_eq!(carousel_target(4, &all, &selected, 1), Some(4)); // clamp
+        assert_eq!(carousel_target(3, &all, &selected, -1), Some(1));
+        assert_eq!(carousel_target(1, &all, &selected, -1), Some(1)); // clamp
+    }
+
+    #[test]
+    fn current_outside_the_set_returns_none() {
+        let all = [0usize, 1, 2];
+        let selected: [usize; 0] = [];
+        // A current index not in the set (e.g. the externally-opened sentinel
+        // would never be passed here, but a stale index returns None safely).
+        assert_eq!(carousel_target(9, &all, &selected, 1), None);
+        // Selected set that does not contain `current`.
+        assert_eq!(carousel_target(0, &all, &[1usize, 2], 1), None);
+    }
+
+    #[test]
+    fn empty_set_returns_none() {
+        let all: [usize; 0] = [];
+        let selected: [usize; 0] = [];
+        assert_eq!(carousel_target(0, &all, &selected, 1), None);
+    }
+}
+
+#[cfg(test)]
 mod render_tests {
     //! Render smoke tests — drive the IO-side `render` over a headless
     //! [`TestBackend`] to prove the two-panel layout and the modal /
@@ -2814,6 +2968,30 @@ mod render_tests {
         // + native body), not the captured stdout. trace:STORY-693
         let spec = sample_spec();
         draw_with_spec(&st, Some(&spec), 100, 30);
+    }
+
+    #[test]
+    fn modal_title_advertises_carousel_when_multiple_items() {
+        // With >1 item in the bottom list and no selection, the modal title
+        // advertises the ←/→ carousel hint. trace:STORY-710
+        let mut st = sample(4);
+        st.drill();
+        st.focus_bottom();
+        st.open_modal();
+        let spec = sample_spec();
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).expect("test backend");
+        terminal
+            .draw(|f| render(f, &st, Some(&spec), None))
+            .expect("render");
+        let buf = terminal.backend().buffer().clone();
+        let mut out = String::new();
+        for cell in buf.content() {
+            out.push_str(cell.symbol());
+        }
+        assert!(
+            out.contains("prev/next"),
+            "the carousel hint is painted in the modal title, got: {out}"
+        );
     }
 
     #[test]
