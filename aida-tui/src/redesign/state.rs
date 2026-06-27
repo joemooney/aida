@@ -131,19 +131,21 @@ impl Scope {
         match self {
             Scope::Backlog => {
                 "Shows approved + planned specs — the groomed work waiting to be \
-                 picked up. Drill in (↵) to act on the set: groom, approve, or archive."
+                 picked up. ↵ descends to the items; → opens the verbs to act on \
+                 the set: groom, approve, or archive."
             }
             Scope::Open => {
                 "Shows the whole open backlog — every unfinished spec regardless of \
-                 status. Drill in (↵) for the per-item verbs (show, why) plus the \
-                 status-conditional ones (request approval / approve for drafts, \
-                 queue for approved) and defer."
+                 status. ↵ descends to the items; → opens the per-item verbs (show, \
+                 why) plus the status-conditional ones (request approval / approve \
+                 for drafts, queue for approved) and defer."
             }
             Scope::Test => {
                 "Shows the shipped specs in focus — Done + Completed work ready to \
-                 verify. Drill in (↵) or press p on a row to open its ## Test Plan \
-                 (the do→expect steps) in the preview modal; rows carrying a test \
-                 plan are marked, and the full description shows when a spec has none."
+                 verify. ↵ descends to the items; → opens the verbs, or press p on a \
+                 row to open its ## Test Plan (the do→expect steps) in the preview \
+                 modal; rows carrying a test plan are marked, and the full \
+                 description shows when a spec has none."
             }
             Scope::Queue => "Shows the work routed to your role. Not wired yet (Slice 1).",
             Scope::Prs => "Shows the open pull requests. Not wired yet (Slice 1).",
@@ -898,8 +900,13 @@ impl RedesignState {
         }
     }
 
-    /// Enter at the scope level → drill into the highlighted scope's verbs
-    /// (only functional scopes drill). Returns `true` if a drill happened.
+    /// Right arrow → OPEN THE VERBS: drill into the highlighted scope's verbs
+    /// (only functional scopes drill). Invoked from the scopes panel (Right on
+    /// a scope) AND from the items panel at the scope level (Right on an item —
+    /// the resulting verb list reflects the focused item's status, because
+    /// `bottom_idx` is preserved and [`Self::current_verbs`] keys off the
+    /// focused item). Always lands the keyboard on the verbs (top) panel.
+    /// Returns `true` if a drill happened. trace:TASK-944 | ai:claude
     pub fn drill(&mut self) -> bool {
         if self.level != Level::Scopes {
             return false;
@@ -1632,9 +1639,9 @@ pub fn help_for(target: FocusTarget) -> HelpContent {
             HelpContent {
                 header: format!("Items › {id}{status_note}"),
                 body: "Item-level actions for the focused spec: p / ↵ previews it in \
-                       a modal. ⇧Tab returns to the verbs panel, where the per-item \
-                       verbs (show, why) and the status-conditional ones act on this \
-                       row. Space toggles it into the multi-select set."
+                       a modal. → opens the verbs for this item (show, why, and the \
+                       status-conditional ones act on this row). ← / Esc goes back a \
+                       level. Space toggles it into the multi-select set."
                     .to_string(),
                 legend: item_legend(),
             }
@@ -1652,9 +1659,9 @@ pub fn help_for(target: FocusTarget) -> HelpContent {
 /// The key legend for the scopes panel context. trace:TASK-922 | ai:claude
 fn scope_legend() -> Vec<String> {
     vec![
-        "↵: drill into the highlighted scope".to_string(),
+        "↵ / Tab: descend to the items panel".to_string(),
+        "→: drill into the highlighted scope's verbs".to_string(),
         "↑/↓: move highlight".to_string(),
-        "Tab: focus the items panel".to_string(),
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
@@ -1668,9 +1675,9 @@ fn scope_legend() -> Vec<String> {
 fn verb_legend() -> Vec<String> {
     vec![
         "↵: run the highlighted verb".to_string(),
+        "← / Esc: back to scopes".to_string(),
         "↑/↓: move highlight".to_string(),
         "Tab: focus the items panel".to_string(),
-        "Esc: back to scopes".to_string(),
         "type: fuzzy-filter the list".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
@@ -1685,8 +1692,9 @@ fn item_legend() -> Vec<String> {
     vec![
         "Space: toggle-select this item".to_string(),
         "a / A: select all / none".to_string(),
+        "→: open the verbs for this item".to_string(),
         "p / ↵: preview this spec".to_string(),
-        "⇧Tab / Esc: back to the verbs panel".to_string(),
+        "← / Esc / ⇧Tab: back a level".to_string(),
         "type: fuzzy-filter the items".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
@@ -2883,5 +2891,93 @@ mod tests {
         assert!(p.filtered_indices().is_empty());
         assert_eq!(p.selected_epic(), None);
         assert_eq!(s.take_epic_selection(), None);
+    }
+
+    // --- Directional navigation (TASK-944) -------------------------------
+
+    #[test]
+    fn enter_on_scope_descends_to_items_not_verbs() {
+        // NEW model: Enter on a scope DESCENDS to the items panel (focus →
+        // Bottom) while the top panel KEEPS showing the scopes (no drill).
+        // trace:TASK-944
+        let mut s = state(3);
+        assert_eq!(s.focus, Focus::Top);
+        assert_eq!(s.level, Level::Scopes);
+        s.focus_bottom(); // the Enter-on-scope transition
+        assert_eq!(s.focus, Focus::Bottom);
+        assert_eq!(s.level, Level::Scopes, "top panel still shows scopes");
+        assert!(s.scope.is_none(), "no scope was drilled to verbs");
+    }
+
+    #[test]
+    fn right_on_scope_opens_verbs() {
+        // NEW model: Right on a scope OPENS THE VERBS (drill), landing the
+        // keyboard on the verbs (top) panel. trace:TASK-944
+        let mut s = state(3);
+        assert!(s.drill()); // the Right-on-scope transition
+        assert_eq!(s.level, Level::Verbs);
+        assert_eq!(s.scope, Some(Scope::Backlog));
+        assert_eq!(s.focus, Focus::Top);
+        assert_eq!(s.top_verb(), Some(Verb::Groom));
+    }
+
+    #[test]
+    fn right_on_item_opens_verbs_reflecting_focused_item_status() {
+        // NEW model: from the items panel (reached by Enter-descend), Right
+        // OPENS THE VERBS for the focused item — the verb list reflects the
+        // focused item's STATUS. trace:TASK-944
+        let mut s = RedesignState::new(open_items(), "advisor");
+        s.move_down(); // highlight the Open scope (index 1)
+        assert_eq!(s.top_scope(), Some(Scope::Open));
+        s.focus_bottom(); // Enter-on-scope descends to the items
+        assert_eq!(s.focus, Focus::Bottom);
+        // bottom_idx 0 = TASK-0 (Draft).
+        assert!(s.drill()); // Right-on-item opens the verbs
+        assert_eq!(s.scope, Some(Scope::Open));
+        assert_eq!(s.level, Level::Verbs);
+        assert_eq!(s.focus, Focus::Top);
+        // The verb list reflects the focused Draft item.
+        let verbs = s.current_verbs();
+        assert!(verbs.contains(&Verb::RequestApproval));
+        assert!(verbs.contains(&Verb::Approve));
+        assert!(!verbs.contains(&Verb::Queue));
+
+        // Back out, focus an Approved item, re-open the verbs: the list now
+        // reflects the Approved status (queue, not request approval).
+        assert!(s.pop()); // Left: verbs → scopes
+        assert_eq!(s.level, Level::Scopes);
+        assert_eq!(
+            s.top_scope(),
+            Some(Scope::Open),
+            "highlight restored to Open"
+        );
+        s.focus_bottom(); // descend again
+        s.move_down(); // → TASK-1 (Approved)
+        assert!(s.drill()); // Right-on-item
+        let verbs = s.current_verbs();
+        assert!(verbs.contains(&Verb::Queue));
+        assert!(!verbs.contains(&Verb::RequestApproval));
+    }
+
+    #[test]
+    fn left_goes_back_a_level_everywhere_without_exiting() {
+        // NEW model: Left = pop one level (items → scopes, verbs → scopes);
+        // at the top of the stack it returns false (the caller does NOT exit —
+        // that stays Esc's job). trace:TASK-944
+        let mut s = state(3);
+        // Items panel (descended) → back to scopes.
+        s.focus_bottom();
+        assert_eq!(s.focus, Focus::Bottom);
+        assert!(s.pop()); // Left
+        assert_eq!(s.focus, Focus::Top);
+        assert_eq!(s.level, Level::Scopes);
+        // Verbs panel (drilled) → back to scopes.
+        assert!(s.drill());
+        assert_eq!(s.level, Level::Verbs);
+        assert!(s.pop()); // Left
+        assert_eq!(s.level, Level::Scopes);
+        // Top of the stack: Left (pop) is a no-op that returns false.
+        assert!(!s.pop());
+        assert_eq!(s.level, Level::Scopes);
     }
 }

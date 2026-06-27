@@ -625,6 +625,30 @@ fn handle_key(
         KeyCode::Tab => st.focus_bottom(),
         KeyCode::BackTab => st.focus_top(),
 
+        // Directional navigation (TASK-944): Right = go deeper (toward the
+        // verbs), Left = back a level. Up/Down own list movement, so the
+        // horizontal arrows are free for depth. trace:TASK-944 | ai:claude
+        KeyCode::Right => match (st.focus, st.level) {
+            // Scopes panel, OR the items panel at the scope level → OPEN THE
+            // VERBS (drill). From the items panel the verb list reflects the
+            // focused item's status, because `drill` keeps `bottom_idx` and
+            // `current_verbs` keys off the focused item. trace:TASK-944
+            (_, Level::Scopes) => {
+                st.drill();
+            }
+            // Items panel under a drilled scope → surface the verbs panel
+            // (it already reflects the focused item). trace:TASK-944
+            (Focus::Bottom, Level::Verbs) => st.focus_top(),
+            // Already on the verbs panel → nothing deeper to open.
+            (Focus::Top, Level::Verbs) => {}
+        },
+        // Left always goes BACK a level (items → scopes, verbs → scopes); it
+        // never exits at the top of the stack — that stays Esc's job.
+        // trace:TASK-944 | ai:claude
+        KeyCode::Left => {
+            st.pop();
+        }
+
         KeyCode::Char(' ') => st.toggle_select(),
         KeyCode::Char('a') if st.focus == Focus::Bottom => st.select_all(),
         KeyCode::Char('A') if st.focus == Focus::Bottom => st.select_none(),
@@ -643,9 +667,11 @@ fn handle_key(
         }
 
         KeyCode::Enter => match (st.focus, st.level) {
-            // Scope level: Enter drills into the highlighted scope.
+            // Scope level: Enter DESCENDS to the items/Targets panel (the top
+            // panel keeps showing the scopes). Drilling to the verbs is now the
+            // Right-arrow gesture. trace:TASK-944 | ai:claude
             (Focus::Top, Level::Scopes) => {
-                st.drill();
+                st.focus_bottom();
             }
             // Verb level, top focus: Enter runs the verb.
             (Focus::Top, Level::Verbs) => {
