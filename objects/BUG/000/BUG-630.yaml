@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:29:35.585396069Z
-modified_at: 2026-06-27T01:33:03.803780664Z
+modified_at: 2026-06-27T01:49:24.129809916Z
 req_type: Bug
 tags:
 - gap
@@ -27,3 +27,8 @@ comments:
   content: 'REFRAMED by operator insight: the real fix is the GATE (BUG-631), not the TUI verb. request-approval (--for advisor) should not need advisor authority at all — fixing the gate makes it work from any role without setting the role env. The role-env approach stays correct only for the QUEUE verb (--for implementer), which legitimately dispatches work for execution.'
   created_at: 2026-06-27T01:33:03.803780664Z
   modified_at: 2026-06-27T01:33:03.803780664Z
+- id: 019f06c4-6d21-7a90-876f-cd9e99611435
+  author: joe
+  content: Commit a18c6cf66 references this requirement
+  created_at: 2026-06-27T01:49:24.129809916Z
+  modified_at: 2026-06-27T01:49:24.129809916Z
