@@ -9701,37 +9701,105 @@ mod tests {
         );
     }
 
-    // TASK-287: bare spec-id provenance in `///` clap doc comments leaks into
-    // `aida <cmd> --help`, where it's opaque noise to a user. Keep ids as `//`
-    // trace markers or in commits instead. Usage examples (`e.g. ...`) are
-    // legitimate help text and are exempted. (This comment uses `//`, not
-    // `///`, so it isn't itself scanned.)
+    // TASK-287 / BUG-629: a `///` clap doc comment doubles as `--help` text, so
+    // *provenance* on one (a `trace:` marker, or a bare SPEC-ID standing in for
+    // the developer breadcrumb) leaks the id into user-facing output. But a
+    // *descriptive* mention of a SPEC-ID inside prose (e.g. "reuses the
+    // STORY-122 usage log") is legitimate help text, not provenance — BUG-629
+    // tightened the criterion from "any SPEC-ID token" (over-broad; it forced
+    // agents to reword legit prose) down to "provenance only". The discriminator
+    // is `doc_comment_is_provenance_leak`, mirrored verbatim by the fast
+    // grep-based pre-commit hook (TASK-903) so the gate and CI agree. (This
+    // comment uses `//`, not `///`, so it isn't itself scanned.)
     #[test]
     fn source_doc_comments_carry_no_spec_id_provenance() {
         let src = include_str!("cli.rs");
-        let re =
-            regex::Regex::new(r"\b(STORY|TASK|BUG|EPIC|SPIKE|FR|SPEC|ADR|PRIN)-[0-9]+").unwrap();
         let offenders: Vec<(usize, &str)> = src
             .lines()
             .enumerate()
             .filter(|(_, line)| {
                 let trimmed = line.trim_start();
-                // `///` doc lines only; exempt usage examples ("e.g." / "e.g ").
-                trimmed.starts_with("///") && re.is_match(trimmed) && !trimmed.contains("e.g.")
+                trimmed.starts_with("///") && doc_comment_is_provenance_leak(trimmed)
             })
             .map(|(i, line)| (i + 1, line))
             .collect();
         assert!(
             offenders.is_empty(),
-            "`///` doc comments in cli.rs must not carry bare SPEC-ID provenance \
-             (it leaks into `--help`). Move the id to a `//` trace marker above \
-             the item, or reword. Usage examples may use `e.g. \\`TASK-N\\``:\n{}",
+            "`///` doc comments in cli.rs must not carry SPEC-ID provenance — a \
+             `trace:` marker or a *bare* SPEC-ID (it leaks into `--help`). Move \
+             the id to a `//` trace marker above the item, or reword as prose. A \
+             descriptive prose mention of a SPEC-ID is allowed:\n{}",
             offenders
                 .iter()
                 .map(|(n, l)| format!("  {n}: {l}"))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+    }
+
+    // BUG-629 / TASK-903: the discriminator shared by the CI provenance test
+    // above and the grep-based pre-commit hook. `line` is a `///`-prefixed doc
+    // line (already trimmed). It is a *provenance leak* — and so rejected — when
+    // it carries a `trace:` marker, OR is a *bare* SPEC-ID (the line is
+    // essentially nothing but SPEC-ID token(s) + punctuation, no descriptive
+    // prose words). A descriptive prose mention of a SPEC-ID is NOT a leak.
+    //
+    // Mirror any change here into aida-core/templates/hooks/aida-pre-commit.sh
+    // and the embedded fallback in aida-core/src/scaffolding/hooks.rs so the
+    // fast gate and CI stay in lockstep.
+    fn doc_comment_is_provenance_leak(line: &str) -> bool {
+        let spec_id =
+            regex::Regex::new(r"\b(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+").unwrap();
+        // No SPEC-ID at all → nothing to leak.
+        if !spec_id.is_match(line) {
+            return false;
+        }
+        // A `trace:` marker on a `///` line is always provenance.
+        if line.contains("trace:") {
+            return true;
+        }
+        // Strip the `///` prefix, then remove every SPEC-ID token. What remains
+        // is the surrounding text. If it still contains alphabetic words, this
+        // is a descriptive mention (prose) — allow. If only punctuation /
+        // whitespace / digits remain, the line is a *bare* SPEC-ID — reject.
+        let body = line.trim_start_matches('/').trim();
+        let residual = spec_id.replace_all(body, " ");
+        let has_prose_word = residual.split_whitespace().any(|tok| {
+            // A "word" is a token with two or more ascii-alphabetic chars, so a
+            // stray "a"/"x" or pure punctuation doesn't count as prose.
+            tok.chars().filter(|c| c.is_ascii_alphabetic()).count() >= 2
+        });
+        !has_prose_word
+    }
+
+    // BUG-629: reject only provenance, allow descriptive prose. Reject and allow
+    // cases use the same discriminator the CI scan and the hook share.
+    #[test]
+    fn doc_comment_provenance_leak_discriminates_provenance_from_prose() {
+        // REJECT — trace: marker on a `///` line (the --help-leak trap).
+        assert!(doc_comment_is_provenance_leak("/// trace:TASK-955"));
+        assert!(doc_comment_is_provenance_leak(
+            "/// resolve the path. trace:BUG-448 | ai:claude"
+        ));
+        // REJECT — bare SPEC-ID provenance, no surrounding prose.
+        assert!(doc_comment_is_provenance_leak("/// TASK-955"));
+        assert!(doc_comment_is_provenance_leak("/// BUG-448"));
+        assert!(doc_comment_is_provenance_leak("/// (STORY-122, TASK-903)"));
+        assert!(doc_comment_is_provenance_leak("/// FR-0042"));
+
+        // ALLOW — a descriptive prose mention of a SPEC-ID is legitimate help
+        // text, not provenance.
+        assert!(!doc_comment_is_provenance_leak(
+            "/// reuses the STORY-122 usage log"
+        ));
+        assert!(!doc_comment_is_provenance_leak(
+            "/// reads the SPIKE-67 field-study log"
+        ));
+        assert!(!doc_comment_is_provenance_leak(
+            "/// (e.g. `TASK-489` — treated as `--spec`)"
+        ));
+        // ALLOW — no SPEC-ID at all.
+        assert!(!doc_comment_is_provenance_leak("/// Mark a spec done"));
     }
 
     // trace:TASK-0415 — the positional status shortcut parses into the List
