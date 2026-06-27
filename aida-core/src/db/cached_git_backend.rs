@@ -79,6 +79,29 @@ impl CachedGitBackend {
         crate::git_ops::head_sha(self.inner.path()).unwrap_or_default()
     }
 
+    /// Resolve a UUID to its `Requirement` WITHOUT the O(n) `find_by_uuid` scan
+    /// over every object file. The cache holds the stable uuid→spec_id mapping,
+    /// so we resolve the spec_id from the cache then read the ONE matching YAML
+    /// object (the read is authoritative — the cache only tells us which file).
+    /// On any cache miss, a spec_id/uuid mismatch (defends against a torn cache
+    /// row), or an unreadable cache, we fall back to the inner full scan so
+    /// correctness never depends on cache freshness. The uuid→spec_id mapping is
+    /// invariant (spec_ids are stable and never reused), so even a stale cache
+    /// row resolves to the right file.
+    // trace:BUG-634 | ai:claude
+    fn get_requirement_targeted(&self, id: &Uuid) -> Result<Option<Requirement>> {
+        if let Ok(Some(spec_id)) = self.cache.spec_id_for_uuid(id) {
+            if let Ok(Some(req)) = self.inner.get_requirement_by_spec_id(&spec_id) {
+                if req.id == *id {
+                    return Ok(Some(req));
+                }
+            }
+        }
+        // Cache miss / mismatch / unreadable — fall back to the authoritative
+        // (but O(n)) scan rather than risk a wrong not-found.
+        self.inner.get_requirement(id)
+    }
+
     /// If the cache is stale (or missing source SHA), rebuild it from the
     /// inner GitBackend. Cheap when fresh — just a meta lookup + string
     /// compare.
@@ -226,7 +249,8 @@ impl CachedGitBackend {
 
         for parent_id in parent_ids {
             // Load the candidate parent; skip anything that isn't an epic.
-            let Ok(Some(epic)) = self.inner.get_requirement(&parent_id) else {
+            // BUG-634: targeted uuid→object resolve, not a full scan per edge.
+            let Ok(Some(epic)) = self.get_requirement_targeted(&parent_id) else {
                 continue;
             };
             if epic.req_type != RequirementType::Epic {
@@ -249,7 +273,8 @@ impl CachedGitBackend {
             child_ids.sort();
             child_ids.dedup();
             for cid in &child_ids {
-                if let Ok(Some(child)) = self.inner.get_requirement(cid) {
+                // BUG-634: targeted resolve per child, not a full scan each.
+                if let Ok(Some(child)) = self.get_requirement_targeted(cid) {
                     subset.push(child);
                 }
             }
@@ -329,7 +354,11 @@ impl DatabaseBackend for CachedGitBackend {
     // ---- single-row CRUD: write-through with cache upsert/delete ----------
 
     fn get_requirement(&self, id: &Uuid) -> Result<Option<Requirement>> {
-        self.inner.get_requirement(id)
+        // BUG-634: cache-resolve uuid→spec_id and read the one object, avoiding
+        // the O(n) full scan on the write path (this method is on the hot path
+        // via refresh_parent_epic_status and the CLI lease/ancestor walk).
+        // trace:BUG-634 | ai:claude
+        self.get_requirement_targeted(id)
     }
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
