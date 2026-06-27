@@ -3,12 +3,12 @@ spec_id: BUG-636
 agreed_id: BUG-636
 title: 'PERF: cache fully rebuilds on every store HEAD move — incremental update needed for multi-agent stores'
 description: 'Exposed by BUG-634 (2026-06-26): with the YAML-scan write cost removed, the new dominant wall-time cost is TASK-712''s ensure_cache_fresh doing a FULL cache rebuild (.aida/cache.db, ~2494 specs, ~seconds) on EVERY detected store HEAD move. In a busy multi-agent shared store, HEAD moves constantly, so nearly every read/write triggers a full rebuild — measured ~1.6-4.25s wall per edit (vs ~0.6s CPU; the gap is the rebuild + git commit). FIX: make the cache update INCREMENTAL — on staleness, diff the orphan-branch HEAD range and upsert only the changed specs'' rows, instead of DELETE+reinsert all 2494. The stale-detection (HEAD SHA compare) stays; only the rebuild strategy changes. Single-clone use barely notices; multi-agent use is where it bites. Verify: a write in a busy store drops from ~2-4s to sub-second.'
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:51:52.248493533Z
-modified_at: 2026-06-27T03:52:12.283707382Z
+modified_at: 2026-06-27T16:30:35.145099596Z
 req_type: Bug
 tags:
 - bug634-followup
