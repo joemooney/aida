@@ -3,12 +3,12 @@ spec_id: TASK-956
 agreed_id: TASK-956
 title: 'Apply the TASK-935 surface cuts: HIDE 6 zero-call parents + MERGE 2 + HIDE 3 subcommands (grep-verified)'
 description: 'Operator approved the TASK-935 cut-list (docs/plans/2026-06-27-task-935-surface-cut-list.md, merged). Apply the cuts in cli.rs, each VERIFIED by the grep the cut-list flags (do NOT hide a verb with a real harness/MCP/skill dependency). HIDE (clap hide=true; capability stays callable, just off --help): punts, load, worker, headless, scaffold, skill (top-level parents) + doctor verify-relationships, queue load, role repair (subcommands). MERGE (keep canonical, hidden alias): changelog generate -> changelog refresh; doctor fsck -> doctor check. For EACH: grep the codebase/skills/MCP for a dependency first; if found (e.g. scaffold/skill may be harness/MCP-driven), DO NOT hide it — report it as kept-with-reason. Record the before/after top-level command count (target 84 -> ~78).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T15:55:12.133814147Z
-modified_at: 2026-06-27T15:55:12.133814147Z
+modified_at: 2026-06-27T15:55:26.043147739Z
 req_type: Task
 tags:
 - cli
