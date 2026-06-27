@@ -17,12 +17,12 @@ description: |-
   ## Test Plan
 
   1. Press **p** on a spec with a rich description → **expect** the body renders as **markdown** (headings bold, `**bold**`/`*italic*`, inline + fenced `code`, bullet/numbered lists), and **scrolls** (↑/↓ or j/k, PageUp/Down). Esc/q/p closes it.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:53:18.176392457Z
-modified_at: 2026-06-26T18:57:01.150434633Z
+modified_at: 2026-06-27T02:58:12.223680578Z
 req_type: Task
 tags:
 - markdown
