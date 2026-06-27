@@ -8,10 +8,9 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T14:29:52.537672722Z
-modified_at: 2026-06-27T02:55:24.095916340Z
+modified_at: 2026-06-27T02:56:59.995118134Z
 req_type: Task
 tags:
-- deferred:design
 - node-identity
 - parent:EPIC-47
 - team
