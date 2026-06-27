@@ -102,20 +102,130 @@ impl CachedGitBackend {
         self.inner.get_requirement(id)
     }
 
-    /// If the cache is stale (or missing source SHA), rebuild it from the
-    /// inner GitBackend. Cheap when fresh — just a meta lookup + string
+    /// If the cache is stale (or missing source SHA), bring it up to the
+    /// store's current HEAD. Cheap when fresh — just a meta lookup + string
     /// compare.
+    ///
+    /// When the recorded cache HEAD is a known ancestor of the new HEAD (a
+    /// normal fast-forward / merge advance), only the rows for the object files
+    /// that changed in `recorded..head` are refreshed — instead of re-parsing
+    /// and re-inserting all ~N objects on every HEAD move. In a busy multi-agent
+    /// store HEAD moves constantly, so this is the dominant read/write wall-cost.
+    /// We fall back to a full rebuild whenever incremental can't be proven safe
+    /// (no recorded HEAD; recorded HEAD not an ancestor of head, i.e. the orphan
+    /// branch was force-pushed/rebased; the diff is too large to beat a rebuild;
+    /// or any error mid-update). Never produce a wrong cache: when in doubt, full
+    /// rebuild.
+    // trace:BUG-636 | ai:claude
     fn ensure_cache_fresh(&self) -> Result<()> {
         let head = self.current_head_sha();
         if !self.cache.is_stale(&head)? {
             return Ok(());
         }
+        // Non-git fixture (empty HEAD): nothing to diff — full rebuild is the
+        // only correct path (and is cheap, there are no commits).
+        if !head.is_empty() {
+            if let Some(recorded) = self.cache.source_head_sha()? {
+                if !recorded.is_empty()
+                    && crate::git_ops::is_ancestor(self.inner.path(), &recorded, &head)
+                        .unwrap_or(false)
+                {
+                    match self.try_incremental_update(&recorded, &head) {
+                        Ok(true) => return Ok(()),
+                        // Ok(false): incremental declined (diff too large / a row
+                        // the diff named couldn't be read) — fall through to a
+                        // full rebuild, which is always correct.
+                        Ok(false) => {}
+                        Err(e) => {
+                            eprintln!(
+                                "warning: incremental cache update failed ({e}); full rebuild"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        self.full_rebuild(&head)
+    }
+
+    /// Full authoritative rebuild: load the whole store and re-project every
+    /// row. The fallback whenever incremental can't be proven safe.
+    // trace:BUG-636
+    fn full_rebuild(&self, head: &str) -> Result<()> {
         let store = self
             .inner
             .load()
             .context("Failed to load git store for cache rebuild")?;
-        self.cache.rebuild_from_store(&store, &head)?;
+        self.cache.rebuild_from_store(&store, head)?;
         Ok(())
+    }
+
+    /// Refresh only the cache rows for the object files that changed between the
+    /// recorded cache HEAD (`from`, a proven ancestor of `to`) and the new HEAD
+    /// (`to`). Returns `Ok(true)` when the incremental update fully applied (cache
+    /// stamped at `to`), `Ok(false)` when it declined (caller must full-rebuild),
+    /// or `Err` on a git/diff failure (caller logs + full-rebuilds).
+    ///
+    /// Correctness: the single-YAML read (`get_requirement_by_spec_id` against the
+    /// live worktree, which is checked out at `to`) is AUTHORITATIVE — the diff
+    /// only tells us WHICH files to refresh, never their content. Each refreshed
+    /// row goes through the same `upsert_requirement` + `refresh_parent_epic_status`
+    /// the normal write-through path uses, so an incremental catch-up produces the
+    /// same cache those commits would have produced had they been written through
+    /// this backend. The whole-graph derived columns (a NEIGHBOR's `in_degree`,
+    /// dependents' `blocked`, an epic rollup over a grandchild) follow the SAME
+    /// rebuildable-projection contract as every single-row write — approximate
+    /// between rebuilds, authoritative after `aida cache rebuild` — they are never
+    /// WRONG about the set of rows or a row's own summary content.
+    // trace:BUG-636
+    fn try_incremental_update(&self, from: &str, to: &str) -> Result<bool> {
+        use crate::git_ops::ObjectChange;
+
+        let changes = crate::git_ops::changed_object_files(self.inner.path(), from, to)?;
+        // Above this many changed files, a from-scratch rebuild (one batched
+        // transaction, no per-row epic-rollup re-reads) is cheaper than replaying
+        // upserts one at a time. The full store is ~thousands of objects; a few
+        // hundred changed files is the crossover where incremental stops winning.
+        const INCREMENTAL_MAX_FILES: usize = 500;
+        if changes.len() > INCREMENTAL_MAX_FILES {
+            return Ok(false);
+        }
+        for (kind, path) in &changes {
+            // The spec_id is the file stem: objects/TYPE/000/<SPEC-ID>.yaml.
+            let Some(spec_id) = path.file_stem().and_then(|s| s.to_str()) else {
+                // Unparseable path — bail to the always-correct full rebuild.
+                return Ok(false);
+            };
+            match kind {
+                ObjectChange::Added | ObjectChange::Modified => {
+                    // Authoritative read of the ONE object at the worktree HEAD.
+                    match self.inner.get_requirement_by_spec_id(spec_id)? {
+                        Some(req) => {
+                            self.cache.upsert_requirement(&req)?;
+                            // BUG-626 parity with the write path: a child's status
+                            // / hierarchy change shifts its parent epic's rollup.
+                            self.refresh_parent_epic_status(&req);
+                        }
+                        None => {
+                            // The diff says present at `to` but the worktree can't
+                            // read it (HEAD moved underneath us, or a torn state).
+                            // Don't guess — full rebuild. trace:BUG-636
+                            return Ok(false);
+                        }
+                    }
+                }
+                ObjectChange::Deleted => {
+                    // Resolve the spec_id (from the path) to its uuid via the
+                    // cache and drop the row. Absent already → harmless no-op.
+                    if let Some(uuid) = self.cache.uuid_for_spec_id(spec_id)? {
+                        self.cache.delete_requirement(&uuid)?;
+                    }
+                }
+            }
+        }
+        // Every changed row refreshed — the cache now matches `to`.
+        self.cache.set_source_head_sha(to)?;
+        Ok(true)
     }
 
     /// Cache-backed list query with filter pushdown. Returns lightweight
@@ -631,6 +741,320 @@ mod tests {
         // cleared the recorded SHA when it saw the pre-write HEAD had drifted.)
         let all = backend.list_summaries(&ListFilter::default()).unwrap();
         assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
+    }
+
+    // ---------------------------------------------------------------- BUG-636
+    // Incremental cache update on a HEAD move: refresh only the changed rows
+    // instead of a full delete-and-reinsert of every object. The tests below
+    // pin the two correctness invariants — (1) an incremental update is
+    // byte-equal to a full rebuild at the same HEAD for the row content it
+    // owns, and (2) a non-ancestor HEAD (rewritten history) falls back to a
+    // full rebuild — plus the git helpers they rely on. trace:BUG-636
+
+    /// Snapshot the rows that matter for an incremental-vs-rebuild comparison:
+    /// the authoritative summary content plus the projected derived columns.
+    /// Sorted by spec_id for a deterministic compare.
+    fn row_snapshot(b: &CachedGitBackend) -> Vec<(String, String, String, u32, u32, bool, bool)> {
+        let mut rows: Vec<_> = b
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap()
+            .into_iter()
+            .map(|s| {
+                (
+                    s.spec_id.unwrap_or_default(),
+                    s.title,
+                    s.status,
+                    s.in_degree,
+                    s.out_degree,
+                    s.blocked,
+                    s.archived,
+                )
+            })
+            .collect();
+        rows.sort();
+        rows
+    }
+
+    /// A long-lived backend whose cache is fresh at HEAD-A, then an external
+    /// writer lands several commits (add + modify + delete) advancing HEAD to
+    /// HEAD-B. The long-lived backend's next read must INCREMENTALLY update its
+    /// cache and land on exactly the rows a from-scratch full rebuild at HEAD-B
+    /// produces.
+    // trace:BUG-636
+    #[test]
+    fn incremental_update_matches_full_rebuild() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_a = dir.path().join(".aida").join("a.cache.db");
+        let cache_fresh = dir.path().join(".aida").join("fresh.cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+
+        // Long-lived backend A: three rows, cache fresh at HEAD-A.
+        let backend = CachedGitBackend::open(&store_root, &cache_a).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "a"))
+            .unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-002", "b"))
+            .unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-003", "c"))
+            .unwrap();
+        assert_eq!(backend.cache().requirement_count().unwrap(), 3);
+        let recorded_before = backend.cache().source_head_sha().unwrap();
+
+        // External writer advances HEAD with one of each change kind:
+        // add FR-1-004, modify FR-1-002's title, delete FR-1-001.
+        {
+            let external = GitBackend::new(&store_root).unwrap();
+            external
+                .add_requirement(sample_req("FR-1-004", "d"))
+                .unwrap();
+            let mut r2 = external
+                .get_requirement_by_spec_id("FR-1-002")
+                .unwrap()
+                .unwrap();
+            r2.title = "b (modified externally)".into();
+            external.update_requirement(&r2).unwrap();
+            let r1 = external
+                .get_requirement_by_spec_id("FR-1-001")
+                .unwrap()
+                .unwrap();
+            external.delete_requirement(&r1.id).unwrap();
+        }
+
+        // Backend A reads → should take the INCREMENTAL path (recorded HEAD is
+        // an ancestor of the new HEAD). The rows must match a full rebuild.
+        let incremental_rows = row_snapshot(&backend);
+
+        // The incremental update advanced the recorded SHA (it didn't just
+        // clear it / leave it pinned at HEAD-A).
+        let recorded_after = backend.cache().source_head_sha().unwrap();
+        assert_ne!(
+            recorded_before, recorded_after,
+            "incremental update should advance the recorded HEAD"
+        );
+        assert_eq!(
+            recorded_after,
+            Some(crate::git_ops::head_sha(&store_root).unwrap()),
+            "recorded HEAD must equal the store HEAD after an incremental update"
+        );
+
+        // Ground truth: a brand-new cache full-rebuilt at the same HEAD.
+        let fresh = CachedGitBackend::open(&store_root, &cache_fresh).unwrap();
+        let rebuild_rows = row_snapshot(&fresh);
+
+        assert_eq!(
+            incremental_rows, rebuild_rows,
+            "incremental update must equal a full rebuild at the same HEAD"
+        );
+        // Spot-check the net effect: 001 gone, 002 retitled, 004 present.
+        let titles: Vec<&str> = incremental_rows.iter().map(|r| r.1.as_str()).collect();
+        assert!(!incremental_rows.iter().any(|r| r.0 == "FR-1-001"));
+        assert!(titles.contains(&"b (modified externally)"));
+        assert!(incremental_rows.iter().any(|r| r.0 == "FR-1-004"));
+        assert_eq!(incremental_rows.len(), 3);
+    }
+
+    /// Each change kind refreshes the right row in isolation.
+    // trace:BUG-636
+    #[test]
+    fn incremental_add_modify_delete_each_refresh_right_row() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "keep"))
+            .unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-002", "to-edit"))
+            .unwrap();
+
+        // ADD via external writer. (row_snapshot's list read triggers the
+        // incremental freshen; requirement_count is a raw cache read and does
+        // NOT freshen, so check it only after a read.)
+        {
+            let ext = GitBackend::new(&store_root).unwrap();
+            ext.add_requirement(sample_req("FR-1-003", "added"))
+                .unwrap();
+        }
+        let rows = row_snapshot(&backend);
+        assert!(rows.iter().any(|r| r.0 == "FR-1-003" && r.1 == "added"));
+        assert_eq!(backend.cache().requirement_count().unwrap(), 3);
+
+        // MODIFY via external writer.
+        {
+            let ext = GitBackend::new(&store_root).unwrap();
+            let mut r = ext.get_requirement_by_spec_id("FR-1-002").unwrap().unwrap();
+            r.title = "edited".into();
+            ext.update_requirement(&r).unwrap();
+        }
+        let rows = row_snapshot(&backend);
+        assert!(rows.iter().any(|r| r.0 == "FR-1-002" && r.1 == "edited"));
+        assert_eq!(backend.cache().requirement_count().unwrap(), 3);
+
+        // DELETE via external writer.
+        {
+            let ext = GitBackend::new(&store_root).unwrap();
+            let r = ext.get_requirement_by_spec_id("FR-1-001").unwrap().unwrap();
+            ext.delete_requirement(&r.id).unwrap();
+        }
+        let rows = row_snapshot(&backend);
+        assert!(!rows.iter().any(|r| r.0 == "FR-1-001"));
+        assert_eq!(backend.cache().requirement_count().unwrap(), 2);
+    }
+
+    /// A rewritten orphan-branch history (the recorded HEAD is no longer an
+    /// ancestor of the new HEAD) must fall back to a full rebuild rather than
+    /// diff against an unreachable commit — and still produce a correct cache.
+    // trace:BUG-636
+    #[test]
+    fn incremental_falls_back_on_non_ancestor() {
+        use std::process::Command;
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "a"))
+            .unwrap();
+        let recorded = backend.cache().source_head_sha().unwrap().unwrap();
+
+        // Rewrite history: `commit --amend` produces a SIBLING commit whose
+        // parent is the old HEAD's parent — so the recorded HEAD is no longer
+        // reachable from the new HEAD. Change the message so the amended commit
+        // gets a DIFFERENT sha (an identical-tree/message/author amend is
+        // byte-identical and git reuses the same hash).
+        let amend = Command::new("git")
+            .current_dir(&store_root)
+            .args(["commit", "--amend", "-m", "rewritten root"])
+            .output()
+            .unwrap();
+        assert!(amend.status.success(), "amend failed: {amend:?}");
+        let amended = crate::git_ops::head_sha(&store_root).unwrap();
+        assert_ne!(recorded, amended);
+        assert!(
+            !crate::git_ops::is_ancestor(&store_root, &recorded, &amended).unwrap(),
+            "recorded HEAD must NOT be an ancestor of the amended HEAD"
+        );
+
+        // The read takes the non-ancestor fallback (full rebuild) and the cache
+        // is still correct (the amend kept the same tree → one row).
+        let rows = row_snapshot(&backend);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "FR-1-001");
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap(),
+            Some(amended),
+            "fallback rebuild re-stamps the recorded HEAD to the new HEAD"
+        );
+    }
+
+    /// Timing demonstration (ignored by default; run with
+    /// `cargo test -p aida-core incremental_is_faster_than_full_rebuild -- --ignored --nocapture`).
+    /// Builds a store of N specs, then compares a from-scratch full rebuild
+    /// against a stale-by-one-commit incremental update. The incremental path
+    /// parses ONE changed YAML versus all N.
+    // trace:BUG-636
+    #[test]
+    #[ignore]
+    fn incremental_is_faster_than_full_rebuild() {
+        use std::time::Instant;
+        const N: usize = 400;
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+
+        let backend = CachedGitBackend::open(&store_root, &dir.path().join("a.db")).unwrap();
+        for i in 1..=N {
+            backend
+                .add_requirement(sample_req(&format!("FR-1-{i:04}"), &format!("r{i}")))
+                .unwrap();
+        }
+
+        // Full rebuild: fresh cache opened at the current HEAD.
+        let t0 = Instant::now();
+        let fresh = CachedGitBackend::open(&store_root, &dir.path().join("b.db")).unwrap();
+        let _ = fresh.list_summaries(&ListFilter::default()).unwrap();
+        let full = t0.elapsed();
+
+        // One more external commit, then an incremental update on `backend`
+        // (recorded HEAD is an ancestor of the new HEAD → incremental path).
+        {
+            let ext = GitBackend::new(&store_root).unwrap();
+            ext.add_requirement(sample_req("FR-1-9999", "new")).unwrap();
+        }
+        let t1 = Instant::now();
+        let _ = backend.list_summaries(&ListFilter::default()).unwrap();
+        let incr = t1.elapsed();
+
+        println!("BUG-636 timing (N={N}): full_rebuild={full:?}  incremental_1commit={incr:?}");
+        assert!(
+            incr < full,
+            "incremental ({incr:?}) should beat full rebuild ({full:?})"
+        );
+    }
+
+    /// The diff helper classifies add / modify / delete over the objects tree.
+    // trace:BUG-636
+    #[test]
+    fn changed_object_files_classifies_changes() {
+        use crate::git_ops::ObjectChange;
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "a"))
+            .unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-002", "b"))
+            .unwrap();
+        let from = crate::git_ops::head_sha(&store_root).unwrap();
+
+        // add FR-1-003, modify FR-1-001, delete FR-1-002.
+        {
+            let ext = GitBackend::new(&store_root).unwrap();
+            ext.add_requirement(sample_req("FR-1-003", "c")).unwrap();
+            let mut r = ext.get_requirement_by_spec_id("FR-1-001").unwrap().unwrap();
+            r.title = "a2".into();
+            ext.update_requirement(&r).unwrap();
+            let d = ext.get_requirement_by_spec_id("FR-1-002").unwrap().unwrap();
+            ext.delete_requirement(&d.id).unwrap();
+        }
+        let to = crate::git_ops::head_sha(&store_root).unwrap();
+
+        let changes = crate::git_ops::changed_object_files(&store_root, &from, &to).unwrap();
+        let kind_for = |spec: &str| -> Option<ObjectChange> {
+            changes
+                .iter()
+                .find(|(_, p)| p.file_stem().and_then(|s| s.to_str()) == Some(spec))
+                .map(|(k, _)| *k)
+        };
+        assert_eq!(kind_for("FR-1-003"), Some(ObjectChange::Added));
+        assert_eq!(kind_for("FR-1-001"), Some(ObjectChange::Modified));
+        assert_eq!(kind_for("FR-1-002"), Some(ObjectChange::Deleted));
     }
 
     #[test]
