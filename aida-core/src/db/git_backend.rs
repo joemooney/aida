@@ -286,7 +286,14 @@ impl GitBackend {
     // trace:TASK-951 | ai:claude
     fn resolve_queue_user(&self, requested: &str) -> String {
         let dir = self.root.join("registry/queues");
-        let target = crate::node::canonical_user_id(requested);
+        // trace:TASK-845 — compose TASK-951's case-fold (first) with the
+        // operator-curated person-alias map (second): `requested` resolves to
+        // its CANONICAL person, so a queue keyed under any of a person's aliases
+        // (`joe.mooney@gmail.com`) is found when looked up under another (`joe`).
+        // The map is empty by default, in which case `resolve` is exactly the
+        // TASK-951 case-fold and the behaviour is unchanged.
+        let aliases = crate::alias::AliasRegistry::load(&self.root);
+        let target = aliases.resolve(requested);
         let read = match std::fs::read_dir(&dir) {
             Ok(rd) => rd,
             // No queues dir yet → nothing to match against; keep original casing.
@@ -303,7 +310,10 @@ impl GitBackend {
                 if stem == requested {
                     return requested.to_string();
                 }
-                if crate::node::canonical_user_id(stem) == target {
+                // Resolve each existing queue file to its canonical person too,
+                // so an alias's stored queue file is matched even when the
+                // lookup uses a different alias of the same person.
+                if aliases.resolve(stem) == target {
                     return stem.to_string();
                 }
             }
@@ -1258,6 +1268,59 @@ mod tests {
         // Removing as `JOE` clears from the same file.
         backend.queue_remove("JOE", &entry.requirement_id).unwrap();
         assert_eq!(backend.queue_list("joe", false).unwrap().len(), 1);
+    }
+
+    // TASK-845: the queue resolution composes the case-fold with the person-alias
+    // map on the store. A queue filed under `joe` is found when the same human's
+    // OTHER machine looks it up under `joe.mooney@gmail.com`, once the two are
+    // linked. The stored filename is never rewritten (BUG-89 safety preserved).
+    // trace:TASK-845 | ai:claude
+    #[test]
+    fn test_queue_matches_across_person_aliases() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Filed under `joe` on one host.
+        let entry = sample_queue_entry("joe", 1000);
+        backend.queue_add(entry.clone()).unwrap();
+        assert!(root.join("registry/queues/joe.yaml").exists());
+
+        // Without a link, a genuinely-different string does NOT match (the
+        // case-fold alone can't bridge `joe` ↔ `joe.mooney@gmail.com`).
+        assert!(
+            backend
+                .queue_list("joe.mooney@gmail.com", false)
+                .unwrap()
+                .is_empty(),
+            "unlinked alias must not match"
+        );
+
+        // Operator links the two identities on the shared store.
+        let mut aliases = crate::alias::AliasRegistry::default();
+        aliases.link("joe", "joe.mooney@gmail.com");
+        aliases.save(&root).unwrap();
+
+        // Now the alias finds the SAME queue.
+        let as_alias = backend.queue_list("joe.mooney@gmail.com", false).unwrap();
+        assert_eq!(as_alias.len(), 1, "linked alias finds joe's queue");
+        assert_eq!(as_alias[0].requirement_id, entry.requirement_id);
+
+        // Adding under the alias appends to the SAME `joe.yaml` — no second file,
+        // stored value untouched.
+        let entry2 = sample_queue_entry("joe.mooney@gmail.com", 2000);
+        backend.queue_add(entry2).unwrap();
+        assert!(
+            !root
+                .join("registry/queues/joe.mooney@gmail.com.yaml")
+                .exists(),
+            "no duplicate alias queue file — resolution folds the lookup, not storage"
+        );
+        assert_eq!(
+            backend.queue_list("joe", false).unwrap().len(),
+            2,
+            "both entries land in joe's one queue"
+        );
     }
 
     // BUG-529: `queue_remove_for_role` with a role filter drops ONLY the entry

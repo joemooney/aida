@@ -67,6 +67,7 @@
 //! trace:STORY-266 | ai:claude
 
 pub mod ai;
+pub mod alias;
 pub mod analytics;
 pub mod block_allocation;
 pub mod conflict;
@@ -128,6 +129,7 @@ pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
     EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,
 };
+pub use alias::AliasRegistry;
 pub use block_allocation::{BlockAllocationConfig, BlockAllocationTypeConfig};
 #[cfg(feature = "postgres")]
 pub use db::PostgresBackend;

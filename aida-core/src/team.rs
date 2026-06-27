@@ -514,6 +514,10 @@ pub fn build_team_members(store_root: &Path) -> Vec<TeamMemberDto> {
     let node_roster = load_node_roster(store_root);
     let roles = TeamRoster::load(store_root);
     let claims = list_coordination_claims(store_root);
+    // trace:TASK-845 — the operator-curated person-alias map, so a person's
+    // genuinely-different owner strings across hosts collapse into one row (the
+    // case-fold alone only collapses case-variants).
+    let aliases = crate::alias::AliasRegistry::load(store_root);
 
     // Group nodes by the person key (a person may have several clones, possibly
     // with different integer user_ids across machines). trace:STORY-653
@@ -530,11 +534,14 @@ pub fn build_team_members(store_root: &Path) -> Vec<TeamMemberDto> {
             .unwrap_or_default();
         let registered = node.registered.to_rfc3339();
 
-        // trace:TASK-951 | ai:claude — dedup the roster on the case-folded person
-        // key so the same human whose clones report `Joe` on one machine and `joe`
-        // on another collapses into ONE row. The DTO keeps the first-seen original
-        // casing for display + role lookup; only the GROUPING key is folded.
-        let dedup_key = crate::node::canonical_user_id(&user_id);
+        // trace:TASK-951 trace:TASK-845 | ai:claude — dedup the roster on the
+        // CANONICAL person: TASK-951's case-fold collapses case-variants (`Joe`
+        // vs `joe`), then TASK-845's alias map collapses a person's
+        // genuinely-different owner strings across hosts (`joe` ↔
+        // `joe.mooney@gmail.com`) into ONE row. The DTO keeps the first-seen
+        // original casing for display + role lookup; only the GROUPING key is
+        // canonicalized.
+        let dedup_key = aliases.resolve(&user_id);
         let entry = by_user.entry(dedup_key).or_insert_with(|| TeamMemberDto {
             user_id: user_id.clone(),
             // Default the display label to the person key; a node carrying an
@@ -661,6 +668,61 @@ registered = "2026-06-17T03:00:00Z"
         assert_eq!(u1.last_seen.as_deref(), Some("2026-06-17T02:00:00+00:00"));
         let u2 = members.iter().find(|m| m.user_id == "2").unwrap();
         assert_eq!(u2.role.as_deref(), Some("implementer"));
+    }
+
+    // TASK-845: the team roster dedups on the CANONICAL person, so a human's
+    // genuinely-different owner strings across hosts collapse into ONE member
+    // once linked — composing with TASK-951's case-fold.
+    // trace:TASK-845 | ai:claude
+    #[test]
+    fn team_roster_collapses_linked_aliases_to_one_member() {
+        let dir = tempfile::tempdir().unwrap();
+        // Three clones, three genuinely-different owner strings (not just case).
+        write(
+            &dir.path().join("registry/nodes.toml"),
+            r#"
+[[nodes]]
+id = "1"
+user_id = 1
+hostname = "imac"
+user = "joe"
+clone_path = "/home/joe/ai/aida"
+registered = "2026-06-17T01:00:00Z"
+
+[[nodes]]
+id = "2"
+user_id = 2
+hostname = "gd-ms"
+user = "Joe.Mooney@gd-ms.com"
+clone_path = "/home/joe/ai/aida-b"
+registered = "2026-06-17T02:00:00Z"
+
+[[nodes]]
+id = "3"
+user_id = 3
+hostname = "jm"
+user = "joe.mooney@gmail.com"
+clone_path = "/home/joe/ai/aida-c"
+registered = "2026-06-17T03:00:00Z"
+"#,
+        );
+
+        // Before any link: three distinct owners → three members.
+        let members = build_team_members(dir.path());
+        assert_eq!(members.len(), 3, "three distinct owners before linking");
+
+        // Operator links all three as one person.
+        let mut aliases = crate::alias::AliasRegistry::default();
+        aliases.link("joe", "Joe.Mooney@gd-ms.com");
+        aliases.link("joe", "joe.mooney@gmail.com");
+        aliases.save(dir.path()).unwrap();
+
+        // After linking: one collapsed member spanning all three hosts.
+        let members = build_team_members(dir.path());
+        assert_eq!(members.len(), 1, "linked aliases collapse to one member");
+        let m = &members[0];
+        assert_eq!(m.hosts.len(), 3, "all three hosts under one person");
+        assert_eq!(m.clone_paths.len(), 3, "all three clones under one person");
     }
 
     #[test]

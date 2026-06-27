@@ -289,6 +289,13 @@ pub struct ListFilter {
     /// Exact match on assignee (team-member handle). Powers `aida list --mine`
     /// and `--assigned <user>`. trace:STORY-639 | ai:claude
     pub assignee: Option<String>,
+    /// Additional assignee handles that resolve to the SAME canonical person as
+    /// `assignee` (TASK-845's person-alias map). When non-empty, the assignee
+    /// filter matches `assignee` OR any of these aliases, so `--mine` /
+    /// `--assigned <user>` surfaces specs assigned under any of a person's
+    /// cross-host owner strings. Empty = the plain single-handle match.
+    // trace:TASK-845 | ai:claude
+    pub assignee_aliases: Vec<String>,
     /// Exact match on EITHER owner OR assignee (handle). Powers `aida list
     /// --user <name>` / `me` / `user:<name>` — broader than the owner-only or
     /// assignee-only filters. trace:STORY-662 | ai:claude
@@ -997,10 +1004,25 @@ impl Cache {
             sql.push_str(" AND LOWER(owner) = LOWER(?)");
             args.push(o.clone());
         }
-        // trace:STORY-639 trace:TASK-951 | ai:claude
+        // trace:STORY-639 trace:TASK-951 trace:TASK-845 | ai:claude — the assignee
+        // match folds case (TASK-951) and ORs in the person's other aliases
+        // (TASK-845) so `--mine` / `--assigned` surfaces specs assigned under any
+        // of one human's cross-host owner strings.
         if let Some(a) = &filter.assignee {
-            sql.push_str(" AND LOWER(assignee) = LOWER(?)");
-            args.push(a.clone());
+            if filter.assignee_aliases.is_empty() {
+                sql.push_str(" AND LOWER(assignee) = LOWER(?)");
+                args.push(a.clone());
+            } else {
+                let mut handles = vec![a.clone()];
+                handles.extend(filter.assignee_aliases.iter().cloned());
+                let placeholders = handles
+                    .iter()
+                    .map(|_| "LOWER(?)")
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                sql.push_str(&format!(" AND LOWER(assignee) IN ({placeholders})"));
+                args.extend(handles);
+            }
         }
         // trace:STORY-662 trace:TASK-951 | ai:claude — `--user <name>` / `me` /
         // `user:<name>` matches owner OR assignee, so a person sees specs they own
@@ -2050,6 +2072,54 @@ mod tests {
             })
             .unwrap();
         assert!(nobody.is_empty());
+    }
+
+    // TASK-845: the assignee filter ORs in the canonical person's aliases, so
+    // `--mine` / `--assigned` surfaces specs assigned under ANY of one human's
+    // cross-host owner strings. Empty `assignee_aliases` keeps the plain match.
+    // trace:TASK-845 | ai:claude
+    #[test]
+    fn list_summaries_assignee_filter_matches_person_aliases() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut a = sample_req("FR-1-001", "assigned-to-joe");
+        a.assignee = Some("joe".into());
+        let mut b = sample_req("FR-1-002", "assigned-to-alias");
+        b.assignee = Some("joe.mooney@gmail.com".into());
+        let mut c = sample_req("FR-1-003", "assigned-to-stranger");
+        c.assignee = Some("uhura".into());
+        store.requirements.push(a);
+        store.requirements.push(b);
+        store.requirements.push(c);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Plain assignee filter (no aliases) → only the exact handle.
+        let plain = cache
+            .list_summaries(&ListFilter {
+                assignee: Some("joe".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        let ids: Vec<&str> = plain.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(ids, vec!["FR-1-001"], "no aliases → single-handle match");
+
+        // With the person's aliases expanded → both joe and the linked alias.
+        let mut joes = cache
+            .list_summaries(&ListFilter {
+                assignee: Some("joe".into()),
+                assignee_aliases: vec!["joe.mooney@gmail.com".into()],
+                ..Default::default()
+            })
+            .unwrap();
+        joes.sort_by(|x, y| x.spec_id.cmp(&y.spec_id));
+        let ids: Vec<&str> = joes.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(
+            ids,
+            vec!["FR-1-001", "FR-1-002"],
+            "alias-expanded filter spans both owner strings, never the stranger"
+        );
     }
 
     /// TASK-527: `--tags aida:queue:*` prefix-glob matches every tag under the
