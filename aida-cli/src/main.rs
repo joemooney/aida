@@ -15014,6 +15014,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             &store,
                             "aida add --parent",
                             false,
+                            // BUG-637: `aida add --parent` has no --force override; never skip.
+                            false,
                         )?;
                     }
                 }
@@ -16226,7 +16228,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     // of a full-store load (a scan of every YAML on the write
                     // path). trace:BUG-634 | ai:claude
                     let store = collect_ancestor_store(&backend, &req);
-                    enforce_session_lease(&project_root, &req, &store, "aida edit", *strict)?;
+                    // BUG-637: `--force` is the operator override that always
+                    // permits an edit/reject of a live-claimed spec (the
+                    // EPIC-54-reject escape hatch); `--strict` still escalates
+                    // the live-claim warning into a hard block.
+                    // trace:BUG-637 | ai:claude
+                    enforce_session_lease(
+                        &project_root,
+                        &req,
+                        &store,
+                        "aida edit",
+                        *strict,
+                        *force,
+                    )?;
                 }
             }
             // BUG-68: all validation gates passed → safe to record the
@@ -45939,12 +45953,68 @@ fn collect_ancestor_store(
     }
 }
 
+/// BUG-637: a closure that reports whether a session lease is currently LIVE,
+/// reusing STORY-694's [`lease_state_for`] (pid liveness + worktree existence +
+/// age, with the review-verb special-case). Built once over a pre-probed live
+/// session set so the caller pays for the (relatively expensive) process probe a
+/// single time and the per-lease check is cheap. A spec-scoped CLAIM only gates
+/// work while its holder is live — a dead/stale claim is ignored by every gate
+/// (no crash-deadlock).
+// trace:BUG-637 | ai:claude
+fn lease_is_live<'a>(
+    live_sessions: &'a [process_probe::LiveSession],
+    now: chrono::DateTime<chrono::Utc>,
+) -> impl Fn(&SessionLease) -> bool + 'a {
+    move |l: &SessionLease| matches!(lease_state_for(l, live_sessions, now), LeaseState::Live)
+}
+
+/// BUG-637: the pre-pickup claim gate. Returns the LIVE spec-scoped lease held by
+/// a DIFFERENT session for any of `spec_ids`, if one exists — the signal that
+/// another agent is already working this spec and a fresh pickup would duplicate
+/// it (the BUG-634 incident). Pure over the lease set + an injected liveness
+/// predicate so it is unit-testable without a live process or a lease dir:
+///
+/// - skips the caller's own lease (`self_lease`) — resuming your own work is fine;
+/// - skips non-live (crashed / stale / dormant) claims — no crash-deadlock;
+/// - matches a lease whose raw `--owns` scope equals one of `spec_ids`
+///   (case-insensitive), i.e. the AIDA-launched spec-scoped happy path. Generic
+///   `harness-worktree` advisor fan-out scopes never match, so they don't gate
+///   (making THOSE spec-claimable is the documented follow-on).
+// trace:BUG-637 | ai:claude
+fn live_spec_claim_by_other<'a>(
+    leases: &'a [SessionLease],
+    self_lease: Option<&SessionLease>,
+    spec_ids: &[&str],
+    is_live: impl Fn(&SessionLease) -> bool,
+) -> Option<&'a SessionLease> {
+    leases.iter().find(|l| {
+        if let Some(self_l) = self_lease {
+            if l.id == self_l.id {
+                return false;
+            }
+        }
+        if !is_live(l) {
+            return false;
+        }
+        spec_ids
+            .iter()
+            .any(|id| !id.is_empty() && l.scope.eq_ignore_ascii_case(id))
+    })
+}
+
 fn lease_owning_spec(
     leases: &[SessionLease],
     self_lease: Option<&SessionLease>,
     target_uuid: Uuid,
     target_spec_id: Option<&str>,
     store: &RequirementsStore,
+    // BUG-637: liveness predicate. A spec-scoped claim only blocks an outbound
+    // mutation while its holder is genuinely LIVE — a crashed/stale agent's
+    // lease must NOT permanently lock its spec (no crash-deadlock). Callers
+    // pass `lease_is_live(&live_sessions, now)`; the unit tests (which exercise
+    // ancestry/scope matching, not liveness) pass `|_| true`.
+    // trace:BUG-637 | ai:claude
+    is_live: impl Fn(&SessionLease) -> bool,
 ) -> Option<SessionLease> {
     if leases.is_empty() {
         return None;
@@ -45988,6 +46058,12 @@ fn lease_owning_spec(
                 continue;
             }
         }
+        // BUG-637: a dead/stale claim doesn't own the scope anymore — skip it so a
+        // crashed agent can't permanently block edits to its spec.
+        // trace:BUG-637 | ai:claude
+        if !is_live(lease) {
+            continue;
+        }
         let scope_lc = lease.scope.to_ascii_lowercase();
         // Direct id-form match (handles SPEC-ID + agreed-id forms).
         if ancestor_ids.contains(&scope_lc) {
@@ -46010,14 +46086,26 @@ fn lease_owning_spec(
 /// session owns the scope; in `Warn` mode it prints a warning and returns
 /// `Ok(())` so the operation proceeds. `force_block` (e.g. `--strict` on
 /// `aida edit`) escalates Warn → Block for this single call.
-/// trace:STORY-48 | ai:claude
+///
+/// BUG-637: `force_skip` (e.g. `--force` on `aida edit`) is the operator
+/// override — it short-circuits the whole gate so a deliberate
+/// edit/reject of a live-claimed spec is always possible. The claim check is
+/// now LIVENESS-aware ([`lease_is_live`]): a dead/stale claim no longer owns the
+/// scope, so a crashed agent can't permanently block edits to its spec (the
+/// reject-while-working fix without the crash-deadlock).
+// trace:STORY-48 trace:BUG-637 | ai:claude
 fn enforce_session_lease(
     project_root: &std::path::Path,
     target: &Requirement,
     store: &RequirementsStore,
     operation: &str,
     force_block: bool,
+    force_skip: bool,
 ) -> Result<()> {
+    // BUG-637: operator override — `--force` always wins, no probe needed.
+    if force_skip {
+        return Ok(());
+    }
     let leases = list_leases(project_root);
     if leases.is_empty() {
         return Ok(());
@@ -46025,12 +46113,16 @@ fn enforce_session_lease(
     let self_lease = std::env::current_dir()
         .ok()
         .and_then(|cwd| active_lease_for_cwd(project_root, &cwd));
+    // BUG-637: probe live sessions once, then gate the claim on liveness.
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
     let owner = lease_owning_spec(
         &leases,
         self_lease.as_ref(),
         target.id,
         target.spec_id.as_deref(),
         store,
+        lease_is_live(&live, now),
     );
     let Some(owner) = owner else { return Ok(()) };
 
@@ -48011,6 +48103,51 @@ fn session_start(
             );
         }
         PreflightDecision::AllowAndBump | PreflightDecision::Allow => {}
+    }
+
+    // BUG-637: pre-pickup spec-CLAIM gate. The status preflight above catches
+    // "InProgress with no local lease" and cross-machine status drift, but it
+    // does NOT catch the same-clone duplicate-fanout that motivated this fix:
+    // a SECOND `aida queue work <spec>` while a FIRST live session already holds
+    // a spec-scoped lease for it (the BUG-634 incident — two agents implemented
+    // the same spec concurrently). Refuse when a DIFFERENT, LIVE session already
+    // claims `owns` so we don't duplicate in-flight work.
+    //
+    // Bypasses (all narrow, to avoid wrongly blocking legitimate work):
+    //   - `--force-claim` / orchestrator-corroborated → operator/parent takeover;
+    //   - review sessions → reviewing a PR is not a fresh implementer claim;
+    //   - the caller's OWN lease (resume) → never self-blocks;
+    //   - DEAD/stale claims → ignored (a crashed agent can't lock its spec).
+    // trace:BUG-637 | ai:claude
+    if !force_claim_effective && !is_review_session {
+        let leases = list_leases(&project_root);
+        if !leases.is_empty() {
+            let self_lease = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+            let now = chrono::Utc::now();
+            let live = process_probe::probe_live_claude_sessions();
+            if let Some(claim) = live_spec_claim_by_other(
+                &leases,
+                self_lease.as_ref(),
+                &[owns],
+                lease_is_live(&live, now),
+            ) {
+                let claim_id_short: String = claim.id.chars().take(8).collect();
+                let started = claim
+                    .started_at
+                    .with_timezone(&chrono::Local)
+                    .format("%H:%M");
+                anyhow::bail!(
+                    "`{owns}` is already claimed by session {claim_id_short} (live, started \
+                     {started}) — skipping to avoid duplicate work.\n  \
+                     worktree: {}\n  \
+                     If that session is wrong/abandoned, end it (`aida session end \
+                     {claim_id_short}`) or take over with `--force-claim`.",
+                    claim.worktree_path.display(),
+                );
+            }
+        }
     }
 
     // STORY-71: PR metadata captured from `gh`/`glab` for review sessions.
@@ -58999,6 +59136,155 @@ mod story_694_spec_liveness_tests {
     }
 }
 
+// BUG-637: the spec-scoped CLAIM gates — pre-pickup refuse (the BUG-634
+// duplicate-fanout fix) + pre-edit liveness (the EPIC-54-reject fix). Both gates
+// are pure over the lease set plus an injected liveness predicate, so the matrix
+// is testable without a live process or a lease dir.
+// trace:BUG-637 | ai:claude
+#[cfg(test)]
+mod bug_637_spec_claim_tests {
+    use super::*;
+
+    fn claim_lease(id: &str, scope: &str) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".into(),
+            // A real path is irrelevant here — liveness is injected, not probed.
+            worktree_path: std::path::PathBuf::from(format!("/tmp/aida-{}", scope.to_lowercase())),
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+        }
+    }
+
+    fn req_for(spec_id: &str) -> Requirement {
+        let mut r = Requirement::new(format!("Title for {spec_id}"), "".into());
+        r.spec_id = Some(spec_id.to_string());
+        r
+    }
+
+    // ── pre-pickup gate (live_spec_claim_by_other) ──
+
+    /// A different session holding a LIVE claim on the spec blocks a fresh pickup
+    /// — the BUG-634 duplicate-fanout case.
+    #[test]
+    fn live_spec_claim_by_other_blocks_on_live() {
+        let leases = vec![claim_lease("sess-a", "BUG-634")];
+        let claim = live_spec_claim_by_other(&leases, None, &["BUG-634"], |_| true);
+        assert!(claim.is_some(), "a live foreign claim must block pickup");
+        assert_eq!(claim.unwrap().id, "sess-a");
+    }
+
+    /// A DEAD/stale claim is ignored — a crashed agent must not permanently lock
+    /// its spec (no crash-deadlock).
+    #[test]
+    fn live_spec_claim_by_other_ignores_stale() {
+        let leases = vec![claim_lease("sess-dead", "BUG-634")];
+        // is_live → false for every lease simulates a dead holder.
+        let claim = live_spec_claim_by_other(&leases, None, &["BUG-634"], |_| false);
+        assert!(claim.is_none(), "a dead/stale claim must not block pickup");
+    }
+
+    /// The caller's OWN lease never blocks — resuming your own work is fine.
+    #[test]
+    fn live_spec_claim_by_other_ignores_self() {
+        let mine = claim_lease("sess-mine", "BUG-634");
+        let leases = vec![mine.clone()];
+        let claim = live_spec_claim_by_other(&leases, Some(&mine), &["BUG-634"], |_| true);
+        assert!(claim.is_none(), "must not block on the caller's own lease");
+    }
+
+    /// A generic `harness-worktree` fan-out lease does NOT match a spec scope, so
+    /// it never gates a pickup (the documented follow-on, not this slice).
+    #[test]
+    fn live_spec_claim_by_other_ignores_non_spec_scope() {
+        let leases = vec![claim_lease("sess-fanout", "harness-worktree")];
+        let claim = live_spec_claim_by_other(&leases, None, &["BUG-634"], |_| true);
+        assert!(
+            claim.is_none(),
+            "a non-spec-scoped lease must not block pickup"
+        );
+    }
+
+    // ── pre-edit gate (lease_owning_spec liveness filter) ──
+
+    /// A LIVE foreign claim on the spec is returned to the edit gate (warn/block)
+    /// — the EPIC-54-reject case.
+    #[test]
+    fn lease_owning_spec_returns_live_foreign() {
+        let target = req_for("EPIC-54");
+        let mut store = RequirementsStore::new();
+        store.requirements.push(target.clone());
+        let leases = vec![claim_lease("sess-b", "EPIC-54")];
+        let owner = lease_owning_spec(
+            &leases,
+            None,
+            target.id,
+            target.spec_id.as_deref(),
+            &store,
+            |_| true,
+        );
+        assert!(owner.is_some(), "a live foreign claim must be enforced");
+        assert_eq!(owner.unwrap().id, "sess-b");
+    }
+
+    /// A DEAD/stale foreign claim is skipped by the edit gate — a crashed agent
+    /// can't permanently block edits/rejects of its spec.
+    #[test]
+    fn lease_owning_spec_skips_dead_holder() {
+        let target = req_for("EPIC-54");
+        let mut store = RequirementsStore::new();
+        store.requirements.push(target.clone());
+        let leases = vec![claim_lease("sess-dead", "EPIC-54")];
+        let owner = lease_owning_spec(
+            &leases,
+            None,
+            target.id,
+            target.spec_id.as_deref(),
+            &store,
+            |_| false,
+        );
+        assert!(
+            owner.is_none(),
+            "a dead/stale claim must not block an edit (no crash-deadlock)"
+        );
+    }
+
+    /// The caller's own live lease is skipped — a session edits specs in its own
+    /// scope freely.
+    #[test]
+    fn lease_owning_spec_skips_own_live_lease() {
+        let target = req_for("EPIC-54");
+        let mut store = RequirementsStore::new();
+        store.requirements.push(target.clone());
+        let mine = claim_lease("sess-mine", "EPIC-54");
+        let leases = vec![mine.clone()];
+        let owner = lease_owning_spec(
+            &leases,
+            Some(&mine),
+            target.id,
+            target.spec_id.as_deref(),
+            &store,
+            |_| true,
+        );
+        assert!(owner.is_none(), "must not flag the caller's own live lease");
+    }
+}
+
 // The global running-work table (`aida ps`). trace:STORY-696 | ai:claude
 #[cfg(test)]
 mod story_696_ps_tests {
@@ -69190,7 +69476,16 @@ mod lease_enforcement_tests {
         let mut store = RequirementsStore::new();
         store.requirements.push(target.clone());
         let leases = vec![lease("STORY-48", "abc123")];
-        let owner = lease_owning_spec(&leases, None, target.id, target.spec_id.as_deref(), &store);
+        // BUG-637: this test exercises ancestry/scope matching, not liveness —
+        // treat every lease as live so the synthetic worktree paths don't read stale.
+        let owner = lease_owning_spec(
+            &leases,
+            None,
+            target.id,
+            target.spec_id.as_deref(),
+            &store,
+            |_| true,
+        );
         assert!(owner.is_some());
         assert_eq!(owner.unwrap().scope, "STORY-48");
     }
@@ -69205,7 +69500,14 @@ mod lease_enforcement_tests {
         store.requirements.push(epic.clone());
         store.requirements.push(story.clone());
         let leases = vec![lease("EPIC-20", "epic")];
-        let owner = lease_owning_spec(&leases, None, story.id, story.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec(
+            &leases,
+            None,
+            story.id,
+            story.spec_id.as_deref(),
+            &store,
+            |_| true,
+        );
         assert!(
             owner.is_some(),
             "EPIC-scope lease should own descendant story"
@@ -69229,6 +69531,7 @@ mod lease_enforcement_tests {
             target.id,
             target.spec_id.as_deref(),
             &store,
+            |_| true,
         );
         assert!(owner.is_none(), "should not flag the caller's own lease");
     }
@@ -69254,6 +69557,7 @@ mod lease_enforcement_tests {
             story.id,
             story.spec_id.as_deref(),
             &store,
+            |_| true,
         );
         assert!(
             owner.is_none(),
@@ -69270,7 +69574,14 @@ mod lease_enforcement_tests {
         let mut store = RequirementsStore::new();
         store.requirements.push(target.clone());
         let leases = vec![lease("src/scaffolding/**", "glob")];
-        let owner = lease_owning_spec(&leases, None, target.id, target.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec(
+            &leases,
+            None,
+            target.id,
+            target.spec_id.as_deref(),
+            &store,
+            |_| true,
+        );
         assert!(owner.is_none());
     }
 
@@ -69301,7 +69612,7 @@ mod lease_enforcement_tests {
         store.requirements.push(b.clone());
         // No lease covers either; the call must terminate.
         let leases: Vec<SessionLease> = vec![];
-        let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store, |_| true);
         assert!(owner.is_none());
     }
 
@@ -118580,6 +118891,17 @@ fn handle_queue_command(
                 .unwrap_or(SessionEnforcement::Warn);
             let lease_filter_active =
                 !leases.is_empty() && enforcement_mode != SessionEnforcement::Off;
+            // BUG-637: probe liveness once so the queue filter only hides specs a
+            // LIVE foreign session is working — a crashed/stale claim must not keep
+            // a spec out of the queue forever (no crash-deadlock). Skip the probe
+            // entirely when the filter is inactive.
+            // trace:BUG-637 | ai:claude
+            let lease_live_now = chrono::Utc::now();
+            let lease_live_sessions = if lease_filter_active {
+                process_probe::probe_live_claude_sessions()
+            } else {
+                Vec::new()
+            };
             let mut skipped_for_lease: Vec<(String, String)> = Vec::new();
             // STORY-333: track specs skipped by the pre-pickup gate so
             // `queue next` can hint why (without a hint, an un-pickable
@@ -118659,6 +118981,7 @@ fn handle_queue_command(
                         req.id,
                         req.spec_id.as_deref(),
                         &store,
+                        lease_is_live(&lease_live_sessions, lease_live_now),
                     );
                     match owner {
                         None => true,
