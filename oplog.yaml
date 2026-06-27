@@ -23576,5 +23576,17 @@ operations:
   timestamp: 2026-06-27T04:35:24.697213087Z
   kind: !SetStatus
     status: Done
-clock: 2236
+- id: 019f076f-4a8e-7770-a65b-f785b5c5ece9
+  target_id: 019f076f-3dcf-74f1-af4c-3dbea05e361f
+  author: aida
+  node_id: '1'
+  lamport: 2237
+  timestamp: 2026-06-27T04:56:01.934275752Z
+  kind: !Create
+    title: 'TUI: verb palette must gate by ROLE — advisor-only verbs (approve) show + are selectable for an implementer'
+    description: 'Operator finding (2026-06-26): with the TUI role = implementer, the ''approve'' verb (whose own hint says ''advisor-only: draft -> approved'') still appears in the palette AND is selectable. The palette does not gate by role — an implementer should NOT be offered advisor-only verbs; they should request approval and let the advisor approve. This is the ''role as ambient context'' piece (Slice 3 of the redesign design doc): role should FILTER/GATE the verb palette (advisor sees approve/groom; implementer sees pickup/request-approval). Currently role is display-only. ADD A THIRD GREY-OUT AXIS: a verb is enabled iff status-applicable (TASK-947) AND (if UPDATE) has a selection (TASK-954) AND the active role is permitted to run it. Role-disallowed verbs render greyed + non-selectable with the hint ''requires the <role> role''. Note: the CLI/substrate still gates the transition (request approval is open to any role post-BUG-631; approve stays advisor-gated) — this is the TUI honoring that in the palette so the operator isn''t offered a verb that would be refused.'
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 2237
 node_id: '1'
