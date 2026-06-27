@@ -22603,5 +22603,23 @@ operations:
   timestamp: 2026-06-27T01:56:02.374174372Z
   kind: !SetStatus
     status: In Progress
-clock: 2136
+- id: 019f06ce-b527-7d11-9ca2-072fdf8d6c24
+  target_id: 019f0659-4ed2-7b50-bc31-2ea0a3a6df8f
+  author: aida
+  node_id: '1'
+  lamport: 2137
+  timestamp: 2026-06-27T02:00:37.927276457Z
+  kind: !SetDescription
+    description: |-
+      Surface WHY the advisor parked/deferred each item, inline in the cockpit. EPIC-53 content layer (least shell-coupled — build first).
+
+      ## Acceptance
+      - Each advisor-backlog item (per is_advisor_backlog) shows its park reason inline: revisit trigger, finding, or punt note.
+      - Total advisor-queue depth is displayed.
+      - The park-reason projection is a PURE function over the item set (unit-testable without the TUI shell).
+      - Visibility-first: no new role (defers STORY-688).
+
+      ## Seam
+      EPIC-53 owns the data (enrich is_advisor_backlog with reasons + depth). EPIC-54 provides the content-panel slot. See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
+clock: 2137
 node_id: '1'
