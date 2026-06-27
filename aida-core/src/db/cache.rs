@@ -3171,6 +3171,49 @@ mod tests {
         assert_eq!(cached_status(&cache, done_id), "Completed");
     }
 
+    // BUG-628: archived is a view flag, not a status — the cache-projected epic
+    // rollup must count archived-Completed children. A fully-shipped epic whose
+    // Completed children were archived previously projected Draft (the archived
+    // children appeared excluded); it must project Completed. trace:BUG-628
+    #[test]
+    fn cache_rollup_counts_archived_completed_children() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // Epic stored Draft; both children Completed-but-archived.
+        let mut epic = sample_req("EPIC-1", "shipped epic, children archived");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Draft;
+
+        let mut c1 = sample_req("STORY-1", "archived completed child 1");
+        c1.status = RequirementStatus::Completed;
+        c1.archived = true;
+        let mut c2 = sample_req("STORY-2", "archived completed child 2");
+        c2.status = RequirementStatus::Completed;
+        c2.archived = true;
+
+        epic.relationships
+            .push(rel(RelationshipType::Parent, c1.id));
+        epic.relationships
+            .push(rel(RelationshipType::Parent, c2.id));
+        c1.relationships.push(rel(RelationshipType::Child, epic.id));
+        c2.relationships.push(rel(RelationshipType::Child, epic.id));
+
+        let epic_id = epic.id;
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, c1, c2]);
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Before BUG-628 this read "Draft" — the archived children were treated
+        // as absent from the rollup.
+        assert_eq!(
+            cached_status(&cache, epic_id),
+            "Completed",
+            "an epic whose only children are Completed-but-archived projects Completed"
+        );
+    }
+
     #[test]
     fn upsert_refreshes_epic_own_row_from_cached_children() {
         let dir = tempdir().unwrap();
