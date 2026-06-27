@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T04:55:58.671088230Z
-modified_at: 2026-06-27T04:56:08.591845967Z
+modified_at: 2026-06-27T05:01:06.560300250Z
 req_type: Bug
 tags:
 - gating
@@ -26,3 +26,9 @@ relationships:
   target_id: 019f06da-ce5f-7cb1-b79b-0856de8c4baa
   created_at: 2026-06-27T04:56:08.591833938Z
   created_by: joe
+comments:
+- id: 019f0773-f080-7573-b157-bba671febd5a
+  author: joe
+  content: 'DESIGN INTENT (operator, 2026-06-26): the human should NOT typically wear the advisor role — the advisor is a persistent AGENT that grooms/dispositions; the human is the OPERATOR (direction/keystone). So the TUI human-role default should be operator/implementer (NOT advisor), advisor-only verbs (approve/groom) are gated out of the human''s palette, and ''request approval'' always ROUTES to an advisor agent — the TUI never asks the human to approve. Aligns with the advisor-as-persistent-agent model.'
+  created_at: 2026-06-27T05:01:06.560300250Z
+  modified_at: 2026-06-27T05:01:06.560300250Z
