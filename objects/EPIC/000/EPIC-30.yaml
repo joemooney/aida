@@ -135,7 +135,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-06-07T07:35:09.841701271Z
+modified_at: 2026-06-27T15:35:40.865223616Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
@@ -227,3 +227,8 @@ comments:
   content: '✅ COMPLETE (2026-06-07): v1 drain-loop + systemd unit shipped (#497). Unix-socket control plane + REQUEST spec-type DEFERRED — the harness delivers persistent autonomous execution (compose-via-harness; operator decision 2026-06-07).'
   created_at: 2026-06-07T07:35:08.494550268Z
   modified_at: 2026-06-07T07:35:08.494550268Z
+- id: 019f09b8-e841-7a21-ade2-b6ada22545e0
+  author: joe
+  content: 'Direction (operator 2026-06-27): HOLD/no further build. v1 (resilient drain loop + systemd, PR-497) shipped + the --auto-complete drain + drain-loop.sh deliver the works-overnight value (re-proven in the 2026-06-26 overnight solo run). The persistent-daemon control plane stays a deferred tripwire — promote only on a concrete revisit trigger (bash-loop inadequacy, multi-machine need, telemetry showing unrecoverable loop failures), not now.'
+  created_at: 2026-06-27T15:35:40.865223616Z
+  modified_at: 2026-06-27T15:35:40.865223616Z
