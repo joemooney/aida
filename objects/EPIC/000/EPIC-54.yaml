@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T06:52:56.629549430Z
-modified_at: 2026-06-27T02:14:04.586596903Z
+modified_at: 2026-06-27T02:39:47.234524630Z
 req_type: Epic
 tags:
 - product
@@ -124,6 +124,10 @@ relationships:
 - rel_type: Parent
   target_id: 019f06da-ce5f-7cb1-b79b-0856de8c4baa
   created_at: 2026-06-27T02:14:04.586596903Z
+- rel_type: Parent
+  target_id: 019f06f2-2e9d-78e2-99d2-11c10f3e1023
+  created_at: 2026-06-27T02:39:47.234510663Z
+  created_by: joe
 comments:
 - id: 019f0548-9991-7e43-8b8a-00393c1b3171
   author: joe
