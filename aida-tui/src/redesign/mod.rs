@@ -582,6 +582,31 @@ fn handle_key(
         return Ok(false);
     }
 
+    // FIND mode (TASK-945): an explicit `/` query owns the keyboard for the
+    // top-level LIST filter (scopes/verbs/items). Printable chars live-filter
+    // the focused list; Backspace edits; Up/Down still move the highlight
+    // within the filtered set; Enter CONFIRMS (keep the filter, back to normal
+    // so hotkeys act on the filtered list); Esc CANCELS (clear the filter, back
+    // to normal). This is what removes the need for the old per-hotkey
+    // `if st.filter.is_empty()` guards. trace:TASK-945 | ai:claude
+    if st.find_mode {
+        match key.code {
+            KeyCode::Enter => st.confirm_find(),
+            KeyCode::Esc => {
+                st.cancel_find();
+                st.status = Some("find cleared".to_string());
+            }
+            KeyCode::Backspace => st.pop_filter(),
+            KeyCode::Up => st.move_up(),
+            KeyCode::Down => st.move_down(),
+            KeyCode::Char(c) if !c.is_control() => {
+                st.type_char(c);
+            }
+            _ => {}
+        }
+        return Ok(false);
+    }
+
     match key.code {
         // `?` opens the context-sensitive help popup (it no longer quits —
         // quit moved to `q` / Esc-at-top / Ctrl-C). trace:TASK-922
@@ -598,26 +623,28 @@ fn handle_key(
         },
         KeyCode::Char('C') => clear_focus(st, cache, loaded, focus_set, project_root),
 
-        // `n` opens the new-spec TITLE input modal (create a Draft) — but ONLY
-        // when no fuzzy filter is being typed; with an active filter buffer a
-        // bare `n` is a literal filter character, so it falls through to the
-        // filter arm below (the same guard `q` uses). trace:TASK-931 | ai:claude
-        KeyCode::Char('n') if st.filter.is_empty() => st.open_new_input(),
+        // `/` ENTERS find mode (TASK-945): the explicit, vim/less/fzf-style
+        // gesture for live-filtering the top-level list. Until it is pressed,
+        // every printable char below is a HOTKEY — which is why the old
+        // `if st.filter.is_empty()` guards are gone. trace:TASK-945 | ai:claude
+        KeyCode::Char('/') => st.enter_find_mode(),
+
+        // `n` opens the new-spec TITLE input modal (create a Draft). In NORMAL
+        // mode this is an unconditional hotkey — typing can no longer steal it
+        // (filtering only happens in find mode). trace:TASK-931 | ai:claude
+        KeyCode::Char('n') => st.open_new_input(),
 
         // `r` live-refreshes — re-read the store in-process so state changes
         // made OUTSIDE the TUI (a status flip via the CLI / another agent)
-        // appear without relaunch. Guarded `if st.filter.is_empty()` (like
-        // `n`/`q`) so a bare `r` stays a literal filter character while typing.
+        // appear without relaunch. Unconditional hotkey in normal mode.
         // trace:TASK-934 | ai:claude
-        KeyCode::Char('r') if st.filter.is_empty() => {
+        KeyCode::Char('r') => {
             refresh(st, store, cache, loaded, focus_set);
         }
 
-        // `q` quits — but ONLY when no fuzzy filter is being typed; with an
-        // active filter buffer a bare `q` is a literal filter character, so it
-        // falls through to the filter arm below. Ctrl-C always quits (handled
-        // above); the help popup documents this. trace:TASK-922
-        KeyCode::Char('q') if st.filter.is_empty() => return Ok(true),
+        // `q` quits. Unconditional hotkey in normal mode; Ctrl-C always quits
+        // (handled above); the help popup documents this. trace:TASK-922
+        KeyCode::Char('q') => return Ok(true),
 
         KeyCode::Up => st.move_up(),
         KeyCode::Down => st.move_down(),
@@ -659,9 +686,14 @@ fn handle_key(
             }
         }
 
+        // Esc layering (TASK-945): a confirmed filter is the innermost layer —
+        // clear it FIRST (and consume the Esc); only with no filter applied
+        // does Esc fall through to the pop-level / top-of-stack-exit behavior.
         KeyCode::Esc => {
-            if !st.pop() {
-                // Esc at the top-of-stack scope level exits.
+            if st.esc_clears_filter() {
+                st.status = Some("filter cleared".to_string());
+            } else if !st.pop() {
+                // Esc at the top-of-stack scope level (no filter) exits.
                 return Ok(true);
             }
         }
@@ -685,13 +717,9 @@ fn handle_key(
             }
         },
 
-        KeyCode::Backspace => st.pop_filter(),
-
-        // Type-to-fuzzy-filter the focused list. Printable chars only; the
-        // bottom-panel select-all/none shortcuts above already claimed
-        // `a`/`A` when focused there, so they won't reach the filter.
-        KeyCode::Char(c) if !c.is_control() => st.push_filter(c),
-
+        // In NORMAL mode printable chars are HOTKEYS — anything not bound above
+        // is inert (no type-to-filter fall-through; that lives in find mode).
+        // trace:TASK-945 | ai:claude
         _ => {}
     }
     Ok(false)
@@ -1439,11 +1467,14 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         ]);
         lines.push(line);
     }
-    if focused && !st.filter.is_empty() {
+    // The `/query` find prompt renders ONLY in find mode (TASK-945) — a
+    // confirmed filter narrows the list silently; the prompt is the live
+    // editing surface, not a persistent badge. trace:TASK-945 | ai:claude
+    if focused && st.find_mode {
         lines.insert(
             0,
             Line::from(Span::styled(
-                format!("> {}", st.filter),
+                format!("/{}", st.filter),
                 Style::default().fg(theme.info),
             )),
         );
@@ -1578,11 +1609,13 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         }
         lines.push(Line::from(row_spans));
     }
-    if focused && !st.filter.is_empty() {
+    // The `/query` find prompt renders ONLY in find mode (TASK-945).
+    // trace:TASK-945 | ai:claude
+    if focused && st.find_mode {
         lines.insert(
             0,
             Line::from(Span::styled(
-                format!("> {}", st.filter),
+                format!("/{}", st.filter),
                 Style::default().fg(theme.info),
             )),
         );
@@ -1594,12 +1627,14 @@ fn render_hint(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
     // The focus-key hint (F set/change · C clear) is appended to the base hint
     // in every context so the EPIC lens is discoverable. trace:STORY-695
     let base = match (st.focus, st.level) {
-        (Focus::Top, Level::Scopes) => "↵ drill · Tab items · F focus · C clear · ? help · q quit",
+        (Focus::Top, Level::Scopes) => {
+            "↵ drill · Tab items · / find · F focus · C clear · ? help · q quit"
+        }
         (Focus::Top, Level::Verbs) => {
-            "↵ run · Tab items · Esc back · F focus · C clear · ? help · q quit"
+            "↵ run · Tab items · Esc back · / find · F focus · C clear · ? help · q quit"
         }
         (Focus::Bottom, _) => {
-            "Space select · a/A all/none · p preview · F focus · C clear · ⇧Tab back · ? help · q quit"
+            "Space select · a/A all/none · p preview · / find · F focus · C clear · ⇧Tab back · ? help · q quit"
         }
     };
     let text = st.status.clone().unwrap_or_else(|| base.to_string());
@@ -2284,6 +2319,51 @@ mod render_tests {
     #[test]
     fn renders_scope_level() {
         draw(&sample(5), 100, 30);
+    }
+
+    /// Flatten the painted backend into one string so a render test can assert
+    /// a glyph sequence is (or is not) present. trace:TASK-945 | ai:claude
+    fn rendered_text(st: &RedesignState, w: u16, h: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("test backend");
+        terminal.draw(|f| render(f, st, None)).expect("render");
+        let buf = terminal.backend().buffer().clone();
+        let mut out = String::new();
+        for cell in buf.content() {
+            out.push_str(cell.symbol());
+        }
+        out
+    }
+
+    /// The `/query` find prompt renders ONLY in find mode (TASK-945): a
+    /// confirmed-but-applied filter narrows silently (no prompt); entering find
+    /// mode shows the live `/…` prompt. trace:TASK-945 | ai:claude
+    #[test]
+    fn find_prompt_renders_only_in_find_mode() {
+        // Normal mode with a confirmed filter applied → NO `/zz` prompt.
+        let mut st = sample(6);
+        st.focus_bottom();
+        st.enter_find_mode();
+        st.push_filter('z');
+        st.push_filter('z');
+        st.confirm_find();
+        assert!(!st.find_mode);
+        let normal = rendered_text(&st, 120, 30);
+        assert!(
+            !normal.contains("/zz"),
+            "the find prompt must NOT show in normal mode"
+        );
+
+        // Re-enter find mode and type → the `/ab` prompt IS painted.
+        let mut st2 = sample(6);
+        st2.focus_bottom();
+        st2.enter_find_mode();
+        st2.push_filter('a');
+        st2.push_filter('b');
+        let finding = rendered_text(&st2, 120, 30);
+        assert!(
+            finding.contains("/ab"),
+            "the find prompt must show in find mode"
+        );
     }
 
     /// The columnar scope-list render (TASK-914): a multi-row Backlog list with

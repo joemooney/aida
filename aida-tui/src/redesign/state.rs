@@ -664,6 +664,14 @@ pub struct RedesignState {
     /// purely from the current focus via [`Self::help_content`]; the popup
     /// only tracks that it is showing. trace:TASK-922 | ai:claude
     pub help: bool,
+    /// Is the explicit `/` FIND mode active? When `false` (NORMAL mode)
+    /// printable chars are hotkeys and the top-level list filter is frozen;
+    /// `/` enters find mode, where printable chars live-filter the focused
+    /// list. Enter confirms (keeps the filter, returns to normal), Esc cancels
+    /// (clears the filter, returns to normal). The dedicated modal/picker text
+    /// inputs own their own typing and are unaffected by this flag.
+    /// trace:TASK-945 | ai:claude
+    pub find_mode: bool,
     /// Ambient context shown in the status line.
     pub role: String,
     /// Transient status message (last executed action / stub notice).
@@ -698,6 +706,7 @@ impl RedesignState {
             focus_summary: None,
             epic_picker: None,
             help: false,
+            find_mode: false,
             role: role.into(),
             status: None,
             theme: crate::theme::Theme::default(),
@@ -1472,6 +1481,70 @@ impl RedesignState {
         self.clamp_indices();
     }
 
+    // --- Find mode (TASK-945) --------------------------------------------
+
+    /// Is a top-level list filter currently applied (find mode confirmed a
+    /// non-empty query)? Drives the Esc layering: a live filter is cleared
+    /// before a level is popped. trace:TASK-945 | ai:claude
+    pub fn filter_active(&self) -> bool {
+        !self.filter.trim().is_empty()
+    }
+
+    /// `/` → ENTER find mode. Starts a FRESH query (clears any prior filter)
+    /// so the prompt opens empty, vim/less-style. trace:TASK-945 | ai:claude
+    pub fn enter_find_mode(&mut self) {
+        self.filter.clear();
+        self.find_mode = true;
+        self.clamp_indices();
+    }
+
+    /// Enter in find mode → CONFIRM: keep the typed filter applied and return
+    /// to normal mode so hotkeys act on the filtered list. trace:TASK-945
+    pub fn confirm_find(&mut self) {
+        self.find_mode = false;
+    }
+
+    /// Esc in find mode → CANCEL: clear the filter and return to normal mode.
+    /// trace:TASK-945 | ai:claude
+    pub fn cancel_find(&mut self) {
+        self.filter.clear();
+        self.find_mode = false;
+        self.clamp_indices();
+    }
+
+    /// Clear an applied filter (without touching `find_mode`). Used by the
+    /// normal-mode Esc layering. trace:TASK-945 | ai:claude
+    pub fn clear_filter(&mut self) {
+        self.filter.clear();
+        self.clamp_indices();
+    }
+
+    /// Esc semantics for the top-level list in NORMAL mode: if a filter is
+    /// applied, clear it and report `true` (handled — consume the Esc);
+    /// otherwise report `false` so the caller pops a level. The vim-like
+    /// layering — clear the filter before unwinding the stack. trace:TASK-945
+    pub fn esc_clears_filter(&mut self) -> bool {
+        if self.filter_active() {
+            self.clear_filter();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Route a printable char by mode: in FIND mode it extends the top-level
+    /// filter (and is consumed → `true`); in NORMAL mode it is NOT a filter
+    /// keystroke (the filter is untouched → `false`, leaving it to act as a
+    /// hotkey). The key router shares this gate. trace:TASK-945 | ai:claude
+    pub fn type_char(&mut self, c: char) -> bool {
+        if self.find_mode {
+            self.push_filter(c);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Keep both cursors inside their (possibly newly-filtered) ranges.
     fn clamp_indices(&mut self) {
         let top = self.top_len();
@@ -1662,7 +1735,7 @@ fn scope_legend() -> Vec<String> {
         "↵ / Tab: descend to the items panel".to_string(),
         "→: drill into the highlighted scope's verbs".to_string(),
         "↑/↓: move highlight".to_string(),
-        "type: fuzzy-filter the list".to_string(),
+        "/: find — filter the list (↵ keep · Esc clear)".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
         REFRESH_KEY_LABEL.to_string(),
@@ -1678,7 +1751,7 @@ fn verb_legend() -> Vec<String> {
         "← / Esc: back to scopes".to_string(),
         "↑/↓: move highlight".to_string(),
         "Tab: focus the items panel".to_string(),
-        "type: fuzzy-filter the list".to_string(),
+        "/: find — filter the list (↵ keep · Esc clear)".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
         REFRESH_KEY_LABEL.to_string(),
@@ -1695,7 +1768,7 @@ fn item_legend() -> Vec<String> {
         "→: open the verbs for this item".to_string(),
         "p / ↵: preview this spec".to_string(),
         "← / Esc / ⇧Tab: back a level".to_string(),
-        "type: fuzzy-filter the items".to_string(),
+        "/: find — filter the items (↵ keep · Esc clear)".to_string(),
         "?: toggle this help".to_string(),
         NEW_KEY_LABEL.to_string(),
         REFRESH_KEY_LABEL.to_string(),
@@ -2031,6 +2104,93 @@ mod tests {
         assert!(!s.filter.is_empty());
         s.focus_bottom();
         assert!(s.filter.is_empty());
+    }
+
+    // --- Find mode (TASK-945) --------------------------------------------
+
+    #[test]
+    fn slash_enters_find_mode_fresh() {
+        let mut s = state(3);
+        assert!(!s.find_mode, "starts in normal mode");
+        // A pre-existing filter is cleared on entry (starts fresh).
+        s.filter = "stale".to_string();
+        s.enter_find_mode();
+        assert!(s.find_mode);
+        assert!(s.filter.is_empty(), "find mode opens with a fresh query");
+    }
+
+    #[test]
+    fn typing_in_find_mode_filters_the_focused_list() {
+        let mut s = state(12);
+        s.drill();
+        s.focus_bottom();
+        s.enter_find_mode();
+        // Titles are digit-free, so "11" narrows to STORY-11 alone.
+        assert!(s.type_char('1'));
+        assert!(s.type_char('1'));
+        let idxs = s.bottom_indices();
+        assert_eq!(idxs.len(), 1);
+        assert_eq!(s.items[idxs[0]].id, "STORY-11");
+    }
+
+    #[test]
+    fn enter_confirms_find_keeping_filter() {
+        let mut s = state(3);
+        s.drill();
+        s.enter_find_mode();
+        s.push_filter('a');
+        s.push_filter('r');
+        s.push_filter('c');
+        s.push_filter('h'); // narrows verbs to "archive"
+        s.confirm_find();
+        assert!(!s.find_mode, "confirm returns to normal mode");
+        assert!(s.filter_active(), "confirm KEEPS the filter applied");
+        // Hotkeys now act on the filtered list (only "archive" survives).
+        assert_eq!(s.top_verb(), Some(Verb::Archive));
+    }
+
+    #[test]
+    fn esc_in_find_mode_clears_and_exits() {
+        let mut s = state(3);
+        s.drill();
+        s.enter_find_mode();
+        s.push_filter('a');
+        s.push_filter('r');
+        assert!(s.filter_active());
+        s.cancel_find();
+        assert!(!s.find_mode, "cancel returns to normal mode");
+        assert!(!s.filter_active(), "cancel CLEARS the filter");
+    }
+
+    #[test]
+    fn hotkey_char_in_normal_mode_does_not_filter() {
+        let mut s = state(3);
+        s.drill();
+        assert!(!s.find_mode);
+        // In normal mode a printable char is NOT a filter keystroke — it is
+        // left to act as a hotkey, and the filter is untouched.
+        assert!(!s.type_char('n'));
+        assert!(!s.type_char('q'));
+        assert!(s.filter.is_empty());
+    }
+
+    #[test]
+    fn esc_in_normal_mode_clears_filter_before_popping() {
+        let mut s = state(3);
+        s.drill(); // now at the verb level
+        s.enter_find_mode();
+        s.push_filter('g');
+        s.confirm_find(); // back to normal, filter still applied
+        assert!(!s.find_mode);
+        assert!(s.filter_active());
+        // First Esc clears the filter and stays at the verb level (handled).
+        assert!(s.esc_clears_filter());
+        assert!(!s.filter_active());
+        assert_eq!(s.level, Level::Verbs, "did NOT pop a level yet");
+        // Second Esc: no filter to clear → caller is free to pop.
+        assert!(!s.esc_clears_filter());
+        assert!(s.pop());
+        assert_eq!(s.level, Level::Scopes);
     }
 
     #[test]
