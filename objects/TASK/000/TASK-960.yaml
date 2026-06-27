@@ -8,10 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:41:23.494753579Z
-modified_at: 2026-06-27T16:41:23.494753579Z
+modified_at: 2026-06-27T16:41:27.628999142Z
 req_type: Task
 tags:
 - multi-clone
 - parent:EPIC-46
 - quality
 - testing
+relationships:
+- rel_type: Child
+  target_id: 019ed2f1-d1ca-7212-9df1-56394d8ba3db
+  created_at: 2026-06-27T16:41:27.628999142Z
