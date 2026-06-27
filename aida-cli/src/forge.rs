@@ -1172,6 +1172,29 @@ impl GitLabForge {
             .context("could not invoke `glab` — is the GitLab CLI installed?")
     }
 
+    /// Run `glab api -X GET <path>` with optional `-f key=value` query fields.
+    /// BUG-639: glab (1.36.0) has no `--output json` on `mr list`/`mr view`, so
+    /// the JSON-read methods go through the REST API, which returns the same
+    /// objects the pure parsers below already consume. The `:id` placeholder
+    /// resolves the project from the repo remote; `-X GET` makes `-f` fields
+    /// query params (without it `glab api` defaults to POST), and glab encodes
+    /// each value (so a slashy branch like `feat/x` is safe). The previous
+    /// `glab mr list … --output json` argv was never exercised against a real
+    /// glab — only the pure parsers were unit-tested — so it shipped broken.
+    // trace:BUG-639 | ai:claude
+    fn glab_api_get(&self, path: &str, fields: &[(&str, &str)]) -> Result<std::process::Output> {
+        let mut args: Vec<String> = vec!["api".into(), "-X".into(), "GET".into(), path.into()];
+        for (k, v) in fields {
+            args.push("-f".into());
+            args.push(format!("{k}={v}"));
+        }
+        Command::new("glab")
+            .current_dir(&self.project_root)
+            .args(args.iter().map(String::as_str))
+            .output()
+            .context("could not invoke `glab` — is the GitLab CLI installed?")
+    }
+
     /// Best-effort resolve the open MR iid for a branch — used to fill the
     /// `change` number a [`CiProbeResult`] carries. GitLab pipelines are
     /// branch-scoped, so a missing MR (no MR opened yet) is not an error: it
@@ -1238,61 +1261,69 @@ impl Forge for GitLabForge {
     }
 
     fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
-        // STORY-509: `glab mr list --source-branch <b> --output json` returns a
-        // JSON array of open MRs for the branch. Symmetric with GitHub's
-        // change_for_branch, but glab has no battle-tested PrLookup helper to
-        // delegate to — we shell out and map the JSON. Preserves the BUG-257
-        // transient (CliMissing / Unreachable) vs definitive (NoChange) split the
-        // orchestrator's phase-1 verdict depends on. trace:STORY-509 | ai:claude
-        let out = self.glab(&["mr", "list", "--source-branch", branch, "--output", "json"]);
+        // BUG-639: read open MRs for the branch via the REST API
+        // (`glab api -X GET projects/:id/merge_requests?source_branch=<b>&state=opened`)
+        // — glab 1.36 has no `--output json` on `mr list`. The REST array is the
+        // same shape `glab_lookup_from_list_output` already maps, so only the
+        // invocation changes. Preserves the BUG-257 transient (CliMissing /
+        // Unreachable) vs definitive (NoChange) split the orchestrator's phase-1
+        // verdict depends on. trace:STORY-509 trace:BUG-639 | ai:claude
+        let out = self.glab_api_get(
+            "projects/:id/merge_requests",
+            &[("source_branch", branch), ("state", "opened")],
+        );
         Ok(glab_lookup_from_list_output(out, branch))
     }
 
     fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup> {
         // STORY-509: the BUG-223 fallback — find the open MR whose title/body
         // references `spec` when the branch-keyed lookup misses (branch swapped).
-        // `glab mr list --search <spec> --output json`. The branch label is
+        // BUG-639: via REST (`…?search=<spec>&state=opened`). The branch label is
         // unknown from a spec search; the parser fills it from the MR's own
-        // source_branch. trace:STORY-509 trace:BUG-223 | ai:claude
-        let out = self.glab(&["mr", "list", "--search", spec, "--output", "json"]);
+        // source_branch. trace:STORY-509 trace:BUG-223 trace:BUG-639 | ai:claude
+        let out = self.glab_api_get(
+            "projects/:id/merge_requests",
+            &[("search", spec), ("state", "opened")],
+        );
         Ok(glab_lookup_from_list_output(out, ""))
     }
 
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
-        // STORY-509: did the branch's MR already land? `glab mr list
-        // --source-branch <b> --merged --output json`. Same JSON shape +
+        // STORY-509: did the branch's MR already land? BUG-639: via REST
+        // (`…?source_branch=<b>&state=merged`). Same JSON shape +
         // transient-vs-definitive mapping as change_for_branch.
-        // trace:STORY-509 | ai:claude
-        let out = self.glab(&[
-            "mr",
-            "list",
-            "--source-branch",
-            branch,
-            "--merged",
-            "--output",
-            "json",
-        ]);
+        // trace:STORY-509 trace:BUG-639 | ai:claude
+        let out = self.glab_api_get(
+            "projects/:id/merge_requests",
+            &[("source_branch", branch), ("state", "merged")],
+        );
         Ok(glab_lookup_from_list_output(out, branch))
     }
 
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
-        // STORY-509: `glab mr view <iid> --output json` returns the GitLab REST
-        // MR object (state / merge_status / approvals / sha). Map it to the
-        // forge-neutral ChangeStatus via the pure parser. trace:STORY-509 | ai:claude
-        let iid = c.id.to_string();
-        let out = self.glab(&["mr", "view", &iid, "--output", "json"])?;
+        // STORY-509: the single-MR REST object (state / merge_status / approvals
+        // / sha) mapped to ChangeStatus via the pure parser. BUG-639: via
+        // `glab api -X GET projects/:id/merge_requests/<iid>` — glab 1.36 has no
+        // `--output json` on `mr view`. trace:STORY-509 trace:BUG-639 | ai:claude
+        let path = format!("projects/:id/merge_requests/{}", c.id);
+        let out = self.glab_api_get(&path, &[])?;
         anyhow::ensure!(
             out.status.success(),
-            "glab mr view failed for !{}: {}",
+            "glab api merge_requests/{} failed: {}",
             c.id,
             String::from_utf8_lossy(&out.stderr).trim()
         );
         let body = String::from_utf8_lossy(&out.stdout);
         parse_glab_mr_status(&body)
-            .with_context(|| format!("could not parse `glab mr view` JSON for !{}", c.id))
+            .with_context(|| format!("could not parse glab MR JSON for !{}", c.id))
     }
 
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
+        // TASK-962 (Slice 3): `glab ci list -F json` shares the mr-list defect
+        // BUG-639 fixed — glab 1.36 has no JSON flag here either, so this and
+        // `ci_probe_for_branch` need the same REST move (`glab api -X GET
+        // projects/:id/pipelines?ref=<branch>`). Left as-is in Slice 1: CI wiring
+        // is Slice 3 and needs a live pipeline to validate. trace:TASK-962 | ai:claude
         // STORY-510: GitLab CI is pipeline-scoped. `glab ci list -F json -b <ref>`
         // lists the pipelines for a ref; the newest one's status is the CI state.
         // A Change target uses its source branch (the orchestrator merges branches,
@@ -1412,20 +1443,18 @@ impl Forge for GitLabForge {
     }
 
     fn list_changes(&self, filter: ChangeFilter) -> Result<Vec<ChangeRef>> {
-        // STORY-509: `glab mr list [--target-branch <base>] [--all] --output
-        // json` → a JSON array of MRs, mapped to ChangeRefs. Mirrors GitHub's
-        // list_changes: a non-success exit degrades to an empty list (a missing
-        // CLI / no project should not abort a caller iterating changes), but a
-        // clean run with bad JSON is surfaced. trace:STORY-509 | ai:claude
-        let mut args: Vec<&str> = vec!["mr", "list", "--output", "json"];
+        // STORY-509: a JSON array of MRs mapped to ChangeRefs. BUG-639: via REST
+        // (`…?state=opened|all[&target_branch=<base>]`) — glab 1.36 has no
+        // `--output json` on `mr list`. Mirrors GitHub's list_changes: a
+        // non-success exit degrades to an empty list (a missing CLI / no project
+        // should not abort a caller iterating changes), but a clean run with bad
+        // JSON is surfaced. trace:STORY-509 trace:BUG-639 | ai:claude
+        let state = if filter.open_only { "opened" } else { "all" };
+        let mut fields: Vec<(&str, &str)> = vec![("state", state)];
         if let Some(base) = filter.base.as_deref() {
-            args.push("--target-branch");
-            args.push(base);
+            fields.push(("target_branch", base));
         }
-        if !filter.open_only {
-            args.push("--all");
-        }
-        let out = self.glab(&args)?;
+        let out = self.glab_api_get("projects/:id/merge_requests", &fields)?;
         if !out.status.success() {
             return Ok(Vec::new());
         }

@@ -56132,32 +56132,16 @@ fn pr_ship_handler(
             explicit
         }
         None => {
-            // Look up an open PR for the current branch.
-            let lookup = std::process::Command::new("gh")
-                .current_dir(&project_root)
-                .args([
-                    "pr",
-                    "list",
-                    "--head",
-                    branch.as_str(),
-                    "--state",
-                    "open",
-                    "--json",
-                    "number",
-                    "--jq",
-                    ".[0].number",
-                ])
-                .output()
-                .context("could not invoke `gh pr list` — is `gh` installed and on PATH?")?;
-            let existing: Option<u64> = if lookup.status.success() {
-                let s = String::from_utf8_lossy(&lookup.stdout).trim().to_string();
-                if s.is_empty() {
-                    None
-                } else {
-                    s.parse().ok()
-                }
-            } else {
-                None
+            // Look up an open change for the current branch through the forge
+            // (GitHub: `gh pr list --head`; GitLab: `glab mr list --source-branch`).
+            // Collapse the 5-state ChangeLookup to the prior Option<u64>: only a
+            // definitively-Found change yields a number; every other state (no
+            // change / CLI missing / failed / unreachable) falls through to the
+            // create path, exactly as the old raw lookup's failure-to-None did.
+            // trace:TASK-961 trace:STORY-621 | ai:claude
+            let existing: Option<u64> = match change_lookup_for_branch(&project_root, &branch) {
+                crate::forge::ChangeLookup::Found(c) => Some(c.id),
+                _ => None,
             };
 
             if let Some(existing) = existing {
@@ -56839,32 +56823,15 @@ fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
 /// auth, network) returns `None`, so a probe blip never converts an otherwise-
 /// fine create into a spurious already-merged short-circuit. trace:BUG-574 | ai:claude
 fn latest_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Option<u64> {
-    let gh = resolve_gh_binary()?;
-    let out = std::process::Command::new(&gh)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--head",
-            branch,
-            "--state",
-            "merged",
-            "--limit",
-            "1",
-            "--json",
-            "number",
-            "--jq",
-            ".[0].number",
-        ])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
+    // Route the merged-change lookup through the forge (GitHub: `gh pr list
+    // --head --state merged`; GitLab: `glab mr list --source-branch --merged`).
+    // Only a definitively-Found merged change yields a number; every other state
+    // collapses to None, matching the prior raw-gh failure-to-None behaviour.
+    // trace:TASK-961 trace:STORY-621 | ai:claude
+    match detect_merged_pr_for_branch_via_forge(project_root, branch) {
+        PrLookup::Found(info) => Some(info.number),
+        _ => None,
     }
-    String::from_utf8_lossy(&out.stdout)
-        .trim()
-        .parse::<u64>()
-        .ok()
 }
 
 fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64> {
@@ -56928,6 +56895,45 @@ fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64
         );
     }
     Ok(change.id)
+}
+
+/// Open a change for a just-pushed `queue recover` branch through the forge,
+/// deriving title/body from the branch head commit — the forge-routed
+/// equivalent of the old `gh pr create --fill` (which has no trait method, but
+/// `open_change` + commit-derived title/body is what `pr_ship_create_pr`
+/// already does). Prints a forge-aware action hint and returns whether the
+/// change opened.
+// trace:TASK-961 trace:STORY-621 | ai:claude
+fn recover_open_change(probe_repo: &std::path::Path, branch: &str) -> bool {
+    use pr_ship::{derive_pr_body_from_commit, derive_pr_title_from_commit};
+    let hint = crate::forge::resolve_forge_kind(probe_repo)
+        .create_cmd()
+        .unwrap_or_else(|| "open change".to_string());
+    println!(
+        "  {} {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        hint
+    );
+    let commit_msg = match std::process::Command::new("git")
+        .current_dir(probe_repo)
+        .args(["log", "-1", "--format=%B"])
+        .output()
+    {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => return false,
+    };
+    let title = derive_pr_title_from_commit(&commit_msg);
+    if title.is_empty() {
+        return false;
+    }
+    let req = crate::forge::OpenChange {
+        branch: branch.to_string(),
+        base: crate::forge::default_branch_of(probe_repo),
+        title,
+        body: derive_pr_body_from_commit(&commit_msg),
+        draft: false,
+    };
+    crate::forge::forge_for(probe_repo).open_change(req).is_ok()
 }
 
 /// TASK-140: the full HEAD commit message of a BRANCH (not the local cwd HEAD).
@@ -57305,30 +57311,21 @@ fn prepare_main_worktree_for_pr_ship_pull(main_worktree: &std::path::Path) -> Re
 /// degrades to the stacks.json-only signal rather than blocking the ship.
 /// trace:BUG-434 | ai:claude
 fn open_child_prs(project_root: &std::path::Path, branch: &str) -> Vec<u64> {
-    let out = std::process::Command::new("gh")
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--base",
-            branch,
-            "--state",
-            "open",
-            "--json",
-            "number",
-            "-q",
-            ".[].number",
-        ])
-        .output();
-    let Ok(out) = out else {
-        return Vec::new();
+    // Route the stacked-children guard's PR list through the forge (GitHub:
+    // `gh pr list --base <branch>`; GitLab: `glab mr list --target-branch`).
+    // `open_only` maps to each CLI's default-open listing; a CLI-missing / failed
+    // run degrades to an empty Vec, matching the prior raw-gh behaviour (the
+    // BUG-434 guard then simply finds no children to protect). trace:TASK-961
+    // trace:STORY-621 trace:BUG-434 | ai:claude
+    let filter = crate::forge::ChangeFilter {
+        base: Some(branch.to_string()),
+        open_only: true,
     };
-    if !out.status.success() {
-        return Vec::new();
-    }
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter_map(|l| l.trim().parse::<u64>().ok())
+    crate::forge::forge_for(project_root)
+        .list_changes(filter)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|c| c.id)
         .collect()
 }
 
@@ -126596,28 +126593,21 @@ fn handle_queue_recover(
                 );
                 return Ok(());
             }
-            // Open the PR (gh fills title/body from the branch commits).
-            let pr_st = std::process::Command::new("gh")
-                .current_dir(&probe_repo)
-                .args(["pr", "create", "--fill"])
-                .status();
-            println!(
-                "  {} gh pr create --fill",
-                crate::glyph(crate::glyphs::Glyph::Arrow).cyan()
-            );
-            match pr_st {
-                Ok(s) if s.success() => {
-                    // Now drive phases 3-6 on the freshly-opened PR.
-                    let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
-                }
-                _ => {
-                    eprintln!(
-                        "{} `gh pr create` failed — open the PR manually, then run \
-                         `aida queue recover {}` again (it will take the drive-from-PR path).",
-                        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                        spec
-                    );
-                }
+            // Open the change through the forge — title/body derived from the
+            // branch commits (the forge-routed equivalent of `gh pr create
+            // --fill`), so a GitLab/pure-git repo opens its own change.
+            // trace:TASK-961 trace:STORY-621 | ai:claude
+            if recover_open_change(&probe_repo, b) {
+                // Now drive phases 3-6 on the freshly-opened change.
+                let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+            } else {
+                eprintln!(
+                    "{} opening the {} failed — open it manually, then run \
+                     `aida queue recover {}` again (it will take the drive-from-PR path).",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    crate::forge::resolve_forge_kind(&probe_repo).change_noun(),
+                    spec
+                );
             }
         }
         queue_recover::RecoverAction::WipCommitPushDrive => {
@@ -126648,20 +126638,15 @@ fn handle_queue_recover(
                 );
                 return Ok(());
             }
-            println!(
-                "  {} gh pr create --fill",
-                crate::glyph(crate::glyphs::Glyph::Arrow).cyan()
-            );
-            let pr_st = std::process::Command::new("gh")
-                .current_dir(&probe_repo)
-                .args(["pr", "create", "--fill"])
-                .status();
-            if matches!(pr_st, Ok(s) if s.success()) {
+            // Forge-routed change open — title/body derived from the branch
+            // commits. trace:TASK-961 trace:STORY-621 | ai:claude
+            if recover_open_change(&probe_repo, b) {
                 let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
             } else {
                 eprintln!(
-                    "{} `gh pr create` failed — open the PR manually, then re-run recover.",
-                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+                    "{} opening the {} failed — open it manually, then re-run recover.",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    crate::forge::resolve_forge_kind(&probe_repo).change_noun()
                 );
             }
         }
