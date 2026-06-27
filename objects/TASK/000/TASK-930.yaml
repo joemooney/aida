@@ -8,12 +8,12 @@ description: |-
   This is the DEMO SPEC for an end-to-end lifecycle walkthrough (Draft -> advisor approval -> implementation -> human test-plan verification -> reviewer accept -> Completed) driven through the redesign TUI. Left as a Draft; the implementer will write its ## Test Plan during implementation.
 
   ACCEPTANCE: `aida queue list` ends with a summary footer showing total / routed / unrouted counts; counts are correct; no footer when the queue is empty (the existing empty message stands).
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:01.331691676Z
-modified_at: 2026-06-27T01:30:05.947182495Z
+modified_at: 2026-06-27T01:30:19.779837395Z
 req_type: Task
 tags:
 - cli
