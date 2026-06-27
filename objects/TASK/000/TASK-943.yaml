@@ -1,0 +1,17 @@
+id: 019f06ad-e780-7a32-bebe-f9ad43d0930e
+spec_id: TASK-943
+agreed_id: TASK-943
+title: TUI fuzzy filter targets the focused panel — typing to find an item filters Scopes instead
+description: 'Walkthrough finding (operator, 2026-06-26): typing fuzzy-filters whichever panel has focus; at launch that''s the Scopes panel, so typing ''930'' to find an item filtered the SCOPES list while the items (Targets) stayed unfiltered — confusing. The operator must Tab to the items panel first. Consider: route spec-id-like queries to the items panel, OR a clear cue of which panel the active filter targets, OR reconsider default focus.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-27T01:24:48.128426940Z
+modified_at: 2026-06-27T01:24:48.128426940Z
+req_type: Task
+tags:
+- finding
+- redesign
+- tui
+- ux
