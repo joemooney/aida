@@ -8,8 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T18:25:03.299616594Z
-modified_at: 2026-06-27T18:25:03.299616594Z
+modified_at: 2026-06-27T18:25:07.101381622Z
 req_type: Bug
 tags:
 - depends-on:STORY-621
 - parent:EPIC-35
+relationships:
+- rel_type: Child
+  target_id: 019e9333-7505-78f1-a063-06851ee7f85c
+  created_at: 2026-06-27T18:25:07.101381622Z
