@@ -3,12 +3,12 @@ spec_id: TASK-945
 agreed_id: TASK-945
 title: 'TUI: explicit ''/'' find mode (replaces always-on filtering, kills hotkey collisions)'
 description: "Change the redesign TUI from ALWAYS-ON fuzzy filtering to an explicit '/' find mode (vim/less/fzf model). Today any printable char filters the focused list, so every hotkey (n/r/c/q/F/C/a/A) needs an `if st.filter.is_empty()` guard to avoid collision — fragile and the source of recurring key collisions. \n\nNEW MODEL:\n- NORMAL mode: printable chars are HOTKEYS; '/' ENTERS find mode. Remove the per-hotkey filter guards (no longer needed — hotkeys only fire in normal mode).\n- FIND mode: a '/query' prompt shows; printable chars append to the filter (live-filtering the focused list); Backspace edits; Enter CONFIRMS (keep the filter applied, return to normal mode so you can navigate/act on the filtered results with hotkeys); Esc CANCELS (clear the filter, return to normal mode).\n- Clearing an applied filter from normal mode: Esc clears the filter first if one is applied, else pops the level (vim-like layering). \n- Scope: this is about the top-level LIST fuzzy filter (scopes/verbs/items). The dedicated modal text inputs (defer trigger, focus picker, new-spec title) keep their own typing capture — do NOT change those.\n\nACCEPTANCE: '/' enters find mode with a visible prompt; typing live-filters the focused list; Enter keeps the filter + returns to normal; Esc clears + returns; in normal mode every hotkey works with NO filter collision and the if-filter-empty guards are removed; modal inputs unaffected; pure key-routing logic unit-tested; gates green; ? help legend updated ('/' to find)."
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:06:36.986598928Z
-modified_at: 2026-06-27T02:06:41.257304109Z
+modified_at: 2026-06-27T02:53:40.347956845Z
 req_type: Task
 tags:
 - keyboard
