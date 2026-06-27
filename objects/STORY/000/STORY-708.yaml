@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:21:04.124832287Z
-modified_at: 2026-06-27T02:21:28.948505571Z
+modified_at: 2026-06-27T02:30:00.956098792Z
 req_type: Story
 tags:
 - assess
@@ -41,3 +41,9 @@ relationships:
   target_id: 019f06b8-d0d7-7580-8bae-fbdf2204d81d
   created_at: 2026-06-27T02:21:28.948493203Z
   created_by: joe
+comments:
+- id: 019f06e9-9bfc-7911-a015-3aebbc3dcc4b
+  author: joe
+  content: 'DECISION on reconciling ''backlog groom'' (operator, 2026-06-26): rename ''aida backlog groom'' -> ''aida queue add --approved''. Its function is bulk-move-approved-onto-queue, which is a QUEUE op on a SET, not a backlog op — so it belongs under queue add as a selector. Model: ''aida queue add <spec> [--for]'' = queue one (today); ''aida queue add --approved [--epic <id>] [--batch <name>] [--for]'' = queue all approved (optionally scoped to an epic tree / batch-tagged), replacing backlog groom. ''--approved'' is the only sensible selector (only Approved is enqueueable). It is correctly advisor-gated (bulk dispatch-for-execution, per BUG-631). Composes with aida focus (auto-scope to the focus epic). Keep ''aida backlog groom'' as a DEPRECATED ALIAS. This frees ''groom'' entirely for the disposition verb (assess/intake -> aida groom).'
+  created_at: 2026-06-27T02:30:00.956098792Z
+  modified_at: 2026-06-27T02:30:00.956098792Z
