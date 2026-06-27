@@ -102,23 +102,56 @@ if [ ${#IGNORED_STAGED_FILES[@]} -gt 0 ]; then
     exit 1
 fi
 
-# 5. Substrate-as-bouncer: reject SPEC-ID trace markers on `///` doc comments.
-# A `///` doc comment on a clap field/variant doubles as `--help` text, so a
-# `trace:` marker on one leaks the developer breadcrumb into user-facing output
-# (BUG-227 / TASK-268's "both-at-once trap"). The CI tests
-# source_doc_comments_carry_no_trace_token + help_text_carries_no_trace_markers
-# catch it minutes later in CI; this gate catches it at the moment of writing.
-# Fix: demote the offending `///` to a plain `//` line above the item.
+# 5. Substrate-as-bouncer: reject SPEC-ID *provenance* on `///` doc comments.
+# A `///` doc comment on a clap field/variant doubles as `--help` text, so
+# provenance on one leaks the developer breadcrumb into user-facing output
+# (BUG-227 / TASK-268's "both-at-once trap"). The CI test
+# source_doc_comments_carry_no_spec_id_provenance catches it minutes later; this
+# gate catches it at the moment of writing.
+#
+# A line is *provenance* — and rejected — when it carries a `trace:` marker, OR
+# is a *bare* SPEC-ID (essentially nothing but SPEC-ID token(s) + punctuation,
+# no descriptive prose words). A *descriptive* mention of a SPEC-ID inside prose
+# (e.g. `/// reuses the STORY-122 usage log`) is legitimate help text, NOT a
+# leak, and is allowed (BUG-629 tightened this from the old over-broad "any
+# SPEC-ID token" criterion, which forced agents to reword legit `///` prose).
+# This is the SAME criterion as the cli.rs `doc_comment_is_provenance_leak`
+# helper — keep the two in lockstep (TASK-903).
+# Fix a real offender: demote the `///` to a plain `//` line above the item.
 # Emergency skip: pass --no-verify (or --allow-intermediate, handled above).
 #
 # Scoped to the STAGED DIFF (added lines only), NOT whole staged files: a commit
-# that merely TOUCHES a file carrying pre-existing `///` trace debt must not be
-# rejected for debt it didn't introduce — that just pushes agents to --no-verify,
-# which ALSO skips the advisor-code-gate above, defeating both (BUG-624). We read
-# `git diff --cached --unified=0` and inspect only `+`-added content lines
-# (excluding the `+++ b/file` header), so only NEWLY-added `///` trace markers
-# block; pre-existing ones are ignored. Renames/binaries are diff-filtered out.
-# trace:TASK-135 trace:BUG-624 | ai:claude
+# that merely TOUCHES a file carrying pre-existing `///` provenance debt must not
+# be rejected for debt it didn't introduce — that just pushes agents to
+# --no-verify, which ALSO skips the advisor-code-gate above, defeating both
+# (BUG-624). We read `git diff --cached --unified=0` and inspect only `+`-added
+# content lines (excluding the `+++ b/file` header), so only NEWLY-added `///`
+# provenance blocks; pre-existing lines are ignored. Renames/binaries are
+# diff-filtered out.
+# trace:TASK-135 trace:BUG-624 trace:BUG-629 trace:TASK-903 | ai:claude
+SPEC_ID_RE='(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+'
+
+# Mirror of cli.rs `doc_comment_is_provenance_leak`. Input: a `///`-prefixed doc
+# line. Returns 0 (leak → reject) when it carries `trace:` or is a bare SPEC-ID;
+# returns 1 (allow) for a descriptive prose mention or no SPEC-ID at all.
+__aida_doc_is_provenance_leak() {
+    local docline="$1"
+    # No SPEC-ID at all → nothing to leak.
+    printf '%s\n' "$docline" | grep -qE "$SPEC_ID_RE" || return 1
+    # A `trace:` marker on a `///` line is always provenance.
+    case "$docline" in *trace:*) return 0 ;; esac
+    # Strip the leading `///`, then delete every SPEC-ID token. If an alphabetic
+    # word (2+ ascii letters) survives, this is descriptive prose → allow.
+    # Otherwise only punctuation/digits remain → bare SPEC-ID → reject.
+    local residual
+    residual="$(printf '%s\n' "$docline" \
+        | sed -E 's#^[[:space:]]*///+##; s/'"$SPEC_ID_RE"'/ /g')"
+    if printf '%s\n' "$residual" | grep -qE '[A-Za-z]{2,}'; then
+        return 1
+    fi
+    return 0
+}
+
 DOC_TRACE_OFFENDERS=()
 current_file=""
 while IFS= read -r line; do
@@ -132,14 +165,13 @@ while IFS= read -r line; do
             current_file="${current_file#b/}"
             ;;
         # Any other line starting with "+" is added content. Strip the leading
-        # "+" and apply the same criterion to the added line: a `///` doc comment
-        # carrying a concrete SPEC-ID or a `trace:` marker, excluding obvious
-        # example text (`e.g.`).
+        # "+" and apply the shared provenance criterion to the added line: a
+        # `///` doc comment that is provenance (a `trace:` marker or a bare
+        # SPEC-ID), but NOT a descriptive prose mention.
         "+"*)
             added="${line#+}"
             if printf '%s\n' "$added" | grep -qE '^[[:space:]]*///' \
-                && printf '%s\n' "$added" | grep -qE 'trace:|(STORY|BUG|TASK|EPIC|SPIKE|FR|CR|ADR|PRIN)-[0-9]+' \
-                && ! printf '%s\n' "$added" | grep -qiF 'e.g.'; then
+                && __aida_doc_is_provenance_leak "$added"; then
                 trimmed="${added#"${added%%[![:space:]]*}"}"
                 DOC_TRACE_OFFENDERS+=("${current_file:-<staged>}: ${trimmed}")
             fi
@@ -148,11 +180,11 @@ while IFS= read -r line; do
 done < <(git diff --cached --unified=0 --no-color --diff-filter=ACMR -- '*.rs' 2>/dev/null || true)
 
 if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
-    echo -e "${RED}Refusing commit: a SPEC-ID trace marker is on a \`///\` doc comment." >&2
-    echo -e "clap pulls \`///\` doc blocks into \`--help\`, so the marker leaks into" >&2
-    echo -e "user-facing output. Demote it to a plain \`//\` comment above the item" >&2
-    echo -e "(SPEC-IDs stay in code as \`//\`, never \`///\`). See:" >&2
-    echo -e "docs/user-facing-text-conventions.md${NC}" >&2
+    echo -e "${RED}Refusing commit: SPEC-ID provenance is on a \`///\` doc comment." >&2
+    echo -e "clap pulls \`///\` doc blocks into \`--help\`, so a \`trace:\` marker or a" >&2
+    echo -e "bare SPEC-ID leaks into user-facing output. Demote it to a plain \`//\`" >&2
+    echo -e "comment above the item (a descriptive SPEC-ID mention in prose is fine)." >&2
+    echo -e "See docs/user-facing-text-conventions.md${NC}" >&2
     echo -e "${YELLOW}Offending lines:${NC}" >&2
     for off in "${DOC_TRACE_OFFENDERS[@]}"; do
         echo -e "  - ${YELLOW}${off}${NC}" >&2
