@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:53:10.010355725Z
-modified_at: 2026-06-27T07:54:20.440554724Z
+modified_at: 2026-06-27T16:29:40.260938933Z
 req_type: Spike
 relationships:
 - rel_type: References
@@ -21,4 +21,9 @@ comments:
   content: 'Decision (2026-06-27, post-TASK-938 / MU-601): harden-the-shared-cache is sufficient; do NOT build per-agent cache isolation now. Evidence: the cache-cluster is closed — BUG-627 schema self-heal (drop+rebuild on column/table drift, substrate-as-bouncer: verify actual columns, do not trust the meta), BUG-636 incremental cache update on HEAD move, the application-level lock-and-retry on .aida/cache.db (cache.rs friendly "database is locked while trying to {action}" backoff rather than a raw SQLITE_BUSY), and BUG-632 per-test queue isolation. MU-601 in scripts/multi-clone-harness.sh now empirically proves two concurrent same-clone agents hammering ONE shared cache.db with interleaved add+list+search+cache-status survive with: no SQLITE_BUSY/"database is locked" hard error, no "no such column"/schema-drift hard error, and the cache self-heals to FRESH with both writers queryable (stable at 12 and 20 iters). Per-agent isolation (.aida/cache.<node-id>.db / AIDA_CACHE_PATH or one-clone-per-agent) adds path/lifecycle/rebuild surface for a contention class the shared path already absorbs. Revisit ONLY if a future harness/field signal shows the lock+retry actually starving or hard-erroring under heavier load (e.g. a different-SHA mid-upgrade pair, the noted MU-601 followup). Recommend: mark SPIKE-72 resolved as "harden, do not isolate."'
   created_at: 2026-06-27T07:54:20.440554724Z
   modified_at: 2026-06-27T07:54:20.440554724Z
+- id: 019f09ea-5624-7ae1-be27-cad7af32be9c
+  author: joe
+  content: 'DECISION (2026-06-27): harden the SHARED cache, do NOT build per-agent cache isolation. Rationale: BUG-627 self-heal (schema-drift drop+rebuild) + BUG-636 incremental update + BUG-632 test isolation + TASK-938 concurrency harness (all shipped) make the shared .aida/cache.db robust under concurrent same-clone access. A per-agent cache would add complexity for no proven benefit. Revisit only if the harness surfaces a real concurrent-corruption failure.'
+  created_at: 2026-06-27T16:29:40.260938933Z
+  modified_at: 2026-06-27T16:29:40.260938933Z
 human_only: true
