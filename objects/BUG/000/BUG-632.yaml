@@ -3,15 +3,33 @@ spec_id: BUG-632
 agreed_id: BUG-632
 title: 'Flaky test: queue_add_then_list_same_shell_is_consistent (false CI red under --workspace parallelism)'
 description: '2026-06-27: this test FAILED on PR #1151''s CI (''cargo test --workspace'') but PASSED on the post-merge main CI re-run, and passes 3/3 locally in isolation. Flaky — almost certainly shared queue state (the queue is a per-user file; parallel tests in --workspace mutate the same user''s queue, so ''add then list consistency'' gets disrupted by a concurrent add/remove). Caused a false CI red that (combined with a human merging on red) put a red-CI PR onto main — though main itself stayed green. FIX: isolate the queue per-test (unique AIDA_USER / temp store dir) so it can''t see other tests'' queue mutations.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:54:38.724779264Z
-modified_at: 2026-06-27T06:51:32.349655758Z
+modified_at: 2026-06-27T15:34:12.473843118Z
 req_type: Bug
 tags:
 - ci
 - flaky
 - queue
 - test
+history:
+- id: 019f09b7-8e99-7301-92b6-1ae7114f51c6
+  author: aida-auto-bump
+  timestamp: 2026-06-27T15:34:12.377665859Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f09b7-8ef9-7992-b669-3c004892d7f3
+  timestamp: 2026-06-27T15:34:12.473837336Z
+  agent: aida
+  commit_sha: 8494f0e23a24e4f6ab5cf8708812046ca2396c33
+  summary: Completed via merge 8494f0e2
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T15:34:11.184841320Z
+  completion_sha: 8494f0e23a24e4f6ab5cf8708812046ca2396c33
