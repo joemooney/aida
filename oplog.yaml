@@ -22750,5 +22750,33 @@ operations:
     req_type: Task
     status: Draft
     priority: Low
-clock: 2146
+- id: 019f06e1-7665-75f1-baa9-9b3b22bd4c94
+  target_id: 019f06e1-6afc-7552-a4dd-936b1bceecf5
+  author: aida
+  node_id: '1'
+  lamport: 2147
+  timestamp: 2026-06-27T02:21:07.045016622Z
+  kind: !Create
+    title: 'aida groom: unify the advisor disposition verb (rename assess/intake) + scoped ''aida groom <spec|epic>'' + reconcile backlog-groom'
+    description: |-
+      Unify the advisor disposition verb under `aida groom`, scopable to targets. Resolves the TASK-946 ambiguity and wires the TUI groom verb.
+
+      CURRENT STATE: `aida assess` (alias `intake`) = the advisor disposition pass (read open specs -> propose approve/reject/park/queue), all-open + --only-tag/--exclude-tag filters, NO positional targets. `aida backlog groom` = a NARROWER, separate command (move approved backlog items onto the queue + batch tag). So "groom" is already taken with a different meaning — a naming collision.
+
+      PROPOSAL:
+      1. RENAME assess/intake -> `aida groom` as the canonical advisor disposition verb. Keep `assess`/`intake` as DEPRECATED ALIASES (back-compat).
+      2. RECONCILE `aida backlog groom` so "groom" means ONE thing: fold its move-approved->queue function into `aida groom`'s queue outcome, OR rename it (e.g. `aida backlog queue`), OR make it a deprecated alias. Do NOT leave two grooms.
+      3. ADD POSITIONAL TARGETS: `aida groom <spec>...` grooms just those specs; `aida groom <epic>` grooms the epic + transitive children (reuse aida_core::graph_walk::walk_union); `aida groom` (no args) = all open (today's behavior). Keep the existing --apply/--only-tag/etc. flags.
+
+      COMPOSES WITH:
+      - aida focus (EPIC-55): `aida groom` under a focus auto-scopes to the focus epic's tree.
+      - TUI groom verb (TASK-946): wire the stubbed verb to `aida groom <selected/focused/focus-epic>`.
+
+      NAMING NOTE: "groom" colloquially blends refinement + disposition; assess/intake lean pure disposition. Choose consciously (groom is recognizable + matches the operator's model; alternatives: keep assess, or triage).
+
+      ACCEPTANCE: `aida groom [<spec>...|<epic>]` runs the advisor disposition pass scoped to the targets (all-open default); assess/intake/backlog-groom reconciled (one canonical "groom", aliases deprecated); epic targets use the transitive closure; existing flags preserved; TUI groom verb can shell to it.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 2147
 node_id: '1'
