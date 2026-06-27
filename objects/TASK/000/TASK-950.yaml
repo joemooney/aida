@@ -18,15 +18,33 @@ description: |-
   - A pure merge_contiguous helper + a unit test (contiguous merge; non-contiguous stay separate; different owner/type/node do not merge; full vs live-frontier remaining).
 
   FILES: aida-cli/src/main.rs (handle_block_command list path). Pure merge fn is unit-testable.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:53:11.566495194Z
-modified_at: 2026-06-27T02:53:32.758255105Z
+modified_at: 2026-06-27T03:13:38.870887430Z
 req_type: Task
 tags:
 - cli
 - from-operator
 - id-blocks
 - ux
+history:
+- id: 019f0711-8cea-7f30-b6f5-c9d77b7e3800
+  author: aida-auto-bump
+  timestamp: 2026-06-27T03:13:38.538587357Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f0711-8e36-7f52-b2ac-0f81aa86dc72
+  timestamp: 2026-06-27T03:13:38.870867913Z
+  agent: aida
+  commit_sha: d5cd8d19d18a8ee178eedd9ae899a854bd756e90
+  summary: Completed via merge d5cd8d19
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T03:13:37.548487530Z
+  completion_sha: d5cd8d19d18a8ee178eedd9ae899a854bd756e90
