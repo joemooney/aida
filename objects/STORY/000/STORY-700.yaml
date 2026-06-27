@@ -3,12 +3,12 @@ spec_id: STORY-700
 agreed_id: STORY-700
 title: 'First-run experience: feel the core loop in session one (W5)'
 description: After aida init, guide the user through spec -> trace -> review -> merge -> auto-complete as a single visible arc (first-run hint chain / aida tour) so the loop is felt, not discovered. Builds on BUG-465/EPIC-37 onboarding hardening.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:06.508349535Z
-modified_at: 2026-06-26T23:49:20.946556480Z
+modified_at: 2026-06-27T16:36:16.041297363Z
 req_type: Story
 relationships:
 - rel_type: Child
