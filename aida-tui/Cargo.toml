@@ -17,12 +17,29 @@ portable-pty = { workspace = true }
 vt100 = { workspace = true }
 # Declared now so a fetch failure surfaces in this story's first build;
 # the status overlay (STORY-133) is the first heavy consumer.
-ratatui = { workspace = true }
+# `unstable-rendered-line-info` un-gates `Paragraph::line_count(width)`, which
+# we use to clamp modal scroll against the WRAPPED (post-word-wrap) row count
+# rather than the logical line count — see render_modal. trace:BUG-635
+ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
 
 # Command-surface enumeration walks the real `aida` clap `Command` tree so the
 # fuzzy palette never drifts from the CLI (STORY-682). Already in the workspace
 # lockfile via aida-cli — no new external crate enters the build graph.
 clap = { workspace = true }
+
+# In-process spec/list reads via the cache-backed git backend — no per-read
+# `aida` subprocess cold-start (STORY-693). Default features only (`native`:
+# rusqlite + fs2 + dirs); the read path needs neither `postgres` nor the forge
+# features (github/gitlab/jira). Already in the workspace lockfile via aida-cli.
+# trace:STORY-693
+aida-core = { version = "0.14", path = "../aida-core" }
+
+# Markdown rendering of the show-modal body. Parsed into styled ratatui
+# Lines/Spans ourselves (no tui-markdown — workspace ratatui is 0.30, which
+# tui-markdown does not track). Pinned to the version already resolved in
+# Cargo.lock (via other crates) so no new version enters the dependency graph.
+# trace:TASK-913
+pulldown-cmark = "0.9.6"
 
 anyhow = { workspace = true }
 serde = { workspace = true }

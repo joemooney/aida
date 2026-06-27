@@ -54,6 +54,10 @@ mod overlay;
 mod palette;
 mod picker;
 mod pty;
+/// The action→target command-palette redesign prototype (EPIC-54, Slice 1
+/// = STORY-690). Gated behind `AIDA_TUI_REDESIGN=1`; the existing TUI is
+/// untouched without the toggle. trace:STORY-690 | ai:claude
+mod redesign;
 mod state;
 mod statusbar;
 mod tab;
@@ -115,6 +119,13 @@ pub fn run(opts: TuiOptions) -> Result<()> {
     let project_root = ensure_project_context(&cwd)?;
 
     let config = TuiConfig::load(&cwd);
+
+    // EPIC-54 Slice 1: the action→target redesign prototype is strictly
+    // opt-in via `AIDA_TUI_REDESIGN=1`. When on, it owns the terminal and
+    // the existing PTY-host shell below is never reached. trace:STORY-690
+    if redesign::enabled() {
+        return redesign::run(config.theme.theme(), &project_root);
+    }
     term::install_panic_hook();
     // SIGTERM / SIGINT (Unix) and CTRL_C_EVENT / CTRL_BREAK_EVENT
     // (Windows) restore the terminal before the process dies. Without
