@@ -3,12 +3,12 @@ spec_id: TASK-945
 agreed_id: TASK-945
 title: 'TUI: explicit ''/'' find mode (replaces always-on filtering, kills hotkey collisions)'
 description: "Change the redesign TUI from ALWAYS-ON fuzzy filtering to an explicit '/' find mode (vim/less/fzf model). Today any printable char filters the focused list, so every hotkey (n/r/c/q/F/C/a/A) needs an `if st.filter.is_empty()` guard to avoid collision — fragile and the source of recurring key collisions. \n\nNEW MODEL:\n- NORMAL mode: printable chars are HOTKEYS; '/' ENTERS find mode. Remove the per-hotkey filter guards (no longer needed — hotkeys only fire in normal mode).\n- FIND mode: a '/query' prompt shows; printable chars append to the filter (live-filtering the focused list); Backspace edits; Enter CONFIRMS (keep the filter applied, return to normal mode so you can navigate/act on the filtered results with hotkeys); Esc CANCELS (clear the filter, return to normal mode).\n- Clearing an applied filter from normal mode: Esc clears the filter first if one is applied, else pops the level (vim-like layering). \n- Scope: this is about the top-level LIST fuzzy filter (scopes/verbs/items). The dedicated modal text inputs (defer trigger, focus picker, new-spec title) keep their own typing capture — do NOT change those.\n\nACCEPTANCE: '/' enters find mode with a visible prompt; typing live-filters the focused list; Enter keeps the filter + returns to normal; Esc clears + returns; in normal mode every hotkey works with NO filter collision and the if-filter-empty guards are removed; modal inputs unaffected; pure key-routing logic unit-tested; gates green; ? help legend updated ('/' to find)."
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:06:36.986598928Z
-modified_at: 2026-06-27T02:53:40.347956845Z
+modified_at: 2026-06-27T05:04:19.832058443Z
 req_type: Task
 tags:
 - keyboard
@@ -20,3 +20,21 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-27T02:06:41.257304109Z
+history:
+- id: 019f0776-e316-7910-8924-c1a9f50a22a2
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:19.734296942Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-e378-71d0-92dd-a962a0f4a7b5
+  timestamp: 2026-06-27T05:04:19.832052865Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

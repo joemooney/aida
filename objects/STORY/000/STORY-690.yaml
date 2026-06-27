@@ -28,12 +28,12 @@ description: |-
   1. Launch → **expect** two stacked panels (scopes on top, items below) + a status line, and **no role tabs**.
   2. Highlight **Backlog**, press **Enter** → **expect** the top panel becomes Backlog's verbs; breadcrumb reads `Backlog › …`.
   3. **Tab** to the item list, **Space** a couple items → **expect** `[x]` toggles. Press **Enter** on `groom` with nothing selected → **expect** a "groom all N?" confirm popup. **Esc** → **expect** you pop back a level.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T06:52:59.975232154Z
-modified_at: 2026-06-27T02:56:38.292689891Z
+modified_at: 2026-06-27T05:04:18.069876399Z
 req_type: Story
 tags:
 - parent:EPIC
@@ -46,3 +46,21 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-26T18:57:00.020313997Z
   created_by: joe
+history:
+- id: 019f0776-dc34-72e1-bd44-36d58004cd08
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:17.972240894Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-dc95-7441-a29b-3d16bf0f8f67
+  timestamp: 2026-06-27T05:04:18.069870417Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

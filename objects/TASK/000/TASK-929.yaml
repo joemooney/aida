@@ -10,12 +10,12 @@ description: |-
   ## Test Plan
 
   1. Focus EPIC-54 in the TUI, and separately run `aida graph EPIC-54 --tree` → **expect** the lens shows the **same** set of children as the tree (it no longer truncates when an edge is one-directional). This is the reader half of SPIKE-71; the source half (tag→edge) is already on main.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T20:34:31.945705090Z
-modified_at: 2026-06-27T03:00:35.375059195Z
+modified_at: 2026-06-27T05:04:19.245905782Z
 req_type: Task
 tags:
 - fix
@@ -28,7 +28,23 @@ relationships:
   target_id: 019f057d-6a5e-7d91-8c53-46da890ebe76
   created_at: 2026-06-26T20:34:46.234825339Z
   created_by: joe
+history:
+- id: 019f0776-e0cc-7091-a003-2c0cac09e5df
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:19.148926790Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-e12d-7260-b68a-9ba63caac8bd
+  timestamp: 2026-06-27T05:04:19.245900545Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
 implementation_info:
   implemented: true
   implemented_at: 2026-06-26T20:50:50.864579310Z
   implemented_by: joe
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

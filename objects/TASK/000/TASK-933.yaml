@@ -3,12 +3,12 @@ spec_id: TASK-933
 agreed_id: TASK-933
 title: 'TUI gap: ''accept'' verb — implementation approval (reviewer-gated, Done → Completed)'
 description: 'GAP #3 (the big one): the TUI approve verb is SPEC-approval (Draft->Approved); there is no IMPLEMENTATION-approval. Add an "accept" verb, status-conditional on Done specs (the symmetric reviewer counterpart to the advisor approve), representing the reviewer accepting the implementation. It transitions Done -> Completed (run with reviewer authority, e.g. AIDA_SESSION_ROLE=reviewer on the spawned command) and records a "reviewed/accepted" comment. (Note: in the full flow Done->Completed is merge-driven; for the walkthrough the reviewer accept completes it.) Distinct from approve. ACCEPTANCE: accept appears only for Done focus; completes the spec + comments it; non-Done skipped; pure conditional/target logic tested; gates green; redesign module.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:35.943313832Z
-modified_at: 2026-06-27T03:01:06.798628643Z
+modified_at: 2026-06-27T05:04:19.538967692Z
 req_type: Task
 tags:
 - gap
@@ -20,7 +20,23 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-26T23:28:43.936513344Z
   created_by: joe
+history:
+- id: 019f0776-e1f1-7db0-8eb8-8dc972a9fc3e
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:19.441642220Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-e252-7112-a49e-ed66dc1942a2
+  timestamp: 2026-06-27T05:04:19.538962205Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
 implementation_info:
   implemented: true
   implemented_at: 2026-06-26T23:56:10.366873442Z
   implemented_by: joe
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

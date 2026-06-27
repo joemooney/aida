@@ -12,12 +12,12 @@ description: |-
   - Principle: Right = go deeper (scope→verbs), Left = back, Enter = descend/run. Keep Tab/Shift-Tab/Space/?/q working.
 
   ACCEPTANCE: Enter on a scope descends to items (not verbs); Right on a scope opens its verbs; Right on an item opens the verbs for that item; Left goes back a level everywhere; existing keys still work; pure key-routing logic unit-tested; gates green; redesign module. Update the ? help legends.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:54:42.446804290Z
-modified_at: 2026-06-27T02:53:23.111544025Z
+modified_at: 2026-06-27T05:04:19.734111694Z
 req_type: Task
 tags:
 - keyboard
@@ -29,3 +29,21 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-27T01:54:46.499238301Z
+history:
+- id: 019f0776-e2b4-7f22-baf3-35b5540160de
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:19.636805734Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-e316-7910-8924-c19f77fb56d8
+  timestamp: 2026-06-27T05:04:19.734105953Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

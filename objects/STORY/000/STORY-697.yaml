@@ -24,12 +24,12 @@ description: |-
   2. Press **C** → **expect** the lens clears and all open specs return.
   3. Press **F** → **expect** a fuzzy-filterable **picker of open epics**; arrow/type to find one, Enter focuses it.
   4. Pick an epic, quit, relaunch `aida tui` (no env var) in the same worktree → **expect** it **auto-focuses** on the last pick (persisted in `.aida/tui-focus`); branch-inference is the fallback when there's no marker.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T20:26:16.892766589Z
-modified_at: 2026-06-26T20:38:36.649733508Z
+modified_at: 2026-06-27T05:04:18.365163254Z
 req_type: Story
 tags:
 - focus
@@ -42,7 +42,23 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-26T20:26:40.901002661Z
   created_by: joe
+history:
+- id: 019f0776-dd59-7282-aa9c-1724b2d4c299
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:18.265822294Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-ddbd-7e01-9026-f267e9e3d410
+  timestamp: 2026-06-27T05:04:18.365156186Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
 implementation_info:
   implemented: true
   implemented_at: 2026-06-26T20:38:36.649733508Z
   implemented_by: joe
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
