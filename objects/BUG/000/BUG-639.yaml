@@ -3,12 +3,12 @@ spec_id: BUG-639
 agreed_id: BUG-639
 title: GitLabForge MR JSON-read methods use non-existent glab flag (--output json) — broken vs real glab 1.36.0
 description: 'Live validation against gitlab.joemooney.com (glab 1.36.0) found that every GitLabForge method that reads JSON invokes a glab flag that does not exist: glab mr list ... --output json (change_for_branch, change_for_spec, merged_change_for_branch, list_changes), glab mr view <iid> --output json (change_status), and glab ci list -F json (ci_status, ci_probe_for_branch). All return "unknown flag" and the methods fail. EPIC-35 unit tests never caught this because they feed fixture JSON straight to the pure parsers and never invoke glab. Write paths are fine: mr create, mr merge -s -d -m -y, mr note -m, ci status -b/--live all exist and mr create was validated live (MR !1). Fix: route the JSON reads through glab api (validated working: glab api "projects/:id/merge_requests?source_branch=X&state=opened" and projects/:id/merge_requests/<iid> return the GitLab REST JSON the existing pure parsers — change_ref_from_glab_mr, parse_glab_mr_status, parse_glab_mr_list — already consume; the :id placeholder resolves the project from the repo remote). No trait/type/parser change; provider invocation only. This is the load-bearing reason EPIC-35 was plumbed-not-wired AND the wiring would not have worked: the provider read-path was non-functional against real glab. trace marker stays plain. Found during STORY-621 Slice 1 live validation.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T18:25:03.299616594Z
-modified_at: 2026-06-27T18:45:20.820073436Z
+modified_at: 2026-06-27T19:24:47.483409551Z
 req_type: Bug
 tags:
 - depends-on:STORY-621
@@ -23,3 +23,21 @@ comments:
   content: 'Fixed + live-validated against gitlab.joemooney.com (glab 1.36.0) in the Slice-1 PR. GitLabForge MR reads (change_for_branch/change_for_spec/merged_change_for_branch/list_changes/change_status) now go through ''glab api -X GET projects/:id/merge_requests[...]''; parsers unchanged. End-to-end proof: ''aida pr ship --dry-run'' on a real GitLab repo found the open MR via the actual routed code path; create/merge/merged-lookup/list/view all exercised live. CI read-path (glab ci list -F json) split out to TASK-962 (Slice 3).'
   created_at: 2026-06-27T18:45:20.820073436Z
   modified_at: 2026-06-27T18:45:20.820073436Z
+history:
+- id: 019f0a8a-a99a-7862-a3ac-a3808fd2d0f4
+  author: aida-auto-bump
+  timestamp: 2026-06-27T19:24:47.386416114Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f0a8a-a9fb-7560-a7bf-45d4242893b0
+  timestamp: 2026-06-27T19:24:47.483403903Z
+  agent: aida
+  commit_sha: b68b05599c999781669f4d817eb593ba8d6b6cbd
+  summary: Completed via merge b68b0559
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T19:24:46.390463850Z
+  completion_sha: b68b05599c999781669f4d817eb593ba8d6b6cbd

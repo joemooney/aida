@@ -3,12 +3,12 @@ spec_id: TASK-961
 agreed_id: TASK-961
 title: 'STORY-621 Slice 1: route-only forge wiring (pr ship lookup + merged-lookup + child-PRs + queue-recover create)'
 description: 'Route the 4 clean route-only gh call sites through the existing Forge trait so GitLab works on the keyboard pr-ship + queue-recover paths. No trait change (uses existing methods + pr_ship title/body derivation). Sites (de-drifted 2026-06-27): pr_ship_handler open-PR lookup -> change_lookup_for_branch; latest_merged_pr_for_branch -> detect_merged_pr_for_branch_via_forge; open_child_prs -> list_changes(base filter); queue recover two gh pr create --fill arms -> derive title/body + open_change. GitHub byte-equivalent; validate live on gitlab.joemooney.com. Release --after-pr merge deliberately deferred to Slice 3 (CI-watch sibling; release stays GitHub-coupled). Parent STORY-621.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T18:02:05.497006715Z
-modified_at: 2026-06-27T18:02:14.796487357Z
+modified_at: 2026-06-27T19:24:47.580100014Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -17,3 +17,21 @@ relationships:
 - rel_type: Child
   target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
   created_at: 2026-06-27T18:02:14.796487357Z
+history:
+- id: 019f0a8a-a9fb-7560-a7bf-45e0dda78c66
+  author: aida-auto-bump
+  timestamp: 2026-06-27T19:24:47.483599825Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f0a8a-aa5c-77b1-91d8-5eea46a32ee2
+  timestamp: 2026-06-27T19:24:47.580094324Z
+  agent: aida
+  commit_sha: b68b05599c999781669f4d817eb593ba8d6b6cbd
+  summary: Completed via merge b68b0559
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T19:24:46.390463850Z
+  completion_sha: b68b05599c999781669f4d817eb593ba8d6b6cbd
