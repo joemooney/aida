@@ -1125,6 +1125,28 @@ impl Cache {
             .flatten();
         Ok(spec_id)
     }
+
+    /// Resolve a stable spec_id back to its UUID using the cached row. Used by
+    /// the incremental cache update to turn a DELETED object file's spec_id
+    /// (parsed from its path) into the UUID `delete_requirement` keys on.
+    /// `Ok(None)` when no cache row carries that spec_id — the row is already
+    /// absent, so the delete is a no-op. Comparison is case-insensitive to match
+    /// `canonical_spec_id` (stored spec_ids are upper-cased).
+    // trace:BUG-636
+    pub fn uuid_for_spec_id(&self, spec_id: &str) -> Result<Option<Uuid>> {
+        let conn = self.conn.lock().unwrap();
+        let id_str: Option<String> = conn
+            .query_row(
+                "SELECT id FROM requirements_cache WHERE spec_id = ?1 COLLATE NOCASE",
+                params![spec_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        match id_str {
+            Some(s) => Ok(Uuid::parse_str(&s).ok()),
+            None => Ok(None),
+        }
+    }
 }
 
 // --------------------------------------------------------------- schema drift

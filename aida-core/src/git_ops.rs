@@ -435,6 +435,107 @@ pub fn head_sha(repo: &Path) -> Result<String> {
     Ok(result.stdout)
 }
 
+/// The kind of change a diff reports for a single object file. Renames are
+/// decomposed into Deleted+Added (we pass `--no-renames`), which is exactly the
+/// cache mutation we want: drop the old spec_id's row, add the new one.
+// trace:BUG-636 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectChange {
+    Added,
+    Modified,
+    Deleted,
+}
+
+/// Whether `ancestor` is reachable from (an ancestor commit of) `descendant`.
+///
+/// Used by the incremental cache update to decide whether the recorded cache
+/// HEAD is on the linear/merge history leading to the new HEAD (a normal
+/// fast-forward / merge advance — incremental is safe) versus a force-push /
+/// rebase of the orphan branch that rewrote history (the recorded HEAD is no
+/// longer reachable — the `from..to` diff would be meaningless, so the caller
+/// must full-rebuild). A commit is its own ancestor, so identical SHAs return
+/// true. Empty SHAs (no recorded HEAD / non-git fixture) return false → the
+/// caller falls back to a full rebuild. A bad object or any git error maps to
+/// false for the same fail-safe reason.
+// trace:BUG-636 | ai:claude
+pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool> {
+    if ancestor.is_empty() || descendant.is_empty() {
+        return Ok(false);
+    }
+    // `git merge-base --is-ancestor A B` exits 0 when A is an ancestor of B,
+    // 1 when it is not, and 128 on a bad object. Our `git` wrapper only exposes
+    // success/failure; non-zero (not-ancestor OR error) both mean "don't trust
+    // an incremental diff" → false.
+    let result = git(repo, &["merge-base", "--is-ancestor", ancestor, descendant])?;
+    Ok(result.success)
+}
+
+/// List the spec-object YAML files that changed between `from` and `to`,
+/// restricted to the `objects/` tree, as `(change, repo-relative path)` pairs.
+///
+/// Uses `git diff --no-renames --name-status from to -- objects` so a rename is
+/// reported as a Deleted+Added pair (the right cache mutation, since the spec_id
+/// — and thus the cache row identity — lives in the filename). Status letters:
+/// `A`→Added, `M`/`T`→Modified, `D`→Deleted; `C` (copy, only with `--find-copies`
+/// which we do not pass) is treated as Added if it ever appears. Only paths under
+/// an `objects/` directory ending in `.yaml` are returned — `metadata.yaml` and
+/// `oplog.yaml` (store root) are correctly excluded.
+// trace:BUG-636 | ai:claude
+pub fn changed_object_files(
+    repo: &Path,
+    from: &str,
+    to: &str,
+) -> Result<Vec<(ObjectChange, PathBuf)>> {
+    let result = git(
+        repo,
+        &[
+            "diff",
+            "--no-renames",
+            "--name-status",
+            from,
+            to,
+            "--",
+            "objects",
+        ],
+    )?;
+    if !result.success {
+        anyhow::bail!(
+            "git diff --name-status {}..{} failed: {}",
+            from,
+            to,
+            result.stderr
+        );
+    }
+    let mut changes = Vec::new();
+    for line in result.stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // Format: "<STATUS>\t<path>" (single-letter status with --no-renames).
+        let mut parts = line.splitn(2, '\t');
+        let status = parts.next().unwrap_or("").trim();
+        let path = match parts.next() {
+            Some(p) => p.trim(),
+            None => continue,
+        };
+        if !is_spec_object_path(path) {
+            continue;
+        }
+        let kind = match status.chars().next() {
+            Some('A') | Some('C') => ObjectChange::Added,
+            Some('M') | Some('T') => ObjectChange::Modified,
+            Some('D') => ObjectChange::Deleted,
+            // Unknown/unexpected (e.g. 'U' unmerged): caller treats an Err as a
+            // full-rebuild fallback, but here we just skip the line rather than
+            // mis-classify. An unexpected status is rare on the store branch.
+            _ => continue,
+        };
+        changes.push((kind, PathBuf::from(path)));
+    }
+    Ok(changes)
+}
+
 /// Get the current branch name.
 pub fn current_branch(repo: &Path) -> Result<String> {
     let result = git(repo, &["rev-parse", "--abbrev-ref", "HEAD"])?;
