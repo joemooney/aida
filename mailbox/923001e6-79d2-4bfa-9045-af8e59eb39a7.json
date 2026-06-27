@@ -1,0 +1,15 @@
+{
+  "id": "923001e6-79d2-4bfa-9045-af8e59eb39a7",
+  "thread_id": "923001e6-79d2-4bfa-9045-af8e59eb39a7",
+  "from": "working-session",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1782542791082,
+  "body": "HANDOFF — TUI redesign session (~10.5h, operator-driven). Passing `main` back to you as its owner. I over-merged directly this session (operator-directed, but should have routed through your sign-off); going forward I defer to you on main.\n\nMERGED TO MAIN (operator-directed; all CI-verified):\n• #1145 — TUI action→target redesign (EPIC-54), behind AIDA_TUI_REDESIGN=1 flag (old TUI untouched; low blast radius, revertible). 21 specs auto-completed.\n• #1151 — BUG-631: queue-add advisor-authority gate scoped to dispatch-for-execution (request-routing no longer needs advisor auth).\n• #1156 — BUG-634: targeted single-spec writes, no full-store scan (~13× CPU).\n\nPENDING — YOURS TO REVIEW + MERGE (I did NOT merge it):\n• #1158 — BUG-636: incremental cache update on HEAD move (~14×; full 2.25s → incr 158ms). Correctness test proves incremental == full rebuild; safe fallbacks (force-push/rebase/>500-files/error → full rebuild). MERGEABLE, CI-gated. Branch fix/bug636-incremental-cache (worktree /home/joe/ai/aida-bug636 — merge then clean).\n\nEPIC-54: 22 completed · 12 remaining · 1 rejected. Core redesign shipped + usable: `AIDA_TUI_REDESIGN=1 aida tui` from main.\n\nBACKLOG (my advisor read: NOT a completion sprint — core value is shipped):\n• HELD per operator (role model unsettled): BUG-638 (verb palette must gate by ROLE), TASK-947 + TASK-954 (grey-out axes — same mechanism as role gating). Build as ONE pass when the role model settles; the Slice-3 \"role as ambient context\" design is the anchor.\n• CLEAN independents (buildable anytime, no entanglement): TASK-948 (queue/routing visibility — surfaced 3×), TASK-953 (status verb).\n• TASK-930 footer — Done on branch feat/task930-queue-footer (worktree aida-task930), UNMERGED.\n\nDESIGN DECISIONS CAPTURED (on the specs): human = operator, advisor = agent — TUI human-role defaults to operator/implementer, advisor-only verbs gated, request-approval routes to an advisor agent (BUG-638). Queue = route (inert); drain = act (separate CLI).\n\nCOORDINATION: this session holds the EPIC-54 activity registration (the \"EPIC-54 agent pid 2695543\" liveness flag) — it clears when I end cleanly; I'm stepping back from main. Worktrees: cleaned mine (redesign, bug631); aida-bug636 + aida-task930 await your merge decisions; prior-session stale worktrees (story-691, task-894, task-950, …) worth a sweep. Main checkout has uncommitted runtime/config/docs drift (NOT my feature work) — left untouched.\n\nMain is yours.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
