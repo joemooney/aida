@@ -22489,5 +22489,21 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 2127
+- id: 019f06b2-c32c-76b2-9a5e-74bde5a5a2a0
+  target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
+  author: aida
+  node_id: '1'
+  lamport: 2128
+  timestamp: 2026-06-27T01:30:06.508398425Z
+  kind: !AddTag
+    tag: parent:EPIC-35
+- id: 019f06b2-c4b3-7750-a78d-e2b22fa2fc87
+  target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
+  author: aida
+  node_id: '1'
+  lamport: 2129
+  timestamp: 2026-06-27T01:30:06.899578556Z
+  kind: !RemoveTag
+    tag: parent:EPIC-44
+clock: 2129
 node_id: '1'
