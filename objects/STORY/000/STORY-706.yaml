@@ -16,9 +16,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:36:50.334595154Z
-modified_at: 2026-06-27T01:36:50.334595154Z
+modified_at: 2026-06-27T01:36:57.943542577Z
 req_type: Story
 tags:
 - cli
 - context
 - focus
+relationships:
+- rel_type: Child
+  target_id: 019f06b8-d0d7-7580-8bae-fbdf2204d81d
+  created_at: 2026-06-27T01:36:57.943537840Z
+  created_by: joe
