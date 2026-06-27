@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:39:22.781982403Z
-modified_at: 2026-06-27T02:39:49.489612744Z
+modified_at: 2026-06-27T05:01:07.322970905Z
 req_type: Task
 tags:
 - finding
@@ -22,3 +22,9 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-27T02:39:49.489603484Z
   created_by: joe
+comments:
+- id: 019f0773-f37b-7e80-850d-4edc2dd39a38
+  author: joe
+  content: 'REFINEMENT (operator, 2026-06-26): after ''request approval'' routes a spec, the TUI should AUTO-UPDATE the item to show it is now queued for the advisor. The verb-completion refresh already fires (BUG-633), but routing does not change the spec STATUS (stays Draft), so there is nothing visible to update without a per-item ROUTING BADGE (e.g. ''→ advisor''). That badge is the core of this spec — surface queue membership per item so a routed draft is visibly distinct.'
+  created_at: 2026-06-27T05:01:07.322970905Z
+  modified_at: 2026-06-27T05:01:07.322970905Z
