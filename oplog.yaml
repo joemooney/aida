@@ -22670,5 +22670,17 @@ operations:
 
       ## Seam
       EPIC-53 = approvable-set + batch action. EPIC-54 = multi-select gesture. Do NOT build multi-select UI in EPIC-53. See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
-clock: 2140
+- id: 019f06d4-3d1f-7491-ba23-e5c14ffd2034
+  target_id: 019f06d4-2fba-7a01-8a6f-fb5e300b2865
+  author: aida
+  node_id: '1'
+  lamport: 2141
+  timestamp: 2026-06-27T02:06:40.415952309Z
+  kind: !Create
+    title: 'TUI: explicit ''/'' find mode (replaces always-on filtering, kills hotkey collisions)'
+    description: "Change the redesign TUI from ALWAYS-ON fuzzy filtering to an explicit '/' find mode (vim/less/fzf model). Today any printable char filters the focused list, so every hotkey (n/r/c/q/F/C/a/A) needs an `if st.filter.is_empty()` guard to avoid collision — fragile and the source of recurring key collisions. \n\nNEW MODEL:\n- NORMAL mode: printable chars are HOTKEYS; '/' ENTERS find mode. Remove the per-hotkey filter guards (no longer needed — hotkeys only fire in normal mode).\n- FIND mode: a '/query' prompt shows; printable chars append to the filter (live-filtering the focused list); Backspace edits; Enter CONFIRMS (keep the filter applied, return to normal mode so you can navigate/act on the filtered results with hotkeys); Esc CANCELS (clear the filter, return to normal mode).\n- Clearing an applied filter from normal mode: Esc clears the filter first if one is applied, else pops the level (vim-like layering). \n- Scope: this is about the top-level LIST fuzzy filter (scopes/verbs/items). The dedicated modal text inputs (defer trigger, focus picker, new-spec title) keep their own typing capture — do NOT change those.\n\nACCEPTANCE: '/' enters find mode with a visible prompt; typing live-filters the focused list; Enter keeps the filter + returns to normal; Esc clears + returns; in normal mode every hotkey works with NO filter collision and the if-filter-empty guards are removed; modal inputs unaffected; pure key-routing logic unit-tested; gates green; ? help legend updated ('/' to find)."
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2141
 node_id: '1'
