@@ -3721,6 +3721,11 @@ pub enum QueueCommand {
         // trace:TASK-923 | ai:claude
         #[clap(long, visible_alias = "parent", value_name = "ID")]
         epic: Option<String>,
+        /// Ignore the active focus for this listing — show the whole queue
+        /// instead of the focused subtree. No-op when no focus is set or when
+        /// `--epic` was passed explicitly.
+        #[clap(long)]
+        no_focus: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -6350,6 +6355,14 @@ pub enum Command {
         // trace:STORY-662 | ai:claude
         #[clap(long, value_name = "USER")]
         user: Option<String>,
+
+        /// Ignore the active focus for this listing — show the whole project
+        /// instead of the focused subtree. The focus-specific escape hatch
+        /// (`--all` also widens, but additionally reveals archived/deferred);
+        /// no-op when no focus is set or when `--parent` was passed explicitly.
+        // — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        no_focus: bool,
     },
 
     /// Show details for a specific requirement
@@ -7072,6 +7085,12 @@ pub enum Command {
         // trace:STORY-673 | ai:claude
         #[clap(long)]
         full: bool,
+        /// Ignore the active focus for this snapshot — drop the focus banner.
+        /// No-op when no focus is set. (`aida status --all` is the fleet
+        /// roster, a different axis, so focus has its own escape here.)
+        // — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        no_focus: bool,
     },
 
     /// The global running-work table — one row per active session/agent
@@ -7644,6 +7663,35 @@ pub enum Command {
         /// Machine-readable JSON (`{spec, bucket, reason, needs_human}`).
         #[clap(long)]
         json: bool,
+    },
+
+    /// Set, show, or clear the current FOCUS — a persistent, per-worktree
+    /// context (an epic or spec) that scopes the read commands to that spec's
+    /// transitive subtree. The kubectl-namespace / gcloud-config pattern for
+    /// AIDA's requirement graph.
+    ///
+    ///   aida focus EPIC-55     set the focus to EPIC-55 (+ its subtree)
+    ///   aida focus             show the current focus + a progress rollup
+    ///   aida focus --clear     drop the focus
+    ///
+    /// With a focus set, `aida list`, `aida status`, and `aida queue list`
+    /// scope to the focused subtree and print a loud header naming it; pass
+    /// `--all` / `--no-focus` on those commands to widen back to everything.
+    /// The focus is stored in `.aida/focus` (per-worktree, gitignored) and
+    /// surfaced on the statusline so it is never silently active. Precedence:
+    /// `AIDA_FOCUS` env > `.aida/focus` > none.
+    // — plain `//` keeps the marker out of `--help`.
+    Focus {
+        /// The epic or spec to focus on (SPEC-ID / agreed id). Omit to show
+        /// the current focus.
+        #[clap(value_name = "SPEC", conflicts_with = "clear")]
+        target: Option<String>,
+        /// Clear the current focus (remove `.aida/focus`).
+        #[clap(long)]
+        clear: bool,
+        /// Show the current focus (the default when no SPEC is given).
+        #[clap(long)]
+        show: bool,
     },
 
     // trace:STORY-656 | ai:claude
