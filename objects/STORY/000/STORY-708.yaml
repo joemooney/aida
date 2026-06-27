@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:21:04.124832287Z
-modified_at: 2026-06-27T02:30:00.956098792Z
+modified_at: 2026-06-27T15:35:42.101857171Z
 req_type: Story
 tags:
 - assess
@@ -47,3 +47,8 @@ comments:
   content: 'DECISION on reconciling ''backlog groom'' (operator, 2026-06-26): rename ''aida backlog groom'' -> ''aida queue add --approved''. Its function is bulk-move-approved-onto-queue, which is a QUEUE op on a SET, not a backlog op — so it belongs under queue add as a selector. Model: ''aida queue add <spec> [--for]'' = queue one (today); ''aida queue add --approved [--epic <id>] [--batch <name>] [--for]'' = queue all approved (optionally scoped to an epic tree / batch-tagged), replacing backlog groom. ''--approved'' is the only sensible selector (only Approved is enqueueable). It is correctly advisor-gated (bulk dispatch-for-execution, per BUG-631). Composes with aida focus (auto-scope to the focus epic). Keep ''aida backlog groom'' as a DEPRECATED ALIAS. This frees ''groom'' entirely for the disposition verb (assess/intake -> aida groom).'
   created_at: 2026-06-27T02:30:00.956098792Z
   modified_at: 2026-06-27T02:30:00.956098792Z
+- id: 019f09b8-ed15-7832-9494-33f682916196
+  author: joe
+  content: 'DECISION (operator 2026-06-27): groom is the CANONICAL advisor-disposition verb. assess/intake become deprecated aliases (silently accepted, normalized to groom). Drive the rename: aida groom as the primary, assess/intake aliased. TASK-946 (EPIC-54-tree wiring) follows the same naming.'
+  created_at: 2026-06-27T15:35:42.101857171Z
+  modified_at: 2026-06-27T15:35:42.101857171Z
