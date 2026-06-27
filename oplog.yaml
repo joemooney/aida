@@ -24131,5 +24131,13 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2299
+- id: 019f0a65-c9b5-7d41-af0c-2f84e89435d9
+  target_id: 019f0a53-f943-7502-b0b9-d6cfb4255446
+  author: aida
+  node_id: '1'
+  lamport: 2300
+  timestamp: 2026-06-27T18:44:30.773067098Z
+  kind: !SetTitle
+    title: GitLabForge MR JSON-read methods use non-existent glab flag (--output json) — broken vs real glab 1.36.0
+clock: 2300
 node_id: '1'
