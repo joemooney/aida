@@ -23,8 +23,11 @@ mod list_row;
 mod state;
 mod store;
 
+use state::PendingOp;
 pub use state::{RedesignState, RunOutcome, Scope, TargetItem, Verb};
 use std::collections::HashMap;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::time::Duration;
 use store::{LoadedComment, LoadedSpec, SpecStore};
 
 use crate::term;
@@ -408,6 +411,70 @@ fn missing_spec(id: &str) -> LoadedSpec {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Async verb execution (BUG-633)
+// ---------------------------------------------------------------------------
+
+/// The outcome of a background verb run, sent back over the completion channel:
+/// the final status-line message plus whether the affected scope cache must be
+/// invalidated so the new state shows. trace:BUG-633 | ai:claude
+struct VerbResult {
+    /// The status-line text to show on completion (the existing `*_status`
+    /// message — e.g. "approved 2: TASK-1, TASK-2").
+    status: String,
+    /// Whether to drop the per-scope item cache on completion (a store WRITE
+    /// changed the data; reads don't).
+    invalidate: bool,
+}
+
+/// An in-flight background verb: the DISPLAY state ([`PendingOp`], pure) paired
+/// with the completion channel the worker thread sends its [`VerbResult`] over.
+/// Held as an event-loop local (like `loaded_spec`), never in the pure state.
+/// trace:BUG-633 | ai:claude
+struct Pending {
+    op: PendingOp,
+    rx: Receiver<VerbResult>,
+}
+
+/// Kick off a verb on a background thread so the key handler returns
+/// immediately and the event loop keeps ticking (spinner + completion poll).
+///
+/// POLICY: refuses to start a second verb while one is in flight — sets a
+/// "busy — <label> in progress" status and leaves the existing op untouched
+/// (returns `false`). Navigation stays live because only the verb-START paths
+/// call this; movement keys never do. On success spawns the worker, installs
+/// the [`Pending`], and returns `true`. trace:BUG-633 | ai:claude
+fn start_pending(
+    pending: &mut Option<Pending>,
+    st: &mut RedesignState,
+    label: impl Into<String>,
+    work: impl FnOnce() -> VerbResult + Send + 'static,
+) -> bool {
+    if let Some(p) = pending.as_ref() {
+        st.status = Some(format!("busy — {} in progress", p.op.label));
+        return false;
+    }
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        // The receiver may have been dropped if the TUI exited mid-run; the
+        // send error is then expected and ignored.
+        let _ = tx.send(work());
+    });
+    *pending = Some(Pending {
+        op: PendingOp::new(label),
+        rx,
+    });
+    true
+}
+
+/// Apply a finished verb's [`VerbResult`] to the state: write the final status
+/// line and report whether the scope cache must be invalidated. Pure (no IO, no
+/// threads) so the completion transition is unit-testable. trace:BUG-633 | ai:claude
+fn apply_verb_result(st: &mut RedesignState, result: &VerbResult) -> bool {
+    st.status = Some(result.status.clone());
+    result.invalidate
+}
+
 #[allow(clippy::too_many_arguments)]
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
@@ -421,11 +488,49 @@ fn event_loop(
     // The spec currently shown in the item modal (loaded in-process on open,
     // cleared on close). trace:STORY-693 | ai:claude
     let mut loaded_spec: Option<LoadedSpec> = None;
+    // The in-flight background verb, if any (BUG-633): a worker thread runs the
+    // slow `aida` store-write and sends its result here; the loop polls it,
+    // animates a spinner, and stays responsive meanwhile. trace:BUG-633
+    let mut pending: Option<Pending> = None;
     loop {
         // Keep the bottom panel's target set following the active scope
         // (highlighted at the scope level, drilled-into at the verb level).
         sync_scope_items(st, store, cache, loaded, focus_set.as_ref());
-        terminal.draw(|f| render(f, st, loaded_spec.as_ref()))?;
+        terminal.draw(|f| render(f, st, loaded_spec.as_ref(), pending.as_ref().map(|p| &p.op)))?;
+
+        // Drain a finished background verb (BUG-633): on completion set the
+        // final status + invalidate the affected scope so the new state shows;
+        // otherwise advance the spinner one frame. A disconnected channel means
+        // the worker panicked without sending — clear the pending state rather
+        // than spin forever. trace:BUG-633 | ai:claude
+        if let Some(p) = pending.as_mut() {
+            match p.rx.try_recv() {
+                Ok(result) => {
+                    if apply_verb_result(st, &result) {
+                        invalidate_scope_cache(cache, loaded);
+                    }
+                    pending = None;
+                }
+                Err(TryRecvError::Empty) => p.op.tick(),
+                Err(TryRecvError::Disconnected) => {
+                    st.status = Some("operation ended unexpectedly".to_string());
+                    pending = None;
+                }
+            }
+        }
+
+        // POLL the input with a timeout so the loop TICKS even with no key: a
+        // short timeout while a verb is pending (smooth spinner + prompt
+        // completion), a long idle timeout otherwise (negligible wakeups; any
+        // keystroke wakes `poll` immediately). trace:BUG-633 | ai:claude
+        let timeout = if pending.is_some() {
+            Duration::from_millis(80)
+        } else {
+            Duration::from_millis(1000)
+        };
+        if !crossterm::event::poll(timeout)? {
+            continue;
+        }
         let Event::Key(key) = crossterm::event::read()? else {
             continue;
         };
@@ -441,6 +546,7 @@ fn event_loop(
             loaded,
             focus_set,
             project_root,
+            &mut pending,
             key,
         )? {
             break;
@@ -460,6 +566,7 @@ fn handle_key(
     loaded: &mut Scope,
     focus_set: &mut Option<std::collections::HashSet<String>>,
     project_root: &std::path::Path,
+    pending: &mut Option<Pending>,
     key: KeyEvent,
 ) -> Result<bool> {
     // Ctrl-C always quits.
@@ -489,6 +596,7 @@ fn handle_key(
                         st,
                         store,
                         loaded_spec,
+                        pending,
                         RunOutcome::Defer { ids, trigger },
                     )?;
                 }
@@ -511,7 +619,7 @@ fn handle_key(
     if st.new_input_open() {
         match key.code {
             KeyCode::Enter => match st.take_new_input() {
-                Some(title) => create_new_spec(st, store, cache, loaded, &title),
+                Some(title) => create_new_spec(st, pending, &title),
                 None => st.status = Some("new: cancelled (empty title)".to_string()),
             },
             KeyCode::Esc => {
@@ -553,7 +661,7 @@ fn handle_key(
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                 let outcome = st.resolve_confirm(true);
-                apply_outcome(terminal, st, store, loaded_spec, outcome)?;
+                apply_outcome(terminal, st, store, loaded_spec, pending, outcome)?;
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
                 st.resolve_confirm(false);
@@ -708,7 +816,7 @@ fn handle_key(
             // Verb level, top focus: Enter runs the verb.
             (Focus::Top, Level::Verbs) => {
                 let outcome = st.run_verb();
-                apply_outcome(terminal, st, store, loaded_spec, outcome)?;
+                apply_outcome(terminal, st, store, loaded_spec, pending, outcome)?;
             }
             // Bottom focus: Enter on an item opens its modal (the N=1
             // "preview this spec" case of the same protocol).
@@ -764,6 +872,7 @@ fn apply_outcome(
     st: &mut RedesignState,
     store: Option<&SpecStore>,
     loaded_spec: &mut Option<LoadedSpec>,
+    pending: &mut Option<Pending>,
     outcome: RunOutcome,
 ) -> Result<()> {
     match outcome {
@@ -811,66 +920,93 @@ fn apply_outcome(
         },
         RunOutcome::RequestApproval { drafts, skipped } => {
             // Route each draft to the advisor queue via the RELIABLE path
-            // (`aida queue add --for advisor <id>`) — not the mailbox.
-            // trace:STORY-690 | ai:claude
-            let mut routed = Vec::new();
-            let mut failed = Vec::new();
-            for id in &drafts {
-                if queue_for_advisor(id) {
-                    routed.push(id.clone());
-                } else {
-                    failed.push(id.clone());
+            // (`aida queue add --for advisor <id>`) — not the mailbox. Each
+            // route is a SLOW orphan-branch store write, so run the whole batch
+            // on a background thread (BUG-633) and report on completion.
+            // trace:STORY-690 trace:BUG-633 | ai:claude
+            let label = format!("requesting approval for {} spec(s)…", drafts.len());
+            start_pending(pending, st, label, move || {
+                let mut routed = Vec::new();
+                let mut failed = Vec::new();
+                for id in &drafts {
+                    if queue_for_advisor(id) {
+                        routed.push(id.clone());
+                    } else {
+                        failed.push(id.clone());
+                    }
                 }
-            }
-            st.status = Some(request_approval_status(&routed, &failed, &skipped));
+                VerbResult {
+                    status: request_approval_status(&routed, &failed, &skipped),
+                    invalidate: true,
+                }
+            });
         }
         RunOutcome::Approve { drafts, skipped } => {
             // Directly approve each draft via the advisor-gated transition
             // (`aida edit <id> --status approved`, run with advisor authority).
-            // The do-it-yourself mirror of request approval. trace:TASK-920 | ai:claude
-            let mut approved = Vec::new();
-            let mut failed = Vec::new();
-            for id in &drafts {
-                if approve_spec(id) {
-                    approved.push(id.clone());
-                } else {
-                    failed.push(id.clone());
+            // The do-it-yourself mirror of request approval; run async (BUG-633).
+            // trace:TASK-920 trace:BUG-633 | ai:claude
+            let label = format!("approving {} spec(s)…", drafts.len());
+            start_pending(pending, st, label, move || {
+                let mut approved = Vec::new();
+                let mut failed = Vec::new();
+                for id in &drafts {
+                    if approve_spec(id) {
+                        approved.push(id.clone());
+                    } else {
+                        failed.push(id.clone());
+                    }
                 }
-            }
-            st.status = Some(approve_status(&approved, &failed, &skipped));
+                VerbResult {
+                    status: approve_status(&approved, &failed, &skipped),
+                    invalidate: true,
+                }
+            });
         }
         RunOutcome::Queue { approved, skipped } => {
             // Route each Approved spec to the implementer queue via the
             // RELIABLE path (`aida queue add --for implementer <id>`) — the
-            // Approved-conditional mirror of request approval.
-            // trace:TASK-915 | ai:claude
-            let mut routed = Vec::new();
-            let mut failed = Vec::new();
-            for id in &approved {
-                if queue_for_implementer(id) {
-                    routed.push(id.clone());
-                } else {
-                    failed.push(id.clone());
+            // Approved-conditional mirror of request approval; run async (BUG-633).
+            // trace:TASK-915 trace:BUG-633 | ai:claude
+            let label = format!("queueing {} spec(s)…", approved.len());
+            start_pending(pending, st, label, move || {
+                let mut routed = Vec::new();
+                let mut failed = Vec::new();
+                for id in &approved {
+                    if queue_for_implementer(id) {
+                        routed.push(id.clone());
+                    } else {
+                        failed.push(id.clone());
+                    }
                 }
-            }
-            st.status = Some(queue_status(&routed, &failed, &skipped));
+                VerbResult {
+                    status: queue_status(&routed, &failed, &skipped),
+                    invalidate: true,
+                }
+            });
         }
         RunOutcome::Accept { done, skipped } => {
             // The reviewer accepts each finished Done spec: run the
             // implementation-approval transition (`aida edit <id> --status
             // completed`, carrying reviewer authority) and record a reviewer-
-            // acceptance comment. The Done-status mirror of Approve.
-            // trace:TASK-933 | ai:claude
-            let mut accepted = Vec::new();
-            let mut failed = Vec::new();
-            for id in &done {
-                if accept_spec(id) {
-                    accepted.push(id.clone());
-                } else {
-                    failed.push(id.clone());
+            // acceptance comment. The Done-status mirror of Approve; run async
+            // (BUG-633). trace:TASK-933 trace:BUG-633 | ai:claude
+            let label = format!("accepting {} spec(s)…", done.len());
+            start_pending(pending, st, label, move || {
+                let mut accepted = Vec::new();
+                let mut failed = Vec::new();
+                for id in &done {
+                    if accept_spec(id) {
+                        accepted.push(id.clone());
+                    } else {
+                        failed.push(id.clone());
+                    }
                 }
-            }
-            st.status = Some(accept_status(&accepted, &failed, &skipped));
+                VerbResult {
+                    status: accept_status(&accepted, &failed, &skipped),
+                    invalidate: true,
+                }
+            });
         }
         RunOutcome::OpenDeferInput { ids } => {
             // `defer` needs the operator-supplied `--until` trigger before it
@@ -885,17 +1021,24 @@ fn apply_outcome(
         }
         RunOutcome::Defer { ids, trigger } => {
             // Park each spec off the active view with the captured revisit
-            // trigger via `aida defer <id> --until "<trigger>"`. trace:TASK-921
-            let mut deferred = Vec::new();
-            let mut failed = Vec::new();
-            for id in &ids {
-                if defer_spec(id, &trigger) {
-                    deferred.push(id.clone());
-                } else {
-                    failed.push(id.clone());
+            // trigger via `aida defer <id> --until "<trigger>"` — run async
+            // (BUG-633). trace:TASK-921 trace:BUG-633 | ai:claude
+            let label = format!("deferring {} spec(s)…", ids.len());
+            start_pending(pending, st, label, move || {
+                let mut deferred = Vec::new();
+                let mut failed = Vec::new();
+                for id in &ids {
+                    if defer_spec(id, &trigger) {
+                        deferred.push(id.clone());
+                    } else {
+                        failed.push(id.clone());
+                    }
                 }
-            }
-            st.status = Some(defer_status(&deferred, &failed, &trigger));
+                VerbResult {
+                    status: defer_status(&deferred, &failed, &trigger),
+                    invalidate: true,
+                }
+            });
         }
         RunOutcome::NeedsConfirm(_) => { /* popup already raised by run_verb */ }
         RunOutcome::None => {}
@@ -1253,20 +1396,14 @@ fn create_status(created: Option<&str>, title: &str) -> String {
     }
 }
 
-/// Create a fresh Draft spec from the operator-typed `title` via
-/// `aida add --title <title> --type task --status draft`. The title is passed as
-/// a SINGLE arg-vector element (see [`new_spec_args`]) — never a shell string —
-/// so embedded backticks/quotes/`$` are safe. On success the active scope's
-/// item cache is invalidated so the next [`sync_scope_items`] re-fetches
-/// in-process and the new draft appears if it is in view; the created spec id is
-/// reported on the status line. trace:TASK-931 | ai:claude
-fn create_new_spec(
-    st: &mut RedesignState,
-    _store: Option<&SpecStore>,
-    cache: &mut HashMap<Scope, Vec<TargetItem>>,
-    loaded: &mut Scope,
-    title: &str,
-) {
+/// Run `aida add --title <title> --type task --status draft` and turn its result
+/// into a [`VerbResult`]. The title is passed as a SINGLE arg-vector element
+/// (see [`new_spec_args`]) — never a shell string — so embedded backticks /
+/// quotes / `$` are safe. A successful create invalidates the scope cache so the
+/// new draft shows if it is in view (e.g. the Open scope). Runs ON THE WORKER
+/// THREAD (no `st`/cache borrows), so the slow store write never blocks the
+/// loop. trace:TASK-931 trace:BUG-633 | ai:claude
+fn run_create(title: &str) -> VerbResult {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(new_spec_args(title));
@@ -1277,29 +1414,47 @@ fn create_new_spec(
         Ok(out) if out.status.success() => {
             let stdout = String::from_utf8_lossy(&out.stdout);
             let created = parse_created_spec_id(&stdout);
-            // Refresh the active scope so the new draft shows if it is in view
-            // (e.g. the Open scope, which includes drafts). The fetch is the
-            // same in-process cache read the rest of the TUI uses; clearing the
-            // per-scope cache + resetting the `loaded` sentinel forces it on the
-            // next loop iteration. trace:TASK-931 | ai:claude
-            invalidate_scope_cache(cache, loaded);
-            st.status = Some(create_status(created.as_deref(), title));
+            VerbResult {
+                status: create_status(created.as_deref(), title),
+                // Invalidate so the next sync_scope_items re-fetches in-process
+                // and the new draft appears if it is in view.
+                invalidate: true,
+            }
         }
         Ok(out) => {
             let err = String::from_utf8_lossy(&out.stderr);
-            st.status = Some(format!("new: aida add failed: {}", err.trim()));
+            VerbResult {
+                status: format!("new: aida add failed: {}", err.trim()),
+                invalidate: false,
+            }
         }
-        Err(e) => {
-            st.status = Some(format!("new: could not run aida add: {e}"));
-        }
+        Err(e) => VerbResult {
+            status: format!("new: could not run aida add: {e}"),
+            invalidate: false,
+        },
     }
+}
+
+/// Create a fresh Draft spec from the operator-typed `title`, running the slow
+/// `aida add` store write on a background thread (BUG-633) so the TUI never
+/// freezes. The work + result-shaping live in [`run_create`]; this only kicks
+/// off the pending op. trace:TASK-931 trace:BUG-633 | ai:claude
+fn create_new_spec(st: &mut RedesignState, pending: &mut Option<Pending>, title: &str) {
+    let title = title.to_string();
+    let label = "creating spec…".to_string();
+    start_pending(pending, st, label, move || run_create(&title));
 }
 
 // ---------------------------------------------------------------------------
 // Render
 // ---------------------------------------------------------------------------
 
-fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
+fn render(
+    f: &mut Frame,
+    st: &RedesignState,
+    loaded_spec: Option<&LoadedSpec>,
+    pending: Option<&PendingOp>,
+) {
     let theme = &st.theme;
 
     let rows = Layout::vertical([
@@ -1313,7 +1468,7 @@ fn render(f: &mut Frame, st: &RedesignState, loaded_spec: Option<&LoadedSpec>) {
     render_status(f, rows[0], st, theme);
     render_top(f, rows[1], st, theme);
     render_bottom(f, rows[2], st, theme);
-    render_hint(f, rows[3], st, theme);
+    render_hint(f, rows[3], st, theme, pending);
 
     // The item modal renders the spec loaded IN-PROCESS (`loaded_spec`):
     // structured fields + native body. trace:STORY-693 | ai:claude
@@ -1623,7 +1778,28 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
     f.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-fn render_hint(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
+fn render_hint(
+    f: &mut Frame,
+    area: Rect,
+    st: &RedesignState,
+    theme: &Theme,
+    pending: Option<&PendingOp>,
+) {
+    // A pending background verb (BUG-633) owns the status line: spinner glyph +
+    // label (e.g. "⠙ approving TASK-930…"), painted in the accent colour so the
+    // operator sees the TUI is alive + working. trace:BUG-633 | ai:claude
+    if let Some(op) = pending {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                op.status_line(),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            area,
+        );
+        return;
+    }
     // The focus-key hint (F set/change · C clear) is appended to the base hint
     // in every context so the EPIC lens is discoverable. trace:STORY-695
     let base = match (st.focus, st.level) {
@@ -2257,6 +2433,99 @@ mod refresh_tests {
         assert!(cache.is_empty());
         assert_eq!(loaded, Scope::Sessions);
     }
+
+    // --- Async verb execution (BUG-633) -----------------------------------
+
+    #[test]
+    fn start_pending_installs_a_pending_op() {
+        let mut st = RedesignState::new(vec![item("TASK-1")], "advisor");
+        let mut pending: Option<Pending> = None;
+        let started = start_pending(&mut pending, &mut st, "approving 1 spec(s)…", || {
+            VerbResult {
+                status: "approved 1: TASK-1".to_string(),
+                invalidate: true,
+            }
+        });
+        assert!(started, "a verb starts when none is pending");
+        let p = pending.as_ref().expect("pending installed");
+        assert_eq!(p.op.label, "approving 1 spec(s)…");
+        assert_eq!(p.op.frame, 0);
+    }
+
+    #[test]
+    fn start_pending_rejects_a_second_verb_while_one_is_in_flight() {
+        let mut st = RedesignState::new(vec![item("TASK-1")], "advisor");
+        let mut pending: Option<Pending> = None;
+        // First verb starts and installs the pending op.
+        start_pending(&mut pending, &mut st, "approving 1 spec(s)…", || {
+            VerbResult {
+                status: "approved 1: TASK-1".to_string(),
+                invalidate: true,
+            }
+        });
+        // A SECOND verb is refused while the first is in flight: returns false,
+        // sets a busy status, and leaves the existing op untouched.
+        let started = start_pending(&mut pending, &mut st, "deferring 1 spec(s)…", || {
+            VerbResult {
+                status: "should not run".to_string(),
+                invalidate: false,
+            }
+        });
+        assert!(!started, "a second verb is rejected while one is pending");
+        let busy = st.status.as_deref().unwrap_or_default();
+        assert!(busy.contains("busy"), "busy status, got: {busy}");
+        assert!(
+            busy.contains("approving 1 spec(s)…"),
+            "names the in-flight op"
+        );
+        // The original op is unchanged.
+        assert_eq!(pending.as_ref().unwrap().op.label, "approving 1 spec(s)…");
+    }
+
+    #[test]
+    fn apply_verb_result_sets_status_and_returns_invalidate_flag() {
+        let mut st = RedesignState::new(vec![item("TASK-1")], "advisor");
+        let invalidate = apply_verb_result(
+            &mut st,
+            &VerbResult {
+                status: "approved 1: TASK-1".to_string(),
+                invalidate: true,
+            },
+        );
+        assert!(invalidate, "a store write asks for cache invalidation");
+        assert_eq!(st.status.as_deref(), Some("approved 1: TASK-1"));
+
+        let invalidate = apply_verb_result(
+            &mut st,
+            &VerbResult {
+                status: "new: aida add failed: nope".to_string(),
+                invalidate: false,
+            },
+        );
+        assert!(!invalidate, "a failed write does not invalidate");
+        assert_eq!(st.status.as_deref(), Some("new: aida add failed: nope"));
+    }
+
+    #[test]
+    fn pending_op_completes_over_the_channel() {
+        // The integration shim end-to-end: a worker thread runs the (here
+        // trivial) work and the result arrives over the channel — proving the
+        // completion plumbing without shelling out to `aida`. trace:BUG-633
+        let mut st = RedesignState::new(vec![item("TASK-1")], "advisor");
+        let mut pending: Option<Pending> = None;
+        start_pending(&mut pending, &mut st, "approving 1 spec(s)…", || {
+            VerbResult {
+                status: "approved 1: TASK-1".to_string(),
+                invalidate: true,
+            }
+        });
+        let p = pending.take().expect("pending installed");
+        // Block for the worker's result (the loop's try_recv is the non-blocking
+        // variant; here we just prove the value crosses the channel).
+        let result = p.rx.recv().expect("worker sends a result");
+        assert_eq!(result.status, "approved 1: TASK-1");
+        assert!(result.invalidate);
+    }
 }
 
 #[cfg(test)]
@@ -2300,7 +2569,9 @@ mod render_tests {
 
     fn draw_with_spec(st: &RedesignState, spec: Option<&LoadedSpec>, w: u16, h: u16) {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("test backend");
-        terminal.draw(|f| render(f, st, spec)).expect("render");
+        terminal
+            .draw(|f| render(f, st, spec, None))
+            .expect("render");
     }
 
     fn sample_spec() -> LoadedSpec {
@@ -2321,11 +2592,35 @@ mod render_tests {
         draw(&sample(5), 100, 30);
     }
 
+    #[test]
+    fn renders_pending_spinner_in_the_status_line() {
+        // The status line shows the spinner + label while a verb is pending
+        // (BUG-633); the render must not panic and must paint the label.
+        let st = sample(5);
+        let op = PendingOp::new("approving 1 spec(s)…");
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test backend");
+        terminal
+            .draw(|f| render(f, &st, None, Some(&op)))
+            .expect("render");
+        let buf = terminal.backend().buffer().clone();
+        let mut out = String::new();
+        for cell in buf.content() {
+            out.push_str(cell.symbol());
+        }
+        assert!(out.contains("approving"), "spinner label is painted");
+        assert!(
+            out.contains(state::SPINNER_FRAMES[0]),
+            "spinner glyph is painted"
+        );
+    }
+
     /// Flatten the painted backend into one string so a render test can assert
     /// a glyph sequence is (or is not) present. trace:TASK-945 | ai:claude
     fn rendered_text(st: &RedesignState, w: u16, h: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("test backend");
-        terminal.draw(|f| render(f, st, None)).expect("render");
+        terminal
+            .draw(|f| render(f, st, None, None))
+            .expect("render");
         let buf = terminal.backend().buffer().clone();
         let mut out = String::new();
         for cell in buf.content() {

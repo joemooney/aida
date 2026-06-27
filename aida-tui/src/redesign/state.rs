@@ -501,6 +501,49 @@ impl NewSpecInput {
     }
 }
 
+/// The braille spinner frames cycled while a verb runs in the background.
+/// trace:BUG-633 | ai:claude
+pub const SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+/// The DISPLAY half of a background verb execution (BUG-633): the label shown
+/// while it runs (e.g. `approving TASK-930…`) plus the current spinner frame
+/// index. Pure (no IO, no channel) so the spinner cycling + status-line
+/// rendering are unit-testable; the parent module pairs this with the
+/// completion channel in its own integration shim. trace:BUG-633 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingOp {
+    /// The human label of the in-flight verb (no spinner glyph).
+    pub label: String,
+    /// The current spinner frame index (mod `SPINNER_FRAMES.len()`).
+    pub frame: usize,
+}
+
+impl PendingOp {
+    /// Start a pending op at the first spinner frame.
+    pub fn new(label: impl Into<String>) -> Self {
+        PendingOp {
+            label: label.into(),
+            frame: 0,
+        }
+    }
+
+    /// Advance the spinner one frame (wrapping). Called once per idle event-loop
+    /// tick while the op is in flight. trace:BUG-633 | ai:claude
+    pub fn tick(&mut self) {
+        self.frame = (self.frame + 1) % SPINNER_FRAMES.len();
+    }
+
+    /// The current spinner glyph.
+    pub fn spinner(&self) -> char {
+        SPINNER_FRAMES[self.frame % SPINNER_FRAMES.len()]
+    }
+
+    /// The status-line text while pending: spinner glyph + label.
+    pub fn status_line(&self) -> String {
+        format!("{} {}", self.spinner(), self.label)
+    }
+}
+
 /// One selectable row in the EPIC focus picker (STORY-697): an open epic's
 /// display id + title (+ its status, carried for an optional progress hint).
 /// The picker fuzzy-filters over `id` + `title`. trace:STORY-697 | ai:claude
@@ -1780,6 +1823,36 @@ fn item_legend() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pending_op_new_starts_at_first_frame() {
+        let op = PendingOp::new("approving TASK-930…");
+        assert_eq!(op.frame, 0);
+        assert_eq!(op.spinner(), SPINNER_FRAMES[0]);
+        assert_eq!(op.label, "approving TASK-930…");
+    }
+
+    #[test]
+    fn pending_op_tick_advances_and_wraps() {
+        let mut op = PendingOp::new("queueing…");
+        op.tick();
+        assert_eq!(op.frame, 1);
+        assert_eq!(op.spinner(), SPINNER_FRAMES[1]);
+        // Tick through a full cycle: it wraps back to frame 0.
+        for _ in 0..(SPINNER_FRAMES.len() - 1) {
+            op.tick();
+        }
+        assert_eq!(op.frame, 0);
+        assert_eq!(op.spinner(), SPINNER_FRAMES[0]);
+    }
+
+    #[test]
+    fn pending_op_status_line_shows_spinner_and_label() {
+        let op = PendingOp::new("deferring 2 spec(s)…");
+        let line = op.status_line();
+        assert!(line.starts_with(SPINNER_FRAMES[0]));
+        assert!(line.contains("deferring 2 spec(s)…"));
+    }
 
     fn items(n: usize) -> Vec<TargetItem> {
         // Titles are deliberately digit-free so a digit-only fuzzy query
