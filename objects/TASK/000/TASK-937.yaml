@@ -2,13 +2,21 @@ id: 019f0659-956b-71f0-becc-56d497525329
 spec_id: TASK-937
 agreed_id: TASK-937
 title: Batch-approve from the needs-approval group
-description: 'Multi-select in the needs-approval list (drafts + intake proposals) and approve/queue the selection in one action, vs Enter-dispatching aida edit --status approved one PTY round-trip at a time. The approve-backlog-items want at backlog scale. NOTE: a natural EPIC-54 verb.'
+description: |-
+  Batch-approve from the needs-approval group. GESTURE — EPIC-54 absorbs multi-select; EPIC-53 provides the set + the batch action.
+
+  ## Acceptance
+  - A PURE approvable-set function (drafts + intake proposals) + a batch-approve action (approve+queue N specs in one call), both unit-tested.
+  - EPIC-53 ships the set + action only. The multi-select GESTURE is NOT built here (EPIC-54 provides it).
+
+  ## Seam
+  EPIC-53 = approvable-set + batch action. EPIC-54 = multi-select gesture. Do NOT build multi-select UI in EPIC-53. See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:52:42.091111394Z
-modified_at: 2026-06-26T23:52:50.171558292Z
+modified_at: 2026-06-27T02:01:28.278328932Z
 req_type: Task
 relationships:
 - rel_type: Child
