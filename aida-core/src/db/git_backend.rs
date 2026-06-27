@@ -269,6 +269,48 @@ impl GitBackend {
         })
     }
 
+    /// Resolve the queue-file user-id to use for `requested`, folding case at the
+    /// LOOKUP boundary only. The queue is stored as one YAML file per user-id
+    /// (`registry/queues/<user_id>.yaml`). Historically the lookup was
+    /// case-SENSITIVE, so a shell reporting `Joe` and another reporting `joe`
+    /// split one human across two queue files.
+    ///
+    /// This scans the queues directory for an existing file whose stem matches
+    /// `requested` case-insensitively and, if found, returns that EXISTING stem —
+    /// so `Joe` now reads/writes the queue already keyed under `joe`. When no
+    /// existing file matches, `requested` is returned unchanged, so a brand-new
+    /// queue keeps the shell's original casing: the stored key stays the raw
+    /// shell `$USER`; we never rewrite it, we only fold when comparing.
+    //
+    // BUG-89 (queue keyed off raw shell user; storage unchanged).
+    // trace:TASK-951 | ai:claude
+    fn resolve_queue_user(&self, requested: &str) -> String {
+        let dir = self.root.join("registry/queues");
+        let target = crate::node::canonical_user_id(requested);
+        let read = match std::fs::read_dir(&dir) {
+            Ok(rd) => rd,
+            // No queues dir yet → nothing to match against; keep original casing.
+            Err(_) => return requested.to_string(),
+        };
+        for entry in read.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+                continue;
+            }
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                // An exact (case-sensitive) hit always wins — return immediately
+                // so the common path never rewrites the casing it was handed.
+                if stem == requested {
+                    return requested.to_string();
+                }
+                if crate::node::canonical_user_id(stem) == target {
+                    return stem.to_string();
+                }
+            }
+        }
+        requested.to_string()
+    }
+
     /// Load metadata from the metadata.yaml file.
     fn load_metadata(&self) -> Result<StoreMetadata> {
         if !self.metadata_path.exists() {
@@ -705,6 +747,9 @@ impl DatabaseBackend for GitBackend {
     // Queue operations — stored as registry/queues/{user_id}.yaml
 
     fn queue_list(&self, user_id: &str, _include_completed: bool) -> Result<Vec<QueueEntry>> {
+        // trace:TASK-951 — fold case at the lookup boundary so `Joe` finds the
+        // queue keyed under `joe`. Storage casing is left as-is.
+        let user_id = self.resolve_queue_user(user_id);
         let path = self
             .root
             .join("registry/queues")
@@ -741,7 +786,10 @@ impl DatabaseBackend for GitBackend {
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         let dir = self.root.join("registry/queues");
         std::fs::create_dir_all(&dir)?;
-        let user_id = entry.user_id.clone();
+        // trace:TASK-951 — resolve the FILENAME case-insensitively (so `Joe`
+        // appends to the existing `joe.yaml`) without rewriting the stored
+        // `entry.user_id` (BUG-89: the persisted key stays the raw shell `$USER`).
+        let user_id = self.resolve_queue_user(&entry.user_id);
         let path = dir.join(format!("{}.yaml", user_id));
         // trace:TASK-712 — a parse error here aborts BEFORE the write-back below,
         // so a momentarily-unparseable queue file is never silently truncated.
@@ -793,6 +841,8 @@ impl DatabaseBackend for GitBackend {
         requirement_id: &uuid::Uuid,
         role: Option<&str>,
     ) -> Result<()> {
+        // trace:TASK-951 — fold case at the lookup boundary.
+        let user_id = self.resolve_queue_user(user_id);
         let path = self
             .root
             .join("registry/queues")
@@ -827,6 +877,8 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
+        // trace:TASK-951 — fold case at the lookup boundary.
+        let user_id = self.resolve_queue_user(user_id);
         let path = self
             .root
             .join("registry/queues")
@@ -861,6 +913,8 @@ impl DatabaseBackend for GitBackend {
     // look up a requirement (transient I/O error) errs on the safe
     // side: keep the entry. trace:TASK-1-109 | ai:claude
     fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
+        // trace:TASK-951 — fold case at the lookup boundary.
+        let user_id = self.resolve_queue_user(user_id);
         let path = self
             .root
             .join("registry/queues")
@@ -1162,6 +1216,48 @@ mod tests {
         let ids: Vec<_> = entries.iter().map(|e| e.requirement_id).collect();
         assert!(ids.contains(&e1.requirement_id));
         assert!(ids.contains(&e2.requirement_id));
+    }
+
+    // TASK-951: the queue is keyed off the shell user, stored as one
+    // `registry/queues/<user_id>.yaml` file. The lookup folds case so a queue
+    // filed under `joe` is found when the shell later reports `Joe` — one human
+    // is no longer split across machines whose shells differ only in casing. The
+    // STORED filename keeps its original casing (BUG-89 safety).
+    // trace:TASK-951 | ai:claude
+    #[test]
+    fn test_queue_matches_across_user_case() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Filed under lowercase `joe`.
+        let entry = sample_queue_entry("joe", 1000);
+        backend.queue_add(entry.clone()).unwrap();
+
+        // The stored file keeps its original lowercase casing — nothing rewrote it.
+        let joe_path = root.join("registry/queues/joe.yaml");
+        assert!(joe_path.exists(), "stored key keeps original casing");
+
+        // A shell reporting `Joe` (and `JOE`) finds the same queue.
+        let as_joe = backend.queue_list("Joe", false).unwrap();
+        assert_eq!(as_joe.len(), 1, "`Joe` matches the queue filed under `joe`");
+        assert_eq!(as_joe[0].requirement_id, entry.requirement_id);
+        assert_eq!(backend.queue_list("JOE", false).unwrap().len(), 1);
+
+        // Adding as `Joe` appends to the SAME existing file — no second
+        // `Joe.yaml` is created (BUG-89: we fold the lookup, not the storage).
+        let entry2 = sample_queue_entry("Joe", 2000);
+        backend.queue_add(entry2.clone()).unwrap();
+        assert!(
+            !root.join("registry/queues/Joe.yaml").exists(),
+            "no duplicate case-variant queue file"
+        );
+        let both = backend.queue_list("joe", false).unwrap();
+        assert_eq!(both.len(), 2, "both entries land in the one queue");
+
+        // Removing as `JOE` clears from the same file.
+        backend.queue_remove("JOE", &entry.requirement_id).unwrap();
+        assert_eq!(backend.queue_list("joe", false).unwrap().len(), 1);
     }
 
     // BUG-529: `queue_remove_for_role` with a role filter drops ONLY the entry

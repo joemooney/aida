@@ -8951,7 +8951,13 @@ fn handle_assign_command(
         anyhow::bail!("--to requires a non-empty username");
     }
 
-    let already_assigned_here = req.assignee.as_deref() == Some(target);
+    // trace:TASK-951 | ai:claude — fold case so re-assigning `joe` to a spec
+    // already assigned to `Joe` is recognised as a no-op. The stored assignee
+    // keeps its original casing (we only re-stamp it when the identity actually
+    // changes, below).
+    let already_assigned_here = req.assignee.as_deref().is_some_and(|a| {
+        aida_core::node::canonical_user_id(a) == aida_core::node::canonical_user_id(target)
+    });
     if !already_assigned_here {
         let now = chrono::Utc::now();
         req.assignee = Some(target.to_string());
@@ -9003,7 +9009,11 @@ fn handle_assign_command(
     // — no point messaging yourself — and skip an idempotent re-assign that
     // changed nothing. trace:STORY-644 | ai:claude
     let assigner = current_user_id(None);
-    if assigner != target && !(already_assigned_here && already_queued) {
+    // trace:TASK-951 | ai:claude — self-assign detection folds case (`Joe`
+    // assigning to `joe` is still a self-assign).
+    let is_self_assign =
+        aida_core::node::canonical_user_id(&assigner) == aida_core::node::canonical_user_id(target);
+    if !is_self_assign && !(already_assigned_here && already_queued) {
         let title = req.title.clone();
         send_notification(
             store_path,
