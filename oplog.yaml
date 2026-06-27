@@ -23859,5 +23859,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2267
+- id: 019f09d4-21f1-7682-935f-ecaeb6520ca2
+  target_id: 019f09d4-12e2-7822-8b59-22333d7fef8f
+  author: aida
+  node_id: '1'
+  lamport: 2268
+  timestamp: 2026-06-27T16:05:25.105715507Z
+  kind: !Create
+    title: Make advisor Agent-tool fan-out work spec-claimable (close the BUG-637 fan-out gap)
+    description: 'BUG-637 (merged) gates pickup/edit on spec-scoped LIVE leases — but only AIDA-launched work (aida queue work / aida agent new) writes a spec-scoped lease. When an ADVISOR fans an implementer via the Agent tool (worktree-isolated subagent), the lease is a generic harness-worktree scope, NOT spec-scoped — so a concurrent fan or a re-fan of the SAME spec is NOT caught. This is the exact gap that let the advisor re-dispatch already-done specs twice on 2026-06-26 (TASK-928, BUG-631). Close it: give the advisor a way to RECORD a spec-claim when fanning (e.g. aida claim <spec> / a lightweight pre-fan lease-write keyed to the subagent), so live_spec_claim_by_other catches advisor-fanned work too. Then the pre-pickup gate covers BOTH AIDA-launched and advisor-fanned implementers.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2268
 node_id: '1'
