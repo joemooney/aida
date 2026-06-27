@@ -58984,6 +58984,25 @@ mod story_696_ps_tests {
         assert_eq!(ps_orphan_verdict(Some(LeaseState::Dormant)), Some(true));
     }
 
+    // Rollup / stateless types are excluded from the orphan pass — an
+    // In-Progress epic (BUG-626 child-rollup) never holds a session, so it
+    // must NOT read as orphaned; real work-item types still flow through.
+    // trace:TASK-940 | ai:claude
+    #[test]
+    fn ps_orphan_excludes_rollup_types() {
+        use aida_core::RequirementType;
+        // Rollup / stateless → excluded (would otherwise be all-noise).
+        assert!(ps_orphan_excluded_type(&RequirementType::Epic));
+        assert!(ps_orphan_excluded_type(&RequirementType::Folder));
+        assert!(ps_orphan_excluded_type(&RequirementType::Meta));
+        // Real work items → still flagged when orphaned.
+        assert!(!ps_orphan_excluded_type(&RequirementType::Task));
+        assert!(!ps_orphan_excluded_type(&RequirementType::Story));
+        assert!(!ps_orphan_excluded_type(&RequirementType::Bug));
+        assert!(!ps_orphan_excluded_type(&RequirementType::Functional));
+        assert!(!ps_orphan_excluded_type(&RequirementType::Spike));
+    }
+
     /// The `--json` row shape: every session row carries the documented keys,
     /// and an orphaned spec is emitted under `orphaned` with a `flag-only`
     /// liveness. Builds the same JSON the handler emits from in-memory rows.
@@ -90024,6 +90043,23 @@ fn ps_orphan_verdict(lease_state: Option<LeaseState>) -> Option<bool> {
     }
 }
 
+// Rollup / stateless requirement types never carry a session of their own, so
+// flagging them in the orphan pass is pure noise. Since BUG-626 made an epic's
+// status a child-rollup, In-Progress epics are common — and would otherwise
+// *all* read as "orphaned" (an epic never holds a spec-scoped lease). Folder
+// and Meta are stateless containers/prompts that also never get worked
+// directly. Skip these in the orphan walk so only real work-item In-Progress
+// specs without a live session surface.
+// trace:TASK-940 | ai:claude
+fn ps_orphan_excluded_type(req_type: &aida_core::RequirementType) -> bool {
+    matches!(
+        req_type,
+        aida_core::RequirementType::Epic
+            | aida_core::RequirementType::Folder
+            | aida_core::RequirementType::Meta
+    )
+}
+
 /// `aida ps` — the GLOBAL running-work table. One row per active session/agent
 /// across the project (the project-wide companion to `aida status <spec>`), plus
 /// a pass over In-Progress specs with no live spec-scoped lease so orphaned
@@ -90092,6 +90128,12 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     if let Some(store) = store.as_ref() {
         for r in &store.requirements {
             if !matches!(r.status, aida_core::RequirementStatus::InProgress) {
+                continue;
+            }
+            // Rollup / stateless types (epic, folder, meta) never hold a
+            // spec-scoped lease, so they'd all read as orphaned — skip them so
+            // only real work-item In-Progress specs surface. trace:TASK-940
+            if ps_orphan_excluded_type(&r.req_type) {
                 continue;
             }
             let disp = r
