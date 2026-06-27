@@ -3,12 +3,12 @@ spec_id: SPIKE-72
 agreed_id: SPIKE-72
 title: 'Decide: per-agent cache isolation vs harden the shared cache'
 description: The clean fix floated this session is one-clone-per-agent OR a per-agent cache path (.aida/cache.<node-id>.db or AIDA_CACHE_PATH) so co-located agents stop sharing one SQLite file — vs just hardening contention. Spike the smaller alternative + decide before building. Reuses per-clone rebuildable cache + node id.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:53:10.010355725Z
-modified_at: 2026-06-27T16:29:40.260938933Z
+modified_at: 2026-06-27T16:29:41.141112729Z
 req_type: Spike
 relationships:
 - rel_type: References
