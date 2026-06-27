@@ -6957,6 +6957,37 @@ pub enum Command {
         full: bool,
     },
 
+    /// The global running-work table — one row per active session/agent
+    /// across the project (the `ps`/`docker ps` of AIDA work). Companion to
+    /// `aida status <spec>` (per-spec): where that answers "is THIS spec
+    /// liveness-backed?", `aida ps` answers "what is genuinely running on
+    /// my machine right now, and what only CLAIMS to be?".
+    ///
+    /// Each session row shows: session id, spec (scope), role, worktree, pid,
+    /// started, ELAPSED, and a liveness verdict reusing the same machinery
+    /// `aida status <spec>` and `aida session leases` use
+    /// (live / dormant / STALE).
+    ///
+    /// It ALSO surfaces ORPHANED In-Progress specs — specs at status
+    /// In-Progress with NO spec-scoped lease backing them (the flag-only
+    /// case) — so a crashed or never-started session can't hide behind a
+    /// status flag. AIDA-launched work (`aida queue work` / `aida agent new`)
+    /// gets spec-scoped leases (the rich, spec-linked rows); advisor
+    /// Agent-tool fan-outs take generic `harness-worktree` leases (shown by
+    /// session/worktree, spec unknown).
+    // trace:STORY-696 | ai:claude
+    Ps {
+        /// Machine-readable JSON output: `{ sessions: [...], orphaned: [...] }`.
+        // trace:STORY-696
+        #[clap(long)]
+        json: bool,
+        /// Include STALE (dead-pid / leaked) session rows that the default
+        /// view folds behind a footer count.
+        // trace:STORY-696
+        #[clap(long)]
+        all: bool,
+    },
+
     /// List the team: every registered node/clone sharing this store
     /// (`registry/nodes.toml`) — node id, host, email, clone path, when it
     /// registered, and whether it currently holds a coordination claim
