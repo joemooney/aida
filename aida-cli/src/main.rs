@@ -16088,14 +16088,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
 
             // STORY-48: lease enforcement. Find leases relative to the git
-            // project root (parent of the orphan store), load the full
-            // store once for ancestor walking, and consult the
-            // [session].enforcement knob. Best-effort — if we can't even
-            // find a project root, skip enforcement rather than break edit.
+            // project root (parent of the orphan store), collect the target +
+            // its ancestor chain for ancestor walking (BUG-634: targeted, not a
+            // full-store load), and consult the [session].enforcement knob.
+            // Best-effort — if we can't even find a project root, skip
+            // enforcement rather than break edit.
             // trace:STORY-48 | ai:claude
             if let Ok(project_root) = find_project_root() {
                 if !list_leases(&project_root).is_empty() {
-                    let store = backend.load()?;
+                    // BUG-634: build only the target + its ancestor chain via
+                    // targeted lookups — the lease walk needs no more — instead
+                    // of a full-store load (a scan of every YAML on the write
+                    // path). trace:BUG-634 | ai:claude
+                    let store = collect_ancestor_store(&backend, &req);
                     enforce_session_lease(&project_root, &req, &store, "aida edit", *strict)?;
                 }
             }
@@ -45775,6 +45780,40 @@ fn session_enforcement(project_root: &std::path::Path) -> SessionEnforcement {
 /// session can freely edit specs in its own scope. Returns `None` for
 /// path-glob / free-form scopes that we can't resolve to a spec id.
 /// trace:STORY-48 | ai:claude
+/// Build a minimal store containing the target plus its ancestor chain
+/// (following `Child` edges — the climb-toward-root direction), resolved via
+/// TARGETED per-uuid lookups rather than a full-store `backend.load()` (a scan
+/// of every YAML object on the edit write path). `lease_owning_spec` only walks
+/// `Child` edges from the target and reads the spec_id/agreed_id of the
+/// reachable ancestors, so a store holding exactly that closure is behaviorally
+/// identical to the full store for lease enforcement. The targeted
+/// `get_requirement` is cache-backed; a missing ancestor is simply skipped (an
+/// absent ancestor can't own a lease scope anyway).
+// trace:BUG-634 | ai:claude
+fn collect_ancestor_store(
+    backend: &aida_core::CachedGitBackend,
+    target: &Requirement,
+) -> RequirementsStore {
+    let mut visited: HashSet<Uuid> = HashSet::new();
+    visited.insert(target.id);
+    let mut requirements: Vec<Requirement> = vec![target.clone()];
+    let mut frontier: Vec<Requirement> = vec![target.clone()];
+    while let Some(curr) = frontier.pop() {
+        for rel in &curr.relationships {
+            if rel.rel_type == RelationshipType::Child && visited.insert(rel.target_id) {
+                if let Ok(Some(parent)) = backend.get_requirement(&rel.target_id) {
+                    requirements.push(parent.clone());
+                    frontier.push(parent);
+                }
+            }
+        }
+    }
+    RequirementsStore {
+        requirements,
+        ..Default::default()
+    }
+}
+
 fn lease_owning_spec(
     leases: &[SessionLease],
     self_lease: Option<&SessionLease>,
@@ -114376,6 +114415,49 @@ pub(crate) fn entry_matches_role_filter(
 /// it). Caller passes the intended position so we can detect inversion
 /// against `i64::MAX` sentinel values (which `queue_add` resolves to
 /// "max+1000"). trace:STORY-333 | ai:claude
+/// Build only the requirement subset `warn_if_queued_ahead_of_blocker` reads —
+/// the spec itself, its `BlockedBy` targets (forward check), and every
+/// currently-queued spec (reverse check) — via TARGETED cache-backed lookups,
+/// instead of `storage.load()` (a scan of every YAML on the queue write path).
+/// The warn helper only does `store.requirements.iter().find(|r| r.id == …)` for
+/// exactly these ids, so a store holding their closure is behaviorally
+/// identical; a dangling id resolves to `None` here and to a `None` find in the
+/// full store alike.
+// trace:BUG-634 | ai:claude
+fn build_queue_warn_subset(
+    backend: &aida_core::CachedGitBackend,
+    req: &aida_core::Requirement,
+    storage: &Storage,
+    user_id: &str,
+) -> aida_core::RequirementsStore {
+    use aida_core::DatabaseBackend;
+    let mut seen: HashSet<Uuid> = HashSet::new();
+    seen.insert(req.id);
+    let mut requirements: Vec<aida_core::Requirement> = vec![req.clone()];
+    let mut want: Vec<Uuid> = Vec::new();
+    for rel in &req.relationships {
+        if matches!(rel.rel_type, aida_core::RelationshipType::BlockedBy) {
+            want.push(rel.target_id);
+        }
+    }
+    if let Ok(entries) = storage.queue_list(user_id, true) {
+        for e in entries {
+            want.push(e.requirement_id);
+        }
+    }
+    for id in want {
+        if seen.insert(id) {
+            if let Ok(Some(r)) = backend.get_requirement(&id) {
+                requirements.push(r);
+            }
+        }
+    }
+    aida_core::RequirementsStore {
+        requirements,
+        ..Default::default()
+    }
+}
+
 fn warn_if_queued_ahead_of_blocker(
     req: &aida_core::Requirement,
     intended_position: i64,
@@ -116586,7 +116668,18 @@ fn handle_queue_command(
             // seat the advisor role if they're acting via an env prefix.
             maybe_hint_advisor_seat();
             let user_id = get_user(user);
-            let store = storage.load()?;
+
+            // BUG-634: avoid a full-store scan (`storage.load()` parses every
+            // YAML) on the queue write path. For the distributed (directory)
+            // store, open a cache-backed backend for targeted single-spec
+            // lookups; the deprecated centralized (.db) path keeps the full
+            // load. trace:BUG-634 | ai:claude
+            let targeted_backend: Option<aida_core::CachedGitBackend> = if store_path.is_dir() {
+                let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+                aida_core::CachedGitBackend::open(store_path, &cache_path).ok()
+            } else {
+                None
+            };
 
             // Default routing: when no --for is given but the active session
             // has a role (AIDA_SESSION_ROLE), route to that role automatically.
@@ -116635,13 +116728,30 @@ fn handle_queue_command(
             };
             let for_session_routing: Option<String> = for_session.clone();
 
-            // Resolve requirement ID
-            let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
-                store.requirements.iter().find(|r| r.id == uuid)
-            } else {
-                store.get_requirement_by_spec_id(id)
-            }
-            .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
+            // Resolve requirement ID + the blocker-warning graph subset. The
+            // distributed path resolves both via targeted lookups; the
+            // centralized path falls back to a single full load. trace:BUG-634
+            let (req_owned, warn_store): (aida_core::Requirement, aida_core::RequirementsStore) =
+                if let Some(backend) = targeted_backend.as_ref() {
+                    let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+                        backend.get_requirement(&uuid)?
+                    } else {
+                        backend.get_requirement_by_spec_id(id)?
+                    }
+                    .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
+                    let warn_store = build_queue_warn_subset(backend, &resolved, storage, &user_id);
+                    (resolved, warn_store)
+                } else {
+                    let store = storage.load()?;
+                    let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+                        store.requirements.iter().find(|r| r.id == uuid).cloned()
+                    } else {
+                        store.get_requirement_by_spec_id(id).cloned()
+                    }
+                    .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
+                    (resolved, store)
+                };
+            let req = &req_owned;
 
             // TASK-45: refuse to queue a Completed/Rejected req unless
             // --force. The intermediate state ("Completed item in
@@ -116760,7 +116870,7 @@ fn handle_queue_command(
             // a reason (e.g. branching from the blocker's branch
             // intentionally), so the warning is informational only.
             // trace:STORY-333 | ai:claude
-            warn_if_queued_ahead_of_blocker(req, position, &store, storage, &user_id);
+            warn_if_queued_ahead_of_blocker(req, position, &warn_store, storage, &user_id);
 
             // TASK-618: warn on the silent cross-machine collision hazard.
             // When the queue user_id is the BUG-89 "default" fallback and a

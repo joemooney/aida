@@ -8,7 +8,7 @@
 //! trace:EPIC-1-001 | ai:claude
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -1099,6 +1099,27 @@ impl Cache {
             .ok()
             .unwrap_or_default();
         Ok(d)
+    }
+
+    /// Resolve a UUID to its stable `spec_id` via the cache, so a uuid-keyed
+    /// lookup on the write path can load the ONE matching YAML object instead of
+    /// full-scanning every object file (`find_by_uuid` is O(n) over ~2.5k
+    /// YAMLs). The uuid→spec_id mapping is invariant (spec_ids are stable and
+    /// never reused), so a row built by an older rebuild is still correct;
+    /// callers fall back to the authoritative full scan on a cache miss. Returns
+    /// `Ok(None)` when the uuid isn't in the cache (stale/never-ingested).
+    // trace:BUG-634 | ai:claude
+    pub fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let spec_id = conn
+            .query_row(
+                "SELECT spec_id FROM requirements_cache WHERE id = ?1",
+                params![id.to_string()],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(spec_id)
     }
 }
 
