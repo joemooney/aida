@@ -23060,5 +23060,17 @@ operations:
   timestamp: 2026-06-27T03:19:01.391972615Z
   kind: !SetPriority
     priority: Low
-clock: 2175
+- id: 019f0718-a12c-7b91-b85d-d8470844726a
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2176
+  timestamp: 2026-06-27T03:21:22.476899457Z
+  kind: !Create
+    title: 'TUI: ''status'' verb — per-spec live work-state lens (queued/leased/in-progress/STALE)'
+    description: 'Add a ''status'' read verb (alongside show/why) wired to ''aida status <spec>'': the live WORK-STATE lens — is it queued (and where), leased by whom (pid/elapsed), In-Progress, or STALE. Distinct from show (content) and why (still-open reason). Partly addresses TASK-948 (queue/processing visibility) at the per-spec level. Item-level read verb; renders the output in the modal (in-process if cheap, else shell-out via the async path BUG-633).'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2176
 node_id: '1'
