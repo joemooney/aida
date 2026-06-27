@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T14:29:52.537672722Z
-modified_at: 2026-06-27T02:56:59.995118134Z
+modified_at: 2026-06-27T15:28:48.708574214Z
 req_type: Task
 tags:
 - node-identity
@@ -20,3 +20,8 @@ comments:
   content: 'Ground truth from operator (2026-06-26): these 4 owner strings are ONE person across hosts/clones, each host minting its own ids: joe (imac), joe.mooney, Joe.Mooney@work.example (work host), joe.mooney@gmail.com (gmail/node JM). Surfaces showing them as separate owners: aida db block list, team roster, queue identity (current_user_id resolves shell USER). Needs a person<->alias mapping the surfaces consult to collapse to one canonical person. Companion: TASK-950 (block-list display) shows them separate for now; alias-collapse is a follow-on once this mapping exists.'
   created_at: 2026-06-27T02:55:22.189820450Z
   modified_at: 2026-06-27T02:55:22.189820450Z
+- id: 019f09b2-9e44-7540-a0e2-3316db351203
+  author: joe
+  content: 'DECISION (operator 2026-06-27): build B — a SHARED person registry on the orphan store. aida identity link <a> <b> writes a person<->aliases record on the aida-store branch (extend the existing node/team roster from STORY-640, or a new person registry there); the high-value surfaces (queue current_user_id, team roster, block-list owner, --mine/--assigned) resolve an owner string -> canonical person via the alias map, composed with the TASK-951 case-fold. Smallest slice: the link command + the record + resolution at queue/team/block-list. The AIDA_USER-consistency floor is the zero-code fallback for new work; the registry handles the existing multi-host divergence. PR-for-operator-review (identity-foundational).'
+  created_at: 2026-06-27T15:28:48.708574214Z
+  modified_at: 2026-06-27T15:28:48.708574214Z
