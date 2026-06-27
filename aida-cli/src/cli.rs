@@ -63,6 +63,15 @@ pub enum InternalCommand {
     /// no sanctioned-coding context.
     // trace:STORY-684
     AdvisorCodeGate,
+
+    /// Record a `--no-verify` bypass into the field-study rule-violation log.
+    /// Called by the scaffolded git post-commit hook AFTER the commit lands,
+    /// once the hook has established (via the pre-commit sentinel marker) that
+    /// the pre-commit hook was skipped — i.e. the commit was made with
+    /// `git commit --no-verify`. A no-op unless the field study is enabled
+    /// (`AIDA_FIELD_STUDY=1`); never fails the already-completed commit.
+    // trace:TASK-917
+    RecordNoVerifyBypass,
 }
 
 #[derive(Subcommand, Debug)]

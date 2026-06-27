@@ -9,16 +9,36 @@ YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
+# 0. --no-verify direct-detection sentinel (TASK-917).
+# The pre-commit hook can't observe its own bypass: `git commit --no-verify`
+# means "don't run this hook". So detection is INVERTED — this hook records the
+# staged-tree SHA into a sentinel whenever it runs (including the legitimate
+# early-exit allow paths below); the paired post-commit hook then compares the
+# sentinel to the committed tree. A missing/stale sentinel ⇒ this hook never ran
+# ⇒ --no-verify was used. `aida_precommit_sentinel` writes that marker; it is
+# called before every `exit 0` so a clean allow is never mislabeled a bypass.
+# trace:TASK-917
+aida_precommit_sentinel() {
+    local git_dir tree
+    git_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 0
+    case "$git_dir" in /*) ;; *) git_dir="$(pwd)/$git_dir" ;; esac
+    tree=$(git write-tree 2>/dev/null) || return 0
+    [ -n "$tree" ] && printf '%s\n' "$tree" > "$git_dir/aida-precommit-sentinel" 2>/dev/null
+    return 0
+}
+
 # 1. Environment and argument bypass check
 # Check if AIDA_ALLOW_INTERMEDIATE=1 is set, or if the git commit command was invoked with --allow-intermediate.
 # We check /proc/$PPID/cmdline (Linux) for --allow-intermediate to enable seamless bypass.
 if [ "$AIDA_ALLOW_INTERMEDIATE" = "1" ] || ( [ -f "/proc/$PPID/cmdline" ] && grep -q -z -- "--allow-intermediate" "/proc/$PPID/cmdline" 2>/dev/null ); then
+    aida_precommit_sentinel  # this hook ran + allowed; not a --no-verify bypass. trace:TASK-917
     exit 0
 fi
 
 # 2. Special-case bypass for .aida-store worktree/branch (deliberate gitignored path commits)
 CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
 if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || [[ "$(pwd)" == *"/.aida-store"* ]]; then
+    aida_precommit_sentinel  # trace:TASK-917
     exit 0
 fi
 
@@ -140,4 +160,8 @@ if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
     exit 1
 fi
 
+# All gates passed: record the sentinel for the staged tree we just validated so
+# the post-commit hook knows this commit's pre-commit ran (not --no-verify).
+# trace:TASK-917
+aida_precommit_sentinel
 exit 0
