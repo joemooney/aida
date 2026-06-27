@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T00:40:29.384497958Z
-modified_at: 2026-06-27T06:51:38.324985964Z
+modified_at: 2026-06-27T07:22:30.388246663Z
 req_type: Bug
 tags:
 - dx
 - hooks
 - papercut
+comments:
+- id: 019f07f5-6474-7352-b0ea-8ba7d4b35cb2
+  author: joe
+  content: Commit 110794cc1 references this requirement
+  created_at: 2026-06-27T07:22:30.388246663Z
+  modified_at: 2026-06-27T07:22:30.388246663Z
