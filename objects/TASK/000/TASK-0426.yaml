@@ -10,12 +10,12 @@ description: |-
   - Clarify when AIDA is useful, when it is too much machinery, and how someone can help own, shape, and steer the project.
   - Align the wording with OVERVIEW.md and docs/aida/discipline/agent-agnostic-vs-claude-specific.md.
   - File follow-up docs tasks for any broader website/README/positioning updates needed.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.704172938Z
-modified_at: 2026-06-24T03:44:23.015550718Z
+modified_at: 2026-06-27T16:36:20.729352764Z
 req_type: Task
 tags:
 - docs-review
