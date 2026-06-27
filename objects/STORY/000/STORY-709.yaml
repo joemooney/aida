@@ -3,15 +3,33 @@ spec_id: STORY-709
 agreed_id: STORY-709
 title: 'aida usage performance lens: --slowest (latency by command) + --events (raw event stream with durations)'
 description: "We already CAPTURE per-command latency: ~/.aida/usage.jsonl (STORY-122) logs {cmd, args_count, exit_code, duration_ms, role, binary_sha, ts} per invocation (~130K events). aida usage VIEWS it but only via frequency/error lenses (--unused/--errors/--health) — there is NO latency/performance view. Add the perf lens (reuse the existing usage.jsonl reader in handle_usage_command; do NOT add new capture):\n\n1. aida usage --slowest [--limit N] [--since Nd] [--json]: aggregate latency PER COMMAND from duration_ms — p50, p95, max, and call count — sorted slowest-first (by p95 or max). This is the perf-debug view; e.g. status would surface at the top (it was 26s before STORY-707). \n\n2. aida usage --events [--cmd <shape>] [--slower-than <Nms>] [--limit N] [--since Nd] [--json]: the RAW recent event stream (ts, cmd, duration_ms, exit_code), newest-first, filterable by command shape and a duration threshold, capped by --limit. This is the \"aida events\" raw log the operator imagined, delivered as a usage lens (NOT a new top-level command — avoid surface duplication).\n\nACCEPTANCE:\n- aida usage --slowest ranks commands by latency (p50/p95/max + count), slowest first; honors --since/--limit/--json.\n- aida usage --events streams recent raw events with durations; --cmd filters by command shape; --slower-than Nms filters by threshold; --limit caps; --json emits the rows.\n- Both REUSE the existing usage.jsonl parse path (no new capture, no new file).\n- Unit tests: the percentile (p50/p95/max) computation over a fixture, and the --events filter (by cmd + slower-than).\n\nFILES: aida-cli/src/cli.rs (new --slowest / --events / --slower-than flags on Usage), aida-cli/src/main.rs (handle_usage_command). Distinct from handle_block_command (TASK-950) + current_user_id (TASK-951)."
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:10:15.734573002Z
-modified_at: 2026-06-27T03:10:24.338196594Z
+modified_at: 2026-06-27T03:34:09.872633685Z
 req_type: Story
 tags:
 - from-operator
 - performance
 - telemetry
 - usage
+history:
+- id: 019f0724-5661-7cd3-93f8-964957189803
+  author: aida-auto-bump
+  timestamp: 2026-06-27T03:34:09.761858243Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f0724-56d0-7951-8772-adc34702771f
+  timestamp: 2026-06-27T03:34:09.872626004Z
+  agent: aida
+  commit_sha: fd8b39e7484fa1daf4863546487b692a2240b5fb
+  summary: Completed via merge fd8b39e7
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T03:34:08.645541900Z
+  completion_sha: fd8b39e7484fa1daf4863546487b692a2240b5fb
