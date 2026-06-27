@@ -247,6 +247,39 @@ exit 0
         .to_string()
     }
 
+    // trace:TASK-917 | ai:claude
+    /// Generate the post-commit git hook content — direct `--no-verify` bypass
+    /// detection. Reads from the embedded master template so the scaffolded copy
+    /// never drifts; a compact fallback ships if the embed is somehow absent.
+    pub(super) fn generate_post_commit_hook(&self) -> String {
+        if let Some(content) = crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-post-commit.sh")
+            .copied()
+        {
+            return content.to_string();
+        }
+        r#"#!/bin/bash
+# AIDA post-commit hook — direct --no-verify bypass detection (TASK-917).
+# The pre-commit hook writes the staged-tree SHA into a sentinel when it runs;
+# here we compare it to the committed tree. A missing/stale sentinel means the
+# pre-commit hook was skipped (git commit --no-verify). Observe-only; never
+# fails the (already-completed) commit; inert unless AIDA_FIELD_STUDY=1.
+git_dir=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0
+case "$git_dir" in /*) ;; *) git_dir="$(pwd)/$git_dir" ;; esac
+sentinel="$git_dir/aida-precommit-sentinel"
+committed_tree=$(git rev-parse "HEAD^{tree}" 2>/dev/null) || exit 0
+sentinel_tree=""
+[ -f "$sentinel" ] && sentinel_tree=$(tr -d '[:space:]' < "$sentinel" 2>/dev/null)
+rm -f "$sentinel" 2>/dev/null
+[ -n "$sentinel_tree" ] && [ "$sentinel_tree" = "$committed_tree" ] && exit 0
+if command -v aida >/dev/null 2>&1; then
+    aida internal record-no-verify-bypass >/dev/null 2>&1 || true
+fi
+exit 0
+"#
+        .to_string()
+    }
+
     /// Generate Claude Code validate-commit hook content
     pub(super) fn generate_validate_commit_hook(&self) -> String {
         r#"#!/bin/bash

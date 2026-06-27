@@ -80,6 +80,32 @@ pub const RULE_CLIPPY: &str = "clippy";
 pub const RULE_PROVENANCE_LEAK: &str = "provenance-leak";
 pub const RULE_COMMIT_FORMAT: &str = "commit-format";
 pub const RULE_ADVISOR_CODE_GATE: &str = "advisor-code-gate";
+// trace:TASK-917 | ai:claude
+/// A commit made with `git commit --no-verify`: the pre-commit hook was bypassed
+/// wholesale, so every stated-rule gate the pre-commit hook enforces (the
+/// advisor-code-gate, the doc-comment SPEC-ID leak, fmt auto-fix) was skipped at
+/// once. The bypass itself is the violation — caught DIRECTLY (a post-commit
+/// detector noticing the pre-commit sentinel is absent), not indirectly as later
+/// CI red on whatever the bypassed gate would have caught.
+pub const RULE_NO_VERIFY_BYPASS: &str = "no-verify-bypass";
+
+// trace:TASK-917 | ai:claude
+/// Was the just-made commit's pre-commit hook BYPASSED (i.e. was the commit made
+/// with `git commit --no-verify`)?
+///
+/// The pre-commit hook cannot detect its own bypass — `--no-verify` is exactly
+/// "don't run the pre-commit hook". So the detection is inverted and runs
+/// *after* the commit: the pre-commit hook leaves a sentinel marker for the tree
+/// it validated; a post-commit detector checks whether that sentinel matches the
+/// committed tree. Absent/stale sentinel means the pre-commit hook never ran for
+/// this commit, so `--no-verify` was used.
+///
+/// Pure: the caller supplies whether the sentinel matched the committed tree;
+/// this is the one-line predicate so the inversion is unit-testable and the IO
+/// (reading the sentinel, hashing the tree) lives at the call site.
+pub fn detect_no_verify_bypass(precommit_sentinel_matched: bool) -> bool {
+    !precommit_sentinel_matched
+}
 
 /// The minimal failure context the detector needs — decoupled from
 /// `auto_complete::OrchestrationResult` so [`detect`] is a pure function that
@@ -258,6 +284,56 @@ pub fn record(
         outcome, &ts, spec_id, headless, variant, &bucket, binary_sha,
     );
     append_events(&events);
+}
+
+// trace:TASK-917 | ai:claude
+/// Build the single `no-verify-bypass` event for a commit whose pre-commit hook
+/// was bypassed. Pulled out from [`record_no_verify_bypass`] so event
+/// construction is testable without the filesystem. The `spec_id` is the spec
+/// inferred from the bypassed commit when one is unambiguous (an identifier
+/// breadcrumb, never message content); `unknown` when none could be inferred.
+/// `caught_in_phase` is `post-commit` (where the detector runs) and `via` is
+/// `no-verify` (how it surfaced) — both stable categories, never message text.
+pub fn build_no_verify_event(
+    ts: &str,
+    spec_id: &str,
+    headless: bool,
+    repo_bucket: &str,
+    binary_sha: Option<String>,
+) -> RuleViolation {
+    RuleViolation {
+        ts: ts.to_string(),
+        spec_id: spec_id.to_string(),
+        rule: RULE_NO_VERIFY_BYPASS.to_string(),
+        caught_in_phase: "post-commit".to_string(),
+        via: "no-verify".to_string(),
+        headless,
+        variant: "n/a".to_string(),
+        repo_bucket: repo_bucket.to_string(),
+        binary_sha,
+    }
+}
+
+// trace:TASK-917 | ai:claude
+/// Record a `--no-verify` bypass event. Called from the post-commit detector
+/// once it has established (via the sentinel check) that the pre-commit hook was
+/// skipped. Shares the field study's opt-in + privacy floor: a no-op unless the
+/// study is enabled, and the event carries only identifiers/categories — never
+/// the commit message, diff, or file paths. Best-effort — never blocks or fails
+/// the (already-completed) commit.
+pub fn record_no_verify_bypass(
+    project_root: &Path,
+    spec_id: &str,
+    headless: bool,
+    binary_sha: Option<String>,
+) {
+    if !crate::field_study::is_enabled(Some(project_root)) {
+        return;
+    }
+    let bucket = crate::field_study::repo_bucket_for(repo_commit_count(project_root)).to_string();
+    let ts = chrono::Utc::now().to_rfc3339();
+    let event = build_no_verify_event(&ts, spec_id, headless, &bucket, binary_sha);
+    append_events(std::slice::from_ref(&event));
 }
 
 /// HEAD commit count (the repo-size proxy). `0` on any error.
@@ -527,6 +603,49 @@ mod tests {
             vec![("fmt".into(), 2), ("clippy".into(), 1)]
         );
         assert_eq!(headless_split(&events), (2, 1));
+    }
+
+    #[test]
+    fn no_verify_bypass_detected_when_sentinel_absent() {
+        // The pre-commit hook left no matching sentinel → it never ran for this
+        // commit → --no-verify was used.
+        assert!(detect_no_verify_bypass(false));
+        // Sentinel matched the committed tree → the hook ran → not a bypass.
+        assert!(!detect_no_verify_bypass(true));
+    }
+
+    #[test]
+    fn no_verify_event_carries_post_commit_context() {
+        let ev = build_no_verify_event(
+            "2026-06-26T12:00:00Z",
+            "TASK-917",
+            true,
+            "huge",
+            Some("abc1234".into()),
+        );
+        assert_eq!(ev.rule, RULE_NO_VERIFY_BYPASS);
+        assert_eq!(ev.caught_in_phase, "post-commit");
+        assert_eq!(ev.via, "no-verify");
+        assert!(ev.headless);
+        assert_eq!(ev.repo_bucket, "huge");
+        assert_eq!(ev.spec_id, "TASK-917");
+        // Privacy floor: the schema has no field for message text / paths, and
+        // none of the categories we set leak content.
+        let json = serde_json::to_string(&ev).unwrap();
+        assert!(json.contains("\"rule\":\"no-verify-bypass\""));
+        assert!(json.contains("\"via\":\"no-verify\""));
+    }
+
+    #[test]
+    fn no_verify_event_round_trips_and_tallies_with_other_rules() {
+        let ev = build_no_verify_event("2026-06-26T00:00:00Z", "STORY-9", false, "large", None);
+        let line = serde_json::to_string(&ev).unwrap();
+        let parsed: RuleViolation = serde_json::from_str(&line).unwrap();
+        assert_eq!(ev, parsed);
+        // It tallies through the same by_rule surface `aida field-study
+        // violations` reads, alongside the SPIKE-67 drain rules.
+        let events = vec![ev];
+        assert_eq!(by_rule(&events), vec![("no-verify-bypass".into(), 1)]);
     }
 
     #[test]
