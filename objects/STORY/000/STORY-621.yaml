@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T20:01:42.458630605Z
-modified_at: 2026-06-27T18:44:35.808545921Z
+modified_at: 2026-06-27T19:18:02.263353645Z
 req_type: Story
 tags:
 - parent:EPIC-35
@@ -32,6 +32,9 @@ relationships:
 - rel_type: Parent
   target_id: 019f0a65-cd9f-7f01-8dac-4069f5f5a175
   created_at: 2026-06-27T18:44:35.808545921Z
+- rel_type: Parent
+  target_id: 019f0a84-6bad-7261-a2c9-d95c5d108655
+  created_at: 2026-06-27T19:18:02.263353645Z
 comments:
 - id: 019ec824-3c8c-7d91-afde-8801eb0a6532
   author: joe
