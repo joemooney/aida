@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:14:43.589196772Z
-modified_at: 2026-06-27T01:30:08.015181541Z
+modified_at: 2026-06-27T18:25:07.101381622Z
 req_type: Epic
 tags:
 - collaboration-layer
@@ -63,6 +63,9 @@ relationships:
 - rel_type: Parent
   target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
   created_at: 2026-06-27T01:30:08.015181541Z
+- rel_type: Parent
+  target_id: 019f0a53-f943-7502-b0b9-d6cfb4255446
+  created_at: 2026-06-27T18:25:07.101381622Z
 comments:
 - id: 019e9c0e-2171-7152-9dd5-b2ab3647d704
   author: joe
