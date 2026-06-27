@@ -3,12 +3,12 @@ spec_id: TASK-848
 agreed_id: TASK-848
 title: Refresh the dated market-landscape snapshot feeding P8a (immutable, dated)
 description: 'EPIC-48: P8a (cross-vendor coordination is incentive-blocked, not capability-blocked) rests on dated competitor observations. Refresh docs/research/2026-06-17-agent-coordination-market-landscape.md on cadence as a NEW dated snapshot (do not edit the old one — immutable observations). Multi-modal discovery per the method finding (awesome-lists, known builders, the problems many names, star-velocity), not own-vocabulary search.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:06:38.382086327Z
-modified_at: 2026-06-19T00:45:48.119111834Z
+modified_at: 2026-06-27T06:51:34.159627372Z
 req_type: Task
 tags:
 - competitive
