@@ -21,12 +21,12 @@ description: |-
   2. **queue** → routes the selected Approved specs to the implementer queue (`aida queue add --for implementer`); status line reports routed/skipped.
   3. **approve** → transitions selected Drafts → Approved (runs with advisor authority).
   4. **defer** → opens a one-line **trigger input**; type a revisit condition, Enter → runs `aida defer … --until "<trigger>"`; status line reports deferred ids.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:20:40.219589639Z
-modified_at: 2026-06-27T02:59:38.601065011Z
+modified_at: 2026-06-27T05:04:18.856047194Z
 req_type: Task
 tags:
 - lifecycle
@@ -38,3 +38,21 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-26T19:50:40.336189550Z
   created_by: joe
+history:
+- id: 019f0776-df46-7362-a6b1-e1dda68ae482
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:18.758065322Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-dfa8-7f63-a50a-d15646949ac6
+  timestamp: 2026-06-27T05:04:18.856041456Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

@@ -3,12 +3,12 @@ spec_id: BUG-630
 agreed_id: BUG-630
 title: 'TUI request-approval & queue verbs fail: don''t carry advisor authority for ''aida queue add'' (TASK-647 gate)'
 description: 'Walkthrough finding (operator, 2026-06-26): the request approval verb prints FAILED to route. Root cause: it spawns aida queue add --for advisor WITHOUT setting AIDA_SESSION_ROLE, so the TASK-647 gate (queuing work needs advisor authority or an interactive session) refuses it. INCONSISTENCY: the approve (TASK-920) and accept (TASK-933) verbs set the role env on their spawned Command; request-approval and queue (built earlier) do NOT. FIX: request-approval sets AIDA_SESSION_ROLE=advisor; queue sets it too (aida queue add --for implementer also needs advisor authority to dispatch). DEEPER QUESTION for design: should REQUESTING approval (routing a draft TO the advisor) require advisor authority at all? The gate conflates dispatch-for-execution with request-approval; arguably the request path should be open to any role. Workaround: launch the TUI with AIDA_SESSION_ROLE=advisor so the subprocess inherits it.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:29:35.585396069Z
-modified_at: 2026-06-27T02:53:53.611522385Z
+modified_at: 2026-06-27T05:04:17.873904018Z
 req_type: Bug
 tags:
 - gap
@@ -32,3 +32,21 @@ comments:
   content: Commit a18c6cf66 references this requirement
   created_at: 2026-06-27T01:49:24.129809916Z
   modified_at: 2026-06-27T01:49:24.129809916Z
+history:
+- id: 019f0776-db6f-7602-b058-baa110d9ddbe
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:17.775492687Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-dbd1-7912-8e7c-40f3214dc692
+  timestamp: 2026-06-27T05:04:17.873898831Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

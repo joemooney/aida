@@ -27,12 +27,12 @@ description: |-
   2. Press **C** → **expect** the lens clears and all open specs return.
   3. Press **F** → **expect** a fuzzy-filterable **picker of open epics**; arrow/type to find one, Enter focuses it.
   4. Pick an epic, quit, relaunch `aida tui` (no env var) in the same worktree → **expect** it **auto-focuses** on the last pick (persisted in `.aida/tui-focus`); branch-inference is the fallback when there's no marker.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:36:03.295148059Z
-modified_at: 2026-06-26T19:50:39.381445977Z
+modified_at: 2026-06-27T05:04:18.265583320Z
 req_type: Story
 tags:
 - focus
@@ -51,7 +51,23 @@ comments:
   content: 'DESIGN NOTE (operator, 2026-06-26): the focus lens should also narrow the QUEUE / in-flight view, not just the spec scopes — so when focused on an epic you see that epic''s queued work too. Not actionable yet (the TUI has no functional Queue scope; that''s a later slice). When the Queue scope is built, it MUST respect the active focus epic. The CLI half of this is TASK-923 (aida queue list --epic).'
   created_at: 2026-06-26T18:54:58.175756103Z
   modified_at: 2026-06-26T18:54:58.175756103Z
+history:
+- id: 019f0776-dcf8-78c0-82ca-334e9eda267d
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:18.168303208Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-dd59-7282-aa9c-171db4dcf0d2
+  timestamp: 2026-06-27T05:04:18.265577418Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
 implementation_info:
   implemented: true
   implemented_at: 2026-06-26T18:57:44.636082115Z
   implemented_by: joe
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

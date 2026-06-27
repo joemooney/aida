@@ -3,19 +3,35 @@ spec_id: TASK-934
 agreed_id: TASK-934
 title: 'TUI gap: live refresh (key ''r'') — re-fetch scope/focus/status in-process to witness state changes'
 description: 'GAP #4: the in-process reads are point-in-time, so a spec moving through states does not update live. Add a refresh key (r) that re-fetches the current scope items, the focus set, and statuses from the store in-process (the SpecStore opens the backend once — refresh re-queries; if needed, reopen to pick up external writes/cache rebuilds). Optional: a periodic auto-refresh. ACCEPTANCE: pressing r re-reads the store so externally-changed statuses appear without relaunch; gates green; redesign module.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:43.084302425Z
-modified_at: 2026-06-27T00:02:37.160592191Z
+modified_at: 2026-06-27T05:04:19.636716596Z
 req_type: Task
 tags:
 - gap
 - lifecycle
 - redesign
 - tui
+history:
+- id: 019f0776-e253-7a40-bdc9-bd7d7a798aac
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:19.539067501Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-e2b4-7f22-baf3-35aa09568263
+  timestamp: 2026-06-27T05:04:19.636710664Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
 implementation_info:
   implemented: true
   implemented_at: 2026-06-27T00:02:37.160592191Z
   implemented_by: joe
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

@@ -26,12 +26,12 @@ description: |-
 
   1. Press **?** on the `groom` verb → **expect** a popup explaining groom + a key legend. Press **?** on a scope, and on an item → **expect** context-appropriate help each time.
   2. Confirm **`?` no longer quits** — quit is **q** (at top level) / **Esc** / **Ctrl-C**, documented in the help legend.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:40:53.824948561Z
-modified_at: 2026-06-27T03:00:22.605465980Z
+modified_at: 2026-06-27T05:04:19.148813385Z
 req_type: Task
 tags:
 - help
@@ -44,7 +44,23 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-26T19:50:42.744844125Z
   created_by: joe
+history:
+- id: 019f0776-e06b-7c71-81a5-7c124300722d
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:19.051674809Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-e0cc-7091-a003-2bfec8013473
+  timestamp: 2026-06-27T05:04:19.148807777Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
 implementation_info:
   implemented: true
   implemented_at: 2026-06-26T18:46:48.332135700Z
   implemented_by: joe
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa

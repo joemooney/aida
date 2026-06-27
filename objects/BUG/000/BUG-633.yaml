@@ -3,12 +3,12 @@ spec_id: BUG-633
 agreed_id: BUG-633
 title: 'TUI: verbs freeze the TUI ~20s (synchronous aida subprocess) — run async with spinner + status-line progress'
 description: 'Operator report (2026-06-26): clicking Enter on the approve verb froze the TUI for ~20s. ROOT CAUSE: verbs (approve/queue/accept/request-approval/defer) shell out to aida (Command::output) SYNCHRONOUSLY in the key handler, blocking the event loop; and aida store-writes take 10-20s (orphan-branch commit). So the TUI freezes for the whole write with no feedback. FIX: run verb execution in a BACKGROUND THREAD; show a spinner + status (''approving TASK-X…'') in the status line; the event loop continues. PREREQUISITE: switch the event loop from blocking crossterm read() to poll(timeout) so it can animate the spinner + poll for completion — this ALSO unblocks the auto-refresh that TASK-934 deferred for the same reason. On completion: update the status line with the result, clear the pending state. ACCEPTANCE: running a verb does not freeze the TUI; a spinner + status shows progress; the result appears on completion; the loop stays responsive (or clearly ''busy'') during a pending op. NOTE the related perf issue: a 20s single-spec write is itself slow (orphan-branch commit) — worth a separate investigation, but async makes the TUI usable regardless.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:02:40.902841087Z
-modified_at: 2026-06-27T04:35:21.256273731Z
+modified_at: 2026-06-27T05:04:17.971985071Z
 req_type: Bug
 tags:
 - async
@@ -25,3 +25,21 @@ relationships:
   target_id: 019f070c-cdb2-7b32-88ce-29151f29d395
   created_at: 2026-06-27T03:08:43.014625044Z
   created_by: joe
+history:
+- id: 019f0776-dbd2-7141-aeb2-742f35c58a61
+  author: aida-auto-bump
+  timestamp: 2026-06-27T05:04:17.874062312Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f0776-dc33-7ca0-9e25-99238009ee2c
+  timestamp: 2026-06-27T05:04:17.971979602Z
+  agent: aida
+  commit_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
+  summary: Completed via merge a069dbfd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T05:04:16.774811311Z
+  completion_sha: a069dbfdb2651e73c16ecefc422a2ec8f4aa02aa
