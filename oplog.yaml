@@ -22949,5 +22949,17 @@ operations:
   timestamp: 2026-06-27T02:59:38.757618826Z
   kind: !SetStatus
     status: Done
-clock: 2165
+- id: 019f0707-9065-7653-bdaa-ea39f8f1c490
+  target_id: 019f0707-8406-7c92-91f7-fc25582e32e5
+  author: aida
+  node_id: '1'
+  lamport: 2166
+  timestamp: 2026-06-27T03:02:44.069070289Z
+  kind: !Create
+    title: 'TUI: verbs freeze the TUI ~20s (synchronous aida subprocess) — run async with spinner + status-line progress'
+    description: 'Operator report (2026-06-26): clicking Enter on the approve verb froze the TUI for ~20s. ROOT CAUSE: verbs (approve/queue/accept/request-approval/defer) shell out to aida (Command::output) SYNCHRONOUSLY in the key handler, blocking the event loop; and aida store-writes take 10-20s (orphan-branch commit). So the TUI freezes for the whole write with no feedback. FIX: run verb execution in a BACKGROUND THREAD; show a spinner + status (''approving TASK-X…'') in the status line; the event loop continues. PREREQUISITE: switch the event loop from blocking crossterm read() to poll(timeout) so it can animate the spinner + poll for completion — this ALSO unblocks the auto-refresh that TASK-934 deferred for the same reason. On completion: update the status line with the result, clear the pending state. ACCEPTANCE: running a verb does not freeze the TUI; a spinner + status shows progress; the result appears on completion; the loop stays responsive (or clearly ''busy'') during a pending op. NOTE the related perf issue: a 20s single-spec write is itself slow (orphan-branch commit) — worth a separate investigation, but async makes the TUI usable regardless.'
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 2166
 node_id: '1'
