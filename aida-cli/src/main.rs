@@ -67715,6 +67715,15 @@ mod bug_231_findings_promote_tests {
     /// `queue_list` (the consumer side) sees it. trace:BUG-231
     #[test]
     fn promote_routes_to_implementer_queue_by_default() {
+        // BUG-632: pin a UNIQUE AIDA_USER for the test's lifetime. The queue is
+        // a per-user file, and `queue_promoted_finding` + `queue_list` both
+        // resolve the user via the ambient-env `current_user_id(None)`. Under
+        // parallel `cargo test` a sibling test mutating AIDA_USER/USER could slip
+        // between the add and the list, making the two see different users → the
+        // added item vanishes (false CI red). EnvVarGuard holds ENV_LOCK for the
+        // whole body, so it both isolates the identity AND serialises against
+        // every other env-mutating test. trace:BUG-632
+        let _user = crate::test_env::EnvVarGuard::set("AIDA_USER", "bug632-promote-default-user");
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
         let fid = seed_finding(&root, "TASK-900");
@@ -67773,6 +67782,11 @@ mod bug_231_findings_promote_tests {
     /// `--for <role>` overrides the default queue route. trace:BUG-231
     #[test]
     fn promote_honors_for_override() {
+        // BUG-632: unique AIDA_USER + ENV_LOCK isolation (see
+        // promote_routes_to_implementer_queue_by_default for the rationale).
+        // trace:BUG-632
+        let _user =
+            crate::test_env::EnvVarGuard::set("AIDA_USER", "bug632-promote-for-override-user");
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
         let fid = seed_finding(&root, "TASK-901");
@@ -68334,6 +68348,19 @@ mod bug_231_findings_promote_tests {
     /// not see it.
     #[test]
     fn queue_add_then_list_same_shell_is_consistent() {
+        // BUG-632: this test was flaky under parallel `cargo test --workspace`.
+        // The queue is a per-user file; both `queue_promoted_finding` (the add)
+        // and the `current_user_id(None)` below (the list) resolve the user from
+        // the ambient AIDA_USER/USER env. A sibling test mutating those vars
+        // between the add and the list made the add-user and list-user diverge,
+        // so the just-added item appeared absent (false CI red). Pinning a UNIQUE
+        // AIDA_USER under EnvVarGuard isolates this test's identity AND holds
+        // ENV_LOCK for the whole body, serialising it against every other
+        // env-mutating test so nothing can race in between. The value is distinct
+        // from the "a-different-user" literal below so the negative assertion
+        // stays meaningful. trace:BUG-632
+        let _user =
+            crate::test_env::EnvVarGuard::set("AIDA_USER", "bug632-same-shell-consistent-user");
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
         let fid = seed_finding(&root, "TASK-902");
