@@ -605,21 +605,26 @@ impl Cache {
                 |row| row.get::<_, String>(0),
             )
             .ok();
-        // BUG-485: trigger a migration drop on EITHER a stamped-version
-        // mismatch OR a structural drift in the actual on-disk schema. The
+        // BUG-485 / BUG-627: trigger a migration drop on EITHER a stamped-version
+        // mismatch OR a structural drift in the ACTUAL on-disk schema. The
         // version stamp alone is not enough: a cache can carry the current
-        // `schema_version` yet still have an old `requirements_fts` table
-        // (e.g. a column added to the FTS projection while the version bump
-        // was missed, or a partially-applied earlier migration). In that
-        // state the version check never fires again — a one-way trap — and
-        // the write hard-errors with `table requirements_fts has no column
-        // named external_refs`. Detecting the missing column structurally
-        // makes the cache self-heal: drop + rebuild-from-git on next read.
+        // `schema_version` yet still have an old `requirements_fts` /
+        // `requirements_cache` table (e.g. a column added to the projection while
+        // the version bump was missed, or a partially-applied / torn rebuild). In
+        // that state the version check never fires again — a one-way trap — and
+        // the read/write hard-errors with `table requirements_cache has no column
+        // named blocked`. BUG-627 specifically: concurrent worktree-isolated
+        // agents on different-SHA binaries sharing one `.aida/cache.db` can leave
+        // a column missing while the version meta still says "current". Detecting
+        // the missing column structurally (substrate-as-bouncer — verify the real
+        // columns, don't trust the meta) makes the cache self-heal: drop +
+        // rebuild-from-git on next read, regardless of the version stamp or
+        // HEAD-SHA freshness.
         let version_mismatch = on_disk_version
             .as_deref()
             .map(|v| v != SCHEMA_VERSION)
             .unwrap_or(false);
-        let schema_drifted = fts_schema_drifted(&conn);
+        let schema_drifted = fts_schema_drifted(&conn) || cache_schema_drifted(&conn);
         if version_mismatch || schema_drifted {
             // Drop the cache tables — the next stale-check will rebuild
             // from git. `cache_meta` survives so the source HEAD SHA
@@ -1112,6 +1117,49 @@ const FTS_REQUIRED_COLUMNS: &[&str] = &[
     "external_refs",
 ];
 
+/// Columns the current `requirements_cache` table must expose. Mirror of
+/// `cache_schema.sql`'s `CREATE TABLE requirements_cache` column list. Adding a
+/// column to the schema (and to `insert_one`) means adding it here too, so an
+/// existing cache built by an older-schema binary self-heals on next open even
+/// if the `SCHEMA_VERSION` bump was missed.
+//
+// The operator hit `table requirements_cache has no column named blocked`
+// while `aida cache status` reported FRESH. `blocked` was added without the
+// version stamp distinguishing a v7-without-blocked cache from a v7-with-blocked
+// one — and concurrent worktree-isolated agents running different-SHA binaries
+// against the SHARED `.aida/cache.db` can leave the table at an inconsistent
+// schema (a torn/racy rebuild) even when the stamp is current. The version-meta
+// check alone can't catch that. Verifying the ACTUAL columns on open
+// (substrate-as-bouncer — don't trust the meta) makes a column drift self-heal
+// instead of hard-erroring.
+// trace:BUG-627 trace:TASK-902
+const CACHE_REQUIRED_COLUMNS: &[&str] = &[
+    "id",
+    "spec_id",
+    "agreed_id",
+    "title",
+    "description",
+    "status",
+    "priority",
+    "owner",
+    "assignee",
+    "feature",
+    "req_type",
+    "tags_json",
+    "created_at",
+    "modified_at",
+    "archived",
+    "archived_at",
+    "deferred",
+    "deferred_at",
+    "deferred_until",
+    "in_degree",
+    "out_degree",
+    "heft",
+    "blocked",
+    "yaml_path",
+];
+
 /// Returns true when the on-disk `requirements_fts` table exists but is missing
 /// one or more of the columns the current binary writes. A drifted FTS table
 /// would make `insert_one`'s write hard-error (`table requirements_fts has no
@@ -1136,6 +1184,32 @@ fn fts_schema_drifted(conn: &Connection) -> bool {
         return false;
     }
     FTS_REQUIRED_COLUMNS
+        .iter()
+        .any(|required| !cols.iter().any(|c| c == required))
+}
+
+/// Returns true when the on-disk `requirements_cache` table exists but is
+/// missing one or more of the columns the current binary writes. A drifted
+/// table makes reads/writes hard-error (`table requirements_cache has no column
+/// named blocked`); detecting it structurally lets `open()` drop + force a
+/// rebuild from git regardless of the stamped schema version.
+///
+/// When the table does not exist yet (fresh cache) this returns false — the
+/// schema apply will create it correctly and no migration is needed.
+// trace:BUG-627
+fn cache_schema_drifted(conn: &Connection) -> bool {
+    let cols: Vec<String> = match conn.prepare("PRAGMA table_info(requirements_cache)") {
+        Ok(mut stmt) => match stmt.query_map([], |row| row.get::<_, String>(1)) {
+            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+            Err(_) => return false,
+        },
+        Err(_) => return false,
+    };
+    if cols.is_empty() {
+        // Table doesn't exist yet — schema apply will create it fresh.
+        return false;
+    }
+    CACHE_REQUIRED_COLUMNS
         .iter()
         .any(|required| !cols.iter().any(|c| c == required))
 }
@@ -2475,6 +2549,149 @@ mod tests {
         let current = Connection::open(dir.path().join("current.db")).unwrap();
         current.execute_batch(SCHEMA_SQL).unwrap();
         assert!(!fts_schema_drifted(&current));
+    }
+
+    #[test]
+    fn old_schema_cache_missing_column_self_heals_on_open() {
+        // BUG-627: a cache whose `requirements_cache` table predates the
+        // `blocked` column (TASK-902) must drop + rebuild on open rather than
+        // hard-erroring with `table requirements_cache has no column named
+        // blocked`. Worst-case (the operator's actual hit): the on-disk
+        // schema_version already matches the CURRENT SCHEMA_VERSION and the head
+        // SHA is stamped — `aida cache status` reports FRESH — yet the table is
+        // missing the column because a concurrent older-schema binary built it
+        // (or a torn rebuild). A version-stamp + HEAD-SHA check alone would NOT
+        // fire here; the structural column-existence detector must.
+        // trace:BUG-627
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+
+        // Hand-build an OLD-schema cache: the requirements_cache table is the
+        // pre-TASK-902 shape (no `blocked` column), but the meta version is
+        // stamped to the CURRENT value and a head SHA is recorded to prove the
+        // FRESH-but-broken trap a pure version/SHA check leaves.
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE cache_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE TABLE requirements_cache (
+                     id TEXT PRIMARY KEY NOT NULL,
+                     spec_id TEXT,
+                     agreed_id TEXT,
+                     title TEXT NOT NULL,
+                     description TEXT NOT NULL DEFAULT '',
+                     status TEXT NOT NULL,
+                     priority TEXT NOT NULL,
+                     owner TEXT NOT NULL DEFAULT '',
+                     assignee TEXT,
+                     feature TEXT NOT NULL DEFAULT '',
+                     req_type TEXT NOT NULL,
+                     tags_json TEXT NOT NULL DEFAULT '[]',
+                     created_at TEXT NOT NULL,
+                     modified_at TEXT NOT NULL,
+                     archived INTEGER NOT NULL DEFAULT 0,
+                     archived_at TEXT,
+                     deferred INTEGER NOT NULL DEFAULT 0,
+                     deferred_at TEXT,
+                     deferred_until TEXT,
+                     in_degree INTEGER NOT NULL DEFAULT 0,
+                     out_degree INTEGER NOT NULL DEFAULT 0,
+                     heft INTEGER NOT NULL DEFAULT 0,
+                     -- NOTE: no `blocked` column — pre-TASK-902 shape.
+                     yaml_path TEXT NOT NULL
+                 );
+                 CREATE VIRTUAL TABLE requirements_fts USING fts5(
+                     id UNINDEXED, spec_id, agreed_id, title, description, external_refs,
+                     tokenize = 'porter unicode61'
+                 );",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, SCHEMA_VERSION],
+            )
+            .unwrap();
+            // Stamp a head SHA so a naive open would think the cache is fresh.
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "stalehead"],
+            )
+            .unwrap();
+        }
+
+        // Open with the current binary — must self-heal (drop the drifted table)
+        // and clear the stamped head SHA so the next read rebuilds from git.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "self-heal should invalidate the recorded head SHA so a rebuild fires"
+        );
+
+        // A rebuild that writes the `blocked` column must now succeed (would have
+        // hard-errored against the old table). This is the `insert_one` write
+        // path the operator's `aida show`/`list` exercised.
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("BUG-627", "blocked drift heals"));
+        cache
+            .rebuild_from_store(&store, "newhead")
+            .expect("rebuild against the healed cache schema must succeed");
+
+        // And a query touching the `blocked` column must succeed, not error.
+        let rows = cache
+            .list_summaries(&ListFilter::default())
+            .expect("list reading the `blocked` column must succeed after self-heal");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("BUG-627"));
+    }
+
+    #[test]
+    fn cache_schema_drift_detects_missing_column_only() {
+        // trace:BUG-627 — the detector must fire on a drifted (old) cache table
+        // and stay quiet on a current one and on a fresh (absent) one.
+        let dir = tempdir().unwrap();
+
+        // Absent table → not drifted (fresh apply will create it).
+        let fresh = Connection::open(dir.path().join("fresh.db")).unwrap();
+        assert!(!cache_schema_drifted(&fresh));
+
+        // Old table missing the `blocked` column → drifted.
+        let old = Connection::open(dir.path().join("old.db")).unwrap();
+        old.execute_batch(
+            "CREATE TABLE requirements_cache (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 spec_id TEXT,
+                 agreed_id TEXT,
+                 title TEXT NOT NULL,
+                 description TEXT NOT NULL DEFAULT '',
+                 status TEXT NOT NULL,
+                 priority TEXT NOT NULL,
+                 owner TEXT NOT NULL DEFAULT '',
+                 assignee TEXT,
+                 feature TEXT NOT NULL DEFAULT '',
+                 req_type TEXT NOT NULL,
+                 tags_json TEXT NOT NULL DEFAULT '[]',
+                 created_at TEXT NOT NULL,
+                 modified_at TEXT NOT NULL,
+                 archived INTEGER NOT NULL DEFAULT 0,
+                 archived_at TEXT,
+                 deferred INTEGER NOT NULL DEFAULT 0,
+                 deferred_at TEXT,
+                 deferred_until TEXT,
+                 in_degree INTEGER NOT NULL DEFAULT 0,
+                 out_degree INTEGER NOT NULL DEFAULT 0,
+                 heft INTEGER NOT NULL DEFAULT 0,
+                 yaml_path TEXT NOT NULL
+             );",
+        )
+        .unwrap();
+        assert!(cache_schema_drifted(&old));
+
+        // Current schema → not drifted (no spurious rebuild on normal runs).
+        let current = Connection::open(dir.path().join("current.db")).unwrap();
+        current.execute_batch(SCHEMA_SQL).unwrap();
+        assert!(!cache_schema_drifted(&current));
     }
 
     #[test]
