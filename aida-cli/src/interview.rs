@@ -810,4 +810,102 @@ mod tests {
         assert!(q0["kind"].is_string());
         assert!(q0["prompt"].is_string());
     }
+
+    // End-to-end smoke test for the `aida spec interview --apply` WRITE path.
+    //
+    // The unit tests above lock the pure core (questions_for / apply_answers).
+    // This one closes the loop the integration boundary (handle_spec_interview)
+    // actually runs: fold answers, write the resolved spec back to a real
+    // git-canonical store, RELOAD it, and assert against the persisted spec.
+    // It mirrors handle_spec_interview's --apply branch without reaching into
+    // main.rs (private fn), exercising the same DatabaseBackend write.
+    //
+    // Three assertions, one test (TASK-854):
+    //   1. --apply WRITES the spec — the answers land in the persisted body.
+    //   2. the spec re-scores HIGHER after applying.
+    //   3. a BLANK answer is SKIPPED — it does not overwrite/clobber.
+    #[test]
+    fn apply_write_path_persists_rescores_and_skips_blanks() {
+        use aida_core::{DatabaseBackend, GitBackend, Requirement, RequirementType};
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Seed a gappy story spec: thin body, no acceptance, no parent. It maps
+        // to acceptance/description/not_vague/parent/priority questions.
+        let mut req = Requirement::new("interview apply smoke".into(), "Fix it.".into());
+        req.spec_id = Some("TASK-854".into());
+        req.req_type = RequirementType::Task;
+        let added = backend.add_requirement(req).unwrap();
+
+        // Score BEFORE (the same scorer handle_spec_interview runs).
+        let before = score(&SpecSnapshot::from_requirement(&added));
+
+        // Derive the questions, then answer ONLY the acceptance/parent gaps;
+        // leave the `parent` answer BLANK to prove blank == skip end to end.
+        let questions = questions_for(&before, None);
+        let answers: Vec<Answer> = questions
+            .iter()
+            .map(|q| Answer {
+                dimension: q.dimension.clone(),
+                answer: match q.kind {
+                    QuestionKind::Acceptance => {
+                        "The command exits 0 and the written body re-scores higher".to_string()
+                    }
+                    // BLANK parent answer — must be skipped, not written.
+                    QuestionKind::Parent => "   ".to_string(),
+                    QuestionKind::Priority => "high".to_string(),
+                },
+            })
+            .collect();
+
+        let edit = apply_answers(&added.description, &questions, &answers, "2026-06-18");
+        // The blank parent answer folded into no parent link (skip, not write).
+        assert!(
+            edit.parent_spec_id.is_none(),
+            "blank parent answer must be skipped, not written"
+        );
+
+        // Mirror handle_spec_interview's --apply write: fold body + priority,
+        // then persist via the backend.
+        let mut to_save = added.clone();
+        to_save.description = edit.new_description.clone();
+        if let Some(p) = &edit.priority {
+            to_save.priority = p.clone();
+        }
+        backend.update_requirement(&to_save).unwrap();
+
+        // (1) Reload from the store and confirm the answer text PERSISTED.
+        let reloaded = backend
+            .get_requirement_by_spec_id("TASK-854")
+            .unwrap()
+            .expect("spec persisted");
+        assert!(
+            reloaded.description.contains("re-scores higher"),
+            "interview answer must be written into the persisted spec body"
+        );
+        assert!(
+            reloaded.description.contains("## Acceptance"),
+            "the acceptance section must be present in the persisted body"
+        );
+
+        // (2) Re-score the RELOADED spec — readiness must strictly improve.
+        let after = score(&SpecSnapshot::from_requirement(&reloaded));
+        assert!(
+            after.score > before.score,
+            "applying the interview must raise readiness: {} -> {}",
+            before.score,
+            after.score
+        );
+
+        // (3) The skipped blank parent answer left no parent relationship behind.
+        assert!(
+            !reloaded
+                .relationships
+                .iter()
+                .any(|r| matches!(r.rel_type, aida_core::RelationshipType::Child)),
+            "blank parent answer must not have written a parent link"
+        );
+    }
 }
