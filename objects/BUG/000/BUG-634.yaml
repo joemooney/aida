@@ -18,12 +18,12 @@ description: |-
   Expected: ~13s -> sub-second per write. Verify with telemetry duration_ms before/after.
 
   PRIORITY: highest-leverage perf fix in the codebase — makes the whole tool feel interactive.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:08:27.442206837Z
-modified_at: 2026-06-27T03:08:42.291457240Z
+modified_at: 2026-06-27T03:12:34.854780534Z
 req_type: Bug
 tags:
 - cli
