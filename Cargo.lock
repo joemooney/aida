@@ -140,6 +140,7 @@ dependencies = [
 name = "aida-tui"
 version = "0.14.0"
 dependencies = [
+ "aida-core",
  "anyhow",
  "chrono",
  "clap",
@@ -148,6 +149,7 @@ dependencies = [
  "dirs",
  "libc",
  "portable-pty",
+ "pulldown-cmark 0.9.6",
  "ratatui",
  "serde",
  "serde_json",
