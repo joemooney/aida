@@ -22393,5 +22393,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2118
+- id: 019f0667-7653-78b0-aefe-37028a5632f8
+  target_id: 019f0667-6a32-7d91-8d52-fd9bf7c53e9a
+  author: aida
+  node_id: '1'
+  lamport: 2119
+  timestamp: 2026-06-27T00:07:51.635554535Z
+  kind: !Create
+    title: 'aida ps: exclude rollup-types (epics) from the orphan In-Progress pass'
+    description: 'aida ps orphan pass lists every In-Progress spec with no live session; since BUG-626 made epic status a child-rollup, In-Progress epics (common) all appear as orphaned (epics never have sessions) — noise. One-line filter: skip RequirementType::Epic (and other rollup/stateless types) in the orphan walk. The agent flagged this as a known one-liner.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2119
 node_id: '1'
