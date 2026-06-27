@@ -3,12 +3,12 @@ spec_id: TASK-935
 agreed_id: TASK-935
 title: Second usage-grounded streamlining pass (W2)
 description: Run aida usage --unused 30d + aida usage --errors; cut/hide/merge the next tranche of zero-/rare-call verbs and near-duplicate skills; record before/after top-level command count. Pure subtraction; data-grounded successor to TASK-850/851/852.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:48:47.552272878Z
-modified_at: 2026-06-27T15:42:31.561649863Z
+modified_at: 2026-06-27T15:54:25.028170808Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -21,3 +21,21 @@ comments:
   content: 'W2 cut-list delivered for operator review: docs/plans/2026-06-27-task-935-surface-cut-list.md (PR #1168, branch task-935-cut-list). Proposal only — nothing removed in code. Headline: visible top-level commands 84 -> proposed-after 78 (-6, all HIDE not remove). Top candidates: HIDE 6 zero-call parents (punts/load/worker/headless/scaffold/skill), MERGE changelog generate->refresh + doctor fsck->doctor check, HIDE doctor verify-relationships/queue load/role repair. KEEP machine-driven zero-call verbs (queue rework, session manifest, advisor/agent/mcp register, plan helpers). rel list 50pct error = BUG-573 artifact, not a cut. No skill deletions this tranche.'
   created_at: 2026-06-27T15:42:31.561649863Z
   modified_at: 2026-06-27T15:42:31.561649863Z
+history:
+- id: 019f09ca-0eab-75f0-9fd3-2af3c2f02c1e
+  author: aida-auto-bump
+  timestamp: 2026-06-27T15:54:24.811248973Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f09ca-0f84-7fb2-ad8c-2bf0e0935622
+  timestamp: 2026-06-27T15:54:25.028159701Z
+  agent: aida
+  commit_sha: 4a4386523f8e1f3b3eebbcb2195c5a65a405d8d2
+  summary: Completed via merge 4a438652
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-27T15:54:23.781778778Z
+  completion_sha: 4a4386523f8e1f3b3eebbcb2195c5a65a405d8d2
