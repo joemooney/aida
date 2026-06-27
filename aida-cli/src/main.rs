@@ -37842,6 +37842,96 @@ mod story_462_doctor_tests {
         };
     }
 
+    // trace:TASK-956 | ai:claude — the TASK-935 surface cuts hide verbs from
+    // `--help` with clap `hide = true` but MUST leave them dispatchable. These
+    // parse-tests are the bouncer: a hidden command that stops parsing would be
+    // a real capability regression, not just a help-text change.
+    #[test]
+    fn task_956_hidden_top_level_parents_still_dispatch() {
+        // punts / worker / headless are hidden from `aida --help` but still parse.
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "punts", "analyze"])
+                .unwrap()
+                .command,
+            Command::Punts(_)
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "worker", "directives"])
+                .unwrap()
+                .command,
+            Command::Worker(_)
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "headless", "tail"])
+                .unwrap()
+                .command,
+            Command::Headless(_)
+        ));
+    }
+
+    // trace:TASK-956 | ai:claude
+    #[test]
+    fn task_956_hidden_subcommands_still_dispatch() {
+        // doctor verify-relationships — hidden under `doctor`, still parses.
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "doctor", "verify-relationships", "--repair"])
+                .unwrap()
+                .command,
+            Command::Doctor {
+                cmd: Some(cli::DoctorCommand::VerifyRelationships { repair: true, .. }),
+                ..
+            }
+        ));
+        // queue load — hidden under `queue`, still parses.
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "queue", "load"])
+                .unwrap()
+                .command,
+            Command::Queue(cli::QueueCommand::Load { .. })
+        ));
+        // role repair — hidden under `role`, still parses.
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "role", "repair"])
+                .unwrap()
+                .command,
+            Command::Role(cli::RoleCommand::Repair { .. })
+        ));
+    }
+
+    // trace:TASK-956 | ai:claude — the two "merge" twins keep their own
+    // distinct behavior (they are NOT collapsed into the canonical sibling's
+    // logic, which would drop flags / change the output sink) but are hidden
+    // from their parent's `--help`. The canonical sibling stays visible.
+    #[test]
+    fn task_956_merged_twins_still_dispatch_their_own_logic() {
+        // changelog generate — hidden, but keeps its stdout/range surface
+        // distinct from the canonical `changelog refresh`.
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "changelog", "generate", "--since", "v0.7.0"])
+                .unwrap()
+                .command,
+            Command::Changelog(cli::ChangelogCommand::Generate { since: Some(_), .. })
+        ));
+        // The canonical `changelog refresh` is unchanged and still parses.
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "changelog", "refresh"])
+                .unwrap()
+                .command,
+            Command::Changelog(cli::ChangelogCommand::Refresh { .. })
+        ));
+        // doctor fsck — hidden, but keeps its own full-suite logic distinct
+        // from the canonical `doctor check` (which requires a category arg).
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "doctor", "fsck"])
+                .unwrap()
+                .command,
+            Command::Doctor {
+                cmd: Some(cli::DoctorCommand::Fsck),
+                ..
+            }
+        ));
+    }
+
     #[test]
     fn doctor_category_aliases_normalize() {
         assert_eq!(normalize_doctor_category("leases").unwrap(), "stale-leases");

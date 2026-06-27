@@ -1366,6 +1366,8 @@ pub enum RoleCommand {
     /// activity-log entries, preserve the header and every well-formed
     /// entry, back the original up, and rewrite the file cleanly. A
     /// healthy file is left untouched. Defaults to the active role.
+    // trace:TASK-956 | ai:claude — hidden from `role --help` (still runs).
+    #[clap(hide = true)]
     Repair { name: Option<String> },
 
     /// Print the active role's name and exit, or exit 1 with empty
@@ -2724,6 +2726,8 @@ pub enum DoctorCommand {
     /// dangling references from deleted reqs, bad imports, or
     /// hand-edits. With --repair, strips dangling entries.
     // trace:EPIC-19 | ai:claude
+    // trace:TASK-956 | ai:claude — hidden from `doctor --help` (still runs).
+    #[clap(hide = true)]
     VerifyRelationships {
         /// Strip dangling references in-place. Without this flag, the
         /// command reports only.
@@ -2763,6 +2767,14 @@ pub enum DoctorCommand {
     /// plus a few smaller checks. Exits non-zero if any check found a
     /// problem.
     // trace:EPIC-19 | ai:claude
+    // trace:TASK-956 | ai:claude — folded into the `doctor` surface: hidden
+    // from `doctor --help` (the canonical drift verb is `doctor check`), but
+    // the `fsck` name still runs its own full-suite integrity report. It is
+    // NOT a true alias of `doctor check` — `check` is the per-category
+    // multi-agent diagnostic and requires a category arg, whereas `fsck` runs
+    // the whole legacy suite with no arg, so collapsing it would drop a
+    // capability. Hiding preserves the name + behavior, off `--help`.
+    #[clap(hide = true)]
     Fsck,
 
     /// Check that STORY / BUG descriptions contain a recognized
@@ -3726,6 +3738,8 @@ pub enum QueueCommand {
     },
     /// Sum latest effort estimates for queued items.
     // trace:STORY-451 | ai:codex
+    // trace:TASK-956 | ai:claude — hidden from `queue --help` (still runs).
+    #[clap(hide = true)]
     Load {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
@@ -6652,7 +6666,8 @@ pub enum Command {
 
     /// Browse and analyze the local design-fork punt ledger.
     // trace:STORY-325 | ai:claude
-    #[clap(subcommand)]
+    // trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(subcommand, hide = true)]
     Punts(PuntsCommand),
 
     /// Autonomy + calibration views. Today this carries the three-way
@@ -7701,14 +7716,16 @@ pub enum Command {
     /// `--with-tools` to interleave tool calls) so the user gets clean text
     /// instead of pages of `null`.
     // trace:TASK-398 | ai:claude
-    #[clap(subcommand)]
+    // trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(subcommand, hide = true)]
     Headless(HeadlessCommand),
 
     /// Inspect the `aida-worker` shell function's directive channel —
     /// `aida worker directives` lists the FIFO of pending directives the
     /// worker will act on next.
     // trace:TASK-294 | ai:claude
-    #[clap(subcommand)]
+    // trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(subcommand, hide = true)]
     Worker(WorkerCommand),
 
     /// Generate, list, and acknowledge per-agent pickup briefs.
@@ -9363,6 +9380,15 @@ pub enum ChangelogCommand {
     /// Print the full changelog (or a bounded slice) to stdout, or write
     /// it to `--out`. The default scope is every `v*` tag plus an
     /// `[Unreleased]` section for commits since the most recent tag.
+    // trace:TASK-956 | ai:claude — folded into the `changelog` surface: hidden
+    // from `changelog --help` (the canonical idempotent rewrite is `changelog
+    // refresh`, used by release.sh), but the `generate` name still runs its own
+    // print-to-stdout logic. It is NOT a true alias of `refresh` — `generate`
+    // defaults to stdout over the full history with `--since/--until` range
+    // flags, whereas `refresh` writes CHANGELOG.md with `--released-as`, so
+    // collapsing it would change the sink and drop the range flags. Hiding
+    // preserves the name + behavior, off `--help`.
+    #[clap(hide = true)]
     Generate {
         /// Only include releases at or after this tag (inclusive). May
         /// be combined with `--until` to bound the span.
