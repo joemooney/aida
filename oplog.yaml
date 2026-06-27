@@ -22621,5 +22621,22 @@ operations:
 
       ## Seam
       EPIC-53 owns the data (enrich is_advisor_backlog with reasons + depth). EPIC-54 provides the content-panel slot. See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
-clock: 2137
+- id: 019f06ce-fea5-7401-a014-151891c01616
+  target_id: 019f0658-ba7b-7820-bf26-e7e0b9a518c9
+  author: aida
+  node_id: '1'
+  lamport: 2138
+  timestamp: 2026-06-27T02:00:56.741084300Z
+  kind: !SetDescription
+    description: |-
+      Mailbox reason-group + send-mail action in the cockpit. EPIC-53 content layer.
+
+      ## Acceptance
+      - A Mail group appears sourced from unread_inbox (owner=you, unread count); updates as mail arrives.
+      - A send action (wraps send_message) is exposed as a row action_fn per the seam contract.
+      - The mail source (rows from unread_inbox) and the send action are PURE/registerable (unit-testable without the shell).
+
+      ## Seam
+      EPIC-53 owns the mail source + send action. EPIC-54 owns the selection/dispatch gesture (how you pick a message + trigger reply/send). See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
+clock: 2138
 node_id: '1'
