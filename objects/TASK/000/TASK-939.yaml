@@ -3,12 +3,12 @@ spec_id: TASK-939
 agreed_id: TASK-939
 title: 'Diff-driven doc prompt at PR-open: nudge aida doc add for new public surface'
 description: Hook into /aida-pr; when a PR adds a new CLI subcommand/flag/MCP tool with no Doc --about, nudge for capture. Pairs with the shipped aida doc coverage gate.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:54:53.541067401Z
-modified_at: 2026-06-26T23:54:53.541067401Z
+modified_at: 2026-06-27T16:36:22.591627596Z
 req_type: Task
 tags:
 - doc-projection
