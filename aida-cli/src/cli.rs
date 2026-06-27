@@ -6822,6 +6822,43 @@ pub enum Command {
         id: String,
     },
 
+    /// Record a spec-scoped CLAIM so advisor-fanned work is visible to the
+    /// duplicate-dispatch gates.
+    ///
+    /// AIDA-launched work (`aida queue work`, `aida agent new --spec`) writes a
+    /// spec-scoped session lease, so a second pickup of the same spec is
+    /// refused. But when an advisor fans an implementer via the Claude Agent
+    /// tool (a worktree-isolated subagent), that work takes only a generic
+    /// `harness-worktree` lease — NOT spec-scoped — so the gate can't see it.
+    /// `aida claim <spec>` closes that gap: it writes a lightweight advisory
+    /// lease whose scope IS the spec id, keyed to the calling session's pid, so
+    /// the same gate now refuses a duplicate `aida queue work <spec>` and warns
+    /// on `aida edit <spec>`.
+    ///
+    /// Liveness-aware: the claim only holds while the claiming process is alive;
+    /// a dead claimer's claim is ignored (no crash-deadlock). Idempotent —
+    /// re-claiming your own spec is a no-op refresh. Clear it with
+    /// `aida unclaim <spec>`. Surfaces in `aida status <spec>` and `aida ps`.
+    // trace:TASK-957 | ai:claude
+    Claim {
+        /// SPEC-ID, agreed-id, or UUID to claim.
+        spec: String,
+
+        /// Optional worktree path to record on the claim (where the fanned
+        /// implementer is working). Informational; the claim's liveness is the
+        /// claiming process, not this path.
+        #[clap(long, value_name = "PATH")]
+        worktree: Option<String>,
+    },
+
+    /// Inverse of `aida claim` — removes the caller's spec-scoped claim so a
+    /// fresh `aida queue work <spec>` / `aida edit <spec>` no longer sees it.
+    // trace:TASK-957 | ai:claude
+    Unclaim {
+        /// SPEC-ID, agreed-id, or UUID to unclaim.
+        spec: String,
+    },
+
     /// Assign a spec to a team member — sets the durable assignee and routes
     /// the spec into that member's work queue so it shows in their
     /// `aida queue list`. Idempotent: re-running with the same target is a
