@@ -139,13 +139,36 @@ pub fn parse_pr_rebase_config(toml_body: &str) -> PrRebaseConfig {
     PrRebaseConfig { smoke_check }
 }
 
-/// Read + parse `[pr-rebase]` from `<project_root>/.aida/config.toml`.
-/// Soft-fails to the default config on missing file / parse error.
+/// Read + parse `[pr-rebase]` under the TASK-969 config trust boundary.
+///
+/// `smoke_check` is a CODE-EXECUTING field — the rebase handler runs it via
+/// `sh -c` inside the checked-out PR worktree — so it must NOT be read from
+/// the branch-local working copy a pushed branch controls (that would let a
+/// malicious branch self-enable arbitrary code execution during an
+/// autonomous drain). Instead we read `.aida/config.toml` as it exists on the
+/// TRUSTED DEFAULT BRANCH (`origin/<default>`), via
+/// `trusted_config::read_trusted_config_toml`.
+///
+/// Fail-closed: when the trusted copy can't be read (offline fresh clone,
+/// detached checkout, file absent on the default branch, …) the configured
+/// command is dropped and the caller's safe built-in default applies — the
+/// branch-local copy is never consulted.
+// trace:TASK-969
 pub fn read_pr_rebase_config(project_root: &Path) -> PrRebaseConfig {
-    let path = project_root.join(".aida").join("config.toml");
-    match std::fs::read_to_string(&path) {
-        Ok(body) => parse_pr_rebase_config(&body),
-        Err(_) => PrRebaseConfig::default(),
+    let trusted = crate::trusted_config::read_trusted_config_toml(project_root);
+    pr_rebase_config_from_trusted(trusted.as_deref())
+}
+
+/// Pure trusted-vs-fail-closed selection, split out so it's unit-testable
+/// without git. `Some(body)` is the trusted default-branch config TOML and is
+/// parsed normally; `None` means the trusted copy was unreadable, which
+/// fail-closes to the default config (no configured command → built-in
+/// default applies).
+// trace:TASK-969
+pub fn pr_rebase_config_from_trusted(trusted_toml: Option<&str>) -> PrRebaseConfig {
+    match trusted_toml {
+        Some(body) => parse_pr_rebase_config(body),
+        None => PrRebaseConfig::default(),
     }
 }
 
@@ -869,6 +892,46 @@ enforcement = "warn"
     fn parse_pr_rebase_config_garbage_is_default() {
         let c = parse_pr_rebase_config("this is not toml = [[[");
         assert_eq!(c, PrRebaseConfig::default());
+    }
+
+    // ---- TASK-969 trust-boundary selection ----
+
+    #[test]
+    fn trusted_config_uses_default_branch_smoke_check() {
+        // When the trusted (default-branch) copy is readable, its
+        // smoke_check is the one that takes effect.
+        let trusted = "[pr-rebase]\nsmoke_check = \"cargo build --release\"\n";
+        let c = pr_rebase_config_from_trusted(Some(trusted));
+        assert_eq!(c.smoke_check.as_deref(), Some("cargo build --release"));
+    }
+
+    #[test]
+    fn trusted_config_fail_closed_drops_command_when_unreadable() {
+        // Trusted copy unreadable (None) → NO configured command, so the
+        // handler falls back to its safe built-in default. The branch-local
+        // copy is never consulted by this function.
+        let c = pr_rebase_config_from_trusted(None);
+        assert_eq!(c, PrRebaseConfig::default());
+        assert!(c.smoke_check.is_none());
+        // And a fail-closed config + non-Rust default resolves to "skip".
+        assert_eq!(resolve_smoke_check(false, &c, ""), None);
+    }
+
+    #[test]
+    fn trusted_config_does_not_read_branch_local_hostile_command() {
+        // Simulate the attack outcome at the selection layer: the only input
+        // pr_rebase_config_from_trusted ever sees is the TRUSTED body. A
+        // hostile branch-local command can only reach execution if it appears
+        // in the trusted body, which it cannot (it lives on the branch, not
+        // the default-branch copy the caller passes here).
+        let trusted = "[pr-rebase]\nsmoke_check = \"cargo build\"\n";
+        let c = pr_rebase_config_from_trusted(Some(trusted));
+        assert_eq!(c.smoke_check.as_deref(), Some("cargo build"));
+        assert!(!c
+            .smoke_check
+            .as_deref()
+            .unwrap_or_default()
+            .contains("curl"));
     }
 
     #[test]

@@ -101,6 +101,8 @@ mod team;
 mod test_env;
 // trace:TASK-661 | ai:claude
 mod triage_lease;
+// trace:TASK-969 | ai:claude — trust boundary for code-executing project config.
+mod trusted_config;
 mod usage;
 // trace:TASK-877 | ai:claude — user/project-defined `aida` command aliases.
 mod user_alias;
@@ -56287,6 +56289,10 @@ fn pr_rebase_handler(
     }
 
     // ---- Step 7: smoke check. ----
+    // TASK-969 trust boundary: smoke_check is executed via `sh -c` below, so
+    // read_pr_rebase_config takes it from the TRUSTED default-branch copy of
+    // .aida/config.toml (origin/<default>), not the branch-local working copy
+    // a pushed branch controls. Fail-closed to the built-in default.
     let cfg = read_pr_rebase_config(&project_root);
     let project_default = default_smoke_check(&project_root);
     let smoke_cmd = resolve_smoke_check(no_smoke, &cfg, &project_default);
