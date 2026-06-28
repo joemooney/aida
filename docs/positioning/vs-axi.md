@@ -37,6 +37,7 @@ A coherent ecosystem, not scattered tools — and with real traction:
 | `treehouse` | ~430 | "Manage worktrees without managing worktrees" | our `isolation:worktree` fan-out |
 | `tasks-axi` | ~11 | **Task/backlog manager for agents** — the direct neighbor | `aida` itself (the backlog/queue surface) |
 | `gh-axi` | ~95 | GitHub CLI for agents (token-efficient) | our forge layer (EPIC-35 / STORY-621) |
+| `lavish-axi` | ~1k | "HTML is the new markdown" — opens an agent-generated HTML artifact in the browser, human pinpoint-annotates elements, agent long-polls + revises | — (a **presentation/review layer**; orthogonal to AIDA's substrate. Building it = the surface-complexity the Trojan-horse positioning rejects) |
 
 Delivery is itself a design choice: `firstmate` is *"not a harness, not a CLI —
 a directory"* (`AGENTS.md` + skills + bash). `tasks-axi` ships as an Agent Skill
