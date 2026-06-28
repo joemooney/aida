@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:44:37.596692409Z
-modified_at: 2026-06-28T22:44:41.808343903Z
+modified_at: 2026-06-28T22:44:49.117412583Z
 req_type: Story
 tags:
 - ambient-meter
@@ -20,3 +20,6 @@ relationships:
 - rel_type: Child
   target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
   created_at: 2026-06-28T22:44:41.808343903Z
+deferred: true
+deferred_at: 2026-06-28T22:44:49.117412583Z
+deferred_until: EPIC-53 cockpit lands (this is its ambient projection; value depends on people working outside aida tui — capture now, build after EPIC-53/54 stabilize, per bugs-before-features)
