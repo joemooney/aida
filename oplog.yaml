@@ -24163,5 +24163,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2302
+- id: 019f102e-fefb-7503-acfd-b52e42a44782
+  target_id: 019f102e-f218-77e2-bdde-71460279b37d
+  author: aida
+  node_id: '1'
+  lamport: 2303
+  timestamp: 2026-06-28T21:42:23.227488968Z
+  kind: !Create
+    title: Reproduce the AXI MCP-vs-token-efficient-CLI benchmark on AIDA tools; decide MCP weighting
+    description: 'AXI (kunchenguid) publishes benchmarks claiming agent-native token-efficient CLIs beat MCP on cost/success/turns (gh-axi 100pct/0.05usd/3turns vs GitHub MCP 87pct/0.15usd/6turns). AIDA README calls the MCP server the highest-leverage surface — directly challenged. Reproduce the comparison on AIDAs OWN surfaces: pick representative agent tasks, measure cost/success/turns for (a) the current CLI, (b) the MCP tools, (c) a token-efficient CLI output mode (TOON/minimal schema). Decide: is MCP over-weighted? Should the token-efficient CLI be the PRIMARY agent surface with MCP secondary? Output a decision + evidence. Load-bearing strategic question. See docs/positioning/vs-axi.md + docs/competitive-analysis/2026-06-28-axi-ecosystem.md.'
+    req_type: Spike
+    status: Approved
+    priority: High
+clock: 2303
 node_id: '1'
