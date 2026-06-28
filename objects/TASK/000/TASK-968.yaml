@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:07:30.646503566Z
-modified_at: 2026-06-28T22:07:30.646503566Z
+modified_at: 2026-06-28T22:07:35.475349168Z
 req_type: Task
 tags:
 - axi
@@ -17,3 +17,7 @@ tags:
 - from:axi-review
 - parent:EPIC-56
 - reliability
+relationships:
+- rel_type: Child
+  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
+  created_at: 2026-06-28T22:07:35.475349168Z
