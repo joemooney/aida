@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:10:17.133315871Z
-modified_at: 2026-06-28T22:10:17.133315871Z
+modified_at: 2026-06-28T22:10:20.771450074Z
 req_type: Spike
 tags:
 - axi
@@ -17,4 +17,8 @@ tags:
 - from:axi-review
 - parent:EPIC-56
 - strategic
+relationships:
+- rel_type: Child
+  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
+  created_at: 2026-06-28T22:10:20.771450074Z
 human_only: true
