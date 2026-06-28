@@ -3,12 +3,12 @@ spec_id: TASK-965
 agreed_id: TASK-965
 title: 'Worktree-tangle spawn gate: assert worktree root != primary checkout before fan-out'
 description: firstmate refuses to launch a crewmate unless the resolved worktree root differs from the primary checkout, and alarms if the primary strands on a feature branch. This is exactly our fan-out incident memory (a bare agent checkout-b in the main repo aborts the next merge --ff-only). We defend it with a memory RULE; our own substrate-as-bouncer principle says ship a GATE. Add the assertion at aida agent new / fan-out + an aida status/ps alarm when the primary repo is on a non-default branch with in-flight leases.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:51.754760275Z
-modified_at: 2026-06-28T22:07:00.510461241Z
+modified_at: 2026-06-28T22:33:58.291237348Z
 req_type: Task
 tags:
 - axi
@@ -27,3 +27,21 @@ relationships:
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:07:00.510451332Z
   created_by: joe
+history:
+- id: 019f105e-38ae-7d03-bc98-278214dc1691
+  author: aida-auto-bump
+  timestamp: 2026-06-28T22:33:58.190202248Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f105e-3913-7792-b40e-8a3953ffaf79
+  timestamp: 2026-06-28T22:33:58.291230972Z
+  agent: aida
+  commit_sha: b2f37396749d523e7947de3c3439d3d69eb900dd
+  summary: Completed via merge b2f37396
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T22:33:57.177363644Z
+  completion_sha: b2f37396749d523e7947de3c3439d3d69eb900dd
