@@ -3,12 +3,12 @@ spec_id: TASK-967
 agreed_id: TASK-967
 title: Drain exit summary with token accounting + diff stats to usage.jsonl
 description: gnhf prints a permanent exit summary (elapsed, iterations, cumulative tokens, diff stats, log paths). On drain exit emit specs shipped/shelved/skipped, iterations, cumulative tokens + tokens/spec, diff stats, findings; persist to .aida/usage.jsonl so aida usage can chart cost-per-drain. Feeds the calibration + budget-dispatching loop.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:07:20.767186923Z
-modified_at: 2026-06-28T22:07:29.934291506Z
+modified_at: 2026-06-28T22:50:18.034647278Z
 req_type: Task
 tags:
 - axi
