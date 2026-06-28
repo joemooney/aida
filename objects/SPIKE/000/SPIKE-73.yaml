@@ -3,12 +3,12 @@ spec_id: SPIKE-73
 agreed_id: SPIKE-73
 title: Reproduce the AXI MCP-vs-token-efficient-CLI benchmark on AIDA tools; decide MCP weighting
 description: 'AXI (kunchenguid) publishes benchmarks claiming agent-native token-efficient CLIs beat MCP on cost/success/turns (gh-axi 100pct/0.05usd/3turns vs GitHub MCP 87pct/0.15usd/6turns). AIDA README calls the MCP server the highest-leverage surface — directly challenged. Reproduce the comparison on AIDAs OWN surfaces: pick representative agent tasks, measure cost/success/turns for (a) the current CLI, (b) the MCP tools, (c) a token-efficient CLI output mode (TOON/minimal schema). Decide: is MCP over-weighted? Should the token-efficient CLI be the PRIMARY agent surface with MCP secondary? Output a decision + evidence. Load-bearing strategic question. See docs/positioning/vs-axi.md + docs/competitive-analysis/2026-06-28-axi-ecosystem.md.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T21:42:19.928567429Z
-modified_at: 2026-06-28T22:59:41.441347657Z
+modified_at: 2026-06-28T23:09:27.046206532Z
 req_type: Spike
 tags:
 - axi
@@ -37,4 +37,22 @@ comments:
   content: 'Benchmark shipped: bench/agent-surface/ (PR #1182). Initial run (sonnet, 5 tasks x 2 repeats): CLI 80pct / 44k-tok / 0.0309usd vs MCP 80pct / 95k-tok / 0.0676usd. MCP costs ~2.2x tokens+dollars for SAME success+turns; cold MCP ~5x (0.25 vs 0.05usd). The ~69-tool upfront schema load is the entire tax; context-window consumption (95k vs 44k) is not cacheable away. Verdict: MCP IS over-weighted on cost/context for routine single-shot ops, with no efficiency win. Leverage is structural (typed/discoverable), not cost. Recommend: TASK-964 token-efficient CLI as PRIMARY agent surface, MCP secondary; consider lazy MCP tool loading (ToolSearch) as default. Caveats: n=2/cell; single-call tasks favor CLI; toon column still TODO (TASK-964).'
   created_at: 2026-06-28T22:59:41.441347657Z
   modified_at: 2026-06-28T22:59:41.441347657Z
+history:
+- id: 019f107e-b425-7191-9274-67576fce71fa
+  author: aida-auto-bump
+  timestamp: 2026-06-28T23:09:26.949875357Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f107e-b486-7790-99d5-719dc7d8e736
+  timestamp: 2026-06-28T23:09:27.046200895Z
+  agent: aida
+  commit_sha: 24627943b6abc2bf2e1b059a57156240f1bcdf7a
+  summary: Completed via merge 24627943
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T23:09:25.938513091Z
+  completion_sha: 24627943b6abc2bf2e1b059a57156240f1bcdf7a
 human_only: true
