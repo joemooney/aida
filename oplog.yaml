@@ -24379,5 +24379,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2320
+- id: 019f1048-9453-7452-97f5-9138abbc12d2
+  target_id: 019f1048-89ad-7543-aa2a-c82643852675
+  author: aida
+  node_id: '1'
+  lamport: 2321
+  timestamp: 2026-06-28T22:10:19.859920381Z
+  kind: !Create
+    title: Agent-agnostic drain backend (claude/codex behind a trait)
+    description: 'no-mistakes runs the same gate across claude/codex/opencode/copilot/acp behind one Agent interface; AIDAs drain is hardcoded to claude -p. Our cross-vendor thesis wants neutrality but the keystone loop is single-vendor. Abstract phase-launch behind a backend trait (prompt/cwd/env/schema/stream) with claude+codex adapters via [drain] agent. Mirrors EPIC-35 forge abstraction for the implementer. STRATEGIC: L.'
+    req_type: Spike
+    status: Approved
+    priority: Medium
+clock: 2321
 node_id: '1'
