@@ -448,6 +448,60 @@ pub fn count_findings(sections: &[SourceSection]) -> usize {
         .sum()
 }
 
+/// Label prefixing an origin-group header — the spec (or PR) the findings in
+/// the group are ABOUT. Distinct from [`FINDING_LABEL`] so a reader can't
+/// mistake the linked spec for the finding's own id.
+// trace:BUG-641 | ai:claude
+pub const ABOUT_LABEL: &str = "about";
+
+/// Label prefixing a finding row — the finding's OWN id.
+// trace:BUG-641 | ai:claude
+pub const FINDING_LABEL: &str = "finding";
+
+/// Render the origin-group header for the triage view: the spec or PR the
+/// findings in the group are ABOUT, prefixed with [`ABOUT_LABEL`] so it is
+/// plainly the *linked* spec, never the finding's own id. The caller colours
+/// the returned string.
+// trace:BUG-641 | ai:claude
+pub fn render_origin_header(origin: &str) -> String {
+    format!("{ABOUT_LABEL} {origin}")
+}
+
+/// Render one labeled triage row. The finding's OWN id leads the line behind
+/// the [`FINDING_LABEL`] prefix, so paired with the [`render_origin_header`]
+/// `about <spec>` line above it the two ids are unambiguous: `about STORY-9`
+/// is the linked spec, `finding TASK-12` is the finding itself. Returns plain
+/// (uncoloured) text; the caller indents and prints it.
+// trace:BUG-641 | ai:claude
+pub fn render_finding_row(row: &FindingRow) -> String {
+    // STORY-467: recurrence >= 2 prints a `×N` suffix; the common N=1 case
+    // stays clean.
+    let recur_suffix = if row.recurrence > 1 {
+        format!(" ×{}", row.recurrence)
+    } else {
+        String::new()
+    };
+    match &row.kind {
+        // Implementer + advisor findings carry a `kind:` category; review
+        // findings don't. trace:STORY-285 trace:STORY-467
+        Some(k) => format!(
+            "{FINDING_LABEL} {:<14} {:<9} {:<20} {}{}",
+            row.display_id,
+            row.severity.label(),
+            k,
+            row.title,
+            recur_suffix,
+        ),
+        None => format!(
+            "{FINDING_LABEL} {:<14} {:<9} {}{}",
+            row.display_id,
+            row.severity.label(),
+            row.title,
+            recur_suffix,
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -892,5 +946,76 @@ mod tests {
         let view = build_findings_view(&summaries, &FindingsFilter::default());
         assert_eq!(count_findings(&view), 1);
         assert_eq!(view[0].groups[0].rows[0].display_id, "TASK-1");
+    }
+
+    // BUG-641: the SPIKE-73 `find_finding` benchmark failed because the
+    // finding's own id and the spec it is linked to rendered as two bare,
+    // adjacent ids — a reader couldn't tell which was which. The render now
+    // labels both: the origin header is `about <linked-spec>`, every row is
+    // `finding <finding-id> …`. These assertions pin the labeled positions.
+    #[test]
+    fn origin_header_labels_the_linked_spec() {
+        // The implementer was working STORY-9 when it filed the finding, so
+        // STORY-9 is the *linked* spec the group is ABOUT — it must render
+        // behind the `about` label, never as a bare id.
+        let header = render_origin_header("STORY-9");
+        assert_eq!(header, "about STORY-9");
+        assert!(header.starts_with(ABOUT_LABEL));
+        assert!(header.contains("STORY-9"));
+    }
+
+    #[test]
+    fn finding_row_labels_finding_id_distinct_from_linked_spec() {
+        // TASK-12 is the finding's OWN id; STORY-9 (above, in the origin
+        // header) is the spec it is about. The row leads with `finding TASK-12`
+        // so the finding-id and the linked-spec sit in clearly labeled,
+        // non-confusable positions.
+        let row = FindingRow {
+            display_id: "TASK-12".to_string(),
+            title: "null deref in parser".to_string(),
+            severity: Severity::Major,
+            kind: Some("bug-spotted".to_string()),
+            recurrence: 1,
+        };
+        let rendered = render_finding_row(&row);
+        // The finding-id is labeled and leads the row.
+        assert!(rendered.starts_with(&format!("{FINDING_LABEL} TASK-12")));
+        // The linked spec from the header is NOT in the row — they can't be
+        // conflated.
+        assert!(!rendered.contains("STORY-9"));
+        assert!(rendered.contains("major"));
+        assert!(rendered.contains("bug-spotted"));
+        assert!(rendered.contains("null deref in parser"));
+    }
+
+    #[test]
+    fn finding_row_without_kind_still_labels_finding_id() {
+        // Review findings carry no `kind:` category; the label + leading
+        // finding-id position must survive that branch too.
+        let row = FindingRow {
+            display_id: "TASK-1".to_string(),
+            title: "unchecked unwrap".to_string(),
+            severity: Severity::Minor,
+            kind: None,
+            recurrence: 1,
+        };
+        let rendered = render_finding_row(&row);
+        assert!(rendered.starts_with(&format!("{FINDING_LABEL} TASK-1")));
+        assert!(rendered.contains("minor"));
+        assert!(rendered.contains("unchecked unwrap"));
+    }
+
+    #[test]
+    fn finding_row_keeps_recurrence_suffix() {
+        let row = FindingRow {
+            display_id: "TASK-7".to_string(),
+            title: "flaky test".to_string(),
+            severity: Severity::Minor,
+            kind: Some("followup-suggestion".to_string()),
+            recurrence: 4,
+        };
+        let rendered = render_finding_row(&row);
+        assert!(rendered.starts_with(&format!("{FINDING_LABEL} TASK-7")));
+        assert!(rendered.contains("×4"));
     }
 }
