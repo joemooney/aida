@@ -3986,35 +3986,16 @@ fn handle_findings_command(
                     format!("From {}", section.source.label()).magenta().bold()
                 );
                 for group in &section.groups {
-                    println!("  {}", group.origin.cyan().bold());
+                    // BUG-641: the origin is the spec/PR the findings are
+                    // ABOUT — render it `about <spec>` so it can't be misread
+                    // as a finding's own id (each row below leads with
+                    // `finding <id>`). trace:BUG-641
+                    println!(
+                        "  {}",
+                        findings::render_origin_header(&group.origin).cyan().bold()
+                    );
                     for row in &group.rows {
-                        // STORY-467: recurrence ≥ 2 prints a `×N` suffix; the
-                        // common N=1 case stays clean.
-                        let recur_suffix = if row.recurrence > 1 {
-                            format!(" ×{}", row.recurrence)
-                        } else {
-                            String::new()
-                        };
-                        match &row.kind {
-                            // Implementer + advisor findings carry a `kind:`
-                            // category; review findings don't. trace:STORY-285
-                            // trace:STORY-467
-                            Some(k) => println!(
-                                "    {:<20} {:<9} {:<14} {}{}",
-                                k,
-                                row.severity.label(),
-                                row.display_id,
-                                row.title,
-                                recur_suffix,
-                            ),
-                            None => println!(
-                                "    {:<9} {:<14} {}{}",
-                                row.severity.label(),
-                                row.display_id,
-                                row.title,
-                                recur_suffix,
-                            ),
-                        }
+                        println!("    {}", findings::render_finding_row(row));
                     }
                 }
             }
