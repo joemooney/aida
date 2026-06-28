@@ -1,0 +1,16 @@
+id: 019f1045-2667-7460-9ff3-f203df44eb21
+spec_id: EPIC-56
+agreed_id: EPIC-56
+title: Apply AXI agentic-ergonomics lessons (no-mistakes / firstmate / gnhf / treehouse / tasks-axi)
+description: 'Umbrella for the lessons mined from the kunchenguid AXI ecosystem (2026-06-28 review). Three clusters: agent-interface ergonomics (the AXI 10 principles), drain/worktree reliability, and supervision architecture. See docs/positioning/vs-axi.md + docs/competitive-analysis/2026-06-28-axi-ecosystem.md. Children carry the specific changes + effort.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:06:35.111359647Z
+modified_at: 2026-06-28T22:06:35.111359647Z
+req_type: Epic
+tags:
+- axi
+- competitive
+- from:axi-review
