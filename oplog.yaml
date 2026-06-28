@@ -24295,5 +24295,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2313
+- id: 019f1046-c821-7c10-b5de-31ef82d07ae0
+  target_id: 019f1046-bb3a-7a00-bd52-074e6d185da9
+  author: aida
+  node_id: '1'
+  lamport: 2314
+  timestamp: 2026-06-28T22:08:22.049696630Z
+  kind: !Create
+    title: 'Agent-mode output polish: truncate show + structured errors on stdout + count-lines'
+    description: 'Three small AXI-principle fixes for agent mode (keep human path): (1) truncate aida show descriptions to ~1000 chars with a size hint + --full; (2) emit errors as a structured error:/help: block on STDOUT (agents read stdout; exit codes already correct); (3) inline count: N of M aggregate header on list/search/queue. Relates to TASK-964 (the TOON renderer).'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2314
 node_id: '1'
