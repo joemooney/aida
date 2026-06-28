@@ -15,6 +15,7 @@ mod backlog;
 mod burndown;
 mod calibration;
 mod changelog;
+mod ci_idle_timeout;
 mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
@@ -51979,34 +51980,137 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     CiProbe::Green { pr_number }
 }
 
-/// Block until the branch's CI run reaches a terminal state. Polls every
-/// 30s; gives up after 30 minutes (60 polls) and returns NoSignal so the
+/// Block until the branch's CI run reaches a terminal state. Polls every 30s.
+///
+/// TASK-968: the wait runs an IDLE timeout (re-arms on progress) with a SEPARATE
+/// absolute ceiling, instead of the old flat absolute timeout. The idle deadline
+/// resets whenever CI posts progress (a check appears/transitions, the check set
+/// changes) OR the PR head / base tip advances (the PR got rebased), so a
+/// legitimately-slow-but-moving CI keeps its monitor; only a genuine STALL dies
+/// after the idle window. The absolute ceiling still bounds a forever-progressing
+/// wait so it can't run unbounded. Returns NoSignal on either timeout so the
 /// caller proceeds rather than hanging. Ctrl+C interrupts cleanly.
-/// trace:TASK-111 | ai:claude
+/// Windows: `AIDA_WORKER_CI_IDLE` (default 600s) / `AIDA_WORKER_CI_ABSOLUTE`
+/// (default 5400s).
+// trace:TASK-111 trace:TASK-968 | ai:claude
 fn wait_for_ci_terminal(branch: &str) -> CiProbe {
+    use crate::ci_idle_timeout::{ci_progress_fingerprint, ci_wait_verdict, CiWaitVerdict};
     const POLL_INTERVAL_SECS: u64 = 30;
-    const MAX_POLLS: u32 = 60;
+    let idle_window = crate::ci_idle_timeout::ci_idle_window_secs();
+    let absolute_ceiling = crate::ci_idle_timeout::ci_absolute_ceiling_secs();
+
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let default_ref = detect_default_branch_ref(&project_root);
+
     let started = std::time::Instant::now();
-    for poll in 0..MAX_POLLS {
+    let mut last_progress = started;
+    let mut last_fingerprint: Option<String> = None;
+
+    loop {
         std::thread::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
         let probe = ci_probe_via_forge(branch); // STORY-516: forge-routed
-        let elapsed = started.elapsed().as_secs();
+        let total_elapsed = started.elapsed().as_secs();
+
+        // Progress detection: re-arm the idle deadline whenever the CI check set
+        // transitions/appears OR the PR head / base tip advances (a rebase).
+        let base_tip = default_ref
+            .as_deref()
+            .and_then(|r| git_rev_parse_quiet(&project_root, r));
+        let rollup = ci_rollup_json_for_branch(branch);
+        let fingerprint = ci_progress_fingerprint(&rollup, base_tip.as_deref());
+        let progressed = match &last_fingerprint {
+            // The first observation is the baseline, not progress.
+            Some(prev) => *prev != fingerprint,
+            None => false,
+        };
+        if progressed {
+            last_progress = std::time::Instant::now();
+        }
+        last_fingerprint = Some(fingerprint);
+        let idle_elapsed = last_progress.elapsed().as_secs();
+
         match &probe {
             CiProbe::InProgress { pr_number } => {
-                eprintln!(
-                    "  {} CI still running on PR-{} ({}m {}s elapsed, poll {}/{})",
-                    crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
-                    pr_number,
-                    elapsed / 60,
-                    elapsed % 60,
-                    poll + 1,
-                    MAX_POLLS,
-                );
+                match ci_wait_verdict(total_elapsed, idle_elapsed, idle_window, absolute_ceiling) {
+                    CiWaitVerdict::Continue => {
+                        eprintln!(
+                            "  {} CI still running on PR-{} ({}m {}s elapsed, {}s since progress)",
+                            crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
+                            pr_number,
+                            total_elapsed / 60,
+                            total_elapsed % 60,
+                            idle_elapsed,
+                        );
+                    }
+                    CiWaitVerdict::IdleTimeout => {
+                        return CiProbe::NoSignal(format!(
+                            "CI idle for {idle_window}s with no progress — giving up"
+                        ));
+                    }
+                    CiWaitVerdict::AbsoluteTimeout => {
+                        return CiProbe::NoSignal(format!(
+                            "CI wait hit absolute ceiling ({}m) — giving up",
+                            absolute_ceiling / 60
+                        ));
+                    }
+                }
             }
             _ => return probe,
         }
     }
-    CiProbe::NoSignal("--wait-ci gave up after 30m".to_string())
+}
+
+/// TASK-968: fetch the raw `statusCheckRollup` (+ `headRefOid`) JSON for the
+/// branch's open PR, for the idle-timeout progress fingerprint. Mirrors
+/// `probe_ci_state_for_branch`'s `gh pr list` call but returns the raw stdout
+/// instead of a parsed verdict. Empty string on any failure (gh missing, no PR,
+/// network blip) — the fingerprint then degrades to the base tip only, which
+/// still re-arms on a rebase.
+// trace:TASK-968 | ai:claude
+fn ci_rollup_json_for_branch(branch: &str) -> String {
+    let Some(gh) = resolve_gh_binary() else {
+        return String::new();
+    };
+    let output = std::process::Command::new(&gh)
+        .args([
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "open",
+            "--json",
+            "number,statusCheckRollup,headRefOid",
+            "--limit",
+            "1",
+        ])
+        .output();
+    match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => String::new(),
+    }
+}
+
+/// TASK-968: resolve a ref to its commit SHA via `git rev-parse`, quietly.
+/// `None` on any failure — the caller folds it into the progress fingerprint,
+/// so a missing base tip just drops that one progress signal.
+// trace:TASK-968
+fn git_rev_parse_quiet(project_root: &std::path::Path, refname: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--verify", "--quiet", refname])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 /// BUG-273: `gh run watch` is an interactive terminal renderer. When stdout
