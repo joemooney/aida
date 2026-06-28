@@ -24435,5 +24435,17 @@ operations:
   timestamp: 2026-06-28T22:50:18.202039804Z
   kind: !SetStatus
     status: In Progress
-clock: 2325
+- id: 019f107f-083c-78d1-99b5-1b281c5a0a5a
+  target_id: 019f107e-d3a5-7252-867e-23c3fea4e4fa
+  author: aida
+  node_id: '1'
+  lamport: 2326
+  timestamp: 2026-06-28T23:09:48.476034645Z
+  kind: !Create
+    title: 'aida findings list: finding-ID vs linked-spec reversed in layout (agents misread it)'
+    description: 'Surfaced by the SPIKE-73 benchmark: the find_finding task failed on BOTH the CLI and MCP conditions because aida findings list presents the finding-ID and the linked-spec-ID in a layout that an agent (and human) misreads — it is a CLI-CLARITY issue, not an MCP delta. Fix the layout so the finding-ID and its linked spec are unambiguous (clear labels / column order). Low effort, real legibility win.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2326
 node_id: '1'
