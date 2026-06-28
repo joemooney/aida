@@ -41756,6 +41756,9 @@ fn agent_new_with_config(
     }
 
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
+    // checkout. trace:TASK-965 | ai:claude
+    assert_no_worktree_tangle(&plan, &project_root)?;
     let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
 
     eprintln!(
@@ -41870,6 +41873,9 @@ fn agent_new_bg_dispatch(
     }
 
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
+    // checkout. trace:TASK-965 | ai:claude
+    assert_no_worktree_tangle(&plan, &project_root)?;
     let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
 
     eprintln!(
@@ -46754,6 +46760,239 @@ fn current_branch_at(path: &std::path::Path) -> Option<String> {
         None
     } else {
         Some(s)
+    }
+}
+
+// ─── TASK-965: worktree-tangle gate (substrate-as-bouncer) ─────────────────
+//
+// AIDA's fan-out incident: a bare agent `git checkout -b`s in the MAIN repo,
+// leaving the primary checkout parked on a feature branch, so the next
+// `git merge --ff-only origin/main` aborts. We used to defend this with a memory
+// RULE only; the substrate-as-bouncer principle says ship a GATE. Two pure
+// predicates back the two guards — a spawn-time assertion (`aida agent new`) and
+// a stranded-primary alarm (`aida status` / `aida ps`). Kept side-effect-free so
+// both are unit-testable without git/leases.
+
+/// Pure predicate for the worktree-tangle spawn gate: would launching a fan-out
+/// agent in `launch_cwd` mutate the PRIMARY checkout? True iff the resolved
+/// worktree root is the SAME directory as the primary checkout root. Both paths
+/// are canonicalized first (so `./x` vs `/abs/x` and symlinked forms compare
+/// equal); a path that can't be canonicalized (doesn't exist yet) falls back to
+/// its raw form, which still compares correctly for the equal/unequal cases.
+// trace:TASK-965 | ai:claude
+fn is_worktree_tangle(launch_cwd: &std::path::Path, primary_root: &std::path::Path) -> bool {
+    fn norm(p: &std::path::Path) -> std::path::PathBuf {
+        std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+    }
+    norm(launch_cwd) == norm(primary_root)
+}
+
+/// Spawn-time worktree-tangle gate. A spec-scoped fan-out launch MUST land in its
+/// OWN dedicated worktree — never the primary checkout. A crewmate that runs in
+/// the primary tree can `git checkout -b` there and strand the repo on a feature
+/// branch, aborting the next `git merge --ff-only origin/main`. This is the
+/// programmatic gate that replaces the memory-RULE-only defense. The no-spec
+/// launch (which deliberately runs in the primary, no worktree resolved) is
+/// exempt — only a resolved worktree is asserted against the primary root.
+// trace:TASK-965 | ai:claude
+fn assert_no_worktree_tangle(plan: &AgentLaunchPlan, primary_root: &std::path::Path) -> Result<()> {
+    if plan.current_spec.is_some() && is_worktree_tangle(&plan.launch_cwd, primary_root) {
+        anyhow::bail!(
+            "refusing to launch: the resolved worktree ({}) is the PRIMARY checkout. \
+             A fan-out agent must run in its OWN isolated worktree — running it in the \
+             primary tree lets it switch branches there and strand the repo off the \
+             default branch (the next `git merge --ff-only` would abort). \
+             Run `aida session leases` to inspect, and relaunch so a dedicated worktree \
+             is created for this spec.",
+            plan.launch_cwd.display()
+        );
+    }
+    Ok(())
+}
+
+/// Pure predicate for the stranded-primary alarm. The PRIMARY checkout is the
+/// non-worktree root of the repo; when it sits on a NON-default branch while
+/// agents hold in-flight leases, the next `git merge --ff-only origin/main` in
+/// the primary will abort — the "primary stranded on a feature branch" footgun.
+/// Conservative by construction: an undetectable branch or default branch, or a
+/// zero lease count, never alarms (so a clean default-branch primary is silent).
+// trace:TASK-965 | ai:claude
+fn primary_stranded_on_feature_branch(
+    primary_branch: Option<&str>,
+    default_branch: Option<&str>,
+    in_flight_lease_count: usize,
+) -> bool {
+    let (Some(branch), Some(default)) = (primary_branch, default_branch) else {
+        return false;
+    };
+    in_flight_lease_count > 0 && !branch.is_empty() && !branch.eq_ignore_ascii_case(default)
+}
+
+/// Local-only default-branch NAME probe (no `gh`, no network) — safe for the
+/// fast `aida status` path. Reuses [`detect_default_branch_ref`] (git
+/// symbolic-ref / rev-parse only) and strips a leading `origin/`.
+// trace:TASK-965 | ai:claude
+fn local_default_branch_name(project_root: &std::path::Path) -> Option<String> {
+    let r = detect_default_branch_ref(project_root)?;
+    Some(r.strip_prefix("origin/").unwrap_or(&r).to_string())
+}
+
+/// Resolved facts for the stranded-primary alarm. Assembled by
+/// [`detect_stranded_primary`] (git + lease reads, all local), rendered by
+/// [`print_stranded_primary_banner`].
+// trace:TASK-965 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct StrandedPrimary {
+    primary_root: std::path::PathBuf,
+    branch: String,
+    default_branch: String,
+    lease_count: usize,
+}
+
+/// Resolve the PRIMARY checkout from `cwd`, then return `Some` iff it is stranded
+/// on a feature branch with in-flight leases. Network-free: `main_worktree_root_from`
+/// + `current_branch_at` + `local_default_branch_name` are local git probes and
+/// `list_leases` is a `.aida/sessions/` file scan — no `gh`, no full store load.
+// trace:TASK-965 | ai:claude
+fn detect_stranded_primary(cwd: &std::path::Path) -> Option<StrandedPrimary> {
+    let primary_root = main_worktree_root_from(cwd);
+    let branch = current_branch_at(&primary_root)?;
+    let default_branch = local_default_branch_name(&primary_root)?;
+    let lease_count = list_leases(&primary_root).len();
+    if primary_stranded_on_feature_branch(Some(&branch), Some(&default_branch), lease_count) {
+        Some(StrandedPrimary {
+            primary_root,
+            branch,
+            default_branch,
+            lease_count,
+        })
+    } else {
+        None
+    }
+}
+
+/// Loud, top-of-output banner when the primary checkout is stranded. Shared by
+/// `aida status` (fast path) and `aida ps`.
+// trace:TASK-965 | ai:claude
+fn print_stranded_primary_banner(s: &StrandedPrimary) {
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    println!(
+        "{}",
+        format!("{warn} PRIMARY CHECKOUT STRANDED ON A FEATURE BRANCH")
+            .red()
+            .bold()
+    );
+    println!(
+        "  primary {} is on {} (not {}) while {} lease{} in flight.",
+        s.primary_root.display(),
+        s.branch.yellow().bold(),
+        s.default_branch.cyan(),
+        s.lease_count,
+        if s.lease_count == 1 { " is" } else { "s are" },
+    );
+    println!(
+        "{}",
+        format!(
+            "  the next `git merge --ff-only {}` here will ABORT — switch the primary back: \
+             `git -C {} switch {}`",
+            s.default_branch,
+            s.primary_root.display(),
+            s.default_branch,
+        )
+        .dimmed()
+    );
+    println!();
+}
+
+#[cfg(test)]
+mod task965_worktree_tangle_tests {
+    use super::*;
+    use std::path::Path;
+
+    // Root-equality predicate: equal paths tangle, distinct ones don't. Uses
+    // non-existent paths so canonicalize falls back to the raw form — proving the
+    // predicate is pure (no real dirs / fs side effects needed). trace:TASK-965
+    #[test]
+    fn worktree_tangle_true_when_launch_cwd_equals_primary() {
+        let primary = Path::new("/repo/main");
+        assert!(is_worktree_tangle(primary, primary));
+        assert!(is_worktree_tangle(
+            Path::new("/repo/main"),
+            Path::new("/repo/main")
+        ));
+    }
+
+    #[test]
+    fn worktree_tangle_false_for_distinct_worktree() {
+        assert!(!is_worktree_tangle(
+            Path::new("/repo/.worktrees/task-1"),
+            Path::new("/repo/main")
+        ));
+        // A worktree NESTED under the primary is still a distinct directory — not
+        // the primary root itself — so it must NOT be flagged as a tangle.
+        assert!(!is_worktree_tangle(
+            Path::new("/repo/main/.worktrees/task-1"),
+            Path::new("/repo/main")
+        ));
+    }
+
+    // Stranded-detection predicate. The footgun: primary on a feature branch with
+    // ≥1 in-flight lease. trace:TASK-965
+    #[test]
+    fn stranded_true_on_feature_branch_with_leases() {
+        assert!(primary_stranded_on_feature_branch(
+            Some("task-965-gate"),
+            Some("main"),
+            2
+        ));
+    }
+
+    #[test]
+    fn stranded_false_on_clean_default_branch() {
+        // Same branch as default → never alarm, even with leases in flight (the
+        // no-false-alarm-on-clean-primary case). Case-insensitive match too.
+        assert!(!primary_stranded_on_feature_branch(
+            Some("main"),
+            Some("main"),
+            3
+        ));
+        assert!(!primary_stranded_on_feature_branch(
+            Some("MAIN"),
+            Some("main"),
+            3
+        ));
+        assert!(!primary_stranded_on_feature_branch(
+            Some("master"),
+            Some("master"),
+            1
+        ));
+    }
+
+    #[test]
+    fn stranded_false_when_no_leases_in_flight() {
+        // On a feature branch but nothing in flight → not the footgun; stay silent.
+        assert!(!primary_stranded_on_feature_branch(
+            Some("feature-x"),
+            Some("main"),
+            0
+        ));
+    }
+
+    #[test]
+    fn stranded_false_when_branch_or_default_undetectable() {
+        // Detached HEAD (no branch) or an undetectable default → conservatively
+        // silent, never a false alarm.
+        assert!(!primary_stranded_on_feature_branch(None, Some("main"), 2));
+        assert!(!primary_stranded_on_feature_branch(
+            Some("feature-x"),
+            None,
+            2
+        ));
+        assert!(!primary_stranded_on_feature_branch(
+            Some(""),
+            Some("main"),
+            2
+        ));
     }
 }
 
@@ -91817,6 +92056,13 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             .partition(|r| !matches!(r.state, LeaseState::Stale))
     };
 
+    // TASK-965: stranded-primary alarm — loud banner ABOVE the running-work table
+    // when the primary checkout is parked on a feature branch with in-flight
+    // leases. trace:TASK-965 | ai:claude
+    if let Some(stranded) = detect_stranded_primary(&project_root) {
+        print_stranded_primary_banner(&stranded);
+    }
+
     println!("{}", "Running work".bold());
     println!();
 
@@ -105346,6 +105592,13 @@ fn handle_status_command_distributed(
         || stale;
     if !any_flag {
         let project_root = std::env::current_dir()?;
+        // TASK-965: stranded-primary alarm — loud banner ABOVE the snapshot when the
+        // primary checkout is parked on a feature branch with in-flight leases. All
+        // local reads (git symbolic-ref + lease dir scan), so the fast path's
+        // no-network/no-full-load contract holds. trace:TASK-965 | ai:claude
+        if let Some(stranded) = detect_stranded_primary(&project_root) {
+            print_stranded_primary_banner(&stranded);
+        }
         let snap = collect_fast_status_snapshot(&project_root);
         print_fast_status(&snap);
         return Ok(());
