@@ -24199,5 +24199,17 @@ operations:
     req_type: Epic
     status: Approved
     priority: High
-clock: 2305
+- id: 019f1045-4ce1-77e2-84c7-61b7ef8e28c0
+  target_id: 019f1045-41fd-7d60-a9ea-8afa1e8e77d3
+  author: aida
+  node_id: '1'
+  lamport: 2306
+  timestamp: 2026-06-28T22:06:44.961558439Z
+  kind: !Create
+    title: 'Patch-id force-push guard: refuse force-push unless remote commits are incorporated'
+    description: 'no-mistakes routes every force-push through a patch-id incorporation check (git rev-list --cherry-pick --right-only HEAD...current ^baseSHA) and refuses unless every live-remote commit is already incorporated. AIDAs pr_rebase.rs uses --force-with-lease which our own incident memory says does NOT protect an already-fetched commit (dropped a merged PR on main). Convert the CLAUDE.md rule into a programmatic bouncer. Fail closed if ls-remote fails. Files: aida-cli/src/pr_rebase.rs, the aida push/pull force paths.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 2306
 node_id: '1'
