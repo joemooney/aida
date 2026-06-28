@@ -107,6 +107,52 @@ them into a publishable result:
 5. **Cross-model** — re-run with `--model haiku` and a non-Claude agent (the AXI
    harness also drives `codex`) to check the finding is not Sonnet-specific.
 
+## The TOON column — measured (TASK-964)
+
+trace:TASK-964
+
+The `toon` condition is now built: `AIDA_AGENT_OUTPUT=1` (or any non-TTY caller)
+makes `aida` emit **TOON** — a compact tabular encoding (`name[N]{fields}:` +
+one comma-joined line per row; single specs as `key: value` head fields + a
+relationships table) with a minimal default schema. The human TTY emoji/table
+path is byte-identical (`AIDA_AGENT_OUTPUT=0` forces it). Both bench conditions
+now pin the env var, so `cli` measures the pre-TOON baseline and `toon` measures
+the new agent surface.
+
+The full `claude -p` matrix is a real billed run (re-run it with
+`python3 run_bench.py matrix --condition cli,toon --repeat 5`); the **direct,
+cache-independent** measurement below is the format's token delta on identical
+command output — the comparison the SPIKE-73 caveats name as the signal. Bytes
+measured on this repo's live store (~945 specs); tokens estimated at ~4 chars/tok.
+
+| Command (same data) | CLI human (~tok) | TOON (~tok) | Reduction |
+|---|---|---|---|
+| `aida list --all` (all 945 rows) | ~90,600 | ~71,600 | **21%** |
+| `aida show <spec> --no-git` | ~276 | ~147 | **47%** |
+| `aida queue list` (actionable head) | ~410 | ~67 | **84%** |
+| `aida status` | ~84 | ~31 | **62%** |
+| `aida list` (default, TOON also caps to 30) | ~37,500 | ~845 | 98%† |
+
+†The default-`list` row conflates two effects — TOON's encoding *and* the
+TASK-970 agent default row-cap (30 rows). The honest TOON-format-only number is
+the `list --all` row (both render the same 945 rows): **~21%** purely from
+dropping the table chrome, padding, and per-row glyphs. The focused single-task
+reads (`show` / `queue list` / `status`) — which are what each SPIKE-73 agent
+task actually issues — drop **47–84%**.
+
+**Read.** TOON beats the human CLI on every surface, and wins biggest exactly
+where it matters: the multi-row *browse* pattern (`list`, `queue list`) where
+JSON/MCP and the emoji table balloon. The honest nuance is that SPIKE-73's
+"CLI = 44k input tokens / task" is dominated by fixed harness + system-prompt
+overhead, not `aida`'s output: a single-spec lookup is already ~80–410 tokens in
+either mode, so TOON shaves hundreds-of-tokens per focused task and tens-of-
+percent per browse — it does **not** move single-call tasks below the ~44k floor
+because that floor is mostly not `aida` output. The decisive win is
+**context-window consumption on result-heavy reads** (where MCP's 95k came from)
+plus the strictly-smaller bytes on every call. This supports making the
+token-efficient CLI the *primary* agent surface; re-run the billed matrix for the
+cost/success/turns columns before publishing.
+
 ## Initial findings (SPIKE-73)
 
 **Run:** 2026-06-28 · agent model `sonnet` · judge `haiku` · conditions `cli` +

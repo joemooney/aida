@@ -106,6 +106,12 @@ def run_agent(condition, task_prompt, model, run_dir):
     preamble = condition.get("preamble", "")
     full_prompt = (preamble + "\n\n" + task_prompt).strip() if preamble else task_prompt
     argv = build_claude_argv(condition, full_prompt, model, run_dir)
+    # TASK-964: a condition may pin env vars (e.g. AIDA_AGENT_OUTPUT) so the
+    # `cli` baseline forces the human-formatted output and `toon` forces the
+    # token-efficient agent output, regardless of the (non-)TTY auto-detect.
+    run_env = os.environ.copy()
+    for key, val in (condition.get("env") or {}).items():
+        run_env[str(key)] = str(val)
     start = time.time()
     try:
         proc = subprocess.run(
@@ -114,7 +120,7 @@ def run_agent(condition, task_prompt, model, run_dir):
             capture_output=True,
             text=True,
             timeout=AGENT_TIMEOUT_S,
-            env=os.environ.copy(),
+            env=run_env,
         )
         raw = proc.stdout
         if proc.stderr:
