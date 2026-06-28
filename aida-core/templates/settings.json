@@ -44,6 +44,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-session-context.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-role-context.sh",
             "timeout": 5
           },
