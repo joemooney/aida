@@ -3,12 +3,12 @@ spec_id: BUG-640
 agreed_id: BUG-640
 title: 'Patch-id force-push guard: refuse force-push unless remote commits are incorporated'
 description: 'no-mistakes routes every force-push through a patch-id incorporation check (git rev-list --cherry-pick --right-only HEAD...current ^baseSHA) and refuses unless every live-remote commit is already incorporated. AIDAs pr_rebase.rs uses --force-with-lease which our own incident memory says does NOT protect an already-fetched commit (dropped a merged PR on main). Convert the CLAUDE.md rule into a programmatic bouncer. Fail closed if ls-remote fails. Files: aida-cli/src/pr_rebase.rs, the aida push/pull force paths.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:42.173329639Z
-modified_at: 2026-06-28T22:24:08.996077728Z
+modified_at: 2026-06-28T22:40:50.759010743Z
 req_type: Bug
 tags:
 - axi
@@ -32,3 +32,21 @@ comments:
   content: Commit 420ec222b references this requirement
   created_at: 2026-06-28T22:24:08.996077728Z
   modified_at: 2026-06-28T22:24:08.996077728Z
+history:
+- id: 019f1064-83e4-7a33-9994-50490f92a823
+  author: aida-auto-bump
+  timestamp: 2026-06-28T22:40:50.660682066Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1064-8446-7392-9721-9f38afef63ad
+  timestamp: 2026-06-28T22:40:50.759005097Z
+  agent: aida
+  commit_sha: 499d782ac7713c375a7ab0d61578dbe966ba4b12
+  summary: Completed via merge 499d782a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T22:40:49.642615727Z
+  completion_sha: 499d782ac7713c375a7ab0d61578dbe966ba4b12
