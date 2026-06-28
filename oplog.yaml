@@ -24271,5 +24271,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2311
+- id: 019f1046-5e22-70b3-a518-ca5899bb7445
+  target_id: 019f1046-51cf-7330-bd07-b69fe3807990
+  author: aida
+  node_id: '1'
+  lamport: 2312
+  timestamp: 2026-06-28T22:07:54.914255555Z
+  kind: !Create
+    title: Content-first bare aida + default row-cap for agents
+    description: 'Bare aida prints a help menu though CLAUDE.md says aida status is the entry point; aida list dumps 925 unbounded rows. In agent mode (non-TTY/AIDA_AGENT_OUTPUT): bare aida prints the status snapshot + top queued; aida list applies a default --limit (e.g. 30) + a count: N of M header + a widen hint. Human TTY path unchanged.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2312
 node_id: '1'
