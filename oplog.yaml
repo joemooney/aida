@@ -24319,5 +24319,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2315
+- id: 019f1047-c3ca-70b0-8253-67a73da6adc2
+  target_id: 019f1047-b71f-7171-9b21-08f047e90bad
+  author: aida
+  node_id: '1'
+  lamport: 2316
+  timestamp: 2026-06-28T22:09:26.474469574Z
+  kind: !Create
+    title: Centralized next-step help table keyed by (command, state)
+    description: 'Port the gh-axi/tasks-axi table-driven suggestion model; attach a templated next-step help list to agent-mode list/mutation outputs, carrying filters forward. AIDAs lifecycle state machine makes it richer: suggest the VALID NEXT TRANSITION for the spec state. Relates to TASK-964.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2316
 node_id: '1'
