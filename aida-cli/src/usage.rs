@@ -118,6 +118,35 @@ pub fn append_event(event: &UsageEvent) {
     }
 }
 
+/// Append an arbitrary structured JSON record (e.g. a TASK-967
+/// `drain_summary` event) as one JSONL line. Same opt-out + swallow-errors
+/// contract as [`append_event`]; the caller decides whether to write (gating
+/// on [`is_enabled`]). The distinct `event` discriminator on the record means
+/// [`read_events`]'s `UsageEvent` parse skips it, so per-invocation stats stay
+/// uncontaminated while a cost-per-drain reader can select it.
+// trace:TASK-967 | ai:claude
+pub fn append_value(value: &serde_json::Value) {
+    let Some(path) = log_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        if std::fs::create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+    let Ok(json) = serde_json::to_string(value) else {
+        return;
+    };
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(f, "{}", json);
+    }
+}
+
 /// Read every event from the log, newest-first order is the caller's
 /// problem (this returns insertion order). Best-effort — malformed
 /// lines are skipped silently.
