@@ -27,6 +27,7 @@ mod coordination;
 mod deep_link;
 mod digest;
 mod docs;
+mod drain_caps;
 mod drain_lock;
 mod field_study;
 // trace:SPIKE-67 | ai:claude
@@ -120988,6 +120989,9 @@ fn handle_queue_command(
             json,
             max,
             max_failures,
+            max_tokens,
+            max_iterations,
+            max_runtime,
             no_progress_minutes,
             phase_ceiling_minutes,
             resume_drain,
@@ -121040,6 +121044,31 @@ fn handle_queue_command(
             // operator-supplied value there. trace:TASK-578 | ai:claude
             let auto_complete = &drain_resolution.auto_complete;
             let no_human = &drain_resolution.no_human;
+            // TASK-966: assemble the hard budget caps once, up front, so a bad
+            // `--max-runtime` value bails before any drain work starts. The caps
+            // are threaded into the multi-spec drain loops (nextN / batch /
+            // batches); they stop the drain cleanly at a spec boundary and
+            // compose with `--max-failures` + the goal condition (whichever
+            // fires first). trace:TASK-966 | ai:claude
+            let drain_caps = {
+                let max_runtime = match max_runtime.as_deref() {
+                    Some(s) => match drain_caps::parse_duration(s) {
+                        Some(d) => Some(d),
+                        None => anyhow::bail!(
+                            "could not parse --max-runtime value {:?} — use minutes \
+                             (e.g. `90`) or a suffixed/compound form like `90s`, `45m`, \
+                             `2h`, `1h30m`",
+                            s
+                        ),
+                    },
+                    None => None,
+                };
+                drain_caps::DrainCaps {
+                    max_tokens: *max_tokens,
+                    max_iterations: *max_iterations,
+                    max_runtime,
+                }
+            };
             // TASK-560: reject --resume + --auto-complete with a message that
             // explains the conflict and names both recovery paths, instead of
             // clap's terse "cannot be used with". trace:TASK-560 | ai:claude
@@ -121471,6 +121500,7 @@ fn handle_queue_command(
                         *force_claim,
                         *allow_stale_base,
                         *no_auto_rebase,
+                        &drain_caps,
                     );
                 }
                 if let Some(batch_name) = effective_batch {
@@ -121495,6 +121525,7 @@ fn handle_queue_command(
                         *force_claim,
                         *allow_stale_base,
                         *no_auto_rebase,
+                        &drain_caps,
                     );
                 }
                 // TASK-293: `nextN --auto-complete` drains N specs from the
@@ -121522,6 +121553,7 @@ fn handle_queue_command(
                             *allow_stale_base,
                             *no_auto_rebase,
                             *max_failures,
+                            &drain_caps,
                         );
                     }
                 }
@@ -121548,6 +121580,7 @@ fn handle_queue_command(
                         *allow_stale_base,
                         *no_auto_rebase,
                         *max_failures,
+                        &drain_caps,
                     );
                 }
                 // `--max` only bounds a batch drain — reject it on the
@@ -128387,6 +128420,9 @@ struct RealBatchDriver<'a> {
     allow_stale_base: bool,
     /// STORY-429: outer `--no-auto-rebase` flag, propagated to every member.
     no_auto_rebase: bool,
+    // TASK-966: project root + drain-start for the `--max-tokens` meter. `None`
+    // when no token cap is active. trace:TASK-966 | ai:claude
+    token_meter: Option<(std::path::PathBuf, std::time::SystemTime)>,
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
@@ -128431,6 +128467,14 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
             None,
         )
     }
+
+    // TASK-966: cumulative reported tokens across this drain's headless logs.
+    fn cumulative_tokens(&mut self) -> u64 {
+        match &self.token_meter {
+            Some((root, since)) => sum_headless_log_tokens(root, *since),
+            None => 0,
+        }
+    }
 }
 
 /// Entry point for `aida queue work --batch NAME --auto-complete` (TASK-285).
@@ -128464,6 +128508,8 @@ fn handle_auto_complete_batch(
     allow_stale_base: bool,
     // STORY-429: outer `--no-auto-rebase`, threaded to every batch member.
     no_auto_rebase: bool,
+    // TASK-966: hard budget caps for the whole drain. trace:TASK-966 | ai:claude
+    caps: &drain_caps::DrainCaps,
 ) -> ! {
     if !json {
         eprintln!();
@@ -128495,6 +128541,11 @@ fn handle_auto_complete_batch(
         }
     }
 
+    // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
+    let token_meter = caps
+        .max_tokens
+        .and(drain_root.clone())
+        .map(|root| (root, std::time::SystemTime::now()));
     let mut driver = RealBatchDriver {
         storage,
         user_id: user_id.to_string(),
@@ -128509,17 +128560,30 @@ fn handle_auto_complete_batch(
         force_claim,
         allow_stale_base,
         no_auto_rebase,
+        token_meter,
     };
     // EPIC-28: a `None` `--max-failures` from the CLI means "use the
     // built-in default cap" — set here so the orchestrator never runs
     // with an unbounded failure budget. trace:EPIC-28 | ai:claude
     let max_failures = max_failures.or(Some(DEFAULT_MAX_FAILURES));
-    let result = auto_complete::drain_batch(&mut driver, max, max_failures);
+    // TASK-966: thread the hard budget caps through the batch drain.
+    let mut cap_stop = None;
+    let result = auto_complete::drain_batch_with_caps(
+        &mut driver,
+        max,
+        max_failures,
+        caps,
+        std::time::Instant::now(),
+        &mut cap_stop,
+    );
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
     // user error — the named batch tag matched no queued work. Surface it with
     // a non-zero exit so scripts notice, even though `drain_batch` calls it
     // `Drained`. A batch where every member punted is *not* empty (STORY-276).
-    let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
+    let exit_code = if let Some(stop) = &cap_stop {
+        emit_drain_cap_stop(stop, json);
+        DRAIN_CAP_EXIT_CODE
+    } else if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
         && result.shipped.is_empty()
         && result.punted.is_empty()
         && result.escalated.is_empty()
@@ -128569,6 +128633,8 @@ fn handle_auto_complete_batches(
     allow_stale_base: bool,
     // STORY-429: outer `--no-auto-rebase`, threaded into every member.
     no_auto_rebase: bool,
+    // TASK-966: hard budget caps for the whole chain. trace:TASK-966 | ai:claude
+    caps: &drain_caps::DrainCaps,
 ) -> ! {
     if !json {
         eprintln!();
@@ -128600,51 +128666,73 @@ fn handle_auto_complete_batches(
     let mut batch_index = 0usize;
     // EPIC-28: same default as the single-batch path. trace:EPIC-28 | ai:claude
     let max_failures = max_failures.or(Some(DEFAULT_MAX_FAILURES));
-    let result = auto_complete::drain_batch_chain(batch_names, max, max_failures, |batch_name| {
-        batch_index += 1;
-        let members_for_state = resolve_batch_members(storage, user_id, batch_name, role);
-        if !json
-            && members_for_state
-                .as_ref()
-                .map(|members| !members.is_empty())
-                .unwrap_or(true)
-        {
-            eprintln!(
-                "  {} drain: batch:{} ({}/{})",
-                "→".dimmed(),
-                batch_name.cyan(),
-                batch_index,
-                batch_names.len()
-            );
-        }
-        if let Some(root) = &drain_root {
-            if let Ok(members) = members_for_state {
-                let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
-                let _ = drain_state::DrainState::new_batch(batch_name, &specs).write(root);
+    // TASK-966: a single drain-start + token meter shared across every batch in
+    // the chain so `--max-runtime` / `--max-tokens` are cumulative.
+    let chain_started = std::time::SystemTime::now();
+    let token_meter_root = caps.max_tokens.and(drain_root.clone());
+    let mut cap_stop = None;
+    let result = auto_complete::drain_batch_chain_with_caps(
+        batch_names,
+        max,
+        max_failures,
+        caps,
+        std::time::Instant::now(),
+        &mut cap_stop,
+        |batch_name| {
+            batch_index += 1;
+            let members_for_state = resolve_batch_members(storage, user_id, batch_name, role);
+            if !json
+                && members_for_state
+                    .as_ref()
+                    .map(|members| !members.is_empty())
+                    .unwrap_or(true)
+            {
+                eprintln!(
+                    "  {} drain: batch:{} ({}/{})",
+                    "→".dimmed(),
+                    batch_name.cyan(),
+                    batch_index,
+                    batch_names.len()
+                );
             }
-        }
-        Box::new(RealBatchDriver {
-            storage,
-            user_id: user_id.to_string(),
-            batch_name: batch_name.to_string(),
-            role: role.map(|s| s.to_string()),
-            variant,
-            json,
-            permission_mode: permission_mode.map(|s| s.to_string()),
-            no_human,
-            escalate_mode,
-            steal,
-            force_claim,
-            allow_stale_base,
-            no_auto_rebase,
-        })
-    });
+            if let Some(root) = &drain_root {
+                if let Ok(members) = members_for_state {
+                    let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
+                    let _ = drain_state::DrainState::new_batch(batch_name, &specs).write(root);
+                }
+            }
+            Box::new(RealBatchDriver {
+                storage,
+                user_id: user_id.to_string(),
+                batch_name: batch_name.to_string(),
+                role: role.map(|s| s.to_string()),
+                variant,
+                json,
+                permission_mode: permission_mode.map(|s| s.to_string()),
+                no_human,
+                escalate_mode,
+                steal,
+                force_claim,
+                allow_stale_base,
+                no_auto_rebase,
+                // TASK-966: shared start + root → cumulative token meter.
+                token_meter: token_meter_root.clone().map(|root| (root, chain_started)),
+            })
+        },
+    );
 
     let no_activity = result.shipped.is_empty()
         && result.punted.is_empty()
         && result.escalated.is_empty()
         && matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained);
-    let exit_code = if no_activity { 1 } else { result.exit_code };
+    let exit_code = if let Some(stop) = &cap_stop {
+        emit_drain_cap_stop(stop, json);
+        DRAIN_CAP_EXIT_CODE
+    } else if no_activity {
+        1
+    } else {
+        result.exit_code
+    };
     emit_batch_chain_summary(batch_names, &result, exit_code, json);
     // STORY-493: same best-effort drain-end mailbox digest as the single-batch
     // path. Non-fatal — never affects the drain's exit code. trace:STORY-493
@@ -129393,6 +129481,49 @@ fn drivable_queued_count(storage: &Storage, user_id: &str) -> Result<usize> {
         .count())
 }
 
+/// TASK-966: process-exit code a drain uses when a hard budget cap
+/// (`--max-tokens` / `--max-iterations` / `--max-runtime`) stopped it. Distinct
+/// from the orchestrator's phase-failure codes (1-6) and the shelved-drain code
+/// (2) so an outer loop like `scripts/drain-loop.sh` can recognise "budget
+/// exhausted — stop the loop" vs "chunk drained, keep going".
+// trace:TASK-966 | ai:claude
+const DRAIN_CAP_EXIT_CODE: i32 = 7;
+
+/// TASK-966: sum the cumulative reported tokens across the headless-phase logs a
+/// drain has produced since `since`. Each `claude -p --output-format
+/// stream-json` phase writes a `*.jsonl` log under `.aida/headless-logs/`; the
+/// terminal `result` event carries that phase's cumulative usage. We sum
+/// per-log totals over the logs touched at/after the drain start so the running
+/// figure reflects only THIS drain's spend. Best-effort: an unreadable dir /
+/// file contributes nothing rather than erroring.
+// trace:TASK-966 | ai:claude
+fn sum_headless_log_tokens(project_root: &std::path::Path, since: std::time::SystemTime) -> u64 {
+    let dir = project_root.join(".aida").join("headless-logs");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return 0;
+    };
+    let mut total: u64 = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        // Only count logs written during this drain.
+        let touched_in_window = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .map(|m| m >= since)
+            .unwrap_or(true);
+        if !touched_in_window {
+            continue;
+        }
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            total = total.saturating_add(drain_caps::tokens_from_log(&contents));
+        }
+    }
+    total
+}
+
 /// Real [`auto_complete::BatchDriver`] for a `nextN` drain (TASK-293). Unlike
 /// [`RealBatchDriver`], the "members" are not a `batch:NAME` tag — they are
 /// simply the drivable queue head, re-resolved each call. A shipped spec
@@ -129416,6 +129547,9 @@ struct RealNextNDriver<'a> {
     allow_stale_base: bool,
     /// STORY-429: outer `--no-auto-rebase`, propagated to every member.
     no_auto_rebase: bool,
+    /// TASK-966: project root + drain-start, for the `--max-tokens` meter. `None`
+    /// when no token cap is active, so the headless-log scan is skipped.
+    token_meter: Option<(std::path::PathBuf, std::time::SystemTime)>,
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
@@ -129442,6 +129576,14 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
             self.no_auto_rebase,
             None,
         )
+    }
+
+    // TASK-966: cumulative reported tokens across this drain's headless logs.
+    fn cumulative_tokens(&mut self) -> u64 {
+        match &self.token_meter {
+            Some((root, since)) => sum_headless_log_tokens(root, *since),
+            None => 0,
+        }
     }
 }
 
@@ -129472,6 +129614,8 @@ fn handle_auto_complete_next_n(
     no_auto_rebase: bool,
     // EPIC-28: outer `--max-failures` cap. trace:EPIC-28 | ai:claude
     max_failures: Option<usize>,
+    // TASK-966: hard budget caps for the whole drain. trace:TASK-966 | ai:claude
+    caps: &drain_caps::DrainCaps,
 ) -> ! {
     if !json {
         eprintln!();
@@ -129510,6 +129654,11 @@ fn handle_auto_complete_next_n(
         }
     }
 
+    // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
+    let token_meter = caps
+        .max_tokens
+        .and(drain_root.clone())
+        .map(|root| (root, std::time::SystemTime::now()));
     let mut driver = RealNextNDriver {
         storage,
         user_id: user_id.to_string(),
@@ -129522,16 +129671,31 @@ fn handle_auto_complete_next_n(
         force_claim,
         allow_stale_base,
         no_auto_rebase,
+        token_meter,
     };
     // EPIC-28: apply the same default failure cap as the batch path.
     // trace:EPIC-28 | ai:claude
     let max_failures = max_failures.or(Some(DEFAULT_MAX_FAILURES));
-    let result = auto_complete::drain_batch(&mut driver, Some(n), max_failures);
+    // TASK-966: thread the hard budget caps through the drain. A cap stop is a
+    // clean `MaxReached` carrying the reason in `cap_stop`. trace:TASK-966
+    let mut cap_stop = None;
+    let result = auto_complete::drain_batch_with_caps(
+        &mut driver,
+        Some(n),
+        max_failures,
+        caps,
+        std::time::Instant::now(),
+        &mut cap_stop,
+    );
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
     // user error — surface it with a non-zero exit even though `drain_batch`
     // reports it as a clean `Drained`, matching the `--batch` drain. A drain
     // where every member punted is *not* empty (STORY-276).
-    let exit_code = if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
+    let exit_code = if let Some(stop) = &cap_stop {
+        // TASK-966: a budget cap stopped the drain — report why, exit distinctly.
+        emit_drain_cap_stop(stop, json);
+        DRAIN_CAP_EXIT_CODE
+    } else if matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained)
         && result.shipped.is_empty()
         && result.punted.is_empty()
         && result.escalated.is_empty()
@@ -129546,6 +129710,28 @@ fn handle_auto_complete_next_n(
         let _ = drain_state::DrainState::clear(root);
     }
     std::process::exit(exit_code);
+}
+
+/// TASK-966: announce a clean budget-cap stop — the one-line reason (human) or a
+/// JSON event (machine). The in-flight head stays queued; the operator re-runs
+/// the drain to continue once the budget refreshes.
+// trace:TASK-966 | ai:claude
+fn emit_drain_cap_stop(stop: &drain_caps::CapStop, json: bool) {
+    if json {
+        let obj = serde_json::json!({
+            "event": "drain-cap-stop",
+            "cap": stop.flag(),
+            "reason": stop.reason(),
+        });
+        println!("{obj}");
+    } else {
+        eprintln!();
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            stop.reason()
+        );
+    }
 }
 
 /// Print the closing summary of a `nextN --auto-complete` drain (TASK-293):
