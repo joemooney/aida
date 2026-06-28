@@ -24367,5 +24367,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 2319
+- id: 019f1048-7337-70d2-9a5b-8a3993524634
+  target_id: 019f1048-681d-70d3-80d1-42b127d420c5
+  author: aida
+  node_id: '1'
+  lamport: 2320
+  timestamp: 2026-06-28T22:10:11.383892078Z
+  kind: !Create
+    title: CI-failure auto-fix loop before shelve (+ in-drain merge-conflict rebase)
+    description: 'no-mistakes FIXES failing checks by re-invoking the agent (up to N) + auto-rebases conflicts before parking; AIDA SHELVES (EPIC-28) and never fixes. Add an opt-in CI-fix phase between CI and shelve (headless claude -p with failing logs + spec context, push, re-poll up to N) and reuse /aida-rebase for conflicts. Gate behind [drain] ci_auto_fix=N. STRATEGIC: changes drain behavior.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2320
 node_id: '1'
