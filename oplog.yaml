@@ -24415,5 +24415,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2323
+- id: 019f1068-0775-77e2-9964-56b83bb8ba29
+  target_id: 019f1067-fa5c-7580-ac8b-83d54acdf8f4
+  author: aida
+  node_id: '1'
+  lamport: 2324
+  timestamp: 2026-06-28T22:44:40.949457849Z
+  kind: !Create
+    title: 'aida statusbar: ambient OSC terminal-title meter (gnhf-style), read-only, not dispatch'
+    description: 'The tmux eval verdict: NO to a window-per-lease multiplexer (redundant with EPIC-26/53/54 TUI, and the differentiated fan-out mode runs Agent-tool subagents IN-process with no PTY to pane), YES-narrow to gnhf-style ambient meter. aida statusbar emits the OSC-2 terminal-title escape on an interval from cache-fast sources: aida statusbar -> "aida . q:5 . live:2 . STALE:1 . you:3 (2 approve . 1 mail)" (queue depth + aida ps live/STALE + needs-you = approvals+mail+punts). tmux-INDEPENDENT (OSC title works in any terminal); bonus tmux status-right recipe. Borrow gnhf save/restore-title (ESC[22;0t / ESC[23;0t) so it cleans up on exit; opt-in. READ-ONLY meter, NOT dispatch (that is EPIC-53/54). ~1-2 days. The ambient projection of the cockpit headline onto surfaces visible when NOT in aida tui.'
+    req_type: Story
+    status: Approved
+    priority: Low
+clock: 2324
 node_id: '1'
