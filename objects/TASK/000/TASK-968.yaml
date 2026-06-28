@@ -3,12 +3,12 @@ spec_id: TASK-968
 agreed_id: TASK-968
 title: Idle CI timeout that re-arms on base-branch movement
 description: 'no-mistakes ci_timeout is an IDLE timeout: re-arms whenever CI posts progress or the base tip advances; only genuine stalls die. AIDAs worker uses a flat absolute AIDA_WORKER_SPEC_TIMEOUT, so a drain blocked on slow CI gets killed. Make the CI-wait an idle timeout with a separate absolute safety ceiling.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:07:30.646503566Z
-modified_at: 2026-06-28T22:07:40.410853192Z
+modified_at: 2026-06-28T23:19:43.341092365Z
 req_type: Task
 tags:
 - axi
