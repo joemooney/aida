@@ -24247,5 +24247,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2309
+- id: 019f1046-0eae-7a92-a925-903093ff24f6
+  target_id: 019f1045-ff56-7e90-bec8-0ad6cde393dd
+  author: aida
+  node_id: '1'
+  lamport: 2310
+  timestamp: 2026-06-28T22:07:34.574317639Z
+  kind: !Create
+    title: Idle CI timeout that re-arms on base-branch movement
+    description: 'no-mistakes ci_timeout is an IDLE timeout: re-arms whenever CI posts progress or the base tip advances; only genuine stalls die. AIDAs worker uses a flat absolute AIDA_WORKER_SPEC_TIMEOUT, so a drain blocked on slow CI gets killed. Make the CI-wait an idle timeout with a separate absolute safety ceiling.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2310
 node_id: '1'
