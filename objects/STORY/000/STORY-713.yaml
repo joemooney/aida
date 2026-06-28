@@ -1,0 +1,20 @@
+id: 019f1047-fcd6-7941-86c1-15bcf616088e
+spec_id: STORY-713
+agreed_id: STORY-713
+title: 'Single-liaison dispatcher: advisor owns intake to report, operator speaks outcomes'
+description: 'firstmate: human talks to ONE agent that owns intake->spawn->supervise->integrate->report and speaks only in outcomes. Today AIDA makes the operator the dispatcher+integrator. Promote the advisor to front-of-house (extend aida-solo); machinery exists (queue, agent new, ps, briefs, integrate) so this is wiring+discipline. STRATEGIC: headline UX direction, operator decision.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:09:41.078468066Z
+modified_at: 2026-06-28T22:09:41.078468066Z
+req_type: Story
+tags:
+- axi
+- competitive
+- from:axi-review
+- parent:EPIC-56
+- strategic
+- supervision
+- ux

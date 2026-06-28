@@ -24343,5 +24343,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 2317
+- id: 019f1048-07ce-7992-be2f-493e5bd2098f
+  target_id: 019f1047-fcd6-7941-86c1-15bcf616088e
+  author: aida
+  node_id: '1'
+  lamport: 2318
+  timestamp: 2026-06-28T22:09:43.886632658Z
+  kind: !Create
+    title: 'Single-liaison dispatcher: advisor owns intake to report, operator speaks outcomes'
+    description: 'firstmate: human talks to ONE agent that owns intake->spawn->supervise->integrate->report and speaks only in outcomes. Today AIDA makes the operator the dispatcher+integrator. Promote the advisor to front-of-house (extend aida-solo); machinery exists (queue, agent new, ps, briefs, integrate) so this is wiring+discipline. STRATEGIC: headline UX direction, operator decision.'
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 2318
 node_id: '1'
