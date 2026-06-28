@@ -24175,5 +24175,17 @@ operations:
     req_type: Spike
     status: Approved
     priority: High
-clock: 2303
+- id: 019f102f-31a1-7ee2-82e9-026a6c7b3a15
+  target_id: 019f102f-26e2-73f0-9223-4eaa344f70f0
+  author: aida
+  node_id: '1'
+  lamport: 2304
+  timestamp: 2026-06-28T21:42:36.193213458Z
+  kind: !Create
+    title: Agent-facing token-efficient output mode (adopt AXI output principles; keep emoji human path)
+    description: 'AIDA scores ~4-5/10 on the AXI 10 principles; the misses are concrete: token-efficient output (we print emoji/tables, --json is verbose JSON not TOON), content-first no-args (bare aida shows help not live data), minimal default schemas, structured errors. Add an AGENT-FACING output mode (e.g. AIDA_AGENT_OUTPUT / --toon / detect non-TTY agent caller) that emits token-efficient minimal-schema output with pre-computed aggregates + next-step disclosure. The human emoji path stays UNCHANGED (operator likes it; this is the agent path only). Gated on/informed by the SPIKE decision on MCP-vs-CLI weighting.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2304
 node_id: '1'
