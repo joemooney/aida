@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T21:42:19.928567429Z
-modified_at: 2026-06-28T22:10:36.789135862Z
+modified_at: 2026-06-28T22:59:06.569909935Z
 req_type: Spike
 tags:
 - axi
@@ -27,4 +27,9 @@ comments:
   content: 'gh-axi dive: the AXI bench-github harness is near-drop-in (~600 LOC, runner+usage+grader); parseClaudeJsonl already parses Claude stream-json (tokens/turns/cost/command_log). Conditions: emoji CLI vs MCP vs TOON CLI. Tasks: next-queue-item / show-spec+blocked-by / status-snapshot / find-CI-failure / file-spec. Grader = LLM-judge + grading_hint. De-risks every interface lesson by measuring which output changes move cost first.'
   created_at: 2026-06-28T22:10:36.789135862Z
   modified_at: 2026-06-28T22:10:36.789135862Z
+- id: 019f1075-3cc9-7003-b90a-42fbda21f8ba
+  author: joe
+  content: Commit b182c3037 references this requirement
+  created_at: 2026-06-28T22:59:06.569909935Z
+  modified_at: 2026-06-28T22:59:06.569909935Z
 human_only: true
