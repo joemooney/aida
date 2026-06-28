@@ -285,7 +285,7 @@ blocks:
   type_prefix: STORY
   range_start: 641
   range_end: 740
-  next: 714
+  next: 715
   allocated_at: 2026-05-19T14:14:32.116755942Z
 - node_id: '4'
   owner: Joe.Mooney@work.example
