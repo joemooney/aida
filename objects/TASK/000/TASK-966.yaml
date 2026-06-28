@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:07:01.228519967Z
-modified_at: 2026-06-28T22:07:01.228519967Z
+modified_at: 2026-06-28T22:07:15.296361932Z
 req_type: Task
 tags:
 - axi
@@ -17,3 +17,7 @@ tags:
 - drain
 - from:axi-review
 - parent:EPIC-56
+relationships:
+- rel_type: Child
+  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
+  created_at: 2026-06-28T22:07:15.296361932Z
