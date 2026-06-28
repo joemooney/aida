@@ -1,0 +1,19 @@
+id: 019f1047-d9a5-7673-a495-8cbe9eaa20b5
+spec_id: STORY-712
+agreed_id: STORY-712
+title: Event-driven zero-token supervision daemon (bash classifier in front of the fleet)
+description: 'firstmates biggest architectural lever: a watcher classifies every wake in CHEAP CODE, absorbs the benign majority, wakes the LLM only on an actionable verb (needs-decision/blocked/done/failed/PR-ready/merged). AIDA polls inside LLM loops + advisor_watch forks a claude -p per pass = tokens on non-events. Add aida watch tailing .aida sentinels + lease-liveness + CI poll, classify in code, emit only the wake line. STRATEGIC: design sign-off.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:09:32.069425435Z
+modified_at: 2026-06-28T22:09:32.069425435Z
+req_type: Story
+tags:
+- axi
+- competitive
+- from:axi-review
+- parent:EPIC-56
+- strategic
+- supervision
