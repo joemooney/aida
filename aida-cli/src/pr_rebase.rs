@@ -632,6 +632,138 @@ pub fn parse_merge_tree_conflicts(stdout: &str) -> Vec<String> {
     files
 }
 
+// ---------------------------------------------------------------------------
+// BUG-640: patch-id force-push guard.
+//
+// `--force-with-lease` does NOT protect a commit you've already fetched
+// (the lease compares against your local remote-tracking ref, which a
+// prior fetch may have already advanced) — AIDA had a real incident
+// where this dropped a merged PR on main. Per AIDA's own doctrine
+// (feedback_substrate_as_bouncer_not_rules): convert the CLAUDE.md rule
+// "never force-push over un-incorporated remote work" into a PROGRAMMATIC
+// GATE, lifted from kunchenguid/no-mistakes.
+//
+// Before ANY force-push:
+//   1. `git ls-remote` the LIVE target ref to get the current remote tip.
+//   2. `git rev-list --cherry-pick --right-only HEAD...<remote-tip> ^<base>`
+//      lists every commit the remote has that we DON'T, that isn't already
+//      incorporated by patch-id and isn't reachable from base.
+//   3. Non-empty → REFUSE (real remote work would be dropped).
+//   4. FAIL CLOSED: any inconclusive result (ls-remote fails, base won't
+//      resolve, rev-list errors) refuses rather than risk the overwrite.
+//
+// The pure pieces (ls-remote parse, rev-list classification, message)
+// live here so they're unit-testable without git/network; the
+// side-effecting wrapper that shells out lives in main.rs next to the
+// push call site.
+// ---------------------------------------------------------------------------
+
+/// Verdict of the patch-id force-push guard.
+// trace:BUG-640 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForcePushGuard {
+    /// Every commit the live remote holds is already incorporated by
+    /// patch-id or reachable from base (or the remote ref is absent) —
+    /// the force-push will not drop any remote work. Proceed.
+    Safe,
+    /// The live remote tip holds at least one commit we have NOT
+    /// incorporated by patch-id. Refuse — force-pushing would drop it.
+    /// Carries the `git rev-list --oneline` lines for the message.
+    Unincorporated { commits: Vec<String> },
+    /// Could not determine the remote state (ls-remote failed, base ref
+    /// didn't resolve, rev-list errored). FAIL CLOSED — refuse.
+    Inconclusive { reason: String },
+}
+
+/// Parse the SHA for `expected_ref` out of `git ls-remote <remote> <ref>`
+/// stdout. Each line is `<sha>\t<refname>`. Returns `None` when the ref
+/// is absent (no remote branch yet) — the caller treats absence as
+/// "nothing to overwrite". Pure so the parse is pinned by tests without
+/// hitting the network.
+// trace:BUG-640 | ai:claude
+pub fn parse_ls_remote_tip(stdout: &str, expected_ref: &str) -> Option<String> {
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut it = line.split_whitespace();
+        let sha = it.next().unwrap_or("");
+        let refname = it.next().unwrap_or("");
+        if refname == expected_ref && sha.len() >= 7 && sha.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Some(sha.to_string());
+        }
+    }
+    None
+}
+
+/// Classify the output of
+/// `git rev-list --cherry-pick --right-only --oneline HEAD...<tip> ^<base>`.
+///
+/// Each non-empty line is a commit the remote tip has that our branch
+/// does NOT — and that is neither incorporated by patch-id
+/// (`--cherry-pick` drops patch-equivalent commits) nor reachable from
+/// base (`^<base>` excludes shared history). Any such line means real
+/// remote work would be lost ⇒ refuse. No lines ⇒ safe.
+///
+/// Pure function over the rev-list stdout — the load-bearing
+/// incorporation logic, unit-tested independently of git.
+// trace:BUG-640 | ai:claude
+pub fn classify_force_push(rev_list_stdout: &str) -> ForcePushGuard {
+    let commits: Vec<String> = rev_list_stdout
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .map(|l| l.to_string())
+        .collect();
+    if commits.is_empty() {
+        ForcePushGuard::Safe
+    } else {
+        ForcePushGuard::Unincorporated { commits }
+    }
+}
+
+/// Refusal message for [`ForcePushGuard::Unincorporated`]. Names the
+/// un-incorporated remote commits and the recovery path. Pinned by unit
+/// tests — first-users and the headless drain's logs see this string.
+// trace:BUG-640 | ai:claude
+pub fn force_push_block_message(head_ref: &str, commits: &[String]) -> String {
+    let count = commits.len();
+    let plural = if count == 1 { "" } else { "s" };
+    let mut msg = format!(
+        "Refusing to force-push: origin/{head_ref} has {count} commit{plural} not \
+         incorporated into this branch by patch-id. Force-pushing would DROP \
+         {them}.\n\n",
+        them = if count == 1 { "it" } else { "them" },
+    );
+    msg.push_str("Un-incorporated remote commit(s):\n");
+    for c in commits.iter().take(10) {
+        msg.push_str(&format!("  {c}\n"));
+    }
+    if commits.len() > 10 {
+        msg.push_str(&format!("  … and {} more\n", commits.len() - 10));
+    }
+    msg.push_str(&format!(
+        "\nRecover by pulling the remote work first:\n  \
+         git fetch origin {head_ref}\n  \
+         git rebase origin/{head_ref}   # or merge, then re-run\n\n\
+         (--force-with-lease alone does NOT protect an already-fetched commit — \
+         this guard does.)"
+    ));
+    msg
+}
+
+/// Refusal message for [`ForcePushGuard::Inconclusive`] — the fail-closed
+/// path. Pinned by unit tests.
+// trace:BUG-640 | ai:claude
+pub fn force_push_inconclusive_message(head_ref: &str, reason: &str) -> String {
+    format!(
+        "Refusing to force-push origin/{head_ref}: could not verify the live remote \
+         is safe to overwrite ({reason}). Failing closed — re-run once the remote is \
+         reachable, or push manually after confirming no remote work would be lost."
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1345,5 +1477,117 @@ enforcement = "warn"
         assert!(msg.contains("PR-7"), "{msg}");
         assert!(msg.contains("2 intermediate"), "{msg}");
         assert!(msg.contains("Cargo.lock"), "{msg}");
+    }
+
+    // --- BUG-640: patch-id force-push guard ---
+
+    #[test]
+    fn classify_force_push_empty_is_safe() {
+        // No un-incorporated remote commits → safe to force-push.
+        assert_eq!(classify_force_push(""), ForcePushGuard::Safe);
+        assert_eq!(classify_force_push("\n  \n\n"), ForcePushGuard::Safe);
+    }
+
+    #[test]
+    fn classify_force_push_nonempty_refuses() {
+        // The remote has a commit our branch doesn't carry by patch-id —
+        // refuse, naming the offending line(s). This is the simulated
+        // "remote ahead with a distinct commit" acceptance case.
+        let out = "7660a0a distinct remote commit\n";
+        match classify_force_push(out) {
+            ForcePushGuard::Unincorporated { commits } => {
+                assert_eq!(commits, vec!["7660a0a distinct remote commit".to_string()]);
+            }
+            other => panic!("expected Unincorporated, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn classify_force_push_multiple_unincorporated() {
+        let out = "aaa one\nbbb two\nccc three\n";
+        match classify_force_push(out) {
+            ForcePushGuard::Unincorporated { commits } => assert_eq!(commits.len(), 3),
+            other => panic!("expected Unincorporated, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn classify_force_push_ignores_blank_lines() {
+        // Trailing/leading blank lines must NOT be mistaken for a commit
+        // (that would falsely refuse a safe push).
+        let out = "\nzzz only real commit\n\n";
+        match classify_force_push(out) {
+            ForcePushGuard::Unincorporated { commits } => {
+                assert_eq!(commits, vec!["zzz only real commit".to_string()]);
+            }
+            other => panic!("expected Unincorporated, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_ls_remote_tip_finds_matching_ref() {
+        let out = "5c21b9f56e0dea549c288dd51f6fa18733782fe8\trefs/heads/feature\n";
+        assert_eq!(
+            parse_ls_remote_tip(out, "refs/heads/feature").as_deref(),
+            Some("5c21b9f56e0dea549c288dd51f6fa18733782fe8")
+        );
+    }
+
+    #[test]
+    fn parse_ls_remote_tip_absent_ref_is_none() {
+        // Empty output (remote branch doesn't exist) → None → caller
+        // treats as "nothing to overwrite" → Safe.
+        assert!(parse_ls_remote_tip("", "refs/heads/feature").is_none());
+        // A different ref present, ours absent → still None.
+        let out = "abc123def456abc123def456abc123def456abcd\trefs/heads/other\n";
+        assert!(parse_ls_remote_tip(out, "refs/heads/feature").is_none());
+    }
+
+    #[test]
+    fn parse_ls_remote_tip_picks_correct_ref_among_many() {
+        let out = "1111111111111111111111111111111111111111\trefs/heads/main\n\
+                   2222222222222222222222222222222222222222\trefs/heads/feature\n";
+        assert_eq!(
+            parse_ls_remote_tip(out, "refs/heads/feature").as_deref(),
+            Some("2222222222222222222222222222222222222222")
+        );
+    }
+
+    #[test]
+    fn parse_ls_remote_tip_rejects_non_hex_sha() {
+        // Defensive: a malformed first column must not be returned as a SHA.
+        let out = "not-a-sha\trefs/heads/feature\n";
+        assert!(parse_ls_remote_tip(out, "refs/heads/feature").is_none());
+    }
+
+    #[test]
+    fn force_push_block_message_names_commits_and_recovery() {
+        let msg = force_push_block_message("feature", &s(&["7660a0a distinct remote commit"]));
+        assert!(msg.contains("Refusing to force-push"), "{msg}");
+        assert!(msg.contains("origin/feature"), "{msg}");
+        assert!(msg.contains("1 commit "), "{msg}");
+        assert!(!msg.contains("1 commits"), "{msg}");
+        assert!(msg.contains("7660a0a distinct remote commit"), "{msg}");
+        assert!(msg.contains("git rebase origin/feature"), "{msg}");
+        assert!(msg.contains("force-with-lease alone does NOT"), "{msg}");
+    }
+
+    #[test]
+    fn force_push_block_message_truncates_long_lists() {
+        let many: Vec<String> = (0..15).map(|i| format!("sha{i} commit {i}")).collect();
+        let msg = force_push_block_message("feature", &many);
+        assert!(msg.contains("sha0 commit 0"), "{msg}");
+        assert!(msg.contains("sha9 commit 9"), "{msg}");
+        assert!(!msg.contains("sha10 commit 10"), "{msg}");
+        assert!(msg.contains("… and 5 more"), "{msg}");
+    }
+
+    #[test]
+    fn force_push_inconclusive_message_fails_closed_text() {
+        let msg = force_push_inconclusive_message("feature", "git ls-remote exited 128");
+        assert!(msg.contains("Refusing to force-push"), "{msg}");
+        assert!(msg.contains("origin/feature"), "{msg}");
+        assert!(msg.contains("Failing closed"), "{msg}");
+        assert!(msg.contains("git ls-remote exited 128"), "{msg}");
     }
 }
