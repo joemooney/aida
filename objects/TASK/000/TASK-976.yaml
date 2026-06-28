@@ -1,0 +1,19 @@
+id: 019f1048-ac77-7461-95d8-7dc5be2a47a2
+spec_id: TASK-976
+agreed_id: TASK-976
+title: Outcome-only vocabulary firewall in advisor discipline doc
+description: firstmate never names internals to the human (watcher/crewmate/worktree/task-id/teardown); AIDA has the SPEC-IDs-stay-in-dev-artifacts rule (TASK-268) but not a machinery-vocab firewall. Add a do-not-surface list (orchestrator, lease, drain, worktree, punt, sentinel) to docs/aida/discipline/advisor-role.md.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:10:26.039790094Z
+modified_at: 2026-06-28T22:10:26.039790094Z
+req_type: Task
+tags:
+- advisor
+- axi
+- competitive
+- discipline
+- from:axi-review
+- parent:EPIC-56
