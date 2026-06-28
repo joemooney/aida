@@ -1,0 +1,21 @@
+id: 019f1045-676a-7030-8c73-cd47340bdc0b
+spec_id: TASK-965
+agreed_id: TASK-965
+title: 'Worktree-tangle spawn gate: assert worktree root != primary checkout before fan-out'
+description: firstmate refuses to launch a crewmate unless the resolved worktree root differs from the primary checkout, and alarms if the primary strands on a feature branch. This is exactly our fan-out incident memory (a bare agent checkout-b in the main repo aborts the next merge --ff-only). We defend it with a memory RULE; our own substrate-as-bouncer principle says ship a GATE. Add the assertion at aida agent new / fan-out + an aida status/ps alarm when the primary repo is on a non-default branch with in-flight leases.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:06:51.754760275Z
+modified_at: 2026-06-28T22:06:51.754760275Z
+req_type: Task
+tags:
+- axi
+- competitive
+- from:axi-review
+- parent:EPIC-56
+- reliability
+- safety
+- scar
+- substrate-gate
