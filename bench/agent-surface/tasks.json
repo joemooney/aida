@@ -1,0 +1,27 @@
+{
+  "next_queue_item": {
+    "category": "single_step",
+    "prompt": "What is the next item in my work queue? Report its spec ID and title.",
+    "grading_hint": "The next queued item is TASK-3, titled 'Wire the login form'. The agent must run a command / call a tool to read the queue and report that spec. Hallucinating without querying is a failure."
+  },
+  "show_spec_blocked_by": {
+    "category": "multi_step",
+    "prompt": "Show me spec STORY-2 and report what it is blocked by (its blocked-by graph). Name the blocking spec(s).",
+    "grading_hint": "STORY-2 ('Add password reset flow') is blocked by TASK-1 ('Set up auth backend'). The agent must query the spec and its blocked-by relationship and name TASK-1."
+  },
+  "status_snapshot": {
+    "category": "single_step",
+    "prompt": "Give me a snapshot of the project status: roughly how many requirements exist and a sense of their statuses.",
+    "grading_hint": "There are about 4-5 requirements: a mix of Approved and Draft (TASK-1, TASK-3 Approved; STORY-2 Approved; TASK-4 Draft). The agent must query real project status, not invent numbers. Reasonable approximations of the counts are acceptable."
+  },
+  "find_finding": {
+    "category": "multi_step",
+    "prompt": "Is there an open advisor finding (an observation awaiting triage)? If so, report what it is about and which spec it relates to.",
+    "grading_hint": "There is one finding, 'Empty-email login bug' (a major-severity observation about the login form submitting with an empty email), linked to spec TASK-3. The agent must query findings and report this."
+  },
+  "file_spec": {
+    "category": "multi_step",
+    "prompt": "File a new requirement: a task titled 'Add rate limiting to the login endpoint' with a short description. Report the spec ID it was assigned.",
+    "grading_hint": "The agent must actually create a new requirement (via the CLI add command or the add_requirement tool) and report the assigned spec ID (e.g. TASK-N). A claim of success without an actual create call, or no reported ID, is a failure."
+  }
+}
