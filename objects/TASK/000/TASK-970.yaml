@@ -3,12 +3,12 @@ spec_id: TASK-970
 agreed_id: TASK-970
 title: Content-first bare aida + default row-cap for agents
 description: 'Bare aida prints a help menu though CLAUDE.md says aida status is the entry point; aida list dumps 925 unbounded rows. In agent mode (non-TTY/AIDA_AGENT_OUTPUT): bare aida prints the status snapshot + top queued; aida list applies a default --limit (e.g. 30) + a count: N of M header + a widen hint. Human TTY path unchanged.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:07:51.759834455Z
-modified_at: 2026-06-28T23:00:52.879901705Z
+modified_at: 2026-06-28T23:07:52.462060313Z
 req_type: Task
 tags:
 - agent-output
@@ -36,3 +36,21 @@ comments:
   content: Commit 724d59831 references this requirement
   created_at: 2026-06-28T23:00:52.879901705Z
   modified_at: 2026-06-28T23:00:52.879901705Z
+history:
+- id: 019f107d-42ad-71b1-a91c-dfedca0e6b18
+  author: aida-auto-bump
+  timestamp: 2026-06-28T23:07:52.365120804Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f107d-430e-7860-b731-2a0088298147
+  timestamp: 2026-06-28T23:07:52.462053851Z
+  agent: aida
+  commit_sha: 18f3a9146c09e98f8a03dd7bc448fd04a7e3e4b4
+  summary: Completed via merge 18f3a914
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T23:07:51.353477997Z
+  completion_sha: 18f3a9146c09e98f8a03dd7bc448fd04a7e3e4b4
