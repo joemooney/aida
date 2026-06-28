@@ -3,12 +3,12 @@ spec_id: BUG-641
 agreed_id: BUG-641
 title: 'aida findings list: finding-ID vs linked-spec reversed in layout (agents misread it)'
 description: 'Surfaced by the SPIKE-73 benchmark: the find_finding task failed on BOTH the CLI and MCP conditions because aida findings list presents the finding-ID and the linked-spec-ID in a layout that an agent (and human) misreads — it is a CLI-CLARITY issue, not an MCP delta. Fix the layout so the finding-ID and its linked spec are unambiguous (clear labels / column order). Low effort, real legibility win.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T23:09:35.013944007Z
-modified_at: 2026-06-28T23:09:35.013944007Z
+modified_at: 2026-06-28T23:12:04.396370352Z
 req_type: Bug
 tags:
 - cli-ergonomics
