@@ -24235,5 +24235,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 2308
+- id: 019f1045-e5a6-75c1-a745-608fb4b2b1ec
+  target_id: 019f1045-d8bf-7450-87a1-31c5b006b5ef
+  author: aida
+  node_id: '1'
+  lamport: 2309
+  timestamp: 2026-06-28T22:07:24.070228566Z
+  kind: !Create
+    title: Drain exit summary with token accounting + diff stats to usage.jsonl
+    description: gnhf prints a permanent exit summary (elapsed, iterations, cumulative tokens, diff stats, log paths). On drain exit emit specs shipped/shelved/skipped, iterations, cumulative tokens + tokens/spec, diff stats, findings; persist to .aida/usage.jsonl so aida usage can chart cost-per-drain. Feeds the calibration + budget-dispatching loop.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2309
 node_id: '1'
