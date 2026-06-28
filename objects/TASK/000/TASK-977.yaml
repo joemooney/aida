@@ -1,0 +1,12 @@
+id: 019f105e-5b91-7d40-9e2d-70ad7e0a63d7
+spec_id: TASK-977
+agreed_id: TASK-977
+title: A future enhancement could count only LIVE leases (process-probe) to suppress the
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:34:07.121586610Z
+modified_at: 2026-06-28T22:34:07.121586610Z
+req_type: Task
