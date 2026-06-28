@@ -4335,6 +4335,28 @@ pub enum QueueCommand {
         // composes (the spec's named composition case).
         #[clap(long, value_name = "N", requires = "autonomous")]
         max_failures: Option<usize>,
+        /// With `--auto-complete`: hard budget cap on cumulative reported tokens
+        /// (input + output + cache) across the whole drain. Once the headless
+        /// phases' accumulated usage crosses this, the drain stops cleanly at
+        /// the next spec boundary rather than burning more quota on a wedged
+        /// chunk. A backstop for unattended drains; composes with
+        /// `--max-failures` and the goal condition (whichever fires first).
+        // trace:TASK-966 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "N", requires = "autonomous")]
+        max_tokens: Option<u64>,
+        /// With `--auto-complete`: stop the drain before starting the next spec
+        /// once this many specs have been acted on (shipped / punted /
+        /// escalated / shelved). A hard iteration cap for unattended drains.
+        // trace:TASK-966 | ai:claude
+        #[clap(long, value_name = "N", requires = "autonomous")]
+        max_iterations: Option<u64>,
+        /// With `--auto-complete`: wall-clock budget for the whole drain. A bare
+        /// number is minutes; suffixes / compounds work too (`90s`, `45m`,
+        /// `2h`, `1h30m`). The drain stops between specs once the deadline
+        /// passes — in-flight work is never interrupted mid-phase.
+        // trace:TASK-966 | ai:claude
+        #[clap(long, value_name = "DUR", requires = "autonomous")]
+        max_runtime: Option<String>,
         /// With `--auto-complete`: minutes a *headless* phase may make no
         /// commit / file-change before the watchdog kills + shelves it (a
         /// degenerate echo/sleep spin). Default 10; `0` disables. Overrides

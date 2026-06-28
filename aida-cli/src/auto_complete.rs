@@ -2837,6 +2837,16 @@ pub(crate) trait BatchDriver {
     fn next_head(&mut self) -> Option<String>;
     /// Run one spec's full `--auto-complete` orchestration.
     fn run_spec(&mut self, spec: &str) -> OrchestrationResult;
+    /// TASK-966: cumulative reported tokens across every headless phase the
+    /// drain has run so far (input + output + cache), parsed from each phase's
+    /// `claude -p --output-format stream-json` log. Only consulted when a
+    /// `--max-tokens` cap is active; the default `0` means a driver that does
+    /// not (or cannot) account tokens — e.g. the test mock or an interactive
+    /// drain with no headless logs — never trips the token cap.
+    // trace:TASK-966 | ai:claude
+    fn cumulative_tokens(&mut self) -> u64 {
+        0
+    }
 }
 
 /// Drain a batch: run `orchestrate` per member until the batch is empty, the
@@ -2857,6 +2867,36 @@ pub(crate) fn drain_batch(
     driver: &mut dyn BatchDriver,
     max: Option<usize>,
     max_failures: Option<usize>,
+) -> BatchDrainResult {
+    // Default entry: no budget caps. Existing callers + tests are unchanged.
+    // trace:TASK-966 | ai:claude
+    let mut cap_stop = None;
+    drain_batch_with_caps(
+        driver,
+        max,
+        max_failures,
+        &crate::drain_caps::DrainCaps::default(),
+        std::time::Instant::now(),
+        &mut cap_stop,
+    )
+}
+
+/// EPIC-28 [`drain_batch`] with TASK-966 hard budget caps layered on. The
+/// `caps` (`--max-tokens` / `--max-iterations` / `--max-runtime`) are checked at
+/// each spec boundary; when one fires, `cap_stop_out` is set to the reason and
+/// the drain returns a clean [`BatchDrainOutcome::MaxReached`] (the same "a
+/// configured limit stopped us early" family as `--max`). The caps compose with
+/// `--max-failures`: whichever stop condition is reached first wins. `start` is
+/// the drain's wall-clock origin, injected so the runtime check is deterministic
+/// under test.
+// trace:TASK-966 | ai:claude
+pub(crate) fn drain_batch_with_caps(
+    driver: &mut dyn BatchDriver,
+    max: Option<usize>,
+    max_failures: Option<usize>,
+    caps: &crate::drain_caps::DrainCaps,
+    start: std::time::Instant,
+    cap_stop_out: &mut Option<crate::drain_caps::CapStop>,
 ) -> BatchDrainResult {
     let mut shipped: Vec<String> = Vec::new();
     let mut punted: Vec<String> = Vec::new();
@@ -2897,6 +2937,40 @@ pub(crate) fn drain_batch(
         // attempt).
         if let Some(limit) = max {
             if shipped.len() + punted.len() + escalated.len() + shelved.len() >= limit {
+                return BatchDrainResult {
+                    shipped,
+                    punted,
+                    escalated,
+                    shelved,
+                    skipped,
+                    stopped_at: None,
+                    outcome: BatchDrainOutcome::MaxReached,
+                    exit_code: 0,
+                };
+            }
+        }
+        // TASK-966: hard budget caps, checked once the queue still has a head
+        // (so a genuinely-drained batch reports `Drained`, not a cap stop) but
+        // BEFORE this head is run — `--max-iterations` / `--max-runtime` stop
+        // *between* specs, and `--max-tokens` stops once the prior phases'
+        // accumulated reported tokens crossed the cap. A cap stop is a clean
+        // intentional stop: the in-flight head stays queued for the next drain.
+        // trace:TASK-966 | ai:claude
+        if caps.is_active() {
+            let acted = (shipped.len() + punted.len() + escalated.len() + shelved.len()) as u64;
+            let counters = crate::drain_caps::DrainCounters {
+                tokens: caps
+                    .max_tokens
+                    .map(|_| driver.cumulative_tokens())
+                    .unwrap_or(0),
+                iterations: acted,
+                elapsed: start.elapsed(),
+            };
+            let stop = caps
+                .check_before_iteration(&counters)
+                .or_else(|| caps.check_tokens(&counters));
+            if let Some(stop) = stop {
+                *cap_stop_out = Some(stop);
                 return BatchDrainResult {
                     shipped,
                     punted,
@@ -3039,6 +3113,40 @@ pub(crate) fn drain_batch_chain<'a, F>(
     batch_names: &[String],
     max: Option<usize>,
     max_failures: Option<usize>,
+    make_driver: F,
+) -> BatchChainDrainResult
+where
+    F: FnMut(&str) -> Box<dyn BatchDriver + 'a>,
+{
+    // Default entry: no budget caps. Existing callers + tests unchanged.
+    // trace:TASK-966 | ai:claude
+    let mut cap_stop = None;
+    drain_batch_chain_with_caps(
+        batch_names,
+        max,
+        max_failures,
+        &crate::drain_caps::DrainCaps::default(),
+        std::time::Instant::now(),
+        &mut cap_stop,
+        make_driver,
+    )
+}
+
+/// [`drain_batch_chain`] with TASK-966 hard budget caps threaded across the
+/// whole chain. `--max-runtime` and `--max-tokens` are cumulative across batches
+/// (a shared `start` and the global headless-log token meter respectively);
+/// `--max-iterations` is carried forward by shrinking each batch's iteration
+/// budget by the specs already acted on. A cap stop in any batch sets
+/// `cap_stop_out` and ends the chain with a clean [`BatchDrainOutcome::MaxReached`].
+// trace:TASK-966 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn drain_batch_chain_with_caps<'a, F>(
+    batch_names: &[String],
+    max: Option<usize>,
+    max_failures: Option<usize>,
+    caps: &crate::drain_caps::DrainCaps,
+    start: std::time::Instant,
+    cap_stop_out: &mut Option<crate::drain_caps::CapStop>,
     mut make_driver: F,
 ) -> BatchChainDrainResult
 where
@@ -3055,8 +3163,27 @@ where
     for batch_name in batch_names {
         let consumed = shipped.len() + punted.len() + escalated.len() + shelved.len();
         let remaining = max.map(|limit| limit.saturating_sub(consumed));
+        // TASK-966: carry the iteration budget forward — each batch sees only
+        // the chain-wide `--max-iterations` minus what prior batches consumed.
+        // `--max-tokens` (global log meter) and `--max-runtime` (shared `start`)
+        // are already cumulative, so they pass through unchanged.
+        let batch_caps = crate::drain_caps::DrainCaps {
+            max_tokens: caps.max_tokens,
+            max_iterations: caps
+                .max_iterations
+                .map(|c| c.saturating_sub(consumed as u64)),
+            max_runtime: caps.max_runtime,
+        };
+        let mut batch_cap_stop = None;
         let mut driver = make_driver(batch_name);
-        let result = drain_batch(driver.as_mut(), remaining, max_failures);
+        let result = drain_batch_with_caps(
+            driver.as_mut(),
+            remaining,
+            max_failures,
+            &batch_caps,
+            start,
+            &mut batch_cap_stop,
+        );
 
         shipped.extend(result.shipped.iter().cloned());
         punted.extend(result.punted.iter().cloned());
@@ -3072,6 +3199,24 @@ where
             result: result.clone(),
         };
         steps.push(step);
+
+        // TASK-966: a budget cap fired inside this batch — end the chain with a
+        // clean MaxReached and surface the reason. trace:TASK-966 | ai:claude
+        if let Some(stop) = batch_cap_stop {
+            *cap_stop_out = Some(stop);
+            return BatchChainDrainResult {
+                steps,
+                shipped,
+                punted,
+                escalated,
+                shelved,
+                skipped,
+                stopped_batch: Some(batch_name.clone()),
+                stopped_at: result.stopped_at,
+                outcome: BatchDrainOutcome::MaxReached,
+                exit_code: 0,
+            };
+        }
 
         match result.outcome {
             BatchDrainOutcome::Drained | BatchDrainOutcome::DrainedWithShelved => continue,
@@ -5724,6 +5869,9 @@ mod tests {
         skip_dependent_of: Vec<(String, String, String)>, // (dependent, blocker, reason)
         skipped: Vec<(String, String)>,
         runs: Vec<String>,
+        /// TASK-966: reported tokens each `run_spec` adds to the running total,
+        /// so a `--max-tokens` cap test can drive the accumulator deterministically.
+        tokens_each: u64,
     }
 
     impl MockBatchDriver {
@@ -5739,7 +5887,14 @@ mod tests {
                 skip_dependent_of: Vec::new(),
                 skipped: Vec::new(),
                 runs: Vec::new(),
+                tokens_each: 0,
             }
+        }
+
+        /// TASK-966: each completed spec reports `n` tokens (for `--max-tokens`).
+        fn tokens_each(mut self, n: u64) -> Self {
+            self.tokens_each = n;
+            self
         }
 
         fn failing(mut self, spec: &str, phase: Phase) -> Self {
@@ -5858,6 +6013,11 @@ mod tests {
             self.heads.retain(|h| h != spec);
             ok_result()
         }
+
+        // TASK-966: cumulative reported tokens = per-spec rate × specs run.
+        fn cumulative_tokens(&mut self) -> u64 {
+            self.tokens_each * self.runs.len() as u64
+        }
     }
 
     /// Acceptance: a 3-item batch with every phase green ships all three via
@@ -5871,6 +6031,100 @@ mod tests {
         assert_eq!(result.shipped, vec!["TASK-1", "TASK-2", "TASK-3"]);
         assert_eq!(result.stopped_at, None);
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
+    }
+
+    /// TASK-966: helper to drive [`drain_batch_with_caps`] and recover the
+    /// cap-stop reason alongside the result.
+    fn drain_with_caps(
+        driver: &mut dyn BatchDriver,
+        caps: &crate::drain_caps::DrainCaps,
+        start: std::time::Instant,
+    ) -> (BatchDrainResult, Option<crate::drain_caps::CapStop>) {
+        let mut cap_stop = None;
+        let result = drain_batch_with_caps(driver, None, None, caps, start, &mut cap_stop);
+        (result, cap_stop)
+    }
+
+    /// TASK-966: `--max-iterations 2` stops the drain BEFORE the third spec
+    /// begins — two ship, the third stays queued, and the stop is a clean
+    /// `MaxReached` carrying the iteration cap reason.
+    #[test]
+    fn drain_caps_max_iterations_stops_before_next_spec() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]);
+        let caps = crate::drain_caps::DrainCaps {
+            max_iterations: Some(2),
+            ..Default::default()
+        };
+        let (result, cap_stop) = drain_with_caps(&mut driver, &caps, std::time::Instant::now());
+        assert_eq!(result.outcome, BatchDrainOutcome::MaxReached);
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
+        // The third spec never ran — it stays queued for the next drain.
+        assert_eq!(driver.runs, vec!["TASK-1", "TASK-2"]);
+        assert_eq!(
+            cap_stop,
+            Some(crate::drain_caps::CapStop::Iterations {
+                completed: 2,
+                cap: 2
+            })
+        );
+    }
+
+    /// TASK-966: `--max-runtime` with a deadline already in the past stops the
+    /// drain between specs — nothing runs, the whole batch stays queued.
+    #[test]
+    fn drain_caps_max_runtime_stops_between_specs() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
+        let caps = crate::drain_caps::DrainCaps {
+            max_runtime: Some(std::time::Duration::from_secs(0)),
+            ..Default::default()
+        };
+        // start in the past → elapsed >= 0s deadline immediately.
+        let start = std::time::Instant::now() - std::time::Duration::from_secs(5);
+        let (result, cap_stop) = drain_with_caps(&mut driver, &caps, start);
+        assert_eq!(result.outcome, BatchDrainOutcome::MaxReached);
+        assert!(result.shipped.is_empty());
+        assert!(driver.runs.is_empty());
+        assert!(matches!(
+            cap_stop,
+            Some(crate::drain_caps::CapStop::Runtime { .. })
+        ));
+    }
+
+    /// TASK-966: `--max-tokens` stops the drain once accumulated reported tokens
+    /// cross the cap, checked at the spec boundary. Each spec reports 30k tokens;
+    /// with a 25k cap the first spec already overshoots, so the drain ships one
+    /// then stops before the second.
+    #[test]
+    fn drain_caps_max_tokens_aborts_once_accumulated_exceeds_cap() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"]).tokens_each(30_000);
+        let caps = crate::drain_caps::DrainCaps {
+            max_tokens: Some(25_000),
+            ..Default::default()
+        };
+        let (result, cap_stop) = drain_with_caps(&mut driver, &caps, std::time::Instant::now());
+        assert_eq!(result.outcome, BatchDrainOutcome::MaxReached);
+        assert_eq!(result.shipped, vec!["TASK-1"]);
+        assert_eq!(driver.runs, vec!["TASK-1"]);
+        assert_eq!(
+            cap_stop,
+            Some(crate::drain_caps::CapStop::Tokens {
+                used: 30_000,
+                cap: 25_000
+            })
+        );
+    }
+
+    /// TASK-966: inactive caps leave the drain behaving exactly like the
+    /// uncapped `drain_batch` — a clean full drain, no cap stop.
+    #[test]
+    fn drain_caps_inactive_drains_normally() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).tokens_each(1_000_000);
+        let caps = crate::drain_caps::DrainCaps::default();
+        let (result, cap_stop) = drain_with_caps(&mut driver, &caps, std::time::Instant::now());
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-1", "TASK-2"]);
+        assert_eq!(cap_stop, None);
     }
 
     /// Acceptance: a 3-item batch where phase 1 fails on item 2 — item 1
