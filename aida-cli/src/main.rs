@@ -56120,11 +56120,118 @@ fn pr_rebase_handler(
         }
     }
 
-    // ---- Step 8: force-with-lease push. ----
+    // ---- Step 8 (BUG-640): patch-id force-push guard. ----
+    // `--force-with-lease` does NOT protect a commit we already fetched,
+    // so before overwriting the remote head we ask the LIVE remote what
+    // it holds and refuse if any of those commits aren't incorporated
+    // into our branch by patch-id. Fails CLOSED: any inability to verify
+    // refuses the push. trace:BUG-640 | ai:claude
+    //
+    // Nested so the shell-out wrapper stays next to its one call site;
+    // the pure pieces it composes (parse_ls_remote_tip, classify_force_push)
+    // live in pr_rebase.rs and are unit-tested without git/network.
+    fn force_push_guard(
+        wt_path: &std::path::Path,
+        remote: &str,
+        head_ref: &str,
+        base_ref: &str,
+    ) -> pr_rebase::ForcePushGuard {
+        let full_ref = format!("refs/heads/{head_ref}");
+        // 1. Live remote tip for the target ref.
+        let ls = std::process::Command::new("git")
+            .arg("-C")
+            .arg(wt_path)
+            .args(["ls-remote", remote, &full_ref])
+            .output();
+        let ls = match ls {
+            Ok(o) if o.status.success() => o,
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                return pr_rebase::ForcePushGuard::Inconclusive {
+                    reason: format!(
+                        "git ls-remote {remote} {full_ref} failed: {}",
+                        stderr.trim()
+                    ),
+                };
+            }
+            Err(e) => {
+                return pr_rebase::ForcePushGuard::Inconclusive {
+                    reason: format!("could not invoke git ls-remote: {e}"),
+                };
+            }
+        };
+        let stdout = String::from_utf8_lossy(&ls.stdout);
+        let tip = match pr_rebase::parse_ls_remote_tip(&stdout, &full_ref) {
+            Some(t) => t,
+            // Ref absent on the remote → nothing to overwrite → safe.
+            None => return pr_rebase::ForcePushGuard::Safe,
+        };
+        // 2. Incorporation check: which commits does the remote tip have
+        //    that our HEAD lacks, that aren't patch-id-equivalent to one
+        //    of ours and aren't reachable from base?
+        let range = format!("HEAD...{tip}");
+        let not_base = format!("^{base_ref}");
+        let revs = std::process::Command::new("git")
+            .arg("-C")
+            .arg(wt_path)
+            .args([
+                "rev-list",
+                "--cherry-pick",
+                "--right-only",
+                "--oneline",
+                &range,
+                &not_base,
+            ])
+            .output();
+        match revs {
+            Ok(o) if o.status.success() => {
+                pr_rebase::classify_force_push(&String::from_utf8_lossy(&o.stdout))
+            }
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                pr_rebase::ForcePushGuard::Inconclusive {
+                    reason: format!("git rev-list incorporation check failed: {}", stderr.trim()),
+                }
+            }
+            Err(e) => pr_rebase::ForcePushGuard::Inconclusive {
+                reason: format!("could not invoke git rev-list: {e}"),
+            },
+        }
+    }
+
+    match force_push_guard(&wt_path, "origin", &info.head_ref, &origin_base) {
+        pr_rebase::ForcePushGuard::Safe => {}
+        pr_rebase::ForcePushGuard::Unincorporated { commits } => {
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                pr_rebase::force_push_block_message(&info.head_ref, &commits)
+            );
+            eprintln!(
+                "  {}",
+                format!("Worktree left at {} for inspection.", wt_path.display()).dimmed()
+            );
+            anyhow::bail!("force-push refused: remote has un-incorporated commits");
+        }
+        pr_rebase::ForcePushGuard::Inconclusive { reason } => {
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                pr_rebase::force_push_inconclusive_message(&info.head_ref, &reason)
+            );
+            eprintln!(
+                "  {}",
+                format!("Worktree left at {} for inspection.", wt_path.display()).dimmed()
+            );
+            anyhow::bail!("force-push refused: could not verify remote (fail-closed)");
+        }
+    }
+
+    // ---- Step 8b: force-with-lease push. ----
     // `--force-with-lease=<refname>:<expected-sha>` anchors the lease
     // to the PR head we resolved up-front, so a concurrent push from
     // elsewhere makes this fail loudly instead of silently
-    // overwriting.
+    // overwriting. Belt + suspenders with the BUG-640 guard above.
     let lease = format!("{}:{}", info.head_ref, info.head_oid);
     let push_status = std::process::Command::new("git")
         .arg("-C")
