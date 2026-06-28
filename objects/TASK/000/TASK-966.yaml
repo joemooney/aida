@@ -1,0 +1,19 @@
+id: 019f1045-8c6c-71a3-b6ee-080635b6baa7
+spec_id: TASK-966
+agreed_id: TASK-966
+title: 'Drain hard caps: --max-tokens / --max-iterations / --max-runtime stop conditions'
+description: gnhf has three orthogonal hard caps plus a token meter. aida goal expresses WHAT done looks like but nothing expresses stop-after-N-tokens/iterations/hours. An unattended drain-loop.sh can silently burn a weekly quota on a wedged chunk. Add --max-tokens/--max-iterations/--max-runtime to aida queue work --auto-complete (+ AIDA_DRAIN_MAXTOKENS/MAXITER/MAXRUNTIME in drain-loop.sh). Parse per-phase claude -p usage JSON to accumulate; stop between specs for iteration/runtime, abort in-flight phase for tokens.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:07:01.228519967Z
+modified_at: 2026-06-28T22:07:01.228519967Z
+req_type: Task
+tags:
+- axi
+- budget
+- competitive
+- drain
+- from:axi-review
+- parent:EPIC-56
