@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "name": "AIDA CLI (human-formatted: emoji + tables)",
+    "surface": "cli",
+    "mcp": false,
+    "allowed_tools": ["Bash", "Read", "Grep", "Glob"],
+    "disallowed_tools": [],
+    "preamble": "# Tools\n\nYou are working inside an AIDA project. AIDA tracks requirements/specs and a work queue. The `aida` CLI is installed. Use it via the Bash tool for all requirement, queue, graph, status, and findings operations. Run `aida --help` or `aida <command> --help` to discover subcommands and flags. Do NOT use any MCP tools. Examples:\n- `aida queue next`  / `aida queue list`\n- `aida show <SPEC-ID>` / `aida graph <SPEC-ID> --blocked-by`\n- `aida status` / `aida list`\n- `aida findings list`\n- `aida add --title \"...\" --type task --description \"...\"`\n\nAnswer the user's question, then stop."
+  },
+  "mcp": {
+    "name": "AIDA MCP tools (aida mcp-serve, loaded upfront)",
+    "surface": "mcp",
+    "mcp": true,
+    "allowed_tools": ["mcp__aida", "Read"],
+    "disallowed_tools": ["ToolSearch", "Bash"],
+    "preamble": "# Tools\n\nYou are working inside an AIDA project. AIDA tracks requirements/specs and a work queue, exposed through a registered MCP server named `aida`. Use the AIDA MCP tools (e.g. `queue_next`, `show_requirement`, `query_graph`, `status_unified`, `list_findings`, `add_requirement`) for all requirement, queue, graph, status, and findings operations.\n\nIMPORTANT: Do NOT use the `aida` CLI or any shell command. You must use the AIDA MCP tools exclusively.\n\nAnswer the user's question, then stop."
+  },
+  "toon": {
+    "name": "AIDA token-efficient CLI / TOON mode (NOT BUILT — TASK-964)",
+    "surface": "toon",
+    "not_implemented": true,
+    "mcp": false,
+    "allowed_tools": ["Bash", "Read", "Grep", "Glob"],
+    "disallowed_tools": [],
+    "preamble": "PLACEHOLDER — the token-efficient agent output mode (AIDA's analogue of gh-axi: minimal schema, no emoji/tables, pre-computed summaries) does not exist yet. It is tracked as TASK-964. Once `aida --output toon` (or an `AIDA_AGENT_OUTPUT=toon` env) ships, point this condition's preamble at it and re-run the matrix to fill the third column."
+  }
+}
