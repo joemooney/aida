@@ -3,12 +3,12 @@ spec_id: TASK-969
 agreed_id: TASK-969
 title: 'Config trust boundary: load code-executing config from the trusted default branch SHA'
 description: no-mistakes loads process-launching config (test/lint/format commands, agent) only from a pinned default-branch SHA, fail-closed, so a pushed branch cannot self-enable. AIDA runs hooks + [intake]/config + cargo/gh from worktrees off arbitrary branches; a malicious branch editing .aida/config.toml or a hook is a comparable RCE vector. For drain/CI commands sourced from project config/hooks, read code-executing fields from the trusted default branch. Document in docs/security/.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:07:41.182842374Z
-modified_at: 2026-06-28T23:12:02.447539938Z
+modified_at: 2026-06-28T23:37:32.156041028Z
 req_type: Task
 tags:
 - axi
@@ -24,3 +24,21 @@ relationships:
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:07:51.095904318Z
   created_by: joe
+history:
+- id: 019f1098-6a9b-7741-83bd-c1fbadcbbeee
+  author: aida-auto-bump
+  timestamp: 2026-06-28T23:37:32.059835255Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f1098-6afc-7f60-91b2-b69171e90db6
+  timestamp: 2026-06-28T23:37:32.156035303Z
+  agent: aida
+  commit_sha: fd6cea4b51d6c4a0942c85f0d9053f0709df3077
+  summary: Completed via merge fd6cea4b
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T23:37:31.057449803Z
+  completion_sha: fd6cea4b51d6c4a0942c85f0d9053f0709df3077
