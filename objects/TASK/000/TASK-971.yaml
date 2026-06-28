@@ -3,12 +3,12 @@ spec_id: TASK-971
 agreed_id: TASK-971
 title: 'SessionStart context hook: emit to stdout (not stderr) + wire in settings.json'
 description: aida-session-context.sh writes its dashboard to STDERR, but Claude Code injects STDOUT at SessionStart, and it is not even wired in settings.json. An existing-but-dead asset. Switch to stdout, wire it, and make it a compact TOON queue/in-flight digest. Near-zero effort, realizes the ambient-context principle.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:08:02.271016849Z
-modified_at: 2026-06-28T22:16:26.815375142Z
+modified_at: 2026-06-28T22:25:38.862140536Z
 req_type: Task
 tags:
 - agent-output
@@ -32,3 +32,21 @@ comments:
   content: Commit 947e2c68a references this requirement
   created_at: 2026-06-28T22:16:26.815375142Z
   modified_at: 2026-06-28T22:16:26.815375142Z
+history:
+- id: 019f1056-99b4-76a3-b589-8f4d9f3bfa75
+  author: aida-auto-bump
+  timestamp: 2026-06-28T22:25:38.740926181Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1056-9a2e-7270-a77a-9c002a5340d6
+  timestamp: 2026-06-28T22:25:38.862133258Z
+  agent: aida
+  commit_sha: 2a7eb313423830f81a760445c1e6dfed6058a68f
+  summary: Completed via merge 2a7eb313
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T22:25:37.738094362Z
+  completion_sha: 2a7eb313423830f81a760445c1e6dfed6058a68f
