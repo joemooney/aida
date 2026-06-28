@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:42.173329639Z
-modified_at: 2026-06-28T22:06:50.910015584Z
+modified_at: 2026-06-28T22:24:08.996077728Z
 req_type: Bug
 tags:
 - axi
@@ -26,3 +26,9 @@ relationships:
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:06:50.910003459Z
   created_by: joe
+comments:
+- id: 019f1055-3b24-71c3-a442-a2491d7ffeb8
+  author: joe
+  content: Commit 420ec222b references this requirement
+  created_at: 2026-06-28T22:24:08.996077728Z
+  modified_at: 2026-06-28T22:24:08.996077728Z
