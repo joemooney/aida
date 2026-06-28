@@ -99,6 +99,8 @@ mod status_display;
 mod team;
 #[cfg(test)]
 mod test_env;
+// trace:TASK-964 | ai:claude — TOON agent-output encoder (token-efficient).
+mod toon;
 // trace:TASK-661 | ai:claude
 mod triage_lease;
 mod usage;
@@ -446,9 +448,160 @@ fn agent_list_default_cap(
     }
 }
 
+// ── TASK-964: TOON agent-output renderers (AXI #1 token-efficient output +
+// #2 minimal default schemas). These run ONLY in agent mode; the human emoji /
+// table path is left byte-identical. Each command declares a minimal default
+// field set; `--fields` expands `aida list`. trace:TASK-964
+
+/// The minimal default column schema for `aida list` in agent mode (AXI #2).
+/// Four fields cover the agent's routine need — id / title / status / type —
+/// instead of the human table's id/origin/type/status/title/tags/glyph spread.
+/// `--fields` widens it.
+// trace:TASK-964
+const TOON_LIST_DEFAULT_FIELDS: &[&str] = &["id", "title", "status", "type"];
+
+/// The list fields the agent-mode `--fields` selector understands, mapped onto
+/// the cache summary plus the work-routing axis. Unknown names are rejected with
+/// this list in the error so the agent can self-correct.
+// trace:TASK-964
+const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
+    "id",
+    "title",
+    "status",
+    "type",
+    "priority",
+    "feature",
+    "owner",
+    "assignee",
+    "tags",
+    "heft",
+    "queued",
+    "in_flight",
+    "blocked",
+];
+
+/// Resolve the requested `--fields` selection for agent-mode `aida list` into a
+/// validated, ordered field list. `None` (no `--fields`) yields the minimal
+/// default. A `csv` string is split on commas, trimmed, lowercased, and checked
+/// against [`TOON_LIST_KNOWN_FIELDS`]; an unknown name is an error naming the
+/// valid set. Empty selection falls back to the default.
+// trace:TASK-964
+fn toon_list_fields(csv: Option<&str>) -> Result<Vec<String>> {
+    let Some(csv) = csv else {
+        return Ok(TOON_LIST_DEFAULT_FIELDS
+            .iter()
+            .map(|s| s.to_string())
+            .collect());
+    };
+    let mut out = Vec::new();
+    for raw in csv.split(',') {
+        let name = raw.trim().to_ascii_lowercase();
+        if name.is_empty() {
+            continue;
+        }
+        // `req_type` is a friendly alias for `type`.
+        let name = if name == "req_type" {
+            "type".to_string()
+        } else {
+            name
+        };
+        if !TOON_LIST_KNOWN_FIELDS.contains(&name.as_str()) {
+            anyhow::bail!(
+                "unknown --fields entry `{name}`; valid fields: {}",
+                TOON_LIST_KNOWN_FIELDS.join(", ")
+            );
+        }
+        out.push(name);
+    }
+    if out.is_empty() {
+        return Ok(TOON_LIST_DEFAULT_FIELDS
+            .iter()
+            .map(|s| s.to_string())
+            .collect());
+    }
+    Ok(out)
+}
+
+/// Project one requirement summary + its routing triple `(in_flight, blocked,
+/// queued)` onto a single named list field, as the cell string for a TOON row.
+// trace:TASK-964
+fn toon_list_cell(
+    r: &aida_core::RequirementSummary,
+    routing: (bool, bool, bool),
+    field: &str,
+) -> String {
+    let (in_flight, blocked, queued) = routing;
+    match field {
+        "id" => r
+            .agreed_id
+            .as_deref()
+            .or(r.spec_id.as_deref())
+            .unwrap_or("")
+            .to_string(),
+        "title" => r.title.clone(),
+        "status" => toon_status_token(&r.status),
+        "type" => r.req_type.to_ascii_lowercase(),
+        "priority" => r.priority.to_ascii_lowercase(),
+        "feature" => r.feature.clone(),
+        "owner" => r.owner.clone(),
+        "assignee" => r.assignee.clone().unwrap_or_default(),
+        "tags" => r.tags.join(" "),
+        "heft" => r.heft.to_string(),
+        "queued" => queued.to_string(),
+        "in_flight" => in_flight.to_string(),
+        "blocked" => blocked.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Normalize a cache status string (`InProgress`, `in-progress`, `NeedsAttention`,
+/// …) to a stable lowercase-hyphen token for agent output, so the TOON value is
+/// uniform regardless of how the cache spelled it.
+// trace:TASK-964
+fn toon_status_token(status: &str) -> String {
+    let s = status.trim();
+    match s.to_ascii_lowercase().replace([' ', '_'], "-").as_str() {
+        "inprogress" | "in-progress" => "in-progress".to_string(),
+        "needsattention" | "needs-attention" => "needs-attention".to_string(),
+        other => other.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod task970_agent_output_tests {
     use super::*;
+
+    // TASK-964: no `--fields` => the minimal default schema; an explicit list is
+    // validated + ordered; an unknown field is rejected; the `req_type` alias
+    // folds to `type`. trace:TASK-964
+    #[test]
+    fn toon_list_fields_default_and_selection() {
+        assert_eq!(
+            toon_list_fields(None).unwrap(),
+            vec!["id", "title", "status", "type"]
+        );
+        assert_eq!(
+            toon_list_fields(Some("id, status , req_type")).unwrap(),
+            vec!["id", "status", "type"]
+        );
+        // Empty / whitespace-only selection falls back to the default.
+        assert_eq!(
+            toon_list_fields(Some("  ")).unwrap(),
+            vec!["id", "title", "status", "type"]
+        );
+        assert!(toon_list_fields(Some("id,bogus")).is_err());
+    }
+
+    // TASK-964: cache status spellings collapse to a stable lowercase-hyphen
+    // token regardless of how the cache stored them. trace:TASK-964
+    #[test]
+    fn toon_status_token_normalizes() {
+        assert_eq!(toon_status_token("InProgress"), "in-progress");
+        assert_eq!(toon_status_token("in-progress"), "in-progress");
+        assert_eq!(toon_status_token("NeedsAttention"), "needs-attention");
+        assert_eq!(toon_status_token("Draft"), "draft");
+        assert_eq!(toon_status_token("Done"), "done");
+    }
 
     // AGENT MODE = (AIDA_AGENT_OUTPUT truthy) OR (stdout not a TTY). An explicit
     // falsey value force-selects the HUMAN path even when piped. trace:TASK-970
@@ -14117,6 +14270,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             user,
             limit,
             no_focus,
+            fields,
             ..
         } => {
             // STORY-562: `aida list human` (positional alias) and `aida list
@@ -14668,6 +14822,34 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&out)?);
+                return Ok(());
+            }
+
+            // TASK-964: AGENT-MODE token-efficient TOON render. Replaces the
+            // emoji/table default for non-interactive agent callers (non-TTY or
+            // AIDA_AGENT_OUTPUT). The human TTY path drops through to the
+            // byte-identical table below. The `--tree` grouped view keeps its own
+            // shape (it's a structured rollup, not a flat row set). A leading
+            // `count: N of M` header states the bounded slice; `--fields` widens
+            // the minimal id/title/status/type schema. trace:TASK-964
+            if agent_output_mode() && !*tree {
+                let selected = toon_list_fields(fields.as_deref())?;
+                let rows: Vec<Vec<String>> = reqs
+                    .iter()
+                    .map(|r| {
+                        let routing = row_routing(r);
+                        selected
+                            .iter()
+                            .map(|f| toon_list_cell(r, routing, f))
+                            .collect()
+                    })
+                    .collect();
+                println!("count: {} of {}", reqs.len(), total_after_filters);
+                let field_refs: Vec<&str> = selected.iter().map(String::as_str).collect();
+                println!("{}", crate::toon::table_raw("specs", &field_refs, &rows));
+                if agent_default_cap.is_some() && total_after_filters > reqs.len() {
+                    println!("note: agent default cap — `aida list --all` or `--limit N` to widen");
+                }
                 return Ok(());
             }
 
@@ -16061,6 +16243,85 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             heft: degrees.heft,
                         };
                         println!("{}", serde_json::to_string_pretty(&out)?);
+                        return Ok(());
+                    }
+                    // TASK-964: AGENT-MODE token-efficient TOON render for the
+                    // single-spec detail. A flat scalar head (the minimal field
+                    // set an agent needs) plus a uniform relationships table.
+                    // The human TTY detail view drops through unchanged. The
+                    // description body is truncated unless `--full`/`--verbose`,
+                    // mirroring `--card` density. trace:TASK-964
+                    if agent_output_mode() && !*card {
+                        let mut lines: Vec<String> = Vec::new();
+                        lines.push(crate::toon::scalar("id", &req.display_id()));
+                        if let Some(origin) = req.spec_id.as_deref() {
+                            if origin != req.display_id() {
+                                lines.push(crate::toon::scalar("origin_id", origin));
+                            }
+                        }
+                        lines.push(crate::toon::scalar("title", &req.title));
+                        lines.push(crate::toon::scalar(
+                            "type",
+                            &format!("{:?}", req.req_type).to_ascii_lowercase(),
+                        ));
+                        lines.push(crate::toon::scalar(
+                            "status",
+                            &toon_status_token(&effective_status_str),
+                        ));
+                        lines.push(crate::toon::scalar(
+                            "priority",
+                            &format!("{}", req.effective_priority()).to_ascii_lowercase(),
+                        ));
+                        lines.push(crate::toon::scalar("owner", &req.owner));
+                        if let Some(a) = req.assignee.as_deref() {
+                            lines.push(crate::toon::scalar("assignee", a));
+                        }
+                        if !req.feature.is_empty() {
+                            lines.push(crate::toon::scalar("feature", &req.feature));
+                        }
+                        lines.push(crate::toon::scalar("heft", &degrees.heft.to_string()));
+                        if !req.tags.is_empty() {
+                            let mut tags: Vec<&str> = req.tags.iter().map(String::as_str).collect();
+                            tags.sort_unstable();
+                            lines.push(crate::toon::scalar("tags", &tags.join(" ")));
+                        }
+                        // Description body: truncated by char count unless the
+                        // user opted into the full view. ASCII marker only.
+                        let want_full = *full || *verbose;
+                        let desc = if want_full {
+                            req.description.clone()
+                        } else {
+                            const CAP: usize = 280;
+                            if req.description.chars().count() <= CAP {
+                                req.description.clone()
+                            } else {
+                                let head: String = req.description.chars().take(CAP).collect();
+                                format!("{head} ... (truncated; --full for the rest)")
+                            }
+                        };
+                        lines.push(crate::toon::scalar("description", &desc));
+                        println!("{}", lines.join("\n"));
+
+                        // Relationships as a uniform TOON table (rel,id,title).
+                        if !req.relationships.is_empty() {
+                            let mut rows: Vec<Vec<String>> = Vec::new();
+                            for rel in &req.relationships {
+                                let label = card_rel_label(&rel.rel_type).to_string();
+                                let (tid, ttitle) = match backend.get_requirement(&rel.target_id) {
+                                    Ok(Some(t)) => (t.display_id(), t.title.clone()),
+                                    _ => ("(unknown)".to_string(), String::new()),
+                                };
+                                rows.push(vec![label, tid, ttitle]);
+                            }
+                            println!(
+                                "{}",
+                                crate::toon::table_raw(
+                                    "relationships",
+                                    &["rel", "id", "title"],
+                                    &rows
+                                )
+                            );
+                        }
                         return Ok(());
                     }
                     // TASK-265: --card renders a compact boxed spec card
@@ -105729,6 +105990,51 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
     println!();
 }
 
+/// AGENT-MODE token-efficient TOON render of the fast status snapshot. Scalar
+/// head fields (role / branch / queue depth / the cache counts) then a uniform
+/// TOON table of the top queued items for the active role. No emoji, no section
+/// rules — the token-efficient analog of [`print_fast_status`], which stays
+/// byte-identical for the human TTY path.
+// trace:TASK-964
+fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) {
+    let mut lines: Vec<String> = Vec::new();
+    lines.push(crate::toon::scalar("role", &snap.role));
+    lines.push(crate::toon::scalar(
+        "role_default",
+        &snap.role_is_default.to_string(),
+    ));
+    lines.push(crate::toon::scalar(
+        "branch",
+        snap.branch.as_deref().unwrap_or(""),
+    ));
+    lines.push(crate::toon::scalar(
+        "queue_depth",
+        &snap.queue_depth.to_string(),
+    ));
+    if snap.cache_present {
+        lines.push(crate::toon::scalar("open", &snap.counts.open.to_string()));
+        lines.push(crate::toon::scalar(
+            "in_progress",
+            &snap.counts.in_progress.to_string(),
+        ));
+        lines.push(crate::toon::scalar("draft", &snap.counts.draft.to_string()));
+        lines.push(crate::toon::scalar("total", &snap.counts.total.to_string()));
+    } else {
+        lines.push(crate::toon::scalar("cache", "absent"));
+    }
+    println!("{}", lines.join("\n"));
+
+    let queued = agent_bare_top_queued(project_root, &snap.role, AGENT_BARE_QUEUE_TOPN);
+    let rows: Vec<Vec<String>> = queued
+        .into_iter()
+        .map(|(id, title)| vec![id, title])
+        .collect();
+    println!(
+        "{}",
+        crate::toon::table_raw("queued", &["id", "title"], &rows)
+    );
+}
+
 /// TASK-970: the top-N queued items for the active role, each resolved to its
 /// display id + title from the read-only cache (NO full store load). The queue
 /// YAML is read directly with the SAME role filter `read_queue_depth` uses, so
@@ -105816,6 +106122,13 @@ fn handle_bare_agent_status() -> Result<()> {
         return Ok(());
     };
     let snap = collect_fast_status_snapshot(&project_root);
+    // TASK-964: in TOON agent mode, emit the token-efficient snapshot (this
+    // handler is already agent-only, but AIDA_AGENT_OUTPUT=0 force-selects the
+    // human shape for parity with the explicit `aida status`). trace:TASK-964
+    if agent_output_mode() {
+        print_toon_status(&snap, &project_root);
+        return Ok(());
+    }
     print_fast_status(&snap);
 
     let queued = agent_bare_top_queued(&project_root, &snap.role, AGENT_BARE_QUEUE_TOPN);
@@ -106013,7 +106326,14 @@ fn handle_status_command_distributed(
             print_stranded_primary_banner(&stranded);
         }
         let snap = collect_fast_status_snapshot(&project_root);
-        print_fast_status(&snap);
+        // TASK-964: AGENT-MODE renders the token-efficient TOON snapshot; the
+        // human TTY path keeps the byte-identical emoji/rule snapshot.
+        // trace:TASK-964
+        if agent_output_mode() {
+            print_toon_status(&snap, &project_root);
+        } else {
+            print_fast_status(&snap);
+        }
         return Ok(());
     }
 
@@ -118532,6 +118852,61 @@ fn handle_queue_command(
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
                 let rows = queue_json_rows(&raw, &summaries);
                 println!("{}", serde_json::to_string(&rows)?);
+                return Ok(());
+            }
+            // TASK-964: AGENT-MODE token-efficient TOON render of the queue.
+            // Mirrors the BUG-616 `--json` shape (raw queue order, cache-resolved
+            // id/title/status/for_role) as a uniform TOON table with a count
+            // header, instead of the human grouped/Done-awaiting-merge view. The
+            // human TTY path drops through unchanged. trace:TASK-964
+            if agent_output_mode() {
+                let raw = if *global {
+                    Vec::new()
+                } else {
+                    storage.queue_list(&user_id, *include_completed)?
+                };
+                let backend = advance_backend(store_path)?;
+                let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
+                let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
+                    summaries.iter().map(|s| (s.id, s)).collect();
+                // Mirror the human default: hide archived + terminal (Completed /
+                // Rejected) entries unless the caller widened with
+                // `--include-terminal` / `--include-completed`. Without this the
+                // raw queue (which retains Done-awaiting-merge + shipped specs)
+                // balloons the agent output far past the human view. trace:TASK-964
+                let show_terminal = *include_terminal || *include_completed;
+                let rows: Vec<Vec<String>> = raw
+                    .iter()
+                    .filter_map(|e| {
+                        let s = by_id.get(&e.requirement_id)?;
+                        if !show_terminal {
+                            if s.archived {
+                                return None;
+                            }
+                            let st = s.status.to_ascii_lowercase();
+                            if st == "completed" || st == "rejected" {
+                                return None;
+                            }
+                        }
+                        let id = s
+                            .agreed_id
+                            .as_deref()
+                            .or(s.spec_id.as_deref())
+                            .unwrap_or("")
+                            .to_string();
+                        Some(vec![
+                            id,
+                            s.title.clone(),
+                            toon_status_token(&s.status),
+                            e.for_role.clone().unwrap_or_default(),
+                        ])
+                    })
+                    .collect();
+                println!("count: {}", rows.len());
+                println!(
+                    "{}",
+                    crate::toon::table_raw("queue", &["id", "title", "status", "for_role"], &rows)
+                );
                 return Ok(());
             }
             // TASK-475: nudge when the local orphan store lags origin — a

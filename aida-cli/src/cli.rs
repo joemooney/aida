@@ -6385,6 +6385,16 @@ pub enum Command {
         // — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         no_focus: bool,
+
+        /// AGENT-MODE only: widen the token-efficient TOON column schema. By
+        /// default agent-mode `aida list` emits the minimal `id,title,status,type`
+        /// set; pass a comma-separated field list to expand it, e.g.
+        /// `--fields id,title,status,priority,tags`. Valid fields: id, title,
+        /// status, type, priority, feature, owner, assignee, tags, heft, queued,
+        /// in_flight, blocked. No effect on the human TTY table.
+        // trace:TASK-964 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "CSV")]
+        fields: Option<String>,
     },
 
     /// Show details for a specific requirement
