@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:44:37.596692409Z
-modified_at: 2026-06-28T22:44:37.596692409Z
+modified_at: 2026-06-28T22:44:41.808343903Z
 req_type: Story
 tags:
 - ambient-meter
@@ -16,3 +16,7 @@ tags:
 - gnhf
 - parent:EPIC-53
 - tmux
+relationships:
+- rel_type: Child
+  target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
+  created_at: 2026-06-28T22:44:41.808343903Z
