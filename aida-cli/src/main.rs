@@ -29,6 +29,8 @@ mod digest;
 mod docs;
 mod drain_caps;
 mod drain_lock;
+// trace:TASK-967 | ai:claude
+mod drain_summary;
 mod field_study;
 // trace:SPIKE-67 | ai:claude
 mod rule_violation;
@@ -128846,11 +128848,16 @@ fn handle_auto_complete_batch(
         }
     }
 
+    // TASK-967: drain origin (wall clock + base HEAD) for the exit summary.
+    // trace:TASK-967 | ai:claude
+    let drain_started = std::time::SystemTime::now();
+    let drain_clock = std::time::Instant::now();
+    let drain_base_sha = drain_root.as_deref().and_then(current_branch_head_sha);
     // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
     let token_meter = caps
         .max_tokens
         .and(drain_root.clone())
-        .map(|root| (root, std::time::SystemTime::now()));
+        .map(|root| (root, drain_started));
     let mut driver = RealBatchDriver {
         storage,
         user_id: user_id.to_string(),
@@ -128878,7 +128885,7 @@ fn handle_auto_complete_batch(
         max,
         max_failures,
         caps,
-        std::time::Instant::now(),
+        drain_clock,
         &mut cap_stop,
     );
     // An empty batch (nothing shipped, nothing punted, nothing to drain) is a
@@ -128898,6 +128905,25 @@ fn handle_auto_complete_batch(
         result.exit_code
     };
     emit_batch_drain_summary(batch_name, &result, exit_code, json);
+    // TASK-967: permanent exit summary + cost-per-drain telemetry.
+    finalize_drain_summary(
+        "batch",
+        format!("batch:{batch_name}"),
+        &result.outcome,
+        cap_stop.as_ref(),
+        drain_summary::DrainTallies {
+            shipped: result.shipped.len(),
+            shelved: result.shelved.len(),
+            skipped: result.skipped.len(),
+            punted: result.punted.len(),
+            escalated: result.escalated.len(),
+        },
+        drain_root.as_deref(),
+        drain_base_sha.as_deref(),
+        drain_started,
+        drain_clock.elapsed(),
+        json,
+    );
     // STORY-493: at drain-end, durably digest any mailbox traffic the drain
     // produced into the git-canonical orphan store. Best-effort + non-fatal —
     // never let a digest failure change the drain's exit code. trace:STORY-493
@@ -128974,6 +129000,10 @@ fn handle_auto_complete_batches(
     // TASK-966: a single drain-start + token meter shared across every batch in
     // the chain so `--max-runtime` / `--max-tokens` are cumulative.
     let chain_started = std::time::SystemTime::now();
+    // TASK-967: drain-wide wall clock + base HEAD for the exit summary.
+    // trace:TASK-967 | ai:claude
+    let chain_clock = std::time::Instant::now();
+    let drain_base_sha = drain_root.as_deref().and_then(current_branch_head_sha);
     let token_meter_root = caps.max_tokens.and(drain_root.clone());
     let mut cap_stop = None;
     let result = auto_complete::drain_batch_chain_with_caps(
@@ -128981,7 +129011,7 @@ fn handle_auto_complete_batches(
         max,
         max_failures,
         caps,
-        std::time::Instant::now(),
+        chain_clock,
         &mut cap_stop,
         |batch_name| {
             batch_index += 1;
@@ -129039,6 +129069,30 @@ fn handle_auto_complete_batches(
         result.exit_code
     };
     emit_batch_chain_summary(batch_names, &result, exit_code, json);
+    // TASK-967: permanent exit summary + cost-per-drain telemetry. The label is
+    // the chained batches; the chain's wall clock + base HEAD bound the diff.
+    finalize_drain_summary(
+        "batch-chain",
+        batch_names
+            .iter()
+            .map(|b| format!("batch:{b}"))
+            .collect::<Vec<_>>()
+            .join(" → "),
+        &result.outcome,
+        cap_stop.as_ref(),
+        drain_summary::DrainTallies {
+            shipped: result.shipped.len(),
+            shelved: result.shelved.len(),
+            skipped: result.skipped.len(),
+            punted: result.punted.len(),
+            escalated: result.escalated.len(),
+        },
+        drain_root.as_deref(),
+        drain_base_sha.as_deref(),
+        chain_started,
+        chain_clock.elapsed(),
+        json,
+    );
     // STORY-493: same best-effort drain-end mailbox digest as the single-batch
     // path. Non-fatal — never affects the drain's exit code. trace:STORY-493
     if let Some(root) = &drain_root {
@@ -129829,6 +129883,107 @@ fn sum_headless_log_tokens(project_root: &std::path::Path, since: std::time::Sys
     total
 }
 
+/// TASK-967: the `BatchDrainOutcome` → machine label used in the drain exit
+/// summary's `outcome` field (mirrors the per-emitter JSON mapping).
+// trace:TASK-967 | ai:claude
+fn batch_outcome_label(outcome: &auto_complete::BatchDrainOutcome) -> &'static str {
+    use auto_complete::BatchDrainOutcome;
+    match outcome {
+        BatchDrainOutcome::Drained => "drained",
+        BatchDrainOutcome::MaxReached => "max-reached",
+        BatchDrainOutcome::Failed(_) => "failed",
+        BatchDrainOutcome::Stalled => "stalled",
+        BatchDrainOutcome::Mismatched { .. } => "mismatched",
+        BatchDrainOutcome::Inconclusive => "inconclusive",
+        BatchDrainOutcome::Held => "held",
+        BatchDrainOutcome::DrainedWithShelved => "drained-with-shelved",
+    }
+}
+
+/// TASK-967: `git diff --numstat <base>..HEAD` in the drain's main worktree —
+/// the cumulative line/file churn the drain landed (each shipped spec merged +
+/// pulled advances HEAD on the integration branch). Best-effort: any git error
+/// yields an empty body, which `DrainDiffStats::from_numstat` reads as all-zero.
+// trace:TASK-967 | ai:claude
+fn drain_diff_numstat(root: &std::path::Path, base_sha: &str) -> String {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["diff", "--numstat", &format!("{base_sha}..HEAD")])
+        .output();
+    match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        _ => String::new(),
+    }
+}
+
+/// TASK-967: assemble + emit + record the permanent drain EXIT SUMMARY.
+///
+/// Gathers the impure inputs — cumulative headless-log tokens (reusing
+/// [`sum_headless_log_tokens`] / [`drain_caps::tokens_from_log`]), the
+/// drain-wide `git diff --numstat`, and the wall time — then hands them to the
+/// pure [`drain_summary::DrainSummary`]. The block prints to stderr (human) or
+/// emits the structured record as a JSON line (machine), and the same record is
+/// appended to `~/.aida/usage.jsonl` (gated on telemetry) so `aida usage` can
+/// chart cost-per-drain. Works for every exit family — drained, cap-hit (the
+/// `cap_stop` label overrides the outcome), shelved, or failed.
+// trace:TASK-967 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn finalize_drain_summary(
+    kind: &str,
+    label: String,
+    outcome_outcome: &auto_complete::BatchDrainOutcome,
+    cap_stop: Option<&drain_caps::CapStop>,
+    tallies: drain_summary::DrainTallies,
+    drain_root: Option<&std::path::Path>,
+    drain_base_sha: Option<&str>,
+    started: std::time::SystemTime,
+    elapsed: std::time::Duration,
+    json: bool,
+) {
+    // A budget-cap stop reports the cap that fired; otherwise the drain outcome.
+    let outcome = match cap_stop {
+        Some(stop) => stop.flag().to_string(),
+        None => batch_outcome_label(outcome_outcome).to_string(),
+    };
+    let cumulative_tokens = drain_root
+        .map(|root| sum_headless_log_tokens(root, started))
+        .unwrap_or(0);
+    let diff = match (drain_root, drain_base_sha) {
+        (Some(root), Some(base)) => {
+            drain_summary::DrainDiffStats::from_numstat(&drain_diff_numstat(root, base))
+        }
+        _ => drain_summary::DrainDiffStats::default(),
+    };
+    let summary = drain_summary::DrainSummary {
+        kind: kind.to_string(),
+        label,
+        outcome,
+        tallies,
+        cumulative_tokens,
+        diff,
+        elapsed_secs: elapsed.as_secs(),
+    };
+    let ts = chrono::Utc::now().to_rfc3339();
+    let sha = build_sha_short();
+    let role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let record = summary.to_usage_value(&ts, sha.as_deref(), role.as_deref());
+    if json {
+        // Machine consumers read JSONL — the record is a distinct
+        // `"event":"drain_summary"` line alongside the per-emitter object.
+        println!("{record}");
+    } else {
+        eprint!("\n{}", summary.render());
+    }
+    // Persist to ~/.aida/usage.jsonl so `aida usage` can chart cost-per-drain.
+    let project_root = find_main_worktree_root().ok();
+    if usage::is_enabled(project_root.as_deref()) {
+        usage::append_value(&record);
+    }
+}
+
 /// Real [`auto_complete::BatchDriver`] for a `nextN` drain (TASK-293). Unlike
 /// [`RealBatchDriver`], the "members" are not a `batch:NAME` tag — they are
 /// simply the drivable queue head, re-resolved each call. A shipped spec
@@ -129959,11 +130114,17 @@ fn handle_auto_complete_next_n(
         }
     }
 
+    // TASK-967: capture the drain origin (wall clock + base HEAD) up front so
+    // the exit summary can report token spend, diff stats, and elapsed time
+    // regardless of whether a token cap is active. trace:TASK-967 | ai:claude
+    let drain_started = std::time::SystemTime::now();
+    let drain_clock = std::time::Instant::now();
+    let drain_base_sha = drain_root.as_deref().and_then(current_branch_head_sha);
     // TASK-966: arm the token meter only when a `--max-tokens` cap is set.
     let token_meter = caps
         .max_tokens
         .and(drain_root.clone())
-        .map(|root| (root, std::time::SystemTime::now()));
+        .map(|root| (root, drain_started));
     let mut driver = RealNextNDriver {
         storage,
         user_id: user_id.to_string(),
@@ -129989,7 +130150,7 @@ fn handle_auto_complete_next_n(
         Some(n),
         max_failures,
         caps,
-        std::time::Instant::now(),
+        drain_clock,
         &mut cap_stop,
     );
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
@@ -130010,6 +130171,25 @@ fn handle_auto_complete_next_n(
         result.exit_code
     };
     emit_next_n_drain_summary(n, &result, exit_code, json);
+    // TASK-967: permanent exit summary + cost-per-drain telemetry.
+    finalize_drain_summary(
+        "next-n",
+        format!("next {n}"),
+        &result.outcome,
+        cap_stop.as_ref(),
+        drain_summary::DrainTallies {
+            shipped: result.shipped.len(),
+            shelved: result.shelved.len(),
+            skipped: result.skipped.len(),
+            punted: result.punted.len(),
+            escalated: result.escalated.len(),
+        },
+        drain_root.as_deref(),
+        drain_base_sha.as_deref(),
+        drain_started,
+        drain_clock.elapsed(),
+        json,
+    );
     // STORY-301: clean exit removes the drain-state file; a crash leaves it.
     if let Some(root) = &drain_root {
         let _ = drain_state::DrainState::clear(root);
