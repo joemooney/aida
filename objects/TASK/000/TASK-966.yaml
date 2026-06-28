@@ -3,12 +3,12 @@ spec_id: TASK-966
 agreed_id: TASK-966
 title: 'Drain hard caps: --max-tokens / --max-iterations / --max-runtime stop conditions'
 description: gnhf has three orthogonal hard caps plus a token meter. aida goal expresses WHAT done looks like but nothing expresses stop-after-N-tokens/iterations/hours. An unattended drain-loop.sh can silently burn a weekly quota on a wedged chunk. Add --max-tokens/--max-iterations/--max-runtime to aida queue work --auto-complete (+ AIDA_DRAIN_MAXTOKENS/MAXITER/MAXRUNTIME in drain-loop.sh). Parse per-phase claude -p usage JSON to accumulate; stop between specs for iteration/runtime, abort in-flight phase for tokens.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:07:01.228519967Z
-modified_at: 2026-06-28T22:07:20.058127472Z
+modified_at: 2026-06-28T22:49:35.728904777Z
 req_type: Task
 tags:
 - axi
@@ -25,3 +25,21 @@ relationships:
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:07:20.058123540Z
   created_by: joe
+history:
+- id: 019f106c-868e-7dc2-b006-8b757688c373
+  author: aida-auto-bump
+  timestamp: 2026-06-28T22:49:35.630614393Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f106c-86f0-73f1-966a-6c2af849c32f
+  timestamp: 2026-06-28T22:49:35.728898921Z
+  agent: aida
+  commit_sha: 5c3d0bcc6065483e50685b413e35275debc871c5
+  summary: Completed via merge 5c3d0bcc
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T22:49:34.621024651Z
+  completion_sha: 5c3d0bcc6065483e50685b413e35275debc871c5
