@@ -210,6 +210,33 @@ at current Opus prices (SPIKE-7 measured ~$3.80 across its test suite). An
 overnight drain of a 20-item batch is a ~$60 run. Size your batches
 accordingly.
 
+### The drain exit summary (TASK-967)
+
+Every `--auto-complete` drain (`nextN`, `--batch`, `--batches`) prints a
+permanent **exit summary** when it finishes — drained, cap-hit, shelved, or
+failed:
+
+```
+─ drain summary ─
+  batch:autonomy-modes (drained-with-shelved) · 4 shipped · 1 shelved · 0 skipped · 5 iterations
+  tokens: 1,234,567 cumulative · ~246,913/spec
+  diff: +4,210 -820 across 37 files
+  findings to triage: 1 — `aida findings list`
+```
+
+The token figures are the **cumulative reported tokens** across the drain's
+headless phases (input + output + cache), summed from each phase's
+`stream-json` log under `.aida/headless-logs/` — the same accounting the
+`--max-tokens` budget cap uses (TASK-966). The diff stats are
+`git diff --numstat` between the drain's start HEAD and its end HEAD on the
+integration branch (each shipped spec merges + `aida pull`s, advancing main).
+
+The same numbers are appended to `~/.aida/usage.jsonl` as a structured
+`drain_summary` event (distinct from the per-invocation `UsageEvent` rows), so
+the cost-per-drain history is queryable for the calibration + budget-dispatching
+loop. Telemetry opt-out (`AIDA_TELEMETRY=0` / `[telemetry] enabled = false`)
+suppresses the persisted record; the on-screen summary still prints.
+
 ## Findings reach the advisor (STORY-278, STORY-285)
 
 A headless drain phase surfaces things a human would normally hand to the
