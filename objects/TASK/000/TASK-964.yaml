@@ -3,15 +3,33 @@ spec_id: TASK-964
 agreed_id: TASK-964
 title: Agent-facing token-efficient output mode (adopt AXI output principles; keep emoji human path)
 description: 'AIDA scores ~4-5/10 on the AXI 10 principles; the misses are concrete: token-efficient output (we print emoji/tables, --json is verbose JSON not TOON), content-first no-args (bare aida shows help not live data), minimal default schemas, structured errors. Add an AGENT-FACING output mode (e.g. AIDA_AGENT_OUTPUT / --toon / detect non-TTY agent caller) that emits token-efficient minimal-schema output with pre-computed aggregates + next-step disclosure. The human emoji path stays UNCHANGED (operator likes it; this is the agent path only). Gated on/informed by the SPIKE decision on MCP-vs-CLI weighting.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T21:42:33.442058505Z
-modified_at: 2026-06-28T23:12:00.693816Z
+modified_at: 2026-06-28T23:46:47.241181716Z
 req_type: Task
 tags:
 - axi
 - cli-ergonomics
 - competitive
 - from:axi-review
+history:
+- id: 019f10a0-e2e7-7e90-b5ac-03963de57313
+  author: aida-auto-bump
+  timestamp: 2026-06-28T23:46:47.143846808Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f10a0-e349-7710-ad78-b3f6a5ba5fd9
+  timestamp: 2026-06-28T23:46:47.241176259Z
+  agent: aida
+  commit_sha: 043f628100babb3598e1a1878e95f787a2aefdb5
+  summary: Completed via merge 043f6281
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-28T23:46:46.128634776Z
+  completion_sha: 043f628100babb3598e1a1878e95f787a2aefdb5
