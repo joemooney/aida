@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:51.754760275Z
-modified_at: 2026-06-28T22:33:58.291237348Z
+modified_at: 2026-06-28T22:34:15.669796859Z
 req_type: Task
 tags:
 - axi
@@ -30,6 +30,14 @@ relationships:
 - rel_type: Parent
   target_id: 019f105e-5b91-7d40-9e2d-70ad7e0a63d7
   created_at: 2026-06-28T22:34:12.389618913Z
+comments:
+- id: 019f105e-80e2-73a2-8b77-94e6d870c3d8
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-28-task-965-worktree-tangle-gate.md
+    filed 1 task(s): TASK-977
+  created_at: 2026-06-28T22:34:16.674576278Z
+  modified_at: 2026-06-28T22:34:16.674576278Z
 history:
 - id: 019f105e-38ae-7d03-bc98-278214dc1691
   author: aida-auto-bump
