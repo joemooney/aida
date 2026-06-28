@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:35.111359647Z
-modified_at: 2026-06-28T22:10:20.771450074Z
+modified_at: 2026-06-28T22:10:30.336495990Z
 req_type: Epic
 tags:
 - axi
@@ -99,3 +99,6 @@ relationships:
 - rel_type: Parent
   target_id: 019f1048-89ad-7543-aa2a-c82643852675
   created_at: 2026-06-28T22:10:20.771450074Z
+- rel_type: Parent
+  target_id: 019f1048-ac77-7461-95d8-7dc5be2a47a2
+  created_at: 2026-06-28T22:10:30.336495990Z
