@@ -24259,5 +24259,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2310
+- id: 019f1046-3702-72a3-b512-cb17404260b8
+  target_id: 019f1046-287e-7871-ba18-9f8e45e0a107
+  author: aida
+  node_id: '1'
+  lamport: 2311
+  timestamp: 2026-06-28T22:07:44.898539616Z
+  kind: !Create
+    title: 'Config trust boundary: load code-executing config from the trusted default branch SHA'
+    description: no-mistakes loads process-launching config (test/lint/format commands, agent) only from a pinned default-branch SHA, fail-closed, so a pushed branch cannot self-enable. AIDA runs hooks + [intake]/config + cargo/gh from worktrees off arbitrary branches; a malicious branch editing .aida/config.toml or a hook is a comparable RCE vector. For drain/CI commands sourced from project config/hooks, read code-executing fields from the trusted default branch. Document in docs/security/.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2311
 node_id: '1'
