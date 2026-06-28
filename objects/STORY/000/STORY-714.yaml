@@ -1,0 +1,20 @@
+id: 019f1048-1ef7-7ce1-b428-f58176310bde
+spec_id: STORY-714
+agreed_id: STORY-714
+title: 'Worktree warm-pool: return-to-pool reset instead of destroy-and-recreate'
+description: treehouse reuses a pool of worktrees per repo (acquire/work/RETURN reset-not-delete) so build cache stays warm. DISSOLVES TASK-0396 (cargo-cache poison) + BUG-553 (branch-stacking), kills the cold-build tax per fan-out. aida session end --return; aida queue work prefers idle pooled; detached-HEAD reset to furthest-ahead default on acquire; carries post_create/pre_destroy hooks + tiered dry-run destroy + reservation-vs-liveness leases. STRATEGIC cluster.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:09:49.815294219Z
+modified_at: 2026-06-28T22:09:49.815294219Z
+req_type: Story
+tags:
+- axi
+- competitive
+- from:axi-review
+- parent:EPIC-56
+- reliability
+- strategic
+- worktree

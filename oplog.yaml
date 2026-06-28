@@ -24355,5 +24355,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 2318
+- id: 019f1048-29c6-76a0-aee8-b434094e1531
+  target_id: 019f1048-1ef7-7ce1-b428-f58176310bde
+  author: aida
+  node_id: '1'
+  lamport: 2319
+  timestamp: 2026-06-28T22:09:52.582216470Z
+  kind: !Create
+    title: 'Worktree warm-pool: return-to-pool reset instead of destroy-and-recreate'
+    description: treehouse reuses a pool of worktrees per repo (acquire/work/RETURN reset-not-delete) so build cache stays warm. DISSOLVES TASK-0396 (cargo-cache poison) + BUG-553 (branch-stacking), kills the cold-build tax per fan-out. aida session end --return; aida queue work prefers idle pooled; detached-HEAD reset to furthest-ahead default on acquire; carries post_create/pre_destroy hooks + tiered dry-run destroy + reservation-vs-liveness leases. STRATEGIC cluster.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 2319
 node_id: '1'
