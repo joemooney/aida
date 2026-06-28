@@ -1,0 +1,19 @@
+id: 019f1046-bb3a-7a00-bd52-074e6d185da9
+spec_id: TASK-972
+agreed_id: TASK-972
+title: 'Agent-mode output polish: truncate show + structured errors on stdout + count-lines'
+description: 'Three small AXI-principle fixes for agent mode (keep human path): (1) truncate aida show descriptions to ~1000 chars with a size hint + --full; (2) emit errors as a structured error:/help: block on STDOUT (agents read stdout; exit codes already correct); (3) inline count: N of M aggregate header on list/search/queue. Relates to TASK-964 (the TOON renderer).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-28T22:08:18.746005803Z
+modified_at: 2026-06-28T22:08:18.746005803Z
+req_type: Task
+tags:
+- agent-output
+- axi
+- cli-ergonomics
+- competitive
+- from:axi-review
+- parent:EPIC-56
