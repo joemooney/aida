@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:08:02.271016849Z
-modified_at: 2026-06-28T22:08:17.782721795Z
+modified_at: 2026-06-28T22:16:26.815375142Z
 req_type: Task
 tags:
 - agent-output
@@ -26,3 +26,9 @@ relationships:
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:08:17.782712601Z
   created_by: joe
+comments:
+- id: 019f104e-2dbf-7e00-8802-fad17195a8c3
+  author: joe
+  content: Commit 947e2c68a references this requirement
+  created_at: 2026-06-28T22:16:26.815375142Z
+  modified_at: 2026-06-28T22:16:26.815375142Z
