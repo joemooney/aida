@@ -380,6 +380,159 @@ const ASCIINEMA_SLUG_MAX_CHARS: usize = 80;
 // behaviour). trace:EPIC-28 | ai:claude
 const DEFAULT_MAX_FAILURES: usize = 5;
 
+// TASK-970: default row cap for a bare `aida list` in AGENT MODE. ~925
+// unbounded rows is a token blowout when an agent reads the listing as
+// context; cap to the N most-recent (post-sort, post-filter) and emit a
+// `count: N of M` header + a widen hint. The human TTY path is unbounded
+// (no surprise cap); an explicit `--limit`/`--all` always overrides.
+// trace:TASK-970
+const AGENT_LIST_DEFAULT_LIMIT: usize = 30;
+
+// TASK-970: number of queued items the content-first bare `aida` (agent mode)
+// lists beneath the status snapshot. trace:TASK-970
+const AGENT_BARE_QUEUE_TOPN: usize = 5;
+
+/// TASK-970: the agent-ergonomics output gate. Two AIDA surfaces lean toward
+/// agent-friendly output when the caller is a non-interactive agent rather than
+/// a human at a TTY: bare `aida` routes to the status snapshot (not the
+/// getting-started menu), and bare `aida list` applies a default row cap.
+///
+/// AGENT MODE is true when EITHER `AIDA_AGENT_OUTPUT` is set to a truthy value
+/// OR stdout is not a TTY (piped / headless / MCP). `AIDA_AGENT_OUTPUT=0`
+/// (or `false`/`no`/`off`) force-selects the HUMAN path even when piped, which
+/// also makes the human path testable without a real terminal. The human-at-a-
+/// TTY path is left byte-identical; everything gated on this is agent-only.
+// trace:TASK-970
+fn agent_output_mode() -> bool {
+    agent_output_mode_from(
+        std::env::var("AIDA_AGENT_OUTPUT").ok().as_deref(),
+        std::io::stdout().is_terminal(),
+    )
+}
+
+/// Pure core of [`agent_output_mode`] (testable without touching the real env
+/// or a real terminal). `env` is the `AIDA_AGENT_OUTPUT` value (None = unset);
+/// `stdout_is_tty` is whether stdout is a terminal.
+// trace:TASK-970
+fn agent_output_mode_from(env: Option<&str>, stdout_is_tty: bool) -> bool {
+    match env {
+        Some(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "" | "0" | "false" | "no" | "off"
+        ),
+        None => !stdout_is_tty,
+    }
+}
+
+/// Pure decision for the TASK-970 `aida list` default row cap. Returns the cap
+/// to apply when AGENT MODE should bound a bare `aida list`, else `None`. The
+/// cap is scoped to the default human-readable table render: an explicit
+/// `--limit`/`--all`, the machine shapes (`--short`/`--json`), the grouped
+/// `--tree` view, and the human TTY path all bypass it.
+// trace:TASK-970
+fn agent_list_default_cap(
+    limit: Option<usize>,
+    all: bool,
+    short: bool,
+    json: bool,
+    tree: bool,
+    agent_mode: bool,
+) -> Option<usize> {
+    if limit.is_none() && !all && !short && !json && !tree && agent_mode {
+        Some(AGENT_LIST_DEFAULT_LIMIT)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod task970_agent_output_tests {
+    use super::*;
+
+    // AGENT MODE = (AIDA_AGENT_OUTPUT truthy) OR (stdout not a TTY). An explicit
+    // falsey value force-selects the HUMAN path even when piped. trace:TASK-970
+    #[test]
+    fn agent_output_mode_env_truthy_wins_over_tty() {
+        // Even at a TTY, an explicit truthy value selects agent mode.
+        assert!(agent_output_mode_from(Some("1"), true));
+        assert!(agent_output_mode_from(Some("true"), true));
+        assert!(agent_output_mode_from(Some("yes"), true));
+        assert!(agent_output_mode_from(Some("on"), true));
+        // Arbitrary non-empty non-falsey value is also truthy.
+        assert!(agent_output_mode_from(Some("agent"), true));
+    }
+
+    #[test]
+    fn agent_output_mode_env_falsey_forces_human_even_when_piped() {
+        for v in ["0", "false", "no", "off", "", "  "] {
+            assert!(
+                !agent_output_mode_from(Some(v), false),
+                "AIDA_AGENT_OUTPUT={v:?} should force the human path"
+            );
+        }
+    }
+
+    #[test]
+    fn agent_output_mode_unset_follows_tty() {
+        // Unset: piped (no TTY) => agent mode; a real TTY => human path.
+        assert!(agent_output_mode_from(None, false));
+        assert!(!agent_output_mode_from(None, true));
+    }
+
+    // The default `aida list` cap applies ONLY to the default table render in
+    // agent mode: explicit `--limit`/`--all`, the `--short`/`--json` machine
+    // shapes, the `--tree` view, and the human TTY path all bypass it.
+    // trace:TASK-970
+    #[test]
+    fn list_default_cap_applies_to_bare_agent_table() {
+        assert_eq!(
+            agent_list_default_cap(None, false, false, false, false, true),
+            Some(AGENT_LIST_DEFAULT_LIMIT)
+        );
+    }
+
+    #[test]
+    fn list_default_cap_off_for_human_tty() {
+        // agent_mode = false → never cap (human path is byte-identical).
+        assert_eq!(
+            agent_list_default_cap(None, false, false, false, false, false),
+            None
+        );
+    }
+
+    #[test]
+    fn list_default_cap_explicit_limit_and_all_override() {
+        // An explicit --limit wins (the caller's value is applied elsewhere).
+        assert_eq!(
+            agent_list_default_cap(Some(5), false, false, false, false, true),
+            None
+        );
+        // --all opts out of any cap.
+        assert_eq!(
+            agent_list_default_cap(None, true, false, false, false, true),
+            None
+        );
+    }
+
+    #[test]
+    fn list_default_cap_skips_machine_and_tree_shapes() {
+        // --short and --json stay unbounded so existing enumerating consumers
+        // keep working; --tree is the grouped view, also unbounded.
+        assert_eq!(
+            agent_list_default_cap(None, false, true, false, false, true),
+            None
+        );
+        assert_eq!(
+            agent_list_default_cap(None, false, false, true, false, true),
+            None
+        );
+        assert_eq!(
+            agent_list_default_cap(None, false, false, false, true, true),
+            None
+        );
+    }
+}
+
 fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<i32>> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         eprintln!(
@@ -1697,6 +1850,16 @@ fn run() -> Result<()> {
             };
         if let Some(topic) = help_topic {
             return print_help_topic(topic);
+        }
+        // TASK-970: content-first bare `aida` in AGENT MODE. A human at a TTY
+        // keeps the getting-started menu (the Trojan-horse first impression);
+        // an agent (non-TTY / `AIDA_AGENT_OUTPUT`) gets the `aida status`
+        // snapshot + top queued instead, since CLAUDE.md names `aida status`
+        // as the entry point and a help dump is noise to a coding agent. The
+        // explicit `aida help` verb is unchanged in both modes.
+        // trace:TASK-970
+        if is_bare && agent_output_mode() {
+            return handle_bare_agent_status();
         }
         if is_help_verb || is_bare {
             let want_all = rest.iter().any(|a| a == "--all" || a == "-a");
@@ -14307,8 +14470,21 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // return and the json / table / tree rendering, so every output
             // shape sees the same bounded row set.
             // trace:TASK-900 | ai:claude
-            if let Some(n) = limit {
-                reqs.truncate(*n);
+            //
+            // TASK-970: in AGENT MODE a bare `aida list` (no explicit
+            // `--limit`/`--all`) gets a DEFAULT row cap so an agent reading
+            // ~900 rows as context doesn't blow its token budget. The cap is
+            // scoped to the default human-readable TABLE render only: explicit
+            // machine shapes (`--short` / `--json`) and the grouped `--tree`
+            // view stay unbounded so existing agent/skill consumers that
+            // enumerate every spec keep working, and the human TTY path is
+            // untouched. An explicit `--limit`/`--all` always overrides.
+            // trace:TASK-970
+            let total_after_filters = reqs.len();
+            let agent_default_cap =
+                agent_list_default_cap(*limit, *all, *short, *json, *tree, agent_output_mode());
+            if let Some(n) = limit.or(agent_default_cap) {
+                reqs.truncate(n);
             }
 
             // TASK-743: --short emits one bare canonical spec ID per line —
@@ -14500,6 +14676,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             //
             if let Some(banner) = &focus_banner {
                 println!("{banner}");
+            }
+
+            // TASK-970: in AGENT MODE, when the default cap trimmed the table,
+            // lead with a `count: N of M` header + a widen hint so the agent
+            // knows it's seeing a bounded slice and how to widen. Only fires on
+            // the default table path (agent_default_cap is None for explicit
+            // shapes and when nothing was trimmed). trace:TASK-970
+            if agent_default_cap.is_some() && total_after_filters > reqs.len() {
+                println!(
+                    "count: {} of {} (agent default cap — `aida list --all` or `--limit N` to widen)",
+                    reqs.len(),
+                    total_after_filters
+                );
             }
 
             // TASK-568: --tree groups the (already-filtered) listing by
@@ -105537,6 +105726,122 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
             .dimmed()
     );
     println!();
+}
+
+/// TASK-970: the top-N queued items for the active role, each resolved to its
+/// display id + title from the read-only cache (NO full store load). The queue
+/// YAML is read directly with the SAME role filter `read_queue_depth` uses, so
+/// this list is consistent with the snapshot's `queue:` depth. Returns an empty
+/// vec when the queue or cache can't be read.
+// trace:TASK-970
+fn agent_bare_top_queued(
+    project_root: &std::path::Path,
+    role: &str,
+    n: usize,
+) -> Vec<(String, String)> {
+    let user = current_user_id(None);
+    let queue_path = project_root
+        .join(".aida-store/registry/queues")
+        .join(format!("{}.yaml", user));
+    let Ok(content) = std::fs::read_to_string(&queue_path) else {
+        return Vec::new();
+    };
+    let Ok(entries) = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&content) else {
+        return Vec::new();
+    };
+    // Mirror read_queue_depth's role filter so the listed items are a prefix of
+    // the counted depth, then order by queue position and take the head N.
+    let mut role_entries: Vec<(i64, String)> = entries
+        .iter()
+        .filter(|e| {
+            e.get("for_role")
+                .and_then(serde_yaml::Value::as_str)
+                .map(|r| r == role)
+                .unwrap_or(false)
+        })
+        .filter_map(|e| {
+            let pos = e
+                .get("position")
+                .and_then(serde_yaml::Value::as_i64)
+                .unwrap_or(0);
+            let id = e
+                .get("requirement_id")
+                .and_then(serde_yaml::Value::as_str)?
+                .to_string();
+            Some((pos, id))
+        })
+        .collect();
+    role_entries.sort_by_key(|(pos, _)| *pos);
+    role_entries.truncate(n);
+    // Resolve display id + title from the read-only cache (no full store load),
+    // keyed by the requirement UUID the queue entry carries.
+    let cache_path = project_root.join(".aida/cache.db");
+    let conn = rusqlite::Connection::open_with_flags(
+        &cache_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .ok();
+    role_entries
+        .into_iter()
+        .map(|(_, uuid)| {
+            let resolved = conn.as_ref().and_then(|c| {
+                c.query_row(
+                    "SELECT COALESCE(agreed_id, spec_id, ''), title \
+                     FROM requirements_cache WHERE id = ?1",
+                    [&uuid],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                )
+                .ok()
+            });
+            match resolved {
+                Some((id, title)) if !id.is_empty() => (id, title),
+                Some((_, title)) => (uuid, title),
+                None => (uuid, String::new()),
+            }
+        })
+        .collect()
+}
+
+/// TASK-970: content-first bare `aida` for AGENT MODE. Prints the same fast
+/// `aida status` snapshot a human gets from `aida status` (role / branch /
+/// queue depth / counts), then lists the top queued items for the active role.
+/// Self-resolves the project root and reads the cache read-only — no full store
+/// load — mirroring the STORY-707 fast path. Falls back to the getting-started
+/// menu when not inside an AIDA project (where the snapshot would be empty).
+// trace:TASK-970
+fn handle_bare_agent_status() -> Result<()> {
+    let Ok(project_root) = find_project_root() else {
+        print_tiered_help();
+        return Ok(());
+    };
+    let snap = collect_fast_status_snapshot(&project_root);
+    print_fast_status(&snap);
+
+    let queued = agent_bare_top_queued(&project_root, &snap.role, AGENT_BARE_QUEUE_TOPN);
+    println!("{}", "─── Queued (top) ───".bold());
+    if queued.is_empty() {
+        println!("  {}", "(nothing queued for this role)".dimmed());
+    } else {
+        for (id, title) in &queued {
+            if title.is_empty() {
+                println!("  {id}");
+            } else {
+                println!("  {}  {}", id.bold(), title);
+            }
+        }
+        if snap.queue_depth > queued.len() {
+            println!(
+                "  {}",
+                format!(
+                    "(+{} more — `aida queue list`)",
+                    snap.queue_depth - queued.len()
+                )
+                .dimmed()
+            );
+        }
+    }
+    println!();
+    Ok(())
 }
 
 #[cfg(test)]
