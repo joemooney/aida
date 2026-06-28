@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T21:42:19.928567429Z
-modified_at: 2026-06-28T22:59:06.569909935Z
+modified_at: 2026-06-28T22:59:41.441347657Z
 req_type: Spike
 tags:
 - axi
@@ -32,4 +32,9 @@ comments:
   content: Commit b182c3037 references this requirement
   created_at: 2026-06-28T22:59:06.569909935Z
   modified_at: 2026-06-28T22:59:06.569909935Z
+- id: 019f1075-c501-7921-844c-6e8fdad302f9
+  author: joe
+  content: 'Benchmark shipped: bench/agent-surface/ (PR #1182). Initial run (sonnet, 5 tasks x 2 repeats): CLI 80pct / 44k-tok / 0.0309usd vs MCP 80pct / 95k-tok / 0.0676usd. MCP costs ~2.2x tokens+dollars for SAME success+turns; cold MCP ~5x (0.25 vs 0.05usd). The ~69-tool upfront schema load is the entire tax; context-window consumption (95k vs 44k) is not cacheable away. Verdict: MCP IS over-weighted on cost/context for routine single-shot ops, with no efficiency win. Leverage is structural (typed/discoverable), not cost. Recommend: TASK-964 token-efficient CLI as PRIMARY agent surface, MCP secondary; consider lazy MCP tool loading (ToolSearch) as default. Caveats: n=2/cell; single-call tasks favor CLI; toon column still TODO (TASK-964).'
+  created_at: 2026-06-28T22:59:41.441347657Z
+  modified_at: 2026-06-28T22:59:41.441347657Z
 human_only: true
