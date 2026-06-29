@@ -8,10 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:45:21.135163720Z
-modified_at: 2026-06-29T15:45:21.135163720Z
+modified_at: 2026-06-29T15:45:24.841905795Z
 req_type: Story
 tags:
 - integrator
 - orchestrator
 - parent:EPIC-56
 - throughput
+relationships:
+- rel_type: Child
+  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
+  created_at: 2026-06-29T15:45:24.841905795Z
