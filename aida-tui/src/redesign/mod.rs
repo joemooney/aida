@@ -1125,14 +1125,20 @@ fn apply_outcome(
 /// [`SpecStore`] and never reach here. trace:STORY-693 | ai:claude
 fn run_item_verb(verb: Verb, id: &str) -> (String, String) {
     let title = format!("{id} — {}", verb.label());
-    // Only `why` is shelled out now; any other verb is a defensive no-op
-    // (item-level `show` is intercepted upstream and served in-process).
-    if verb != Verb::Why {
-        return (String::new(), title);
-    }
+    // `why` and `status` shell out to the matching `aida` subcommand; any other
+    // verb is a defensive no-op (item-level `show` is intercepted upstream and
+    // served in-process). `status` reuses the per-spec liveness probe wholesale
+    // (STORY-694's `aida status <spec>`): queued / In-Progress / live / STALE +
+    // session / pid / started / elapsed — no reimplementation here.
+    // trace:TASK-953 | ai:claude
+    let subcommand = match verb {
+        Verb::Why => "why",
+        Verb::Status => "status",
+        _ => return (String::new(), title),
+    };
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
-    cmd.args(["why", id]);
+    cmd.args([subcommand, id]);
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -3067,6 +3073,7 @@ mod render_tests {
             vec![
                 Verb::Show,
                 Verb::Why,
+                Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
                 Verb::Defer
