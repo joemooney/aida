@@ -1,0 +1,12 @@
+id: 019f146f-95cb-7210-817f-c26566822870
+spec_id: TASK-1000
+agreed_id: TASK-1000
+title: Wire `Monitor`-based consumption into the `/goal` overnight loop skill template (skills-side, not Rust)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T17:31:25.003781869Z
+modified_at: 2026-06-29T17:31:25.003781869Z
+req_type: Task
