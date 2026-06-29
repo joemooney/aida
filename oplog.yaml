@@ -26005,5 +26005,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2483
+- id: 019f146e-b8aa-7082-9824-2ca08a19d28a
+  target_id: 019f146e-a621-7172-8e7d-ee9aa1b0ccc1
+  author: aida
+  node_id: '1'
+  lamport: 2484
+  timestamp: 2026-06-29T17:30:28.394688265Z
+  kind: !Create
+    title: 'Calibration: count benign-absorbed vs actionable events per drain in the exit summary to prove the lever empirically'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2484
 node_id: '1'
