@@ -1733,6 +1733,63 @@ pub enum CacheCommand {
     Status,
 }
 
+/// Epic-scoped git-worktree management — the EPIC-55 workspace layer, mirroring
+/// `git worktree`. First slice (STORY-716): create-or-enter a per-epic
+/// workspace that is auto-scoped to that epic via `aida focus`.
+///
+/// STORY-714's warm-pool surface (`aida worktree pool status`) and tiered
+/// removal (`aida worktree remove`) land as sibling variants under this enum
+/// later — the surface is shaped to leave room for them.
+// trace:STORY-716 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum WorktreeCommand {
+    /// Create a git worktree for an epic off origin/main and auto-scope it to
+    /// that epic. Default path `~/ai/aida-<epic-slug>` (e.g. `~/ai/aida-epic54`),
+    /// default branch `<epic>-work` (e.g. `epic-54-work`). After creating the
+    /// worktree it writes the `aida focus <epic>` marker INSIDE the new tree so
+    /// reads there scope to the epic's subtree. Plain subcommand — prints the
+    /// created path, does NOT cd (mirrors `git worktree add`). Idempotent: an
+    /// existing worktree is reported + its focus re-affirmed, not re-created.
+    Add {
+        /// The epic to scope the worktree to (e.g. `EPIC-54`). Also the basis
+        /// for the default path slug and branch name.
+        epic: String,
+        /// Override the worktree path (default `~/ai/aida-<epic-slug>`).
+        #[clap(long, value_name = "PATH")]
+        path: Option<String>,
+        /// Override the branch name (default `<epic>-work`).
+        #[clap(long, value_name = "BRANCH")]
+        branch: Option<String>,
+    },
+
+    /// Create-if-missing, then cd into the epic's worktree. This emits shell
+    /// (`cd '<path>'`) on stdout for the `aida()` wrapper to auto-eval, so a
+    /// subprocess can move the parent shell. Run it BARE (e.g.
+    /// `aida worktree enter <epic>`) — NOT wrapped in `eval "$(...)"`: the
+    /// wrapper already auto-evals it, and double-eval would lose the cd (the
+    /// no-double-eval convention). Without the wrapper installed, pipe the bare
+    /// form through eval yourself: `eval "$(aida worktree enter <epic>)"`.
+    Enter {
+        /// The epic whose worktree to enter (created first if missing).
+        epic: String,
+        /// Override the worktree path (default `~/ai/aida-<epic-slug>`).
+        #[clap(long, value_name = "PATH")]
+        path: Option<String>,
+        /// Override the branch name (default `<epic>-work`).
+        #[clap(long, value_name = "BRANCH")]
+        branch: Option<String>,
+    },
+
+    /// List AIDA-managed worktrees, each annotated with its `.aida/focus`.
+    List {
+        /// Machine-readable JSON (`[{path, branch, focus}]`).
+        #[clap(long)]
+        json: bool,
+    },
+    // STORY-714 (warm-pool) will add `Pool(WorktreePoolCommand)` and a tiered
+    // `Remove { .. }` here. trace:STORY-716
+}
+
 /// Spec-quality tooling — checks you run ON a spec before work begins.
 // trace:STORY-656 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -7731,6 +7788,17 @@ pub enum Command {
     /// Today: `aida spec dryrun <SPEC>` (an implementer-readiness pre-check).
     #[clap(subcommand)]
     Spec(SpecCommand),
+
+    // trace:STORY-716 | ai:claude
+    /// Manage epic-scoped git worktrees — the workspace layer that
+    /// mirrors `git worktree`. `aida worktree add <epic>` creates a worktree
+    /// off origin/main (default `~/ai/aida-<epic-slug>` on `<epic>-work`) and
+    /// auto-scopes it to that epic via `aida focus`; `aida worktree enter
+    /// <epic>` creates-if-missing then cd's you in (run it BARE — the `aida()`
+    /// shell wrapper auto-evals the emitted `cd`, NOT wrapped in `eval`);
+    /// `aida worktree list` shows AIDA-managed worktrees + each one's focus.
+    #[clap(subcommand)]
+    Worktree(WorktreeCommand),
 
     // trace:STORY-631 | ai:claude
     /// Show the AI-generated plain-terms comprehension of WHY a spec exists —
