@@ -107,10 +107,28 @@ B's PR with A's commit and (2) makes A's commit reachable from two branches, so
 spec in a reused worktree: `git reset --hard origin/main` (or a fresh `git
 worktree add -b <branch> <path> origin/main`). `aida session start` already bases
 on `origin/main` and warns when cwd is on a feature branch (BUG-76); raw `git`
-does not — so this rule is on you when you drive `git` directly. Prefer the
-parallel fan-out (one worktree per spec) for independent specs; reserve
-sequential-through-one-worktree for genuinely file-sharing specs, and reset
-between each. trace:BUG-554 | ai:claude
+does not — so this rule is on you when you drive `git` directly.
+
+**Route coupled file-sharing sets to a drain mode — do NOT fan them out in
+parallel and do NOT hand-drive the reset.** The parallel fan-out (one worktree
+per spec) is for INDEPENDENT specs. For a set that shares files / must land in
+order, tag the members `batch:NAME` and drain the batch instead of fanning out:
+
+- **`aida queue work --batch NAME --auto-complete --sequential`** — ordered,
+  each member is its OWN PR off freshly-pulled main, one member at a time
+  (concurrency 1). A member failure **shelves** that member and the drain
+  **continues** with the rest. Use when the members are coupled but each
+  increment is independently shippable + reviewable.
+- **`aida queue work --batch NAME --auto-complete --single-branch`** — all
+  members accumulate on ONE shared branch in one worktree, no per-member
+  merge-to-main, ONE cluster PR at the end. A member failure **halts** the drain
+  (later increments build on earlier commits, so it stops rather than build on
+  broken code). Use when the members must ship together.
+
+The one-line rule of thumb: **`--sequential` shelves-and-continues (independent
+PRs); `--single-branch` halts (one accumulating branch).** Both replace the old
+manual `git reset --hard origin/main` between members — let the mode base each
+member correctly instead of driving `git` by hand. trace:BUG-554 trace:TASK-1005 | ai:claude
 
 **Never co-fan a serialize-group (STORY-614).** Specs that must not run
 concurrently carry a shared `serialize:<group>` tag (e.g. `serialize:docs`,
