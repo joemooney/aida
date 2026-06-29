@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:08:30.476200367Z
-modified_at: 2026-06-28T22:08:34.561610626Z
+modified_at: 2026-06-29T02:34:42.301207056Z
 req_type: Task
 tags:
 - agent-output
@@ -21,3 +21,9 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:08:34.561610626Z
+comments:
+- id: 019f113a-9efd-7453-acab-a078c5641049
+  author: joe
+  content: 'Rejected as a DUPLICATE of TASK-974 (same next-step-help-table spec, Completed/shipped #1191). TASK-973 was filed in the EPIC-56 batch that timed out mid-write, then re-filed as TASK-974 in the retry — leaving this dup. Consolidating on TASK-974.'
+  created_at: 2026-06-29T02:34:42.301207056Z
+  modified_at: 2026-06-29T02:34:42.301207056Z
