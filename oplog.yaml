@@ -26177,5 +26177,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 2500
+- id: 019f1492-34dc-71f0-90ed-f04656e99927
+  target_id: 019f1492-29c9-7ca3-9ba1-6176905ab1c7
+  author: aida
+  node_id: '1'
+  lamport: 2501
+  timestamp: 2026-06-29T18:09:13.948335201Z
+  kind: !Create
+    title: 'SPIKE-70: bless existing drain_batch as --sequential + route coupled work in the burndown docs'
+    description: 'Additive followup to SPIKE-70: (1) add --sequential flag that names the existing drain_batch sequential-merge engine (force concurrency=1, assert fork-off-fresh-main, doc the EPIC-28 shelve rule); (2) rewrite aida-burndown.md + the burndown discipline doc to route coupled file-sharing sets to --single-branch (one PR) or --sequential (ordered PRs) instead of the BUG-554 manual reset dance. Bounded/additive.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2501
 node_id: '1'
