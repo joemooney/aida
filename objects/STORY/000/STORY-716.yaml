@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T04:38:38.335033986Z
-modified_at: 2026-06-29T04:38:43.105277954Z
+modified_at: 2026-06-29T04:38:51.471294671Z
 req_type: Story
 tags:
 - cli
@@ -21,3 +21,7 @@ relationships:
 - rel_type: Child
   target_id: 019f06b8-d0d7-7580-8bae-fbdf2204d81d
   created_at: 2026-06-29T04:38:43.105277954Z
+- rel_type: Parent
+  target_id: 019f06b8-d0d7-7580-8bae-fbdf2204d81d
+  created_at: 2026-06-29T04:38:51.471290791Z
+  created_by: joe
