@@ -1,0 +1,312 @@
+//! AXI principle #9 (contextual disclosure): a centralized, table-driven
+//! next-step suggestion surface keyed by (command, lifecycle state).
+//!
+//! gh-axi / tasks-axi end every output with a flat, templated list of next-step
+//! commands. AIDA's hints were scattered across skills; this module centralizes
+//! them. In AGENT MODE only (`agent_output_mode()`), the list / show / status /
+//! queue / add / edit surfaces get a trailing TOON `next` block listing the
+//! likely next commands, templated with the relevant spec id.
+//!
+//! The richness over gh-axi's flat template is AIDA's LIFECYCLE STATE MACHINE:
+//! for a spec in a given status we suggest the VALID NEXT TRANSITION
+//! (Draft -> approve, Approved -> work, In Progress -> done, Done -> merge, ...)
+//! rather than a generic list. The set of valid transitions is read from
+//! `aida_core::lifecycle::LifecycleModel::declared()` so the suggestions can
+//! never drift from the declared model (and a new declared edge is suggested for
+//! free). This module only supplies the concrete CLI string for each declared
+//! edge; the model decides which edges exist.
+//!
+//! The human TTY path is left byte-identical — it already has the scattered
+//! workflow hints + the emoji UX; this surface is agent-mode-only.
+// trace:TASK-974
+
+use aida_core::lifecycle::{LifecycleModel, State};
+
+/// One suggested next command plus a short token naming the lifecycle target
+/// (or the kind of step) it leads to.
+pub struct NextStep {
+    /// The concrete `aida ...` command, templated with the relevant spec id.
+    pub cmd: String,
+    /// A short reason / target token (e.g. `approved`, `in-progress`, `detail`).
+    pub to: String,
+}
+
+impl NextStep {
+    fn new(cmd: impl Into<String>, to: impl Into<String>) -> Self {
+        NextStep {
+            cmd: cmd.into(),
+            to: to.into(),
+        }
+    }
+}
+
+/// The stable lowercase token for a lifecycle target state — the `to` column of
+/// the `next` block, so the agent sees WHICH state a suggestion advances to.
+fn state_token(s: State) -> &'static str {
+    match s {
+        State::Start => "start",
+        State::Draft => "draft",
+        State::Approved => "approved",
+        State::Planned => "planned",
+        State::InProgress => "in-progress",
+        State::Done => "done",
+        State::Completed => "completed",
+        State::Released => "released",
+        State::Rejected => "rejected",
+        State::NeedsAttention => "needs-attention",
+    }
+}
+
+/// Presentation rank for a target state, so the most-likely mainline-forward
+/// transition lists first and the off-ramps (reject, archive) last. Lower sorts
+/// earlier. Stable sort preserves declared order within a rank.
+fn rank(to: State) -> u8 {
+    match to {
+        // Mainline-forward moves: the overwhelmingly common next step.
+        State::InProgress | State::Done | State::Completed => 0,
+        State::Approved => 1,
+        State::Planned => 2,
+        // Off-ramps.
+        State::Rejected => 8,
+        _ => 5,
+    }
+}
+
+/// The concrete CLI command that drives a declared `from -> to` transition for
+/// spec `id`, or `None` when the edge is not a user-driven *forward suggestion*:
+///   * `Done -> Completed` is the merge auto-bump — suggested as `aida pull`,
+///     not spec-targeted (the merge of the PR is what completes it).
+///   * `Done -> InProgress` is reviewer-driven (RequestChanges), not something a
+///     human should be nudged to do by hand.
+///   * `Completed -> Released` is a repo-level release act, not a per-spec verb.
+fn transition_command(from: State, to: State, id: &str) -> Option<String> {
+    use State::*;
+    Some(match (from, to) {
+        (_, Approved) => format!("aida edit {id} --status approved"),
+        (_, Planned) => format!("aida edit {id} --status planned"),
+        (Approved, InProgress) | (Planned, InProgress) => format!("aida queue work {id}"),
+        (NeedsAttention, InProgress) => format!("aida edit {id} --status in-progress"),
+        (Done, InProgress) => return None, // reviewer RequestChanges, not a nudge
+        (InProgress, Done) => format!("aida queue done {id}"),
+        (Done, Completed) => "aida pull".to_string(), // merge auto-bump
+        (Completed, Released) => return None,         // repo-level release act
+        (_, Rejected) => format!("aida edit {id} --status rejected"),
+        _ => return None,
+    })
+}
+
+/// Lifecycle-aware next steps for a single spec in `status`: the valid declared
+/// transitions out of its current state, templated with `id`, plus an archive
+/// off-ramp for the terminal states. Drives the `show` / `add` / `edit`
+/// surfaces. An unrecognized status yields no steps.
+pub fn spec_next(status: &str, id: &str) -> Vec<NextStep> {
+    let Some(state) = State::from_status_str(status) else {
+        return Vec::new();
+    };
+    let mut ranked: Vec<(u8, NextStep)> = Vec::new();
+    for t in LifecycleModel::declared().transitions {
+        if t.from != state {
+            continue;
+        }
+        if let Some(cmd) = transition_command(t.from, t.to, id) {
+            ranked.push((rank(t.to), NextStep::new(cmd, state_token(t.to))));
+        }
+    }
+    // Terminal long-tail: the only meaningful next move is to archive it.
+    if state.is_terminal() {
+        ranked.push((9, NextStep::new(format!("aida archive {id}"), "archived")));
+    }
+    ranked.sort_by_key(|(r, _)| *r);
+    ranked.into_iter().map(|(_, s)| s).collect()
+}
+
+/// Active filter context carried forward into the `list` surface's suggestions.
+/// The status filter is the load-bearing one: `aida list --status draft` should
+/// suggest the draft state's next transition (`edit --status approved`), so the
+/// filter the agent just used flows into the next step.
+#[derive(Default)]
+pub struct ListContext<'a> {
+    /// The `--status <s>` filter in effect, if any.
+    pub status: Option<&'a str>,
+}
+
+/// Next steps after a `list`: drill into a row, and — when a status filter is
+/// active — the valid next transition for that filtered state (the filter
+/// carried forward). `list` is a MULTI-ROW surface, so the commands template a
+/// literal `<id>` placeholder rather than picking one row's concrete id: that
+/// matches the AXI #9 example and, critically, keeps a real spec id from being
+/// echoed a second time into the machine-parseable id stream (a concrete id in
+/// the trailing block would make a `list | grep id | uniq -d` collision check
+/// see a false duplicate). The per-spec `show` view supplies the concrete id.
+pub fn list_next(ctx: &ListContext) -> Vec<NextStep> {
+    let id = "<id>";
+    let mut steps = vec![NextStep::new(format!("aida show {id}"), "detail")];
+    // Carry the active status filter forward into the lifecycle-aware next move.
+    if let Some(status) = ctx.status {
+        if let Some(state) = State::from_status_str(status) {
+            for t in LifecycleModel::declared().transitions {
+                if t.from != state {
+                    continue;
+                }
+                // Only the single highest-priority forward transition, to keep
+                // the list-level hint tight (the per-spec `show` view fans out
+                // the full set).
+                if rank(t.to) <= 2 {
+                    if let Some(cmd) = transition_command(t.from, t.to, id) {
+                        steps.push(NextStep::new(cmd, state_token(t.to)));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    steps
+}
+
+/// Next steps after a bare `status` snapshot: start the queue head (or show it)
+/// when there is queued work, else point at the open backlog.
+pub fn status_next(queue_depth: usize, top_queued_id: Option<&str>) -> Vec<NextStep> {
+    match (queue_depth, top_queued_id) {
+        (d, Some(id)) if d > 0 => vec![
+            NextStep::new(format!("aida queue work {id}"), "in-progress"),
+            NextStep::new(format!("aida show {id}"), "detail"),
+        ],
+        _ => vec![NextStep::new("aida list --status draft", "triage")],
+    }
+}
+
+/// Next steps after `queue list`: start the head item (or show it) when the
+/// queue is non-empty, else point at the approvable backlog to fill it.
+pub fn queue_next(first_id: Option<&str>) -> Vec<NextStep> {
+    match first_id {
+        Some(id) => vec![
+            NextStep::new(format!("aida queue work {id}"), "in-progress"),
+            NextStep::new(format!("aida show {id}"), "detail"),
+        ],
+        None => vec![NextStep::new("aida list --status approved", "fill-queue")],
+    }
+}
+
+/// Render a slice of next steps as a TOON `next[N]{cmd,to}:` block, or `None`
+/// when there is nothing to suggest (so the caller emits no trailing block).
+/// Round-trippable TOON consistent with the rest of the agent surface.
+pub fn render(steps: &[NextStep]) -> Option<String> {
+    if steps.is_empty() {
+        return None;
+    }
+    let rows: Vec<Vec<String>> = steps
+        .iter()
+        .map(|s| vec![s.cmd.clone(), s.to.clone()])
+        .collect();
+    Some(crate::toon::table_raw("next", &["cmd", "to"], &rows))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cmds(steps: &[NextStep]) -> Vec<String> {
+        steps.iter().map(|s| s.cmd.clone()).collect()
+    }
+
+    // The (command, state) -> suggestion mapping is lifecycle-aware: each spec
+    // status yields the VALID next transition(s) for that state, templated.
+    #[test]
+    fn spec_next_reflects_lifecycle_state() {
+        // Draft -> approve / reject (approve ranks first).
+        let draft = spec_next("draft", "TASK-1");
+        assert_eq!(
+            cmds(&draft),
+            vec![
+                "aida edit TASK-1 --status approved",
+                "aida edit TASK-1 --status rejected"
+            ]
+        );
+
+        // Approved -> work first, then plan, then reject (mainline-forward wins).
+        let approved = spec_next("approved", "TASK-2");
+        assert_eq!(approved[0].cmd, "aida queue work TASK-2");
+        assert!(cmds(&approved).contains(&"aida edit TASK-2 --status planned".to_string()));
+
+        // In Progress -> done. Tolerant of the Display spelling.
+        let in_prog = spec_next("In Progress", "TASK-3");
+        assert_eq!(cmds(&in_prog), vec!["aida queue done TASK-3"]);
+
+        // Done -> merge auto-bump (aida pull), NOT a reviewer-driven reopen.
+        let done = spec_next("done", "TASK-4");
+        assert_eq!(cmds(&done), vec!["aida pull"]);
+
+        // Needs Attention -> resume / approve / reject.
+        let na = spec_next("needs-attention", "TASK-5");
+        assert!(cmds(&na).contains(&"aida edit TASK-5 --status in-progress".to_string()));
+        assert!(cmds(&na).contains(&"aida edit TASK-5 --status approved".to_string()));
+    }
+
+    // Terminal states have no forward transition — the only move is to archive.
+    #[test]
+    fn terminal_states_suggest_archive() {
+        assert_eq!(
+            cmds(&spec_next("completed", "TASK-9")),
+            vec!["aida archive TASK-9"]
+        );
+        assert_eq!(
+            cmds(&spec_next("rejected", "TASK-9")),
+            vec!["aida archive TASK-9"]
+        );
+    }
+
+    // An unparseable status yields no suggestions rather than a wrong one.
+    #[test]
+    fn unknown_status_yields_nothing() {
+        assert!(spec_next("frobnicated", "TASK-1").is_empty());
+    }
+
+    // list: drills into a row (placeholder id) + carries the active status
+    // filter forward into that state's next transition.
+    #[test]
+    fn list_next_carries_status_filter_forward() {
+        let ctx = ListContext {
+            status: Some("draft"),
+        };
+        let steps = list_next(&ctx);
+        assert_eq!(
+            cmds(&steps),
+            vec!["aida show <id>", "aida edit <id> --status approved"]
+        );
+
+        // No status filter -> just the drill-in. The list surface always uses a
+        // placeholder id (never echoes a concrete spec id into the id stream).
+        let bare = list_next(&ListContext::default());
+        assert_eq!(cmds(&bare), vec!["aida show <id>"]);
+    }
+
+    #[test]
+    fn status_and_queue_next_steps() {
+        // Queued work -> start the head.
+        let s = status_next(3, Some("TASK-8"));
+        assert_eq!(s[0].cmd, "aida queue work TASK-8");
+        // Empty queue -> triage drafts.
+        assert_eq!(
+            cmds(&status_next(0, None)),
+            vec!["aida list --status draft"]
+        );
+
+        let q = queue_next(Some("TASK-8"));
+        assert_eq!(q[0].cmd, "aida queue work TASK-8");
+        assert_eq!(cmds(&queue_next(None)), vec!["aida list --status approved"]);
+    }
+
+    // The rendered block is a valid, round-trippable TOON table; empty -> None.
+    #[test]
+    fn render_emits_toon_next_block() {
+        let steps = spec_next("draft", "TASK-1");
+        let block = render(&steps).expect("non-empty");
+        assert!(block.starts_with("next[2]{cmd,to}:"));
+        let parsed = crate::toon::parse_table(&block).expect("round-trips");
+        assert_eq!(parsed.name, "next");
+        assert_eq!(parsed.fields, vec!["cmd", "to"]);
+        assert_eq!(parsed.rows[0][0], "aida edit TASK-1 --status approved");
+
+        assert!(render(&[]).is_none());
+    }
+}
