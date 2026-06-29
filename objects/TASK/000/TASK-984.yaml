@@ -1,0 +1,17 @@
+id: 019f121a-ddf9-70f3-8900-e0f3fd532785
+spec_id: TASK-984
+agreed_id: TASK-984
+title: Catch raw-glyph-literal lint locally/earlier, not just at CI (recurring agent friction)
+description: 'The glyph-lint --block gate (no raw glyph literals; route through aida-cli/src/glyphs.rs Glyph::render) has caught MANY agents this session AFTER a 7-8min CI cycle (e.g. TASK-981 #1194, plus several /// -trace catches alongside it). The friction: agents write raw emoji/unicode in new code, do not know until CI fails, then burn a full re-push cycle. REDUCE the loop: (a) add the glyph-lint to the LOCAL pre-commit hook (it already runs trace/provenance checks) so it is caught at commit not at CI; and/or (b) a clippy-style lint or a clearer error pointing at glyphs.rs with the offending file:line + the Glyph::render replacement. Same spirit as BUG-624s diff-scoped /// gate. Lower the recurring tax.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T06:39:38.488998805Z
+modified_at: 2026-06-29T06:39:38.488998805Z
+req_type: Task
+tags:
+- dev-workflow
+- glyph
+- papercut
+- tooling
