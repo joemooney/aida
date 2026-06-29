@@ -3,12 +3,12 @@ spec_id: TASK-990
 agreed_id: TASK-990
 title: aida watch — streaming event classifier (STORY-712 slice 2)
 description: 'New aida-cli/src/watch.rs + cli.rs wiring: tail -f .aida/events.jsonl, classify each line via EventKind::is_actionable, print ONE wake line only on actionable verbs (silent on benign). Flags --emit-wakes / --all / --once. Stale-drain liveness: if drain_state::probe returns Stale, emit a drain-crashed wake + exit. Read-only consumer of the slice-1 events. Gated on slice-1 (TASK-987/988) landing.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T16:03:30.520305886Z
-modified_at: 2026-06-29T16:24:52.780028609Z
+modified_at: 2026-06-29T16:24:54.336465530Z
 req_type: Task
 tags:
 - events
