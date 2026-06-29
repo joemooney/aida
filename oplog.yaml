@@ -25095,5 +25095,13 @@ operations:
   timestamp: 2026-06-29T06:36:13.493736815Z
   kind: !RemoveTag
     tag: ux
-clock: 2402
+- id: 019f1217-ca6e-7933-ac95-bc6c1730848d
+  target_id: 019f11ca-96d6-7ad3-9310-8663fbfa520b
+  author: aida
+  node_id: '1'
+  lamport: 2403
+  timestamp: 2026-06-29T06:36:16.878035212Z
+  kind: !SetStatus
+    status: Rejected
+clock: 2403
 node_id: '1'
