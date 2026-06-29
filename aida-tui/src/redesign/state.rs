@@ -168,7 +168,7 @@ impl Scope {
     /// fork is deferred). trace:STORY-690 | ai:claude
     pub fn verbs(self) -> Vec<Verb> {
         match self {
-            Scope::Backlog => vec![Verb::Groom, Verb::Approve, Verb::Archive],
+            Scope::Backlog => vec![Verb::Groom, Verb::Approve, Verb::Reject, Verb::Archive],
             Scope::Open => vec![Verb::Show, Verb::Why, Verb::Status],
             // Test scope: `show` previews the focused spec's ## Test Plan in the
             // modal (the same gesture as `p` on a row). trace:STORY-699
@@ -198,6 +198,12 @@ pub fn verb_list_for(scope: Scope, focused_status: Option<&str>) -> Vec<Verb> {
             // Ordered after `request approval` so the existing draft-verb
             // index navigation is undisturbed. trace:TASK-920 | ai:claude
             verbs.push(Verb::Approve);
+            // `reject` is the advisor's DIRECT draft → rejected disposition, the
+            // sibling of `approve` (accept vs decline the same Draft). Same
+            // Draft-conditional, set-level shape; ordered immediately after
+            // `approve` so the existing draft-verb indices are undisturbed.
+            // trace:TASK-949 | ai:claude
+            verbs.push(Verb::Reject);
         }
         // `queue` is the Approved-conditional mirror of `request approval`:
         // it routes the focused/selected Approved specs to the implementer
@@ -239,6 +245,12 @@ pub enum Verb {
     /// The do-it-yourself counterpart to [`Verb::RequestApproval`].
     /// trace:TASK-920
     Approve,
+    /// Open scope, Draft-only: the advisor's DIRECT reject — run the
+    /// `aida edit <id> --status rejected` transition (advisor-gated, so the
+    /// spawned command carries advisor authority) on the selected drafts. The
+    /// sibling of [`Verb::Approve`]: accept vs decline the same Draft.
+    // trace:TASK-949
+    Reject,
     Archive,
     /// Open scope: `aida show <id> --no-git` on the focused item → modal.
     Show,
@@ -278,6 +290,7 @@ impl Verb {
         match self {
             Verb::Groom => "groom",
             Verb::Approve => "approve",
+            Verb::Reject => "reject",
             Verb::Archive => "archive",
             Verb::Show => "show",
             Verb::Why => "why",
@@ -293,6 +306,7 @@ impl Verb {
         match self {
             Verb::Groom => "cross-spec grooming + disposition",
             Verb::Approve => "advisor-only: draft → approved",
+            Verb::Reject => "advisor-only: draft → rejected",
             Verb::Archive => "mark non-core specs archived",
             Verb::Show => "show this spec (aida show --no-git)",
             Verb::Why => "why is this spec still open? (aida why)",
@@ -317,6 +331,12 @@ impl Verb {
             }
             Verb::Approve => {
                 "Advisor's direct draft → approved transition. Draft-only: \
+                 set-level over the selected drafts (non-drafts are skipped), or \
+                 the focused draft when nothing is selected."
+            }
+            Verb::Reject => {
+                "Advisor's direct draft → rejected transition — the sibling of \
+                 approve (decline rather than accept the Draft). Draft-only: \
                  set-level over the selected drafts (non-drafts are skipped), or \
                  the focused draft when nothing is selected."
             }
@@ -373,14 +393,16 @@ impl Verb {
     }
 
     /// Is this verb wired to do real work? `groom` (stubbed), `show`, `why`,
-    /// `request approval`, `queue`, `approve`, `accept`, and `defer` execute;
-    /// `archive` is still present-but-stubbed to prove the verb list +
-    /// breadcrumb. trace:TASK-920 trace:TASK-921 trace:TASK-933
+    /// `request approval`, `queue`, `approve`, `reject`, `accept`, and `defer`
+    /// execute; `archive` is still present-but-stubbed to prove the verb list +
+    /// breadcrumb.
+    // trace:TASK-920 trace:TASK-921 trace:TASK-933 trace:TASK-949
     pub fn is_functional(self) -> bool {
         matches!(
             self,
             Verb::Groom
                 | Verb::Approve
+                | Verb::Reject
                 | Verb::Show
                 | Verb::Why
                 | Verb::Status
@@ -397,10 +419,10 @@ impl Verb {
     /// substrate would refuse for their role:
     ///
     /// - `Some("advisor")` — the advisor-authority dispositions (`groom`,
-    ///   `approve`, `queue`, `archive`). The substrate gates the underlying
-    ///   transitions to advisor authority (the Draft/NeedsAttention → Approved+
-    ///   gate, and the advisor-gated enqueue, TASK-647), so these stay
-    ///   advisor-only.
+    ///   `approve`, `reject`, `queue`, `archive`). The substrate gates the
+    ///   underlying transitions to advisor authority (the Draft/NeedsAttention →
+    ///   Approved/Rejected gate, and the advisor-gated enqueue, TASK-647), so
+    ///   these stay advisor-only.
     /// - `Some("reviewer")` — `accept`, the reviewer's implementation-approval
     ///   (Done → Completed).
     /// - `None` — the role-agnostic verbs (`show`, `why`, `status`, `request
@@ -413,7 +435,9 @@ impl Verb {
     // trace:BUG-638 | ai:claude
     pub fn required_role(self) -> Option<&'static str> {
         match self {
-            Verb::Groom | Verb::Approve | Verb::Queue | Verb::Archive => Some("advisor"),
+            Verb::Groom | Verb::Approve | Verb::Reject | Verb::Queue | Verb::Archive => {
+                Some("advisor")
+            }
             Verb::Accept => Some("reviewer"),
             Verb::Show | Verb::Why | Verb::Status | Verb::RequestApproval | Verb::Defer => None,
         }
@@ -1497,6 +1521,15 @@ impl RedesignState {
             return RunOutcome::Approve { drafts, skipped };
         }
 
+        // reject: directly reject the marked drafts (or focused draft),
+        // skipping non-drafts. The sibling of `approve` — same Draft selection
+        // and advisor gate, but runs the rejected-status transition rather than
+        // approved. trace:TASK-949
+        if verb == Verb::Reject {
+            let (drafts, skipped) = self.draft_selection();
+            return RunOutcome::Reject { drafts, skipped };
+        }
+
         // queue: route the marked Approved specs (or focused Approved item)
         // to the implementer queue. trace:TASK-915
         if verb == Verb::Queue {
@@ -1727,6 +1760,14 @@ pub enum RunOutcome {
     /// `skipped` non-drafts. The do-it-yourself mirror of
     /// [`Self::RequestApproval`]. trace:TASK-920
     Approve {
+        drafts: Vec<String>,
+        skipped: Vec<String>,
+    },
+    /// `reject` on the Draft selection: directly reject `drafts` (the
+    /// advisor-gated `aida edit <id> --status rejected` transition), report
+    /// `skipped` non-drafts. The sibling of [`Self::Approve`].
+    // trace:TASK-949
+    Reject {
         drafts: Vec<String>,
         skipped: Vec<String>,
     },
@@ -2046,6 +2087,8 @@ mod tests {
         assert_eq!(s.breadcrumb(), "Backlog › groom");
         s.move_down(); // → approve
         assert_eq!(s.breadcrumb(), "Backlog › approve");
+        s.move_down(); // → reject
+        assert_eq!(s.breadcrumb(), "Backlog › reject");
         s.move_down(); // → archive
         assert_eq!(s.breadcrumb(), "Backlog › archive");
     }
@@ -2117,6 +2160,7 @@ mod tests {
         // Advisor-authority dispositions.
         assert_eq!(Verb::Groom.required_role(), Some("advisor"));
         assert_eq!(Verb::Approve.required_role(), Some("advisor"));
+        assert_eq!(Verb::Reject.required_role(), Some("advisor"));
         assert_eq!(Verb::Queue.required_role(), Some("advisor"));
         assert_eq!(Verb::Archive.required_role(), Some("advisor"));
         // Reviewer's implementation-approval.
@@ -2151,6 +2195,7 @@ mod tests {
     fn verb_role_permitted_reflects_active_role() {
         let imp = RedesignState::new(items(3), "implementer");
         assert!(!imp.verb_role_permitted(Verb::Approve));
+        assert!(!imp.verb_role_permitted(Verb::Reject));
         assert!(!imp.verb_role_permitted(Verb::Groom));
         assert!(!imp.verb_role_permitted(Verb::Accept));
         assert!(imp.verb_role_permitted(Verb::Show));
@@ -2159,6 +2204,7 @@ mod tests {
 
         let adv = RedesignState::new(items(3), "advisor");
         assert!(adv.verb_role_permitted(Verb::Approve));
+        assert!(adv.verb_role_permitted(Verb::Reject));
         assert!(adv.verb_role_permitted(Verb::Groom));
         // Advisor is the superset: it may also run the reviewer's accept.
         assert!(adv.verb_role_permitted(Verb::Accept));
@@ -2166,12 +2212,13 @@ mod tests {
         let rev = RedesignState::new(items(3), "reviewer");
         assert!(rev.verb_role_permitted(Verb::Accept));
         assert!(!rev.verb_role_permitted(Verb::Approve));
+        assert!(!rev.verb_role_permitted(Verb::Reject));
     }
 
     #[test]
     fn run_verb_refuses_role_disallowed_verb_for_implementer() {
-        // Backlog verbs are [groom, approve, archive]; an implementer must not
-        // be able to RUN the advisor-only approve even though it renders (greyed).
+        // Backlog verbs are [groom, approve, reject, archive]; an implementer must
+        // not be able to RUN the advisor-only approve even though it renders (greyed).
         let mut s = RedesignState::new(items(3), "implementer");
         s.drill(); // Backlog → verbs
         s.move_down(); // groom → approve
@@ -2278,10 +2325,11 @@ mod tests {
     #[test]
     fn non_functional_verb_does_not_execute() {
         // `approve` is now functional (trace:TASK-920); `archive` (Backlog
-        // verb idx 2) remains the present-but-stubbed verb.
+        // verb idx 3, after the inserted `reject`) remains the present-but-stubbed verb.
         let mut s = state(3);
         s.drill();
         s.move_down(); // → approve
+        s.move_down(); // → reject
         s.move_down(); // → archive (stub)
         assert_eq!(s.top_verb(), Some(Verb::Archive));
         assert_eq!(s.run_verb(), RunOutcome::None);
@@ -2351,8 +2399,8 @@ mod tests {
         s.push_filter('c');
         s.push_filter('h');
         let idxs = s.top_indices();
-        // Only "archive" survives.
-        assert_eq!(idxs, vec![2]);
+        // Only "archive" survives (now idx 3 in [groom, approve, reject, archive]).
+        assert_eq!(idxs, vec![3]);
         assert_eq!(s.top_verb(), Some(Verb::Archive));
     }
 
@@ -2510,6 +2558,7 @@ mod tests {
                 Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
+                Verb::Reject,
                 Verb::Defer
             ]
         );
@@ -2522,6 +2571,7 @@ mod tests {
                 Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
+                Verb::Reject,
                 Verb::Defer
             ]
         );
@@ -2545,7 +2595,7 @@ mod tests {
         // Other scopes ignore the status argument.
         assert_eq!(
             verb_list_for(Scope::Backlog, Some("Draft")),
-            vec![Verb::Groom, Verb::Approve, Verb::Archive]
+            vec![Verb::Groom, Verb::Approve, Verb::Reject, Verb::Archive]
         );
     }
 
@@ -2554,7 +2604,7 @@ mod tests {
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom();
-        // bottom_idx 0 = TASK-0 (Draft) → request approval + approve + defer.
+        // bottom_idx 0 = TASK-0 (Draft) → request approval + approve + reject + defer.
         assert_eq!(
             s.current_verbs(),
             vec![
@@ -2563,6 +2613,7 @@ mod tests {
                 Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
+                Verb::Reject,
                 Verb::Defer
             ]
         );
@@ -2586,6 +2637,7 @@ mod tests {
                 Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
+                Verb::Reject,
                 Verb::Defer
             ]
         );
@@ -2722,7 +2774,7 @@ mod tests {
                 Verb::Defer
             ]
         );
-        // Focused on a Draft → request approval + approve, not queue.
+        // Focused on a Draft → request approval + approve + reject, not queue.
         assert_eq!(
             verb_list_for(Scope::Open, Some("Draft")),
             vec![
@@ -2731,6 +2783,7 @@ mod tests {
                 Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
+                Verb::Reject,
                 Verb::Defer
             ]
         );
@@ -2742,7 +2795,7 @@ mod tests {
         // Other scopes ignore the status argument.
         assert_eq!(
             verb_list_for(Scope::Backlog, Some("Approved")),
-            vec![Verb::Groom, Verb::Approve, Verb::Archive]
+            vec![Verb::Groom, Verb::Approve, Verb::Reject, Verb::Archive]
         );
     }
 
@@ -2855,6 +2908,72 @@ mod tests {
         assert!(!verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Approve));
         assert!(!verb_list_for(Scope::Open, None).contains(&Verb::Approve));
         assert!(verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Approve));
+    }
+
+    // --- Reject verb (TASK-949) ------------------------------------------
+
+    #[test]
+    fn reject_targets_selected_drafts_skips_non_drafts() {
+        // The sibling of `approve_targets_selected_drafts...`, but on the
+        // `reject` verb (idx 5 in the Open Draft verb list). trace:TASK-949
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.toggle_select(); // TASK-0 (Draft)
+        s.move_down();
+        s.toggle_select(); // TASK-1 (Approved — should be skipped)
+        s.move_down();
+        s.toggle_select(); // TASK-2 (Draft)
+                           // Focus back to TASK-0 (Draft) so the verb list includes the verb,
+                           // then move the top highlight onto `reject` (idx 5).
+        s.focus_bottom();
+        s.move_up();
+        s.move_up(); // → TASK-0 (Draft)
+        s.focus_top();
+        s.move_down();
+        s.move_down();
+        s.move_down();
+        s.move_down();
+        s.move_down();
+        assert_eq!(s.top_verb(), Some(Verb::Reject));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Reject {
+                drafts: vec!["TASK-0".to_string(), "TASK-2".to_string()],
+                skipped: vec!["TASK-1".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn reject_with_no_selection_uses_focused_draft() {
+        // trace:TASK-949
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom(); // focus TASK-0 (Draft), nothing selected
+        s.focus_top();
+        s.move_down();
+        s.move_down();
+        s.move_down();
+        s.move_down();
+        s.move_down(); // → reject (idx 5)
+        assert_eq!(s.top_verb(), Some(Verb::Reject));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Reject {
+                drafts: vec!["TASK-0".to_string()],
+                skipped: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn reject_absent_on_non_draft_focus() {
+        // `reject` is Draft-conditional, the sibling of `approve`: an Approved
+        // focus exposes `queue`, not `reject`. trace:TASK-949
+        assert!(!verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Reject));
+        assert!(!verb_list_for(Scope::Open, None).contains(&Verb::Reject));
+        assert!(verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Reject));
     }
 
     // --- Accept verb (TASK-933) ------------------------------------------
@@ -3060,8 +3179,8 @@ mod tests {
         s.toggle_select(); // TASK-0
         s.focus_top();
         // Move the top highlight onto `defer` (last verb on the Open Draft
-        // list: show, why, status, request approval, approve, defer → idx 5).
-        for _ in 0..5 {
+        // list: show, why, status, request approval, approve, reject, defer → idx 6).
+        for _ in 0..6 {
             s.move_down();
         }
         assert_eq!(s.top_verb(), Some(Verb::Defer));
