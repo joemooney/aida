@@ -373,6 +373,65 @@ impl Verb {
                 | Verb::Defer
         )
     }
+
+    /// The role lens that owns this verb's underlying lifecycle act — the THIRD
+    /// grey-out axis on top of status-applicability and selection. The redesign
+    /// palette gates by role so an operator is never offered a verb the
+    /// substrate would refuse for their role:
+    ///
+    /// - `Some("advisor")` — the advisor-authority dispositions (`groom`,
+    ///   `approve`, `queue`, `archive`). The substrate gates the underlying
+    ///   transitions to advisor authority (the Draft/NeedsAttention → Approved+
+    ///   gate, and the advisor-gated enqueue, TASK-647), so these stay
+    ///   advisor-only.
+    /// - `Some("reviewer")` — `accept`, the reviewer's implementation-approval
+    ///   (Done → Completed).
+    /// - `None` — the role-agnostic verbs (`show`, `why`, `request approval`,
+    ///   `defer`): any role may run them (`request approval` is open to any role
+    ///   post-BUG-631; reads and parking are unrestricted).
+    ///
+    /// Permission itself is decided by [`role_permits_verb`] (advisor is the
+    /// senior superset). Display-only verbs that aren't permitted render greyed
+    /// + non-selectable with a "requires the &lt;role&gt; role" hint.
+    // trace:BUG-638 | ai:claude
+    pub fn required_role(self) -> Option<&'static str> {
+        match self {
+            Verb::Groom | Verb::Approve | Verb::Queue | Verb::Archive => Some("advisor"),
+            Verb::Accept => Some("reviewer"),
+            Verb::Show | Verb::Why | Verb::RequestApproval | Verb::Defer => None,
+        }
+    }
+}
+
+/// Canonicalize a role name for the palette's role gate: trim + lowercase, and
+/// fold the deprecated `dialog` alias onto `advisor` (mirrors the CLI's
+/// `canonical_role`). Comparisons are case-insensitive so `Advisor` matches
+/// `advisor`.
+// trace:BUG-638 | ai:claude
+fn canonical_role_name(role: &str) -> String {
+    let r = role.trim().to_ascii_lowercase();
+    if r == "dialog" {
+        "advisor".to_string()
+    } else {
+        r
+    }
+}
+
+/// Whether `active_role` may run a verb whose [`Verb::required_role`] is
+/// `required`. `None` required → any role. Otherwise the active role must equal
+/// the requirement, with `advisor` as the senior superset: the advisor may run
+/// any role's verbs (the substrate never refuses an advisor for these acts, so
+/// the palette must not be stricter than the substrate). A non-advisor role is
+/// refused any verb it is not the named owner of. trace below.
+// trace:BUG-638 | ai:claude
+pub fn role_permits_verb(active_role: &str, required: Option<&str>) -> bool {
+    match required {
+        None => true,
+        Some(req) => {
+            let active = canonical_role_name(active_role);
+            active == canonical_role_name(req) || active == "advisor"
+        }
+    }
 }
 
 /// Which panel owns the keyboard. Top = the current list (scopes, or verbs
@@ -808,6 +867,15 @@ impl RedesignState {
         };
         let focused_status = self.focused_item().map(|i| i.status.as_str());
         verb_list_for(scope, focused_status)
+    }
+
+    /// Whether the active role lens ([`Self::role`]) may run `verb` — the
+    /// BUG-638 role gate. A verb the role cannot run renders greyed +
+    /// non-selectable in the palette and refuses to execute (see
+    /// [`Self::run_verb`]). Delegates to [`role_permits_verb`].
+    // trace:BUG-638 | ai:claude
+    pub fn verb_role_permitted(&self, verb: Verb) -> bool {
+        role_permits_verb(&self.role, verb.required_role())
     }
 
     // --- Top-panel accessors ---------------------------------------------
@@ -1368,6 +1436,18 @@ impl RedesignState {
         let Some(verb) = self.top_verb() else {
             return RunOutcome::None;
         };
+        // Role gate (BUG-638): refuse a verb the active role lens may not run —
+        // the substrate would reject it (approve/queue/groom/archive are
+        // advisor-authority acts; accept is the reviewer's). Mirrors the greyed,
+        // non-selectable palette rendering: Enter on a role-disabled verb is a
+        // no-op with a helpful status, never a refused subprocess. Checked
+        // before `is_functional` so a non-advisor gets the role reason rather
+        // than a stub notice. trace:BUG-638 | ai:claude
+        if !self.verb_role_permitted(verb) {
+            let req = verb.required_role().unwrap_or("advisor");
+            self.status = Some(format!("{} requires the {} role", verb.label(), req));
+            return RunOutcome::None;
+        }
         if !verb.is_functional() {
             self.status = Some(format!("{} is not wired yet (Slice 1)", verb.label()));
             return RunOutcome::None;
@@ -2011,6 +2091,109 @@ mod tests {
         s.drill();
         s.toggle_select();
         assert_eq!(s.selected_count(), 0);
+    }
+
+    // --- Role gate (BUG-638) ---------------------------------------------
+
+    #[test]
+    fn required_role_maps_advisor_and_reviewer_verbs() {
+        // Advisor-authority dispositions.
+        assert_eq!(Verb::Groom.required_role(), Some("advisor"));
+        assert_eq!(Verb::Approve.required_role(), Some("advisor"));
+        assert_eq!(Verb::Queue.required_role(), Some("advisor"));
+        assert_eq!(Verb::Archive.required_role(), Some("advisor"));
+        // Reviewer's implementation-approval.
+        assert_eq!(Verb::Accept.required_role(), Some("reviewer"));
+        // Role-agnostic: any role may run these.
+        assert_eq!(Verb::Show.required_role(), None);
+        assert_eq!(Verb::Why.required_role(), None);
+        assert_eq!(Verb::RequestApproval.required_role(), None);
+        assert_eq!(Verb::Defer.required_role(), None);
+    }
+
+    #[test]
+    fn role_permits_verb_advisor_is_superset_others_strict() {
+        // Advisor runs everything (the senior superset).
+        assert!(role_permits_verb("advisor", Some("advisor")));
+        assert!(role_permits_verb("advisor", Some("reviewer")));
+        assert!(role_permits_verb("advisor", None));
+        // Implementer: refused advisor + reviewer verbs, allowed role-agnostic.
+        assert!(!role_permits_verb("implementer", Some("advisor")));
+        assert!(!role_permits_verb("implementer", Some("reviewer")));
+        assert!(role_permits_verb("implementer", None));
+        // Reviewer: its own verb + agnostic, refused advisor.
+        assert!(role_permits_verb("reviewer", Some("reviewer")));
+        assert!(!role_permits_verb("reviewer", Some("advisor")));
+        assert!(role_permits_verb("reviewer", None));
+        // Case-insensitive + the deprecated `dialog` alias folds to advisor.
+        assert!(role_permits_verb("Advisor", Some("advisor")));
+        assert!(role_permits_verb("dialog", Some("advisor")));
+    }
+
+    #[test]
+    fn verb_role_permitted_reflects_active_role() {
+        let imp = RedesignState::new(items(3), "implementer");
+        assert!(!imp.verb_role_permitted(Verb::Approve));
+        assert!(!imp.verb_role_permitted(Verb::Groom));
+        assert!(!imp.verb_role_permitted(Verb::Accept));
+        assert!(imp.verb_role_permitted(Verb::Show));
+        assert!(imp.verb_role_permitted(Verb::RequestApproval));
+        assert!(imp.verb_role_permitted(Verb::Defer));
+
+        let adv = RedesignState::new(items(3), "advisor");
+        assert!(adv.verb_role_permitted(Verb::Approve));
+        assert!(adv.verb_role_permitted(Verb::Groom));
+        // Advisor is the superset: it may also run the reviewer's accept.
+        assert!(adv.verb_role_permitted(Verb::Accept));
+
+        let rev = RedesignState::new(items(3), "reviewer");
+        assert!(rev.verb_role_permitted(Verb::Accept));
+        assert!(!rev.verb_role_permitted(Verb::Approve));
+    }
+
+    #[test]
+    fn run_verb_refuses_role_disallowed_verb_for_implementer() {
+        // Backlog verbs are [groom, approve, archive]; an implementer must not
+        // be able to RUN the advisor-only approve even though it renders (greyed).
+        let mut s = RedesignState::new(items(3), "implementer");
+        s.drill(); // Backlog → verbs
+        s.move_down(); // groom → approve
+        assert_eq!(s.top_verb(), Some(Verb::Approve));
+        let out = s.run_verb();
+        assert_eq!(out, RunOutcome::None);
+        assert_eq!(
+            s.status.as_deref(),
+            Some("approve requires the advisor role")
+        );
+    }
+
+    #[test]
+    fn run_verb_allows_role_permitted_verb_for_advisor() {
+        // The same approve verb runs for an advisor (no role refusal).
+        let mut s = state(3); // advisor
+        s.drill();
+        s.move_down(); // → approve
+        assert_eq!(s.top_verb(), Some(Verb::Approve));
+        let out = s.run_verb();
+        assert!(matches!(out, RunOutcome::Approve { .. }));
+        assert_ne!(
+            s.status.as_deref(),
+            Some("approve requires the advisor role")
+        );
+    }
+
+    #[test]
+    fn run_verb_allows_request_approval_for_implementer() {
+        // The role-agnostic `request approval` is runnable by an implementer:
+        // it routes drafts to the advisor queue (open to any role post-BUG-631).
+        let mut s = RedesignState::new(open_items(), "implementer");
+        drill_open(&mut s); // focus is on the first (Draft) item
+                            // Open+Draft verbs: [show, why, request approval, approve, defer].
+        s.move_down(); // show → why
+        s.move_down(); // why → request approval
+        assert_eq!(s.top_verb(), Some(Verb::RequestApproval));
+        let out = s.run_verb();
+        assert!(matches!(out, RunOutcome::RequestApproval { .. }));
     }
 
     #[test]
