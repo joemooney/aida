@@ -44,7 +44,7 @@ design — Spec Kit is a per-feature convention, not a project-wide graph.
 ## Run it
 
 ```bash
-# aida on PATH (run `aida-on` for the dev build); git user.name/email set.
+# aida on PATH (run `aida dev activate` for the dev build); git user.name/email set.
 bash docs/demos/spec-kit-composition/demo-spec-kit-composition.sh
 bash docs/demos/spec-kit-composition/demo-spec-kit-composition.sh --no-pause   # CI / non-interactive
 ```

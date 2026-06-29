@@ -22,7 +22,7 @@ npx @marp-team/marp-cli@latest docs/presentation/2026-06-management-demo.md -o /
 # 3. Record the backup cast (insurance — see §6). Do this even for a live demo.
 
 # 4. Demo environment check:
-aida --version                            # confirm aida-on / release build active
+aida --version                            # confirm dev-activated / release build active
 gh auth status                            # demo repo creation needs gh
 echo $AIDA_USER $USER                     # queue identity sanity (BUG-89)
 ```

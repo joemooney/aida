@@ -111,7 +111,7 @@ AIDA_BIN="$(git rev-parse --show-toplevel)/target/debug/aida"
 # Option B — explicit absolute path (clearer in copy-paste recipes)
 AIDA_BIN=/home/<user>/path/to/aida/target/debug/aida
 
-# Option C — `aida-on`'d shell already on PATH
+# Option C — an activated dev shell (`aida dev activate`) already on PATH
 AIDA_BIN=aida
 ```
 

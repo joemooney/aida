@@ -244,8 +244,8 @@ TASK-615 + STORY-492 (landing). The resume probes pr_merged/spec_completed accur
 ## Working *on* AIDA
 
 ```bash
-aida dev shell-init --install   # one-time: install aida-on / aida-off helpers
-aida-on                         # pyenv-style: use the in-repo build
+aida dev shell-init --install   # one-time: install the `aida()` shell wrapper
+aida dev activate               # pyenv-style: use the in-repo build (wrapper auto-evals)
 aida dev status                 # which binary is active + does its SHA match HEAD
 aida dev serve                  # aida-server (8080) + vite (5173)
 

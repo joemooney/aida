@@ -309,7 +309,7 @@ with `aida dev shell-init --install`; the rest is automatic.
 
 | Variable | What it does | Default | Who sets it | Scope |
 | --- | --- | --- | --- | --- |
-| `AIDA_DEV_REPO` | Absolute path to the AIDA repo root — lets `aida-on` activate from any directory. | unset (or `--repo`). | dev (baked into shell-init) | shell session |
+| `AIDA_DEV_REPO` | Absolute path to the AIDA repo root — lets `aida dev activate` work from any directory. | unset (or `--repo`). | dev (baked into shell-init) | shell session |
 | `AIDA_DEV_ACTIVE` | Marker that dev activation is live. | `1` when active. | launch-path (`aida dev activate`) | process env |
 | `AIDA_DEV_BIN` | Directory of the active dev `aida` binary. | set by activate. | launch-path | process env |
 | `AIDA_DEV_PROFILE` | Active cargo profile (`debug`/`release`). | set by activate. | launch-path | process env |

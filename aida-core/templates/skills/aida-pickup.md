@@ -1132,9 +1132,12 @@ the advisor seat:
 ## Shell helper (for developers)
 
 `aida role enter <name>` prints shell code; you must `eval` it for the role to
-attach to the current shell. `aida dev shell-init --install` adds two helpers
-(`aida-role` and `aida-off`) that wrap the eval, so you can type
-`aida-role implementer` instead of `eval "$(aida role enter implementer)"`.
-The helpers are convenience only — recommend the canonical `aida role enter`
-form in user-facing instructions, since it works in every shell regardless of
-whether the helpers are installed.
+attach to the current shell. `aida dev shell-init --install` installs an
+`aida()` shell wrapper that auto-evals the shell-modifying subcommands (`role
+enter` / `role end` / `role add`, `dev activate` / `dev deactivate`, `session
+start` / `session end`), so once it's installed you can type
+`aida role enter implementer` directly instead of
+`eval "$(aida role enter implementer)"`. The wrapper is convenience only —
+recommend the canonical `eval "$(aida role enter <name>)"` form in user-facing
+instructions, since it works in every shell regardless of whether the wrapper
+is installed.
