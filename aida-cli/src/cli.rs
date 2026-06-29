@@ -7341,6 +7341,34 @@ pub enum Command {
         all: bool,
     },
 
+    /// Stream the drain event feed and wake on actionable verbs only.
+    ///
+    /// Follows `.aida/events.jsonl` like `tail -f`, classifies each event in
+    /// cheap code, and prints ONE wake line only when something actionable
+    /// happens (CI terminal, a PR shipped/merged, a punt, a shelve, an
+    /// escalation, the drain finished) — staying silent on the benign majority
+    /// (phase churn, run bookkeeping). Intended to back the harness `Monitor`
+    /// tool so a supervising session burns nothing while nothing is happening.
+    /// If the drain's orchestrator process has died, prints one
+    /// `WAKE drain-crashed` line and exits so a follower never blocks forever.
+    // trace:TASK-990 | ai:claude
+    Watch {
+        /// Emit wake lines for actionable events (the default behavior — this
+        /// flag makes it explicit for the `Monitor`-tool invocation).
+        #[clap(long)]
+        emit_wakes: bool,
+
+        /// Also surface the benign (non-actionable) events as an indented debug
+        /// feed, not just the wake lines.
+        #[clap(long)]
+        all: bool,
+
+        /// Drain the current backlog, classify it, and exit instead of
+        /// following the stream (cron / test mode).
+        #[clap(long)]
+        once: bool,
+    },
+
     /// List the team: every registered node/clone sharing this store
     /// (`registry/nodes.toml`) — node id, host, email, clone path, when it
     /// registered, and whether it currently holds a coordination claim
