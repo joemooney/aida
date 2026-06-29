@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:09:32.069425435Z
-modified_at: 2026-06-29T15:33:26.597222294Z
+modified_at: 2026-06-29T15:52:09.827337651Z
 req_type: Story
 tags:
 - axi
@@ -21,3 +21,6 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:09:36.270427037Z
+- rel_type: Parent
+  target_id: 019f1414-a8db-7940-9f76-928fcef17462
+  created_at: 2026-06-29T15:52:09.827337651Z
