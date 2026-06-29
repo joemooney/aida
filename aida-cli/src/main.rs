@@ -41777,6 +41777,8 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             sandbox,
             role,
             force_claim,
+            pool,
+            no_pool,
         } => {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
@@ -41785,6 +41787,14 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             if *launch && mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
+            // STORY-714: --pool / --no-pool win over the config; None = config.
+            let use_pool = if *pool {
+                Some(true)
+            } else if *no_pool {
+                Some(false)
+            } else {
+                None
+            };
             session_start(
                 owns,
                 branch.as_deref(),
@@ -41800,6 +41810,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 mode.contained,
                 role.clone(),
                 *force_claim,
+                use_pool,
             )
         }
         SessionCommand::HarnessWorktreeRegister {
@@ -43429,6 +43440,10 @@ fn prepare_agent_launch(
                 false,
                 role.clone(),
                 /* force_claim */ false,
+                // STORY-714: config-driven (no per-command flag on this path
+                // yet) — [worktree_pool] enabled decides.
+                /* use_pool */
+                None,
             );
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result
@@ -49193,6 +49208,99 @@ fn session_start_status_bump_preconditions_met(
 
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
+/// Resolve whether a session should pool its worktree: the explicit
+/// `--pool`/`--no-pool` flag wins; otherwise `[worktree_pool] enabled` in the
+/// repo config decides (default false).
+// trace:STORY-714 | ai:claude
+fn resolve_worktree_pool_enabled(flag: Option<bool>, project_root: &std::path::Path) -> bool {
+    if let Some(f) = flag {
+        return f;
+    }
+    std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+        .ok()
+        .and_then(|b| toml::from_str::<toml::Value>(&b).ok())
+        .and_then(|v| v.get("worktree_pool")?.get("enabled")?.as_bool())
+        .unwrap_or(false)
+}
+
+/// Acquire a warm-pool worktree for a new session and create `branch_name` on
+/// it. The tree is handed out at a detached furthest-ahead default HEAD, so the
+/// branch forks from the right base; a durable lease (keyed on the branch) keeps
+/// it reserved while the session is live even though this start process exits.
+/// On branch-creation failure the tree is returned, not leaked.
+// trace:STORY-714 | ai:claude
+fn acquire_session_pool_worktree(
+    project_root: &std::path::Path,
+    branch_name: &str,
+) -> Result<std::path::PathBuf> {
+    let opts = aida_core::worktree_pool::AcquireOptions {
+        lease_holder: Some(branch_name.to_string()),
+        max_trees: worktree_pool_config_max_trees(project_root),
+        post_create_hooks: worktree_pool_global_hooks("post_create"),
+    };
+    let acquired = aida_core::worktree_pool::acquire(project_root, &opts)?;
+
+    let co = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&acquired)
+        .args(["checkout", "-b", branch_name])
+        .output()?;
+    use std::io::Write;
+    let _ = std::io::stderr().write_all(&co.stdout);
+    let _ = std::io::stderr().write_all(&co.stderr);
+    if !co.status.success() {
+        // Hand the tree back so a failed branch-create doesn't pin it.
+        let _ = aida_core::worktree_pool::return_to_pool(project_root, &acquired);
+        anyhow::bail!("failed to create branch `{branch_name}` on the pooled worktree");
+    }
+    eprintln!(
+        "{} using warm-pool worktree {} (recycled — build cache kept)",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        acquired.display().to_string().dimmed()
+    );
+    Ok(acquired)
+}
+
+#[cfg(test)]
+mod worktree_pool_resolve_tests {
+    use super::resolve_worktree_pool_enabled;
+
+    fn project_with_config(body: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(dir.path().join(".aida").join("config.toml"), body).unwrap();
+        dir
+    }
+
+    #[test]
+    fn flag_overrides_config_both_ways() {
+        let on = project_with_config("[worktree_pool]\nenabled = true\n");
+        // --no-pool (Some(false)) wins over enabled = true
+        assert!(!resolve_worktree_pool_enabled(Some(false), on.path()));
+        let off = project_with_config("[worktree_pool]\nenabled = false\n");
+        // --pool (Some(true)) wins over enabled = false
+        assert!(resolve_worktree_pool_enabled(Some(true), off.path()));
+    }
+
+    #[test]
+    fn config_decides_when_no_flag() {
+        let on = project_with_config("[worktree_pool]\nenabled = true\n");
+        assert!(resolve_worktree_pool_enabled(None, on.path()));
+        let off = project_with_config("[worktree_pool]\nenabled = false\n");
+        assert!(!resolve_worktree_pool_enabled(None, off.path()));
+    }
+
+    #[test]
+    fn defaults_off_when_absent() {
+        // No [worktree_pool] section at all.
+        let bare = project_with_config("[other]\nx = 1\n");
+        assert!(!resolve_worktree_pool_enabled(None, bare.path()));
+        // No config file at all.
+        let empty = tempfile::tempdir().unwrap();
+        assert!(!resolve_worktree_pool_enabled(None, empty.path()));
+    }
+}
+
 fn session_start(
     owns: &str,
     branch: Option<&str>,
@@ -49212,6 +49320,9 @@ fn session_start(
     // NeedsAttention. Done/Completed/Rejected/Draft still refuse.
     // trace:BUG-379 | ai:claude
     force_claim: bool,
+    // STORY-714: pool the session's worktree? Some(true)=--pool,
+    // Some(false)=--no-pool, None=resolve from [worktree_pool] enabled config.
+    use_pool: Option<bool>,
 ) -> Result<()> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -49265,7 +49376,9 @@ fn session_start(
         .and_then(|s| s.to_str())
         .unwrap_or("project")
         .to_string();
-    let worktree_path = match explicit_path {
+    // STORY-714: `mut` because the warm-pool flow reassigns this to an
+    // acquired pool tree (../aida-pool-<slug>-N) in the default creation path.
+    let mut worktree_path = match explicit_path {
         Some(p) => std::path::PathBuf::from(p),
         None => project_root
             .parent()
@@ -49756,31 +49869,66 @@ fn session_start(
             }
         }
 
-        let mut args = vec![
-            "worktree",
-            "add",
-            "-b",
-            branch_name.as_str(),
-            worktree_path.to_str().unwrap(),
-        ];
-        if let Some(rb) = resolved_base.as_deref() {
-            args.push(rb);
-        }
-        // STORY-73: capture stdout and re-emit to stderr. `git worktree add`
-        // prints things like "HEAD is now at <sha>" to stdout, which would
-        // otherwise contaminate session_start's stdout (where the wrapper
-        // expects only `export AIDA_SESSION_ID=...` for eval).
-        // trace:STORY-73 | ai:claude
-        let res = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args(&args)
-            .output()?;
-        use std::io::Write;
-        let _ = std::io::stderr().write_all(&res.stdout);
-        let _ = std::io::stderr().write_all(&res.stderr);
-        if !res.status.success() {
-            anyhow::bail!("`git worktree add` failed");
+        // STORY-714: warm-pool path. When pooling is enabled (config or
+        // --pool) AND no explicit --base is given (the pool resets to the
+        // furthest-ahead default, which is what an unqualified session wants),
+        // acquire a recycled detached tree and create the session branch ON
+        // it, instead of a fresh `git worktree add`. The directory's warm
+        // `target/` cache is reused; the durable lease keeps the tree reserved
+        // for this session even after this short-lived start process exits
+        // (so a concurrent acquire can't grab the live session's tree).
+        // trace:STORY-714 | ai:claude
+        let pool_enabled = resolve_worktree_pool_enabled(use_pool, &project_root);
+        let pooled = if pool_enabled && base.is_none() {
+            match acquire_session_pool_worktree(&project_root, &branch_name) {
+                Ok(acquired) => Some(acquired),
+                Err(e) => {
+                    eprintln!(
+                        "{} warm-pool acquire failed ({e}); falling back to a fresh worktree",
+                        "Warning:".yellow().bold()
+                    );
+                    None
+                }
+            }
+        } else {
+            if pool_enabled && base.is_some() {
+                eprintln!(
+                    "{} --base given — not pooling this session (the pool resets to the default branch)",
+                    "ⓘ".cyan()
+                );
+            }
+            None
+        };
+
+        if let Some(acquired) = pooled {
+            worktree_path = acquired;
+        } else {
+            let mut args = vec![
+                "worktree",
+                "add",
+                "-b",
+                branch_name.as_str(),
+                worktree_path.to_str().unwrap(),
+            ];
+            if let Some(rb) = resolved_base.as_deref() {
+                args.push(rb);
+            }
+            // STORY-73: capture stdout and re-emit to stderr. `git worktree add`
+            // prints things like "HEAD is now at <sha>" to stdout, which would
+            // otherwise contaminate session_start's stdout (where the wrapper
+            // expects only `export AIDA_SESSION_ID=...` for eval).
+            // trace:STORY-73 | ai:claude
+            let res = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&project_root)
+                .args(&args)
+                .output()?;
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(&res.stdout);
+            let _ = std::io::stderr().write_all(&res.stderr);
+            if !res.status.success() {
+                anyhow::bail!("`git worktree add` failed");
+            }
         }
     }
 
@@ -126585,6 +126733,11 @@ fn handle_queue_work(
         false,
         /* role */ Some(role.clone()),
         /* force_claim */ force_claim,
+        // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
+        // only for non-stacked spawns (resolved_base is None unless --stack /
+        // --base), so stacked work keeps a fresh `git worktree add`.
+        /* use_pool */
+        None,
     )?;
 
     // Look up the lease we just minted: by scope, by owner=us, freshest.
