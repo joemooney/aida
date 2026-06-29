@@ -26217,5 +26217,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2504
+- id: 019f14d9-88d3-7613-87da-6328d529f1bc
+  target_id: 019f14d9-7da8-7cf1-b44d-1ca48ccf6cdb
+  author: aida
+  node_id: '1'
+  lamport: 2505
+  timestamp: 2026-06-29T19:27:08.499347091Z
+  kind: !Create
+    title: 'Autopilot slice 2: autopilot::evaluate four-gate envelope contract (pure, wired to nothing)'
+    description: 'TASK-0429 smallest-first-slice. New aida-cli/src/autopilot.rs: ActionClass, Authority (auto/propose/never), AutopilotEnvelope embedding IntakeConfig, the conservative Default table, and the PURE four-gate evaluate() function + its full unit-test suite, WIRED TO NOTHING (zero behavior change to groom). Lands the governing contract + tests as a low-risk reviewable artifact the other slices build against. GATED: operator ratifies first. The --autopilot flag + config parse is the second slice.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2505
 node_id: '1'
