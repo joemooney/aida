@@ -4239,6 +4239,13 @@ pub enum QueueCommand {
         // trace:TASK-559 | ai:codex
         #[clap(long)]
         force_claim: bool,
+        /// Override the focus-scope drift guard: start work on a
+        /// spec outside the active `aida focus` subtree even when `[focus]
+        /// out_of_scope = "block"` would refuse, and silence the `warn` nudge.
+        /// Always overrides regardless of the configured policy.
+        // trace:STORY-717 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        force: bool,
         /// Tag-driven batch pickup: instead of resolving from `id`, pick
         /// the head queued item tagged `batch:<NAME>`. Repeat the
         /// invocation to drain the batch one session per item (each
@@ -5831,6 +5838,13 @@ pub enum AgentNewCommand {
         #[clap(long)]
         spec: Option<String>,
 
+        /// Override the focus-scope drift guard: launch on a spec
+        /// outside the active `aida focus` subtree even when `[focus]
+        /// out_of_scope = "block"` would refuse, and silence the `warn` nudge.
+        // trace:STORY-717 | ai:claude
+        #[clap(long)]
+        force: bool,
+
         /// AIDA project root or descendant used as the launch base.
         #[clap(long, value_name = "PATH")]
         cwd: Option<PathBuf>,
@@ -5899,6 +5913,13 @@ pub enum AgentNewCommand {
         #[clap(long)]
         spec: Option<String>,
 
+        /// Override the focus-scope drift guard: launch on a spec
+        /// outside the active `aida focus` subtree even when `[focus]
+        /// out_of_scope = "block"` would refuse, and silence the `warn` nudge.
+        // trace:STORY-717 | ai:claude
+        #[clap(long)]
+        force: bool,
+
         /// AIDA project root or descendant used as the launch base.
         #[clap(long, value_name = "PATH")]
         cwd: Option<PathBuf>,
@@ -5950,6 +5971,13 @@ pub enum AgentNewCommand {
         /// SPEC-ID to work. Creates a scoped worktree + lease before launch.
         #[clap(long)]
         spec: Option<String>,
+
+        /// Override the focus-scope drift guard: launch on a spec
+        /// outside the active `aida focus` subtree even when `[focus]
+        /// out_of_scope = "block"` would refuse, and silence the `warn` nudge.
+        // trace:STORY-717 | ai:claude
+        #[clap(long)]
+        force: bool,
 
         /// AIDA project root or descendant used as the launch base.
         #[clap(long, value_name = "PATH")]
