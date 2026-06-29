@@ -21386,6 +21386,24 @@ fn init_intake_config_section() -> &'static str {
      # on_apply = \"queue\"\n"
 }
 
+/// The `[worktree_pool]` scaffold section. Pooling is ON by default (TASK-985):
+/// `aida session start` (and the agent-new / queue-work / orchestrator paths)
+/// reuse a recycled warm worktree instead of `git worktree add`, keeping the
+/// build cache warm across fan-out (~30× faster per-spec builds — see
+/// docs/research/2026-06-29-warm-pool-build-delta.md).
+// trace:TASK-985 | ai:claude
+fn init_worktree_pool_config_section() -> &'static str {
+    "\n# Worktree warm-pool (STORY-714). Pooling is ON by default: a session's\n\
+     # worktree is acquired from a recycled pool and RESET (not deleted) on\n\
+     # hand-back, so its compiled `target/` stays warm across fan-out. Escape\n\
+     # hatches: set `enabled = false` here, pass `--no-pool` to a single\n\
+     # `aida session start`, or pass `--remove` to `aida session end` to delete\n\
+     # the worktree instead of returning it.\n\
+     [worktree_pool]\n\
+     enabled = true\n\
+     # max_trees = 16   # cap on pooled worktrees (default 16)\n"
+}
+
 #[cfg(test)]
 mod story_569_review_brief_tests {
     use super::*;
@@ -23574,6 +23592,8 @@ fn handle_init_distributed_worktree(
     // Commented [intake] example block (defaults are safe; discoverability only).
     // trace:TASK-760 | ai:claude
     let config_content = config_content + init_intake_config_section();
+    // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
+    let config_content = config_content + init_worktree_pool_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // STORY-511: surface the auto-detected forge so the operator sees the
@@ -23760,6 +23780,8 @@ fn handle_init_post_clone(
     // Commented [intake] example block (defaults are safe; discoverability only).
     // trace:TASK-760 | ai:claude
     let config_content = config_content + init_intake_config_section();
+    // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
+    let config_content = config_content + init_worktree_pool_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
@@ -24316,6 +24338,8 @@ fn handle_init_distributed_sibling(
     // Commented [intake] example block (defaults are safe; discoverability only).
     // trace:TASK-760 | ai:claude
     let config_content = config_content + init_intake_config_section();
+    // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
+    let config_content = config_content + init_worktree_pool_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
@@ -41867,6 +41891,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             watch_ci,
             skip_ci,
             return_to_pool,
+            remove,
         } => session_end(
             id.as_deref(),
             spec.as_deref(),
@@ -41878,6 +41903,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *watch_ci,
             *skip_ci,
             *return_to_pool,
+            *remove,
         ),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
@@ -49237,8 +49263,11 @@ fn session_start_status_bump_preconditions_met(
 #[allow(clippy::too_many_arguments)]
 /// Resolve whether a session should pool its worktree: the explicit
 /// `--pool`/`--no-pool` flag wins; otherwise `[worktree_pool] enabled` in the
-/// repo config decides (default false).
-// trace:STORY-714 | ai:claude
+/// repo config decides. Default is now **ON** (TASK-985): the build-delta
+/// measurement (docs/research/2026-06-29-warm-pool-build-delta.md) showed ~30×
+/// faster per-spec builds on fan-out, so pooling is the default and `--no-pool`
+/// / `[worktree_pool] enabled = false` are the escape hatches.
+// trace:STORY-714 trace:TASK-985 | ai:claude
 fn resolve_worktree_pool_enabled(flag: Option<bool>, project_root: &std::path::Path) -> bool {
     if let Some(f) = flag {
         return f;
@@ -49247,7 +49276,7 @@ fn resolve_worktree_pool_enabled(flag: Option<bool>, project_root: &std::path::P
         .ok()
         .and_then(|b| toml::from_str::<toml::Value>(&b).ok())
         .and_then(|v| v.get("worktree_pool")?.get("enabled")?.as_bool())
-        .unwrap_or(false)
+        .unwrap_or(true)
 }
 
 /// Acquire a warm-pool worktree for a new session and create `branch_name` on
@@ -49392,13 +49421,16 @@ mod worktree_pool_resolve_tests {
     }
 
     #[test]
-    fn defaults_off_when_absent() {
-        // No [worktree_pool] section at all.
+    fn defaults_on_when_absent() {
+        // TASK-985: pooling is ON by default — an absent [worktree_pool]
+        // section (or missing config file) resolves to enabled.
         let bare = project_with_config("[other]\nx = 1\n");
-        assert!(!resolve_worktree_pool_enabled(None, bare.path()));
-        // No config file at all.
+        assert!(resolve_worktree_pool_enabled(None, bare.path()));
         let empty = tempfile::tempdir().unwrap();
-        assert!(!resolve_worktree_pool_enabled(None, empty.path()));
+        assert!(resolve_worktree_pool_enabled(None, empty.path()));
+        // But an explicit `enabled = false` still opts out.
+        let off = project_with_config("[worktree_pool]\nenabled = false\n");
+        assert!(!resolve_worktree_pool_enabled(None, off.path()));
     }
 }
 
@@ -53810,8 +53842,12 @@ fn session_end(
     wait_ci: bool,
     watch_ci: bool,
     skip_ci: bool,
+    // STORY-714: explicit --return (back-compat; pooled trees now return by
+    // default). TASK-985: --remove forces deletion instead of returning.
     return_to_pool: bool,
+    remove: bool,
 ) -> Result<()> {
+    let _ = return_to_pool; // returning is now the default; flag kept for compat
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -54077,9 +54113,10 @@ fn session_end(
     // leased and silently breaks reuse (the next acquire creates a fresh tree).
     // Instead salvage a patch (so no work is lost) and let it through to the
     // return path. Non-pool trees / non-return still refuse without --force.
-    // trace:BUG-652 trace:STORY-714 | ai:claude
-    let returning_pool_tree = return_to_pool
-        && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
+    // TASK-985: a pooled tree returns by DEFAULT now — `--remove` opts out.
+    // trace:BUG-652 trace:STORY-714 trace:TASK-985 | ai:claude
+    let returning_pool_tree =
+        !remove && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
     match dirty_gate_outcome(!dirty_entries.is_empty(), force, returning_pool_tree) {
         DirtyGateOutcome::Proceed => {}
         DirtyGateOutcome::Salvage => {
@@ -54249,9 +54286,10 @@ fn session_end(
             peer.id.yellow(),
             peer.scope
         );
-    } else if return_to_pool
+    } else if !remove
         && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path)
     {
+        // TASK-985: returning a pooled tree is the default; `--remove` opts out.
         match aida_core::worktree_pool::return_to_pool(&project_root, &target.worktree_path) {
             Ok(_) => {
                 returned_to_pool = true;
@@ -126722,6 +126760,10 @@ fn handle_queue_work(
                 /* skip_ci */
                 true,
                 /* return_to_pool */ false,
+                // --steal reclaims a stuck lease's tree; let the default apply
+                // (a pooled tree is returned + reset clean, not deleted).
+                /* remove */
+                false,
             )
             // BUG-311: collapse the internal session_end error into the
             // primary message so it surfaces specifically as "--steal could
