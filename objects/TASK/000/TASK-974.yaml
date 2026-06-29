@@ -3,12 +3,12 @@ spec_id: TASK-974
 agreed_id: TASK-974
 title: Centralized next-step help table keyed by (command, state)
 description: 'Port the gh-axi/tasks-axi table-driven suggestion model; attach a templated next-step help list to agent-mode list/mutation outputs, carrying filters forward. AIDAs lifecycle state machine makes it richer: suggest the VALID NEXT TRANSITION for the spec state. Relates to TASK-964.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:09:23.231858531Z
-modified_at: 2026-06-28T22:09:27.331677761Z
+modified_at: 2026-06-29T00:11:01.878044879Z
 req_type: Task
 tags:
 - agent-output
