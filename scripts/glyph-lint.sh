@@ -56,7 +56,20 @@ ALLOW_LIST=(
 )
 
 block_mode=0
-if [[ "${1:-}" == "--block" || "${GLYPH_LINT_BLOCK:-0}" == "1" ]]; then
+explicit_files=()
+# Args: `--block` plus an OPTIONAL list of file paths to scan. With no file
+# paths the guard scans the whole aida-cli/src tree (CI default). With paths it
+# scans ONLY those — the pre-commit hook passes the staged aida-cli/src/*.rs
+# files so a new raw literal is caught at commit time, scoped to what changed,
+# without flagging the pre-existing long-tail (TASK-984). The exempt/allow-list
+# logic still applies to the passed files. trace:TASK-984
+for arg in "$@"; do
+  case "$arg" in
+    --block) block_mode=1 ;;
+    *) explicit_files+=("$arg") ;;
+  esac
+done
+if [[ "${GLYPH_LINT_BLOCK:-0}" == "1" ]]; then
   block_mode=1
 fi
 
@@ -73,7 +86,20 @@ violations=0
 allowed_hits=0
 offending_files=()
 
-while IFS= read -r f; do
+# Scan target: the explicitly-passed files (staged-files mode), else the whole
+# aida-cli/src tree (CI default). trace:TASK-984
+scan_files=()
+if [[ ${#explicit_files[@]} -gt 0 ]]; then
+  for f in "${explicit_files[@]}"; do
+    [[ -f "$f" ]] && scan_files+=("$f")
+  done
+else
+  while IFS= read -r f; do
+    scan_files+=("$f")
+  done < <(find "$SRC_DIR" -name '*.rs' | sort)
+fi
+
+for f in "${scan_files[@]}"; do
   count=$(grep -oP "[$GLYPHS]" "$f" 2>/dev/null | wc -l || true)
   [[ "$count" -eq 0 ]] && continue
   if is_exempt "$f"; then
@@ -82,7 +108,7 @@ while IFS= read -r f; do
     violations=$((violations + count))
     offending_files+=("$f ($count)")
   fi
-done < <(find "$SRC_DIR" -name '*.rs' | sort)
+done
 
 echo "glyph-lint: registry glyph set = $GLYPHS"
 echo "glyph-lint: $allowed_hits literal(s) in exempt/allow-listed files (pre-existing, tracked by TASK-835)"
