@@ -3,15 +3,33 @@ spec_id: BUG-642
 agreed_id: BUG-642
 title: CLAUDE.md references aida-on / aida-off which no longer exist (shell-init uses the aida() wrapper)
 description: 'CLAUDE.md (lines ~70, 172, 176) tells users to run aida-on / aida-off, but aida dev shell-init --install now installs an aida() WRAPPER function (no aida-on/aida-off aliases). Verified 2026-06-29: /home/joe/.aida/shell-init.sh defines aida() that auto-evals dev activate|dev deactivate|role enter|role end|role add|session start|session end (and worktree enter per STORY-716) -- there is NO aida-on. An operator hit aida-on: command not found + aida on: unrecognized subcommand following the docs. FIX: replace aida-on/aida-off references in CLAUDE.md (+ scripts/aida-demo prereqs, line 70) with aida dev activate / aida dev deactivate; note the wrapper handles the eval (no separate alias). Also worth: aida dev activate could alias a friendly aida-on if we want to keep the name -- but the doc must match reality either way.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:27:32.335514205Z
-modified_at: 2026-06-29T05:30:34.636369681Z
+modified_at: 2026-06-29T05:45:31.558724694Z
 req_type: Bug
 tags:
 - dev-workflow
 - docs
 - from-operator
 - papercut
+history:
+- id: 019f11e9-523c-7303-8014-acf3291245f1
+  author: aida-auto-bump
+  timestamp: 2026-06-29T05:45:31.452243371Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f11e9-52a6-75f3-81b9-bf9d7be77405
+  timestamp: 2026-06-29T05:45:31.558719549Z
+  agent: aida
+  commit_sha: 1e3a37fa4e9dcf7e38b944450c31a05a2773ab74
+  summary: Completed via merge 1e3a37fa
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-29T05:45:30.438895825Z
+  completion_sha: 1e3a37fa4e9dcf7e38b944450c31a05a2773ab74
