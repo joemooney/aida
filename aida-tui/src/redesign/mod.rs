@@ -1692,13 +1692,44 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
                 ("↵", v.label(), v.hint(), false)
             }
         };
+        // BUG-638: at the verb level, grey out + relabel a verb the active role
+        // is not permitted to run. The operator still SEES the full verb
+        // vocabulary (quiet-depth discoverability), but an advisor-/reviewer-only
+        // verb their role would be refused for renders dimmed, non-selectable,
+        // and with a "requires the <role> role" hint instead of its normal one.
+        // The role axis is orthogonal to status-applicability (verb_list_for)
+        // and to selection — this is the THIRD grey-out axis. trace:BUG-638
+        let mut hint = hint.to_string();
+        let mut role_disabled = false;
+        if st.level == Level::Verbs {
+            let v = st.current_verbs()[real];
+            if !st.verb_role_permitted(v) {
+                role_disabled = true;
+                if let Some(req) = v.required_role() {
+                    hint = format!("requires the {req} role");
+                }
+            }
+        }
         let marker = if selected { "▸ " } else { "  " };
-        let dim_label = !drills && st.level == Level::Scopes; // non-wired scopes are dimmed
-        let style = row_style(theme, selected && focused, dim_label);
+        // Non-wired scopes are dimmed; a role-disabled verb is dimmed too, even
+        // when it is the cursor row, so the greyed state survives the highlight.
+        let dim_label = (!drills && st.level == Level::Scopes) || role_disabled;
+        let style = if role_disabled {
+            Style::default().fg(theme.dim)
+        } else {
+            row_style(theme, selected && focused, dim_label)
+        };
+        // A role-disabled verb keeps the plain (dim) weight; only an enabled
+        // label is bolded, so the disabled rows read as visibly inert.
+        let label_style = if role_disabled {
+            style
+        } else {
+            style.add_modifier(Modifier::BOLD)
+        };
         let line = Line::from(vec![
             Span::styled(marker, style),
             Span::styled(format!("{glyph} "), style),
-            Span::styled(format!("{label:<10}"), style.add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{label:<10}"), label_style),
             Span::styled(format!("  {hint}"), Style::default().fg(theme.dim)),
         ]);
         lines.push(line);
