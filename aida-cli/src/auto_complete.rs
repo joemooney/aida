@@ -1484,6 +1484,24 @@ fn finish_escalated(
     reason: &str,
 ) -> OrchestrationResult {
     let elapsed = start.elapsed().as_millis();
+    // STORY-712: reaching the human tier is an actionable wake. This is the one
+    // convergence point for both escalation kinds (the advisor's design-fork
+    // and the reviewer's merge decision), so emit AdvisorEscalated here.
+    // Best-effort — resolve the project root the same way the module's `glyph`
+    // helper does; a missing root simply skips the emit. trace:TASK-988 | ai:claude
+    if let Ok(root) = crate::find_project_root() {
+        let (_, run_uuid) = crate::drain_state::current_context(&root);
+        crate::events::emit(
+            &root,
+            &crate::events::Event::new(
+                Some(spec.to_string()),
+                run_uuid,
+                crate::events::EventKind::AdvisorEscalated {
+                    reason: reason.to_string(),
+                },
+            ),
+        );
+    }
     // The escalation surfaced in a specific phase — phase 3 for a merge
     // decision, phase 1 (the punt) for a design-fork.
     let phase = match kind {

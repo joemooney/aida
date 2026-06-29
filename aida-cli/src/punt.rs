@@ -136,6 +136,22 @@ pub fn append_failure_to_ledger(
         paused_at: Some(fr.shelved_at),
         resolved_at: None,
     };
+    // STORY-712: this is the one disjoint SpecShelved emit site — `fr` carries
+    // the phase + kind a `set_member_outcome(completed=false)` does not, so the
+    // shelve is emitted here and suppressed there. Best-effort, never blocks the
+    // ledger write. trace:TASK-988 | ai:claude
+    let (_, run_uuid) = crate::drain_state::current_context(project_root);
+    crate::events::emit(
+        project_root,
+        &crate::events::Event::new(
+            Some(spec.to_string()),
+            run_uuid,
+            crate::events::EventKind::SpecShelved {
+                phase: fr.phase.clone(),
+                kind: fr.kind.clone(),
+            },
+        ),
+    );
     append_to_ledger(project_root, &record)
 }
 
@@ -148,6 +164,27 @@ pub fn append_failure_to_ledger(
 /// two concurrent writers could interleave content and newline, producing
 /// a torn JSON line both consumers dropped.) trace:STORY-361
 pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Result<()> {
+    // STORY-712: emit a PuntFiled event for a genuine punt — the load-bearing
+    // actionable wake. A *shelve* reaches this writer via
+    // `append_failure_to_ledger`, which already emitted its own SpecShelved
+    // line, so the shelve discriminator is skipped here to keep one event per
+    // verb. This emit precedes the telemetry gate below: the event stream is
+    // supervision substrate (local-only, never phoned home), not telemetry, so
+    // it must wake a watcher even when the punt *ledger* is opted out.
+    // Best-effort. trace:TASK-988 | ai:claude
+    if record.resolution_path != RESOLUTION_SHELVED_FAILURE {
+        let (_, run_uuid) = crate::drain_state::current_context(project_root);
+        crate::events::emit(
+            project_root,
+            &crate::events::Event::new(
+                Some(record.spec.clone()),
+                run_uuid,
+                crate::events::EventKind::PuntFiled {
+                    spec: record.spec.clone(),
+                },
+            ),
+        );
+    }
     // Check telemetry opt-out
     if !crate::usage::is_enabled(Some(project_root)) {
         return Ok(());

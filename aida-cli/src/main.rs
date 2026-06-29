@@ -40,6 +40,7 @@ mod drain_resume;
 mod drain_state;
 mod dryrun;
 mod effort_calibration;
+mod events;
 mod exit_signal;
 mod external_import_bleed;
 mod findings;
@@ -52828,7 +52829,18 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
                     }
                 }
             }
-            _ => return probe,
+            // Any non-InProgress probe is the terminal CI verdict.
+            // STORY-712: emit the actionable CiTerminal wake before returning.
+            // Best-effort, no control-flow change. trace:TASK-988 | ai:claude
+            _ => {
+                let green = matches!(probe, CiProbe::Green { .. });
+                let (spec, run_uuid) = drain_state::current_context(&project_root);
+                events::emit(
+                    &project_root,
+                    &events::Event::new(spec, run_uuid, events::EventKind::CiTerminal { green }),
+                );
+                return probe;
+            }
         }
     }
 }
@@ -131811,6 +131823,23 @@ fn finalize_drain_summary(
     if usage::is_enabled(project_root.as_deref()) {
         usage::append_value(&record);
     }
+    // STORY-712: emit the terminal QueueDrained wake — the "agent is done" an
+    // overnight loop waits on. Drain-level, so no spec. Best-effort, not
+    // telemetry-gated (supervision substrate). trace:TASK-988 | ai:claude
+    if let Some(root) = project_root.as_deref() {
+        let (_, run_uuid) = drain_state::current_context(root);
+        events::emit(
+            root,
+            &events::Event::new(
+                None,
+                run_uuid,
+                events::EventKind::QueueDrained {
+                    shipped: summary.tallies.shipped,
+                    shelved: summary.tallies.shelved,
+                },
+            ),
+        );
+    }
 }
 
 /// Real [`auto_complete::BatchDriver`] for a `nextN` drain (TASK-293). Unlike
@@ -135968,6 +135997,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             "  {} merged PR-{}",
             crate::glyph(crate::glyphs::Glyph::Check).green(),
             pr
+        );
+        // STORY-712: phase-4 merge success is an integration-milestone wake.
+        // Best-effort, no control-flow change. trace:TASK-988 | ai:claude
+        let (_, run_uuid) = drain_state::current_context(&self.project_root);
+        events::emit(
+            &self.project_root,
+            &events::Event::new(
+                Some(self.spec.clone()),
+                run_uuid,
+                events::EventKind::PrMerged { pr },
+            ),
         );
         Ok(())
     }
