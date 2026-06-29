@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:09:32.069425435Z
-modified_at: 2026-06-29T17:30:56.029887286Z
+modified_at: 2026-06-29T17:31:55.923224175Z
 req_type: Story
 tags:
 - axi
@@ -66,3 +66,11 @@ relationships:
 - rel_type: Parent
   target_id: 019f146f-e861-7221-aad6-7035adba1998
   created_at: 2026-06-29T17:31:51.470825039Z
+comments:
+- id: 019f1470-129b-75c1-b9d7-2417eb942f46
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-29-story-712-zero-token-supervision.md
+    filed 5 task(s): TASK-998, TASK-999, TASK-1000, TASK-1001, TASK-1002
+  created_at: 2026-06-29T17:31:56.955959097Z
+  modified_at: 2026-06-29T17:31:56.955959097Z
