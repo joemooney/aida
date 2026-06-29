@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:30:46.434143882Z
-modified_at: 2026-06-29T06:55:05.264225132Z
+modified_at: 2026-06-29T07:05:42.172492815Z
 req_type: Task
 tags:
 - axi
@@ -19,3 +19,9 @@ relationships:
 - rel_type: Child
   target_id: 019f1048-1ef7-7ce1-b428-f58176310bde
   created_at: 2026-06-29T05:30:48.623046930Z
+comments:
+- id: 019f1232-ba1c-76e2-8143-435d7ce3c79b
+  author: joe
+  content: Commit 2d66b1f47 references this requirement
+  created_at: 2026-06-29T07:05:42.172492815Z
+  modified_at: 2026-06-29T07:05:42.172492815Z
