@@ -1,0 +1,16 @@
+id: 019f1414-dd18-7c90-bc06-3e51682b84a4
+spec_id: TASK-988
+agreed_id: TASK-988
+title: Emit events at drain state-changes — STORY-712 slice 1b
+description: 'Co-locate events::emit beside the existing state mutators: drain_state::set_phase/set_member_outcome/set_run, wait_for_ci_terminal return, punt::append_to_ledger + append_failure_to_ledger, run_advisor escalate, drain_summary exit. Produces a complete .aida/events.jsonl on every drain (a live tail -f feed). Best-effort, non-blocking, one emit site per verb. Ships with 1a as one PR. Plan: docs/plans/2026-06-29-story-712-zero-token-supervision.md.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T15:52:19.480342431Z
+modified_at: 2026-06-29T15:52:19.480342431Z
+req_type: Task
+tags:
+- events
+- parent:STORY-712
+- story-712
