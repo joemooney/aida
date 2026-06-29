@@ -3,12 +3,12 @@ spec_id: TASK-1003
 agreed_id: TASK-1003
 title: 'SPIKE-70 core: --single-branch coupled-sequential drain mode (engine + flag + cluster-PR)'
 description: 'Build the genuinely-missing capability from SPIKE-70: aida queue work --batch NAME --auto-complete --single-branch drives coupled members on ONE shared branch in ONE worktree (commit-per-member, Implementer+CI per member, NO intermediate merge, HALT-on-failure keeping prior commits), then opens ONE cluster PR linking all member SPEC-IDs. The sibling --sequential (bless the existing drain_batch) + docs are a separate followup. Plan: docs/plans/2026-06-29-spike-70-coupled-sequential-drain.md. Keystone (the drain) — supervised review.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:34:13.599274691Z
-modified_at: 2026-06-29T17:57:21.678934754Z
+modified_at: 2026-06-29T18:08:57.601594552Z
 req_type: Task
 tags:
 - coupled-sequential
