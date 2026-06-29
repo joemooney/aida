@@ -178,61 +178,80 @@ impl Scope {
     }
 }
 
-/// The verb list a scope exposes *given the focused item's status*. This is
-/// the item-state-conditional logic, kept pure so it is unit-testable: for
-/// the Open scope, `request approval` is appended only when the focused
-/// item is a Draft (it routes drafts to the advisor queue). All other
-/// scopes ignore `focused_status` and return their static [`Scope::verbs`].
-/// trace:STORY-690 | ai:claude
-pub fn verb_list_for(scope: Scope, focused_status: Option<&str>) -> Vec<Verb> {
+/// The full verb vocabulary a scope exposes, INDEPENDENT of the focused item's
+/// status. Kept pure so it is unit-testable.
+///
+/// Pre-TASK-947 this *filtered* the Open scope by the focused item's status —
+/// `approve`/`reject`/`request approval` showed only on a Draft, `queue` only
+/// on an Approved, `accept` only on a Done, and the rest were HIDDEN. TASK-947
+/// converts that hide → grey: the list is now the complete set for the scope,
+/// and status-applicability is decided per row at render + run time by
+/// [`verb_required_status`] / [`status_permits_verb`] (the STATUS grey-out axis,
+/// sibling of BUG-638's role axis). The operator sees the whole verb vocabulary
+/// (quiet-depth discoverability); the inapplicable rows render greyed +
+/// non-selectable with an "only for &lt;Status&gt; specs" hint, and `run_verb`
+/// refuses them with a status message instead of acting.
+///
+/// The Open-scope order is preserved from the historical draft view —
+/// `request approval` = 3, `approve` = 4, `reject` = 5 — with `queue`, `accept`
+/// then the always-on `defer` last, so existing draft-verb index navigation is
+/// undisturbed. trace:STORY-690 trace:TASK-947 | ai:claude
+pub fn verb_list_for(scope: Scope) -> Vec<Verb> {
     let mut verbs = scope.verbs();
     if scope == Scope::Open {
-        let focused_is_draft = focused_status
-            .map(|s| s.eq_ignore_ascii_case("draft"))
-            .unwrap_or(false);
-        if focused_is_draft {
-            verbs.push(Verb::RequestApproval);
-            // `approve` is the advisor's DIRECT draft → approved transition,
-            // the Draft-conditional set-level counterpart to `request
-            // approval` (route-to-advisor vs do-it-when-you-ARE-the-advisor).
-            // Ordered after `request approval` so the existing draft-verb
-            // index navigation is undisturbed. trace:TASK-920 | ai:claude
-            verbs.push(Verb::Approve);
-            // `reject` is the advisor's DIRECT draft → rejected disposition, the
-            // sibling of `approve` (accept vs decline the same Draft). Same
-            // Draft-conditional, set-level shape; ordered immediately after
-            // `approve` so the existing draft-verb indices are undisturbed.
-            // trace:TASK-949 | ai:claude
-            verbs.push(Verb::Reject);
-        }
-        // `queue` is the Approved-conditional mirror of `request approval`:
-        // it routes the focused/selected Approved specs to the implementer
-        // queue, closing the lifecycle loop. trace:TASK-915 | ai:claude
-        let focused_is_approved = focused_status
-            .map(|s| s.eq_ignore_ascii_case("approved"))
-            .unwrap_or(false);
-        if focused_is_approved {
-            verbs.push(Verb::Queue);
-        }
-        // `accept` is the Done-conditional reviewer counterpart to `approve`:
-        // implementation-approval (the reviewer accepting finished work),
-        // driving the spec Done → Completed. The symmetric mirror of `queue`
-        // one lifecycle stage later. Ordered after `queue` (and before the
-        // always-on `defer`) so the existing draft/approved verb indices are
-        // undisturbed. trace:TASK-933 | ai:claude
-        let focused_is_done = focused_status
-            .map(|s| s.eq_ignore_ascii_case("done"))
-            .unwrap_or(false);
-        if focused_is_done {
-            verbs.push(Verb::Accept);
-        }
-        // `defer` is NOT status-conditional — it parks ANY open spec off the
-        // active view with a revisit trigger, so it is appended for every
-        // Open-scope focus (drafts, approved, or no focus). Ordered last so the
-        // existing draft/approved verb indices are undisturbed. trace:TASK-921
+        // The status-conditional verbs, now ALWAYS present (greyed when the
+        // focused status doesn't apply — see [`verb_required_status`]):
+        //   `request approval` / `approve` / `reject` -> Draft (TASK-920/TASK-949)
+        //   `queue`  -> Approved (TASK-915)
+        //   `accept` -> Done     (TASK-933)
+        //   `defer`  -> any status (TASK-921), so it is genuinely unconditional.
+        verbs.push(Verb::RequestApproval);
+        verbs.push(Verb::Approve);
+        verbs.push(Verb::Reject);
+        verbs.push(Verb::Queue);
+        verbs.push(Verb::Accept);
         verbs.push(Verb::Defer);
     }
     verbs
+}
+
+/// The lifecycle status `verb` is gated to *within a given scope* — the STATUS
+/// grey-out axis (TASK-947), the sibling of [`Verb::required_role`]'s role axis.
+/// The same verb can be status-conditional in one scope and unconditional in
+/// another: `approve`/`reject` are Draft-only in the Open scope (you approve a
+/// draft) but unconditional dispositions in the Backlog scope, so this is keyed
+/// on `(scope, verb)`, not the verb alone.
+///
+/// - Open scope: `request approval` / `approve` / `reject` -> `Some("Draft")`;
+///   `queue` -> `Some("Approved")`; `accept` -> `Some("Done")`; the read verbs
+///   (`show` / `why` / `status`) and `defer` -> `None` (any status).
+/// - Every other scope -> `None` (no status gate; matches the pre-TASK-947
+///   behaviour where only the Open scope filtered verbs by focused status).
+// trace:TASK-947 | ai:claude
+pub fn verb_required_status(scope: Scope, verb: Verb) -> Option<&'static str> {
+    if scope != Scope::Open {
+        return None;
+    }
+    match verb {
+        Verb::RequestApproval | Verb::Approve | Verb::Reject => Some("Draft"),
+        Verb::Queue => Some("Approved"),
+        Verb::Accept => Some("Done"),
+        _ => None,
+    }
+}
+
+/// Whether a verb whose [`verb_required_status`] is `required` applies to the
+/// focused item's `focused_status`. `None` required -> any status (always
+/// applicable). Otherwise the focused status must match (case-insensitive); a
+/// missing focus (`None`) is NOT applicable for a status-gated verb. The STATUS
+/// analog of [`role_permits_verb`]. trace:TASK-947 | ai:claude
+pub fn status_permits_verb(focused_status: Option<&str>, required: Option<&str>) -> bool {
+    match required {
+        None => true,
+        Some(req) => focused_status
+            .map(|s| s.eq_ignore_ascii_case(req))
+            .unwrap_or(false),
+    }
 }
 
 /// A verb (leaf action) applied to the current target selection.
@@ -906,8 +925,10 @@ impl RedesignState {
         let Some(scope) = self.scope else {
             return Vec::new();
         };
-        let focused_status = self.focused_item().map(|i| i.status.as_str());
-        verb_list_for(scope, focused_status)
+        // TASK-947: the list is the FULL scope vocabulary regardless of the
+        // focused status — status-inapplicable verbs render greyed (not hidden).
+        // Applicability is decided per row by [`Self::verb_status_permitted`].
+        verb_list_for(scope)
     }
 
     /// Whether the active role lens ([`Self::role`]) may run `verb` — the
@@ -917,6 +938,30 @@ impl RedesignState {
     // trace:BUG-638 | ai:claude
     pub fn verb_role_permitted(&self, verb: Verb) -> bool {
         role_permits_verb(&self.role, verb.required_role())
+    }
+
+    /// Whether the FOCUSED item's status permits `verb` — the TASK-947 STATUS
+    /// gate, the sibling of [`Self::verb_role_permitted`]'s role gate. A verb
+    /// the focused status doesn't apply to (e.g. `approve` on a non-Draft,
+    /// `accept` on a non-Done) renders greyed + non-selectable in the palette
+    /// and refuses to execute. The two axes COMPOSE: a verb is enabled iff BOTH
+    /// gates pass. Delegates to [`status_permits_verb`] over the scope-aware
+    /// [`verb_required_status`]. trace:TASK-947 | ai:claude
+    pub fn verb_status_permitted(&self, verb: Verb) -> bool {
+        let Some(scope) = self.scope else {
+            return true;
+        };
+        let focused_status = self.focused_item().map(|i| i.status.as_str());
+        status_permits_verb(focused_status, verb_required_status(scope, verb))
+    }
+
+    /// The lifecycle status `verb` is gated to in the CURRENT scope, if any —
+    /// drives a status-disabled row's "only for &lt;Status&gt; specs" hint and
+    /// the matching `run_verb` refusal message. `None` for status-agnostic verbs
+    /// or outside a drilled scope. trace:TASK-947 | ai:claude
+    pub fn verb_status_hint(&self, verb: Verb) -> Option<&'static str> {
+        self.scope
+            .and_then(|scope| verb_required_status(scope, verb))
     }
 
     // --- Top-panel accessors ---------------------------------------------
@@ -1487,6 +1532,19 @@ impl RedesignState {
         if !self.verb_role_permitted(verb) {
             let req = verb.required_role().unwrap_or("advisor");
             self.status = Some(format!("{} requires the {} role", verb.label(), req));
+            return RunOutcome::None;
+        }
+        // Status gate (TASK-947): refuse a verb the FOCUSED item's status does
+        // not apply to — the substrate would reject the transition (approve/
+        // reject need a Draft; queue needs an Approved; accept needs a Done).
+        // Mirrors the greyed, non-selectable palette rendering: Enter on a
+        // status-disabled verb is a no-op with a helpful status, never a doomed
+        // subprocess. Composes with the role gate above — a verb runs iff BOTH
+        // pass; role is checked first so a role mismatch wins the message.
+        // trace:TASK-947 | ai:claude
+        if !self.verb_status_permitted(verb) {
+            let req = self.verb_status_hint(verb).unwrap_or("the right");
+            self.status = Some(format!("{} applies only to {} specs", verb.label(), req));
             return RunOutcome::None;
         }
         if !verb.is_functional() {
@@ -2544,103 +2602,124 @@ mod tests {
         );
     }
 
+    /// The full, status-INDEPENDENT Open-scope verb vocabulary — the complete
+    /// list `verb_list_for(Scope::Open)` returns post-TASK-947 (hide → grey).
+    /// Draft-trio indices are preserved (request approval = 3, approve = 4,
+    /// reject = 5); queue = 6, accept = 7, defer = 8. trace:TASK-947
+    fn open_full_verbs() -> Vec<Verb> {
+        vec![
+            Verb::Show,
+            Verb::Why,
+            Verb::Status,
+            Verb::RequestApproval,
+            Verb::Approve,
+            Verb::Reject,
+            Verb::Queue,
+            Verb::Accept,
+            Verb::Defer,
+        ]
+    }
+
     #[test]
-    fn verb_list_for_open_adds_request_approval_only_on_draft() {
-        // Focused on a Draft → request approval + approve are present (the
-        // Draft-conditional verbs); approve is ordered after request approval.
-        // `defer` (TASK-921, status-unconditional) is appended last on every
-        // Open focus. trace:TASK-920
+    fn verb_list_for_open_is_full_unconditional_vocabulary() {
+        // TASK-947: the Open list is the COMPLETE verb set regardless of focused
+        // status — status-conditional verbs are no longer hidden (they grey).
+        // The draft-trio (request approval / approve / reject) keeps indices
+        // 3/4/5 so existing navigation is undisturbed. trace:TASK-947
+        assert_eq!(verb_list_for(Scope::Open), open_full_verbs());
+        // Other scopes are unchanged — Backlog still returns its static set.
         assert_eq!(
-            verb_list_for(Scope::Open, Some("Draft")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::RequestApproval,
-                Verb::Approve,
-                Verb::Reject,
-                Verb::Defer
-            ]
-        );
-        // Case-insensitive.
-        assert_eq!(
-            verb_list_for(Scope::Open, Some("draft")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::RequestApproval,
-                Verb::Approve,
-                Verb::Reject,
-                Verb::Defer
-            ]
-        );
-        // Focused on Approved → queue (not request approval); see
-        // `verb_list_for_adds_queue_only_on_approved`. trace:TASK-915
-        assert_eq!(
-            verb_list_for(Scope::Open, Some("Approved")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::Queue,
-                Verb::Defer
-            ]
-        );
-        // No focused item → show / why / defer.
-        assert_eq!(
-            verb_list_for(Scope::Open, None),
-            vec![Verb::Show, Verb::Why, Verb::Status, Verb::Defer]
-        );
-        // Other scopes ignore the status argument.
-        assert_eq!(
-            verb_list_for(Scope::Backlog, Some("Draft")),
+            verb_list_for(Scope::Backlog),
             vec![Verb::Groom, Verb::Approve, Verb::Reject, Verb::Archive]
         );
     }
 
     #[test]
-    fn current_verbs_tracks_focused_item_status() {
+    fn verb_required_status_gates_open_verbs_only() {
+        // Open scope: the status-conditional verbs name their gating status.
+        // trace:TASK-947 trace:TASK-920 trace:TASK-949 trace:TASK-915 trace:TASK-933
+        assert_eq!(
+            verb_required_status(Scope::Open, Verb::RequestApproval),
+            Some("Draft")
+        );
+        assert_eq!(
+            verb_required_status(Scope::Open, Verb::Approve),
+            Some("Draft")
+        );
+        assert_eq!(
+            verb_required_status(Scope::Open, Verb::Reject),
+            Some("Draft")
+        );
+        assert_eq!(
+            verb_required_status(Scope::Open, Verb::Queue),
+            Some("Approved")
+        );
+        assert_eq!(
+            verb_required_status(Scope::Open, Verb::Accept),
+            Some("Done")
+        );
+        // Read verbs + defer are status-agnostic.
+        assert_eq!(verb_required_status(Scope::Open, Verb::Show), None);
+        assert_eq!(verb_required_status(Scope::Open, Verb::Why), None);
+        assert_eq!(verb_required_status(Scope::Open, Verb::Status), None);
+        assert_eq!(verb_required_status(Scope::Open, Verb::Defer), None);
+        // Backlog (and every non-Open scope) has NO status gate — approve/reject
+        // there are unconditional dispositions, not Draft-only.
+        assert_eq!(verb_required_status(Scope::Backlog, Verb::Approve), None);
+        assert_eq!(verb_required_status(Scope::Backlog, Verb::Reject), None);
+        assert_eq!(verb_required_status(Scope::Backlog, Verb::Groom), None);
+    }
+
+    #[test]
+    fn status_permits_verb_matches_focused_status() {
+        // None required → always applicable (any status, even no focus).
+        assert!(status_permits_verb(Some("Draft"), None));
+        assert!(status_permits_verb(None, None));
+        // Some required → only the matching focused status, case-insensitive.
+        assert!(status_permits_verb(Some("Draft"), Some("Draft")));
+        assert!(status_permits_verb(Some("draft"), Some("Draft")));
+        assert!(!status_permits_verb(Some("Approved"), Some("Draft")));
+        // A status-gated verb with no focused item is NOT applicable.
+        assert!(!status_permits_verb(None, Some("Draft")));
+    }
+
+    #[test]
+    fn current_verbs_is_full_list_regardless_of_focus() {
+        // Post-TASK-947 the list no longer changes per focused status — it is
+        // the full vocabulary always; only applicability (greying) tracks the
+        // focus. trace:TASK-947
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom();
-        // bottom_idx 0 = TASK-0 (Draft) → request approval + approve + reject + defer.
-        assert_eq!(
-            s.current_verbs(),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::RequestApproval,
-                Verb::Approve,
-                Verb::Reject,
-                Verb::Defer
-            ]
-        );
-        s.move_down(); // → TASK-1 (Approved) → queue + defer (trace:TASK-915)
-        assert_eq!(
-            s.current_verbs(),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::Queue,
-                Verb::Defer
-            ]
-        );
-        s.move_down(); // → TASK-2 (Draft)
-        assert_eq!(
-            s.current_verbs(),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::RequestApproval,
-                Verb::Approve,
-                Verb::Reject,
-                Verb::Defer
-            ]
-        );
+        // bottom_idx 0 = TASK-0 (Draft).
+        assert_eq!(s.current_verbs(), open_full_verbs());
+        s.move_down(); // → TASK-1 (Approved): list unchanged.
+        assert_eq!(s.current_verbs(), open_full_verbs());
+        s.move_down(); // → TASK-2 (Draft): still unchanged.
+        assert_eq!(s.current_verbs(), open_full_verbs());
+    }
+
+    #[test]
+    fn verb_status_permitted_tracks_focused_item_status() {
+        // The STATUS gate (sibling of BUG-638's role gate): a verb applies iff
+        // the FOCUSED item's status matches its required status. trace:TASK-947
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom(); // focus TASK-0 (Draft)
+        assert!(s.verb_status_permitted(Verb::RequestApproval));
+        assert!(s.verb_status_permitted(Verb::Approve));
+        assert!(s.verb_status_permitted(Verb::Reject));
+        assert!(!s.verb_status_permitted(Verb::Queue)); // needs Approved
+        assert!(!s.verb_status_permitted(Verb::Accept)); // needs Done
+                                                         // Status-agnostic verbs apply on any focus.
+        assert!(s.verb_status_permitted(Verb::Show));
+        assert!(s.verb_status_permitted(Verb::Defer));
+
+        s.move_down(); // → TASK-1 (Approved)
+        assert!(s.verb_status_permitted(Verb::Queue));
+        assert!(!s.verb_status_permitted(Verb::Approve)); // needs Draft
+        assert!(!s.verb_status_permitted(Verb::Accept)); // needs Done
+        assert!(s.verb_status_permitted(Verb::Defer));
     }
 
     #[test]
@@ -2751,52 +2830,22 @@ mod tests {
     }
 
     #[test]
-    fn verb_list_for_adds_queue_only_on_approved() {
-        // Focused on an Approved → queue is present (third verb); defer last.
-        assert_eq!(
-            verb_list_for(Scope::Open, Some("Approved")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::Queue,
-                Verb::Defer
-            ]
-        );
-        // Case-insensitive.
-        assert_eq!(
-            verb_list_for(Scope::Open, Some("approved")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::Queue,
-                Verb::Defer
-            ]
-        );
-        // Focused on a Draft → request approval + approve + reject, not queue.
-        assert_eq!(
-            verb_list_for(Scope::Open, Some("Draft")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::RequestApproval,
-                Verb::Approve,
-                Verb::Reject,
-                Verb::Defer
-            ]
-        );
-        // No focused item → show / why / defer.
-        assert_eq!(
-            verb_list_for(Scope::Open, None),
-            vec![Verb::Show, Verb::Why, Verb::Status, Verb::Defer]
-        );
-        // Other scopes ignore the status argument.
-        assert_eq!(
-            verb_list_for(Scope::Backlog, Some("Approved")),
-            vec![Verb::Groom, Verb::Approve, Verb::Reject, Verb::Archive]
-        );
+    fn queue_is_status_applicable_only_on_approved() {
+        // `queue` is present in the full list always, but applies (is enabled)
+        // only when the focused spec is Approved. trace:TASK-915 trace:TASK-947
+        assert!(verb_list_for(Scope::Open).contains(&Verb::Queue));
+        assert!(status_permits_verb(
+            Some("Approved"),
+            verb_required_status(Scope::Open, Verb::Queue)
+        ));
+        assert!(!status_permits_verb(
+            Some("Draft"),
+            verb_required_status(Scope::Open, Verb::Queue)
+        ));
+        assert!(!status_permits_verb(
+            None,
+            verb_required_status(Scope::Open, Verb::Queue)
+        ));
     }
 
     #[test]
@@ -2810,14 +2859,15 @@ mod tests {
         s.toggle_select(); // TASK-2 (Draft — should be skipped)
         s.move_down();
         s.toggle_select(); // TASK-3 (Approved)
-                           // Focus back to TASK-1 (Approved) so the verb list includes the
-                           // verb, then move the top highlight onto `queue` (idx 2).
+                           // Focus back to TASK-1 (Approved) so the status gate
+                           // permits `queue`, then move the top highlight onto
+                           // `queue` (idx 6 in the full list). trace:TASK-947
         s.focus_bottom();
         s.move_down(); // → TASK-1 (Approved)
         s.focus_top();
-        s.move_down();
-        s.move_down();
-        s.move_down();
+        for _ in 0..6 {
+            s.move_down();
+        }
         assert_eq!(s.top_verb(), Some(Verb::Queue));
         assert_eq!(
             s.run_verb(),
@@ -2835,9 +2885,9 @@ mod tests {
         s.focus_bottom();
         s.move_down(); // focus TASK-1 (Approved), nothing selected
         s.focus_top();
-        s.move_down();
-        s.move_down();
-        s.move_down(); // → queue
+        for _ in 0..6 {
+            s.move_down(); // → queue (idx 6)
+        }
         assert_eq!(s.top_verb(), Some(Verb::Queue));
         assert_eq!(
             s.run_verb(),
@@ -2845,6 +2895,54 @@ mod tests {
                 approved: vec!["TASK-1".to_string()],
                 skipped: vec![],
             }
+        );
+    }
+
+    #[test]
+    fn run_verb_refuses_status_inapplicable_queue_on_draft() {
+        // `queue` greyed on a Draft focus → Enter is a no-op with a status hint,
+        // NOT a doomed subprocess. The STATUS-axis analog of BUG-638's role
+        // refusal. trace:TASK-947
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom(); // focus TASK-0 (Draft)
+        s.focus_top();
+        for _ in 0..6 {
+            s.move_down(); // → queue (idx 6), greyed for a Draft focus
+        }
+        assert_eq!(s.top_verb(), Some(Verb::Queue));
+        assert!(!s.verb_status_permitted(Verb::Queue));
+        let out = s.run_verb();
+        assert_eq!(out, RunOutcome::None);
+        assert_eq!(
+            s.status.as_deref(),
+            Some("queue applies only to Approved specs")
+        );
+    }
+
+    #[test]
+    fn role_and_status_axes_compose_role_wins_message() {
+        // `queue` is gated on BOTH axes — advisor-only (role, BUG-638) AND
+        // Approved-only (status, TASK-947). When both disqualify, the ROLE
+        // refusal wins the message (the seat mismatch is checked first), so an
+        // implementer focused on a Draft gets the role reason, not the status
+        // one. trace:TASK-947 trace:BUG-638
+        let mut s = RedesignState::new(open_items(), "implementer");
+        drill_open(&mut s);
+        s.focus_bottom(); // focus TASK-0 (Draft)
+        s.focus_top();
+        for _ in 0..6 {
+            s.move_down(); // → queue (idx 6): role- AND status-disabled here
+        }
+        assert_eq!(s.top_verb(), Some(Verb::Queue));
+        assert!(!s.verb_role_permitted(Verb::Queue));
+        assert!(!s.verb_status_permitted(Verb::Queue));
+        let out = s.run_verb();
+        assert_eq!(out, RunOutcome::None);
+        assert_eq!(
+            s.status.as_deref(),
+            Some("queue requires the advisor role"),
+            "role refusal takes precedence over the status refusal"
         );
     }
 
@@ -2902,12 +3000,15 @@ mod tests {
     }
 
     #[test]
-    fn approve_absent_on_non_draft_focus() {
-        // `approve` is Draft-conditional: an Approved focus exposes `queue`,
-        // not `approve`. trace:TASK-920
-        assert!(!verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Approve));
-        assert!(!verb_list_for(Scope::Open, None).contains(&Verb::Approve));
-        assert!(verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Approve));
+    fn approve_present_but_status_applicable_only_on_draft() {
+        // Post-TASK-947: `approve` is ALWAYS in the Open list (greyed off-Draft),
+        // but applies only to a Draft focus — the substrate would refuse it
+        // otherwise. trace:TASK-920 trace:TASK-947
+        assert!(verb_list_for(Scope::Open).contains(&Verb::Approve));
+        let req = verb_required_status(Scope::Open, Verb::Approve);
+        assert!(status_permits_verb(Some("Draft"), req));
+        assert!(!status_permits_verb(Some("Approved"), req));
+        assert!(!status_permits_verb(None, req));
     }
 
     // --- Reject verb (TASK-949) ------------------------------------------
@@ -2968,12 +3069,14 @@ mod tests {
     }
 
     #[test]
-    fn reject_absent_on_non_draft_focus() {
-        // `reject` is Draft-conditional, the sibling of `approve`: an Approved
-        // focus exposes `queue`, not `reject`. trace:TASK-949
-        assert!(!verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Reject));
-        assert!(!verb_list_for(Scope::Open, None).contains(&Verb::Reject));
-        assert!(verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Reject));
+    fn reject_present_but_status_applicable_only_on_draft() {
+        // Sibling of `approve`: always in the Open list (greyed off-Draft), but
+        // applies only to a Draft focus. trace:TASK-949 trace:TASK-947
+        assert!(verb_list_for(Scope::Open).contains(&Verb::Reject));
+        let req = verb_required_status(Scope::Open, Verb::Reject);
+        assert!(status_permits_verb(Some("Draft"), req));
+        assert!(!status_permits_verb(Some("Approved"), req));
+        assert!(!status_permits_verb(None, req));
     }
 
     // --- Accept verb (TASK-933) ------------------------------------------
@@ -2998,39 +3101,20 @@ mod tests {
     }
 
     #[test]
-    fn verb_list_for_adds_accept_only_on_done() {
-        // Focused on a Done → accept is present (after show / why), defer last.
-        assert_eq!(
-            verb_list_for(Scope::Open, Some("Done")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::Accept,
-                Verb::Defer
-            ]
-        );
-        // Case-insensitive.
-        assert_eq!(
-            verb_list_for(Scope::Open, Some("done")),
-            vec![
-                Verb::Show,
-                Verb::Why,
-                Verb::Status,
-                Verb::Accept,
-                Verb::Defer
-            ]
-        );
-        // accept is Done-only: Draft / Approved / no-focus do NOT expose it.
-        assert!(!verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Accept));
-        assert!(!verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Accept));
-        assert!(!verb_list_for(Scope::Open, None).contains(&Verb::Accept));
-        // Other scopes ignore the status argument (no accept).
-        assert!(!verb_list_for(Scope::Backlog, Some("Done")).contains(&Verb::Accept));
-        // accept is the LAST status-conditional verb (before the always-on
-        // defer), so the existing draft/approved indices are undisturbed.
-        let done = verb_list_for(Scope::Open, Some("Done"));
-        assert_eq!(done.last(), Some(&Verb::Defer));
+    fn accept_present_but_status_applicable_only_on_done() {
+        // Post-TASK-947: `accept` is ALWAYS in the Open list (greyed off-Done),
+        // but applies only to a Done focus. The Backlog scope has no `accept`
+        // and no status gate at all. trace:TASK-933 trace:TASK-947
+        assert!(verb_list_for(Scope::Open).contains(&Verb::Accept));
+        let req = verb_required_status(Scope::Open, Verb::Accept);
+        assert!(status_permits_verb(Some("Done"), req));
+        assert!(status_permits_verb(Some("done"), req)); // case-insensitive
+        assert!(!status_permits_verb(Some("Draft"), req));
+        assert!(!status_permits_verb(Some("Approved"), req));
+        assert!(!status_permits_verb(None, req));
+        assert!(!verb_list_for(Scope::Backlog).contains(&Verb::Accept));
+        // `defer` is still the last verb in the full list (indices undisturbed).
+        assert_eq!(verb_list_for(Scope::Open).last(), Some(&Verb::Defer));
     }
 
     #[test]
@@ -3057,9 +3141,9 @@ mod tests {
         s.move_up();
         s.move_up(); // → TASK-0 (Done)
         s.focus_top();
-        s.move_down();
-        s.move_down();
-        s.move_down();
+        for _ in 0..7 {
+            s.move_down(); // → accept (idx 7 in the full list) trace:TASK-947
+        }
         assert_eq!(s.top_verb(), Some(Verb::Accept));
         assert_eq!(
             s.run_verb(),
@@ -3077,9 +3161,9 @@ mod tests {
         drill_open(&mut s);
         s.focus_bottom(); // focus TASK-0 (Done), nothing selected
         s.focus_top();
-        s.move_down();
-        s.move_down();
-        s.move_down(); // → accept (idx 3)
+        for _ in 0..7 {
+            s.move_down(); // → accept (idx 7) trace:TASK-947
+        }
         assert_eq!(s.top_verb(), Some(Verb::Accept));
         assert_eq!(
             s.run_verb(),
@@ -3127,17 +3211,18 @@ mod tests {
 
     #[test]
     fn defer_present_on_open_scope_for_any_status() {
-        // `defer` is NOT status-conditional — it appears for drafts, approved,
-        // and no-focus on the Open scope. trace:TASK-921
-        assert!(verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Defer));
-        assert!(verb_list_for(Scope::Open, Some("Approved")).contains(&Verb::Defer));
-        assert!(verb_list_for(Scope::Open, None).contains(&Verb::Defer));
-        // It is the LAST verb (appended after the status-conditional ones), so
-        // the existing draft/approved indices are undisturbed.
-        let drafts = verb_list_for(Scope::Open, Some("Draft"));
-        assert_eq!(drafts.last(), Some(&Verb::Defer));
+        // `defer` is NOT status-conditional — it is in the Open list and applies
+        // to any focused status (no status gate). trace:TASK-921 trace:TASK-947
+        assert!(verb_list_for(Scope::Open).contains(&Verb::Defer));
+        assert_eq!(verb_required_status(Scope::Open, Verb::Defer), None);
+        assert!(status_permits_verb(Some("Draft"), None));
+        assert!(status_permits_verb(Some("Approved"), None));
+        assert!(status_permits_verb(None, None));
+        // It is the LAST verb (after the status-conditional ones), so the
+        // existing draft/approved indices are undisturbed.
+        assert_eq!(verb_list_for(Scope::Open).last(), Some(&Verb::Defer));
         // Other scopes do not expose defer.
-        assert!(!verb_list_for(Scope::Backlog, Some("Draft")).contains(&Verb::Defer));
+        assert!(!verb_list_for(Scope::Backlog).contains(&Verb::Defer));
     }
 
     #[test]
@@ -3178,9 +3263,10 @@ mod tests {
         s.focus_bottom();
         s.toggle_select(); // TASK-0
         s.focus_top();
-        // Move the top highlight onto `defer` (last verb on the Open Draft
-        // list: show, why, status, request approval, approve, reject, defer → idx 6).
-        for _ in 0..6 {
+        // Move the top highlight onto `defer` — the LAST verb in the full Open
+        // list: show, why, status, request approval, approve, reject, queue,
+        // accept, defer → idx 8. trace:TASK-947
+        for _ in 0..8 {
             s.move_down();
         }
         assert_eq!(s.top_verb(), Some(Verb::Defer));
@@ -3555,8 +3641,10 @@ mod tests {
     #[test]
     fn right_on_item_opens_verbs_reflecting_focused_item_status() {
         // NEW model: from the items panel (reached by Enter-descend), Right
-        // OPENS THE VERBS for the focused item — the verb list reflects the
-        // focused item's STATUS. trace:TASK-944
+        // OPENS THE VERBS for the focused item. Post-TASK-947 the verb LIST is
+        // the full vocabulary regardless of status; what reflects the focused
+        // item's STATUS is now APPLICABILITY (greying), not membership.
+        // trace:TASK-944 trace:TASK-947
         let mut s = RedesignState::new(open_items(), "advisor");
         s.move_down(); // highlight the Open scope (index 1)
         assert_eq!(s.top_scope(), Some(Scope::Open));
@@ -3567,14 +3655,18 @@ mod tests {
         assert_eq!(s.scope, Some(Scope::Open));
         assert_eq!(s.level, Level::Verbs);
         assert_eq!(s.focus, Focus::Top);
-        // The verb list reflects the focused Draft item.
+        // The full vocabulary is present; the Draft focus makes the draft verbs
+        // applicable and `queue` inapplicable (greyed).
         let verbs = s.current_verbs();
         assert!(verbs.contains(&Verb::RequestApproval));
         assert!(verbs.contains(&Verb::Approve));
-        assert!(!verbs.contains(&Verb::Queue));
+        assert!(verbs.contains(&Verb::Queue));
+        assert!(s.verb_status_permitted(Verb::RequestApproval));
+        assert!(s.verb_status_permitted(Verb::Approve));
+        assert!(!s.verb_status_permitted(Verb::Queue));
 
-        // Back out, focus an Approved item, re-open the verbs: the list now
-        // reflects the Approved status (queue, not request approval).
+        // Back out, focus an Approved item, re-open the verbs: applicability now
+        // reflects the Approved status (queue applies, request approval doesn't).
         assert!(s.pop()); // Left: verbs → scopes
         assert_eq!(s.level, Level::Scopes);
         assert_eq!(
@@ -3585,9 +3677,8 @@ mod tests {
         s.focus_bottom(); // descend again
         s.move_down(); // → TASK-1 (Approved)
         assert!(s.drill()); // Right-on-item
-        let verbs = s.current_verbs();
-        assert!(verbs.contains(&Verb::Queue));
-        assert!(!verbs.contains(&Verb::RequestApproval));
+        assert!(s.verb_status_permitted(Verb::Queue));
+        assert!(!s.verb_status_permitted(Verb::RequestApproval));
     }
 
     #[test]
