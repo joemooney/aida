@@ -10,12 +10,12 @@ description: |-
   PROPOSED MODE (a real capability gap, not just a one-off): a drain mode that commits each queued increment to the CURRENT feature branch (no per-spec branch, no merge-to-main), runs sequentially (one at a time, same worktree), and gates each on a human/validation checkpoint before the next. Call it e.g. `queue work --branch-accumulate` / a `sequential single-branch` drain. This is the orchestration shape for incremental feature builds (vs the independent-backlog-drain shape the burndown already serves).
 
   This is probe-thesis data: using AIDA on AIDA's own work revealed where the autonomy machinery's assumptions don't fit a common real shape.
-status: Draft
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:24:24.238621261Z
-modified_at: 2026-06-27T16:40:42.830280037Z
+modified_at: 2026-06-29T15:30:18.305207422Z
 req_type: Spike
 tags:
 - autonomy
