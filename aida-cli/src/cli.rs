@@ -834,6 +834,21 @@ pub enum SessionCommand {
         // trace:BUG-379 | ai:claude
         #[clap(long)]
         force_claim: bool,
+
+        /// Acquire the session's worktree from the warm-pool (reset a recycled
+        /// tree instead of creating a fresh one — keeps the build cache warm).
+        /// Overrides the `[worktree_pool] enabled` config for this run. Only
+        /// affects the default new-branch flow (not --reuse-branch or PR
+        /// review checkouts).
+        // trace:STORY-714 | ai:claude
+        #[clap(long)]
+        pool: bool,
+
+        /// Force a fresh `git worktree add` even when `[worktree_pool] enabled`
+        /// is on — the opt-out counterpart to `--pool`.
+        // trace:STORY-714 | ai:claude
+        #[clap(long, conflicts_with = "pool")]
+        no_pool: bool,
     },
 
     /// Register an existing Claude harness worktree lease from a SubagentStart hook.
