@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:09:41.078468066Z
-modified_at: 2026-06-28T22:09:44.861451506Z
+modified_at: 2026-06-29T04:53:15.600601546Z
 req_type: Story
 tags:
 - axi
@@ -22,3 +22,9 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:09:44.861451506Z
+comments:
+- id: 019f11b9-78d0-72d0-900b-8d1cbe17088e
+  author: joe
+  content: 'Drain-trigger placement (from TUI redesign liveness work, 2026-06-28): the redesign Scope/Verb surface has NO drain trigger; the only `aida queue work --auto-complete` entry point is the OLD launcher (nav.rs ActionDrain). Whether the operator triggers/sees drains from the redesign TUI is part of this single-liaison dispatcher design — do not bolt a naive "drain" button onto the Queue scope independently. Open design Q raised by operator: should a TUI-initiated drain run in its own terminal/tab vs. drop the current pane into the orchestrator process? Decide here.'
+  created_at: 2026-06-29T04:53:15.600601546Z
+  modified_at: 2026-06-29T04:53:15.600601546Z
