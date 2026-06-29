@@ -2,8 +2,29 @@
 
 Date: 2026-06-28
 Specs: STORY-714, EPIC-56, TASK-0396, BUG-553
-Status: Draft
+Status: Slice 1 implemented (pool primitives + CLI surface + `session end --return`); lifecycle wiring + default-flip remain as followups
 Complexity: ~900 prod LOC, ~500 test LOC, ~6 commits, risk medium
+
+## Implementation note (slice 1, 2026-06-28)
+
+Shipped: the core pool primitives (`aida-core/src/worktree_pool.rs`,
+`worktree_pool_destroy.rs`, `worktree_hooks.rs`), the git verbs in
+`git_ops.rs` (`add_detached_worktree`, `reset_worktree_to`,
+`furthest_ahead_default_ref`, `worktree_is_dirty`, `worktree_head_is_merged`,
+`remove_worktree_at`), the `aida worktree pool {status,acquire,return,destroy}`
+CLI surface, and the `aida session end --return` wiring. 22 new core tests
+(pure logic + git-fixture integration) plus the help-leak regression.
+
+**Slice boundary.** The DoD recipe references `aida session end --return`, but
+exercising that end-to-end needs a session lease whose worktree is a pool tree
+— i.e. `aida agent new` / `aida queue work` / the orchestrator must *acquire
+from the pool on start*, which is the next slice. Until then the directly-
+testable surface is `aida worktree pool acquire/return/status/destroy`; the
+Verification below was run with `aida worktree pool return <path>` in place of
+`session end --return` and all four checks pass. Remaining (see Followups):
+acquire-on-start integration, replacing the `run_compete_arm` /
+`heal_doctor_orphan_worktree` `--force` removals with the tiered `destroy`, and
+the opt-in→default flip once the pool is proven by dogfood.
 
 <!--
   DESIGN SKETCH for operator / master-advisor sign-off BEFORE the build.

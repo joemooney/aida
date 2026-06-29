@@ -191,7 +191,7 @@ use crate::cli::{
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand,
     SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
     TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, WorktreeCommand,
-    ZenCommand,
+    WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41828,6 +41828,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             wait_ci,
             watch_ci,
             skip_ci,
+            return_to_pool,
         } => session_end(
             id.as_deref(),
             spec.as_deref(),
@@ -41838,6 +41839,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *wait_ci,
             *watch_ci,
             *skip_ci,
+            *return_to_pool,
         ),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
@@ -53548,6 +53550,7 @@ fn session_end(
     wait_ci: bool,
     watch_ci: bool,
     skip_ci: bool,
+    return_to_pool: bool,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -53945,6 +53948,11 @@ fn session_end(
     use std::io::Write;
     let shared_peer =
         peer_lease_sharing_worktree(&remaining_leases, &target.id, &target.worktree_path);
+    // STORY-714: when `--return` is set and this is a registered warm-pool
+    // worktree, hand it back to the pool (reset to a clean detached base, mark
+    // idle) instead of deleting it. The directory persists so the next acquire
+    // reuses it warm. trace:STORY-714 | ai:claude
+    let mut returned_to_pool = false;
     if let Some(peer) = shared_peer {
         // Skip the removal; this lease/registry entry is already gone, so the
         // session has ended — we just leave the shared worktree standing.
@@ -53955,6 +53963,23 @@ fn session_end(
             peer.id.yellow(),
             peer.scope
         );
+    } else if return_to_pool
+        && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path)
+    {
+        match aida_core::worktree_pool::return_to_pool(&project_root, &target.worktree_path) {
+            Ok(_) => {
+                returned_to_pool = true;
+                eprintln!(
+                    "{} worktree returned to the warm-pool (reset to a clean base, marked idle — directory + build cache kept)",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
+            }
+            Err(e) => eprintln!(
+                "{} could not return worktree to the pool: {} — left in place",
+                "Warning:".yellow().bold(),
+                e
+            ),
+        }
     } else {
         // BUG-67: always pass `--force`. We've already gated on the dirty
         // check above, so by this point the only non-clean state is
@@ -54019,8 +54044,10 @@ fn session_end(
     // With `--purge-cc`: remove the dir atomically here.
     // BUG-483: skip entirely when we kept a shared worktree — the dir is
     // still live (the peer is using it), so it's neither orphaned nor safe
-    // to purge. trace:TASK-70 BUG-483 | ai:claude
-    if shared_peer.is_none() {
+    // to purge. STORY-714: also skip when we returned the tree to the pool —
+    // the directory persists, so its cwd is not orphaned.
+    // trace:TASK-70 BUG-483 STORY-714 | ai:claude
+    if shared_peer.is_none() && !returned_to_pool {
         if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
             if cc_dir.is_dir() {
                 if purge_cc {
@@ -92763,7 +92790,276 @@ fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             handle_worktree_enter(epic, path.as_deref(), branch.as_deref())
         }
         WorktreeCommand::List { json } => handle_worktree_list(*json),
+        // STORY-714 warm-pool surface.
+        WorktreeCommand::Pool(pool) => handle_worktree_pool_command(pool),
     }
+}
+
+// ── Worktree warm-pool CLI (STORY-714) ──────────────────────────────────────
+//
+// Dispatched before storage init (via handle_worktree_command): the pool
+// operates purely on git + the `.aida/worktree-pool/` registry, no requirement
+// store. trace:STORY-714 | ai:claude
+
+/// `[worktree_pool] max_trees` from the repo-level config (clamped ≥1), or None
+/// to fall back to the pool's default cap.
+fn worktree_pool_config_max_trees(project_root: &std::path::Path) -> Option<usize> {
+    let body = std::fs::read_to_string(project_root.join(".aida").join("config.toml")).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    value
+        .get("worktree_pool")?
+        .get("max_trees")?
+        .as_integer()
+        .map(|n| n.max(1) as usize)
+}
+
+/// Hook commands for `key` (`post_create` / `pre_destroy`), sourced ONLY from
+/// the machine-global `~/.aida/config.toml`. Repo-level config is deliberately
+/// ignored — cloning a repo must never run arbitrary shell on your machine
+/// (treehouse's stance).
+// trace:STORY-714 | ai:claude
+fn worktree_pool_global_hooks(key: &str) -> Vec<String> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    let Ok(body) = std::fs::read_to_string(home.join(".aida").join("config.toml")) else {
+        return Vec::new();
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return Vec::new();
+    };
+    value
+        .get("worktree_pool")
+        .and_then(|w| w.get(key))
+        .and_then(|h| h.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
+    let project_root = find_project_root()?;
+    match cmd {
+        WorktreePoolCommand::Status { json } => worktree_pool_status(&project_root, *json),
+        WorktreePoolCommand::Acquire { lease_holder, json } => {
+            let opts = aida_core::worktree_pool::AcquireOptions {
+                lease_holder: lease_holder.clone(),
+                max_trees: worktree_pool_config_max_trees(&project_root),
+                post_create_hooks: worktree_pool_global_hooks("post_create"),
+            };
+            let path = aida_core::worktree_pool::acquire(&project_root, &opts)?;
+            if *json {
+                println!("{}", serde_json::json!({ "path": path }));
+            } else {
+                println!("{}", path.display());
+            }
+            Ok(())
+        }
+        WorktreePoolCommand::Return { path } => {
+            let target = match path {
+                Some(p) => std::path::PathBuf::from(p),
+                None => std::env::current_dir()?,
+            };
+            aida_core::worktree_pool::return_to_pool(&project_root, &target)?;
+            println!(
+                "{} returned {} to the warm-pool (reset to a clean base, marked idle — directory + build cache kept)",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                target.display()
+            );
+            Ok(())
+        }
+        WorktreePoolCommand::Destroy {
+            paths,
+            all,
+            no_dry_run,
+            include_unlanded,
+            include_in_use,
+            include_leased,
+            json,
+        } => worktree_pool_destroy(
+            &project_root,
+            paths,
+            *all,
+            !*no_dry_run,
+            *include_unlanded,
+            *include_in_use,
+            *include_leased,
+            *json,
+        ),
+    }
+}
+
+fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()> {
+    let cwd = std::env::current_dir().ok();
+    let rows = aida_core::worktree_pool::list(project_root, cwd.as_deref())?;
+
+    if json {
+        let arr: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.entry.name,
+                    "path": r.entry.path,
+                    "state": r.state.label(),
+                    "leased": r.entry.leased,
+                    "lease_holder": r.entry.lease_holder,
+                    "owner_pid": r.entry.owner_pid,
+                    "head": r.head,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({ "pool": arr }))?
+        );
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!("warm-pool is empty — `aida worktree pool acquire` creates the first tree");
+        return Ok(());
+    }
+
+    use crate::glyphs::Glyph;
+    use aida_core::worktree_pool::PoolState;
+    println!("{}", "WORKTREE WARM-POOL".bold());
+    for r in &rows {
+        // Registry-managed glyphs route through `crate::glyph` so they get the
+        // ASCII fallback on terminals that can't draw them (glyph-lint). The
+        // filled-circle/diamond/ellipsis markers below have no registry variant
+        // and stay raw. trace:STORY-714 trace:TASK-835
+        let dot = match r.state {
+            PoolState::Available => "●".green(),
+            PoolState::InUse => crate::glyph(Glyph::InFlight).yellow(),
+            PoolState::Leased => "◆".cyan(),
+            PoolState::Dirty => crate::glyph(Glyph::Cross).red(),
+            PoolState::Destroying => "…".dimmed(),
+            PoolState::Here => crate::glyph(Glyph::FlowActive).bold(),
+        };
+        let head = r
+            .head
+            .as_deref()
+            .map(|h| h[..h.len().min(9)].to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let holder = r
+            .entry
+            .lease_holder
+            .as_deref()
+            .map(|h| format!("  lease:{h}"))
+            .unwrap_or_default();
+        println!(
+            "  {} {:<14} {:<11} {}  {}{}",
+            dot,
+            r.entry.name,
+            r.state.label(),
+            head.dimmed(),
+            r.entry.path.display(),
+            holder.cyan()
+        );
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn worktree_pool_destroy(
+    project_root: &std::path::Path,
+    paths: &[String],
+    all: bool,
+    dry_run: bool,
+    include_unlanded: bool,
+    include_in_use: bool,
+    include_leased: bool,
+    json: bool,
+) -> Result<()> {
+    use aida_core::worktree_pool_destroy::{
+        self as wd, DestroyAction, DestroyOptions, DestroySelector,
+    };
+
+    let selector = if all {
+        DestroySelector::All
+    } else if !paths.is_empty() {
+        DestroySelector::Paths(paths.iter().map(std::path::PathBuf::from).collect())
+    } else {
+        anyhow::bail!("specify worktree path(s) to destroy, or pass --all for a bulk sweep");
+    };
+
+    let opts = DestroyOptions {
+        dry_run,
+        include_unlanded,
+        include_in_use,
+        include_leased,
+        pre_destroy_hooks: worktree_pool_global_hooks("pre_destroy"),
+    };
+
+    let mut salvage = |p: &std::path::Path| {
+        let _ = salvage_worktree_patch(project_root, "worktree-pool", Some("pool"), p);
+    };
+    let report = wd::destroy(project_root, &selector, &opts, &mut salvage)?;
+
+    if json {
+        let arr: Vec<_> = report
+            .targets
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "path": t.entry.path,
+                    "name": t.entry.name,
+                    "class": t.class.label(),
+                    "action": match t.action {
+                        DestroyAction::WouldRemove => "would-remove",
+                        DestroyAction::Removed => "removed",
+                        DestroyAction::Skipped => "skipped",
+                    },
+                    "reason": t.reason,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "dry_run": report.dry_run,
+                "removed": report.removed_count(),
+                "targets": arr,
+            }))?
+        );
+        return Ok(());
+    }
+
+    if report.targets.is_empty() {
+        println!("no matching pool worktrees");
+        return Ok(());
+    }
+
+    if report.dry_run {
+        println!(
+            "{} dry-run — nothing removed (pass --no-dry-run to apply)",
+            "→".dimmed()
+        );
+    }
+    for t in &report.targets {
+        let mark = match t.action {
+            DestroyAction::WouldRemove => "would remove".yellow(),
+            DestroyAction::Removed => "removed".green(),
+            DestroyAction::Skipped => "skipped".dimmed(),
+        };
+        println!(
+            "  {}  {}  {}",
+            mark,
+            t.entry.path.display(),
+            t.reason.dimmed()
+        );
+    }
+    if !report.dry_run {
+        println!(
+            "{} {} worktree(s) removed",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            report.removed_count()
+        );
+    }
+    Ok(())
 }
 
 /// `aida worktree add <epic>` — create (or re-affirm) the epic worktree and
@@ -126139,6 +126435,7 @@ fn handle_queue_work(
                 // session they're actively stealing. trace:TASK-111
                 /* skip_ci */
                 true,
+                /* return_to_pool */ false,
             )
             // BUG-311: collapse the internal session_end error into the
             // primary message so it surfaces specifically as "--steal could
