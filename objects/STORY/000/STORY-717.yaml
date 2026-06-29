@@ -3,12 +3,12 @@ spec_id: STORY-717
 agreed_id: STORY-717
 title: 'Focus-scope drift guard: configurable [focus] policy (off/warn/block) at work-start'
 description: 'When a worktree has a focus set (.aida/focus, STORY-706) and you start work on a spec OUTSIDE that focus subtree, nudge you. Caught a real mix-up 2026-06-29 (STORY-714/EPIC-56 nearly worked in an EPIC-54-focused tree). CONFIGURABLE POLICY: a [focus] block in .aida/config.toml -- out_of_scope = off | warn | block (default warn). off = no-op; warn = print a nudge that SUGGESTS THE FIX (e.g. STORY-714 is not under your focus EPIC-54 -- did you mean aida focus EPIC-56 first?); block = refuse unless --force. INSERTION POINT = work-START not commit-time: aida queue work <spec>, aida agent new --spec <spec>, and flipping a spec to In-Progress in a focused worktree. Check membership via the focus subtree (reuse TASK-955 descendant query). --force ALWAYS overrides regardless of policy. Soft by default (warn) so cross-scope work stays cheap; mute via off. Sibling of the worktree-tangle gate (TASK-965) + spec-claim (BUG-637) -- makes aida focus a meaningful scope, not a cosmetic label.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:11:48.648126691Z
-modified_at: 2026-06-29T05:11:56.762438010Z
+modified_at: 2026-06-29T05:18:28.427349427Z
 req_type: Story
 tags:
 - focus
