@@ -1800,8 +1800,20 @@ impl RedesignState {
 
     /// `/` → ENTER find mode. Starts a FRESH query (clears any prior filter)
     /// so the prompt opens empty, vim/less-style. trace:TASK-945 | ai:claude
+    ///
+    /// TASK-943: the filter already follows focus, but at the SCOPES level the
+    /// top (focused) panel is a fixed nav rail (Backlog/Open/Test/Queue/…) — the
+    /// searchable content the operator means by `/` is the backlog in the items
+    /// (bottom) panel. So at the scope level (and only when there are items to
+    /// search) entering find mode points the keyboard at the items panel, so
+    /// typing a spec-id narrows the ITEMS instead of the scope rail. At the
+    /// VERBS level the top panel IS worth filtering (the verb palette, locked by
+    /// `enter_confirms_find_keeping_filter`), so focus is left untouched there.
     pub fn enter_find_mode(&mut self) {
         self.filter.clear();
+        if self.level == Level::Scopes && self.focus == Focus::Top && !self.items.is_empty() {
+            self.focus = Focus::Bottom;
+        }
         self.find_mode = true;
         self.clamp_indices();
     }
@@ -2603,6 +2615,56 @@ mod tests {
         let idxs = s.bottom_indices();
         assert_eq!(idxs.len(), 1);
         assert_eq!(s.items[idxs[0]].id, "STORY-11");
+    }
+
+    #[test]
+    fn find_at_scopes_level_targets_the_items_panel() {
+        // TASK-943: at launch (Scopes level, Top focus) the top panel is the
+        // fixed scope nav rail; `/` should search the BACKLOG (items), not the
+        // rail. Entering find mode points the keyboard at the items panel so a
+        // typed spec-id narrows the items — the operator's intent.
+        let mut s = state(12);
+        assert_eq!(s.level, Level::Scopes);
+        assert_eq!(s.focus, Focus::Top, "cold open focuses the scope rail");
+        s.enter_find_mode();
+        assert_eq!(
+            s.focus,
+            Focus::Bottom,
+            "find at the scope level targets the items panel"
+        );
+        // Titles are digit-free, so "11" narrows to STORY-11 alone.
+        assert!(s.type_char('1'));
+        assert!(s.type_char('1'));
+        let idxs = s.bottom_indices();
+        assert_eq!(idxs.len(), 1);
+        assert_eq!(s.items[idxs[0]].id, "STORY-11");
+    }
+
+    #[test]
+    fn find_at_verbs_level_keeps_top_focus() {
+        // TASK-943: at the Verbs level the top panel is the verb palette — worth
+        // filtering — so `/` leaves focus on the verbs. Only the Scopes-level
+        // nav rail is bypassed.
+        let mut s = state(3);
+        s.drill(); // → Verbs level, Top focus
+        assert_eq!(s.level, Level::Verbs);
+        s.enter_find_mode();
+        assert_eq!(
+            s.focus,
+            Focus::Top,
+            "verb-level find still filters the verb palette"
+        );
+    }
+
+    #[test]
+    fn find_at_scopes_level_with_no_items_keeps_top_focus() {
+        // TASK-943: with an empty backlog there is nothing to search in the
+        // items panel, so find mode leaves focus on the scope rail (no surprise
+        // jump to an empty panel).
+        let mut s = state(0);
+        assert_eq!(s.level, Level::Scopes);
+        s.enter_find_mode();
+        assert_eq!(s.focus, Focus::Top, "no items → focus stays on the rail");
     }
 
     #[test]
