@@ -1123,13 +1123,6 @@
   added_at: 2026-06-27T01:51:26.304390247Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
-  position: 502000
-  added_by: joe
-  added_at: 2026-06-27T04:56:39.602099802Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 019f1048-1ef7-7ce1-b428-f58176310bde
   position: 503000
   added_by: joe
@@ -1181,6 +1174,14 @@
   position: 509000
   added_by: joe
   added_at: 2026-06-29T06:36:04.848364196Z
+  for_role: implementer
+  for_scope: harness-worktree
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  position: 510000
+  added_by: joe
+  added_at: 2026-06-29T06:36:09.895605298Z
   for_role: implementer
   for_scope: harness-worktree
   added_by_machine: imac
