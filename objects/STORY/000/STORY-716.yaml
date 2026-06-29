@@ -1,0 +1,19 @@
+id: 019f11ac-15ff-7030-a44d-fc77cb2d1d5d
+spec_id: STORY-716
+agreed_id: STORY-716
+title: 'aida worktree namespace: add + enter (create-or-enter an epic-scoped workspace)'
+description: 'EPIC-55 workspace layer (the deferred half of STORY-706 focus). A aida worktree subcommand namespace that mirrors git worktree and houses AIDAs worktree operations. FIRST SLICE: (1) aida worktree add <epic> [--path P] [--branch B] — create a git worktree (default path ~/ai/aida-<epic-slug>, default branch <epic-lower>-work) off origin/main, then run the STORY-706 aida focus <epic> inside it so the new tree is auto-scoped; plain subcommand, prints the path, no cd (mirrors git worktree add). (2) aida worktree enter <epic> — the eval-wrapper that creates-if-missing then cd-s you in; MUST be a shell-function auto-eval (like aida-on / aida role enter / aida dev activate — study that eval pattern, a plain subprocess CANNOT cd the parent shell), wired via aida dev shell-init (or aida worktree shell-init). (3) aida worktree list — AIDA-managed worktrees + each ones focus. REUSE aida focus (STORY-706) for the focus step; do NOT overload plain aida focus (it stays the cheap view-scoper). NAMESPACE ALIGNMENT: STORY-714 (warm-pool) already uses aida worktree pool status + tiered aida worktree remove — those land under THIS same namespace later; design the clap surface so pool/remove slot in cleanly. Smallest valuable slice now = add + enter (+ list if cheap), no warm-pool dependency.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T04:38:38.335033986Z
+modified_at: 2026-06-29T04:38:38.335033986Z
+req_type: Story
+tags:
+- cli
+- focus
+- from-operator
+- parent:EPIC-55
+- workspace
+- worktree
