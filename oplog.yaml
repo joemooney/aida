@@ -25993,5 +25993,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2482
+- id: 019f146e-32e2-73f1-a54b-c98ce4b0bf3a
+  target_id: 019f146e-1630-76e1-8d11-9f10473ad6b9
+  author: aida
+  node_id: '1'
+  lamport: 2483
+  timestamp: 2026-06-29T17:29:54.146061172Z
+  kind: !Create
+    title: Migrate `wait_for_ci_terminal`'s in-phase 30s poll to consume CI webhooks where the forge supports them (further-out; the in-phase poll is cheap Rust, not token spend)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2483
 node_id: '1'
