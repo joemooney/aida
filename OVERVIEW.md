@@ -156,7 +156,7 @@ Each clone of an AIDA-using project gets a unique **node id** and writes its ide
 ### Surfaces
 
 - **CLI (`aida`)** — primary work surface. Embeds the MCP server (`aida mcp-serve`).
-- **MCP server** — exposes requirements as native Claude Code tools over JSON-RPC 2.0 stdio. The highest-leverage surface for the agent-context vision.
+- **MCP server** — exposes requirements as native Claude Code tools over JSON-RPC 2.0 stdio: the **typed, structural** surface for MCP-native clients. (AIDA's own agent-surface benchmark found the token-efficient CLI path — `AIDA_AGENT_OUTPUT`/TOON — costs roughly **half** of MCP for identical agent tasks, so the CLI is the primary agent surface and MCP is the typed option, not the cost-winner. See `bench/agent-surface/`.)
 - **REST + gRPC server (`aida-server`, port 8080)** — backs the React dashboard and provides a public API.
 - **React dashboard (`aida-web-react/`, port 5173 dev)** — kanban / sprint / queue / chat UI; Vite proxies `/api` to the server.
 
