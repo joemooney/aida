@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:18.954962222Z
-modified_at: 2026-06-27T16:40:32.022498173Z
+modified_at: 2026-06-29T19:26:55.938928553Z
 req_type: Epic
 tags:
 - advisor-autopilot
@@ -50,6 +50,11 @@ comments:
   content: 'Opened from operator feedback that the advisor role is currently a bottleneck: product role can shape and draft ideas, solo mode can work safe backlog, and zen reduces mechanical prompts during drains, but there is no distinct bounded-discretion mode for advisor disposition itself. Working name endorsed in discussion: "advisor autopilot".'
   created_at: 2026-06-24T03:17:46.110292317Z
   modified_at: 2026-06-24T03:17:46.110292317Z
+- id: 019f14d9-57c2-7dd1-b919-99d5a80a64bd
+  author: joe
+  content: 'Master-advisor PROVISIONAL review (2026-06-29, operator traveling — Q3 review+provisionally-approve). All 4 design plans reviewed: STRONG across the board. Autopilot is correctly framed as a bounded-AUTHORITY envelope OVER the existing groom (not a new disposition engine), substrate-as-bouncer (hard bounds in select_intake_candidates, not the skill prompt), per-action authority (auto/propose/never) with 4 AND-composed gates, conservative safe-by-default (approve/reject=propose), git-canonical audit via spec comments with a rebuildable JSONL index (NOT gitignored .aida), reversal as a deterministic inverse-action table, product input as evidence-not-authority (monotonic-toward-caution), and the orthogonal grooming-vs-draining axis insight (autopilot is NOT a 4th ladder rung — it governs a different stage; one shared keystone classifier). Each plan has a clean pure-testable core + a de-risked smallest-first-slice. Recommended BUILD ORDER: TASK-0432 doc (the shared mental model) -> TASK-0429 evaluate() contract (pure, wired to nothing) -> TASK-0430 audit-log + TASK-0431 product-evidence (build against the contract). PROVISIONALLY APPROVED. Build gated on operator ratification of the autopilot DIRECTION on return.'
+  created_at: 2026-06-29T19:26:55.938928553Z
+  modified_at: 2026-06-29T19:26:55.938928553Z
 deferred: true
 deferred_at: 2026-06-27T16:40:32.022498173Z
 deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
