@@ -20,11 +20,104 @@
 //!
 //!
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 /// Environment override for the active focus. Highest-precedence tier; a blank
 /// value falls through to the marker file.
 pub const FOCUS_ENV: &str = "AIDA_FOCUS";
+
+// ----------------------------------------------------------- drift guard (STORY-717)
+
+/// The `[focus] out_of_scope` policy that governs what happens when you START
+/// work on a spec outside the active focus's subtree (STORY-717). The guard
+/// fires at work-start moments only (`queue work`, `agent new --spec`, flipping
+/// a spec to In Progress) -- never at commit time -- so cross-scope reads stay
+/// free and only the act of *starting* work is nudged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutOfScopePolicy {
+    /// No-op: the guard is silent. The escape hatch for operators who routinely
+    /// work across scopes and don't want the nudge.
+    Off,
+    /// Print a nudge to stderr that suggests the fix, then PROCEED (default).
+    #[default]
+    Warn,
+    /// Refuse the work-start with the nudge + a non-zero exit, unless `--force`.
+    Block,
+}
+
+/// Parse the `[focus] out_of_scope` config value. Unknown / empty values fall
+/// back to the default (`warn`) -- a typo softens to the safe default rather
+/// than erroring at every work-start. Case-insensitive; `-`/`_` tolerated.
+pub fn parse_out_of_scope_policy(raw: &str) -> OutOfScopePolicy {
+    match raw.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+        "off" | "none" | "silent" => OutOfScopePolicy::Off,
+        "block" | "refuse" | "hard" => OutOfScopePolicy::Block,
+        // "warn" and anything unrecognized -> the safe default.
+        _ => OutOfScopePolicy::Warn,
+    }
+}
+
+/// The action the drift guard should take at a work-start moment. A PURE
+/// decision over (policy, in-scope?, force?) so the policy matrix is
+/// unit-testable without a backend or filesystem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusGuardAction {
+    /// Let the work-start proceed silently.
+    Proceed,
+    /// Print the nudge to stderr, then proceed.
+    Warn,
+    /// Refuse the work-start (non-zero exit).
+    Block,
+}
+
+/// Decide what the drift guard does. `--force` ALWAYS overrides (proceeds
+/// silently) regardless of policy; a spec already in the focus subtree always
+/// proceeds; otherwise the policy decides. (The no-focus case is handled by the
+/// caller -- it never reaches here.)
+pub fn decide_focus_action(
+    policy: OutOfScopePolicy,
+    in_scope: bool,
+    force: bool,
+) -> FocusGuardAction {
+    if in_scope || force {
+        return FocusGuardAction::Proceed;
+    }
+    match policy {
+        OutOfScopePolicy::Off => FocusGuardAction::Proceed,
+        OutOfScopePolicy::Warn => FocusGuardAction::Warn,
+        OutOfScopePolicy::Block => FocusGuardAction::Block,
+    }
+}
+
+/// The membership predicate: is `target` inside the focus subtree? The subtree
+/// set comes from the cache's `descendant_ids` closure (TASK-955), which
+/// INCLUDES the focus root itself -- so the focus epic and every transitive
+/// descendant are in-scope, and any other spec is out-of-scope. PURE (a set
+/// membership test) so the predicate is unit-testable in isolation.
+pub fn is_in_focus_scope(target: &Uuid, subtree: &HashSet<Uuid>) -> bool {
+    subtree.contains(target)
+}
+
+/// Build the out-of-scope nudge: the core mismatch sentence plus, when a
+/// suggested focus is known, the "Did you mean ..." fix. PURE (no color/glyph)
+/// so the caller can prepend a glyph and append a mode-specific suffix and the
+/// wording stays testable.
+///
+/// Shape: `STORY-714 is not under your current focus (EPIC-54). Did you mean
+/// 'aida focus EPIC-56' first?`
+pub fn out_of_scope_message(
+    target_label: &str,
+    focus_label: &str,
+    suggested_focus: Option<&str>,
+) -> String {
+    let mut msg = format!("{target_label} is not under your current focus ({focus_label}).");
+    if let Some(sug) = suggested_focus {
+        msg.push_str(&format!(" Did you mean 'aida focus {sug}' first?"));
+    }
+    msg
+}
 
 /// The per-worktree focus marker path: `<project_root>/.aida/focus`. A pure
 /// path-builder (no IO) so the path logic is unit-testable. The file is
@@ -195,5 +288,104 @@ mod tests {
         assert!(h.contains("showing 13 of 2400"));
         assert!(h.contains("--all"));
         assert!(h.contains("--no-focus"));
+    }
+
+    // ----------------------------------------------- drift guard (STORY-717)
+
+    #[test]
+    fn policy_parse_warn_is_default_for_unknown_and_blank() {
+        assert_eq!(parse_out_of_scope_policy("warn"), OutOfScopePolicy::Warn);
+        assert_eq!(parse_out_of_scope_policy(""), OutOfScopePolicy::Warn);
+        assert_eq!(
+            parse_out_of_scope_policy("nonsense"),
+            OutOfScopePolicy::Warn
+        );
+        assert_eq!(OutOfScopePolicy::default(), OutOfScopePolicy::Warn);
+    }
+
+    #[test]
+    fn policy_parse_off_and_block_and_case_insensitive() {
+        assert_eq!(parse_out_of_scope_policy("off"), OutOfScopePolicy::Off);
+        assert_eq!(parse_out_of_scope_policy(" OFF "), OutOfScopePolicy::Off);
+        assert_eq!(parse_out_of_scope_policy("block"), OutOfScopePolicy::Block);
+        assert_eq!(parse_out_of_scope_policy("Block"), OutOfScopePolicy::Block);
+    }
+
+    #[test]
+    fn membership_predicate_uses_the_subtree_set() {
+        let root = Uuid::new_v4();
+        let child = Uuid::new_v4();
+        let outsider = Uuid::new_v4();
+        // descendant_ids includes the root itself + descendants.
+        let subtree: HashSet<Uuid> = [root, child].into_iter().collect();
+        assert!(is_in_focus_scope(&root, &subtree)); // the focus epic itself
+        assert!(is_in_focus_scope(&child, &subtree)); // a descendant
+        assert!(!is_in_focus_scope(&outsider, &subtree)); // EPIC-B spec
+    }
+
+    #[test]
+    fn decide_in_scope_always_proceeds_regardless_of_policy() {
+        for policy in [
+            OutOfScopePolicy::Off,
+            OutOfScopePolicy::Warn,
+            OutOfScopePolicy::Block,
+        ] {
+            assert_eq!(
+                decide_focus_action(policy, /* in_scope */ true, /* force */ false),
+                FocusGuardAction::Proceed
+            );
+        }
+    }
+
+    #[test]
+    fn decide_off_is_silent_when_out_of_scope() {
+        assert_eq!(
+            decide_focus_action(OutOfScopePolicy::Off, false, false),
+            FocusGuardAction::Proceed
+        );
+    }
+
+    #[test]
+    fn decide_warn_nudges_when_out_of_scope() {
+        assert_eq!(
+            decide_focus_action(OutOfScopePolicy::Warn, false, false),
+            FocusGuardAction::Warn
+        );
+    }
+
+    #[test]
+    fn decide_block_refuses_when_out_of_scope() {
+        assert_eq!(
+            decide_focus_action(OutOfScopePolicy::Block, false, false),
+            FocusGuardAction::Block
+        );
+    }
+
+    #[test]
+    fn decide_force_overrides_every_policy() {
+        for policy in [
+            OutOfScopePolicy::Off,
+            OutOfScopePolicy::Warn,
+            OutOfScopePolicy::Block,
+        ] {
+            assert_eq!(
+                decide_focus_action(policy, /* in_scope */ false, /* force */ true),
+                FocusGuardAction::Proceed
+            );
+        }
+    }
+
+    #[test]
+    fn out_of_scope_message_names_mismatch_and_suggests_fix() {
+        let m = out_of_scope_message("STORY-714", "EPIC-54", Some("EPIC-56"));
+        assert!(m.contains("STORY-714 is not under your current focus (EPIC-54)."));
+        assert!(m.contains("Did you mean 'aida focus EPIC-56' first?"));
+    }
+
+    #[test]
+    fn out_of_scope_message_omits_suggestion_when_unknown() {
+        let m = out_of_scope_message("STORY-714", "EPIC-54", None);
+        assert!(m.contains("STORY-714 is not under your current focus (EPIC-54)."));
+        assert!(!m.contains("Did you mean"));
     }
 }
