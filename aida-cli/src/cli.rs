@@ -4391,6 +4391,20 @@ pub enum QueueCommand {
         // trace:TASK-1003, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, requires = "autonomous")]
         single_branch: bool,
+        /// Coupled-sequential drain: with `--batch NAME --auto-complete`, drive
+        /// the batch members ONE AT A TIME, in pickup order — each member forks
+        /// off the freshly-pulled main, runs its full lifecycle, and merges as
+        /// its OWN PR before the next member starts. For coupled-but-
+        /// independently-shippable work that must land in order (each increment
+        /// stays a reviewable PR to main). A member failure SHELVES that member
+        /// and the drain continues with the rest — contrast `--single-branch`,
+        /// which accumulates every member on one branch and HALTS on a failure.
+        /// This names + guards the existing batch drain, which is already
+        /// one-member-at-a-time; concurrency is pinned to 1. Requires `--batch`
+        /// or `--batches`.
+        // trace:TASK-1005, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, requires = "autonomous", conflicts_with = "single_branch")]
+        sequential: bool,
         /// With `--batch`: print the matching queue entries in pickup
         /// order and exit without starting a session. Useful for
         /// auditing the batch before draining.
@@ -10508,5 +10522,77 @@ mod tests {
                 other => panic!("expected human {word}, got {other:?}"),
             }
         }
+    }
+
+    // trace:TASK-1005 / SPIKE-70 — `--sequential` parses on `queue work`,
+    // requires an autonomous drain, and conflicts with `--single-branch`.
+    #[test]
+    fn sequential_flag_parses_with_batch_and_autonomous() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "queue",
+            "work",
+            "--batch",
+            "tui",
+            "--auto-complete",
+            "--sequential",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Queue(QueueCommand::Work {
+                sequential,
+                single_branch,
+                batch,
+                ..
+            }) => {
+                assert!(sequential, "--sequential should parse as true");
+                assert!(!single_branch);
+                assert_eq!(batch.as_deref(), Some("tui"));
+            }
+            other => panic!("expected queue work, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1005 — `--sequential` is autonomous-only; without
+    // `--auto-complete` (or `--drain`) clap rejects it via `requires`.
+    #[test]
+    fn sequential_requires_autonomous_drain() {
+        let err = Cli::try_parse_from(["aida", "queue", "work", "--batch", "tui", "--sequential"])
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("autonomous")
+                || err.to_string().contains("auto-complete")
+                || err.to_string().contains("required"),
+            "expected a requires-autonomous error, got: {err}"
+        );
+    }
+
+    // trace:TASK-1005 — `--sequential` (per-member PRs) and `--single-branch`
+    // (one accumulating branch) are mutually exclusive drive shapes.
+    #[test]
+    fn sequential_conflicts_with_single_branch() {
+        let err = Cli::try_parse_from([
+            "aida",
+            "queue",
+            "work",
+            "--batch",
+            "tui",
+            "--auto-complete",
+            "--sequential",
+            "--single-branch",
+        ])
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("cannot be used with")
+                || err.to_string().contains("single-branch"),
+            "expected a conflicts-with error, got: {err}"
+        );
+    }
+
+    // trace:TASK-1005 — the sequential mode pins concurrency to 1; the named
+    // invariant the dispatch relies on.
+    #[test]
+    fn sequential_pins_concurrency_to_one() {
+        assert_eq!(crate::SEQUENTIAL_DRAIN_CONCURRENCY, 1);
     }
 }

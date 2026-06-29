@@ -409,6 +409,13 @@ const ASCIINEMA_SLUG_MAX_CHARS: usize = 80;
 // behaviour). trace:EPIC-28 | ai:claude
 const DEFAULT_MAX_FAILURES: usize = 5;
 
+// SPIKE-70: `--sequential` drives a batch ONE member at a time — concurrency is
+// pinned to 1. The existing batch drain (`auto_complete::drain_batch`) is already
+// inherently one-member-at-a-time (it merges + pulls before advancing the head),
+// so `--sequential` names + guards that invariant rather than introducing a
+// parallel knob. trace:TASK-1005 | ai:claude
+pub(crate) const SEQUENTIAL_DRAIN_CONCURRENCY: usize = 1;
+
 // TASK-970: default row cap for a bare `aida list` in AGENT MODE. ~925
 // unbounded rows is a token blowout when an agent reads the listing as
 // context; cap to the N most-recent (post-sort, post-filter) and emit a
@@ -123620,6 +123627,7 @@ fn handle_queue_command(
             batch,
             batches,
             single_branch,
+            sequential,
             dry_run,
             resume,
             fresh,
@@ -124161,6 +124169,35 @@ fn handle_queue_command(
                         role.as_deref(),
                         *max,
                     );
+                }
+                // TASK-1005 / SPIKE-70: `--sequential` NAMES + guards the existing
+                // per-member-PR batch drain as a first-class coupled-ordered mode:
+                // members run ONE AT A TIME (concurrency pinned to 1), each its own
+                // PR off freshly-pulled main, with shelve-and-continue on a member
+                // failure. It does NOT change the engine — it requires a batch and
+                // then falls through to the same `handle_auto_complete_batch[es]`
+                // dispatch below, which `drain_batch` already drives sequentially.
+                // `conflicts_with = "single_branch"` is enforced by clap.
+                // trace:TASK-1005 | ai:claude
+                if *sequential {
+                    let has_batch = effective_batch.is_some_and(|b| !b.is_empty())
+                        || effective_batches.is_some();
+                    if !has_batch {
+                        anyhow::bail!(
+                            "--sequential drives a batch one member at a time — pair it with \
+                             `--batch NAME` or `--batches A,B,C` (e.g. `aida queue work \
+                             --batch NAME --auto-complete --sequential`)"
+                        );
+                    }
+                    if !*json {
+                        eprintln!(
+                            "Sequential drain: members run one at a time (concurrency {SEQUENTIAL_DRAIN_CONCURRENCY}); \
+                             each member is its own PR off freshly-pulled main, and a member \
+                             failure shelves that member and continues with the rest."
+                        );
+                    }
+                    // Fall through to the batch / batches dispatch below — it IS
+                    // the sequential one-member-at-a-time engine.
                 }
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
                 // batch — one full lifecycle per member, advancing the head
