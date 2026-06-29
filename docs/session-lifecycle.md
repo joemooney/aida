@@ -199,7 +199,11 @@ aida worktree pool status [--json]                          # available / in-use
 aida worktree pool destroy [--all | PATH...] [--no-dry-run] # ONLY path that deletes; dry-run by default
         [--include-unlanded] [--include-in-use] [--include-leased]
 aida session end --return                                   # hand this session's pool tree back instead of removing
+aida session start --owns <scope> --pool                    # acquire the session's worktree FROM the pool
+                                                            #   (or set [worktree_pool] enabled = true; --no-pool opts out)
 ```
+
+**Acquire-on-start (config-gated).** With `[worktree_pool] enabled = true` in `.aida/config.toml` — or `--pool` per run — `aida session start` (and the `aida agent new` / `aida queue work` / orchestrator paths that route through it) acquire a recycled warm tree instead of `git worktree add`: the pool hands out a detached tree at the furthest-ahead default, and the session's branch is created *on* it. The tree is held by a **durable lease** keyed on the branch, so the short-lived `session start` process exiting doesn't let a concurrent acquire grab the live session's tree. `aida session end --return` hands it back. Default is **off** (today's destroy-and-recreate); only the default new-branch flow pools (`--reuse-branch` and PR-review checkouts always `git worktree add`); an explicit `--base` falls back to a fresh worktree.
 
 State lives under `.aida/worktree-pool/` (per-clone runtime state, already covered by the deny-by-default `.aida/*` gitignore). Every mutation runs under an advisory file lock (`pool.lock`) so parallel fan-out implementers can't be handed the same idle tree.
 
@@ -214,7 +218,7 @@ State lives under `.aida/worktree-pool/` (per-clone runtime state, already cover
 
 **Hook safety.** `post_create` / `pre_destroy` hook commands are sourced **only from the machine-global `~/.aida/config.toml`**, never a checked-in repo-level `.aida/config.toml` — cloning a repo must not be able to run arbitrary shell on your machine.
 
-**Slice status.** The pool primitives + the `aida worktree pool` surface + `aida session end --return` ship in slice 1. Not yet wired: `aida agent new` / `aida queue work` / the orchestrator acquiring from the pool on start, and replacing the orchestrator/doctor `--force` removals with the tiered `destroy`. Those are tracked followups (see the plan's Followups), gated behind the opt-in `--return` until the pool is proven by dogfood, then the default flips.
+**Slice status.** Slice 1 shipped the pool primitives + the `aida worktree pool` surface + `aida session end --return`. Slice 2 (TASK-982) wires **acquire-on-start** into `session_start` (and thus `aida agent new` / `aida queue work` / the orchestrator), gated by `[worktree_pool] enabled` / `--pool`, default off until proven by dogfood. Still a tracked followup: replacing the orchestrator/doctor `--force` removals with the tiered `destroy` (TASK-983).
 
 ---
 
