@@ -8,13 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:24:48.128426940Z
-modified_at: 2026-06-27T16:35:49.811526957Z
+modified_at: 2026-06-29T06:35:46.387121478Z
 req_type: Task
 tags:
-- finding
-- redesign
-- tui
-- ux
+- batch:epic54
 relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
