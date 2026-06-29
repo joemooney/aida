@@ -1,0 +1,17 @@
+id: 019f1400-8fd7-71f3-bb3a-e5de421b7088
+spec_id: TASK-986
+agreed_id: TASK-986
+title: 'Re-frame MCP positioning: typed/structural option, CLI is primary (benchmark-backed)'
+description: 'Apply the measured (flavor A) re-frame from the SPIKE-73 benchmark: OVERVIEW.md:159 + CLAUDE.md:266 call MCP "the highest-leverage surface" — the 72-cell benchmark shows MCP ~2x the token-efficient CLI cost (structural, not just upfront-schema tax). Re-frame to: MCP = typed/structural option for MCP-native clients; the AIDA_AGENT_OUTPUT/TOON CLI is the primary, cheaper agent surface. Keep MCP first-class (typed schemas, native client integration), do NOT over-correct. Dated artifacts stay frozen.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T15:30:08.983787985Z
+modified_at: 2026-06-29T15:30:08.983787985Z
+req_type: Task
+tags:
+- docs
+- mcp
+- parent:EPIC-56
+- positioning
