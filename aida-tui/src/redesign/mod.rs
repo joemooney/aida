@@ -1504,11 +1504,23 @@ fn defer_status(deferred: &[String], failed: &[String], trigger: &str) -> String
 /// that is NEVER shell-parsed. A title with backticks, quotes, or `$` is inert
 /// (no command substitution, no globbing) because there is no shell in the
 /// pipeline. Pure (no IO) so the safe arg vector is unit-testable without
-/// spawning. trace:TASK-931 | ai:claude
-fn new_spec_args(title: &str) -> Vec<&str> {
-    vec![
+/// spawning.
+///
+/// When a focus epic is active (`parent` is `Some`), the new Draft is filed
+/// under it via `--parent <epic>` so work created while focused on EPIC-X is
+/// auto-linked to EPIC-X instead of orphaned — and so the focus lens does not
+/// immediately hide the freshly-created spec. With no focus (`parent` is
+/// `None`) the args are unchanged and the spec is created unparented as before.
+// trace:TASK-931 trace:TASK-942 | ai:claude
+fn new_spec_args<'a>(title: &'a str, parent: Option<&'a str>) -> Vec<&'a str> {
+    let mut args = vec![
         "add", "--title", title, "--type", "task", "--status", "draft",
-    ]
+    ];
+    if let Some(parent) = parent {
+        args.push("--parent");
+        args.push(parent);
+    }
+    args
 }
 
 /// Parse the spec id out of `aida add`'s success line (`Added: TASK-932 - …`).
@@ -1528,31 +1540,42 @@ fn parse_created_spec_id(stdout: &str) -> Option<String> {
 }
 
 /// The status-line confirmation for a `new` create: the created spec id (when
-/// the CLI reported one) plus a truncated title. Pure (no IO) so it is unit
-/// testable. trace:TASK-931 | ai:claude
-fn create_status(created: Option<&str>, title: &str) -> String {
+/// the CLI reported one) plus a truncated title. When the create was filed under
+/// an active focus epic (`parent` is `Some`), the confirmation names the parent
+/// so the operator sees the new draft was linked (not orphaned) — the visible
+/// counterpart to the silent focus-hiding the link prevents. Pure (no IO) so it
+/// is unit testable.
+// trace:TASK-931 trace:TASK-942 | ai:claude
+fn create_status(created: Option<&str>, title: &str, parent: Option<&str>) -> String {
     let short: String = if title.chars().count() > 50 {
         format!("{}…", title.chars().take(50).collect::<String>())
     } else {
         title.to_string()
     };
-    match created {
+    let base = match created {
         Some(id) => format!("created {id} (Draft): {short}"),
         None => format!("created Draft spec: {short}"),
+    };
+    match parent {
+        Some(epic) => format!("{base} (under {epic})"),
+        None => base,
     }
 }
 
-/// Run `aida add --title <title> --type task --status draft` and turn its result
-/// into a [`VerbResult`]. The title is passed as a SINGLE arg-vector element
-/// (see [`new_spec_args`]) — never a shell string — so embedded backticks /
-/// quotes / `$` are safe. A successful create invalidates the scope cache so the
-/// new draft shows if it is in view (e.g. the Open scope). Runs ON THE WORKER
-/// THREAD (no `st`/cache borrows), so the slow store write never blocks the
-/// loop. trace:TASK-931 trace:BUG-633 | ai:claude
-fn run_create(title: &str) -> VerbResult {
+/// Run `aida add --title <title> --type task --status draft [--parent <epic>]`
+/// and turn its result into a [`VerbResult`]. The title is passed as a SINGLE
+/// arg-vector element (see [`new_spec_args`]) — never a shell string — so
+/// embedded backticks / quotes / `$` are safe. When `parent` is `Some` (an
+/// active focus epic), the new draft is filed under it so it is not orphaned and
+/// the focus lens keeps it visible (TASK-942). A successful create invalidates
+/// the scope cache so the new draft shows if it is in view (e.g. the Open scope,
+/// or the focus subtree). Runs ON THE WORKER THREAD (no `st`/cache borrows), so
+/// the slow store write never blocks the loop.
+// trace:TASK-931 trace:TASK-942 trace:BUG-633 | ai:claude
+fn run_create(title: &str, parent: Option<String>) -> VerbResult {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
-    cmd.args(new_spec_args(title));
+    cmd.args(new_spec_args(title, parent.as_deref()));
     if let Ok(cwd) = std::env::current_dir() {
         cmd.current_dir(cwd);
     }
@@ -1561,7 +1584,7 @@ fn run_create(title: &str) -> VerbResult {
             let stdout = String::from_utf8_lossy(&out.stdout);
             let created = parse_created_spec_id(&stdout);
             VerbResult {
-                status: create_status(created.as_deref(), title),
+                status: create_status(created.as_deref(), title, parent.as_deref()),
                 // Invalidate so the next sync_scope_items re-fetches in-process
                 // and the new draft appears if it is in view.
                 invalidate: true,
@@ -1583,12 +1606,22 @@ fn run_create(title: &str) -> VerbResult {
 
 /// Create a fresh Draft spec from the operator-typed `title`, running the slow
 /// `aida add` store write on a background thread (BUG-633) so the TUI never
-/// freezes. The work + result-shaping live in [`run_create`]; this only kicks
-/// off the pending op. trace:TASK-931 trace:BUG-633 | ai:claude
+/// freezes. When a focus epic is active (`st.focus_epic`), the new draft is
+/// filed under it (`--parent <epic>`) so work created while focused on EPIC-X is
+/// auto-linked to EPIC-X instead of orphaned — otherwise the focus lens would
+/// immediately hide the parentless spec ("I created a spec but it vanished").
+/// With no active focus the draft is created unparented as before. The focus
+/// notion reused is the redesign's own `focus_epic` (STORY-697: `AIDA_TUI_EPIC`
+/// env > `.aida/tui-focus` marker > branch inference), the same source the
+/// cockpit lens uses to decide what is in view — so the create and the lens
+/// agree. The work + result-shaping live in [`run_create`]; this only kicks off
+/// the pending op.
+// trace:TASK-931 trace:TASK-942 trace:BUG-633 | ai:claude
 fn create_new_spec(st: &mut RedesignState, pending: &mut Option<Pending>, title: &str) {
     let title = title.to_string();
+    let parent = st.focus_epic.clone();
     let label = "creating spec…".to_string();
-    start_pending(pending, st, label, move || run_create(&title));
+    start_pending(pending, st, label, move || run_create(&title, parent));
 }
 
 // ---------------------------------------------------------------------------
@@ -3342,13 +3375,38 @@ mod render_tests {
         // and `$`, which would be shell-dangerous in a shell string but are
         // inert as an OS argument. trace:TASK-931
         let title = "fix the `rm -rf $HOME` \"quote\" bug";
-        let args = new_spec_args(title);
+        let args = new_spec_args(title, None);
         assert_eq!(
             args,
             vec!["add", "--title", title, "--type", "task", "--status", "draft"],
         );
         // The whole title is exactly one element (not split on spaces/specials).
         assert_eq!(args.iter().filter(|a| **a == title).count(), 1);
+    }
+
+    #[test]
+    fn new_spec_args_appends_parent_when_focused() {
+        // With an active focus epic, the new draft is filed under it via
+        // `--parent <epic>` so the focus lens keeps it visible. trace:TASK-942
+        let args = new_spec_args("a new task", Some("EPIC-54"));
+        assert_eq!(
+            args,
+            vec![
+                "add",
+                "--title",
+                "a new task",
+                "--type",
+                "task",
+                "--status",
+                "draft",
+                "--parent",
+                "EPIC-54",
+            ],
+        );
+        // No focus → no --parent flag at all (unparented, unchanged behavior).
+        assert!(!new_spec_args("a new task", None)
+            .iter()
+            .any(|a| *a == "--parent"));
     }
 
     #[test]
@@ -3366,15 +3424,27 @@ mod render_tests {
 
     #[test]
     fn create_status_reports_id_and_title() {
-        let with_id = create_status(Some("TASK-9"), "do the thing");
+        let with_id = create_status(Some("TASK-9"), "do the thing", None);
         assert!(with_id.contains("TASK-9"));
         assert!(with_id.contains("do the thing"));
         // Without an id we still confirm a Draft was created.
-        let no_id = create_status(None, "do the thing");
+        let no_id = create_status(None, "do the thing", None);
         assert!(no_id.contains("Draft"));
         // Long titles are truncated with an ellipsis.
         let long = "x".repeat(80);
-        assert!(create_status(Some("TASK-1"), &long).contains('…'));
+        assert!(create_status(Some("TASK-1"), &long, None).contains('…'));
+    }
+
+    #[test]
+    fn create_status_names_focus_parent_when_filed_under_epic() {
+        // When filed under an active focus epic, the confirmation names the
+        // parent so the operator sees the link (not orphaned). trace:TASK-942
+        let s = create_status(Some("TASK-9"), "do the thing", Some("EPIC-54"));
+        assert!(s.contains("TASK-9"));
+        assert!(s.contains("EPIC-54"));
+        // No focus → no parent mention.
+        let none = create_status(Some("TASK-9"), "do the thing", None);
+        assert!(!none.contains("under"));
     }
 
     #[test]
