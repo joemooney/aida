@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:28:25.671403857Z
-modified_at: 2026-06-29T15:48:21.278566037Z
+modified_at: 2026-06-29T15:59:35.746328818Z
 req_type: Task
 tags:
 - axi
@@ -19,6 +19,12 @@ relationships:
 - rel_type: Child
   target_id: 019f1048-1ef7-7ce1-b428-f58176310bde
   created_at: 2026-06-29T15:28:28.032539877Z
+comments:
+- id: 019f141b-8542-7f31-82e6-3c5596a93866
+  author: joe
+  content: 'Dogfood measurement caveat (2026-06-29): the dev environment sets CARGO_TARGET_DIR=/home/joe/ai/aida/target, so ALL worktrees (incl. pool trees) share ONE target/. The warm-pool’s per-worktree-cache benefit is therefore invisible / redundant in this setup, and the cold-vs-warm build delta CANNOT be measured here (first-ever compile 4687ms vs later 165ms reflects the shared target warming once, not the pool). To quantify the payoff before the flip: measure on a setup WITHOUT a shared CARGO_TARGET_DIR (the default for most users), or against the real aida workspace with per-worktree targets. The lifecycle itself (acquire->checkout->return->reuse-same-tree) was verified clean at the primitive level.'
+  created_at: 2026-06-29T15:59:35.746328818Z
+  modified_at: 2026-06-29T15:59:35.746328818Z
 deferred: true
 deferred_at: 2026-06-29T15:48:21.278566037Z
 deferred_until: a supervised dogfood run proves the warm-cache payoff (real drain with [worktree_pool] enabled=true) + acquire->checkout->return integration coverage
