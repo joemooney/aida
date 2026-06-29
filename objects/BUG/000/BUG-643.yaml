@@ -1,0 +1,17 @@
+id: 019f11da-63d8-7801-82f4-0998de06e2af
+spec_id: BUG-643
+agreed_id: BUG-643
+title: aida dev activate auto-pin does not flip to the newer build; remediation advice is wrong
+description: 'With Pin: auto (freshest of debug/release wins), aida dev activate keeps activating the STALE release even though the debug build is newer + SHA-exact-matches HEAD. Verified 2026-06-29: release at SHA 1bd0d9ba (ancestor of HEAD e9eee4eb), debug at HEAD; aida dev status WARNs the debug build is newer and says Re-run aida dev activate to flip to debug -- but re-running keeps release (operator ran it 2x, stayed on release). TWO defects: (1) the auto/freshest-wins pick is sticky on the already-active build instead of re-selecting the freshest SHA-matched binary; (2) the remediation message Re-run aida dev activate to flip to debug is FALSE -- the working form is the explicit aida dev activate debug (or the user must aida dev deactivate first). FIX: make auto re-pick the freshest on every activate (not preserve current), AND correct the warning to point at the form that actually flips (aida dev activate debug). trace marker plain comment.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T05:29:12.920707530Z
+modified_at: 2026-06-29T05:29:12.920707530Z
+req_type: Bug
+tags:
+- dev-workflow
+- from-operator
+- papercut
+- reliability
