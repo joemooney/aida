@@ -3,12 +3,12 @@ spec_id: TASK-973
 agreed_id: TASK-973
 title: Centralized next-step help[] table keyed by (command, state)
 description: 'gh-axi/tasks-axi end every output with a templated next-step help[] list; ours are scattered across skills. Port the table-driven suggestion model; attach to agent-mode list/mutation outputs, carrying filters forward. AIDAs lifecycle state machine makes it richer: suggest the VALID NEXT TRANSITION for the spec state.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:08:30.476200367Z
-modified_at: 2026-06-29T02:34:42.301207056Z
+modified_at: 2026-06-29T02:34:43.395585370Z
 req_type: Task
 tags:
 - agent-output
