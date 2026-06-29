@@ -24595,5 +24595,17 @@ operations:
   timestamp: 2026-06-29T05:18:28.596158234Z
   kind: !SetStatus
     status: In Progress
-clock: 2342
+- id: 019f11d8-e82b-7843-b542-2c4f69ff024f
+  target_id: 019f11d8-daef-7c43-8fe1-6b4d13daba43
+  author: aida
+  node_id: '1'
+  lamport: 2343
+  timestamp: 2026-06-29T05:27:35.723707579Z
+  kind: !Create
+    title: CLAUDE.md references aida-on / aida-off which no longer exist (shell-init uses the aida() wrapper)
+    description: 'CLAUDE.md (lines ~70, 172, 176) tells users to run aida-on / aida-off, but aida dev shell-init --install now installs an aida() WRAPPER function (no aida-on/aida-off aliases). Verified 2026-06-29: /home/joe/.aida/shell-init.sh defines aida() that auto-evals dev activate|dev deactivate|role enter|role end|role add|session start|session end (and worktree enter per STORY-716) -- there is NO aida-on. An operator hit aida-on: command not found + aida on: unrecognized subcommand following the docs. FIX: replace aida-on/aida-off references in CLAUDE.md (+ scripts/aida-demo prereqs, line 70) with aida dev activate / aida dev deactivate; note the wrapper handles the eval (no separate alias). Also worth: aida dev activate could alias a friendly aida-on if we want to keep the name -- but the doc must match reality either way.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2343
 node_id: '1'
