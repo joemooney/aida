@@ -198,12 +198,13 @@ aida worktree pool return [PATH]                            # reset + mark idle;
 aida worktree pool status [--json]                          # available / in-use / leased / dirty / here + HEAD
 aida worktree pool destroy [--all | PATH...] [--no-dry-run] # ONLY path that deletes; dry-run by default
         [--include-unlanded] [--include-in-use] [--include-leased]
-aida session end --return                                   # hand this session's pool tree back instead of removing
-aida session start --owns <scope> --pool                    # acquire the session's worktree FROM the pool
-                                                            #   (or set [worktree_pool] enabled = true; --no-pool opts out)
+aida session start --owns <scope>                           # acquires from the pool BY DEFAULT (--no-pool opts out)
+aida session end                                            # returns a pooled tree BY DEFAULT (--remove opts out)
 ```
 
-**Acquire-on-start (config-gated).** With `[worktree_pool] enabled = true` in `.aida/config.toml` — or `--pool` per run — `aida session start` (and the `aida agent new` / `aida queue work` / orchestrator paths that route through it) acquire a recycled warm tree instead of `git worktree add`: the pool hands out a detached tree at the furthest-ahead default, and the session's branch is created *on* it. The tree is held by a **durable lease** keyed on the branch, so the short-lived `session start` process exiting doesn't let a concurrent acquire grab the live session's tree. `aida session end --return` hands it back. Default is **off** (today's destroy-and-recreate); only the default new-branch flow pools (`--reuse-branch` and PR-review checkouts always `git worktree add`); an explicit `--base` falls back to a fresh worktree.
+**Acquire-on-start (ON by default — TASK-985).** `aida session start` (and the `aida agent new` / `aida queue work` / orchestrator paths that route through it) acquire a recycled warm tree instead of `git worktree add`: the pool hands out a detached tree at the furthest-ahead default, and the session's branch is created *on* it. The tree is held by a **durable lease** keyed on the branch, so the short-lived `session start` process exiting doesn't let a concurrent acquire grab the live session's tree. `aida session end` then **returns it by default** (reset to a clean base, idle, directory kept).
+
+**Default is ON.** The build-delta measurement ([`docs/research/2026-06-29-warm-pool-build-delta.md`](research/2026-06-29-warm-pool-build-delta.md)) showed ~**30× faster** per-spec builds on fan-out (5497 ms cold-per-spec under destroy-and-recreate → 182 ms per warm reuse), so pooling is the default. **Escape hatches:** `[worktree_pool] enabled = false` in `.aida/config.toml`, `--no-pool` on a single `aida session start`, or `--remove` on `aida session end` to delete the worktree instead of returning it. Only the default new-branch flow pools (`--reuse-branch` and PR-review checkouts always `git worktree add`); an explicit `--base` falls back to a fresh worktree.
 
 State lives under `.aida/worktree-pool/` (per-clone runtime state, already covered by the deny-by-default `.aida/*` gitignore). Every mutation runs under an advisory file lock (`pool.lock`) so parallel fan-out implementers can't be handed the same idle tree.
 
@@ -218,7 +219,7 @@ State lives under `.aida/worktree-pool/` (per-clone runtime state, already cover
 
 **Hook safety.** `post_create` / `pre_destroy` hook commands are sourced **only from the machine-global `~/.aida/config.toml`**, never a checked-in repo-level `.aida/config.toml` — cloning a repo must not be able to run arbitrary shell on your machine.
 
-**Slice status.** Slice 1 shipped the pool primitives + the `aida worktree pool` surface + `aida session end --return`. Slice 2 (TASK-982) wires **acquire-on-start** into `session_start` (and thus `aida agent new` / `aida queue work` / the orchestrator), gated by `[worktree_pool] enabled` / `--pool`, default off until proven by dogfood. Still a tracked followup: replacing the orchestrator/doctor `--force` removals with the tiered `destroy` (TASK-983).
+**Status.** Fully shipped: pool primitives + `aida worktree pool` surface + `session end --return` (TASK-981); acquire-on-start wired into `session_start` (TASK-982); doctor/GC teardowns routed through the hook-aware tiered teardown (TASK-983); `session end --return` made robust to dirty trees (BUG-652). The default was flipped **ON** (TASK-985) once the build-delta measurement proved the payoff — `--no-pool` / `--remove` / `enabled = false` remain the escape hatches.
 
 ---
 

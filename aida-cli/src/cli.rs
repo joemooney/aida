@@ -967,14 +967,21 @@ pub enum SessionCommand {
         skip_ci: bool,
 
         /// Return this session's worktree to the warm-pool instead of
-        /// removing it: reset it to a clean detached base and mark it idle so
-        /// the next acquire reuses it warm. The directory persists (its build
-        /// cache stays warm), dissolving the cargo-fingerprint poison of the
-        /// destroy-and-recreate model. No-op when the worktree isn't a
-        /// registered pool tree.
-        // trace:STORY-714 | ai:claude
+        /// removing it (now the DEFAULT for pooled worktrees): reset it to a
+        /// clean detached base and mark it idle so the next acquire reuses it
+        /// warm. Kept as an explicit opt-in for back-compat; a pooled tree is
+        /// returned by default unless you pass `--remove`. No-op when the
+        /// worktree isn't a registered pool tree.
+        // trace:STORY-714 trace:TASK-985 | ai:claude
         #[clap(long = "return")]
         return_to_pool: bool,
+
+        /// Delete the worktree instead of returning it to the warm-pool — the
+        /// opt-out now that returning a pooled tree is the default. Forces the
+        /// old destroy-and-recreate teardown (`git worktree remove`).
+        // trace:TASK-985 | ai:claude
+        #[clap(long, conflicts_with = "return_to_pool")]
+        remove: bool,
     },
 
     /// List active session leases — the canonical "who holds what
