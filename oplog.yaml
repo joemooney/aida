@@ -24619,5 +24619,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 2344
+- id: 019f11db-9248-77f0-85d3-5549c330a96a
+  target_id: 019f11db-8d34-7c41-bfa0-dbec661cfb60
+  author: aida
+  node_id: '1'
+  lamport: 2345
+  timestamp: 2026-06-29T05:30:30.344346899Z
+  kind: !Create
+    title: 'Worktree warm-pool slice 1: pool primitives + CLI + session end --return'
+    description: 'Slice 1 of the worktree warm-pool (STORY-714). Ships: aida-core worktree_pool / worktree_pool_destroy / worktree_hooks modules; git_ops worktree primitives (add_detached_worktree, reset_worktree_to, furthest_ahead_default_ref, worktree_is_dirty/head_is_merged/head_sha, remove_worktree_at); the "aida worktree pool {status,acquire,return,destroy}" CLI surface; and "aida session end --return" wiring. Dry-run-by-default tiered destroy with per-risk-class --include-* flags; reservation-vs-PID-liveness leases; machine-global-only hook sourcing. 22 new core tests + help-leak regression. This is the trailer target so STORY-714 stays open for the remaining lifecycle wiring.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2345
 node_id: '1'
