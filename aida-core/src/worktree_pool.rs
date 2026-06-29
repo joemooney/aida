@@ -701,4 +701,61 @@ mod git_integration_tests {
         assert_eq!(p1, p2);
         assert_eq!(read_state(root).unwrap().entries.len(), 1);
     }
+
+    /// The full session lifecycle the warm-pool relies on: acquire a detached
+    /// tree, create the session branch ON it (what `session_start` does after
+    /// acquire), then return it. The return must reset the tree off the branch
+    /// back to a clean detached base — the acquire→checkout→return path the
+    /// advisor asked to have automated before the default flips on.
+    // trace:STORY-714 trace:TASK-982 | ai:claude
+    #[test]
+    fn acquire_checkout_branch_return_resets_off_branch() {
+        let repo = init_repo();
+        let root = repo.path();
+
+        // 1. acquire — pool hands out a detached tree at the base.
+        let path = acquire(root, &opts()).unwrap();
+        let head_branch = |p: &Path| -> String {
+            let o = Command::new("git")
+                .current_dir(p)
+                .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+        assert_eq!(
+            head_branch(&path),
+            "HEAD",
+            "acquire hands out a detached HEAD"
+        );
+
+        // 2. checkout -b — the worker creates its session branch on the tree.
+        git(&path, &["checkout", "-b", "task-x-work"]);
+        assert_eq!(head_branch(&path), "task-x-work");
+        std::fs::write(path.join("impl.txt"), "work").unwrap();
+        git(&path, &["add", "-A"]);
+        git(&path, &["commit", "-qm", "implement task-x"]);
+
+        // 3. return — resets the tree off the branch back to a detached base.
+        return_to_pool(root, &path).unwrap();
+        assert!(path.exists(), "return keeps the directory");
+        assert_eq!(
+            head_branch(&path),
+            "HEAD",
+            "return must leave the tree detached at the base, not on the session branch"
+        );
+        let log = Command::new("git")
+            .current_dir(&path)
+            .args(["log", "--oneline"])
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&log.stdout).contains("implement task-x"),
+            "the session branch's commit must not be on the returned tree's HEAD"
+        );
+        // And the entry is idle (returnable to the next acquire).
+        let pool = read_state(root).unwrap();
+        assert_eq!(pool.entries.len(), 1);
+        assert!(pool.entries[0].owner_pid.is_none() && !pool.entries[0].leased);
+    }
 }
