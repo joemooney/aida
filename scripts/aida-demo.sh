@@ -6,7 +6,7 @@
 # then prompts for cleanup at the end.
 #
 # Prerequisites:
-#   - `aida` on PATH (run `aida-on` first if using dev build)
+#   - `aida` on PATH (run `aida dev activate` first if using dev build)
 #   - `gh` CLI authenticated (`gh auth status` to verify)
 #   - `git` configured with user.name + user.email
 #
@@ -447,7 +447,7 @@ fi
 
 step_header "Pre-flight checks"
 
-command -v aida >/dev/null 2>&1 || { fail "aida not on PATH. Run 'aida-on' first if using the dev build."; exit 1; }
+command -v aida >/dev/null 2>&1 || { fail "aida not on PATH. Run 'aida dev activate' first if using the dev build."; exit 1; }
 ok "aida found: $(command -v aida)"
 dim "   version: $(aida --version 2>&1 | head -1)"
 

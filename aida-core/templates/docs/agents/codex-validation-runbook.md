@@ -31,7 +31,7 @@ outcome of this runbook (see Step 9).
 Before Step 1, confirm:
 
 - `aida` is on `PATH` (`aida --version`), or you have its absolute path. From an AIDA
-  source checkout, run `aida-on` so the in-repo build shadows any installed release.
+  source checkout, run `aida dev activate` so the in-repo build shadows any installed release.
 - Codex CLI is installed (`codex --version`).
 - `git` is configured with `user.name` and `user.email`.
 - You have a project to validate in. Either:

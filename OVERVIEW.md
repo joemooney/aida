@@ -236,14 +236,14 @@ Bidirectional sync with GitLab issues: configurable type/priority/status label m
 ## Developer workflow (working *on* AIDA)
 
 ```bash
-# One-time: install shell helpers (aida-on / aida-off) into ~/.bashrc or ~/.zshrc
+# One-time: install the `aida()` shell wrapper into ~/.bashrc or ~/.zshrc
 aida dev shell-init --install
 
 # Per-shell: activate the in-repo build (pyenv-style)
-aida-on                                # alias for: eval "$(aida dev activate)"
+aida dev activate                      # the `aida()` wrapper auto-evals this — no `eval $(...)` needed
 aida dev status                        # confirm activation, show binary mtime
 aida dev serve                         # foreground supervisor: aida-server (8080) + vite (5173)
-aida-off
+aida dev deactivate                    # the wrapper auto-evals this too
 ```
 
 `aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)`. For releases, `scripts/release.sh {major|minor|patch}` bumps the workspace version, generates tag notes, commits, tags, and pushes — triggering the release workflow that builds and publishes binary tarballs.

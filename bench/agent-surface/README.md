@@ -82,7 +82,7 @@ judge model `haiku`. Artifacts land under `results/<condition>/<task>/run<N>/`
 (raw stream-json, judge output, grade.json) and `results/results.jsonl`.
 `results/` and `fixture-project/` are git-ignored — they are regenerated.
 
-Prerequisites: `claude` and `aida` on PATH (run `aida-on` for the dev build),
+Prerequisites: `claude` and `aida` on PATH (run `aida dev activate` for the dev build),
 `git` configured. Each `claude -p` is a real billed call, so cost scales with
 `conditions x tasks x repeat`.
 
