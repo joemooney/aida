@@ -92623,16 +92623,21 @@ fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()
         return Ok(());
     }
 
+    use crate::glyphs::Glyph;
     use aida_core::worktree_pool::PoolState;
     println!("{}", "WORKTREE WARM-POOL".bold());
     for r in &rows {
+        // Registry-managed glyphs route through `crate::glyph` so they get the
+        // ASCII fallback on terminals that can't draw them (glyph-lint). The
+        // filled-circle/diamond/ellipsis markers below have no registry variant
+        // and stay raw. trace:STORY-714 trace:TASK-835
         let dot = match r.state {
             PoolState::Available => "●".green(),
-            PoolState::InUse => "◐".yellow(),
+            PoolState::InUse => crate::glyph(Glyph::InFlight).yellow(),
             PoolState::Leased => "◆".cyan(),
-            PoolState::Dirty => "✗".red(),
+            PoolState::Dirty => crate::glyph(Glyph::Cross).red(),
             PoolState::Destroying => "…".dimmed(),
-            PoolState::Here => "▶".bold(),
+            PoolState::Here => crate::glyph(Glyph::FlowActive).bold(),
         };
         let head = r
             .head
