@@ -169,7 +169,7 @@ impl Scope {
     pub fn verbs(self) -> Vec<Verb> {
         match self {
             Scope::Backlog => vec![Verb::Groom, Verb::Approve, Verb::Archive],
-            Scope::Open => vec![Verb::Show, Verb::Why],
+            Scope::Open => vec![Verb::Show, Verb::Why, Verb::Status],
             // Test scope: `show` previews the focused spec's ## Test Plan in the
             // modal (the same gesture as `p` on a row). trace:STORY-699
             Scope::Test => vec![Verb::Show],
@@ -244,6 +244,14 @@ pub enum Verb {
     Show,
     /// Open scope: `aida why <id>` on the focused item → modal.
     Why,
+    /// Open scope: `aida status <id>` on the focused item → modal. The per-spec
+    /// LIVE work-state lens — queued / In-Progress / live ● / STALE ⚠ plus the
+    /// backing session / pid / started / elapsed. Reuses the STORY-694 per-spec
+    /// liveness probe wholesale (shells out to `aida status <spec>`); distinct
+    /// from `show` (content) and `why` (still-open reason). An item-level read
+    /// verb, so role-agnostic (any role).
+    // trace:TASK-953 | ai:claude
+    Status,
     /// Open scope, Draft-only: route the selected drafts to the advisor
     /// queue via `aida queue add --for advisor`. trace:STORY-690
     RequestApproval,
@@ -273,6 +281,7 @@ impl Verb {
             Verb::Archive => "archive",
             Verb::Show => "show",
             Verb::Why => "why",
+            Verb::Status => "status",
             Verb::RequestApproval => "request approval",
             Verb::Queue => "queue",
             Verb::Accept => "accept",
@@ -287,6 +296,7 @@ impl Verb {
             Verb::Archive => "mark non-core specs archived",
             Verb::Show => "show this spec (aida show --no-git)",
             Verb::Why => "why is this spec still open? (aida why)",
+            Verb::Status => "live work-state: queued / in-progress / live / STALE (aida status)",
             Verb::RequestApproval => "route selected drafts to the advisor queue",
             Verb::Queue => "route selected Approved specs to the implementer queue",
             Verb::Accept => "reviewer: accept finished work (Done → Completed)",
@@ -322,6 +332,12 @@ impl Verb {
                 "Explain why this spec is still open (aida why) in a modal. \
                  Item-level: acts on the single focused row."
             }
+            Verb::Status => {
+                "Show this spec's LIVE work-state (aida status) in a modal: is it \
+                 queued (and where), leased/In-Progress, backed by a live session \
+                 (pid/started/elapsed), or STALE. Distinct from show (content) and \
+                 why (still-open reason). Item-level: acts on the single focused row."
+            }
             Verb::RequestApproval => {
                 "Route the selected drafts to the advisor queue for review. \
                  Draft-only, set-level (non-drafts skipped); falls back to the \
@@ -353,7 +369,7 @@ impl Verb {
     /// open a modal on the focused row. `request approval` is set-level.
     /// trace:STORY-690 | ai:claude
     pub fn is_item_level(self) -> bool {
-        matches!(self, Verb::Show | Verb::Why)
+        matches!(self, Verb::Show | Verb::Why | Verb::Status)
     }
 
     /// Is this verb wired to do real work? `groom` (stubbed), `show`, `why`,
@@ -367,6 +383,7 @@ impl Verb {
                 | Verb::Approve
                 | Verb::Show
                 | Verb::Why
+                | Verb::Status
                 | Verb::RequestApproval
                 | Verb::Queue
                 | Verb::Accept
@@ -386,8 +403,8 @@ impl Verb {
     ///   advisor-only.
     /// - `Some("reviewer")` — `accept`, the reviewer's implementation-approval
     ///   (Done → Completed).
-    /// - `None` — the role-agnostic verbs (`show`, `why`, `request approval`,
-    ///   `defer`): any role may run them (`request approval` is open to any role
+    /// - `None` — the role-agnostic verbs (`show`, `why`, `status`, `request
+    ///   approval`, `defer`): any role may run them (`request approval` is open to any role
     ///   post-BUG-631; reads and parking are unrestricted).
     ///
     /// Permission itself is decided by [`role_permits_verb`] (advisor is the
@@ -398,7 +415,7 @@ impl Verb {
         match self {
             Verb::Groom | Verb::Approve | Verb::Queue | Verb::Archive => Some("advisor"),
             Verb::Accept => Some("reviewer"),
-            Verb::Show | Verb::Why | Verb::RequestApproval | Verb::Defer => None,
+            Verb::Show | Verb::Why | Verb::Status | Verb::RequestApproval | Verb::Defer => None,
         }
     }
 }
@@ -2188,9 +2205,10 @@ mod tests {
         // it routes drafts to the advisor queue (open to any role post-BUG-631).
         let mut s = RedesignState::new(open_items(), "implementer");
         drill_open(&mut s); // focus is on the first (Draft) item
-                            // Open+Draft verbs: [show, why, request approval, approve, defer].
+                            // Open+Draft verbs: [show, why, status, request approval, approve, defer].
         s.move_down(); // show → why
-        s.move_down(); // why → request approval
+        s.move_down(); // why → status
+        s.move_down(); // status → request approval
         assert_eq!(s.top_verb(), Some(Verb::RequestApproval));
         let out = s.run_verb();
         assert!(matches!(out, RunOutcome::RequestApproval { .. }));
@@ -2472,7 +2490,10 @@ mod tests {
 
     #[test]
     fn open_scope_static_verbs_are_show_and_why() {
-        assert_eq!(Scope::Open.verbs(), vec![Verb::Show, Verb::Why]);
+        assert_eq!(
+            Scope::Open.verbs(),
+            vec![Verb::Show, Verb::Why, Verb::Status]
+        );
     }
 
     #[test]
@@ -2486,6 +2507,7 @@ mod tests {
             vec![
                 Verb::Show,
                 Verb::Why,
+                Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
                 Verb::Defer
@@ -2497,6 +2519,7 @@ mod tests {
             vec![
                 Verb::Show,
                 Verb::Why,
+                Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
                 Verb::Defer
@@ -2506,12 +2529,18 @@ mod tests {
         // `verb_list_for_adds_queue_only_on_approved`. trace:TASK-915
         assert_eq!(
             verb_list_for(Scope::Open, Some("Approved")),
-            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::Status,
+                Verb::Queue,
+                Verb::Defer
+            ]
         );
         // No focused item → show / why / defer.
         assert_eq!(
             verb_list_for(Scope::Open, None),
-            vec![Verb::Show, Verb::Why, Verb::Defer]
+            vec![Verb::Show, Verb::Why, Verb::Status, Verb::Defer]
         );
         // Other scopes ignore the status argument.
         assert_eq!(
@@ -2531,6 +2560,7 @@ mod tests {
             vec![
                 Verb::Show,
                 Verb::Why,
+                Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
                 Verb::Defer
@@ -2539,7 +2569,13 @@ mod tests {
         s.move_down(); // → TASK-1 (Approved) → queue + defer (trace:TASK-915)
         assert_eq!(
             s.current_verbs(),
-            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::Status,
+                Verb::Queue,
+                Verb::Defer
+            ]
         );
         s.move_down(); // → TASK-2 (Draft)
         assert_eq!(
@@ -2547,6 +2583,7 @@ mod tests {
             vec![
                 Verb::Show,
                 Verb::Why,
+                Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
                 Verb::Defer
@@ -2591,6 +2628,32 @@ mod tests {
     }
 
     #[test]
+    fn status_verb_is_item_level_read_role_agnostic() {
+        // `status` is the per-spec live work-state lens — an item-level READ
+        // verb (like show / why), so it is role-agnostic (any role) and yields
+        // a ShowItem on the focused row. trace:TASK-953
+        assert!(Verb::Status.is_item_level());
+        assert!(Verb::Status.is_functional());
+        assert_eq!(Verb::Status.required_role(), None);
+        // Runnable by a non-advisor (implementer): role-agnostic, never gated.
+        let mut s = RedesignState::new(open_items(), "implementer");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.move_down(); // focus TASK-1
+        s.focus_top();
+        s.move_down();
+        s.move_down(); // show → why → status (idx 2)
+        assert_eq!(s.top_verb(), Some(Verb::Status));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::ShowItem {
+                verb: Verb::Status,
+                id: "TASK-1".to_string(),
+            }
+        );
+    }
+
+    #[test]
     fn request_approval_targets_selected_drafts_skips_non_drafts() {
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
@@ -2603,6 +2666,7 @@ mod tests {
                            // Focus back to TASK-0 (Draft) so the verb list includes the verb,
                            // then move the top highlight onto `request approval` (idx 2).
         s.focus_top();
+        s.move_down();
         s.move_down();
         s.move_down();
         assert_eq!(s.top_verb(), Some(Verb::RequestApproval));
@@ -2622,6 +2686,7 @@ mod tests {
         s.focus_bottom(); // focus TASK-0 (Draft), nothing selected
         s.focus_top();
         s.move_down();
+        s.move_down();
         s.move_down(); // → request approval
         assert_eq!(s.top_verb(), Some(Verb::RequestApproval));
         assert_eq!(
@@ -2638,12 +2703,24 @@ mod tests {
         // Focused on an Approved → queue is present (third verb); defer last.
         assert_eq!(
             verb_list_for(Scope::Open, Some("Approved")),
-            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::Status,
+                Verb::Queue,
+                Verb::Defer
+            ]
         );
         // Case-insensitive.
         assert_eq!(
             verb_list_for(Scope::Open, Some("approved")),
-            vec![Verb::Show, Verb::Why, Verb::Queue, Verb::Defer]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::Status,
+                Verb::Queue,
+                Verb::Defer
+            ]
         );
         // Focused on a Draft → request approval + approve, not queue.
         assert_eq!(
@@ -2651,6 +2728,7 @@ mod tests {
             vec![
                 Verb::Show,
                 Verb::Why,
+                Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
                 Verb::Defer
@@ -2659,7 +2737,7 @@ mod tests {
         // No focused item → show / why / defer.
         assert_eq!(
             verb_list_for(Scope::Open, None),
-            vec![Verb::Show, Verb::Why, Verb::Defer]
+            vec![Verb::Show, Verb::Why, Verb::Status, Verb::Defer]
         );
         // Other scopes ignore the status argument.
         assert_eq!(
@@ -2686,6 +2764,7 @@ mod tests {
         s.focus_top();
         s.move_down();
         s.move_down();
+        s.move_down();
         assert_eq!(s.top_verb(), Some(Verb::Queue));
         assert_eq!(
             s.run_verb(),
@@ -2703,6 +2782,7 @@ mod tests {
         s.focus_bottom();
         s.move_down(); // focus TASK-1 (Approved), nothing selected
         s.focus_top();
+        s.move_down();
         s.move_down();
         s.move_down(); // → queue
         assert_eq!(s.top_verb(), Some(Verb::Queue));
@@ -2736,6 +2816,7 @@ mod tests {
         s.move_down();
         s.move_down();
         s.move_down();
+        s.move_down();
         assert_eq!(s.top_verb(), Some(Verb::Approve));
         assert_eq!(
             s.run_verb(),
@@ -2755,7 +2836,8 @@ mod tests {
         s.focus_top();
         s.move_down();
         s.move_down();
-        s.move_down(); // → approve (idx 3)
+        s.move_down();
+        s.move_down(); // → approve (idx 4)
         assert_eq!(s.top_verb(), Some(Verb::Approve));
         assert_eq!(
             s.run_verb(),
@@ -2801,12 +2883,24 @@ mod tests {
         // Focused on a Done → accept is present (after show / why), defer last.
         assert_eq!(
             verb_list_for(Scope::Open, Some("Done")),
-            vec![Verb::Show, Verb::Why, Verb::Accept, Verb::Defer]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::Status,
+                Verb::Accept,
+                Verb::Defer
+            ]
         );
         // Case-insensitive.
         assert_eq!(
             verb_list_for(Scope::Open, Some("done")),
-            vec![Verb::Show, Verb::Why, Verb::Accept, Verb::Defer]
+            vec![
+                Verb::Show,
+                Verb::Why,
+                Verb::Status,
+                Verb::Accept,
+                Verb::Defer
+            ]
         );
         // accept is Done-only: Draft / Approved / no-focus do NOT expose it.
         assert!(!verb_list_for(Scope::Open, Some("Draft")).contains(&Verb::Accept));
@@ -2846,6 +2940,7 @@ mod tests {
         s.focus_top();
         s.move_down();
         s.move_down();
+        s.move_down();
         assert_eq!(s.top_verb(), Some(Verb::Accept));
         assert_eq!(
             s.run_verb(),
@@ -2864,7 +2959,8 @@ mod tests {
         s.focus_bottom(); // focus TASK-0 (Done), nothing selected
         s.focus_top();
         s.move_down();
-        s.move_down(); // → accept (idx 2)
+        s.move_down();
+        s.move_down(); // → accept (idx 3)
         assert_eq!(s.top_verb(), Some(Verb::Accept));
         assert_eq!(
             s.run_verb(),
@@ -2964,8 +3060,8 @@ mod tests {
         s.toggle_select(); // TASK-0
         s.focus_top();
         // Move the top highlight onto `defer` (last verb on the Open Draft
-        // list: show, why, request approval, approve, defer → idx 4).
-        for _ in 0..4 {
+        // list: show, why, status, request approval, approve, defer → idx 5).
+        for _ in 0..5 {
             s.move_down();
         }
         assert_eq!(s.top_verb(), Some(Verb::Defer));
