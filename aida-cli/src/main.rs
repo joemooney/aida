@@ -133814,8 +133814,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
             .as_mut()
             .map(|c| c as &mut dyn FnMut() -> Option<String>);
-        let outcome = exit_signal::spawn_and_wait_watched(cmd, &sentinel, &self.exit_cfg, wd_dyn)
-            .map_err(|e| {
+        // TASK-298: a headless implementer launches `claude -p`, which spawns
+        // an agent test-worker pool; put it in its own process group so the reap
+        // sweeps the whole group on every exit path. An interactive implementer
+        // keeps the tree-walk-only path so its REPL stays interactive.
+        // trace:TASK-298 | ai:claude
+        let outcome = exit_signal::spawn_and_wait_watched(
+            cmd,
+            &sentinel,
+            &self.exit_cfg,
+            wd_dyn,
+            headless_impl,
+        )
+        .map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
                 format!("could not launch the implementer session: {e}"),
@@ -134554,8 +134565,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
             .as_mut()
             .map(|c| c as &mut dyn FnMut() -> Option<String>);
-        let outcome = exit_signal::spawn_and_wait_watched(cmd, &sentinel, &self.exit_cfg, wd_dyn)
-            .map_err(|e| {
+        // TASK-298: both `--no-human` variants run the reviewer headless (it too
+        // launches `claude -p` + an agent worker pool), so reap by process group
+        // on every exit path. The interactive `--zen` reviewer stays on the
+        // tree-walk path. trace:TASK-298 | ai:claude
+        let outcome = exit_signal::spawn_and_wait_watched(
+            cmd,
+            &sentinel,
+            &self.exit_cfg,
+            wd_dyn,
+            self.no_human.is_some(),
+        )
+        .map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
                 format!("could not launch the reviewer session: {e}"),
