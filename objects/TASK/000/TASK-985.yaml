@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:28:25.671403857Z
-modified_at: 2026-06-29T16:29:09.552153440Z
+modified_at: 2026-06-29T16:30:09.384282606Z
 req_type: Task
 tags:
 - axi
@@ -30,6 +30,11 @@ comments:
   content: 'BUILD-DELTA MEASUREMENT (2026-06-29, CARGO_TARGET_DIR UNSET so each worktree has its own target/, like a real user). Throwaway crate, real dep tree (serde, serde_json, anyhow, tokio, clap). Flow A = destroy-recreate (fresh worktree per spec, cold target/): cold build avg 5497ms — EVERY spec pays this. Flow B = warm-pool (acquire/return recycled tree): first/cold 5696ms, then warm-reuse avg 182ms (deps cached, only the changed crate recompiles). PAYOFF: 5497ms -> 182ms = 30.2x faster per reused spec, saves ~5.3s each. Pool hit-rate 67% (2/3; approaches (N-1)/N for larger drains). Over a 3-spec drain: 16.5s (destroy-recreate) vs 6.1s (warm-pool) = 10.4s saved, and the saving grows LINEARLY with drain width. On the real aida workspace (minutes-long cold build) the delta is far larger. BOTH TASK-985 gates now cleared: BUG-652 fixed (#1208) + this measurement. Recommend flipping the default ON; decision is the operators on this data.'
   created_at: 2026-06-29T16:25:22.585030915Z
   modified_at: 2026-06-29T16:25:22.585030915Z
+- id: 019f1437-7fe8-7763-b3a6-6640bb62fb39
+  author: joe
+  content: Commit cfcb91794 references this requirement
+  created_at: 2026-06-29T16:30:09.384282606Z
+  modified_at: 2026-06-29T16:30:09.384282606Z
 deferred: true
 deferred_at: 2026-06-29T15:48:21.278566037Z
 deferred_until: a supervised dogfood run proves the warm-cache payoff (real drain with [worktree_pool] enabled=true) + acquire->checkout->return integration coverage
