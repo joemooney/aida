@@ -3,12 +3,12 @@ spec_id: STORY-716
 agreed_id: STORY-716
 title: 'aida worktree namespace: add + enter (create-or-enter an epic-scoped workspace)'
 description: 'EPIC-55 workspace layer (the deferred half of STORY-706 focus). A aida worktree subcommand namespace that mirrors git worktree and houses AIDAs worktree operations. FIRST SLICE: (1) aida worktree add <epic> [--path P] [--branch B] — create a git worktree (default path ~/ai/aida-<epic-slug>, default branch <epic-lower>-work) off origin/main, then run the STORY-706 aida focus <epic> inside it so the new tree is auto-scoped; plain subcommand, prints the path, no cd (mirrors git worktree add). (2) aida worktree enter <epic> — the eval-wrapper that creates-if-missing then cd-s you in; MUST be a shell-function auto-eval (like aida-on / aida role enter / aida dev activate — study that eval pattern, a plain subprocess CANNOT cd the parent shell), wired via aida dev shell-init (or aida worktree shell-init). (3) aida worktree list — AIDA-managed worktrees + each ones focus. REUSE aida focus (STORY-706) for the focus step; do NOT overload plain aida focus (it stays the cheap view-scoper). NAMESPACE ALIGNMENT: STORY-714 (warm-pool) already uses aida worktree pool status + tiered aida worktree remove — those land under THIS same namespace later; design the clap surface so pool/remove slot in cleanly. Smallest valuable slice now = add + enter (+ list if cheap), no warm-pool dependency.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T04:38:38.335033986Z
-modified_at: 2026-06-29T04:54:34.412716281Z
+modified_at: 2026-06-29T05:17:28.203898892Z
 req_type: Story
 tags:
 - cli
@@ -29,3 +29,21 @@ relationships:
   target_id: 019f1048-1ef7-7ce1-b428-f58176310bde
   created_at: 2026-06-29T04:38:52.357096096Z
   created_by: joe
+history:
+- id: 019f11cf-a2a8-77c1-8f6d-70701cb9359a
+  author: aida-auto-bump
+  timestamp: 2026-06-29T05:17:28.104493279Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f11cf-a30b-7573-afc5-799985fe5f3a
+  timestamp: 2026-06-29T05:17:28.203893387Z
+  agent: aida
+  commit_sha: e9eee4eb1b7cc34c6c8f816483a9c636e87d8faa
+  summary: Completed via merge e9eee4eb
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-29T05:17:27.086246179Z
+  completion_sha: e9eee4eb1b7cc34c6c8f816483a9c636e87d8faa
