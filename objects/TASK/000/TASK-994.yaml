@@ -1,0 +1,12 @@
+id: 019f146d-b60f-76f3-81a3-a50ecd5e2332
+spec_id: TASK-994
+agreed_id: TASK-994
+title: A verbose `aida watch --all` TUI feed for live debugging
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T17:29:22.191258079Z
+modified_at: 2026-06-29T17:29:22.191258079Z
+req_type: Task
