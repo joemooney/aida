@@ -411,6 +411,34 @@ impl Verb {
         matches!(self, Verb::Show | Verb::Why | Verb::Status)
     }
 
+    /// READ vs UPDATE classification — STORY-710 part B. READ verbs
+    /// (`show` / `why` / `status`) only DISPLAY a spec; UPDATE verbs mutate
+    /// state (status transitions, queue routing, deferral, archival, grooming).
+    /// The SELECTION grey-out axis keys off this: "none = all" is a safe read
+    /// of the focused row, but a dangerous silent mutation for an update — so
+    /// an update verb that targets the explicit selection set greys out when
+    /// nothing is selected. A property of the verb itself.
+    // trace:TASK-954 | ai:claude
+    pub fn is_update(self) -> bool {
+        !matches!(self, Verb::Show | Verb::Why | Verb::Status)
+    }
+
+    /// Whether this verb demands at least one EXPLICITLY-selected item before
+    /// it will run — the SELECTION grey-out axis (STORY-710 part B), the THIRD
+    /// axis composing with role (BUG-638) and status (TASK-947). True for the
+    /// UPDATE verbs that act on the explicit selection set and would otherwise
+    /// silently fall back to the merely-focused item
+    /// (`approve` / `reject` / `queue` / `accept` / `defer` /
+    /// `request approval` / `archive`) — the accidental-mutation risk part B
+    /// closes. False for the READ verbs (`show` / `why` / `status`, where
+    /// none = all is a safe focused-row read) and for `groom`, whose
+    /// empty-selection path is an explicit "groom all N?" confirm that already
+    /// guards against an accidental bulk mutation.
+    // trace:TASK-954 | ai:claude
+    pub fn requires_selection(self) -> bool {
+        self.is_update() && !matches!(self, Verb::Groom)
+    }
+
     /// Is this verb wired to do real work? `groom` (stubbed), `show`, `why`,
     /// `request approval`, `queue`, `approve`, `reject`, `accept`, and `defer`
     /// execute; `archive` is still present-but-stubbed to prove the verb list +
@@ -953,6 +981,19 @@ impl RedesignState {
         };
         let focused_status = self.focused_item().map(|i| i.status.as_str());
         status_permits_verb(focused_status, verb_required_status(scope, verb))
+    }
+
+    /// Whether the current SELECTION permits `verb` — the STORY-710 part B
+    /// SELECTION gate, the THIRD axis composing with
+    /// [`Self::verb_role_permitted`] (role) and [`Self::verb_status_permitted`]
+    /// (status). An UPDATE verb that acts on the explicit selection set
+    /// ([`Verb::requires_selection`]) is permitted only when ≥1 item is
+    /// selected — otherwise it would silently mutate the merely-focused item.
+    /// The READ verbs (`show` / `why` / `status`) and `groom` (its own
+    /// confirm-all guard) are always permitted on this axis. A verb is enabled
+    /// iff ALL THREE axes pass. trace:TASK-954 | ai:claude
+    pub fn verb_selection_permitted(&self, verb: Verb) -> bool {
+        !verb.requires_selection() || self.selected_count() > 0
     }
 
     /// The lifecycle status `verb` is gated to in the CURRENT scope, if any —
@@ -1545,6 +1586,18 @@ impl RedesignState {
         if !self.verb_status_permitted(verb) {
             let req = self.verb_status_hint(verb).unwrap_or("the right");
             self.status = Some(format!("{} applies only to {} specs", verb.label(), req));
+            return RunOutcome::None;
+        }
+        // Selection gate (STORY-710 part B / TASK-954): refuse an UPDATE verb
+        // that targets the explicit selection set when nothing is selected —
+        // "none = all" is safe for a read but a dangerous SILENT mutation of
+        // the merely-focused item for an update. Mirrors the greyed, non-
+        // selectable palette row. Composes AFTER role and status: selection is
+        // the least-fundamental axis (transient UI state, not a capability
+        // mismatch), so a role / status disqualifier wins the message first.
+        // trace:TASK-954 | ai:claude
+        if !self.verb_selection_permitted(verb) {
+            self.status = Some(format!("{} — select item(s) first", verb.label()));
             return RunOutcome::None;
         }
         if !verb.is_functional() {
@@ -2291,8 +2344,13 @@ mod tests {
 
     #[test]
     fn run_verb_allows_role_permitted_verb_for_advisor() {
-        // The same approve verb runs for an advisor (no role refusal).
+        // The same approve verb runs for an advisor (no role refusal). Select
+        // an item first so the STORY-710 part B selection gate is satisfied and
+        // this test isolates the role axis. trace:TASK-954
         let mut s = state(3); // advisor
+        s.focus_bottom();
+        s.toggle_select();
+        s.focus_top();
         s.drill();
         s.move_down(); // → approve
         assert_eq!(s.top_verb(), Some(Verb::Approve));
@@ -2311,6 +2369,11 @@ mod tests {
         let mut s = RedesignState::new(open_items(), "implementer");
         drill_open(&mut s); // focus is on the first (Draft) item
                             // Open+Draft verbs: [show, why, status, request approval, approve, defer].
+                            // Select the focused Draft so the STORY-710 part B selection gate is
+                            // satisfied — this test isolates the role axis. trace:TASK-954
+        s.focus_bottom();
+        s.toggle_select();
+        s.focus_top();
         s.move_down(); // show → why
         s.move_down(); // why → status
         s.move_down(); // status → request approval
@@ -2811,7 +2874,11 @@ mod tests {
     }
 
     #[test]
-    fn request_approval_with_no_selection_uses_focused_draft() {
+    fn request_approval_with_no_selection_is_refused() {
+        // STORY-710 part B: an UPDATE verb requires an EXPLICIT selection — it
+        // no longer silently falls back to the focused draft (that was the
+        // accidental-mutation risk). Greyed in the palette + refused by
+        // run_verb with a "select item(s) first" status. trace:TASK-954
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom(); // focus TASK-0 (Draft), nothing selected
@@ -2820,12 +2887,11 @@ mod tests {
         s.move_down();
         s.move_down(); // → request approval
         assert_eq!(s.top_verb(), Some(Verb::RequestApproval));
+        assert!(!s.verb_selection_permitted(Verb::RequestApproval));
+        assert_eq!(s.run_verb(), RunOutcome::None);
         assert_eq!(
-            s.run_verb(),
-            RunOutcome::RequestApproval {
-                drafts: vec!["TASK-0".to_string()],
-                skipped: vec![],
-            }
+            s.status.as_deref(),
+            Some("request approval — select item(s) first")
         );
     }
 
@@ -2879,7 +2945,10 @@ mod tests {
     }
 
     #[test]
-    fn queue_with_no_selection_uses_focused_approved() {
+    fn queue_with_no_selection_is_refused() {
+        // STORY-710 part B: `queue` requires an EXPLICIT selection even when the
+        // focused spec is Approved (status passes, selection does not). The
+        // selection axis composes AFTER status. trace:TASK-954
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom();
@@ -2889,13 +2958,11 @@ mod tests {
             s.move_down(); // → queue (idx 6)
         }
         assert_eq!(s.top_verb(), Some(Verb::Queue));
-        assert_eq!(
-            s.run_verb(),
-            RunOutcome::Queue {
-                approved: vec!["TASK-1".to_string()],
-                skipped: vec![],
-            }
-        );
+        // Status passes (focused is Approved), but selection does not.
+        assert!(s.verb_status_permitted(Verb::Queue));
+        assert!(!s.verb_selection_permitted(Verb::Queue));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        assert_eq!(s.status.as_deref(), Some("queue — select item(s) first"));
     }
 
     #[test]
@@ -2979,8 +3046,9 @@ mod tests {
     }
 
     #[test]
-    fn approve_with_no_selection_uses_focused_draft() {
-        // trace:TASK-920
+    fn approve_with_no_selection_is_refused() {
+        // STORY-710 part B: `approve` requires an EXPLICIT selection — no silent
+        // fall-back to the focused draft. trace:TASK-954 trace:TASK-920
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom(); // focus TASK-0 (Draft), nothing selected
@@ -2990,13 +3058,9 @@ mod tests {
         s.move_down();
         s.move_down(); // → approve (idx 4)
         assert_eq!(s.top_verb(), Some(Verb::Approve));
-        assert_eq!(
-            s.run_verb(),
-            RunOutcome::Approve {
-                drafts: vec!["TASK-0".to_string()],
-                skipped: vec![],
-            }
-        );
+        assert!(!s.verb_selection_permitted(Verb::Approve));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        assert_eq!(s.status.as_deref(), Some("approve — select item(s) first"));
     }
 
     #[test]
@@ -3047,8 +3111,9 @@ mod tests {
     }
 
     #[test]
-    fn reject_with_no_selection_uses_focused_draft() {
-        // trace:TASK-949
+    fn reject_with_no_selection_is_refused() {
+        // STORY-710 part B: `reject` requires an EXPLICIT selection — no silent
+        // fall-back to the focused draft. trace:TASK-954 trace:TASK-949
         let mut s = RedesignState::new(open_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom(); // focus TASK-0 (Draft), nothing selected
@@ -3059,13 +3124,9 @@ mod tests {
         s.move_down();
         s.move_down(); // → reject (idx 5)
         assert_eq!(s.top_verb(), Some(Verb::Reject));
-        assert_eq!(
-            s.run_verb(),
-            RunOutcome::Reject {
-                drafts: vec!["TASK-0".to_string()],
-                skipped: vec![],
-            }
-        );
+        assert!(!s.verb_selection_permitted(Verb::Reject));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        assert_eq!(s.status.as_deref(), Some("reject — select item(s) first"));
     }
 
     #[test]
@@ -3155,8 +3216,10 @@ mod tests {
     }
 
     #[test]
-    fn accept_with_no_selection_uses_focused_done() {
-        // trace:TASK-933
+    fn accept_with_no_selection_is_refused() {
+        // STORY-710 part B: `accept` requires an EXPLICIT selection even when the
+        // focused spec is Done (status passes, selection does not).
+        // trace:TASK-954 trace:TASK-933
         let mut s = RedesignState::new(accept_items(), "advisor");
         drill_open(&mut s);
         s.focus_bottom(); // focus TASK-0 (Done), nothing selected
@@ -3165,13 +3228,10 @@ mod tests {
             s.move_down(); // → accept (idx 7) trace:TASK-947
         }
         assert_eq!(s.top_verb(), Some(Verb::Accept));
-        assert_eq!(
-            s.run_verb(),
-            RunOutcome::Accept {
-                done: vec!["TASK-0".to_string()],
-                skipped: vec![],
-            }
-        );
+        assert!(s.verb_status_permitted(Verb::Accept));
+        assert!(!s.verb_selection_permitted(Verb::Accept));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        assert_eq!(s.status.as_deref(), Some("accept — select item(s) first"));
     }
 
     #[test]
@@ -3276,6 +3336,161 @@ mod tests {
                 ids: vec!["TASK-0".to_string()],
             }
         );
+    }
+
+    // --- Selection grey-out axis (STORY-710 part B / TASK-954) ------------
+
+    #[test]
+    fn read_vs_update_classification_is_a_verb_property() {
+        // READ verbs only display; UPDATE verbs mutate. Reads never require a
+        // selection; updates that act on the selection set do — except `groom`,
+        // whose empty-selection path is its own confirm-all guard. trace:TASK-954
+        for v in [Verb::Show, Verb::Why, Verb::Status] {
+            assert!(!v.is_update(), "{} is a read", v.label());
+            assert!(
+                !v.requires_selection(),
+                "{} never gates on selection",
+                v.label()
+            );
+        }
+        for v in [
+            Verb::Approve,
+            Verb::Reject,
+            Verb::Queue,
+            Verb::Accept,
+            Verb::Defer,
+            Verb::RequestApproval,
+            Verb::Archive,
+        ] {
+            assert!(v.is_update(), "{} is an update", v.label());
+            assert!(v.requires_selection(), "{} gates on selection", v.label());
+        }
+        // `groom` is an update, but exempt (confirm-all guards it).
+        assert!(Verb::Groom.is_update());
+        assert!(!Verb::Groom.requires_selection());
+    }
+
+    #[test]
+    fn reads_are_selection_permitted_with_nothing_selected() {
+        // none = all is a safe focused-row read — the read verbs stay enabled.
+        // trace:TASK-954
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom(); // nothing selected
+        s.focus_top();
+        assert_eq!(s.selected_count(), 0);
+        for v in [Verb::Show, Verb::Why, Verb::Status] {
+            assert!(s.verb_selection_permitted(v));
+        }
+    }
+
+    #[test]
+    fn groom_is_selection_exempt_and_still_confirms_all() {
+        // `groom` does not grey on an empty selection — its empty path is the
+        // explicit "groom all N?" confirm, not a silent focused-row mutation.
+        // trace:TASK-954
+        let mut s = state(3);
+        s.drill();
+        assert!(s.verb_selection_permitted(Verb::Groom));
+        let out = s.run_verb();
+        assert_eq!(
+            out,
+            RunOutcome::NeedsConfirm(ConfirmAll {
+                verb: Verb::Groom,
+                count: 3,
+            })
+        );
+    }
+
+    #[test]
+    fn defer_with_no_selection_is_refused() {
+        // STORY-710 part B: `defer` (any-status update) requires an EXPLICIT
+        // selection — no silent fall-back to the focused item. trace:TASK-954
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom(); // focus TASK-0, nothing selected
+        s.focus_top();
+        for _ in 0..8 {
+            s.move_down(); // → defer (idx 8)
+        }
+        assert_eq!(s.top_verb(), Some(Verb::Defer));
+        assert!(!s.verb_selection_permitted(Verb::Defer));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        assert_eq!(s.status.as_deref(), Some("defer — select item(s) first"));
+    }
+
+    #[test]
+    fn selection_with_one_item_re_enables_the_update_verb() {
+        // The positive: selecting ≥1 item flips the selection axis green, so the
+        // update verb runs (composing with role + status). trace:TASK-954
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.toggle_select(); // select TASK-0 (Draft)
+        assert!(s.verb_selection_permitted(Verb::Approve));
+        s.focus_top();
+        s.move_down();
+        s.move_down();
+        s.move_down();
+        s.move_down(); // → approve (idx 4)
+        assert_eq!(s.top_verb(), Some(Verb::Approve));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Approve {
+                drafts: vec!["TASK-0".to_string()],
+                skipped: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn three_axis_precedence_role_then_status_then_selection() {
+        // The hint precedence (most-fundamental wins): role > status >
+        // selection. `queue` is advisor-only (role), Approved-only (status),
+        // and selection-gated. trace:TASK-954
+        // 1. Implementer on a focused Approved, nothing selected → ROLE wins.
+        let mut imp = RedesignState::new(open_items(), "implementer");
+        drill_open(&mut imp);
+        imp.focus_bottom();
+        imp.move_down(); // focus TASK-1 (Approved)
+        imp.focus_top();
+        for _ in 0..6 {
+            imp.move_down(); // → queue
+        }
+        assert_eq!(imp.top_verb(), Some(Verb::Queue));
+        assert_eq!(imp.run_verb(), RunOutcome::None);
+        assert_eq!(
+            imp.status.as_deref(),
+            Some("queue requires the advisor role")
+        );
+        // 2. Advisor on a focused Draft, nothing selected → STATUS wins (role
+        //    passes, status fails before selection is consulted).
+        let mut adv = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut adv);
+        adv.focus_bottom(); // focus TASK-0 (Draft)
+        adv.focus_top();
+        for _ in 0..6 {
+            adv.move_down(); // → queue
+        }
+        assert_eq!(adv.top_verb(), Some(Verb::Queue));
+        assert_eq!(adv.run_verb(), RunOutcome::None);
+        assert_eq!(
+            adv.status.as_deref(),
+            Some("queue applies only to Approved specs")
+        );
+        // 3. Advisor on a focused Approved, nothing selected → SELECTION wins
+        //    (role + status both pass).
+        let mut sel = RedesignState::new(open_items(), "advisor");
+        drill_open(&mut sel);
+        sel.focus_bottom();
+        sel.move_down(); // focus TASK-1 (Approved)
+        sel.focus_top();
+        for _ in 0..6 {
+            sel.move_down(); // → queue
+        }
+        assert_eq!(sel.top_verb(), Some(Verb::Queue));
+        assert_eq!(sel.run_verb(), RunOutcome::None);
+        assert_eq!(sel.status.as_deref(), Some("queue — select item(s) first"));
     }
 
     #[test]

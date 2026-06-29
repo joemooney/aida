@@ -1778,9 +1778,13 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         //   * STATUS (TASK-947): a status-conditional verb the FOCUSED item's
         //     status doesn't apply to (e.g. `approve` on a non-Draft, `accept`
         //     on a non-Done) -> "only for <Status> specs".
-        // A verb greys if EITHER axis disqualifies it; role takes hint
-        // precedence (the seat mismatch is the more fundamental one). With
-        // selection these are the grey-out axes. trace:TASK-947 trace:BUG-638
+        //   * SELECTION (TASK-954): an UPDATE verb that acts on the explicit
+        //     selection set when nothing is selected (none = all is safe for a
+        //     read, a silent mutation for an update) -> "select item(s) first".
+        // A verb greys if ANY axis disqualifies it; the hint follows a
+        // most-fundamental-wins precedence — role (seat mismatch) > status
+        // (lifecycle mismatch) > selection (transient UI state).
+        // trace:TASK-954 trace:TASK-947 trace:BUG-638
         let mut hint = hint.to_string();
         let mut disabled = false;
         if st.level == Level::Verbs {
@@ -1795,6 +1799,9 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
                 if let Some(req) = st.verb_status_hint(v) {
                     hint = format!("only for {req} specs");
                 }
+            } else if !st.verb_selection_permitted(v) {
+                disabled = true;
+                hint = "select item(s) first".to_string();
             }
         }
         let marker = if selected { "▸ " } else { "  " };
