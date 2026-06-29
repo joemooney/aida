@@ -25753,5 +25753,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 2456
+- id: 019f141f-2a20-7720-aba0-df13a0e5241c
+  target_id: 019f141f-1a58-7752-8787-448376cac722
+  author: aida
+  node_id: '1'
+  lamport: 2457
+  timestamp: 2026-06-29T16:03:34.560819027Z
+  kind: !Create
+    title: aida watch — streaming event classifier (STORY-712 slice 2)
+    description: 'New aida-cli/src/watch.rs + cli.rs wiring: tail -f .aida/events.jsonl, classify each line via EventKind::is_actionable, print ONE wake line only on actionable verbs (silent on benign). Flags --emit-wakes / --all / --once. Stale-drain liveness: if drain_state::probe returns Stale, emit a drain-crashed wake + exit. Read-only consumer of the slice-1 events. Gated on slice-1 (TASK-987/988) landing.'
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2457
 node_id: '1'
