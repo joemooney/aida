@@ -54,10 +54,63 @@ fi
 # git-native --no-verify are the escape hatches. Falls open if `aida` isn't on
 # PATH (this hook ships to repos that may not have the binary installed).
 # trace:STORY-684
-if command -v aida >/dev/null 2>&1; then
-    if ! aida internal advisor-code-gate; then
+#
+# BUG-651: resolve the gate binary ROBUSTLY. Agents commit in isolated worktrees
+# where the `aida` on PATH is often a STALE released build (e.g. 0.9.1) that
+# predates `internal advisor-code-gate`; that binary exits non-zero on an
+# unknown-subcommand error, which used to ABORT the commit even with no real
+# violation — pushing agents to --no-verify (which also skips every check
+# below). Fix: (a) prefer a freshest in-repo target/{debug,release}/aida (which
+# tracks the working source) over a possibly-stale PATH aida; and (b) if NO
+# resolvable binary actually supports the subcommand (version skew), skip with a
+# warning instead of failing closed. The gate runs when it CAN; it never blocks
+# a commit because the binary is old. POSIX/dash-safe (no bashisms in this
+# block). trace:BUG-651
+__aida_repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+# Probe whether a binary supports the gate subcommand WITHOUT side effects:
+# `... --help` exits 0 when the subcommand exists, non-zero (clap error) on a
+# stale binary that never had it. Echoes the first supporting binary, preferring
+# the freshest in-repo build, then the PATH `aida`. trace:BUG-651
+__aida_resolve_gate_bin() {
+    _dbg="$__aida_repo_root/target/debug/aida"
+    _rel="$__aida_repo_root/target/release/aida"
+    _path=$(command -v aida 2>/dev/null)
+
+    _candidates=""
+    if [ -n "$__aida_repo_root" ] && [ -x "$_dbg" ] && [ -x "$_rel" ]; then
+        if [ "$_dbg" -nt "$_rel" ]; then
+            _candidates="$_dbg $_rel"
+        else
+            _candidates="$_rel $_dbg"
+        fi
+    elif [ -n "$__aida_repo_root" ] && [ -x "$_dbg" ]; then
+        _candidates="$_dbg"
+    elif [ -n "$__aida_repo_root" ] && [ -x "$_rel" ]; then
+        _candidates="$_rel"
+    fi
+    [ -n "$_path" ] && _candidates="$_candidates $_path"
+
+    for _bin in $_candidates; do
+        if "$_bin" internal advisor-code-gate --help >/dev/null 2>&1; then
+            printf '%s\n' "$_bin"
+            return 0
+        fi
+    done
+    return 1
+}
+
+__aida_gate_bin=$(__aida_resolve_gate_bin)
+if [ -n "$__aida_gate_bin" ]; then
+    if ! "$__aida_gate_bin" internal advisor-code-gate; then
         exit 1
     fi
+elif command -v aida >/dev/null 2>&1; then
+    # A stale/old aida is on PATH but no resolvable binary supports the gate
+    # subcommand (version skew). Skip-with-a-warning rather than fail closed:
+    # blocking a commit because the GATE BINARY is old just forces --no-verify,
+    # which defeats this gate AND every check below it. trace:BUG-651
+    printf 'pre-commit: advisor-code-gate skipped — no aida on PATH or in target/ supports it (stale/old build); not blocking the commit.\n' >&2
 fi
 
 # 3. Auto-fmt staged Rust files before commit so cargo fmt --check (in CI)
@@ -190,6 +243,29 @@ if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
         echo -e "  - ${YELLOW}${off}${NC}" >&2
     done
     exit 1
+fi
+
+# 6. TASK-984: catch raw glyph LITERALS at commit time, not 7 min later at CI.
+# Registry glyphs (status badges, work-routing markers, emoji) must route
+# through aida-cli/src/glyphs.rs so the `[ui] glyphs = "ascii"` profile / the
+# AIDA_GLYPHS env / a [glyphs] override apply; a raw literal typed inline
+# silently bypasses all of that. scripts/glyph-lint.sh --block is the CI guard;
+# running it HERE on just the staged aida-cli/src/*.rs files surfaces a new
+# literal at the moment of writing instead of after a full CI cycle. Staged-
+# files-scoped (and only when such files change) keeps it fast and stops it
+# flagging pre-existing long-tail debt this commit didn't touch (BUG-624 spirit).
+# Emergency skip: --no-verify. POSIX/dash-safe. trace:TASK-984
+if [ -n "$__aida_repo_root" ] && [ -x "$__aida_repo_root/scripts/glyph-lint.sh" ]; then
+    staged_glyph_files=$(git diff --cached --name-only --diff-filter=ACM -- aida-cli/src 2>/dev/null | grep '\.rs$' || true)
+    if [ -n "$staged_glyph_files" ]; then
+        # Word-split the newline list into per-file args (repo paths have no
+        # spaces). glyph-lint.sh cd's to repo root, so relative paths resolve.
+        if ! glyph_out=$("$__aida_repo_root/scripts/glyph-lint.sh" --block $staged_glyph_files 2>&1); then
+            printf '%s\n' "$glyph_out" >&2
+            printf 'pre-commit: raw glyph literal(s) in staged code — route them through aida-cli/src/glyphs.rs (Glyph::render). Caught locally to save a CI cycle. Emergency skip: --no-verify.\n' >&2
+            exit 1
+        fi
+    fi
 fi
 
 # All gates passed: record the sentinel for the staged tree we just validated so
