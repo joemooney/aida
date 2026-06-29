@@ -3,12 +3,12 @@ spec_id: TASK-1002
 agreed_id: TASK-1002
 title: 'Calibration: count benign-absorbed vs actionable events per drain in the exit summary to prove the lever empirically'
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:31:46.145941688Z
-modified_at: 2026-06-29T17:31:46.145941688Z
+modified_at: 2026-06-29T17:33:37.803190992Z
 req_type: Task
 relationships:
 - rel_type: Child
