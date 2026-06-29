@@ -1,0 +1,12 @@
+id: 019f146f-e861-7221-aad6-7035adba1998
+spec_id: TASK-1002
+agreed_id: TASK-1002
+title: 'Calibration: count benign-absorbed vs actionable events per drain in the exit summary to prove the lever empirically'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T17:31:46.145941688Z
+modified_at: 2026-06-29T17:31:46.145941688Z
+req_type: Task
