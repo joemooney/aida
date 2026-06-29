@@ -26129,5 +26129,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2495
+- id: 019f1472-4716-75e2-8ba3-49e93675d9bc
+  target_id: 019f1472-285f-7220-a79d-347739cee11b
+  author: aida
+  node_id: '1'
+  lamport: 2496
+  timestamp: 2026-06-29T17:34:21.462288648Z
+  kind: !Create
+    title: 'SPIKE-70 core: --single-branch coupled-sequential drain mode (engine + flag + cluster-PR)'
+    description: 'Build the genuinely-missing capability from SPIKE-70: aida queue work --batch NAME --auto-complete --single-branch drives coupled members on ONE shared branch in ONE worktree (commit-per-member, Implementer+CI per member, NO intermediate merge, HALT-on-failure keeping prior commits), then opens ONE cluster PR linking all member SPEC-IDs. The sibling --sequential (bless the existing drain_batch) + docs are a separate followup. Plan: docs/plans/2026-06-29-spike-70-coupled-sequential-drain.md. Keystone (the drain) — supervised review.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2496
 node_id: '1'
