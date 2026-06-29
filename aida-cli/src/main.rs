@@ -46,6 +46,8 @@ mod findings;
 mod focus;
 mod forge;
 mod global_queue;
+// trace:TASK-974 | ai:claude — AXI #9 lifecycle-aware next-step help block.
+mod help_next;
 mod interview;
 // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
 mod glyph_config;
@@ -14936,6 +14938,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 if agent_default_cap.is_some() && total_after_filters > reqs.len() {
                     println!("note: agent default cap — `aida list --all` or `--limit N` to widen");
                 }
+                // TASK-974 (AXI #9): trailing next-step block — drill into a row
+                // (placeholder id, so no concrete spec id is echoed twice into
+                // the id stream) and carry the active status filter forward into
+                // the valid next transition for that state. trace:TASK-974
+                let next = crate::help_next::list_next(&crate::help_next::ListContext {
+                    status: status.as_deref(),
+                });
+                if let Some(block) = crate::help_next::render(&next) {
+                    println!("{block}");
+                }
                 return Ok(());
             }
 
@@ -16143,6 +16155,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         );
                     }
                 }
+                // TASK-974 (AXI #9): agent-mode next-step block — the valid next
+                // transition(s) for the freshly-filed spec's status (a draft
+                // becomes approve/reject), templated with its id. The human TTY
+                // path is unchanged. trace:TASK-974
+                if agent_output_mode() {
+                    if let Some(sid) = last.spec_id.as_deref() {
+                        let next = crate::help_next::spec_next(&last.status.to_string(), sid);
+                        if let Some(block) = crate::help_next::render(&next) {
+                            println!("{block}");
+                        }
+                    }
+                }
             }
         }
         Command::Graph {
@@ -16407,6 +16431,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                     &rows
                                 )
                             );
+                        }
+                        // TASK-974 (AXI #9): lifecycle-aware next-step block —
+                        // the valid next transition(s) for THIS spec's current
+                        // state, templated with its id. trace:TASK-974
+                        let next =
+                            crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        if let Some(block) = crate::help_next::render(&next) {
+                            println!("{block}");
                         }
                         return Ok(());
                     }
@@ -17348,6 +17380,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             e
                         ),
                     }
+                }
+            }
+
+            // TASK-974 (AXI #9): agent-mode next-step block — the valid next
+            // transition(s) for the spec's (now-current) status, templated with
+            // its id. e.g. after `aida edit X --status approved` -> suggest
+            // `aida queue work X`. The human TTY path is unchanged. trace:TASK-974
+            if agent_output_mode() {
+                let sid = req.spec_id.as_deref().unwrap_or(id);
+                let next = crate::help_next::spec_next(&req.status.to_string(), sid);
+                if let Some(block) = crate::help_next::render(&next) {
+                    println!("{block}");
                 }
             }
         }
@@ -106218,6 +106262,7 @@ fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) 
     println!("{}", lines.join("\n"));
 
     let queued = agent_bare_top_queued(project_root, &snap.role, AGENT_BARE_QUEUE_TOPN);
+    let top_id: Option<String> = queued.first().map(|(id, _)| id.clone());
     let rows: Vec<Vec<String>> = queued
         .into_iter()
         .map(|(id, title)| vec![id, title])
@@ -106226,6 +106271,12 @@ fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) 
         "{}",
         crate::toon::table_raw("queued", &["id", "title"], &rows)
     );
+    // TASK-974 (AXI #9): next-step block — start/show the queue head when there
+    // is queued work, else point at the open backlog. trace:TASK-974
+    let next = crate::help_next::status_next(snap.queue_depth, top_id.as_deref());
+    if let Some(block) = crate::help_next::render(&next) {
+        println!("{block}");
+    }
 }
 
 /// TASK-970: the top-N queued items for the active role, each resolved to its
@@ -119100,6 +119151,14 @@ fn handle_queue_command(
                     "{}",
                     crate::toon::table_raw("queue", &["id", "title", "status", "for_role"], &rows)
                 );
+                // TASK-974 (AXI #9): next-step block — start/show the queue head
+                // when non-empty, else point at the approvable backlog to fill
+                // it. The first cell of each row is the spec id. trace:TASK-974
+                let first_id = rows.first().and_then(|r| r.first()).map(String::as_str);
+                let next = crate::help_next::queue_next(first_id);
+                if let Some(block) = crate::help_next::render(&next) {
+                    println!("{block}");
+                }
                 return Ok(());
             }
             // TASK-475: nudge when the local orphan store lags origin — a
