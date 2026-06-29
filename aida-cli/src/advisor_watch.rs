@@ -79,22 +79,54 @@ pub(crate) enum WatchTick {
 
 /// Pure tick decision. `presence` is the effective presence (already accounts
 /// for the away-TTL, so `Home` covers both "operator returned" and "TTL
-/// lapsed"). `has_unread_mail` forks immediately (event-driven — TASK-776; the
-/// loop's poll sleep rate-limits how often this fires). Otherwise forks on the
-/// first away tick and then every `fork_interval_secs` (`secs_since_last_fork`
-/// is `None` before the first fork).
+/// lapsed") and is the **hard gate** — a `Home` operator never forks, whatever
+/// else is true.
+///
+/// The loop is **event-driven first, timer second** (STORY-712 slice 3). Two
+/// events fork immediately, before and independent of the cadence:
+/// `has_unread_mail` (TASK-776 — the one event trigger that already existed)
+/// and `actionable_event` (a NEW actionable line appeared in
+/// `.aida/events.jsonl` since the last fork — the same `events::is_actionable`
+/// classification `aida watch` uses).
+///
+/// `fork_interval_secs` is **demoted to the degenerate fallback**: it only
+/// fires when `event_stream_live` is false — i.e. there is no live drain
+/// writing `.aida/events.jsonl`, so correctness never leans on the event path.
+/// When the event stream IS live the timer goes quiet (no cadence fork, no
+/// first-tick fork): the watcher wakes only on a real event, and that is where
+/// the idle-poll token burn dies. When the stream is NOT live the behavior is
+/// EXACTLY as before this slice — fork on the first away tick (`None`) and then
+/// every `fork_interval_secs` — so a missing/empty event stream regresses
+/// nothing.
+// trace:TASK-991 trace:STORY-712 trace:TASK-776 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn plan_watch_tick(
     presence: Presence,
     has_unread_mail: bool,
+    actionable_event: bool,
+    event_stream_live: bool,
     secs_since_last_fork: Option<u64>,
     fork_interval_secs: u64,
 ) -> WatchTick {
+    // Hard gate: a present operator is the supervisor — never fork.
     if matches!(presence, Presence::Home) {
         return WatchTick::Exit("operator is home (returned or away-TTL lapsed)".to_string());
     }
+    // Event-driven triggers — fire before and independent of the cadence.
     if has_unread_mail {
         return WatchTick::Fork;
     }
+    if actionable_event {
+        return WatchTick::Fork;
+    }
+    // When a live drain is streaming events, the timer is quiet: we wake only on
+    // a real event (above). This is the token-savings payoff.
+    if event_stream_live {
+        return WatchTick::Skip(
+            "away; event stream live; no actionable event or unread mail — timer quiet".to_string(),
+        );
+    }
+    // Degenerate fallback: no live event stream → behave exactly as before.
     match secs_since_last_fork {
         None => WatchTick::Fork,
         Some(s) if s >= fork_interval_secs => WatchTick::Fork,
@@ -102,6 +134,77 @@ pub(crate) fn plan_watch_tick(
             "away; no unread mail; {s}s since last fork (< {fork_interval_secs}s cadence)"
         )),
     }
+}
+
+/// Is a live drain actively streaming events into `.aida/events.jsonl`? Only
+/// then does the cadence timer go quiet in [`plan_watch_tick`] — otherwise
+/// correctness must not lean on the event path, so the timer governs again.
+///
+/// "Live" = the event file exists AND [`crate::drain_state::probe`] reports an
+/// [`Active`](crate::drain_state::DrainStatus::Active) drain. A `Stale`
+/// (crashed orchestrator) or `None` verdict means no one is writing events, so
+/// the timer takes over — which is exactly how a crashed drain still gets
+/// noticed (the cadence fork wakes the advisor). Best-effort and read-only.
+// trace:TASK-991 | ai:claude
+fn event_stream_is_live(project_root: &Path) -> bool {
+    crate::events::events_path(project_root).exists()
+        && matches!(
+            crate::drain_state::probe(project_root),
+            crate::drain_state::DrainStatus::Active(_)
+        )
+}
+
+/// Scan `.aida/events.jsonl` for any NEW **actionable** event appended since
+/// byte offset `*pos`, advancing `*pos` past every complete line consumed (so a
+/// given line triggers at most one fork). Reuses
+/// [`crate::events::EventKind::is_actionable`] — the exact classifier
+/// `aida watch` applies; benign churn (`PhaseEntered`, `RunStarted`) is absorbed
+/// here and never wakes the loop.
+///
+/// Best-effort and tolerant, mirroring `watch::drain_new_lines`: a missing or
+/// unreadable file yields `false` and leaves `*pos` untouched (so a dead event
+/// stream cleanly falls back to the cadence timer), a shrunk file re-reads from
+/// the top, a partial trailing line is left for the next tick, and a malformed
+/// line is skipped rather than erroring.
+// trace:TASK-991 | ai:claude
+fn scan_new_actionable_event(path: &Path, pos: &mut u64) -> bool {
+    use std::io::{BufRead, BufReader, Seek, SeekFrom};
+    let mut file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    let len = file.metadata().map(|m| m.len()).unwrap_or(*pos);
+    if len < *pos {
+        // File was truncated/rotated under us — re-read from the top.
+        *pos = 0;
+    }
+    if file.seek(SeekFrom::Start(*pos)).is_err() {
+        return false;
+    }
+    let mut reader = BufReader::new(file);
+    let mut buf = String::new();
+    let mut actionable = false;
+    loop {
+        buf.clear();
+        let read = match reader.read_line(&mut buf) {
+            Ok(n) => n,
+            Err(_) => break,
+        };
+        if read == 0 {
+            break;
+        }
+        if !buf.ends_with('\n') {
+            // Partial line — leave `pos` so the next tick re-reads it whole.
+            break;
+        }
+        *pos += read as u64;
+        if let Ok(ev) = serde_json::from_str::<crate::events::Event>(buf.trim_end_matches('\n')) {
+            if ev.kind.is_actionable() {
+                actionable = true;
+            }
+        }
+    }
+    actionable
 }
 
 /// Options for [`run_advisor_watch`].
@@ -137,11 +240,30 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
         WATCH_PROMPT
     };
 
+    // Event-driven supervision (STORY-712 slice 3). We follow `.aida/events.jsonl`
+    // from its current end so only events appended AFTER the watch starts count
+    // as "new" — a stale backlog from a prior drain never re-fires. When no live
+    // drain is streaming events, `plan_watch_tick` falls back to the cadence
+    // timer, so an empty/absent stream regresses nothing.
+    let events_path = crate::events::events_path(project_root);
+    let mut event_offset: u64 = std::fs::metadata(&events_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+
     loop {
         let presence = presence::current_presence(Utc::now());
         let secs = last_fork.map(|t| t.elapsed().as_secs());
         let has_unread = advisor_unread_count(project_root) > 0;
-        match plan_watch_tick(presence, has_unread, secs, opts.fork_interval_secs) {
+        let stream_live = event_stream_is_live(project_root);
+        let actionable = scan_new_actionable_event(&events_path, &mut event_offset);
+        match plan_watch_tick(
+            presence,
+            has_unread,
+            actionable,
+            stream_live,
+            secs,
+            opts.fork_interval_secs,
+        ) {
             WatchTick::Exit(reason) => {
                 println!("advisor watch exiting: {reason}");
                 break;
@@ -152,6 +274,8 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
             WatchTick::Fork => {
                 if has_unread {
                     println!("  · unread advisor mail — forking now");
+                } else if actionable {
+                    println!("  · actionable drain event — forking now");
                 }
                 if opts.dry_run {
                     preview_fork(project_root, &config);
@@ -237,15 +361,20 @@ fn fork_and_run(project_root: &Path, config: &AdvisorConfig, prompt: &str) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::events::{Event, EventKind};
+
+    // The five existing decision cases, ported to the slice-3 signature with no
+    // live event stream (`actionable_event = false`, `event_stream_live = false`)
+    // — the degenerate-fallback path, which must behave EXACTLY as before.
 
     #[test]
     fn home_exits_the_loop_even_before_first_fork() {
         assert!(matches!(
-            plan_watch_tick(Presence::Home, false, None, 60),
+            plan_watch_tick(Presence::Home, false, false, false, None, 60),
             WatchTick::Exit(_)
         ));
         assert!(matches!(
-            plan_watch_tick(Presence::Home, false, Some(9999), 60),
+            plan_watch_tick(Presence::Home, false, false, false, Some(9999), 60),
             WatchTick::Exit(_)
         ));
     }
@@ -253,7 +382,7 @@ mod tests {
     #[test]
     fn away_forks_on_the_first_tick() {
         assert_eq!(
-            plan_watch_tick(Presence::Away, false, None, 60),
+            plan_watch_tick(Presence::Away, false, false, false, None, 60),
             WatchTick::Fork
         );
     }
@@ -261,11 +390,11 @@ mod tests {
     #[test]
     fn away_forks_once_the_cadence_has_elapsed() {
         assert_eq!(
-            plan_watch_tick(Presence::Away, false, Some(60), 60),
+            plan_watch_tick(Presence::Away, false, false, false, Some(60), 60),
             WatchTick::Fork
         );
         assert_eq!(
-            plan_watch_tick(Presence::Away, false, Some(600), 60),
+            plan_watch_tick(Presence::Away, false, false, false, Some(600), 60),
             WatchTick::Fork
         );
     }
@@ -273,26 +402,167 @@ mod tests {
     #[test]
     fn away_skips_before_the_cadence_with_no_mail() {
         assert!(matches!(
-            plan_watch_tick(Presence::Away, false, Some(30), 60),
+            plan_watch_tick(Presence::Away, false, false, false, Some(30), 60),
             WatchTick::Skip(_)
         ));
     }
 
     #[test]
-    fn unread_mail_forks_immediately_even_before_the_cadence() {
-        // TASK-776: event-driven — unread advisor mail beats the idle timer.
+    fn unread_mail_still_forks() {
+        // TASK-776 preserved: unread advisor mail beats the idle timer, both in
+        // the fallback path and when a live event stream is quiet.
         assert_eq!(
-            plan_watch_tick(Presence::Away, true, Some(1), 60),
+            plan_watch_tick(Presence::Away, true, false, false, Some(1), 60),
+            WatchTick::Fork
+        );
+        assert_eq!(
+            plan_watch_tick(Presence::Away, true, false, true, Some(1), 60),
             WatchTick::Fork
         );
     }
 
     #[test]
-    fn home_wins_over_unread_mail() {
-        // Presence is the hard gate — never fork once the operator is back.
+    fn presence_present_never_forks() {
+        // Presence is the hard gate — Home exits over every other trigger.
         assert!(matches!(
-            plan_watch_tick(Presence::Home, true, Some(1), 60),
+            plan_watch_tick(Presence::Home, true, false, false, Some(1), 60),
             WatchTick::Exit(_)
         ));
+        assert!(matches!(
+            plan_watch_tick(Presence::Home, false, true, true, None, 60),
+            WatchTick::Exit(_)
+        ));
+    }
+
+    #[test]
+    fn plan_watch_tick_forks_on_actionable_event_before_cadence() {
+        // STORY-712: an actionable drain event forks immediately, well before
+        // the cadence would, whether or not a live stream marks the timer quiet.
+        assert_eq!(
+            plan_watch_tick(Presence::Away, false, true, true, Some(1), 60),
+            WatchTick::Fork
+        );
+        // And even with no prior fork recorded, the event drives the fork.
+        assert_eq!(
+            plan_watch_tick(Presence::Away, false, true, true, None, 60),
+            WatchTick::Fork
+        );
+    }
+
+    #[test]
+    fn plan_watch_tick_falls_back_to_timer_without_event_stream() {
+        // No live event stream → the cadence timer governs exactly as before:
+        // skip before the interval, fork once it elapses (and on the first tick).
+        assert!(matches!(
+            plan_watch_tick(Presence::Away, false, false, false, Some(30), 60),
+            WatchTick::Skip(_)
+        ));
+        assert_eq!(
+            plan_watch_tick(Presence::Away, false, false, false, Some(60), 60),
+            WatchTick::Fork
+        );
+        assert_eq!(
+            plan_watch_tick(Presence::Away, false, false, false, None, 60),
+            WatchTick::Fork
+        );
+    }
+
+    #[test]
+    fn no_event_no_cadence_no_fork() {
+        // The savings case: a live event stream marks the timer quiet, so with no
+        // actionable event and no mail we Skip even when the cadence has long
+        // since elapsed — the timer no longer forks while events flow.
+        assert!(matches!(
+            plan_watch_tick(Presence::Away, false, false, true, Some(9999), 60),
+            WatchTick::Skip(_)
+        ));
+        assert!(matches!(
+            plan_watch_tick(Presence::Away, false, false, true, None, 60),
+            WatchTick::Skip(_)
+        ));
+    }
+
+    // --- scan_new_actionable_event: the offset-tracking event reader ---
+
+    fn write_lines(path: &Path, events: &[Event]) {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .unwrap();
+        for e in events {
+            writeln!(f, "{}", serde_json::to_string(e).unwrap()).unwrap();
+        }
+    }
+
+    #[test]
+    fn scan_detects_only_new_actionable_lines_and_advances_offset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        // Benign-only backlog: no wake.
+        write_lines(
+            &path,
+            &[
+                Event::new(Some("STORY-1".into()), "", EventKind::RunStarted),
+                Event::new(
+                    Some("STORY-1".into()),
+                    "",
+                    EventKind::PhaseEntered {
+                        idx: 1,
+                        slug: "implementer".into(),
+                    },
+                ),
+            ],
+        );
+        let mut pos = 0u64;
+        assert!(
+            !scan_new_actionable_event(&path, &mut pos),
+            "benign churn must not wake"
+        );
+        let after_benign = pos;
+        assert!(after_benign > 0, "offset advanced past the benign lines");
+
+        // Append one actionable event — the next scan wakes exactly once.
+        write_lines(
+            &path,
+            &[Event::new(
+                Some("STORY-1".into()),
+                "",
+                EventKind::PuntFiled {
+                    spec: "STORY-1".into(),
+                },
+            )],
+        );
+        assert!(
+            scan_new_actionable_event(&path, &mut pos),
+            "a new actionable event wakes"
+        );
+        assert!(
+            pos > after_benign,
+            "offset advanced past the actionable line"
+        );
+
+        // Already consumed — no re-fire on the same line.
+        assert!(
+            !scan_new_actionable_event(&path, &mut pos),
+            "consumed lines never re-fire"
+        );
+    }
+
+    #[test]
+    fn scan_is_false_when_no_event_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl"); // never created
+        let mut pos = 0u64;
+        assert!(!scan_new_actionable_event(&path, &mut pos));
+        assert_eq!(pos, 0, "a missing file leaves the offset untouched");
+    }
+
+    #[test]
+    fn event_stream_not_live_without_drain_state() {
+        // No drain-state file + no events file → not live, so the timer governs.
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!event_stream_is_live(dir.path()));
     }
 }
