@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:11:57.398736440Z
-modified_at: 2026-06-29T05:12:14.608828243Z
+modified_at: 2026-06-29T06:36:15.067734996Z
 req_type: Task
 tags:
 - from-operator
@@ -31,3 +31,9 @@ relationships:
   target_id: 019f11ac-15ff-7030-a44d-fc77cb2d1d5d
   created_at: 2026-06-29T05:12:14.608821273Z
   created_by: joe
+comments:
+- id: 019f1217-c35b-7063-8db4-a6443a798cb2
+  author: joe
+  content: Rejected as SUBSUMED by TASK-981 (warm-pool slice 1). TASK-981 already shipped the aida worktree pool {status,acquire,return,destroy} surface wired to the aida-core engine -- which is exactly the pool/remove command->engine wiring this task described. The remaining lifecycle integration (acquire-from-pool on fan-out/drain) is TASK-982; the tiered-destroy-for-force-removals is TASK-983. Consolidating on those.
+  created_at: 2026-06-29T06:36:15.067734996Z
+  modified_at: 2026-06-29T06:36:15.067734996Z
