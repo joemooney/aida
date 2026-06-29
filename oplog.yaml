@@ -26077,5 +26077,13 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2489
+- id: 019f1471-876f-7fb2-b1e4-ba63cba50e06
+  target_id: 019f146f-316a-7151-901d-e58d87c518ab
+  author: aida
+  node_id: '1'
+  lamport: 2490
+  timestamp: 2026-06-29T17:33:32.399367389Z
+  kind: !SetStatus
+    status: Rejected
+clock: 2490
 node_id: '1'
