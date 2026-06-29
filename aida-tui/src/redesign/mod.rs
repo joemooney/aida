@@ -1858,12 +1858,15 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
 
     let idxs = st.bottom_indices();
     if st.items.is_empty() {
+        // Scope-appropriate empty state: the Queue scope's "nothing here" means
+        // an empty queue, not an empty backlog. trace:TASK-948
+        let empty_msg = if active_item_scope(st) == Some(Scope::Queue) {
+            "(queue empty — route work with `aida queue add --for <role>`)"
+        } else {
+            "(no backlog items — file some with `aida add --status approved`)"
+        };
         f.render_widget(
-            Paragraph::new(Span::styled(
-                "(no backlog items — file some with `aida add --status approved`)",
-                Style::default().fg(theme.dim),
-            ))
-            .block(block),
+            Paragraph::new(Span::styled(empty_msg, Style::default().fg(theme.dim))).block(block),
             area,
         );
         return;
@@ -1967,6 +1970,23 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
                     .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ));
+        }
+        // Queue scope routing badge (TASK-948): a trailing `->role` on rows that
+        // sit on a role's queue, so a routed spec is visibly distinct from an
+        // unrouted one (the "I routed it and it vanished" gap). Painted in the
+        // accent colour like the test-plan marker; left off (not greyed) when
+        // the entry is unrouted (`routed_role == None`). On the cursor-
+        // highlighted row it rides the structural style so it stays legible over
+        // the accent fill. trace:TASK-948 | ai:claude
+        if let Some(role) = &item.routed_role {
+            let badge_style = if cursor_active {
+                structural
+            } else {
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD)
+            };
+            row_spans.push(Span::styled(format!(" ->{role}"), badge_style));
         }
         lines.push(Line::from(row_spans));
     }
@@ -2675,6 +2695,7 @@ mod refresh_tests {
             priority: String::new(),
             body: String::new(),
             has_test_plan: false,
+            routed_role: None,
         }
     }
 
@@ -2900,6 +2921,7 @@ mod render_tests {
                 priority: ["High", "Medium", "Low"][i % 3].into(),
                 body: format!("# STORY-{i}\n\nbody text here"),
                 has_test_plan: false,
+                routed_role: None,
             })
             .collect();
         RedesignState::new(items, "advisor")

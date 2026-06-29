@@ -123,6 +123,17 @@ impl SpecStore {
     /// `None`, behavior is unchanged (every scope-matching spec).
     /// trace:STORY-693 trace:STORY-695 | ai:claude
     pub fn scope_items(&self, scope: Scope, focus: Option<&HashSet<String>>) -> Vec<TargetItem> {
+        // The Queue scope is NOT a status slice of the spec list — it reads the
+        // role-routing queue (the same `aida queue list` data) and projects each
+        // entry to a row carrying its routed role. Handled before the list query
+        // so the unrouted-vanishing-Draft gap is closed. trace:TASK-948
+        if scope == Scope::Queue {
+            let mut rows = self.queue_items();
+            if let Some(set) = focus {
+                rows.retain(|it| focus_includes(set, it));
+            }
+            return rows;
+        }
         let filter = ListFilter {
             // Backlog/Open both default to the active view (archived + deferred
             // rows hidden), matching the CLI `list` defaults.
@@ -156,6 +167,56 @@ impl SpecStore {
             }
         }
         items
+    }
+
+    /// The role-routing queue, projected to [`TargetItem`] rows — the Queue
+    /// scope's item set (TASK-948). Reuses the SAME read the CLI `aida queue
+    /// list` uses: `DatabaseBackend::queue_list(user_id, false)` on the open
+    /// cache-backed git backend (the CLI routes through `Storage::queue_list`,
+    /// which delegates to this same git backend for a directory store — no
+    /// reimplementation of the queue read).
+    ///
+    /// The queue user id mirrors the CLI's `current_user_id`: `AIDA_USER` →
+    /// `USER` → `USERNAME` → `"default"` (the `--user` override has no TUI
+    /// surface). Each entry is resolved to its requirement so the row carries
+    /// the spec's id / type / status / title; `for_role` rides along as
+    /// [`TargetItem::routed_role`] so the row renders a `->role` badge. Rows
+    /// are ordered by queue position (lower = higher priority), matching the
+    /// CLI list order. An unresolvable entry (a queued spec the cache can't
+    /// read) is skipped rather than crashing the scope.
+    // trace:TASK-948 | ai:claude
+    pub fn queue_items(&self) -> Vec<TargetItem> {
+        let user_id = queue_user_id();
+        let mut entries = match self.backend.queue_list(&user_id, false) {
+            Ok(e) => e,
+            Err(_) => return Vec::new(),
+        };
+        // Queue position is the CLI's display order (lower = higher priority).
+        entries.sort_by_key(|e| e.position);
+        let mut rows = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let Ok(Some(req)) = self.backend.get_requirement(&entry.requirement_id) else {
+                continue;
+            };
+            rows.push(TargetItem {
+                id: req
+                    .spec_id
+                    .clone()
+                    .or_else(|| req.agreed_id.clone())
+                    .unwrap_or_else(|| entry.requirement_id.to_string()),
+                title: req.title.clone(),
+                req_type: format!("{:?}", req.req_type),
+                status: format!("{:?}", req.status),
+                priority: format!("{:?}", req.priority),
+                body: String::new(),
+                has_test_plan: false,
+                // The stored `for_role` is already canonical (the CLI writes it
+                // through `canonical_role_name`), so display it as-is; `None`
+                // is an unrouted/general queue entry. trace:TASK-948
+                routed_role: entry.for_role.clone(),
+            });
+        }
+        rows
     }
 
     /// The transitive descendant closure of `epic_id` (STORY-695): the epic
@@ -384,6 +445,9 @@ fn summary_to_item(s: RequirementSummary) -> TargetItem {
         // Populated only for the Test scope (the description load happens there);
         // every other scope leaves it false. trace:STORY-699
         has_test_plan: false,
+        // Populated only by the Queue read (queue_items); summary rows are
+        // unrouted. trace:TASK-948
+        routed_role: None,
     }
 }
 
@@ -572,6 +636,19 @@ impl SpecStore {
         let progress = FocusProgress::tally(in_focus.iter().map(|s| s.as_str()));
         (progress, in_focus.len())
     }
+}
+
+/// The queue identity for the Queue scope read, mirroring aida-cli's
+/// `current_user_id` (BUG-89): `AIDA_USER` → `USER` → `USERNAME` → `"default"`.
+/// The `--user` override has no TUI surface, so the env chain is the whole
+/// resolution. Keep aligned with `current_user_id` so the TUI reads the SAME
+/// queue the CLI writes.
+// trace:TASK-948 | ai:claude
+fn queue_user_id() -> String {
+    std::env::var("AIDA_USER")
+        .or_else(|_| std::env::var("USER"))
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "default".to_string())
 }
 
 /// Resolve the orphan-branch store worktree for the project rooted at
@@ -939,6 +1016,7 @@ mod tests {
             priority: String::new(),
             body: String::new(),
             has_test_plan: false,
+            routed_role: None,
         }
     }
 

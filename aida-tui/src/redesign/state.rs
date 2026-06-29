@@ -34,6 +34,14 @@ pub struct TargetItem {
     /// description); `false` everywhere else. Drives the per-row "has a test
     /// plan" marker in the Test scope. trace:STORY-699 | ai:claude
     pub has_test_plan: bool,
+    /// The role this item is routed to, when it sits on a role's work queue.
+    /// Populated only for the [`Scope::Queue`] item set (read from each
+    /// `QueueEntry.for_role`); `None` everywhere else, and `None` for an
+    /// unrouted/general queue entry. Drives the per-row `->role` routing
+    /// badge so a routed spec is visibly distinct from an unrouted one — the
+    /// "I routed it and it vanished" gap this scope closes.
+    // trace:TASK-948 | ai:claude
+    pub routed_role: Option<String>,
 }
 
 impl TargetItem {
@@ -116,7 +124,7 @@ impl Scope {
             Scope::Backlog => "approved + planned specs",
             Scope::Open => "the open backlog (all unfinished specs)",
             Scope::Test => "shipped specs to verify (Done + Completed)",
-            Scope::Queue => "your routed work",
+            Scope::Queue => "routed work (->role badge per spec)",
             Scope::Prs => "open pull requests",
             Scope::History => "completed specs",
             Scope::Findings => "triage items",
@@ -147,7 +155,12 @@ impl Scope {
                  modal; rows carrying a test plan are marked, and the full \
                  description shows when a spec has none."
             }
-            Scope::Queue => "Shows the work routed to your role. Not wired yet (Slice 1).",
+            Scope::Queue => {
+                "Shows the work routed onto a queue — each spec carrying a ->role \
+                 badge (->advisor, ->implementer) so a routed Draft is visible \
+                 instead of vanishing. The row count is the queue depth. ↵ descends \
+                 to the items; → opens the verbs (show)."
+            }
             Scope::Prs => "Shows the open pull requests. Not wired yet (Slice 1).",
             Scope::History => "Shows completed specs. Not wired yet (Slice 1).",
             Scope::Findings => "Shows triage items (findings). Not wired yet (Slice 1).",
@@ -155,9 +168,16 @@ impl Scope {
         }
     }
 
-    /// Is this scope wired for real? Backlog, Open, and Test all drill.
+    /// Is this scope wired for real? Backlog, Open, Test, and Queue all drill.
+    /// Queue surfaces the role-routing the rest of the TUI was blind to — a
+    /// routed Draft used to "vanish" because routing doesn't change spec
+    /// status; the Queue scope is where it now shows up.
+    // trace:TASK-948 | ai:claude
     pub fn is_functional(self) -> bool {
-        matches!(self, Scope::Backlog | Scope::Open | Scope::Test)
+        matches!(
+            self,
+            Scope::Backlog | Scope::Open | Scope::Test | Scope::Queue
+        )
     }
 
     /// The *static* verbs this scope exposes — those that do not depend on
@@ -173,6 +193,10 @@ impl Scope {
             // Test scope: `show` previews the focused spec's ## Test Plan in the
             // modal (the same gesture as `p` on a row). trace:STORY-699
             Scope::Test => vec![Verb::Show],
+            // Queue scope is a read-only visibility surface — `show` opens the
+            // focused queued spec; routing/dequeue stay CLI verbs for now.
+            // trace:TASK-948
+            Scope::Queue => vec![Verb::Show],
             _ => Vec::new(),
         }
     }
@@ -2116,6 +2140,7 @@ mod tests {
                 priority: "medium".into(),
                 body: format!("body of item {}", word_for(i)),
                 has_test_plan: false,
+                routed_role: None,
             })
             .collect()
     }
@@ -2135,6 +2160,7 @@ mod tests {
                 priority: "high".into(),
                 body: String::new(),
                 has_test_plan: false,
+                routed_role: None,
             })
             .collect()
     }
@@ -2181,11 +2207,14 @@ mod tests {
     #[test]
     fn non_functional_scope_does_not_drill() {
         let mut s = state(3);
-        // Move highlight onto Queue (index 3 — Backlog, Open, Test, Queue, …).
+        // Move highlight onto PRs (index 4 — Backlog, Open, Test, Queue, PRs, …);
+        // Queue is now functional (TASK-948), so PRs is the next still-stubbed
+        // scope that must not drill.
         s.move_down(); // → Open
         s.move_down(); // → Test
         s.move_down(); // → Queue
-        assert_eq!(s.top_scope(), Some(Scope::Queue));
+        s.move_down(); // → PRs
+        assert_eq!(s.top_scope(), Some(Scope::Prs));
         assert!(!s.drill());
         assert_eq!(s.level, Level::Scopes);
         assert!(s.status.is_some());
@@ -2655,6 +2684,40 @@ mod tests {
         // Backlog still leads; Open is the second entry.
         assert_eq!(Scope::all()[0], Scope::Backlog);
         assert_eq!(Scope::all()[1], Scope::Open);
+    }
+
+    /// The Queue scope is a wired, drillable visibility surface (TASK-948): it
+    /// reads the role-routing queue rather than a status slice, so a routed
+    /// Draft is visible instead of vanishing. Its only verb is the read-only
+    /// `show`.
+    #[test]
+    fn queue_scope_is_functional_with_show_only() {
+        assert!(Scope::Queue.is_functional());
+        assert_eq!(Scope::Queue.verbs(), vec![Verb::Show]);
+        // The hint + help advertise the routing badge, not "not wired yet".
+        assert!(Scope::Queue.hint().contains("role"));
+        assert!(!Scope::Queue.help().contains("Not wired"));
+        assert!(Scope::Queue.help().contains("badge"));
+    }
+
+    /// A queue row carries its routed role so the render path can paint the
+    /// `->role` badge; a spec list row does not.
+    // trace:TASK-948 | ai:claude
+    #[test]
+    fn target_item_carries_routed_role() {
+        let mut it = TargetItem {
+            id: "TASK-941".into(),
+            title: "routed draft".into(),
+            req_type: "Task".into(),
+            status: "Draft".into(),
+            priority: "High".into(),
+            body: String::new(),
+            has_test_plan: false,
+            routed_role: Some("advisor".into()),
+        };
+        assert_eq!(it.routed_role.as_deref(), Some("advisor"));
+        it.routed_role = None;
+        assert!(it.routed_role.is_none());
     }
 
     #[test]
@@ -3157,6 +3220,7 @@ mod tests {
                 priority: "high".into(),
                 body: String::new(),
                 has_test_plan: false,
+                routed_role: None,
             })
             .collect()
     }
