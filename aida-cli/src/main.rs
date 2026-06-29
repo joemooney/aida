@@ -22379,6 +22379,52 @@ fn focus_scope_guard_for_spec(
     focus_scope_guard(project_root, &backend, &target, force)
 }
 
+// BUG-653: `aida agent new --spec <epic>` used to dead-end. The launch path
+// routes through `session_start` -> `preflight_spec_status`, which refuses a
+// Draft spec with "transition it to Approved first". But an epic's status is a
+// read-only rollup of its children (BUG-626) -- `aida edit <epic> --status
+// approved` is rejected -- so that advice sends the operator to a command that
+// will refuse. And you don't implement an epic directly anyway; work happens on
+// its children. Detect the epic up front and give an epic-appropriate message
+// instead of routing into the implement-readiness gate. Non-epic specs (incl.
+// genuinely-Draft tasks/stories) fall through untouched, so their correct
+// "transition to Approved" refusal is preserved. trace:BUG-653 | ai:claude
+fn epic_agent_new_guard(project_root: &std::path::Path, spec: &str) -> Result<()> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(());
+    };
+    let Ok(backend) = advance_backend(&store_path) else {
+        return Ok(());
+    };
+    let Some(target) = backend.get_requirement_by_spec_id(spec)? else {
+        return Ok(());
+    };
+    match epic_agent_new_refusal(&target.req_type, &target.display_id()) {
+        Some(message) => anyhow::bail!("{message}"),
+        None => Ok(()),
+    }
+}
+
+/// BUG-653: pure decision half of [`epic_agent_new_guard`] — returns the
+/// epic-appropriate refusal message when the resolved `--spec` is an epic, or
+/// `None` for every other type (so non-epic specs fall through to the existing
+/// readiness gate untouched). Pure so the message + the type gate are
+/// unit-testable without a store fixture.
+// trace:BUG-653 | ai:claude
+fn epic_agent_new_refusal(req_type: &RequirementType, display_id: &str) -> Option<String> {
+    if !matches!(req_type, RequirementType::Epic) {
+        return None;
+    }
+    Some(format!(
+        "{display_id}'s status is a read-only rollup of its children -- you don't implement an \
+         epic directly.\n  \
+         Pick an approved child and launch on that:\n    \
+         aida list --parent {display_id} --status approved\n  \
+         Or open a design/advisor session scoped to the epic in a focused worktree (no --spec):\n    \
+         aida worktree enter {display_id}   # then a plain `aida agent new ...` in that worktree"
+    ))
+}
+
 /// STORY-564: read `[zen] auto_exit` from `.aida/config.toml`. Returns the
 /// operator's persistent preference for whether a clean standalone-`--zen`
 /// finish auto-exits (`true`, the default) or always pauses (`false`).
@@ -42626,6 +42672,9 @@ fn agent_new_with_config(
     // dry preview is never blocked) and before the worktree/lease/status-flip
     // side effects of `prepare_agent_launch`. trace:STORY-717 | ai:claude
     if let Some(spec_id) = spec.as_deref() {
+        // BUG-653: an epic isn't directly implementable — give the
+        // epic-appropriate message before the readiness gate dead-ends.
+        epic_agent_new_guard(&project_root, spec_id)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
@@ -42750,6 +42799,8 @@ fn agent_new_bg_dispatch(
     // STORY-717: focus-scope drift guard (same as the foreground path) for the
     // `--bg` dispatch. trace:STORY-717 | ai:claude
     if let Some(spec_id) = spec.as_deref() {
+        // BUG-653: epic-aware dead-end guard, same as the foreground path.
+        epic_agent_new_guard(&project_root, spec_id)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
@@ -93446,9 +93497,49 @@ fn handle_worktree_enter(
         out.branch,
         out.focus,
     );
+    // BUG-654: warn (to STDERR, never stdout) when the installed shell wrapper
+    // can't auto-eval this `cd`, so the silent no-op is explained instead of
+    // leaving the operator wondering why `aida focus` shows nothing afterward.
+    if !wrapper_can_eval_worktree_enter() {
+        eprintln!(
+            "  {} shell wrapper looks stale or missing — the `cd` below won't auto-apply. \
+             Run `aida dev shell-init --install` to enable auto-cd, or \
+             `eval \"$(aida worktree enter {})\"`.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            epic,
+        );
+    }
     // The one shell-modifying line the wrapper evals.
     println!("{}", enter_cd_line(&out.path));
     Ok(())
+}
+
+/// BUG-654: does the installed `aida()` shell wrapper auto-eval `worktree
+/// enter`? The wrapper advertises which verb groups it auto-evals via the
+/// comma-separated `AIDA_SHELL_WRAPPER` marker (exported from `SHELL_HELPERS`).
+/// A wrapper installed before STORY-716 added `worktree enter` to its eval case
+/// carries a marker WITHOUT the `worktree` capability; a shell with no wrapper
+/// at all leaves the marker unset. Either way the `cd` line `worktree enter`
+/// prints is never eval'd, so the cd silently no-ops. Returns true only when the
+/// marker is present AND lists the `worktree` capability — the one wrapper shape
+/// that will actually apply the cd.
+// trace:BUG-654 | ai:claude
+fn wrapper_can_eval_worktree_enter() -> bool {
+    wrapper_marker_has_worktree_cap(std::env::var("AIDA_SHELL_WRAPPER").ok().as_deref())
+}
+
+/// BUG-654: pure decision half of [`wrapper_can_eval_worktree_enter`] — given
+/// the `AIDA_SHELL_WRAPPER` marker value (`None` when unset), is the `worktree`
+/// capability advertised? Pure so the parsing is unit-testable without mutating
+/// the process-global env var.
+// trace:BUG-654 | ai:claude
+fn wrapper_marker_has_worktree_cap(marker: Option<&str>) -> bool {
+    marker
+        .map(|caps| {
+            caps.split(',')
+                .any(|c| c.trim().eq_ignore_ascii_case("worktree"))
+        })
+        .unwrap_or(false)
 }
 
 /// The single shell line `aida worktree enter` emits on stdout for the `aida()`
@@ -103093,6 +103184,80 @@ mod eval_subcommand_hint_tests {
         match prev {
             Some(v) => std::env::set_var("AIDA_SHELL_WRAPPER", v),
             None => std::env::remove_var("AIDA_SHELL_WRAPPER"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod worktree_enter_wrapper_staleness_tests {
+    //! BUG-654: `aida worktree enter` only auto-cd's when the installed shell
+    //! wrapper advertises the `worktree` capability via `AIDA_SHELL_WRAPPER`.
+    //! A pre-STORY-716 wrapper's marker lacks it (or is unset for "no wrapper"),
+    //! and we must warn so the silent no-op cd is explained.
+    use super::wrapper_marker_has_worktree_cap;
+
+    #[test]
+    fn current_wrapper_marker_advertises_worktree() {
+        // The shape exported by SHELL_HELPERS today (STORY-716+).
+        assert!(wrapper_marker_has_worktree_cap(Some(
+            "role,session,dev,worktree"
+        )));
+        // Order / extra whitespace don't matter.
+        assert!(wrapper_marker_has_worktree_cap(Some(
+            "worktree, role , session"
+        )));
+    }
+
+    #[test]
+    fn stale_or_missing_wrapper_does_not_advertise_worktree() {
+        // Pre-STORY-716 wrapper: marker present but no `worktree` capability.
+        assert!(!wrapper_marker_has_worktree_cap(Some("role,session,dev")));
+        // No wrapper installed at all → marker unset.
+        assert!(!wrapper_marker_has_worktree_cap(None));
+        // Empty marker (set but capability-less) also can't auto-eval enter.
+        assert!(!wrapper_marker_has_worktree_cap(Some("")));
+        // A substring of another token must not count as the capability.
+        assert!(!wrapper_marker_has_worktree_cap(Some("worktrees,role")));
+    }
+}
+
+#[cfg(test)]
+mod epic_agent_new_refusal_tests {
+    //! BUG-653: `aida agent new --spec <epic>` must give an epic-appropriate
+    //! message (you don't implement an epic; pick a child / open a focused
+    //! worktree) instead of routing into the Draft "transition to Approved"
+    //! gate, whose advice an epic can't follow (its status is a read-only
+    //! rollup). Non-epic types fall through untouched.
+    use super::epic_agent_new_refusal;
+    use aida_core::RequirementType;
+
+    #[test]
+    fn epic_gets_child_picking_message() {
+        let msg = epic_agent_new_refusal(&RequirementType::Epic, "EPIC-0428")
+            .expect("an epic must produce a refusal message");
+        assert!(msg.contains("read-only rollup of its children"));
+        assert!(msg.contains("you don't implement an epic"));
+        // Routes the operator to the real next steps, not the dead-end approve.
+        assert!(msg.contains("aida list --parent EPIC-0428 --status approved"));
+        assert!(msg.contains("aida worktree enter EPIC-0428"));
+        // Must NOT resurrect the dead-end advice (`aida edit <epic> --status
+        // approved`, which an epic rollup rejects).
+        assert!(!msg.contains("aida edit"));
+    }
+
+    #[test]
+    fn non_epic_types_fall_through() {
+        for ty in [
+            RequirementType::Bug,
+            RequirementType::Task,
+            RequirementType::Story,
+            RequirementType::Functional,
+            RequirementType::Spike,
+        ] {
+            assert!(
+                epic_agent_new_refusal(&ty, "BUG-1").is_none(),
+                "non-epic type {ty:?} must fall through to the existing readiness gate"
+            );
         }
     }
 }
