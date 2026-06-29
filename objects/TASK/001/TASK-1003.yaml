@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:34:13.599274691Z
-modified_at: 2026-06-29T17:34:13.599274691Z
+modified_at: 2026-06-29T17:57:21.678934754Z
 req_type: Task
 tags:
 - coupled-sequential
 - drain
 - keystone
 - spike-70
+comments:
+- id: 019f1487-568e-7743-b238-c2dfa4f84009
+  author: joe
+  content: Commit ba8cfda44 references this requirement
+  created_at: 2026-06-29T17:57:21.678934754Z
+  modified_at: 2026-06-29T17:57:21.678934754Z
