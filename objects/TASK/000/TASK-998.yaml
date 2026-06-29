@@ -1,0 +1,12 @@
+id: 019f146f-316a-7151-901d-e58d87c518ab
+spec_id: TASK-998
+agreed_id: TASK-998
+title: events.jsonl rotation / per-drain truncation at `run-started`
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T17:30:59.306717672Z
+modified_at: 2026-06-29T17:30:59.306717672Z
+req_type: Task

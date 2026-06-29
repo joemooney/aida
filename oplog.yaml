@@ -26017,5 +26017,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2484
+- id: 019f146f-448c-7410-a8f2-24e2731d5ac3
+  target_id: 019f146f-316a-7151-901d-e58d87c518ab
+  author: aida
+  node_id: '1'
+  lamport: 2485
+  timestamp: 2026-06-29T17:31:04.204220323Z
+  kind: !Create
+    title: events.jsonl rotation / per-drain truncation at `run-started`
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2485
 node_id: '1'
