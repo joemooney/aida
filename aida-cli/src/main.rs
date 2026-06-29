@@ -312,18 +312,31 @@ fn main() {
         Ok(()) => 0,
         Err(err) => {
             let msg = format!("{:?}", err);
-            // Anyhow's Debug format prints the chain as
-            //     summary
-            //     \n
-            //     Caused by:\n    inner1\n    inner2
-            // Color the first non-empty line bold-red; dim the chain so
-            // root summary stands out from causal background.
-            let mut lines = msg.lines();
-            if let Some(first) = lines.next() {
-                eprintln!("{} {}", "Error:".red().bold(), first.red());
-            }
-            for rest in lines {
-                eprintln!("{}", rest.dimmed());
+            // TASK-972 (AXI #6): agents read STDOUT. An error printed to stderr
+            // with a human `Error:` prefix is invisible to the agent loop,
+            // forcing blind retries. In AGENT MODE emit the error as a
+            // structured TOON `error:`/`help:` block on STDOUT instead, with an
+            // actionable next-command suggestion where the message embeds one.
+            // The exit code is unchanged (this only moves the OUTPUT channel),
+            // and the human-at-a-TTY path below is byte-identical to before.
+            // trace:TASK-972
+            if agent_output_mode() {
+                let (summary, help) = agent_error_summary_help(&msg);
+                println!("{}", toon::error_block(summary, help.as_deref()));
+            } else {
+                // Anyhow's Debug format prints the chain as
+                //     summary
+                //     \n
+                //     Caused by:\n    inner1\n    inner2
+                // Color the first non-empty line bold-red; dim the chain so
+                // root summary stands out from causal background.
+                let mut lines = msg.lines();
+                if let Some(first) = lines.next() {
+                    eprintln!("{} {}", "Error:".red().bold(), first.red());
+                }
+                for rest in lines {
+                    eprintln!("{}", rest.dimmed());
+                }
             }
             1
         }
@@ -430,6 +443,44 @@ fn agent_output_mode_from(env: Option<&str>, stdout_is_tty: bool) -> bool {
         ),
         None => !stdout_is_tty,
     }
+}
+
+/// TASK-972 (AXI #6): split a formatted anyhow error into the one-line summary
+/// the agent error block shows plus an optional suggested next command. The
+/// summary is the first line with any leading human `Error:` prefix stripped
+/// (several `bail!` sites embed one, which would otherwise read `error: Error:
+/// …` once nested under the TOON `error:` key). The suggestion reuses the rich
+/// hints the not_found module and friends already embed — see
+/// [`extract_aida_suggestion`] — so "where known" comes for free.
+// trace:TASK-972
+fn agent_error_summary_help(msg: &str) -> (&str, Option<String>) {
+    let first = msg.lines().next().unwrap_or("").trim();
+    let summary = first
+        .strip_prefix("Error: ")
+        .or_else(|| first.strip_prefix("error: "))
+        .unwrap_or(first);
+    (summary, extract_aida_suggestion(msg))
+}
+
+/// TASK-972: pull the first backtick-quoted `aida …` command out of an error
+/// message, to reuse as the agent error block's `help:` next-command
+/// suggestion. AIDA's rich not-found / parse-failure errors already embed
+/// hints like ``try `aida list` or `aida search <terms>` ``; surfacing the
+/// first one keeps the suggestion truthful without a brittle per-error table.
+/// Returns None when the message embeds no such command.
+// trace:TASK-972
+fn extract_aida_suggestion(msg: &str) -> Option<String> {
+    let mut rest = msg;
+    while let Some(open) = rest.find('`') {
+        let after = &rest[open + 1..];
+        let close = after.find('`')?;
+        let candidate = &after[..close];
+        if candidate.starts_with("aida ") {
+            return Some(candidate.to_string());
+        }
+        rest = &after[close + 1..];
+    }
+    None
 }
 
 /// Pure decision for the TASK-970 `aida list` default row cap. Returns the cap
@@ -636,6 +687,55 @@ mod task970_agent_output_tests {
         // Unset: piped (no TTY) => agent mode; a real TTY => human path.
         assert!(agent_output_mode_from(None, false));
         assert!(!agent_output_mode_from(None, true));
+    }
+
+    // TASK-972 (AXI #6): the agent-mode error block reuses the rich next-command
+    // hint AIDA's not-found errors already embed, and the summary drops any
+    // human `Error:` prefix so it doesn't double under the TOON `error:` key.
+    #[test]
+    fn agent_error_summary_strips_prefix_and_extracts_suggestion() {
+        let msg = "Requirement not found: NOSUCH-1\n  \
+                   Hint: check the spec ID (try `aida list` or `aida search <terms>`).";
+        let (summary, help) = agent_error_summary_help(msg);
+        assert_eq!(summary, "Requirement not found: NOSUCH-1");
+        assert_eq!(help.as_deref(), Some("aida list"));
+    }
+
+    #[test]
+    fn agent_error_summary_drops_leading_error_prefix() {
+        let (summary, help) = agent_error_summary_help("Error: brief not found at \"x\".");
+        assert_eq!(summary, "brief not found at \"x\".");
+        assert_eq!(help, None);
+    }
+
+    #[test]
+    fn agent_error_rendered_block_is_toon_on_stdout_shape() {
+        // The exact block the agent-mode handler prints to STDOUT for the
+        // acceptance case (`aida show NOSUCH-1`).
+        let msg = "Requirement not found: NOSUCH-1\n  \
+                   Hint: check the spec ID (try `aida list` or `aida search <terms>`).";
+        let (summary, help) = agent_error_summary_help(msg);
+        let block = toon::error_block(summary, help.as_deref());
+        assert_eq!(
+            block,
+            "error: \"Requirement not found: NOSUCH-1\"\nhelp: aida list"
+        );
+    }
+
+    #[test]
+    fn extract_aida_suggestion_finds_first_command_or_none() {
+        assert_eq!(
+            extract_aida_suggestion("try `aida list` or `aida search x`").as_deref(),
+            Some("aida list")
+        );
+        // A backtick token that isn't an `aida …` command is skipped.
+        assert_eq!(
+            extract_aida_suggestion("see `requirements.db`, then `aida cache rebuild`").as_deref(),
+            Some("aida cache rebuild")
+        );
+        assert_eq!(extract_aida_suggestion("plain message, no hint"), None);
+        // An unterminated backtick doesn't panic or loop.
+        assert_eq!(extract_aida_suggestion("dangling `aida list"), None);
     }
 
     // The default `aida list` cap applies ONLY to the default table render in
