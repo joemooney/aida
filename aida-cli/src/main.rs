@@ -86401,86 +86401,15 @@ fn pick_dev_binary_dir(
         };
     }
 
-    let head_sha = current_branch_head_sha(repo);
-    let release_sha = release_mtime
-        .is_some()
-        .then(|| binary_embedded_sha(&release))
-        .flatten();
-    let debug_sha = debug_mtime
-        .is_some()
-        .then(|| binary_embedded_sha(&debug))
-        .flatten();
-
-    // Classify each candidate against current HEAD.
-    let release_match = head_sha
-        .as_ref()
-        .zip(release_sha.as_ref())
-        .map(|(h, s)| classify_sha_match(repo, s, h))
-        .unwrap_or(ShaMatch::Unknown);
-    let debug_match = head_sha
-        .as_ref()
-        .zip(debug_sha.as_ref())
-        .map(|(h, s)| classify_sha_match(repo, s, h))
-        .unwrap_or(ShaMatch::Unknown);
-
-    // Selection precedence:
-    //   1. exact SHA match — release tiebreaker
-    //   2. ancestor SHA match — release tiebreaker
-    //   3. recency fallback (today's behavior) with a warning
-    //   4. only-one if only one binary exists
-    match (release_mtime.is_some(), debug_mtime.is_some()) {
-        (true, true) => {
-            match (release_match, debug_match) {
-                (ShaMatch::Exact, _) => Ok((
-                    repo.join("target/release"),
-                    "release",
-                    BinarySelectionReason::ShaExactMatch,
-                )),
-                (_, ShaMatch::Exact) => Ok((
-                    repo.join("target/debug"),
-                    "debug",
-                    BinarySelectionReason::ShaExactMatch,
-                )),
-                (ShaMatch::Ancestor, _) => Ok((
-                    repo.join("target/release"),
-                    "release",
-                    BinarySelectionReason::ShaAncestorMatch,
-                )),
-                (_, ShaMatch::Ancestor) => Ok((
-                    repo.join("target/debug"),
-                    "debug",
-                    BinarySelectionReason::ShaAncestorMatch,
-                )),
-                _ => {
-                    // recency fallback — same as pre-TASK-221 behavior
-                    let (rm, dm) = (release_mtime.unwrap(), debug_mtime.unwrap());
-                    if rm >= dm {
-                        Ok((
-                            repo.join("target/release"),
-                            "release",
-                            BinarySelectionReason::RecencyFallback,
-                        ))
-                    } else {
-                        Ok((
-                            repo.join("target/debug"),
-                            "debug",
-                            BinarySelectionReason::RecencyFallback,
-                        ))
-                    }
-                }
-            }
-        }
-        (true, false) => Ok((
-            repo.join("target/release"),
-            "release",
-            BinarySelectionReason::OnlyOne,
-        )),
-        (false, true) => Ok((
-            repo.join("target/debug"),
-            "debug",
-            BinarySelectionReason::OnlyOne,
-        )),
-        (false, false) => anyhow::bail!(
+    // BUG-643: auto mode (pin == auto) must RE-PICK the freshest SHA-matched
+    // binary on EVERY activate — never stay sticky on whichever build is
+    // already active. Probe both candidates ({mtime, sha-verdict}) and run the
+    // pure selector so a just-rebuilt debug flips in over an older release.
+    let (release_cand, debug_cand) = dev_build_candidates(repo);
+    match auto_select_dev_profile(release_cand, debug_cand) {
+        Some((DevProfile::Release, reason)) => Ok((repo.join("target/release"), "release", reason)),
+        Some((DevProfile::Debug, reason)) => Ok((repo.join("target/debug"), "debug", reason)),
+        None => anyhow::bail!(
             "No aida binary found at {} or {}.\n\
              Run `cargo build --release` (or just `cargo build`) first.",
             release.display(),
@@ -86604,6 +86533,145 @@ fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
         .and_then(|m| m.modified())
         .ok();
     matches!((active_mtime, other_mtime), (Some(a), Some(o)) if o > a)
+}
+
+/// Which build profile auto-selection chose.
+// trace:BUG-643 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DevProfile {
+    Release,
+    Debug,
+}
+
+impl DevProfile {
+    fn as_str(self) -> &'static str {
+        match self {
+            DevProfile::Release => "release",
+            DevProfile::Debug => "debug",
+        }
+    }
+}
+
+/// A built binary candidate for auto-selection: its file mtime plus how its
+/// embedded SHA relates to current HEAD.
+// trace:BUG-643 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DevBuildCandidate {
+    pub mtime: std::time::SystemTime,
+    pub sha: ShaMatch,
+}
+
+/// Rank a SHA verdict for auto-selection. An exact match to HEAD is the
+/// strongest signal the binary reflects the source on disk, an ancestor is
+/// weaker, and anything else (diverged / unknown) is recency-only.
+// trace:BUG-643 | ai:claude
+fn sha_rank(m: ShaMatch) -> u8 {
+    match m {
+        ShaMatch::Exact => 2,
+        ShaMatch::Ancestor => 1,
+        ShaMatch::Unrelated | ShaMatch::Unknown => 0,
+    }
+}
+
+/// Pure auto-mode (`pin == auto`) build picker (BUG-643). Given each profile's
+/// `{mtime, sha-verdict}`, RE-PICK the freshest SHA-matched binary on every
+/// call so a fresh `aida dev activate` flips to a newer build instead of
+/// staying sticky on whichever build happens to be active.
+///
+/// Ordering:
+///   1. higher SHA rank wins (exact > ancestor > diverged/unknown) — the
+///      TASK-221 invariant that a HEAD-matching binary beats a stale one;
+///   2. within the same rank, the freshest (highest mtime) wins — this is
+///      what makes a just-rebuilt debug flip in over an older release;
+///   3. an exact mtime tie falls to release (the conventional default).
+///
+/// The selection reason is derived from the WINNER's own SHA verdict so the
+/// `dev activate` chip stays truthful. Returns `None` only when neither build
+/// exists.
+// trace:BUG-643 | ai:claude
+pub(crate) fn auto_select_dev_profile(
+    release: Option<DevBuildCandidate>,
+    debug: Option<DevBuildCandidate>,
+) -> Option<(DevProfile, BinarySelectionReason)> {
+    match (release, debug) {
+        (Some(r), Some(d)) => {
+            let (rr, dr) = (sha_rank(r.sha), sha_rank(d.sha));
+            let pick = if rr != dr {
+                // Stronger SHA match wins outright.
+                if rr > dr {
+                    DevProfile::Release
+                } else {
+                    DevProfile::Debug
+                }
+            } else if r.mtime != d.mtime {
+                // Same SHA class → freshest mtime wins (the sticky-bug fix).
+                if r.mtime > d.mtime {
+                    DevProfile::Release
+                } else {
+                    DevProfile::Debug
+                }
+            } else {
+                // Exact tie → release, the stable conventional default.
+                DevProfile::Release
+            };
+            let winner_sha = match pick {
+                DevProfile::Release => r.sha,
+                DevProfile::Debug => d.sha,
+            };
+            let reason = match winner_sha {
+                ShaMatch::Exact => BinarySelectionReason::ShaExactMatch,
+                ShaMatch::Ancestor => BinarySelectionReason::ShaAncestorMatch,
+                ShaMatch::Unrelated | ShaMatch::Unknown => BinarySelectionReason::RecencyFallback,
+            };
+            Some((pick, reason))
+        }
+        (Some(_), None) => Some((DevProfile::Release, BinarySelectionReason::OnlyOne)),
+        (None, Some(_)) => Some((DevProfile::Debug, BinarySelectionReason::OnlyOne)),
+        (None, None) => None,
+    }
+}
+
+/// Probe `<repo>/target/{release,debug}/aida`: file mtime + embedded-SHA
+/// verdict vs current HEAD, packaged for [`auto_select_dev_profile`]. Shared
+/// by `pick_dev_binary_dir`'s auto branch and `dev status`'s flip advice so
+/// the two always agree on what auto would pick.
+// trace:BUG-643 | ai:claude
+fn dev_build_candidates(
+    repo: &std::path::Path,
+) -> (Option<DevBuildCandidate>, Option<DevBuildCandidate>) {
+    let release = repo.join("target/release/aida");
+    let debug = repo.join("target/debug/aida");
+    let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
+    let debug_mtime = std::fs::metadata(&debug).and_then(|m| m.modified()).ok();
+    let head_sha = current_branch_head_sha(repo);
+    let verdict = |mtime: Option<std::time::SystemTime>, bin: &std::path::Path| {
+        mtime.map(|m| {
+            let sha = binary_embedded_sha(bin);
+            let verdict = head_sha
+                .as_ref()
+                .zip(sha.as_ref())
+                .map(|(h, s)| classify_sha_match(repo, s, h))
+                .unwrap_or(ShaMatch::Unknown);
+            DevBuildCandidate {
+                mtime: m,
+                sha: verdict,
+            }
+        })
+    };
+    (
+        verdict(release_mtime, &release),
+        verdict(debug_mtime, &debug),
+    )
+}
+
+/// What `aida dev activate` (auto / unpinned) would select for `repo` right
+/// now — used by `aida dev status` to give accurate flip advice instead of
+/// promising a re-run will flip when it would not. Returns the profile name
+/// ("debug"/"release"), or None if no build exists.
+// trace:BUG-643 | ai:claude
+fn auto_pick_profile_name(repo: &std::path::Path) -> Option<&'static str> {
+    let (release_cand, debug_cand) = dev_build_candidates(repo);
+    auto_select_dev_profile(release_cand, debug_cand).map(|(p, _)| p.as_str())
 }
 
 fn handle_dev_activate(
@@ -86896,14 +86964,30 @@ fn handle_dev_status() -> Result<()> {
                         other
                     );
                 } else {
-                    println!(
-                        "      Re-run `aida dev activate` to flip to {}, or pin with",
-                        other
-                    );
-                    println!(
-                        "      `aida dev activate {}` to keep working on {}.",
-                        profile, profile
-                    );
+                    // BUG-643: only promise a plain re-run flips when auto-select
+                    // ACTUALLY would. A newer-by-mtime alternate that is a weaker
+                    // SHA match (e.g. ancestor vs the active exact match) is NOT
+                    // auto-picked, so the old "Re-run to flip" advice was false —
+                    // point at the explicit override in that case instead.
+                    match auto_pick_profile_name(&repo_path) {
+                        Some(pick) if pick != profile => {
+                            println!(
+                                "      Re-run `aida dev activate` to flip to {}, or pin with",
+                                pick
+                            );
+                            println!(
+                                "      `aida dev activate {}` to keep working on {}.",
+                                profile, profile
+                            );
+                        }
+                        _ => {
+                            println!(
+                                "      Auto-select keeps {} (it matches HEAD more closely).",
+                                profile
+                            );
+                            println!("      To switch anyway, run `aida dev activate {}`.", other);
+                        }
+                    }
                 }
             }
         }
@@ -102272,6 +102356,116 @@ mod binary_selection_tests {
             "got: {:?}",
             m
         );
+    }
+
+    // ---- BUG-643: pure auto-mode build selection ----
+    //
+    // `auto_select_dev_profile` is the freshest-wins picker the `auto` pin
+    // uses on every `aida dev activate`. These pin it: given two builds with
+    // {mtime, sha-verdict}, which profile is selected (and the reason chip).
+    // trace:BUG-643 | ai:claude
+
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    fn cand(secs: u64, sha: ShaMatch) -> DevBuildCandidate {
+        DevBuildCandidate {
+            mtime: UNIX_EPOCH + Duration::from_secs(secs),
+            sha,
+        }
+    }
+
+    #[test]
+    fn auto_flips_to_newer_debug_exact_over_older_release_ancestor() {
+        // The reported BUG-643 scenario: release is an ancestor of HEAD,
+        // debug is freshly rebuilt at HEAD (exact) and newer. Auto must pick
+        // debug — NOT stay sticky on the stale release.
+        let (pick, reason) = auto_select_dev_profile(
+            Some(cand(100, ShaMatch::Ancestor)),
+            Some(cand(200, ShaMatch::Exact)),
+        )
+        .unwrap();
+        assert_eq!(pick, DevProfile::Debug);
+        assert_eq!(reason, BinarySelectionReason::ShaExactMatch);
+    }
+
+    #[test]
+    fn auto_breaks_same_sha_class_tie_by_freshest_not_release() {
+        // Both builds are exact matches; debug is newer. The pre-fix logic
+        // always tie-broke to release (sticky). Post-fix: freshest wins.
+        let (pick, _) = auto_select_dev_profile(
+            Some(cand(100, ShaMatch::Exact)),
+            Some(cand(200, ShaMatch::Exact)),
+        )
+        .unwrap();
+        assert_eq!(pick, DevProfile::Debug);
+
+        // Symmetric: release newer among two exacts → release.
+        let (pick, _) = auto_select_dev_profile(
+            Some(cand(200, ShaMatch::Exact)),
+            Some(cand(100, ShaMatch::Exact)),
+        )
+        .unwrap();
+        assert_eq!(pick, DevProfile::Release);
+    }
+
+    #[test]
+    fn auto_prefers_exact_even_when_alternate_is_newer_but_weaker() {
+        // Active release is exact; debug is NEWER by mtime but only an
+        // ancestor. The stronger SHA match wins — this is the case where the
+        // old "Re-run to flip" advice was false, so auto must keep release.
+        let (pick, reason) = auto_select_dev_profile(
+            Some(cand(100, ShaMatch::Exact)),
+            Some(cand(999, ShaMatch::Ancestor)),
+        )
+        .unwrap();
+        assert_eq!(pick, DevProfile::Release);
+        assert_eq!(reason, BinarySelectionReason::ShaExactMatch);
+    }
+
+    #[test]
+    fn auto_recency_fallback_when_neither_matches() {
+        // Neither build's SHA is recognizable on HEAD → freshest mtime wins,
+        // reason is the recency fallback (preserves pre-TASK-221 behavior).
+        let (pick, reason) = auto_select_dev_profile(
+            Some(cand(100, ShaMatch::Unrelated)),
+            Some(cand(200, ShaMatch::Unknown)),
+        )
+        .unwrap();
+        assert_eq!(pick, DevProfile::Debug);
+        assert_eq!(reason, BinarySelectionReason::RecencyFallback);
+    }
+
+    #[test]
+    fn auto_exact_mtime_tie_falls_to_release() {
+        // Identical mtime + identical SHA class → stable release default.
+        let t = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let (pick, _) = auto_select_dev_profile(
+            Some(cand(t, ShaMatch::Exact)),
+            Some(cand(t, ShaMatch::Exact)),
+        )
+        .unwrap();
+        assert_eq!(pick, DevProfile::Release);
+    }
+
+    #[test]
+    fn auto_only_one_build_present() {
+        let (pick, reason) =
+            auto_select_dev_profile(None, Some(cand(100, ShaMatch::Unknown))).unwrap();
+        assert_eq!(pick, DevProfile::Debug);
+        assert_eq!(reason, BinarySelectionReason::OnlyOne);
+
+        let (pick, reason) =
+            auto_select_dev_profile(Some(cand(100, ShaMatch::Unknown)), None).unwrap();
+        assert_eq!(pick, DevProfile::Release);
+        assert_eq!(reason, BinarySelectionReason::OnlyOne);
+    }
+
+    #[test]
+    fn auto_no_build_present_is_none() {
+        assert!(auto_select_dev_profile(None, None).is_none());
     }
 }
 
