@@ -24563,5 +24563,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 2339
+- id: 019f11ca-a327-7d30-a652-6256f380c892
+  target_id: 019f11ca-96d6-7ad3-9310-8663fbfa520b
+  author: aida
+  node_id: '1'
+  lamport: 2340
+  timestamp: 2026-06-29T05:12:00.551763642Z
+  kind: !Create
+    title: Wire aida worktree pool/remove (STORY-716 namespace) to the STORY-714 aida-core pool engine
+    description: 'STORY-714 builds the worktree-pool ENGINE in aida-core (worktree_pool.rs, worktree_hooks.rs, worktree_pool_destroy.rs); STORY-716 builds the aida worktree COMMAND namespace in aida-cli (add/enter/list). They are complementary layers (engine vs command), no collision -- merge independently. THIS task is the follow-on AFTER both land: add aida worktree pool [status] + aida worktree remove subcommands to STORY-716s WorktreeCommand clap enum, wiring them to STORY-714s aida-core engine; and optionally make aida worktree add acquire-from-pool when a warm tree is idle. Gated on BOTH STORY-714 + STORY-716 merged.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2340
 node_id: '1'
