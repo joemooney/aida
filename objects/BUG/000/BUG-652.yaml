@@ -3,12 +3,12 @@ spec_id: BUG-652
 agreed_id: BUG-652
 title: session end --return refuses on a dirty pool worktree, silently breaking reuse
 description: 'Found by the TASK-985 dogfood (2026-06-29). aida session end --return hits session_end’s dirty-worktree refusal BEFORE the return branch: any uncommitted change (e.g. an untracked Cargo.lock a build wrote) makes it bail with "worktree has uncommitted changes" and the Effects block still says "git worktree remove". Because the return never runs, the pool entry stays leased, so the NEXT acquire creates a fresh tree instead of reusing — pool hit-rate collapses to 0% and the whole warm-cache payoff is lost. return_to_pool resets the tree (reset --hard + clean -fd) anyway, so the dirty gate is wrong for the --return path. FIX: make --return salvage-then-reset (like worktree_pool_destroy::destroy does for unlanded work) instead of refusing — the directly-invoked `aida worktree pool return` already bypasses the gate and works. BLOCKS TASK-985 (default-flip). Note: well-behaved projects that commit Cargo.lock + commit their work end clean (only gitignored target/ dirty, which the check already excludes), so this bites the forgot-to-commit / tool-wrote-untracked-file cases — but for a reuse-centric feature a fragile return path is a real blocker.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:59:29.842008386Z
-modified_at: 2026-06-29T16:07:50.006501609Z
+modified_at: 2026-06-29T16:08:12.860487514Z
 req_type: Bug
 tags:
 - axi
