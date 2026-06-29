@@ -3,12 +3,12 @@ spec_id: BUG-638
 agreed_id: BUG-638
 title: 'TUI: verb palette must gate by ROLE — advisor-only verbs (approve) show + are selectable for an implementer'
 description: 'Operator finding (2026-06-26): with the TUI role = implementer, the ''approve'' verb (whose own hint says ''advisor-only: draft -> approved'') still appears in the palette AND is selectable. The palette does not gate by role — an implementer should NOT be offered advisor-only verbs; they should request approval and let the advisor approve. This is the ''role as ambient context'' piece (Slice 3 of the redesign design doc): role should FILTER/GATE the verb palette (advisor sees approve/groom; implementer sees pickup/request-approval). Currently role is display-only. ADD A THIRD GREY-OUT AXIS: a verb is enabled iff status-applicable (TASK-947) AND (if UPDATE) has a selection (TASK-954) AND the active role is permitted to run it. Role-disallowed verbs render greyed + non-selectable with the hint ''requires the <role> role''. Note: the CLI/substrate still gates the transition (request approval is open to any role post-BUG-631; approve stays advisor-gated) — this is the TUI honoring that in the palette so the operator isn''t offered a verb that would be refused.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T04:55:58.671088230Z
-modified_at: 2026-06-29T06:41:38.006437055Z
+modified_at: 2026-06-29T06:41:46.770399494Z
 req_type: Bug
 tags:
 - batch:epic54
@@ -26,3 +26,10 @@ comments:
   content: 'DESIGN INTENT (operator, 2026-06-26): the human should NOT typically wear the advisor role — the advisor is a persistent AGENT that grooms/dispositions; the human is the OPERATOR (direction/keystone). So the TUI human-role default should be operator/implementer (NOT advisor), advisor-only verbs (approve/groom) are gated out of the human''s palette, and ''request approval'' always ROUTES to an advisor agent — the TUI never asks the human to approve. Aligns with the advisor-as-persistent-agent model.'
   created_at: 2026-06-27T05:01:06.560300250Z
   modified_at: 2026-06-27T05:01:06.560300250Z
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: failed
+  detail: the implementer session exited 1 — it was aborted or errored
+  recovery_hint: 'Continue the implementer session: `aida queue work BUG-638 --resume`'
+  shelved_at: 2026-06-29T06:41:46.770399494Z
