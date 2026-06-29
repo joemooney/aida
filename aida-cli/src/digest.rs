@@ -1857,6 +1857,46 @@ mod tests {
         assert_eq!(themes[0].spec_ids.len(), 2);
     }
 
+    /// TASK-1003 / SPIKE-70: a single-branch cluster PR — N coupled members,
+    /// each committed with its own `(SPEC-ID)` trailer onto ONE shared branch,
+    /// merged as ONE PR (`#88`) — folds into a single cluster theme linking
+    /// every member. Confirms `collapse_cluster_prs` already models the
+    /// single-branch one-PR-many-specs shape. trace:TASK-1003 | ai:claude
+    #[test]
+    fn collapse_cluster_pr_models_single_branch_cluster() {
+        let commits = vec![
+            commit(
+                "a",
+                "feat(tui): increment 1 (TASK-1) (#88)",
+                &["TASK-1"],
+                Some(88),
+            ),
+            commit(
+                "b",
+                "feat(tui): increment 2 (TASK-2) (#88)",
+                &["TASK-2"],
+                Some(88),
+            ),
+            commit(
+                "c",
+                "feat(tui): increment 3 (TASK-3) (#88)",
+                &["TASK-3"],
+                Some(88),
+            ),
+        ];
+        let themes = collapse_cluster_prs(&commits);
+        // ONE cluster theme for the one PR, linking all three coupled members.
+        assert_eq!(themes.len(), 1);
+        assert_eq!(themes[0].pr, 88);
+        assert_eq!(themes[0].spec_ids.len(), 3);
+        for id in ["TASK-1", "TASK-2", "TASK-3"] {
+            assert!(
+                themes[0].spec_ids.iter().any(|s| s == id),
+                "cluster PR must link {id}"
+            );
+        }
+    }
+
     #[test]
     fn is_noise_commit_drops_typo_and_chore() {
         assert!(is_noise_commit("docs: README polish"));

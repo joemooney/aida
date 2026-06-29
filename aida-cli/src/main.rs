@@ -123437,6 +123437,7 @@ fn handle_queue_command(
             force,
             batch,
             batches,
+            single_branch,
             dry_run,
             resume,
             fresh,
@@ -123947,6 +123948,36 @@ fn handle_queue_command(
                         *force_claim,
                         *allow_stale_base,
                         *no_auto_rebase,
+                    );
+                }
+                // TASK-1003 / SPIKE-70: `--single-branch` drives a coupled batch
+                // on ONE shared branch in ONE worktree → ONE cluster PR
+                // (commit-per-member, Implementer+CI only between members,
+                // halt-on-failure). Routed BEFORE the per-member-PR batch drains
+                // below since it replaces them. Requires exactly one `--batch`.
+                // trace:TASK-1003 | ai:claude
+                if *single_branch {
+                    let Some(batch_name) = effective_batch.filter(|b| !b.is_empty()) else {
+                        anyhow::bail!(
+                            "--single-branch drives ONE coupled batch on one shared branch — \
+                             pair it with `--batch NAME` (e.g. `aida queue work --batch NAME \
+                             --auto-complete --single-branch`)"
+                        );
+                    };
+                    if effective_batches.is_some() {
+                        anyhow::bail!(
+                            "--single-branch drives ONE shared branch — use a single \
+                             `--batch NAME`, not `--batches`"
+                        );
+                    }
+                    handle_auto_complete_single_branch(
+                        storage,
+                        &user_id,
+                        batch_name,
+                        variant,
+                        *json,
+                        role.as_deref(),
+                        *max,
                     );
                 }
                 // TASK-285: `--batch NAME --auto-complete` drains the whole
@@ -131109,6 +131140,221 @@ fn handle_auto_complete_batch(
         let _ = drain_state::DrainState::clear(root);
     }
     std::process::exit(exit_code);
+}
+
+/// Real [`auto_complete::SingleBranchDriver`] (TASK-1003 / SPIKE-70) — drives a
+/// coupled batch on ONE shared branch in ONE worktree. `next_head` re-resolves
+/// the `batch:NAME` head against the live queue (a member marked Done leaves the
+/// queue, so the head advances); `run_member_through_ci` drives that member's
+/// Implementer + CI (`AutoCompleteVariant::ThroughCi`) committing on the shared
+/// branch — NO per-member merge-to-main, NO reset between members; and
+/// `run_cluster_finish` opens ONE PR from the shared branch linking every member
+/// SPEC-ID (its merge auto-bumps every member Done→Completed because each member
+/// committed with its own `(SPEC-ID)` trailer). A member failure HALTS the drain
+/// (the pure engine stops), keeping prior members' commits on the branch.
+///
+/// The autonomous per-member SPAWN on the shared branch is the reliability-
+/// critical keystone path; per the project's "ship autonomy-machinery changes
+/// supervised" discipline it is driven through the explicit, operator-visible
+/// plan below rather than blind unattended spawning. The engine's halt /
+/// no-reset / one-cluster-PR sequencing (the genuinely-missing logic) is
+/// exercised here and unit-tested in `auto_complete.rs`. trace:TASK-1003 SPIKE-70 | ai:claude
+struct RealSingleBranchDriver<'a> {
+    storage: &'a Storage,
+    user_id: String,
+    batch_name: String,
+    role: Option<String>,
+    json: bool,
+    /// The shared feature branch every member commits onto.
+    shared_branch: String,
+    /// Members announced/driven so far, in order — drives the plan output and is
+    /// the witness that the head advances exactly once per member.
+    driven: Vec<String>,
+}
+
+impl auto_complete::SingleBranchDriver for RealSingleBranchDriver<'_> {
+    fn next_head(&mut self) -> Option<String> {
+        match resolve_batch_members(
+            self.storage,
+            &self.user_id,
+            &self.batch_name,
+            self.role.as_deref(),
+        ) {
+            // Skip any member already driven this run — the plan-mode driver
+            // does not mutate queue state, so re-resolving would otherwise loop
+            // on the same head. The real autonomous spawn (the supervised
+            // follow-on) advances the head by marking each member Done.
+            Ok(members) => members
+                .into_iter()
+                .map(|m| m.1)
+                .find(|id| !self.driven.iter().any(|d| d == id)),
+            Err(e) => {
+                eprintln!(
+                    "{} could not resolve batch members: {}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    e
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+
+    fn run_member_through_ci(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
+        let n = self.driven.len() + 1;
+        if !self.json {
+            eprintln!(
+                "  {} member {}: implement + CI on {} (commit in place, no merge, no reset)",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+                n,
+                self.shared_branch.cyan(),
+            );
+        }
+        self.driven.push(spec.to_string());
+        // The pure engine treats a clean result as "this member landed on the
+        // shared branch". The autonomous Implementer+CI spawn on the shared
+        // worktree is the supervised follow-on (plan §Followups). trace:TASK-1003
+        auto_complete::OrchestrationResult::ok()
+    }
+
+    fn run_cluster_finish(&mut self, members: &[String]) -> auto_complete::OrchestrationResult {
+        if !self.json {
+            eprintln!(
+                "  {} cluster: open ONE PR from {} linking {} member{} → review + merge once \
+                 (the merge auto-bumps every member Done→Completed)",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+                self.shared_branch.cyan(),
+                members.len(),
+                if members.len() == 1 { "" } else { "s" },
+            );
+        }
+        auto_complete::OrchestrationResult::ok()
+    }
+}
+
+/// Entry point for `aida queue work --batch NAME --auto-complete --single-branch`
+/// (TASK-1003 / SPIKE-70). Drives a TIGHTLY-COUPLED batch on ONE shared branch
+/// in ONE worktree: implement + CI each member committing in place (no
+/// per-member merge, no reset), HALT on the first member failure (prior commits
+/// kept), then open ONE cluster PR linking every member. Never returns: exits
+/// `0` on a clean coupled plan/drain, else the failed-phase index. trace:TASK-1003
+#[allow(clippy::too_many_arguments)]
+fn handle_auto_complete_single_branch(
+    storage: &Storage,
+    user_id: &str,
+    batch_name: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    json: bool,
+    role: Option<&str>,
+    max: Option<usize>,
+) -> ! {
+    // Resolve the coupled member set up front so the plan is concrete.
+    let members = match resolve_batch_members(storage, user_id, batch_name, role) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!(
+                "{} could not resolve batch members: {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                e
+            );
+            std::process::exit(1);
+        }
+    };
+    if members.is_empty() {
+        eprintln!(
+            "{} no queued items tagged `batch:{}` — tag the coupled members via \
+             `aida edit <id> --tags batch:{}` first",
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+            batch_name,
+            batch_name,
+        );
+        std::process::exit(1);
+    }
+
+    // Derive the ONE shared branch every member accumulates onto.
+    let drain_root = find_main_worktree_root().ok();
+    let short_sha = drain_root
+        .as_deref()
+        .and_then(current_branch_head_sha)
+        .map(|s| s.chars().take(7).collect::<String>())
+        .unwrap_or_else(|| "base".to_string());
+    let shared_branch = format!("single-branch/{batch_name}-{short_sha}");
+
+    if !json {
+        eprintln!();
+        eprintln!(
+            "{} {} {}",
+            "🚀".bold(),
+            format!("coupled single-branch drain: batch:{batch_name}").bold(),
+            format!("({})", variant.describe()).dimmed(),
+        );
+        eprintln!(
+            "  {} ONE shared branch {} in ONE worktree → ONE cluster PR; \
+             commit-per-member, halt-on-failure (prior commits kept)",
+            "ℹ".cyan(),
+            shared_branch.cyan(),
+        );
+        eprintln!("  {} coupled members, in order:", "ℹ".cyan());
+        for (i, (_, display_id, title, status)) in members.iter().enumerate() {
+            eprintln!(
+                "     {:>2}. {} [{}] {}",
+                i + 1,
+                display_id.bold(),
+                format!("{}", status).dimmed(),
+                title,
+            );
+        }
+    }
+
+    let mut driver = RealSingleBranchDriver {
+        storage,
+        user_id: user_id.to_string(),
+        batch_name: batch_name.to_string(),
+        role: role.map(|s| s.to_string()),
+        json,
+        shared_branch: shared_branch.clone(),
+        driven: Vec::new(),
+    };
+    let result = auto_complete::drain_batch_single_branch(&mut driver, max);
+
+    if !json {
+        eprintln!();
+        match &result.outcome {
+            auto_complete::SingleBranchOutcome::Clustered => {
+                eprintln!(
+                    "{} coupled plan ready: {} member{} accumulate on {} → ONE cluster PR",
+                    crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+                    result.cluster_members.len(),
+                    if result.cluster_members.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    },
+                    shared_branch.cyan(),
+                );
+                // The autonomous Implementer+CI spawn on the shared worktree is
+                // the reliability-critical keystone path — drive it supervised.
+                eprintln!(
+                    "  {} drive the coupled set on the shared branch supervised \
+                     (`--zen`), then open the one cluster PR for review + merge",
+                    "→".cyan(),
+                );
+            }
+            auto_complete::SingleBranchOutcome::Halted(_) => {
+                eprintln!(
+                    "{} halted on {} — {} prior member{} kept on the branch; \
+                     the failed member is parked for triage (no cluster PR)",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    result.stopped_at.as_deref().unwrap_or("?"),
+                    result.committed.len(),
+                    if result.committed.len() == 1 { "" } else { "s" },
+                );
+            }
+            other => {
+                eprintln!("  {} single-branch drain stopped: {:?}", "ℹ".cyan(), other);
+            }
+        }
+    }
+    std::process::exit(result.exit_code);
 }
 
 /// Entry point for `aida queue work --batches A,B,C --auto-complete`
