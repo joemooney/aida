@@ -48,6 +48,36 @@ The ID configuration controls how requirement identifiers (SPEC-IDs) are generat
 - **PerPrefix**: Each prefix maintains its own counter (AUTH-001, FR-001, SEC-001)
 - **PerFeatureType**: Each feature+type combination has its own counter (Two Level only)
 
+### Focus-scope drift guard (`[focus] out_of_scope`)
+
+When a worktree has a focus set (`aida focus <epic-or-spec>`, written to
+`.aida/focus`; STORY-706) and you START work on a spec OUTSIDE that focus's
+subtree, AIDA can nudge you so cross-scope mix-ups are caught at the keyboard
+(STORY-717). The policy lives in `.aida/config.toml`:
+
+```toml
+[focus]
+# off | warn | block  (default: warn)
+out_of_scope = "warn"
+```
+
+| Value | Behavior at a work-start moment |
+|-------|---------------------------------|
+| `off` | No-op — the guard is silent. |
+| `warn` (default) | Prints a stderr nudge that names the mismatch and suggests the fix (`<spec> is not under your current focus (<focus>). Did you mean 'aida focus <epic>' first?`), then PROCEEDS. |
+| `block` | Refuses the work-start with the same message and a non-zero exit, unless `--force`. |
+
+The guard fires at the three **work-start** moments only (never at commit time):
+
+- `aida queue work <spec>`
+- `aida agent new <vendor> --spec <spec>`
+- `aida edit <spec> --status in-progress`
+
+`--force` ALWAYS overrides regardless of the configured policy (and silences the
+`warn` nudge). Membership is the focus epic itself plus its transitive
+descendants — the same subtree the focus read-scope (`aida list`, etc.) uses.
+A spec inside the focus subtree, or no focus set, is never guarded.
+
 ### Feature Configuration
 
 Features organize requirements into logical groups. Each feature has:

@@ -16956,6 +16956,26 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
             }
 
+            // STORY-717: focus-scope drift guard at the In-Progress work-start
+            // moment. Flipping a spec to In Progress in a focused worktree is
+            // "starting work"; if the spec is outside the focus subtree, apply
+            // the [focus] out_of_scope policy (warn nudges + proceeds, block
+            // refuses without --force, off is silent). Only the genuine
+            // transition INTO In Progress is a work-start — re-saving an
+            // already-In-Progress spec or any other status edit is not.
+            // trace:STORY-717 | ai:claude
+            if let Some(status_str) = status {
+                let starts_work = matches!(
+                    status_str.to_lowercase().replace('-', "_").as_str(),
+                    "in_progress" | "inprogress"
+                ) && req.status != aida_core::RequirementStatus::InProgress;
+                if starts_work {
+                    if let Ok(project_root) = find_project_root() {
+                        focus_scope_guard(&project_root, &backend, &req, *force)?;
+                    }
+                }
+            }
+
             // STORY-48: lease enforcement. Find leases relative to the git
             // project root (parent of the orphan store), collect the target +
             // its ancestor chain for ancestor walking (BUG-634: targeted, not a
@@ -22194,6 +22214,127 @@ fn read_archive_auto_after_days(project_root: &std::path::Path) -> Option<u64> {
     }
 }
 
+/// STORY-717: read `[focus] out_of_scope` from `.aida/config.toml`. Governs the
+/// focus-scope drift guard at work-start (off/warn/block). Missing config /
+/// key / unparseable TOML falls back to the default (`warn`). The optional
+/// `none`/`silent` and `refuse`/`hard` aliases are accepted by the parser.
+// trace:STORY-717 | ai:claude
+fn read_focus_out_of_scope_policy(project_root: &std::path::Path) -> focus::OutOfScopePolicy {
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return focus::OutOfScopePolicy::default();
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return focus::OutOfScopePolicy::default();
+    };
+    value
+        .get("focus")
+        .and_then(|t| t.get("out_of_scope"))
+        .and_then(|v| v.as_str())
+        .map(focus::parse_out_of_scope_policy)
+        .unwrap_or_default()
+}
+
+/// STORY-717: derive a cheap "did you mean" focus suggestion for an out-of-scope
+/// target — its `parent:` tag when present (the AIDA convention is
+/// `parent:EPIC-NN`). Returns `None` when no cheap hint exists, in which case
+/// the nudge just names the mismatch (per the spec: "if cheap; else just name
+/// the mismatch").
+// trace:STORY-717 | ai:claude
+fn suggested_focus_for(target: &aida_core::Requirement) -> Option<String> {
+    target
+        .tags
+        .iter()
+        .find_map(|t| t.strip_prefix("parent:"))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// STORY-717: the focus-scope drift guard. At a work-START moment, if the
+/// current worktree has a focus set (STORY-706) and `target` is OUTSIDE that
+/// focus's transitive subtree, apply the configured `[focus] out_of_scope`
+/// policy. `force` ALWAYS overrides. Membership reuses the cache's
+/// `descendant_ids` closure (TASK-955) — the same subtree the focus read-scope
+/// uses — rather than re-walking the hierarchy. Best-effort: an unresolvable
+/// focus spec or a cache error skips the guard rather than blocking real work
+/// (a `Block` policy still returns `Err` on a genuine out-of-scope start).
+// trace:STORY-717 | ai:claude
+fn focus_scope_guard(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+    target: &aida_core::Requirement,
+    force: bool,
+) -> Result<()> {
+    // No focus set in this worktree → no check.
+    let Some(focus_ref) = focus::resolve_focus(project_root) else {
+        return Ok(());
+    };
+    let policy = read_focus_out_of_scope_policy(project_root);
+    // Cheap exit before touching the cache when the guard is muted anyway.
+    if policy == focus::OutOfScopePolicy::Off {
+        return Ok(());
+    }
+    // The focus label must still resolve to a real spec; if it no longer does,
+    // don't block work (the read-scope path warns about a dangling focus).
+    let Some(focus_req) = backend.get_requirement_by_spec_id(&focus_ref)? else {
+        return Ok(());
+    };
+    // REUSE the TASK-955 subtree closure (includes the root) for membership.
+    let subtree = backend.descendant_ids(&focus_req.id)?;
+    let in_scope = focus::is_in_focus_scope(&target.id, &subtree);
+    match focus::decide_focus_action(policy, in_scope, force) {
+        focus::FocusGuardAction::Proceed => Ok(()),
+        focus::FocusGuardAction::Warn => {
+            let core = focus::out_of_scope_message(
+                &target.display_id(),
+                &focus_req.display_id(),
+                suggested_focus_for(target).as_deref(),
+            );
+            eprintln!(
+                "{} {} (--force to silence)",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                core
+            );
+            Ok(())
+        }
+        focus::FocusGuardAction::Block => {
+            let core = focus::out_of_scope_message(
+                &target.display_id(),
+                &focus_req.display_id(),
+                suggested_focus_for(target).as_deref(),
+            );
+            anyhow::bail!("{} (pass --force to override)", core)
+        }
+    }
+}
+
+/// STORY-717: focus guard for callers that don't already hold a backend
+/// (`queue work`, `agent new --spec`). Resolves `spec` against a cache-backed
+/// backend, then defers to [`focus_scope_guard`]. Skips early (no backend work)
+/// when no focus is set; best-effort on store/spec resolution. A `Block` policy
+/// still propagates the `Err`.
+// trace:STORY-717 | ai:claude
+fn focus_scope_guard_for_spec(
+    project_root: &std::path::Path,
+    spec: &str,
+    force: bool,
+) -> Result<()> {
+    // Fast path: no focus → skip the (potentially cache-rebuilding) backend open.
+    if focus::resolve_focus(project_root).is_none() {
+        return Ok(());
+    }
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Ok(());
+    };
+    let Ok(backend) = advance_backend(&store_path) else {
+        return Ok(());
+    };
+    let Some(target) = backend.get_requirement_by_spec_id(spec)? else {
+        return Ok(());
+    };
+    focus_scope_guard(project_root, &backend, &target, force)
+}
+
 /// STORY-564: read `[zen] auto_exit` from `.aida/config.toml`. Returns the
 /// operator's persistent preference for whether a clean standalone-`--zen`
 /// finish auto-exits (`true`, the default) or always pauses (`false`).
@@ -22372,6 +22513,47 @@ mod story_441_archive_config_tests {
         let tmp = tempfile::tempdir().unwrap();
         write_config(tmp.path(), "[store.sync]\nauto_push = \"manual\"\n");
         assert_eq!(read_archive_auto_after_days(tmp.path()), None);
+    }
+
+    /// STORY-717: `[focus] out_of_scope` config read — default + each mode.
+    // trace:STORY-717 | ai:claude
+    #[test]
+    fn read_focus_policy_defaults_to_warn_when_absent_or_unset() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No config file at all → default warn.
+        assert_eq!(
+            read_focus_out_of_scope_policy(tmp.path()),
+            focus::OutOfScopePolicy::Warn
+        );
+        // Config present but no [focus] block → default warn.
+        write_config(tmp.path(), "[archive]\nauto_after_days = 30\n");
+        assert_eq!(
+            read_focus_out_of_scope_policy(tmp.path()),
+            focus::OutOfScopePolicy::Warn
+        );
+    }
+
+    // trace:STORY-717 | ai:claude
+    #[test]
+    fn read_focus_policy_reads_each_mode() {
+        for (body, expected) in [
+            (
+                "[focus]\nout_of_scope = \"off\"\n",
+                focus::OutOfScopePolicy::Off,
+            ),
+            (
+                "[focus]\nout_of_scope = \"warn\"\n",
+                focus::OutOfScopePolicy::Warn,
+            ),
+            (
+                "[focus]\nout_of_scope = \"block\"\n",
+                focus::OutOfScopePolicy::Block,
+            ),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            write_config(tmp.path(), body);
+            assert_eq!(read_focus_out_of_scope_policy(tmp.path()), expected);
+        }
     }
 
     /// Mirrors `auto_bump_env_flag_respects_opt_out` shape — one test that
@@ -41732,6 +41914,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
         "claude" => Some(AgentNewCommand::Claude {
             role: None,
             spec: None,
+            force: false,
             cwd: None,
             permission_mode: None,
             sandbox: false,
@@ -41747,6 +41930,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
         "codex" => Some(AgentNewCommand::Codex {
             role: None,
             spec: None,
+            force: false,
             cwd: None,
             bypass_sandbox: false,
             no_context: false,
@@ -41760,6 +41944,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
         "antigravity" => Some(AgentNewCommand::Antigravity {
             role: None,
             spec: None,
+            force: false,
             cwd: None,
             bypass_sandbox: false,
             no_context: false,
@@ -41823,6 +42008,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
         AgentNewCommand::Claude {
             role,
             spec,
+            force,
             cwd,
             permission_mode,
             sandbox,
@@ -41837,6 +42023,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
         } => agent_new_claude(
             role.clone(),
             spec.clone(),
+            *force,
             cwd.as_deref(),
             permission_mode.as_deref(),
             *sandbox,
@@ -41849,6 +42036,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
         AgentNewCommand::Codex {
             role,
             spec,
+            force,
             cwd,
             bypass_sandbox,
             no_context,
@@ -41861,6 +42049,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
         } => agent_new_codex(
             role.clone(),
             spec.clone(),
+            *force,
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
@@ -41871,6 +42060,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
         AgentNewCommand::Antigravity {
             role,
             spec,
+            force,
             cwd,
             bypass_sandbox,
             no_context,
@@ -41883,6 +42073,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
         } => agent_new_antigravity(
             role.clone(),
             spec.clone(),
+            *force,
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
@@ -42111,6 +42302,7 @@ fn child_role_project_root(cwd: Option<&std::path::Path>) -> Result<std::path::P
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
+    force: bool,
     cwd: Option<&std::path::Path>,
     permission_mode: Option<&str>,
     sandbox: bool,
@@ -42180,6 +42372,7 @@ fn agent_new_claude(
             config,
             role,
             spec,
+            force,
             cwd,
             context,
             prompt,
@@ -42192,6 +42385,7 @@ fn agent_new_claude(
             config,
             role,
             spec,
+            force,
             cwd,
             context,
             prompt,
@@ -42208,6 +42402,7 @@ fn agent_new_claude(
 fn agent_new_codex(
     role: Option<String>,
     spec: Option<String>,
+    force: bool,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
@@ -42242,6 +42437,7 @@ fn agent_new_codex(
         config,
         role,
         spec,
+        force,
         cwd,
         context,
         prompt,
@@ -42257,6 +42453,7 @@ fn agent_new_codex(
 fn agent_new_antigravity(
     role: Option<String>,
     spec: Option<String>,
+    force: bool,
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
@@ -42291,6 +42488,7 @@ fn agent_new_antigravity(
         config,
         role,
         spec,
+        force,
         cwd,
         context,
         prompt,
@@ -42306,6 +42504,7 @@ fn agent_new_with_config(
     mut config: AgentLaunchConfig,
     role: Option<String>,
     spec: Option<String>,
+    force: bool,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
@@ -42352,6 +42551,16 @@ fn agent_new_with_config(
     // trace:BUG-408 | ai:claude
     if context.show {
         return print_dry_launch_context(&project_root, role, spec, &config, name);
+    }
+
+    // STORY-717: focus-scope drift guard at the agent-launch work-start moment.
+    // Spawning an agent on `--spec` outside the active focus subtree applies the
+    // [focus] out_of_scope policy (warn nudges + proceeds, block refuses without
+    // --force, off silent). Runs AFTER the `--show-context` preview return (a
+    // dry preview is never blocked) and before the worktree/lease/status-flip
+    // side effects of `prepare_agent_launch`. trace:STORY-717 | ai:claude
+    if let Some(spec_id) = spec.as_deref() {
+        focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
@@ -42426,6 +42635,7 @@ fn agent_new_bg_dispatch(
     mut config: AgentLaunchConfig,
     role: Option<String>,
     spec: Option<String>,
+    force: bool,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
@@ -42469,6 +42679,12 @@ fn agent_new_bg_dispatch(
     // trace:BUG-408 | ai:claude
     if context.show {
         return print_dry_launch_context(&project_root, role, spec, &config, name);
+    }
+
+    // STORY-717: focus-scope drift guard (same as the foreground path) for the
+    // `--bg` dispatch. trace:STORY-717 | ai:claude
+    if let Some(spec_id) = spec.as_deref() {
+        focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
@@ -122239,6 +122455,7 @@ fn handle_queue_command(
             force_base,
             steal,
             force_claim,
+            force,
             batch,
             batches,
             dry_run,
@@ -122280,6 +122497,17 @@ fn handle_queue_command(
             strict,
         } => {
             let user_id = get_user(user);
+            // STORY-717: focus-scope drift guard at the queue-work work-start
+            // moment. When an explicit spec `id` is named and the worktree has
+            // a focus set, refuse/nudge if the spec is outside the focus
+            // subtree per `[focus] out_of_scope`. `--force` always overrides.
+            // The `next` / `nextN` / `batch:NAME` keywords don't resolve to a
+            // spec, so the guard naturally no-ops for them. trace:STORY-717
+            if let Some(spec_arg) = id.as_deref() {
+                if let Ok(project_root) = find_project_root() {
+                    focus_scope_guard_for_spec(&project_root, spec_arg, *force)?;
+                }
+            }
             // TASK-578: expand the `--drain` discoverability alias into the
             // underlying `--auto-complete --no-human=both --max <queue-size>`
             // state before anything downstream reads those flags. `--drain` only
