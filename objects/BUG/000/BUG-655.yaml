@@ -3,12 +3,12 @@ spec_id: BUG-655
 agreed_id: BUG-655
 title: Auto-followups duplicates when a plan with a Followups section is committed by multiple agents/PRs
 description: 'STORY-712 shipped via 4 slice PRs; the plan docs/plans/2026-06-29-story-712-zero-token-supervision.md (with a ## Followups section) was copied + committed into more than one slice worktree. Each commit that carried the plan + reached Done tripped the auto-followups filing, so the 5 followup bullets were filed TWICE (TASK-993-997 + exact dups TASK-998-1002). The [aida:followups] idempotency marker is evidently per-triggering-commit, not global to the plan/spec, so two independent commits both fire. FIX: dedupe auto-followups by (plan-path + bullet-text) or a spec-level marker that survives across commits/agents, not a per-commit marker. Rejected the 5 dups manually (998-1002).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:33:38.940496400Z
-modified_at: 2026-06-29T17:33:38.940496400Z
+modified_at: 2026-06-29T18:19:56.003225820Z
 req_type: Bug
 tags:
 - auto-followups
