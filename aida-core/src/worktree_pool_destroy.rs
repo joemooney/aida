@@ -265,6 +265,41 @@ pub fn destroy(
     })
 }
 
+/// Tear down a single worktree by path, whether or not it is a pool entry.
+///
+/// This is the shared teardown the heal/GC paths use instead of a bare
+/// `git worktree remove --force`: it runs the `pre_destroy` hooks (the one
+/// place `cargo clean` should fire — TASK-0396) *before* the removal, removes
+/// the worktree, and deregisters it from the pool registry if it happens to be
+/// a pooled tree. Salvaging dirty state stays the caller's responsibility (the
+/// doctor heals already patch-salvage before calling this).
+///
+/// Returns Ok(true) when the worktree was removed. Unlike `destroy`, this does
+/// NOT classify or honor `--include-*` flags — the caller has already decided
+/// the tree should go (a confirmed orphan / merged-agent worktree); this just
+/// makes the teardown hook-aware and registry-consistent.
+// trace:STORY-714 trace:TASK-0396 | ai:claude
+pub fn teardown_worktree_path(
+    project_root: &Path,
+    worktree_path: &Path,
+    pre_destroy_hooks: &[String],
+) -> Result<bool> {
+    // pre_destroy hooks (cargo clean) fire while the tree still exists.
+    if worktree_path.exists() {
+        crate::worktree_hooks::run_hooks(pre_destroy_hooks, worktree_path, "pre_destroy");
+    }
+    git_ops::remove_worktree_at(project_root, worktree_path, true)?;
+
+    // Deregister from the pool registry if this was a pooled tree (no-op
+    // otherwise). Best-effort: a registry hiccup must not fail the teardown.
+    let target = canonical(worktree_path);
+    let _ = worktree_pool::with_state_lock(project_root, |pool| {
+        pool.entries.retain(|e| canonical(&e.path) != target);
+        Ok(())
+    });
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,5 +535,49 @@ mod git_integration_tests {
             "a leased tree is never removed by a bulk --all sweep"
         );
         assert!(report.targets[0].reason.contains("--include-leased"));
+    }
+
+    #[test]
+    fn teardown_path_runs_hook_removes_and_deregisters() {
+        let repo = init_repo();
+        let root = repo.path();
+        let p1 = worktree_pool::acquire(
+            root,
+            &AcquireOptions {
+                max_trees: Some(4),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(worktree_pool::read_state(root).unwrap().entries.len(), 1);
+
+        // The pre_destroy hook fires before the removal — the one place
+        // cargo clean would run on a doctor/GC teardown.
+        let marker = root.join("teardown-hook.marker");
+        let hook = format!("touch {}", marker.display());
+        let ok = teardown_worktree_path(root, &p1, &[hook]).unwrap();
+        assert!(ok);
+        assert!(marker.exists(), "pre_destroy hook must run before removal");
+        assert!(!p1.exists(), "worktree should be removed");
+        assert!(
+            worktree_pool::read_state(root).unwrap().entries.is_empty(),
+            "a pooled tree must be deregistered from the registry on teardown"
+        );
+    }
+
+    #[test]
+    fn teardown_path_handles_non_pool_worktree() {
+        // A worktree that isn't a pool entry (the common doctor case) is still
+        // torn down cleanly, with no registry to touch.
+        let repo = init_repo();
+        let root = repo.path();
+        let wt = root.parent().unwrap().join("aida-non-pool-test");
+        git_ops::add_detached_worktree(root, &wt, "main").unwrap();
+        assert!(wt.exists());
+        assert!(worktree_pool::read_state(root).unwrap().entries.is_empty());
+
+        let ok = teardown_worktree_path(root, &wt, &[]).unwrap();
+        assert!(ok);
+        assert!(!wt.exists(), "non-pool worktree should still be removed");
     }
 }
