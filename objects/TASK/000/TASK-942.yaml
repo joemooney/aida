@@ -3,12 +3,12 @@ spec_id: TASK-942
 agreed_id: TASK-942
 title: TUI create ('n') should link the new draft to the active focus epic
 description: 'Walkthrough finding (operator, 2026-06-26): when focused on an epic and pressing n to create a draft, the new spec gets NO parent edge, so the focus lens immediately HIDES it — the operator sees their new spec vanish (''I created a spec but it was not made a child of the focus epic''). FIX: when a focus epic is active, n sets the new spec''s parent to the focus epic (bidirectional rel add) so it appears in the cockpit. Without a focus, behavior unchanged.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:24:40.752272512Z
-modified_at: 2026-06-29T09:14:22.257107058Z
+modified_at: 2026-06-29T09:14:23.529526601Z
 req_type: Task
 tags:
 - batch:epic54
