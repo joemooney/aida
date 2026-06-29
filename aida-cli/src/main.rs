@@ -115,6 +115,8 @@ mod usage;
 mod user_alias;
 mod worker;
 mod workflow_hints;
+// trace:STORY-716 | ai:claude — `aida worktree` namespace (EPIC-55 workspace layer).
+mod worktree;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
 mod worktree_lease;
 mod zen;
@@ -188,7 +190,8 @@ use crate::cli::{
     RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand,
     SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
-    TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
+    TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, WorktreeCommand,
+    ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2585,6 +2588,15 @@ fn run() -> Result<()> {
         return handle_spec_interview(id, *apply, *ai, answers.as_deref(), *json);
     }
 
+    // STORY-716: `aida worktree` (EPIC-55 workspace layer) operates on git +
+    // the filesystem; `enter` emits `cd` shell on stdout for the `aida()`
+    // wrapper to auto-eval. Like `role enter` it needs no shared storage
+    // handle and its stdout must stay clean of store-init noise, so it
+    // dispatches early. trace:STORY-716 | ai:claude
+    if let Command::Worktree(wt_cmd) = &cli.command {
+        return handle_worktree_command(wt_cmd);
+    }
+
     // STORY-563: `aida human <subcommand>` self-loads the store like `aida why`
     // / `burndown explain`, or delegates to the top-level presence handlers.
     // Dispatch early, no shared storage handle needed.
@@ -3706,6 +3718,9 @@ fn run() -> Result<()> {
         Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
         Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
+        Command::Worktree(_) => {
+            unreachable!("worktree subcommands are dispatched before storage init")
+        }
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -14289,6 +14304,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
         Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
+        Command::Worktree(_) => {
+            unreachable!("worktree subcommands are dispatched before storage init")
+        }
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -86929,10 +86947,10 @@ fn eval_subcommand_hint(subcommand: &str) -> String {
 /// Shell helpers emitted by `aida dev shell-init`. A single `aida()` wrapper
 /// function — pyenv/rbenv style. For most subcommands it just delegates to
 /// the binary. For the handful of eval-only subcommands (dev activate, dev
-/// deactivate, role enter, role end, role add — those that need to mutate
-/// the calling shell), it wraps them in `eval "$(command aida ...)"` so
-/// they actually take effect in the user's shell instead of getting lost
-/// in the subprocess.
+/// deactivate, role enter, role end, role add, worktree enter — those that
+/// need to mutate the calling shell, e.g. cd into a new worktree), it wraps
+/// them in `eval "$(command aida ...)"` so they actually take effect in the
+/// user's shell instead of getting lost in the subprocess.
 ///
 /// Use `command aida ...` to bypass the wrapper and invoke the binary
 /// directly (e.g., for scripting where you want raw stdout).
@@ -86950,14 +86968,14 @@ const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # (`aida role enter <role>`); printing `eval "$(...)"` would double-eval and
 # lose the effect. The value lists the auto-evaled verb groups for any future
 # wrapper-aware decisions.
-export AIDA_SHELL_WRAPPER='role,session,dev'
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree'
 
 aida() {
     # Take the first two positional words verbatim — that's enough to
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
     case "$_aida_cmd" in
-        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end")
+        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end"|"worktree enter")
             # session start/end split output: stderr for human messages
             # (status, prompts), stdout for the shell-modifying lines
             # (`export AIDA_SESSION_ID=...` / `unset AIDA_SESSION_ID`).
@@ -92298,6 +92316,319 @@ fn handle_unclaim(spec: &str) -> Result<()> {
 /// ([`lease_state_for`], which already folds in pid/worktree liveness), and the
 /// elapsed-from-started helper ([`humanize_duration_secs`]).
 // trace:STORY-694 | ai:claude
+/// The outcome of [`ensure_epic_worktree`]: where the epic worktree lives, the
+/// branch it's on, the focus label written into it, and whether THIS call
+/// created it (vs. found it already registered). Lets `add` print "created" vs
+/// "already exists", and `enter` re-affirm the focus on an existing tree.
+// trace:STORY-716 | ai:claude
+struct EpicWorktreeOutcome {
+    path: std::path::PathBuf,
+    branch: String,
+    focus: String,
+    created: bool,
+}
+
+/// Resolve the path + branch for an epic worktree (honoring `--path`/`--branch`
+/// overrides), create the git worktree off the default branch (origin/main) if
+/// it isn't already registered, and write the `aida focus <epic>` marker INSIDE
+/// it. Idempotent: an already-registered worktree is left as-is and its focus
+/// re-affirmed. Prints nothing — the caller routes human/eval output.
+// trace:STORY-716 | ai:claude
+fn ensure_epic_worktree(
+    epic: &str,
+    path_override: Option<&str>,
+    branch_override: Option<&str>,
+) -> Result<EpicWorktreeOutcome> {
+    let main_root = find_main_worktree_root()?;
+    let home =
+        dirs::home_dir().context("cannot resolve home directory for the default worktree path")?;
+    ensure_epic_worktree_core(&main_root, &home, epic, path_override, branch_override)
+}
+
+/// The testable core of [`ensure_epic_worktree`] — takes the main worktree root
+/// and the home dir explicitly so a test can drive it against a throwaway git
+/// repo + temp home without depending on cwd discovery.
+// trace:STORY-716 | ai:claude
+fn ensure_epic_worktree_core(
+    main_root: &std::path::Path,
+    home: &std::path::Path,
+    epic: &str,
+    path_override: Option<&str>,
+    branch_override: Option<&str>,
+) -> Result<EpicWorktreeOutcome> {
+    let focus_label = crate::worktree::normalize_epic_label(epic);
+
+    let path: std::path::PathBuf = match path_override {
+        Some(p) => std::path::PathBuf::from(p),
+        None => crate::worktree::default_worktree_path(home, epic),
+    };
+    let branch = branch_override
+        .map(|b| b.to_string())
+        .unwrap_or_else(|| crate::worktree::default_branch(epic));
+
+    // Idempotency: if git already tracks a worktree at this path, re-affirm the
+    // focus and report it rather than erroring (mirrors a re-run of `add`).
+    let porcelain = std::process::Command::new("git")
+        .arg("-C")
+        .arg(main_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+
+    if crate::worktree::is_registered(&porcelain, &path) {
+        crate::focus::write_focus_marker(&path, &focus_label)?;
+        return Ok(EpicWorktreeOutcome {
+            path,
+            branch,
+            focus: focus_label,
+            created: false,
+        });
+    }
+
+    // Fork the new branch from origin's mainline regardless of the current
+    // worktree's HEAD (BUG-76's detect helper), falling back to origin/main.
+    let base_ref = detect_default_branch_ref(main_root).unwrap_or_else(|| "origin/main".into());
+
+    // If the branch already exists, attach it (drop `-b`); else create it off
+    // the base ref. `git worktree add` refuses to recreate an existing branch.
+    let branch_exists = std::process::Command::new("git")
+        .arg("-C")
+        .arg(main_root)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("refs/heads/{}", branch))
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let path_str = path
+        .to_str()
+        .context("worktree path is not valid UTF-8")?
+        .to_string();
+
+    // Ensure the parent dir exists (e.g. `~/ai` on a fresh machine) — older git
+    // won't create missing intermediate directories for the worktree path.
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    let mut args: Vec<String> = vec!["worktree".into(), "add".into()];
+    if branch_exists {
+        args.push(path_str.clone());
+        args.push(branch.clone());
+    } else {
+        args.push("-b".into());
+        args.push(branch.clone());
+        args.push(path_str.clone());
+        args.push(base_ref.clone());
+    }
+
+    let res = std::process::Command::new("git")
+        .arg("-C")
+        .arg(main_root)
+        .args(&args)
+        .output()
+        .context("failed to invoke `git worktree add`")?;
+    if !res.status.success() {
+        anyhow::bail!(
+            "`git worktree add` failed: {}",
+            String::from_utf8_lossy(&res.stderr).trim()
+        );
+    }
+
+    // Auto-scope the new tree to the epic (STORY-706 focus). Uses the low-level
+    // marker writer, not the validating `aida focus` path — the fresh worktree
+    // has no cache attached yet, and validation already happened (or doesn't
+    // apply) at the operator's keyboard.
+    crate::focus::write_focus_marker(&path, &focus_label)?;
+
+    Ok(EpicWorktreeOutcome {
+        path,
+        branch,
+        focus: focus_label,
+        created: true,
+    })
+}
+
+/// Dispatch `aida worktree <subcommand>` (STORY-716, EPIC-55 workspace layer).
+// trace:STORY-716 | ai:claude
+fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
+    match cmd {
+        WorktreeCommand::Add { epic, path, branch } => {
+            handle_worktree_add(epic, path.as_deref(), branch.as_deref())
+        }
+        WorktreeCommand::Enter { epic, path, branch } => {
+            handle_worktree_enter(epic, path.as_deref(), branch.as_deref())
+        }
+        WorktreeCommand::List { json } => handle_worktree_list(*json),
+    }
+}
+
+/// `aida worktree add <epic>` — create (or re-affirm) the epic worktree and
+/// print its path. Mirrors `git worktree add`: prints the path, does NOT cd.
+// trace:STORY-716 | ai:claude
+fn handle_worktree_add(
+    epic: &str,
+    path_override: Option<&str>,
+    branch_override: Option<&str>,
+) -> Result<()> {
+    let out = ensure_epic_worktree(epic, path_override, branch_override)?;
+    let verb = if out.created {
+        "Created"
+    } else {
+        "Already exists"
+    };
+    println!(
+        "{} {} worktree for {} at {}",
+        crate::glyph(crate::glyphs::Glyph::Check),
+        verb,
+        out.focus.cyan().bold(),
+        out.path.display().to_string().cyan(),
+    );
+    println!("  branch: {}  ·  focus: {}", out.branch, out.focus);
+    if out.created {
+        println!(
+            "  cd into it with `aida worktree enter {}` (auto-cd via the shell wrapper).",
+            epic
+        );
+    } else {
+        println!(
+            "  focus re-affirmed; `aida worktree enter {}` to cd in.",
+            epic
+        );
+    }
+    Ok(())
+}
+
+/// `aida worktree enter <epic>` — create-if-missing, then emit `cd '<path>'`
+/// on stdout for the `aida()` shell wrapper to auto-eval. Human-facing status
+/// goes to STDERR so it never contaminates the eval'd stdout.
+// trace:STORY-716 | ai:claude
+fn handle_worktree_enter(
+    epic: &str,
+    path_override: Option<&str>,
+    branch_override: Option<&str>,
+) -> Result<()> {
+    let out = ensure_epic_worktree(epic, path_override, branch_override)?;
+    let verb = if out.created {
+        "Created and entering"
+    } else {
+        "Entering"
+    };
+    // Status to stderr — the eval-wrapper captures stdout only.
+    eprintln!(
+        "{} {} worktree for {} ({} · focus {})",
+        crate::glyph(crate::glyphs::Glyph::Check),
+        verb,
+        out.focus,
+        out.branch,
+        out.focus,
+    );
+    // The one shell-modifying line the wrapper evals.
+    println!("{}", enter_cd_line(&out.path));
+    Ok(())
+}
+
+/// The single shell line `aida worktree enter` emits on stdout for the `aida()`
+/// wrapper to auto-eval: `cd '<single-quote-escaped path>'`. Pure so the
+/// emitted-shell contract is unit-testable without git.
+// trace:STORY-716 | ai:claude
+fn enter_cd_line(path: &std::path::Path) -> String {
+    format!("cd '{}'", sh_single_quote(&path.display().to_string()))
+}
+
+/// `aida worktree list` — every registered git worktree annotated with its
+/// `.aida/focus` (the epic it's scoped to, or `—` when unscoped).
+// trace:STORY-716 | ai:claude
+fn handle_worktree_list(json: bool) -> Result<()> {
+    let main_root = find_main_worktree_root()?;
+    let porcelain = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&main_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .context("failed to invoke `git worktree list`")?;
+    if !porcelain.status.success() {
+        anyhow::bail!(
+            "`git worktree list` failed: {}",
+            String::from_utf8_lossy(&porcelain.stderr).trim()
+        );
+    }
+    let text = String::from_utf8_lossy(&porcelain.stdout);
+    let paths = crate::worktree::parse_worktree_paths(&text);
+
+    // Pair each worktree with its focus marker + current branch (re-parse the
+    // porcelain for the branch line that follows each `worktree` record).
+    let branches = parse_worktree_branches(&text);
+    let rows: Vec<(std::path::PathBuf, Option<String>, Option<String>)> = paths
+        .iter()
+        .map(|p| {
+            let focus = crate::focus::read_focus_marker(p);
+            let branch = branches.get(p).cloned();
+            (p.clone(), branch, focus)
+        })
+        .collect();
+
+    if json {
+        let arr: Vec<serde_json::Value> = rows
+            .iter()
+            .map(|(p, b, f)| {
+                serde_json::json!({
+                    "path": p.display().to_string(),
+                    "branch": b,
+                    "focus": f,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!(arr))?);
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!("No git worktrees found.");
+        return Ok(());
+    }
+    println!("{}", "AIDA worktrees".bold());
+    for (p, b, f) in &rows {
+        let focus = f
+            .as_deref()
+            .map(|s| s.cyan().bold().to_string())
+            .unwrap_or_else(|| "\u{2014}".dimmed().to_string());
+        let branch = b.as_deref().unwrap_or("(detached)");
+        println!(
+            "  {}  [{}]  focus: {}",
+            p.display().to_string().cyan(),
+            branch,
+            focus,
+        );
+    }
+    Ok(())
+}
+
+/// Parse `git worktree list --porcelain` into a path -> branch-shortname map.
+/// Each record is `worktree <path>` followed (when on a branch) by
+/// `branch refs/heads/<name>`; a detached record has no branch line. Pure.
+// trace:STORY-716 | ai:claude
+fn parse_worktree_branches(
+    porcelain: &str,
+) -> std::collections::HashMap<std::path::PathBuf, String> {
+    let mut map = std::collections::HashMap::new();
+    let mut current: Option<std::path::PathBuf> = None;
+    for line in porcelain.lines() {
+        if let Some(p) = line.strip_prefix("worktree ") {
+            current = Some(std::path::PathBuf::from(p.trim()));
+        } else if let Some(b) = line.strip_prefix("branch ") {
+            if let Some(p) = &current {
+                let short = b.trim().strip_prefix("refs/heads/").unwrap_or(b.trim());
+                map.insert(p.clone(), short.to_string());
+            }
+        }
+    }
+    map
+}
+
 /// `aida focus [<spec>] [--clear] [--show]` — the per-worktree focus context.
 /// Set (a spec given), show (no args / `--show`), or clear (`--clear`) the
 /// focus persisted in `.aida/focus`.
@@ -139856,5 +140187,143 @@ mod merge_contiguous_blocks_tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].next, 40);
         assert_eq!(rows[0].remaining, 61);
+    }
+}
+
+// trace:STORY-716 | ai:claude
+#[cfg(test)]
+mod worktree_handler_tests {
+    use super::*;
+
+    fn git(path: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(path)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("git {:?} failed to spawn: {e}", args));
+        assert!(
+            out.status.success(),
+            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+            args,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    fn init_main_repo(path: &std::path::Path) {
+        git(path, &["init", "-b", "main", "--quiet"]);
+        git(path, &["config", "user.email", "aida@example.test"]);
+        git(path, &["config", "user.name", "AIDA Test"]);
+        git(path, &["commit", "--allow-empty", "-m", "base", "--quiet"]);
+    }
+
+    // The single shell line `worktree enter` emits — `cd '<escaped>'` — is the
+    // contract the `aida()` wrapper auto-evals; assert its exact shape.
+    #[test]
+    fn enter_cd_line_is_single_quoted_cd() {
+        let line = enter_cd_line(std::path::Path::new("/home/joe/ai/aida-epic54"));
+        assert_eq!(line, "cd '/home/joe/ai/aida-epic54'");
+    }
+
+    #[test]
+    fn enter_cd_line_escapes_apostrophes() {
+        let line = enter_cd_line(std::path::Path::new("/tmp/o'brien/aida-epic1"));
+        // The path's apostrophe must be escaped so the eval'd `cd` is one word.
+        assert_eq!(line, "cd '/tmp/o'\\''brien/aida-epic1'");
+    }
+
+    #[test]
+    fn add_creates_worktree_with_focus_then_is_idempotent() {
+        let repo = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        init_main_repo(repo.path());
+
+        // First add: creates the worktree, branch, and focus marker.
+        let out = ensure_epic_worktree_core(repo.path(), home.path(), "EPIC-54", None, None)
+            .expect("first add succeeds");
+        assert!(out.created, "first add reports created");
+        assert_eq!(out.branch, "epic-54-work");
+        assert_eq!(out.focus, "EPIC-54");
+        assert_eq!(out.path, home.path().join("ai").join("aida-epic54"));
+        assert!(out.path.exists(), "worktree dir exists");
+
+        // Focus marker written INSIDE the new worktree.
+        let focus = crate::focus::read_focus_marker(&out.path);
+        assert_eq!(focus.as_deref(), Some("EPIC-54"));
+
+        // The new worktree is on the derived branch.
+        let head = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&out.path)
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&head.stdout).trim(), "epic-54-work");
+
+        // Second add: idempotent — reports already-exists, focus re-affirmed.
+        let again = ensure_epic_worktree_core(repo.path(), home.path(), "EPIC-54", None, None)
+            .expect("second add succeeds");
+        assert!(!again.created, "re-run reports not-created");
+        assert_eq!(again.path, out.path);
+        assert_eq!(
+            crate::focus::read_focus_marker(&again.path).as_deref(),
+            Some("EPIC-54")
+        );
+    }
+
+    #[test]
+    fn add_honors_path_and_branch_overrides() {
+        let repo = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        init_main_repo(repo.path());
+        let custom = home.path().join("custom-tree");
+
+        let out = ensure_epic_worktree_core(
+            repo.path(),
+            home.path(),
+            "epic-7",
+            Some(custom.to_str().unwrap()),
+            Some("my-branch"),
+        )
+        .expect("override add succeeds");
+        assert!(out.created);
+        assert_eq!(out.path, custom);
+        assert_eq!(out.branch, "my-branch");
+        assert_eq!(out.focus, "EPIC-7");
+        assert_eq!(
+            crate::focus::read_focus_marker(&out.path).as_deref(),
+            Some("EPIC-7")
+        );
+    }
+
+    #[test]
+    fn list_branches_parse_pairs_path_to_short_branch() {
+        let porcelain = "\
+worktree /home/joe/ai/aida
+HEAD aaa
+branch refs/heads/main
+
+worktree /home/joe/ai/aida-epic54
+HEAD bbb
+branch refs/heads/epic-54-work
+
+worktree /home/joe/ai/aida-detached
+HEAD ccc
+detached
+";
+        let map = parse_worktree_branches(porcelain);
+        assert_eq!(
+            map.get(std::path::Path::new("/home/joe/ai/aida"))
+                .map(String::as_str),
+            Some("main")
+        );
+        assert_eq!(
+            map.get(std::path::Path::new("/home/joe/ai/aida-epic54"))
+                .map(String::as_str),
+            Some("epic-54-work")
+        );
+        // The detached worktree has no branch line → absent from the map.
+        assert!(!map.contains_key(std::path::Path::new("/home/joe/ai/aida-detached")));
     }
 }
