@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:09:49.815294219Z
-modified_at: 2026-06-29T04:58:07.987616316Z
+modified_at: 2026-06-29T15:48:21.687411420Z
 req_type: Story
 tags:
 - axi
@@ -40,3 +40,8 @@ comments:
   content: 'Namespace alignment: this warm-pool lives under the new ''aida worktree'' namespace (STORY-716) as ''aida worktree pool'' + ''aida worktree remove'' — operator chose ''aida worktree'' (maps to git worktree) over a standalone verb on 2026-06-29. Design the pool/remove surface to slot into that namespace.'
   created_at: 2026-06-29T04:38:53.194859304Z
   modified_at: 2026-06-29T04:38:53.194859304Z
+- id: 019f1411-3c37-7fa2-b2d4-50592d3e9c29
+  author: joe
+  content: 'Functionally complete 2026-06-29: all three implementation slices merged — TASK-981 (#1194 primitives + worktree pool surface + session end --return), TASK-982 (#1197 acquire-on-start, config/--pool gated, default off), TASK-983 (#1207 doctor heals routed through hook-aware teardown). TASK-0396 (cargo-cache poison) and BUG-553 (branch-stacking) structurally dissolved across every teardown path. Only remaining child is TASK-985 (flip default ON), deferred behind the advisor gate: supervised dogfood + integration tests.'
+  created_at: 2026-06-29T15:48:21.687411420Z
+  modified_at: 2026-06-29T15:48:21.687411420Z
