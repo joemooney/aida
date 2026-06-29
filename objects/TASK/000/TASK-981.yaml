@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:30:29.044252966Z
-modified_at: 2026-06-29T05:31:50.741541082Z
+modified_at: 2026-06-29T05:41:02.778642565Z
 req_type: Task
 tags:
 - aida:worktree:pool
@@ -25,3 +25,8 @@ comments:
   content: Commit e9eee4eb1 references this requirement
   created_at: 2026-06-29T05:31:50.741541082Z
   modified_at: 2026-06-29T05:31:50.741541082Z
+- id: 019f11e5-38ba-7c12-aab9-200e699bc5ea
+  author: joe
+  content: Commit 09836af33 references this requirement
+  created_at: 2026-06-29T05:41:02.778642565Z
+  modified_at: 2026-06-29T05:41:02.778642565Z
