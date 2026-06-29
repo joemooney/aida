@@ -1768,36 +1768,47 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
                 ("↵", v.label(), v.hint(), false)
             }
         };
-        // BUG-638: at the verb level, grey out + relabel a verb the active role
-        // is not permitted to run. The operator still SEES the full verb
-        // vocabulary (quiet-depth discoverability), but an advisor-/reviewer-only
-        // verb their role would be refused for renders dimmed, non-selectable,
-        // and with a "requires the <role> role" hint instead of its normal one.
-        // The role axis is orthogonal to status-applicability (verb_list_for)
-        // and to selection — this is the THIRD grey-out axis. trace:BUG-638
+        // Grey out + relabel a verb that doesn't apply to the selected spec, on
+        // either of two COMPOSING axes (the operator still SEES the full verb
+        // vocabulary — quiet-depth discoverability — but inapplicable rows
+        // render dimmed, non-selectable, with a reason instead of the normal
+        // hint):
+        //   * ROLE (BUG-638): an advisor-/reviewer-only verb the active role
+        //     would be refused for -> "requires the <role> role".
+        //   * STATUS (TASK-947): a status-conditional verb the FOCUSED item's
+        //     status doesn't apply to (e.g. `approve` on a non-Draft, `accept`
+        //     on a non-Done) -> "only for <Status> specs".
+        // A verb greys if EITHER axis disqualifies it; role takes hint
+        // precedence (the seat mismatch is the more fundamental one). With
+        // selection these are the grey-out axes. trace:TASK-947 trace:BUG-638
         let mut hint = hint.to_string();
-        let mut role_disabled = false;
+        let mut disabled = false;
         if st.level == Level::Verbs {
             let v = st.current_verbs()[real];
             if !st.verb_role_permitted(v) {
-                role_disabled = true;
+                disabled = true;
                 if let Some(req) = v.required_role() {
                     hint = format!("requires the {req} role");
+                }
+            } else if !st.verb_status_permitted(v) {
+                disabled = true;
+                if let Some(req) = st.verb_status_hint(v) {
+                    hint = format!("only for {req} specs");
                 }
             }
         }
         let marker = if selected { "▸ " } else { "  " };
-        // Non-wired scopes are dimmed; a role-disabled verb is dimmed too, even
-        // when it is the cursor row, so the greyed state survives the highlight.
-        let dim_label = (!drills && st.level == Level::Scopes) || role_disabled;
-        let style = if role_disabled {
+        // Non-wired scopes are dimmed; a disabled verb is dimmed too, even when
+        // it is the cursor row, so the greyed state survives the highlight.
+        let dim_label = (!drills && st.level == Level::Scopes) || disabled;
+        let style = if disabled {
             Style::default().fg(theme.dim)
         } else {
             row_style(theme, selected && focused, dim_label)
         };
-        // A role-disabled verb keeps the plain (dim) weight; only an enabled
-        // label is bolded, so the disabled rows read as visibly inert.
-        let label_style = if role_disabled {
+        // A disabled verb keeps the plain (dim) weight; only an enabled label is
+        // bolded, so the disabled rows read as visibly inert.
+        let label_style = if disabled {
             style
         } else {
             style.add_modifier(Modifier::BOLD)
@@ -3130,14 +3141,16 @@ mod render_tests {
     }
 
     #[test]
-    fn renders_open_scope_verbs_with_draft_conditional() {
-        // Focused on a Draft item → the verb list shows request approval +
-        // approve + reject (the Draft-conditional verbs). trace:TASK-920 trace:TASK-949
+    fn renders_open_scope_verbs_with_status_greying() {
+        // Post-TASK-947: the verb list is the FULL Open vocabulary regardless of
+        // focused status — status-inapplicable verbs render GREYED, not hidden.
+        // On a Draft focus the draft verbs apply and `queue`/`accept` grey.
+        // trace:TASK-920 trace:TASK-949 trace:TASK-947
         let mut st = sample(5); // index 0 is Draft
         drill_open(&mut st);
         st.focus_bottom(); // focus TASK-0 (Draft)
         st.focus_top();
-        draw(&st, 100, 30);
+        draw(&st, 100, 30); // renders without panic, greyed rows included
         assert_eq!(
             st.current_verbs(),
             vec![
@@ -3147,9 +3160,15 @@ mod render_tests {
                 Verb::RequestApproval,
                 Verb::Approve,
                 Verb::Reject,
-                Verb::Defer
+                Verb::Queue,
+                Verb::Accept,
+                Verb::Defer,
             ]
         );
+        // Draft focus: draft verbs apply; approved/done verbs grey.
+        assert!(st.verb_status_permitted(Verb::Approve));
+        assert!(!st.verb_status_permitted(Verb::Queue));
+        assert!(!st.verb_status_permitted(Verb::Accept));
     }
 
     #[test]
