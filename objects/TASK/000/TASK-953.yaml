@@ -8,15 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:21:18.056343541Z
-modified_at: 2026-06-27T16:36:00.106020524Z
+modified_at: 2026-06-29T06:36:05.667479059Z
 req_type: Task
 tags:
-- parent:EPIC-54
-- redesign
-- status
-- tui
-- verb
-- visibility
+- batch:epic54
 relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b

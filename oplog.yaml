@@ -24983,5 +24983,61 @@ operations:
   timestamp: 2026-06-29T06:36:03.705211469Z
   kind: !RemoveTag
     tag: finding
-clock: 2388
+- id: 019f1217-9f4f-76d0-b65b-bae6334bbb7f
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2389
+  timestamp: 2026-06-29T06:36:05.839537737Z
+  kind: !AddTag
+    tag: batch:epic54
+- id: 019f1217-a0f7-75d1-8ea6-da1c5a66cc6d
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2390
+  timestamp: 2026-06-29T06:36:06.263162189Z
+  kind: !RemoveTag
+    tag: tui
+- id: 019f1217-a29e-7b63-ac71-76825831179b
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2391
+  timestamp: 2026-06-29T06:36:06.686347559Z
+  kind: !RemoveTag
+    tag: visibility
+- id: 019f1217-a444-7932-9468-ae5075ee795b
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2392
+  timestamp: 2026-06-29T06:36:07.108553915Z
+  kind: !RemoveTag
+    tag: parent:EPIC-54
+- id: 019f1217-a5ea-7f93-9908-0c40d58e5242
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2393
+  timestamp: 2026-06-29T06:36:07.530781026Z
+  kind: !RemoveTag
+    tag: verb
+- id: 019f1217-a790-77c1-9481-f438cab4e8b6
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2394
+  timestamp: 2026-06-29T06:36:07.952748944Z
+  kind: !RemoveTag
+    tag: redesign
+- id: 019f1217-a936-7683-9035-566667011b21
+  target_id: 019f0718-8fe8-7c12-a5d3-c5d5d55320e4
+  author: aida
+  node_id: '1'
+  lamport: 2395
+  timestamp: 2026-06-29T06:36:08.374646246Z
+  kind: !RemoveTag
+    tag: status
+clock: 2395
 node_id: '1'
