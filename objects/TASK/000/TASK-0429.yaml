@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:38.146829409Z
-modified_at: 2026-06-27T16:40:33.237489257Z
+modified_at: 2026-06-29T16:31:39.729232457Z
 req_type: Task
 tags:
 - advisor-autopilot
@@ -25,6 +25,12 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
   created_at: 2026-06-24T03:17:38.146867480Z
+comments:
+- id: 019f1438-e0d1-7491-910f-cb698def781d
+  author: joe
+  content: 'Design plan: docs/plans/2026-06-29-epic-0428-policy-envelope.md — autopilot = bounded-authority envelope over groom; per-action-class authority map (auto/propose/never) + 4 AND-composed gates (fence, authority, Type-A/recorded-B grounding, risk ceiling); conservative default (approve/reject=propose). Design only; needs master-advisor sign-off.'
+  created_at: 2026-06-29T16:31:39.729232457Z
+  modified_at: 2026-06-29T16:31:39.729232457Z
 deferred: true
 deferred_at: 2026-06-27T16:40:33.237489257Z
 deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
