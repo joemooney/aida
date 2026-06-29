@@ -26205,5 +26205,17 @@ operations:
   timestamp: 2026-06-29T18:31:53.513730462Z
   kind: !SetStatus
     status: Completed
-clock: 2503
+- id: 019f14d9-69d0-7142-91b3-1735d28a294a
+  target_id: 019f14d9-5ae8-7cf0-b053-204d6c1e5c9e
+  author: aida
+  node_id: '1'
+  lamport: 2504
+  timestamp: 2026-06-29T19:27:00.560421849Z
+  kind: !Create
+    title: 'Autopilot slice 1: autonomy-doc section 8 + orthogonal-axes framing (the shared mental model)'
+    description: 'TASK-0432 smallest-first-slice (doc-first). New section 8 in docs/architecture/autonomy-and-escalation.md: autopilot is the grooming-stage analog of the cascade, the orthogonal grooming-vs-draining axes, the composition matrix, one keystone classifier. Plus the docs/solo-mode.md compose-with note + glossary entry. Lands the shared mental model that prevents precedence bugs before any code. GATED: operator ratifies the autopilot direction first.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2504
 node_id: '1'
