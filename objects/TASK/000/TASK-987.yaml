@@ -3,12 +3,12 @@ spec_id: TASK-987
 agreed_id: TASK-987
 title: Event substrate + classifier core (events.rs) — STORY-712 slice 1a
 description: 'New aida-cli/src/events.rs: EventKind enum + Event struct + is_actionable() pure classifier + emit() best-effort append to .aida/events.jsonl (clone of punt::append_to_ledger). NO behavior change, NO consumer yet. Pure + writer tests per the plan. Smallest valuable slice of STORY-712 (zero-token supervision). Plan: docs/plans/2026-06-29-story-712-zero-token-supervision.md.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:52:06.107156683Z
-modified_at: 2026-06-29T15:52:09.827337651Z
+modified_at: 2026-06-29T16:24:44.989769722Z
 req_type: Task
 tags:
 - events
