@@ -207,8 +207,24 @@ spec, then move to the next.
 ### 5. Loop until drained
 
 Re-run `aida burndown plan` (the ready set shrinks as specs land + may grow as
-blockers clear), launch the next wave, and repeat until `ready` is empty. For an
-unattended drain, schedule the next wave via a wake-up rather than blocking.
+blockers clear), launch the next wave, and repeat until `ready` is empty.
+
+For an **unattended** drain, wait on the wave **event-driven**, not on a blind
+timer. Launch the harness `Monitor` tool over the drain's wake feed:
+
+```
+Monitor(command: "aida watch --emit-wakes", persistent: true)
+```
+
+`aida watch` tails the drain's event stream and prints a line **only** on an
+actionable verb — a PR shipped or merged, a CI verdict, a punt, a shelve, the
+queue drained — staying silent through the benign phase churn. The session burns
+**zero tokens while the wave runs** and wakes exactly when there is something to
+integrate, so supervision cost drops from O(time-elapsed) to O(actionable
+events). Keep a **long-interval** `ScheduleWakeup` (e.g. 30–60 min) as the
+documented degenerate fallback: if no event stream is live, or the watcher
+wedges, the timer still resurfaces the loop — correctness never depends on the
+event path.
 
 ### 6. Report
 
@@ -280,4 +296,4 @@ parallel. They are **not** competitors: reach for `/aida-burndown` to drain a
 *ready set*; reach for the orchestrator drain when its single-spec lifecycle is
 what you want. Don't run both against the same set.
 
-trace:STORY-527 trace:TASK-792 | ai:claude
+trace:STORY-527 trace:TASK-792 trace:TASK-992 | ai:claude
