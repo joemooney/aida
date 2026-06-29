@@ -1,0 +1,17 @@
+id: 019f1280-0958-73c1-bf2c-1c96dbb9738f
+spec_id: BUG-651
+agreed_id: BUG-651
+title: Pre-commit advisor-code-gate aborts when PATH aida is stale, forcing agents to --no-verify
+description: 'The pre-commit hook calls aida internal advisor-code-gate. Agents committing in isolated worktrees often have a STALE released aida on PATH (e.g. 0.9.1) that predates the internal subcommand, so the hook exits 2 and ABORTS the commit even with no real violation. Agents work around it by verifying the gate manually with ./target/debug/aida then committing with --no-verify (seen on TASK-947, TASK-953, TASK-949 this session). Two harms: the --no-verify bypass defeats the gate''s purpose, and it is recurring friction. FIX: the hook should resolve the gate binary robustly (prefer the in-repo target/{debug,release}/aida over a stale PATH aida, like aida dev activate''s SHA-match), OR detect version-skew and skip-with-warning rather than fail-closed-abort, OR have agents always aida-on/build first. Sibling of TASK-984 (glyph-lint dev-loop friction).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T08:30:08.728738245Z
+modified_at: 2026-06-29T08:30:08.728738245Z
+req_type: Bug
+tags:
+- dev-workflow
+- from-agent
+- papercut
+- pre-commit
