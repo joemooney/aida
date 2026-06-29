@@ -1,0 +1,17 @@
+id: 019f11db-e5d1-7f83-91e2-2f98e2cd4bf3
+spec_id: TASK-983
+agreed_id: TASK-983
+title: 'Worktree warm-pool: replace --force worktree removals with tiered destroy'
+description: Followup to TASK-981 (warm-pool slice 1). Replace the blunt "git worktree remove --force" calls in run_compete_arm and heal_doctor_orphan_worktree (aida-cli/src/main.rs) with worktree_pool_destroy::destroy (classified, salvage-aware, dry-run-able). Routes every worktree teardown through the one classified delete path that runs the pre_destroy cargo-clean hook, completing the TASK-0396 dissolution for the orchestrator/doctor paths too.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T05:30:51.729897747Z
+modified_at: 2026-06-29T05:30:51.729897747Z
+req_type: Task
+tags:
+- axi
+- depends-on:TASK-981
+- parent:STORY-714
+- worktree
