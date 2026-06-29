@@ -25765,5 +25765,17 @@ operations:
     req_type: Task
     status: Draft
     priority: High
-clock: 2457
+- id: 019f141f-5ad6-7b31-9474-2a2895b7946b
+  target_id: 019f141f-46f6-76e0-a7d1-6dd80091f3ca
+  author: aida
+  node_id: '1'
+  lamport: 2458
+  timestamp: 2026-06-29T16:03:47.030859703Z
+  kind: !Create
+    title: advisor_watch event-driven — the token-savings land here (STORY-712 slice 3)
+    description: Generalize advisor_watch::plan_watch_tick to fork on an actionable event (from aida watch) instead of the fork_interval_secs cadence; demote the timer to the degenerate fallback when no event stream is live; keep presence as the hard gate. THIS is where the idle-poll token burn dies. SUPERVISED change (touches autonomy behavior) -- ship at the keyboard with the advisor watching, not unattended. Gated on slices 1+2.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 2458
 node_id: '1'
