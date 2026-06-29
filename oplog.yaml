@@ -24503,5 +24503,13 @@ operations:
   timestamp: 2026-06-29T02:34:40.520685108Z
   kind: !SetTitle
     title: 'Stranded-primary alarm: count only LIVE leases (process-probe) to suppress false positives'
-clock: 2333
+- id: 019f113a-a3ea-7f10-b6ce-def39cc5ef59
+  target_id: 019f1046-e90c-7ff0-9741-6abd86d797cb
+  author: aida
+  node_id: '1'
+  lamport: 2334
+  timestamp: 2026-06-29T02:34:43.562704242Z
+  kind: !SetStatus
+    status: Rejected
+clock: 2334
 node_id: '1'
