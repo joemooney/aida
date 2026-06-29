@@ -3,12 +3,12 @@ spec_id: TASK-980
 agreed_id: TASK-980
 title: 'Statusline shows the active focus segment (focus: EPIC-X)'
 description: 'STORY-706s loud-visibility intent NAMED the statusline as a goal but it may not be wired. VERIFY first (grep the real statusLine command in settings.json / the aida statusline path) -- if already wired, close. If not: add a focus: EPIC-X segment that reads the per-worktree .aida/focus marker (STORY-706) and shows it when set, omits when unset. Keep it POSIX/dash-safe (statusLine runs under /bin/sh -- see feedback_claude_code_statusline_posix). This is the PASSIVE companion to STORY-717s active drift-guard: statusline = always-on "you are in EPIC-54" awareness; drift-guard = active "you are acting outside it" warning. Together they make focus a real visible mode, not a cosmetic label. Small effort.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:14:47.815816674Z
-modified_at: 2026-06-29T05:14:59.619744560Z
+modified_at: 2026-06-29T06:39:50.123447699Z
 req_type: Task
 tags:
 - focus
