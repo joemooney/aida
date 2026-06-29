@@ -3,12 +3,12 @@ spec_id: TASK-949
 agreed_id: TASK-949
 title: 'TUI: no ''reject'' verb — advisor can approve a draft but not reject it'
 description: 'Walkthrough finding (operator, 2026-06-26): the TUI has an ''approve'' verb (Draft->Approved) but NO ''reject'' verb (Draft->Rejected). The advisor disposition is incomplete — you can accept work but not reject it from the TUI; rejecting requires dropping to ''aida edit --status rejected''. Add a Draft-conditional ''reject'' verb (advisor-gated, like approve), ideally prompting for a brief reason (a rejection comment). Mirrors the approve verb.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:39:37.397810656Z
-modified_at: 2026-06-29T07:39:14.143239843Z
+modified_at: 2026-06-29T09:50:22.564035329Z
 req_type: Task
 tags:
 - batch:epic54
