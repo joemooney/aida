@@ -3,12 +3,12 @@ spec_id: TASK-953
 agreed_id: TASK-953
 title: 'TUI: ''status'' verb — per-spec live work-state lens (queued/leased/in-progress/STALE)'
 description: 'Add a ''status'' read verb (alongside show/why) wired to ''aida status <spec>'': the live WORK-STATE lens — is it queued (and where), leased by whom (pid/elapsed), In-Progress, or STALE. Distinct from show (content) and why (still-open reason). Partly addresses TASK-948 (queue/processing visibility) at the per-spec level. Item-level read verb; renders the output in the modal (in-process if cheap, else shell-out via the async path BUG-633).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:21:18.056343541Z
-modified_at: 2026-06-29T07:20:23.783177343Z
+modified_at: 2026-06-29T07:20:24.976368883Z
 req_type: Task
 tags:
 - batch:epic54
