@@ -25705,5 +25705,17 @@ operations:
   timestamp: 2026-06-29T15:47:52.557782320Z
   kind: !SetStatus
     status: Completed
-clock: 2452
+- id: 019f1414-b3fa-7ed0-873e-b7a1fb8209b9
+  target_id: 019f1414-a8db-7940-9f76-928fcef17462
+  author: aida
+  node_id: '1'
+  lamport: 2453
+  timestamp: 2026-06-29T15:52:08.954038897Z
+  kind: !Create
+    title: Event substrate + classifier core (events.rs) — STORY-712 slice 1a
+    description: 'New aida-cli/src/events.rs: EventKind enum + Event struct + is_actionable() pure classifier + emit() best-effort append to .aida/events.jsonl (clone of punt::append_to_ledger). NO behavior change, NO consumer yet. Pure + writer tests per the plan. Smallest valuable slice of STORY-712 (zero-token supervision). Plan: docs/plans/2026-06-29-story-712-zero-token-supervision.md.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2453
 node_id: '1'
