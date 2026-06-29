@@ -1144,3 +1144,11 @@
   for_role: implementer
   for_scope: harness-worktree
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019f06ad-cab0-75c0-9671-1a648dfc34e7
+  position: 505000
+  added_by: joe
+  added_at: 2026-06-29T06:35:45.568933303Z
+  for_role: implementer
+  for_scope: harness-worktree
+  added_by_machine: imac
