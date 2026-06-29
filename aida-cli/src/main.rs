@@ -36898,14 +36898,14 @@ fn heal_doctor_merged_agent_worktree(
         });
     }
 
-    let removed = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["worktree", "remove", "--force"])
-        .arg(&worktree)
-        .status()
-        .with_context(|| format!("removing worktree {}", worktree.display()))?;
-    if !removed.success() {
+    // STORY-714: shared teardown — pre_destroy cargo-clean hook (TASK-0396)
+    // fires before removal, and a pooled tree is deregistered from the registry.
+    let removed = aida_core::worktree_pool_destroy::teardown_worktree_path(
+        project_root,
+        &worktree,
+        &worktree_pool_global_hooks("pre_destroy"),
+    );
+    if removed.is_err() {
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -37883,18 +37883,19 @@ fn heal_doctor_orphan_worktree(
 ) -> Result<DoctorHealResult> {
     let worktree = std::path::PathBuf::from(&finding.id);
     let salvage = salvage_worktree_patch(project_root, "orphan-worktree", None, &worktree)?;
-    let status = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["worktree", "remove", "--force"])
-        .arg(&worktree)
-        .status()
-        .with_context(|| format!("removing worktree {}", worktree.display()))?;
+    // STORY-714: route through the shared teardown so the pre_destroy
+    // cargo-clean hook fires (TASK-0396) and a pooled tree is deregistered.
+    let healed = aida_core::worktree_pool_destroy::teardown_worktree_path(
+        project_root,
+        &worktree,
+        &worktree_pool_global_hooks("pre_destroy"),
+    )
+    .is_ok();
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
         action: "removed orphan worktree".to_string(),
-        status: if status.success() { "healed" } else { "failed" }.to_string(),
+        status: if healed { "healed" } else { "failed" }.to_string(),
         detail: salvage.map(|p| format!("salvage patch: {}", p.display())),
     })
 }
