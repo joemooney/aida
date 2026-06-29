@@ -3,12 +3,12 @@ spec_id: TASK-948
 agreed_id: TASK-948
 title: 'TUI: no queue/routing visibility — can''t see what''s routed to advisor/implementer queues'
 description: 'Walkthrough finding (operator, 2026-06-26): after ''request approval'' routes a draft to the advisor queue, there is NO way to see it in the TUI — routing doesn''t change spec status (stays Draft), and the Queue scope is a stub. The operator routed TASK-941 and it ''vanished''. NEEDED: (a) make the Queue scope functional — show each role''s queue (advisor/implementer) and what''s in it; AND/OR (b) a per-spec ROUTING BADGE on item rows (e.g. ''→advisor'' when a spec is queued for a role), so a routed Draft is visibly distinct from an un-routed one. Connects to STORY-672 (fleet-wide queue view) and the queue/processing visibility question.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T02:39:22.781982403Z
-modified_at: 2026-06-29T08:50:03.392355692Z
+modified_at: 2026-06-29T08:50:04.589254595Z
 req_type: Task
 tags:
 - batch:epic54
