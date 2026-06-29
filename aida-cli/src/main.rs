@@ -49262,6 +49262,80 @@ fn acquire_session_pool_worktree(
     Ok(acquired)
 }
 
+/// What `session end`'s dirty-worktree gate should do.
+// trace:BUG-652 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum DirtyGateOutcome {
+    /// Clean, or `--force` (discard) — continue without ceremony.
+    Proceed,
+    /// Dirty + `--return`ing a pool tree — patch-salvage, then continue (the
+    /// return resets the tree, so refusing would only break reuse).
+    Salvage,
+    /// Dirty, not forced, not a pool return — refuse and ask for `--force`.
+    Refuse,
+}
+
+/// Decide the dirty-gate outcome from the three facts. Pure so the BUG-652
+/// reuse-vs-refuse contract is unit-testable without the session machinery.
+// trace:BUG-652 | ai:claude
+fn dirty_gate_outcome(dirty: bool, force: bool, returning_pool_tree: bool) -> DirtyGateOutcome {
+    if !dirty || force {
+        return DirtyGateOutcome::Proceed;
+    }
+    if returning_pool_tree {
+        DirtyGateOutcome::Salvage
+    } else {
+        DirtyGateOutcome::Refuse
+    }
+}
+
+#[cfg(test)]
+mod dirty_gate_tests {
+    use super::{dirty_gate_outcome, DirtyGateOutcome};
+
+    #[test]
+    fn clean_tree_proceeds() {
+        assert_eq!(
+            dirty_gate_outcome(false, false, false),
+            DirtyGateOutcome::Proceed
+        );
+        assert_eq!(
+            dirty_gate_outcome(false, false, true),
+            DirtyGateOutcome::Proceed
+        );
+    }
+
+    #[test]
+    fn force_discards_regardless() {
+        assert_eq!(
+            dirty_gate_outcome(true, true, false),
+            DirtyGateOutcome::Proceed
+        );
+        assert_eq!(
+            dirty_gate_outcome(true, true, true),
+            DirtyGateOutcome::Proceed
+        );
+    }
+
+    #[test]
+    fn dirty_pool_return_salvages_not_refuses() {
+        // BUG-652: the regression — a dirty pooled tree being returned must
+        // salvage and continue, never refuse (which would break reuse).
+        assert_eq!(
+            dirty_gate_outcome(true, false, true),
+            DirtyGateOutcome::Salvage
+        );
+    }
+
+    #[test]
+    fn dirty_non_pool_or_non_return_still_refuses() {
+        assert_eq!(
+            dirty_gate_outcome(true, false, false),
+            DirtyGateOutcome::Refuse
+        );
+    }
+}
+
 #[cfg(test)]
 mod worktree_pool_resolve_tests {
     use super::resolve_worktree_pool_enabled;
@@ -53961,19 +54035,45 @@ fn session_end(
     // untracked) and BEFORE deleting the lease, so a refusal leaves the
     // session intact and recoverable. trace:BUG-67 | ai:claude
     let dirty_entries = worktree_dirty_entries(&target.worktree_path);
-    if !dirty_entries.is_empty() && !force {
-        let mut msg = format!(
-            "worktree {} has uncommitted changes:\n",
-            target.worktree_path.display()
-        );
-        for line in &dirty_entries {
-            msg.push_str(&format!("  {}\n", line));
+    // BUG-652: `--return` resets the worktree (reset --hard + clean -fd), so a
+    // dirty pooled tree must NOT be refused here — refusing leaves the tree
+    // leased and silently breaks reuse (the next acquire creates a fresh tree).
+    // Instead salvage a patch (so no work is lost) and let it through to the
+    // return path. Non-pool trees / non-return still refuse without --force.
+    // trace:BUG-652 trace:STORY-714 | ai:claude
+    let returning_pool_tree = return_to_pool
+        && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
+    match dirty_gate_outcome(!dirty_entries.is_empty(), force, returning_pool_tree) {
+        DirtyGateOutcome::Proceed => {}
+        DirtyGateOutcome::Salvage => {
+            match salvage_worktree_patch(&project_root, "pool-return", None, &target.worktree_path) {
+                Ok(Some(p)) => eprintln!(
+                    "{} salvaged uncommitted changes to {} before returning the pooled worktree (it will be reset)",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    p.display().to_string().dimmed()
+                ),
+                Ok(None) => {}
+                Err(e) => eprintln!(
+                    "{} could not salvage uncommitted changes before return: {} — proceeding (they will be reset away)",
+                    "Warning:".yellow().bold(),
+                    e
+                ),
+            }
         }
-        msg.push_str(
-            "\nPass `--force` to `aida session end` to discard these and remove the worktree.\n\
-             (Gitignored files like target/ and .aida/cache.db never require --force.)",
-        );
-        anyhow::bail!(msg);
+        DirtyGateOutcome::Refuse => {
+            let mut msg = format!(
+                "worktree {} has uncommitted changes:\n",
+                target.worktree_path.display()
+            );
+            for line in &dirty_entries {
+                msg.push_str(&format!("  {}\n", line));
+            }
+            msg.push_str(
+                "\nPass `--force` to `aida session end` to discard these and remove the worktree.\n\
+                 (Gitignored files like target/ and .aida/cache.db never require --force.)",
+            );
+            anyhow::bail!(msg);
+        }
     }
 
     // Delete the lease file BEFORE removing the worktree. The canonical
