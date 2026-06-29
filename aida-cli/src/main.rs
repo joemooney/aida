@@ -56,6 +56,8 @@ mod glyphs;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
 mod headless_tail;
 mod headless_tee;
+// trace:TASK-990 | ai:claude — `aida watch` streaming event classifier.
+mod watch;
 // trace:STORY-658 | ai:claude — `aida health` at-a-glance vital-signs read.
 mod health;
 mod health_metrics;
@@ -2540,6 +2542,27 @@ fn run() -> Result<()> {
         return handle_ps(*json, *all);
     }
 
+    // `aida watch` is a read-only consumer of the slice-1 `.aida/events.jsonl`
+    // stream (STORY-712): it tails the file, classifies each event in cheap
+    // code, and wakes only on actionable verbs. It touches no store/backend, so
+    // dispatch early like `aida ps`. trace:TASK-990 | ai:claude
+    if let Command::Watch {
+        emit_wakes: _,
+        all,
+        once,
+    } = &cli.command
+    {
+        let project_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        return watch::handle_watch(
+            &project_root,
+            &watch::WatchOpts {
+                all: *all,
+                once: *once,
+            },
+        );
+    }
+
     // TASK-957: `aida claim` / `aida unclaim` self-load the store read-only to
     // resolve the spec id forms, then write/remove a lightweight advisory lease
     // under `.aida/sessions/`. Like `aida ps` / `aida status <spec>` they touch
@@ -3715,6 +3738,7 @@ fn run() -> Result<()> {
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
+        Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         // trace:TASK-957
         Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
         Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
@@ -14301,6 +14325,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
+        Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         // trace:TASK-957
         Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
         Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),

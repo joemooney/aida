@@ -129,11 +129,9 @@ impl EventKind {
     /// (wake-safe), the same bias the [`Unknown`](Self::Unknown) catch-all
     /// applies at the deserialization boundary. Over-waking is recoverable;
     /// a silently-dropped actionable event is not.
-    // trace:TASK-987 | ai:claude
-    // why: the pure classifier is exercised by this module's unit tests now; its
-    // production consumer is the `aida watch` streaming classifier, a deliberate
-    // later slice of STORY-712 (this slice ships only the emit substrate).
-    #[allow(dead_code)]
+    // trace:TASK-987 trace:TASK-990 | ai:claude
+    // The production consumer is the `aida watch` streaming classifier
+    // (`watch.rs`, STORY-712 slice 2), which calls this per event line.
     pub fn is_actionable(&self) -> bool {
         match self {
             // Benign churn — absorbed by the watcher, never wakes the LLM.
