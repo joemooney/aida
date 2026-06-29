@@ -26165,5 +26165,17 @@ operations:
   timestamp: 2026-06-29T18:08:57.786225732Z
   kind: !SetStatus
     status: Completed
-clock: 2499
+- id: 019f1492-1959-7362-b1a1-2df2dfcd3eb0
+  target_id: 019f1492-0b0a-7d21-9124-65e443f41031
+  author: aida
+  node_id: '1'
+  lamport: 2500
+  timestamp: 2026-06-29T18:09:06.905098495Z
+  kind: !Create
+    title: 'SPIKE-70: --single-branch autonomous per-member Implementer+CI spawn on the shared branch (SUPERVISED)'
+    description: 'Engine + flag + honest plan-output shipped (TASK-1003 / #1218). Remaining: wire the actual autonomous per-member Implementer+CI spawn onto the shared single-branch worktree (the RealSingleBranchDriver currently plan-modes; the spawn is deferred). This IS the reliability-critical autonomy path — ship SUPERVISED at the keyboard with the operator watching the first real coupled drive, NOT via unattended drain. Drives the already-tested drain_batch_single_branch engine.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2500
 node_id: '1'
