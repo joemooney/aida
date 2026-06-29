@@ -3,12 +3,12 @@ spec_id: TASK-982
 agreed_id: TASK-982
 title: 'Worktree warm-pool: acquire-from-pool on session/agent/queue-work start'
 description: Followup to TASK-981 (warm-pool slice 1). Wire the worktree-creation sites — aida agent new, aida queue work, the orchestrator compete arm — to call worktree_pool::acquire (prefer idle pooled, reset-not-create) instead of a bare git worktree add, and to record the returned pool path on the session lease so "aida session end --return" has a registered tree to hand back. This is the slice that makes the DoD recipe (session end --return) exercise end-to-end and delivers the "queue work prefers idle pooled" acceptance item of STORY-714. Keep --return opt-in until proven by dogfood.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:30:46.434143882Z
-modified_at: 2026-06-29T05:30:46.434143882Z
+modified_at: 2026-06-29T06:55:05.264225132Z
 req_type: Task
 tags:
 - axi
