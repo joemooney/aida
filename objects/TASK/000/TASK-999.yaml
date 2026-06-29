@@ -3,12 +3,12 @@ spec_id: TASK-999
 agreed_id: TASK-999
 title: A verbose `aida watch --all` TUI feed for live debugging
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:31:15.564499718Z
-modified_at: 2026-06-29T17:31:15.564499718Z
+modified_at: 2026-06-29T17:33:33.532595172Z
 req_type: Task
 relationships:
 - rel_type: Child
