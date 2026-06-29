@@ -25039,5 +25039,61 @@ operations:
   timestamp: 2026-06-29T06:36:08.374646246Z
   kind: !RemoveTag
     tag: status
-clock: 2395
+- id: 019f1217-b342-7061-9dd7-a36f241c6442
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2396
+  timestamp: 2026-06-29T06:36:10.946997147Z
+  kind: !AddTag
+    tag: batch:epic54
+- id: 019f1217-b4ec-7672-a449-dc638e507be8
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2397
+  timestamp: 2026-06-29T06:36:11.372292268Z
+  kind: !RemoveTag
+    tag: verb-model
+- id: 019f1217-b696-7b03-88b8-da10d600161e
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2398
+  timestamp: 2026-06-29T06:36:11.798530770Z
+  kind: !RemoveTag
+    tag: selection
+- id: 019f1217-b83e-7012-b7ea-9c9565fcde3d
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2399
+  timestamp: 2026-06-29T06:36:12.222553874Z
+  kind: !RemoveTag
+    tag: redesign
+- id: 019f1217-b9e5-7561-bd61-7e958e82d9b9
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2400
+  timestamp: 2026-06-29T06:36:12.645830181Z
+  kind: !RemoveTag
+    tag: tui
+- id: 019f1217-bb8d-70e2-af83-237aa10270a8
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2401
+  timestamp: 2026-06-29T06:36:13.069151744Z
+  kind: !RemoveTag
+    tag: parent:EPIC-54
+- id: 019f1217-bd35-7d73-ae95-f1e3d3e098b9
+  target_id: 019f0748-d85f-75b3-901a-3171307f1079
+  author: aida
+  node_id: '1'
+  lamport: 2402
+  timestamp: 2026-06-29T06:36:13.493736815Z
+  kind: !RemoveTag
+    tag: ux
+clock: 2402
 node_id: '1'
