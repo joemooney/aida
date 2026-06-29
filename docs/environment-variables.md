@@ -221,6 +221,7 @@ overrides user.
 | `AIDA_FIELD_STUDY` | Opt-IN switch for the SPIKE-67 observe-only rule-adherence field study. Gates both the retrospective git-log sensor (`~/.aida/field-study.jsonl`, written by `aida field-study scan`) and the live drain-path stated-rule-violation logger (`~/.aida/rule-violations.jsonl`, written during real `aida queue work --auto-complete` drains; query with `aida field-study violations`). | OFF. Opt-in with `1`/`true`/`yes`/`on` (or `[field_study] enabled = true`). Forced off when `AIDA_TELEMETRY=0`. | user | process env |
 | `AIDA_EXIT_GRACE_MS` | Grace window between SIGTERM and SIGKILL during an orchestrated exit. | `2000`. | launch-path / ops | process env |
 | `AIDA_EXIT_POLL_MS` | Poll interval for the sentinel-file/child-process check during graceful exit. | `100` (min 1). | launch-path / ops | process env |
+| `AIDA_WAIT_DELAY_MS` | `WaitDelay` backstop: upper bound on the post-exit wait for a reaped drain child, so a descendant holding the stdout/stderr pipe open cannot wedge the orchestrator. | `10000` (min 1). | launch-path / ops | process env |
 
 ---
 
