@@ -1,0 +1,12 @@
+id: 019f146f-beb3-7b72-b7ea-f2fb0484532b
+spec_id: TASK-1001
+agreed_id: TASK-1001
+title: Migrate `wait_for_ci_terminal`'s in-phase 30s poll to consume CI webhooks where the forge supports them (further-out; the in-phase poll is cheap Rust, not token spend)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T17:31:35.475779173Z
+modified_at: 2026-06-29T17:31:35.475779173Z
+req_type: Task
