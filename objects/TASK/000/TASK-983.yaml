@@ -15,3 +15,7 @@ tags:
 - depends-on:TASK-981
 - parent:STORY-714
 - worktree
+relationships:
+- rel_type: Child
+  target_id: 019f1048-1ef7-7ce1-b428-f58176310bde
+  created_at: 2026-06-29T05:30:53.409044576Z
