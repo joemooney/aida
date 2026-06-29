@@ -3,12 +3,12 @@ spec_id: BUG-642
 agreed_id: BUG-642
 title: CLAUDE.md references aida-on / aida-off which no longer exist (shell-init uses the aida() wrapper)
 description: 'CLAUDE.md (lines ~70, 172, 176) tells users to run aida-on / aida-off, but aida dev shell-init --install now installs an aida() WRAPPER function (no aida-on/aida-off aliases). Verified 2026-06-29: /home/joe/.aida/shell-init.sh defines aida() that auto-evals dev activate|dev deactivate|role enter|role end|role add|session start|session end (and worktree enter per STORY-716) -- there is NO aida-on. An operator hit aida-on: command not found + aida on: unrecognized subcommand following the docs. FIX: replace aida-on/aida-off references in CLAUDE.md (+ scripts/aida-demo prereqs, line 70) with aida dev activate / aida dev deactivate; note the wrapper handles the eval (no separate alias). Also worth: aida dev activate could alias a friendly aida-on if we want to keep the name -- but the doc must match reality either way.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T05:27:32.335514205Z
-modified_at: 2026-06-29T05:27:32.335514205Z
+modified_at: 2026-06-29T05:30:34.636369681Z
 req_type: Bug
 tags:
 - dev-workflow
