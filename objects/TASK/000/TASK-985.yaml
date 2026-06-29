@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:28:25.671403857Z
-modified_at: 2026-06-29T15:59:35.746328818Z
+modified_at: 2026-06-29T16:25:22.585030915Z
 req_type: Task
 tags:
 - axi
@@ -25,6 +25,11 @@ comments:
   content: 'Dogfood measurement caveat (2026-06-29): the dev environment sets CARGO_TARGET_DIR=/home/joe/ai/aida/target, so ALL worktrees (incl. pool trees) share ONE target/. The warm-pool’s per-worktree-cache benefit is therefore invisible / redundant in this setup, and the cold-vs-warm build delta CANNOT be measured here (first-ever compile 4687ms vs later 165ms reflects the shared target warming once, not the pool). To quantify the payoff before the flip: measure on a setup WITHOUT a shared CARGO_TARGET_DIR (the default for most users), or against the real aida workspace with per-worktree targets. The lifecycle itself (acquire->checkout->return->reuse-same-tree) was verified clean at the primitive level.'
   created_at: 2026-06-29T15:59:35.746328818Z
   modified_at: 2026-06-29T15:59:35.746328818Z
+- id: 019f1433-1f99-7cd1-b13c-3cc487133dd5
+  author: joe
+  content: 'BUILD-DELTA MEASUREMENT (2026-06-29, CARGO_TARGET_DIR UNSET so each worktree has its own target/, like a real user). Throwaway crate, real dep tree (serde, serde_json, anyhow, tokio, clap). Flow A = destroy-recreate (fresh worktree per spec, cold target/): cold build avg 5497ms — EVERY spec pays this. Flow B = warm-pool (acquire/return recycled tree): first/cold 5696ms, then warm-reuse avg 182ms (deps cached, only the changed crate recompiles). PAYOFF: 5497ms -> 182ms = 30.2x faster per reused spec, saves ~5.3s each. Pool hit-rate 67% (2/3; approaches (N-1)/N for larger drains). Over a 3-spec drain: 16.5s (destroy-recreate) vs 6.1s (warm-pool) = 10.4s saved, and the saving grows LINEARLY with drain width. On the real aida workspace (minutes-long cold build) the delta is far larger. BOTH TASK-985 gates now cleared: BUG-652 fixed (#1208) + this measurement. Recommend flipping the default ON; decision is the operators on this data.'
+  created_at: 2026-06-29T16:25:22.585030915Z
+  modified_at: 2026-06-29T16:25:22.585030915Z
 deferred: true
 deferred_at: 2026-06-29T15:48:21.278566037Z
 deferred_until: a supervised dogfood run proves the warm-cache payoff (real drain with [worktree_pool] enabled=true) + acquire->checkout->return integration coverage
