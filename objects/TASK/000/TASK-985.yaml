@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:28:25.671403857Z
-modified_at: 2026-06-29T16:48:42.011544467Z
+modified_at: 2026-06-29T16:49:41.810828905Z
 req_type: Task
 tags:
 - axi
@@ -40,6 +40,11 @@ comments:
   content: Commit 5c9d9e02f references this requirement
   created_at: 2026-06-29T16:48:42.011544467Z
   modified_at: 2026-06-29T16:48:42.011544467Z
+- id: 019f1449-63b2-7020-b76c-9e1b649e7838
+  author: joe
+  content: Commit 5b36c615e references this requirement
+  created_at: 2026-06-29T16:49:41.810828905Z
+  modified_at: 2026-06-29T16:49:41.810828905Z
 deferred: true
 deferred_at: 2026-06-29T15:48:21.278566037Z
 deferred_until: a supervised dogfood run proves the warm-cache payoff (real drain with [worktree_pool] enabled=true) + acquire->checkout->return integration coverage
