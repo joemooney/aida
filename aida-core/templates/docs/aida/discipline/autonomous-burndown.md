@@ -11,7 +11,7 @@ The failure mode is not "the agent can't do the work" — it's that the agent *s
 1. **Front-load decisions once.** Disposition the backlog so the ready set is decision-free; tag decided-and-buildable specs. A spec with an unresolved design fork is *not* ready.
 2. **Fan out implementer subagents in parallel**, each isolated in its own git worktree, each taking **one** bounded ready spec end-to-end to a PR (read spec → implement to acceptance → trace markers → build + test + fmt → commit → push → open PR). Worktree isolation means parallel agents never collide.
 3. **The main session is the integrator** — it does *not* implement. It polls the PRs, merges the green + clean ones, reconciles them to Completed, pulls, and launches the next wave.
-4. **Loop it** (e.g. a scheduled wake-up) so waves keep launching for hours.
+4. **Loop it event-driven.** Wait on the wave with the harness `Monitor` tool over the drain's wake feed — `Monitor(command: "aida watch --emit-wakes", persistent: true)` — which wakes the session **only** on an actionable verb (a PR shipped/merged, a CI verdict, a punt, a shelve, the queue drained) and stays silent through the benign phase churn, so the supervisor burns **zero tokens** between events: supervision cost is O(actionable-events), not O(time-elapsed). Keep a **long-interval** scheduled wake-up (30–60 min) as the degenerate fallback so a wedged or event-less watcher still resurfaces the loop.
 
 ## The non-negotiable rules
 
