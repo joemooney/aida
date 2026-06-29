@@ -24531,5 +24531,17 @@ operations:
   timestamp: 2026-06-29T04:38:54.739695408Z
   kind: !SetStatus
     status: In Progress
-clock: 2336
+- id: 019f11b9-1e46-7813-8328-7d56b6e8019e
+  target_id: 019f11b9-1869-7d50-9c57-d80ba8086da3
+  author: aida
+  node_id: '1'
+  lamport: 2337
+  timestamp: 2026-06-29T04:52:52.422518674Z
+  kind: !Create
+    title: 'TUI: per-row liveness glyph in the Targets list (●live / ⚠STALE / idle)'
+    description: 'Render a per-row work-liveness glyph in the redesign Targets list, sourced from the same data as `aida ps`: ● live (a session/lease is actively backing the spec), ⚠ STALE (flag set but no live session), or blank (idle/no session). Complements TASK-953 (the on-demand `status` verb) by making liveness ambient — visible without drilling into a verb. Motivating gap: an operator who just queued a spec to the implementer cannot tell from the list whether anything is working it. Reframes the rejected idea of putting liveness in the one-shot queue-confirmation message (wrong surface: that fires at queue-time when no session exists yet).'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2337
 node_id: '1'
