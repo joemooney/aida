@@ -25809,5 +25809,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2461
+- id: 019f142b-89ef-7f42-aaf4-13523effaf4b
+  target_id: 019f142b-7f1b-7380-b66b-664cd9ee9db1
+  author: aida
+  node_id: '1'
+  lamport: 2462
+  timestamp: 2026-06-29T16:17:05.519493958Z
+  kind: !Create
+    title: aida worktree enter silently no-ops the cd when the installed shell wrapper is stale (no hint)
+    description: 'aida worktree enter <epic> prints cd <path> but if the installed ~/.aida/shell-init.sh wrapper predates STORY-716 (no worktree-enter in its auto-eval case), the cd is never applied -- the shell stays put, aida focus then shows "No focus set", and there is NO hint why. Operator ran enter twice + was confused 2026-06-29. FIX: detect a stale/missing wrapper (e.g. an AIDA_SHELL_WRAPPER version marker) and, when worktree enter emits a cd that likely will not be evaled, print a one-line stderr hint: "shell wrapper looks stale -- run aida dev shell-init --install to enable auto-cd, or eval the output." Sibling of BUG-642 (wrapper doc-drift).'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 2462
 node_id: '1'
