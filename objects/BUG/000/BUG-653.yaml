@@ -3,12 +3,12 @@ spec_id: BUG-653
 agreed_id: BUG-653
 title: 'aida agent new --spec <epic> dead-ends: says transition-to-Approved but epic status is a read-only rollup (cant approve)'
 description: 'aida agent new claude --spec EPIC-0428 refused with "spec EPIC-0428 is Draft -- not ready for implementation. Transition it to Approved first (aida edit EPIC-0428 --status approved)." But per BUG-626 an epics status is a read-only rollup of its children -- aida edit <epic> --status approved is REJECTED. So the error sends the operator to a command that will refuse: a dead-end. Also: you do not implement an epic; work happens on its children. FIX: aida agent new --spec <epic> should either (a) detect the spec is an epic and give an epic-appropriate message (work its approved children / pick a child), or (b) allow launching an advisor/design agent scoped to the epic without the implement-readiness gate. Observed 2026-06-29 setting up a parallel EPIC-0428 design terminal.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T16:16:55.981360840Z
-modified_at: 2026-06-29T16:16:55.981360840Z
+modified_at: 2026-06-29T17:44:05.793920959Z
 req_type: Bug
 tags:
 - agent-new
