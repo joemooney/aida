@@ -884,6 +884,26 @@ impl OrchestrationResult {
             held_reason: None,
         }
     }
+
+    /// A clean success result — exit `0`, no failed phase, every non-failure
+    /// field cleared. Used by the single-branch driver's per-member and cluster
+    /// runs (and the unit-test mock) to signal "this stage landed cleanly".
+    // trace:TASK-1003 | ai:claude
+    pub(crate) fn ok() -> Self {
+        Self {
+            exit_code: 0,
+            failed_phase: None,
+            failure: None,
+            phase_durations: Vec::new(),
+            total_ms: 0,
+            punt_reason: None,
+            shipped_spec_id: None,
+            escalation: None,
+            inconclusive_reason: None,
+            shelved_reason: None,
+            held_reason: None,
+        }
+    }
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -3114,6 +3134,234 @@ pub(crate) fn drain_batch_with_caps(
         } else {
             shipped.push(head);
         }
+    }
+}
+
+// --- Single-branch coupled-sequential drain (TASK-1003 / SPIKE-70) ----------
+//
+// `aida queue work --batch NAME --auto-complete --single-branch` drives a set
+// of TIGHTLY-COUPLED batch members on ONE shared feature branch in ONE
+// worktree. Each member is implemented + CI'd and committed IN PLACE — no reset
+// between members, no per-member merge-to-main — so commits ACCUMULATE on the
+// shared branch; then ONE cluster PR is opened at the end linking every member
+// SPEC-ID. Because each member commits with its own `(SPEC-ID)` trailer, the
+// merge of that one PR lets the existing `aida pull` Done→Completed scan credit
+// EVERY member, not just one.
+//
+// This is the genuinely-missing capability vs [`drain_batch`] (which merges each
+// member to main as its own PR). For coupled work where later increments build
+// on earlier commits (EPIC-54's TUI children), the failure rule INVERTS: a
+// member failure HALTS the drain — prior members' commits stay on the branch,
+// the failed member is parked `NeedsAttention` — rather than EPIC-28's
+// shelve-and-continue, because continuing would stack later commits on broken
+// code. (EPIC-28's shelve→skip-dependents→continue is correct only when members
+// are INDEPENDENT — the `drain_batch` / parallel case.)
+//
+// Pure sequencing behind a [`SingleBranchDriver`] — the same testability shape
+// as [`BatchDriver`]. The I/O (the one worktree+branch creation, the per-member
+// Implementer+CI run, the cluster Reviewer/Merge/PR) lives in the real driver
+// in `main.rs`. trace:TASK-1003 SPIKE-70 | ai:claude
+
+/// Why a [`drain_batch_single_branch`] run stopped. trace:TASK-1003 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SingleBranchOutcome {
+    /// No member was pickable — the batch was empty for the role, so nothing
+    /// was driven and no branch/PR was created.
+    Empty,
+    /// Every member committed on the shared branch and ONE cluster PR opened
+    /// (or, in a `through-ci` variant, every member committed and CI is green).
+    Clustered,
+    /// A member's Implementer/CI phase failed — the drain HALTED. Prior
+    /// members' commits are intact on the shared branch; the failed member is
+    /// parked `NeedsAttention`. The [`Phase`] is the phase that failed.
+    Halted(Phase),
+    /// A member reported success but the queue head did not advance — stopped
+    /// to avoid looping forever on the same spec (mirrors [`BatchDrainOutcome::Stalled`]).
+    Stalled,
+    /// The cluster Reviewer/Merge phase failed AFTER every member committed.
+    /// The accumulated branch is intact; only the cluster wrap-up failed.
+    ClusterFailed(Phase),
+    /// The per-increment checkpoint (the `--zen` pause) asked to stop before
+    /// the next member started. Prior commits are intact; the remaining members
+    /// were not begun. A clean stop (exit `0`).
+    Paused,
+}
+
+/// Outcome of a [`drain_batch_single_branch`] run — which members landed on the
+/// shared branch, which members the one cluster PR links, where it stopped, and
+/// the process exit code. trace:TASK-1003 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct SingleBranchResult {
+    /// Member spec-ids committed to the shared branch, in drain order. On a
+    /// `Halted` / `Paused` / `Stalled` stop this holds the members that DID
+    /// commit before the stop (their work is kept on the branch).
+    pub(crate) committed: Vec<String>,
+    /// The member spec-ids the ONE cluster PR links — equal to `committed` once
+    /// the cluster finish ran, empty on an `Empty` / `Halted` / `Paused` /
+    /// `Stalled` stop (no PR was opened). The cluster merge's Done→Completed
+    /// auto-bump must credit every id in this list. trace:TASK-1003
+    pub(crate) cluster_members: Vec<String>,
+    /// The member the drain stopped on — set for `Halted` / `Stalled`, `None`
+    /// for a clean `Clustered` / `Empty` / `ClusterFailed`.
+    pub(crate) stopped_at: Option<String>,
+    /// Why the drain stopped.
+    pub(crate) outcome: SingleBranchOutcome,
+    /// Process exit code: `0` on a clean cluster / empty / paused stop, else the
+    /// failed-phase index (per STORY-246's exit codes) or `1` for a stall.
+    pub(crate) exit_code: i32,
+}
+
+/// Drives a single-branch coupled-sequential drain: yields the next member and
+/// runs it through Implementer+CI ONLY (committing in place on the shared
+/// branch), then runs the cluster Reviewer/Merge ONCE at the end. The real
+/// implementation re-resolves the `batch:NAME` head against the queue and drives
+/// the shared worktree; the mock stands in for both so the loop is testable.
+/// trace:TASK-1003 | ai:claude
+pub(crate) trait SingleBranchDriver {
+    /// The current batch head spec-id, or `None` when every member has been
+    /// driven. Re-resolved each call — a member marked Done leaves the queue, so
+    /// the head advances naturally (the same mechanism [`BatchDriver`] uses).
+    fn next_head(&mut self) -> Option<String>;
+
+    /// Run ONE member through phases 1-2 (Implementer + CI) ONLY, committing IN
+    /// PLACE on the shared branch — NO per-member PR, NO merge, NO reset. On a
+    /// clean run the member is marked Done and its commit stays on the branch. A
+    /// non-zero `exit_code` (or any non-ship outcome — punt / escalation /
+    /// inconclusive / hold / shipped-mismatch) means this member did not cleanly
+    /// land, so the coupled drain HALTS rather than stacking later members on a
+    /// branch missing this one's work. The driver parks a failed member
+    /// `NeedsAttention`.
+    fn run_member_through_ci(&mut self, spec: &str) -> OrchestrationResult;
+
+    /// After EVERY member committed: run the Reviewer + Merge phases ONCE for
+    /// the whole cluster and open ONE PR linking `members`. Returns the cluster
+    /// [`OrchestrationResult`]; a non-zero exit means the cluster wrap-up failed
+    /// (the accumulated branch is left intact for triage).
+    fn run_cluster_finish(&mut self, members: &[String]) -> OrchestrationResult;
+
+    /// Per-increment checkpoint, called BETWEEN members (after the first). The
+    /// real driver honors the `--zen` pause (operator validates the increment
+    /// before the next) / the `--no-human=both` auto-continue. Return `true` to
+    /// proceed to `next`, `false` to stop the drain with prior commits intact.
+    /// Default `true` (no checkpoint) so the pure-logic tests need not implement
+    /// it. trace:TASK-1003 | ai:claude
+    fn checkpoint_between_members(&mut self, _prev: &str, _next: &str) -> bool {
+        true
+    }
+}
+
+/// Drive a single-branch coupled-sequential drain: loop members in queue order,
+/// running each through Implementer+CI and committing in place on ONE shared
+/// branch, then run the cluster Reviewer/Merge ONCE → ONE PR. HALT on the first
+/// member that does not cleanly land (prior commits kept; failed member parked).
+/// `max` caps how many members the drain commits. Pure sequencing; the I/O lives
+/// in the [`SingleBranchDriver`]. trace:TASK-1003 SPIKE-70 | ai:claude
+pub(crate) fn drain_batch_single_branch(
+    driver: &mut dyn SingleBranchDriver,
+    max: Option<usize>,
+) -> SingleBranchResult {
+    let mut committed: Vec<String> = Vec::new();
+    loop {
+        let Some(head) = driver.next_head() else {
+            // The batch drained — every member committed. Fall through to the
+            // cluster finish below.
+            break;
+        };
+        // `--max` bounds how many members the single-branch drain accumulates.
+        if let Some(limit) = max {
+            if committed.len() >= limit {
+                break;
+            }
+        }
+        // Stall guard: a member we already committed resurfacing as the head
+        // means the queue did not advance (its run reported success but it never
+        // left the queue). Stop rather than loop forever on the same spec.
+        if committed.iter().any(|s| s == &head) {
+            return SingleBranchResult {
+                committed,
+                cluster_members: Vec::new(),
+                stopped_at: Some(head),
+                outcome: SingleBranchOutcome::Stalled,
+                exit_code: 1,
+            };
+        }
+        // Per-increment checkpoint BEFORE running the next member (after the
+        // first commit): honor the `--zen` pause / `--no-human` auto-continue.
+        // A stop request parks the drain with prior commits intact — NEVER
+        // discards accumulated work.
+        if let Some(prev) = committed.last() {
+            if !driver.checkpoint_between_members(prev, &head) {
+                return SingleBranchResult {
+                    committed,
+                    cluster_members: Vec::new(),
+                    stopped_at: Some(head),
+                    outcome: SingleBranchOutcome::Paused,
+                    exit_code: 0,
+                };
+            }
+        }
+        let result = driver.run_member_through_ci(&head);
+        // HALT-on-failure: a phase failure, OR any non-ship outcome (punt /
+        // escalation / inconclusive / hold / shipped-mismatch), means this
+        // member did not cleanly land on the shared branch. In a coupled
+        // single-branch drain we cannot stack later members on a branch missing
+        // this one's work, so STOP — prior commits stay on the branch, the
+        // failed member is parked `NeedsAttention` by the driver. This is the
+        // deliberate inverse of EPIC-28's shelve-and-continue (correct only for
+        // INDEPENDENT members). trace:TASK-1003 | ai:claude
+        let unclean = result.punt_reason.is_some()
+            || result.escalation.is_some()
+            || result.inconclusive_reason.is_some()
+            || result.held_reason.is_some()
+            || result.shipped_spec_id.is_some();
+        if result.exit_code != 0 || unclean {
+            let phase = result.failed_phase.unwrap_or(Phase::Implementer);
+            // A clean-but-unclean stop (punt/hold/etc, exit 0) still halts the
+            // coupled drain; surface a non-zero exit so scripts notice.
+            let exit_code = if result.exit_code != 0 {
+                result.exit_code
+            } else {
+                phase.index()
+            };
+            return SingleBranchResult {
+                committed,
+                cluster_members: Vec::new(),
+                stopped_at: Some(head),
+                outcome: SingleBranchOutcome::Halted(phase),
+                exit_code,
+            };
+        }
+        committed.push(head);
+    }
+    // Nothing committed → nothing to cluster (empty batch, or `--max 0`).
+    if committed.is_empty() {
+        return SingleBranchResult {
+            committed,
+            cluster_members: Vec::new(),
+            stopped_at: None,
+            outcome: SingleBranchOutcome::Empty,
+            exit_code: 0,
+        };
+    }
+    // Every member committed on the shared branch — run Reviewer/Merge ONCE for
+    // the whole cluster → ONE PR linking every member. trace:TASK-1003
+    let cluster = driver.run_cluster_finish(&committed);
+    if cluster.exit_code != 0 {
+        let phase = cluster.failed_phase.unwrap_or(Phase::Reviewer);
+        return SingleBranchResult {
+            cluster_members: committed.clone(),
+            committed,
+            stopped_at: None,
+            outcome: SingleBranchOutcome::ClusterFailed(phase),
+            exit_code: cluster.exit_code,
+        };
+    }
+    SingleBranchResult {
+        cluster_members: committed.clone(),
+        committed,
+        stopped_at: None,
+        outcome: SingleBranchOutcome::Clustered,
+        exit_code: 0,
     }
 }
 
@@ -6568,5 +6816,221 @@ mod tests {
             result.shipped.iter().any(|s| s == "BUG-244"),
             "actual shipped spec must be credited"
         );
+    }
+
+    // --- Single-branch coupled-sequential drain (TASK-1003 / SPIKE-70) ------
+
+    /// Mock [`SingleBranchDriver`]. Models a shared feature branch as a growing
+    /// `branch_commits` log: `run_member_through_ci` appends the member (and
+    /// pops it from the queue so the head advances), so after N clean members
+    /// the log is `[m1, m2, …, mN]`. A reset between members WOULD truncate that
+    /// log — it never does, which is exactly what the no-reset test asserts.
+    /// `run_cluster_finish` records the one-PR member list and the merge's
+    /// Done→Completed bump set; `cluster_finishes` counts cluster merges (must be
+    /// exactly 1, and 0 if any member failed — proving no intermediate merge).
+    struct MockSingleBranch {
+        /// Members still queued (front = head); a member is popped on a clean run.
+        queue: Vec<String>,
+        /// Members configured to FAIL their through-CI run, by id.
+        fail: std::collections::HashSet<String>,
+        /// Members whose through-CI run PUNTS (clean exit, no ship), by id.
+        punt: std::collections::HashSet<String>,
+        /// Commits accumulated on the shared branch, in order (no-reset witness).
+        branch_commits: Vec<String>,
+        /// How many times the cluster Reviewer/Merge ran (no-intermediate-merge
+        /// witness — must be 0 or 1).
+        cluster_finishes: usize,
+        /// The member ids handed to the single cluster PR.
+        cluster_members: Vec<String>,
+        /// The members the single cluster merge bumped Done→Completed.
+        completed: Vec<String>,
+        /// `(prev, next)` pairs the per-increment checkpoint fired on.
+        checkpoints: Vec<(String, String)>,
+        /// If set, the checkpoint returns `false` (stop) when `next` matches.
+        stop_before: Option<String>,
+    }
+
+    impl MockSingleBranch {
+        fn new(members: &[&str]) -> Self {
+            Self {
+                queue: members.iter().map(|s| s.to_string()).collect(),
+                fail: std::collections::HashSet::new(),
+                punt: std::collections::HashSet::new(),
+                branch_commits: Vec::new(),
+                cluster_finishes: 0,
+                cluster_members: Vec::new(),
+                completed: Vec::new(),
+                checkpoints: Vec::new(),
+                stop_before: None,
+            }
+        }
+        fn failing(mut self, spec: &str) -> Self {
+            self.fail.insert(spec.to_string());
+            self
+        }
+        fn punting(mut self, spec: &str) -> Self {
+            self.punt.insert(spec.to_string());
+            self
+        }
+        fn stop_before(mut self, spec: &str) -> Self {
+            self.stop_before = Some(spec.to_string());
+            self
+        }
+    }
+
+    impl SingleBranchDriver for MockSingleBranch {
+        fn next_head(&mut self) -> Option<String> {
+            self.queue.first().cloned()
+        }
+        fn run_member_through_ci(&mut self, spec: &str) -> OrchestrationResult {
+            if self.fail.contains(spec) {
+                // Phase-2 (CI) failure — member NOT committed, NOT popped.
+                return OrchestrationResult::failed(Phase::Ci);
+            }
+            if self.punt.contains(spec) {
+                // A clean exit (0) but the member did NOT ship — a design-fork
+                // punt. The coupled drain must HALT here too. Member not popped.
+                let mut r = OrchestrationResult::ok();
+                r.punt_reason = Some("design fork".to_string());
+                return r;
+            }
+            // Clean run: the member's commit lands on the shared branch and it
+            // leaves the queue (marked Done). NO reset — the prior members'
+            // commits stay in the log.
+            self.branch_commits.push(spec.to_string());
+            self.queue.retain(|s| s != spec);
+            OrchestrationResult::ok()
+        }
+        fn run_cluster_finish(&mut self, members: &[String]) -> OrchestrationResult {
+            self.cluster_finishes += 1;
+            self.cluster_members = members.to_vec();
+            // The ONE cluster merge bumps EVERY member Done→Completed (each
+            // member's own `(SPEC-ID)` commit trailer is credited by the pull
+            // scan). Model that by completing every linked member.
+            self.completed = members.to_vec();
+            OrchestrationResult::ok()
+        }
+        fn checkpoint_between_members(&mut self, prev: &str, next: &str) -> bool {
+            self.checkpoints.push((prev.to_string(), next.to_string()));
+            self.stop_before.as_deref() != Some(next)
+        }
+    }
+
+    /// Each member commits in place on the ONE shared branch and the cluster
+    /// Reviewer/Merge runs exactly ONCE at the end — there is NO merge-to-main
+    /// between members. trace:TASK-1003 | ai:claude
+    #[test]
+    fn single_branch_commits_each_member_no_intermediate_merge() {
+        let mut m = MockSingleBranch::new(&["A", "B", "C"]);
+        let r = drain_batch_single_branch(&mut m, None);
+        assert_eq!(r.outcome, SingleBranchOutcome::Clustered);
+        // All three commits accumulated on the one branch, in order.
+        assert_eq!(m.branch_commits, vec!["A", "B", "C"]);
+        assert_eq!(r.committed, vec!["A", "B", "C"]);
+        // The cluster merge ran ONCE — not once per member.
+        assert_eq!(m.cluster_finishes, 1);
+    }
+
+    /// A member failure HALTS the drain (NOT EPIC-28 shelve-and-continue): the
+    /// prior member's commit stays on the branch, the failed member is the stop
+    /// point, and NO cluster PR is opened. trace:TASK-1003 | ai:claude
+    #[test]
+    fn single_branch_halts_on_member_failure_keeps_prior_commits() {
+        let mut m = MockSingleBranch::new(&["A", "B", "C"]).failing("B");
+        let r = drain_batch_single_branch(&mut m, None);
+        // A committed; B failed; C never ran — accumulated work is kept.
+        assert_eq!(m.branch_commits, vec!["A"]);
+        assert_eq!(r.committed, vec!["A"]);
+        assert_eq!(r.stopped_at.as_deref(), Some("B"));
+        assert!(matches!(r.outcome, SingleBranchOutcome::Halted(Phase::Ci)));
+        // No cluster PR — the branch is parked for triage, not shipped.
+        assert_eq!(m.cluster_finishes, 0);
+        assert!(r.cluster_members.is_empty());
+        assert_ne!(r.exit_code, 0);
+    }
+
+    /// A mid-cluster punt (clean exit, no ship) also HALTS — a coupled drain
+    /// cannot stack later members on a branch missing this one's work.
+    /// trace:TASK-1003 | ai:claude
+    #[test]
+    fn single_branch_halts_on_member_punt_keeps_prior_commits() {
+        let mut m = MockSingleBranch::new(&["A", "B", "C"]).punting("B");
+        let r = drain_batch_single_branch(&mut m, None);
+        assert_eq!(m.branch_commits, vec!["A"]);
+        assert_eq!(r.stopped_at.as_deref(), Some("B"));
+        assert!(matches!(r.outcome, SingleBranchOutcome::Halted(_)));
+        assert_eq!(m.cluster_finishes, 0);
+    }
+
+    /// All members ship on ONE branch and exactly ONE cluster PR links every
+    /// member SPEC-ID. trace:TASK-1003 | ai:claude
+    #[test]
+    fn single_branch_opens_one_cluster_pr_linking_all_members() {
+        let mut m = MockSingleBranch::new(&["A", "B", "C"]);
+        let r = drain_batch_single_branch(&mut m, None);
+        assert_eq!(m.cluster_finishes, 1);
+        // The one PR links every member.
+        assert_eq!(m.cluster_members, vec!["A", "B", "C"]);
+        assert_eq!(r.cluster_members, vec!["A", "B", "C"]);
+    }
+
+    /// The single cluster merge credits ALL member ids — every member is bumped
+    /// Done→Completed on the one merge, not just one. trace:TASK-1003 | ai:claude
+    #[test]
+    fn single_branch_cluster_merge_bumps_all_members_completed() {
+        let mut m = MockSingleBranch::new(&["A", "B", "C"]);
+        let _ = drain_batch_single_branch(&mut m, None);
+        // The one merge's Done→Completed scan credited every member.
+        assert_eq!(m.completed, vec!["A", "B", "C"]);
+    }
+
+    /// No reset between members: each member's commit STACKS on the shared
+    /// branch. After three members the branch retains every prior member's
+    /// commit — a BUG-554-style reset between members would have truncated the
+    /// log to just the latest. trace:TASK-1003 BUG-554 | ai:claude
+    #[test]
+    fn single_branch_no_reset_between_members() {
+        let mut m = MockSingleBranch::new(&["A", "B", "C"]);
+        let _ = drain_batch_single_branch(&mut m, None);
+        // Every member's commit is still present and ordered — proof the BUG-554
+        // "reset between members" rule is suppressed in single-branch mode.
+        assert_eq!(m.branch_commits, vec!["A", "B", "C"]);
+        // The checkpoint fired between members (B after A, C after B), never
+        // before the first — and never reset.
+        assert_eq!(
+            m.checkpoints,
+            vec![
+                ("A".to_string(), "B".to_string()),
+                ("B".to_string(), "C".to_string()),
+            ]
+        );
+    }
+
+    /// The per-increment checkpoint can stop the drain before the next member:
+    /// prior commits are intact, the remaining members are not started, and NO
+    /// cluster PR opens (the operator validates before continuing).
+    /// trace:TASK-1003 | ai:claude
+    #[test]
+    fn single_branch_checkpoint_stop_parks_with_prior_commits() {
+        let mut m = MockSingleBranch::new(&["A", "B", "C"]).stop_before("B");
+        let r = drain_batch_single_branch(&mut m, None);
+        assert!(matches!(r.outcome, SingleBranchOutcome::Paused));
+        assert_eq!(r.exit_code, 0);
+        // A landed; the checkpoint stopped before B, so B/C never ran.
+        assert_eq!(m.branch_commits, vec!["A"]);
+        assert_eq!(r.stopped_at.as_deref(), Some("B"));
+        assert_eq!(m.cluster_finishes, 0);
+    }
+
+    /// An empty batch drives nothing — no branch, no cluster PR, clean exit.
+    /// trace:TASK-1003 | ai:claude
+    #[test]
+    fn single_branch_empty_batch_is_clean_noop() {
+        let mut m = MockSingleBranch::new(&[]);
+        let r = drain_batch_single_branch(&mut m, None);
+        assert_eq!(r.outcome, SingleBranchOutcome::Empty);
+        assert_eq!(r.exit_code, 0);
+        assert_eq!(m.cluster_finishes, 0);
+        assert!(r.committed.is_empty());
     }
 }

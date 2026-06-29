@@ -4379,6 +4379,18 @@ pub enum QueueCommand {
             conflicts_with_all = ["id", "batch", "type_filter", "dry_run"]
         )]
         batches: Option<String>,
+        /// Coupled-sequential drain: with `--batch NAME --auto-complete`, drive
+        /// the batch members on ONE shared branch in ONE worktree — each member
+        /// is implemented + CI'd and committed in place (no per-member
+        /// merge-to-main, no reset between members), then ONE cluster PR is
+        /// opened linking every member. For TIGHTLY-COUPLED work that ships
+        /// together, where later increments build on earlier commits. A member
+        /// failure HALTS the drain, keeping prior members' commits on the
+        /// branch. Contrast the default batch drain, which merges each member to
+        /// main as its own PR. Requires `--batch` or `--batches`.
+        // trace:TASK-1003, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, requires = "autonomous")]
+        single_branch: bool,
         /// With `--batch`: print the matching queue entries in pickup
         /// order and exit without starting a session. Useful for
         /// auditing the batch before draining.
