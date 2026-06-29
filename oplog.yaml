@@ -25637,5 +25637,17 @@ operations:
   timestamp: 2026-06-29T15:28:24.502845532Z
   kind: !SetStatus
     status: In Progress
-clock: 2445
+- id: 019f13ff-03d5-7411-b833-29cf7324df07
+  target_id: 019f13fe-fc47-7650-aa23-54798feacbf0
+  author: aida
+  node_id: '1'
+  lamport: 2446
+  timestamp: 2026-06-29T15:28:27.605818264Z
+  kind: !Create
+    title: 'Worktree warm-pool: flip acquire-on-start default to ON'
+    description: 'Flip [worktree_pool] enabled default from false to true (and/or make --return the session-end default) so pooling is the standard path. ADVISOR GATE (2026-06-29): before the default flips on, REQUIRED: (1) automated integration tests for the acquire -> checkout -b -> return path (currently only manually e2e-verified in TASK-982), and (2) a supervised dogfood run of a real drain on the pool. Do NOT flip until both are green. Deferred until then.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2446
 node_id: '1'
