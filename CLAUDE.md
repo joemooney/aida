@@ -67,7 +67,7 @@ bash scripts/aida-demo.sh --auto-cleanup  # skip cleanup prompt (for CI / script
 
 The script creates a throwaway public GitHub repo (timestamped name like `aida-demo-20260525-...`), clones it locally, runs `aida init`, walks through filing a spec + implementing + committing with the `(SPEC-ID)` trailer convention + `aida pull` auto-bump, then prompts for cleanup (defaults to keep so you can poke around). Useful for: first-user evaluation, demo recordings, sanity-checking a fresh `aida` build initializes cleanly.
 
-Prerequisites: `aida` on PATH (run `aida-on` first if using the dev build), `gh` CLI authenticated, `git` configured with `user.name` + `user.email`.
+Prerequisites: `aida` on PATH (run `aida dev activate` first if using the dev build), `gh` CLI authenticated, `git` configured with `user.name` + `user.email`.
 
 ### Starter discipline pack (STORY-255)
 
@@ -169,18 +169,18 @@ The plan tooling closes the loop end-to-end: `aida ultraplan <spec>` assembles a
 ## AIDA-developer workflow (only when working on AIDA itself)
 
 ```bash
-# One-time: install shell helpers (aida-on / aida-off) into ~/.bashrc or ~/.zshrc
+# One-time: install the `aida()` shell wrapper into ~/.bashrc or ~/.zshrc
 aida dev shell-init --install
 
 # Per-shell: activate the in-repo build (pyenv-style)
-aida-on                                # alias for: eval "$(aida dev activate)"
+aida dev activate                      # the `aida()` wrapper auto-evals this — no `eval $(...)` needed
 # now `aida` resolves to ./target/{release|debug}/aida (whichever is freshest)
 
 aida dev status                        # confirms activation, shows binary mtime
 aida dev serve                         # foreground supervisor for aida-server (8080) + vite (5173)
                                        # Ctrl+C stops both
 
-aida-off                               # alias for: eval "$(aida dev deactivate)"
+aida dev deactivate                    # the wrapper auto-evals this too
 # back to the released aida on PATH
 ```
 
@@ -269,7 +269,7 @@ The **7 core tool schemas mirror the current CLI surface** (STORY-82): the statu
 
 Long-running MCP servers self-respawn after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA for the same version. The current MCP response is flushed first; the next request runs on the new binary. If a client still appears stale, kill that agent's `aida mcp-serve` process and let the MCP client respawn it.
 
-**This dev repo dogfoods its own MCP server.** A checked-in `.mcp.json` registers `aida mcp-serve` (resolved off PATH — run `aida-on` so it's the in-repo build) so Claude Code sessions working *in* this repo exercise the MCP tools, not just the CLI. MCP-vs-CLI parity gaps (schema drift, tool-response edge cases) therefore surface here first, in our own workflow, rather than only when downstream projects hit them. trace:TASK-253
+**This dev repo dogfoods its own MCP server.** A checked-in `.mcp.json` registers `aida mcp-serve` (resolved off PATH — run `aida dev activate` so it's the in-repo build) so Claude Code sessions working *in* this repo exercise the MCP tools, not just the CLI. MCP-vs-CLI parity gaps (schema drift, tool-response edge cases) therefore surface here first, in our own workflow, rather than only when downstream projects hit them. trace:TASK-253
 
 ## Template architecture (CRITICAL for AIDA development)
 

@@ -78,7 +78,7 @@ git ancestry. The full round-trip is exercised end-to-end by
 
 ```bash
 # Use the in-repo dev build if you are developing AIDA:
-aida-on
+aida dev activate
 
 # Walkthrough (Enter-to-continue between steps):
 bash scripts/demo-lifecycle-authority.sh
