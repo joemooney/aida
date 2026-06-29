@@ -25957,5 +25957,17 @@ operations:
   timestamp: 2026-06-29T17:28:59.468981460Z
   kind: !SetStatus
     status: Completed
-clock: 2479
+- id: 019f146d-a373-73b3-b2b4-62a34905842c
+  target_id: 019f146d-6a22-7370-b53f-174439305934
+  author: aida
+  node_id: '1'
+  lamport: 2480
+  timestamp: 2026-06-29T17:29:17.427202935Z
+  kind: !Create
+    title: events.jsonl rotation / per-drain truncation at `run-started`
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2480
 node_id: '1'
