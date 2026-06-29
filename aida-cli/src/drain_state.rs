@@ -321,6 +321,28 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
     state.run_uuid = run_uuid.to_string();
     state.zen = zen;
     let _ = state.write(project_root);
+    // STORY-712: emit the matching event-stream line so a watcher can be woken
+    // by a stream-tail instead of polling this snapshot. Best-effort. trace:TASK-988
+    crate::events::emit(
+        project_root,
+        &crate::events::Event::new(
+            Some(spec.to_string()),
+            run_uuid,
+            crate::events::EventKind::RunStarted,
+        ),
+    );
+}
+
+/// STORY-712: best-effort snapshot of the live drain's current spec + run uuid,
+/// for event correlation at emit sites that don't already carry them (the CI
+/// wait, the punt ledger, the drain summary). Returns `(None, "")` when no
+/// drain-state file exists.
+// trace:TASK-988 | ai:claude
+pub(crate) fn current_context(project_root: &Path) -> (Option<String>, String) {
+    match DrainState::read(project_root) {
+        Some(state) => (state.current, state.run_uuid),
+        None => (None, String::new()),
+    }
 }
 
 /// TASK-336: clear the run-scoped fields a child uses to corroborate — the
@@ -354,6 +376,20 @@ pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase
         member.state = format!("in-phase-{phase_index}");
     }
     let _ = state.write(project_root);
+    // STORY-712: phase churn is the benign majority — emitted (so a `--all`
+    // feed can show it) but classified silent so it never wakes the LLM.
+    // Best-effort. trace:TASK-988
+    crate::events::emit(
+        project_root,
+        &crate::events::Event::new(
+            Some(spec.to_string()),
+            state.run_uuid.clone(),
+            crate::events::EventKind::PhaseEntered {
+                idx: phase_index,
+                slug: phase_slug.to_string(),
+            },
+        ),
+    );
 }
 
 /// BUG-286: append a retry event to the live drain-state file. Best-effort —
@@ -426,6 +462,23 @@ pub(crate) fn set_member_outcome(
     // `current_phase` does not outlive the run that set it.
     state.current_phase = None;
     let _ = state.write(project_root);
+    // STORY-712: a member that shipped with a PR is an actionable wake (merge /
+    // advance). The *shelved* (completed=false) case is emitted from
+    // `punt::append_failure_to_ledger` instead — the one disjoint SpecShelved
+    // site, where the phase + kind are known — so it is NOT emitted here, to
+    // avoid a double-emit. Best-effort. trace:TASK-988
+    if completed {
+        if let Some(pr) = pr {
+            crate::events::emit(
+                project_root,
+                &crate::events::Event::new(
+                    Some(spec.to_string()),
+                    state.run_uuid.clone(),
+                    crate::events::EventKind::PhaseDonePr { pr },
+                ),
+            );
+        }
+    }
 }
 
 /// The corroborated verdict for `aida drain status`: whether the drain-state
