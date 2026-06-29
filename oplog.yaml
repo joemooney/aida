@@ -25717,5 +25717,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 2453
+- id: 019f1414-e879-7423-900b-f3977c6c3b01
+  target_id: 019f1414-dd18-7c90-bc06-3e51682b84a4
+  author: aida
+  node_id: '1'
+  lamport: 2454
+  timestamp: 2026-06-29T15:52:22.393302707Z
+  kind: !Create
+    title: Emit events at drain state-changes — STORY-712 slice 1b
+    description: 'Co-locate events::emit beside the existing state mutators: drain_state::set_phase/set_member_outcome/set_run, wait_for_ci_terminal return, punt::append_to_ledger + append_failure_to_ledger, run_advisor escalate, drain_summary exit. Produces a complete .aida/events.jsonl on every drain (a live tail -f feed). Best-effort, non-blocking, one emit site per verb. Ships with 1a as one PR. Plan: docs/plans/2026-06-29-story-712-zero-token-supervision.md.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2454
 node_id: '1'
