@@ -3,12 +3,12 @@ spec_id: TASK-954
 agreed_id: TASK-954
 title: 'STORY-710 part B: grey out UPDATE verbs when nothing is selected (require explicit selection)'
 description: 'Part B of STORY-710 (part A, the carousel, shipped in commit 4d37e487c). UPDATE verbs (approve/queue/accept/defer/request-approval) require >=1 explicitly SELECTED item; when nothing is selected they render GREYED OUT (dimmed, non-selectable, hint ''select item(s) first''). READ verbs (show/why/status) stay always-available (''none = all'' is safe for reads, dangerous for updates). This is a SECOND grey-out axis on top of TASK-947 (status-applicability): a verb is enabled iff status-applicable AND (if UPDATE) has a selection. The read/update classification is a property of each Verb. Prevents accidentally mutating the focused item.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T04:14:02.335400548Z
-modified_at: 2026-06-29T08:30:16.761362454Z
+modified_at: 2026-06-29T09:50:30.477058663Z
 req_type: Task
 tags:
 - batch:epic54
