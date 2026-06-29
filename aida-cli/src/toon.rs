@@ -102,6 +102,27 @@ pub fn scalar(key: &str, value: &str) -> String {
     format!("{key}: {}", escape(value))
 }
 
+/// Render an agent-mode error as a structured TOON block: an `error:` scalar
+/// carrying the one-line summary, plus an optional `help:` scalar carrying a
+/// suggested next command. Reuses [`scalar`] so the block is valid,
+/// round-trippable TOON consistent with the rest of the agent surface (a value
+/// with a structural colon — like `Requirement not found: NOSUCH-1` — is quoted
+/// per the TOON rule).
+///
+/// This exists because agents read STDOUT: an error printed to stderr with a
+/// human `Error:` prefix is invisible to the agent loop, forcing blind retries.
+/// In AGENT MODE the central error handler routes here and prints the block to
+/// stdout instead.
+// trace:TASK-972
+pub fn error_block(summary: &str, help: Option<&str>) -> String {
+    let mut out = scalar("error", summary);
+    if let Some(h) = help {
+        out.push('\n');
+        out.push_str(&scalar("help", h));
+    }
+    out
+}
+
 /// A column in a TOON table: a stable field `name` plus a projection from a row
 /// `T` to its cell string. The port of the `toon.ts` `FieldDef`. The wired call
 /// sites use [`table_raw`] (they project through closures that capture per-call
@@ -403,5 +424,29 @@ mod tests {
             &parsed.rows,
         );
         assert_eq!(once, again);
+    }
+
+    // TASK-972: the agent-mode error block is an `error:` scalar plus an optional
+    // `help:` scalar. A colon in the summary triggers TOON quoting, and the block
+    // round-trips through parse_scalar (so an agent can parse it deterministically).
+    #[test]
+    fn error_block_with_help_is_two_scalars() {
+        let block = error_block("Requirement not found: NOSUCH-1", Some("aida list"));
+        let expected = "error: \"Requirement not found: NOSUCH-1\"\nhelp: aida list";
+        assert_eq!(block, expected);
+        let mut lines = block.lines();
+        let (ek, ev) = parse_scalar(lines.next().unwrap()).unwrap();
+        assert_eq!(ek, "error");
+        assert_eq!(ev, "Requirement not found: NOSUCH-1");
+        let (hk, hv) = parse_scalar(lines.next().unwrap()).unwrap();
+        assert_eq!(hk, "help");
+        assert_eq!(hv, "aida list");
+    }
+
+    #[test]
+    fn error_block_without_help_is_single_scalar() {
+        let block = error_block("boom", None);
+        assert_eq!(block, "error: boom");
+        assert!(!block.contains("help:"));
     }
 }
