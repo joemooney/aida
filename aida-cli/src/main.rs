@@ -56007,6 +56007,32 @@ fn auto_followups_disabled() -> bool {
     )
 }
 
+/// BUG-655: content-level dedup for auto-followups. The [`FOLLOWUPS_MARKER`]
+/// comment is a *per-spec* fast-path, but it is not a hard guarantee: a plan
+/// carrying a `## Followups` section can be committed into more than one slice
+/// worktree (STORY-712 shipped via 4 slice PRs), and two independent commits
+/// that each reach completion before the other's marker comment has synced
+/// will *both* fire the filing — double-filing the same bullets. The robust
+/// guarantee is content-level: before filing a bullet as a child TASK, check
+/// whether a child TASK with the SAME parent spec AND the SAME (trimmed,
+/// case-insensitive) title already exists, and skip it if so. Child specs are
+/// real, queryable store rows, so this survives across commits/agents/PRs in a
+/// way the single marker comment does not.
+///
+/// `existing_children` is the `(parent_spec_id, title)` set already present in
+/// the store. Pure + total so it is unit-testable in isolation.
+fn followup_already_filed(
+    existing_children: &[(String, String)],
+    parent: &str,
+    bullet: &str,
+) -> bool {
+    let norm = |s: &str| s.trim().to_ascii_lowercase();
+    let want = norm(bullet);
+    existing_children
+        .iter()
+        .any(|(p, title)| p == parent && norm(title) == want)
+}
+
 /// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
 /// in the `# Plan:` title line or the `Specs:` header line. Cross-references
 /// in a `## Related` section don't count (that plan owns a different spec).
@@ -56489,6 +56515,24 @@ fn extract_plan_followups(
     if plan_files.is_empty() {
         return Ok(());
     }
+
+    // BUG-655: content-level dedup set — the `(parent_spec, title)` of every
+    // child TASK the parent already has. The marker comment above is the
+    // fast-path, but a plan committed by more than one slice PR can fire the
+    // filing twice before the first marker syncs; this set is the real
+    // guarantee, since the children are durable store rows. We grow it in the
+    // filing loop too so a plan that lists the same bullet twice is also a
+    // no-op the second time.
+    let mut existing_children: Vec<(String, String)> = {
+        use aida_core::models::RelationshipType;
+        req.relationships
+            .iter()
+            .filter(|r| r.rel_type == RelationshipType::Parent)
+            .filter_map(|r| store.get_requirement_by_id(&r.target_id))
+            .map(|child| (spec_id.to_string(), child.title.clone()))
+            .collect()
+    };
+
     // Collect + dedupe followup bullets across every owning plan file.
     let mut followups: Vec<String> = Vec::new();
     let mut sources: Vec<String> = Vec::new();
@@ -56527,9 +56571,20 @@ fn extract_plan_followups(
 
     let mut filed: Vec<(String, String)> = Vec::new(); // (new_spec, title)
     let mut declined: Vec<String> = Vec::new();
+    let mut deduped: Vec<String> = Vec::new(); // BUG-655: already-filed bullets
     let mut skip_rest = false;
 
     for followup in &followups {
+        // BUG-655: a bullet whose title already exists as a child of this
+        // parent has already been filed (this run, a prior run, or a sibling
+        // commit's run) — skip it without prompting, so a plan landed by
+        // multiple PRs cannot double-file. This is the cross-commit guarantee
+        // the per-spec marker comment cannot make.
+        if followup_already_filed(&existing_children, spec_id, followup) {
+            deduped.push(followup.clone());
+            continue;
+        }
+
         let accept = if skip_rest {
             false
         } else if interactive {
@@ -56556,7 +56611,12 @@ fn extract_plan_followups(
 
         if accept {
             match aida_subcmd_add_followup_task(project_root, spec_id, followup) {
-                Some(new_id) => filed.push((new_id, followup.clone())),
+                Some(new_id) => {
+                    // Record the title so a later identical bullet in the same
+                    // plan is recognised as already-filed (BUG-655).
+                    existing_children.push((spec_id.to_string(), followup.clone()));
+                    filed.push((new_id, followup.clone()));
+                }
                 None => declined.push(followup.clone()),
             }
         } else {
@@ -56580,6 +56640,15 @@ fn extract_plan_followups(
     if !declined.is_empty() {
         marker.push_str(&format!("\ndeclined {}:", declined.len()));
         for d in &declined {
+            marker.push_str(&format!("\n  - {d}"));
+        }
+    }
+    if !deduped.is_empty() {
+        // BUG-655: bullets skipped because an identical child TASK already
+        // existed — recorded so the audit trail shows the double-file was
+        // prevented, not silently dropped.
+        marker.push_str(&format!("\nskipped {} already-filed:", deduped.len()));
+        for d in &deduped {
             marker.push_str(&format!("\n  - {d}"));
         }
     }
@@ -56612,6 +56681,13 @@ fn extract_plan_followups(
             "·".dimmed(),
             declined.len(),
             display_id
+        );
+    }
+    if !deduped.is_empty() {
+        println!(
+            "  {} {} followup(s) already filed as child task(s) — skipped",
+            "·".dimmed(),
+            deduped.len(),
         );
     }
 
@@ -67594,6 +67670,112 @@ diff --git a/gone.rs b/gone.rs
                 "Fix the `a < b` guard".to_string(),
             ]
         );
+    }
+
+    /// BUG-655: a bullet whose title already exists as a child of the SAME
+    /// parent is recognised as already-filed (so a second commit can't double
+    /// file it); a genuinely-new bullet is not. Match is trim + case
+    /// insensitive, and scoped to the parent.
+    #[test]
+    fn followup_already_filed_matches_existing_child_title() {
+        let existing = vec![
+            (
+                "STORY-712".to_string(),
+                "Wire the zero-token path".to_string(),
+            ),
+            (
+                "STORY-712".to_string(),
+                "Add the supervision metric".to_string(),
+            ),
+        ];
+
+        // Exact match under the same parent → already filed.
+        assert!(followup_already_filed(
+            &existing,
+            "STORY-712",
+            "Wire the zero-token path"
+        ));
+        // Trim + case-insensitive match → still already filed.
+        assert!(followup_already_filed(
+            &existing,
+            "STORY-712",
+            "  wire the zero-token path  "
+        ));
+        // A genuinely-new bullet under the same parent → not filed yet.
+        assert!(!followup_already_filed(
+            &existing,
+            "STORY-712",
+            "Document the new flag"
+        ));
+        // Same title text but a DIFFERENT parent → not a dup (parent-scoped).
+        assert!(!followup_already_filed(
+            &existing,
+            "STORY-999",
+            "Wire the zero-token path"
+        ));
+        // Empty existing set → nothing is ever already-filed.
+        assert!(!followup_already_filed(&[], "STORY-712", "anything"));
+    }
+
+    /// BUG-655: the idempotency the bug breaks — re-running the dedup decision
+    /// over the same plan's bullets after the first run filed them is a no-op
+    /// (every bullet is now recognised as already-filed), so a plan committed
+    /// by multiple slice PRs cannot double-file. Models the filing loop's
+    /// growing `existing_children` set.
+    #[test]
+    fn followup_dedup_makes_refiling_a_noop() {
+        let parent = "STORY-712";
+        let bullets = vec![
+            "Wire the zero-token path".to_string(),
+            "Add the supervision metric".to_string(),
+            "Document the new flag".to_string(),
+        ];
+
+        // First run: nothing exists, so every bullet is filed and recorded.
+        let mut existing: Vec<(String, String)> = Vec::new();
+        let mut filed_first = Vec::new();
+        for b in &bullets {
+            if !followup_already_filed(&existing, parent, b) {
+                existing.push((parent.to_string(), b.clone()));
+                filed_first.push(b.clone());
+            }
+        }
+        assert_eq!(filed_first, bullets);
+
+        // Second run (a sibling commit carrying the same plan): the children
+        // now exist in the store, so the same loop files NOTHING.
+        let mut filed_second = Vec::new();
+        for b in &bullets {
+            if !followup_already_filed(&existing, parent, b) {
+                existing.push((parent.to_string(), b.clone()));
+                filed_second.push(b.clone());
+            }
+        }
+        assert!(
+            filed_second.is_empty(),
+            "re-running the filing over the same plan must be a no-op, got {filed_second:?}"
+        );
+    }
+
+    /// BUG-655: a plan that lists the SAME bullet twice in one `## Followups`
+    /// section files it only once within a single run (the loop grows the
+    /// dedup set as it files).
+    #[test]
+    fn followup_dedup_handles_duplicate_bullets_in_one_plan() {
+        let parent = "STORY-712";
+        let bullets = vec![
+            "Tighten the retry budget".to_string(),
+            "Tighten the retry budget".to_string(), // duplicate bullet
+        ];
+        let mut existing: Vec<(String, String)> = Vec::new();
+        let mut filed = Vec::new();
+        for b in &bullets {
+            if !followup_already_filed(&existing, parent, b) {
+                existing.push((parent.to_string(), b.clone()));
+                filed.push(b.clone());
+            }
+        }
+        assert_eq!(filed, vec!["Tighten the retry budget".to_string()]);
     }
 
     /// BUG-105: when multiple plan files own the same spec, discover_plan_context
