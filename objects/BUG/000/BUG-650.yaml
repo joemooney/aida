@@ -1,0 +1,17 @@
+id: 019f1229-1a14-70b2-a8d1-b66b924314aa
+spec_id: BUG-650
+agreed_id: BUG-650
+title: Drain cannot acquire HARNESS-WORKTREE when an advisor/other claude session shares the same checkout
+description: 'aida queue work --auto-complete (the orchestrator) run from a checkout that already has a live claude session in it FAILS at phase 1: the HARNESS-WORKTREE scope is owned by that checkouts live-session lease (e.g. abf9f7f0 on /home/joe/ai/aida with 2 live claude processes = the advisor session + the drain itself). --steal is refused/dangerous (its worktree IS the main checkout; removing it would (deleted)-cwd-corrupt the live sessions). So an advisor and a drain cannot share one checkout -- the multi-clone-isolation gap (EPIC-46/47, STORY-711) biting for real. FIX options: (a) the drain should spawn its implementer in a fresh isolated worktree and NOT contend on the host checkouts scope; (b) a per-driver clone/lock model (STORY-711); (c) at minimum a clear error: "another claude session occupies this checkout; run the drain from a separate clone." Observed 2026-06-29 while an advisor session drove EPIC-55 in the same tree the operator launched the EPIC-54 zen drain.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-29T06:55:11.380749677Z
+modified_at: 2026-06-29T06:55:11.380749677Z
+req_type: Bug
+tags:
+- coordination
+- drain
+- from-operator
+- multi-clone
