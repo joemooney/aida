@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:59:29.842008386Z
-modified_at: 2026-06-29T16:06:46.073827099Z
+modified_at: 2026-06-29T16:07:50.006501609Z
 req_type: Bug
 tags:
 - axi
@@ -26,3 +26,8 @@ comments:
   content: Commit 2ba3ee7f4 references this requirement
   created_at: 2026-06-29T16:06:46.073827099Z
   modified_at: 2026-06-29T16:06:46.073827099Z
+- id: 019f1423-0ff6-70d0-acc3-f63b1c7905b3
+  author: joe
+  content: Commit b3b0c85de references this requirement
+  created_at: 2026-06-29T16:07:50.006501609Z
+  modified_at: 2026-06-29T16:07:50.006501609Z
