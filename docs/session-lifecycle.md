@@ -159,7 +159,7 @@ This is what makes the **fixup loop cheap.** Without resume, every fixup pays th
 | AIDA session manifest | Persists in `.aida-store/` | `aida session show <id>` (historical) |
 | Claude conversation JSONL | Persists indefinitely on local disk | `claude --resume <id>` — wired via TASK-112 |
 | Worktree directory | Configurable; may persist after `aida session end` | Recreated on `aida queue work` (with same branch) |
-| Cargo incremental cache (sibling worktrees) | Survives `aida session end` — cargo's `target/.fingerprint/` references the now-deleted worktree's source paths and can poison sibling worktrees' builds (TASK-0396) | `cargo clean -p <crate>...` in the affected sibling, or `cargo clean` for a full sweep |
+| Cargo incremental cache (sibling worktrees) | Survives `aida session end` — cargo's `target/.fingerprint/` references the now-deleted worktree's source paths and can poison sibling worktrees' builds (TASK-0396); **dissolved when you use the warm-pool** (`session end --return` keeps the tree, see below) | `cargo clean -p <crate>...` in the affected sibling, or `cargo clean` for a full sweep |
 | Plan file (`docs/plans/`) | Committed to git, permanent | `git log docs/plans/` |
 | Trace comments in code | Permanent (committed) | `aida search` / `grep trace:` |
 | Doc seeds (req comments) | Permanent in orphan store | `aida show <SPEC>` |
@@ -183,6 +183,38 @@ cargo clean -p aida-core -p aida-cli           # surgical, faster; name the crat
 ```
 
 **Why it's not currently automated:** scoping the clean tightly requires reading the dying worktree's `Cargo.toml` to enumerate its workspace members, and an over-broad clean invalidates artifacts other workflows want to keep. Filed as the optional Path B in TASK-0396 (a `--clean-cache` flag on `aida session end`) — deferred until the cost of the manual `cargo clean` actually bites repeatedly.
+
+> **Dissolved by the warm-pool (STORY-714).** The root cause is *deletion*: a worktree that is removed leaves dangling `target/.fingerprint` paths. The warm-pool **never deletes on hand-back** — `aida session end --return` (and `aida worktree pool return`) reset the tree to a clean detached base and keep the directory, so its fingerprints stay valid and its `target/` stays warm. The only path that deletes a tree is `aida worktree pool destroy`, which runs a `pre_destroy` hook — the one place `cargo clean` should fire — at the exact moment the paths are about to dangle. See **Worktree warm-pool** below.
+
+---
+
+## Worktree warm-pool (STORY-714)
+
+The historical model treats a per-spec worktree as disposable: create a sibling worktree, work in it, `git worktree remove --force` it on `session end`. The expensive, warm thing is the worktree's compiled `target/` cache; the branch is the cheap, throwaway thing. The **warm-pool** (ported from [treehouse](https://github.com/kunchenguid/treehouse)) inverts that — it keeps a pool of recycled worktrees per repo and, on hand-back, **resets the tree to a clean detached-HEAD base instead of deleting it**.
+
+```bash
+aida worktree pool acquire [--json] [--lease-holder NAME]   # reuse an idle warm tree (reset) or create one
+aida worktree pool return [PATH]                            # reset + mark idle; DIRECTORY PERSISTS (cache kept)
+aida worktree pool status [--json]                          # available / in-use / leased / dirty / here + HEAD
+aida worktree pool destroy [--all | PATH...] [--no-dry-run] # ONLY path that deletes; dry-run by default
+        [--include-unlanded] [--include-in-use] [--include-leased]
+aida session end --return                                   # hand this session's pool tree back instead of removing
+```
+
+State lives under `.aida/worktree-pool/` (per-clone runtime state, already covered by the deny-by-default `.aida/*` gitignore). Every mutation runs under an advisory file lock (`pool.lock`) so parallel fan-out implementers can't be handed the same idle tree.
+
+**Two bug classes dissolved (not patched):**
+
+- **TASK-0396** (cross-worktree cargo fingerprint poison) — a tree that is never removed never leaves a dangling absolute path. The single delete path (`destroy`) runs the `pre_destroy` `cargo clean` hook.
+- **BUG-553** (branch-stacking on worktree reuse) — every `acquire` *unconditionally* hard-resets to a **detached** furthest-ahead default ref before handing the tree out. The base-reset lives in the `acquire` primitive, so no caller can reuse a tree and forget it. The old manual rule ("`git reset --hard origin/main` before each next spec") becomes a structural guarantee.
+
+**Reservation vs liveness.** A pool entry carries both a PID-liveness owner (`owner_pid`, self-heals to idle when the owner process dies) and a durable lease (`leased` / `lease_holder`, survives with zero live processes). A headless drain that parks `NeedsAttention` keeps its tree reserved via `--lease-holder`; a crashed implementer's tree self-heals back to idle on the next `heal_state` pass.
+
+**Tiered destroy.** `destroy` classifies each tree (`disposable` / `dirty` / `unmerged` / `in-use` / `leased` / `unverified`) and removes only `disposable` trees unless you opt into a riskier class with one `--include-*` flag. Dirty/unmerged trees are patch-salvaged (`salvage_worktree_patch`) before removal. `--include-leased` is honored only when the exact path is named, never in a bulk `--all` sweep.
+
+**Hook safety.** `post_create` / `pre_destroy` hook commands are sourced **only from the machine-global `~/.aida/config.toml`**, never a checked-in repo-level `.aida/config.toml` — cloning a repo must not be able to run arbitrary shell on your machine.
+
+**Slice status.** The pool primitives + the `aida worktree pool` surface + `aida session end --return` ship in slice 1. Not yet wired: `aida agent new` / `aida queue work` / the orchestrator acquiring from the pool on start, and replacing the orchestrator/doctor `--force` removals with the tiered `destroy`. Those are tracked followups (see the plan's Followups), gated behind the opt-in `--return` until the pool is proven by dogfood, then the default flips.
 
 ---
 

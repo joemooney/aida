@@ -642,6 +642,188 @@ pub fn has_worktree(repo_root: &Path, worktree_dir: &str) -> bool {
         .unwrap_or(false)
 }
 
+// ── Worktree warm-pool primitives (STORY-714) ───────────────────────────────
+//
+// The warm-pool keeps a set of long-lived sibling worktrees and recycles them
+// (reset-not-delete) instead of the destroy-and-recreate model. These are the
+// git verbs the pool registry (`worktree_pool.rs`) drives; keeping them here
+// means the pool never reshells `git worktree` itself and the `--detach` add /
+// classified remove live next to AIDA's other managed-worktree primitives.
+
+/// Add a new worktree at `path` with a **detached HEAD** pointing at `ref_`.
+/// The pool always hands out detached trees — the worker creates its own
+/// branch — so a reused tree never stacks one spec's branch on another's
+/// (the structural dissolution of BUG-553).
+// trace:STORY-714 trace:BUG-553 | ai:claude
+pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Result<()> {
+    // Drop stale registrations first — same rationale as create_store_worktree
+    // (a manually-deleted dir leaves a dangling registration). trace:BUG-39
+    let _ = git(repo_root, &["worktree", "prune"]);
+    let path_str = path.to_string_lossy();
+    let result = git(repo_root, &["worktree", "add", "--detach", &path_str, ref_])?;
+    if !result.success {
+        anyhow::bail!(
+            "failed to add pool worktree at {}: {}",
+            path.display(),
+            result.stderr
+        );
+    }
+    Ok(())
+}
+
+/// Reset a worktree to a clean **detached-HEAD** checkout of `ref_`: force a
+/// detached checkout, hard-reset, and clean untracked files. This is the
+/// shared "acquire / return" cleanup — running it on every acquire makes the
+/// base-reset unconditional (no caller can forget it), dissolving BUG-553.
+/// Gitignored paths (`target/`, `.aida/cache.db`, …) survive `clean -fd`, so
+/// the compiled cache that makes the pool *warm* is preserved.
+// trace:STORY-714 trace:BUG-553 | ai:claude
+pub fn reset_worktree_to(worktree_path: &Path, ref_: &str) -> Result<()> {
+    let co = git(worktree_path, &["checkout", "--detach", "--force", ref_])?;
+    if !co.success {
+        anyhow::bail!(
+            "failed to detach worktree {} onto {}: {}",
+            worktree_path.display(),
+            ref_,
+            co.stderr
+        );
+    }
+    let reset = git(worktree_path, &["reset", "--hard", ref_])?;
+    if !reset.success {
+        anyhow::bail!(
+            "failed to hard-reset worktree {}: {}",
+            worktree_path.display(),
+            reset.stderr
+        );
+    }
+    // `clean -fd` removes untracked dirs/files but honors .gitignore, so the
+    // warm `target/` is kept. We deliberately do NOT pass -x.
+    let _ = git(worktree_path, &["clean", "-fd"]);
+    Ok(())
+}
+
+/// The repo's default branch name (`main` / `master`), detected from
+/// `origin/HEAD` when set, else by which local branch exists, else `"main"`.
+// trace:STORY-714 | ai:claude
+pub fn default_branch_name(repo_root: &Path) -> String {
+    if let Ok(r) = git(
+        repo_root,
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ],
+    ) {
+        if r.success {
+            if let Some(name) = r.stdout.rsplit('/').next() {
+                if !name.is_empty() {
+                    return name.to_string();
+                }
+            }
+        }
+    }
+    for cand in ["main", "master"] {
+        let exists = git(repo_root, &["rev-parse", "--verify", "--quiet", cand])
+            .map(|x| x.success)
+            .unwrap_or(false);
+        if exists {
+            return cand.to_string();
+        }
+    }
+    "main".to_string()
+}
+
+/// Resolve the ref a pool worktree should reset to on acquire/return: the
+/// **furthest-ahead default ref**. Compares local `<default>` against
+/// `origin/<default>` and picks the one strictly ahead; on divergence, a tie,
+/// or origin-ahead it prefers `origin/<default>` (the shared base). A fresh
+/// clone has only `origin/<default>`; right after a local merge, local is
+/// ahead and wins. Errors only when neither ref resolves.
+// trace:STORY-714 trace:BUG-553 | ai:claude
+pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
+    let default = default_branch_name(repo_root);
+    let local = default.clone();
+    let origin = format!("origin/{default}");
+
+    let local_exists = git(repo_root, &["rev-parse", "--verify", "--quiet", &local])
+        .map(|r| r.success)
+        .unwrap_or(false);
+    let origin_exists = git(repo_root, &["rev-parse", "--verify", "--quiet", &origin])
+        .map(|r| r.success)
+        .unwrap_or(false);
+
+    match (local_exists, origin_exists) {
+        (true, true) => {
+            let origin_anc_local = is_ancestor(repo_root, &origin, &local).unwrap_or(false);
+            let local_anc_origin = is_ancestor(repo_root, &local, &origin).unwrap_or(false);
+            // local strictly ahead of origin → reset onto local; otherwise the
+            // shared origin ref is the safe base.
+            if origin_anc_local && !local_anc_origin {
+                Ok(local)
+            } else {
+                Ok(origin)
+            }
+        }
+        (true, false) => Ok(local),
+        (false, true) => Ok(origin),
+        (false, false) => {
+            anyhow::bail!(
+                "no default branch ({local} / {origin}) found to reset pool worktree onto"
+            )
+        }
+    }
+}
+
+/// True when a worktree has uncommitted changes (tracked or untracked,
+/// gitignored paths excluded). Used to classify a tree as dirty before a
+/// reset/return/destroy so unlanded work is never silently discarded.
+// trace:STORY-714 | ai:claude
+pub fn worktree_is_dirty(worktree_path: &Path) -> bool {
+    git(worktree_path, &["status", "--porcelain"])
+        .map(|r| !r.stdout.is_empty())
+        .unwrap_or(false)
+}
+
+/// True when the worktree's current HEAD is already an ancestor of `base_ref`
+/// — its commits have landed, so the tree is safe to reset or destroy.
+// trace:STORY-714 | ai:claude
+pub fn worktree_head_is_merged(worktree_path: &Path, base_ref: &str) -> bool {
+    is_ancestor(worktree_path, "HEAD", base_ref).unwrap_or(false)
+}
+
+/// The worktree's current HEAD SHA, or None if it can't be resolved.
+// trace:STORY-714 | ai:claude
+pub fn worktree_head_sha(worktree_path: &Path) -> Option<String> {
+    git(worktree_path, &["rev-parse", "HEAD"])
+        .ok()
+        .filter(|r| r.success)
+        .map(|r| r.stdout)
+}
+
+/// Remove a worktree by absolute path. `force` adds `--force` (discards a
+/// dirty tree). The pool's `destroy` path calls this only after classifying
+/// and salvaging; `return` never calls it (the directory persists).
+// trace:STORY-714 trace:TASK-0396 | ai:claude
+pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -> Result<()> {
+    let path_str = worktree_path.to_string_lossy();
+    let mut args: Vec<&str> = vec!["worktree", "remove"];
+    if force {
+        args.push("--force");
+    }
+    args.push(&path_str);
+    let result = git(repo_root, &args)?;
+    if !result.success {
+        anyhow::bail!(
+            "failed to remove worktree {}: {}",
+            worktree_path.display(),
+            result.stderr
+        );
+    }
+    let _ = git(repo_root, &["worktree", "prune"]);
+    Ok(())
+}
+
 /// Check if the remote is reachable (can we push/pull?).
 pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
     git(repo, &["ls-remote", "--exit-code", remote])

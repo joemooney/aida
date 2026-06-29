@@ -950,6 +950,16 @@ pub enum SessionCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long)]
         skip_ci: bool,
+
+        /// Return this session's worktree to the warm-pool instead of
+        /// removing it: reset it to a clean detached base and mark it idle so
+        /// the next acquire reuses it warm. The directory persists (its build
+        /// cache stays warm), dissolving the cargo-fingerprint poison of the
+        /// destroy-and-recreate model. No-op when the worktree isn't a
+        /// registered pool tree.
+        // trace:STORY-714 | ai:claude
+        #[clap(long = "return")]
+        return_to_pool: bool,
     },
 
     /// List active session leases — the canonical "who holds what
@@ -1786,8 +1796,83 @@ pub enum WorktreeCommand {
         #[clap(long)]
         json: bool,
     },
-    // STORY-714 (warm-pool) will add `Pool(WorktreePoolCommand)` and a tiered
-    // `Remove { .. }` here. trace:STORY-716
+
+    /// Manage the warm-pool of recycled worktrees — kept warm (reset-not-delete
+    /// on hand-back) so build caches survive across fan-outs. Dissolves the
+    /// cargo-cache poison and branch-stacking hazards of destroy-and-recreate.
+    // trace:STORY-714 | ai:claude
+    #[clap(subcommand)]
+    Pool(WorktreePoolCommand),
+}
+
+/// Subcommands under `aida worktree pool`.
+// trace:STORY-714 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum WorktreePoolCommand {
+    /// Show every pooled worktree with its live state (available / in-use /
+    /// leased / dirty / destroying) and current HEAD. Read-only.
+    Status {
+        /// Emit JSON instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Acquire a worktree from the pool: reuse an idle warm tree (reset to a
+    /// clean detached base) or create a new one up to the cap. Prints the path.
+    Acquire {
+        /// Stamp a durable reservation under this holder name (survives with no
+        /// live process) — for a headless drain that parks work mid-flight.
+        #[clap(long)]
+        lease_holder: Option<String>,
+
+        /// Emit JSON (`{"path": "..."}`) instead of the bare path.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Return a worktree to the pool: reset it to a clean detached base and
+    /// mark it idle. The directory PERSISTS (the warm cache is kept). Defaults
+    /// to the pool tree containing the current directory.
+    Return {
+        /// Worktree path to return (default: the pool tree at the cwd).
+        path: Option<String>,
+    },
+
+    /// Tear down pool worktrees. DRY-RUN BY DEFAULT — pass `--no-dry-run` to
+    /// actually remove. Each tree is classified by risk; only `disposable`
+    /// trees are removed unless you opt into a riskier class with one
+    /// `--include-*` flag. This is the ONLY path that deletes a directory.
+    Destroy {
+        /// Specific worktree path(s) to destroy. Omit with `--all` for a bulk
+        /// sweep (in which `--include-leased` is ignored as a safety stop).
+        paths: Vec<String>,
+
+        /// Target every pooled worktree.
+        #[clap(long)]
+        all: bool,
+
+        /// Actually remove (the default is a preview).
+        #[clap(long)]
+        no_dry_run: bool,
+
+        /// Allow removing dirty / unmerged / unverified trees (uncommitted or
+        /// unlanded work is patch-salvaged first).
+        #[clap(long)]
+        include_unlanded: bool,
+
+        /// Allow removing a tree with a live owner process.
+        #[clap(long)]
+        include_in_use: bool,
+
+        /// Allow removing a durably-leased tree — honored only when the exact
+        /// path is named, never in a `--all` sweep.
+        #[clap(long)]
+        include_leased: bool,
+
+        /// Emit JSON instead of the human report.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Spec-quality tooling — checks you run ON a spec before work begins.
