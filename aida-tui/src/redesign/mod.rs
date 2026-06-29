@@ -1033,6 +1033,28 @@ fn apply_outcome(
                 }
             });
         }
+        RunOutcome::Reject { drafts, skipped } => {
+            // Directly reject each draft via the advisor-gated transition
+            // (`aida edit <id> --status rejected`, run with advisor authority).
+            // The sibling of approve; run async (BUG-633).
+            // trace:TASK-949 trace:BUG-633 | ai:claude
+            let label = format!("rejecting {} spec(s)…", drafts.len());
+            start_pending(pending, st, label, move || {
+                let mut rejected = Vec::new();
+                let mut failed = Vec::new();
+                for id in &drafts {
+                    if reject_spec(id) {
+                        rejected.push(id.clone());
+                    } else {
+                        failed.push(id.clone());
+                    }
+                }
+                VerbResult {
+                    status: reject_status(&rejected, &failed, &skipped),
+                    invalidate: true,
+                }
+            });
+        }
         RunOutcome::Queue { approved, skipped } => {
             // Route each Approved spec to the implementer queue via the
             // RELIABLE path (`aida queue add --for implementer <id>`) — the
@@ -1292,6 +1314,54 @@ fn approve_status(approved: &[String], failed: &[String], skipped: &[String]) ->
     }
     if parts.is_empty() {
         return "approve: nothing to approve (no drafts selected)".to_string();
+    }
+    parts.join(" · ")
+}
+
+/// Directly reject one draft spec. Returns `true` on success. Runs the
+/// advisor-gated transition `aida edit <id> --status rejected` — the rejection
+/// transition is REFUSED from a non-advisor identity, so the spawned command
+/// carries advisor authority via `AIDA_SESSION_ROLE=advisor` in its env. The
+/// sibling of [`approve_spec`].
+// trace:TASK-949 | ai:claude
+fn reject_spec(id: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["edit", id, "--status", "rejected"]);
+    // The rejected-status transition is advisor-gated; carry advisor authority
+    // on the spawned command so it is not refused as a non-advisor identity.
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    matches!(cmd.output(), Ok(out) if out.status.success())
+}
+
+/// The status-line confirmation for a `reject` run: which ids were rejected,
+/// which failed the transition, and which were skipped as non-drafts. Pure (no
+/// IO) so it is unit testable. The sibling of [`approve_status`].
+// trace:TASK-949 | ai:claude
+fn reject_status(rejected: &[String], failed: &[String], skipped: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !rejected.is_empty() {
+        parts.push(format!(
+            "rejected {}: {}",
+            rejected.len(),
+            rejected.join(", ")
+        ));
+    }
+    if !failed.is_empty() {
+        parts.push(format!("FAILED to reject: {}", failed.join(", ")));
+    }
+    if !skipped.is_empty() {
+        parts.push(format!(
+            "skipped {} non-draft(s): {}",
+            skipped.len(),
+            skipped.join(", ")
+        ));
+    }
+    if parts.is_empty() {
+        return "reject: nothing to reject (no drafts selected)".to_string();
     }
     parts.join(" · ")
 }
@@ -3062,7 +3132,7 @@ mod render_tests {
     #[test]
     fn renders_open_scope_verbs_with_draft_conditional() {
         // Focused on a Draft item → the verb list shows request approval +
-        // approve (the Draft-conditional verbs). trace:TASK-920
+        // approve + reject (the Draft-conditional verbs). trace:TASK-920 trace:TASK-949
         let mut st = sample(5); // index 0 is Draft
         drill_open(&mut st);
         st.focus_bottom(); // focus TASK-0 (Draft)
@@ -3076,6 +3146,7 @@ mod render_tests {
                 Verb::Status,
                 Verb::RequestApproval,
                 Verb::Approve,
+                Verb::Reject,
                 Verb::Defer
             ]
         );
@@ -3137,6 +3208,23 @@ mod render_tests {
         // Empty case.
         let empty = approve_status(&[], &[], &[]);
         assert!(empty.contains("nothing to approve"));
+    }
+
+    #[test]
+    fn reject_status_lists_rejected_skipped_failed() {
+        // trace:TASK-949
+        let s = reject_status(
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &["TASK-3".to_string()],
+            &["TASK-4".to_string()],
+        );
+        assert!(s.contains("rejected 2"));
+        assert!(s.contains("TASK-1"));
+        assert!(s.contains("FAILED"));
+        assert!(s.contains("skipped 1"));
+        // Empty case.
+        let empty = reject_status(&[], &[], &[]);
+        assert!(empty.contains("nothing to reject"));
     }
 
     #[test]
