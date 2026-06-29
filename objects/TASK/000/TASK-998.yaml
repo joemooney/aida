@@ -3,12 +3,12 @@ spec_id: TASK-998
 agreed_id: TASK-998
 title: events.jsonl rotation / per-drain truncation at `run-started`
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:30:59.306717672Z
-modified_at: 2026-06-29T17:30:59.306717672Z
+modified_at: 2026-06-29T17:33:32.221696015Z
 req_type: Task
 relationships:
 - rel_type: Child
