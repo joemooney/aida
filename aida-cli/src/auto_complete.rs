@@ -586,6 +586,27 @@ pub(crate) fn is_database_locked_message(reason: &str) -> bool {
     lower.contains("database is locked") || lower.contains("database table is locked")
 }
 
+/// BUG-657: does a failure `message` describe an ENVIRONMENTAL fault — the disk
+/// is full or the machine ran out of memory — rather than a spec or
+/// orchestrator bug? The auto-draft text the orchestrator files on a failure
+/// already tells the triager to *reject* environment issues, so the drive
+/// suppresses the auto-file entirely for these (one less phantom Draft to open
+/// and reject). Pure, case-insensitive substring match on the spellings the
+/// OS / toolchain emit, chosen to avoid false positives (no bare `oom` — it
+/// hides in `groom`/`room`).
+// trace:BUG-657 | ai:claude
+pub(crate) fn is_environmental_failure(message: &str) -> bool {
+    let m = message.to_ascii_lowercase();
+    m.contains("no space left on device")
+        || m.contains("disk full")
+        || m.contains("out of disk")
+        || m.contains("enospc")
+        || m.contains("out of memory")
+        || m.contains("cannot allocate memory")
+        || m.contains("oom-kill")
+        || m.contains("oomkilled")
+}
+
 /// The verdict of the BUG-241 reconcile step: when a phase ends without the
 /// artifact the orchestrator polls for (an open PR, a verdict file), did the
 /// phase genuinely fail — or did the spec ship anyway, merged out-of-band by a
@@ -798,6 +819,39 @@ pub(crate) enum AdvisorOutcome {
     Escalated { reason: String, category: String },
 }
 
+/// TASK-1054: canonical drive PROCESS exit codes — what a script wrapping
+/// `aida queue work … --auto-complete` (single-spec or batch) reads to branch
+/// on the outcome. Before TASK-1054 a hard failure and a shelve both surfaced
+/// as `2` (a single-spec failure exited the failed-phase index — `2` for a CI
+/// failure — colliding with EPIC-28's `2 = shelved` sentinel), so a wrapper
+/// could not tell "the drive parked a spec and moved on" from "the drive hit a
+/// wall". The codes below split them:
+///
+/// | code | meaning                                                            |
+/// |------|--------------------------------------------------------------------|
+/// | 0    | clean — shipped / punted / escalated / held / inconclusive / no-op |
+/// | 1    | nothing to do — empty batch, or a non-advancing-queue stall        |
+/// | 2    | shelved / parked-and-advanced (EPIC-28) — recoverable, re-drivable  |
+/// | 3    | hard unrecoverable failure — un-shelved phase fail, build/env/internal |
+/// | 7    | a `--max-tokens` / `--max-iterations` / `--max-runtime` cap stop    |
+///
+/// `2` (shelved) is the load-bearing EPIC-28 contract — scripts + `/goal`
+/// conditions depend on it — so it is preserved exactly; `3` is the new
+/// distinct hard-failure code.
+// trace:TASK-1054 | ai:claude
+pub(crate) const DRIVE_EXIT_CLEAN: i32 = 0;
+/// TASK-1054: a spec was parked `NeedsAttention` and the drive treated it as
+/// recoverable (a single-spec shelved phase failure, or a batch that fully
+/// drained with ≥1 member shelved/skipped).
+// trace:TASK-1054 | ai:claude
+pub(crate) const DRIVE_EXIT_SHELVED: i32 = 2;
+/// TASK-1054: an unrecoverable hard failure — an un-shelvable phase failure
+/// (`Spawn` / `MissingTool` / `Internal`), a batch that hard-stopped on a
+/// failure (un-shelvable, or over the `--max-failures` budget), or a build /
+/// environment break. Distinct from `2` so a wrapper branches correctly.
+// trace:TASK-1054 | ai:claude
+pub(crate) const DRIVE_EXIT_HARD_FAIL: i32 = 3;
+
 /// Outcome of an [`orchestrate`] run — the process exit code plus the
 /// telemetry the caller needs to log the run and, on failure, auto-draft a
 /// BUG. Returning this instead of a bare `i32` keeps `orchestrate` pure: it
@@ -904,6 +958,32 @@ impl OrchestrationResult {
             held_reason: None,
         }
     }
+
+    /// TASK-1054: the canonical PROCESS exit code for a single-spec drive.
+    ///
+    /// The `exit_code` field stays the 1-based failed-phase index (consumed by
+    /// the JSON phase events, the telemetry log, and `drain_batch`'s internal
+    /// non-zero check), but the *process* a wrapping script observes must
+    /// collapse to the stable [`DRIVE_EXIT_CLEAN`] / [`DRIVE_EXIT_SHELVED`] /
+    /// [`DRIVE_EXIT_HARD_FAIL`] table so it can branch on the outcome:
+    ///
+    /// - no `failed_phase` → `0` (shipped / punted / escalated / held /
+    ///   inconclusive / a BUG-657 terminal-status no-op);
+    /// - a failure that *shelved* the spec (`shelved_reason` set — a
+    ///   recoverable phase failure parked `NeedsAttention`) → `2`, the
+    ///   preserved EPIC-28 sentinel;
+    /// - a failure that did NOT shelve (`Spawn` / `MissingTool` / `Internal`,
+    ///   or a shelve that failed) → `3`, the new hard-failure code.
+    // trace:TASK-1054 | ai:claude
+    pub(crate) fn process_exit_code(&self) -> i32 {
+        if self.failed_phase.is_none() {
+            DRIVE_EXIT_CLEAN
+        } else if self.shelved_reason.is_some() {
+            DRIVE_EXIT_SHELVED
+        } else {
+            DRIVE_EXIT_HARD_FAIL
+        }
+    }
 }
 
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
@@ -944,6 +1024,20 @@ pub(crate) trait PhaseDriver {
     /// only ever ratify a success, never invent one. trace:BUG-241 | ai:claude
     fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
         PhaseReconcile::GenuineFailure
+    }
+
+    /// BUG-657: the target spec's current status label *if it is already
+    /// terminal* (`Completed` or `Rejected`) — `None` when the spec is in a
+    /// drivable state, when the driver cannot read the store, or when this is a
+    /// `--resume`/`--from-pr` re-entry (those legitimately re-drive a spec that
+    /// reaches `Completed` mid-pipeline). When `Some`, the orchestrator skips
+    /// phase 1 entirely and finishes as a clean NO-OP — never spawning an
+    /// implementer that would exit 1 ("nothing to implement") and auto-draft a
+    /// phantom failure BUG. The default `None` keeps test mocks simple; only
+    /// `RealPhaseDriver` reads the real status.
+    // trace:BUG-657 | ai:claude
+    fn terminal_status(&mut self) -> Option<&'static str> {
+        None
     }
     /// BUG-245: the spec id the PR's commits actually credit (the `(SPEC-ID)`
     /// at the end of each commit subject), or `None` when the PR cannot be
@@ -1349,6 +1443,59 @@ fn emit_shipped_mismatch(dispatched: &str, shipped: &str, json: bool, elapsed: u
             shipped,
             dispatched,
         );
+    }
+}
+
+/// BUG-657: print the terminal-status NO-OP epilogue and build a clean
+/// *non-failure* [`OrchestrationResult`] (exit `0`, no `failed_phase`). Reached
+/// when the orchestrator is dispatched against a spec that is already
+/// `Completed` or `Rejected`: there is nothing to drive, so it must NOT spawn an
+/// implementer (which would exit 1 — "nothing to implement" — and auto-draft a
+/// phantom failure BUG; this is exactly the BUG-638 → BUG-644..649 incident).
+/// `status` is the terminal status label for the message. Also called by the
+/// real `run_auto_complete` entry BEFORE it queues anything, so a terminal
+/// target never even reaches the implementer queue.
+// trace:BUG-657 | ai:claude
+pub(crate) fn finish_noop(
+    spec: &str,
+    status: &str,
+    json: bool,
+    start: &Instant,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    if json {
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "noop",
+                spec,
+                elapsed,
+                Some(0),
+                &[("reason", &format!("already {status}"))],
+            )
+        );
+    } else {
+        eprintln!();
+        eprintln!(
+            "{} {} is already {} — nothing to drive.",
+            "ⓘ".cyan().bold(),
+            spec.bold(),
+            status,
+        );
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: Vec::new(),
+        total_ms: elapsed,
+        punt_reason: None,
+        shipped_spec_id: None,
+        escalation: None,
+        inconclusive_reason: None,
+        shelved_reason: None,
+        held_reason: None,
     }
 }
 
@@ -2513,6 +2660,19 @@ pub(crate) fn orchestrate_with_resume(
         }
         credited = spec.to_string();
     } else {
+        // BUG-657: refuse to drive a spec that is already terminal (Completed or
+        // Rejected) BEFORE spawning the implementer. The implementer would exit 1
+        // ("nothing to implement") and the orchestrator would auto-draft a phantom
+        // failure BUG — the BUG-638 → BUG-644..649 incident (6 identical drafts in
+        // a 6-minute window). A terminal target is a clean NO-OP, not a phase-1
+        // failure. Only the from-scratch (phase-1) entry checks this; a
+        // `--resume`/`--from-pr` re-entry returns `None` from `terminal_status`
+        // because it legitimately re-drives a spec that reached Completed mid-
+        // pipeline (the merge already promoted it; BUG-241 reconcile handles that
+        // case as an out-of-band success). trace:BUG-657 | ai:claude
+        if let Some(status) = driver.terminal_status() {
+            return finish_noop(spec, status, json, &start);
+        }
         // Phase 1 — implementer session. Outcomes: a PR was opened (run on), a
         // genuine failure (reconcile then report), or a punt. STORY-306: a punt no
         // longer stops the drain outright — it routes through the headless advisor
@@ -3012,10 +3172,12 @@ pub(crate) fn drain_batch_with_caps(
             } else {
                 BatchDrainOutcome::DrainedWithShelved
             };
+            // TASK-1054: a fully-drained batch that shelved/skipped ≥1 member is
+            // the preserved EPIC-28 `2` sentinel; a genuinely-clean drain is `0`.
             let exit_code = if matches!(outcome, BatchDrainOutcome::DrainedWithShelved) {
-                2
+                DRIVE_EXIT_SHELVED
             } else {
-                0
+                DRIVE_EXIT_CLEAN
             };
             return BatchDrainResult {
                 shipped,
@@ -3120,7 +3282,13 @@ pub(crate) fn drain_batch_with_caps(
                 skipped,
                 stopped_at: Some(head),
                 outcome: BatchDrainOutcome::Failed(phase),
-                exit_code: result.exit_code,
+                // TASK-1054: a batch that hard-stopped on a failure (un-shelvable,
+                // or over the `--max-failures` budget) is the canonical hard
+                // failure — `3`, NOT the failed-phase index (which collided with
+                // the EPIC-28 `2 = shelved` sentinel when the failed phase was CI).
+                // The shelved-and-advanced case keeps exiting `2` via the
+                // `DrainedWithShelved` branch above. trace:TASK-1054 | ai:claude
+                exit_code: DRIVE_EXIT_HARD_FAIL,
             };
         }
         // BUG-257: an inconclusive run pauses the drain. The spec stays in
@@ -3758,6 +3926,31 @@ mod tests {
         assert!(!is_database_locked_message(""));
     }
 
+    /// BUG-657: an environmental fault (disk full / OOM) is recognised so the
+    /// drive suppresses the phantom auto-draft — but unrelated failures (and the
+    /// `oom`-in-`groom` false-positive trap) must NOT match. Pure function,
+    /// case-insensitive.
+    // trace:BUG-657 | ai:claude
+    #[test]
+    fn environmental_failure_is_recognised_without_false_positives() {
+        assert!(is_environmental_failure(
+            "write failed: No space left on device"
+        ));
+        assert!(is_environmental_failure("ENOSPC writing object"));
+        assert!(is_environmental_failure("disk full"));
+        assert!(is_environmental_failure("process killed: Out Of Memory"));
+        assert!(is_environmental_failure("cgroup oom-kill invoked"));
+        assert!(is_environmental_failure("cannot allocate memory"));
+        // Real spec/orchestrator failures must NOT be suppressed…
+        assert!(!is_environmental_failure("CI run failed (red)"));
+        assert!(!is_environmental_failure("no PR was opened"));
+        // …and the bare-`oom` substring trap (groom / room) must NOT match.
+        assert!(!is_environmental_failure(
+            "aida groom failed in the reviewer room"
+        ));
+        assert!(!is_environmental_failure(""));
+    }
+
     /// BUG-455: a transient cache-lock failure is reclassified to the shelvable
     /// `CacheLocked` kind, so a batch drain parks the spec and continues instead
     /// of hard-stopping; an unrelated failure keeps its kind. Idempotent.
@@ -3909,6 +4102,12 @@ mod tests {
         /// batch-mode inconclusive can route through the EPIC-28 shelve→advance
         /// path. `false` (default) keeps the trait default `Ok(None)`.
         shelve_succeeds: bool,
+        /// BUG-657: when `Some`, `terminal_status` reports the target spec as
+        /// already terminal (`Completed`/`Rejected`) so the orchestrator
+        /// finishes as a clean NO-OP without ever calling `run_implementer`.
+        /// `None` (default) ⇒ the spec is drivable.
+        // trace:BUG-657 | ai:claude
+        terminal: Option<&'static str>,
     }
 
     impl MockPhaseDriver {
@@ -3931,11 +4130,23 @@ mod tests {
                 held: None,
                 mark_escalated_calls: 0,
                 shelve_succeeds: false,
+                terminal: None,
             }
         }
 
         fn all_ok() -> Self {
             Self::base()
+        }
+
+        /// BUG-657: the target spec is already terminal — `terminal_status`
+        /// reports `status` and the orchestrator must finish as a NO-OP without
+        /// spawning the implementer.
+        // trace:BUG-657 | ai:claude
+        fn already_terminal(status: &'static str) -> Self {
+            Self {
+                terminal: Some(status),
+                ..Self::base()
+            }
         }
 
         /// TASK-136: `run_implementer` returns
@@ -4064,6 +4275,12 @@ mod tests {
 
     impl PhaseDriver for MockPhaseDriver {
         fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure> {
+            // BUG-657: the orchestrator must skip phase 1 entirely for a
+            // terminal target — if it reached here, the no-op guard failed.
+            assert!(
+                self.terminal.is_none(),
+                "BUG-657: run_implementer must never be called for a terminal-status spec",
+            );
             self.record(Phase::Implementer)?;
             if let Some(reason) = &self.inconclusive {
                 return Ok(ImplementerOutcome::Inconclusive {
@@ -4117,6 +4334,9 @@ mod tests {
         }
         fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
             self.reconcile.clone()
+        }
+        fn terminal_status(&mut self) -> Option<&'static str> {
+            self.terminal
         }
         fn shipped_spec_id(&mut self) -> Option<String> {
             self.shipped_spec_id.clone()
@@ -4337,6 +4557,109 @@ mod tests {
                 Phase::Build,
             ]
         );
+    }
+
+    /// BUG-657: driving an already-COMPLETED spec is a clean NO-OP — the
+    /// orchestrator must NOT spawn an implementer (which would exit 1 and
+    /// auto-draft a phantom failure BUG). No phase runs; the result is a clean
+    /// exit 0 with no failed phase or failure.
+    // trace:BUG-657 | ai:claude
+    #[test]
+    fn orchestrate_terminal_completed_spec_is_a_noop_no_implementer() {
+        let mut driver = MockPhaseDriver::already_terminal("Completed");
+        let result = orchestrate(
+            &mut driver,
+            "BUG-638",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        // No phase ran at all — the implementer was never spawned (the mock's
+        // `run_implementer` asserts it is never reached for a terminal spec).
+        assert!(
+            driver.calls.is_empty(),
+            "no phase should run for a terminal spec"
+        );
+        // A clean non-failure stop: exit 0, no failed phase, no failure → no
+        // auto-drafted failure BUG.
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_CLEAN);
+        assert!(result.failed_phase.is_none());
+        assert!(result.failure.is_none());
+    }
+
+    /// BUG-657: same NO-OP for an already-REJECTED target.
+    // trace:BUG-657 | ai:claude
+    #[test]
+    fn orchestrate_terminal_rejected_spec_is_a_noop() {
+        let mut driver = MockPhaseDriver::already_terminal("Rejected");
+        let result = orchestrate(
+            &mut driver,
+            "TASK-9",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert!(driver.calls.is_empty());
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_CLEAN);
+        assert!(result.failed_phase.is_none());
+    }
+
+    /// TASK-1054: a single-spec drive's PROCESS exit code collapses the failed-
+    /// phase index to the canonical 0/2/3 table. A SHELVED failure (the spec was
+    /// parked `NeedsAttention`) exits 2 — the preserved EPIC-28 sentinel — even
+    /// when the failed phase index is not 2.
+    // trace:TASK-1054 | ai:claude
+    #[test]
+    fn process_exit_code_shelved_failure_is_2() {
+        // A build (phase 6) failure that shelved the spec.
+        let mut driver = MockPhaseDriver::failing_at(Phase::Build);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert!(result.shelved_reason.is_some(), "the spec was parked");
+        // The internal field stays the failed-phase index (6)…
+        assert_eq!(result.exit_code, Phase::Build.index());
+        // …but the PROCESS code is the shelved sentinel 2, NOT 6.
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_SHELVED);
+    }
+
+    /// TASK-1054: an un-shelvable hard failure (the mock's default
+    /// `shelve_on_failure` returns `Ok(None)`) exits 3 — distinct from the
+    /// shelved `2` — so a wrapper can tell a hard wall from a parked spec.
+    // trace:TASK-1054 | ai:claude
+    #[test]
+    fn process_exit_code_unshelved_hard_failure_is_3() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Ci);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert!(result.shelved_reason.is_none(), "no shelve happened");
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_HARD_FAIL);
+    }
+
+    /// TASK-1054: a clean ship exits 0 at the process level.
+    // trace:TASK-1054 | ai:claude
+    #[test]
+    fn process_exit_code_clean_ship_is_0() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_CLEAN);
     }
 
     #[test]
@@ -6535,7 +6858,13 @@ mod tests {
         let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2", "TASK-3"])
             .failing("TASK-2", Phase::Implementer);
         let result = drain_batch(&mut driver, None, None);
-        assert_eq!(result.exit_code, 1, "phase 1 → exit code 1");
+        // TASK-1054: a hard-stop batch failure is the canonical hard-fail code 3,
+        // not the failed-phase index (1 here) — which would collide with the
+        // empty-batch/stall `1`. trace:TASK-1054 | ai:claude
+        assert_eq!(
+            result.exit_code, DRIVE_EXIT_HARD_FAIL,
+            "hard fail → exit code 3"
+        );
         assert_eq!(
             result.outcome,
             BatchDrainOutcome::Failed(Phase::Implementer)
@@ -6546,13 +6875,14 @@ mod tests {
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2"]);
     }
 
-    /// A mid-batch phase-3 failure stops the drain with that phase's exit code.
+    /// TASK-1054: a mid-batch un-shelvable failure stops the drain with the
+    /// canonical hard-fail exit code 3, regardless of which phase failed.
     #[test]
-    fn drain_batch_failure_carries_failed_phase_exit_code() {
+    fn drain_batch_hard_failure_exits_with_hard_fail_code() {
         let mut driver =
             MockBatchDriver::new(&["TASK-1", "TASK-2"]).failing("TASK-1", Phase::Reviewer);
         let result = drain_batch(&mut driver, None, None);
-        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
         assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Reviewer));
         assert!(result.shipped.is_empty());
     }
@@ -6764,7 +7094,10 @@ mod tests {
         let result = drain_batch(&mut driver, None, Some(2));
         // First two shelve and the drain continues; the third trips the cap.
         assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
-        assert_eq!(result.exit_code, Phase::Ci.index());
+        // TASK-1054: a hard-stop (over the failure budget) is the canonical
+        // hard-fail code 3, NOT the CI phase index 2 — which would collide with
+        // the EPIC-28 `2 = shelved` sentinel. trace:TASK-1054 | ai:claude
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
         assert_eq!(result.shelved, vec!["A", "B"]);
         assert_eq!(result.stopped_at, Some("C".to_string()));
         // D and E were never attempted — the cap stops the drain.
@@ -6814,7 +7147,8 @@ mod tests {
             result.outcome,
             BatchDrainOutcome::Failed(Phase::Implementer)
         );
-        assert_eq!(result.exit_code, 1);
+        // TASK-1054: hard-fail code 3 (was the failed-phase index 1).
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
         assert!(result.shelved.is_empty());
         assert_eq!(result.shipped, vec!["TASK-1"]);
     }
