@@ -28,6 +28,9 @@ relationships:
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-06-26T18:57:01.570001946Z
   created_by: joe
+- rel_type: Parent
+  target_id: 019f16c1-7749-7b93-8f3d-ef648c630fee
+  created_at: 2026-06-30T04:20:15.133769033Z
 deferred: true
 deferred_at: 2026-06-27T16:40:42.830280037Z
 deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
