@@ -28298,5 +28298,37 @@ operations:
   timestamp: 2026-06-30T16:55:49.030463516Z
   kind: !SetStatus
     status: Completed
-clock: 2730
+- id: 019f1977-ce0e-75a2-8d22-d3f5a9a68cf4
+  target_id: 019f1977-b8bc-7971-a93f-1086df831471
+  author: aida
+  node_id: '1'
+  lamport: 2731
+  timestamp: 2026-06-30T16:58:29.774769633Z
+  kind: !Create
+    title: 'Presence consumer (c): make the aida questions inbox presence-aware (quiet-when-away surfacing) under a [presence] knob'
+    description: |-
+      STORY-561 consumer (c), unblocked now that the questions inbox shipped (STORY-555). Today aida questions has NO presence gating (verified 2026-06-30: only BUG-495 acceptance-text scan references presence) — pending decisions surface the same whether the operator is home or away.
+
+      Wire presence as an ADVISORY default for how the questions inbox SURFACES (never for the read itself):
+      - away (consumers on): decision-required specs accumulate quietly — no proactive surfacing in aida status / on the next interactive command; the operator is not interrupted while away.
+      - home: pending questions surface (in aida status, and on the next interactive command).
+
+      Add a tunable presence.questions knob under [presence] in .aida/config.toml, symmetric with the existing away_drain (consumer a) and home_offer (consumer d) fields in PresenceConfig (aida-cli/src/presence.rs). Suggested values: quiet-when-away (DEFAULT) | always-surface. Default works with zero config the moment you aida away / aida home.
+
+      Invariants (match the rest of the presence machinery):
+      - ADVISORY only — explicit aida questions list ALWAYS shows the full inbox regardless of presence; this gates only the PROACTIVE surfacing, never the read.
+      - Presence never changes WHICH specs need a decision (the sweep is unaffected), only whether they nudge you.
+      - Honors the consumers = off master switch and the integrity floor.
+
+      Acceptance:
+      1. presence.questions parses under [presence] with quiet-when-away default; bad/missing value falls back to default (mirror the away_drain parse tests).
+      2. When away + consumers on + quiet-when-away: aida status does NOT proactively surface pending questions; when home: it does.
+      3. aida questions list output is identical in both presence states (read is never gated).
+      4. Documented in the away/home/presence and questions --help, alongside the (a)/(d) knobs.
+
+      Related: TASK-769 (the sibling decouple-escalation-from-away_drain slice for consumer b); STORY-561 (the presence design); the stale-header fix in presence.rs already names this gap.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2731
 node_id: '1'
