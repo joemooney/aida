@@ -29059,5 +29059,17 @@ operations:
   timestamp: 2026-06-30T22:06:05.469714262Z
   kind: !SetStatus
     status: Completed
-clock: 2799
+- id: 019f1a94-ac38-7d60-a793-0c63320f7d58
+  target_id: 019f1a94-a5ae-7ce1-a7c8-22f562c8b320
+  author: aida
+  node_id: '1'
+  lamport: 2800
+  timestamp: 2026-06-30T22:09:38.872425345Z
+  kind: !Create
+    title: next[] guidance drops out at queue work/done — after queue done, an agent isn't told to aida pull (strands the spec at Done)
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2800
 node_id: '1'

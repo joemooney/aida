@@ -1,0 +1,17 @@
+id: 019f1a94-a5ae-7ce1-a7c8-22f562c8b320
+spec_id: BUG-673
+agreed_id: BUG-673
+title: next[] guidance drops out at queue work/done — after queue done, an agent isn't told to aida pull (strands the spec at Done)
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T22:09:37.198722217Z
+modified_at: 2026-06-30T22:09:37.198722217Z
+req_type: Bug
+tags:
+- agent-surface
+- from-audit
+- next-step
+- queue
