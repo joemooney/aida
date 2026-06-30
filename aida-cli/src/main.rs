@@ -88533,6 +88533,65 @@ pub(crate) fn classify_sha_match(
     }
 }
 
+/// BUG-665: pure predicate — should `aida pull` warn that the built binary is
+/// now stale after the code leg advanced? True only when the in-repo build is
+/// dev-activated AND its embedded SHA is a STRICT ancestor of HEAD (genuinely
+/// behind the freshly-pulled changes). A non-dev-activated (released) binary on
+/// PATH is expected to differ, so no warning; a binary that already matches
+/// HEAD ([`ShaMatch::Exact`]) or has diverged ([`ShaMatch::Unrelated`] /
+/// [`ShaMatch::Unknown`]) does NOT get this "run cargo build" nudge. Reuses the
+/// same SHA classification `aida dev status` shows.
+// trace:BUG-665 | ai:claude
+pub(crate) fn pull_binary_is_stale(dev_activated: bool, verdict: ShaMatch) -> bool {
+    dev_activated && matches!(verdict, ShaMatch::Ancestor)
+}
+
+/// BUG-665: after a successful `aida pull` code leg, warn when a dev-activated
+/// in-repo binary is now behind the freshly-pulled HEAD — so `aida tui` /
+/// `aida integrate` don't silently keep running old code until the next
+/// `cargo build`. No-op when not dev-activated, when the binary already matches
+/// HEAD, or when the pulled repo isn't the one the active binary was built from.
+/// Best-effort: any missing signal (env unset, git/binary unavailable) → silent.
+// trace:BUG-665 | ai:claude
+fn warn_if_pulled_binary_stale(project_root: &std::path::Path) {
+    // Dev-activation: an in-repo build is on PATH. Same signals `aida dev
+    // status` reads (AIDA_DEV_ACTIVE + AIDA_DEV_BIN + AIDA_DEV_REPO).
+    let dev_activated = std::env::var("AIDA_DEV_ACTIVE").is_ok();
+    if !dev_activated {
+        return;
+    }
+    let (Ok(bin_dir), Ok(repo)) = (
+        std::env::var("AIDA_DEV_BIN"),
+        std::env::var("AIDA_DEV_REPO"),
+    ) else {
+        return;
+    };
+    let repo_path = std::path::PathBuf::from(&repo);
+    // Only reason about the binary when the repo we just pulled IS the one the
+    // active binary was built from — otherwise the SHAs aren't comparable and a
+    // warning would be a false alarm.
+    let same_repo = match (project_root.canonicalize(), repo_path.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    if !same_repo {
+        return;
+    }
+    let aida_path = std::path::PathBuf::from(&bin_dir).join("aida");
+    let head = current_branch_head_sha(&repo_path);
+    let bin_sha = binary_embedded_sha(&aida_path);
+    if let (Some(h), Some(b)) = (head.as_deref(), bin_sha.as_deref()) {
+        let verdict = classify_sha_match(&repo_path, b, h);
+        if pull_binary_is_stale(dev_activated, verdict) {
+            eprintln!();
+            eprintln!(
+                "  {} your aida binary is now behind HEAD — run `cargo build` to pick up the pulled changes.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+            );
+        }
+    }
+}
+
 /// True when the inactive-side build at `<repo>/target/<other>/aida` is
 /// newer than the active-side build at `<repo>/target/<active>/aida`.
 /// Used for the stale-build warning + PS1 marker.
@@ -100891,6 +100950,15 @@ fn handle_pull_command(
                     {
                         maybe_auto_archive_sweep(&project_root, &sweep_backend, quiet);
                     }
+
+                    // BUG-665: HEAD just advanced. If a dev-activated in-repo
+                    // build is on PATH and is now behind HEAD, the user's `aida`
+                    // (tui / integrate / anything) is silently running old code
+                    // until they rebuild. Nudge once. Suppressed in --quiet
+                    // (orchestrator / scripted) runs. trace:BUG-665 | ai:claude
+                    if !quiet {
+                        warn_if_pulled_binary_stale(&project_root);
+                    }
                 }
                 Ok(s) => {
                     // BUG-254: surface the recovery hint and an explicit
@@ -105524,6 +105592,41 @@ mod binary_selection_tests {
             "got: {:?}",
             m
         );
+    }
+
+    // ---- BUG-665: stale-binary-after-pull warning predicate ----
+    //
+    // `pull_binary_is_stale` decides whether `aida pull` should nudge the user
+    // to `cargo build`. The contract: warn ONLY when dev-activated AND the
+    // built binary's SHA is a strict ancestor of HEAD (genuinely behind). No
+    // false alarm when it matches HEAD; no warning for a released binary.
+    // trace:BUG-665 | ai:claude
+
+    #[test]
+    fn pull_stale_warns_when_binary_behind_head() {
+        // Dev-activated + binary SHA is an ancestor of HEAD → behind → warn.
+        assert!(pull_binary_is_stale(true, ShaMatch::Ancestor));
+    }
+
+    #[test]
+    fn pull_stale_silent_when_binary_matches_head() {
+        // Dev-activated but the binary already matches HEAD → no warning.
+        assert!(!pull_binary_is_stale(true, ShaMatch::Exact));
+    }
+
+    #[test]
+    fn pull_stale_silent_when_not_dev_activated() {
+        // A released binary on PATH is expected to differ from HEAD — even an
+        // ancestor verdict must NOT warn when dev-activation is off.
+        assert!(!pull_binary_is_stale(false, ShaMatch::Ancestor));
+    }
+
+    #[test]
+    fn pull_stale_silent_for_diverged_or_unknown() {
+        // Diverged (different branch's build) / unknown (git unavailable) do
+        // not get the "run cargo build to pick up the pull" nudge.
+        assert!(!pull_binary_is_stale(true, ShaMatch::Unrelated));
+        assert!(!pull_binary_is_stale(true, ShaMatch::Unknown));
     }
 
     // ---- BUG-643: pure auto-mode build selection ----
