@@ -215,6 +215,16 @@ fn write_state(project_root: &Path, pool: &Pool) -> Result<()> {
 /// persist the (possibly mutated) pool. The lock serializes concurrent
 /// acquires so two callers can't be handed the same idle tree. `heal_state`
 /// runs before `f` so callers always see a self-healed view.
+///
+/// **Cross-platform guarantee.** The exclusive lock is acquired through
+/// `fs2::FileExt::lock_exclusive`, which maps to `flock(2)` on Unix and to
+/// `LockFileEx` on Windows — so the same mutual exclusion holds on both, and
+/// the nightly cross-platform matrix exercises this code path on each OS.
+/// (Treehouse, the upstream this pool was ported from, splits the same concern
+/// into `lock_unix.go` / `lock_windows.go`; `fs2` gives us that parity behind a
+/// single call, with no `cfg`-gated divergence.) The lock is held for the whole
+/// read-modify-write window, so two callers serialize even when each opens its
+/// own descriptor on the same `pool.lock` file.
 pub fn with_state_lock<T>(
     project_root: &Path,
     f: impl FnOnce(&mut Pool) -> Result<T>,
@@ -570,6 +580,80 @@ mod tests {
         // default/empty fields are skipped on serialize but decode back to default
         assert_eq!(back.entries[0].owner_pid, None);
         assert!(!back.entries[0].leased);
+    }
+
+    // The advisory `pool.lock` must serialize concurrent `with_state_lock`
+    // calls so two acquirers never run their read-modify-write windows at the
+    // same time — otherwise two fan-out implementers could be handed one idle
+    // tree. This guarantee is cross-platform: `fs2::lock_exclusive` is
+    // `flock(2)` on Unix and `LockFileEx` on Windows, so the same serialization
+    // holds on both (the nightly cross-platform matrix runs this test on each).
+    // Gated on `native` because the lock is a no-op without it (fs2).
+    // trace:TASK-1011 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn state_lock_serializes_concurrent_acquirers() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root: PathBuf = dir.path().to_path_buf();
+
+        // How many closures are inside the critical section right now, and the
+        // high-water mark ever observed. A working lock keeps the latter at 1.
+        let in_section = Arc::new(AtomicUsize::new(0));
+        let max_seen = Arc::new(AtomicUsize::new(0));
+
+        let n_threads = 8usize;
+        let handles: Vec<_> = (0..n_threads)
+            .map(|i| {
+                let root = root.clone();
+                let in_section = Arc::clone(&in_section);
+                let max_seen = Arc::clone(&max_seen);
+                std::thread::spawn(move || {
+                    with_state_lock(&root, |pool| {
+                        // If the lock serializes, `now` is always 1 here.
+                        let now = in_section.fetch_add(1, Ordering::SeqCst) + 1;
+                        max_seen.fetch_max(now, Ordering::SeqCst);
+                        // Hold the section long enough that an unserialized peer
+                        // would overlap and bump `max_seen` past 1.
+                        std::thread::sleep(std::time::Duration::from_millis(15));
+                        in_section.fetch_sub(1, Ordering::SeqCst);
+                        // Mutate under the lock so a lost read-modify-write would
+                        // drop an entry. The dir must exist or `heal_state` (run
+                        // at the next acquire) would prune the missing path.
+                        let p = root.join(format!("aida-pool-{i}"));
+                        std::fs::create_dir_all(&p).unwrap();
+                        pool.entries.push(PoolEntry {
+                            name: format!("aida-pool-{i}"),
+                            path: p,
+                            ..Default::default()
+                        });
+                        Ok(())
+                    })
+                    .unwrap();
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        // Mutual exclusion: two acquirers never held `pool.lock` at once.
+        assert_eq!(
+            max_seen.load(Ordering::SeqCst),
+            1,
+            "two acquirers held pool.lock concurrently — lock did not serialize"
+        );
+        // Serialized read-modify-write: every thread's push survived (none was
+        // lost to a concurrent read-then-overwrite).
+        let final_pool = read_state(&root).unwrap();
+        assert_eq!(
+            final_pool.entries.len(),
+            n_threads,
+            "an RMW was lost — the lock did not serialize writes"
+        );
     }
 }
 
