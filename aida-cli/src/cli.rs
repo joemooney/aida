@@ -8189,12 +8189,48 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Orchestrator(OrchestratorCommand),
 
-    /// Inspect the corroborated zen context — whether `AIDA_ZEN=1` is backed by
-    /// a verifiable provenance or is a stale / leaked value. Hidden: it is a
-    /// skill introspection hook, not a daily-driver command.
-    // trace:BUG-237 | ai:claude
-    #[clap(subcommand, hide = true)]
-    Zen(ZenCommand),
+    /// One-shot AUTONOMOUS implement + ship for a single approved spec.
+    /// Auto-queues the spec, then drives it through the `--auto-complete --zen`
+    /// orchestrator (implement → CI → review → merge → pull). Fire-and-forget
+    /// friendly: launch several for INDEPENDENT specs in parallel, each in its
+    /// own worktree. The auto-implement counterpart to `aida ship` (which
+    /// finishes a HUMAN-implemented spec). With no `<spec>` and no subcommand,
+    /// prints help.
+    // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
+    Zen {
+        /// The approved spec to autonomously implement and ship.
+        #[clap(value_name = "SPEC")]
+        spec: Option<String>,
+
+        /// Run the drive headless (`claude -p`) so it needs no Ctrl+D —
+        /// forwarded to the orchestrator. Bare `--no-human` runs the reviewer
+        /// headless and pauses at the implementer; `--no-human=both` runs the
+        /// implementer headless too. Aliases: `--unattended`, `--headless`.
+        #[clap(
+            long,
+            value_name = "MODE",
+            num_args = 0..=1,
+            default_missing_value = "reviewer-only",
+            aliases = ["unattended", "headless"]
+        )]
+        no_human: Option<String>,
+
+        /// Skip the post-merge `aida pull` (the Done → Completed auto-bump) —
+        /// forwarded to the orchestrator.
+        #[clap(long)]
+        no_pull: bool,
+
+        /// Resolve + validate the spec and PRINT the plan WITHOUT driving it.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Inspect the corroborated zen context — whether `AIDA_ZEN=1` is backed
+        /// by a verifiable provenance or is a stale / leaked value. A skill
+        /// introspection hook, not a daily-driver.
+        // trace:BUG-237 | ai:claude
+        #[clap(subcommand)]
+        command: Option<ZenCommand>,
+    },
 
     /// Inspect the active `aida queue work --auto-complete` drain — what
     /// command launched it, the batch members and their progress, and what
