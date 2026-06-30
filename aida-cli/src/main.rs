@@ -50347,6 +50347,37 @@ fn resolve_worktree_pool_enabled(flag: Option<bool>, project_root: &std::path::P
 /// it reserved while the session is live even though this start process exits.
 /// On branch-creation failure the tree is returned, not leaked.
 // trace:STORY-714 | ai:claude
+/// BUG-669: a recycled pool worktree may still carry the PRIOR occupant's
+/// session lease — `return_to_pool` resets the *tree* but the session lease
+/// (`.aida/sessions/<id>.toml`) keyed to that worktree path is left behind. Drop
+/// every lease pointing at `worktree_path` so the reused tree never inherits the
+/// previous session's spec identity (an ADR-7 session reading as the prior
+/// occupant's TASK-0439 in `aida ps`). The new session writes its own fresh
+/// lease — new spec, started_at, role, id — right after acquisition. Returns the
+/// count removed. An idle pooled tree never has a LIVE session, so removing any
+/// lease pointing at it is safe. Path comparison is canonicalized to match the
+/// canonicalized `worktree_path` `list_leases` reads back.
+// trace:BUG-669 | ai:claude
+fn clear_worktree_session_leases(
+    project_root: &std::path::Path,
+    worktree_path: &std::path::Path,
+) -> usize {
+    let target = worktree_path
+        .canonicalize()
+        .unwrap_or_else(|_| worktree_path.to_path_buf());
+    let mut removed = 0usize;
+    for lease in list_leases(project_root) {
+        let lease_wt = lease
+            .worktree_path
+            .canonicalize()
+            .unwrap_or_else(|_| lease.worktree_path.clone());
+        if lease_wt == target && std::fs::remove_file(lease_path(project_root, &lease.id)).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 fn acquire_session_pool_worktree(
     project_root: &std::path::Path,
     branch_name: &str,
@@ -50358,6 +50389,20 @@ fn acquire_session_pool_worktree(
         post_create_hooks: worktree_pool_global_hooks("post_create"),
     };
     let acquired = aida_core::worktree_pool::acquire(project_root, &opts)?;
+
+    // BUG-669: reset the lease on reuse — drop any stale session lease the prior
+    // occupant left pointing at this recycled tree, so `aida ps` attributes the
+    // reused worktree to the NEW session's spec, not the inherited one.
+    // trace:BUG-669 | ai:claude
+    let cleared = clear_worktree_session_leases(project_root, &acquired);
+    if cleared > 0 {
+        eprintln!(
+            "{} reset {} stale lease{} from the recycled worktree",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            cleared,
+            if cleared == 1 { "" } else { "s" }
+        );
+    }
 
     let co = std::process::Command::new("git")
         .arg("-C")
@@ -63052,6 +63097,142 @@ mod story_696_ps_tests {
         let envelope = serde_json::json!({ "sessions": [row], "orphaned": [orphan] });
         assert!(envelope["sessions"].is_array());
         assert!(envelope["orphaned"].is_array());
+    }
+
+    /// BUG-669: persist a session lease to `.aida/sessions/<id>.toml`.
+    fn persist_lease(root: &std::path::Path, lease: &SessionLease) {
+        std::fs::create_dir_all(leases_dir(root)).unwrap();
+        std::fs::write(
+            lease_path(root, &lease.id),
+            toml::to_string_pretty(lease).unwrap(),
+        )
+        .unwrap();
+    }
+
+    /// BUG-669: a recycled pool worktree must NOT inherit the prior occupant's
+    /// lease. `clear_worktree_session_leases` drops the stale lease pointing at
+    /// the reused tree so the new session's fresh lease (the NEW spec) is the
+    /// only one `aida ps` resolves for that path.
+    #[test]
+    fn pool_reuse_clears_prior_occupant_lease() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // The recycled worktree dir must exist so canonicalize() agrees on both
+        // sides of the path comparison.
+        let wt = root.join("pool-wt-0");
+        std::fs::create_dir_all(&wt).unwrap();
+        let wt_canon = wt.canonicalize().unwrap();
+
+        // Prior occupant: a TASK-0439 lease pointing at the pooled tree.
+        persist_lease(root, &ps_lease("sess-old", "TASK-0439", wt_canon.clone()));
+
+        // Acquire-time reset removes exactly the one stale lease.
+        assert_eq!(
+            clear_worktree_session_leases(root, &wt),
+            1,
+            "the prior occupant's lease must be cleared on reuse"
+        );
+        assert!(
+            list_leases(root).is_empty(),
+            "no lease should survive the reset"
+        );
+
+        // The new session stamps its OWN lease for the same tree (ADR-7).
+        persist_lease(root, &ps_lease("sess-new", "ADR-7", wt_canon));
+        let scopes: Vec<String> = list_leases(root).into_iter().map(|l| l.scope).collect();
+        assert_eq!(
+            scopes,
+            vec!["ADR-7".to_string()],
+            "the reused tree must report the NEW spec, not the inherited one: {scopes:?}"
+        );
+    }
+
+    /// BUG-669: the reset only touches leases pointing at the acquired tree — a
+    /// concurrent sibling session in a DIFFERENT worktree is untouched.
+    #[test]
+    fn pool_reuse_leaves_other_worktree_leases_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mine = root.join("pool-wt-0");
+        let other = root.join("pool-wt-1");
+        std::fs::create_dir_all(&mine).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+
+        persist_lease(
+            root,
+            &ps_lease("sess-old", "TASK-0439", mine.canonicalize().unwrap()),
+        );
+        persist_lease(
+            root,
+            &ps_lease("sess-sib", "STORY-1", other.canonicalize().unwrap()),
+        );
+
+        assert_eq!(clear_worktree_session_leases(root, &mine), 1);
+        let scopes: Vec<String> = list_leases(root).into_iter().map(|l| l.scope).collect();
+        assert_eq!(
+            scopes,
+            vec!["STORY-1".to_string()],
+            "only the acquired tree's lease is reset; the sibling survives"
+        );
+    }
+
+    /// TASK-1064: the three-way orphan framing. A flag-only spec (no spec-scoped
+    /// lease) while a fan-out is live → "likely worked by a fan-out". A crashed
+    /// (stale) spec-scoped lease is a genuine orphan regardless of any fan-out.
+    /// No fan-out → still a genuine orphan.
+    #[test]
+    fn ps_orphan_likely_fanout_matrix() {
+        // flag-only (stale_lease=false) + fan-out live → reframe as fan-out work.
+        assert!(ps_orphan_likely_fanout(false, true));
+        // flag-only + NO fan-out → genuine orphan.
+        assert!(!ps_orphan_likely_fanout(false, false));
+        // crashed spec-scoped lease (stale) → genuine orphan even with a fan-out.
+        assert!(!ps_orphan_likely_fanout(true, true));
+        assert!(!ps_orphan_likely_fanout(true, false));
+    }
+
+    /// TASK-1064: a LIVE generic `harness-worktree` lease (an advisor Agent-tool
+    /// fan-out) is detected as an active fan-out; a spec-scoped lease (even live)
+    /// is NOT — only the generic non-spec-linked harness scope counts.
+    #[test]
+    fn live_fanout_harness_lease_detects_generic_harness_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let now = chrono::Utc::now();
+
+        // A live generic harness lease → fan-out active.
+        let harness = ps_lease(
+            "sess-fanout",
+            worktree_lease::HARNESS_WORKTREE_SCOPE,
+            tmp.path().to_path_buf(),
+        );
+        let live = vec![process_probe::LiveSession {
+            pid: std::process::id(),
+            cwd: tmp.path().to_path_buf(),
+            jsonl: None,
+            stale_cwd: false,
+        }];
+        assert!(
+            live_fanout_harness_lease(&[harness.clone()], &live, now),
+            "a live harness-worktree lease must read as an active fan-out"
+        );
+
+        // A live SPEC-scoped lease is not a fan-out (it backs its own spec).
+        let spec_lease = ps_lease("sess-spec", "STORY-7", tmp.path().to_path_buf());
+        assert!(
+            !live_fanout_harness_lease(&[spec_lease], &live, now),
+            "a spec-scoped lease is not a generic fan-out lease"
+        );
+
+        // A DEAD harness lease (worktree gone, no live process) is not active.
+        let dead_harness = ps_lease(
+            "sess-dead",
+            worktree_lease::HARNESS_WORKTREE_SCOPE,
+            std::path::PathBuf::from("/nonexistent/aida-fanout-dead"),
+        );
+        assert!(
+            !live_fanout_harness_lease(&[dead_harness], &[], now),
+            "a dead harness lease is not an active fan-out"
+        );
     }
 }
 
@@ -96226,6 +96407,14 @@ struct PsOrphan {
     /// (STALE) — distinct from no lease at all (pure flag-only). Either way the
     /// In-Progress flag is not liveness-backed.
     stale_lease: bool,
+    /// TASK-1064: `true` when this flag-only spec (no spec-scoped lease) is most
+    /// likely being built by a live advisor Agent-tool fan-out — a fan-out takes
+    /// a generic non-spec-linked `harness-worktree` lease, so its specs read as
+    /// having no spec lease. Surfaced informationally instead of under the
+    /// alarming "Orphaned" header. Never set for a stale (crashed) spec-scoped
+    /// lease — that is a genuine orphan.
+    // trace:TASK-1064 | ai:claude
+    likely_fanout: bool,
 }
 
 /// The flag-only / orphaned verdict for one In-Progress spec, given the
@@ -96241,6 +96430,37 @@ fn ps_orphan_verdict(lease_state: Option<LeaseState>) -> Option<bool> {
         Some(_) => Some(true),
         None => Some(false),
     }
+}
+
+/// TASK-1064: is an advisor Agent-tool fan-out currently running? Detected as a
+/// LIVE lease whose scope is the generic `harness-worktree` fallback — the lease
+/// an Agent-tool subagent (a `general-purpose` fan-out whose branch carries no
+/// SPEC-ID) takes. Such a lease is deliberately NOT spec-linked, so the specs it
+/// is building read as having no spec-scoped lease. Its liveness means those
+/// flag-only In-Progress specs are most likely being worked by the fan-out, not
+/// genuinely orphaned. Pure over the lease set + the shared liveness machinery.
+// trace:TASK-1064 | ai:claude
+fn live_fanout_harness_lease(
+    leases: &[SessionLease],
+    live: &[process_probe::LiveSession],
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    leases.iter().any(|l| {
+        l.scope
+            .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
+            && matches!(lease_state_for(l, live, now), LeaseState::Live)
+    })
+}
+
+/// TASK-1064: should a flag-only In-Progress spec (no spec-scoped lease) be
+/// surfaced as "likely worked by a fan-out" rather than "orphaned"? True only
+/// when there is NO spec-scoped lease at all (`stale_lease == false` — a crashed
+/// spec-scoped lease is a genuine orphan regardless) AND a live fan-out harness
+/// lease exists (a plausible live worker). Pure so the three-way framing is
+/// unit-testable without a store or a lease dir.
+// trace:TASK-1064 | ai:claude
+fn ps_orphan_likely_fanout(stale_lease: bool, fanout_active: bool) -> bool {
+    !stale_lease && fanout_active
 }
 
 // Rollup / stateless requirement types never carry a session of their own, so
@@ -96689,6 +96909,11 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     // liveness-backed — but we mark it so the operator sees "crashed session"
     // vs "never started". trace:STORY-696
     let mut orphans: Vec<PsOrphan> = Vec::new();
+    // TASK-1064: is a live advisor Agent-tool fan-out running? If so, a flag-only
+    // In-Progress spec (no spec-scoped lease) is most likely being built by it
+    // (the fan-out takes a generic non-spec-linked harness lease) — surface it
+    // informationally instead of as a genuine orphan. trace:TASK-1064 | ai:claude
+    let fanout_active = live_fanout_harness_lease(&leases, &live, now);
     if let Some(store) = store.as_ref() {
         for r in &store.requirements {
             if !matches!(r.status, aida_core::RequirementStatus::InProgress) {
@@ -96720,6 +96945,8 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
                     spec: disp,
                     title: r.title.clone(),
                     stale_lease,
+                    // trace:TASK-1064 | ai:claude
+                    likely_fanout: ps_orphan_likely_fanout(stale_lease, fanout_active),
                 });
             }
         }
@@ -96761,6 +96988,9 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "spec": o.spec,
                     "title": o.title,
                     "liveness": if o.stale_lease { "stale" } else { "flag-only" },
+                    // TASK-1064: a flag-only spec while a fan-out is live is most
+                    // likely being built by it, not genuinely orphaned.
+                    "likely_fanout": o.likely_fanout,
                     "live": false,
                 })
             })
@@ -96847,8 +97077,38 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         }
     }
 
-    // Orphaned In-Progress specs — the flag-only / crashed-session case.
-    if !orphans.is_empty() {
+    // TASK-1064: split the no-live-spec-lease specs into two honestly-framed
+    // groups. A flag-only spec while a fan-out is live is most likely being
+    // BUILT by that fan-out (which takes a generic non-spec-linked harness
+    // lease) — informational, not alarming. Only the rest — crashed (stale)
+    // spec-scoped leases, or flag-only with NO live worker — are genuine
+    // orphans. trace:TASK-1064 | ai:claude
+    let (fanout_worked, genuine): (Vec<&PsOrphan>, Vec<&PsOrphan>) =
+        orphans.iter().partition(|o| o.likely_fanout);
+
+    // Likely worked by a fan-out — informational (a live advisor Agent-tool
+    // subagent is plausibly building these; its lease just isn't spec-linked).
+    if !fanout_worked.is_empty() {
+        let info = "ⓘ";
+        println!();
+        println!(
+            "{}",
+            "Likely worked by a fan-out (live advisor Agent-tool subagent — generic harness lease, spec not linked)"
+                .bold()
+                .cyan()
+        );
+        for o in &fanout_worked {
+            println!(
+                "  {} {}  {}",
+                info.cyan(),
+                o.spec.cyan().bold(),
+                truncate(&o.title, 48).dimmed(),
+            );
+        }
+    }
+
+    // Orphaned In-Progress specs — the genuine flag-only / crashed-session case.
+    if !genuine.is_empty() {
         let warn = crate::glyph(crate::glyphs::Glyph::Warning);
         println!();
         println!(
@@ -96857,7 +97117,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 .bold()
                 .yellow()
         );
-        for o in &orphans {
+        for o in &genuine {
             let why = if o.stale_lease {
                 "stale lease — process dead"
             } else {
