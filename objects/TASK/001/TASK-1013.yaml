@@ -1,0 +1,12 @@
+id: 019f165a-0ca6-7372-a771-fedf0550a0d3
+spec_id: TASK-1013
+agreed_id: TASK-1013
+title: TASK-0431 — product-sourced decisions must be filterable (`--from-product`); the evidence field records the product handoff (this plan reserves the filter, TASK-0431 fills the source)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T02:27:08.070727403Z
+modified_at: 2026-06-30T02:27:08.070727403Z
+req_type: Task
