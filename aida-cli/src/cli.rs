@@ -8208,27 +8208,38 @@ pub enum Command {
     Orchestrator(OrchestratorCommand),
 
     /// One-shot AUTONOMOUS implement + ship for a single approved spec.
-    /// Auto-queues the spec, then drives it through the `--auto-complete --zen`
-    /// orchestrator (implement → CI → review → merge → pull). Fire-and-forget
-    /// friendly: launch several for INDEPENDENT specs in parallel, each in its
-    /// own worktree. The auto-implement counterpart to `aida ship` (which
-    /// finishes a HUMAN-implemented spec). With no `<spec>` and no subcommand,
-    /// prints help.
+    /// Auto-queues the spec, then drives it through the SAME `--auto-complete`
+    /// orchestrator `aida burndown` uses (implement → CI → review → merge →
+    /// pull). FULLY HEADLESS by default — fire several for INDEPENDENT specs in
+    /// parallel and walk away; an INDEPENDENT reviewer always runs before the
+    /// auto-merge. Use `--supervised` to drive the implementer yourself. The
+    /// auto-implement counterpart to `aida ship` (which finishes a
+    /// HUMAN-implemented spec). With no `<spec>` and no subcommand, prints help.
     // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
     Zen {
         /// The approved spec to autonomously implement and ship.
         #[clap(value_name = "SPEC")]
         spec: Option<String>,
 
-        /// Run the drive headless (`claude -p`) so it needs no Ctrl+D —
-        /// forwarded to the orchestrator. Bare `--no-human` runs the reviewer
-        /// headless and pauses at the implementer; `--no-human=both` runs the
-        /// implementer headless too. Aliases: `--unattended`, `--headless`.
+        /// Supervised drive: YOU drive the implementer interactively, and the
+        /// reviewer still runs headless as an independent gate before the
+        /// auto-merge. The opt-in counterpart to the fire-and-forget default
+        /// (which runs the implementer headless too). Maps to the
+        /// orchestrator's `--no-human=reviewer-only`.
+        #[clap(long, conflicts_with = "no_human")]
+        supervised: bool,
+
+        /// Explicit autonomy mode override, forwarded to the orchestrator. The
+        /// reviewer ALWAYS runs headless as an independent gate; this only
+        /// governs the implementer. The DEFAULT is `both` (fully headless
+        /// fire-and-forget — fire several for INDEPENDENT specs and walk away).
+        /// `--no-human=reviewer-only` (= `--supervised`) keeps the implementer
+        /// interactive. Aliases: `--unattended`, `--headless`.
         #[clap(
             long,
             value_name = "MODE",
             num_args = 0..=1,
-            default_missing_value = "reviewer-only",
+            default_missing_value = "both",
             aliases = ["unattended", "headless"]
         )]
         no_human: Option<String>,
