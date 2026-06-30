@@ -28864,5 +28864,20 @@ operations:
   timestamp: 2026-06-30T20:39:49.321896842Z
   kind: !SetStatus
     status: Completed
-clock: 2778
+- id: 019f1a5f-d90e-7b52-a913-746904dabc9a
+  target_id: 019f1a5f-6ef0-72c3-9013-5ff03ed5a748
+  author: aida
+  node_id: '1'
+  lamport: 2779
+  timestamp: 2026-06-30T21:11:56.942309043Z
+  kind: !SetDescription
+    description: |-
+      When a spec transitions INTO Completed (via aida done or aida edit --status completed), render a distinct felt close instead of the flat generic Updated: <id> line (used for any tag edit) or the bare done message. Honors STORY-700 AC3 (BINDING): "The arc terminates with the payoff made explicit: the user SEES the spec reach Completed (the felt-not-discovered moment), not just a generic done message."
+
+      ## Acceptance
+      1. A status-change INTO Completed renders a felt crescendo: names the spec + title, shows the thought->merged arc terminating (filed -> built -> merged -> completed, the loop closed), and points forward to aida show <id> for the linked commit.
+      2. Only the into-Completed transition gets the crescendo; a non-completion edit still renders Updated:.
+      3. The agent/TOON path is unaffected (machine output keeps Updated:).
+      4. House style: status glyph + glyphs via the registry (ascii-safe), no raw glyphs; existing workflow-hint line preserved.
+clock: 2779
 node_id: '1'

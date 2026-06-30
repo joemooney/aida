@@ -2,13 +2,20 @@ id: 019f1a5f-6ef0-72c3-9013-5ff03ed5a748
 spec_id: STORY-738
 agreed_id: STORY-738
 title: 'Completion crescendo: a spec reaching Completed renders a felt loop-closed moment, not the generic Updated: line'
-description: ''
+description: |-
+  When a spec transitions INTO Completed (via aida done or aida edit --status completed), render a distinct felt close instead of the flat generic Updated: <id> line (used for any tag edit) or the bare done message. Honors STORY-700 AC3 (BINDING): "The arc terminates with the payoff made explicit: the user SEES the spec reach Completed (the felt-not-discovered moment), not just a generic done message."
+
+  ## Acceptance
+  1. A status-change INTO Completed renders a felt crescendo: names the spec + title, shows the thought->merged arc terminating (filed -> built -> merged -> completed, the loop closed), and points forward to aida show <id> for the linked commit.
+  2. Only the into-Completed transition gets the crescendo; a non-completion edit still renders Updated:.
+  3. The agent/TOON path is unaffected (machine output keeps Updated:).
+  4. House style: status glyph + glyphs via the registry (ascii-safe), no raw glyphs; existing workflow-hint line preserved.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T21:11:29.776490236Z
-modified_at: 2026-06-30T21:11:29.776490236Z
+modified_at: 2026-06-30T21:11:56.741556749Z
 req_type: Story
 tags:
 - completion
