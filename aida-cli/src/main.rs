@@ -82,6 +82,7 @@ mod pr_ship;
 mod presence;
 mod process_probe;
 mod prompts;
+mod ship;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
 mod queue_recover;
@@ -3064,6 +3065,32 @@ fn run() -> Result<()> {
         return handle_pr_command(pr_cmd);
     }
 
+    // STORY-720: `aida ship` dispatches before storage init for the same
+    // reason as `aida pr` — every side-effect is a git / gh / self-invoked
+    // `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
+    // resolved from the branch / lease, not the requirement store.
+    // trace:STORY-720 | ai:claude
+    if let Command::Ship {
+        spec,
+        message,
+        no_merge,
+        no_pr,
+        keep_worktree,
+        dry_run,
+        no_trailer_check,
+    } = &cli.command
+    {
+        return run_human_finish_ceremony(HumanFinishOptions {
+            spec: spec.clone(),
+            message: message.clone(),
+            no_merge: *no_merge,
+            no_pr: *no_pr,
+            keep_worktree: *keep_worktree,
+            dry_run: *dry_run,
+            no_trailer_check: *no_trailer_check,
+        });
+    }
+
     // BUG-233 / TASK-336: orchestrator-context introspection. Dispatched
     // before storage init — it reads only env vars + the `.aida/drain-
     // state.json` file's `run_uuid` + PID, no requirement store. (Before
@@ -3800,6 +3827,7 @@ fn run() -> Result<()> {
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
+        Command::Ship { .. } => unreachable!("ship is dispatched before storage init"),
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
         }
@@ -14391,6 +14419,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
+        Command::Ship { .. } => unreachable!("ship is dispatched before storage init"),
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
         }
@@ -57823,6 +57852,223 @@ fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<String> {
         }
     }
     out
+}
+
+/// STORY-720: options for the shared human-implementer finish ceremony.
+// trace:STORY-720 | ai:claude — plain `//` keeps the marker out of any doc surface.
+struct HumanFinishOptions {
+    /// Explicit spec to finish; `None` ⇒ resolve from the branch / lease.
+    spec: Option<String>,
+    /// Commit subject when there is uncommitted work; `None` ⇒ a conventional
+    /// default. The `(SPEC-ID)` trailer is always ensured.
+    message: Option<String>,
+    /// `--no-merge` — stop after opening the PR.
+    no_merge: bool,
+    /// `--no-pr` — stop after rebase + push.
+    no_pr: bool,
+    /// `--keep-worktree` — skip the worktree-cleanup step after merge.
+    keep_worktree: bool,
+    /// `--dry-run` — print the plan and exit.
+    dry_run: bool,
+    /// `--no-trailer-check` — forwarded to the finish tail's trailer guard.
+    no_trailer_check: bool,
+}
+
+/// STORY-720: the one-shot HUMAN-implementer finish — commit → rebase → push
+/// → PR → CI → squash-merge → pull → worktree-cleanup.
+///
+/// This is the SHARED finish ceremony. `aida ship` is the direct caller today;
+/// `aida zen` (STORY-721) and `aida integrate` (STORY-718) call the same fn so
+/// the commit→rebase→PR→CI→merge→pull→cleanup sequence has exactly one home.
+///
+/// The finish TAIL (PR / CI / squash-merge / `aida pull` auto-bump /
+/// worktree-cleanup) is NOT reimplemented — it delegates to
+/// [`pr_ship_handler`] (TASK-458), the same machinery `aida pr ship` drives.
+/// Only the human-implementer PREFIX is new here: commit the human's
+/// uncommitted work with the `(SPEC-ID)` trailer, rebase onto current
+/// `origin/main`, and push. Phase-1 (implement) is done by the human instead
+/// of a spawned agent.
+// trace:STORY-720 | ai:claude — plain `//` keeps the marker out of any doc surface.
+fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> {
+    use ship::FinishMode;
+
+    let project_root = find_project_root()?;
+    let main_worktree = main_worktree_root_from(&project_root);
+    let branch = current_git_branch(&project_root)?;
+    if branch.is_empty() {
+        anyhow::bail!(
+            "could not detect the current branch (detached HEAD?) — `aida ship` runs from \
+             inside the spec's worktree"
+        );
+    }
+    if branch == "main" || branch == "master" {
+        anyhow::bail!(
+            "refusing to ship from `{branch}` — `aida ship` runs from inside the spec's \
+             feature-branch worktree, not the default branch"
+        );
+    }
+
+    // Resolve the spec: explicit arg → branch name → active session lease.
+    let lease_scope = list_leases(&main_worktree)
+        .into_iter()
+        .find(|l| l.branch == branch)
+        .map(|l| l.scope);
+    let spec = ship::resolve_spec(opts.spec.as_deref(), &branch, lease_scope.as_deref())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "could not resolve a spec from branch `{branch}` — pass one explicitly: \
+                 `aida ship <SPEC>`"
+            )
+        })?;
+
+    let mode = ship::finish_mode(opts.no_pr, opts.no_merge);
+    let dirty = working_tree_is_dirty(&project_root);
+
+    // ---- Dry-run: print the resolved plan and exit. ----
+    if opts.dry_run {
+        print!("{}", ship::format_ship_plan(&spec, &branch, mode, dirty));
+        return Ok(());
+    }
+
+    eprintln!(
+        "{} aida ship — {} on branch {}",
+        "→".cyan().bold(),
+        spec.bold(),
+        branch
+    );
+
+    // ---- Step 1: commit uncommitted work with the (SPEC-ID) trailer. ----
+    if dirty {
+        let subject = ship::commit_subject(&spec, opts.message.as_deref());
+        eprintln!("  step 1: committing uncommitted work — {}", subject);
+        let add = std::process::Command::new("git")
+            .current_dir(&project_root)
+            .args(["add", "-A"])
+            .status()
+            .context("could not invoke `git add`")?;
+        if !add.success() {
+            anyhow::bail!("`git add -A` failed — investigate before retrying");
+        }
+        let commit = std::process::Command::new("git")
+            .current_dir(&project_root)
+            .args(["commit", "-m", &subject])
+            .status()
+            .context("could not invoke `git commit`")?;
+        if !commit.success() {
+            anyhow::bail!("`git commit` failed — investigate before retrying");
+        }
+        eprintln!(
+            "  {} committed",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+    } else {
+        eprintln!("  step 1: no uncommitted work — nothing to commit");
+    }
+
+    // ---- Step 2: rebase onto current origin/main. ----
+    eprintln!("  step 2: rebasing onto current origin/main");
+    let fetch = std::process::Command::new("git")
+        .current_dir(&project_root)
+        .args(["fetch", "origin", "main"])
+        .status()
+        .context("could not invoke `git fetch`")?;
+    if !fetch.success() {
+        anyhow::bail!("`git fetch origin main` failed — is the remote reachable?");
+    }
+    let rebase = std::process::Command::new("git")
+        .current_dir(&project_root)
+        .args(["rebase", "origin/main"])
+        .status()
+        .context("could not invoke `git rebase`")?;
+    if !rebase.success() {
+        // Abort so the worktree is left clean, then bail with the manual recipe.
+        let _ = std::process::Command::new("git")
+            .current_dir(&project_root)
+            .args(["rebase", "--abort"])
+            .status();
+        anyhow::bail!(
+            "rebase onto origin/main hit conflicts — aborted, worktree left clean.\n  \
+             Resolve by hand: `git rebase origin/main`, fix the conflicts, \
+             `git rebase --continue`, then re-run `aida ship`."
+        );
+    }
+    eprintln!(
+        "  {} rebased onto origin/main",
+        crate::glyph(crate::glyphs::Glyph::Check).green()
+    );
+
+    // ---- Step 3: push (force-with-lease — the rebase may have rewritten history). ----
+    eprintln!("  step 3: pushing {} to origin", branch);
+    let push = std::process::Command::new("git")
+        .current_dir(&project_root)
+        .args(["push", "--force-with-lease", "-u", "origin", &branch])
+        .status()
+        .context("could not invoke `git push`")?;
+    if !push.success() {
+        anyhow::bail!(
+            "`git push --force-with-lease -u origin {branch}` failed — investigate before retrying"
+        );
+    }
+    eprintln!(
+        "  {} pushed {}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        branch
+    );
+
+    // ---- Finish: branch on the resolved mode. ----
+    match mode {
+        FinishMode::RebasePushOnly => {
+            eprintln!(
+                "{} aida ship — {} rebased + pushed (--no-pr; no PR opened)",
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+                spec.bold()
+            );
+            Ok(())
+        }
+        FinishMode::StopAtPr => {
+            // Open the PR (or reuse an existing one for this branch), then stop.
+            let pr = match change_lookup_for_branch(&project_root, &branch) {
+                crate::forge::ChangeLookup::Found(c) => {
+                    eprintln!("  step 4: found open PR-{} for branch {}", c.id, branch);
+                    c.id
+                }
+                _ => {
+                    let n = pr_ship_create_pr(&project_root, &branch)?;
+                    eprintln!(
+                        "  {} created PR-{}",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        n
+                    );
+                    n
+                }
+            };
+            eprintln!(
+                "{} aida ship — PR-{} open for {} (--no-merge; not merged). Review + merge it, \
+                 or finish with `aida ship`.",
+                "⏸".yellow().bold(),
+                pr,
+                spec.bold()
+            );
+            Ok(())
+        }
+        FinishMode::FullShip => {
+            // Reuse the existing finish machinery (TASK-458): pr_ship_handler
+            // resolves / creates the PR, watches CI, squash-merges, runs
+            // `aida pull` (Done → Completed auto-bump), and removes the
+            // worktree. --keep-worktree maps to `pr ship`'s --no-cleanup.
+            eprintln!("  step 4: finishing (CI → squash-merge → pull → cleanup)");
+            pr_ship_handler(
+                None,                  // resolve / create the PR for this branch
+                false,                 // no_pull — run `aida pull`
+                opts.keep_worktree,    // no_cleanup
+                false,                 // dry_run
+                false,                 // force_delete_branch
+                None,                  // complexity
+                None,                  // effort
+                opts.no_trailer_check, // no_trailer_check
+            )
+        }
+    }
 }
 
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
