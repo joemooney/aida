@@ -8,8 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T15:07:53.430982522Z
-modified_at: 2026-06-14T22:20:27.105488547Z
+modified_at: 2026-06-30T16:36:10.568975607Z
 req_type: Task
+tags:
+- zen-ready
 relationships:
 - rel_type: Child
   target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
