@@ -3,12 +3,12 @@ spec_id: STORY-729
 agreed_id: STORY-729
 title: Error messages that name their fix + clear Done-vs-Completed language
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T08:33:29.664301835Z
-modified_at: 2026-06-30T08:33:29.664301835Z
+modified_at: 2026-06-30T08:54:14.451064814Z
 req_type: Story
 tags:
 - clarity
