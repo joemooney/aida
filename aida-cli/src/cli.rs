@@ -7573,7 +7573,7 @@ pub enum Command {
         /// With --events: keep only events whose `duration_ms` is at or
         /// above this threshold.
         // trace:STORY-709 | ai:claude
-        #[clap(long, value_name = "Nms", requires = "events")]
+        #[clap(long, value_name = "Nms", requires = "events", value_parser = parse_duration_ms)]
         slower_than: Option<u64>,
     },
 
@@ -10231,11 +10231,72 @@ pub enum JiraCommand {
     },
 }
 
+/// Parse a duration threshold into whole milliseconds, accepting an optional
+/// unit suffix. The `--slower-than` flag's help text is `Nms`, which invites
+/// users to type `500ms`; bare `500` (the historical form) is still accepted,
+/// and `2s` is sugar for `2000`.
+///
+/// Accepted: `500`, `500ms`, `2s` (case-insensitive, surrounding whitespace
+/// trimmed). A bare number is interpreted as milliseconds.
+// trace:TASK-1055 — plain `//` so the SPEC-ID stays out of `--help` output.
+pub fn parse_duration_ms(raw: &str) -> Result<u64, String> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return Err("expected a duration like 500, 500ms, or 2s".to_string());
+    }
+    let lower = s.to_ascii_lowercase();
+    let (digits, multiplier) = if let Some(num) = lower.strip_suffix("ms") {
+        (num.trim_end(), 1u64)
+    } else if let Some(num) = lower.strip_suffix('s') {
+        (num.trim_end(), 1000u64)
+    } else {
+        (lower.as_str(), 1u64)
+    };
+    let value: u64 = digits.parse().map_err(|_| {
+        format!("invalid duration '{raw}' — expected a number optionally suffixed with ms or s (e.g. 500, 500ms, 2s)")
+    })?;
+    value
+        .checked_mul(multiplier)
+        .ok_or_else(|| format!("duration '{raw}' overflows the millisecond range"))
+}
+
 // trace:BUG-227 | ai:claude
 #[cfg(test)]
 mod tests {
     use super::*;
     use clap::CommandFactory;
+
+    /// TASK-1055: `--slower-than` accepts a bare number (ms), an explicit `ms`
+    /// suffix, or an `s` suffix (seconds → ms). The help text reads `Nms`,
+    /// which used to reject `500ms` with "invalid digit found in string".
+    #[test]
+    fn parse_duration_ms_accepts_bare_and_suffixed() {
+        assert_eq!(parse_duration_ms("500"), Ok(500));
+        assert_eq!(parse_duration_ms("500ms"), Ok(500));
+        assert_eq!(parse_duration_ms("2s"), Ok(2000));
+        // case-insensitive + surrounding whitespace tolerated
+        assert_eq!(parse_duration_ms(" 750MS "), Ok(750));
+        assert_eq!(parse_duration_ms("0"), Ok(0));
+        // garbage and bare units are rejected with a helpful message
+        assert!(parse_duration_ms("fast").is_err());
+        assert!(parse_duration_ms("ms").is_err());
+        assert!(parse_duration_ms("").is_err());
+        assert!(parse_duration_ms("1.5s").is_err());
+    }
+
+    /// TASK-1055: the parser is actually wired onto the clap flag, so
+    /// `usage --events --slower-than 500ms` parses to 500 (not a parse error).
+    #[test]
+    fn slower_than_flag_accepts_ms_suffix() {
+        let cli = Cli::try_parse_from(["aida", "usage", "--events", "--slower-than", "500ms"])
+            .expect("`--slower-than 500ms` must parse");
+        match cli.command {
+            Command::Usage { slower_than, .. } => {
+                assert_eq!(slower_than, Some(500));
+            }
+            other => panic!("expected Usage command, got {other:?}"),
+        }
+    }
 
     // True when `s` contains a real AIDA trace marker — the literal `trace:`
     // token followed by an uppercase SPEC-ID prefix, a dash, and a digit (e.g.
