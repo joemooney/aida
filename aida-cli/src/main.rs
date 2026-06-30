@@ -78,6 +78,11 @@ mod mcp;
 mod metrics;
 mod network_retry;
 mod not_found;
+// ADR-7/ADR-9 guardrail registry — consumed only by its own tests (the
+// substrate-as-bouncer CI gate for the one-engine invariant), so it compiles
+// in test builds only. trace:ADR-7 trace:ADR-9
+#[cfg(test)]
+mod orchestration_routing;
 mod orchestrator;
 // trace:STORY-647 | ai:claude — team RBAC slice 2: gated-op permission map +
 // protected specs + strict mode (guardrail, not security).
@@ -104181,6 +104186,52 @@ mod queue_work_tests {
         assert_eq!(resolve_autonomy_mode(true, true), AutonomyMode::NoHuman);
     }
 
+    // --- AutonomyMode::resolve_run (ADR-7 / ADR-10) -----------------------
+    // The in-flight typed resolution that replaces the bare `AIDA_ZEN` re-read
+    // inside run_auto_complete. Same precedence as resolve_autonomy_mode, but
+    // expressed over the typed `--no-human` mode + the zen-INTENT-TOKEN
+    // presence (not a bare env read), so a leaked AIDA_ZEN is leak-resistant.
+
+    /// No `--no-human`, no zen token → the human is driving. (ADR-10)
+    #[test]
+    fn resolve_run_default_when_nothing_set() {
+        assert_eq!(
+            AutonomyMode::resolve_run(None, false),
+            AutonomyMode::Default
+        );
+    }
+
+    /// Zen-intent token present (and no `--no-human`) → a supervised zen run
+    /// under ADR-10.
+    #[test]
+    fn resolve_run_zen_when_token_present() {
+        let m = AutonomyMode::resolve_run(None, true);
+        assert_eq!(m, AutonomyMode::Zen);
+        assert!(m.is_zen());
+    }
+
+    /// `--no-human` wins over a zen token (the stronger mode) — symmetric with
+    /// resolve_autonomy_mode's precedence. (ADR-10)
+    #[test]
+    fn resolve_run_no_human_beats_zen_token() {
+        assert_eq!(
+            AutonomyMode::resolve_run(Some(auto_complete::NoHumanMode::Both), true),
+            AutonomyMode::NoHuman
+        );
+        assert_eq!(
+            AutonomyMode::resolve_run(Some(auto_complete::NoHumanMode::ReviewerOnly), false),
+            AutonomyMode::NoHuman
+        );
+    }
+
+    /// BUG-237 leak-resistance preserved: NO zen token (a leaked `AIDA_ZEN=1`
+    /// carries none) → NOT recorded as a zen run. (ADR-10 / BUG-237)
+    #[test]
+    fn resolve_run_no_token_is_not_zen() {
+        let m = AutonomyMode::resolve_run(None, false);
+        assert!(!m.is_zen());
+    }
+
     // --- resolve_drain_alias (TASK-578) -----------------------------------
 
     /// `--drain` off is a pure identity map — the operator's flags pass through
@@ -133229,10 +133280,15 @@ fn handle_queue_integrate(
             // child only); a genuinely independent drain never inherits it and is
             // still refused, so the repo-wide one-authority invariant holds.
             // trace:TASK-1050 trace:BUG-650 | ai:claude
+            // ONE per-spec orchestration engine (ADR-7): integrate hands the
+            // spec to the SAME `--auto-complete` engine, entering at the
+            // reviewer phase via `--from-pr`. The routing argv is a pure helper
+            // so the `orchestration_routing` guardrail can assert it.
+            // trace:ADR-7 trace:ADR-9 | ai:claude
             let status = std::process::Command::new(&aida)
                 .current_dir(drive_cwd)
                 .env("AIDA_DRAIN_FORCE", "1")
-                .args(["queue", "work", id, "--auto-complete", "--from-pr"])
+                .args(integrate::drive_args(id))
                 .status();
             match status {
                 Ok(s) if s.success() => {
@@ -133648,11 +133704,15 @@ fn run_auto_complete(
     // since the drain-state file already records every other field the check
     // needs. trace:BUG-233 trace:TASK-336 | ai:claude
     //
-    // BUG-237: record whether this run is `--zen`. `AIDA_ZEN_TOKEN` is present
-    // iff the `--zen` dispatch arm ran — the `Default` / `--no-human` arms
-    // scrub it — so a leaked `AIDA_ZEN=1` on a plain `--auto-complete` run
-    // does not get recorded as a zen run. trace:BUG-237 | ai:claude
-    let run_zen = std::env::var(zen::ZEN_TOKEN_ENV).is_ok();
+    // ADR-7/ADR-10: resolve this run's autonomy ONCE into a typed value (the
+    // single in-process source of truth) rather than re-reading `AIDA_ZEN` as a
+    // bare env bool. `for_auto_complete_run` unifies the `--no-human` mode and
+    // the `--zen` intent token; it preserves the BUG-237 guarantee that a
+    // leaked `AIDA_ZEN=1` (no token) is not recorded as a zen run. The env var
+    // stays as the cross-process transport to phase children / skill templates.
+    // trace:ADR-7 trace:ADR-10 trace:BUG-237 | ai:claude
+    let autonomy = AutonomyMode::for_auto_complete_run(no_human);
+    let run_zen = autonomy.is_zen();
     let run_token = uuid::Uuid::now_v7().to_string();
 
     // STORY-301: surface the drain so a user inside the spawned Claude session
@@ -140959,6 +141019,49 @@ enum AutonomyMode {
     Default,
     Zen,
     NoHuman,
+}
+
+impl AutonomyMode {
+    /// ADR-7/ADR-10: the SINGLE in-process resolution of an in-flight
+    /// `--auto-complete` run's autonomy mode. Unifies both autonomy axes into
+    /// one typed value — the typed `--no-human` mode (which gates PARENT-engine
+    /// behavior: headless implementer spawn, CI-watch) plus `--zen` (a
+    /// CHILD-session signal: skill templates auto-resolve `kind:confirmation`
+    /// prompts when `AIDA_ZEN` is set).
+    ///
+    /// `--zen` is recovered from the zen-INTENT TOKEN (`AIDA_ZEN_TOKEN`), not a
+    /// bare `AIDA_ZEN` read: the token is minted only by the `--zen` dispatch
+    /// arm and scrubbed by the `Default` / `--no-human` arms, so a leaked
+    /// `AIDA_ZEN=1` is NOT mistaken for a zen run (BUG-237). The `AIDA_ZEN` env
+    /// var remains the cross-process TRANSPORT to spawned phase children / skill
+    /// templates; this typed value is the in-process SOURCE OF TRUTH, so the
+    /// engine path no longer re-derives zen-ness from scattered bare env reads.
+    /// (The engine carries no `zen` field the way it carries `no_human`, because
+    /// zen's pauses fire in the child sessions, not the parent engine.)
+    // trace:ADR-7 trace:ADR-10 | ai:claude
+    fn for_auto_complete_run(no_human: Option<auto_complete::NoHumanMode>) -> Self {
+        Self::resolve_run(no_human, std::env::var(zen::ZEN_TOKEN_ENV).is_ok())
+    }
+
+    /// The pure core of [`for_auto_complete_run`]: resolve the autonomy mode
+    /// from the typed `--no-human` mode and whether the zen-intent token is
+    /// present. Precedence `--no-human` > `--zen` > default matches
+    /// [`resolve_autonomy_mode`]. Pure, so the precedence + the BUG-237
+    /// leak-resistance are unit-testable without mutating process env.
+    // trace:ADR-7 trace:ADR-10 | ai:claude
+    fn resolve_run(no_human: Option<auto_complete::NoHumanMode>, zen_token_present: bool) -> Self {
+        match (no_human.is_some(), zen_token_present) {
+            (true, _) => AutonomyMode::NoHuman,
+            (false, true) => AutonomyMode::Zen,
+            (false, false) => AutonomyMode::Default,
+        }
+    }
+
+    /// True when this run is a supervised `--zen` drive.
+    // trace:ADR-10
+    fn is_zen(self) -> bool {
+        matches!(self, AutonomyMode::Zen)
+    }
 }
 
 /// Resolve the effective autonomy mode from the `--zen` flag and the
