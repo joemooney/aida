@@ -28756,5 +28756,17 @@ operations:
   timestamp: 2026-06-30T18:59:33.384185054Z
   kind: !SetStatus
     status: Approved
-clock: 2766
+- id: 019f19e6-b566-7dc3-abe5-da3583ee9e0d
+  target_id: 019f19e6-a842-7ea0-81ed-71f93cbd3af9
+  author: aida
+  node_id: '1'
+  lamport: 2767
+  timestamp: 2026-06-30T18:59:37.958947032Z
+  kind: !Create
+    title: 'aida ps: in-progress specs being worked by an advisor fan-out (non-spec-linked harness-worktree lease) should not list under ''Orphaned'' — surface them as ''likely worked by a fan-out'' vs genuinely orph'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2767
 node_id: '1'
