@@ -3,12 +3,12 @@ spec_id: BUG-672
 agreed_id: BUG-672
 title: aida search (default) + aida graph emit human formatting to agents, not TOON, and lack next[] guidance
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T21:16:52.360674767Z
-modified_at: 2026-06-30T21:16:52.360674767Z
+modified_at: 2026-06-30T21:39:00.098949102Z
 req_type: Bug
 tags:
 - agent-surface
