@@ -27,7 +27,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:01.331691676Z
-modified_at: 2026-06-27T02:07:25.051080154Z
+modified_at: 2026-06-30T02:41:05.095519462Z
 req_type: Task
 tags:
 - cli
@@ -45,6 +45,11 @@ comments:
   content: 'ADVISOR DISPOSITION (2026-06-26): APPROVED. Small, well-scoped, and genuinely testable — a one-line footer (total / routed / unrouted) adds at-a-glance queue legibility, consistent with the redesign''s quiet-depth goal. Acceptance is concrete and verifiable by running ''aida queue list''. No overlap with existing work, low blast radius. Routing to implementation.'
   created_at: 2026-06-27T01:30:05.947182495Z
   modified_at: 2026-06-27T01:30:05.947182495Z
+- id: 019f1666-d247-7842-a541-5b2a5fbaf1c2
+  author: joe
+  content: Dropped per operator (2026-06-29). The implementation branch feat/task930-queue-footer was 74 commits behind main and conflicting (a rebase would ~= re-implementation); the queue-list footer has since evolved on main (BUG-621, STORY-672, the rich to-empty-this-queue footer). Not worth resurrecting; re-file fresh if the N-items-M-routed-K-unrouted summary line is ever wanted.
+  created_at: 2026-06-30T02:41:05.095519462Z
+  modified_at: 2026-06-30T02:41:05.095519462Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-27T01:30:30.566430737Z
