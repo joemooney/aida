@@ -457,9 +457,224 @@ pub(crate) fn resolve_scope_route(
     }
 }
 
+// =========================================================================
+// THOUGHT → spec front door (STORY-725). The `aida zen <arg>` positional
+// accepts free text as well as a spec id: a non-spec-id arg is drafted into a
+// spec and filed as a draft, then driven through the SAME gated path. The pure
+// detection + draft-composition live here so they are exhaustively
+// unit-testable without storage or the AI transport; the IO (the AI call, the
+// draft filing, the drive) lives in `main.rs::run_zen_drive`. trace:STORY-725
+// =========================================================================
+
+/// The longest title `aida zen` will file for a drafted thought; mirrors the
+/// `aida add` title cap so a paste accident still files something legible.
+// trace:STORY-725 | ai:claude
+const MAX_DRAFT_TITLE_LEN: usize = 200;
+
+/// Whether `arg` looks like a spec id (`TASK-123`, `STORY-45`, `BUG-9`,
+/// `ADR-7`, and multi-segment agreed ids like `FR-1-042`) rather than a
+/// free-text thought. The rule: a single whitespace-free token of an
+/// all-alphabetic prefix followed by one or more `-<digits>` groups. Anything
+/// else — multiple words, a bare word, an empty string — is treated as a
+/// thought. A spec id keeps the existing resolve-or-refuse behavior; a thought
+/// routes to the draft-and-drive front door. Case-insensitive (`task-7`).
+// trace:STORY-725 | ai:claude
+pub(crate) fn looks_like_spec_id(arg: &str) -> bool {
+    let s = arg.trim();
+    if s.is_empty() || s.chars().any(char::is_whitespace) {
+        return false;
+    }
+    let mut segments = s.split('-');
+    match segments.next() {
+        Some(prefix) if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic()) => {}
+        _ => return false,
+    }
+    let mut saw_numeric_segment = false;
+    for seg in segments {
+        if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+        saw_numeric_segment = true;
+    }
+    saw_numeric_segment
+}
+
+/// Which path produced a drafted spec's body — for the operator-facing report
+/// and the `[AI:claude]` provenance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DraftSource {
+    /// A genuine AI draft (title + description + acceptance criteria).
+    Ai,
+    /// No AI draft was reachable — the thought was captured verbatim.
+    Fallback,
+}
+
+impl DraftSource {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            DraftSource::Ai => "AI-drafted acceptance criteria",
+            DraftSource::Fallback => "no AI reachable — thought captured verbatim",
+        }
+    }
+}
+
+/// A spec body composed from a free-text thought, ready to file as a draft.
+#[derive(Debug, Clone)]
+pub(crate) struct DraftedThought {
+    pub title: String,
+    pub description: String,
+    pub source: DraftSource,
+}
+
+/// Cap a title at [`MAX_DRAFT_TITLE_LEN`] on a char boundary.
+fn truncate_title(s: &str) -> String {
+    let s = s.trim();
+    if s.chars().count() > MAX_DRAFT_TITLE_LEN {
+        s.chars().take(MAX_DRAFT_TITLE_LEN).collect()
+    } else {
+        s.to_string()
+    }
+}
+
+/// Compose the draft spec body from the thought and an OPTIONAL AI draft. Pure:
+/// the caller runs the AI request (or not) and passes the result in, so the
+/// AI-vs-fallback branch is unit-testable without the transport.
+///
+/// With a usable AI draft: the AI title + description, plus the acceptance
+/// criteria rendered under a `## Acceptance` section (the same heading
+/// `aida ultraplan` / `aida lint` look for), plus a provenance line naming the
+/// originating thought. Without one: the thought becomes the title verbatim and
+/// the description captures it with a "refine before it ships" note — which the
+/// suitability gate will (correctly) flag as under-specified.
+// trace:STORY-725 | ai:claude
+pub(crate) fn compose_draft_from_thought(
+    thought: &str,
+    ai: Option<aida_core::DraftSpecResponse>,
+) -> DraftedThought {
+    let thought = thought.trim();
+    match ai {
+        Some(d) if !d.title.trim().is_empty() => {
+            let title = truncate_title(&d.title);
+            let mut description = d.description.trim().to_string();
+            let criteria: Vec<&str> = d
+                .acceptance_criteria
+                .iter()
+                .map(|c| c.trim())
+                .filter(|c| !c.is_empty())
+                .collect();
+            if !criteria.is_empty() {
+                description.push_str("\n\n## Acceptance\n");
+                for c in &criteria {
+                    description.push_str(&format!("- {c}\n"));
+                }
+            }
+            description.push_str(&format!(
+                "\n_Drafted by `aida zen` from the thought: \"{thought}\"._"
+            ));
+            DraftedThought {
+                title,
+                description,
+                source: DraftSource::Ai,
+            }
+        }
+        _ => {
+            let description = format!(
+                "Drafted by `aida zen` from a free-text thought; no AI draft was reachable, \
+                 so this captures the thought verbatim. Refine the description and add \
+                 acceptance criteria before it ships.\n\nThought: \"{thought}\""
+            );
+            DraftedThought {
+                title: truncate_title(thought),
+                description,
+                source: DraftSource::Fallback,
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spec_ids_are_recognized() {
+        for id in [
+            "TASK-123",
+            "STORY-45",
+            "BUG-9",
+            "ADR-7",
+            "task-7",
+            "FR-1-042",
+            "EPIC-1-001",
+        ] {
+            assert!(looks_like_spec_id(id), "{id} should look like a spec id");
+        }
+    }
+
+    #[test]
+    fn free_text_is_not_a_spec_id() {
+        for thought in [
+            "make the tree header show the parent title",
+            "refactor",
+            "fix the bug in zen",
+            "",
+            "   ",
+            "TASK 123",
+            "TASK-",
+            "-123",
+            "task-12a",
+            "123",
+        ] {
+            assert!(
+                !looks_like_spec_id(thought),
+                "{thought:?} should be treated as free text"
+            );
+        }
+    }
+
+    #[test]
+    fn compose_uses_ai_draft_with_acceptance() {
+        let ai = aida_core::DraftSpecResponse {
+            title: "Show the parent title in the tree header".to_string(),
+            description: "The tree header should display the parent spec's title.".to_string(),
+            acceptance_criteria: vec![
+                "The header renders the parent's title".to_string(),
+                "A root node shows no parent title and does not error".to_string(),
+            ],
+        };
+        let drafted = compose_draft_from_thought("tree header parent title", Some(ai));
+        assert_eq!(drafted.source, DraftSource::Ai);
+        assert_eq!(drafted.title, "Show the parent title in the tree header");
+        assert!(drafted.description.contains("## Acceptance"));
+        assert!(drafted
+            .description
+            .contains("- The header renders the parent's title"));
+        assert!(drafted.description.contains("tree header parent title"));
+    }
+
+    #[test]
+    fn compose_falls_back_when_no_ai() {
+        let drafted =
+            compose_draft_from_thought("make the tree header show the parent title", None);
+        assert_eq!(drafted.source, DraftSource::Fallback);
+        assert_eq!(drafted.title, "make the tree header show the parent title");
+        assert!(drafted.description.contains("no AI draft was reachable"));
+        assert!(drafted
+            .description
+            .contains("make the tree header show the parent title"));
+    }
+
+    #[test]
+    fn compose_treats_empty_ai_title_as_fallback() {
+        let ai = aida_core::DraftSpecResponse {
+            title: "   ".to_string(),
+            description: "x".to_string(),
+            acceptance_criteria: vec![],
+        };
+        let drafted = compose_draft_from_thought("do the thing", Some(ai));
+        assert_eq!(drafted.source, DraftSource::Fallback);
+        assert_eq!(drafted.title, "do the thing");
+    }
 
     #[test]
     fn approved_and_beyond_are_ready() {

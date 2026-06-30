@@ -295,6 +295,32 @@ pub fn build_evaluation_prompt(req: &Requirement, store: &RequirementsStore) -> 
         .replace("{req_type}", &req_type)
 }
 
+/// Build the prompt that drafts a full spec from a one-line free-text thought.
+///
+/// Reuses the same Claude-CLI request path as the evaluate / improve / generate
+/// prompts (no new transport): it asks for a single JSON object with a crisp
+/// title, an expanded description, and genuine, testable acceptance criteria, so
+/// the thought-to-spec front door (`aida zen "<thought>"`) files a well-formed
+/// draft instead of a bare title.
+// trace:STORY-725 | ai:claude
+pub fn build_draft_spec_prompt(thought: &str) -> String {
+    format!(
+        "You are drafting a single software requirement (a \"spec\") from a short \
+free-text thought a developer typed. Expand it into a well-formed spec.\n\n\
+## The thought\n{thought}\n\n\
+## Output\n\
+Return ONLY a JSON object (no prose, no markdown fence) with exactly these keys:\n\
+{{\n\
+  \"title\": \"a crisp one-line title (imperative mood, <= 100 chars)\",\n\
+  \"description\": \"2-4 sentences expanding the thought into clear intent and scope\",\n\
+  \"acceptance_criteria\": [\"a testable, verifiable criterion\", \"another\"]\n\
+}}\n\n\
+Rules: keep the title faithful to the thought; write 2-5 acceptance criteria, each \
+independently verifiable (avoid vague words like \"works\" or \"properly\"); do not \
+invent scope the thought does not imply."
+    )
+}
+
 /// Build prompt for finding duplicates
 pub fn build_duplicates_prompt(req: &Requirement, store: &RequirementsStore) -> String {
     let project_context = build_project_context(store);
