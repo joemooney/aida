@@ -1,0 +1,18 @@
+id: 019f19b9-202b-76e3-a355-4536bfc2b8c1
+spec_id: TASK-1063
+agreed_id: TASK-1063
+title: Dead-queue pruning split across queue prune --orphaned/--merged + queue gc — fold into queue prune --terminal or sharpen the cross-references so the right verb is obvious
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T18:09:50.635260665Z
+modified_at: 2026-06-30T18:09:50.635260665Z
+req_type: Task
+tags:
+- from-audit
+- queue
+- redundancy
+- ux
+- zen-ready
