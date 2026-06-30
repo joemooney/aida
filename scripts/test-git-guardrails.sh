@@ -107,6 +107,42 @@ echo
 echo "== MUST BLOCK: unparseable target fails CLOSED =="
 check "bare force-push from DETACHED worktree"  block "$REPO" "git -C $WTD push --force-with-lease"
 
+# --- Branch deletion (BUG-662) ---------------------------------------------
+echo
+echo "== MUST ALLOW: deleting a feature branch =="
+check "delete feature -D"                       allow "$REPO" "git branch -D feature-x"
+check "delete feature -d"                        allow "$REPO" "git branch -d feature-x"
+check "delete feature --delete"                  allow "$REPO" "git branch --delete feature-x"
+check "delete feature --delete --force"          allow "$REPO" "git branch --delete --force feature-x"
+check "delete two feature branches"              allow "$REPO" "git branch -D feature-x feature-y"
+check "delete feature from WORKTREE (-C)"        allow "$REPO" "git -C $WT branch -D feature-y"
+check "delete substring story-610-main-fix"      allow "$REPO" "git branch -D story-610-main-fix"
+check "chained status && delete feature"         allow "$REPO" "git status && git branch -D feature-x"
+check "delete feature-z in trunk repo"           allow "$DFLT" "git branch -D feature-z"
+
+echo
+echo "== MUST ALLOW: non-delete branch commands =="
+check "create branch (no flag)"                  allow "$REPO" "git branch new-feature"
+check "rename branch (-m)"                        allow "$REPO" "git branch -m old-name new-name"
+check "list branches (-a)"                        allow "$REPO" "git branch -a"
+
+echo
+echo "== MUST BLOCK: deleting a protected branch =="
+check "delete main (-D)"                          block "$REPO" "git branch -D main"
+check "delete main (-d)"                          block "$REPO" "git branch -d main"
+check "delete main (--delete)"                    block "$REPO" "git branch --delete main"
+check "delete aida-store"                         block "$REPO" "git branch -D aida-store"
+check "delete master"                             block "$REPO" "git branch -D master"
+check "delete develop"                            block "$REPO" "git branch -D develop"
+check "delete feature + main (one protected)"    block "$REPO" "git branch -D feature-x main"
+check "delete default branch trunk (dynamic)"    block "$DFLT" "git branch -D trunk"
+check "chained delete feature && delete main"    block "$REPO" "git branch -D feature-x && git branch -D main"
+
+echo
+echo "== MUST BLOCK: unparseable delete fails CLOSED =="
+check "delete with no branch name (-D)"           block "$REPO" "git branch -D"
+check "delete with no branch name (--delete)"     block "$REPO" "git branch --delete"
+
 echo
 echo "----------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
