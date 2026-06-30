@@ -1,0 +1,18 @@
+id: 019f16e6-45ab-7872-99d3-f173aba0fb25
+spec_id: BUG-658
+agreed_id: BUG-658
+title: aida list --tree EPIC group header shows raw stored status, not the BUG-626 rollup
+description: 'Surfaced in the PR #1231 independent review. The new tree group header reads parent.status (raw YAML status from backend.load()), but an EPICs real status is a read-only rollup derived from its children (BUG-626; derive_epic_status / compute_epic_statuses in cache.rs). So an EPIC rendered as a tree HEADER can show its raw stored status while the same EPIC rendered as a ROW (or via aida show) shows the rollup-derived status — they can disagree. Pre-existing fidelity gap, not introduced by #1231. FIX: the tree header should use the rollup-derived status (the cache value) for EPICs, consistent with every other surface.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T05:00:17.707490590Z
+modified_at: 2026-06-30T05:00:17.707490590Z
+req_type: Bug
+tags:
+- aida:list
+- epic
+- papercut
+- rollup
+- tree
