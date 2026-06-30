@@ -11,12 +11,12 @@ description: |-
   - Child rows remain nested below the parent as they are today.
   - Synthetic buckets such as truly unscoped groups remain distinguishable from real parent requirements.
   - Add or update coverage for the tree renderer so parent-backed group headers cannot regress to count-only output.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: cli
 created_at: 2026-06-30T04:08:32.658638894Z
-modified_at: 2026-06-30T04:44:48.465674254Z
+modified_at: 2026-06-30T04:52:28.283341591Z
 req_type: Bug
 tags:
 - aida:list
@@ -29,3 +29,7 @@ comments:
   content: 'Advisor-approved for aida zen (2026-06-29): suitability-checked — real bug, non-keystone, unblocked, standalone (no epic scope), well-specified, heft 2. Clean autonomous candidate.'
   created_at: 2026-06-30T04:40:20.211547045Z
   modified_at: 2026-06-30T04:40:20.211547045Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-30T04:52:28.283341591Z
+  implemented_by: joe
