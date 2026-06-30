@@ -725,11 +725,30 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
             "done on a branch — awaiting merge to the default branch (auto-completes on merge)"
                 .to_string(),
         ),
-        "inprogress" => (OpenBucket::InProgress, "work in progress".to_string()),
+        // STORY-727 (FIX 6): say what's actually true and name the next command.
+        // The old "work in progress" was a tautology that named nothing.
+        "inprogress" => (
+            OpenBucket::InProgress,
+            "in progress — being implemented now; run `aida status <id>` to see who's on it and whether it's live or stale"
+                .to_string(),
+        ),
+        // STORY-727 (FIX 6 + FIX 11): Approved and Planned must read DIFFERENTLY
+        // so a human learns what Planned means. Both are buildable now; the
+        // difference is design state. Each names the next command in plain
+        // language (no "burndown ready set" jargon).
+        "approved" => (
+            OpenBucket::Actionable,
+            "ready — run `aida zen <id>` to build + ship it autonomously, or `aida ship <id>` if you'll implement it yourself"
+                .to_string(),
+        ),
+        "planned" => (
+            OpenBucket::Actionable,
+            "planned & ready — the design is settled; run `aida zen <id>` to build + ship it, or `aida ship <id>` to implement it yourself"
+                .to_string(),
+        ),
         _ => (
             OpenBucket::Actionable,
-            "ready to pick up — approved & unblocked (appears in the `burndown plan` ready set)"
-                .to_string(),
+            "open & actionable — run `aida zen <id>` to build + ship it autonomously".to_string(),
         ),
     }
 }
@@ -2190,6 +2209,46 @@ mod tests {
             .0,
             OpenBucket::Actionable
         );
+    }
+
+    // STORY-727 (FIX 6 + FIX 11): the plain-language `why` reasons NAME the next
+    // command and read DIFFERENTLY for Approved vs Planned, so a human learns
+    // what Planned means and never sees the old "burndown ready set" jargon.
+    #[test]
+    fn explain_open_reasons_name_command_and_differentiate_approved_planned() {
+        let approved = explain_open(&open("task", "approved", &[], false, false, false)).1;
+        let planned = explain_open(&open("task", "planned", &[], false, false, false)).1;
+        let inprogress = explain_open(&open("task", "inprogress", &[], false, false, false)).1;
+
+        // Approved names the autonomous drive and the manual alternative.
+        assert!(approved.contains("aida zen"), "approved reason: {approved}");
+        assert!(
+            approved.contains("aida ship"),
+            "approved reason: {approved}"
+        );
+
+        // Planned names the same commands but reads differently (design settled).
+        assert!(planned.contains("aida zen"), "planned reason: {planned}");
+        assert!(
+            planned.contains("design is settled"),
+            "planned reason: {planned}"
+        );
+        assert_ne!(
+            approved, planned,
+            "Approved and Planned must read differently (FIX 11)"
+        );
+
+        // In-progress says what's true and points at the liveness view, not the
+        // old "work in progress" tautology.
+        assert!(
+            inprogress.contains("aida status"),
+            "inprogress reason: {inprogress}"
+        );
+        assert_ne!(inprogress, "work in progress");
+
+        // No jargon leaks: the old "burndown ready set" phrasing is gone.
+        assert!(!approved.contains("burndown plan"));
+        assert!(!planned.contains("burndown plan"));
     }
 
     #[test]
