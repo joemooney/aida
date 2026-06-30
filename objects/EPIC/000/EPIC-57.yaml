@@ -1,0 +1,18 @@
+id: 019f16dc-1929-7573-a289-6536dae296fc
+spec_id: EPIC-57
+agreed_id: EPIC-57
+title: Multi-vendor implementation bake-off (aida zen --compete)
+description: 'aida zen SPEC --compete fans N agents (claude/codex/agy) to INDEPENDENTLY implement the same spec in separate worktrees, then a judge compares the candidates; the winner merges, losers close. THREE PARTS: FAN (N worktree-isolated implementers, same spec+acceptance, no shared context — independence is the point), JUDGE (objective = each candidates CI build/tests/lint, a failing candidate is eliminated; quality = ONE blind reviewer scoring the passers side-by-side against acceptance + code quality + blast radius, blind to which vendor wrote which to avoid vendor bias), SELECT (highest-scoring passer wins, tie-break on diff-size/simplicity, optionally graft runner-up ideas). VALUE: right tool for hard/ambiguous specs (diversity catches failure modes one agent misses); flagship demonstration of AIDAs multi-vendor thesis (cross-vendor coordination a single-vendor tool structurally cannot do); generates labeled dispatch-policy data (which vendor wins which kind of spec — feeds the AGY dispatch policy + the field study). PREMIUM mode (N-times implement cost): for hard/high-value specs, or run on a SAMPLE to learn routing then route cheaply by default. Builds on the existing HeadlessVendor{Claude,Codex} abstraction (STORY-683/TASK-894/895).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T04:49:10.953504486Z
+modified_at: 2026-06-30T04:49:10.953504486Z
+req_type: Epic
+tags:
+- bake-off
+- competition
+- from-operator
+- multi-vendor
+- zen

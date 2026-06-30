@@ -27189,5 +27189,17 @@ operations:
   timestamp: 2026-06-30T04:44:29.112877348Z
   kind: !SetStatus
     status: Approved
-clock: 2602
+- id: 019f16dc-253e-7d90-90e3-d44746d60525
+  target_id: 019f16dc-1929-7573-a289-6536dae296fc
+  author: aida
+  node_id: '1'
+  lamport: 2603
+  timestamp: 2026-06-30T04:49:14.046264978Z
+  kind: !Create
+    title: Multi-vendor implementation bake-off (aida zen --compete)
+    description: 'aida zen SPEC --compete fans N agents (claude/codex/agy) to INDEPENDENTLY implement the same spec in separate worktrees, then a judge compares the candidates; the winner merges, losers close. THREE PARTS: FAN (N worktree-isolated implementers, same spec+acceptance, no shared context — independence is the point), JUDGE (objective = each candidates CI build/tests/lint, a failing candidate is eliminated; quality = ONE blind reviewer scoring the passers side-by-side against acceptance + code quality + blast radius, blind to which vendor wrote which to avoid vendor bias), SELECT (highest-scoring passer wins, tie-break on diff-size/simplicity, optionally graft runner-up ideas). VALUE: right tool for hard/ambiguous specs (diversity catches failure modes one agent misses); flagship demonstration of AIDAs multi-vendor thesis (cross-vendor coordination a single-vendor tool structurally cannot do); generates labeled dispatch-policy data (which vendor wins which kind of spec — feeds the AGY dispatch policy + the field study). PREMIUM mode (N-times implement cost): for hard/high-value specs, or run on a SAMPLE to learn routing then route cheaply by default. Builds on the existing HeadlessVendor{Claude,Codex} abstraction (STORY-683/TASK-894/895).'
+    req_type: Epic
+    status: Draft
+    priority: Medium
+clock: 2603
 node_id: '1'
