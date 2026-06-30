@@ -27225,5 +27225,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 2605
+- id: 019f16e3-b7c7-7780-8b0c-0ec8b1c8bdb7
+  target_id: 019f16e3-ac95-7992-ba17-9c67804ebfd1
+  author: aida
+  node_id: '1'
+  lamport: 2606
+  timestamp: 2026-06-30T04:57:30.311727906Z
+  kind: !Create
+    title: aida zen should run an independent reviewer phase before hand-off (slice 1 skips it)
+    description: 'aida zen slice 1 (TASK-0439 first real drive) implemented, tested (self-authored), PR-d, and marked done — then HANDED OFF to the human with ZERO independent review (PR #1231: 0 reviews, reviewDecision=NONE). The full --auto-complete lifecycle has a reviewer phase between CI and merge; the zen drive did not run it. FIX: wire an independent reviewer phase into aida zen — a reviewer agent reads the PR diff + checks it against the specs acceptance + flags issues. In --zen (supervised) it INFORMS the human before they merge (a cheap screen); in --no-human it GATES the merge (request-changes parks NeedsAttention). Reuse the orchestrators existing reviewer phase rather than reimplementing. This is the difference between zen as implement-and-handoff vs implement-review-and-ship.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2606
 node_id: '1'
