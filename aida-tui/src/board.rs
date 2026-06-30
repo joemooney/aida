@@ -126,6 +126,14 @@ pub struct ClassifiedItem {
     /// this `false`.
     // trace:TASK-904 | ai:claude
     pub intake_proposal: bool,
+    /// The one-line reason this spec is PARKED — surfaced inline by the cockpit's
+    /// advisor-backlog panel so a parked item explains itself (STORY-703): the
+    /// deferred shelf's revisit trigger, a punt/needs-attention note, or the
+    /// advisor-backlog "blessed but not routed" status. `None` for a row that is
+    /// actively moving (in-flight) or already handed off (awaiting review) — those
+    /// aren't parked. Computed by [`park_reason`] during [`classify`].
+    // trace:STORY-703 | ai:claude
+    pub park_reason: Option<String>,
 }
 
 /// The cheap (non-network) inputs the classifier needs. Each Vec is the
@@ -183,6 +191,10 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
                 // rows; those merge in async via `merge_intake_proposals` after
                 // the heavyweight `aida intake` fence lands. trace:TASK-904
                 intake_proposal: false,
+                // STORY-703: the structural park reason (deferred shelf rows get
+                // their real revisit trigger patched in below, once the deferred
+                // pass has the row in hand). trace:STORY-703
+                park_reason: park_reason(reason, advisor_backlog, None, None, None),
             });
         }
     };
@@ -291,7 +303,92 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
         );
     }
 
+    // STORY-703: patch each deferred item's park reason with its REAL revisit
+    // trigger (`aida defer --until "<cond>"`, carried on the JSON row as
+    // `deferred_until`). The `take` pass above stamped a generic deferred reason;
+    // here we overwrite it with the trigger so the cockpit shows "returns when:
+    // <cond>" inline rather than a placeholder. Only the deferred rows carry a
+    // trigger, so this leaves every other tier's structural reason intact.
+    // trace:STORY-703 | ai:claude
+    for r in &inputs.deferred_rows {
+        if let Some(item) = out
+            .iter_mut()
+            .find(|it| it.spec_id == r.spec_id && it.reason == Reason::Deferred)
+        {
+            item.park_reason = park_reason(
+                Reason::Deferred,
+                false,
+                r.deferred_until.as_deref(),
+                None,
+                None,
+            );
+        }
+    }
+
     out
+}
+
+/// Project a parked spec's metadata into the one-line reason it sits in the
+/// advisor's backlog instead of moving — the content STORY-703 surfaces inline.
+/// A PURE function over the classified facts plus the optional content slots
+/// (revisit trigger / punt note / finding), so it is unit-testable from a fixture
+/// of park states without the TUI shell.
+///
+/// Returns `None` for a row that is actively MOVING ([`Reason::InFlight`]) or
+/// already handed off ([`Reason::AwaitingReview`]) — those are not "parked", so
+/// they carry no park reason. Every other reason maps to a short explanation:
+///   * `Deferred` -> "returns when: <trigger>" (the revisit condition)
+///   * `NeedsAttention` -> "parked: <punt note>" (a punt the advisor must triage)
+///   * `NeedsApproval` -> the advisor-backlog "blessed, awaiting routing" line, or
+///     the draft "awaiting an approve/reject verdict" line
+///   * `NeedsAnswer` -> "waiting on a decision[: <finding>]"
+///   * `Blocked` -> "blocked by an incomplete dependency"
+// trace:STORY-703 | ai:claude
+pub fn park_reason(
+    reason: Reason,
+    advisor_backlog: bool,
+    revisit_trigger: Option<&str>,
+    punt_note: Option<&str>,
+    finding: Option<&str>,
+) -> Option<String> {
+    fn clean(s: Option<&str>) -> Option<&str> {
+        s.map(str::trim).filter(|t| !t.is_empty())
+    }
+    match reason {
+        Reason::Deferred => Some(match clean(revisit_trigger) {
+            Some(t) => format!("returns when: {t}"),
+            None => "deferred — no revisit trigger recorded".to_string(),
+        }),
+        Reason::NeedsAttention => Some(match clean(punt_note).or_else(|| clean(finding)) {
+            Some(n) => format!("parked: {n}"),
+            None => "needs attention — parked for triage".to_string(),
+        }),
+        Reason::NeedsApproval => Some(if advisor_backlog {
+            "blessed by the advisor — awaiting routing to the implementer queue".to_string()
+        } else {
+            "awaiting an approve/reject verdict".to_string()
+        }),
+        Reason::NeedsAnswer => Some(match clean(finding) {
+            Some(f) => format!("waiting on a decision: {f}"),
+            None => "waiting on a human decision".to_string(),
+        }),
+        Reason::Blocked => Some("blocked by an incomplete dependency".to_string()),
+        Reason::InFlight | Reason::AwaitingReview => None,
+    }
+}
+
+/// The total advisor-queue depth: how many classified items the advisor still
+/// owns a disposition on — the drafts awaiting an approve/reject verdict PLUS the
+/// advisor-backlog (Approved-but-not-queued) specs the advisor has blessed but
+/// not routed. Both ride the [`Reason::NeedsApproval`] group. Surfacing this
+/// count (STORY-703) stops the advisor's pending queue being a black box. Pure
+/// over the item set.
+// trace:STORY-703 | ai:claude
+pub fn advisor_queue_depth(items: &[ClassifiedItem]) -> usize {
+    items
+        .iter()
+        .filter(|it| it.reason == Reason::NeedsApproval)
+        .count()
 }
 
 /// True for the advisor-backlog sub-class of needs-approval (TASK-901): an
@@ -339,12 +436,22 @@ pub fn rows_for(items: &[ClassifiedItem], reason: Reason) -> Vec<ListRow> {
         .map(|it| ListRow {
             id: it.spec_id.clone(),
             title: it.title.clone(),
-            status: if it.intake_proposal {
-                format!("intake · {}", it.status)
-            } else if it.advisor_backlog {
-                format!("backlog · {}", it.status)
-            } else {
-                it.status.clone()
+            // STORY-703: fold the park reason into the status column so a parked
+            // item explains WHY inline ("backlog · Approved — blessed by the
+            // advisor…", "Approved — returns when: <trigger>"). The prefix
+            // (intake / backlog) is kept; the reason is appended with an em-dash.
+            status: {
+                let base = if it.intake_proposal {
+                    format!("intake · {}", it.status)
+                } else if it.advisor_backlog {
+                    format!("backlog · {}", it.status)
+                } else {
+                    it.status.clone()
+                };
+                match &it.park_reason {
+                    Some(reason) => format!("{base} — {reason}"),
+                    None => base,
+                }
             },
             kind: if it.intake_proposal {
                 RowKind::ReasonIntakeProposal
@@ -647,6 +754,9 @@ pub fn merge_intake_proposals(items: &mut Vec<ClassifiedItem>, candidate_ids: &[
                 reason: Reason::NeedsApproval,
                 advisor_backlog: false,
                 intake_proposal: true,
+                // An intake proposal is a draft awaiting the advisor's verdict.
+                // trace:STORY-703
+                park_reason: park_reason(Reason::NeedsApproval, false, None, None, None),
             });
         }
     }
@@ -667,6 +777,16 @@ mod tests {
             queued,
             in_flight,
             blocked,
+            deferred_until: None,
+        }
+    }
+
+    /// A deferred row carrying its revisit trigger — for the STORY-703 park-reason
+    /// projection tests.
+    fn deferred_row(id: &str, trigger: &str) -> ListJsonRow {
+        ListJsonRow {
+            deferred_until: Some(trigger.to_string()),
+            ..row(id, "Approved", false, false, false)
         }
     }
 
@@ -747,8 +867,14 @@ mod tests {
         let draft = rows.iter().find(|r| r.id == "STORY-21").unwrap();
         assert_eq!(backlog.kind, RowKind::ReasonAdvisorBacklog);
         assert!(backlog.status.starts_with("backlog · "));
+        // STORY-703: the advisor-backlog row now also carries its park reason
+        // inline (blessed, awaiting routing).
+        assert!(backlog.status.contains("awaiting routing"));
         assert_eq!(draft.kind, RowKind::ReasonNeedsApproval);
-        assert_eq!(draft.status, "Draft");
+        // STORY-703: the draft row keeps its `Draft` status prefix but now also
+        // explains why it's parked (awaiting a verdict).
+        assert!(draft.status.starts_with("Draft"));
+        assert!(draft.status.contains("approve/reject verdict"));
     }
 
     #[test]
@@ -992,5 +1118,130 @@ Answered (1)
         merge_intake_proposals(&mut items, &[]);
         assert_eq!(items.len(), before);
         assert!(items.iter().all(|i| !i.intake_proposal));
+    }
+
+    // --- Advisor park-reason projection (STORY-703). ---
+
+    #[test]
+    fn park_reason_maps_each_park_state() {
+        // A fixture of park states → its inline reason string. Deferred surfaces
+        // its trigger; needs-attention its punt note; the advisor-backlog vs
+        // draft split of needs-approval; needs-answer; blocked. The two MOVING
+        // states (in-flight / awaiting-review) are not parked → None.
+        assert_eq!(
+            park_reason(Reason::Deferred, false, Some("the shelf grows"), None, None).as_deref(),
+            Some("returns when: the shelf grows")
+        );
+        // Deferred with no trigger falls back to a legible placeholder.
+        assert_eq!(
+            park_reason(Reason::Deferred, false, None, None, None).as_deref(),
+            Some("deferred — no revisit trigger recorded")
+        );
+        // Blank/whitespace trigger is treated as absent.
+        assert_eq!(
+            park_reason(Reason::Deferred, false, Some("   "), None, None).as_deref(),
+            Some("deferred — no revisit trigger recorded")
+        );
+        assert_eq!(
+            park_reason(
+                Reason::NeedsAttention,
+                false,
+                None,
+                Some("needs a design call"),
+                None
+            )
+            .as_deref(),
+            Some("parked: needs a design call")
+        );
+        // A finding backfills the punt note when none was recorded.
+        assert_eq!(
+            park_reason(
+                Reason::NeedsAttention,
+                false,
+                None,
+                None,
+                Some("flaky path")
+            )
+            .as_deref(),
+            Some("parked: flaky path")
+        );
+        // Advisor-backlog vs draft split of needs-approval.
+        assert_eq!(
+            park_reason(Reason::NeedsApproval, true, None, None, None).as_deref(),
+            Some("blessed by the advisor — awaiting routing to the implementer queue")
+        );
+        assert_eq!(
+            park_reason(Reason::NeedsApproval, false, None, None, None).as_deref(),
+            Some("awaiting an approve/reject verdict")
+        );
+        assert_eq!(
+            park_reason(Reason::NeedsAnswer, false, None, None, None).as_deref(),
+            Some("waiting on a human decision")
+        );
+        assert_eq!(
+            park_reason(Reason::Blocked, false, None, None, None).as_deref(),
+            Some("blocked by an incomplete dependency")
+        );
+        // Moving / handed-off states are not parked.
+        assert_eq!(park_reason(Reason::InFlight, false, None, None, None), None);
+        assert_eq!(
+            park_reason(Reason::AwaitingReview, false, None, None, None),
+            None
+        );
+    }
+
+    #[test]
+    fn classify_populates_park_reason_inline() {
+        // End-to-end: a deferred spec carrying a revisit trigger, an
+        // advisor-backlog spec, and a draft → each classified item carries its
+        // park reason, and the trigger reaches the deferred row.
+        let inputs = BoardInputs {
+            all_rows: vec![row("STORY-1", "Approved", false, false, false)], // advisor backlog
+            draft_rows: vec![row("STORY-2", "Draft", false, false, false)],
+            deferred_rows: vec![deferred_row("STORY-3", "demand is proven")],
+            ..BoardInputs::default()
+        };
+        let items = classify(&inputs);
+        let find = |id: &str| items.iter().find(|i| i.spec_id == id).unwrap();
+
+        assert_eq!(
+            find("STORY-1").park_reason.as_deref(),
+            Some("blessed by the advisor — awaiting routing to the implementer queue")
+        );
+        assert_eq!(
+            find("STORY-2").park_reason.as_deref(),
+            Some("awaiting an approve/reject verdict")
+        );
+        assert_eq!(
+            find("STORY-3").park_reason.as_deref(),
+            Some("returns when: demand is proven")
+        );
+
+        // The reason reaches the rendered row inline.
+        let deferred_rows = rows_for(&items, Reason::Deferred);
+        let r3 = deferred_rows.iter().find(|r| r.id == "STORY-3").unwrap();
+        assert!(r3.status.contains("returns when: demand is proven"));
+    }
+
+    #[test]
+    fn advisor_queue_depth_counts_drafts_and_backlog() {
+        // The advisor-queue depth is the needs-approval group: drafts awaiting a
+        // verdict PLUS advisor-backlog (approved-not-queued) specs. Deferred /
+        // blocked / in-flight do not count.
+        let inputs = BoardInputs {
+            all_rows: vec![
+                row("STORY-1", "Approved", false, false, false), // backlog → counts
+                row("STORY-2", "Approved", true, false, false),  // queued → out
+            ],
+            draft_rows: vec![
+                row("STORY-3", "Draft", false, false, false),
+                row("STORY-4", "Draft", false, false, false),
+            ],
+            deferred_rows: vec![deferred_row("STORY-5", "later")],
+            ..BoardInputs::default()
+        };
+        let items = classify(&inputs);
+        // 1 backlog + 2 drafts = 3; the deferred + queued rows don't count.
+        assert_eq!(advisor_queue_depth(&items), 3);
     }
 }

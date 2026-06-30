@@ -422,9 +422,11 @@ impl Verb {
     pub fn help(self) -> &'static str {
         match self {
             Verb::Groom => {
-                "Cross-spec grooming and routine disposition of the backlog. \
-                 Set-level: runs over the selected specs, or all of them when \
-                 nothing is selected (confirms first). Not yet available."
+                "Cross-spec grooming and routine disposition of the backlog — \
+                 runs the headless advisor disposition pass (`aida groom`) in \
+                 PROPOSE mode and shows the proposed approve/reject/park/queue \
+                 plan in a modal (it never writes; review the plan, then act). \
+                 Set-level: confirms before running when nothing is selected."
             }
             Verb::Approve => {
                 "Advisor's direct draft → approved transition. Draft-only: \
@@ -438,8 +440,9 @@ impl Verb {
                  the focused draft when nothing is selected."
             }
             Verb::Archive => {
-                "Mark non-core specs archived (hidden from default views, audit \
-                 trail kept). Set-level. Not yet available."
+                "Mark the selected specs archived (`aida archive <id>`) — hidden \
+                 from default views, audit trail kept. Set-level: requires an \
+                 explicit selection (it never falls back to the focused row)."
             }
             Verb::Show => {
                 "Show this spec's details (aida show --no-git) in a modal. \
@@ -529,19 +532,22 @@ impl Verb {
         self.is_update() && !matches!(self, Verb::Groom | Verb::Drive)
     }
 
-    /// Is this verb wired to do real work? `show`, `why`, `status`, `request
-    /// approval`, `queue`, `approve`, `reject`, `accept`, and `defer` execute.
-    /// `groom` and `archive` are NOT wired yet — they render greyed +
-    /// non-selectable with a "not yet available" hint and refuse to run, so an
-    /// operator never picks a verb that silently no-ops. The WIRED grey-out
-    /// axis, the most fundamental of the four (role / status / selection /
-    /// wired) — an unwired verb is inert for every role and status.
-    // trace:STORY-724 trace:TASK-920 trace:TASK-921 trace:TASK-933 trace:TASK-949
+    /// Is this verb wired to do real work? Every cockpit verb now executes.
+    /// `groom` and `archive` were the last two stubs — they used to render greyed
+    /// with a "not yet available" hint; STORY-703 wired them to the existing CLI
+    /// paths (`aida groom` propose, `aida archive <id>`) so the marquee advisor
+    /// gestures are no longer dead. The WIRED grey-out axis is the most
+    /// fundamental of the four (role, status, selection, wired). It now
+    /// disqualifies nothing, but the gate stays as the structural home for any
+    /// future not-yet-wired verb. STORY-703 supersedes the STORY-724 stub gating.
+    // trace:STORY-703 trace:STORY-724 trace:TASK-920 trace:TASK-921 trace:TASK-933 trace:TASK-949
     pub fn is_functional(self) -> bool {
         matches!(
             self,
-            Verb::Approve
+            Verb::Groom
+                | Verb::Approve
                 | Verb::Reject
+                | Verb::Archive
                 | Verb::Show
                 | Verb::Why
                 | Verb::Status
@@ -2594,38 +2600,48 @@ mod tests {
     }
 
     #[test]
-    fn groom_is_greyed_and_refused_with_a_selection() {
-        // STORY-724: `groom` is not wired yet, so it is inert — selecting an
-        // item and pressing Enter on it is a no-op with a "not yet available"
-        // status, never a silent stub-log.
+    fn groom_with_a_selection_executes() {
+        // STORY-703: `groom` is now WIRED — selecting an item and pressing Enter
+        // runs the set-level verb (the parent shells out to `aida groom`), so the
+        // outcome is an Execute, never a "not yet available" refusal.
         let mut s = state(3);
         s.drill();
         assert_eq!(s.top_verb(), Some(Verb::Groom));
-        assert!(!Verb::Groom.is_functional());
+        assert!(Verb::Groom.is_functional());
         s.focus_bottom();
         s.toggle_select(); // STORY-0
         s.focus_top();
-        assert_eq!(s.run_verb(), RunOutcome::None);
-        assert!(s.confirm.is_none());
-        assert!(s.status.as_deref().unwrap().contains("not yet available"));
+        let out = s.run_verb();
+        assert!(
+            matches!(
+                out,
+                RunOutcome::Execute {
+                    verb: Verb::Groom,
+                    ..
+                }
+            ),
+            "groom executes on the selection, got {out:?}"
+        );
     }
 
     #[test]
-    fn groom_is_greyed_and_refused_with_no_selection() {
-        // STORY-724: with nothing selected, an unwired `groom` does NOT raise a
-        // confirm-all — it refuses up front with "not yet available".
+    fn groom_with_no_selection_confirms_all() {
+        // STORY-703: with nothing selected, a wired `groom` is selection-exempt,
+        // so it raises the "groom all N?" confirm rather than refusing.
         let mut s = state(3);
         s.drill();
-        assert_eq!(s.run_verb(), RunOutcome::None);
-        assert!(s.confirm.is_none(), "no confirm for an unwired verb");
-        assert!(s.status.as_deref().unwrap().contains("not yet available"));
+        let out = s.run_verb();
+        assert!(
+            matches!(out, RunOutcome::NeedsConfirm(_)),
+            "groom raises confirm-all with no selection, got {out:?}"
+        );
+        assert!(s.confirm.is_some());
     }
 
     #[test]
     fn confirm_all_accept_executes_on_every_item() {
-        // The generic confirm-all → Execute machinery is latent (no verb is
-        // wired to it today, STORY-724), but still correct: seed a confirm and
-        // resolve it. trace:STORY-724
+        // The confirm-all → Execute machinery drives `groom` when nothing is
+        // selected (STORY-703): seed a confirm and resolve it.
         let mut s = state(3);
         s.confirm = Some(ConfirmAll {
             verb: Verb::Groom,
@@ -2658,32 +2674,54 @@ mod tests {
     }
 
     #[test]
-    fn non_functional_verb_does_not_execute() {
-        // `approve` is now functional (trace:TASK-920); `archive` (Backlog
-        // verb idx 3, after the inserted `reject`) is an unwired stub — STORY-724
-        // greys it "not yet available" and refuses Enter.
+    fn archive_requires_an_explicit_selection() {
+        // STORY-703: `archive` is now WIRED, but it is an UPDATE verb that acts
+        // on the explicit selection set (TASK-954) — with nothing selected it is
+        // selection-gated (refused with "select item(s) first"), never a
+        // "not yet available" stub. With a selection it Executes.
         let mut s = state(3);
         s.drill();
         s.move_down(); // → approve
         s.move_down(); // → reject
-        s.move_down(); // → archive (stub)
+        s.move_down(); // → archive
         assert_eq!(s.top_verb(), Some(Verb::Archive));
+        assert!(Verb::Archive.is_functional());
+        // No selection → selection gate refuses.
         assert_eq!(s.run_verb(), RunOutcome::None);
-        assert!(s.confirm.is_none());
-        assert!(s.status.as_deref().unwrap().contains("not yet available"));
+        assert!(s
+            .status
+            .as_deref()
+            .unwrap()
+            .contains("select item(s) first"));
+        // Select a row → archive Executes on it.
+        s.focus_bottom();
+        s.toggle_select(); // STORY-0
+        s.focus_top();
+        let out = s.run_verb();
+        assert!(
+            matches!(
+                out,
+                RunOutcome::Execute {
+                    verb: Verb::Archive,
+                    ..
+                }
+            ),
+            "archive executes on the selection, got {out:?}"
+        );
     }
 
     #[test]
-    fn groom_and_archive_are_the_only_unwired_verbs() {
-        // STORY-724: exactly `groom` and `archive` are gated on the WIRED axis —
-        // every other verb is functional, so a user never picks a verb that
-        // silently no-ops. The Backlog verb list still SHOWS them (greyed), so
-        // their discoverability is intact.
-        assert!(!Verb::Groom.is_functional());
-        assert!(!Verb::Archive.is_functional());
+    fn every_backlog_verb_is_wired() {
+        // STORY-703: `groom` and `archive` were the last two stubs; wiring them
+        // means every cockpit verb is now functional. The Backlog verb list still
+        // SHOWS them, so their discoverability is intact.
+        assert!(Verb::Groom.is_functional());
+        assert!(Verb::Archive.is_functional());
         for v in [
+            Verb::Groom,
             Verb::Approve,
             Verb::Reject,
+            Verb::Archive,
             Verb::Show,
             Verb::Why,
             Verb::Status,
@@ -2691,10 +2729,11 @@ mod tests {
             Verb::Queue,
             Verb::Accept,
             Verb::Defer,
+            Verb::Drive,
         ] {
             assert!(v.is_functional(), "{} should be wired", v.label());
         }
-        // Both stubs are still listed in the Backlog scope (visible but greyed).
+        // Both are listed in the Backlog scope.
         assert!(Scope::Backlog.verbs().contains(&Verb::Groom));
         assert!(Scope::Backlog.verbs().contains(&Verb::Archive));
     }
@@ -3894,18 +3933,21 @@ mod tests {
     }
 
     #[test]
-    fn groom_is_selection_exempt_but_unwired() {
-        // `groom` does not gate on the selection axis (its empty path was the
-        // "groom all N?" confirm) — that property is unchanged. But STORY-724
-        // gates it on the WIRED axis instead, so running it is refused with
-        // "not yet available" rather than raising a confirm. trace:TASK-954
-        // trace:STORY-724
+    fn groom_is_selection_exempt_and_wired() {
+        // `groom` does not gate on the selection axis (its empty path is the
+        // "groom all N?" confirm) — that property is unchanged. Now that it is
+        // WIRED (STORY-703), running it with no selection raises that confirm
+        // rather than refusing with "not yet available". trace:TASK-954
+        // trace:STORY-703
         let mut s = state(3);
         s.drill();
         assert!(s.verb_selection_permitted(Verb::Groom));
-        assert!(!Verb::Groom.is_functional());
-        assert_eq!(s.run_verb(), RunOutcome::None);
-        assert!(s.status.as_deref().unwrap().contains("not yet available"));
+        assert!(Verb::Groom.is_functional());
+        let out = s.run_verb();
+        assert!(
+            matches!(out, RunOutcome::NeedsConfirm(_)),
+            "groom raises confirm-all, got {out:?}"
+        );
     }
 
     #[test]
