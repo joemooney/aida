@@ -45,6 +45,60 @@ pub struct LoadedSpec {
     /// the preview modal so the human can READ the advisor's disposition
     /// ("approved because X") inside the TUI. trace:TASK-932 | ai:claude
     pub comments: Vec<LoadedComment>,
+    /// The spec's relationship graph — parent epic(s), children, blocked-by /
+    /// blocks chains, and references — projected for the preview modal. This is
+    /// AIDA's #1 differentiator (the typed requirement graph) surfaced at the
+    /// natural dig-in gesture, the same edges `aida show` / `aida graph` print
+    /// on the CLI.
+    // trace:STORY-739 | ai:claude
+    pub graph: SpecGraph,
+}
+
+/// One related spec, projected for the preview modal's graph section: its
+/// display id, title, and status — enough to render a `<id> <title> [<status>]`
+/// row with the cockpit's status glyph.
+// trace:STORY-739 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedRelation {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+}
+
+/// A spec's relationship graph, grouped by relation, for the preview modal.
+/// Every group is independently empty-able so the renderer can omit groups that
+/// have no edges (no empty headers). The grouping follows the stored convention
+/// (TASK-679: a relationship's `rel_type` names the SOURCE's role relative to
+/// the target), so a `Parent` edge on this spec points at a CHILD, a `Child`
+/// edge points at the PARENT, and so on.
+// trace:STORY-739 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SpecGraph {
+    /// Parent epic(s) — resolved from this spec's outgoing `Child` edges.
+    pub parents: Vec<LoadedRelation>,
+    /// Children — resolved from this spec's outgoing `Parent` edges.
+    pub children: Vec<LoadedRelation>,
+    /// Hard blockers — this spec's outgoing `BlockedBy` edges (the spec is
+    /// un-pickable until each reaches Completed).
+    pub blocked_by: Vec<LoadedRelation>,
+    /// Specs this one blocks — outgoing `Blocks` edges.
+    pub blocks: Vec<LoadedRelation>,
+    /// General references — outgoing `References` edges.
+    pub references: Vec<LoadedRelation>,
+}
+
+impl SpecGraph {
+    /// True when the spec has no relationships in any group — the renderer omits
+    /// the whole graph section (rather than printing an empty header) in that
+    /// case.
+    // trace:STORY-739 | ai:claude
+    pub fn is_empty(&self) -> bool {
+        self.parents.is_empty()
+            && self.children.is_empty()
+            && self.blocked_by.is_empty()
+            && self.blocks.is_empty()
+            && self.references.is_empty()
+    }
 }
 
 /// One comment on a spec, projected for the TUI preview: who wrote it, a short
@@ -83,6 +137,45 @@ fn format_comment_time(ts: chrono::DateTime<chrono::Utc>) -> String {
     ts.with_timezone(&chrono::Local)
         .format("%Y-%m-%d %H:%M")
         .to_string()
+}
+
+/// Project a requirement's OUTGOING relationship edges into the grouped
+/// [`SpecGraph`] the preview modal renders. `resolve` maps a target uuid to its
+/// display row (id + title + status); a target that does not resolve (a
+/// dangling edge to a deleted spec) is skipped so the modal never shows a bare
+/// uuid. Grouping follows the stored convention (TASK-679: `rel_type` names the
+/// SOURCE's role relative to the target) — a `Parent` edge points at a child, a
+/// `Child` edge at the parent, `BlockedBy`/`Blocks`/`References` map directly.
+/// `Duplicate`/`Verifies`/`VerifiedBy`/`Custom` are not surfaced in the modal's
+/// graph section today. A PURE function of `(relationships, resolve)` — no IO —
+/// so the rel_type→group mapping, target resolution, and empty-group elision are
+/// unit-testable against a fixture.
+// trace:STORY-739 | ai:claude
+pub fn graph_from_relationships(
+    relationships: &[aida_core::Relationship],
+    resolve: impl Fn(uuid::Uuid) -> Option<LoadedRelation>,
+) -> SpecGraph {
+    let mut graph = SpecGraph::default();
+    for rel in relationships {
+        let Some(row) = resolve(rel.target_id) else {
+            continue;
+        };
+        match &rel.rel_type {
+            // This spec is the parent of the target → the target is a CHILD.
+            RelationshipType::Parent => graph.children.push(row),
+            // This spec is a child of the target → the target is the PARENT.
+            RelationshipType::Child => graph.parents.push(row),
+            RelationshipType::BlockedBy => graph.blocked_by.push(row),
+            RelationshipType::Blocks => graph.blocks.push(row),
+            RelationshipType::References => graph.references.push(row),
+            // Not surfaced in the preview modal's graph section.
+            RelationshipType::Duplicate
+            | RelationshipType::Verifies
+            | RelationshipType::VerifiedBy
+            | RelationshipType::Custom(_) => {}
+        }
+    }
+    graph
 }
 
 /// The in-process read handle: a cache-backed git backend opened once from the
@@ -265,6 +358,13 @@ impl SpecStore {
         let req = self.backend.get_requirement_by_spec_id(id).ok()??;
         let mut tags: Vec<String> = req.tags.iter().cloned().collect();
         tags.sort();
+        // Resolve the spec's relationship targets (uuids on `req.relationships`)
+        // to their display id + title + status, so the modal can render the
+        // typed graph — AIDA's #1 differentiator — at the dig-in gesture. One
+        // cache-backed `list_summaries` read builds a uuid→summary map for the
+        // (typically handful of) targets; an unresolved target (deleted spec) is
+        // dropped by `graph_from_relationships`. trace:STORY-739 | ai:claude
+        let graph = self.spec_graph(&req);
         Some(LoadedSpec {
             id: req
                 .spec_id
@@ -278,6 +378,42 @@ impl SpecStore {
             tags,
             description: req.description.clone(),
             comments: comments_from_requirement(&req),
+            graph,
+        })
+    }
+
+    /// Build the [`SpecGraph`] for `req` by resolving each outgoing-relationship
+    /// target uuid to a display row via a single cache-backed `list_summaries`
+    /// read (the same cheap read projection `aida list` uses; all three view
+    /// tiers included so an archived/deferred neighbour still resolves). Returns
+    /// an empty graph when the summary read fails (the modal then omits the
+    /// graph section) rather than erroring the whole preview load.
+    // trace:STORY-739 | ai:claude
+    fn spec_graph(&self, req: &aida_core::Requirement) -> SpecGraph {
+        if req.relationships.is_empty() {
+            return SpecGraph::default();
+        }
+        let filter = ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            ..Default::default()
+        };
+        let summaries = match self.backend.list_summaries(&filter) {
+            Ok(s) => s,
+            Err(_) => return SpecGraph::default(),
+        };
+        let by_uuid: HashMap<uuid::Uuid, RequirementSummary> =
+            summaries.into_iter().map(|s| (s.id, s)).collect();
+        graph_from_relationships(&req.relationships, |target| {
+            by_uuid.get(&target).map(|s| LoadedRelation {
+                id: s
+                    .spec_id
+                    .clone()
+                    .or_else(|| s.agreed_id.clone())
+                    .unwrap_or_default(),
+                title: s.title.clone(),
+                status: s.status.clone(),
+            })
         })
     }
 
@@ -1109,6 +1245,103 @@ mod tests {
         let store = store_of(vec![rreq(1, "EPIC-1")]);
         let set = descendant_closure(&store, uuid::Uuid::from_u128(42));
         assert!(set.is_empty());
+    }
+
+    // --- preview-modal relationship graph (STORY-739) --------------------
+
+    /// A fixture row for the resolver table, mirroring what `load_spec` builds
+    /// from `list_summaries`.
+    // trace:STORY-739
+    fn rel_row(id: &str, title: &str, status: &str) -> LoadedRelation {
+        LoadedRelation {
+            id: id.to_string(),
+            title: title.to_string(),
+            status: status.to_string(),
+        }
+    }
+
+    #[test]
+    fn graph_groups_each_relation_type_by_the_stored_convention() {
+        // The spec under preview has one of every surfaced edge. Per TASK-679 a
+        // `Child` edge points at the PARENT and a `Parent` edge at a CHILD.
+        let rels = vec![
+            edge(RelationshipType::Child, 10),     // → parent epic
+            edge(RelationshipType::Parent, 20),    // → child
+            edge(RelationshipType::BlockedBy, 30), // → blocker
+            edge(RelationshipType::Blocks, 40),    // → blocked
+            edge(RelationshipType::References, 50),
+            // Edge types the modal does not surface today:
+            edge(RelationshipType::Duplicate, 60),
+            edge(RelationshipType::Verifies, 70),
+        ];
+        let table: HashMap<u128, LoadedRelation> = [
+            (10, rel_row("EPIC-7", "the epic", "InProgress")),
+            (20, rel_row("TASK-2", "a child task", "Approved")),
+            (30, rel_row("BUG-9", "a blocker", "Done")),
+            (40, rel_row("STORY-3", "downstream", "Draft")),
+            (50, rel_row("DOC-1", "see also", "Completed")),
+            (60, rel_row("STORY-99", "dup", "Rejected")),
+            (70, rel_row("TASK-88", "verifier", "Draft")),
+        ]
+        .into_iter()
+        .collect();
+
+        let graph = graph_from_relationships(&rels, |t| table.get(&t.as_u128()).cloned());
+
+        assert_eq!(
+            graph.parents,
+            vec![rel_row("EPIC-7", "the epic", "InProgress")]
+        );
+        assert_eq!(
+            graph.children,
+            vec![rel_row("TASK-2", "a child task", "Approved")]
+        );
+        assert_eq!(
+            graph.blocked_by,
+            vec![rel_row("BUG-9", "a blocker", "Done")]
+        );
+        assert_eq!(
+            graph.blocks,
+            vec![rel_row("STORY-3", "downstream", "Draft")]
+        );
+        assert_eq!(
+            graph.references,
+            vec![rel_row("DOC-1", "see also", "Completed")]
+        );
+        assert!(!graph.is_empty());
+    }
+
+    #[test]
+    fn graph_omits_empty_groups_and_drops_dangling_targets() {
+        // Only a parent edge plus an edge whose target the resolver can't find
+        // (a deleted spec). The dangling edge is dropped; every other group is
+        // empty.
+        let rels = vec![
+            edge(RelationshipType::Child, 10),
+            edge(RelationshipType::Parent, 999), // unresolved → dropped
+        ];
+        let table: HashMap<u128, LoadedRelation> =
+            [(10u128, rel_row("EPIC-7", "the epic", "InProgress"))]
+                .into_iter()
+                .collect();
+
+        let graph = graph_from_relationships(&rels, |t| table.get(&t.as_u128()).cloned());
+
+        assert_eq!(graph.parents.len(), 1, "resolved parent kept");
+        assert!(graph.children.is_empty(), "dangling child target dropped");
+        assert!(graph.blocked_by.is_empty());
+        assert!(graph.blocks.is_empty());
+        assert!(graph.references.is_empty());
+        assert!(
+            !graph.is_empty(),
+            "the one parent makes the graph non-empty"
+        );
+    }
+
+    #[test]
+    fn graph_of_no_relationships_is_empty() {
+        let graph = graph_from_relationships(&[], |_| None);
+        assert!(graph.is_empty());
     }
 
     #[test]
