@@ -13,7 +13,7 @@ Every change goes through the same chain — **implement → CI → review → m
 | You want to… | Run | Who writes the code | How much you watch |
 |---|---|---|---|
 | Finish **one spec you just coded** | `aida ship <spec>` | **You** | You did the work; AIDA does the paperwork |
-| Hand off **one spec, start to finish** | `aida zen <spec>` | **AIDA** | On standby — step in if you like |
+| Hand off **one spec, start to finish** | `aida zen <spec>` | **AIDA** | Nothing — headless all the way to main |
 | Walk away from a **whole batch** | `aida burndown run` | **AIDA**, in parallel | Goodnight. Read the results over coffee |
 | Keep a **queue draining forever** | `aida queue integrate --watch` | (already done) | It merges finished work as it lands |
 
@@ -33,16 +33,18 @@ This is the everyday workhorse: **you keep the fun part (writing the code), AIDA
 
 ### `aida zen` — hand off the whole thing
 
-Some work you'd rather just *describe* and get back finished. `aida zen` takes an approved spec and drives the entire chain itself — it queues it, implements it, waits for CI, reviews, merges, and pulls.
+Some work you'd rather just *describe* and get back finished. `aida zen` takes an approved spec and drives the entire chain itself — queue, implement, wait for CI, review, merge, pull — and bumps the spec to Completed when it lands on main.
 
 ```
 $ aida zen <spec>
 ```
 
-By default the advisor rides along on standby, so you can glance over and step in. When you genuinely want to walk away — *tell your agents goodnight* — add the headless mode and it needs nothing further from you:
+That's the whole command. **It's fully headless by default** — *tell your agents goodnight.* The implementer runs headless, an independent reviewer always runs as its own gate before the merge, and the change drives all the way to main with nobody in the loop. No flag required; this *is* the walk-away.
+
+Want to keep your hands on the keyboard for the actual coding? `--supervised` lets **you** drive the implementer interactively, while the reviewer and merge stay autonomous behind you:
 
 ```
-$ aida zen <spec> --no-human=both
+$ aida zen <spec> --supervised
 ```
 
 Got five independent specs? Launch five, each in its own worktree, and let them run in parallel. Fire-and-forget, by design.
@@ -97,7 +99,7 @@ $ aida add --title "Add a --version short flag" --type task --status approved
 **2. Hand it the keys.** Use the SPEC-ID it just printed back:
 
 ```
-$ aida zen <spec> --no-human=both
+$ aida zen <spec>
 ```
 
 It queues the spec, spins up an implementer in an isolated worktree, waits for CI, reviews, merges the PR, and pulls — promoting the spec to **Completed** the moment the merge lands on main.
@@ -119,8 +121,8 @@ That's it. You described a change in one line and the next time you looked, it w
 |---|---|
 | "I just finished coding this — close it out." | `aida ship` |
 | "Open the PR but let a human merge." | `aida ship --no-merge` |
-| "Build this one for me, I'll keep half an eye on it." | `aida zen <spec>` |
-| "Build this one and don't ask me anything." | `aida zen <spec> --no-human=both` |
+| "Build this one and don't ask me anything." | `aida zen <spec>` |
+| "Build it, but let *me* write the code." | `aida zen <spec> --supervised` |
 | "Drain the whole ready backlog overnight." | `aida burndown run` |
 | "Keep merging finished work onto main as it shows up." | `aida queue integrate --watch` |
 | "Wait — what's actually running?" | `aida burndown status` · `aida ps` |
