@@ -552,6 +552,28 @@ fn agent_output_mode_from(env: Option<&str>, stdout_is_tty: bool) -> bool {
     }
 }
 
+/// True when there is no human at the keyboard to answer a `Type 'y' to
+/// confirm:` prompt — agent output mode is forced, or stdin is not a TTY. In
+/// this state reading the prompt only hits EOF: the answer is never 'y', so the
+/// historical `if !yes { read_line }` gate CANCELLED the write while an agent
+/// capturing stdout (the "Cancelled" notice went to stderr) believed it
+/// succeeded — a silent no-op that derails the implement -> done -> merge chain.
+/// Callers must branch on this up front: AUTO-CONFIRM a reversible write (the
+/// agent explicitly invoked the verb), or FAIL LOUDLY on a destructive one.
+/// Never silently cancel a non-TTY write.
+// trace:BUG-671
+fn non_interactive_confirm() -> bool {
+    non_interactive_confirm_from(agent_output_mode(), std::io::stdin().is_terminal())
+}
+
+/// Pure core of [`non_interactive_confirm`] (testable without a real terminal).
+/// `agent_mode` is [`agent_output_mode`]'s verdict; `stdin_is_tty` is whether
+/// stdin is a terminal.
+// trace:BUG-671
+fn non_interactive_confirm_from(agent_mode: bool, stdin_is_tty: bool) -> bool {
+    agent_mode || !stdin_is_tty
+}
+
 /// TASK-972 (AXI #6): split a formatted anyhow error into the one-line summary
 /// the agent error block shows plus an optional suggested next command. The
 /// summary is the first line with any leading human `Error:` prefix stripped
@@ -1139,6 +1161,39 @@ mod task970_agent_output_tests {
         // Unset: piped (no TTY) => agent mode; a real TTY => human path.
         assert!(agent_output_mode_from(None, false));
         assert!(!agent_output_mode_from(None, true));
+    }
+
+    // BUG-671: a `Type 'y'` prompt is "non-interactive" — auto-confirm-or-fail,
+    // never silently cancel — when agent mode is forced OR stdin is not a TTY.
+    #[test]
+    fn non_interactive_confirm_when_no_human_at_keyboard() {
+        // Agent mode forced (regardless of stdin) => non-interactive.
+        assert!(non_interactive_confirm_from(true, true));
+        assert!(non_interactive_confirm_from(true, false));
+        // Not agent mode, but stdin is piped/closed (no TTY) => non-interactive:
+        // reading a prompt would only hit EOF.
+        assert!(non_interactive_confirm_from(false, false));
+        // Genuine interactive shell: not agent mode AND stdin is a TTY.
+        assert!(!non_interactive_confirm_from(false, true));
+    }
+
+    // BUG-671: agent mode shows ONLY the first line of an error as the TOON
+    // `error:` summary. The gated-write guard errors therefore have to name the
+    // override flag on that first line, or an agent never sees the escape hatch.
+    #[test]
+    fn reopen_guard_error_names_force_on_first_line() {
+        // Mirror of the `aida edit <closed> --status approved` guard message.
+        let msg = format!(
+            "{} is currently {}. Re-opening a closed requirement is \
+             usually a mistake — pass --force to override.\n  Otherwise, \
+             file a new requirement that supersedes {}.",
+            "BUG-1", "Completed", "BUG-1"
+        );
+        let (summary, _help) = agent_error_summary_help(&msg);
+        assert!(
+            summary.contains("--force"),
+            "the agent-visible summary must name --force, got: {summary:?}"
+        );
     }
 
     // TASK-972 (AXI #6): the agent-mode error block reuses the rich next-command
@@ -17790,11 +17845,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     probe.set_status_from_str(canonical);
                     if !is_terminal_status(&probe.status) {
                         let spec_id = req.spec_id.as_deref().unwrap_or("?");
+                        // BUG-671: keep the override flag on the FIRST line. In
+                        // agent mode only the first line of an error survives as
+                        // the TOON `error:` summary, so a `--force` hint on a
+                        // continuation line is invisible to the agent that needs
+                        // it. trace:BUG-671 | ai:claude
                         anyhow::bail!(
                             "{} is currently {}. Re-opening a closed requirement is \
-                             usually a mistake.\n  If you mean to re-open it, pass \
-                             `--force`. Otherwise, file a new requirement that \
-                             supersedes {}.",
+                             usually a mistake — pass --force to override.\n  Otherwise, \
+                             file a new requirement that supersedes {}.",
                             spec_id,
                             req.status,
                             spec_id
@@ -34651,6 +34710,19 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
     let (state, path) = load_role(project_root, name)?;
     let scope = if state.global { " [global]" } else { "" };
     if !yes {
+        // BUG-671: deleting a role removes the file — genuinely destructive, so
+        // (unlike the reversible `queue done`) we DON'T auto-confirm. But never
+        // silently cancel a non-interactive write either: with no human to
+        // answer the prompt, FAIL LOUDLY with a machine-actionable error naming
+        // the override flag so an agent can self-correct instead of believing
+        // the delete happened. trace:BUG-671 | ai:claude
+        if non_interactive_confirm() {
+            anyhow::bail!(
+                "role delete needs confirmation in non-interactive mode — re-run with -y to \
+                 delete role '{}'.",
+                name
+            );
+        }
         eprintln!(
             "Delete role '{}{}'? (purpose: {}, last active: {})",
             name,
@@ -125967,10 +126039,12 @@ fn handle_queue_command(
                     .as_deref()
                     .or(req.spec_id.as_deref())
                     .unwrap_or("?");
+                // BUG-671: override flag on the FIRST line so agent mode (which
+                // shows only the first line as the error summary) surfaces it.
+                // trace:BUG-671 | ai:claude
                 anyhow::bail!(
-                    "{} is {} — re-queueing closed work is usually a mistake.\n  \
-                     Pass `--force` if you really mean to re-queue it, or file a \
-                     new requirement that supersedes {}.",
+                    "{} is {} — re-queueing closed work is usually a mistake; pass --force \
+                     to override.\n  Otherwise, file a new requirement that supersedes {}.",
                     display_id,
                     req.status,
                     display_id
@@ -127312,7 +127386,15 @@ fn handle_queue_command(
                 run_client_trailer_guard(&project_root, "queue done", *force);
             }
 
-            if !yes {
+            // BUG-671: `queue done` is non-destructive and reversible (marks
+            // Done + dequeues). With no human to answer the prompt
+            // (`non_interactive_confirm`), the old `read_line` gate hit EOF,
+            // failed the 'y' check, and CANCELLED — marking nothing Done while
+            // an agent capturing stdout (the "Cancelled" notice went to stderr)
+            // believed it succeeded. AUTO-CONFIRM instead: the agent explicitly
+            // invoked `done`. Only a real interactive non-`--yes` run still
+            // prompts. trace:BUG-671 | ai:claude
+            if !yes && !non_interactive_confirm() {
                 eprintln!(
                     "Mark {} ({}) as done and remove from queue?",
                     display_id.bold(),
@@ -129364,10 +129446,11 @@ fn handle_queue_rework(
         RequirementStatus::Completed | RequirementStatus::Rejected
     ) && !force
     {
+        // BUG-671: override flag on the FIRST line so agent mode (first-line
+        // error summary only) surfaces it. trace:BUG-671 | ai:claude
         anyhow::bail!(
-            "{} is {} — re-opening closed work is usually a mistake.\n  \
-             Pass `--force` if you really mean to rework it, or file a new \
-             requirement that supersedes {}.",
+            "{} is {} — re-opening closed work is usually a mistake; pass --force to \
+             override.\n  Otherwise, file a new requirement that supersedes {}.",
             display_id,
             current_status,
             display_id
