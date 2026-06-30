@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T07:39:37.307587645Z
-modified_at: 2026-06-30T07:39:37.307587645Z
+modified_at: 2026-06-30T07:44:39.634724467Z
 req_type: Bug
 tags:
 - branch-delete
@@ -16,3 +16,9 @@ tags:
 - git-guardrails
 - hooks
 - papercut
+comments:
+- id: 019f177c-c0d2-7831-a7d4-9760c1fe827a
+  author: joe
+  content: Commit ef5e38807 references this requirement
+  created_at: 2026-06-30T07:44:39.634724467Z
+  modified_at: 2026-06-30T07:44:39.634724467Z
