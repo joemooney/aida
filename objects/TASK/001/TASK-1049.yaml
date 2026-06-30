@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:57:27.445662820Z
-modified_at: 2026-06-30T04:57:31.189808203Z
+modified_at: 2026-06-30T04:59:36.481722535Z
 req_type: Task
 tags:
 - orchestrator
@@ -19,3 +19,9 @@ relationships:
 - rel_type: Child
   target_id: 019f1692-8c85-7a70-8d2d-fe2539a91792
   created_at: 2026-06-30T04:57:31.189808203Z
+comments:
+- id: 019f16e5-a4a1-7e32-80fa-73a2c9426995
+  author: joe
+  content: 'Broadened per ADR-7: the real fix is that aida zen must reuse the FULL shared --auto-complete per-spec orchestration (implement->CI->review->merge->pull), identical to burndown — NOT a truncated implement+PR+handoff. The missing independent reviewer is the visible symptom; the root cause is zen ran only the implementer phase. Fix = call the same orchestration primitive, and the review (plus CI-wait, merge-gate, auto-bump) all come for free.'
+  created_at: 2026-06-30T04:59:36.481722535Z
+  modified_at: 2026-06-30T04:59:36.481722535Z
