@@ -3,12 +3,12 @@ spec_id: TASK-1053
 agreed_id: TASK-1053
 title: 'aida queue work <spec> --dry-run: preview the single-spec plan'
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T07:12:59.468300340Z
-modified_at: 2026-06-30T07:12:59.468300340Z
+modified_at: 2026-06-30T07:39:23.488616320Z
 req_type: Task
 tags:
 - dry-run
