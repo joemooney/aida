@@ -66,6 +66,8 @@ mod health_metrics;
 mod history;
 mod intake;
 mod integrate;
+// trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
+mod integrate_checkout;
 mod integrate_view;
 mod intent;
 mod mailbox_store;
@@ -130865,11 +130867,29 @@ fn handle_queue_integrate(
         .map(|m| m.saturating_mul(60))
         .unwrap_or(interval);
 
-    // TODO(TASK-1036 slice 2b): UNATTENDED use of this event-driven `--watch`
-    // loop is gated on the own-checkout guard (slice 2b) — the integrator must
-    // refuse to drive merges from a worktree that has its own uncommitted/branched
-    // work. Until 2b lands, run this SUPERVISED only (advisor + operator watching
-    // the first live drives); do NOT leave it running headless. trace:TASK-1036
+    // TASK-1050 / BUG-650 (slice 2b): give `aida integrate` its OWN checkout so
+    // it never contends the advisor's harness-worktree lease — the gate that
+    // unblocks UNATTENDED `--watch`. (1) acquire/reuse a dedicated warm-pool
+    // worktree pinned to the default branch under a distinct integrator lease
+    // scope; (2) refuse to drive from — or relocate the drives out of — a shared
+    // checkout a live non-integrator session holds (option-c). The merge drives
+    // below run IN this dedicated checkout. `--dry-run` drives nothing, so it
+    // skips both. The global drain lock taken above is untouched: it stays the
+    // one merge authority repo-wide. trace:TASK-1050 trace:BUG-650 | ai:claude
+    let integrator_checkout: Option<std::path::PathBuf> = if dry_run {
+        None
+    } else {
+        let dedicated = integrate_checkout::ensure_integrator_checkout(&project_root)?;
+        let cwd = std::env::current_dir().unwrap_or_else(|_| project_root.clone());
+        integrate_checkout::guard_not_shared_checkout(&project_root, &cwd, &dedicated)?;
+        Some(dedicated)
+    };
+    // The cwd for the spawned child drives: the dedicated integrator checkout
+    // when we have one, else the project root (dry-run never spawns a real
+    // drive). trace:TASK-1050 | ai:claude
+    let drive_cwd: &std::path::Path = integrator_checkout
+        .as_deref()
+        .unwrap_or(project_root.as_path());
 
     let mut integrated_total: usize = 0;
     let mut pass: usize = 0;
@@ -131312,8 +131332,11 @@ fn handle_queue_integrate(
                             id,
                             pr
                         );
+                        // TASK-1050/BUG-650: rebase in the integrator's own
+                        // checkout, not the (possibly advisor-leased) launch
+                        // worktree. trace:TASK-1050 | ai:claude
                         let rb = std::process::Command::new(&aida)
-                            .current_dir(&project_root)
+                            .current_dir(drive_cwd)
                             .args(build_integrate_rebase_args(pr))
                             .status();
                         match rb {
@@ -131363,8 +131386,18 @@ fn handle_queue_integrate(
                 "↩".cyan().bold(),
                 id
             );
+            // TASK-1050/BUG-650: drive in the integrator's OWN checkout so the
+            // merge work never sits in (or lease-contends) a live session's
+            // worktree. Because the drive runs in a linked worktree, its
+            // `find_main_worktree_root()` drain lock targets MAIN — the very lock
+            // THIS integrate run already holds. Authorize the delegated sub-drive
+            // past that self-conflict with the force escape (env-scoped to the
+            // child only); a genuinely independent drain never inherits it and is
+            // still refused, so the repo-wide one-authority invariant holds.
+            // trace:TASK-1050 trace:BUG-650 | ai:claude
             let status = std::process::Command::new(&aida)
-                .current_dir(&project_root)
+                .current_dir(drive_cwd)
+                .env("AIDA_DRAIN_FORCE", "1")
                 .args(["queue", "work", id, "--auto-complete", "--from-pr"])
                 .status();
             match status {
