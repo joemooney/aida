@@ -3,12 +3,12 @@ spec_id: TASK-1007
 agreed_id: TASK-1007
 title: 'Autopilot slice 2: autopilot::evaluate four-gate envelope contract (pure, wired to nothing)'
 description: 'TASK-0429 smallest-first-slice. New aida-cli/src/autopilot.rs: ActionClass, Authority (auto/propose/never), AutopilotEnvelope embedding IntakeConfig, the conservative Default table, and the PURE four-gate evaluate() function + its full unit-test suite, WIRED TO NOTHING (zero behavior change to groom). Lands the governing contract + tests as a low-risk reviewable artifact the other slices build against. GATED: operator ratifies first. The --autopilot flag + config parse is the second slice.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T19:27:05.640920884Z
-modified_at: 2026-06-29T19:27:09.500728236Z
+modified_at: 2026-06-30T03:03:20.976735352Z
 req_type: Task
 tags:
 - autopilot
