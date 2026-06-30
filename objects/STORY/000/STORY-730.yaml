@@ -1,0 +1,18 @@
+id: 019f17b1-432c-7041-b658-80d74be7d4c6
+spec_id: STORY-730
+agreed_id: STORY-730
+title: Make aida status the durable morning-after report (since-you-were-away banner)
+description: 'Round-3 audit #1 recommendation: the single highest-trust moment is "I walked away — what happened?" and aida status (the natural first command) says nothing about it. The drain outcome only appears in the EPHEMERAL drain_summary.rs eprint to stderr, which scrolls away. FIX: persist each drains outcome tally (shipped/shelved/skipped + findings-to-triage) to .aida/drain-state.json when the drain ends (the data already exists in BatchDrainOutcome), and have bare aida status lead with a "since you were away" banner when non-empty, e.g.: "⏸ Last drain (3h ago): 5 shipped · 3 shelved · 1 skipped — 3 specs need you → aida human". Point at aida human (the richer what-needs-you aggregator: reviews-awaiting + needs-attention + findings) as the umbrella, with findings list as the drill-down (round-3 finding 5). Makes every other recovery finding a drill-down rather than a discovery problem. SEQUENCED after the error-clarity PR (both touch main.rs status).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T08:42:00.876573129Z
+modified_at: 2026-06-30T08:42:00.876573129Z
+req_type: Story
+tags:
+- from-audit
+- morning-after
+- recovery
+- status
+- trust
