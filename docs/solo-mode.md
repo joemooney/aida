@@ -59,6 +59,35 @@ expensive error) is what it guards against. The posture decision is the pure
 `presence::resolve_solo_posture` / `is_keystone_class`, unit-tested in
 isolation. trace:TASK-827
 
+## Composes with: the groom step gains an `--autopilot` option
+
+The loop's step 1 (`groom`) gains an opt-in `--autopilot` flag — a
+**bounded-authority envelope** over the binary `groom --apply`. Where `--apply`
+is all-or-nothing (execute *every* proposed disposition once a spec clears the
+fence), `--autopilot` is governed by a per-action authority map (auto / propose
+/ never) plus a grounding gate, so it is **strictly more conservative** than the
+binary apply: only reversible, in-fence, substrate-grounded actions auto-execute;
+approvals and rejections are held for review by default; anything uncertain
+escalates. See `docs/architecture/autonomy-and-escalation.md` §8 for the full
+envelope and the orthogonal grooming-vs-draining framing.
+
+Two things make it compose cleanly with this loop:
+
+- **It inherits the solo keystone partition.** Autopilot's keystone fence and
+  the solo posture above route through the *same* classifier
+  (`presence::is_keystone_class`), so a keystone spec is parked for the human at
+  the grooming stage exactly as it is at the draining stage — one classifier,
+  consistent across both stages.
+- **A headless solo loop tightens it further.** Under `--no-human`, an uncertain
+  auto-action *demotes* to escalate (it cannot pause-and-ask). The tightening is
+  demote-only, so the worst case is over-conservatism, never an un-gated execute.
+
+Note: this is the **groom step's new option**, not a change to the solo-loop
+default. Flipping the loop's grooming step to `--autopilot` by default is a
+later, separate, **supervised** step — prove the envelope at the keyboard before
+making it the unattended default. Until then, run it explicitly
+(`aida groom --autopilot`) when you want the bounded posture.
+
 ## Why it's safe to leave running (the floor)
 
 | Guarantee | Mechanism |
