@@ -2,13 +2,13 @@ id: 019f1763-feed-7ee2-9cee-7731d993d5fb
 spec_id: STORY-725
 agreed_id: STORY-725
 title: aida zen free-text front door + help cleanup
-description: ''
+description: 'Two improvements to `aida zen`. (1) THOUGHT to MERGED front door: the positional arg also accepts free text — when it does NOT match the SPEC-ID pattern, draft a spec from it (title + description + AI-drafted acceptance criteria via the existing aida-core AiClient path, fallback to a clear default description when no AI is reachable), file it as a DRAFT, and hand it into the existing zen drive (which routes a draft through the TASK-1037 approve-gate). --dry-run prints the would-draft line and files nothing. (2) zen --help cleanup: hide the introspection subcommands (status/finish/needs-human) so `aida zen <spec>` / `aida zen "<thought>"` is the clean top-line.'
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T07:17:37.133304686Z
-modified_at: 2026-06-30T07:17:37.133304686Z
+modified_at: 2026-06-30T07:17:54.704586935Z
 req_type: Story
 tags:
 - from-audit
