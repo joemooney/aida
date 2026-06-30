@@ -27237,5 +27237,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 2606
+- id: 019f16e5-9661-73c0-8cb0-663135c4606f
+  target_id: 019f16e5-8b1a-7d62-9dc9-3f27222d2918
+  author: aida
+  node_id: '1'
+  lamport: 2607
+  timestamp: 2026-06-30T04:59:32.833136242Z
+  kind: !Create
+    title: One per-spec orchestration engine — zen/burndown/integrate differ only in scope + lifetime, never in the per-spec lifecycle
+    description: 'DECISION (accepted 2026-06-29): There is ONE per-spec orchestration engine — implement to CI to review to merge to pull. aida zen, aida burndown, and aida integrate ALL call it. They differ ONLY in SCOPE (single spec / a defined set / the continuous queue) and LIFETIME (one-shot / continuous) — NEVER in the per-spec lifecycle. Autonomy mode (--zen supervised vs --no-human headless) parameterizes the PAUSES uniformly across all three (supervised pauses before merge for the human; headless gates the merge on the review). ANTI-PATTERN: a per-entry-point orchestration variant — e.g. zen truncating at implement+PR+handoff while burndown runs the full lifecycle. CONTEXT: aida zen slice-1s first real drive (TASK-0439, PR #1231) stopped at implement+PR with ZERO review (reviewDecision=NONE), revealing it ran only the implementer phase instead of reusing the full engine. CONSEQUENCE: a new lifecycle phase is added ONCE to the shared engine and applies to all three entry points; the reviewer phase comes free to zen because it is already in the primitive. Tracked by TASK-1049.'
+    req_type: Decision
+    status: Approved
+    priority: High
+clock: 2607
 node_id: '1'
