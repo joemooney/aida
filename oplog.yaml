@@ -26897,5 +26897,17 @@ operations:
   timestamp: 2026-06-30T04:03:26.597871324Z
   kind: !SetStatus
     status: Completed
-clock: 2572
+- id: 019f16bf-5fa1-7280-9f18-527d591b9abc
+  target_id: 019f16bf-4ddd-71b2-9ec4-be8a588db535
+  author: aida
+  node_id: '1'
+  lamport: 2573
+  timestamp: 2026-06-30T04:17:48.449090291Z
+  kind: !Create
+    title: Scoped work defaults into its scope worktree (soft default + coupling-escalation + --solo override)
+    description: 'DECISION (accepted 2026-06-29): Scoped work — a spec belonging to an epic/focus/scope — defaults into its scope worktree. Splitting an independently-shippable child into its own worktree+PR is the explicit exception (--solo). A coupling signal (file-overlap with the scopes in-flight work) escalates the default from soft to enforced. CONTEXT: aida zen/burndown/integrate fan implementers; the question was whether to MANDATE that a scoped spec be implemented in its scope worktree. RATIONALE: default-in-scope is coherent (related changes stay together; intra-epic collisions become sequential commits on one branch instead of rebase fights; worktree structure mirrors spec structure). A HARD mandate is REJECTED: it serializes genuinely-independent epic children into one long-lived branch + one giant all-or-nothing cluster PR, killing the parallel fan-out that is core to AIDA throughput (warm-pool/fleet economics: saving proportional to fan-out width) and concentrating the BUG-496 green-alone-red-together integration risk. The TRUE axis is COUPLING (shared files / must-land-together); scope is a strong default-PROXY for coupling, not an identity. CONSEQUENCES: aida zen auto-routes a scoped spec into its scope worktree (info line, creating it if absent), --solo overrides to own-worktree+own-PR, --into-epic forces the cluster route; the warn only fires on override-into-collision. Implemented by aida zen slice 2.'
+    req_type: Decision
+    status: Approved
+    priority: High
+clock: 2573
 node_id: '1'
