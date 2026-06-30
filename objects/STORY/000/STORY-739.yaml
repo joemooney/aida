@@ -1,0 +1,18 @@
+id: 019f1ac0-da9f-7ab0-962c-72f53002b566
+spec_id: STORY-739
+agreed_id: STORY-739
+title: 'TUI preview modal surfaces the relationship graph (blocked-by/blocks, parent/children) — the dig-in gesture reveals AIDA''s #1 differentiator'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T22:57:54.335492062Z
+modified_at: 2026-06-30T22:57:54.335492062Z
+req_type: Story
+tags:
+- cockpit
+- from-audit
+- graph
+- trojan-horse
+- tui
