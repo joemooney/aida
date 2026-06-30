@@ -3,12 +3,12 @@ spec_id: STORY-739
 agreed_id: STORY-739
 title: 'TUI preview modal surfaces the relationship graph (blocked-by/blocks, parent/children) — the dig-in gesture reveals AIDA''s #1 differentiator'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T22:57:54.335492062Z
-modified_at: 2026-06-30T22:57:54.335492062Z
+modified_at: 2026-06-30T23:19:00.290873382Z
 req_type: Story
 tags:
 - cockpit
