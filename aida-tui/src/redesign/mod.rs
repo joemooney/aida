@@ -1151,10 +1151,56 @@ fn apply_outcome(
                 }
             });
         }
+        RunOutcome::Drive { id } => {
+            // Kick off the headline autonomous drive on the focused spec by
+            // launching `aida zen <id>` as a DETACHED background drive. The
+            // cockpit holds the terminal, so it can't host the long-running,
+            // interactive drive inline (the prompt's read+dispose surface rule);
+            // we spawn it detached with its stdio nulled and point the operator
+            // at `aida drain status` to watch it — matching the existing
+            // shell-out pattern rather than inventing a PTY host. Unlike the
+            // queue/approve/defer verbs this does NOT use `start_pending`: that
+            // captures output and blocks on completion, which is exactly wrong
+            // for a drive that runs for minutes. trace:STORY-728 | ai:claude
+            if spawn_drive(&id) {
+                st.status = Some(format!(
+                    "drive launched for {id} — watch it with `aida drain status`"
+                ));
+            } else {
+                st.status = Some(format!("drive: FAILED to launch the drive for {id}"));
+            }
+        }
         RunOutcome::NeedsConfirm(_) => { /* popup already raised by run_verb */ }
         RunOutcome::None => {}
     }
     Ok(())
+}
+
+/// Launch the autonomous drive on `id` as a DETACHED background process:
+/// `aida zen <id>`. Returns `true` if the child spawned. The cockpit can't host
+/// the long-running interactive drive in-terminal, so the child's stdio is
+/// nulled and it is left to run independently (the operator watches it with
+/// `aida drain status`). Mirrors the other verbs' launchers but uses `spawn`
+/// (fire-and-forget) instead of `output` (capture-and-wait), and carries advisor
+/// authority on the spawned command so the drive isn't refused by the role gate.
+// trace:STORY-728 | ai:claude
+fn spawn_drive(id: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["zen", id]);
+    // Kicking off the drive commits the team to autonomously execute the spec —
+    // an advisor-authority act (like routing it onto the implementer queue), so
+    // carry advisor authority on the spawned command.
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    // Detach: the drive outlives this gesture and runs on its own. Null the
+    // stdio so it never fights the TUI for the terminal.
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    cmd.spawn().is_ok()
 }
 
 /// Shell out for the `why` verb and return `(stdout_or_error, title)`.
@@ -1838,8 +1884,8 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         // A verb greys if ANY axis disqualifies it; the hint follows a
         // most-fundamental-wins precedence — wired (act doesn't exist yet) >
         // role (seat mismatch) > status (lifecycle mismatch) > selection
-        // (transient UI state).
-        // trace:STORY-724 trace:TASK-954 trace:TASK-947 trace:BUG-638
+        // (transient UI state) > keystone (focused spec stays human-supervised).
+        // trace:STORY-724 trace:TASK-954 trace:TASK-947 trace:BUG-638 trace:STORY-728
         let mut hint = hint.to_string();
         let mut disabled = false;
         if st.level == Level::Verbs {
@@ -1864,6 +1910,12 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
             } else if !st.verb_selection_permitted(v) {
                 disabled = true;
                 hint = "select item(s) first".to_string();
+            } else if !st.verb_keystone_permitted(v) {
+                // KEYSTONE axis (STORY-728): `drive` is refused on a keystone /
+                // architecture-class focused spec — that work stays human-
+                // supervised rather than shipping on an autonomous default.
+                disabled = true;
+                hint = "keystone — stays human-supervised".to_string();
             }
         }
         let marker = if selected { "▸ " } else { "  " };
@@ -2758,6 +2810,7 @@ mod refresh_tests {
             body: String::new(),
             has_test_plan: false,
             routed_role: None,
+            tags: Vec::new(),
         }
     }
 
@@ -3006,6 +3059,7 @@ mod render_tests {
                 body: format!("# STORY-{i}\n\nbody text here"),
                 has_test_plan: false,
                 routed_role: None,
+                tags: Vec::new(),
             })
             .collect();
         RedesignState::new(items, "advisor")
@@ -3276,12 +3330,15 @@ mod render_tests {
                 Verb::Queue,
                 Verb::Accept,
                 Verb::Defer,
+                Verb::Drive,
             ]
         );
         // Draft focus: draft verbs apply; approved/done verbs grey.
         assert!(st.verb_status_permitted(Verb::Approve));
         assert!(!st.verb_status_permitted(Verb::Queue));
         assert!(!st.verb_status_permitted(Verb::Accept));
+        // `drive` is Approved-gated too, so it greys on a Draft focus.
+        assert!(!st.verb_status_permitted(Verb::Drive));
     }
 
     #[test]
