@@ -134963,6 +134963,40 @@ fn run_zen_drive(
         );
     };
 
+    // THOUGHT → spec front door (STORY-725). A positional that is NOT a spec id
+    // is free text: draft a spec from it, file it as a draft, and drive THAT new
+    // spec through the same status-routing + approve-gate path below. A real
+    // spec id keeps the existing resolve-or-refuse behavior.
+    // trace:STORY-725 | ai:claude
+    let drafted_spec: String;
+    let spec: &str = if zen_drive::looks_like_spec_id(spec) {
+        spec
+    } else {
+        if dry_run {
+            // --dry-run files nothing — just report what the front door would do.
+            println!("would draft + file + drive: {spec}");
+            return Ok(());
+        }
+        // The drafted spec is born a Draft and routes through the autopilot
+        // approve-gate below, which needs git-canonical storage; the legacy
+        // (centralized) path can't run it, so refuse early with guidance.
+        if store_path.is_none() {
+            anyhow::bail!(
+                "aida zen \"<thought>\" (free-text drafting) needs git-canonical storage. \
+                 File the spec first (aida add ...), then run aida zen <SPEC>."
+            );
+        }
+        let (new_id, source) = zen_file_thought_as_draft(storage, spec)?;
+        eprintln!(
+            "  {} drafted {} from your thought ({}) — filed as a draft; routing it through the approve-gate.",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            new_id,
+            source.label()
+        );
+        drafted_spec = new_id;
+        &drafted_spec
+    };
+
     // Resolve against the store. The spec must exist; status routes it.
     let store = storage.load()?;
     let req = store
@@ -135158,6 +135192,66 @@ fn run_zen_drive(
         std::process::exit(status.code().unwrap_or(1));
     }
     Ok(())
+}
+
+/// THOUGHT → spec front door (STORY-725): draft a spec from a free-text thought
+/// and file it as a Draft, returning its new display id + which path drafted the
+/// body. Reuses the same programmatic filing path as `file_task_for_schedule`
+/// (load → build → `add_requirement_with_id` → save), so it works on the
+/// git-canonical store. The new spec is born a Draft so the caller's autopilot
+/// approve-gate decides whether to drive it.
+// trace:STORY-725 | ai:claude
+fn zen_file_thought_as_draft(
+    storage: &Storage,
+    thought: &str,
+) -> Result<(String, zen_drive::DraftSource)> {
+    let ai = zen_try_ai_draft(thought);
+    let drafted = zen_drive::compose_draft_from_thought(thought, ai);
+    file_drafted_thought(storage, drafted)
+}
+
+/// File an already-composed [`zen_drive::DraftedThought`] as a Draft and return
+/// its new display id + source. Split from the AI-wiring above so the filing IO
+/// is unit-testable without the AI transport.
+// trace:STORY-725 | ai:claude
+fn file_drafted_thought(
+    storage: &Storage,
+    drafted: zen_drive::DraftedThought,
+) -> Result<(String, zen_drive::DraftSource)> {
+    let mut store = storage.load()?;
+    let mut req = Requirement::new(drafted.title.clone(), drafted.description.clone());
+    req.req_type = RequirementType::Task;
+    req.status = RequirementStatus::Draft;
+    req.owner = get_default_author();
+    req.tags.insert("aida:zen".to_string());
+    req.tags.insert("from-thought".to_string());
+
+    let id = req.id;
+    let type_prefix = store.get_type_prefix(&req.req_type);
+    store.add_requirement_with_id(req, None, type_prefix.as_deref());
+    storage.save(&store)?;
+
+    let spec_id = store
+        .get_requirement_by_id(&id)
+        .and_then(|r| r.spec_id.clone())
+        .unwrap_or_else(|| id.to_string());
+    Ok((spec_id, drafted.source))
+}
+
+/// Best-effort genuine AI draft of a thought via the EXISTING aida-core
+/// [`aida_core::AiClient`] path (Claude CLI). Returns `None` — so the caller
+/// uses the verbatim fallback — when the AI is unreachable, when the request
+/// fails, or when `AIDA_ZEN_NO_AI=1` forces the fallback (tests / offline).
+// trace:STORY-725 | ai:claude
+fn zen_try_ai_draft(thought: &str) -> Option<aida_core::DraftSpecResponse> {
+    if std::env::var("AIDA_ZEN_NO_AI").ok().as_deref() == Some("1") {
+        return None;
+    }
+    let client = aida_core::AiClient::new();
+    if !client.is_available() {
+        return None;
+    }
+    client.draft_spec(thought).ok()
 }
 
 /// Load the autopilot policy envelope from `[autopilot]` in `.aida/config.toml`,
@@ -143833,5 +143927,114 @@ detached
         );
         // The detached worktree has no branch line → absent from the map.
         assert!(!map.contains_key(std::path::Path::new("/home/joe/ai/aida-detached")));
+    }
+}
+
+// trace:STORY-725 | ai:claude — the THOUGHT → spec front door + zen help cleanup.
+#[cfg(test)]
+mod zen_front_door_tests {
+    use super::*;
+    use clap::CommandFactory;
+    use tempfile::TempDir;
+
+    /// IMPROVEMENT 1: a free-text thought files a Draft spec, and the new id is
+    /// what the drive (mocked here via `drive_args`, not actually spawned) would
+    /// be handed. Forces the fallback path (a fabricated `DraftedThought`) so no
+    /// AI transport runs.
+    #[test]
+    fn free_text_thought_files_a_draft_then_would_drive_it() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        let storage = Storage::new(db_path);
+
+        let drafted = zen_drive::compose_draft_from_thought(
+            "make the tree header show the parent title",
+            None,
+        );
+        let (spec_id, source) = file_drafted_thought(&storage, drafted).unwrap();
+        assert_eq!(source, zen_drive::DraftSource::Fallback);
+
+        // The draft landed: exactly one spec, born Draft, titled from the thought.
+        let store = storage.load().unwrap();
+        assert_eq!(store.requirements.len(), 1);
+        let req = &store.requirements[0];
+        assert_eq!(req.status, RequirementStatus::Draft);
+        assert_eq!(req.title, "make the tree header show the parent title");
+        assert!(req.tags.contains("from-thought"));
+
+        // The drive (mocked) would be handed exactly the new id — the same argv
+        // `run_zen_drive` self-invokes.
+        let args = zen_drive::drive_args(&spec_id, None, false, false);
+        assert_eq!(args[..3], ["queue", "work", spec_id.as_str()]);
+        assert!(args.contains(&"--auto-complete".to_string()));
+    }
+
+    /// IMPROVEMENT 1: an AI draft yields genuine acceptance criteria in the
+    /// filed body.
+    #[test]
+    fn ai_drafted_thought_files_acceptance_criteria() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+        let storage = Storage::new(db_path);
+
+        let ai = aida_core::DraftSpecResponse {
+            title: "Show the parent title in the tree header".to_string(),
+            description: "Render the parent spec's title in the tree view header.".to_string(),
+            acceptance_criteria: vec!["The header shows the parent's title".to_string()],
+        };
+        let drafted = zen_drive::compose_draft_from_thought("tree header", Some(ai));
+        let (_id, source) = file_drafted_thought(&storage, drafted).unwrap();
+        assert_eq!(source, zen_drive::DraftSource::Ai);
+
+        let store = storage.load().unwrap();
+        let req = &store.requirements[0];
+        assert!(req.description.contains("## Acceptance"));
+        assert!(req
+            .description
+            .contains("The header shows the parent's title"));
+    }
+
+    /// IMPROVEMENT 2: `aida zen --help` no longer lists the introspection
+    /// subcommands (status / finish / needs-human) at the top level — yet they
+    /// still PARSE.
+    #[test]
+    fn zen_help_hides_introspection_subcommands_but_keeps_them_runnable() {
+        let mut cli = crate::cli::Cli::command();
+        let zen = cli
+            .get_subcommands_mut()
+            .find(|c| c.get_name() == "zen")
+            .expect("zen subcommand exists");
+        let help = zen.render_help().to_string();
+        assert!(
+            !help.contains("needs-human"),
+            "zen --help must not list the introspection subcommands:\n{help}"
+        );
+        // The visible-subcommand list must be empty (all three are hidden).
+        assert!(
+            crate::cli::Cli::command()
+                .get_subcommands()
+                .find(|c| c.get_name() == "zen")
+                .unwrap()
+                .get_subcommands()
+                .all(|s| s.is_hide_set()),
+            "every zen subcommand must be hidden from --help"
+        );
+
+        // Still runnable: the parser accepts `aida zen status`.
+        let parsed = crate::cli::Cli::try_parse_from(["aida", "zen", "status"]);
+        assert!(parsed.is_ok(), "aida zen status must still parse");
+    }
+
+    /// IMPROVEMENT 1 (detection): a real spec id keeps existing behavior; free
+    /// text routes to the front door.
+    #[test]
+    fn detection_splits_spec_id_from_thought() {
+        assert!(zen_drive::looks_like_spec_id("TASK-123"));
+        assert!(zen_drive::looks_like_spec_id("FR-1-042"));
+        assert!(!zen_drive::looks_like_spec_id(
+            "make the tree header show the parent title"
+        ));
     }
 }
