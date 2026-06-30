@@ -1844,6 +1844,52 @@ fn finish_held(
     }
 }
 
+/// STORY-731: build the human-readable TAIL of a single-spec drive failure.
+///
+/// EPIC-28 parity. When the failure was *shelved* (`shelved` mirrors
+/// `OrchestrationResult::shelved_reason.is_some()` — a recoverable phase
+/// failure: CI red / RequestChanges / build fail → the spec parked in Needs
+/// Attention) the tail names it parked-NOT-crashed and points at the recovery
+/// commands (`aida why <spec>` for what failed, `aida findings list` for all
+/// parked work), exactly the legibility the batch drain already gives its
+/// shelved members. A non-shelve (a genuine hard crash — Spawn / MissingTool /
+/// Internal) keeps the terminal "auto-complete failed at phase N" line so it
+/// still reads as a crash. The single-spec drive is the MOST COMMON first
+/// failure, so this is where the weakest recovery signal hurt most.
+///
+/// Returned as one `String` per line so a unit test can assert the wording
+/// without an external process.
+// trace:STORY-731 | ai:claude
+fn single_spec_failure_tail(
+    spec: &str,
+    phase: Phase,
+    elapsed_ms: u128,
+    shelved: bool,
+) -> Vec<String> {
+    if shelved {
+        vec![
+            format!(
+                "{} {} parked for triage — not a crash. Fix the blocker, then re-drive.",
+                "⏸".yellow().bold(),
+                spec.bold(),
+            ),
+            format!(
+                "  {} `aida why {}` (what failed) · `aida findings list` (all parked work)",
+                "→".dimmed(),
+                spec,
+            ),
+        ]
+    } else {
+        vec![format!(
+            "{} {} — auto-complete failed at phase {} ({})",
+            glyph(crate::glyphs::Glyph::Cross).red().bold(),
+            spec.bold(),
+            phase.index(),
+            fmt_duration(elapsed_ms),
+        )]
+    }
+}
+
 /// Print the failure epilogue (reason + recovery hint) and build the
 /// failure [`OrchestrationResult`] (exit code = the phase's 1-based index).
 ///
@@ -1920,13 +1966,12 @@ fn finish_failure(
         );
         eprintln!("  {} {}", "→".dimmed(), hint.cyan());
         eprintln!();
-        eprintln!(
-            "{} {} — auto-complete failed at phase {} ({})",
-            glyph(crate::glyphs::Glyph::Cross).red().bold(),
-            spec.bold(),
-            phase.index(),
-            fmt_duration(elapsed)
-        );
+        // STORY-731: when the failure was shelved, the tail names it
+        // parked-not-crashed and points at recovery commands (parity with the
+        // batch drain); otherwise it stays a terminal crash line.
+        for line in single_spec_failure_tail(spec, phase, elapsed, shelved_reason.is_some()) {
+            eprintln!("{line}");
+        }
     }
     OrchestrationResult {
         exit_code: code,
@@ -4772,6 +4817,67 @@ mod tests {
         assert!(
             result.shelved_reason.is_none(),
             "single-spec never shelves an inconclusive",
+        );
+    }
+
+    // --- STORY-731: single-spec shelve failure reads as parked-not-crashed --
+
+    /// STORY-731 acceptance: a SHELVED single-spec drive failure (a recoverable
+    /// phase failure that parked the spec in Needs Attention) renders the
+    /// parity tail — it names the spec PARKED (not crashed), tells the operator
+    /// to fix-then-re-drive, and points at BOTH recovery commands (`aida why`
+    /// for what failed, `aida findings list` for all parked work). This is the
+    /// legibility the batch drain already had; the single-spec path now matches.
+    #[test]
+    fn single_spec_shelve_failure_names_parked_and_recovery_commands() {
+        let lines = single_spec_failure_tail("TASK-1", Phase::Ci, 4200, true);
+        let joined = lines.join("\n");
+        assert!(
+            joined.contains("parked for triage"),
+            "a shelve must name itself parked-for-triage, not a crash: {joined}"
+        );
+        assert!(
+            joined.contains("not a crash"),
+            "a shelve must explicitly say it is not a crash: {joined}"
+        );
+        assert!(
+            joined.contains("re-drive"),
+            "a shelve must tell the operator to fix-then-re-drive: {joined}"
+        );
+        assert!(
+            joined.contains("aida why TASK-1"),
+            "a shelve must point at `aida why <spec>` for what failed: {joined}"
+        );
+        assert!(
+            joined.contains("aida findings list"),
+            "a shelve must point at `aida findings list` for all parked work: {joined}"
+        );
+        assert!(
+            !joined.contains("auto-complete failed"),
+            "a shelve must NOT use the terminal crash wording: {joined}"
+        );
+    }
+
+    /// STORY-731: a genuine hard crash (a NON-shelvable failure — Spawn /
+    /// MissingTool / Internal — that never parked the spec) still reads as a
+    /// crash: the terminal "auto-complete failed at phase N" line, and NONE of
+    /// the parked/recovery language. The parity tail must not soften a real
+    /// crash into a recoverable-looking park.
+    #[test]
+    fn single_spec_hard_crash_still_reads_as_a_crash() {
+        let lines = single_spec_failure_tail("TASK-1", Phase::Implementer, 1500, false);
+        let joined = lines.join("\n");
+        assert!(
+            joined.contains("auto-complete failed"),
+            "a hard crash keeps the terminal crash wording: {joined}"
+        );
+        assert!(
+            !joined.contains("parked"),
+            "a hard crash must NOT be mislabelled as parked: {joined}"
+        );
+        assert!(
+            !joined.contains("aida findings list"),
+            "a hard crash is not triageable parked work — no findings-list pointer: {joined}"
         );
     }
 
