@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:38.146829409Z
-modified_at: 2026-06-30T02:27:04.696587232Z
+modified_at: 2026-06-30T02:28:53.731352429Z
 req_type: Task
 tags:
 - advisor-autopilot
@@ -64,6 +64,13 @@ comments:
   content: 'Design plan: docs/plans/2026-06-29-epic-0428-policy-envelope.md — autopilot = bounded-authority envelope over groom; per-action-class authority map (auto/propose/never) + 4 AND-composed gates (fence, authority, Type-A/recorded-B grounding, risk ceiling); conservative default (approve/reject=propose). Design only; needs master-advisor sign-off.'
   created_at: 2026-06-29T16:31:39.729232457Z
   modified_at: 2026-06-29T16:31:39.729232457Z
+- id: 019f165b-ad72-7810-9f33-92cfadeb9167
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-29-epic-0428-audit-reversal.md, docs/plans/2026-06-29-epic-0428-mode-composition.md, docs/plans/2026-06-29-epic-0428-policy-envelope.md, docs/plans/2026-06-29-epic-0428-product-role-integration.md
+    filed 11 task(s): TASK-1013, TASK-1014, TASK-1015, TASK-1016, TASK-1017, TASK-1018, TASK-1019, TASK-1020, TASK-1021, TASK-1022, TASK-1023
+  created_at: 2026-06-30T02:28:54.770516555Z
+  modified_at: 2026-06-30T02:28:54.770516555Z
 deferred: true
 deferred_at: 2026-06-27T16:40:33.237489257Z
 deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
