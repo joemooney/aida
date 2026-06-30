@@ -3,12 +3,12 @@ spec_id: STORY-718
 agreed_id: STORY-718
 title: aida integrator — continuous focus-scoped queue-drainer (the integrator seat)
 description: 'A dedicated, long-lived terminal/agent that CONTINUOUSLY drains the queue onto main and shows live throughput. The clean seat division: the ADVISOR grooms + queues work; the INTEGRATOR continuously drains the already-queued set (implement-or-pickup -> CI -> merge -> pull -> loop). Surface: aida integrator [--focus EPIC-X] starts the loop in this terminal, scoped by STORY-706 focus (continuously drain just that epic/areas queue). Runs in its OWN checkout/clone so it never contends with an advisor session for the HARNESS-WORKTREE scope (sidesteps BUG-650). Made affordable by STORY-712 event-driven supervision (wakes only on real events -> leave it running all day for ~free, no idle-poll burn). Visibility is half the value: a live throughput view the operator GLANCES at -- what is draining now, time since last merge, easy-queue depth, main-idle detection -- so you can see we are maximizing throughput onto main. integrator should also become a first-class role alongside advisor/implementer/reviewer. Idle-aware: when nothing has merged to main in N minutes AND queued work exists, it keeps pulling. Operator concept 2026-06-29.'
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:45:21.135163720Z
-modified_at: 2026-06-30T06:09:34.840453858Z
+modified_at: 2026-06-30T18:59:33.187494580Z
 req_type: Story
 tags:
 - integrator
