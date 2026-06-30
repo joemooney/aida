@@ -42,6 +42,23 @@ exists precisely because the decisions are too load-bearing to guess. (The
 headless analogue for a fork an *implementer* hits mid-drain is `/aida-punt`
 → `/aida-advise`; this skill is the human-present, decisions-up-front shape.)
 
+## Work directly — you are the only agent
+
+Read the spec, its graph, and the relevant code **yourself**, first-hand, with
+your own tools (`aida show`, `aida graph`, `Read`, `Grep`, `Bash`). The whole
+point of a guided dialog is a direct line between the human and the decision —
+nothing should sit in between.
+
+- **Do not spawn sub-agents.** No `Agent`, no `Task`, no Explore /
+  general-purpose subagent — not to analyze, corroborate, map the codebase, or
+  gather context. Delegation adds latency and an extra layer of indirection
+  ("message queued for delivery… awaiting its response") between the human and
+  the fork, and defeats the entire point of a direct guided dialog.
+- **The only two actors are YOU and the HUMAN.** Gather what you need quickly
+  and first-hand, then put the decision to the human. Bias to asking the human
+  sooner with the context you already have, not to exhaustive background
+  research.
+
 ## Autonomy mode
 
 Guided mode is interactive by construction, so it does **not** auto-resolve
@@ -75,6 +92,9 @@ just-in-time, but a settled decision is never re-asked.
 ## PHASE 1 — Major decisions up front
 
 ### 1a. Read the spec and its graph
+
+Read it **first-hand, yourself** — these commands are yours to run directly,
+not to delegate to a sub-agent (see *Work directly* above).
 
 ```bash
 aida show <SPEC>                  # title, description, ## Acceptance, comments, git linkage
@@ -256,21 +276,22 @@ operator tries it, so do **not** auto-merge.
 
    Then open the PR with `/aida-pr` (it links the spec + writes a test plan).
 
-4. **Verify CI green, then present for review — DO NOT merge.** Watch the PR's
+4. **Verify CI green, then finish simply — DO NOT merge.** First watch the PR's
    required check to SUCCESS in a separate step (`gh pr merge` does NOT gate on
-   CI; local-green ≠ CI-green). When CI is green, present the PR to the
-   operator with a finish-state block:
+   CI; local-green ≠ CI-green). Only once CI is green, close out with exactly
+   three things and one command:
 
-   - **State snapshot** — spec, branch, PR URL, CI status, the ADRs filed.
-   - **The decisions made** — each ADR id + its one-line decision, so the
-     reviewer sees the *why* without re-deriving it.
-   - **Recommendation** — your read on whether it is ready to merge, and any
-     residual risk worth a human's eyes.
-   - **Explicit hand-off** — *"Keystone merge stays human: review the PR and
-     the ADRs, then merge when satisfied. I will not auto-merge."*
+   1. **The spec** — `<SPEC>` · `<PR URL>` · CI ✅ green.
+   2. **The ADRs filed** — one line each: `<ADR-ID>` — `<the decision>`.
+   3. **The merge command** — show it literally:
 
-   After the operator merges, sync with `aida pull` (not raw `git pull`) so the
-   `Done → Completed` auto-bump fires.
+      ```bash
+      gh pr merge <N> --squash --delete-branch && aida pull
+      ```
+
+   Keystone merge stays yours: review the PR + the ADRs, then run that command
+   when satisfied. (`aida pull`, not raw `git pull`, so the `Done → Completed`
+   auto-bump fires.)
 
 ---
 
