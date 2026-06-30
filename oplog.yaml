@@ -27021,5 +27021,17 @@ operations:
   timestamp: 2026-06-30T04:21:48.353565023Z
   kind: !SetStatus
     status: Completed
-clock: 2583
+- id: 019f16c3-27f9-7753-9a29-0db1c6ae9064
+  target_id: 019f16c3-1573-7372-a466-bf6e5d6e755c
+  author: aida
+  node_id: '1'
+  lamport: 2584
+  timestamp: 2026-06-30T04:21:56.345764299Z
+  kind: !Create
+    title: Materialize `.claude/skills/*.md` into prompts for non-Claude vendors (the `seed_skill_prompt` hook)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2584
 node_id: '1'
