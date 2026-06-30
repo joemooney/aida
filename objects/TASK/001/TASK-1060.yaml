@@ -1,0 +1,18 @@
+id: 019f1999-3885-7670-8ccd-d29ddb3c103f
+spec_id: TASK-1060
+agreed_id: TASK-1060
+title: Make --zen a typed engine parameter (kill the AIDA_ZEN env-var side-channel) — fully realize ADR-7 uniform autonomy parameterization
+description: 'ADR-7 holds that autonomy mode parameterizes the per-spec engine pauses uniformly across zen/integrate/queue-work. Today only half-realized: --no-human is a clean typed engine parameter, but --zen is threaded as an AIDA_ZEN env-var side-channel read in scattered spots. Converge --zen to a typed parameter threaded through the engine like --no-human, removing the env-var reads, so autonomy mode is uniformly parameterized. CAREFUL: touches the autonomy keystone engine threading - ship supervised at the keyboard, not via unattended zen/drain. Surfaced by the ADR-7 guided-implement decision dialog.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T17:34:59.717863882Z
+modified_at: 2026-06-30T17:34:59.717863882Z
+req_type: Task
+tags:
+- adr-7
+- autonomy
+- careful
+- from-operator
+- refactor
