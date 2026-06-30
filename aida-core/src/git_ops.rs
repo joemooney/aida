@@ -575,6 +575,9 @@ pub fn create_store_worktree(
         // Verify it's actually a worktree
         let result = git(repo_root, &["worktree", "list"])?;
         if result.stdout.contains(worktree_dir) {
+            // Self-heal: ensure the lowered gc.auto is set even on a store
+            // attached before TASK-1033. Best-effort + idempotent.
+            apply_store_gc_auto_from_env(&worktree_path);
             return Ok(worktree_path); // already set up
         }
         anyhow::bail!(
@@ -621,6 +624,13 @@ pub fn create_store_worktree(
         // Clean working tree
         let _ = git(&worktree_path, &["clean", "-fd"]);
     }
+
+    // TASK-1033: lower the store's `gc.auto` so git auto-repacks the shared
+    // object store long before its 6700-loose-object default — a heavy drive
+    // accumulates thousands of loose objects (well below 6700) that slow every
+    // targeted store commit ~4x until a manual `git gc`. Best-effort: a failed
+    // config-set never breaks store creation.
+    apply_store_gc_auto_from_env(&worktree_path);
 
     Ok(worktree_path)
 }
@@ -950,6 +960,91 @@ pub fn detach_head(repo: &Path) -> Result<()> {
         anyhow::bail!("git checkout --detach failed: {}", result.stderr);
     }
     Ok(())
+}
+
+// ── Store git-object self-maintenance (TASK-1033) ───────────────────────────
+//
+// A heavy drive (dozens of `aida edit` store commits, PR merges, worktree
+// create/teardown) accumulates thousands of loose objects in the SHARED object
+// store. That bloat sat BELOW git's `gc.auto` default (6700) so git never
+// auto-repacked — yet it slowed every targeted store commit (BUG-634's
+// sub-second path) to ~4s. A single `git gc` cut it back. The fix is to make
+// AIDA self-maintain the store's git: lower `gc.auto` so git repacks far
+// sooner, and run a cheap `git gc --auto` at existing sync chokepoints.
+// trace:TASK-1033 | ai:claude
+
+/// The lowered `gc.auto` threshold AIDA sets on the orphan-store repo so git
+/// auto-repacks the shared object store long before its 6700-loose-object
+/// default — keeping targeted store commits sub-second after a heavy drive.
+/// Override with `AIDA_STORE_GC_AUTO`.
+pub const STORE_GC_AUTO_DEFAULT: u32 = 500;
+
+/// Resolve the `gc.auto` threshold to set on the store from an optional
+/// override (the `AIDA_STORE_GC_AUTO` value). Pure — unit-testable without git.
+///
+/// - unset / empty -> the [`STORE_GC_AUTO_DEFAULT`].
+/// - `off` / `disabled` / `none` / `0` -> `None` (leave git's default; disables
+///   AIDA's self-maintenance).
+/// - a positive integer -> that threshold.
+/// - anything unparseable -> the default (never silently disable on garbage).
+// trace:TASK-1033 | ai:claude
+pub fn resolve_store_gc_auto(override_val: Option<&str>) -> Option<u32> {
+    let Some(raw) = override_val.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Some(STORE_GC_AUTO_DEFAULT);
+    };
+    if raw.eq_ignore_ascii_case("off")
+        || raw.eq_ignore_ascii_case("disabled")
+        || raw.eq_ignore_ascii_case("none")
+    {
+        return None;
+    }
+    match raw.parse::<u32>() {
+        Ok(0) => None,                         // explicit 0 = git's "disable auto-gc"
+        Ok(n) => Some(n),                      // honour an explicit threshold
+        Err(_) => Some(STORE_GC_AUTO_DEFAULT), // ignore garbage, stay self-maintaining
+    }
+}
+
+/// Set `gc.auto = <threshold>` on the store repo (writes the shared common
+/// config a linked worktree points at). Best-effort + idempotent: re-setting
+/// the same value is a no-op, and a failed `git config` is swallowed (returns
+/// `false`) — a maintenance knob must never break the store.
+// trace:TASK-1033 | ai:claude
+pub fn configure_store_gc_auto(repo: &Path, threshold: u32) -> bool {
+    git(repo, &["config", "gc.auto", &threshold.to_string()])
+        .map(|r| r.success)
+        .unwrap_or(false)
+}
+
+/// Apply AIDA's lowered `gc.auto` to the store repo, honouring the
+/// `AIDA_STORE_GC_AUTO` override. Best-effort + idempotent — safe to call on
+/// every worktree attach and sync.
+// trace:TASK-1033 | ai:claude
+pub fn apply_store_gc_auto_from_env(repo: &Path) {
+    let override_val = std::env::var("AIDA_STORE_GC_AUTO").ok();
+    if let Some(threshold) = resolve_store_gc_auto(override_val.as_deref()) {
+        let _ = configure_store_gc_auto(repo, threshold);
+    }
+}
+
+/// Run `git gc --auto` on the store repo — a cheap no-op unless the (lowered)
+/// `gc.auto` threshold is exceeded, in which case git repacks loose objects.
+/// Best-effort: failures are swallowed.
+// trace:TASK-1033 | ai:claude
+pub fn gc_auto(repo: &Path) -> bool {
+    git(repo, &["gc", "--auto"])
+        .map(|r| r.success)
+        .unwrap_or(false)
+}
+
+/// Opportunistic store maintenance for a sync chokepoint (`aida pull`,
+/// `aida db sync`): ensure the lowered `gc.auto` is set (self-heals stores
+/// created before TASK-1033), then run `git gc --auto`. Both legs best-effort —
+/// maintenance rides the sync, never breaks it.
+// trace:TASK-1033 | ai:claude
+pub fn opportunistic_store_gc(repo: &Path) {
+    apply_store_gc_auto_from_env(repo);
+    let _ = gc_auto(repo);
 }
 
 /// Get a git config value (checks local, then global).
@@ -2808,5 +2903,61 @@ mod tests {
             ra.1 < rb.0 || rb.1 < ra.0,
             "duplicate node id produced OVERLAPPING ranges: {ra:?} vs {rb:?}"
         );
+    }
+
+    // ── Store gc self-maintenance (TASK-1033) ───────────────────────────────
+
+    /// Pure resolver: unset/empty → default; off-words and 0 → disabled;
+    /// a positive integer is honoured; garbage falls back to the default.
+    // trace:TASK-1033 | ai:claude
+    #[test]
+    fn resolve_store_gc_auto_maps_overrides() {
+        assert_eq!(resolve_store_gc_auto(None), Some(STORE_GC_AUTO_DEFAULT));
+        assert_eq!(resolve_store_gc_auto(Some("")), Some(STORE_GC_AUTO_DEFAULT));
+        assert_eq!(
+            resolve_store_gc_auto(Some("   ")),
+            Some(STORE_GC_AUTO_DEFAULT)
+        );
+        // Disable forms.
+        assert_eq!(resolve_store_gc_auto(Some("off")), None);
+        assert_eq!(resolve_store_gc_auto(Some("OFF")), None);
+        assert_eq!(resolve_store_gc_auto(Some("disabled")), None);
+        assert_eq!(resolve_store_gc_auto(Some("None")), None);
+        assert_eq!(resolve_store_gc_auto(Some("0")), None);
+        // Explicit thresholds.
+        assert_eq!(resolve_store_gc_auto(Some("1000")), Some(1000));
+        assert_eq!(resolve_store_gc_auto(Some("  250 ")), Some(250));
+        // Garbage → default, never a silent disable.
+        assert_eq!(
+            resolve_store_gc_auto(Some("banana")),
+            Some(STORE_GC_AUTO_DEFAULT)
+        );
+        assert_eq!(
+            resolve_store_gc_auto(Some("-5")),
+            Some(STORE_GC_AUTO_DEFAULT)
+        );
+    }
+
+    /// A fresh store worktree has the lowered `gc.auto` set on its repo, so git
+    /// auto-repacks the shared object store far sooner than its 6700 default.
+    // trace:TASK-1033 | ai:claude
+    #[test]
+    fn create_store_worktree_sets_lowered_gc_auto() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+        // Need at least one commit before adding a worktree.
+        std::fs::write(repo.join("README.md"), "hi").unwrap();
+        add(&repo, &["README.md"]).unwrap();
+        commit(&repo, "init").unwrap();
+
+        let worktree = create_store_worktree(&repo, ".aida-store", "aida-store").unwrap();
+
+        // `git config gc.auto` from the worktree reads the shared common
+        // config, which create_store_worktree just set.
+        let got = git(&worktree, &["config", "gc.auto"]).unwrap();
+        assert!(got.success, "gc.auto should be set on the store repo");
+        assert_eq!(got.stdout, STORE_GC_AUTO_DEFAULT.to_string());
     }
 }
