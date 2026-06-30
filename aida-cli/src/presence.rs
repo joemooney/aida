@@ -10,11 +10,18 @@
 //! COMPUTED, not just stored. `effective_presence()` is the pure function that
 //! encodes that, unit-tested below.
 //!
-//! This slice is READ-ONLY state: nothing consumes presence to change a
-//! command's behavior. Consumer wiring (burndown / escalation / questions /
-//! pickup) is a deferred follow-up.
+//! The TASK-756 primitive was READ-ONLY state. Consumer wiring (STORY-561) has
+//! since landed: presence now sets DEFAULTS for mode selection via the
+//! `[presence]` config block — `consumers` (master switch), `away_drain`
+//! (consumer a: `aida burndown run` drain mode + the coupled escalation
+//! default, see `resolve_drain_mode`), and `home_offer` (consumer d: home-side
+//! keystone surfacing). Presence is ADVISORY only: explicit per-command flags
+//! always win and integrity gates (CI / merge-on-green / authority) always
+//! apply. Still un-wired: consumer (c) `aida questions` quiet-when-away
+//! accumulation, which is gated on the questions inbox (STORY-555); and a
+//! standalone escalation knob decoupled from `away_drain` (TASK-769).
 //!
-// trace:TASK-756 | ai:claude
+// trace:TASK-756 trace:STORY-561 | ai:claude
 
 use std::path::{Path, PathBuf};
 
