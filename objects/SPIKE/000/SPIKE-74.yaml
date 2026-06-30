@@ -3,12 +3,12 @@ spec_id: SPIKE-74
 agreed_id: SPIKE-74
 title: Agent-agnostic drain backend (claude/codex behind a trait)
 description: 'no-mistakes runs the same gate across claude/codex/opencode/copilot/acp behind one Agent interface; AIDAs drain is hardcoded to claude -p. Our cross-vendor thesis wants neutrality but the keystone loop is single-vendor. Abstract phase-launch behind a backend trait (prompt/cwd/env/schema/stream) with claude+codex adapters via [drain] agent. Mirrors EPIC-35 forge abstraction for the implementer. STRATEGIC: L.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:10:17.133315871Z
-modified_at: 2026-06-29T15:33:28.259973690Z
+modified_at: 2026-06-30T04:21:48.167148324Z
 req_type: Spike
 tags:
 - axi
