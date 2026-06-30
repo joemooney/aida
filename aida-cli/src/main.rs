@@ -136746,6 +136746,28 @@ impl DrainTuning {
     }
 }
 
+/// Format the periodic liveness heartbeat an otherwise-silent headless phase
+/// emits every ~30s — actor + spec + elapsed + time since the last observed
+/// activity. The watchdog already computes "time since last progress" to decide
+/// when to KILL a degenerate session; this turns that same signal into
+/// reassurance so the operator can tell "working hard" from "hung". Pure so the
+/// elapsed / since-progress formatting is pinned by a unit test (no real drive).
+// trace:STORY-726 | ai:claude
+fn phase_heartbeat_line(
+    actor: &str,
+    spec: &str,
+    elapsed: std::time::Duration,
+    since_progress: std::time::Duration,
+) -> String {
+    let e = elapsed.as_secs();
+    format!(
+        "{actor} working on {spec} ({}m {}s elapsed, last activity {}s ago)",
+        e / 60,
+        e % 60,
+        since_progress.as_secs(),
+    )
+}
+
 /// BUG-420: a phase-scoped no-progress + wall-clock-ceiling watchdog for a
 /// *headless* orchestrator phase. While the `claude -p` child runs, the
 /// orchestrator's [`exit_signal::spawn_and_wait_watched`] poll loop calls
@@ -136770,6 +136792,13 @@ struct PhaseWatchdog {
     no_progress: std::time::Duration,
     ceiling: std::time::Duration,
     worktree: Option<std::path::PathBuf>,
+    /// STORY-726: when `Some((actor, spec))`, the watchdog also emits a
+    /// liveness heartbeat to stderr on each poll tick where it does NOT trip —
+    /// reassurance that an otherwise-silent headless phase is alive. Set only
+    /// when the phase would run silent (headless + teeing off); a teed or
+    /// interactive phase already streams its own progress.
+    // trace:STORY-726 | ai:claude
+    heartbeat: Option<(String, String)>,
 }
 
 impl PhaseWatchdog {
@@ -136796,6 +136825,30 @@ impl PhaseWatchdog {
             no_progress,
             ceiling,
             worktree: None,
+            heartbeat: None,
+        }
+    }
+
+    /// STORY-726: arm the periodic liveness heartbeat. `actor` is the phase
+    /// noun ("implementer"), `spec` the SPEC-ID being worked. Call only when the
+    /// phase would otherwise be silent so the heartbeat never double-prints over
+    /// a teed/interactive child.
+    // trace:STORY-726 | ai:claude
+    fn with_heartbeat(mut self, actor: impl Into<String>, spec: impl Into<String>) -> Self {
+        self.heartbeat = Some((actor.into(), spec.into()));
+        self
+    }
+
+    /// Emit one liveness heartbeat (when armed). Mirrors the CI-wait phase's
+    /// `CI still running …` reassurance so an unattended drive is never dark.
+    // trace:STORY-726 | ai:claude
+    fn emit_heartbeat(&self, since_progress: std::time::Duration, total: std::time::Duration) {
+        if let Some((actor, spec)) = &self.heartbeat {
+            eprintln!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
+                phase_heartbeat_line(actor, spec, total, since_progress),
+            );
         }
     }
 
@@ -136840,8 +136893,11 @@ impl PhaseWatchdog {
     /// Probe (rate-limited) and return `Some(reason)` if the watchdog should
     /// trip — the caller then reaps the child. trace:BUG-420 | ai:claude
     fn check(&mut self) -> Option<String> {
-        // Both checks disabled → never trips.
-        if self.no_progress.is_zero() && self.ceiling.is_zero() {
+        // Both kill-checks disabled AND no heartbeat to emit → nothing to do.
+        // STORY-726: with the heartbeat armed we still poll (on the same coarse
+        // cadence) so a silent headless phase stays visibly alive even if a user
+        // disabled the no-progress / ceiling kills.
+        if self.no_progress.is_zero() && self.ceiling.is_zero() && self.heartbeat.is_none() {
             return None;
         }
         let now = std::time::Instant::now();
@@ -136906,13 +136962,17 @@ impl PhaseWatchdog {
             return Some(reason);
         }
 
-        auto_complete::watchdog_verdict(
-            now.duration_since(self.last_progress),
-            now.duration_since(self.phase_start),
-            self.no_progress,
-            self.ceiling,
-        )
-        .map(|t| self.trip_reason(t))
+        let since_progress = now.duration_since(self.last_progress);
+        let total = now.duration_since(self.phase_start);
+        let verdict =
+            auto_complete::watchdog_verdict(since_progress, total, self.no_progress, self.ceiling);
+        // STORY-726: not tripping → the phase is alive; emit the reassurance
+        // heartbeat (when armed) using the very signal the watchdog would
+        // otherwise only weaponize to kill.
+        if verdict.is_none() {
+            self.emit_heartbeat(since_progress, total);
+        }
+        verdict.map(|t| self.trip_reason(t))
     }
 
     fn trip_reason(&self, trip: auto_complete::WatchdogTrip) -> String {
@@ -137784,12 +137844,23 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // owns its own coarse git-poll cadence; the spawn loop just consults it.
         // trace:BUG-420 | ai:claude
         let mut watchdog = headless_impl.then(|| {
-            PhaseWatchdog::new(
+            let wd = PhaseWatchdog::new(
                 self.project_root.clone(),
                 session_uuid.clone(),
                 self.drain_tuning.no_progress,
                 self.drain_tuning.ceiling,
-            )
+            );
+            // STORY-726: a headless implementer with teeing off (`--no-tee-headless`
+            // / `AIDA_TEE_HEADLESS=0`) runs in TOTAL silence until it exits or the
+            // watchdog kills it — the operator can't tell "thinking hard" from
+            // "hung". Arm the liveness heartbeat ONLY in that silent case; a teed
+            // child already streams its own progress, so don't double up.
+            // trace:STORY-726 | ai:claude
+            if crate::headless_tee::TeeOptions::from_env_and_flag(false).enabled {
+                wd
+            } else {
+                wd.with_heartbeat("implementer", &self.spec)
+            }
         });
         let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
         let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
@@ -143680,6 +143751,47 @@ mod queue_json_rows_tests {
         let summaries = vec![summary(id, None, None)];
         let rows = queue_json_rows(&[entry(id, None)], &summaries);
         assert_eq!(rows[0]["spec_id"], "?");
+    }
+}
+
+#[cfg(test)]
+mod phase_heartbeat_tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// STORY-726: the heartbeat line carries the actor, the spec, the elapsed
+    /// wall-clock (m + s), and the seconds-since-last-activity the watchdog
+    /// already tracks — the reassurance signal an unattended drive needs.
+    // trace:STORY-726 | ai:claude
+    #[test]
+    fn formats_elapsed_minutes_seconds_and_since_progress() {
+        let line = phase_heartbeat_line(
+            "implementer",
+            "STORY-726",
+            Duration::from_secs(4 * 60 + 18),
+            Duration::from_secs(12),
+        );
+        assert_eq!(
+            line,
+            "implementer working on STORY-726 (4m 18s elapsed, last activity 12s ago)"
+        );
+    }
+
+    /// Sub-minute elapsed reads `0m Ns`, and a zero since-progress (a just-reset
+    /// timer) reads `0s ago` rather than panicking or rolling over.
+    // trace:STORY-726 | ai:claude
+    #[test]
+    fn handles_sub_minute_and_zero_since_progress() {
+        let line = phase_heartbeat_line(
+            "implementer",
+            "BUG-1",
+            Duration::from_secs(42),
+            Duration::from_secs(0),
+        );
+        assert_eq!(
+            line,
+            "implementer working on BUG-1 (0m 42s elapsed, last activity 0s ago)"
+        );
     }
 }
 
