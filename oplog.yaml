@@ -27033,5 +27033,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2584
+- id: 019f16c3-4a39-7871-970a-2826d6ab7cb8
+  target_id: 019f16c3-397a-7eb3-a09a-904c8679956d
+  author: aida
+  node_id: '1'
+  lamport: 2585
+  timestamp: 2026-06-30T04:22:05.113796414Z
+  kind: !Create
+    title: '`.mcp.json` → codex/gemini MCP config translation for headless drain agents'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2585
 node_id: '1'
