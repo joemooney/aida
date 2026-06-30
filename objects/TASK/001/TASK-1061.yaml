@@ -3,12 +3,12 @@ spec_id: TASK-1061
 agreed_id: TASK-1061
 title: 'status --full non-git floor: cut the ~5s CPU + ~6s blocked (live-session /proc probe + backend.load()) now-dominant after the git fan-out fix'
 description: ''
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:53:37.415853178Z
-modified_at: 2026-06-30T17:53:37.415853178Z
+modified_at: 2026-06-30T18:38:20.921134093Z
 req_type: Task
 tags:
 - from-audit
