@@ -8,9 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:28:16.114450654Z
-modified_at: 2026-06-30T03:54:24.765705552Z
+modified_at: 2026-06-30T06:18:23.653822783Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019ef7a2-20e2-7090-a019-58f0f267ee52
   created_at: 2026-06-30T02:28:21.717465590Z
+deferred: true
+deferred_at: 2026-06-30T06:18:23.653822783Z
+deferred_until: premature plan-followup (auto-filed from a design plan); revisit when the parent feature's build reaches the relevant slice
