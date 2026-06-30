@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:18.954962222Z
-modified_at: 2026-06-30T02:27:03.636780533Z
+modified_at: 2026-06-30T18:54:54.714575798Z
 req_type: Epic
 tags:
 - advisor-autopilot
@@ -66,3 +66,8 @@ comments:
   content: 'Operator RATIFIED the advisor-autopilot direction (2026-06-29). The 4 design plans are approved for build. Build order: TASK-1006 (autonomy-doc section-8 + framing) -> TASK-1007 (pure evaluate() contract) -> TASK-0430 audit-log + TASK-0431 product-evidence. Slice 1 (TASK-1006) starting now.'
   created_at: 2026-06-30T02:27:03.636780533Z
   modified_at: 2026-06-30T02:27:03.636780533Z
+- id: 019f19e2-62fa-7241-b8a5-71cddb373fa9
+  author: joe
+  content: Commit be4738c33 references this requirement
+  created_at: 2026-06-30T18:54:54.714575798Z
+  modified_at: 2026-06-30T18:54:54.714575798Z
