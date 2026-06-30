@@ -27317,5 +27317,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 2614
+- id: 019f173a-61bc-73b0-b85c-b73f28a0caa3
+  target_id: 019f173a-5a04-7020-80a5-80431fc44401
+  author: aida
+  node_id: '1'
+  lamport: 2615
+  timestamp: 2026-06-30T06:32:09.916073260Z
+  kind: !Create
+    title: 'Front-door actionable launcher: no-args/status/list show live actionable work + lead with zen/ship'
+    description: ''
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 2615
 node_id: '1'
