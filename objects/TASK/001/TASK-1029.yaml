@@ -1,0 +1,12 @@
+id: 019f165c-fd1f-7263-9f3e-1ca441e77357
+spec_id: TASK-1029
+agreed_id: TASK-1029
+title: TASK-0432 — does a product seat change anything under `--no-human`/solo? (No new authority, but the audit `mode` should note product-sourced decisions taken during a headless drain.)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T02:30:20.703745188Z
+modified_at: 2026-06-30T02:30:20.703745188Z
+req_type: Task
