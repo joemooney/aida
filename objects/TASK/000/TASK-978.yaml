@@ -3,12 +3,12 @@ spec_id: TASK-978
 agreed_id: TASK-978
 title: 'TUI: per-row liveness glyph in the Targets list (●live / ⚠STALE / idle)'
 description: 'Render a per-row work-liveness glyph in the redesign Targets list, sourced from the same data as `aida ps`: ● live (a session/lease is actively backing the spec), ⚠ STALE (flag set but no live session), or blank (idle/no session). Complements TASK-953 (the on-demand `status` verb) by making liveness ambient — visible without drilling into a verb. Motivating gap: an operator who just queued a spec to the implementer cannot tell from the list whether anything is working it. Reframes the rejected idea of putting liveness in the one-shot queue-confirmation message (wrong surface: that fires at queue-time when no session exists yet).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T04:52:50.921063666Z
-modified_at: 2026-06-30T23:04:57.650221484Z
+modified_at: 2026-06-30T23:17:03.304189243Z
 req_type: Task
 tags:
 - needs-design
