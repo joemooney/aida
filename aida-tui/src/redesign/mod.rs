@@ -29,7 +29,7 @@ pub use state::{RedesignState, RunOutcome, Scope, TargetItem, Verb};
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::Duration;
-use store::{LoadedComment, LoadedSpec, SpecStore};
+use store::{LoadedComment, LoadedRelation, LoadedSpec, SpecGraph, SpecStore};
 
 use crate::term;
 use crate::theme::Theme;
@@ -428,6 +428,7 @@ fn missing_spec(id: &str) -> LoadedSpec {
         tags: Vec::new(),
         description: format!("(could not load {id} from the store)"),
         comments: Vec::new(),
+        graph: SpecGraph::default(),
     }
 }
 
@@ -2334,6 +2335,14 @@ fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Vec<Line<'a>> {
         lines.extend(markdown_to_lines(&spec.description, theme));
     }
 
+    // Relationship graph section (STORY-739): the spec's typed graph — parent
+    // epic, children, blocked-by / blocks chains, references — surfaced right
+    // after the body. This is AIDA's #1 differentiator (the requirement graph
+    // `aida show` / `aida graph` print on the CLI) shown at the natural dig-in
+    // gesture. Omitted entirely when the spec has no relationships, so an
+    // unconnected spec shows no empty header.
+    lines.extend(graph_lines(&spec.graph, theme));
+
     // Comments / advisor disposition section (TASK-932): surfaced below the
     // body so the human can READ "approved because X" inside the TUI. Always
     // present (even with no comments) so the disposition affordance is
@@ -2391,6 +2400,82 @@ fn comment_lines<'a>(comments: &'a [LoadedComment], theme: &Theme) -> Vec<Line<'
         }
     }
     lines
+}
+
+/// Render a spec's relationship graph as styled modal lines: a `── Graph ──`
+/// header followed by one labelled group per non-empty relation (Parent epic,
+/// Children, Blocked by, Blocks, References), each row a status glyph + id +
+/// title + `[status]`. Surfacing the typed graph here is AIDA's #1 differentiator
+/// shown at the dig-in gesture — the same edges `aida show` / `aida graph` print.
+/// Returns NO lines when the graph is empty, so an unconnected spec shows no
+/// header (the caller appends nothing). A PURE function (no IO) so the
+/// graph→lines mapping is render-smoke testable.
+// trace:STORY-739 | ai:claude
+fn graph_lines<'a>(graph: &'a SpecGraph, theme: &Theme) -> Vec<Line<'a>> {
+    if graph.is_empty() {
+        return Vec::new();
+    }
+    let glyph_mode = list_row::GlyphMode::from_env();
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "── Graph ──",
+        Style::default().fg(theme.dim).add_modifier(Modifier::BOLD),
+    )));
+    // The groups, in a deliberate reading order: where the spec sits in the
+    // hierarchy (parent → children) then its dependency edges (blockers → blocks)
+    // then loose references.
+    let groups: [(&str, &[LoadedRelation]); 5] = [
+        ("Parent epic", &graph.parents),
+        ("Children", &graph.children),
+        ("Blocked by", &graph.blocked_by),
+        ("Blocks", &graph.blocks),
+        ("References", &graph.references),
+    ];
+    for (label, rels) in groups {
+        if rels.is_empty() {
+            continue;
+        }
+        lines.push(Line::from(Span::styled(
+            format!("{label}:"),
+            Style::default().fg(theme.dim),
+        )));
+        for rel in rels {
+            lines.push(relation_row(rel, glyph_mode, theme));
+        }
+    }
+    lines
+}
+
+/// One graph row: `  <status-glyph> <id> <title> [<status>]`. The glyph + the
+/// `[status]` tag carry the status colour (the cockpit's `list_row` palette);
+/// the id is accent, the title plain. A PURE helper so the row idiom is shared
+/// across groups.
+// trace:STORY-739 | ai:claude
+fn relation_row<'a>(rel: &'a LoadedRelation, mode: list_row::GlyphMode, theme: &Theme) -> Line<'a> {
+    let status_style = list_row::status_style(&rel.status, theme);
+    let mut spans: Vec<Span> = vec![
+        Span::styled(
+            format!("  {} ", list_row::status_glyph(&rel.status, mode)),
+            status_style,
+        ),
+        Span::styled(
+            rel.id.clone(),
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ];
+    if !rel.title.is_empty() {
+        spans.push(Span::styled(
+            format!(" {}", rel.title),
+            Style::default().fg(theme.fg),
+        ));
+    }
+    if !rel.status.is_empty() {
+        spans.push(Span::styled(format!("  [{}]", rel.status), status_style));
+    }
+    Line::from(spans)
 }
 
 /// Parse a markdown body into styled ratatui [`Line`]s — a PURE function (no
@@ -3116,6 +3201,7 @@ mod render_tests {
             tags: vec!["performance".into(), "tui".into()],
             description: "Line one.\n\nLine two of the body.".into(),
             comments: vec![],
+            graph: SpecGraph::default(),
         }
     }
 
@@ -3240,6 +3326,7 @@ mod render_tests {
             tags: vec![],
             description: "Intro paragraph.\n\n## Test Plan\n1. do X → expect Y".into(),
             comments: vec![],
+            graph: SpecGraph::default(),
         };
         // Not in the Test scope → untouched (full description).
         let untouched = test_plan_view(&st, spec.clone());
@@ -3757,6 +3844,7 @@ mod render_tests {
                 when: "2026-06-26 16:27".into(),
                 content: "approved because the slice is well-bounded".into(),
             }],
+            graph: SpecGraph::default(),
         };
         draw_with_spec(&st, Some(&spec), 100, 30);
         // Tiny terminal must not panic either.
@@ -3801,6 +3889,7 @@ mod render_tests {
             tags: vec![],
             description: body,
             comments: vec![],
+            graph: SpecGraph::default(),
         };
         st.modal_scroll = 9999; // way past the end
         draw_with_spec(&st, Some(&spec), 100, 30);
@@ -3827,6 +3916,7 @@ mod render_tests {
             tags: vec![],
             description: body,
             comments: vec![],
+            graph: SpecGraph::default(),
         };
         let lines = spec_lines(&spec, &theme);
         let inner_w = 40u16;
@@ -3921,6 +4011,76 @@ mod render_tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(bare_blob.contains("No comments."));
+    }
+
+    /// STORY-739: `spec_lines` renders the relationship-graph section — the
+    /// `── Graph ──` header, a labelled group per non-empty relation, and one
+    /// `<id> <title> [<status>]` row per related spec — and OMITS empty groups
+    /// (and the whole section when the spec has no relationships).
+    #[test]
+    fn spec_lines_renders_graph_section_grouped_and_omits_empty() {
+        let theme = Theme::default();
+        let mut spec = sample_spec();
+        spec.graph = SpecGraph {
+            parents: vec![LoadedRelation {
+                id: "EPIC-7".into(),
+                title: "the epic".into(),
+                status: "InProgress".into(),
+            }],
+            children: vec![
+                LoadedRelation {
+                    id: "TASK-2".into(),
+                    title: "child one".into(),
+                    status: "Approved".into(),
+                },
+                LoadedRelation {
+                    id: "TASK-3".into(),
+                    title: "child two".into(),
+                    status: "Done".into(),
+                },
+            ],
+            blocked_by: vec![LoadedRelation {
+                id: "BUG-9".into(),
+                title: "a blocker".into(),
+                status: "Draft".into(),
+            }],
+            blocks: vec![],
+            references: vec![],
+        };
+        let blob: String = spec_lines(&spec, &theme)
+            .iter()
+            .map(line_text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(blob.contains("── Graph ──"), "graph header shown");
+        assert!(blob.contains("Parent epic:"), "parent group label shown");
+        assert!(blob.contains("EPIC-7"), "parent id shown");
+        assert!(blob.contains("the epic"), "parent title shown");
+        assert!(blob.contains("Children:"), "children group label shown");
+        assert!(blob.contains("TASK-2"), "first child shown");
+        assert!(blob.contains("TASK-3"), "second child shown");
+        assert!(blob.contains("Blocked by:"), "blocked-by group label shown");
+        assert!(blob.contains("BUG-9"), "blocker shown");
+        assert!(blob.contains("[Approved]"), "status tag rendered on a row");
+        // Empty groups produce no header.
+        assert!(!blob.contains("Blocks:"), "empty blocks group omitted");
+        assert!(
+            !blob.contains("References:"),
+            "empty references group omitted"
+        );
+
+        // A spec with NO relationships renders no graph section at all.
+        let bare = sample_spec();
+        assert!(bare.graph.is_empty());
+        let bare_blob: String = spec_lines(&bare, &theme)
+            .iter()
+            .map(line_text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !bare_blob.contains("── Graph ──"),
+            "no graph header for an unconnected spec"
+        );
     }
 }
 
