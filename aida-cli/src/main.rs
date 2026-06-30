@@ -56957,6 +56957,73 @@ fn followup_already_filed(
         .any(|(p, title)| p == parent && norm(title) == want)
 }
 
+// BUG-656: BUG-655's per-parent `(parent, title)` dedup was not enough. The
+// auto-followups path keys child TASKs to the *completing spec*, so the same
+// plan's bullets get re-filed when a DIFFERENT spec completes — either because
+// the plan's header lists several specs (each "owns" the plan and re-extracts
+// it) or because the same followup text was copied into a sibling plan. On
+// EPIC-0428 this re-filed ~14 cross-plan duplicate TASKs (TASK-1019-1032). The
+// stable signature is the PLAN PATH, not the completing spec: a plan's followups
+// must be extracted exactly once across the whole store. The marker comment
+// already records `extracted from <relative plan paths>`; we parse that back out
+// of every spec's comments to build the already-extracted set, then skip any
+// plan already in it. A re-completion, a sibling-spec completion, or a slice PR
+// landing the plan twice all become no-ops at the plan granularity.
+
+/// Parse the plan paths a [`FOLLOWUPS_MARKER`] comment records. The marker's
+/// first line is `[aida:followups] extracted from <p1>, <p2>, ...`; everything
+/// after `extracted from` up to the newline is the comma-separated relative
+/// plan-path list. Returns the trimmed, non-empty paths (empty for any comment
+/// that is not a followups marker, or a marker with no `extracted from` clause).
+/// Pure + total so it is unit-testable in isolation.
+// trace:BUG-656 | ai:claude
+fn parse_extracted_plans_from_marker(comment: &str) -> Vec<String> {
+    let Some(rest) = comment.strip_prefix(FOLLOWUPS_MARKER) else {
+        return Vec::new();
+    };
+    let Some(first_line) = rest.lines().next() else {
+        return Vec::new();
+    };
+    let Some(paths) = first_line.trim().strip_prefix("extracted from ") else {
+        return Vec::new();
+    };
+    paths
+        .split(',')
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
+/// BUG-656: the cross-store stable signature. Given the relative plan paths a
+/// completing spec owns and the set of plan paths already extracted (parsed from
+/// every spec's [`FOLLOWUPS_MARKER`] comments), return only the plans not yet
+/// extracted. Empty result ⇒ every owned plan's followups were already filed by
+/// an earlier completion, so the whole pass is a no-op. Pure + total.
+// trace:BUG-656 | ai:claude
+fn plans_pending_extraction(
+    owned_rel_paths: &[String],
+    already_extracted: &std::collections::HashSet<String>,
+) -> Vec<String> {
+    owned_rel_paths
+        .iter()
+        .filter(|p| !already_extracted.contains(*p))
+        .cloned()
+        .collect()
+}
+
+/// BUG-656: secondary global-title guard. The plan-path signature stops a plan
+/// being re-extracted, but the SAME followup text copied into a *distinct*
+/// sibling plan (a different owning spec, a different path) would still slip
+/// through. `existing_titles` is the normalized titles of every followup TASK
+/// already filed across the store; a bullet whose trimmed/case-insensitive title
+/// matches one of them has already been filed somewhere and is skipped. Pure +
+/// total.
+// trace:BUG-656 | ai:claude
+fn followup_filed_anywhere(existing_titles: &[String], bullet: &str) -> bool {
+    let want = bullet.trim().to_ascii_lowercase();
+    existing_titles.iter().any(|t| *t == want)
+}
+
 /// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
 /// in the `# Plan:` title line or the `Specs:` header line. Cross-references
 /// in a `## Related` section don't count (that plan owns a different spec).
@@ -57440,6 +57507,50 @@ fn extract_plan_followups(
         return Ok(());
     }
 
+    // BUG-656: plan-path stable signature — the cross-store guarantee. Build the
+    // set of plan paths whose followups have ALREADY been extracted (by this
+    // spec, a re-completion, or any sibling spec that also owns the plan), then
+    // drop owned plans already in it. The per-spec marker comment above only
+    // suppresses re-runs of the SAME spec; this keys dedup on the plan path so a
+    // plan whose header lists several specs is extracted exactly once. Without
+    // it, completing each EPIC-0428 design task re-extracted the shared plans
+    // and re-filed their followups (TASK-1019-1032). trace:BUG-656 | ai:claude
+    let already_extracted: std::collections::HashSet<String> = store
+        .requirements
+        .iter()
+        .flat_map(|r| r.comments.iter())
+        .flat_map(|c| parse_extracted_plans_from_marker(&c.content))
+        .collect();
+    let owned_rel_paths: Vec<String> = plan_files
+        .iter()
+        .map(|p| {
+            p.strip_prefix(project_root)
+                .unwrap_or(p)
+                .display()
+                .to_string()
+        })
+        .collect();
+    let pending: std::collections::HashSet<String> =
+        plans_pending_extraction(&owned_rel_paths, &already_extracted)
+            .into_iter()
+            .collect();
+    if pending.is_empty() {
+        // Every owned plan's followups were already filed by an earlier
+        // completion — re-completion / sibling-spec completion is a no-op.
+        return Ok(());
+    }
+    let plan_files: Vec<std::path::PathBuf> = plan_files
+        .into_iter()
+        .filter(|p| {
+            let rel = p
+                .strip_prefix(project_root)
+                .unwrap_or(p)
+                .display()
+                .to_string();
+            pending.contains(&rel)
+        })
+        .collect();
+
     // BUG-655: content-level dedup set — the `(parent_spec, title)` of every
     // child TASK the parent already has. The marker comment above is the
     // fast-path, but a plan committed by more than one slice PR can fire the
@@ -57455,6 +57566,36 @@ fn extract_plan_followups(
             .filter_map(|r| store.get_requirement_by_id(&r.target_id))
             .map(|child| (spec_id.to_string(), child.title.clone()))
             .collect()
+    };
+
+    // BUG-656: secondary global-title guard. Collect the normalized titles of
+    // every followup TASK already filed across the store — the child TASKs of
+    // any spec that carries a FOLLOWUPS_MARKER. If the same bullet text was
+    // copied into a distinct sibling plan (a different owning spec, a path the
+    // plan-path signature above won't match), this stops it being re-filed under
+    // the new parent. We grow it in the filing loop too. trace:BUG-656 | ai:claude
+    let mut global_filed_titles: Vec<String> = {
+        use aida_core::models::RelationshipType;
+        let mut titles = Vec::new();
+        for r in &store.requirements {
+            if !r
+                .comments
+                .iter()
+                .any(|c| c.content.starts_with(FOLLOWUPS_MARKER))
+            {
+                continue;
+            }
+            for rel in r
+                .relationships
+                .iter()
+                .filter(|rel| rel.rel_type == RelationshipType::Parent)
+            {
+                if let Some(child) = store.get_requirement_by_id(&rel.target_id) {
+                    titles.push(child.title.trim().to_ascii_lowercase());
+                }
+            }
+        }
+        titles
     };
 
     // Collect + dedupe followup bullets across every owning plan file.
@@ -57504,7 +57645,12 @@ fn extract_plan_followups(
         // commit's run) — skip it without prompting, so a plan landed by
         // multiple PRs cannot double-file. This is the cross-commit guarantee
         // the per-spec marker comment cannot make.
-        if followup_already_filed(&existing_children, spec_id, followup) {
+        // BUG-656: also skip a bullet whose title was already filed as a
+        // followup TASK ANYWHERE in the store — the same text copied into a
+        // sibling plan owned by a different spec must not become a duplicate.
+        if followup_already_filed(&existing_children, spec_id, followup)
+            || followup_filed_anywhere(&global_filed_titles, followup)
+        {
             deduped.push(followup.clone());
             continue;
         }
@@ -57537,8 +57683,10 @@ fn extract_plan_followups(
             match aida_subcmd_add_followup_task(project_root, spec_id, followup) {
                 Some(new_id) => {
                     // Record the title so a later identical bullet in the same
-                    // plan is recognised as already-filed (BUG-655).
+                    // plan is recognised as already-filed (BUG-655), both
+                    // per-parent and globally (BUG-656).
                     existing_children.push((spec_id.to_string(), followup.clone()));
+                    global_filed_titles.push(followup.trim().to_ascii_lowercase());
                     filed.push((new_id, followup.clone()));
                 }
                 None => declined.push(followup.clone()),
@@ -68921,6 +69069,118 @@ diff --git a/gone.rs b/gone.rs
             }
         }
         assert_eq!(filed, vec!["Tighten the retry budget".to_string()]);
+    }
+
+    /// BUG-656: the marker comment records `extracted from <relative paths>`;
+    /// the parser pulls that comma-separated list back out for the cross-store
+    /// plan-path dedup. A non-marker comment, or a marker without an
+    /// `extracted from` clause, yields nothing.
+    #[test]
+    fn parse_extracted_plans_from_marker_pulls_the_plan_paths() {
+        // The exact shape `extract_plan_followups` writes.
+        let marker = format!(
+            "{} extracted from docs/plans/a.md, docs/plans/b.md\nfiled 2 task(s): TASK-1, TASK-2",
+            FOLLOWUPS_MARKER
+        );
+        assert_eq!(
+            parse_extracted_plans_from_marker(&marker),
+            vec!["docs/plans/a.md".to_string(), "docs/plans/b.md".to_string()]
+        );
+        // A single plan, filed-0 variant — still records the plan path.
+        let single = format!(
+            "{} extracted from docs/plans/solo.md\nfiled 0 task(s)",
+            FOLLOWUPS_MARKER
+        );
+        assert_eq!(
+            parse_extracted_plans_from_marker(&single),
+            vec!["docs/plans/solo.md".to_string()]
+        );
+        // An unrelated comment contributes no plan paths.
+        assert!(parse_extracted_plans_from_marker("just a normal comment").is_empty());
+        // A marker missing the `extracted from` clause contributes nothing.
+        assert!(parse_extracted_plans_from_marker(FOLLOWUPS_MARKER).is_empty());
+    }
+
+    /// BUG-656: running the followup filing twice over the SAME plan files the
+    /// children only on the first completion — the second run is a no-op. The
+    /// stable signature is the plan PATH, not the completing spec, so this holds
+    /// even when the re-completion is a different spec that also owns the plan
+    /// (a plan header listing several specs, as on EPIC-0428).
+    #[test]
+    fn followup_extraction_is_idempotent_per_plan_across_completions() {
+        let plan = "docs/plans/2026-06-30-shared.md".to_string();
+
+        // First completion: nothing extracted yet, so the plan is pending.
+        let already_extracted: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let pending_first = plans_pending_extraction(&[plan.clone()], &already_extracted);
+        assert_eq!(
+            pending_first,
+            vec![plan.clone()],
+            "first completion must process the plan"
+        );
+
+        // The first run wrote `[aida:followups] extracted from <plan>`; rebuild
+        // the already-extracted set from that marker, exactly as the real path
+        // does by scanning every spec's comments.
+        let marker = format!(
+            "{} extracted from {}\nfiled 2 task(s)",
+            FOLLOWUPS_MARKER, plan
+        );
+        let already_extracted: std::collections::HashSet<String> =
+            parse_extracted_plans_from_marker(&marker)
+                .into_iter()
+                .collect();
+
+        // Second completion (re-completion, OR a sibling spec that also owns the
+        // plan): the plan is no longer pending, so nothing is re-filed.
+        let pending_second = plans_pending_extraction(&[plan.clone()], &already_extracted);
+        assert!(
+            pending_second.is_empty(),
+            "re-completing a plan already extracted must be a no-op, got {pending_second:?}"
+        );
+    }
+
+    /// BUG-656: a cross-plan completion does NOT re-file another plan's
+    /// followups. Spec A owns plan-A; spec B's header also references plan-A (so
+    /// B "owns" it) plus its own plan-B. After A extracts plan-A, completing B
+    /// processes only plan-B — plan-A's followups are not re-filed under B.
+    #[test]
+    fn cross_plan_completion_does_not_refile_another_plans_followups() {
+        let plan_a = "docs/plans/a.md".to_string();
+        let plan_b = "docs/plans/b.md".to_string();
+
+        // Spec A completes first and extracts plan-A.
+        let after_a: std::collections::HashSet<String> =
+            parse_extracted_plans_from_marker(&format!(
+                "{} extracted from {}\nfiled 1 task(s)",
+                FOLLOWUPS_MARKER, plan_a
+            ))
+            .into_iter()
+            .collect();
+
+        // Spec B owns BOTH plan-A (cross-reference) and plan-B. Only plan-B is
+        // pending — plan-A was already extracted by A.
+        let b_owned = vec![plan_a.clone(), plan_b.clone()];
+        let pending = plans_pending_extraction(&b_owned, &after_a);
+        assert_eq!(
+            pending,
+            vec![plan_b.clone()],
+            "B must only extract its own plan, not re-file plan-A's followups"
+        );
+    }
+
+    /// BUG-656: the secondary global-title guard catches the same followup text
+    /// copied into a DISTINCT sibling plan (a different path the plan-path
+    /// signature won't match). Once `alpha` is filed anywhere, a sibling plan's
+    /// identical bullet is recognised as already-filed regardless of parent;
+    /// trim + case-insensitive.
+    #[test]
+    fn followup_filed_anywhere_dedups_copied_bullet_text() {
+        let filed = vec!["alpha".to_string(), "wire the path".to_string()];
+        assert!(followup_filed_anywhere(&filed, "alpha"));
+        assert!(followup_filed_anywhere(&filed, "  ALPHA  "));
+        assert!(!followup_filed_anywhere(&filed, "beta"));
+        assert!(!followup_filed_anywhere(&[], "anything"));
     }
 
     /// BUG-105: when multiple plan files own the same spec, discover_plan_context
