@@ -3,12 +3,12 @@ spec_id: STORY-731
 agreed_id: STORY-731
 title: 'Single-spec drive failure: name it as shelved-not-crashed + point to findings list (parity with batch)'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T08:42:24.569457595Z
-modified_at: 2026-06-30T08:42:24.569457595Z
+modified_at: 2026-06-30T08:59:47.594800965Z
 req_type: Story
 tags:
 - drive
