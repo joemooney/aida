@@ -1,0 +1,28 @@
+id: 019f16b6-e492-77e1-a1ee-fa071722cd21
+spec_id: TASK-0439
+title: Show parent requirement details in tree group headers
+description: |-
+  `aida list open --tree` currently renders parent groups like `EPIC-56 (5 items)` without the parent requirement's own title/status/details. That makes the parent look like a synthetic or Unscoped bucket instead of the actual requirement.
+
+  Desired behavior: when a tree group is backed by a real parent requirement, render the parent row with its normal identifying details at the parent level, and treat the child count as metadata. For example, prefer output shaped like `EPIC-56 (5 items) Apply AXI...` or `EPIC-56 Apply AXI... [5 items]`, followed by the child rows.
+
+  Acceptance criteria:
+  - `aida list open --tree` shows the real parent requirement title/details for scoped parent groups such as `EPIC-56`, not only the item count.
+  - Child rows remain nested below the parent as they are today.
+  - Synthetic buckets such as truly unscoped groups remain distinguishable from real parent requirements.
+  - Add or update coverage for the tree renderer so parent-backed group headers cannot regress to count-only output.
+status: Draft
+priority: Medium
+owner: ''
+feature: cli
+created_at: 2026-06-30T04:08:32.658638894Z
+modified_at: 2026-06-30T04:08:32.658638894Z
+req_type: Task
+tags:
+- aida:list
+- papercut
+- tree
+relationships:
+- rel_type: Child
+  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
+  created_at: 2026-06-30T04:08:32.658846789Z
