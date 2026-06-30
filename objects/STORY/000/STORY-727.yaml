@@ -1,0 +1,18 @@
+id: 019f178c-087c-7ea0-ba1a-d342ea6f7c6a
+spec_id: STORY-727
+agreed_id: STORY-727
+title: Per-spec next-steps for humans + clearer why language
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T08:01:21.020683535Z
+modified_at: 2026-06-30T08:01:21.020683535Z
+req_type: Story
+tags:
+- cli
+- from-audit
+- next-steps
+- ux
+- why
