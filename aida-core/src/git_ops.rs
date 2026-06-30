@@ -972,6 +972,14 @@ pub fn detach_head(repo: &Path) -> Result<()> {
 // AIDA self-maintain the store's git: lower `gc.auto` so git repacks far
 // sooner, and run a cheap `git gc --auto` at existing sync chokepoints.
 // trace:TASK-1033 | ai:claude
+//
+// BUG-663 follow-up: lowering `gc.auto` to 500 made git's implicit `gc --auto`
+// inside `git commit` fire ~13x more often, and on the 15k-commit store each
+// repack is multi-second — running INLINE on the write path it spiked
+// `aida add`/`edit` to 6-16s (telemetry). The threshold stays (bloat
+// prevention); the fix is to also set `gc.autoDetach = true` on the store so
+// the repack forks to the background and the write returns immediately.
+// trace:BUG-663 | ai:claude
 
 /// The lowered `gc.auto` threshold AIDA sets on the orphan-store repo so git
 /// auto-repacks the shared object store long before its 6700-loose-object
@@ -1005,15 +1013,27 @@ pub fn resolve_store_gc_auto(override_val: Option<&str>) -> Option<u32> {
     }
 }
 
-/// Set `gc.auto = <threshold>` on the store repo (writes the shared common
-/// config a linked worktree points at). Best-effort + idempotent: re-setting
-/// the same value is a no-op, and a failed `git config` is swallowed (returns
-/// `false`) — a maintenance knob must never break the store.
-// trace:TASK-1033 | ai:claude
+/// Set `gc.auto = <threshold>` AND `gc.autoDetach = true` on the store repo
+/// (writes the shared common config a linked worktree points at). The two
+/// always travel together: lowering `gc.auto` (TASK-1033) makes git's implicit
+/// `gc --auto` inside `git commit` fire ~13x more often, and on a 15k-commit
+/// store each repack is multi-second — so without autoDetach the repack runs
+/// INLINE on the write path and spikes `aida add`/`edit` to 6-16s when a write
+/// crosses the loose-object line (BUG-663). With `gc.autoDetach = true` (git's
+/// default since 2.0, but set explicitly so the store carries it regardless of
+/// the user's global config), git forks the repack and `git commit` returns
+/// immediately — the write never blocks on gc. Best-effort + idempotent:
+/// re-setting the same values is a no-op, and a failed `git config` is
+/// swallowed (returns `false`) — a maintenance knob must never break the store.
+// trace:TASK-1033 trace:BUG-663 | ai:claude
 pub fn configure_store_gc_auto(repo: &Path, threshold: u32) -> bool {
-    git(repo, &["config", "gc.auto", &threshold.to_string()])
+    let auto_ok = git(repo, &["config", "gc.auto", &threshold.to_string()])
         .map(|r| r.success)
-        .unwrap_or(false)
+        .unwrap_or(false);
+    let detach_ok = git(repo, &["config", "gc.autoDetach", "true"])
+        .map(|r| r.success)
+        .unwrap_or(false);
+    auto_ok && detach_ok
 }
 
 /// Apply AIDA's lowered `gc.auto` to the store repo, honouring the
@@ -2940,7 +2960,10 @@ mod tests {
 
     /// A fresh store worktree has the lowered `gc.auto` set on its repo, so git
     /// auto-repacks the shared object store far sooner than its 6700 default.
-    // trace:TASK-1033 | ai:claude
+    /// It also has `gc.autoDetach = true` so the repack git's implicit
+    /// `gc --auto` fires inside `git commit` forks to the background and never
+    /// blocks the write (BUG-663).
+    // trace:TASK-1033 trace:BUG-663 | ai:claude
     #[test]
     fn create_store_worktree_sets_lowered_gc_auto() {
         let dir = tempfile::tempdir().unwrap();
@@ -2959,5 +2982,36 @@ mod tests {
         let got = git(&worktree, &["config", "gc.auto"]).unwrap();
         assert!(got.success, "gc.auto should be set on the store repo");
         assert_eq!(got.stdout, STORE_GC_AUTO_DEFAULT.to_string());
+
+        // BUG-663: the store must also carry gc.autoDetach=true so the lowered
+        // threshold's more-frequent repack forks to the background instead of
+        // blocking the write path.
+        let detach = git(&worktree, &["config", "gc.autoDetach"]).unwrap();
+        assert!(
+            detach.success,
+            "gc.autoDetach should be set on the store repo"
+        );
+        assert_eq!(detach.stdout, "true");
+    }
+
+    /// `configure_store_gc_auto` sets BOTH `gc.auto` and `gc.autoDetach = true`
+    /// — the bloat-prevention threshold and the never-block-the-write detach
+    /// always travel together (BUG-663).
+    // trace:BUG-663 | ai:claude
+    #[test]
+    fn configure_store_gc_auto_sets_threshold_and_detach() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        init(&repo).unwrap();
+
+        assert!(configure_store_gc_auto(&repo, STORE_GC_AUTO_DEFAULT));
+
+        let auto = git(&repo, &["config", "gc.auto"]).unwrap();
+        assert_eq!(auto.stdout, STORE_GC_AUTO_DEFAULT.to_string());
+        let detach = git(&repo, &["config", "gc.autoDetach"]).unwrap();
+        assert_eq!(
+            detach.stdout, "true",
+            "auto-gc must be detached so it never blocks a write"
+        );
     }
 }
