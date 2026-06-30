@@ -1,0 +1,17 @@
+id: 019f1747-2d66-7193-893b-f66329fede8a
+spec_id: ADR-8
+agreed_id: ADR-8
+title: TUI default is now a read+dispose cockpit, not a session shell — confirm the direction
+description: 'TASK-1051 made the EPIC-54 redesign the default aida tui (#1234). A deep audit (UX loop, 2026-06-29) found the redesign is a fundamentally DIFFERENT product from legacy: it is a read+dispose cockpit (view backlog, run verbs/drains) with NO PTY hosting, NO Claude-session tabs, and NO crash recovery — all of which legacy had. So defaulting to it changed what aida tui IS: users who used it as a session shell must now opt out via AIDA_TUI_REDESIGN=0. OPERATOR DECISION: (a) keep cockpit-as-default, session-shell relegated to the =0 opt-out (current state); (b) preserve/merge the session-shell capability into the cockpit before it is the default; or (c) revert the default until the cockpit reaches capability parity. Polish for the prototype-label + dead-scopes/verbs is being shipped separately; this is the deeper product-direction call. Surfaced by the UX self-improvement loop.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T06:46:08.486248056Z
+modified_at: 2026-06-30T06:46:08.486248056Z
+req_type: Decision
+tags:
+- direction
+- from-ux-loop
+- needs-operator
+- tui
