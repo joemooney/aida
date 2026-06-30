@@ -10,6 +10,7 @@ mod agent_registry;
 mod alias;
 mod auto_complete;
 mod auto_complete_telemetry;
+mod autopilot;
 mod awaiting_you;
 mod backlog;
 mod burndown;
