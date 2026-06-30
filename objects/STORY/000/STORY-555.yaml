@@ -36,6 +36,10 @@ tags:
 - autonomy
 - core
 - needs-supervised-build
+relationships:
+- rel_type: Parent
+  target_id: 019f1977-b8bc-7971-a93f-1086df831471
+  created_at: 2026-06-30T16:58:30.599901299Z
 history:
 - id: 019ebc7c-4f75-71f3-90ad-9fdb2384c330
   author: aida-auto-bump
