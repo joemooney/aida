@@ -8249,6 +8249,27 @@ pub enum Command {
         #[clap(long)]
         no_pull: bool,
 
+        /// Override the soft suitability warnings (under-specified / coupled)
+        /// and drive anyway. Does NOT override the hard refusals (epic,
+        /// keystone, blocked).
+        // trace:TASK-1037 | ai:claude
+        #[clap(long)]
+        force: bool,
+
+        /// Own worktree + own PR: split this spec out of its scope (parent epic
+        /// / active focus) instead of routing into the scope worktree. The
+        /// explicit exception to the default-into-scope routing.
+        // trace:ADR-6 | ai:claude
+        #[clap(long, conflicts_with = "into_epic")]
+        solo: bool,
+
+        /// Force the cluster route: drive inside the scope (parent epic / focus)
+        /// worktree even when the default would otherwise pick its own. The
+        /// counterpart to `--solo`.
+        // trace:ADR-6 | ai:claude
+        #[clap(long)]
+        into_epic: bool,
+
         /// Resolve + validate the spec and PRINT the plan WITHOUT driving it.
         #[clap(long)]
         dry_run: bool,
