@@ -26965,5 +26965,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2578
+- id: 019f16c2-2bfb-7352-94fe-37aaa2796601
+  target_id: 019f16c2-1ac1-72b0-b1e8-5391a0965507
+  author: aida
+  node_id: '1'
+  lamport: 2579
+  timestamp: 2026-06-30T04:20:51.835957962Z
+  kind: !Create
+    title: '**TASK (checkpoint):** per-member `--zen` pause / `--no-human=both` auto-continue hook. ~40 LOC'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2579
 node_id: '1'

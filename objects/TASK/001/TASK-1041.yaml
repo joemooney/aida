@@ -1,0 +1,12 @@
+id: 019f16c2-1ac1-72b0-b1e8-5391a0965507
+spec_id: TASK-1041
+agreed_id: TASK-1041
+title: '**TASK (checkpoint):** per-member `--zen` pause / `--no-human=both` auto-continue hook. ~40 LOC'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T04:20:47.425912930Z
+modified_at: 2026-06-30T04:20:47.425912930Z
+req_type: Task
