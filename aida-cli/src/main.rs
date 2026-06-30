@@ -6217,6 +6217,131 @@ fn collect_decision_requests(
     Ok((pending, answered))
 }
 
+/// TASK-1061: pending-DecisionRequest count drawn from an ALREADY-LOADED store
+/// instead of a fresh full-store load. The decision-inbox line in
+/// `aida status --full`'s presence section used to call
+/// `collect_decision_requests(backend)`, which delegates to
+/// `list_requirements(false)` — a SECOND full-store load (read every YAML
+/// object from the orphan store) duplicating the `backend.load()` the rich
+/// status path already paid for. Counting over `store.requirements` reuses that
+/// load: identical result (same `decision_request.is_pending()` predicate, same
+/// archived-excluded set the rich path operates on), zero extra I/O.
+// trace:TASK-1061
+fn pending_decision_request_count(store: &aida_core::models::RequirementsStore) -> usize {
+    store
+        .requirements
+        .iter()
+        // Match `list_requirements(false)` exactly: archived rows are excluded
+        // (the predicate the previous `collect_decision_requests` path used).
+        .filter(|req| !req.archived)
+        .filter(|req| {
+            req.decision_request
+                .as_ref()
+                .map(|dr| dr.is_pending())
+                .unwrap_or(false)
+        })
+        .count()
+}
+
+// TASK-1061: the store-backed pending-decision count that replaced the
+// `--full` presence section's redundant second full-store load must agree
+// EXACTLY with the prior `collect_decision_requests` pending count — same
+// predicate (`decision_request.is_pending()`), same archived-excluded scope
+// (`list_requirements(false)`). trace:TASK-1061
+#[cfg(test)]
+mod pending_decision_request_count_tests {
+    use super::*;
+    use aida_core::{DecisionChoice, DecisionRequest, Requirement, RequirementsStore};
+
+    fn pending_dr() -> DecisionRequest {
+        DecisionRequest {
+            question: "Promote or ship?".to_string(),
+            choices: vec![
+                DecisionChoice {
+                    label: "Promote".to_string(),
+                    consequence: "decompose".to_string(),
+                    resolution: "tag:+epic".to_string(),
+                },
+                DecisionChoice {
+                    label: "Ship".to_string(),
+                    consequence: "implement".to_string(),
+                    resolution: "status:approved".to_string(),
+                },
+            ],
+            recommended: Some(1),
+            rationale: None,
+            answered: None,
+            note: None,
+            asked_at: None,
+            answered_at: None,
+        }
+    }
+
+    fn answered_dr() -> DecisionRequest {
+        let mut dr = pending_dr();
+        dr.answered = Some(0);
+        dr
+    }
+
+    /// Replicates the OLD path: list non-archived requirements, count those
+    /// with a pending DecisionRequest. The new helper must equal this.
+    fn old_pending_count(store: &RequirementsStore) -> usize {
+        store
+            .requirements
+            .iter()
+            .filter(|r| !r.archived)
+            .filter(|r| {
+                r.decision_request
+                    .as_ref()
+                    .map(|dr| dr.is_pending())
+                    .unwrap_or(false)
+            })
+            .count()
+    }
+
+    fn req(title: &str, dr: Option<DecisionRequest>, archived: bool) -> Requirement {
+        let mut r = Requirement::new(title.to_string(), String::new());
+        r.decision_request = dr;
+        r.archived = archived;
+        r
+    }
+
+    #[test]
+    fn matches_old_full_load_path_on_mixed_fixture() {
+        let mut store = RequirementsStore::default();
+        store.requirements = vec![
+            req("pending-1", Some(pending_dr()), false),
+            req("answered", Some(answered_dr()), false),
+            req("no-decision", None, false),
+            req("pending-2", Some(pending_dr()), false),
+            // Archived pending: excluded by BOTH paths — `list_requirements(false)`
+            // filtered archived, so the count must NOT include it.
+            req("archived-pending", Some(pending_dr()), true),
+        ];
+        assert_eq!(pending_decision_request_count(&store), 2);
+        assert_eq!(
+            pending_decision_request_count(&store),
+            old_pending_count(&store),
+            "store-backed count must equal the old full-load count exactly"
+        );
+    }
+
+    #[test]
+    fn empty_and_none_pending_yield_zero() {
+        let mut store = RequirementsStore::default();
+        assert_eq!(pending_decision_request_count(&store), 0);
+        store.requirements = vec![
+            req("none", None, false),
+            req("answered", Some(answered_dr()), false),
+        ];
+        assert_eq!(pending_decision_request_count(&store), 0);
+        assert_eq!(
+            pending_decision_request_count(&store),
+            old_pending_count(&store)
+        );
+    }
+}
+
 /// `aida questions` / `aida questions list` / `ask` / `answer` dispatch.
 // trace:STORY-522 | ai:claude
 fn handle_questions_command(
@@ -106440,8 +106565,28 @@ fn build_agent_classify_context(
 ) -> agent_registry::AgentClassifyContext {
     let now = chrono::Utc::now();
     let cfg = agent_registry::Config::load(project_root);
+    // BUG-613/TASK-1061: ONE memoized live-session probe drives liveness for
+    // every lease — the mapping below is a pure fold over this single snapshot,
+    // never an O(leases) fan-out of separate `/proc` probes. trace:TASK-1061
     let live_sessions = process_probe::probe_live_claude_sessions();
-    let live_lease_worktrees: Vec<std::path::PathBuf> = leases
+    let live_lease_worktrees = live_lease_worktrees(now, leases, &live_sessions);
+    agent_registry::AgentClassifyContext::new(now, cfg.busy_threshold_secs, live_lease_worktrees)
+}
+
+/// TASK-1061: compute the set of live-lease worktree paths from a SINGLE shared
+/// `live_sessions` snapshot. Pulled out of `build_agent_classify_context` as a
+/// pure fold over the already-probed slice so the live-session `/proc` probe
+/// stays bounded to the one memoized walk (BUG-613) regardless of how many
+/// leases are open — adding leases never adds probes. Taking `live_sessions` by
+/// reference is the structural guarantee: this function CANNOT re-probe per
+/// lease.
+// trace:TASK-1061
+fn live_lease_worktrees(
+    now: chrono::DateTime<chrono::Utc>,
+    leases: &[SessionLease],
+    live_sessions: &[process_probe::LiveSession],
+) -> Vec<std::path::PathBuf> {
+    leases
         .iter()
         .filter_map(|l| {
             if l.worktree_path.as_os_str().is_empty() {
@@ -106457,8 +106602,119 @@ fn build_agent_classify_context(
                 _ => None,
             }
         })
-        .collect();
-    agent_registry::AgentClassifyContext::new(now, cfg.busy_threshold_secs, live_lease_worktrees)
+        .collect()
+}
+
+// TASK-1061: the live-session `/proc` probe must stay bounded — one memoized
+// walk drives liveness for EVERY lease, never an O(leases) fan-out of separate
+// probes. `live_lease_worktrees` enforces this structurally by taking the
+// already-probed `live_sessions` slice; these tests lock that contract: N
+// leases are classified entirely from a SINGLE injected snapshot, with zero
+// probes performed by the function itself. trace:TASK-1061
+#[cfg(test)]
+mod live_lease_worktrees_tests {
+    use super::*;
+    use process_probe::LiveSession;
+
+    fn lease_at(id: &str, worktree: &std::path::Path) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: id.to_string(),
+            slug: id.to_ascii_lowercase(),
+            owner: "tester".into(),
+            worktree_path: worktree.to_path_buf(),
+            branch: id.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+            claim_verb: true,
+        }
+    }
+
+    fn live_session_at(cwd: &std::path::Path) -> LiveSession {
+        LiveSession {
+            pid: 4242,
+            cwd: cwd.to_path_buf(),
+            jsonl: None,
+            stale_cwd: false,
+        }
+    }
+
+    /// Many leases, ONE shared snapshot: every lease whose existing worktree is
+    /// covered by the single `live_sessions` slice classifies Live. The probe is
+    /// performed zero times by the function (it takes the snapshot by ref), so
+    /// liveness is O(leases) in-memory comparisons — never O(leases) probes.
+    #[test]
+    fn classifies_many_leases_from_single_snapshot() {
+        let now = chrono::Utc::now();
+        // Each lease points at a real, existing worktree dir (so
+        // `worktree_exists` is true and classification turns on liveness only).
+        let dirs: Vec<tempfile::TempDir> = (0..6).map(|_| tempfile::tempdir().unwrap()).collect();
+        let leases: Vec<SessionLease> = dirs
+            .iter()
+            .enumerate()
+            .map(|(i, d)| lease_at(&format!("TASK-{i}"), d.path()))
+            .collect();
+
+        // One snapshot covering only the FIRST three worktrees.
+        let snapshot: Vec<LiveSession> = dirs
+            .iter()
+            .take(3)
+            .map(|d| live_session_at(d.path()))
+            .collect();
+
+        let live = live_lease_worktrees(now, &leases, &snapshot);
+        assert_eq!(
+            live.len(),
+            3,
+            "exactly the leases covered by the single snapshot are Live"
+        );
+        for d in dirs.iter().take(3) {
+            assert!(live.iter().any(|p| p == d.path()));
+        }
+    }
+
+    /// An empty snapshot means no lease is Live (recent leases with existing
+    /// worktrees but no live claude classify Dormant, not Live).
+    #[test]
+    fn empty_snapshot_yields_no_live_leases() {
+        let now = chrono::Utc::now();
+        let dir = tempfile::tempdir().unwrap();
+        let leases = vec![lease_at("TASK-1", dir.path())];
+        let live = live_lease_worktrees(now, &leases, &[]);
+        assert!(
+            live.is_empty(),
+            "no live sessions in the snapshot → no live leases"
+        );
+    }
+
+    /// A stale-cwd (deleted-worktree) session never marks a lease Live, even if
+    /// its recorded cwd matches the lease path.
+    #[test]
+    fn stale_cwd_session_does_not_mark_live() {
+        let now = chrono::Utc::now();
+        let dir = tempfile::tempdir().unwrap();
+        let leases = vec![lease_at("TASK-1", dir.path())];
+        let stale = LiveSession {
+            pid: 99,
+            cwd: dir.path().to_path_buf(),
+            jsonl: None,
+            stale_cwd: true,
+        };
+        let live = live_lease_worktrees(now, &leases, &[stale]);
+        assert!(live.is_empty(), "a stale-cwd session must not read Live");
+    }
 }
 
 /// TASK-515: launcher/MCP registry rows are richer and win. Raw agent launches
@@ -106928,6 +107184,7 @@ const KEYSTONE_TAG: &str = "needs-supervised-build";
 fn print_status_presence_consumers(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
+    store: &aida_core::models::RequirementsStore,
 ) {
     let cfg = presence::read_presence_config(&config_path_for_project(project_root));
     if cfg.consumers == presence::ConsumersMode::Off {
@@ -106942,17 +107199,19 @@ fn print_status_presence_consumers(
     }
 
     // (c) decision inbox — pending DecisionRequests awaiting the operator.
-    if let Ok((pending, _)) = collect_decision_requests(backend) {
-        if !pending.is_empty() {
-            println!(
-                "  {} {} decision{} await your call — {}",
-                "Decisions:".bold().yellow(),
-                pending.len(),
-                if pending.len() == 1 { "" } else { "s" },
-                "aida questions".cyan()
-            );
-            println!();
-        }
+    // TASK-1061: count over the already-loaded `store` rather than re-loading
+    // the whole store via `collect_decision_requests(backend)` (a second
+    // full-store read on the rich status path). trace:TASK-1061
+    let pending = pending_decision_request_count(store);
+    if pending > 0 {
+        println!(
+            "  {} {} decision{} await your call — {}",
+            "Decisions:".bold().yellow(),
+            pending,
+            if pending == 1 { "" } else { "s" },
+            "aida questions".cyan()
+        );
+        println!();
     }
 
     // (d) home_offer = surface: the keystone cohort, ready for the at-keyboard
@@ -111359,7 +111618,7 @@ fn handle_status_command_distributed(
     let _ = awaiting_report.render(verbose, stdout.lock());
 
     print_status_presence_line(&project_root);
-    print_status_presence_consumers(&project_root, backend);
+    print_status_presence_consumers(&project_root, backend, &store);
     print_status_session_section(&user_ctx);
     print_status_branch_section(&user_ctx);
     if !no_ci {
