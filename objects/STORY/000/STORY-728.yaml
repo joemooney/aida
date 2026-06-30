@@ -3,12 +3,12 @@ spec_id: STORY-728
 agreed_id: STORY-728
 title: Add a drive/zen verb to the cockpit so you can kick off an autonomous drive from the TUI
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T08:01:36.447046984Z
-modified_at: 2026-06-30T08:01:36.447046984Z
+modified_at: 2026-06-30T08:30:53.169837689Z
 req_type: Story
 tags:
 - cockpit
