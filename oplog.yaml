@@ -27577,5 +27577,17 @@ operations:
   timestamp: 2026-06-30T10:08:57.750686114Z
   kind: !SetStatus
     status: Completed
-clock: 2643
+- id: 019f1801-1f70-7d02-b9ce-c0d394cabc99
+  target_id: 019f1801-0efb-7b30-ae5d-8470c35a5c8b
+  author: aida
+  node_id: '1'
+  lamport: 2644
+  timestamp: 2026-06-30T10:09:14.608676479Z
+  kind: !Create
+    title: 'status --full real bottleneck: ~32k git subprocesses fanning over worktrees x branches (not the gh probes)'
+    description: 'Per #1255 strace: aida status --full spawns ~32,000 subprocesses (~9,000 git rev-list + ~7,400 git log) across the worktree/remote-activity/coordination sections; on this repo (148 worktrees x 989 remote branches) that is the ~22s, while the four gh probes total only ~1.9s. #1255 parallelized the gh probes (helps normal repos) but does NOT touch the git fan-out. A true 22s->sub-second win needs reducing the git fan-out: cache/scope the per-worktree + per-branch git calls, or batch them. Separate, larger optimization.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2644
 node_id: '1'
