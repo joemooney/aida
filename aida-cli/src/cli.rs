@@ -7374,6 +7374,24 @@ pub enum Command {
         all: bool,
     },
 
+    /// The integrator seat at a glance — a read-only throughput view (writes
+    /// nothing, no drain).
+    ///
+    /// One screen, scoped to the active focus, answering "what would I work
+    /// next, and is main actually moving?": the focus-scoped queue (specs + the
+    /// role each is routed to), live throughput (time since the last merge to
+    /// the default branch, recent-merge counts, and a main-idle indicator), and
+    /// the active fan-out (which sessions/agents hold which specs right now).
+    /// A cheap cache-backed read — no full store load, no network beyond a
+    /// local git read.
+    // trace:TASK-1034 | ai:claude
+    Integrate {
+        /// Emit the view as JSON instead of the human summary.
+        // trace:TASK-1034
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Stream the drain event feed and wake on actionable verbs only.
     ///
     /// Follows `.aida/events.jsonl` like `tail -f`, classifies each event in

@@ -110,6 +110,7 @@ aida cache status                      # Compare cache HEAD vs git HEAD
 aida status                            # Sub-second cache snapshot (role/branch/queue depth/counts). Heavy PR/CI/liveness/hygiene diagnostics moved to `aida doctor`; `--full`/`--ci` keep the rich view (STORY-707)
 aida status <spec>                     # Per-spec liveness: ● live / ⚠ STALE / flag-only + session/pid/started/elapsed (STORY-694). `aida why <spec>` flags a stalled in-flight lease instead of "being worked" (BUG-623)
 aida ps                                # Global running-work table: every active session/agent with spec/role/pid/started/elapsed/live-vs-STALE, plus orphaned In-Progress specs (no live session backing the flag) (STORY-696)
+aida integrate [--json]                # Read-only integrator throughput view (no drain): focus-scoped queue + merge throughput off git log origin/main / .aida/events.jsonl (time-since-last-merge + main-idle indicator) + the aida ps running-work table. Cache-backed; honors AIDA_AGENT_OUTPUT (TASK-1034)
 aida usage --slowest [--limit N]       # Commands ranked by latency (p50/p95/max + count) — perf debugging (STORY-709)
 aida usage --events [--cmd X] [--slower-than Nms]  # Raw recent command-event stream with durations (STORY-709)
 aida memories check [--verbose] [--json]   # Drift between local memory pack and binary's embedded master; fix via init --with-memories --refresh (STORY-410)
