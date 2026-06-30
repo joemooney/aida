@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:24:24.238621261Z
-modified_at: 2026-06-30T04:19:56.474069978Z
+modified_at: 2026-06-30T04:21:44.155148839Z
 req_type: Spike
 tags:
 - autonomy
@@ -49,6 +49,14 @@ relationships:
 - rel_type: Parent
   target_id: 019f16c2-b2ad-7a21-983d-d9eddb088c13
   created_at: 2026-06-30T04:21:34.516018223Z
+comments:
+- id: 019f16c2-fc65-7962-83f4-aed2c8eb8f52
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-29-spike-70-coupled-sequential-drain.md
+    filed 7 task(s): TASK-1038, TASK-1039, TASK-1040, TASK-1041, TASK-1042, TASK-1043, TASK-1044
+  created_at: 2026-06-30T04:21:45.189752059Z
+  modified_at: 2026-06-30T04:21:45.189752059Z
 deferred: true
 deferred_at: 2026-06-27T16:40:42.830280037Z
 deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
