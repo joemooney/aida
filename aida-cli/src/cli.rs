@@ -8120,6 +8120,58 @@ pub enum Command {
     #[clap(subcommand)]
     Triage(TriageCommand),
 
+    /// The one-shot HUMAN-implementer finish. From inside a worktree where
+    /// you implemented a spec, run the whole finish ceremony in ONE command:
+    /// commit any uncommitted work with the (SPEC-ID) trailer, rebase onto
+    /// current origin/main, push, open the PR, wait for CI green, squash-merge,
+    /// run `aida pull` (Done → Completed auto-bump), and remove the worktree.
+    ///
+    /// It is the orchestrator's finish phases with phase-1 (implement) done by
+    /// you instead of a spawned agent — the human-implementer counterpart to
+    /// `aida queue work <id> --auto-complete`. The spec is resolved from the
+    /// current branch (or the active session lease); pass `<spec>` to override.
+    ///
+    /// Stop earlier with `--no-merge` (open the PR, don't merge) or `--no-pr`
+    /// (just rebase + push). `--keep-worktree` leaves the worktree in place
+    /// after a successful merge.
+    Ship {
+        /// Spec to finish. When omitted, resolved from the current branch
+        /// name (e.g. `story-720-ship` → STORY-720) or the active session
+        /// lease covering this worktree.
+        #[clap(value_name = "SPEC")]
+        spec: Option<String>,
+
+        /// Commit subject to use when committing uncommitted work. The
+        /// `(SPEC-ID)` trailer is appended automatically. When omitted, a
+        /// conventional default is used. Ignored when the worktree is clean.
+        #[clap(long, short = 'm', value_name = "MSG")]
+        message: Option<String>,
+
+        /// Stop after opening the PR — do not watch CI or merge. The PR is
+        /// left open for a human to review + merge.
+        #[clap(long)]
+        no_merge: bool,
+
+        /// Stop after rebase + push — do not open a PR. Useful when you want
+        /// to open the PR yourself, or when CI is configured to gate on push.
+        #[clap(long, conflicts_with = "no_merge")]
+        no_pr: bool,
+
+        /// Keep the worktree after a successful merge (skip the
+        /// `aida session end` cleanup step).
+        #[clap(long)]
+        keep_worktree: bool,
+
+        /// Print the resolved finish sequence without executing any of it.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Bypass the client-side trailer spec-ID check before shipping.
+        // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        no_trailer_check: bool,
+    },
+
     /// Pull-request side-effects intended to fire from the /aida-pr
     /// skill. Today: `auto-queue-review` files the reviewer story right
     /// after `gh pr create` so the trigger lives where context is
