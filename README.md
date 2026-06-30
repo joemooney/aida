@@ -347,6 +347,8 @@ $ aida queue work STORY-1 --auto-complete
 
 It drives the implementer session, waits for CI, runs the reviewer, merges the PR, pulls, and bumps STORY-1 to Completed — no further input. Run the loop manually first so you can see each stage; reach for `--auto-complete` once the rhythm is familiar. The trade-off (interactive = better decisions, autonomous = better throughput) and the headless overnight-drain variants are covered in [`docs/lifecycle.md`](docs/lifecycle.md#autonomous-drains-and---auto-complete) and [`docs/autonomous-drain.md`](docs/autonomous-drain.md).
 
+> **New here and want the short, friendly tour of the autonomy commands?** [`docs/aida-power-features.md`](docs/aida-power-features.md) distills the whole thought-to-merged taxonomy — `aida ship`, `aida zen`, `aida burndown run`, `aida queue integrate --watch` — into one skimmable page.
+
 Concretely, `--auto-complete` is a process tree — the orchestrator process spawns short-lived Claude sessions for the two phases that need judgment (implementer, reviewer) and runs the deterministic steps itself:
 
 ```
