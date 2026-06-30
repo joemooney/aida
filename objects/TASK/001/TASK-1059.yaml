@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T16:58:24.316766298Z
-modified_at: 2026-06-30T16:59:00.589922552Z
+modified_at: 2026-06-30T18:18:50.290639589Z
 req_type: Task
 tags:
 - aida:presence
@@ -43,4 +43,8 @@ relationships:
 - rel_type: !Custom related
   target_id: 019ebd88-7d68-7b71-9a0b-a06eb25f87a9
   created_at: 2026-06-30T16:59:00.589917657Z
+  created_by: joe
+- rel_type: References
+  target_id: 019f19c1-15cc-7831-8279-ba9292828c05
+  created_at: 2026-06-30T18:18:50.290632283Z
   created_by: joe
