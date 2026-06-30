@@ -1,0 +1,16 @@
+id: 019f1ad4-f733-7253-8ecb-2599a329eff0
+spec_id: STORY-740
+agreed_id: STORY-740
+title: 'Cockpit depth: wire the stubbed groom/archive verbs + advisor park-reason inline (STORY-703)'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T23:19:52.371263991Z
+modified_at: 2026-06-30T23:19:52.371263991Z
+req_type: Story
+tags:
+- cockpit
+- from-audit
+- tui
