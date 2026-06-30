@@ -11,6 +11,15 @@ It is intentionally shallow on first sight. The depth — the requirement
 graph, queue routing, lifecycle, `/goal` composition — surfaces through
 use. See `OVERVIEW.md` → "Public face: the TUI is the product."
 
+> **Default changed (EPIC-54):** `aida tui` now renders the **action→target
+> command-palette redesign** by default. To run the PTY-supervisor shell this
+> document describes, opt out with `AIDA_TUI_REDESIGN=0` (also accepts
+> `false`/`no`/`off`). The redesign is a scope→action→target spec-disposition
+> console, **not** a drop-in superset of this supervisor — it does not host
+> Claude PTY sessions, the status overlay, the autonomous-drain view, or
+> crash-recovery re-attach yet. Set the opt-out (or `[tui]` defaults) for the
+> session-hosting workflows below until the redesign absorbs them.
+
 ## Launching
 
 ```bash

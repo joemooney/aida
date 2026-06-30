@@ -54,9 +54,10 @@ mod overlay;
 mod palette;
 mod picker;
 mod pty;
-/// The action→target command-palette redesign prototype (EPIC-54, Slice 1
-/// = STORY-690). Gated behind `AIDA_TUI_REDESIGN=1`; the existing TUI is
-/// untouched without the toggle. trace:STORY-690 | ai:claude
+/// The action→target command-palette redesign (EPIC-54). Now the DEFAULT
+/// (TASK-1051): it renders unless `AIDA_TUI_REDESIGN` is an explicit opt-OUT
+/// (`0`/`false`/`no`/`off`), which selects the legacy TUI below.
+// trace:STORY-690 trace:TASK-1051 | ai:claude
 mod redesign;
 mod state;
 mod statusbar;
@@ -70,6 +71,12 @@ pub use cmd_palette::{enumerate, fuzzy_score, rank, CommandEntry, Scored, COMMON
 pub use config::{TuiConfig, TuiMode};
 pub use config_menu::{run as run_config_menu, ConfigMenuItem, EditKind, EditOutcome};
 pub use launcher::LauncherOptions;
+/// Is the EPIC-54 action→target redesign selected for this `aida tui`?
+/// Default-on (TASK-1051); `AIDA_TUI_REDESIGN=0`/`false`/`no`/`off` opts out to
+/// the legacy TUI. The CLI launcher gate calls this so its launcher-bypass
+/// decision can never drift from `aida_tui::run`'s dispatch.
+// trace:TASK-1051 | ai:claude
+pub use redesign::enabled as redesign_enabled;
 pub use theme::{Theme, ThemeName};
 
 /// Test-only re-export of the launcher's internal Intent + writer so
@@ -120,9 +127,11 @@ pub fn run(opts: TuiOptions) -> Result<()> {
 
     let config = TuiConfig::load(&cwd);
 
-    // EPIC-54 Slice 1: the action→target redesign prototype is strictly
-    // opt-in via `AIDA_TUI_REDESIGN=1`. When on, it owns the terminal and
-    // the existing PTY-host shell below is never reached. trace:STORY-690
+    // EPIC-54: the action→target redesign is now the DEFAULT (TASK-1051). It
+    // renders unless `AIDA_TUI_REDESIGN` is an explicit opt-OUT
+    // (`0`/`false`/`no`/`off`), which falls through to the legacy PTY-host
+    // shell below. When selected, it owns the terminal and that shell is never
+    // reached. trace:STORY-690 trace:TASK-1051
     if redesign::enabled() {
         return redesign::run(config.theme.theme(), &project_root);
     }
