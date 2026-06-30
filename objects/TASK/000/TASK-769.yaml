@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:31:39.368008246Z
-modified_at: 2026-06-30T16:36:12.303644401Z
+modified_at: 2026-06-30T16:53:23.096024714Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,6 +22,20 @@ comments:
   content: 'Reverted Done→Approved: PR #804 marked this Done with ZERO implementation. TASK-769 is a CONDITIONAL task (''make per-knob tunable IF the fixed mapping proves too rigid'') — it should stay parked until the rigidity is actually felt, not auto-completed. Leave deferred.'
   created_at: 2026-06-13T02:28:40.199695827Z
   modified_at: 2026-06-13T02:28:40.199695827Z
+- id: 019f1973-2018-70e3-a2dc-455b3a0ee629
+  author: joe
+  content: |-
+    Code-verified 2026-06-30 (premise still holds, but the two sub-slices are NOT symmetric):
+
+    [presence] block today = three knobs (aida-cli/src/presence.rs PresenceConfig): consumers (P0 master), away_drain (consumer a), home_offer (consumer d). No field for (b) escalation or (c) questions — confirmed.
+
+    (b) escalation IS wired, but COUPLED into away_drain in resolve_drain_mode: escalate_defaults is derived from the away_drain rung (HeadlessBoth/HeadlessEscalateDefaults -> escalate; HeadlessPark -> park). So you cannot pick park-drain without also forcing park-escalation. THIS is the real, buildable slice of TASK-769: add a standalone presence.escalation knob and decouple it from away_drain. Consumer exists, just rigid.
+
+    (c) questions is NOT presence-wired at all — no away->accumulate-quietly / home->surface gating exists. Per STORY-561 it composes with the STORY-555 questions inbox (BUILD STORY-555 FIRST). So "make (c) tunable" is premature: there is no consumer to add a knob to yet. Drop (c) from this task; it re-enters only once the questions consumer is built.
+
+    Recommend: re-scope TASK-769 to (b)-only (decouple escalation from away_drain into its own [presence] knob); track (c) separately under/after STORY-555. Advisory framing + integrity gates unchanged.
+  created_at: 2026-06-30T16:53:23.096024714Z
+  modified_at: 2026-06-30T16:53:23.096024714Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T02:14:48.325488870Z
