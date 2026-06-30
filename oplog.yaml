@@ -28590,5 +28590,17 @@ operations:
   timestamp: 2026-06-30T17:53:25.964036241Z
   kind: !SetStatus
     status: Completed
-clock: 2750
+- id: 019f19aa-534d-7292-8e1d-f67d0045e9ae
+  target_id: 019f19aa-4687-78d0-90ea-d49e2e38d49d
+  author: aida
+  node_id: '1'
+  lamport: 2751
+  timestamp: 2026-06-30T17:53:40.685477823Z
+  kind: !Create
+    title: 'status --full non-git floor: cut the ~5s CPU + ~6s blocked (live-session /proc probe + backend.load()) now-dominant after the git fan-out fix'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2751
 node_id: '1'
