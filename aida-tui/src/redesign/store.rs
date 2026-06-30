@@ -214,6 +214,8 @@ impl SpecStore {
                 // through `canonical_role_name`), so display it as-is; `None`
                 // is an unrouted/general queue entry. trace:TASK-948
                 routed_role: entry.for_role.clone(),
+                // Tags drive the `drive` verb's keystone gate. trace:STORY-728
+                tags: req.tags.iter().cloned().collect(),
             });
         }
         rows
@@ -448,6 +450,9 @@ fn summary_to_item(s: RequirementSummary) -> TargetItem {
         // Populated only by the Queue read (queue_items); summary rows are
         // unrouted. trace:TASK-948
         routed_role: None,
+        // Tags flow through from the cache summary; the `drive` verb's keystone
+        // gate reads them. trace:STORY-728
+        tags: s.tags,
     }
 }
 
@@ -1017,6 +1022,7 @@ mod tests {
             body: String::new(),
             has_test_plan: false,
             routed_role: None,
+            tags: Vec::new(),
         }
     }
 
