@@ -120,6 +120,78 @@ pub fn status_glyph(status: &str, mode: GlyphMode) -> &'static str {
     }
 }
 
+/// The work-liveness of a target row — is a live session/lease actively backing
+/// this spec? Mirrors the CLI's `aida ps` / `aida status <spec>` per-spec
+/// verdict (the `SpecLiveness` enum in `aida-cli/src/main.rs`), collapsed to the
+/// three states the cockpit glyph needs:
+///
+/// | RowLiveness | `aida ps` source                                  | glyph |
+/// |-------------|---------------------------------------------------|-------|
+/// | `Live`      | a spec-scoped session/lease with a live process   | ●     |
+/// | `Stale`     | flag set but no live session (dead lease OR a     | ⚠     |
+/// |             | flag-only/orphaned In-Progress spec)              |       |
+/// | `Idle`      | no session backing the spec (the default)         | ◦     |
+///
+/// ## Why this is a consumed signal, not a re-probe
+///
+/// The authoritative liveness machinery — the `/proc` process probe
+/// (`process_probe::pid_is_alive` / `probe_live_claude_sessions`), the session
+/// lease parse, and the `classify_spec_liveness` matrix — all live in
+/// `aida-cli`, which `aida-tui` MUST NOT depend on. So the cockpit does NOT
+/// reimplement the probe: it shells out to `aida ps --json` (the same binary,
+/// via `current_exe()`) on a poll cadence and maps each row's spec id through
+/// this enum. The probe runs in the CLI; the TUI only consumes its verdict.
+/// See `liveness.rs` for the shell-out + the `should_probe` cache gate.
+///
+/// FOLLOW-UP (not this task): the long-term home for the liveness probe is a
+/// shared `aida-core` helper both surfaces call, so the spec→liveness map can be
+/// computed in-process without a subprocess. Until then the `aida ps --json`
+/// shell-out is the agreed shared-logic seam.
+// trace:TASK-978 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowLiveness {
+    /// A spec-scoped session/lease is alive — work is actively backing this row.
+    Live,
+    /// The In-Progress flag is set but no live session backs it (a dead/dormant
+    /// lease, or a flag-only/orphaned spec). The honest "is anything working
+    /// it?" answer is no.
+    Stale,
+    /// No session is backing this spec — the idle default.
+    Idle,
+}
+
+/// The liveness glyph for the active [`GlyphMode`]. Mirrors the CLI's `aida ps`
+/// glyph conventions: ● live (the `LeaseState::Live` glyph), ⚠ stale (the
+/// `Glyph::Warning` glyph), and a dim ◦ for idle. ASCII fallbacks stay a single
+/// visible column so the leading liveness cell aligns across rows.
+// trace:TASK-978 | ai:claude
+pub fn liveness_glyph(state: RowLiveness, mode: GlyphMode) -> &'static str {
+    match (state, mode) {
+        (RowLiveness::Live, GlyphMode::Unicode) => "●",
+        (RowLiveness::Live, GlyphMode::Ascii) => "*",
+        (RowLiveness::Stale, GlyphMode::Unicode) => "⚠",
+        // Mirrors `glyphs.rs` `Glyph::Warning` ASCII ("!").
+        (RowLiveness::Stale, GlyphMode::Ascii) => "!",
+        (RowLiveness::Idle, GlyphMode::Unicode) => "◦",
+        // Idle reads as blank in ASCII — the column stays one space wide.
+        (RowLiveness::Idle, GlyphMode::Ascii) => " ",
+    }
+}
+
+/// The liveness [`Style`] for a glyph, mirroring `aida ps`'s colours: live →
+/// green, stale → the theme's warn (yellow), idle → dim.
+// trace:TASK-978 | ai:claude
+pub fn liveness_style(state: RowLiveness, theme: &Theme) -> Style {
+    match state {
+        // Live → green, matching the CLI's `.green()` "live" label.
+        RowLiveness::Live => Style::default().fg(Color::Green),
+        // Stale → the theme's warn role (yellow), matching the CLI's `.yellow()`.
+        RowLiveness::Stale => Style::default().fg(theme.warn),
+        // Idle → dim, so a row with no live backing recedes.
+        RowLiveness::Idle => Style::default().fg(theme.dim),
+    }
+}
+
 /// The status [`Style`] (colour + emphasis) for a status, mirroring
 /// `status_display::paint_status`'s semantics against the active [`Theme`].
 ///
@@ -456,6 +528,41 @@ mod tests {
         );
         assert_eq!(row.title.chars().count(), 10);
         assert!(row.title.ends_with('…'));
+    }
+
+    #[test]
+    fn liveness_glyph_maps_each_state_unicode() {
+        // live → ●, stale → ⚠, idle → ◦ (the TASK-978 mapping, mirroring
+        // `aida ps`'s LeaseState::Live ● / Glyph::Warning ⚠ conventions).
+        assert_eq!(liveness_glyph(RowLiveness::Live, GlyphMode::Unicode), "●");
+        assert_eq!(liveness_glyph(RowLiveness::Stale, GlyphMode::Unicode), "⚠");
+        assert_eq!(liveness_glyph(RowLiveness::Idle, GlyphMode::Unicode), "◦");
+    }
+
+    #[test]
+    fn liveness_glyph_ascii_downgrades_stay_single_column() {
+        assert_eq!(liveness_glyph(RowLiveness::Live, GlyphMode::Ascii), "*");
+        assert_eq!(liveness_glyph(RowLiveness::Stale, GlyphMode::Ascii), "!");
+        // Idle is blank in ASCII, but still one visible column wide.
+        assert_eq!(liveness_glyph(RowLiveness::Idle, GlyphMode::Ascii), " ");
+        for state in [RowLiveness::Live, RowLiveness::Stale, RowLiveness::Idle] {
+            assert_eq!(
+                liveness_glyph(state, GlyphMode::Ascii).chars().count(),
+                1,
+                "ASCII liveness glyph stays one column for alignment"
+            );
+        }
+    }
+
+    #[test]
+    fn liveness_style_maps_to_semantic_colours() {
+        let t = Theme::default();
+        // Live → green (matches the CLI's `.green()` live label).
+        assert_eq!(liveness_style(RowLiveness::Live, &t).fg, Some(Color::Green));
+        // Stale → warn/yellow (matches the CLI's `.yellow()` stale label).
+        assert_eq!(liveness_style(RowLiveness::Stale, &t).fg, Some(t.warn));
+        // Idle → dim, so an unbacked row recedes.
+        assert_eq!(liveness_style(RowLiveness::Idle, &t).fg, Some(t.dim));
     }
 
     #[test]
