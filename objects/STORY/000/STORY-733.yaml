@@ -3,12 +3,12 @@ spec_id: STORY-733
 agreed_id: STORY-733
 title: Compact the orphan aida-store branch (15.7k commits) — the substrate tax behind every write/gc/rebase
 description: 'Round-4 efficiency audit finding 1 (the root amplifier): the orphan aida-store branch has ~15,691 commits, never compacted — every gc-repack, push-reject rebase, and fetch pays for the full history, turning ms ops into multi-second ones (the cause behind the 6-16s write spikes and the cache stalls). FIX (CAREFUL — rewrites store branch history): a periodic orphan-branch compaction — squash history to a snapshot commit (the store is a projection; old commits mainly feed aida history), and/or git gc --aggressive + a shallow horizon, at a sync chokepoint. SENSITIVE: rewriting the orphan history affects aida history --events (which walks the git log — must preserve/migrate it) and requires a coordinated force-push across clones. Needs a deliberate design pass; do NOT fan unsupervised.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T09:30:06.352074255Z
-modified_at: 2026-06-30T16:41:25.025676460Z
+modified_at: 2026-06-30T16:53:57.335387903Z
 req_type: Story
 tags:
 - careful
