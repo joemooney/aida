@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:17:54.084875531Z
-modified_at: 2026-06-30T04:17:54.084875531Z
+modified_at: 2026-06-30T04:18:01.140765746Z
 req_type: Task
 tags:
 - integrator
@@ -16,3 +16,7 @@ tags:
 - scope-routing
 - suitability
 - zen
+relationships:
+- rel_type: Child
+  target_id: 019f1692-8c85-7a70-8d2d-fe2539a91792
+  created_at: 2026-06-30T04:18:01.140765746Z
