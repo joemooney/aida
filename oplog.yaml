@@ -28812,5 +28812,17 @@ operations:
   timestamp: 2026-06-30T19:20:53.865204355Z
   kind: !SetStatus
     status: Completed
-clock: 2772
+- id: 019f19fa-bd52-79b0-91f0-2299795e74be
+  target_id: 019f19fa-aecb-7df2-8a35-6c67327e054f
+  author: aida
+  node_id: '1'
+  lamport: 2773
+  timestamp: 2026-06-30T19:21:30.706594412Z
+  kind: !Create
+    title: 'status --full remaining floor: cache-back the hygiene/cleanup doctor scans + the single still-needed backend.load() (deferred from TASK-1061 to avoid output drift)'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2773
 node_id: '1'

@@ -1,0 +1,17 @@
+id: 019f19fa-aecb-7df2-8a35-6c67327e054f
+spec_id: TASK-1065
+agreed_id: TASK-1065
+title: 'status --full remaining floor: cache-back the hygiene/cleanup doctor scans + the single still-needed backend.load() (deferred from TASK-1061 to avoid output drift)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T19:21:26.987566259Z
+modified_at: 2026-06-30T19:21:26.987566259Z
+req_type: Task
+tags:
+- from-audit
+- performance
+- status
+- zen-ready
