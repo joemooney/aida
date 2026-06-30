@@ -52280,16 +52280,26 @@ fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStat
     let live = process_probe::probe_live_claude_sessions();
     // One batched gh call for every worktree's PR (never per-row).
     let pr_by_branch = collect_open_prs(main_root).by_branch;
-    // Commits-ahead-of-default per worktree branch (cheap local git).
+    // Commits-ahead-of-default per worktree branch.
     let default_ref =
         detect_default_branch_ref(main_root).unwrap_or_else(|| "origin/main".to_string());
+    // TASK-1056: one batched `git for-each-ref` ahead-count map for every local
+    // branch, instead of a `git rev-list --count` per worktree branch. Falls
+    // back to the per-branch probe for any branch the batch didn't cover (or
+    // when the git version doesn't support the field — the map comes back
+    // empty). trace:TASK-1056 | ai:claude
+    let ahead_by_branch = collect_branch_ahead_of(main_root, &default_ref);
     let mut ahead_by_path = std::collections::HashMap::new();
     for wt in &worktrees {
         if wt.path == *main_root || wt.branch.as_deref() == Some("aida-store") {
             continue;
         }
         if let Some(branch) = wt.branch.as_deref() {
-            if let Some(a) = branch_ahead_of(main_root, branch, &default_ref) {
+            let ahead = ahead_by_branch
+                .get(branch)
+                .copied()
+                .or_else(|| branch_ahead_of(main_root, branch, &default_ref));
+            if let Some(a) = ahead {
                 ahead_by_path.insert(wt.path.clone(), a);
             }
         }
@@ -107841,6 +107851,58 @@ fn branch_ahead_of(project_root: &std::path::Path, branch: &str, target_ref: &st
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
+/// TASK-1056: batch every local branch's commits-ahead-of-`target_ref` count
+/// into ONE `git for-each-ref` (the `ahead-behind` field, git ≥ 2.41) instead
+/// of a `git rev-list --count <target>..<branch>` per branch. On a fleet repo
+/// the per-branch loop spawned a hundred-plus rev-list processes; this is one.
+/// The map's value equals `branch_ahead_of(.., branch, target_ref)` for the
+/// same branch, so callers that swap the lookup in render byte-identical
+/// output. Returns an EMPTY map when the field is unsupported (older git makes
+/// `for-each-ref` exit non-zero on the unknown atom) so callers transparently
+/// fall back to the per-branch probe.
+// trace:TASK-1056 | ai:claude
+fn collect_branch_ahead_of(
+    project_root: &std::path::Path,
+    target_ref: &str,
+) -> std::collections::HashMap<String, u32> {
+    let mut map = std::collections::HashMap::new();
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "for-each-ref",
+            &format!("--format=%(refname:short)%09%(ahead-behind:{target_ref})"),
+            "refs/heads/",
+        ])
+        .output();
+    let Ok(out) = out else { return map };
+    if !out.status.success() {
+        // Older git: the `ahead-behind` atom is unknown and the whole call
+        // fails — leave the map empty so callers fall back per-branch.
+        return map;
+    }
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut parts = line.splitn(2, '\t');
+        let Some(name) = parts.next() else { continue };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        // The `ahead-behind` field renders "<ahead> <behind>"; we want ahead.
+        // An empty field (e.g. target_ref unresolved for this ref) is skipped
+        // so the caller falls back rather than recording a bogus 0.
+        let Some(ahead) = parts
+            .next()
+            .and_then(|ab| ab.split_whitespace().next().map(|s| s.to_string()))
+            .and_then(|s| s.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        map.insert(name.to_string(), ahead);
+    }
+    map
+}
+
 /// `git for-each-ref refs/heads/` — just the branch names.
 fn list_local_branches(project_root: &std::path::Path) -> Vec<String> {
     let out = std::process::Command::new("git")
@@ -107857,6 +107919,79 @@ fn list_local_branches(project_root: &std::path::Path) -> Vec<String> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect()
+}
+
+/// One `git for-each-ref` over `refs/heads/` returning each local branch's name
+/// paired with its tip-commit time (unix seconds). Collapses a per-branch
+/// `git log -1 --format=%ct` fan-out (one process per branch — thousands on a
+/// fleet repo) into a single git invocation that yields the same data.
+// trace:TASK-1056 | ai:claude
+fn collect_local_branch_commit_times(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, i64> {
+    let mut map = std::collections::HashMap::new();
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "for-each-ref",
+            "--format=%(refname:short)%09%(committerdate:unix)",
+            "refs/heads/",
+        ])
+        .output();
+    let Ok(out) = out else { return map };
+    if !out.status.success() {
+        return map;
+    }
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut parts = line.splitn(2, '\t');
+        let Some(name) = parts.next() else { continue };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let ts = parts
+            .next()
+            .and_then(|s| s.trim().parse::<i64>().ok())
+            .unwrap_or(0);
+        map.insert(name.to_string(), ts);
+    }
+    map
+}
+
+/// One `git for-each-ref` over `refs/remotes/origin` returning the set of
+/// remote-tracking branch short names with the `origin/` prefix stripped (and
+/// the symbolic `origin/HEAD` excluded). Collapses a per-branch
+/// `git rev-parse --verify --quiet origin/<branch>` existence fan-out into a
+/// single git invocation; membership in the set is equivalent to a successful
+/// verify.
+// trace:TASK-1056 | ai:claude
+fn collect_remote_branch_name_set(
+    project_root: &std::path::Path,
+) -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/remotes/origin",
+        ])
+        .output();
+    let Ok(out) = out else { return set };
+    if !out.status.success() {
+        return set;
+    }
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let name = line.trim();
+        let short = name.strip_prefix("origin/").unwrap_or(name);
+        if short.is_empty() || short == "HEAD" {
+            continue;
+        }
+        set.insert(short.to_string());
+    }
+    set
 }
 
 /// Look up a PR's merge state via `gh pr view <N>`. Returns `Some(true)`
@@ -108046,6 +108181,16 @@ fn collect_cleanup_report(
         .map(|l| (l.clone(), lease_state_for(l, &live_sessions, now)))
         .collect();
 
+    // TASK-1056: batch the per-branch git probes the detectors below need into
+    // two `git for-each-ref` calls — local branch tip-times and the remote
+    // branch name set — instead of spawning a `git log -1 --format=%ct` per
+    // local branch and a `git rev-parse --verify origin/<branch>` per branch.
+    // On a fleet repo (hundreds of work branches) that collapses thousands of
+    // git subprocesses into two. The derived values are identical, so the
+    // rendered report is unchanged. trace:TASK-1056 | ai:claude
+    let local_branch_times = collect_local_branch_commit_times(project_root);
+    let remote_branches = collect_remote_branch_name_set(project_root);
+
     // ── Detector 1: Uncommitted WIP across every worktree ──
     // Skip the orphan-store worktree (`.aida-store`) — it's AIDA-managed,
     // dirty state there is the normal mid-write moment between
@@ -108129,22 +108274,12 @@ fn collect_cleanup_report(
         // are reported with `unpushed_commits == 0`.
         // trace:STORY-385 | ai:claude
         let branch_name = spec_id.to_ascii_lowercase();
-        let local_exists = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["rev-parse", "--verify", "--quiet", &branch_name])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
+        // TASK-1056: batched-map lookups replace per-spec `git rev-parse
+        // --verify` probes. trace:TASK-1056 | ai:claude
+        let local_exists = local_branch_times.contains_key(&branch_name);
         let (unpushed, pushed) = if local_exists {
             let upstream = format!("origin/{}", branch_name);
-            let upstream_exists = std::process::Command::new("git")
-                .arg("-C")
-                .arg(project_root)
-                .args(["rev-parse", "--verify", "--quiet", &upstream])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
+            let upstream_exists = remote_branches.contains(&branch_name);
             if upstream_exists {
                 let ahead_upstream =
                     branch_ahead_of(project_root, &branch_name, &upstream).unwrap_or(0);
@@ -108206,6 +108341,11 @@ fn collect_cleanup_report(
     let mut branches_ahead_no_pr = Vec::new();
     let default_ref = detect_default_branch_ref(project_root);
     if let Some(default_ref) = default_ref.as_deref() {
+        // TASK-1056: one batched ahead-count map for every local branch,
+        // replacing a `git rev-list --count <default>..<branch>` per surviving
+        // branch in the loop below. Falls back per-branch for anything the
+        // batch missed. trace:TASK-1056 | ai:claude
+        let ahead_by_branch = collect_branch_ahead_of(project_root, default_ref);
         for branch in list_local_branches(project_root) {
             // Skip the default branch itself + the orphan store branch.
             if branch == "main" || branch == "master" || branch == "aida-store" {
@@ -108239,27 +108379,21 @@ fn collect_cleanup_report(
             }
             // Skip branches with no recent activity — the cleanup section
             // is for in-flight work, not historical archaeology.
-            let last_commit_ts = std::process::Command::new("git")
-                .arg("-C")
-                .arg(project_root)
-                .args(["log", "-1", "--format=%ct", &branch])
-                .output()
-                .ok()
-                .and_then(|o| {
-                    if o.status.success() {
-                        String::from_utf8_lossy(&o.stdout)
-                            .trim()
-                            .parse::<i64>()
-                            .ok()
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(0);
+            // TASK-1056: read the tip-commit time from the batched
+            // for-each-ref map instead of a `git log -1 --format=%ct` per
+            // branch. trace:TASK-1056 | ai:claude
+            let last_commit_ts = local_branch_times.get(&branch).copied().unwrap_or(0);
             if now_secs - last_commit_ts > recent_branch_window_secs {
                 continue;
             }
-            let ahead = match branch_ahead_of(project_root, &branch, default_ref) {
+            // TASK-1056: batched-map ahead count, falling back to the
+            // per-branch probe when the batch didn't cover this branch.
+            // trace:TASK-1056 | ai:claude
+            let ahead = match ahead_by_branch
+                .get(&branch)
+                .copied()
+                .or_else(|| branch_ahead_of(project_root, &branch, default_ref))
+            {
                 Some(n) if n > 0 => n,
                 _ => continue,
             };
@@ -108272,18 +108406,9 @@ fn collect_cleanup_report(
             if already_sticky {
                 continue;
             }
-            let upstream_exists = std::process::Command::new("git")
-                .arg("-C")
-                .arg(project_root)
-                .args([
-                    "rev-parse",
-                    "--verify",
-                    "--quiet",
-                    &format!("origin/{}", branch),
-                ])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
+            // TASK-1056: batched-map membership replaces a per-branch
+            // `git rev-parse --verify origin/<branch>`. trace:TASK-1056
+            let upstream_exists = remote_branches.contains(&branch);
             branches_ahead_no_pr.push(status_cleanup::BranchAheadItem {
                 branch,
                 commits_ahead: ahead,
@@ -145221,5 +145346,172 @@ mod zen_front_door_tests {
         assert!(!zen_drive::looks_like_spec_id(
             "make the tree header show the parent title"
         ));
+    }
+}
+
+// TASK-1056: the batched git-fanout collapse for `aida status --full`. These
+// tests pin the substitution to OUTPUT EQUIVALENCE — each batched helper must
+// return exactly the data the per-branch git loop it replaced produced, so the
+// rendered status is byte-identical while the process count drops from O(local
+// branches) to one `git for-each-ref`. trace:TASK-1056 | ai:claude
+#[cfg(test)]
+mod task_1056_batched_git_fanout_tests {
+    use super::*;
+
+    fn git_run(root: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?} spawn failed: {e}"));
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    fn git_stdout(root: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?} spawn failed: {e}"));
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Build a repo with a `main` baseline plus N work branches each carrying a
+    /// distinct number of commits ahead of main, and synthesize matching
+    /// `refs/remotes/origin/*` for a subset (no network). Returns the work
+    /// branch names.
+    fn build_branchy_repo(root: &std::path::Path) -> Vec<String> {
+        git_run(root, &["init", "-q", "-b", "main"]);
+        git_run(root, &["config", "user.email", "t@t"]);
+        git_run(root, &["config", "user.name", "t"]);
+        git_run(root, &["commit", "--allow-empty", "-qm", "main root"]);
+
+        let names = ["task-101", "story-202", "bug-303"];
+        for (i, name) in names.iter().enumerate() {
+            git_run(root, &["checkout", "-q", "-b", name, "main"]);
+            // i+1 commits ahead of main, so each branch's ahead-count differs.
+            for c in 0..=i {
+                git_run(
+                    root,
+                    &[
+                        "commit",
+                        "--allow-empty",
+                        "-qm",
+                        &format!("{name} commit {c}"),
+                    ],
+                );
+            }
+        }
+        git_run(root, &["checkout", "-q", "main"]);
+        // Synthesize remote-tracking refs for two of the three branches.
+        for name in &names[..2] {
+            let sha = git_stdout(root, &["rev-parse", name]);
+            git_run(
+                root,
+                &["update-ref", &format!("refs/remotes/origin/{name}"), &sha],
+            );
+        }
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    // The batched local-branch tip-time map must equal a per-branch
+    // `git log -1 --format=%ct` — the exact value the recency filter read
+    // before. One `for-each-ref` replaces the per-branch `git log` loop.
+    #[test]
+    fn local_branch_commit_times_match_per_branch_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let names = build_branchy_repo(root);
+
+        let map = collect_local_branch_commit_times(root);
+        // Every branch (incl. main) is present — proves a single call enumerated
+        // them all, not a per-branch probe that could miss one.
+        assert!(map.contains_key("main"), "main missing: {map:?}");
+        for name in &names {
+            let want: i64 = git_stdout(root, &["log", "-1", "--format=%ct", name])
+                .parse()
+                .unwrap();
+            assert_eq!(map.get(name).copied(), Some(want), "tip time for {name}");
+        }
+    }
+
+    // The batched remote-branch name set membership must equal a per-branch
+    // `git rev-parse --verify --quiet origin/<branch>` — present where the
+    // ref exists, absent where it does not.
+    #[test]
+    fn remote_branch_set_matches_rev_parse_verify() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let names = build_branchy_repo(root);
+
+        let set = collect_remote_branch_name_set(root);
+        for name in &names {
+            let verify_ok = std::process::Command::new("git")
+                .current_dir(root)
+                .args([
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    &format!("origin/{name}"),
+                ])
+                .output()
+                .unwrap()
+                .status
+                .success();
+            assert_eq!(
+                set.contains(name),
+                verify_ok,
+                "remote membership disagrees with rev-parse for {name}"
+            );
+        }
+        // The synthesized refs (first two) are present; the third is not.
+        assert!(set.contains(&names[0]));
+        assert!(set.contains(&names[1]));
+        assert!(!set.contains(&names[2]));
+    }
+
+    // The batched ahead-count map must equal a per-branch
+    // `branch_ahead_of(.., branch, "main")` for every branch — the value the
+    // worktree + cleanup sections render. One `for-each-ref` replaces the
+    // per-branch `git rev-list --count` loop. (On git < 2.41 the helper returns
+    // an empty map and callers fall back, so only assert equivalence for the
+    // entries the batch actually produced.)
+    #[test]
+    fn branch_ahead_of_map_matches_per_branch_rev_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let names = build_branchy_repo(root);
+
+        let map = collect_branch_ahead_of(root, "main");
+        // On a modern git the batch covers every branch; assert it is non-empty
+        // so we know the batched path (not just the fallback) is exercised here.
+        assert!(
+            !map.is_empty(),
+            "expected the batched ahead-count path to populate on this git"
+        );
+        for name in &names {
+            let per_branch = branch_ahead_of(root, name, "main");
+            if let Some(batched) = map.get(name).copied() {
+                assert_eq!(
+                    Some(batched),
+                    per_branch,
+                    "ahead count for {name} batched vs per-branch"
+                );
+            }
+        }
+        // The constructed ahead-counts (1, 2, 3) are recovered exactly.
+        assert_eq!(map.get("task-101").copied(), Some(1));
+        assert_eq!(map.get("story-202").copied(), Some(2));
+        assert_eq!(map.get("bug-303").copied(), Some(3));
+        assert_eq!(map.get("main").copied(), Some(0));
     }
 }
