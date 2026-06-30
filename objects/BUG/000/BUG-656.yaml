@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T03:33:08.692722118Z
-modified_at: 2026-06-30T18:38:22.653558970Z
+modified_at: 2026-06-30T18:54:53.178504664Z
 req_type: Bug
 tags:
 - auto-followups
 - bug-655-recurrence
 - dedup
 - zen-ready
+comments:
+- id: 019f19e2-5cfa-7de3-83f5-84c926ed91fa
+  author: joe
+  content: Commit be4738c33 references this requirement
+  created_at: 2026-06-30T18:54:53.178504664Z
+  modified_at: 2026-06-30T18:54:53.178504664Z
