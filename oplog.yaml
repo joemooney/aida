@@ -26733,5 +26733,17 @@ operations:
   timestamp: 2026-06-30T03:03:23.019320192Z
   kind: !SetStatus
     status: In Progress
-clock: 2554
+- id: 019f1681-3b6d-7051-9d21-5d0cf7d957d4
+  target_id: 019f1680-ec94-7850-9a9c-d138be278c55
+  author: aida
+  node_id: '1'
+  lamport: 2555
+  timestamp: 2026-06-30T03:09:55.949161777Z
+  kind: !Create
+    title: aida ship — one-shot human-implementer finish (commit→rebase→PR→CI→merge→pull→cleanup)
+    description: 'The human-implementer counterpart to the --auto-complete orchestrator. Today a hand-built branch needs a cumbersome 7-step ceremony (commit with SPEC-ID trailer, fetch, rebase onto main, push, gh pr create, wait CI, gh pr merge, aida pull, git worktree remove). aida ship condenses it: from inside a worktree (set up via aida queue work <spec> --no-launch), aida ship runs the finish ceremony in one command — commit any uncommitted work with the (SPEC-ID) trailer, rebase onto current origin/main (resolve/abort on conflict), push, open the PR, wait for CI green, merge --squash, aida pull (Done->Completed auto-bump), and remove the worktree. REUSE the orchestrators existing finish phases (auto_complete.rs CI-wait / merge / pull / worktree-cleanup, the rebase-on-divergence logic) — aida ship is those phases with phase-1 (implement) done by the HUMAN instead of a spawned agent. Flags: --no-merge (stop at PR), --no-pr (just rebase+push), --keep-worktree. Operator friction 2026-06-29: the manual procedure is too cumbersome. Pairs with aida integrate (STORY-718): ship = one-shot human finish; integrate = continuous auto-drain.'
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 2555
 node_id: '1'
