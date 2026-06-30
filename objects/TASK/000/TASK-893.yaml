@@ -23,6 +23,3 @@ tags:
 - parent:EPIC-0419
 - statusline
 - watch
-deferred: true
-deferred_at: 2026-06-27T16:36:30.186559954Z
-deferred_until: 'Codex ships command-backed status lines (openai/codex #20043/#20244)'

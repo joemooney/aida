@@ -13,6 +13,3 @@ req_type: Story
 tags:
 - doc-projection
 - living-docs
-deferred: true
-deferred_at: 2026-06-27T16:36:31.726542185Z
-deferred_until: STORY-704 (Doc-read tutorial projection) shipped

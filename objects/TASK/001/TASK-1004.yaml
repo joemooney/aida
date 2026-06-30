@@ -16,6 +16,3 @@ tags:
 - needs-keyboard
 - spike-70
 - supervised
-deferred: true
-deferred_at: 2026-06-30T03:54:31.323131672Z
-deferred_until: auto-filed plan followup; parked 2026-06-29 BUG-656; revisit when parent feature reprioritized

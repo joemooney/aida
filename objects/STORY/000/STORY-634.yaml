@@ -17,6 +17,3 @@ tags:
 - multi-repo
 - parent:SPIKE-62
 - schema
-deferred: true
-deferred_at: 2026-06-27T16:36:32.526125948Z
-deferred_until: operator signs off SPIKE-62 D1-D5 nested-Origin shape

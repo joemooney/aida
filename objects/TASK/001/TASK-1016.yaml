@@ -14,6 +14,3 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a2-20e2-7090-a019-58f0f267ee52
   created_at: 2026-06-30T02:27:42.613821494Z
-deferred: true
-deferred_at: 2026-06-30T03:54:26.768223681Z
-deferred_until: auto-filed plan followup; parked 2026-06-29 BUG-656; revisit when parent feature reprioritized

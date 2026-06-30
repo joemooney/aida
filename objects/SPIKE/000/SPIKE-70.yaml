@@ -57,7 +57,4 @@ comments:
     filed 7 task(s): TASK-1038, TASK-1039, TASK-1040, TASK-1041, TASK-1042, TASK-1043, TASK-1044
   created_at: 2026-06-30T04:21:45.189752059Z
   modified_at: 2026-06-30T04:21:45.189752059Z
-deferred: true
-deferred_at: 2026-06-27T16:40:42.830280037Z
-deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
 human_only: true
