@@ -26773,5 +26773,17 @@ operations:
   timestamp: 2026-06-30T03:28:47.545727901Z
   kind: !SetStatus
     status: Completed
-clock: 2558
+- id: 019f1692-9df5-7030-b17b-52139817e070
+  target_id: 019f1692-8c85-7a70-8d2d-fe2539a91792
+  author: aida
+  node_id: '1'
+  lamport: 2559
+  timestamp: 2026-06-30T03:28:55.285988656Z
+  kind: !Create
+    title: aida zen <spec> — one-shot autonomous implement+ship (auto-queue + approval-gate + parallel fire-and-forget)
+    description: 'The auto-implement counterpart to aida ship (human-implement). aida zen <spec> takes ANY approved spec (queued or not — auto-queue/bypass), runs a zen autonomous implementation (= aida queue work <spec> --auto-complete --zen), and drives it to a PR + onto main. Fire-and-forget per spec: kick off several for INDEPENDENT specs in parallel (each its own worktree). If the spec is NOT approved (Draft), route it to the advisor for an approve decision FIRST (composes with the EPIC-0428 autopilot approve action), then implement. Coupled specs (shared files) must use the SPIKE-70 --single-branch sequential mode, not parallel fire. Thin wrapper over the existing --auto-complete --zen orchestrator + auto-queue + autopilot approve-gate + the shared --from-pr finish ceremony (also used by aida ship STORY-720 + aida integrate STORY-718). Build AFTER aida ship (shared finish) + autopilot evaluate (TASK-1007, the approve-gate). The third of the ship/zen/integrate taxonomy. Operator concept 2026-06-29.'
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 2559
 node_id: '1'
