@@ -2393,6 +2393,16 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
     )
 }
 
+/// The one-line "you can watch this live" hint printed under the kickoff
+/// banner. The out-of-band `aida drain status` reads `.aida/drain-state.json`
+/// and shows the live phase / members / command — it is good but
+/// undiscoverable, so the banner advertises it. Pure + named so a test can
+/// assert the banner keeps naming the command.
+// trace:STORY-726 | ai:claude
+pub(crate) fn watch_live_hint() -> &'static str {
+    "watch live: aida drain status"
+}
+
 /// STORY-492: the orchestration loop with a `start_phase` — used by `--resume`
 /// to re-enter a crashed drain at the first phase whose effect is *not* yet
 /// present in the world (computed by `drain_resume::reconcile_resume_phase`
@@ -2438,6 +2448,9 @@ pub(crate) fn orchestrate_with_resume(
             format!("({})", variant.describe()).dimmed(),
             lifecycle_note.dimmed()
         );
+        // STORY-726: advertise the out-of-band live view so an unattended drive
+        // is discoverable, not just trustworthy. trace:STORY-726 | ai:claude
+        eprintln!("   {}", watch_live_hint().dimmed());
     }
 
     // STORY-492: on a resume that re-enters past phase 1, the implementer
@@ -3608,6 +3621,22 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The kickoff banner must keep advertising the out-of-band live view
+    /// (`aida drain status`) so a drive is discoverable.
+    // trace:STORY-726 | ai:claude
+    #[test]
+    fn kickoff_banner_names_drain_status() {
+        let hint = watch_live_hint();
+        assert!(
+            hint.contains("aida drain status"),
+            "kickoff banner hint should name the live-view command, got: {hint}"
+        );
+        assert!(
+            hint.contains("watch live"),
+            "hint should read as a live-view invite"
+        );
+    }
 
     /// STORY-265 slice 3: with `--with-plan`, the prelude is a plan session
     /// THEN a promote — ordered, before the drain. Fully isolated: pure
