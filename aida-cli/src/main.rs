@@ -10537,12 +10537,204 @@ fn handle_done_command(
     );
     backend.update_requirement(&req)?;
     record_role_activity(&display_id, "done");
-    println!(
-        "{} {display_id} — {}",
-        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
-        "done".green()
-    );
+    // STORY-738: `aida done` is always an into-Completed transition (the
+    // already-Completed case returned early above), so the human path gets
+    // the completion crescendo instead of the flat check-mark `done` line. The
+    // agent/TOON surface keeps the terse machine line. trace:STORY-738
+    if agent_output_mode() {
+        println!(
+            "{} {display_id} — {}",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            "done".green()
+        );
+    } else {
+        render_completion_crescendo(&display_id, &req.title);
+    }
     Ok(())
+}
+
+/// STORY-738: the completion crescendo. When a spec transitions INTO
+/// Completed — the payoff state the thought→merged arc exists for — render a
+/// distinct, felt close instead of the flat generic `Updated: <id>` line
+/// (which is reused for any tag edit) or the bare check-mark `done` line. The
+/// render names the spec + title, shows the arc terminating (filed → built →
+/// merged → completed, the loop closed), and points forward to `aida show
+/// <id>` for the commit that landed it. Honors STORY-700 AC3 (BINDING): the
+/// completion is the felt moment, not a generic done message. Glyphs come
+/// from the registry so it stays ascii-safe; the `aida show <id>` breadcrumb
+/// is the one deliberate SPEC-ID in the copy (the caller just typed the id,
+/// so naming it matches the done/Updated house style).
+// trace:STORY-738 | ai:claude
+fn render_completion_crescendo(display_id: &str, title: &str) {
+    for line in completion_crescendo_lines(display_id, title) {
+        println!("{line}");
+    }
+}
+
+/// Pure renderer for [`render_completion_crescendo`] — returns the rendered
+/// (colored) lines so the felt elements are unit-testable without capturing
+/// stdout.
+// trace:STORY-738 | ai:claude
+fn completion_crescendo_lines(display_id: &str, title: &str) -> Vec<String> {
+    use crate::glyphs::Glyph;
+    let check = crate::glyph(Glyph::Check);
+    let arrow = crate::glyph(Glyph::Arrow);
+    let sub = crate::glyph(Glyph::SubArrow);
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "{} {} reached {} — the loop closed.",
+        check.green().bold(),
+        display_id.bold(),
+        "Completed".green().bold()
+    ));
+    let title = title.trim();
+    if !title.is_empty() {
+        lines.push(format!("  {}", title.dimmed()));
+    }
+    let arc = format!("filed {arrow} built {arrow} merged {arrow} completed");
+    lines.push(format!("  {} {}", sub.dimmed(), arc.dimmed()));
+    lines.push(format!(
+        "  {} {}  to see the commit that landed it.",
+        sub.dimmed(),
+        format!("aida show {display_id}").cyan()
+    ));
+    lines
+}
+
+/// STORY-738: is this status edit a transition INTO Completed? True only when
+/// the prior status was something other than Completed and the new canonical
+/// status is `Completed` — a no-op re-set of an already-Completed spec is not
+/// a crescendo moment.
+// trace:STORY-738 | ai:claude
+fn is_into_completed_transition(old: &aida_core::RequirementStatus, new_canonical: &str) -> bool {
+    !matches!(old, aida_core::RequirementStatus::Completed) && new_canonical == "Completed"
+}
+
+/// STORY-738: which render the `aida edit` status-change path emits. The
+/// crescendo fires only on a true into-Completed transition AND only on the
+/// human surface; the agent/TOON path and every non-completion edit keep the
+/// flat Updated line.
+// trace:STORY-738 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum EditCompletionRender {
+    Crescendo,
+    Updated,
+}
+
+fn edit_completion_render(into_completed: bool, agent_mode: bool) -> EditCompletionRender {
+    if into_completed && !agent_mode {
+        EditCompletionRender::Crescendo
+    } else {
+        EditCompletionRender::Updated
+    }
+}
+
+#[cfg(test)]
+mod story_738_completion_crescendo_tests {
+    use super::*;
+    use aida_core::RequirementStatus;
+
+    // A status-change INTO Completed renders the felt crescendo — names the
+    // spec + title, shows the arc terminating, points forward — and is NOT
+    // the generic Updated line. trace:STORY-738
+    #[test]
+    fn crescendo_has_felt_elements_not_updated() {
+        let rendered =
+            completion_crescendo_lines("STORY-700", "First-run experience: feel the core loop")
+                .join("\n");
+        // Names the spec + title.
+        assert!(rendered.contains("STORY-700"), "names the spec: {rendered}");
+        assert!(
+            rendered.contains("First-run experience"),
+            "names the title: {rendered}"
+        );
+        // Felt close: reaches Completed, the loop closed.
+        assert!(
+            rendered.contains("Completed"),
+            "names Completed: {rendered}"
+        );
+        assert!(
+            rendered.contains("the loop closed"),
+            "felt close: {rendered}"
+        );
+        // The arc terminating.
+        assert!(rendered.contains("filed"), "arc start: {rendered}");
+        assert!(rendered.contains("merged"), "arc merge: {rendered}");
+        // Points forward to the linked commit.
+        assert!(
+            rendered.contains("aida show STORY-700"),
+            "forward breadcrumb: {rendered}"
+        );
+        assert!(
+            rendered.contains("commit that landed it"),
+            "points at the commit: {rendered}"
+        );
+        // It is emphatically NOT the flat generic line.
+        assert!(
+            !rendered.contains("Updated:"),
+            "must not be the generic Updated: line: {rendered}"
+        );
+    }
+
+    /// A title-only edit (no title) still renders a coherent crescendo and
+    /// skips the empty title line.
+    #[test]
+    fn crescendo_omits_empty_title_line() {
+        let rendered = completion_crescendo_lines("TASK-1", "   ");
+        // 3 lines: header, arc, breadcrumb (no title line).
+        assert_eq!(rendered.len(), 3, "no blank title line: {rendered:?}");
+    }
+
+    // Only a genuine transition INTO Completed counts — a no-op re-set of an
+    // already-Completed spec does not. trace:STORY-738
+    #[test]
+    fn into_completed_transition_detection() {
+        assert!(is_into_completed_transition(
+            &RequirementStatus::Done,
+            "Completed"
+        ));
+        assert!(is_into_completed_transition(
+            &RequirementStatus::InProgress,
+            "Completed"
+        ));
+        // Already Completed -> Completed is not a crescendo moment.
+        assert!(!is_into_completed_transition(
+            &RequirementStatus::Completed,
+            "Completed"
+        ));
+        // A non-completion target never crescendos.
+        assert!(!is_into_completed_transition(
+            &RequirementStatus::InProgress,
+            "Done"
+        ));
+    }
+
+    // The `aida edit` render gate: crescendo fires ONLY on a true
+    // into-Completed transition on the HUMAN surface. A non-completion edit
+    // keeps Updated, and the agent/TOON surface is unaffected (keeps Updated).
+    // trace:STORY-738
+    #[test]
+    fn edit_render_gate() {
+        // Human + into-Completed -> crescendo.
+        assert_eq!(
+            edit_completion_render(true, false),
+            EditCompletionRender::Crescendo
+        );
+        // Non-completion human edit -> Updated.
+        assert_eq!(
+            edit_completion_render(false, false),
+            EditCompletionRender::Updated
+        );
+        // Agent/TOON path unaffected even on into-Completed -> Updated.
+        assert_eq!(
+            edit_completion_render(true, true),
+            EditCompletionRender::Updated
+        );
+        assert_eq!(
+            edit_completion_render(false, true),
+            EditCompletionRender::Updated
+        );
+    }
 }
 
 /// Local truncate helper for archive listings; mirrors `history::shorten`.
@@ -18085,6 +18277,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 changed = true;
             }
             let mut new_status_for_manifest: Option<String> = None;
+            // STORY-738: did this edit transition the spec INTO Completed?
+            // Captured against the prior status before the set below so the
+            // human render path can fire the completion crescendo instead of
+            // the flat `Updated:` line. trace:STORY-738 | ai:claude
+            let mut into_completed = false;
             // TASK-358: triage out of NeedsAttention — captured here, applied
             // after the backend save below. trace:TASK-358 | ai:claude
             let mut left_needs_attention = false;
@@ -18165,6 +18362,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     maybe_hint_advisor_seat();
                 }
                 let was_needs_attention = matches!(req.status, RequirementStatus::NeedsAttention);
+                // STORY-738: capture the into-Completed transition against the
+                // prior status (before the set). trace:STORY-738 | ai:claude
+                into_completed = is_into_completed_transition(&req.status, canonical);
                 req.set_status_from_str(canonical);
                 // STORY-332 / EPIC-28: a spec triaged out of NeedsAttention is
                 // no longer paused — drop the now-stale punt metadata AND any
@@ -18331,7 +18531,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if changed {
                 req.modified_at = chrono::Utc::now();
                 backend.update_requirement(&req)?;
-                println!("Updated: {}", id);
+                // STORY-738: a transition INTO Completed is the payoff state —
+                // render the felt completion crescendo instead of the flat
+                // generic `Updated:` line (reused for any tag edit). Only the
+                // human surface gets it; the agent/TOON path and every
+                // non-completion edit keep `Updated:`. The workflow-hint line
+                // below is unaffected. trace:STORY-738 | ai:claude
+                match edit_completion_render(into_completed, agent_output_mode()) {
+                    EditCompletionRender::Crescendo => {
+                        let display_id = req.spec_id.as_deref().unwrap_or(id);
+                        render_completion_crescendo(display_id, &req.title);
+                    }
+                    EditCompletionRender::Updated => println!("Updated: {}", id),
+                }
 
                 // TASK-928 (SPIKE-71): a tag edit that introduces a
                 // `parent:<SPEC-ID>` tag must materialize the real bidirectional
