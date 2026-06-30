@@ -52,12 +52,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019f19c2-afea-7d23-aaad-84884fa5f170
-  timestamp: 2026-06-30T18:20:17.258740044Z
-  agent: implementer
-  commit_sha: c3c61e5422b5b09107a36d917b80b9c3f8f229a4
-  summary: Completed via merge c3c61e54
 implementation_info:
   implemented: true
   implemented_at: 2026-06-30T18:06:29.212869585Z

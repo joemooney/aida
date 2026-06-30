@@ -1,0 +1,18 @@
+id: 019f1a22-8eac-7063-8cbb-2dde80f88f55
+spec_id: STORY-736
+agreed_id: STORY-736
+title: aida zen <thought> --dry-run renders the spec it would draft (title + description + acceptance), not a flat echo — the it-just-knew moment
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T20:05:00.204677095Z
+modified_at: 2026-06-30T20:05:00.204677095Z
+req_type: Story
+tags:
+- delight
+- dry-run
+- first-run
+- from-audit
+- zen
