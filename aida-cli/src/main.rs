@@ -15641,6 +15641,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             &unscoped_key,
                             group.len(),
                             parent_by_label.get(key.as_str()).copied(),
+                            &store,
                         )
                     );
                     let id_col_width = group
@@ -47846,11 +47847,22 @@ fn tree_group_header(
     unscoped_key: &str,
     count: usize,
     parent: Option<&aida_core::Requirement>,
+    store: &aida_core::RequirementsStore,
 ) -> String {
     let plural = if count == 1 { "" } else { "s" };
     if key == unscoped_key {
         format!("{} ({} item{})", "Unscoped".cyan().bold(), count, plural)
     } else if let Some(parent) = parent {
+        // BUG-658: an EPIC's status is a read-only rollup of its children
+        // (BUG-626) — never the raw stored YAML status, which can drift in both
+        // directions (a childless epic reading In Progress, an actively-shipping
+        // epic reading Draft). The tree header used `parent.status` directly, so
+        // the same epic could read one status as a group HEADER here and another
+        // as a row / via `aida show` / `aida why`. Route through
+        // `effective_display_status` — the same `derive_epic_status` rollup every
+        // other surface uses — so the header agrees with the rest of the view.
+        // trace:BUG-658 | ai:claude
+        let effective = effective_display_status(store, parent);
         format!(
             "{}  {}  [{}]  ({} item{})",
             key.cyan().bold(),
@@ -47858,7 +47870,7 @@ fn tree_group_header(
             // cache_key() ("InProgress") matches the child rows' status form
             // (summary.status), so both spell the same status identically in
             // one view rather than mixing "InProgress" / "In Progress".
-            status_display::status_badge(parent.status.cache_key()),
+            status_display::status_badge(effective.cache_key()),
             count,
             plural,
         )
@@ -78878,8 +78890,18 @@ mod derive_parent_epic_label_tests {
         colored::control::set_override(false);
         let mut epic = req("EPIC-56", None, RequirementType::Epic);
         epic.title = "Apply AXI lessons".to_string();
-        epic.status = aida_core::RequirementStatus::InProgress;
-        let header = tree_group_header("EPIC-56", "~unscoped", 5, Some(&epic));
+        epic.status = aida_core::RequirementStatus::Draft;
+        // One In Progress child → the BUG-626 rollup derives InProgress, which the
+        // header must show even though the epic's stored status is Draft.
+        let mut child = req("TASK-1", None, RequirementType::Task);
+        child.status = aida_core::RequirementStatus::InProgress;
+        epic.relationships
+            .push(rel(child.id, RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![epic.clone(), child],
+            ..Default::default()
+        };
+        let header = tree_group_header("EPIC-56", "~unscoped", 5, Some(&epic), &store);
         assert!(header.contains("EPIC-56"), "header: {header}");
         assert!(
             header.contains("Apply AXI lessons"),
@@ -78894,13 +78916,47 @@ mod derive_parent_epic_label_tests {
         assert_ne!(header, "EPIC-56 (5 items)");
     }
 
+    /// BUG-658: the `--tree` EPIC group header must show the children-derived
+    /// rollup status (BUG-626), not the raw stored YAML status. An epic stored
+    /// `Draft` whose only child is In Progress must render `InProgress` in the
+    /// header — agreeing with `aida show` / `aida why` / the row render.
+    // trace:BUG-658 | ai:claude
+    #[test]
+    fn tree_header_epic_status_is_children_rollup_not_stored() {
+        colored::control::set_override(false);
+        // Stored status deliberately disagrees with the children rollup.
+        let mut epic = req("EPIC-77", None, RequirementType::Epic);
+        epic.title = "Drifted epic".to_string();
+        epic.status = aida_core::RequirementStatus::Draft; // stale stored value
+        let mut child = req("STORY-3", None, RequirementType::Story);
+        child.status = aida_core::RequirementStatus::InProgress;
+        epic.relationships
+            .push(rel(child.id, RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![epic.clone(), child],
+            ..Default::default()
+        };
+        let header = tree_group_header("EPIC-77", "~unscoped", 2, Some(&epic), &store);
+        // Rollup-derived status (a child In Progress → InProgress).
+        assert!(
+            header.contains("InProgress"),
+            "header should show the children rollup status, got: {header}"
+        );
+        // The raw stored Draft must NOT leak through.
+        assert!(
+            !header.contains("Draft"),
+            "header leaked the raw stored status: {header}"
+        );
+    }
+
     /// The synthetic Unscoped bucket stays a plain count-only header — it has
     /// no backing requirement, so it must remain distinguishable from a real
     /// parent row (TASK-0439).
     #[test]
     fn tree_header_for_unscoped_is_count_only() {
         colored::control::set_override(false);
-        let header = tree_group_header("~unscoped", "~unscoped", 3, None);
+        let store = RequirementsStore::default();
+        let header = tree_group_header("~unscoped", "~unscoped", 3, None, &store);
         assert_eq!(header, "Unscoped (3 items)");
     }
 
@@ -78910,8 +78966,17 @@ mod derive_parent_epic_label_tests {
         colored::control::set_override(false);
         let mut epic = req("EPIC-7", None, RequirementType::Epic);
         epic.title = "Solo".to_string();
-        epic.status = aida_core::RequirementStatus::Completed;
-        let header = tree_group_header("EPIC-7", "~unscoped", 1, Some(&epic));
+        epic.status = aida_core::RequirementStatus::Draft;
+        // All children Completed → rollup derives Completed.
+        let mut child = req("TASK-9", None, RequirementType::Task);
+        child.status = aida_core::RequirementStatus::Completed;
+        epic.relationships
+            .push(rel(child.id, RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![epic.clone(), child],
+            ..Default::default()
+        };
+        let header = tree_group_header("EPIC-7", "~unscoped", 1, Some(&epic), &store);
         assert!(header.contains("(1 item)"), "header: {header}");
         assert!(!header.contains("items"), "should be singular: {header}");
     }
@@ -78922,7 +78987,8 @@ mod derive_parent_epic_label_tests {
     #[test]
     fn tree_header_unresolved_parent_falls_back_to_count() {
         colored::control::set_override(false);
-        let header = tree_group_header("EPIC-99", "~unscoped", 2, None);
+        let store = RequirementsStore::default();
+        let header = tree_group_header("EPIC-99", "~unscoped", 2, None, &store);
         assert_eq!(header, "EPIC-99 (2 items)");
     }
 }
