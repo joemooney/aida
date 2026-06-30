@@ -8,10 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:49:19.637987576Z
-modified_at: 2026-06-30T04:49:19.637987576Z
+modified_at: 2026-06-30T04:49:25.475726472Z
 req_type: Task
 tags:
 - multi-vendor
 - parent:EPIC-57
 - vendor-select
 - zen
+relationships:
+- rel_type: Child
+  target_id: 019f16dc-1929-7573-a289-6536dae296fc
+  created_at: 2026-06-30T04:49:25.475726472Z
