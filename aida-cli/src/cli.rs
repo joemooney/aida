@@ -9368,6 +9368,16 @@ pub enum Command {
         // trace:STORY-584 | ai:claude
         #[clap(long, conflicts_with_all = ["all", "archived"])]
         deferred: bool,
+
+        /// Include META requirements (AI prompt customization seeded by
+        /// `aida init`) in the activity view. By default META rows are
+        /// hidden so the 6 seeded prompt templates don't drown a fresh
+        /// project's real work — matching `aida list` and `aida status`,
+        /// which already exclude them. Pass `--include-meta` to see them,
+        /// or filter explicitly with `--type meta`.
+        // trace:STORY-737 | ai:claude
+        #[clap(long)]
+        include_meta: bool,
     },
 
     /// Opt-in EARS-style quality lint for requirement text. AIDA stays a

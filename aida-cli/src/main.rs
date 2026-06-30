@@ -316,6 +316,78 @@ fn install_sigpipe_handler() {
 #[cfg(not(unix))]
 fn install_sigpipe_handler() {}
 
+/// STORY-737 (delight #5): a sentinel error meaning "a soft, non-error signpost
+/// was already rendered to stderr by the command; the top-level handler must NOT
+/// re-print it as a red `Error:`". An empty queue on day one is the EXPECTED
+/// state, not a failure — a brand-new user running `aida queue work` should get
+/// a forward-pointing nudge, not a red error. The exit code still goes non-zero
+/// (scripts that gate on it keep working); only the human-facing RENDER is
+/// softened. The signpost itself is emitted at the call site (with the project's
+/// info glyph) so this carries no message of its own.
+// trace:STORY-737 | ai:claude
+#[derive(Debug)]
+struct SoftSignpostShown;
+
+impl std::fmt::Display for SoftSignpostShown {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Kept terse: only ever surfaces if some future caller wraps it in
+        // context (the human render path suppresses it entirely).
+        f.write_str("queue is empty")
+    }
+}
+
+impl std::error::Error for SoftSignpostShown {}
+
+/// STORY-737 (delight #4): should `aida history` hide the stateless internal
+/// META prompt-template rows? Yes by default — they're plumbing seeded by
+/// `aida init`, not user-authored work, and drown a fresh project's one real
+/// spec (matching `aida list` and `aida status`, which already exclude them).
+/// An explicit `--include-meta` OR `--type meta` overrides the hide so META
+/// stays reachable.
+// trace:STORY-737 | ai:claude
+fn history_should_exclude_meta(include_meta: bool, type_filter: Option<&str>) -> bool {
+    if include_meta {
+        return false;
+    }
+    let asked_for_meta = type_filter
+        .map(|t| t.eq_ignore_ascii_case("meta"))
+        .unwrap_or(false);
+    !asked_for_meta
+}
+
+#[cfg(test)]
+mod story_737_delight_tests {
+    use super::*;
+
+    // STORY-737 (delight #4): `aida history` hides META by default, but
+    // `--include-meta` and an explicit `--type meta` both keep it visible.
+    #[test]
+    fn history_meta_hidden_by_default_but_reachable() {
+        // Default view: META is excluded.
+        assert!(history_should_exclude_meta(false, None));
+        assert!(history_should_exclude_meta(false, Some("bug")));
+        // `--include-meta` keeps META visible regardless of type filter.
+        assert!(!history_should_exclude_meta(true, None));
+        assert!(!history_should_exclude_meta(true, Some("meta")));
+        // An explicit `--type meta` keeps META visible (case-insensitive).
+        assert!(!history_should_exclude_meta(false, Some("meta")));
+        assert!(!history_should_exclude_meta(false, Some("META")));
+    }
+
+    // STORY-737 (delight #5): the empty-queue soft signpost is an Error type
+    // (so the existing `?`/`Result` plumbing carries it) but the top-level
+    // handler suppresses its render — proven here via the downcast the handler
+    // performs.
+    #[test]
+    fn soft_signpost_is_downcastable_sentinel() {
+        let err: anyhow::Error = anyhow::Error::new(SoftSignpostShown);
+        assert!(
+            err.downcast_ref::<SoftSignpostShown>().is_some(),
+            "the top-level handler keys off this downcast to skip the red render"
+        );
+    }
+}
+
 fn main() {
     install_sigpipe_handler();
     // STORY-122: per-invocation telemetry. Wraps run() so every CLI
@@ -346,6 +418,11 @@ fn main() {
             if agent_output_mode() {
                 let (summary, help) = agent_error_summary_help(&msg);
                 println!("{}", toon::error_block(summary, help.as_deref()));
+            } else if err.downcast_ref::<SoftSignpostShown>().is_some() {
+                // STORY-737 (delight #5): the command already rendered a soft,
+                // forward-pointing signpost to stderr — re-printing it as a red
+                // `Error:` would undo the whole point. Exit non-zero silently.
+                // trace:STORY-737 | ai:claude
             } else {
                 // Anyhow's Debug format prints the chain as
                 //     summary
@@ -16916,16 +16993,32 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         );
                     }
                 }
-                // TASK-974 (AXI #9): agent-mode next-step block — the valid next
-                // transition(s) for the freshly-filed spec's status (a draft
-                // becomes approve/reject), templated with its id. The human TTY
-                // path is unchanged. trace:TASK-974
-                if agent_output_mode() {
-                    if let Some(sid) = last.spec_id.as_deref() {
+                // TASK-974 (AXI #9): the lifecycle-aware next-step block — the
+                // valid next transition(s) for the freshly-filed spec's status (a
+                // draft becomes approve/reject), templated with its id.
+                //
+                // STORY-737 (delight #2): a brand-new user files spec #1 on the
+                // HUMAN TTY and needs this nudge MOST, yet it used to fire only
+                // under `agent_output_mode()` — the agent got guided, the human
+                // got a bare "Added: …". Render the human `Next:` footer (the same
+                // idiom `aida show` uses) plus a trace-link breadcrumb so the
+                // newcomer learns the one move that wires their code to the spec.
+                // Agent mode keeps its TOON `next` block; the two never both fire.
+                // trace:TASK-974 trace:STORY-737 | ai:claude
+                if let Some(sid) = last.spec_id.as_deref() {
+                    if agent_output_mode() {
                         let next = crate::help_next::spec_next(&last.status.to_string(), sid);
                         if let Some(block) = crate::help_next::render(&next) {
                             println!("{block}");
                         }
+                    } else {
+                        println!(
+                            "{}",
+                            crate::help_next::render_human_add_footer(
+                                &last.status.to_string(),
+                                sid
+                            )
+                        );
                     }
                 }
             }
@@ -19416,6 +19509,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             all,
             archived,
             deferred,
+            include_meta,
         } => {
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
@@ -19533,6 +19627,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 archived_only_specs,
                 deferred_specs,
                 deferred_only_specs,
+                // STORY-737 (delight #4): hide META by default. An explicit
+                // `--type meta` (or `--include-meta`) keeps them visible — the
+                // type filter is honored above, so we only need to suppress the
+                // default-view drowning. trace:STORY-737 | ai:claude
+                exclude_meta: history_should_exclude_meta(*include_meta, r#type.as_deref()),
             };
             history::run(store_path, &opts)?;
         }
@@ -129640,6 +129739,35 @@ fn resolve_queue_work_plan(
                     .requirements
                     .iter()
                     .any(|r| !matches!(r.req_type, aida_core::RequirementType::Meta));
+                // STORY-737 (delight #5): an empty queue on day one is the
+                // EXPECTED state, not a failure. On the HUMAN path, render a
+                // soft, forward-pointing signpost (info glyph — NOT a red
+                // `Error:`) and return the `SoftSignpostShown` sentinel so the
+                // top-level handler suppresses the error render (exit still
+                // non-zero so scripts keep gating). Agent mode keeps the
+                // structured error it parses. trace:STORY-737 | ai:claude
+                if !agent_output_mode() {
+                    if !has_real_specs && skipped_unpickable.is_empty() {
+                        eprintln!(
+                            "{} Your queue is empty — looks like a fresh project. Get started:\n  \
+                             1. File a spec:  aida add --title \"<what you're building>\" --type task --status approved\n  \
+                             2. Queue it:     aida queue add <SPEC-ID>   (the id printed by step 1)\n  \
+                             3. Work it:      aida queue work\n  \
+                             Browse anytime with `aida list`.",
+                            "ℹ".cyan()
+                        );
+                    } else {
+                        eprintln!(
+                            "{} Nothing queued yet — that's the expected day-one state. \
+                             Approve a draft and queue it in one step: \
+                             `aida add \"<what you're building>\" --queue`, \
+                             or queue an existing spec: `aida queue add <id>`.{}",
+                            "ℹ".cyan(),
+                            suffix
+                        );
+                    }
+                    return anyhow::Error::new(SoftSignpostShown);
+                }
                 if !has_real_specs && skipped_unpickable.is_empty() {
                     anyhow::anyhow!(
                         "Your queue is empty — looks like a fresh project. Get started:\n  \
