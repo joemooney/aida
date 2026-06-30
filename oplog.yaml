@@ -26453,5 +26453,17 @@ operations:
   timestamp: 2026-06-30T02:29:21.047684892Z
   kind: !SetStatus
     status: In Progress
-clock: 2525
+- id: 019f165c-3b2e-7e20-be51-0a4278e32837
+  target_id: 019f165c-2474-7162-be66-3618fd73d400
+  author: aida
+  node_id: '1'
+  lamport: 2526
+  timestamp: 2026-06-30T02:29:31.054193839Z
+  kind: !Create
+    title: TASK-0431 — product-sourced decisions must be filterable (`--from-product`); the evidence field records the product handoff (this plan reserves the filter, TASK-0431 fills the source)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2526
 node_id: '1'
