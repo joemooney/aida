@@ -27277,5 +27277,17 @@ operations:
   timestamp: 2026-06-30T05:03:15.928229131Z
   kind: !SetStatus
     status: In Progress
-clock: 2610
+- id: 019f1725-b0fe-7722-9408-f1d819c4683e
+  target_id: 019f1725-a5f2-7302-9ab7-5e90827762a8
+  author: aida
+  node_id: '1'
+  lamport: 2611
+  timestamp: 2026-06-30T06:09:33.950565743Z
+  kind: !Create
+    title: 'aida integrate slice 2b: own-checkout guard (BUG-650) — unblocks unattended use'
+    description: 'New aida-cli/src/integrate_checkout.rs: ensure_integrator_checkout (acquire/reuse a DEDICATED warm-pool worktree pinned to the default branch, separately lease-scoped from the advisors checkout — reuse acquire_session_pool_worktree + git_ops add_detached_worktree/default_branch_name) + guard_not_shared_checkout (clear-error refusal when a live non-integrator session occupies the cwd — BUG-650 option-c). Wire into handle_queue_integrate before the first drive, replacing the TASK-1036 slice-2b-gating TODO. The global drain_lock still serializes merge authority repo-wide; this just gives integrate its OWN checkout so it does not contend the advisors HARNESS-WORKTREE lease. Unblocks UNATTENDED aida integrate --watch. Per the STORY-718 integrate-loop plan.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2611
 node_id: '1'
