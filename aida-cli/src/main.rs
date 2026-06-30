@@ -117532,6 +117532,127 @@ fn extract_acceptance_section(description: &str) -> Option<String> {
     }
 }
 
+/// The description prose that precedes the `## Acceptance` section — the lead
+/// paragraphs to show under the spec's title. For a fallback (no-AI) draft there
+/// is no acceptance heading, so the whole body is the lead. Sibling of
+/// [`extract_acceptance_section`].
+// trace:STORY-736 | ai:claude
+fn drafted_lead_prose(description: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    for line in description.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("## ") {
+            let lower = rest.trim().to_ascii_lowercase();
+            if ACCEPTANCE_SECTION_HEADINGS
+                .iter()
+                .any(|h| lower.starts_with(&h.to_ascii_lowercase()))
+            {
+                break;
+            }
+        }
+        out.push(line);
+    }
+    out.join("\n").trim().to_string()
+}
+
+/// The acceptance bullets of a drafted body, as clean strings (leading `- `/`* `
+/// markers stripped). Reuses [`extract_acceptance_section`], then keeps only the
+/// genuine bullet lines — so the provenance footer line (`_Drafted by …_`) that
+/// follows the bullets in a composed body is filtered out.
+// trace:STORY-736 | ai:claude
+fn drafted_acceptance_bullets(description: &str) -> Vec<String> {
+    let Some(section) = extract_acceptance_section(description) else {
+        return Vec::new();
+    };
+    section
+        .lines()
+        .map(str::trim)
+        .filter_map(|l| l.strip_prefix("- ").or_else(|| l.strip_prefix("* ")))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Render the SAFE `aida zen "<thought>" --dry-run` preview: compose the SAME
+/// draft the real run would file (genuine AI draft, with the offline fallback)
+/// and pretty-print it in the `aida show` idiom — title + description +
+/// acceptance — so the operator sees the structured spec a sentence becomes,
+/// not a flat echo. Composes + renders only; nothing is persisted.
+// trace:STORY-736 | ai:claude
+fn render_zen_dry_run_draft(thought: &str) -> String {
+    let ai = zen_try_ai_draft(thought);
+    let drafted = zen_drive::compose_draft_from_thought(thought, ai);
+    render_drafted_thought_preview(&drafted)
+}
+
+/// Pure renderer for a composed [`zen_drive::DraftedThought`] — split from the AI
+/// wiring above so the layout is unit-testable without the transport. Mirrors the
+/// `aida show` card: a clean rule, the title under a status glyph, the lead
+/// description prose, an indented acceptance block, a source note, and the
+/// lifecycle line. All glyphs route through the registry (ascii-safe).
+// trace:STORY-736 | ai:claude
+fn render_drafted_thought_preview(drafted: &zen_drive::DraftedThought) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    let rule = "─".repeat(60);
+    let arrow = crate::glyph(crate::glyphs::Glyph::Arrow);
+    let pending = crate::glyph(crate::glyphs::Glyph::Pending);
+    let bullet = crate::glyph(crate::glyphs::Glyph::Bullet);
+    let check = crate::glyph(crate::glyphs::Glyph::Check);
+
+    let _ = writeln!(out, "{}", rule.dimmed());
+    let _ = writeln!(
+        out,
+        "{} would draft + file + drive a new {} from your thought:",
+        arrow.cyan(),
+        "Draft".yellow()
+    );
+    let _ = writeln!(out);
+    let _ = writeln!(out, "  {} {}", pending.yellow(), drafted.title.bold());
+    let _ = writeln!(out);
+
+    let lead = drafted_lead_prose(&drafted.description);
+    if !lead.is_empty() {
+        let _ = writeln!(out, "  {}", format!("{arrow} Description:").bold());
+        for line in lead.lines() {
+            let _ = writeln!(out, "    {line}");
+        }
+        let _ = writeln!(out);
+    }
+
+    let criteria = drafted_acceptance_bullets(&drafted.description);
+    if !criteria.is_empty() {
+        let label = if criteria.len() == 1 {
+            "1 item".to_string()
+        } else {
+            format!("{} items", criteria.len())
+        };
+        let _ = writeln!(out, "  {}", format!("{arrow} Acceptance ({label}):").bold());
+        for c in &criteria {
+            let _ = writeln!(out, "    {bullet} {c}");
+        }
+        let _ = writeln!(out);
+    }
+
+    let note = match drafted.source {
+        zen_drive::DraftSource::Ai => "AI-drafted from your thought.".to_string(),
+        zen_drive::DraftSource::Fallback => {
+            "no AI was reachable — showing the offline-fallback draft (refine the \
+             acceptance criteria before it ships)."
+                .to_string()
+        }
+    };
+    let _ = writeln!(out, "  {} {}", check.green(), note.dimmed());
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "  …then: approve {arrow} implement {arrow} CI {arrow} review {arrow} merge, \
+         fully headless. Run without --dry-run to drive it."
+    );
+    let _ = writeln!(out, "{}", rule.dimmed());
+    out
+}
+
 /// Pull `(REQ-ID)` trailers from a commit message **subject** only. AIDA's
 /// commit format wraps the requirement id in parens at end-of-subject:
 /// `[AI:tool] feat(scope): description (REQ-ID)`. Also tolerates the
@@ -137277,8 +137398,13 @@ fn run_zen_drive(
         spec
     } else {
         if dry_run {
-            // --dry-run files nothing — just report what the front door would do.
-            println!("would draft + file + drive: {spec}");
+            // --dry-run files nothing — but the whole pitch of zen is "a sentence
+            // becomes a structured, shipped spec", so the SAFE preview composes the
+            // SAME draft the real run would file (AI, with an offline fallback) and
+            // pretty-prints it in the `aida show` idiom — title + description +
+            // acceptance — instead of echoing the thought back. Composes + renders
+            // only; nothing is persisted. trace:STORY-736
+            print!("{}", render_zen_dry_run_draft(spec));
             return Ok(());
         }
         // The drafted spec is born a Draft and routes through the autopilot
@@ -146549,6 +146675,56 @@ mod zen_front_door_tests {
         assert!(req
             .description
             .contains("The header shows the parent's title"));
+    }
+
+    /// STORY-736: `aida zen "<thought>" --dry-run` renders the spec it WOULD
+    /// draft — title + description + acceptance — instead of echoing the thought
+    /// back. The renderer is pure (composes + formats, persists nothing), so we
+    /// exercise both the AI-drafted and the offline-fallback shapes here, and
+    /// confirm a real spec-id is still routed to the per-spec preview path.
+    #[test]
+    fn zen_dry_run_renders_drafted_spec() {
+        // ── AI-drafted thought: title + description + acceptance bullets ──────
+        let ai = aida_core::DraftSpecResponse {
+            title: "Add a dark mode toggle".to_string(),
+            description: "Let the user switch the UI between light and dark themes.".to_string(),
+            acceptance_criteria: vec![
+                "A toggle in settings switches the theme".to_string(),
+                "The chosen theme persists across restarts".to_string(),
+            ],
+        };
+        let drafted = zen_drive::compose_draft_from_thought("add a dark mode toggle", Some(ai));
+        assert_eq!(drafted.source, zen_drive::DraftSource::Ai);
+        let rendered = render_drafted_thought_preview(&drafted);
+
+        // Title is rendered, not the raw flat echo.
+        assert!(rendered.contains("Add a dark mode toggle"));
+        assert!(!rendered.contains("would draft + file + drive: add a dark mode toggle"));
+        // Structured blocks: description prose + an Acceptance section + each bullet.
+        assert!(rendered.contains("Description:"));
+        assert!(rendered.contains("Let the user switch the UI"));
+        assert!(rendered.contains("Acceptance"));
+        assert!(rendered.contains("A toggle in settings switches the theme"));
+        assert!(rendered.contains("The chosen theme persists across restarts"));
+        // The lifecycle line closes the preview.
+        assert!(rendered.contains("Run without --dry-run to drive it."));
+        // The raw `## Acceptance` markdown heading is NOT shown verbatim (it is
+        // re-rendered as a labelled block) and neither is the provenance footer.
+        assert!(!rendered.contains("## Acceptance"));
+        assert!(!rendered.contains("_Drafted by"));
+
+        // ── Offline fallback: no AI → still a rendered draft, flagged as such ─
+        let fallback = zen_drive::compose_draft_from_thought("add a dark mode toggle", None);
+        assert_eq!(fallback.source, zen_drive::DraftSource::Fallback);
+        let rendered_fb = render_drafted_thought_preview(&fallback);
+        assert!(rendered_fb.contains("add a dark mode toggle"));
+        assert!(rendered_fb.contains("no AI was reachable"));
+        assert!(rendered_fb.contains("Run without --dry-run to drive it."));
+
+        // ── A real spec-id is NOT free text → the free-text renderer is skipped,
+        // so the existing per-spec dry-run preview path still applies.
+        assert!(zen_drive::looks_like_spec_id("STORY-736"));
+        assert!(!zen_drive::looks_like_spec_id("add a dark mode toggle"));
     }
 
     /// IMPROVEMENT 2: `aida zen --help` no longer lists the introspection
