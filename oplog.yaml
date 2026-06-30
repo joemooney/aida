@@ -26625,5 +26625,13 @@ operations:
   timestamp: 2026-06-30T02:33:15.104033664Z
   kind: !RemoveTag
     tag: docs
-clock: 2542
+- id: 019f165f-ad54-7c53-94c1-64e6ab626801
+  target_id: 019f14d9-5ae8-7cf0-b053-204d6c1e5c9e
+  author: aida
+  node_id: '1'
+  lamport: 2543
+  timestamp: 2026-06-30T02:33:16.884824154Z
+  kind: !RemoveTag
+    tag: perf-probe-tmp
+clock: 2543
 node_id: '1'
