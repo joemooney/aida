@@ -4108,6 +4108,30 @@ pub enum QueueCommand {
         #[clap(long = "for", visible_alias = "for-role")]
         r#for: Option<String>,
     },
+    /// Garbage-collect dead routed queue entries — remove every entry whose
+    /// backing spec is archived, completed, or rejected (terminal corpses that
+    /// linger in the queue file after the work shipped). The default `aida
+    /// queue list` view already hides them, but the underlying queue file
+    /// still carries them; this sweeps them and reports the count. Sibling of
+    /// `aida queue prune --orphaned` (which targets DELETED specs) — `gc`
+    /// targets specs that still exist but are done with. Use `--dry-run` to
+    /// preview. Still-actionable entries (Draft/Approved/Planned/InProgress/
+    /// Done) always survive.
+    // trace:TASK-1052 | ai:claude — plain `//` so the SPEC-ID doesn't leak
+    // into user-facing --help output per the TASK-268 convention.
+    Gc {
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+        /// Restrict the sweep to entries routed to this role. Default: every
+        /// role's entries in this user's queue.
+        #[clap(long = "for", visible_alias = "for-role")]
+        r#for: Option<String>,
+        /// Preview the entries that would be removed; don't actually remove
+        /// them.
+        #[clap(long)]
+        dry_run: bool,
+    },
     /// Peek at the top item in your queue without removing it. When a role
     /// is active and --role is not passed, defaults to filtering on it.
     /// Use this between work items to see what's next. Considers local +
