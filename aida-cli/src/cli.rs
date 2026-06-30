@@ -2829,6 +2829,28 @@ pub enum StoreCommand {
         #[clap(long)]
         force: bool,
     },
+
+    /// Deep-repack the orphan store git repo to relieve the substrate tax of a
+    /// long, never-compacted history. The bare command runs an aggressive
+    /// `git gc` — safe + non-destructive: no history is rewritten, `aida
+    /// history` is unaffected, no force-push needed. `gc` is an alias.
+    // trace:STORY-733 | ai:claude
+    #[clap(alias = "gc")]
+    Compact {
+        /// DESTRUCTIVE opt-in: rewrite the orphan-store history to a single
+        /// snapshot commit. Rewrites the branch (breaks the full `aida
+        /// history --events` timeline — preserved only via the backup ref) and
+        /// needs a coordinated force-push every clone must re-sync. Never runs
+        /// automatically. Without `--yes` it only PRINTS the plan.
+        #[clap(long)]
+        squash: bool,
+
+        /// Required to actually perform a `--squash` rewrite. Without it,
+        /// `--squash` prints exactly what it would do and exits without
+        /// touching the store.
+        #[clap(long)]
+        yes: bool,
+    },
 }
 
 /// Maintenance + migration ops on the AIDA store.

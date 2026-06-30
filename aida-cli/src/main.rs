@@ -34463,7 +34463,175 @@ fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
     match cmd {
         cli::StoreCommand::Status => store_status(),
         cli::StoreCommand::InstallHook { force } => store_install_hook(*force),
+        cli::StoreCommand::Compact { squash, yes } => store_compact(*squash, *yes),
     }
+}
+
+/// `aida store compact` (alias `aida store gc`). The bare command runs a deep,
+/// non-destructive `git gc --aggressive` on the orphan store. `--squash` is the
+/// DESTRUCTIVE history-rewrite path — gated behind `--yes`, prints the plan
+/// otherwise, and never runs automatically.
+// trace:STORY-733 | ai:claude
+fn store_compact(squash: bool, yes: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    if !store_path.exists() {
+        anyhow::bail!(
+            "no .aida-store/ worktree found at {} — run an `aida` store command first to attach it",
+            store_path.display()
+        );
+    }
+
+    if squash {
+        return store_compact_squash(&store_path, yes);
+    }
+
+    // ── Safe path: aggressive repack ──
+    let before = aida_core::git_ops::count_objects(&store_path);
+    if let Some(b) = before {
+        println!(
+            "{} {} packs, {} loose objects before compaction",
+            "Store:".bold(),
+            b.packs.to_string().cyan(),
+            b.loose.to_string().cyan()
+        );
+    }
+    println!("Running an aggressive repack (deep gc — this can take a moment)...");
+    let res = aida_core::git_ops::gc_aggressive(&store_path)?;
+    if !res.success {
+        anyhow::bail!("git gc --aggressive failed: {}", res.stderr);
+    }
+    let after = aida_core::git_ops::count_objects(&store_path);
+    match (before, after) {
+        (Some(b), Some(a)) => println!(
+            "{} {} -> {} packs, {} -> {} loose objects",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            b.packs,
+            a.packs,
+            b.loose,
+            a.loose
+        ),
+        _ => println!(
+            "{} aggressive repack complete",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        ),
+    }
+    println!(
+        "{}",
+        "History is unchanged — `aida history` and the orphan log are intact.".dimmed()
+    );
+    Ok(())
+}
+
+/// The DESTRUCTIVE `--squash` path. Without `--yes` it prints exactly what it
+/// would do and exits without touching the store. With `--yes` it records a
+/// backup ref BEFORE any rewrite, collapses the orphan history to a single
+/// snapshot commit, and prints (never runs) the coordinated force-push.
+// trace:STORY-733 | ai:claude
+fn store_compact_squash(store_path: &std::path::Path, yes: bool) -> Result<()> {
+    let head = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let commit_count = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args(["rev-list", "--count", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|| "?".to_string());
+    let ts = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let backup_ref = format!("aida-store-pre-squash-{ts}");
+
+    println!(
+        "{}  {}",
+        crate::glyph(crate::glyphs::Glyph::Warning).red().bold(),
+        "DESTRUCTIVE: aida store compact --squash".red().bold()
+    );
+    println!();
+    let bullet = crate::glyph(crate::glyphs::Glyph::Bullet);
+    println!("This will REWRITE the orphan `aida-store` branch:");
+    println!(
+        "  {bullet} collapse {} commits into a single snapshot commit",
+        commit_count.yellow()
+    );
+    println!(
+        "  {bullet} record a backup branch {} pointing at the current tip {}",
+        backup_ref.cyan(),
+        head.as_deref()
+            .map(short_sha)
+            .unwrap_or_else(|| "(unknown)".to_string())
+            .cyan()
+    );
+    println!("  {bullet} leave every YAML / the cache byte-identical (only history collapses)");
+    println!();
+    println!("{}", "Consequences:".bold());
+    println!(
+        "  {bullet} {} loses its full timeline — the pre-squash horizon survives ONLY",
+        "aida history --events".yellow()
+    );
+    println!("    at the backup branch; point history tooling there to inspect old events.");
+    println!(
+        "  {bullet} a coordinated {} is required; every other clone must re-sync",
+        "force-push".yellow()
+    );
+    println!("    (`git fetch` + hard reset of their `.aida-store/`).");
+    println!("  {bullet} this command NEVER pushes — you run the force-push after review.");
+    println!();
+
+    if !yes {
+        println!(
+            "{} no changes made. Re-run with {} to perform the rewrite.",
+            "Plan only —".dimmed(),
+            "--yes".cyan()
+        );
+        return Ok(());
+    }
+
+    let message = format!(
+        "snapshot: compacted aida-store @ {} (squashed {} commits; backup: {})",
+        chrono::Local::now().format("%Y-%m-%d"),
+        commit_count,
+        backup_ref
+    );
+    let outcome = aida_core::git_ops::squash_orphan_to_snapshot(store_path, &message, &backup_ref)?;
+
+    // Reclaim the now-unreferenced object space (the old commits are still held
+    // by the backup ref, so this won't drop them until that ref is deleted).
+    let _ = aida_core::git_ops::gc_aggressive(store_path);
+
+    println!(
+        "{} squashed to snapshot {}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        short_sha(&outcome.snapshot_sha).cyan()
+    );
+    println!("  backup branch: {}", outcome.backup_ref.cyan());
+    println!("  pre-squash tip: {}", short_sha(&outcome.old_head).cyan());
+    println!();
+    println!("{}", "Next (manual — review first):".bold());
+    println!(
+        "  {}",
+        "git -C .aida-store push --force-with-lease origin aida-store".cyan()
+    );
+    println!(
+        "  {}",
+        "Then every other clone must re-sync their .aida-store/ (fetch + hard reset).".dimmed()
+    );
+    println!(
+        "  {}",
+        format!(
+            "Recovery if needed: git -C .aida-store reset --hard {}",
+            outcome.backup_ref
+        )
+        .dimmed()
+    );
+    Ok(())
 }
 
 // ── Sandbox store (SPIKE-48) ─────────────────────────────────────────────
