@@ -220,6 +220,35 @@ pub fn queue_next(first_id: Option<&str>) -> Vec<NextStep> {
     }
 }
 
+/// Next steps after `aida queue work <id>` pickup: the work is now in flight,
+/// so the natural next move is to FINISH it (`aida queue done <id>` — marks it
+/// Done, finished on a branch), with the spec's own detail view as a follow-up.
+/// `id` is the picked-up spec's display id. This closes the gap where the
+/// add -> approve -> queue list -> queue WORK chain dropped the agent's
+/// next-step breadcrumb exactly at pickup.
+// trace:BUG-673 | ai:claude — plain `//` keeps the marker out of any doc/help.
+pub fn queue_work_next(id: &str) -> Vec<NextStep> {
+    vec![
+        NextStep::new(format!("aida queue done {id}"), "done"),
+        NextStep::new(format!("aida show {id}"), "detail"),
+    ]
+}
+
+/// Next steps after `aida queue done <id>`: the canonical next move is `aida
+/// pull`, which fires the Done -> Completed auto-bump once the spec's PR merges
+/// to the default branch — WITHOUT it the spec strands at Done. The spec's own
+/// detail view (where the open PR / merge state shows) is the follow-up. `id`
+/// is the just-marked-done spec's display id. This closes the gap where the
+/// add -> ... -> queue DONE chain dropped the breadcrumb exactly at the step
+/// before completion.
+// trace:BUG-673 | ai:claude — plain `//` keeps the marker out of any doc/help.
+pub fn queue_done_next(id: &str) -> Vec<NextStep> {
+    vec![
+        NextStep::new("aida pull", "completed"),
+        NextStep::new(format!("aida show {id}"), "detail"),
+    ]
+}
+
 /// Next steps after `aida search`: drill into a result row. `search` is a
 /// MULTI-ROW surface, so the command templates a literal `<id>` placeholder
 /// (the same rule [`list_next`] follows) rather than picking one row's concrete
@@ -442,6 +471,57 @@ mod tests {
         let q = queue_next(Some("TASK-8"));
         assert_eq!(q[0].cmd, "aida queue work TASK-8");
         assert_eq!(cmds(&queue_next(None)), vec!["aida list --status approved"]);
+    }
+
+    // BUG-673: after `aida queue done <id>` the breadcrumb names `aida pull`
+    // (the Done -> Completed auto-bump after the PR merges) on BOTH the agent
+    // TOON `next[]` block and the human `Next:` block — without it an agent
+    // strands the spec at Done.
+    #[test]
+    fn queue_done_emits_next_with_aida_pull() {
+        let steps = queue_done_next("TASK-7");
+        // The primary suggestion is `aida pull`, advancing to completed.
+        assert_eq!(steps[0].cmd, "aida pull");
+        assert_eq!(steps[0].to, "completed");
+        assert!(cmds(&steps).contains(&"aida show TASK-7".to_string()));
+
+        // Agent path: the rendered TOON `next` block includes `aida pull`.
+        let agent = render(&steps).expect("non-empty");
+        assert!(agent.starts_with("next["), "agent block is TOON:\n{agent}");
+        assert!(
+            agent.contains("aida pull"),
+            "agent block names pull:\n{agent}"
+        );
+
+        // Human path: the `Next:` block also names `aida pull`.
+        let human = render_human(&steps).expect("non-empty");
+        assert!(human.contains("Next:"), "human block has header:\n{human}");
+        assert!(
+            human.contains("aida pull"),
+            "human block names pull:\n{human}"
+        );
+        // It is the HUMAN render, not the agent TOON block.
+        assert!(
+            !human.contains("cmd,to"),
+            "human must not emit TOON:\n{human}"
+        );
+    }
+
+    // BUG-673: after `aida queue work <id>` pickup the breadcrumb names the
+    // finish move (`aida queue done <id>`) on both the agent and human paths.
+    #[test]
+    fn queue_work_emits_next() {
+        let steps = queue_work_next("TASK-7");
+        assert_eq!(steps[0].cmd, "aida queue done TASK-7");
+        assert_eq!(steps[0].to, "done");
+        assert!(cmds(&steps).contains(&"aida show TASK-7".to_string()));
+
+        let agent = render(&steps).expect("non-empty");
+        assert!(agent.contains("aida queue done TASK-7"));
+
+        let human = render_human(&steps).expect("non-empty");
+        assert!(human.contains("Next:"));
+        assert!(human.contains("aida queue done TASK-7"));
     }
 
     // The rendered block is a valid, round-trippable TOON table; empty -> None.

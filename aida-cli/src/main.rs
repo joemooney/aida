@@ -127924,6 +127924,27 @@ fn handle_queue_command(
                 "run `aida queue next` to see what's next".dimmed()
             );
 
+            // BUG-673: next-step breadcrumb after `queue done`. The agent chain
+            // is add -> approve -> queue list -> queue work -> queue done ->
+            // `aida pull`, but the `next[]` block dropped out exactly here, so
+            // an agent that just marked a spec Done was never told the next move
+            // is `aida pull` (which fires the Done -> Completed auto-bump once
+            // the PR merges) and stranded the spec at Done. Emit the lifecycle
+            // block on both surfaces: the TOON `next[]` block in agent mode, the
+            // `Next:` block on the human TTY (same idiom `aida show` uses).
+            // trace:BUG-673 | ai:claude
+            {
+                let next = crate::help_next::queue_done_next(display_id);
+                let rendered = if agent_output_mode() {
+                    crate::help_next::render(&next)
+                } else {
+                    crate::help_next::render_human(&next)
+                };
+                if let Some(block) = rendered {
+                    println!("{block}");
+                }
+            }
+
             // TASK-96: offer to file the plan's Followups bullets as child
             // TASKs. Interactive prompt unless `--yes` (then file all).
             // Best-effort — a failure here never blocks `queue done`.
@@ -132071,6 +132092,23 @@ fn handle_queue_work(
                 "  {}",
                 format!("claude {}", shell_join_display(&args)).cyan()
             );
+        }
+        // BUG-673: next-step breadcrumb after a `queue work` pickup. The lease
+        // is taken and the worktree is set up (only the launch is deferred), so
+        // this IS a genuine pickup — the natural next move is to finish the work
+        // (`aida queue done <id>`). Closes the gap where the next[] block
+        // dropped out at `queue work`. Emit the TOON `next[]` block in agent
+        // mode, the human `Next:` block otherwise. trace:BUG-673 | ai:claude
+        {
+            let next = crate::help_next::queue_work_next(&plan.anchor_display);
+            let rendered = if agent_output_mode() {
+                crate::help_next::render(&next)
+            } else {
+                crate::help_next::render_human(&next)
+            };
+            if let Some(block) = rendered {
+                println!("{block}");
+            }
         }
         return Ok(());
     }
