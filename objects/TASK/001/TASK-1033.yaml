@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:35:27.117249631Z
-modified_at: 2026-06-30T02:35:27.117249631Z
+modified_at: 2026-06-30T02:36:53.255579870Z
 req_type: Task
 tags:
 - from-operator
@@ -16,3 +16,9 @@ tags:
 - maintenance
 - performance
 - store
+comments:
+- id: 019f1662-fa87-75a3-a266-c5b56c439538
+  author: joe
+  content: Sequenced BEHIND the EPIC-0428 autopilot slices (TASK-1006 doc -> TASK-1007 evaluate-contract -> audit-log + product-evidence impl slices). Drive after the autopilot arc completes. Operator request 2026-06-29.
+  created_at: 2026-06-30T02:36:53.255579870Z
+  modified_at: 2026-06-30T02:36:53.255579870Z
