@@ -28274,5 +28274,13 @@ operations:
   timestamp: 2026-06-30T16:36:12.496484376Z
   kind: !AddTag
     tag: zen-ready
-clock: 2727
+- id: 019f1973-3597-7082-94c0-4cf158c3adcb
+  target_id: 019ebd88-7d68-7b71-9a0b-a06eb25f87a9
+  author: aida
+  node_id: '1'
+  lamport: 2728
+  timestamp: 2026-06-30T16:53:28.599316917Z
+  kind: !SetTitle
+    title: Decouple the away presence escalation default from `away_drain` into its own `[presence]` knob (today escalation rides the away_drain rung; (c) questions deferred to STORY-555)
+clock: 2728
 node_id: '1'
