@@ -1,0 +1,17 @@
+id: 019f1a63-666d-7070-964d-ebb2257a9c12
+spec_id: BUG-671
+agreed_id: BUG-671
+title: 'agent-mode write verbs: queue done silently no-ops on EOF; guard errors hide the --force/-y override an agent needs'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T21:15:49.741373186Z
+modified_at: 2026-06-30T21:15:49.741373186Z
+req_type: Bug
+tags:
+- agent-surface
+- confirm
+- from-audit
+- queue
