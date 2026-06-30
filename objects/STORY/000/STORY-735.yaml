@@ -1,0 +1,17 @@
+id: 019f1973-50eb-7750-8d47-706a8b490b94
+spec_id: STORY-735
+agreed_id: STORY-735
+title: 'aida guided-implement: structured step-by-step decision dialog for keystone/architecture/security specs'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T16:53:35.595039309Z
+modified_at: 2026-06-30T16:53:35.595039309Z
+req_type: Story
+tags:
+- dialog
+- from-operator
+- guided-implement
+- keystone
