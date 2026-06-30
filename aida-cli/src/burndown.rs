@@ -2251,6 +2251,23 @@ mod tests {
         assert!(!planned.contains("burndown plan"));
     }
 
+    // STORY-729 (FIX 7): a Done spec's `why` reason names the branch-vs-merge
+    // reality — "awaiting merge" — so a human reads it (not just the colour) and
+    // can tell Done from Completed by the words alone. (The Completed side is the
+    // terminal-status branch in `handle_why`, covered by the CLI text there.)
+    #[test]
+    fn explain_open_done_reason_says_awaiting_merge() {
+        let done = explain_open(&open("task", "done", &[], false, false, false)).1;
+        assert!(
+            done.contains("awaiting merge"),
+            "done reason must say 'awaiting merge': {done}"
+        );
+        assert!(
+            done.contains("on a branch"),
+            "done reason must say it's on a branch: {done}"
+        );
+    }
+
     #[test]
     fn explain_open_precedence_decision_beats_structural() {
         // An epic that is ALSO tagged for a human decision reports the decision
