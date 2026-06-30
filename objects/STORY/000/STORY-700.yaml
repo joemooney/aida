@@ -2,13 +2,27 @@ id: 019f0656-4b4c-7481-b8a7-ff4ae8a23e84
 spec_id: STORY-700
 agreed_id: STORY-700
 title: 'First-run experience: feel the core loop in session one (W5)'
-description: After aida init, guide the user through spec -> trace -> review -> merge -> auto-complete as a single visible arc (first-run hint chain / aida tour) so the loop is felt, not discovered. Builds on BUG-465/EPIC-37 onboarding hardening.
+description: |-
+  After aida init, guide the user through spec -> trace -> review -> merge -> auto-complete as a single visible arc so the loop is FELT, not discovered. Builds on BUG-465/EPIC-37 onboarding hardening.
+
+  ## Decision (operator-resolved 2026-06-30, BINDING)
+  Deliver this as a PASSIVE, contextual first-run HINT CHAIN — NOT an opt-in aida tour command. Rationale: a command the user must already know to invoke contradicts the felt-not-discovered goal (you cannot discover the thing that teaches you discovery). The hints meet the user where they already are, firing at the moment they are positioned to take each next step. The aida tour alternative is explicitly rejected for the MVP.
+
+  ## Acceptance
+  1. First-run guidance is a passive contextual hint chain, surfaced automatically as the user performs each step — never an opt-in command the user must know to run.
+  2. The chain covers the full arc end to end: after init -> file the first spec; after a spec is filed -> add the trace comment / implement; after trace -> review; after review -> merge; after merge -> the spec auto-completes back into the graph. Each hint names the single next command to run.
+  3. The arc terminates with the payoff made explicit: the user SEES the spec they filed reach Completed via the merge auto-bump (the felt-not-discovered moment), not just a generic done message.
+  4. Hints are advisory and non-blocking: each step fires once, the chain is idempotent (repeating a step does not re-nag), and a completed arc silences the chain. Re-running aida init does not replay an already-finished arc.
+  5. The whole chain is silenceable via one config/env knob, and is auto-silent in non-interactive / non-TTY contexts (scripts, CI, headless) — zero hint output when there is no human at the keyboard.
+  6. Hint text is user-facing first-run copy: NO SPEC-IDs in the strings (per docs/user-facing-text-conventions.md / TASK-268) — a first-run user does not yet hold the requirement graph.
+
+  Primary caller: a human at an interactive TTY immediately after a fresh aida init (verify each criterion in that env). Out of scope: the in-TUI quiet-depth reveal (sibling TASK-936); any aida tour command (rejected above).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:06.508349535Z
-modified_at: 2026-06-30T16:35:31.988331917Z
+modified_at: 2026-06-30T17:12:15.699426625Z
 req_type: Story
 tags:
 - zen-ready
