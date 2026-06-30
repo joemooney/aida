@@ -1,0 +1,35 @@
+id: 019f19c1-15cc-7831-8279-ba9292828c05
+spec_id: PRIN-2
+agreed_id: PRIN-2
+title: 'Configurability earns its place via evidence: default-first, authority-envelope is the exception'
+description: |-
+  A config knob is never free: every knob is a decision the tool pushes onto a user who is worse-placed to make it than the designer is. It also costs surface complexity (test matrix, docs, support, "why is it behaving like this?") — paid whether or not anyone tunes it. This cuts against the Trojan-horse positioning, where the surface should feel trivially simple and depth surfaces through use, not through a cockpit of toggles. (Cf. docs/architecture/on-complexity.md: choose constraints early so you do not pay for freedom you never use.)
+
+  RULE — make a behavior a config knob only if ALL THREE hold:
+  1. Reasonable users genuinely DIFFER on the right behavior (observed, not hypothetical).
+  2. A default CANNOT safely absorb the variance — getting it wrong is costly, not merely mildly annoying.
+  3. The user is EQUIPPED to choose — they have the context to set it correctly.
+  Fail any one -> ship a well-chosen DEFAULT, not a knob.
+
+  EARN THE KNOB, do not guess it: ship the default, turn on the SPIKE-67 field study ([field_study], git-log-as-sensor, default off) to measure whether the fixed behavior actually chafes in real repos, and add the knob only when the evidence says so. New knobs are evidence-driven, not speculative.
+
+  THE ONE EXCEPTION — AUTHORITY. Configurability is legitimately load-bearing where it governs what an agent may do WITHOUT a human watching (e.g. the advisor-autopilot authority envelope, TASK-0429). There the right boundary genuinely varies by how much a team trusts automation and a wrong default is high-blast-radius, so a config ENVELOPE that narrows/widens the authority boundary is justified. Even then: configure the authority BOUNDARY, not a dozen behavioral toggles.
+
+  CONSEQUENCE for the feel of the tool: a fresh aida init yields sensible behavior with an essentially empty config.toml; the file grows only as a user hits real friction; nobody is asked to make a decision they are not ready for at the moment they are least ready.
+
+  APPLIED:
+  - STORY-700 (first-run hint chain): NO policy — a first-run user cannot configure the thing that teaches them the tool. One off-switch + non-TTY auto-silence only.
+  - TASK-769 / TASK-1059 (presence consumers): default-first; per-consumer knob only on field-study evidence of rigidity. Do not pre-build.
+  - TASK-1020 (autopilot): the authority-envelope exception applies (envelope config OK); but the flag-vs-posture-vs-mode surface is a one-time design ratification, not a runtime knob.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T18:18:32.268866358Z
+modified_at: 2026-06-30T18:18:32.268866358Z
+req_type: Principle
+tags:
+- autonomy
+- config
+- from-advisor
+- product
