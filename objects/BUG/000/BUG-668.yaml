@@ -1,0 +1,18 @@
+id: 019f19bd-6517-7b42-b4d8-29e8a421b223
+spec_id: BUG-668
+agreed_id: BUG-668
+title: aida search --fields has no agent/TOON output path — completes STORY-734 humans+agents parity (search costs agents 2x tokens)
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T18:14:30.423894487Z
+modified_at: 2026-06-30T18:14:30.423894487Z
+req_type: Bug
+tags:
+- agent-surface
+- cli
+- fields
+- from-audit
+- toon
