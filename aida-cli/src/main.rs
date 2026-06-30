@@ -15167,18 +15167,35 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                 });
 
+                // BUG: a real parent-backed group header used to print only the
+                // parent's id + child count (`EPIC-56 (5 items)`), making a real
+                // scoped parent indistinguishable from a synthetic bucket. Resolve
+                // each parent label back to its requirement so the header can carry
+                // the parent's own title + status badge; the child count becomes
+                // trailing metadata. The label is the parent's canonical display id
+                // (agreed_id else spec_id) — the same key derive_parent_epic_label
+                // groups on — so look it up by that. trace:TASK-0439 | ai:claude
+                let parent_by_label: std::collections::HashMap<&str, &aida_core::Requirement> =
+                    store
+                        .requirements
+                        .iter()
+                        .filter_map(|p| {
+                            p.agreed_id
+                                .as_deref()
+                                .or(p.spec_id.as_deref())
+                                .map(|id| (id, p))
+                        })
+                        .collect();
                 for (key, group) in &ordered {
-                    let header = if key == &unscoped_key {
-                        "Unscoped".to_string()
-                    } else {
-                        key.clone()
-                    };
                     println!();
                     println!(
-                        "{} ({} item{})",
-                        header.cyan().bold(),
-                        group.len(),
-                        if group.len() == 1 { "" } else { "s" }
+                        "{}",
+                        tree_group_header(
+                            key,
+                            &unscoped_key,
+                            group.len(),
+                            parent_by_label.get(key.as_str()).copied(),
+                        )
                     );
                     let id_col_width = group
                         .iter()
@@ -47127,6 +47144,42 @@ fn derive_parent_epic_label(
         })
 }
 
+/// Render the header line for a `--tree` group (`aida list --tree`).
+///
+/// A real parent-backed group (`parent` resolves to the requirement the label
+/// groups on) carries the parent's own title + status badge at the parent
+/// level, with the child count trailing as metadata — so a real scoped parent
+/// reads as a requirement, not as a synthetic count-only bucket. The synthetic
+/// `Unscoped` bucket and an unresolvable label both fall back to the plain
+/// `<label> (N items)` form, keeping synthetic buckets distinguishable from
+/// real parents.
+// trace:TASK-0439 | ai:claude
+fn tree_group_header(
+    key: &str,
+    unscoped_key: &str,
+    count: usize,
+    parent: Option<&aida_core::Requirement>,
+) -> String {
+    let plural = if count == 1 { "" } else { "s" };
+    if key == unscoped_key {
+        format!("{} ({} item{})", "Unscoped".cyan().bold(), count, plural)
+    } else if let Some(parent) = parent {
+        format!(
+            "{}  {}  [{}]  ({} item{})",
+            key.cyan().bold(),
+            parent.title,
+            // cache_key() ("InProgress") matches the child rows' status form
+            // (summary.status), so both spell the same status identically in
+            // one view rather than mixing "InProgress" / "In Progress".
+            status_display::status_badge(parent.status.cache_key()),
+            count,
+            plural,
+        )
+    } else {
+        format!("{} ({} item{})", key.cyan().bold(), count, plural)
+    }
+}
+
 fn entry_scope_session_match(
     entry: &aida_core::QueueEntry,
     self_lease: Option<&SessionLease>,
@@ -77804,6 +77857,62 @@ mod derive_parent_epic_label_tests {
             derive_parent_epic_label(&task, &store),
             Some("EPIC-20".to_string())
         );
+    }
+
+    /// A `--tree` parent-backed group header must surface the parent
+    /// requirement's own title + status — never a count-only header that
+    /// reads like a synthetic bucket. Guards against the TASK-0439 regression.
+    #[test]
+    fn tree_header_for_real_parent_shows_title_and_status() {
+        colored::control::set_override(false);
+        let mut epic = req("EPIC-56", None, RequirementType::Epic);
+        epic.title = "Apply AXI lessons".to_string();
+        epic.status = aida_core::RequirementStatus::InProgress;
+        let header = tree_group_header("EPIC-56", "~unscoped", 5, Some(&epic));
+        assert!(header.contains("EPIC-56"), "header: {header}");
+        assert!(
+            header.contains("Apply AXI lessons"),
+            "parent title missing: {header}"
+        );
+        assert!(header.contains("InProgress"), "status missing: {header}");
+        assert!(
+            header.contains("5 items"),
+            "count metadata missing: {header}"
+        );
+        // Must NOT be the bare count-only form.
+        assert_ne!(header, "EPIC-56 (5 items)");
+    }
+
+    /// The synthetic Unscoped bucket stays a plain count-only header — it has
+    /// no backing requirement, so it must remain distinguishable from a real
+    /// parent row (TASK-0439).
+    #[test]
+    fn tree_header_for_unscoped_is_count_only() {
+        colored::control::set_override(false);
+        let header = tree_group_header("~unscoped", "~unscoped", 3, None);
+        assert_eq!(header, "Unscoped (3 items)");
+    }
+
+    /// Singular count uses "item", not "items" (TASK-0439).
+    #[test]
+    fn tree_header_singular_count() {
+        colored::control::set_override(false);
+        let mut epic = req("EPIC-7", None, RequirementType::Epic);
+        epic.title = "Solo".to_string();
+        epic.status = aida_core::RequirementStatus::Completed;
+        let header = tree_group_header("EPIC-7", "~unscoped", 1, Some(&epic));
+        assert!(header.contains("(1 item)"), "header: {header}");
+        assert!(!header.contains("items"), "should be singular: {header}");
+    }
+
+    /// A label that doesn't resolve to a requirement (shouldn't normally
+    /// happen) falls back to the plain id + count header rather than panicking
+    /// or dropping the count (TASK-0439).
+    #[test]
+    fn tree_header_unresolved_parent_falls_back_to_count() {
+        colored::control::set_override(false);
+        let header = tree_group_header("EPIC-99", "~unscoped", 2, None);
+        assert_eq!(header, "EPIC-99 (2 items)");
     }
 }
 
