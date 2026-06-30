@@ -11,6 +11,6 @@ pub mod responses;
 pub use client::{AiClient, AiError, AiMode};
 pub use evaluator::{BackgroundEvaluator, EvaluationResult, EvaluatorConfig, EvaluatorStatus};
 pub use responses::{
-    DuplicateResult, EvaluationResponse, GeneratedChild, IssueReport, RelationshipSuggestion,
-    StoredAiEvaluation, SuggestedImprovement,
+    DraftSpecResponse, DuplicateResult, EvaluationResponse, GeneratedChild, IssueReport,
+    RelationshipSuggestion, StoredAiEvaluation, SuggestedImprovement,
 };

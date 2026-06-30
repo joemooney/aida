@@ -5493,6 +5493,12 @@ pub enum OrchestratorCommand {
 /// on its own. These subcommands let a session — or a skill running inside one
 /// — verify whether zen mode is *genuinely* in effect rather than trusting the
 /// bare env var.
+///
+/// Every variant is `hide = true`: these are skill / orchestrator introspection
+/// hooks, not daily-driver verbs, so they stay OFF the `aida zen --help` top
+/// line (which leads with `aida zen <SPEC>` / `aida zen "<thought>"`). They
+/// still parse + run.
+// trace:STORY-725 | ai:claude — plain `//` keeps the marker out of `--help`.
 // trace:BUG-237 | ai:claude
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -5503,6 +5509,7 @@ pub enum ZenCommand {
     /// `interactive`. Skills branch their zen behavior off this word instead
     /// of reading the bare `$AIDA_ZEN` env var, so a leaked `AIDA_ZEN=1` never
     /// silently auto-resolves a confirmation prompt.
+    #[clap(hide = true)]
     Status {
         /// Emit `{"context","corroborated","reason"}` JSON instead of the
         /// bare status word.
@@ -5516,6 +5523,7 @@ pub enum ZenCommand {
     /// renders the grab-next/stop table. The gate the skill consults instead
     /// of always pausing.
     // trace:STORY-564 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(hide = true)]
     Finish {
         /// Emit `{"decision","reason","corroborated"}` JSON instead of the
         /// bare decision word.
@@ -5527,6 +5535,7 @@ pub enum ZenCommand {
     /// raises a punt. Its presence makes `aida zen finish` pause at the
     /// grab-next/stop checkpoint rather than auto-exiting.
     // trace:STORY-564 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(hide = true)]
     NeedsHuman {
         /// One line on why a human was needed (for later triage). Only the
         /// marker's presence drives the gate; the reason is recorded alongside.
@@ -8207,17 +8216,23 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Orchestrator(OrchestratorCommand),
 
-    /// One-shot AUTONOMOUS implement + ship for a single approved spec.
-    /// Auto-queues the spec, then drives it through the SAME `--auto-complete`
-    /// orchestrator `aida burndown` uses (implement → CI → review → merge →
-    /// pull). FULLY HEADLESS by default — fire several for INDEPENDENT specs in
-    /// parallel and walk away; an INDEPENDENT reviewer always runs before the
-    /// auto-merge. Use `--supervised` to drive the implementer yourself. The
-    /// auto-implement counterpart to `aida ship` (which finishes a
-    /// HUMAN-implemented spec). With no `<spec>` and no subcommand, prints help.
+    /// One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought.
+    /// Pass an approved spec id to drive it; pass free text to draft a spec from
+    /// the thought, file it, and drive that — thought to (gated) merged in one
+    /// line. Auto-queues the spec, then drives it through the SAME
+    /// `--auto-complete` orchestrator `aida burndown` uses (implement → CI →
+    /// review → merge → pull). FULLY HEADLESS by default — fire several for
+    /// INDEPENDENT specs in parallel and walk away; an INDEPENDENT reviewer
+    /// always runs before the auto-merge. Use `--supervised` to drive the
+    /// implementer yourself. The auto-implement counterpart to `aida ship`
+    /// (which finishes a HUMAN-implemented spec). With no argument, prints help.
     // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
+    // trace:STORY-725 | ai:claude
     Zen {
-        /// The approved spec to autonomously implement and ship.
+        /// An approved SPEC id to drive (e.g. TASK-123), OR a free-text thought
+        /// to draft into a spec and drive. Free text is drafted into a title +
+        /// description + acceptance criteria, filed as a draft, then routed
+        /// through the approve-gate before driving.
         #[clap(value_name = "SPEC")]
         spec: Option<String>,
 

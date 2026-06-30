@@ -130,8 +130,8 @@ pub mod yaml_helpers;
 
 // Re-export commonly used types
 pub use ai::{
-    AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
-    EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,
+    AiClient, AiMode, BackgroundEvaluator, DraftSpecResponse, EvaluationResponse, EvaluationResult,
+    EvaluatorConfig, EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,
 };
 pub use alias::AliasRegistry;
 pub use block_allocation::{BlockAllocationConfig, BlockAllocationTypeConfig};

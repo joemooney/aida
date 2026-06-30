@@ -101,6 +101,20 @@ pub struct ImproveDescriptionResponse {
     pub rationale: String,
 }
 
+/// Response from drafting a full spec out of a free-text thought.
+///
+/// The structured result of `build_draft_spec_prompt`: a crisp title, an
+/// expanded description, and genuine acceptance criteria — the payload the
+/// thought-to-spec front door files as a draft.
+// trace:STORY-725 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct DraftSpecResponse {
+    pub title: String,
+    pub description: String,
+    #[serde(default)]
+    pub acceptance_criteria: Vec<String>,
+}
+
 /// A generated child requirement
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct GeneratedChild {
@@ -197,6 +211,19 @@ pub fn parse_improve_response(response: &str) -> Result<ImproveDescriptionRespon
     serde_json::from_str(json_str).map_err(|e| {
         AiError::InvalidResponse(format!(
             "Failed to parse improve response: {}. JSON: {}",
+            e,
+            &json_str[..json_str.len().min(200)]
+        ))
+    })
+}
+
+/// Parse a drafted spec response from AI.
+// trace:STORY-725 | ai:claude
+pub fn parse_draft_spec_response(response: &str) -> Result<DraftSpecResponse, AiError> {
+    let json_str = extract_json(response);
+    serde_json::from_str(json_str).map_err(|e| {
+        AiError::InvalidResponse(format!(
+            "Failed to parse draft spec response: {}. JSON: {}",
             e,
             &json_str[..json_str.len().min(200)]
         ))
@@ -324,6 +351,32 @@ That's my evaluation."#;
         let result = parse_improve_response(response).unwrap();
         assert_eq!(result.improved_description, "Better description here");
         assert_eq!(result.changes_made.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_draft_spec_response() {
+        let response = r#"```json
+{
+  "title": "Show the parent title in the tree header",
+  "description": "The tree view header should display the parent spec's title for orientation.",
+  "acceptance_criteria": [
+    "The tree header renders the parent's title text",
+    "A root node with no parent shows no parent title and does not error"
+  ]
+}
+```"#;
+
+        let result = parse_draft_spec_response(response).unwrap();
+        assert_eq!(result.title, "Show the parent title in the tree header");
+        assert_eq!(result.acceptance_criteria.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_draft_spec_response_tolerates_missing_acceptance() {
+        let response = r#"{"title": "T", "description": "D"}"#;
+        let result = parse_draft_spec_response(response).unwrap();
+        assert_eq!(result.title, "T");
+        assert!(result.acceptance_criteria.is_empty());
     }
 
     #[test]

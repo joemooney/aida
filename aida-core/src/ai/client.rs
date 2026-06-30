@@ -4,7 +4,7 @@
 
 use crate::ai::prompts;
 use crate::ai::responses::{
-    self, DuplicatesResponse, EvaluationResponse, GenerateChildrenResponse,
+    self, DraftSpecResponse, DuplicatesResponse, EvaluationResponse, GenerateChildrenResponse,
     ImproveDescriptionResponse, SuggestRelationshipsResponse,
 };
 use crate::models::{Requirement, RequirementsStore};
@@ -214,6 +214,17 @@ impl AiClient {
         let prompt = prompts::build_generate_children_prompt(req, store);
         let response = self.send_request(&prompt)?;
         responses::parse_generate_children_response(&response)
+    }
+
+    /// Draft a full spec (title + description + acceptance criteria) from a
+    /// short free-text thought. The thought-to-spec front door
+    /// (`aida zen "<thought>"`) calls this; on any failure the caller falls back
+    /// to a bare-title draft.
+    // trace:STORY-725 | ai:claude
+    pub fn draft_spec(&self, thought: &str) -> Result<DraftSpecResponse, AiError> {
+        let prompt = prompts::build_draft_spec_prompt(thought);
+        let response = self.send_request(&prompt)?;
+        responses::parse_draft_spec_response(&response)
     }
 
     /// Send a request to the AI
