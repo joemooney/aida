@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:06.508349535Z
-modified_at: 2026-06-30T17:12:27.734656025Z
+modified_at: 2026-06-30T18:18:44.413550388Z
 req_type: Story
 tags:
 - needs-design
@@ -31,4 +31,8 @@ relationships:
 - rel_type: Child
   target_id: 019edaeb-0ef4-7720-a85d-3483f15c856e
   created_at: 2026-06-26T23:49:20.946549951Z
+  created_by: joe
+- rel_type: References
+  target_id: 019f19c1-15cc-7831-8279-ba9292828c05
+  created_at: 2026-06-30T18:18:44.413544120Z
   created_by: joe
