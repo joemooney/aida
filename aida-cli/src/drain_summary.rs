@@ -135,14 +135,18 @@ impl DrainSummary {
         let mut out = String::new();
         out.push_str("─ drain summary ─\n");
         out.push_str(&format!(
-            "  {} ({}) · {} shipped · {} shelved · {} skipped · {} iteration{}\n",
+            "  {} ({}) · {} shipped · {} shelved · {} skipped · {} iteration{} · {} elapsed\n",
             self.label,
             self.outcome,
             t.shipped,
             t.shelved,
             t.skipped,
             iters,
-            if iters == 1 { "" } else { "s" }
+            if iters == 1 { "" } else { "s" },
+            // BUG-660: the durable EXIT SUMMARY must carry the wall-clock the
+            // drive took — the "here's what happened" line is incomplete
+            // without it. trace:BUG-660 | ai:claude
+            format_elapsed(self.elapsed_secs),
         ));
         out.push_str(&format!(
             "  tokens: {} cumulative · ~{}/spec\n",
@@ -221,6 +225,19 @@ fn group_thousands(n: u64) -> String {
         out.push(*b as char);
     }
     out
+}
+
+/// Render an elapsed-seconds count as a compact `Hh Mm Ss` / `Mm Ss` / `Ss`
+/// duration. Pure, ASCII-only.
+// trace:BUG-660 | ai:claude
+fn format_elapsed(secs: u64) -> String {
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m {}s", secs / 60, secs % 60)
+    } else {
+        format!("{}h {}m {}s", secs / 3600, (secs % 3600) / 60, secs % 60)
+    }
 }
 
 #[cfg(test)]
@@ -337,6 +354,8 @@ mod tests {
         assert!(out.contains("1 shelved"));
         assert!(out.contains("2 skipped"));
         assert!(out.contains("5 iterations"));
+        // BUG-660: the durable summary carries the elapsed wall-clock.
+        assert!(out.contains("1m 30s elapsed"), "got: {out}");
         // Thousands-grouped token figures.
         assert!(out.contains("1,234,567 cumulative"));
         assert!(out.contains("246,913/spec"), "got: {out}");
@@ -363,11 +382,20 @@ mod tests {
             elapsed_secs: 0,
         };
         let out = s.render();
-        // Singular: "1 iteration" (no plural s), end-of-line.
-        assert!(out.contains("1 iteration\n"), "got: {out}");
+        // Singular: "1 iteration" (no plural s), followed by the elapsed field.
+        assert!(out.contains("1 iteration ·"), "got: {out}");
         assert!(!out.contains("1 iterations"), "got: {out}");
+        assert!(out.contains("0s elapsed\n"), "got: {out}");
         assert!(out.contains("across 1 file\n"), "got: {out}");
         assert!(out.contains("findings to triage: 0"));
+    }
+
+    #[test]
+    fn format_elapsed_humanizes_durations() {
+        assert_eq!(format_elapsed(0), "0s");
+        assert_eq!(format_elapsed(45), "45s");
+        assert_eq!(format_elapsed(90), "1m 30s");
+        assert_eq!(format_elapsed(3661), "1h 1m 1s");
     }
 
     #[test]

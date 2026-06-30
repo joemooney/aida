@@ -39,6 +39,7 @@ mod rule_violation;
 // trace:STORY-656 | ai:claude
 mod drain_resume;
 mod drain_state;
+mod drive_robustness;
 mod dryrun;
 mod effort_calibration;
 mod event_wait;
@@ -90306,6 +90307,20 @@ fn handle_burndown_run(
     let project_root = find_main_worktree_root()?;
     let _drain_guard = drain_lock::acquire_drain_lock(&project_root, &drain_lock_command)?;
 
+    // BUG-660: keep the host awake for the unattended headless drain. Best-effort
+    // + pid-scoped (auto-releases when this process exits). trace:BUG-660
+    let _sleep_inhibitor = {
+        let inhibitor = drive_robustness::SleepInhibitor::for_drive("aida burndown run");
+        if let Some(tool) = inhibitor.tool() {
+            eprintln!(
+                "  {} sleep-prevention active for this drain (via {})",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                tool
+            );
+        }
+        inhibitor
+    };
+
     // BUG-607: a drain-state.json left behind by a KILLED or crashed
     // `queue work --auto-complete` drain (its orchestrator pid is dead) must not
     // make the spawned `/aida-burndown` agent falsely believe a live drain
@@ -126643,6 +126658,28 @@ fn handle_queue_command(
                         &drain_lock_command,
                     )?)
                 };
+                // BUG-660: prevent the host from sleeping for the duration of an
+                // unattended drive — a lidded/idle laptop must not suspend
+                // mid-drain. Best-effort (a missing caffeinate / systemd-inhibit
+                // degrades to a no-op) and scoped to the drive's lifetime: the
+                // held child is pid-tied so it auto-releases on the route
+                // handlers' `std::process::exit` (which skips `Drop`). The
+                // `--resume-dry-run` preview drives nothing, so it stays
+                // unarmed alongside the lock above. trace:BUG-660 | ai:claude
+                let _sleep_inhibitor = if *resume_dry_run {
+                    None
+                } else {
+                    let inhibitor =
+                        drive_robustness::SleepInhibitor::for_drive("aida unattended drive");
+                    if let Some(tool) = inhibitor.tool() {
+                        eprintln!(
+                            "{} sleep-prevention active for this drive (via {})",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            tool
+                        );
+                    }
+                    Some(inhibitor)
+                };
                 // STORY-492: `--resume-drain` is its own entry — read the crashed
                 // drain-state, gate on PID-liveness, reconcile from reality, and
                 // re-enter (or `--dry-run` preview). It never returns. Routed
@@ -133985,24 +134022,30 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
     }
 
     fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
-        run_auto_complete(
-            self.storage,
-            &self.user_id,
-            spec,
-            self.variant,
-            self.json,
-            self.permission_mode.as_deref(),
-            self.no_human,
-            self.escalate_mode,
-            // STORY-301: a batch / nextN member does not own the drain-state
-            // file — the batch orchestrator created it.
-            false,
-            self.steal,
-            self.force_claim,
-            self.allow_stale_base,
-            self.no_auto_rebase,
-            None,
-        )
+        // BUG-660: retry a transient/retryable per-spec failure (locked cache,
+        // GH-API blip) through an exponential backoff instead of hammering or
+        // immediately shelving — an unattended drive rides out a brief blip.
+        // trace:BUG-660 | ai:claude
+        drive_robustness::run_with_transient_backoff(|| {
+            run_auto_complete(
+                self.storage,
+                &self.user_id,
+                spec,
+                self.variant,
+                self.json,
+                self.permission_mode.as_deref(),
+                self.no_human,
+                self.escalate_mode,
+                // STORY-301: a batch / nextN member does not own the drain-state
+                // file — the batch orchestrator created it.
+                false,
+                self.steal,
+                self.force_claim,
+                self.allow_stale_base,
+                self.no_auto_rebase,
+                None,
+            )
+        })
     }
 
     // TASK-966: cumulative reported tokens across this drain's headless logs.
@@ -135488,24 +135531,30 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     }
 
     fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
-        run_auto_complete(
-            self.storage,
-            &self.user_id,
-            spec,
-            self.variant,
-            self.json,
-            self.permission_mode.as_deref(),
-            self.no_human,
-            self.escalate_mode,
-            // STORY-301: a batch / nextN member does not own the drain-state
-            // file — the batch orchestrator created it.
-            false,
-            self.steal,
-            self.force_claim,
-            self.allow_stale_base,
-            self.no_auto_rebase,
-            None,
-        )
+        // BUG-660: retry a transient/retryable per-spec failure (locked cache,
+        // GH-API blip) through an exponential backoff instead of hammering or
+        // immediately shelving — an unattended drive rides out a brief blip.
+        // trace:BUG-660 | ai:claude
+        drive_robustness::run_with_transient_backoff(|| {
+            run_auto_complete(
+                self.storage,
+                &self.user_id,
+                spec,
+                self.variant,
+                self.json,
+                self.permission_mode.as_deref(),
+                self.no_human,
+                self.escalate_mode,
+                // STORY-301: a batch / nextN member does not own the drain-state
+                // file — the batch orchestrator created it.
+                false,
+                self.steal,
+                self.force_claim,
+                self.allow_stale_base,
+                self.no_auto_rebase,
+                None,
+            )
+        })
     }
 
     // TASK-966: cumulative reported tokens across this drain's headless logs.
