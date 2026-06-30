@@ -18361,6 +18361,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 println!("Use --pull and/or --push to sync with remote.");
                 println!("  aida db sync --pull --push");
             }
+
+            // TASK-1033: opportunistic store maintenance after a sync that
+            // touched the store — ensure the lowered gc.auto is set, then
+            // `git gc --auto` (a cheap no-op unless the threshold is exceeded).
+            // Best-effort; never fails the sync.
+            if *pull || *push {
+                aida_core::git_ops::opportunistic_store_gc(store_path);
+            }
         }
 
         // Status
@@ -63387,6 +63395,10 @@ fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
             // this write costs us a stale-looking indicator for one
             // render cycle, no worse.
             let _ = touch_last_fetch_ok(store_path);
+            // TASK-1033: opportunistic store maintenance rides the sync —
+            // ensure the lowered gc.auto is set, then `git gc --auto` (a cheap
+            // no-op unless the threshold is exceeded). Best-effort.
+            aida_core::git_ops::opportunistic_store_gc(store_path);
         }
         Err(e) => {
             // pull --rebase can leave the repo mid-rebase on conflicts
@@ -99544,6 +99556,11 @@ fn handle_pull_command(
                         }
                     }
                 }
+                // TASK-1033: opportunistic store maintenance after a clean
+                // store-leg pull — ensure the lowered gc.auto is set, then
+                // `git gc --auto` (no-op unless the threshold is exceeded).
+                // Best-effort; never affects pull's exit code.
+                aida_core::git_ops::opportunistic_store_gc(store_path);
             }
             Err(e) => {
                 eprintln!(
