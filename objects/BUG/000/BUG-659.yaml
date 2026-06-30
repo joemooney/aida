@@ -16,12 +16,12 @@ description: |-
   - Add or update tree-renderer coverage so a parent/group row cannot regress into duplicate Unscoped output.
 
   Context: this is adjacent to TASK-0439, which fixed parent-backed group header rendering; this bug covers duplicate placement under Unscoped.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T05:08:45.804437417Z
-modified_at: 2026-06-30T05:09:08.874079212Z
+modified_at: 2026-06-30T07:51:43.872639198Z
 req_type: Bug
 tags:
 - aida:list
