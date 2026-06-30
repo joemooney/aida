@@ -55,12 +55,20 @@ const MODAL_PAGE: u16 = 10;
 /// verification steps. trace:STORY-699 | ai:claude
 const TEST_PLAN_MARKER: &str = "🧪";
 
-/// Is the redesign prototype toggled on? Checked by `aida_tui::run` so the
-/// existing TUI is the default and the prototype is strictly opt-in.
+/// Is the action→target redesign selected? Checked by `aida_tui::run` and the
+/// CLI launcher gate (via the `aida_tui::redesign_enabled` re-export). EPIC-54
+/// is now the DEFAULT (TASK-1051): the redesign renders unless
+/// `AIDA_TUI_REDESIGN` is an explicit opt-OUT (`0`/`false`/`no`/`off`), which
+/// selects the legacy TUI. Unset, empty, or any other value keeps the default
+/// (redesign on).
+// trace:TASK-1051 | ai:claude
 pub fn enabled() -> bool {
-    matches!(
-        std::env::var("AIDA_TUI_REDESIGN").ok().as_deref(),
-        Some("1") | Some("true") | Some("yes")
+    !matches!(
+        std::env::var("AIDA_TUI_REDESIGN")
+            .ok()
+            .map(|v| v.trim().to_ascii_lowercase())
+            .as_deref(),
+        Some("0") | Some("false") | Some("no") | Some("off")
     )
 }
 
@@ -3789,5 +3797,56 @@ mod render_tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(bare_blob.contains("No comments."));
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    //! The default-on / opt-out semantics of `AIDA_TUI_REDESIGN` (TASK-1051):
+    //! EPIC-54 renders unless the env var is an explicit opt-OUT. trace:TASK-1051
+    use super::enabled;
+    use std::sync::Mutex;
+
+    /// Serialize tests that mutate `AIDA_TUI_REDESIGN`. cargo runs tests in
+    /// parallel within a process, so without this they trample each other.
+    fn with_redesign_env<R>(val: Option<&str>, f: impl FnOnce() -> R) -> R {
+        static LOCK: Mutex<()> = Mutex::new(());
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let prev = std::env::var("AIDA_TUI_REDESIGN").ok();
+        match val {
+            Some(v) => std::env::set_var("AIDA_TUI_REDESIGN", v),
+            None => std::env::remove_var("AIDA_TUI_REDESIGN"),
+        }
+        let result = f();
+        match prev {
+            Some(v) => std::env::set_var("AIDA_TUI_REDESIGN", v),
+            None => std::env::remove_var("AIDA_TUI_REDESIGN"),
+        }
+        result
+    }
+
+    #[test]
+    fn default_on_when_unset() {
+        assert!(with_redesign_env(None, enabled));
+    }
+
+    #[test]
+    fn opt_out_values_select_legacy() {
+        for v in ["0", "false", "no", "off", "FALSE", "Off", " 0 "] {
+            assert!(
+                !with_redesign_env(Some(v), enabled),
+                "expected opt-out for {v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn redesign_stays_on_for_truthy_or_other_values() {
+        for v in ["1", "true", "yes", "on", "", "anything"] {
+            assert!(
+                with_redesign_env(Some(v), enabled),
+                "expected redesign-on for {v:?}"
+            );
+        }
     }
 }
