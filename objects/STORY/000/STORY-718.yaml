@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:45:21.135163720Z
-modified_at: 2026-06-30T02:45:49.308234861Z
+modified_at: 2026-06-30T03:54:03.948245410Z
 req_type: Story
 tags:
 - integrator
@@ -28,3 +28,6 @@ relationships:
 - rel_type: Parent
   target_id: 019f166b-19dd-74b2-ace1-13a20c345234
   created_at: 2026-06-30T02:45:49.308234861Z
+- rel_type: Parent
+  target_id: 019f16a9-920e-7891-b3c3-5c5f805c448f
+  created_at: 2026-06-30T03:54:03.948245410Z
