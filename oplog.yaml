@@ -26801,5 +26801,17 @@ operations:
   timestamp: 2026-06-30T03:33:07.862883744Z
   kind: !SetStatus
     status: Rejected
-clock: 2561
+- id: 019f1696-8882-78a1-b2e7-f284dd02fc8b
+  target_id: 019f1696-7bd4-70b1-97bb-ada200e538db
+  author: aida
+  node_id: '1'
+  lamport: 2562
+  timestamp: 2026-06-30T03:33:11.938206616Z
+  kind: !Create
+    title: Auto-followups recurred on EPIC-0428 plan completions — filed cross-plan followup cruft (TASK-1019-1032) despite BUG-655
+    description: 'Marking the 4 EPIC-0428 design tasks completed auto-filed ~14 followup tasks (TASK-1019-1032) from the plans Followups/Related sections, including duplicates across plans and file-at-sign-off placeholders and plan cross-references that are NOT standalone buildable specs. BUG-655s content-dedup is per-parent (same parent + same title) so cross-plan/cross-parent followups slip through, and the parser over-fires on Related/placeholder bullets. FIX: tighten the auto-followups to (a) dedup globally by title not just per-parent, (b) skip Related/cross-reference and file-at-sign-off placeholder bullets, (c) maybe gate auto-followups off for design-spike plans entirely. Needs cleanup of TASK-1019-1032.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 2562
 node_id: '1'
