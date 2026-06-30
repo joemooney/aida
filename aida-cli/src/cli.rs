@@ -4946,12 +4946,16 @@ pub enum QueueCommand {
         /// an explicit flag for symmetry with --watch.
         #[clap(long)]
         once: bool,
-        /// Keep watching: after each pass, sleep --interval seconds and scan
-        /// again, integrating newly-ready specs as producers ship them. Without
-        /// this the command makes a single pass and exits.
+        /// Keep watching: after each pass, BLOCK until a drain event lands (a PR
+        /// is ready / CI reaches a verdict / a PR merges) and rescan, integrating
+        /// newly-ready specs as producers ship them. Event-driven — it wakes on
+        /// real activity, not a blind timer; the idle backstop only bounds the
+        /// quiet-period rescan. Without this the command makes a single pass.
         #[clap(long)]
         watch: bool,
-        /// Seconds to sleep between passes in --watch mode (default 60).
+        /// Idle backstop (seconds) for --watch: the longest the loop waits with no
+        /// drain event before a full rescan. Superseded by --idle-minutes when
+        /// that is given. Default 60.
         #[clap(long, value_name = "SECS", default_value_t = 60)]
         interval: u64,
         /// Cap the number of specs integrated this run (across all passes). 0 =
@@ -4974,6 +4978,20 @@ pub enum QueueCommand {
         ///   .aida/config.toml, then `per-item`.
         #[clap(long, value_enum)]
         strategy: Option<crate::integrate::IntegrateStrategy>,
+        // trace:TASK-1036 | ai:claude
+        /// Scope the scan to a focus epic/spec and its transitive descendants —
+        /// only PRs under that subtree are integrated. Overrides the per-worktree
+        /// `aida focus` marker / AIDA_FOCUS for this run. Omit to use the active
+        /// focus (if any), else scan the whole project.
+        #[clap(long, value_name = "ID")]
+        focus: Option<String>,
+        // trace:TASK-1036 | ai:claude
+        /// Idle backstop for `--watch`, in minutes: the longest the loop waits
+        /// with no drain event before a full rescan. The loop is event-driven —
+        /// it wakes immediately on a ready PR / CI verdict / merge — so this only
+        /// bounds the quiet-period rescan. Defaults to `--interval` seconds.
+        #[clap(long, value_name = "N")]
+        idle_minutes: Option<u64>,
         // trace:STORY-647 | ai:claude
         /// Bypass the team RBAC guardrail (`[team.permissions] integrate`). The
         /// gate is a guardrail, not security — the bypass is recorded in history.
