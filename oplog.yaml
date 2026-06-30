@@ -27485,5 +27485,17 @@ operations:
   timestamp: 2026-06-30T08:32:49.934319255Z
   kind: !SetStatus
     status: Completed
-clock: 2633
+- id: 019f17a9-1905-7480-aa38-665b673a0e41
+  target_id: 019f17a9-0a14-7541-9c74-a8051b4ae98d
+  author: aida
+  node_id: '1'
+  lamport: 2634
+  timestamp: 2026-06-30T08:33:05.797030348Z
+  kind: !Create
+    title: 'Drive exit codes: distinguish shelved/parked from hard-fail (preserve EPIC-28 exit-2 contract)'
+    description: 'Round-2 audit finding 5: a drive exits 0 for success/punt/held and 2 for BOTH shelved-at-CI and hard-fail-at-CI — a script wrapping a drive cannot branch on outcome from the exit code alone. CAREFUL change: EPIC-28 already established exit 2 = anything shelved/skipped (scripts + /goal conditions depend on it) — do NOT break that. ADD a distinct code (e.g. 3) for HARD-FAILURE (CI red with no shelve, build fail, unrecoverable) while keeping 0=clean, 2=shelved/parked-and-advanced. Document the code table. Needs a deliberate design pass re: every caller that checks the drive exit code (the orchestrator, burndown scripts, /goal).'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2634
 node_id: '1'
