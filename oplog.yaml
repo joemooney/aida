@@ -28658,5 +28658,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2757
+- id: 019f19b9-2cdf-7b10-b243-eec7a668c288
+  target_id: 019f19b9-202b-76e3-a355-4536bfc2b8c1
+  author: aida
+  node_id: '1'
+  lamport: 2758
+  timestamp: 2026-06-30T18:09:53.887870999Z
+  kind: !Create
+    title: Dead-queue pruning split across queue prune --orphaned/--merged + queue gc — fold into queue prune --terminal or sharpen the cross-references so the right verb is obvious
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2758
 node_id: '1'
