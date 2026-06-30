@@ -10,12 +10,12 @@ description: |-
   2. Only the into-Completed transition gets the crescendo; a non-completion edit still renders Updated:.
   3. The agent/TOON path is unaffected (machine output keeps Updated:).
   4. House style: status glyph + glyphs via the registry (ascii-safe), no raw glyphs; existing workflow-hint line preserved.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T21:11:29.776490236Z
-modified_at: 2026-06-30T21:11:56.741556749Z
+modified_at: 2026-06-30T22:06:05.271805754Z
 req_type: Story
 tags:
 - completion
