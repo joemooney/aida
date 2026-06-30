@@ -1,0 +1,17 @@
+id: 019f1989-37bf-78d2-8757-ab52ebeec234
+spec_id: BUG-665
+agreed_id: BUG-665
+title: aida pull leaves a stale binary silently — warn + suggest cargo build when HEAD moves past the built binary's SHA
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T17:17:30.943946666Z
+modified_at: 2026-06-30T17:17:30.943946666Z
+req_type: Bug
+tags:
+- dev-workflow
+- from-operator
+- papercut
+- zen-ready
