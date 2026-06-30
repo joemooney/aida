@@ -3328,28 +3328,90 @@ mod tests {
         );
     }
 
+    /// Pin every git knob `git gc --aggressive` consults so the aggressive
+    /// repack is deterministic across host *and* CI git environments. The
+    /// STORY-733 fixture flaked in CI with "failed to run repack" because
+    /// `git gc` runs optional side-tasks alongside the core repack — writing a
+    /// commit-graph, a multi-pack-index, and (for bare repos) reachability
+    /// bitmaps, plus an auto-detached background gc and a parallel pack build.
+    /// Any of those can fail or race on a constrained runner and abort the
+    /// whole gc, even though the pack consolidation the test cares about is
+    /// sound. Disabling them leaves just the deterministic consolidation path
+    /// under test.
+    // trace:BUG-667 | ai:claude
+    fn pin_gc_environment(repo: &Path) {
+        for (key, val) in [
+            ("gc.auto", "0"),                 // never let an auto-gc fire mid-fixture
+            ("gc.autoDetach", "false"),       // run gc in the foreground, surface errors
+            ("gc.writeCommitGraph", "false"), // skip the commit-graph side-task
+            ("core.multiPackIndex", "false"), // skip the midx write/expire side-task
+            ("repack.writeBitmaps", "false"), // no bitmap generation
+            ("pack.writeBitmaps", "false"),
+            ("pack.threads", "1"), // single-threaded packing = deterministic
+            ("maintenance.auto", "false"), // no background maintenance scheduling
+        ] {
+            git(repo, &["config", key, val]).expect("set gc config knob");
+        }
+    }
+
+    /// Build a deterministic multi-pack store: `commits` commits, each packed
+    /// into its OWN pack via `git repack -d` (repack without `-a` leaves prior
+    /// packs in place), so packs accumulate. The repo's gc environment is
+    /// pinned first (see [`pin_gc_environment`]) so a later aggressive repack is
+    /// reproducible. Returns the object counts after seeding.
+    // trace:BUG-667 | ai:claude
+    fn seed_multi_pack_store(repo: &Path, commits: usize) -> StoreObjectCounts {
+        init(repo).unwrap();
+        configure_user(repo, "Test", "test@example.com").unwrap();
+        pin_gc_environment(repo);
+        for i in 0..commits {
+            std::fs::write(repo.join(format!("f{i}.txt")), format!("content {i}")).unwrap();
+            add(repo, &[&format!("f{i}.txt")]).unwrap();
+            commit(repo, &format!("commit {i}")).unwrap();
+            // Pack the just-created loose objects into their own pack.
+            git(repo, &["repack", "-d"]).unwrap();
+        }
+        count_objects(repo).expect("count-objects after seeding")
+    }
+
+    /// The fixture helper itself: seeding N commits with a per-commit
+    /// `git repack -d` must leave a genuine multi-pack state (>= 2 packs) — the
+    /// precondition the aggressive-repack test depends on — and must pin the gc
+    /// config knobs on the repo.
+    // trace:BUG-667 | ai:claude
+    #[test]
+    fn seed_multi_pack_store_accumulates_packs() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        let counts = seed_multi_pack_store(&repo, 5);
+        assert!(
+            counts.packs >= 2,
+            "seeding 5 per-commit repacks should leave multiple packs, got {}",
+            counts.packs
+        );
+        // The pinned config knobs are actually set on the fixture repo.
+        let auto = git(&repo, &["config", "gc.auto"]).unwrap();
+        assert_eq!(
+            auto.stdout, "0",
+            "gc.auto must be pinned off in the fixture"
+        );
+        let detach = git(&repo, &["config", "gc.autoDetach"]).unwrap();
+        assert_eq!(detach.stdout, "false", "gc.autoDetach must be pinned off");
+    }
+
     /// `gc_aggressive` consolidates many accumulated packs into one (the safe,
     /// non-destructive perf win): seed several packs via repeated
     /// `git repack -d`, then assert the aggressive repack drops the pack count.
+    /// The fixture pins the gc environment (BUG-667) so the consolidation is
+    /// deterministic and `git gc`'s optional side-tasks can't flake CI.
     // trace:STORY-733 | ai:claude
+    // trace:BUG-667 | ai:claude
     #[test]
     fn gc_aggressive_reduces_pack_count() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
-        configure_user(&repo, "Test", "test@example.com").unwrap();
 
-        // Build several commits, packing into a NEW pack after each so packs
-        // accumulate (repack without -a leaves prior packs in place).
-        for i in 0..5 {
-            std::fs::write(repo.join(format!("f{i}.txt")), format!("content {i}")).unwrap();
-            add(&repo, &[&format!("f{i}.txt")]).unwrap();
-            commit(&repo, &format!("commit {i}")).unwrap();
-            // Pack the just-created loose objects into their own pack.
-            git(&repo, &["repack", "-d"]).unwrap();
-        }
-
-        let before = count_objects(&repo).expect("count-objects before");
+        let before = seed_multi_pack_store(&repo, 5);
         assert!(
             before.packs >= 2,
             "fixture should accumulate multiple packs, got {}",
