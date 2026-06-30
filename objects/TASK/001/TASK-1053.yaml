@@ -1,0 +1,17 @@
+id: 019f175f-c24c-7220-976c-715b7aa53dfd
+spec_id: TASK-1053
+agreed_id: TASK-1053
+title: 'aida queue work <spec> --dry-run: preview the single-spec plan'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T07:12:59.468300340Z
+modified_at: 2026-06-30T07:12:59.468300340Z
+req_type: Task
+tags:
+- dry-run
+- from-audit
+- queue
+- ux
