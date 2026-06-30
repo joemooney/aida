@@ -1,0 +1,17 @@
+id: 019f17de-2465-7430-9948-7448644d64fb
+spec_id: TASK-1055
+agreed_id: TASK-1055
+title: 'Efficiency quick-wins: parallel status --full probes, path-scoped history --id, --slower-than ms suffix'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T09:31:02.117752285Z
+modified_at: 2026-06-30T09:31:02.117752285Z
+req_type: Task
+tags:
+- cli
+- from-audit
+- performance
+- quick-wins
