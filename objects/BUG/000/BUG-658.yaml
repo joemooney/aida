@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T05:00:17.707490590Z
-modified_at: 2026-06-30T05:00:17.707490590Z
+modified_at: 2026-06-30T16:34:20.888188705Z
 req_type: Bug
 tags:
 - aida:list
@@ -16,3 +16,4 @@ tags:
 - papercut
 - rollup
 - tree
+- zen-ready
