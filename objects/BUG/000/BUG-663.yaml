@@ -1,0 +1,18 @@
+id: 019f17dd-ad8f-7443-adb1-b6cc0ccefb5e
+spec_id: BUG-663
+agreed_id: BUG-663
+title: Store auto-gc repack runs inline on writes — move it off the write path (6-16s spike regression)
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T09:30:31.695391067Z
+modified_at: 2026-06-30T09:30:31.695391067Z
+req_type: Bug
+tags:
+- from-audit
+- gc
+- performance
+- store
+- write-path
