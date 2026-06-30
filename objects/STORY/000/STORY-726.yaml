@@ -1,0 +1,18 @@
+id: 019f178c-03e6-7b10-a82d-b93897ccb84e
+spec_id: STORY-726
+agreed_id: STORY-726
+title: 'Drive liveness: implementer-phase heartbeat + discoverable drain status'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T08:01:19.846042807Z
+modified_at: 2026-06-30T08:01:19.846042807Z
+req_type: Story
+tags:
+- drive
+- from-audit
+- heartbeat
+- trust
+- ux
