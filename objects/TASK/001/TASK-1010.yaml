@@ -1,0 +1,12 @@
+id: 019f1658-2dfd-7d32-810b-33037834a5af
+spec_id: TASK-1010
+agreed_id: TASK-1010
+title: '`post_create` hook recipe to pre-warm `cargo build` on a freshly-created pool tree (turn cold-create into warm-on-first-use)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T02:25:05.533718865Z
+modified_at: 2026-06-30T02:25:05.533718865Z
+req_type: Task
