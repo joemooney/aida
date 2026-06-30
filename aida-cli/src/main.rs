@@ -14707,6 +14707,29 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 aida_core::DeferFilter::NonDeferredOnly
             };
+            // STORY-723: bare `aida list` defaults to the OPEN/actionable lens.
+            // A newcomer's first list should show LIVE work (draft → approved →
+            // planned → in-progress → needs-attention), not a wall of completed/
+            // rejected history. The default applies ONLY when no status filter is
+            // already in play (neither `--status`/positional nor a role scope
+            // status) and the view wasn't deliberately widened — `--all`,
+            // `--archived`, and `--deferred` each opt back into closed rows, and
+            // an explicit `aida list closed` / `--status completed` is untouched.
+            // The closed set stays one flag away (`--all` / `--status closed`).
+            // trace:STORY-723 | ai:claude
+            let default_open_lens =
+                list_default_open_lens(effective_status.is_some(), *all, *archived, *deferred);
+            let effective_status = if default_open_lens {
+                Some(
+                    aida_core::RequirementStatus::open_statuses()
+                        .iter()
+                        .map(|s| s.cache_key())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                )
+            } else {
+                effective_status
+            };
             // STORY-632: resolve the --sort order. Unknown values fall back to
             // the default (freshest-first) with a stderr note rather than
             // erroring the listing. trace:STORY-632 | ai:claude
@@ -15010,10 +15033,39 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 0
             };
 
+            // STORY-723: count of closed (done/completed/rejected) rows the
+            // default OPEN lens is now hiding, so the discoverability footer can
+            // tell the user the rest is one flag away. Only computed when the
+            // default-open lens is actually active. trace:STORY-723 | ai:claude
+            let closed_hidden_count = if default_open_lens {
+                let closed_filter = aida_core::ListFilter {
+                    status: Some(
+                        aida_core::RequirementStatus::closed_statuses()
+                            .iter()
+                            .map(|s| s.cache_key())
+                            .collect::<Vec<_>>()
+                            .join(","),
+                    ),
+                    ..filter.clone()
+                };
+                backend.list_summaries(&closed_filter)?.len()
+            } else {
+                0
+            };
+
             // Shared footer nudge for both view axes. Each prints a dimmed,
             // 2-space-indented line only when rows on that axis were hidden.
-            // trace:STORY-441 trace:STORY-584 | ai:claude
+            // trace:STORY-441 trace:STORY-584 trace:STORY-723 | ai:claude
             let print_hidden_hints = || {
+                if closed_hidden_count > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({closed_hidden_count} closed hidden — open lens; pass --all or `--status closed` to see them)"
+                        )
+                        .dimmed()
+                    );
+                }
                 if archived_hidden_count > 0 {
                     println!(
                         "{}",
@@ -15104,11 +15156,30 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             .collect()
                     })
                     .collect();
-                println!("count: {} of {}", reqs.len(), total_after_filters);
+                // STORY-723: label the denominator so it reconciles with the
+                // other surfaces. The default `aida list` is now the OPEN lens,
+                // so `M` counts open (active, non-archived) specs — distinct from
+                // `aida status`'s `total` (every active spec, all statuses). An
+                // explicit status filter relabels to plain "matched".
+                // trace:STORY-723 | ai:claude
+                let denom_label = list_count_denom_label(default_open_lens);
+                println!(
+                    "count: {} of {} {}",
+                    reqs.len(),
+                    total_after_filters,
+                    denom_label
+                );
                 let field_refs: Vec<&str> = selected.iter().map(String::as_str).collect();
                 println!("{}", crate::toon::table_raw("specs", &field_refs, &rows));
                 if agent_default_cap.is_some() && total_after_filters > reqs.len() {
                     println!("note: agent default cap — `aida list --all` or `--limit N` to widen");
+                }
+                // STORY-723: tell the agent the closed history exists but is
+                // hidden behind the default open lens. trace:STORY-723
+                if closed_hidden_count > 0 {
+                    println!(
+                        "note: {closed_hidden_count} closed hidden (open lens) — `aida list --all` or `--status closed`"
+                    );
                 }
                 // TASK-974 (AXI #9): trailing next-step block — drill into a row
                 // (placeholder id, so no concrete spec id is echoed twice into
@@ -87069,6 +87140,17 @@ const GETTING_STARTED: &[(&str, &str)] = &[
     ("add", "Add a new requirement"),
     ("list", "List requirements"),
     ("show", "Show details for one requirement"),
+    // trace:STORY-723 | ai:claude — the two shortest thought-to-merged paths belong
+    // on the first screen: `zen` autonomously implements + ships an approved
+    // spec; `ship` finishes one you implemented yourself.
+    (
+        "zen",
+        "Autonomously implement + ship an approved spec, end-to-end",
+    ),
+    (
+        "ship",
+        "Finish the current spec — commit, open a PR, CI, merge",
+    ),
     ("done", "Mark a spec done — the simple \"I finished it\""),
     // trace:TASK-879 | ai:claude — surface the solo loop on the first screen.
     (
@@ -87277,11 +87359,15 @@ fn print_tiered_help() {
 
     println!("{}", "More, grouped by topic".cyan().bold());
     // Skip "Getting started" (already shown above) and the dev-only group.
+    // STORY-723: render the topic HEADERS bold (not command-green) — green is
+    // the runnable-command colour used for the Getting-started rows above, and
+    // styling a non-runnable header the same way invited `aida Specs` (which
+    // errors). Bold reads as a section label, distinct from a command.
     for (group, _cmds) in command_groups()
         .iter()
         .filter(|(g, _)| *g != "Getting started" && *g != "Working on aida itself")
     {
-        println!("  {}", group.green());
+        println!("  {}", group.bold());
     }
     println!();
 
@@ -87403,7 +87489,12 @@ mod help_grouping_tests {
     fn getting_started_is_the_curated_core_loop() {
         let names: Vec<&str> = GETTING_STARTED.iter().map(|(n, _)| *n).collect();
         // trace:TASK-879 | ai:claude — `solo` joins the curated first screen.
-        assert_eq!(names, ["init", "add", "list", "show", "done", "solo"]);
+        // trace:STORY-723 | ai:claude — `zen` + `ship` (the shortest
+        // thought-to-merged paths) lead the loop right after the read verbs.
+        assert_eq!(
+            names,
+            ["init", "add", "list", "show", "zen", "ship", "done", "solo"]
+        );
     }
 
     // trace:STORY-556 | ai:claude
@@ -93155,6 +93246,28 @@ fn generate_intent(
     })
 }
 
+/// STORY-723: the leading arrow marker for an `aida why` headline. Stripped on
+/// the AGENT output path — the agent convention is no decorative leading glyphs,
+/// and `AIDA_AGENT_OUTPUT=1 aida why <spec>` was leaking the arrow glyph — and
+/// kept byte-identical on the human TTY path.
+fn why_headline_prefix() -> String {
+    why_headline_prefix_for(agent_output_mode())
+}
+
+/// Pure form of [`why_headline_prefix`] — empty in agent mode, the colored
+/// arrow + trailing space otherwise — so the "no leading glyph on the agent
+/// path" invariant is unit-testable without touching the process env / TTY.
+fn why_headline_prefix_for(agent: bool) -> String {
+    if agent {
+        String::new()
+    } else {
+        format!(
+            "{} ",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+        )
+    }
+}
+
 /// STORY-547: `aida why <ID>` — single-spec drill-down using the same
 /// classifier as `burndown explain`. trace:STORY-547 | ai:claude
 fn handle_why(id: &str, json: bool) -> Result<()> {
@@ -93204,8 +93317,8 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
             );
         } else {
             println!(
-                "{} {} is archived (shelved) — run `aida unarchive {}` to reactivate it.",
-                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+                "{}{} is archived (shelved) — run `aida unarchive {}` to reactivate it.",
+                why_headline_prefix(),
                 disp.cyan(),
                 disp
             );
@@ -93237,8 +93350,8 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
             );
         } else {
             println!(
-                "{} {} is {} — it's done, nothing keeping it open.",
-                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+                "{}{} is {} — it's done, nothing keeping it open.",
+                why_headline_prefix(),
                 disp.cyan(),
                 status.green()
             );
@@ -93286,11 +93399,7 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
                         }))?
                     );
                 } else {
-                    println!(
-                        "{} {}",
-                        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
-                        disp.cyan().bold()
-                    );
+                    println!("{}{}", why_headline_prefix(), disp.cyan().bold());
                     // The bucket label already says "stalled"; the text reason
                     // drops the redundant "in-flight but STALLED — " prefix the
                     // JSON keeps for a self-contained machine string.
@@ -93373,11 +93482,7 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     } else {
         "·".dimmed()
     };
-    println!(
-        "{} {}",
-        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
-        f.id.cyan().bold()
-    );
+    println!("{}{}", why_headline_prefix(), f.id.cyan().bold());
     // The derived reason gets the bucket header; finding-links + residual notes
     // each get their own labelled line beneath it.
     let mut iter = reasons.iter();
@@ -108643,6 +108748,10 @@ struct FastStatusSnapshot {
     role_is_default: bool,
     branch: Option<String>,
     queue_depth: usize,
+    /// STORY-723: of `queue_depth` items routed to this role, how many are
+    /// ACTUALLY actionable (live + workable status). The raw depth is padded
+    /// with archived/completed/deferred corpses; this is the reconcilable count.
+    queue_actionable: usize,
     counts: FastStatusCounts,
     cache_present: bool,
 }
@@ -108734,6 +108843,9 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
     let (role, role_is_default) = effective_role_resolved();
     let branch = current_branch_at(project_root);
     let queue_depth = read_queue_depth(project_root, Some(role.as_str())).unwrap_or(0);
+    // STORY-723: the subset of the role queue that is actually actionable, so
+    // the snapshot can reconcile "163 routed" against a far smaller live set.
+    let queue_actionable = role_queue_actionable(project_root, &role).len();
     let cache_path = project_root.join(".aida/cache.db");
     let cache_present = cache_path.exists();
     let counts = fast_status_counts_from_cache(&cache_path);
@@ -108742,6 +108854,7 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
         role_is_default,
         branch,
         queue_depth,
+        queue_actionable,
         counts,
         cache_present,
     }
@@ -108767,19 +108880,34 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
             "(not a git branch)".dimmed()
         ),
     }
+    // STORY-723: label the queue count unambiguously. `queue_depth` is the
+    // SHARED role-routed queue (which can be padded with archived/completed
+    // corpses), NOT the caller's personal `aida queue list` — that mismatch
+    // ("163 routed" vs "your queue is empty") was a top first-impression
+    // confusion. Show how many of the routed items are actually actionable and
+    // point at the personal queue. trace:STORY-723
     println!(
-        "  {:<10} {} routed to role:{}",
+        "  {:<10} {} routed to role:{} ({} actionable) — shared role queue, not your personal queue",
         "queue:".bold(),
         snap.queue_depth,
-        snap.role
+        snap.role,
+        snap.queue_actionable,
+    );
+    println!(
+        "  {:<10} {}",
+        "",
+        "your personal queue: `aida queue list`".dimmed()
     );
     println!();
 
     println!("{}", "─── Requirements (cache) ───".bold());
     if snap.cache_present {
         let c = &snap.counts;
+        // STORY-723: name the denominator so it reconciles with `aida list`.
+        // `total` here counts every ACTIVE (non-archived) spec across all
+        // statuses; bare `aida list` defaults to the OPEN subset of these.
         println!(
-            "  {} open · {} in-progress · {} draft · {} total",
+            "  {} open · {} in-progress · {} draft · {} total active (non-archived)",
             c.open, c.in_progress, c.draft, c.total
         );
     } else {
@@ -108823,6 +108951,12 @@ fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) 
         "queue_depth",
         &snap.queue_depth.to_string(),
     ));
+    // STORY-723: the actionable subset of the role-routed depth, so an agent can
+    // tell a padded queue (archived/completed corpses) from real live work.
+    lines.push(crate::toon::scalar(
+        "queue_actionable",
+        &snap.queue_actionable.to_string(),
+    ));
     if snap.cache_present {
         lines.push(crate::toon::scalar("open", &snap.counts.open.to_string()));
         lines.push(crate::toon::scalar(
@@ -108836,35 +108970,89 @@ fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) 
     }
     println!("{}", lines.join("\n"));
 
-    let queued = agent_bare_top_queued(project_root, &snap.role, AGENT_BARE_QUEUE_TOPN);
-    let top_id: Option<String> = queued.first().map(|(id, _)| id.clone());
-    let rows: Vec<Vec<String>> = queued
+    // STORY-723: the queued[] table + the `next` head are the ACTIONABLE set
+    // (archived/completed/deferred/blocked corpses filtered out), so an agent is
+    // never nudged to `aida queue work <archived-spec>`.
+    let actionable = role_queue_actionable(project_root, &snap.role);
+    let top: Option<(String, String)> = actionable
+        .first()
+        .map(|(id, _title, status)| (id.clone(), status.clone()));
+    let rows: Vec<Vec<String>> = actionable
         .into_iter()
-        .map(|(id, title)| vec![id, title])
+        .take(AGENT_BARE_QUEUE_TOPN)
+        .map(|(id, title, _status)| vec![id, title])
         .collect();
     println!(
         "{}",
         crate::toon::table_raw("queued", &["id", "title"], &rows)
     );
-    // TASK-974 (AXI #9): next-step block — start/show the queue head when there
-    // is queued work, else point at the open backlog. trace:TASK-974
-    let next = crate::help_next::status_next(snap.queue_depth, top_id.as_deref());
+    // TASK-974 (AXI #9) / STORY-723: next-step block — lead with the fastest
+    // thought-to-merged path for the actionable head (`aida zen` / `aida ship`),
+    // else point at the approvable backlog. trace:TASK-974 trace:STORY-723
+    let next = crate::help_next::status_next(
+        snap.queue_depth,
+        top.as_ref().map(|(id, st)| (id.as_str(), st.as_str())),
+    );
     if let Some(block) = crate::help_next::render(&next) {
         println!("{block}");
     }
 }
 
-/// TASK-970: the top-N queued items for the active role, each resolved to its
-/// display id + title from the read-only cache (NO full store load). The queue
-/// YAML is read directly with the SAME role filter `read_queue_depth` uses, so
-/// this list is consistent with the snapshot's `queue:` depth. Returns an empty
-/// vec when the queue or cache can't be read.
-// trace:TASK-970
-fn agent_bare_top_queued(
+/// STORY-723: is `status` an ACTIONABLE lifecycle state — one a front-door
+/// `next` nudge may safely point at? Live + workable: approved / planned /
+/// in-progress / needs-attention. Draft (not yet approved), done (awaiting
+/// merge), and the terminal states (completed / rejected / released) are NOT
+/// actionable. Case- and spelling-tolerant (the cache stores the Debug form,
+/// e.g. "InProgress" / "NeedsAttention").
+fn is_actionable_queue_status(status: &str) -> bool {
+    let s = status.to_ascii_lowercase().replace(['-', '_', ' '], "");
+    matches!(
+        s.as_str(),
+        "approved" | "planned" | "inprogress" | "needsattention"
+    )
+}
+
+/// STORY-723: pure predicate — is a queued requirement row (its cache fields)
+/// safe to surface as the actionable head of the front-door `next` nudge? A row
+/// qualifies only when it is NOT archived, NOT deferred, NOT blocked, and sits
+/// in an actionable status. Kept side-effect-free so the "never nudge an
+/// archived/completed corpse" invariant is unit-testable without a queue file or
+/// a cache DB.
+fn queue_row_actionable(status: &str, archived: i64, deferred: i64, blocked: i64) -> bool {
+    archived == 0 && deferred == 0 && blocked == 0 && is_actionable_queue_status(status)
+}
+
+/// STORY-723: should bare `aida list` apply the default OPEN/actionable lens?
+/// Only when no status filter is already in play and the view wasn't widened to
+/// include closed/archived/deferred rows. Pure so the default is unit-testable.
+fn list_default_open_lens(has_status: bool, all: bool, archived: bool, deferred: bool) -> bool {
+    !has_status && !all && !archived && !deferred
+}
+
+/// STORY-723: the denominator label for the agent `aida list` `count: N of M`
+/// header — `open` under the default actionable lens (so it reconciles with the
+/// `aida status` active total, which counts all statuses) else plain `matched`.
+fn list_count_denom_label(default_open_lens: bool) -> &'static str {
+    if default_open_lens {
+        "open"
+    } else {
+        "matched"
+    }
+}
+
+/// STORY-723: the role-routed queue entries that are ACTUALLY actionable, in
+/// queue-position order. The raw role queue is padded with archived / completed
+/// / deferred corpses that were never dequeued (BUG: the front-door `next` once
+/// nudged `aida queue work STORY-248` for an archived spec); this is the set a
+/// nudge may safely point at. Each tuple is `(display_id, title, status)`. Live
+/// = not archived, not deferred, not blocked, and in a workable status. Reads
+/// the queue YAML + read-only cache only — NO full store load. (Supersedes
+/// TASK-970's `agent_bare_top_queued`, which did no liveness filtering.)
+// trace:STORY-723 trace:TASK-970
+fn role_queue_actionable(
     project_root: &std::path::Path,
     role: &str,
-    n: usize,
-) -> Vec<(String, String)> {
+) -> Vec<(String, String, String)> {
     let user = current_user_id(None);
     let queue_path = project_root
         .join(".aida-store/registry/queues")
@@ -108875,8 +109063,7 @@ fn agent_bare_top_queued(
     let Ok(entries) = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&content) else {
         return Vec::new();
     };
-    // Mirror read_queue_depth's role filter so the listed items are a prefix of
-    // the counted depth, then order by queue position and take the head N.
+    // Mirror read_queue_depth's role filter, then order by queue position.
     let mut role_entries: Vec<(i64, String)> = entries
         .iter()
         .filter(|e| {
@@ -108898,9 +109085,9 @@ fn agent_bare_top_queued(
         })
         .collect();
     role_entries.sort_by_key(|(pos, _)| *pos);
-    role_entries.truncate(n);
-    // Resolve display id + title from the read-only cache (no full store load),
-    // keyed by the requirement UUID the queue entry carries.
+    // Resolve id + title + liveness fields from the read-only cache (no full
+    // store load), keyed by the requirement UUID the queue entry carries, and
+    // KEEP only the actionable ones.
     let cache_path = project_root.join(".aida/cache.db");
     let conn = rusqlite::Connection::open_with_flags(
         &cache_path,
@@ -108909,22 +109096,49 @@ fn agent_bare_top_queued(
     .ok();
     role_entries
         .into_iter()
-        .map(|(_, uuid)| {
-            let resolved = conn.as_ref().and_then(|c| {
+        .filter_map(|(_, uuid)| {
+            let row = conn.as_ref().and_then(|c| {
                 c.query_row(
-                    "SELECT COALESCE(agreed_id, spec_id, ''), title \
+                    "SELECT COALESCE(agreed_id, spec_id, ''), title, status, \
+                     archived, deferred, blocked \
                      FROM requirements_cache WHERE id = ?1",
                     [&uuid],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, i64>(3)?,
+                            row.get::<_, i64>(4)?,
+                            row.get::<_, i64>(5)?,
+                        ))
+                    },
                 )
                 .ok()
-            });
-            match resolved {
-                Some((id, title)) if !id.is_empty() => (id, title),
-                Some((_, title)) => (uuid, title),
-                None => (uuid, String::new()),
+            })?;
+            let (id, title, status, archived, deferred, blocked) = row;
+            // Drop archived / deferred / blocked / non-workable-status corpses —
+            // never surface one as the actionable head. trace:STORY-723
+            if !queue_row_actionable(&status, archived, deferred, blocked) {
+                return None;
             }
+            let display_id = if id.is_empty() { uuid } else { id };
+            Some((display_id, title, status))
         })
+        .collect()
+}
+
+/// STORY-723: the top-N ACTIONABLE queued items for the active role as
+/// `(display_id, title)` — the head of [`role_queue_actionable`].
+fn agent_bare_top_queued(
+    project_root: &std::path::Path,
+    role: &str,
+    n: usize,
+) -> Vec<(String, String)> {
+    role_queue_actionable(project_root, role)
+        .into_iter()
+        .take(n)
+        .map(|(id, title, _status)| (id, title))
         .collect()
 }
 
@@ -108975,6 +109189,101 @@ fn handle_bare_agent_status() -> Result<()> {
     }
     println!();
     Ok(())
+}
+
+#[cfg(test)]
+mod story723_front_door_tests {
+    use super::*;
+
+    // STORY-723: the front-door `next` nudge must NEVER point at an archived /
+    // completed / done / draft corpse — only live, workable specs.
+    #[test]
+    fn next_filter_excludes_archived_and_completed() {
+        // Actionable statuses (case/spelling-tolerant) pass.
+        for s in [
+            "approved",
+            "Approved",
+            "in-progress",
+            "InProgress",
+            "needs-attention",
+        ] {
+            assert!(queue_row_actionable(s, 0, 0, 0), "{s} should be actionable");
+        }
+        // Non-workable statuses are excluded even when otherwise live.
+        for s in [
+            "completed",
+            "Completed",
+            "done",
+            "Done",
+            "rejected",
+            "draft",
+            "released",
+        ] {
+            assert!(
+                !queue_row_actionable(s, 0, 0, 0),
+                "{s} must not be surfaced as actionable"
+            );
+        }
+        // An archived / deferred / blocked row is excluded regardless of status.
+        assert!(
+            !queue_row_actionable("approved", 1, 0, 0),
+            "archived excluded"
+        );
+        assert!(
+            !queue_row_actionable("approved", 0, 1, 0),
+            "deferred excluded"
+        );
+        assert!(
+            !queue_row_actionable("in-progress", 0, 0, 1),
+            "blocked excluded"
+        );
+    }
+
+    // STORY-723: bare `aida list` defaults to the OPEN lens; any explicit status
+    // filter or a widened view (--all / --archived / --deferred) opts out.
+    #[test]
+    fn bare_list_defaults_to_open_lens() {
+        // Bare list (no status, no widening) -> open lens on.
+        assert!(list_default_open_lens(false, false, false, false));
+        // An explicit status filter opts out (e.g. `aida list completed`).
+        assert!(!list_default_open_lens(true, false, false, false));
+        // Each widening flag opts out so closed rows surface.
+        assert!(!list_default_open_lens(false, true, false, false)); // --all
+        assert!(!list_default_open_lens(false, false, true, false)); // --archived
+        assert!(!list_default_open_lens(false, false, false, true)); // --deferred
+
+        // The open lens's status set is exactly the non-terminal states — it
+        // must hide done/completed/rejected.
+        let open: Vec<&str> = aida_core::RequirementStatus::open_statuses()
+            .iter()
+            .map(|s| s.cache_key())
+            .collect();
+        for closed in ["Completed", "Done", "Rejected"] {
+            assert!(
+                !open.contains(&closed),
+                "open lens must not include {closed}"
+            );
+        }
+    }
+
+    // STORY-723: the agent `aida list` count denominator is labelled so it
+    // reconciles with `aida status` instead of reading as a bare mismatched int.
+    #[test]
+    fn count_denominator_is_labelled() {
+        assert_eq!(list_count_denom_label(true), "open");
+        assert_eq!(list_count_denom_label(false), "matched");
+    }
+
+    // STORY-723: the agent-path `aida why` headline has NO leading glyph; the
+    // human path keeps the decorative arrow.
+    #[test]
+    fn why_headline_has_no_leading_glyph_in_agent_mode() {
+        assert_eq!(why_headline_prefix_for(true), "");
+        assert!(
+            !why_headline_prefix_for(false).is_empty(),
+            "human path keeps the leading arrow marker"
+        );
+    }
 }
 
 #[cfg(test)]

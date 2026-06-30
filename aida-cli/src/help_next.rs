@@ -163,15 +163,40 @@ pub fn list_next(ctx: &ListContext) -> Vec<NextStep> {
     steps
 }
 
-/// Next steps after a bare `status` snapshot: start the queue head (or show it)
-/// when there is queued work, else point at the open backlog.
-pub fn status_next(queue_depth: usize, top_queued_id: Option<&str>) -> Vec<NextStep> {
-    match (queue_depth, top_queued_id) {
-        (d, Some(id)) if d > 0 => vec![
-            NextStep::new(format!("aida queue work {id}"), "in-progress"),
-            NextStep::new(format!("aida show {id}"), "detail"),
-        ],
-        _ => vec![NextStep::new("aida list --status draft", "triage")],
+/// Next steps after a bare `status` snapshot. Leads with the FASTEST
+/// thought-to-merged path for the ACTIONABLE queue head: `aida zen <id>` for an
+/// approved/planned spec (one-shot autonomous implement + ship) or `aida ship
+/// <id>` for one already in flight — then the manual `queue work` / `show`.
+/// Falls back to the approvable backlog when nothing actionable is queued.
+/// `top` carries the head spec's (id, status) so the suggestion matches its
+/// lifecycle state; the caller has already filtered out archived/completed/
+/// deferred corpses so anything passed here is safe to nudge.
+pub fn status_next(_queue_depth: usize, top: Option<(&str, &str)>) -> Vec<NextStep> {
+    match top {
+        Some((id, status)) => {
+            let st = status.to_ascii_lowercase();
+            let in_flight = st.contains("progress") || st.replace('-', "") == "needsattention";
+            let mut steps = Vec::new();
+            if in_flight {
+                // Already being implemented — finish it: commit, PR, CI, merge.
+                steps.push(NextStep::new(format!("aida ship {id}"), "merged"));
+                steps.push(NextStep::new(
+                    format!("aida queue work {id}"),
+                    "in-progress",
+                ));
+            } else {
+                // Approved/planned head — the autonomous one-shot is the shortest
+                // path from here to merged.
+                steps.push(NextStep::new(format!("aida zen {id}"), "merged"));
+                steps.push(NextStep::new(
+                    format!("aida queue work {id}"),
+                    "in-progress",
+                ));
+            }
+            steps.push(NextStep::new(format!("aida show {id}"), "detail"));
+            steps
+        }
+        None => vec![NextStep::new("aida list --status approved", "fill-queue")],
     }
 }
 
@@ -282,13 +307,21 @@ mod tests {
 
     #[test]
     fn status_and_queue_next_steps() {
-        // Queued work -> start the head.
-        let s = status_next(3, Some("TASK-8"));
-        assert_eq!(s[0].cmd, "aida queue work TASK-8");
-        // Empty queue -> triage drafts.
+        // An approved actionable head -> lead with the autonomous one-shot
+        // (`aida zen`) — the fastest thought-to-merged path. trace:STORY-723
+        let approved = status_next(3, Some(("TASK-8", "approved")));
+        assert_eq!(approved[0].cmd, "aida zen TASK-8");
+        assert_eq!(approved[0].to, "merged");
+        assert!(cmds(&approved).contains(&"aida queue work TASK-8".to_string()));
+
+        // An in-flight head -> lead with `aida ship` (finish + merge it).
+        let in_flight = status_next(1, Some(("TASK-9", "in-progress")));
+        assert_eq!(in_flight[0].cmd, "aida ship TASK-9");
+
+        // Nothing actionable queued -> point at the approvable backlog.
         assert_eq!(
             cmds(&status_next(0, None)),
-            vec!["aida list --status draft"]
+            vec!["aida list --status approved"]
         );
 
         let q = queue_next(Some("TASK-8"));
