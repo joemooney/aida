@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:18.954962222Z
-modified_at: 2026-06-30T18:54:54.714575798Z
+modified_at: 2026-06-30T18:55:52.168918361Z
 req_type: Epic
 tags:
 - advisor-autopilot
@@ -71,3 +71,8 @@ comments:
   content: Commit be4738c33 references this requirement
   created_at: 2026-06-30T18:54:54.714575798Z
   modified_at: 2026-06-30T18:54:54.714575798Z
+- id: 019f19e3-4368-7cb1-b8c9-43f713fa663d
+  author: joe
+  content: Commit 9ad727eb8 references this requirement
+  created_at: 2026-06-30T18:55:52.168918361Z
+  modified_at: 2026-06-30T18:55:52.168918361Z
