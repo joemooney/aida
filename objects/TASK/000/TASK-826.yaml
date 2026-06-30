@@ -17,6 +17,3 @@ tags:
 - gitlab
 - needs-human
 - parent:EPIC-44
-deferred: true
-deferred_at: 2026-06-27T16:40:43.600244896Z
-deferred_until: STORY-621 forge migration done AND operator signs off the EPIC-44 GitLab cutover

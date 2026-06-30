@@ -13,6 +13,3 @@ req_type: Story
 tags:
 - doc-projection
 - living-docs
-deferred: true
-deferred_at: 2026-06-27T16:36:33.419299933Z
-deferred_until: living-docs work reprioritized (EPIC-24 follow-on)

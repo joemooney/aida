@@ -20,9 +20,6 @@ comments:
   content: 'Reject (advisor 2026-06-26): ImplementationInfo is fully built (models.rs, persisted, set from CLI/MCP/digest); operator REJECTED 2026-06-06 as predating git-canonical storage. completed_at/completion_sha shipped via STORY-86; provenance via aida show git-linkage (TASK-241) + trace markers. Re-speccing built work = graph noise.'
   created_at: 2026-06-26T23:51:14.845842670Z
   modified_at: 2026-06-26T23:51:14.845842670Z
-deferred: true
-deferred_at: 2026-06-27T16:40:26.339767299Z
-deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)
 trace_links:
 - id: c2bb330c-f8b8-4e5d-900b-9b83ff68ca98
   artifact_type: SourceCode

@@ -17,6 +17,3 @@ tags:
 - interop
 - parent:EPIC-50
 - tilt-verdict
-deferred: true
-deferred_at: 2026-06-27T15:35:39.896832691Z
-deferred_until: 'Beads adoption grows OR a distribution-funnel bet is greenlit; re-verify the live issues.jsonl schema first. NOTE: Gas Town OSS went cross-vendor (2026-06-26), shifting the competitive calculus — re-assess the bet before building.'

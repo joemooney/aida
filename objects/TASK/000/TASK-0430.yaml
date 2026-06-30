@@ -53,6 +53,3 @@ comments:
     filed 5 task(s): TASK-1024, TASK-1025, TASK-1026, TASK-1027, TASK-1028
   created_at: 2026-06-30T02:30:14.323247001Z
   modified_at: 2026-06-30T02:30:14.323247001Z
-deferred: true
-deferred_at: 2026-06-27T16:40:34.439884111Z
-deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)

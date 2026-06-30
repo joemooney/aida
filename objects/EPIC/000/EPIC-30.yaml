@@ -232,6 +232,3 @@ comments:
   content: 'Direction (operator 2026-06-27): HOLD/no further build. v1 (resilient drain loop + systemd, PR-497) shipped + the --auto-complete drain + drain-loop.sh deliver the works-overnight value (re-proven in the 2026-06-26 overnight solo run). The persistent-daemon control plane stays a deferred tripwire — promote only on a concrete revisit trigger (bash-loop inadequacy, multi-machine need, telemetry showing unrecoverable loop failures), not now.'
   created_at: 2026-06-27T15:35:40.865223616Z
   modified_at: 2026-06-27T15:35:40.865223616Z
-deferred: true
-deferred_at: 2026-06-27T16:36:29.469058456Z
-deferred_until: bash-loop inadequacy OR multi-machine need OR telemetry shows unrecoverable loop failures (daemon-grade trigger)

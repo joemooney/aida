@@ -26,6 +26,3 @@ comments:
   content: 'HOLD (operator, 2026-06-16): cutover stays parked — operator still cannot access gitlab.joemooney.com from work. Blocker is operator''s corporate/work network access to the gitlab host, not anything in the codebase. The backlog-cleared half of the trigger is met and gitlab works locally (BUG-559 fix verified against it), so the ONLY remaining gate is operator work-access + explicit go. Do not repoint origin / flip [forge] provider until then.'
   created_at: 2026-06-16T22:24:15.137540327Z
   modified_at: 2026-06-16T22:24:15.137540327Z
-deferred: true
-deferred_at: 2026-06-27T16:40:28.072813806Z
-deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)

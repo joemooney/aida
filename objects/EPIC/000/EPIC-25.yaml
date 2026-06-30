@@ -32,6 +32,3 @@ comments:
   content: 'Reject (advisor 2026-06-26): operator REJECTED release-as-queueable-composite + documenter-role as over-engineered for solo/small-team (2026-06-06). The one valuable slice (release-time doc-coverage gate, TASK-680) already shipped as aida doc coverage. scripts/release.sh + aida changelog deliver the practical value.'
   created_at: 2026-06-26T23:51:12.063457402Z
   modified_at: 2026-06-26T23:51:12.063457402Z
-deferred: true
-deferred_at: 2026-06-27T16:40:27.273722551Z
-deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)

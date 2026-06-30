@@ -51,6 +51,3 @@ comments:
   content: 'Opened from discussion that advisor autopilot becomes safer and more useful if bounded by subsystem. Current AIDA has tags, feature categories, scopes, roles, and subsystem-scoped memories, but no first-class subsystem object or routing contract. Desired direction: subsystem = durable project slice with scope, memory focus, role routing, and authority policy; specialized advisors operate inside it while master advisor arbitrates cross-subsystem/keystone calls.'
   created_at: 2026-06-24T03:21:59.680989197Z
   modified_at: 2026-06-24T03:21:59.680989197Z
-deferred: true
-deferred_at: 2026-06-27T16:40:31.100970982Z
-deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)

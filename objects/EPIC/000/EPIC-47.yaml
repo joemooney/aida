@@ -45,6 +45,3 @@ comments:
   content: 'Completed: Tier 1 (assignment, team awareness, history-merge, multi-host), Tier 2 (auto mailbox sync, notifications, comments/relationships auto-merge), Tier 3 (RBAC slices 1+2, team dashboard A/B/C). Remaining items are separate deferred specs: TASK-845 (cross-machine person unification), TASK-841 (integrate stacked-branch). — advisor'
   created_at: 2026-06-18T04:36:28.623791826Z
   modified_at: 2026-06-18T04:36:28.623791826Z
-deferred: true
-deferred_at: 2026-06-27T16:40:29.630192569Z
-deferred_until: stabilization-before-features phase declared done by operator (+ architecture sketch-first sign-off for the design-block tasks)

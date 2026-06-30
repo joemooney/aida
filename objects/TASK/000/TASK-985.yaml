@@ -45,6 +45,3 @@ comments:
   content: Commit 5b36c615e references this requirement
   created_at: 2026-06-29T16:49:41.810828905Z
   modified_at: 2026-06-29T16:49:41.810828905Z
-deferred: true
-deferred_at: 2026-06-29T15:48:21.278566037Z
-deferred_until: a supervised dogfood run proves the warm-cache payoff (real drain with [worktree_pool] enabled=true) + acquire->checkout->return integration coverage
