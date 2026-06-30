@@ -3,12 +3,12 @@ spec_id: VIS-1
 agreed_id: VIS-1
 title: AIDA is your project's missing index — of intent, not just code
 description: ''
-status: InProgress
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:10:07.033280927Z
-modified_at: 2026-06-10T03:34:10.335352984Z
+modified_at: 2026-06-30T04:23:36.052126365Z
 req_type: Vision
 comments:
 - id: 019e0f5e-489b-7f43-a104-c67304b927e6
