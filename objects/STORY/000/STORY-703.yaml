@@ -18,8 +18,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:52:24.018503764Z
-modified_at: 2026-06-27T16:36:06.590992260Z
+modified_at: 2026-06-30T16:35:37.953151220Z
 req_type: Story
+tags:
+- zen-ready
 relationships:
 - rel_type: Child
   target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
