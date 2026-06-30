@@ -17111,6 +17111,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         "Status".bold(),
                         status_display::status_badge(&status)
                     );
+                    // STORY-727: the per-spec next-command block for HUMANS. The
+                    // agent-mode TOON `next` block fires on its own branch above
+                    // (and returns); STORY-723 added next-steps to the front door
+                    // but not to per-spec inspection, so the human `show` never
+                    // got a next command. Render it now, leading with `aida zen
+                    // <id>` for an Approved/Planned spec. trace:STORY-727
+                    let next =
+                        crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                    if let Some(block) = crate::help_next::render_human(&next) {
+                        println!("{block}");
+                    }
                 }
                 None => {
                     // BUG-600: not-found is a failure — return the error so the
@@ -93497,6 +93508,21 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         };
         println!("    {} {}", tag, r.text.dimmed());
     }
+    // STORY-727: `aida why` previously named no command. The reason text now
+    // names it generically (`<id>`); fill in the CONCRETE templated command as a
+    // `Next:` block, leading with `aida zen <id>` for an Approved/Planned spec.
+    // Gated to the buckets where a forward command makes sense — a Blocked /
+    // AwaitingDecision spec's reason already names its own action, so a `zen`
+    // suggestion there would contradict it. trace:STORY-727 | ai:claude
+    if matches!(
+        bucket,
+        burndown::OpenBucket::Actionable | burndown::OpenBucket::InProgress
+    ) {
+        let next = crate::help_next::spec_next(&eff_status.to_string(), &f.id);
+        if let Some(block) = crate::help_next::render_human(&next) {
+            println!("{block}");
+        }
+    }
     Ok(())
 }
 
@@ -94709,6 +94735,14 @@ fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> Result<()> {
                 status_label
             );
         }
+    }
+    // STORY-727: the per-spec next-command block — `aida status <spec>` is a
+    // per-spec inspection surface, so it gets the same human `Next:` block as
+    // `show` / `why`, leading with `aida zen <id>` for an Approved/Planned spec.
+    // The json branch returned above. trace:STORY-727 | ai:claude
+    let next = crate::help_next::spec_next(&status_label, &disp);
+    if let Some(block) = crate::help_next::render_human(&next) {
+        println!("{block}");
     }
     Ok(())
 }

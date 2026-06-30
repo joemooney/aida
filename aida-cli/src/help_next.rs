@@ -104,6 +104,14 @@ pub fn spec_next(status: &str, id: &str) -> Vec<NextStep> {
         return Vec::new();
     };
     let mut ranked: Vec<(u8, NextStep)> = Vec::new();
+    // STORY-727: a buildable spec (Approved / Planned) LEADS with the headline
+    // autonomous drive (`aida zen <id>`) — the fastest thought-to-merged path —
+    // ahead of the manual `queue work`, matching the front-door (`status_next`)
+    // pattern. Pushed first at rank 0; the stable sort keeps it ahead of the
+    // (also rank-0) `queue work` move.
+    if matches!(state, State::Approved | State::Planned) {
+        ranked.push((0, NextStep::new(format!("aida zen {id}"), "merged")));
+    }
     for t in LifecycleModel::declared().transitions {
         if t.from != state {
             continue;
@@ -226,6 +234,52 @@ pub fn render(steps: &[NextStep]) -> Option<String> {
     Some(crate::toon::table_raw("next", &["cmd", "to"], &rows))
 }
 
+/// A short human-facing gloss for a next step's target token, used by the
+/// `Next:` block on the per-spec HUMAN views (`show` / `why` / `status <id>`).
+/// An unmapped token glosses to the empty string, so the command renders on its
+/// own with no trailing description.
+// trace:STORY-727 | ai:claude
+fn human_hint(to: &str) -> &'static str {
+    match to {
+        "merged" => "build + ship it autonomously, end-to-end",
+        "in-progress" => "start implementing it yourself",
+        "approved" => "approve it",
+        "planned" => "mark it planned — the design is settled",
+        "done" => "mark it done (finished on a branch)",
+        "completed" => "sync after merge to auto-complete it",
+        "rejected" => "reject it",
+        "archived" => "hide it from the default views",
+        "detail" => "see the full detail",
+        "triage" => "triage the draft inbox",
+        "fill-queue" => "fill the queue from the approved backlog",
+        _ => "",
+    }
+}
+
+/// Render the next steps as a HUMAN `Next:` block — a bold header plus one cyan
+/// `aida ...` command per line with a dimmed gloss. The human-TTY analog of
+/// [`render`] (which emits the agent-mode TOON `next` block); the two never both
+/// fire on one surface. `None` when there is nothing to suggest, so the caller
+/// emits no trailing block.
+// trace:STORY-727 | ai:claude
+pub fn render_human(steps: &[NextStep]) -> Option<String> {
+    if steps.is_empty() {
+        return None;
+    }
+    use colored::Colorize;
+    let arrow = crate::glyph(crate::glyphs::Glyph::Arrow);
+    let mut lines: Vec<String> = vec![format!("\n{}", "Next:".bold())];
+    for s in steps {
+        let hint = human_hint(&s.to);
+        if hint.is_empty() {
+            lines.push(format!("  {} {}", arrow, s.cmd.cyan()));
+        } else {
+            lines.push(format!("  {} {}   {}", arrow, s.cmd.cyan(), hint.dimmed()));
+        }
+    }
+    Some(lines.join("\n"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,10 +302,18 @@ mod tests {
             ]
         );
 
-        // Approved -> work first, then plan, then reject (mainline-forward wins).
+        // Approved -> STORY-727: lead with the autonomous one-shot (`aida zen`),
+        // then the manual `queue work`, then plan, then reject.
         let approved = spec_next("approved", "TASK-2");
-        assert_eq!(approved[0].cmd, "aida queue work TASK-2");
+        assert_eq!(approved[0].cmd, "aida zen TASK-2");
+        assert!(cmds(&approved).contains(&"aida queue work TASK-2".to_string()));
         assert!(cmds(&approved).contains(&"aida edit TASK-2 --status planned".to_string()));
+
+        // Planned -> STORY-727: also leads with `aida zen` (design settled,
+        // ready to build), then the manual `queue work`.
+        let planned = spec_next("planned", "TASK-2b");
+        assert_eq!(planned[0].cmd, "aida zen TASK-2b");
+        assert!(cmds(&planned).contains(&"aida queue work TASK-2b".to_string()));
 
         // In Progress -> done. Tolerant of the Display spelling.
         let in_prog = spec_next("In Progress", "TASK-3");
@@ -341,5 +403,24 @@ mod tests {
         assert_eq!(parsed.rows[0][0], "aida edit TASK-1 --status approved");
 
         assert!(render(&[]).is_none());
+    }
+
+    // STORY-727: the HUMAN per-spec views render a `Next:` block that NAMES the
+    // concrete next command (Approved leads with `aida zen`), and empty -> None.
+    #[test]
+    fn render_human_emits_next_command_block() {
+        let steps = spec_next("approved", "STORY-7");
+        let block = render_human(&steps).expect("non-empty");
+        assert!(block.contains("Next:"));
+        // Leads with the autonomous one-shot for an Approved spec.
+        assert!(block.contains("aida zen STORY-7"));
+        // And still offers the manual implement path.
+        assert!(block.contains("aida queue work STORY-7"));
+
+        // An in-progress spec gets the "finish it" command, not zen.
+        let in_prog = render_human(&spec_next("In Progress", "STORY-8")).expect("non-empty");
+        assert!(in_prog.contains("aida queue done STORY-8"));
+
+        assert!(render_human(&[]).is_none());
     }
 }
