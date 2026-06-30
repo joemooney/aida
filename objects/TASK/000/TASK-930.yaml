@@ -22,12 +22,12 @@ description: |-
   4. Regression — The footer must not appear in the in-flight-only view (`--in-flight-only`) and must not disturb the existing terminal-status-hidden hint, the tree/by-batch grouped views, or the ultraplan/out-of-order-blocker hints.
 
   Automated coverage: pure formatter `queue_summary_footer(total, routed)` is unit-tested in mod `task_930_queue_summary_footer_tests` (empty → None; all-routed; all-unrouted; mixed; singular; saturating). Run `env -u AIDA_SESSION_ROLE cargo test -p aida-cli task_930`.
-status: Done
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:27:01.331691676Z
-modified_at: 2026-06-30T02:41:05.095519462Z
+modified_at: 2026-06-30T02:41:05.979061731Z
 req_type: Task
 tags:
 - cli
