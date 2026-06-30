@@ -26261,5 +26261,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2508
+- id: 019f1658-3e82-7452-a803-38b0016e4435
+  target_id: 019f1658-2dfd-7d32-810b-33037834a5af
+  author: aida
+  node_id: '1'
+  lamport: 2509
+  timestamp: 2026-06-30T02:25:09.762382528Z
+  kind: !Create
+    title: '`post_create` hook recipe to pre-warm `cargo build` on a freshly-created pool tree (turn cold-create into warm-on-first-use)'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2509
 node_id: '1'
