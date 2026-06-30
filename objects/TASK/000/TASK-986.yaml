@@ -3,12 +3,12 @@ spec_id: TASK-986
 agreed_id: TASK-986
 title: 'Re-frame MCP positioning: typed/structural option, CLI is primary (benchmark-backed)'
 description: 'Apply the measured (flavor A) re-frame from the SPIKE-73 benchmark: OVERVIEW.md:159 + CLAUDE.md:266 call MCP "the highest-leverage surface" — the 72-cell benchmark shows MCP ~2x the token-efficient CLI cost (structural, not just upfront-schema tax). Re-frame to: MCP = typed/structural option for MCP-native clients; the AIDA_AGENT_OUTPUT/TOON CLI is the primary, cheaper agent surface. Keep MCP first-class (typed schemas, native client integration), do NOT over-correct. Dated artifacts stay frozen.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T15:30:08.983787985Z
-modified_at: 2026-06-29T15:30:12.788454281Z
+modified_at: 2026-06-30T02:22:24.169695304Z
 req_type: Task
 tags:
 - docs
@@ -19,3 +19,21 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-29T15:30:12.788454281Z
+history:
+- id: 019f1655-b6bd-7f10-938d-397faefcf6cb
+  author: aida-auto-bump
+  timestamp: 2026-06-30T02:22:23.933204696Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1655-b7a9-7090-b07e-a1c9ac6ab6e7
+  timestamp: 2026-06-30T02:22:24.169688190Z
+  agent: aida
+  commit_sha: 9498769e8b88b7f96505e6e7cfbcfd3d045fec79
+  summary: Completed via merge 9498769e
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-30T02:22:22.908747469Z
+  completion_sha: 9498769e8b88b7f96505e6e7cfbcfd3d045fec79
