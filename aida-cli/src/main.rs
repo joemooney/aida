@@ -64,6 +64,7 @@ mod health_metrics;
 mod history;
 mod intake;
 mod integrate;
+mod integrate_view;
 mod intent;
 mod mailbox_store;
 mod manual;
@@ -2570,6 +2571,16 @@ fn run() -> Result<()> {
         );
     }
 
+    // `aida integrate` (bare) is the read-only integrator throughput view
+    // (TASK-1034): the focus-scoped queue, merge throughput off `git log
+    // origin/main` + the `.aida/events.jsonl` stream, and the `aida ps`
+    // running-work table. It self-resolves the distributed store for the queue
+    // read and otherwise touches only local git + the lease dir, so dispatch
+    // early like `aida ps` / `aida watch`. trace:TASK-1034 | ai:claude
+    if let Command::Integrate { json } = &cli.command {
+        return handle_integrate(*json);
+    }
+
     // TASK-957: `aida claim` / `aida unclaim` self-load the store read-only to
     // resolve the spec id forms, then write/remove a lightweight advisory lease
     // under `.aida/sessions/`. Like `aida ps` / `aida status <spec>` they touch
@@ -3746,6 +3757,10 @@ fn run() -> Result<()> {
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
+        // trace:TASK-1034
+        Command::Integrate { .. } => {
+            unreachable!("integrate is dispatched before storage init")
+        }
         // trace:TASK-957
         Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
         Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
@@ -14333,6 +14348,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
+        // trace:TASK-1034
+        Command::Integrate { .. } => {
+            unreachable!("integrate is dispatched before storage init")
+        }
         // trace:TASK-957
         Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
         Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
@@ -94236,20 +94255,384 @@ fn ps_orphan_excluded_type(req_type: &aida_core::RequirementType) -> bool {
 /// a pass over In-Progress specs with no live spec-scoped lease so orphaned
 /// flags surface. Reuses the per-spec liveness machinery wholesale.
 // trace:STORY-696 trace:STORY-694 | ai:claude
-fn handle_ps(json: bool, all: bool) -> Result<()> {
+/// `aida integrate` (bare) — the read-only integrator throughput view
+/// (TASK-1034). One screen, scoped to the active focus: the focus-scoped queue
+/// (specs + routed role + depth), live throughput (time since the last merge to
+/// `origin/main`, recent-merge counts, a main-idle indicator), and the active
+/// fan-out (the `aida ps` running-work table). Writes nothing; the only network
+/// touch is a local `git log` read. Reuses the queue read, the cache summaries,
+/// `focus::resolve_focus`, the `.aida/events.jsonl` stream, and
+/// [`gather_running_work`] — no machinery is reimplemented.
+// trace:TASK-1034 trace:STORY-718 | ai:claude
+fn handle_integrate(json: bool) -> Result<()> {
+    use std::collections::HashSet;
+
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let now = chrono::Utc::now();
 
-    // One pid-probe + one lease read, shared by both the session table and the
-    // orphan pass — the same single-probe discipline `aida session leases` uses.
+    // --- Focus scope ---------------------------------------------------------
+    let focus_label = focus::resolve_focus(&project_root);
+
+    // --- Focus-scoped queue (reuse the queue read + cache summaries) ---------
+    // The store is resolved the same way every store-bearing command resolves
+    // it; a fresh / un-attached clone degrades to an empty queue rather than an
+    // error (the throughput + running-work sections still render).
+    let store_path = detect_distributed_store();
+    let user_id = current_user_id(None);
+    let mut queue_rows: Vec<(String, String, String, String)> = Vec::new(); // (id, title, status, role)
+    if let Some(sp) = store_path.as_deref() {
+        let storage = Storage::new(sp);
+        if let Ok(backend) = advance_backend(sp) {
+            let summaries = backend
+                .list_summaries(&aida_core::ListFilter::default())
+                .unwrap_or_default();
+            let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
+                summaries.iter().map(|s| (s.id, s)).collect();
+
+            // Resolve the focus label to its subtree (cache-fast descendant
+            // closure, the same `backend.descendant_ids` the focused `aida list`
+            // / `aida queue list` use). None => no focus, show the whole queue.
+            let subtree: Option<HashSet<Uuid>> = focus_label.as_deref().and_then(|label| {
+                summaries
+                    .iter()
+                    .find(|s| {
+                        [s.agreed_id.as_deref(), s.spec_id.as_deref()]
+                            .into_iter()
+                            .flatten()
+                            .any(|id| id.eq_ignore_ascii_case(label))
+                    })
+                    .and_then(|s| backend.descendant_ids(&s.id).ok())
+            });
+
+            let raw = storage.queue_list(&user_id, false).unwrap_or_default();
+            for e in &raw {
+                if let Some(set) = subtree.as_ref() {
+                    if !set.contains(&e.requirement_id) {
+                        continue;
+                    }
+                }
+                let Some(s) = by_id.get(&e.requirement_id) else {
+                    continue;
+                };
+                // Mirror the default queue/list view: hide archived + terminal
+                // (Completed / Rejected) so the queue reads as live work.
+                if s.archived {
+                    continue;
+                }
+                let st = s.status.to_ascii_lowercase();
+                if st == "completed" || st == "rejected" {
+                    continue;
+                }
+                let id = s
+                    .agreed_id
+                    .as_deref()
+                    .or(s.spec_id.as_deref())
+                    .unwrap_or("")
+                    .to_string();
+                queue_rows.push((
+                    id,
+                    s.title.clone(),
+                    s.status.clone(),
+                    e.for_role.clone().unwrap_or_default(),
+                ));
+            }
+        }
+    }
+
+    // --- Throughput (git log origin/main, falling back to the event stream) --
+    let git_merges =
+        integrate_view::read_git_merge_times(&project_root, integrate_view::GIT_LOG_SCAN_LIMIT);
+    let events = integrate_view::read_events(&project_root);
+    let merge_times = if git_merges.is_empty() {
+        integrate_view::merge_times_from_events(&events)
+    } else {
+        git_merges
+    };
+    let throughput = integrate_view::summarize_throughput(&merge_times, now);
+    let idle = integrate_view::main_idle_verdict(
+        throughput.last_merge,
+        now,
+        integrate_view::DEFAULT_IDLE_THRESHOLD_MINS,
+    );
+    let drain_times = integrate_view::drain_times_from_events(&events);
+    let drains_last_day = drain_times
+        .iter()
+        .filter(|t| **t >= now - chrono::Duration::hours(24) && **t <= now)
+        .count();
+
+    // --- Active fan-out work (reuse the `aida ps` running-work table) --------
+    let (mut run_rows, _orphans) = gather_running_work(&project_root);
+    // When a focus is active, keep rows whose spec is in the focus subtree; a
+    // generic harness-worktree lease (spec unknown) stays visible since it
+    // cannot be excluded honestly. With no focus, every row shows.
+    if let (Some(_label), Some(sp)) = (focus_label.as_deref(), store_path.as_deref()) {
+        if let Ok(backend) = advance_backend(sp) {
+            let summaries = backend
+                .list_summaries(&aida_core::ListFilter::default())
+                .unwrap_or_default();
+            if let Some(froot) = summaries.iter().find(|s| {
+                [s.agreed_id.as_deref(), s.spec_id.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|id| id.eq_ignore_ascii_case(focus_label.as_deref().unwrap_or("")))
+            }) {
+                if let Ok(subtree) = backend.descendant_ids(&froot.id) {
+                    let in_scope: HashSet<String> = summaries
+                        .iter()
+                        .filter(|s| subtree.contains(&s.id))
+                        .flat_map(|s| {
+                            [s.agreed_id.clone(), s.spec_id.clone()]
+                                .into_iter()
+                                .flatten()
+                        })
+                        .map(|id| id.to_ascii_lowercase())
+                        .collect();
+                    run_rows.retain(|r| match &r.spec {
+                        Some(sp) => in_scope.contains(&sp.to_ascii_lowercase()),
+                        None => true,
+                    });
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- JSON ----
+    if json {
+        let queue_json: Vec<serde_json::Value> = queue_rows
+            .iter()
+            .map(|(id, title, status, role)| {
+                serde_json::json!({ "id": id, "title": title, "status": status, "role": role })
+            })
+            .collect();
+        let running_json: Vec<serde_json::Value> = run_rows
+            .iter()
+            .map(|row| {
+                serde_json::json!({
+                    "spec": row.spec,
+                    "role": row.lease.role,
+                    "pid": row.pid,
+                    "elapsed_secs": row.elapsed_secs,
+                    "live": matches!(row.state, LeaseState::Live),
+                    "liveness": row.state.label(),
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "focus": focus_label,
+                "queue_depth": queue_rows.len(),
+                "queue": queue_json,
+                "throughput": {
+                    "last_merge": throughput.last_merge.map(|t| t.to_rfc3339()),
+                    "merges_last_hour": throughput.merges_last_hour,
+                    "merges_last_day": throughput.merges_last_day,
+                    "drains_last_day": drains_last_day,
+                    "main_idle": idle.idle,
+                    "minutes_since_last_merge": idle.minutes_since_last_merge,
+                },
+                "running": running_json,
+            }))?
+        );
+        return Ok(());
+    }
+
+    // --------------------------------------------------- AGENT (TOON) mode ----
+    // Token-efficient rendering for non-TTY / AIDA_AGENT_OUTPUT consumers, the
+    // TASK-964 AXI pattern: flat scalars + uniform TOON tables, no glyphs/color.
+    if agent_output_mode() {
+        println!("view: integrate");
+        println!("focus: {}", focus_label.as_deref().unwrap_or("none"));
+        println!("main_idle: {}", idle.idle);
+        println!(
+            "minutes_since_last_merge: {}",
+            idle.minutes_since_last_merge
+                .map(|m| m.to_string())
+                .unwrap_or_else(|| "none".to_string())
+        );
+        println!("merges_last_hour: {}", throughput.merges_last_hour);
+        println!("merges_last_day: {}", throughput.merges_last_day);
+        println!("drains_last_day: {drains_last_day}");
+        println!("queue_depth: {}", queue_rows.len());
+        println!("running: {}", run_rows.len());
+        let q: Vec<Vec<String>> = queue_rows
+            .iter()
+            .map(|(id, title, status, role)| {
+                vec![
+                    id.clone(),
+                    title.clone(),
+                    toon_status_token(status),
+                    role.clone(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw("queue", &["id", "title", "status", "role"], &q)
+        );
+        let r: Vec<Vec<String>> = run_rows
+            .iter()
+            .map(|row| {
+                vec![
+                    row.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    row.lease.role.clone().unwrap_or_else(|| "-".to_string()),
+                    humanize_duration_secs(row.elapsed_secs),
+                    row.state.label().to_string(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw("running", &["spec", "role", "elapsed", "live"], &r)
+        );
+        return Ok(());
+    }
+
+    // --------------------------------------------------------- HUMAN mode ----
+    let arrow = crate::glyph(crate::glyphs::Glyph::Arrow);
+    let queued_g = crate::glyph(crate::glyphs::Glyph::Queued);
+    let robot_g = crate::glyph(crate::glyphs::Glyph::Robot);
+    let hourglass = crate::glyph(crate::glyphs::Glyph::Hourglass);
+    let check_g = crate::glyph(crate::glyphs::Glyph::Check);
+    let warn_g = crate::glyph(crate::glyphs::Glyph::Warning);
+
+    println!("{}", "Integrator".bold());
+    match focus_label.as_deref() {
+        Some(f) => println!("{} {}", arrow.cyan(), format!("focus: {f}").cyan()),
+        None => println!("{}", "scope: all (no focus set)".dimmed()),
+    }
+    println!();
+
+    // Queue ------------------------------------------------------------------
+    println!(
+        "{}  {}",
+        "Queue".bold(),
+        format!("{} routed", queue_rows.len()).dimmed()
+    );
+    if queue_rows.is_empty() {
+        println!("  {}", "(queue empty)".dimmed());
+    } else {
+        for (id, title, _status, role) in queue_rows.iter().take(15) {
+            let role_col = if role.is_empty() {
+                "unrouted".dimmed().to_string()
+            } else {
+                role.cyan().to_string()
+            };
+            println!(
+                "  {} {:<14} {}  {}",
+                queued_g.cyan(),
+                id.yellow(),
+                truncate(title, 48),
+                role_col,
+            );
+        }
+        if queue_rows.len() > 15 {
+            println!(
+                "  {}",
+                format!("(+{} more)", queue_rows.len() - 15).dimmed()
+            );
+        }
+    }
+    println!();
+
+    // Throughput -------------------------------------------------------------
+    println!("{}", "Throughput".bold());
+    let last_merge_str = match throughput.last_merge {
+        Some(ts) => {
+            let secs = (now - ts).num_seconds().max(0) as u64;
+            format!("{} ago", humanize_duration_secs(secs))
+        }
+        None => "no merges on record".to_string(),
+    };
+    let idle_badge = if idle.idle {
+        format!("{} idle", warn_g).yellow().to_string()
+    } else {
+        format!("{} moving", check_g).green().to_string()
+    };
+    println!("  Last merge to main:  {last_merge_str}   {idle_badge}");
+    if idle.idle {
+        if let Some(mins) = idle.minutes_since_last_merge {
+            println!(
+                "  {}",
+                format!(
+                    "(no merge in {mins}m — threshold {}m)",
+                    integrate_view::DEFAULT_IDLE_THRESHOLD_MINS
+                )
+                .dimmed()
+            );
+        }
+    }
+    println!(
+        "  Merges to main:      {} in last 1h {} {} in last 24h",
+        throughput.merges_last_hour,
+        "·".dimmed(),
+        throughput.merges_last_day,
+    );
+    if !drain_times.is_empty() {
+        println!("  Drains completed:    {drains_last_day} in last 24h");
+    }
+    println!();
+
+    // Active fan-out ---------------------------------------------------------
+    println!(
+        "{}  {}",
+        "Running work".bold(),
+        format!("{} active", run_rows.len()).dimmed()
+    );
+    if run_rows.is_empty() {
+        println!("  {}", "(no active sessions)".dimmed());
+    } else {
+        for row in &run_rows {
+            let spec_col = row
+                .spec
+                .clone()
+                .unwrap_or_else(|| truncate(&row.lease.scope, 14));
+            let role_col = row.lease.role.as_deref().unwrap_or("-");
+            let live_label = format!("{} {}", row.state.glyph(), row.state.label());
+            let live_col = match row.state {
+                LeaseState::Live => live_label.green(),
+                LeaseState::Dormant => live_label.cyan(),
+                LeaseState::Stale => live_label.yellow(),
+            };
+            println!(
+                "  {} {:<14} {:<10} {:<8} {}",
+                robot_g.cyan(),
+                truncate(&spec_col, 14),
+                truncate(role_col, 10),
+                humanize_duration_secs(row.elapsed_secs),
+                live_col,
+            );
+        }
+    }
+    println!();
+    println!(
+        "{}",
+        format!("{hourglass} read-only view — `aida queue work` to pick up, `aida ps` for full session detail").dimmed()
+    );
+
+    Ok(())
+}
+
+/// Build the GLOBAL running-work picture: one [`PsRow`] per active session
+/// lease (with liveness/pid/elapsed/spec resolved) plus the orphaned
+/// In-Progress specs with no live spec-scoped lease. Extracted from `handle_ps`
+/// so the `aida ps` table and the `aida integrate` throughput view share ONE
+/// definition of "what's running right now" and can never disagree.
+///
+/// One pid-probe + one lease read feed both passes, the same single-probe
+/// discipline `aida session leases` uses. Read-only; degrades gracefully when
+/// the store is unreachable (rows still resolve, specs read as scope-unknown).
+// trace:TASK-1034 trace:STORY-696 | ai:claude
+fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
-    let leases = list_leases(&project_root);
+    let leases = list_leases(project_root);
 
     // The store gives us (a) the set of known spec ids (so a lease scope can be
     // resolved to a spec vs. a generic harness scope) and (b) the In-Progress
     // specs for the orphan pass. Read-only; degrade gracefully if unreachable.
-    let store = load_store_for_lookup(&project_root);
+    let store = load_store_for_lookup(project_root);
 
     let rows: Vec<PsRow> = leases
         .iter()
@@ -94333,6 +94716,15 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         orphans.sort_by(|a, b| a.spec.cmp(&b.spec));
     }
 
+    (rows, orphans)
+}
+
+fn handle_ps(json: bool, all: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+
+    let (rows, orphans) = gather_running_work(&project_root);
+
     if json {
         let sessions: Vec<serde_json::Value> = rows
             .iter()
@@ -94395,7 +94787,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     if shown.is_empty() && hidden_stale.is_empty() {
         println!("{}", "(no active sessions)".dimmed());
     } else {
-        let all_ids: Vec<&str> = leases.iter().map(|l| l.id.as_str()).collect();
+        let all_ids: Vec<&str> = rows.iter().map(|r| r.lease.id.as_str()).collect();
         let header = format!(
             "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {}",
             "session", "spec", "role", "pid", "started", "elapsed", "live"
