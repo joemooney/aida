@@ -10,12 +10,12 @@ description: |-
   - Slice 3: CI status/watch abstraction incl. the delegated-review gh api check-runs poll (~6 sites; unblocks unattended --auto-complete on GitLab; deepest).
   - Slice 4: user-facing text derived from ForgeKind (cosmetic, ~40 strings).
   Acceptance (fold in on grooming): each slice is its own child; Slice 0 lands first; GitHub behavior byte-for-byte preserved; a GitLab repo can run pr ship + the --auto-complete drain end-to-end. Also correct EPIC-35 status to reflect deferred wiring. STRATEGIC/TIMING is an operator call: this is the GitLab-primary unblocker but a multi-slice feature push that currently sits behind the stabilization-before-features phase. Relates to BUG-559 (Tier-1 substrate bug), TASK-820 (inventory), EPIC-35.
-status: InProgress
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T20:01:42.458630605Z
-modified_at: 2026-06-27T19:18:02.263353645Z
+modified_at: 2026-06-30T04:23:34.583806657Z
 req_type: Story
 tags:
 - parent:EPIC-35
