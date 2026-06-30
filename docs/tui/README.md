@@ -1,238 +1,240 @@
 # AIDA TUI (`aida tui`)
 
-The AIDA TUI is a thin **process-supervisor shell that hosts Claude Code
-sessions** (EPIC-26). It owns the terminal, reserves a one-row status
-strip at the bottom, and runs each Claude session as a PTY child. You
-drop out of a live conversation to a status overlay, take a
-one-keystroke action, and drop back into the *same* conversation — "tmux
-for AIDA workflows," not a dashboard.
+`aida tui` is a keyboard-driven **cockpit over your requirement graph**. It is
+built on one idea (EPIC-54):
 
-It is intentionally shallow on first sight. The depth — the requirement
-graph, queue routing, lifecycle, `/goal` composition — surfaces through
-use. See `OVERVIEW.md` → "Public face: the TUI is the product."
+> **Pick a verb. Pick the targets. Run it.**
 
-> **Default changed (EPIC-54):** `aida tui` now renders the **action→target
-> command-palette redesign** by default. To run the PTY-supervisor shell this
-> document describes, opt out with `AIDA_TUI_REDESIGN=0` (also accepts
-> `false`/`no`/`off`). The redesign is a scope→action→target spec-disposition
-> console, **not** a drop-in superset of this supervisor — it does not host
-> Claude PTY sessions, the status overlay, the autonomous-drain view, or
-> crash-recovery re-attach yet. Set the opt-out (or `[tui]` defaults) for the
-> session-hosting workflows below until the redesign absorbs them.
+Everything — groom the backlog, approve a batch of drafts, route work to a
+queue, preview a spec, check what's live — is the same gesture at two
+altitudes: a whole scope, or a single item. There are no role tabs, no panes
+to wire up, no hosted shell to drive. Two stacked lists and a status line; you
+drill, multi-select, and act.
+
+It is intentionally shallow on first sight. The depth — the graph, queue
+routing, lifecycle, role gating — surfaces through use. See `OVERVIEW.md` →
+"Public face: the TUI is the product."
 
 ## Launching
 
 ```bash
-aida tui                 # empty shell — a welcome panel shows the keys
-aida tui EPIC-26         # host a session working EPIC-26 in the first tab
-aida tui --no-recover    # skip crash-recovery re-attach (see below)
+aida tui                        # the cockpit, opened on the Backlog scope
+aida tui EPIC-54                # launch focused on an epic + its children
+AIDA_TUI_REDESIGN=0 aida tui    # opt out to the legacy PTY-host TUI (below)
 ```
 
-The TUI must run inside an AIDA project (a git repo with `.aida/`). The
-hosted child is always `aida queue work`, never `claude` directly — so
-all lease / worktree / manifest / permission-mode logic is inherited.
+The TUI must run inside an AIDA project (a git repo with `.aida/`). It opens
+the cache-backed store **once**, in-process — every scope list and spec
+preview is an in-process read, so navigation is sub-millisecond and never
+shells out per row.
 
-## Hosting model
+## The model: scope → action → targets → execute
 
-- The supervisor is synchronous and thread-per-source: an input thread
-  and one reader thread per PTY feed a single event channel.
-- A **focused** tab blits its PTY output straight to your terminal —
-  Claude renders natively, zero parser cost. A `vt100` parser is fed in
-  the background so the screen can be repainted on tab-switch or
-  overlay-close.
-- The bottom row is a status strip: the tab list, a notification badge,
-  and a key hint that rotates (~3s) through the command vocabulary so
-  the prefix keys are discoverable without a busy strip.
+```
+┌ Backlog › groom ─────────────────────────── role: advisor · 12 item(s) · 2 selected ┐
+│ Scopes / Verbs (TOP panel — the current list)                                        │
+│   ↵ groom            cross-spec grooming + disposition                               │
+│     approve          advisor-only: draft → approved                                  │
+│     reject           advisor-only: draft → rejected                                  │
+│     archive          mark non-core specs archived                                    │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│ Targets (BOTTOM panel — the items the verb would hit)                                │
+│ ▸[x] STORY-672  Story   ◐ in-progress   Fleet-wide queue view …                      │
+│   [ ] BUG-619   Bug     ○ approved      aida tui lags navigating to PRs …            │
+│   [x] STORY-689 Story   ○ approved      render preview as markdown …                 │
+└ ↵ run · Tab items · Esc back · / find · ? help · q quit ─────────────────────────────┘
+```
+
+- **Top panel = the current list.** At launch it holds the **scopes**
+  (Backlog, Open, Test, Queue, PRs, History, Findings, Sessions). Drilling into
+  a scope replaces it with that scope's **verbs**.
+- **Bottom panel = the target set** — the items of the current scope, always
+  visible and multi-selectable. It is the live preview of *what an action would
+  hit*.
+- **Status line (top)** — the breadcrumb (`Backlog › groom`), your **role**, the
+  item / selected counts, and the focus chip when an epic lens is set.
+- **Key hint (bottom)** — the keys live for the panel you're in.
+
+**Scopes are nouns; verbs are verbs.** A scope shows a `›` (it has children —
+`↵` or `→` drills in). A verb shows a `↵` run glyph (Enter executes it on the
+selection). Item-level actions ("preview this spec", "why is it open") are just
+the N=1 case of the same protocol.
+
+### Scopes
+
+| Scope | Holds | Wired |
+|-------|-------|-------|
+| **Backlog** | approved + planned specs (the groomed, ready work) | yes |
+| **Open** | the whole open backlog — every unfinished spec | yes |
+| **Test** | shipped specs to verify (Done + Completed); a 🧪 marks rows with a `## Test Plan`, and `p` surfaces those do→expect steps | yes |
+| **Queue** | routed work — each spec carries a `->role` badge so a routed draft is visible instead of vanishing; the row count is the queue depth | yes |
+| **PRs** / **History** / **Findings** / **Sessions** | placeholders that prove the layout | not yet |
 
 ## Keybindings
 
-All commands go through a **prefix key** — `Ctrl-a` by default
-(configurable, see below). Press the prefix, then a command key. Plain
-keystrokes pass straight through to the focused Claude session.
+Plain keystrokes are **hotkeys** (the list is not type-to-filter — that lives
+in find mode, below). Keys are context-sensitive; the bottom hint always shows
+what's live.
 
-| Keys | Action |
-|------|--------|
-| `prefix` `n` | open the **new-session picker** |
-| `prefix` `o` | open the **status overlay** |
-| `prefix` `p` | **pause** the focused chat and open the deterministic action palette |
-| `prefix` `?` | open the **keybinding cheatsheet** |
-| `prefix` `[` / `]` | focus the previous / next tab |
-| `prefix` `1`…`9` | focus tab N |
-| `prefix` `d` | **detach** — quit the TUI; conversations persist and are re-attached next launch |
-| `prefix` `q` | **quit** — confirms first when sessions are live |
-| `prefix` `prefix` | send one literal prefix byte to the focused child |
+### Navigating
 
-`prefix` `?` opens a grouped cheatsheet (Sessions / Tabs / Overlays /
-Lifecycle) of every binding; `Esc` / `q` / `?` close it. In the empty
-shell a bare `?` opens it too — there is no hosted child to receive the
-keystroke.
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | move the highlight in the focused list |
+| `→` | go deeper — drill a scope into its **verbs** (also from a focused item, so the verb list reflects that item's status) |
+| `←` | go back one level (verbs → scopes, items → list) |
+| `↵` Enter | **scope:** descend to the Targets panel · **verb:** run it on the selection · **item:** open its preview |
+| `Tab` | focus the **Targets** (bottom) panel |
+| `Shift-Tab` | focus back to the **list** (top) panel |
+| `Esc` | clear an active find filter, else pop one level; at the top level it **quits** |
+| `q` / `Ctrl-C` | quit |
 
-## Empty shell
+### Selecting & acting on targets (bottom panel)
 
-With no scope (and nothing recovered) the TUI opens an **empty shell**:
-a centered welcome panel naming the prefix key and the top five
-bindings, plus a hint to relaunch as `aida tui <SCOPE>`. The rotating
-status-strip hint reinforces the same vocabulary. This is the persistent
-home of the TUI — it is *not* a dead-end black screen.
+| Key | Action |
+|-----|--------|
+| `Space` | toggle-select the focused item |
+| `a` / `A` | select all / select none (respects the active filter) |
+| `p` (or `↵`) | open the item **preview modal** (full markdown body) |
+| `↵` on a verb | run it. With nothing selected, an update verb that needs a target greys out; `groom` instead confirms "apply to all N?" |
 
-The TUI is a persistent shell: when the last hosted session ends, the
-supervisor drops back to this welcome panel rather than exiting. `prefix
-q` quits; `prefix d` detaches.
+### Find, focus, create, refresh
 
-## Tabs (multi-session)
+| Key | Action |
+|-----|--------|
+| `/` | **find mode** — live-filter the focused list (verbs on top, items by id/title on the bottom). `↵` keeps the filter, `Esc` clears it |
+| `F` | open the **epic focus picker** — a fuzzy list of open epics; scope the whole TUI to one + its children |
+| `C` | clear the epic focus |
+| `n` | **new** — create a Draft spec from a typed title |
+| `r` | **refresh** — re-read the store in-process so changes made outside the TUI (a CLI edit, another agent) appear without relaunch |
+| `?` | context-sensitive help — what you're on, what it does, and the keys live here |
 
-N Claude sessions are hosted at once, one focused. `prefix n` opens the
-new-session picker:
+### In a preview modal
 
-- **start** a queued spec fresh — `aida queue work <spec> --session-id
-  <uuid>`;
-- **resume** a recorded conversation for the launch scope — `aida queue
-  work <scope> --resume <id>` (sessions already on a tab are filtered
-  out).
+| Key | Action |
+|-----|--------|
+| `↑` `↓` / `PgUp` `PgDn` / `Space` | scroll the body |
+| `←` / `→` | **carousel** to the prev / next spec (through the selected subset, else the whole list) without closing |
+| `Esc` / `q` / `p` | close |
 
-`↑/↓` (or `j/k`) select, `Enter` opens the session in a new focused tab,
-`Esc` cancels. A soft cap (`MAX_TABS`, default 4) bounds concurrent
-Claude children — N sessions is N× CPU / tokens / API.
+## Role-gated verbs — greyed, with the reason inline
 
-## Status overlay (`prefix o`)
+This is the affordance worth knowing about. You always see a scope's **whole**
+verb vocabulary (discoverability), but a verb that *can't* apply right now
+renders dimmed, non-selectable, and **relabeled with why**. Three composing
+axes decide it, and the most fundamental reason wins:
 
-A read-only `ratatui` view built from `aida status --json`. The first
-paint is cache-only (`--no-ci`, sub-millisecond); a background
-`gh`-backed refresh repaints when it lands, so a slow `gh` never stalls
-the overlay opening.
+1. **Role** — an advisor-/reviewer-only verb you lack the seat for →
+   `requires the advisor role` (or `requires the reviewer role`).
+2. **Status** — a lifecycle-conditional verb the focused item doesn't match
+   (`approve` on a non-Draft, `accept` on a non-Done) → `only for Draft specs`
+   (or `Done`, etc.).
+3. **Selection** — an update verb that would otherwise silently mutate the
+   merely-focused row when you meant a set → `select item(s) first`.
 
-Panels: **Session lease**, **Branch · PR · CI**, **Queue**, **Activity
-log**, **Actions**. `←/→` (or `h/l`) select an action, `Enter` runs it,
-`Esc` / `q` close.
+So an **implementer** opening Backlog sees `groom` / `approve` / `reject` /
+`archive` greyed with *"requires the advisor role"*; an **advisor** sees them
+live. The TUI hides nothing and lies about nothing — and the gate is real:
+greying is a courtesy, but the underlying `aida` transition is still
+advisor-/reviewer-gated at the substrate, so the palette is never *more*
+permissive than the CLI.
 
-### Quick actions
+Role is **ambient context**, shown in the status line and set via
+`AIDA_SESSION_ROLE` (default `advisor`). It is the lens that colors the
+palette, not a navigation axis.
 
-| Button | What it does |
-|--------|--------------|
-| Next in queue | `aida queue next` — preview the queue head |
-| End session | `aida session end --yes` — confirmed |
-| View PR | `gh pr view` — the branch's PR |
-| Drain → review | start an autonomous drain, reviewer in the loop |
-| Drain → merge | start an autonomous drain, autonomous-merge each PR |
+## Verbs
 
-The first three run as captured subprocesses — their output lands in the
-Activity log panel. State-changing actions arm a `y`/cancel confirm.
+The functional verbs today (more land per slice):
 
-## Action palette (`prefix p`) — pause, act, inject, resume
+| Verb | Where | Does | Gated to |
+|------|-------|------|----------|
+| `groom` | Backlog | cross-spec grooming + routine disposition over the selection (or "all N?") | advisor |
+| `approve` / `reject` | Backlog, Open (Draft) | drive Draft → Approved / Rejected | advisor |
+| `queue` | Open (Approved) | route Approved specs to the implementer queue | advisor |
+| `request approval` | Open (Draft) | route drafts to the advisor queue | any role |
+| `accept` | Open (Done) | reviewer's implementation-approval (Done → Completed) + acceptance comment | reviewer |
+| `defer` | Open (any) | park specs off the active view with a typed revisit trigger | any role |
+| `show` / `why` / `status` | Open, etc. | read-only: spec body / why-still-open / live work-state | any role |
+| `archive` | Backlog | mark non-core specs archived (stubbed for now) | advisor |
 
-`prefix p` **suspends** the focused chat (`SIGSTOP`s its whole process
-group) and opens a deterministic AIDA action palette. The palette is
-zero-LLM: typing fuzzy-filters a curated verb set (`queue`, `punts`,
-`findings`, `status`, `list`, `history`), and `spec <ID>` / `run <cmd>`
-run a parametric `aida show <ID> --json` / arbitrary read-only command.
-`Enter` runs the highlighted action as a captured subprocess; the result
-renders inline in the Result pane. The chat stays frozen the whole time —
-no keystroke reaches it.
+Set-level verbs run over the **selected** items (or the focused item as the
+N=1 default for reads); a long store-write batch runs on a background thread
+with a spinner in the status line, so the TUI stays responsive and you can
+keep navigating while it works.
 
-| Keys | Action |
-|------|--------|
-| type | fuzzy-filter the action list |
-| `↑` / `↓` / `Tab` | move the selection |
-| `Enter` | run the highlighted (or `spec`/`run`) action |
-| `Ctrl-Y` | **resume + inject** the last result into the chat |
-| `Esc` | resume the conversation (no injection) |
+## Status, liveness & autonomous-drain visibility
 
-`Ctrl-Y` is the EPIC-51 payoff: it `SIGCONT`s the chat **and** types the
-last action's result into the chat's PTY stdin as a quoted, fenced
-context block (`[AIDA palette result — \`aida queue list --json\`]` …),
-so the conversation continues with that result in view. It is a result
-block, not a directive, and long output is head-clipped. The hint only
-appears once an action has produced a result; with no result, `Ctrl-Y`
-degrades to a plain resume.
+There's no separate status overlay — the cockpit *is* the status surface:
 
-### `Ctrl-D` as an alternate open trigger (opt-in)
+- The **status line** carries the breadcrumb, role, counts, and the focus chip.
+- The **Queue scope** shows what's routed and to which role — the depth and the
+  `->role` badge per spec.
+- The per-item **`status`** verb (`aida status <spec>`) reports the live
+  work-state of any spec: queued / In-Progress, backed by a **live ●** session
+  (pid · started · elapsed) or **STALE ⚠**. This is how you watch an autonomous
+  drain from the cockpit — open a queued/in-flight spec's `status` and see
+  whether a real session is behind the flag.
+- **`why`** explains why a spec is still open; **`r`** re-reads the store so
+  state another agent changed shows up without relaunch.
 
-EPIC-51 frames the palette's literal entry point as **`Ctrl-D` from the
-chat**. Because `Ctrl-D` is also the terminal EOF byte (`0x04`), this is
-**off by default** — `Ctrl-D` passes straight through to the hosted child
-unless you opt in with `[tui] ctrl_d_palette = true`. When enabled, a raw
-`Ctrl-D` typed in a focused chat opens the same palette `prefix p` opens
-(suspend the chat → palette). It fires only with a child actually hosted;
-in the empty shell `Ctrl-D` is left alone. `prefix p` remains the
-always-available, EOF-free trigger regardless of this setting.
+## Epic focus lens
 
-## Autonomous drains & `/goal` composition
-
-The two **Drain** buttons start an autonomous queue drain. They never
-hand-write `/goal` text — selecting one types `/aida-drain-queue --mode
-review` (or `--mode merge`) into the focused Claude session and closes
-the overlay so it runs there.
-
-`/aida-drain-queue` (the skill) assembles the `/goal` prompt with real
-command flags and the mechanism clause that matches the mode — the
-structural fix for the `/goal` phrasing trap (a hand-rolled `aida queue
-work --next` is a non-existent flag; a hand-picked mechanism clause
-silently chooses the workflow). `review` keeps the reviewer in the loop
-via `aida session end`; `merge` autonomously merges each PR.
-
-Watch progress by reopening the overlay — the Queue panel shows the
-queue draining.
-
-## Crash recovery
-
-A TUI crash kills its PTY children, but each Claude conversation is a
-durable `.jsonl` file. The TUI records the live tab set to
-`.aida/tui-state.json` on every spawn / close. On the next launch it
-re-attaches each recorded session via `aida queue work <scope> --resume
-<id>`.
-
-- `prefix q` (clean quit) clears the state file — nothing to recover.
-- `prefix d` (detach) and a hard crash leave it — the next launch
-  re-attaches.
-- `aida tui --no-recover` discards stale state and starts clean.
-
-## Configuration
-
-A `[tui]` block in `.aida/config.toml`:
-
-```toml
-[tui]
-prefix_key     = "Ctrl-a"   # command-mode prefix (also: "ctrl+a", "C-a", "alt-b")
-max_tabs       = 4          # soft cap on concurrently hosted sessions
-ctrl_d_palette = false      # opt-in: Ctrl-D from the chat opens the action palette
-```
-
-Missing file / section / keys fall back to the defaults — a config error
-never blocks launching the TUI.
+`F` opens a fuzzy picker of open epics; choosing one narrows **every** scope to
+that epic plus its transitive children, and the status line shows
+`focus: EPIC-54 — 6 done · 2 draft`. The pick is saved to `.aida/tui-focus`, so
+relaunching the worktree re-focuses automatically. Launch focused with
+`aida tui EPIC-54` or `AIDA_TUI_EPIC=EPIC-54`; the launch precedence is
+`AIDA_TUI_EPIC` env → `.aida/tui-focus` marker → inference from the current
+branch's commit trailers. `C` clears it.
 
 ## Terminal-state safety
 
-The TUI puts the terminal into raw mode + the alternate screen, then
-hides the cursor. Three exit paths restore the terminal back to a sane
-state — cooked mode, main screen, cursor visible:
+The TUI takes the terminal into raw mode + the alternate screen via the same
+RAII guard the rest of `aida-tui` uses, with a panic hook and a SIGTERM/SIGINT
+handler chained in front, so a normal exit, a panic, or a signal all restore
+cooked mode + the main screen + a visible cursor exactly once. `kill -9` is the
+one uncatchable case; recover with `reset` or `stty sane && tput cnorm`.
 
-- **Normal exit** (`prefix q`, `prefix d`, last session ending in a
-  `--no-recover` launch) — `TermGuard::drop` runs the restore sequence
-  on the way out of `aida_tui::run`.
-- **Panic** (a bug in the supervisor or a hosted child's drop chain) —
-  a panic hook chains in front of the default one so restore runs
-  *before* the backtrace prints (otherwise the trace scrolls past in
-  raw mode with no newlines).
-- **SIGTERM / SIGINT** — `kill <pid>` from another terminal, or `Ctrl-C`
-  at a parent shell that propagated through. A signal handler installed
-  at launch restores the terminal before the process dies. Windows
-  equivalents (`CTRL_C_EVENT`, `CTRL_BREAK_EVENT`) are covered by the
-  same handler. The three paths share a single atomic restore-gate, so
-  a Drop / panic / signal race ends in exactly one restore.
+## Choosing the TUI: redesign (default) vs legacy
 
-**SIGKILL is the one case left.** Signal 9 is uncatchable by design —
-no handler runs, no Drop runs. If you `kill -9 <pid>` an `aida tui`
-process (or the kernel OOM-killer does it for you), the parent shell is
-left with cursor hidden and raw mode on. Recovery: `reset`, or
-`stty sane && tput cnorm`. trace:BUG-110
+`AIDA_TUI_REDESIGN` selects which TUI launches (TASK-1051). It is an
+**opt-out** knob:
+
+- **unset** (or any value other than the four below) → the **redesign**
+  (this document) — the default.
+- `0` / `false` / `no` / `off` (case-insensitive) → the **legacy PTY-host TUI**.
+
+The two are different shapes:
+
+| | Redesign (default) | Legacy (`AIDA_TUI_REDESIGN=0`) |
+|---|---|---|
+| Mental model | pick a verb → pick targets → run | a tmux-like shell hosting Claude Code sessions |
+| What it shows | your requirement graph as scopes + targets | live Claude conversations in tabs |
+| Acting | run AIDA verbs directly from the cockpit | drive Claude; pause to an action palette |
+
+The legacy TUI is documented in [`legacy.md`](legacy.md) — its prefix-key
+model (`Ctrl-a`), session tabs, status overlay (`prefix o`), pause/inject
+action palette (`prefix p` / `Ctrl-Y`), autonomous-drain buttons, and crash
+recovery. Use it if you want the session-hosting shell; otherwise the redesign
+is the cockpit.
 
 ## Implementation
 
-The `aida-tui` workspace crate (`aida tui` dispatches into it before
-storage init). Modules: `term` (raw-mode + panic-safe teardown), `pty`
-(PTY host), `tab` (tab manager), `statusbar`, `app` (event loop +
-routing), `overlay`, `actions`, `picker`, `state` (crash recovery),
-`welcome` (empty-shell panel), `help` (keybinding cheatsheet). The crate
-ships in release binaries as of STORY-137.
+The redesign lives in `aida-tui/src/redesign/`:
 
-Implementation plan: `docs/plans/2026-05-15-epic-26-tui.md`.
+- `state.rs` — the **pure** state machine: panel focus, the scope→verb
+  navigation stack (and the breadcrumb it implies), the multi-select target
+  set, the three grey-out axes (role / status / selection), the fuzzy filter,
+  modals, and the epic picker. IO-free and unit-tested.
+- `mod.rs` — the IO: the terminal guard, the in-process store reads, the
+  render, background verb execution, and the keystroke→transition wiring.
+- `store.rs` — the in-process cache-backed read backend (`SpecStore`): scope
+  lists, spec loads, epic-descendant closures, focus markers.
+- `list_row.rs` — the CLI-style columnar row renderer (id · type · status glyph
+  · priority · title), so the cockpit and `aida list` share one color map.
+
+Gate: `redesign::enabled()` (mirrored by the `aida tui` dispatch in
+`aida-cli/src/main.rs`). Design + slice plan:
+`docs/plans/2026-06-25-tui-action-target-redesign.md`. The legacy PTY-host
+implementation (EPIC-26) is documented in [`legacy.md`](legacy.md).
