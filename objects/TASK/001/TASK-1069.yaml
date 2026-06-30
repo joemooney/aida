@@ -3,10 +3,18 @@ spec_id: TASK-1069
 agreed_id: TASK-1069
 title: Done-path crescendo demo
 description: ''
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T21:20:52.795212575Z
-modified_at: 2026-06-30T21:21:11.898392634Z
+modified_at: 2026-06-30T21:21:13.260207795Z
 req_type: Task
+history:
+- id: 019f1a68-562c-77c2-a764-86b87cd5d4f4
+  author: joe
+  timestamp: 2026-06-30T21:21:13.260205820Z
+  changes:
+  - field_name: status
+    old_value: In Progress
+    new_value: Completed
