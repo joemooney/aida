@@ -1,0 +1,12 @@
+id: 019f16c2-44ec-7e71-9a2c-15ce6eb2b4b1
+spec_id: TASK-1042
+agreed_id: TASK-1042
+title: '**TASK (bless --sequential):** name + guard the existing `drain_batch` sequential-merge'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T04:20:58.220355420Z
+modified_at: 2026-06-30T04:20:58.220355420Z
+req_type: Task
