@@ -156,6 +156,14 @@ impl GitBackend {
         self
     }
 
+    /// Count requirement objects in the store WITHOUT parsing their YAML.
+    /// O(files) directory reads — backs `aida cache status`'s store count
+    /// without a full `load()` (BUG-664).
+    // trace:BUG-664
+    pub fn object_count(&self) -> Result<usize> {
+        object_store::count_objects(&self.objects_root)
+    }
+
     /// Record an operation in the append-only oplog.
     fn record_op(&self, target_id: uuid::Uuid, kind: crate::oplog::OpKind) {
         if !self.oplog_enabled {

@@ -274,6 +274,42 @@ pub fn list_objects(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
     Ok(results)
 }
 
+/// Count requirement YAML files in the object store WITHOUT parsing them.
+///
+/// Walks `objects/TYPE/SHARD/*.yaml` and counts files — the same directory walk
+/// as `list_objects`, but it never reads or deserializes a file. Used by
+/// `aida cache status` to report "Store requirements: N" in O(files) directory
+/// reads instead of YAML-parsing every object via a full `list_requirements`
+/// load (BUG-664: that full load made `cache status` ~1s even when FRESH).
+// trace:BUG-664
+#[cfg(feature = "native")]
+pub fn count_objects(objects_root: &Path) -> Result<usize> {
+    if !objects_root.exists() {
+        return Ok(0);
+    }
+    let mut count = 0usize;
+    for type_entry in std::fs::read_dir(objects_root)? {
+        let type_entry = type_entry?;
+        if !type_entry.file_type()?.is_dir() {
+            continue;
+        }
+        for shard_entry in std::fs::read_dir(type_entry.path())? {
+            let shard_entry = shard_entry?;
+            if !shard_entry.file_type()?.is_dir() {
+                continue;
+            }
+            for file_entry in std::fs::read_dir(shard_entry.path())? {
+                let file_entry = file_entry?;
+                let path = file_entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("yaml") {
+                    count += 1;
+                }
+            }
+        }
+    }
+    Ok(count)
+}
+
 /// BUG-97 / TASK-223: shared recovery-hint suffix for any "failed to load /
 /// failed to parse" surface. The first time a user sees a parse failure
 /// they spend ~30 minutes diagnosing; the hint compresses that to seconds
@@ -602,6 +638,36 @@ mod tests {
         for spec in &specs {
             assert!(spec_ids.contains(spec), "Missing {}", spec);
         }
+    }
+
+    // BUG-664: `count_objects` reports the same total as `list_objects` /
+    // `load_all_objects` but never parses a YAML file — it backs the fast
+    // `aida cache status` store count.
+    #[cfg(feature = "native")]
+    #[test]
+    fn count_objects_matches_list_without_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        // Empty / missing store counts zero.
+        assert_eq!(count_objects(&objects_root).unwrap(), 0);
+
+        let specs = ["FR-001", "FR-002", "BUG-001", "FEAT-001", "STORY-7-009"];
+        for spec in &specs {
+            let mut req = Requirement::new(format!("Req {}", spec), "desc".into());
+            req.spec_id = Some(spec.to_string());
+            write_object(&objects_root, &req).unwrap();
+        }
+
+        let count = count_objects(&objects_root).unwrap();
+        assert_eq!(count, specs.len());
+        assert_eq!(count, list_objects(&objects_root).unwrap().len());
+        assert_eq!(count, load_all_objects(&objects_root).unwrap().len());
+
+        // A stray non-yaml file in a shard dir must not be counted.
+        let stray = objects_root.join("FR").join("000").join("notes.txt");
+        std::fs::write(&stray, "ignore me").unwrap();
+        assert_eq!(count_objects(&objects_root).unwrap(), specs.len());
     }
 
     #[cfg(feature = "native")]

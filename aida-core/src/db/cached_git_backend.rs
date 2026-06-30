@@ -37,7 +37,13 @@ impl CachedGitBackend {
     pub fn with_inner(inner: GitBackend, cache_path: &Path) -> Result<Self> {
         let cache = Cache::open(cache_path)?;
         let backend = CachedGitBackend { inner, cache };
-        backend.ensure_cache_fresh()?;
+        // BUG-664: the constructor is on the hot path of every read command
+        // (`aida status`, `aida list`). Use the read-tolerant freshness check so
+        // a reader serves the last-good snapshot when another process is already
+        // rebuilding the cache, instead of contending for the write lock through
+        // the ~25s retry ladder. Writers re-check freshness strictly on their own
+        // write paths, and the SHA-based stale detection is unchanged.
+        backend.ensure_cache_fresh_for_read()?;
         Ok(backend)
     }
 
@@ -148,6 +154,30 @@ impl CachedGitBackend {
         self.full_rebuild(&head)
     }
 
+    /// Read-path freshness: like `ensure_cache_fresh`, but when the cache is
+    /// stale AND another LIVE process currently holds the cache write-lock (it is
+    /// mid rebuild/write), skip the rebuild and serve the last-good committed
+    /// snapshot instead of contending for the write lock through the ~25s retry
+    /// ladder (BUG-664). WAL guarantees that snapshot is consistent — a reader
+    /// sees the last COMMITTED state, never a torn mid-rebuild read — and the
+    /// foreign writer is itself bringing the cache current, so a momentary stale
+    /// read is exactly the rebuildable-projection contract, not a correctness
+    /// loss. Pure-read callers use this; writers keep the strict
+    /// `ensure_cache_fresh` so the cache they write through is never weakened.
+    // trace:BUG-664 | ai:claude
+    fn ensure_cache_fresh_for_read(&self) -> Result<()> {
+        let head = self.current_head_sha();
+        if !self.cache.is_stale(&head)? {
+            return Ok(());
+        }
+        // Stale, but if another live process is already rebuilding, don't pile
+        // onto the write lock — read the prior consistent snapshot.
+        if super::cache::foreign_writer_holds_lock(self.cache.path()) {
+            return Ok(());
+        }
+        self.ensure_cache_fresh()
+    }
+
     /// Full authoritative rebuild: load the whole store and re-project every
     /// row. The fallback whenever incremental can't be proven safe.
     // trace:BUG-636
@@ -233,7 +263,7 @@ impl CachedGitBackend {
     /// `get_requirement` call. Triggers a stale-check first so callers
     /// always see fresh data.
     pub fn list_summaries(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
-        self.ensure_cache_fresh()?;
+        self.ensure_cache_fresh_for_read()?;
         self.cache.list_summaries(filter)
     }
 
@@ -243,7 +273,7 @@ impl CachedGitBackend {
     /// HEAD change since the last rebuild forces a fresh full recompute).
     /// trace:STORY-632 | ai:claude
     pub fn degrees(&self, id: &Uuid) -> Result<crate::db::Degrees> {
-        self.ensure_cache_fresh()?;
+        self.ensure_cache_fresh_for_read()?;
         self.cache.degrees_for_id(id)
     }
 
@@ -254,7 +284,7 @@ impl CachedGitBackend {
     /// `aida list --parent <id> --recursive`.
     // trace:TASK-955 | ai:claude
     pub fn descendant_ids(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
-        self.ensure_cache_fresh()?;
+        self.ensure_cache_fresh_for_read()?;
         self.cache.descendant_ids(root)
     }
 
@@ -268,7 +298,7 @@ impl CachedGitBackend {
         archive: ArchiveFilter,
         defer: DeferFilter,
     ) -> Result<Vec<RequirementSummary>> {
-        self.ensure_cache_fresh()?;
+        self.ensure_cache_fresh_for_read()?;
         self.cache.search(query, limit, archive, defer)
     }
 
