@@ -28528,5 +28528,51 @@ operations:
     req_type: Decision
     status: Approved
     priority: Medium
-clock: 2747
+- id: 019f199e-2f9a-7ff0-9c43-fbb38b991802
+  target_id: 019f199e-24b9-70e3-871f-b4809f7ef49c
+  author: aida
+  node_id: '1'
+  lamport: 2748
+  timestamp: 2026-06-30T17:40:25.114702494Z
+  kind: !Create
+    title: 'ADR-7 enforcement: autonomy mode becomes a uniform first-class typed engine parameter (--zen no longer an env-only side-channel)'
+    description: |
+      ## Context
+      ADR-7's clause "autonomy mode parameterizes the PAUSES uniformly across all
+      three" is only half-realized. --no-human (headless) is a first-class typed
+      engine parameter: NoHumanMode carried as a RealPhaseDriver field + EscalateMode
+      on orchestrate(). But --zen (supervised) is threaded as an env-var side-channel
+      (AIDA_ZEN) set at kickoff and re-read in scattered in-process spots (kickoff
+      dispatch, provenance token, drain-state stamping) rather than a typed parameter
+      on the engine. The asymmetry is the structural gap behind ADR-7's autonomy
+      clause.
+
+      ## Options considered
+      - Follow-up TASK — keep this PR focused on the routing guardrail.
+      - In scope now (chosen by operator) — fully realize the autonomy clause here.
+
+      ## Decision
+      In scope now. Introduce a unified typed AutonomyMode (the existing
+      AutonomyMode::{Default,Zen,NoHuman} from resolve_autonomy_mode) carried on the
+      phase driver alongside no_human, resolved ONCE at dispatch. All IN-PROCESS
+      autonomy reads consult the typed field, not scattered env::var(AIDA_ZEN) reads.
+      The AIDA_ZEN env var is KEPT, but strictly as the cross-process transport to
+      spawned phase children + skill templates (which read it to auto-resolve
+      kind:confirmation prompts) — it is set ONCE from the typed value, not re-read as
+      the in-process source of truth.
+
+      ## Rationale
+      A typed parameter cannot replace a cross-process signal, so the env var must
+      remain as child transport; but the engine's in-process logic should not re-read
+      env in scattered spots. Resolving autonomy once into a typed value and carrying
+      it makes --zen symmetric with --no-human and removes the asymmetry ADR-7 names.
+
+      ## Consequences
+      Bigger PR touching the hot zen-dispatch path in main.rs. AIDA_ZEN survives as
+      the child-process transport but is no longer the in-process source of truth.
+      Future autonomy modes extend one typed enum, parameterizing pauses uniformly.
+    req_type: Decision
+    status: Approved
+    priority: Medium
+clock: 2748
 node_id: '1'
