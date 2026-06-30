@@ -470,6 +470,31 @@ pub fn return_to_pool(project_root: &Path, worktree_path: &Path) -> Result<()> {
             })?;
 
         let path = pool.entries[idx].path.clone();
+        // BUG-660: never SILENTLY discard uncommitted work on the reset below —
+        // if a returning tree is dirty (e.g. a drive shelved a spec mid-edit, or
+        // a commit failed), salvage its diff to `.aida/salvage/` first so it can
+        // be inspected/replayed. Best-effort: a salvage failure must not block
+        // the return (the tree still needs to reset to be reusable).
+        // trace:BUG-660 | ai:claude
+        if git_ops::worktree_is_dirty(&path) {
+            let salvage_dir = project_root.join(".aida").join("salvage");
+            let label = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "worktree".to_string());
+            match git_ops::preserve_dirty_worktree(&path, &salvage_dir, &label) {
+                Ok(Some(saved)) => eprintln!(
+                    "  preserved uncommitted work from {} to {} before reset",
+                    path.display(),
+                    saved.display()
+                ),
+                Ok(None) => {}
+                Err(e) => eprintln!(
+                    "  warning: could not salvage uncommitted work from {} before reset: {e}",
+                    path.display()
+                ),
+            }
+        }
         git_ops::reset_worktree_to(&path, &base_ref)
             .with_context(|| format!("reset returned worktree {}", path.display()))?;
         let e = &mut pool.entries[idx];
