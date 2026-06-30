@@ -3,12 +3,12 @@ spec_id: STORY-734
 agreed_id: STORY-734
 title: 'aida list --fields <csv>: select + order the displayed columns (humans + agents)'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T16:29:34.768845567Z
-modified_at: 2026-06-30T16:33:11.544481825Z
+modified_at: 2026-06-30T16:55:48.838744976Z
 req_type: Story
 tags:
 - cli
