@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:59:29.946514786Z
-modified_at: 2026-06-30T18:06:29.212869585Z
+modified_at: 2026-06-30T18:06:50.055768904Z
 req_type: Decision
 tags:
 - architecture
@@ -37,6 +37,13 @@ comments:
   content: Commit 3e9c2dd7f references this requirement
   created_at: 2026-06-30T18:00:20.367916965Z
   modified_at: 2026-06-30T18:00:20.367916965Z
+- id: 019f19b6-64a1-7aa1-ba29-cfd9082a3d95
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-30-adr-7-one-orchestration-engine.md
+    filed 1 task(s): TASK-1062
+  created_at: 2026-06-30T18:06:51.553979558Z
+  modified_at: 2026-06-30T18:06:51.553979558Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-30T18:06:29.212869585Z
