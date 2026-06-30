@@ -712,6 +712,102 @@ pub fn reset_worktree_to(worktree_path: &Path, ref_: &str) -> Result<()> {
     Ok(())
 }
 
+/// Preserve a dirty worktree's uncommitted work as a salvage patch under
+/// `salvage_dir` BEFORE a destructive reset/clean discards it — the
+/// commit-failure-preserve-for-repair leg of unattended-drive robustness
+/// (BUG-660). A pooled worktree must reset to a clean base to be reusable, but
+/// it must never SILENTLY lose work on the way there: if the tree is dirty, its
+/// tracked diff (`HEAD` + staged) and a manifest of untracked files are written
+/// to `salvage_dir/<label>-<timestamp>.patch`, which `git apply` can replay for
+/// repair. A clean tree writes nothing and returns `None`. Best-effort by
+/// contract — the caller treats a failure here as non-fatal, but the common
+/// path captures the work.
+// trace:BUG-660 | ai:claude
+pub fn preserve_dirty_worktree(
+    worktree_path: &Path,
+    salvage_dir: &Path,
+    label: &str,
+) -> Result<Option<PathBuf>> {
+    if !worktree_is_dirty(worktree_path) {
+        return Ok(None);
+    }
+    // Raw (untrimmed) diff capture — the shared `git()` helper trims, which we
+    // avoid here to keep the patch byte-faithful for `git apply`.
+    let raw = |args: &[&str]| -> String {
+        Command::new("git")
+            .arg("-C")
+            .arg(worktree_path)
+            .args(args)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default()
+    };
+    let mut body = String::new();
+    body.push_str(&format!(
+        "# AIDA salvage patch (BUG-660)\n# worktree: {}\n# label: {}\n\n",
+        worktree_path.display(),
+        label
+    ));
+    body.push_str(&raw(&["diff", "--binary", "HEAD"]));
+    body.push_str(&raw(&["diff", "--binary", "--cached"]));
+    let untracked = raw(&["ls-files", "--others", "--exclude-standard"]);
+    if !untracked.trim().is_empty() {
+        body.push_str("\n# Untracked files present at salvage time:\n");
+        for line in untracked.lines() {
+            body.push_str("#   ");
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+
+    std::fs::create_dir_all(salvage_dir)
+        .with_context(|| format!("create salvage dir {}", salvage_dir.display()))?;
+    let stamp = now_compact_stamp();
+    let safe_label = sanitize_salvage_label(label);
+    let path = salvage_dir.join(format!("{safe_label}-{stamp}.patch"));
+    // TASK-331: git_ops.rs is a known-concurrent path — use the atomic writer
+    // rather than a bare `fs::write` so a salvage never tears under contention.
+    crate::write_atomic(&path, body.as_bytes())
+        .with_context(|| format!("write salvage patch {}", path.display()))?;
+    Ok(Some(path))
+}
+
+/// A filesystem-safe, hyphen-collapsed label for a salvage patch filename.
+fn sanitize_salvage_label(label: &str) -> String {
+    let mut out: String = label
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    while out.contains("--") {
+        out = out.replace("--", "-");
+    }
+    let trimmed = out.trim_matches('-').to_string();
+    if trimmed.is_empty() {
+        "worktree".to_string()
+    } else {
+        trimmed
+    }
+}
+
+/// A compact UTC timestamp (`YYYYMMDDTHHMMSSZ`) for salvage-patch filenames.
+/// Avoids a chrono dependency in this module by formatting the unix epoch.
+fn now_compact_stamp() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Just the epoch seconds — monotonic enough to disambiguate consecutive
+    // salvages and trivially sortable. (Human-readable time lives in the
+    // patch header's worktree/label lines.)
+    secs.to_string()
+}
+
 /// The repo's default branch name (`main` / `master`), detected from
 /// `origin/HEAD` when set, else by which local branch exists, else `"main"`.
 // trace:STORY-714 | ai:claude
