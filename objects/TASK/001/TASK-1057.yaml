@@ -1,0 +1,18 @@
+id: 019f1801-2e8e-7b20-8f9f-d876e2a173ca
+spec_id: TASK-1057
+agreed_id: TASK-1057
+title: 'Prune accumulated git cruft: 148 worktrees + 989 remote branches (careful — merged only)'
+description: 'The fan-out workflow (incl. this UX loops 21+ PRs) accumulated ~148 git worktrees + ~989 remote branches. This bloats disk AND is the multiplier behind the status --full git fan-out. CLEANUP (careful, supervised): git worktree prune + remove stale agent worktrees (verify dead, not live); delete MERGED remote branches (gh / git push --delete) — NEVER unmerged work (check git branch --merged origin/main). The guardrails hook now allows feature-branch deletion (BUG-662). Confirm before bulk-deleting branches.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T10:09:18.478004427Z
+modified_at: 2026-06-30T10:09:18.478004427Z
+req_type: Task
+tags:
+- branches
+- cleanup
+- from-audit
+- maintenance
+- worktree
