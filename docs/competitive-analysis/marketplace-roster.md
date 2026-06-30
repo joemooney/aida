@@ -1,6 +1,6 @@
 # Marketplace roster — substrate & agent-orchestration projects AIDA tracks
 
-**Living document** · Last updated: 2026-06-17 · Refresh cadence: with each ecosystem scan (see `README.md` · `signals-to-watch.md`)
+**Living document** · Last updated: 2026-06-29 · Refresh cadence: with each ecosystem scan (see `README.md` · `signals-to-watch.md`)
 
 > **Why this file exists.** AIDA is built in a fast-moving field. We actively survey the agent-tooling marketplace so we **build on / interoperate with prior art rather than reinvent it** — and so anyone reviewing AIDA can see the landscape we measure ourselves against. This is the *roster* (who's in the field, by category); the dated files in this directory are the point-in-time *analyses*. Inclusion here is not an endorsement, and absence is not a judgment — it's a working list, kept honest by refresh.
 >
@@ -53,6 +53,7 @@ The "drive N agents through work" layer. AIDA's orchestrator/drain lives here. *
 | **Warp** + **Oz** (`warp.dev`) | Agentic terminal + **Oz** orchestrates parallel agents *across harnesses* (Claude Code, Codex, own); BYO-key | Multi-harness orchestrator that actually ships; resells 3rd-party LLMs. |
 | **Conductor Build** (Melty Labs, YC) | Native **macOS** app, parallel agents in worktrees + review/ship-PR dashboard; closed, pre-1.0 | Fan-out launcher + dashboard. *(Distinct from `ryanmac/code-conductor` below — same generic name.)* |
 | **Code Conductor** (`ryanmac`) / **Baton** | GitHub-issue claim/poll-dispatch-reconcile loops; Claude-only | Issue-driven dispatch (close to "drain the queue"); thin layer, tiny adoption. |
+| **gnhf** (`kunchenguid`, ~2.6k★, MIT) `[V]` | "Good Night, Have Fun" — single-objective ralph-style overnight loop: one free-text prompt → commit-on-success/reset-on-failure iterations until a cap/`--stop-when` trips; **7 agents + ACP**, `npm i -g`, sleep-prevention | **Nearest *autonomy-layer* neighbor** (same author as AXI). `2026-06-29-gnhf-vs-aida.md`. **Prompt-driven loop vs AIDA's spec-graph-driven drain:** no IDs/traces/lifecycle/coordination, no review/merge (leaves a branch to review by hand), parallelism = N uncoordinated worktree processes. Wins on simplicity/install/executor-breadth/adoption; AIDA wins on structured-traceable-self-closing. Learn: the framing, sleep-prevention + backoff, ACP executor breadth. |
 | **Sculptor** (Imbue) | Desktop UI, parallel agents each in a Docker container + IDE "pairing"; Claude-first (+Codex) | Fan-out + sandbox isolation; a Claude Code wrapper at heart. |
 | **container-use** (`cu`, Dagger) | MCP server giving each agent an isolated container + git branch | Isolation layer, not a coordinator; review via plain git. |
 | **Devin / "manages Devins"** (Cognition) | Manager→child fan-out (map-reduce); closed/hosted | **Cognition's own blog lists cross-agent shared state as unsolved** — external validation of the gap. |
