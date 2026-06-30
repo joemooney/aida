@@ -16062,6 +16062,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     // (None) when unassigned. trace:STORY-639 | ai:claude
                     #[serde(skip_serializing_if = "Option::is_none")]
                     assignee: Option<&'a str>,
+                    // STORY-703: the revisit trigger of a deferred spec, so the
+                    // cockpit's advisor-backlog panel can surface WHY each parked
+                    // item is parked inline. Omitted (None) when not deferred.
+                    // trace:STORY-703 | ai:claude
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    deferred_until: Option<&'a str>,
                 }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
@@ -16081,6 +16087,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             in_flight,
                             blocked,
                             assignee: r.assignee.as_deref(),
+                            deferred_until: r.deferred_until.as_deref(),
                         }
                     })
                     .collect();

@@ -959,11 +959,12 @@ fn test_plan_view(st: &RedesignState, spec: LoadedSpec) -> LoadedSpec {
 }
 
 /// Turn a [`RunOutcome`] into IO. The generic set-level [`RunOutcome::Execute`]
-/// path is the latent future-wiring entry for set-level verbs (e.g. a wired
-/// `groom`): it logs the verb + target ids to the status line for now. No verb
-/// reaches it today — `groom` is gated as "not yet available" (STORY-724) and
-/// the live verbs have dedicated outcome variants.
-// trace:STORY-690 | ai:claude
+/// path is dispatched by verb: `groom` runs the headless advisor disposition
+/// pass in PROPOSE mode (`aida groom`, read-only) and shows the plan in a modal;
+/// `archive` shells out to `aida archive <id>` for each selected target (a store
+/// write, run async). Any other verb falls through to the latent status-line log
+/// (defensive — no other verb reaches the set-level path today).
+// trace:STORY-690 trace:STORY-703 | ai:claude
 fn apply_outcome(
     _terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
@@ -973,11 +974,53 @@ fn apply_outcome(
     outcome: RunOutcome,
 ) -> Result<()> {
     match outcome {
+        RunOutcome::Execute {
+            verb: Verb::Groom, ..
+        } => {
+            // `groom` is the marquee advisor gesture: run the headless
+            // disposition pass in PROPOSE mode (`aida groom`, no `--apply`) and
+            // surface the proposed approve/reject/park/queue plan in the verb
+            // modal. PROPOSE is the SAFE default — it only READS the store and
+            // prints what it WOULD do; it never mutates. The operator reviews the
+            // plan, then acts (approve / queue / reject) via the other verbs or
+            // the CLI's `aida groom --apply`. The set-level `ids` are ignored:
+            // `aida groom` always weighs the whole open backlog, not a subset.
+            // Captured synchronously (it is a deterministic, local store read —
+            // no LLM in the propose path), mirroring the `show` / `why` read
+            // verbs. trace:STORY-703 | ai:claude
+            let (out, title) = run_groom_propose();
+            st.open_verb_modal(title, out);
+        }
+        RunOutcome::Execute {
+            verb: Verb::Archive,
+            ids,
+        } => {
+            // `archive` marks each selected spec archived via `aida archive <id>`
+            // — a store WRITE per id, so run the whole batch on a background
+            // thread (BUG-633 pattern) and report on completion. The selection
+            // gate (TASK-954) guarantees `ids` is non-empty here. trace:STORY-703
+            let label = format!("archiving {} spec(s)…", ids.len());
+            start_pending(pending, st, label, move || {
+                let mut archived = Vec::new();
+                let mut failed = Vec::new();
+                for id in &ids {
+                    if archive_spec(id) {
+                        archived.push(id.clone());
+                    } else {
+                        failed.push(id.clone());
+                    }
+                }
+                VerbResult {
+                    status: archive_status(&archived, &failed),
+                    invalidate: true,
+                }
+            });
+        }
         RunOutcome::Execute { verb, ids } => {
-            // TODO: replace this stub with the real verb wiring — e.g. shell
-            // out to `aida` (groom = the backlog-groom skill / `aida groom`)
-            // or emit an intent for the bash wrapper. Latent until a set-level
-            // verb is wired; logs instead so the gesture loop stays exercised.
+            // Defensive: no other verb reaches the generic set-level path today
+            // (the live verbs have dedicated outcome variants, and groom/archive
+            // are handled above). Log instead of silently no-opping so a future
+            // wiring gap is visible. trace:STORY-690
             let preview: Vec<&str> = ids.iter().take(5).map(|s| s.as_str()).collect();
             let more = if ids.len() > 5 {
                 format!(" +{} more", ids.len() - 5)
@@ -1209,6 +1252,94 @@ fn spawn_drive(id: &str) -> bool {
         cmd.current_dir(cwd);
     }
     cmd.spawn().is_ok()
+}
+
+/// The argument vector for the cockpit's `groom` gesture: `aida groom` with NO
+/// `--apply` — the PROPOSE pass. Propose is the safe default: it reads the open
+/// backlog and prints the approve/reject/park/queue plan it WOULD apply, without
+/// writing anything. Kept as a pure arg vector (passed to `Command::args`, never
+/// a shell string) so the verb shape is unit-testable without spawning.
+// trace:STORY-703 | ai:claude
+fn groom_args() -> [&'static str; 1] {
+    ["groom"]
+}
+
+/// Run the headless advisor disposition pass in PROPOSE mode and return
+/// `(stdout_or_error, title)` for the verb modal. Captures stdout (colour codes
+/// auto-disable on a non-TTY pipe, so the modal text is plain). A non-zero exit
+/// or spawn failure yields an error body rather than a panic, so the cockpit
+/// always shows *something*. Carries advisor authority for provenance (and so
+/// any future gating on the read path isn't surprised); the propose pass itself
+/// performs no writes.
+// trace:STORY-703 | ai:claude
+fn run_groom_propose() -> (String, String) {
+    let title = "groom — proposed dispositions (propose-only, nothing applied)".to_string();
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(groom_args());
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    match cmd.output() {
+        Ok(out) => {
+            let mut body = String::from_utf8_lossy(&out.stdout).into_owned();
+            if !out.status.success() {
+                let err = String::from_utf8_lossy(&out.stderr);
+                body.push_str("\n\n[groom exited non-zero]\n");
+                body.push_str(&err);
+            }
+            if body.trim().is_empty() {
+                body = "groom produced no output.".to_string();
+            }
+            (body, title)
+        }
+        Err(e) => (format!("failed to run `aida groom`: {e}"), title),
+    }
+}
+
+/// The argument vector for archiving one spec: `aida archive <id>`. Kept as a
+/// pure arg vector (the id is a single arg-vector element, never shell-parsed)
+/// so it is unit-testable without spawning.
+// trace:STORY-703 | ai:claude
+fn archive_args(id: &str) -> [&str; 2] {
+    ["archive", id]
+}
+
+/// Archive one spec via `aida archive <id>`. Returns `true` on success. Carries
+/// advisor authority on the spawned command (archival is an advisor-authority
+/// disposition, mirroring the other backlog verbs).
+// trace:STORY-703 | ai:claude
+fn archive_spec(id: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(archive_args(id));
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    matches!(cmd.output(), Ok(out) if out.status.success())
+}
+
+/// The status-line confirmation for an `archive` run: which ids were archived
+/// and which failed. Pure (no IO) so it is unit testable.
+// trace:STORY-703 | ai:claude
+fn archive_status(archived: &[String], failed: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !archived.is_empty() {
+        parts.push(format!(
+            "archived {}: {}",
+            archived.len(),
+            archived.join(", ")
+        ));
+    }
+    if !failed.is_empty() {
+        parts.push(format!("FAILED to archive: {}", failed.join(", ")));
+    }
+    if parts.is_empty() {
+        return "archive: nothing to archive".to_string();
+    }
+    parts.join(" · ")
 }
 
 /// Shell out for the `why` verb and return `(stdout_or_error, title)`.
@@ -1879,8 +2010,10 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         // vocabulary — quiet-depth discoverability — but inapplicable rows
         // render dimmed, non-selectable, with a reason instead of the normal
         // hint):
-        //   * WIRED (STORY-724): a verb not yet wired (`groom`, `archive`)
-        //     -> "not yet available".
+        //   * WIRED (STORY-724): a verb not yet wired -> "not yet available".
+        //     STORY-703 wired the last two stubs (`groom`/`archive`), so no verb
+        //     trips this axis today, but the gate stays as the structural home
+        //     for any future not-yet-wired verb.
         //   * ROLE (BUG-638): an advisor-/reviewer-only verb the active role
         //     would be refused for -> "requires the <role> role".
         //   * STATUS (TASK-947): a status-conditional verb the FOCUSED item's
@@ -1898,10 +2031,11 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         let mut disabled = false;
         if st.level == Level::Verbs {
             let v = st.current_verbs()[real];
-            // WIRED axis (STORY-724): a verb not yet wired (`groom`, `archive`)
-            // greys with "not yet available" — checked first because an unwired
-            // verb is inert regardless of role / status / selection, so a user
-            // never picks a verb that silently no-ops.
+            // WIRED axis (STORY-724): a verb not yet wired greys with "not yet
+            // available" — checked first because an unwired verb is inert
+            // regardless of role / status / selection. STORY-703 wired the last
+            // two stubs, so this currently disqualifies nothing, but the gate is
+            // retained for any future not-yet-wired verb.
             if !v.is_functional() {
                 disabled = true;
                 hint = "not yet available".to_string();
@@ -3566,6 +3700,45 @@ mod render_tests {
         // No shell metacharacters that would be dangerous if (mistakenly) shelled.
         assert!(!args[3].contains('`'));
         assert!(!args[3].contains('$'));
+    }
+
+    #[test]
+    fn groom_args_is_propose_only() {
+        // STORY-703: the cockpit `groom` gesture runs `aida groom` with NO
+        // `--apply` — the SAFE propose pass that reads + prints the plan but
+        // never writes. Assert the verb shape (the spawn argv) so a future edit
+        // can't silently add `--apply` and turn the read into a mutation.
+        let args = groom_args();
+        assert_eq!(args, ["groom"]);
+        assert!(!args.contains(&"--apply"), "groom stays propose-only");
+    }
+
+    #[test]
+    fn archive_args_builds_safe_arg_vector() {
+        // STORY-703: `archive` shells out to `aida archive <id>`; the id is a
+        // single arg-vector element (never shell-parsed). Assert the argv.
+        let args = archive_args("BUG-42");
+        assert_eq!(args, ["archive", "BUG-42"]);
+    }
+
+    #[test]
+    fn archive_status_lists_archived_and_failed() {
+        // STORY-703
+        let s = archive_status(
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &["TASK-3".to_string()],
+        );
+        assert!(s.contains("archived 2"));
+        assert!(s.contains("TASK-1"));
+        assert!(s.contains("FAILED to archive"));
+        assert!(s.contains("TASK-3"));
+        // All-success case omits the FAILED clause.
+        let ok = archive_status(&["TASK-9".to_string()], &[]);
+        assert!(ok.contains("archived 1"));
+        assert!(!ok.contains("FAILED"));
+        // Empty case.
+        let empty = archive_status(&[], &[]);
+        assert!(empty.contains("nothing to archive"));
     }
 
     #[test]

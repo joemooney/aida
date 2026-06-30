@@ -307,6 +307,9 @@ impl DashboardModel {
                 reason: crate::board::Reason::AwaitingReview,
                 advisor_backlog: false,
                 intake_proposal: false,
+                // Awaiting-review work is handed off, not parked → no park reason.
+                // trace:STORY-703
+                park_reason: None,
             });
         }
         self.reason_counts = crate::board::counts(&self.board)
@@ -686,6 +689,13 @@ pub struct ListJsonRow {
     pub in_flight: bool,
     #[serde(default)]
     pub blocked: bool,
+    /// The revisit trigger of a deferred spec (`aida defer --until "<cond>"`),
+    /// when present — the content the cockpit's advisor-backlog panel surfaces
+    /// inline so each parked item shows WHY it is parked. `None` for any spec
+    /// that is not on the deferred shelf.
+    // trace:STORY-703 | ai:claude
+    #[serde(default)]
+    pub deferred_until: Option<String>,
 }
 
 /// Parse `aida list --json` output. Tolerant: a JSON shape mismatch
@@ -1018,9 +1028,22 @@ fn render_tabs(frame: &mut Frame, area: Rect, model: &DashboardModel) {
 
 fn render_list(frame: &mut Frame, area: Rect, model: &DashboardModel) {
     let theme = &model.theme;
+    // STORY-703: on the advisor-backlog panel (the needs-approval reason, which
+    // holds the drafts + advisor-backlog rows) annotate the title with the total
+    // advisor-queue depth so the advisor's pending queue is a visible number, not
+    // a black box. trace:STORY-703 | ai:claude
+    let title = if model.nav.current() == NavSection::Reason(crate::board::Reason::NeedsApproval) {
+        format!(
+            " {} · advisor queue: {} ",
+            section_title(model.nav.current()),
+            crate::board::advisor_queue_depth(&model.board)
+        )
+    } else {
+        format!(" {} ", section_title(model.nav.current()))
+    };
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.border))
-        .title(format!(" {} ", section_title(model.nav.current())));
+        .title(title);
     let inner_w = area.width.saturating_sub(2) as usize;
     let inner_h = area.height.saturating_sub(2) as usize;
 
@@ -1495,6 +1518,7 @@ mod tests {
             reason: crate::board::Reason::NeedsApproval,
             advisor_backlog: false,
             intake_proposal: false,
+            park_reason: None,
         }];
         m.board_loaded = true;
         let (tx, rx) = std::sync::mpsc::channel();
