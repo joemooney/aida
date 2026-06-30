@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:09:49.815294219Z
-modified_at: 2026-06-30T02:24:41.771218587Z
+modified_at: 2026-06-30T02:25:34.029468782Z
 req_type: Story
 tags:
 - axi
@@ -63,3 +63,10 @@ comments:
   content: 'Functionally complete 2026-06-29: all three implementation slices merged — TASK-981 (#1194 primitives + worktree pool surface + session end --return), TASK-982 (#1197 acquire-on-start, config/--pool gated, default off), TASK-983 (#1207 doctor heals routed through hook-aware teardown). TASK-0396 (cargo-cache poison) and BUG-553 (branch-stacking) structurally dissolved across every teardown path. Only remaining child is TASK-985 (flip default ON), deferred behind the advisor gate: supervised dogfood + integration tests.'
   created_at: 2026-06-29T15:48:21.687411420Z
   modified_at: 2026-06-29T15:48:21.687411420Z
+- id: 019f1658-a155-76e0-b5ef-1ebd95ed4a27
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-28-story-714-worktree-warm-pool.md
+    filed 5 task(s): TASK-1008, TASK-1009, TASK-1010, TASK-1011, TASK-1012
+  created_at: 2026-06-30T02:25:35.061794341Z
+  modified_at: 2026-06-30T02:25:35.061794341Z
