@@ -3,12 +3,12 @@ spec_id: STORY-726
 agreed_id: STORY-726
 title: 'Drive liveness: implementer-phase heartbeat + discoverable drain status'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T08:01:19.846042807Z
-modified_at: 2026-06-30T08:01:19.846042807Z
+modified_at: 2026-06-30T08:29:53.442334049Z
 req_type: Story
 tags:
 - drive
