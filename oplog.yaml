@@ -27201,5 +27201,17 @@ operations:
     req_type: Epic
     status: Draft
     priority: Medium
-clock: 2603
+- id: 019f16dc-476e-7ec0-99f0-9fa7927cc43b
+  target_id: 019f16dc-3b15-7562-83ed-20f8b3a7b802
+  author: aida
+  node_id: '1'
+  lamport: 2604
+  timestamp: 2026-06-30T04:49:22.798418045Z
+  kind: !Create
+    title: aida zen --agent {claude|codex|agy} — vendor selector (foundation for the bake-off)
+    description: 'aida zen SPEC --agent VENDOR chooses which agent implements. Forward the flag to the orchestrators existing HeadlessVendor selection (STORY-683/TASK-894/895 already have Claude+Codex — mostly wiring). AGY needs ADDING to the vendor enum: a HeadlessVendor::Agy variant + its launch path. Verify the exact HeadlessVendor seam in auto_complete.rs / the headless drive before wiring. Foundation slice — the bake-off needs per-vendor invocation. Parent EPIC-57.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2604
 node_id: '1'
