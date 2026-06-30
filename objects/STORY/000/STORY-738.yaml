@@ -1,0 +1,18 @@
+id: 019f1a5f-6ef0-72c3-9013-5ff03ed5a748
+spec_id: STORY-738
+agreed_id: STORY-738
+title: 'Completion crescendo: a spec reaching Completed renders a felt loop-closed moment, not the generic Updated: line'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T21:11:29.776490236Z
+modified_at: 2026-06-30T21:11:29.776490236Z
+req_type: Story
+tags:
+- completion
+- delight
+- first-run
+- from-audit
+- parent:STORY-700
