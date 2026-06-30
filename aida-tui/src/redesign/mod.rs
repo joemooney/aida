@@ -1,10 +1,10 @@
-//! The `aida tui` **action→target redesign** prototype — Slice 1.
+//! The `aida tui` **action→target redesign** cockpit (EPIC-54).
 //!
-//! A throwaway-able keystone that validates the gesture grammar from
-//! `docs/plans/2026-06-25-tui-action-target-redesign.md` on ONE scope
-//! (Backlog) and ONE functional verb (groom). It is gated behind the
-//! `AIDA_TUI_REDESIGN=1` env toggle (see [`enabled`]); the existing TUI is
-//! completely unchanged without it.
+//! Implements the gesture grammar from
+//! `docs/plans/2026-06-25-tui-action-target-redesign.md` across the wired
+//! scopes (Backlog / Open / Test / Queue) and their verbs. It is the default
+//! `aida tui` surface; the legacy TUI is reachable via `AIDA_TUI_REDESIGN=0`
+//! (see [`enabled`]).
 //!
 //! The protocol: **scope → action → targets → execute**. The top panel
 //! holds the scopes, then a scope's verbs after a drill; the bottom panel
@@ -72,7 +72,20 @@ pub fn enabled() -> bool {
     )
 }
 
-/// Launch the redesign prototype. Owns the terminal via the same RAII
+/// The cockpit's opening status line — a confident, finished one-liner naming
+/// the wired scopes (or the store-unavailable fallback). Deliberately carries
+/// NO "prototype" / "Slice N" self-label: this is the default `aida tui`
+/// surface that every user sees.
+// trace:STORY-724 | ai:claude
+fn startup_status(store_available: bool) -> String {
+    if store_available {
+        "Scopes: Backlog · Open · Test · Queue. ? help · q quits.".to_string()
+    } else {
+        "Store unavailable — no in-process data. ? help · q quits.".to_string()
+    }
+}
+
+/// Launch the redesign cockpit. Owns the terminal via the same RAII
 /// guard the rest of the TUI uses, so a panic or a normal exit never
 /// strands the terminal in raw mode.
 ///
@@ -85,7 +98,7 @@ pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
     term::install_signal_handler()?;
 
     // Open the in-process read backend once. If the store can't be attached
-    // (offline, missing, etc.) the prototype still runs — the scope lists are
+    // (offline, missing, etc.) the cockpit still runs — the scope lists are
     // empty and the modal reports the failure — rather than crashing.
     // trace:STORY-693 | ai:claude
     let store = SpecStore::open(project_root);
@@ -121,11 +134,7 @@ pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
         st.focus_epic = launch_epic.clone();
         refresh_focus_summary(&mut st, s, set);
     }
-    st.status = Some(if store.is_some() {
-        "Slice 1 prototype — Backlog / Open scopes. ? help · q quits.".to_string()
-    } else {
-        "Slice 1 prototype — store unavailable (no in-process data). ? help · q quits.".to_string()
-    });
+    st.status = Some(startup_status(store.is_some()));
 
     // Per-scope item-set cache so the bottom panel can follow the
     // highlighted scope without re-querying on every cursor move.
@@ -941,10 +950,12 @@ fn test_plan_view(st: &RedesignState, spec: LoadedSpec) -> LoadedSpec {
     }
 }
 
-/// Turn a [`RunOutcome`] into IO. Slice 1 STUBS the actual groom: it logs
-/// the verb + target ids to the status line. Wiring the real groom (shell
-/// out to `aida` / the grooming skill) is a later slice — the loop and the
-/// selection are what Slice 1 validates. trace:STORY-690 | ai:claude
+/// Turn a [`RunOutcome`] into IO. The generic set-level [`RunOutcome::Execute`]
+/// path is the latent future-wiring entry for set-level verbs (e.g. a wired
+/// `groom`): it logs the verb + target ids to the status line for now. No verb
+/// reaches it today — `groom` is gated as "not yet available" (STORY-724) and
+/// the live verbs have dedicated outcome variants.
+// trace:STORY-690 | ai:claude
 fn apply_outcome(
     _terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
@@ -955,10 +966,10 @@ fn apply_outcome(
 ) -> Result<()> {
     match outcome {
         RunOutcome::Execute { verb, ids } => {
-            // TODO(Slice 2+): replace this stub with the real verb wiring —
-            // e.g. shell out to `aida` (groom = the backlog-groom skill /
-            // `aida intake`) or emit an intent for the bash wrapper. Slice
-            // 1 only proves the selection + gesture loop, so we log instead.
+            // TODO: replace this stub with the real verb wiring — e.g. shell
+            // out to `aida` (groom = the backlog-groom skill / `aida groom`)
+            // or emit an intent for the bash wrapper. Latent until a set-level
+            // verb is wired; logs instead so the gesture loop stays exercised.
             let preview: Vec<&str> = ids.iter().take(5).map(|s| s.as_str()).collect();
             let more = if ids.len() > 5 {
                 format!(" +{} more", ids.len() - 5)
@@ -1810,10 +1821,12 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
             }
         };
         // Grey out + relabel a verb that doesn't apply to the selected spec, on
-        // either of two COMPOSING axes (the operator still SEES the full verb
+        // any of four COMPOSING axes (the operator still SEES the full verb
         // vocabulary — quiet-depth discoverability — but inapplicable rows
         // render dimmed, non-selectable, with a reason instead of the normal
         // hint):
+        //   * WIRED (STORY-724): a verb not yet wired (`groom`, `archive`)
+        //     -> "not yet available".
         //   * ROLE (BUG-638): an advisor-/reviewer-only verb the active role
         //     would be refused for -> "requires the <role> role".
         //   * STATUS (TASK-947): a status-conditional verb the FOCUSED item's
@@ -1823,14 +1836,22 @@ fn render_top(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         //     selection set when nothing is selected (none = all is safe for a
         //     read, a silent mutation for an update) -> "select item(s) first".
         // A verb greys if ANY axis disqualifies it; the hint follows a
-        // most-fundamental-wins precedence — role (seat mismatch) > status
-        // (lifecycle mismatch) > selection (transient UI state).
-        // trace:TASK-954 trace:TASK-947 trace:BUG-638
+        // most-fundamental-wins precedence — wired (act doesn't exist yet) >
+        // role (seat mismatch) > status (lifecycle mismatch) > selection
+        // (transient UI state).
+        // trace:STORY-724 trace:TASK-954 trace:TASK-947 trace:BUG-638
         let mut hint = hint.to_string();
         let mut disabled = false;
         if st.level == Level::Verbs {
             let v = st.current_verbs()[real];
-            if !st.verb_role_permitted(v) {
+            // WIRED axis (STORY-724): a verb not yet wired (`groom`, `archive`)
+            // greys with "not yet available" — checked first because an unwired
+            // verb is inert regardless of role / status / selection, so a user
+            // never picks a verb that silently no-ops.
+            if !v.is_functional() {
+                disabled = true;
+                hint = "not yet available".to_string();
+            } else if !st.verb_role_permitted(v) {
                 disabled = true;
                 if let Some(req) = v.required_role() {
                     hint = format!("requires the {req} role");
@@ -2738,6 +2759,28 @@ mod refresh_tests {
             has_test_plan: false,
             routed_role: None,
         }
+    }
+
+    #[test]
+    fn startup_status_has_no_prototype_self_label() {
+        // STORY-724: the default cockpit's opening line must read as finished —
+        // no "prototype" / "Slice N" self-deprecation in either branch.
+        for available in [true, false] {
+            let line = startup_status(available);
+            let lower = line.to_lowercase();
+            assert!(
+                !lower.contains("prototype"),
+                "status line still says prototype: {line}"
+            );
+            assert!(
+                !lower.contains("slice 1") && !lower.contains("slice 2"),
+                "status line still references a slice: {line}"
+            );
+        }
+        // The store-available line names the wired scopes.
+        let ok = startup_status(true);
+        assert!(ok.contains("Backlog"));
+        assert!(ok.contains("Queue"));
     }
 
     #[test]
