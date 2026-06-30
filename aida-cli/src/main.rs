@@ -103990,7 +103990,8 @@ mod queue_work_tests {
         backend.save(&store).unwrap();
 
         // 1. With strict = true, it must refuse and error out with status-aware error message
-        let res = resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, true);
+        let res =
+            resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, true, false);
         assert!(res.is_err());
         let err = res.unwrap_err().to_string();
         assert!(
@@ -103998,9 +103999,24 @@ mod queue_work_tests {
             "expected not queued error, got: {err}"
         );
 
-        // 2. With strict = false, it must automatically queue it and return a successful plan
-        let res = resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, false)
-            .expect("auto-queue should succeed and return plan");
+        // TASK-1053: a DRY RUN on the same Approved-but-unqueued spec must
+        // resolve the very same Item plan WITHOUT persisting the auto-queue —
+        // the queue stays empty afterwards. trace:TASK-1053 | ai:claude
+        let res =
+            resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, false, true)
+                .expect("dry-run should resolve a plan without persisting");
+        assert_eq!(res.mode, QueueWorkMode::Item);
+        assert_eq!(res.anchor_display, "BUG-376");
+        let entries = storage.queue_list("test-user", false).unwrap();
+        assert!(
+            entries.is_empty(),
+            "dry-run must not persist the auto-queue, found: {entries:?}"
+        );
+
+        // 2. With strict = false (real run), it must automatically queue it and return a successful plan
+        let res =
+            resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, false, false)
+                .expect("auto-queue should succeed and return plan");
         assert_eq!(res.mode, QueueWorkMode::Item);
         assert_eq!(res.anchor_display, "BUG-376");
 
@@ -104069,7 +104085,7 @@ mod queue_work_tests {
         let root = dir.path().join("aida-store");
         let storage = Storage::new(&root);
         queue_review_story(&storage, &root);
-        let plan = resolve_queue_work_plan(&storage, "u", Some("PR-457"), None, false)
+        let plan = resolve_queue_work_plan(&storage, "u", Some("PR-457"), None, false, false)
             .expect("PR-N with a queued review story resolves to a plan");
         assert!(
             plan.review_target.is_some(),
@@ -125599,9 +125615,10 @@ fn handle_queue_command(
                 };
                 Some(head.1)
             } else {
-                if *dry_run {
-                    anyhow::bail!("--dry-run currently only applies with --batch");
-                }
+                // TASK-1053: a single-spec `--dry-run` is no longer a
+                // dead-end — it flows into handle_queue_work, which prints
+                // the resolved plan and returns before any side effect.
+                // trace:TASK-1053 | ai:claude
                 effective_id.map(|s| s.to_string())
             };
             handle_queue_work(
@@ -125658,6 +125675,10 @@ fn handle_queue_command(
                 // STORY-265: plan-only mode — launch /aida-plan in `plan`
                 // permission mode instead of /aida-pickup implement.
                 *plan_only,
+                // TASK-1053: single-spec dry-run — print the resolved plan
+                // (session id, worktree, branch, role, skill, lease) and
+                // return before any side effect. trace:TASK-1053 | ai:claude
+                *dry_run,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -126781,6 +126802,7 @@ fn handle_queue_rework(
             /* effort */ None,
             /* strict */ false,
             /* plan_only */ false,
+            /* dry_run */ false,
         )?;
     } else {
         println!(
@@ -126890,6 +126912,11 @@ fn resolve_queue_work_plan(
     arg: Option<&str>,
     type_filter: Option<&str>,
     strict: bool,
+    // TASK-1053: under a dry-run, the convenience auto-queue of an explicit
+    // Approved-but-unqueued spec must NOT persist — we synthesize the queue
+    // entry in-memory so the plan resolves identically to a real pickup while
+    // mutating nothing. trace:TASK-1053 | ai:claude
+    dry_run: bool,
 ) -> Result<QueueWorkPlan> {
     let mut entries = storage.queue_list(user_id, /* include_completed */ false)?;
     let store = storage.load()?;
@@ -126912,17 +126939,25 @@ fn resolve_queue_work_plan(
                     for_session: None,
                     added_by_machine: None,
                 };
-                storage.queue_add(entry)?;
-                let display_id = req
-                    .agreed_id
-                    .as_deref()
-                    .or(req.spec_id.as_deref())
-                    .unwrap_or(arg_str);
-                record_role_activity(display_id, "queue-add");
-                println!("queued {} for role:{}", display_id, role);
-                // Reload entries to include the auto-queued entry.
-                // trace:TASK-547 | ai:antigravity
-                entries = storage.queue_list(user_id, /* include_completed */ false)?;
+                if dry_run {
+                    // TASK-1053: preview only — push the synthesized entry so the
+                    // Item-pickup match below resolves the same plan a real pickup
+                    // would, but persist nothing (no queue_add, no role-activity,
+                    // no "queued …" line). trace:TASK-1053 | ai:claude
+                    entries.push(entry);
+                } else {
+                    storage.queue_add(entry)?;
+                    let display_id = req
+                        .agreed_id
+                        .as_deref()
+                        .or(req.spec_id.as_deref())
+                        .unwrap_or(arg_str);
+                    record_role_activity(display_id, "queue-add");
+                    println!("queued {} for role:{}", display_id, role);
+                    // Reload entries to include the auto-queued entry.
+                    // trace:TASK-547 | ai:antigravity
+                    entries = storage.queue_list(user_id, /* include_completed */ false)?;
+                }
             }
         }
     }
@@ -127727,6 +127762,12 @@ fn handle_queue_work(
     // touching code; promote Approved -> Planned afterward via
     // `aida plan promote`. trace:STORY-265 | ai:claude
     plan_only: bool,
+    // TASK-1053: single-spec preview. Resolve the full plan (scope, role,
+    // skill, branch, worktree path, session id, lease) and print it, then
+    // return WITHOUT creating a worktree, taking a lease, or launching a
+    // session. The `--batch` form is handled at the dispatch site (it
+    // returns there before reaching this function). trace:TASK-1053 | ai:claude
+    dry_run: bool,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -127744,7 +127785,7 @@ fn handle_queue_work(
     // unchanged. We try the normal resolution first; only on its failure do we
     // consult the marker, so a still-queued or non-held spec keeps its existing
     // behaviour exactly. trace:TASK-630 | ai:claude
-    let plan = match resolve_queue_work_plan(storage, user_id, arg, type_filter, strict) {
+    let plan = match resolve_queue_work_plan(storage, user_id, arg, type_filter, strict, dry_run) {
         Ok(plan) => plan,
         Err(e) => match arg.filter(|_| resume.is_some()) {
             Some(arg_str) => {
@@ -127815,7 +127856,7 @@ fn handle_queue_work(
     // the anchor (the parent scope) as the captured spec; the
     // operator's estimate is for the cluster as a whole.
     // trace:STORY-439 | ai:claude
-    if (complexity.is_some() || assist_est.is_some()) && !list_sessions {
+    if (complexity.is_some() || assist_est.is_some()) && !list_sessions && !dry_run {
         if let Ok(project_root) = find_project_root() {
             let main_root = main_worktree_root_from(&project_root);
             let spec = plan.anchor_display.as_str();
@@ -127833,7 +127874,7 @@ fn handle_queue_work(
             apply_calibration_tags(storage, spec, complexity, assist_est);
         }
     }
-    if effort.is_some() && !list_sessions {
+    if effort.is_some() && !list_sessions && !dry_run {
         if let Ok(project_root) = find_project_root() {
             let main_root = main_worktree_root_from(&project_root);
             let spec = plan.anchor_display.as_str();
@@ -128173,6 +128214,73 @@ fn handle_queue_work(
         if let Some(note) = orchestrator::detect(&root_for_orch).informational_note() {
             eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
         }
+    }
+
+    // TASK-1053: single-spec dry-run preview. The plan is now fully resolved —
+    // the pre-flight summary above already printed anchor/scope/role/mode/skill;
+    // here we add the branch, worktree path, session id, and the lease the
+    // pickup WOULD create, then return. We sit BEFORE the first side effect
+    // (the scope-conflict sweep, the pre-pickup pull, and session_start that
+    // follow), so a dry run creates no worktree, takes no lease, writes no
+    // manifest, and launches no claude. The branch + worktree derivation
+    // mirror `session_start` exactly so the preview matches a real pickup.
+    // The `--batch` dry-run is a separate path that returns at the dispatch
+    // site before this function is even called. trace:TASK-1053 | ai:claude
+    if dry_run {
+        let dry_line = |label: &str, value: String| {
+            eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
+        };
+        let project_root = find_main_worktree_root()?;
+        let slug = slugify(&plan.scope);
+        let branch = if let Some(b) = branch_override {
+            b.to_string()
+        } else if let Some((forge, n)) = plan.review_target {
+            forge.local_branch_for(n)
+        } else {
+            // Best-effort: on the rare all-candidates-taken error, fall back to
+            // the bare slug rather than failing a read-only preview.
+            resolve_session_branch(&project_root, &slug, "auto").unwrap_or_else(|_| slug.clone())
+        };
+        let repo_name = project_root
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("project");
+        let worktree_path = match path_override {
+            Some(p) => std::path::PathBuf::from(p),
+            None => project_root
+                .parent()
+                .map(|parent| parent.join(format!("{}-{}", repo_name, slug)))
+                .unwrap_or_else(|| std::path::PathBuf::from(format!("{}-{}", repo_name, slug))),
+        };
+        let session_render = match &launch {
+            Some(l) => format!(
+                "{} {}",
+                l.session_id().cyan(),
+                "(claude session id it would launch / resume)".dimmed()
+            ),
+            None => "(deferred — --no-launch)".dimmed().to_string(),
+        };
+        dry_line("branch", branch.cyan().to_string());
+        dry_line(
+            "worktree",
+            worktree_path.display().to_string().cyan().to_string(),
+        );
+        dry_line("session", session_render);
+        dry_line(
+            "lease",
+            format!(
+                "{} {}",
+                "would be created".cyan(),
+                format!("(owner {}, scope {}, role {})", user_id, plan.scope, role).dimmed()
+            ),
+        );
+        eprintln!();
+        eprintln!(
+            "{} dry run — nothing created (no worktree, no lease, no session). \
+             Re-run without --dry-run to pick up.",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+        );
+        return Ok(());
     }
 
     // TASK-81: scope-conflict pre-flight. If any active lease already
