@@ -21436,7 +21436,11 @@ fn init_worktree_pool_config_section() -> &'static str {
      # the worktree instead of returning it.\n\
      [worktree_pool]\n\
      enabled = true\n\
-     # max_trees = 16   # cap on pooled worktrees (default 16)\n"
+     # max_trees = 16   # cap on pooled worktrees (default 16)\n\
+     # lease_ttl_secs = 21600   # a durable lease older than this (with no live\n\
+     #                          # owner) is treated as EXPIRED and reclaimed by\n\
+     #                          # the next acquire — guards against reservation\n\
+     #                          # leaks when a session dies (default 6h)\n"
 }
 
 #[cfg(test)]
@@ -49378,6 +49382,7 @@ fn acquire_session_pool_worktree(
     let opts = aida_core::worktree_pool::AcquireOptions {
         lease_holder: Some(branch_name.to_string()),
         max_trees: worktree_pool_config_max_trees(project_root),
+        lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(project_root)),
         post_create_hooks: worktree_pool_global_hooks("post_create"),
     };
     let acquired = aida_core::worktree_pool::acquire(project_root, &opts)?;
@@ -93409,6 +93414,24 @@ fn worktree_pool_config_max_trees(project_root: &std::path::Path) -> Option<usiz
         .map(|n| n.max(1) as usize)
 }
 
+/// Read `[worktree_pool] lease_ttl_secs` (seconds) from `.aida/config.toml`,
+/// falling back to the core default when unset/invalid. Drives the
+/// reservation-leak backstop: a lease older than this with no live owner is
+/// reclaimable (and shows as `expired` in `pool status`).
+// trace:TASK-1008 | ai:claude
+fn worktree_pool_config_lease_ttl_secs(project_root: &std::path::Path) -> i64 {
+    std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+        .ok()
+        .and_then(|body| toml::from_str::<toml::Value>(&body).ok())
+        .and_then(|value| {
+            value
+                .get("worktree_pool")?
+                .get("lease_ttl_secs")?
+                .as_integer()
+        })
+        .unwrap_or(aida_core::worktree_pool::DEFAULT_LEASE_TTL_SECS)
+}
+
 /// Hook commands for `key` (`post_create` / `pre_destroy`), sourced ONLY from
 /// the machine-global `~/.aida/config.toml`. Repo-level config is deliberately
 /// ignored — cloning a repo must never run arbitrary shell on your machine
@@ -93444,6 +93467,7 @@ fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
             let opts = aida_core::worktree_pool::AcquireOptions {
                 lease_holder: lease_holder.clone(),
                 max_trees: worktree_pool_config_max_trees(&project_root),
+                lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(&project_root)),
                 post_create_hooks: worktree_pool_global_hooks("post_create"),
             };
             let path = aida_core::worktree_pool::acquire(&project_root, &opts)?;
@@ -93490,7 +93514,8 @@ fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
 
 fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()> {
     let cwd = std::env::current_dir().ok();
-    let rows = aida_core::worktree_pool::list(project_root, cwd.as_deref())?;
+    let lease_ttl = worktree_pool_config_lease_ttl_secs(project_root);
+    let rows = aida_core::worktree_pool::list(project_root, cwd.as_deref(), lease_ttl)?;
 
     if json {
         let arr: Vec<_> = rows
@@ -93502,6 +93527,7 @@ fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()
                     "state": r.state.label(),
                     "leased": r.entry.leased,
                     "lease_holder": r.entry.lease_holder,
+                    "leased_at": r.entry.leased_at,
                     "owner_pid": r.entry.owner_pid,
                     "head": r.head,
                 })
@@ -93531,6 +93557,7 @@ fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()
             PoolState::Available => "●".green(),
             PoolState::InUse => crate::glyph(Glyph::InFlight).yellow(),
             PoolState::Leased => "◆".cyan(),
+            PoolState::Expired => crate::glyph(Glyph::Warning).yellow(),
             PoolState::Dirty => crate::glyph(Glyph::Cross).red(),
             PoolState::Destroying => "…".dimmed(),
             PoolState::Here => crate::glyph(Glyph::FlowActive).bold(),
