@@ -3,12 +3,12 @@ spec_id: TASK-1051
 agreed_id: TASK-1051
 title: Make the EPIC-54 TUI redesign (AIDA_TUI_REDESIGN) the default
 description: 'The command-palette / action-to-target TUI redesign (EPIC-54), shipped behind AIDA_TUI_REDESIGN=1, becomes the DEFAULT. The flag inverts to an opt-OUT: AIDA_TUI_REDESIGN=0 selects the legacy TUI. Operator call 2026-06-29: no reason it should not be the default now.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T06:12:43.173317544Z
-modified_at: 2026-06-30T06:12:43.173317544Z
+modified_at: 2026-06-30T06:35:26.940416967Z
 req_type: Task
 tags:
 - default-flip
