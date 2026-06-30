@@ -26521,5 +26521,17 @@ operations:
   timestamp: 2026-06-30T02:30:17.044727120Z
   kind: !SetStatus
     status: Completed
-clock: 2531
+- id: 019f165d-0f7a-7420-b5d1-3a046140e791
+  target_id: 019f165c-fd1f-7263-9f3e-1ca441e77357
+  author: aida
+  node_id: '1'
+  lamport: 2532
+  timestamp: 2026-06-30T02:30:25.402970452Z
+  kind: !Create
+    title: TASK-0432 — does a product seat change anything under `--no-human`/solo? (No new authority, but the audit `mode` should note product-sourced decisions taken during a headless drain.)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2532
 node_id: '1'
