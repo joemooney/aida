@@ -42,6 +42,13 @@ pub struct TargetItem {
     /// "I routed it and it vanished" gap this scope closes.
     // trace:TASK-948 | ai:claude
     pub routed_role: Option<String>,
+    /// The spec's tags, carried so the cockpit can tell keystone /
+    /// architecture-class work apart from routine work. The `drive` verb (kick
+    /// off an autonomous drive) is refused on a keystone spec, which must stay
+    /// human-supervised. Populated by the summary / queue load paths; empty
+    /// when the data path doesn't supply tags.
+    // trace:STORY-728 | ai:claude
+    pub tags: Vec<String>,
 }
 
 impl TargetItem {
@@ -67,6 +74,33 @@ impl TargetItem {
     /// trace:TASK-933 | ai:claude
     pub fn is_done(&self) -> bool {
         self.status.eq_ignore_ascii_case("done")
+    }
+
+    /// Is this spec keystone / architecture-class — the work an autonomous
+    /// drive must NOT ship on a default, but escalate to a human? The `drive`
+    /// verb keys off this to refuse a keystone spec in the cockpit. Mirrors the
+    /// CLI's `presence::is_keystone_class` heuristic: an `epic` type is
+    /// architecture-shaped by definition, and any
+    /// keystone / architecture / security / supervised / high-blast-radius tag
+    /// marks the spec keystone. Conservative by design — a false positive only
+    /// greys `drive` (the operator drops to the CLI), the cheap error.
+    // trace:STORY-728 | ai:claude
+    pub fn is_keystone(&self) -> bool {
+        if self.req_type.trim().eq_ignore_ascii_case("epic") {
+            return true;
+        }
+        self.tags.iter().any(|t| {
+            matches!(
+                t.trim().to_ascii_lowercase().as_str(),
+                "keystone"
+                    | "architecture"
+                    | "security"
+                    | "supervised"
+                    | "needs-supervised-build"
+                    | "blast-radius:high"
+                    | "risk:high"
+            )
+        })
     }
 }
 
@@ -191,10 +225,11 @@ impl Scope {
             // Test scope: `show` previews the focused spec's ## Test Plan in the
             // modal (the same gesture as `p` on a row). trace:STORY-699
             Scope::Test => vec![Verb::Show],
-            // Queue scope is a read-only visibility surface — `show` opens the
-            // focused queued spec; routing/dequeue stay CLI verbs for now.
-            // trace:TASK-948
-            Scope::Queue => vec![Verb::Show],
+            // Queue scope: `show` opens the focused queued spec; `drive` kicks
+            // off the autonomous drive on a queued-and-Approved spec (greyed for
+            // a non-Approved / keystone row). Other routing/dequeue stay CLI
+            // verbs for now. trace:TASK-948 trace:STORY-728
+            Scope::Queue => vec![Verb::Show, Verb::Drive],
             _ => Vec::new(),
         }
     }
@@ -233,6 +268,10 @@ pub fn verb_list_for(scope: Scope) -> Vec<Verb> {
         verbs.push(Verb::Queue);
         verbs.push(Verb::Accept);
         verbs.push(Verb::Defer);
+        // `drive` (kick off the autonomous drive) -> Approved + non-keystone
+        // (STORY-728). Last so it doesn't disturb the historical draft-verb
+        // index navigation.
+        verbs.push(Verb::Drive);
     }
     verbs
 }
@@ -251,6 +290,12 @@ pub fn verb_list_for(scope: Scope) -> Vec<Verb> {
 ///   behaviour where only the Open scope filtered verbs by focused status).
 // trace:TASK-947 | ai:claude
 pub fn verb_required_status(scope: Scope, verb: Verb) -> Option<&'static str> {
+    // `drive` is Approved-gated wherever it is offered (Open AND Queue) — you
+    // only kick off an autonomous drive on an approved spec. Handled before the
+    // Open-only early return so the Queue scope gates it too. trace:STORY-728
+    if verb == Verb::Drive && matches!(scope, Scope::Open | Scope::Queue) {
+        return Some("Approved");
+    }
     if scope != Scope::Open {
         return None;
     }
@@ -324,6 +369,15 @@ pub enum Verb {
     /// `aida defer <id> --until "<trigger>"`. Set-level; the trigger is
     /// captured by a single-line input modal before execution. trace:TASK-921
     Defer,
+    /// Open / Queue scope, Approved + non-keystone only: kick off the headline
+    /// autonomous drive on the focused spec — `aida zen <id>`, the same gated
+    /// implement→CI→review→merge drive the CLI runs — launched as a detached
+    /// background drive (the cockpit holds the terminal, so it can't host the
+    /// long-running drive inline). Refused on a keystone / architecture-class
+    /// spec, which must stay human-supervised. The marquee capability on the
+    /// marquee surface: you no longer drop to the CLI to start a drive.
+    // trace:STORY-728 | ai:claude
+    Drive,
 }
 
 impl Verb {
@@ -340,6 +394,7 @@ impl Verb {
             Verb::Queue => "queue",
             Verb::Accept => "accept",
             Verb::Defer => "defer",
+            Verb::Drive => "drive",
         }
     }
 
@@ -356,6 +411,7 @@ impl Verb {
             Verb::Queue => "route selected Approved specs to the implementer queue",
             Verb::Accept => "reviewer: accept finished work (Done → Completed)",
             Verb::Defer => "park selected specs off the active view with a revisit trigger",
+            Verb::Drive => "kick off the autonomous drive on this approved spec (aida zen)",
         }
     }
 
@@ -422,6 +478,14 @@ impl Verb {
                  trigger (aida defer --until). Any open spec qualifies (not \
                  status-conditional), set-level; falls back to the focused item."
             }
+            Verb::Drive => {
+                "Kick off the headline autonomous drive on the focused spec \
+                 (aida zen) — the same gated implement → CI → review → merge \
+                 drive the CLI runs — launched as a detached background drive \
+                 you watch with aida drain status. Item-level: acts on the \
+                 single focused row. Approved-only, and refused on a keystone / \
+                 architecture-class spec, which stays human-supervised."
+            }
         }
     }
 
@@ -455,10 +519,14 @@ impl Verb {
     /// closes. False for the READ verbs (`show` / `why` / `status`, where
     /// none = all is a safe focused-row read) and for `groom`, whose
     /// empty-selection path is an explicit "groom all N?" confirm that already
-    /// guards against an accidental bulk mutation.
-    // trace:TASK-954 | ai:claude
+    /// guards against an accidental bulk mutation. Also false for `drive`, which
+    /// is a single-target launch on the FOCUSED approved spec (N=1, like a read
+    /// gesture): its tight Approved + non-keystone gates already constrain the
+    /// target, and one autonomous drive per row is the intended unit — a
+    /// multi-select checkbox would be the wrong shape.
+    // trace:TASK-954 trace:STORY-728 | ai:claude
     pub fn requires_selection(self) -> bool {
-        self.is_update() && !matches!(self, Verb::Groom)
+        self.is_update() && !matches!(self, Verb::Groom | Verb::Drive)
     }
 
     /// Is this verb wired to do real work? `show`, `why`, `status`, `request
@@ -481,6 +549,7 @@ impl Verb {
                 | Verb::Queue
                 | Verb::Accept
                 | Verb::Defer
+                | Verb::Drive
         )
     }
 
@@ -506,12 +575,29 @@ impl Verb {
     // trace:BUG-638 | ai:claude
     pub fn required_role(self) -> Option<&'static str> {
         match self {
-            Verb::Groom | Verb::Approve | Verb::Reject | Verb::Queue | Verb::Archive => {
-                Some("advisor")
-            }
+            // `drive` commits the team to autonomously execute the spec (the
+            // same authority bar as `queue`, which routes it onto the
+            // implementer queue), so it is advisor-gated. trace:STORY-728
+            Verb::Groom
+            | Verb::Approve
+            | Verb::Reject
+            | Verb::Queue
+            | Verb::Archive
+            | Verb::Drive => Some("advisor"),
             Verb::Accept => Some("reviewer"),
             Verb::Show | Verb::Why | Verb::Status | Verb::RequestApproval | Verb::Defer => None,
         }
+    }
+
+    /// Is this verb refused on a keystone / architecture-class spec — the
+    /// KEYSTONE grey-out axis (STORY-728), a fourth gate composing with role /
+    /// status / selection. Only `drive` is keystone-gated: kicking off an
+    /// autonomous drive on keystone work would ship architecture-class change on
+    /// a default, exactly the move the CLI's solo posture parks for a human. The
+    /// keystone classification itself lives on [`TargetItem::is_keystone`].
+    // trace:STORY-728 | ai:claude
+    pub fn is_keystone_gated(self) -> bool {
+        matches!(self, Verb::Drive)
     }
 }
 
@@ -1018,6 +1104,24 @@ impl RedesignState {
     /// iff ALL THREE axes pass. trace:TASK-954 | ai:claude
     pub fn verb_selection_permitted(&self, verb: Verb) -> bool {
         !verb.requires_selection() || self.selected_count() > 0
+    }
+
+    /// Whether the FOCUSED item is NOT keystone-class for a keystone-gated verb
+    /// — the STORY-728 KEYSTONE gate, a FOURTH axis composing with role / status
+    /// / selection. Only `drive` is keystone-gated ([`Verb::is_keystone_gated`]):
+    /// an autonomous drive on a keystone / architecture-class spec is refused so
+    /// that work stays human-supervised (mirroring the CLI's solo posture). A
+    /// non-keystone-gated verb always passes; a keystone-gated verb passes only
+    /// when the focused item is non-keystone (or there is no focused item — the
+    /// status gate handles emptiness).
+    // trace:STORY-728 | ai:claude
+    pub fn verb_keystone_permitted(&self, verb: Verb) -> bool {
+        if !verb.is_keystone_gated() {
+            return true;
+        }
+        self.focused_item()
+            .map(|i| !i.is_keystone())
+            .unwrap_or(true)
     }
 
     /// The lifecycle status `verb` is gated to in the CURRENT scope, if any —
@@ -1635,6 +1739,19 @@ impl RedesignState {
             self.status = Some(format!("{} — select item(s) first", verb.label()));
             return RunOutcome::None;
         }
+        // Keystone gate (STORY-728): refuse a keystone-gated verb (`drive`) on a
+        // keystone / architecture-class focused spec — an autonomous drive must
+        // not ship that work on a default; it stays human-supervised. Mirrors the
+        // greyed, non-selectable palette row. Composes last (the keystone status
+        // is a property of the focused spec, like status, but specific to drive).
+        // trace:STORY-728 | ai:claude
+        if !self.verb_keystone_permitted(verb) {
+            self.status = Some(format!(
+                "{} — keystone / architecture specs stay human-supervised",
+                verb.label()
+            ));
+            return RunOutcome::None;
+        }
 
         // Item-level verbs target the focused item, regardless of selection.
         if verb.is_item_level() {
@@ -1695,6 +1812,21 @@ impl RedesignState {
         if verb == Verb::Defer {
             let ids = self.defer_selection();
             return RunOutcome::OpenDeferInput { ids };
+        }
+
+        // drive: kick off the autonomous drive on the FOCUSED approved spec.
+        // Single-target (N=1) — the role / status (Approved) / keystone gates
+        // above have already vetted the focused item, so resolve it here and
+        // hand the parent the id to launch `aida zen <id>` as a detached
+        // background drive. trace:STORY-728 | ai:claude
+        if verb == Verb::Drive {
+            let Some(item) = self.focused_item() else {
+                self.status = Some("no item focused".to_string());
+                return RunOutcome::None;
+            };
+            return RunOutcome::Drive {
+                id: item.id.clone(),
+            };
         }
 
         // Set-level verbs (groom, …) operate on the selection.
@@ -1950,6 +2082,12 @@ pub enum RunOutcome {
     /// via `aida defer <id> --until "<trigger>"`. Emitted by the parent's
     /// input-modal confirm path, not by `run_verb`. trace:TASK-921
     Defer { ids: Vec<String>, trigger: String },
+    /// `drive` on the focused Approved + non-keystone spec: the parent launches
+    /// `aida zen <id>` as a DETACHED background drive (the cockpit holds the
+    /// terminal, so the long-running drive can't run inline) and points the
+    /// operator at `aida drain status`. Single-target (N=1).
+    // trace:STORY-728 | ai:claude
+    Drive { id: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -2160,6 +2298,7 @@ mod tests {
                 body: format!("body of item {}", word_for(i)),
                 has_test_plan: false,
                 routed_role: None,
+                tags: Vec::new(),
             })
             .collect()
     }
@@ -2180,6 +2319,7 @@ mod tests {
                 body: String::new(),
                 has_test_plan: false,
                 routed_role: None,
+                tags: Vec::new(),
             })
             .collect()
     }
@@ -2800,12 +2940,13 @@ mod tests {
 
     /// The Queue scope is a wired, drillable visibility surface (TASK-948): it
     /// reads the role-routing queue rather than a status slice, so a routed
-    /// Draft is visible instead of vanishing. Its only verb is the read-only
-    /// `show`.
+    /// Draft is visible instead of vanishing. It exposes the read-only `show`
+    /// plus `drive` (STORY-728) — kick off the autonomous drive on a
+    /// queued-and-Approved spec.
     #[test]
-    fn queue_scope_is_functional_with_show_only() {
+    fn queue_scope_is_functional_with_show_and_drive() {
         assert!(Scope::Queue.is_functional());
-        assert_eq!(Scope::Queue.verbs(), vec![Verb::Show]);
+        assert_eq!(Scope::Queue.verbs(), vec![Verb::Show, Verb::Drive]);
         // The hint + help advertise the routing badge, not "not wired yet".
         assert!(Scope::Queue.hint().contains("role"));
         assert!(!Scope::Queue.help().contains("Not wired"));
@@ -2826,6 +2967,7 @@ mod tests {
             body: String::new(),
             has_test_plan: false,
             routed_role: Some("advisor".into()),
+            tags: Vec::new(),
         };
         assert_eq!(it.routed_role.as_deref(), Some("advisor"));
         it.routed_role = None;
@@ -2855,6 +2997,9 @@ mod tests {
             Verb::Queue,
             Verb::Accept,
             Verb::Defer,
+            // `drive` is appended last (STORY-728) so the historical draft-verb
+            // index navigation is undisturbed.
+            Verb::Drive,
         ]
     }
 
@@ -2895,6 +3040,16 @@ mod tests {
         assert_eq!(
             verb_required_status(Scope::Open, Verb::Accept),
             Some("Done")
+        );
+        // `drive` is Approved-gated in the Open scope (STORY-728), AND in the
+        // Queue scope (the only verb that gates outside Open).
+        assert_eq!(
+            verb_required_status(Scope::Open, Verb::Drive),
+            Some("Approved")
+        );
+        assert_eq!(
+            verb_required_status(Scope::Queue, Verb::Drive),
+            Some("Approved")
         );
         // Read verbs + defer are status-agnostic.
         assert_eq!(verb_required_status(Scope::Open, Verb::Show), None);
@@ -3333,6 +3488,7 @@ mod tests {
                 body: String::new(),
                 has_test_plan: false,
                 routed_role: None,
+                tags: Vec::new(),
             })
             .collect()
     }
@@ -3350,8 +3506,9 @@ mod tests {
         assert!(!status_permits_verb(Some("Approved"), req));
         assert!(!status_permits_verb(None, req));
         assert!(!verb_list_for(Scope::Backlog).contains(&Verb::Accept));
-        // `defer` is still the last verb in the full list (indices undisturbed).
-        assert_eq!(verb_list_for(Scope::Open).last(), Some(&Verb::Defer));
+        // `drive` is the last verb in the full list (STORY-728); `defer` is the
+        // second-to-last, so the status-conditional indices stay undisturbed.
+        assert_eq!(verb_list_for(Scope::Open).last(), Some(&Verb::Drive));
     }
 
     #[test]
@@ -3454,9 +3611,13 @@ mod tests {
         assert!(status_permits_verb(Some("Draft"), None));
         assert!(status_permits_verb(Some("Approved"), None));
         assert!(status_permits_verb(None, None));
-        // It is the LAST verb (after the status-conditional ones), so the
-        // existing draft/approved indices are undisturbed.
-        assert_eq!(verb_list_for(Scope::Open).last(), Some(&Verb::Defer));
+        // It comes after the status-conditional verbs, so the existing
+        // draft/approved indices are undisturbed. `drive` is appended after it
+        // (STORY-728), so `defer` is now the second-to-last verb and `drive`
+        // the last.
+        let open = verb_list_for(Scope::Open);
+        assert_eq!(open.last(), Some(&Verb::Drive));
+        assert_eq!(open[open.len() - 2], Verb::Defer);
         // Other scopes do not expose defer.
         assert!(!verb_list_for(Scope::Backlog).contains(&Verb::Defer));
     }
@@ -3512,6 +3673,168 @@ mod tests {
                 ids: vec!["TASK-0".to_string()],
             }
         );
+    }
+
+    // --- Drive verb (STORY-728) ------------------------------------------
+
+    /// A single-item Open-scope state whose lone target has the given status /
+    /// type / tags — exercises the `drive` verb's status + keystone gates.
+    fn drive_state(status: &str, req_type: &str, tags: &[&str]) -> RedesignState {
+        let item = TargetItem {
+            id: "TASK-7".into(),
+            title: "drive target".into(),
+            req_type: req_type.into(),
+            status: status.into(),
+            priority: "High".into(),
+            body: String::new(),
+            has_test_plan: false,
+            routed_role: None,
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+        };
+        RedesignState::new(vec![item], "advisor")
+    }
+
+    /// Drill into Open, focus the lone item, and move the top highlight onto
+    /// the `drive` verb. Returns the prepared state.
+    fn drilled_on_drive(mut s: RedesignState) -> RedesignState {
+        drill_open(&mut s);
+        s.focus_bottom(); // focus the lone target (sets the focused-item gate)
+        s.focus_top();
+        while s.top_verb() != Some(Verb::Drive) {
+            s.move_down();
+        }
+        s
+    }
+
+    #[test]
+    fn drive_is_keystone_gated_advisor_role_and_appended_last() {
+        // Wiring sanity: `drive` is functional, advisor-gated, keystone-gated,
+        // a single-target launch (no selection requirement), and present last in
+        // the Open list. trace:STORY-728
+        assert!(Verb::Drive.is_functional());
+        assert_eq!(Verb::Drive.required_role(), Some("advisor"));
+        assert!(Verb::Drive.is_keystone_gated());
+        assert!(!Verb::Drive.is_item_level());
+        assert!(Verb::Drive.is_update());
+        assert!(!Verb::Drive.requires_selection());
+        assert_eq!(Verb::Drive.label(), "drive");
+        assert!(verb_list_for(Scope::Open).contains(&Verb::Drive));
+    }
+
+    #[test]
+    fn target_item_keystone_classification() {
+        // Mirrors the CLI's is_keystone_class: epic type, or a keystone-class
+        // tag → keystone; a plain task with routine tags → not. trace:STORY-728
+        let epic = TargetItem {
+            req_type: "Epic".into(),
+            ..drive_state("Approved", "Epic", &[]).items[0].clone()
+        };
+        assert!(epic.is_keystone());
+        for tag in [
+            "keystone",
+            "architecture",
+            "security",
+            "supervised",
+            "needs-supervised-build",
+            "blast-radius:high",
+            "risk:high",
+        ] {
+            let it = drive_state("Approved", "Task", &[tag]).items[0].clone();
+            assert!(it.is_keystone(), "tag {tag} should classify keystone");
+        }
+        let routine = drive_state("Approved", "Task", &["papercut", "batch:x"]).items[0].clone();
+        assert!(!routine.is_keystone());
+    }
+
+    #[test]
+    fn drive_offered_on_approved_non_keystone_in_open_scope() {
+        // The headline path: an Approved + non-keystone spec offers `drive` on
+        // all four axes (role / status / selection / keystone). trace:STORY-728
+        let s = drive_state("Approved", "Story", &[]);
+        let mut s = s;
+        drill_open(&mut s);
+        s.focus_bottom();
+        assert!(s.verb_role_permitted(Verb::Drive));
+        assert!(s.verb_status_permitted(Verb::Drive));
+        assert!(s.verb_selection_permitted(Verb::Drive));
+        assert!(s.verb_keystone_permitted(Verb::Drive));
+    }
+
+    #[test]
+    fn drive_resolves_to_zen_launch_on_focused_approved() {
+        // Selecting `drive` on the focused Approved spec resolves to the
+        // RunOutcome the parent turns into an `aida zen <id>` launch (the IO is
+        // mocked out — the pure machine only decides). trace:STORY-728
+        let s = drilled_on_drive(drive_state("Approved", "Story", &[]));
+        let mut s = s;
+        assert_eq!(s.top_verb(), Some(Verb::Drive));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::Drive {
+                id: "TASK-7".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn drive_greyed_with_reason_on_draft() {
+        // A Draft focus fails the status gate (Approved-only) — `drive` greys and
+        // run_verb refuses with a status message, no launch. trace:STORY-728
+        let mut s = drilled_on_drive(drive_state("Draft", "Story", &[]));
+        assert!(!s.verb_status_permitted(Verb::Drive));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        let msg = s.status.clone().unwrap_or_default();
+        assert!(msg.contains("Approved"), "got: {msg}");
+    }
+
+    #[test]
+    fn drive_greyed_with_reason_on_keystone_epic() {
+        // An Approved EPIC passes the status gate but fails the keystone gate —
+        // keystone / architecture work stays human-supervised. trace:STORY-728
+        let mut s = drilled_on_drive(drive_state("Approved", "Epic", &[]));
+        assert!(s.verb_status_permitted(Verb::Drive));
+        assert!(!s.verb_keystone_permitted(Verb::Drive));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        let msg = s.status.clone().unwrap_or_default();
+        assert!(msg.contains("human-supervised"), "got: {msg}");
+    }
+
+    #[test]
+    fn drive_greyed_with_reason_on_keystone_tag() {
+        // A keystone TAG (not just the epic type) also fails the keystone gate.
+        // trace:STORY-728
+        let mut s = drilled_on_drive(drive_state("Approved", "Story", &["architecture"]));
+        assert!(!s.verb_keystone_permitted(Verb::Drive));
+        assert_eq!(s.run_verb(), RunOutcome::None);
+    }
+
+    #[test]
+    fn drive_refused_for_non_advisor_role() {
+        // `drive` commits the team to autonomously execute — advisor-gated. An
+        // implementer-role cockpit sees it greyed and run_verb refuses with the
+        // role reason. trace:STORY-728
+        let item = TargetItem {
+            id: "TASK-7".into(),
+            title: "drive target".into(),
+            req_type: "Story".into(),
+            status: "Approved".into(),
+            priority: "High".into(),
+            body: String::new(),
+            has_test_plan: false,
+            routed_role: None,
+            tags: Vec::new(),
+        };
+        let mut s = RedesignState::new(vec![item], "implementer");
+        assert!(!s.verb_role_permitted(Verb::Drive));
+        drill_open(&mut s);
+        s.focus_bottom();
+        s.focus_top();
+        while s.top_verb() != Some(Verb::Drive) {
+            s.move_down();
+        }
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        let msg = s.status.clone().unwrap_or_default();
+        assert!(msg.contains("advisor"), "got: {msg}");
     }
 
     // --- Selection grey-out axis (STORY-710 part B / TASK-954) ------------
