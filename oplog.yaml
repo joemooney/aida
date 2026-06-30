@@ -28282,5 +28282,13 @@ operations:
   timestamp: 2026-06-30T16:53:28.599316917Z
   kind: !SetTitle
     title: Decouple the away presence escalation default from `away_drain` into its own `[presence]` knob (today escalation rides the away_drain rung; (c) questions deferred to STORY-555)
-clock: 2728
+- id: 019f1973-a69a-75b0-8f12-86ad9bbdfc14
+  target_id: 019f17dd-4a90-7363-9a3f-01a8d351eb49
+  author: aida
+  node_id: '1'
+  lamport: 2729
+  timestamp: 2026-06-30T16:53:57.530079446Z
+  kind: !SetStatus
+    status: Completed
+clock: 2729
 node_id: '1'
