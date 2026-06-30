@@ -1,0 +1,12 @@
+id: 019f165a-c89f-7300-9761-2d61d7b43705
+spec_id: TASK-1018
+agreed_id: TASK-1018
+title: TASK-0430 — durable audit + one-command reversal for every `Execute` outcome (depends on the `Decision`/`Outcome` shapes defined here)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T02:27:56.191783165Z
+modified_at: 2026-06-30T02:27:56.191783165Z
+req_type: Task
