@@ -26553,5 +26553,17 @@ operations:
   timestamp: 2026-06-30T02:30:42.735981727Z
   kind: !SetStatus
     status: Completed
-clock: 2534
+- id: 019f165d-72e6-7381-90fc-69cd85b25aa7
+  target_id: 019f165d-5ffd-75f3-bcde-afd1306d871b
+  author: aida
+  node_id: '1'
+  lamport: 2535
+  timestamp: 2026-06-30T02:30:50.854829239Z
+  kind: !Create
+    title: 'Followup TASK (file at sign-off): flip the *solo-loop default* groom step to `--autopilot` once the envelope is proven in supervised use (separate, later — `feedback_reliability_fixes_use_keyboard_not'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2535
 node_id: '1'
