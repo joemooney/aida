@@ -26365,5 +26365,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2517
+- id: 019f165a-d96d-7503-896e-d20b19cf8e0f
+  target_id: 019f165a-c89f-7300-9761-2d61d7b43705
+  author: aida
+  node_id: '1'
+  lamport: 2518
+  timestamp: 2026-06-30T02:28:00.493566782Z
+  kind: !Create
+    title: TASK-0430 — durable audit + one-command reversal for every `Execute` outcome (depends on the `Decision`/`Outcome` shapes defined here)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2518
 node_id: '1'
