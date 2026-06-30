@@ -614,6 +614,30 @@ pub(crate) fn describe_pr_completion(c: &PrCompletion) -> String {
     }
 }
 
+/// Assemble the `aida queue work <id> --auto-complete --from-pr` argv the
+/// integrator self-invokes per ready PR. Pure, so the routing guarantee is
+/// pinned by a unit test (and the `orchestration_routing` guardrail).
+///
+/// ONE per-spec orchestration engine (ADR-7): `integrate` does NOT run its own
+/// merge lifecycle — it hands each Done+PR spec to the SAME
+/// `--auto-complete` engine `aida zen` and `aida queue work` use, entering at
+/// the reviewer phase via `--from-pr` (phases 3-6: review → merge → pull →
+/// build). It differs from zen only in SCOPE (an already-Done PR rather than a
+/// from-scratch spec) and START PHASE, never in the per-spec lifecycle. The
+/// caller adds the `AIDA_DRAIN_FORCE` env scoped to the child (TASK-1050) and
+/// runs it in the integrator's own checkout — those are delivery concerns, not
+/// part of the routing argv asserted here.
+// trace:ADR-7 trace:ADR-9 | ai:claude
+pub(crate) fn drive_args(id: &str) -> Vec<String> {
+    vec![
+        "queue".to_string(),
+        "work".to_string(),
+        id.to_string(),
+        "--auto-complete".to_string(),
+        "--from-pr".to_string(),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1219,5 +1243,29 @@ enabled = true
             describe_pr_completion(&c),
             "integrating PR #8 → completes (no trailered spec)"
         );
+    }
+
+    // ── ADR-7 / ADR-9: integrate routes through the one engine ───────────────
+
+    #[test]
+    fn drive_args_routes_through_the_auto_complete_engine() {
+        let args = drive_args("STORY-520");
+        // The routing invariant the orchestration_routing guardrail relies on:
+        // integrate hands the spec to `queue work --auto-complete`, never an
+        // inlined merge lifecycle.
+        assert_eq!(
+            args,
+            vec![
+                "queue".to_string(),
+                "work".to_string(),
+                "STORY-520".to_string(),
+                "--auto-complete".to_string(),
+                "--from-pr".to_string(),
+            ]
+        );
+        assert!(args.contains(&"--auto-complete".to_string()));
+        // `--from-pr` is the re-entry seam — the engine starts at the reviewer
+        // phase (phases 3-6) rather than from-scratch implement.
+        assert!(args.contains(&"--from-pr".to_string()));
     }
 }
