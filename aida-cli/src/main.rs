@@ -85721,19 +85721,15 @@ fn handle_tui_command(
 ) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let cfg = aida_tui::TuiConfig::load(&cwd);
-    // STORY-690: the action->target redesign prototype owns the terminal
-    // directly (like the PTY-host `run()` path), so it must bypass the launcher
-    // intent-fd/shell-wrapper handshake. When `AIDA_TUI_REDESIGN` is on, force
+    // STORY-690: the action->target redesign owns the terminal directly (like
+    // the PTY-host `run()` path), so it must bypass the launcher
+    // intent-fd/shell-wrapper handshake. When the redesign is selected, force
     // the direct `run()` path — which then dispatches to `redesign::run()`.
-    // trace:STORY-690 | ai:claude
-    let redesign = std::env::var("AIDA_TUI_REDESIGN")
-        .map(|v| {
-            matches!(
-                v.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
-        })
-        .unwrap_or(false);
+    // EPIC-54 is now the DEFAULT (TASK-1051): the redesign renders unless
+    // `AIDA_TUI_REDESIGN` is an explicit opt-OUT (`0`/`false`/`no`/`off`).
+    // Routes through the same `aida_tui` predicate `run()` uses so the two
+    // gates can't drift. trace:STORY-690 trace:TASK-1051 | ai:claude
+    let redesign = aida_tui::redesign_enabled();
     let use_launcher = !redesign && (launcher || cfg.mode == aida_tui::TuiMode::Launcher);
     if use_launcher {
         // STORY-681: bare `aida tui` dispatches intents IN-PROCESS and
