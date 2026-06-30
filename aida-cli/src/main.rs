@@ -103788,7 +103788,7 @@ mod queue_work_tests {
         let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "reviewer", false),
+            derive_queue_work_prompt(&plan, "reviewer", false, false),
             "/aida-review --pr 11"
         );
     }
@@ -103799,7 +103799,7 @@ mod queue_work_tests {
         let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "reviewer", false),
+            derive_queue_work_prompt(&plan, "reviewer", false, false),
             "/aida-review"
         );
     }
@@ -103817,7 +103817,7 @@ mod queue_work_tests {
             anchor_title: "title".into(),
         };
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer", false),
+            derive_queue_work_prompt(&plan, "implementer", false, false),
             "/aida-pickup BUG-83"
         );
     }
@@ -103830,7 +103830,7 @@ mod queue_work_tests {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer", false),
+            derive_queue_work_prompt(&plan, "implementer", false, false),
             "/aida-pickup --auto-first"
         );
     }
@@ -103844,7 +103844,7 @@ mod queue_work_tests {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer", false),
+            derive_queue_work_prompt(&plan, "implementer", false, false),
             "/aida-pickup --auto-first"
         );
     }
@@ -103863,8 +103863,27 @@ mod queue_work_tests {
             anchor_title: "title".into(),
         };
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer", true),
+            derive_queue_work_prompt(&plan, "implementer", true, false),
             "/aida-plan BUG-83"
+        );
+    }
+
+    /// STORY-735: guided keystone mode runs /aida-guided-implement (the
+    /// structured decision dialog) with the spec focus, not /aida-pickup.
+    #[test]
+    fn prompt_guided_runs_guided_implement() {
+        let e = resolved("STORY-7", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = QueueWorkPlan {
+            mode: QueueWorkMode::Item,
+            entries: vec![e],
+            scope: "EPIC-20".into(),
+            review_target: None,
+            anchor_display: "STORY-7".into(),
+            anchor_title: "title".into(),
+        };
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "implementer", false, true),
+            "/aida-guided-implement STORY-7"
         );
     }
 
@@ -104890,7 +104909,7 @@ mod queue_work_tests {
             "PR-N pickup must set review_target so it routes to the reviewer"
         );
         assert_eq!(
-            derive_queue_work_prompt(&plan, "reviewer", false),
+            derive_queue_work_prompt(&plan, "reviewer", false, false),
             "/aida-review --pr 457"
         );
     }
@@ -125819,6 +125838,7 @@ fn handle_queue_command(
             sandbox,
             no_launch,
             plan_only,
+            guided,
             with_plan,
             role,
             no_pull,
@@ -126697,6 +126717,10 @@ fn handle_queue_command(
                 // STORY-265: plan-only mode — launch /aida-plan in `plan`
                 // permission mode instead of /aida-pickup implement.
                 *plan_only,
+                // STORY-735: guided keystone mode — launch
+                // /aida-guided-implement (structured decision dialog) instead
+                // of /aida-pickup. trace:STORY-735 | ai:claude
+                *guided,
                 // TASK-1053: single-spec dry-run — print the resolved plan
                 // (session id, worktree, branch, role, skill, lease) and
                 // return before any side effect. trace:TASK-1053 | ai:claude
@@ -127824,6 +127848,7 @@ fn handle_queue_rework(
             /* effort */ None,
             /* strict */ false,
             /* plan_only */ false,
+            /* guided */ false,
             /* dry_run */ false,
         )?;
     } else {
@@ -128665,13 +128690,25 @@ fn infer_queue_work_role(
 ///     argument) still pauses to confirm.
 ///     trace:TASK-86 trace:TASK-548 | ai:claude
 ///     trace:STORY-42 | ai:claude
-fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str, plan_only: bool) -> String {
+fn derive_queue_work_prompt(
+    plan: &QueueWorkPlan,
+    role: &str,
+    plan_only: bool,
+    guided: bool,
+) -> String {
     let role_lower = role.to_ascii_lowercase();
     if role_lower == "reviewer" {
         if let Some((_, n)) = plan.review_target {
             return format!("/aida-review --pr {}", n);
         }
         return "/aida-review".to_string();
+    }
+    // STORY-735: guided keystone mode runs the structured decision-dialog
+    // skill instead of pickup. It is interactive-only and conflicts with the
+    // autonomous drain at the CLI; the spec id is the anchor it dialogs over.
+    // trace:STORY-735 | ai:claude
+    if guided {
+        return format!("/aida-guided-implement {}", plan.anchor_display);
     }
     // STORY-265: plan-only mode runs the planning skill instead of pickup —
     // produce a docs/plans/ file, no code. (Reviewer handled above; plan-only
@@ -128784,6 +128821,12 @@ fn handle_queue_work(
     // touching code; promote Approved -> Planned afterward via
     // `aida plan promote`. trace:STORY-265 | ai:claude
     plan_only: bool,
+    // STORY-735: guided keystone-implementation mode — launch
+    // /aida-guided-implement (a structured decision dialog) instead of
+    // /aida-pickup. Interactive-only; the spec's major architectural forks
+    // are decided up front and recorded as ADRs before any code.
+    // trace:STORY-735 | ai:claude
+    guided: bool,
     // TASK-1053: single-spec preview. Resolve the full plan (scope, role,
     // skill, branch, worktree path, session id, lease) and print it, then
     // return WITHOUT creating a worktree, taking a lease, or launching a
@@ -129003,7 +129046,7 @@ fn handle_queue_work(
         maybe_show_faithful_launcher_notice();
     }
 
-    let prompt = derive_queue_work_prompt(&plan, &role, plan_only);
+    let prompt = derive_queue_work_prompt(&plan, &role, plan_only, guided);
 
     // STORY-281: reviewer pre-flight stale-base check. Fires only when
     // the resolved scope is a GitHub PR AND the inferred role is the
