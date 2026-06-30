@@ -981,6 +981,15 @@ pub struct RedesignState {
     /// state owns no render code yet the parent can paint in the user's
     /// palette. trace:STORY-690 | ai:claude
     pub theme: crate::theme::Theme,
+    /// Per-spec work-liveness for the Targets list — the ambient "is anything
+    /// live working this row?" signal (TASK-978). The cached verdict map +
+    /// probe-time live in [`super::liveness::LivenessProbe`]; the parent module
+    /// refreshes it on a poll cadence (`refresh_if_due`, gated by a TTL so the
+    /// `aida ps --json` shell-out never fires per-frame), and the render path
+    /// reads it with `liveness.for_id`. Empty (everything Idle) until the first
+    /// probe lands.
+    // trace:TASK-978 | ai:claude
+    pub liveness: super::liveness::LivenessProbe,
 }
 
 impl RedesignState {
@@ -1010,6 +1019,7 @@ impl RedesignState {
             role: role.into(),
             status: None,
             theme: crate::theme::Theme::default(),
+            liveness: super::liveness::LivenessProbe::default(),
         }
     }
 

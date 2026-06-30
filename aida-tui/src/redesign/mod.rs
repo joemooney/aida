@@ -20,6 +20,7 @@
 //! trace:STORY-690 | ai:claude
 
 mod list_row;
+mod liveness;
 mod state;
 mod store;
 
@@ -515,6 +516,12 @@ fn event_loop(
         // Keep the bottom panel's target set following the active scope
         // (highlighted at the scope level, drilled-into at the verb level).
         sync_scope_items(st, store, cache, loaded, focus_set.as_ref());
+        // Refresh the per-row liveness verdict (TASK-978) on a poll cadence: the
+        // `aida ps --json` shell-out runs a real process probe, so `refresh_if_due`
+        // gates it behind a TTL — at most once every few seconds, never per-frame.
+        // The render path only reads the cached map. trace:TASK-978 | ai:claude
+        st.liveness
+            .refresh_if_due(&crate::app::aida_exe(), project_root);
         terminal.draw(|f| render(f, st, loaded_spec.as_ref(), pending.as_ref().map(|p| &p.op)))?;
 
         // Drain a finished background verb (BUG-633): on completion set the
@@ -2002,13 +2009,16 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
     // Column widths computed across the *visible* id set so columns line up.
     let widths =
         list_row::ColumnWidths::for_rows(idxs.iter().map(|&real| st.items[real].id.as_str()));
-    // The leading control cells (cursor marker + checkbox) reserve a fixed,
-    // mode-independent prefix; the title gets whatever width remains.
-    // "▸[x] " = marker(1) + checkbox(3) + space(1) = 5 visible cols, then each
-    // column + its single-space separator.
+    // The leading control cells (liveness glyph + cursor marker + checkbox)
+    // reserve a fixed, mode-independent prefix; the title gets whatever width
+    // remains. "● ▸[x] " = liveness(1) + space(1) + marker(1) + checkbox(3) +
+    // space(1) = 7 visible cols, then each column + its single-space separator.
+    // trace:TASK-978 | ai:claude
+    let live_w = 2; // leading liveness glyph (1) + space (1)
     let prefix_w = 5;
     let glyph_w = 2; // status glyph (1) + space (1)
-    let fixed = prefix_w
+    let fixed = live_w
+        + prefix_w
         + widths.id
         + 1
         + widths.req_type
@@ -2065,7 +2075,21 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
             list_row::priority_style(&item.priority, theme)
         };
 
+        // Leading per-row liveness glyph (TASK-978): ● live / ⚠ stale / ◦ idle,
+        // sourced from `aida ps --json` (the cached `st.liveness` probe), so an
+        // operator watching a drive sees at a glance which targets are live vs
+        // orphaned/stale. Rides the structural style over the cursor highlight
+        // (contrast), else its own semantic colour. trace:TASK-978 | ai:claude
+        let live = st.liveness.for_id(&item.id);
+        let live_glyph = list_row::liveness_glyph(live, mode);
+        let live_style = if cursor_active {
+            structural
+        } else {
+            list_row::liveness_style(live, theme)
+        };
+
         let mut row_spans = vec![
+            Span::styled(format!("{live_glyph} "), live_style),
             Span::styled(format!("{marker}{checkbox} "), structural),
             Span::styled(format!("{} ", cells.id), structural),
             Span::styled(format!("{} ", cells.req_type), structural),
