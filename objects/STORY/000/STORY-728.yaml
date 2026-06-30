@@ -1,0 +1,18 @@
+id: 019f178c-44bf-7b00-8d6c-1bd09879a00f
+spec_id: STORY-728
+agreed_id: STORY-728
+title: Add a drive/zen verb to the cockpit so you can kick off an autonomous drive from the TUI
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T08:01:36.447046984Z
+modified_at: 2026-06-30T08:01:36.447046984Z
+req_type: Story
+tags:
+- cockpit
+- drive
+- from-audit
+- tui
+- zen
