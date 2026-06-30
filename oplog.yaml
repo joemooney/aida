@@ -28352,5 +28352,13 @@ operations:
       6. Hint text is user-facing first-run copy: NO SPEC-IDs in the strings (per docs/user-facing-text-conventions.md / TASK-268) — a first-run user does not yet hold the requirement graph.
 
       Primary caller: a human at an interactive TTY immediately after a fresh aida init (verify each criterion in that env). Out of scope: the in-TUI quiet-depth reveal (sibling TASK-936); any aida tour command (rejected above).
-clock: 2732
+- id: 019f1984-7574-7f03-9596-46341541990e
+  target_id: 019f1801-0efb-7b30-ae5d-8470c35a5c8b
+  author: aida
+  node_id: '1'
+  lamport: 2733
+  timestamp: 2026-06-30T17:12:19.060648530Z
+  kind: !SetStatus
+    status: In Progress
+clock: 2733
 node_id: '1'
