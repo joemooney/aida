@@ -3,12 +3,12 @@ spec_id: BUG-666
 agreed_id: BUG-666
 title: 'guided-implement: work the spec directly (no Explore/Agent sub-agents) + a simple one-command finish'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:30:53.654530145Z
-modified_at: 2026-06-30T17:30:53.654530145Z
+modified_at: 2026-06-30T17:42:25.729489087Z
 req_type: Bug
 tags:
 - from-operator
