@@ -26853,5 +26853,17 @@ operations:
   timestamp: 2026-06-30T03:35:21.448381848Z
   kind: !SetStatus
     status: In Progress
-clock: 2567
+- id: 019f16a9-9f21-7e61-8397-9f1d67373aac
+  target_id: 019f16a9-920e-7891-b3c3-5c5f805c448f
+  author: aida
+  node_id: '1'
+  lamport: 2568
+  timestamp: 2026-06-30T03:54:02.913858997Z
+  kind: !Create
+    title: 'aida integrate slice 2a: event-driven + focus-scoped --watch (convert timer-poll)'
+    description: 'Convert the existing aida queue integrate --watch from a blind timer-poll loop into an EVENT-DRIVEN, focus-scoped continuous drain. Lift advisor_watch::scan_new_actionable_event + event_stream_is_live into a shared event_wait.rs; swap the --interval sleep for wait_for_actionable (wake on PhaseDonePr/CiTerminal/PrMerged + an idle backstop); apply focus::resolve_focus to scope the candidate set (add pure integrate::in_focus_scope). REUSE the existing merge-decision core (integrate.rs classify_candidate/etc) + the --from-pr finish + drain_lock. Keystone (drives merges continuously) -> build + careful review + supervised first-runs; gated behind slice 2b own-checkout before any UNATTENDED use. Plan: the STORY-718 integrate-loop design spike.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2568
 node_id: '1'
