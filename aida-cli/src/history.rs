@@ -50,6 +50,13 @@ pub struct HistoryOpts {
     /// When `Some`, only rows whose spec_id is in this set are shown.
     /// Used by `--deferred` to narrow to the primed shelf. trace:STORY-584 | ai:claude
     pub deferred_only_specs: Option<std::collections::HashSet<String>>,
+    /// STORY-737 (delight #4): hide stateless internal META rows (the 6
+    /// AI-prompt templates `aida init` seeds) from the default activity view
+    /// so a fresh project's one real spec isn't drowned — matching `aida list`
+    /// and `aida status`, which already exclude them. The caller leaves this
+    /// `false` when `--include-meta` or an explicit `--type meta` was passed.
+    // trace:STORY-737 | ai:claude
+    pub exclude_meta: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -326,6 +333,9 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
             Some(t) => e.req_type.eq_ignore_ascii_case(t),
             None => true,
         })
+        // STORY-737 (delight #4): drop stateless META prompt-template rows from
+        // the default view. trace:STORY-737 | ai:claude
+        .filter(|e| !opts.exclude_meta || !e.req_type.eq_ignore_ascii_case("meta"))
         .filter(|e| match &opts.author_filter {
             Some(a) => e.author.contains(a),
             None => true,
@@ -518,6 +528,12 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
             if !e.last_author.contains(a) {
                 return false;
             }
+        }
+        // STORY-737 (delight #4): hide stateless META prompt-template rows from
+        // the default digest. `e.req_type` is the path-prefix form ("META"), so
+        // a case-insensitive compare catches it. trace:STORY-737 | ai:claude
+        if opts.exclude_meta && e.req_type.eq_ignore_ascii_case("meta") {
+            return false;
         }
         true
     });
@@ -1388,6 +1404,85 @@ mod tests {
         );
     }
 
+    /// STORY-737 (delight #4): the default `aida history` view hides the
+    /// stateless internal META prompt-template rows (`exclude_meta`), but they
+    /// stay reachable. This drives the real orphan-store git log and asserts the
+    /// META spec's events drop out by default and return when `exclude_meta` is
+    /// off (the `--include-meta` / `--type meta` path).
+    // trace:STORY-737
+    #[test]
+    fn history_excludes_meta_rows_by_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let write = |rel: &str, body: &str| {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        };
+        let meta_path = "objects/META/000/META-1.yaml";
+        let task_path = "objects/TASK/000/TASK-1.yaml";
+
+        // Commit 1: seed both specs as Draft.
+        write(meta_path, "spec_id: META-1\ntitle: m\nstatus: Draft\n");
+        write(task_path, "spec_id: TASK-1\ntitle: t\nstatus: Draft\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "seed"]);
+
+        // Commit 2: flip both to Approved — one status-change event each.
+        write(meta_path, "spec_id: META-1\ntitle: m\nstatus: Approved\n");
+        write(task_path, "spec_id: TASK-1\ntitle: t\nstatus: Approved\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "approve both"]);
+
+        // Default view (exclude_meta = true): META-1 is hidden, TASK-1 shows.
+        let hidden = HistoryOpts {
+            exclude_meta: true,
+            ..base_opts()
+        };
+        let (events, _) = collect_filtered_events(root, &hidden).unwrap();
+        assert!(
+            events.iter().any(|e| e.spec_id == "TASK-1"),
+            "the real spec's events must still show, got: {:?}",
+            events.iter().map(|e| &e.spec_id).collect::<Vec<_>>()
+        );
+        assert!(
+            !events.iter().any(|e| e.spec_id == "META-1"),
+            "META rows must be hidden by default, got: {:?}",
+            events.iter().map(|e| &e.spec_id).collect::<Vec<_>>()
+        );
+
+        // `--include-meta` / `--type meta` (exclude_meta = false): META returns.
+        let shown = HistoryOpts {
+            exclude_meta: false,
+            ..base_opts()
+        };
+        let (events, _) = collect_filtered_events(root, &shown).unwrap();
+        assert!(
+            events.iter().any(|e| e.spec_id == "META-1"),
+            "META rows must be visible when not excluded, got: {:?}",
+            events.iter().map(|e| &e.spec_id).collect::<Vec<_>>()
+        );
+    }
+
     /// A `HistoryOpts` with every filter off — tests override the one field
     /// they exercise.
     // trace:TASK-1055
@@ -1409,6 +1504,7 @@ mod tests {
             archived_only_specs: None,
             deferred_specs: std::collections::HashSet::new(),
             deferred_only_specs: None,
+            exclude_meta: false,
         }
     }
 

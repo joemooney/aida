@@ -2208,6 +2208,9 @@ impl<'a> McpServer<'a> {
             // STORY-584: same — no defer filtering on the MCP ledger.
             deferred_specs: std::collections::HashSet::new(),
             deferred_only_specs: None,
+            // STORY-737: the MCP ledger is the full event stream — keep META
+            // visible (the CLI-only default-view hide doesn't apply here).
+            exclude_meta: false,
         };
         let events = history::collect_event_records(self.storage.path(), &opts)
             .map_err(|e| e.to_string())?;

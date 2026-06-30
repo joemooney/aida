@@ -280,6 +280,31 @@ pub fn render_human(steps: &[NextStep]) -> Option<String> {
     Some(lines.join("\n"))
 }
 
+/// STORY-737 (delight #2): the HUMAN footer shown after `aida add`. A brand-new
+/// user files spec #1 at the TTY and needs the next-step nudge MOST, yet the
+/// post-add block used to fire only in agent mode — the agent got guided, the
+/// human got a bare "Added: …". This pairs the lifecycle `Next:` block (the same
+/// idiom `aida show` uses — approve it / reject it for a fresh draft) with a
+/// trace-link breadcrumb teaching the ONE move that wires code to the spec.
+/// Returns the full multi-line footer; the breadcrumb always renders even when
+/// `status` yields no transitions, so the newcomer always learns the trace step.
+// trace:STORY-737 | ai:claude
+pub fn render_human_add_footer(status: &str, id: &str) -> String {
+    use colored::Colorize;
+    let mut out = String::new();
+    if let Some(block) = render_human(&spec_next(status, id)) {
+        out.push_str(&block);
+        out.push('\n');
+    }
+    let arrow = crate::glyph(crate::glyphs::Glyph::SubArrow);
+    out.push_str(&format!(
+        "  {} Link your code to it: add a {} comment where you implement it.",
+        arrow.dimmed(),
+        format!("// trace:{id}").cyan(),
+    ));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,5 +447,45 @@ mod tests {
         assert!(in_prog.contains("aida queue done STORY-8"));
 
         assert!(render_human(&[]).is_none());
+    }
+
+    // STORY-737 (delight #2): the HUMAN add footer pairs the lifecycle `Next:`
+    // block with the trace-link breadcrumb. A freshly-filed draft leads with
+    // approve/reject AND always teaches the trace step.
+    #[test]
+    fn render_human_add_footer_pairs_next_block_with_trace_breadcrumb() {
+        let footer = render_human_add_footer("draft", "TASK-1");
+        // The lifecycle Next: block (same idiom as `aida show`).
+        assert!(
+            footer.contains("Next:"),
+            "footer missing Next: block:\n{footer}"
+        );
+        assert!(
+            footer.contains("aida edit TASK-1 --status approved"),
+            "draft footer should offer the approve move:\n{footer}"
+        );
+        // The trace-link breadcrumb with the spec's real id.
+        assert!(
+            footer.contains("// trace:TASK-1"),
+            "footer missing trace breadcrumb:\n{footer}"
+        );
+        assert!(
+            footer.contains("Link your code to it"),
+            "footer missing the link-your-code breadcrumb:\n{footer}"
+        );
+        // It is the HUMAN render, not the agent TOON block.
+        assert!(
+            !footer.contains("cmd,to"),
+            "human footer must not emit the agent TOON `next` block:\n{footer}"
+        );
+    }
+
+    // The breadcrumb renders even when the status yields no transitions, so a
+    // newcomer always learns the trace step regardless of lifecycle state.
+    #[test]
+    fn render_human_add_footer_always_emits_trace_breadcrumb() {
+        let footer = render_human_add_footer("frobnicated", "BUG-9");
+        assert!(!footer.contains("Next:"), "no transitions → no Next: block");
+        assert!(footer.contains("// trace:BUG-9"));
     }
 }
