@@ -28610,5 +28610,17 @@ operations:
   timestamp: 2026-06-30T17:56:09.578237168Z
   kind: !SetStatus
     status: Completed
-clock: 2752
+- id: 019f19ac-c58d-7da1-b312-6b731c40bc09
+  target_id: 019f19ac-b85f-75b0-9cc6-3fcbdbaee429
+  author: aida
+  node_id: '1'
+  lamport: 2753
+  timestamp: 2026-06-30T17:56:21.005328748Z
+  kind: !Create
+    title: Flaky CI test gc_aggressive_reduces_pack_count ('failed to run repack') — harden the STORY-733 compaction test against the CI git environment
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2753
 node_id: '1'
