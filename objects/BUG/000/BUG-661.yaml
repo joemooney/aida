@@ -1,0 +1,18 @@
+id: 019f174c-5321-7210-8519-be9fa884e26a
+spec_id: BUG-661
+agreed_id: BUG-661
+title: git-guardrails false-positive blocks worktree feature-branch force-pushes (checks CWD HEAD not the push target)
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T06:51:45.825326245Z
+modified_at: 2026-06-30T06:51:45.825326245Z
+req_type: Bug
+tags:
+- from-audit
+- git-guardrails
+- hooks
+- papercut
+- worktree
