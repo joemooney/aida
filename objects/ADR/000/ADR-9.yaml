@@ -1,0 +1,57 @@
+id: 019f199d-c782-7b53-9c2c-44404c718d31
+spec_id: ADR-9
+agreed_id: ADR-9
+title: 'ADR-7 enforcement: CI guardrail asserts per-spec drivers route through the one engine; burndown fan-out is the single allow-listed exception'
+description: |
+  ## Context
+  ADR-7 asserts aida zen / aida burndown / aida integrate ALL call one per-spec
+  orchestration engine (orchestrate_with_resume in auto_complete.rs), differing
+  only in scope + lifetime + autonomy mode, never in the per-spec lifecycle. Code
+  reality (2026-06-30 map): zen self-invokes `queue work --auto-complete` (full
+  phases 1-6) and integrate self-invokes `--from-pr` (re-enters the engine at
+  phases 3-6) — both route through the engine. But aida burndown DELIBERATELY
+  reimplements the per-spec lifecycle as skill-prose + native Task-tool subagent
+  fan-out (aida-burndown.md explicitly rejects `queue work --auto-complete`). The
+  ADR-as-written conflicts with that deliberate divergence. The fork triggered by
+  zen slice-1 (PR #1231 stopped at implement+PR, zero review) proved a PROSE rule
+  does not hold against a confident agent.
+
+  ## Options considered
+  - Refactor burndown onto the engine (subprocess `queue work --auto-complete`
+    per ready spec) — maximal literal conformance, but high blast radius against
+    the empirically-working autonomous drain; bad trade in a stabilization phase.
+  - Reconcile the ADR to the precise truth + ship a CI guardrail (chosen).
+  - Decision/doc-only — disqualified by its own failure mode: prose is exactly
+    what failed at zen slice-1.
+
+  ## Decision
+  Scope the one-engine invariant to the per-spec ENGINE layer (zen + integrate +
+  queue-work). Record burndown's native-subagent fan-out as a NAMED, rationale'd
+  FLEET-layer exception (it orchestrates a fleet of implementers, one level above
+  the per-spec lifecycle). Ship a guardrail test (the crux): every per-spec
+  driver must route through orchestrate_with_resume(); burndown is the SINGLE
+  explicitly allow-listed exception. A new per-spec driver that reimplements the
+  lifecycle trips CI unless someone consciously adds it to the exception list.
+  Pair with an architecture doc recording the invariant + the exception.
+
+  ## Rationale
+  Substrate-as-bouncer, not another rule: convert "please do not re-fork" from
+  prose into a CI gate. Put enforcement where it is real (the engine layer) and
+  preserve the one piece of autonomy that reliably works (burndown's fan-out).
+
+  ## Consequences
+  A future per-spec driver routes through the engine or consciously joins the
+  exception list. burndown's fan-out is sanctioned and documented, not silently
+  non-conforming. The invariant is checked at CI, not trusted to prose.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T17:39:58.466702878Z
+modified_at: 2026-06-30T17:39:58.466702878Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:ADR-7
+- keystone
+- orchestration
