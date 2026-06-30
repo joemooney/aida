@@ -40,6 +40,7 @@ Everything in this directory is in service of making that scope honest. If a com
 | [vs-saas-pm.md](vs-saas-pm.md) | When Linear / Jira / GitHub Projects make sense vs the lightweight git-canonical, code-aware angle AIDA serves. |
 | [vs-aider.md](vs-aider.md) | **(adjacent neighbor, not competitor)** Aider is a terminal pair-programmer that auto-commits every change; AIDA is the spec graph + lifecycle above the editing. Different layers — "Aider edits, AIDA remembers why" — and how to run Aider as the implementer inside AIDA. |
 | [vs-continue.md](vs-continue.md) | **(adjacent neighbor, not competitor)** Continue is a CI-native AI assistant with declarative `.continue/checks/` markdown gates; AIDA is the requirement graph + lifecycle. Continue enforces *how* code looks; AIDA remembers *what* it was for. How they layer. |
+| [vs-langgraph.md](vs-langgraph.md) | **(runtime/control-plane neighbor)** LangGraph is a durable execution runtime for stateful agent workflows; AIDA is the program-owned coordination record those workflows can read from and write back to. "LangGraph runs the agents; AIDA remembers what the work is for." |
 
 ### Cross-cutting decision aids
 

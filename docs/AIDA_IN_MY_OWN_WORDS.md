@@ -1,37 +1,58 @@
-# AIDA - My Thoughts -  (a human authored document)
+# AIDA as a probe into an emerging ecosystem 
 
-What is next for software development now with these AI agents at our fingertips?
+How does the practice software development evolve?
+
+I assumed we would write requirements not code - too dry, too static
+
+Editor / "Come Jan 2026, if you are using an IDE you are a bad engineer" - yegge Nov 2025
 
 How to not get lost in the confusion of so much constantly shifting and expanding capabilities?
 
+You can build what you dreamed of, what would you build?
+
 For any project I want to be able to interrogate it and know why rather than just what.
 
-Should I individually develop a personal operating system of sorts?
+Should I individually develop a personal operating system environment of sorts?
 
-Should any large company develop a mesh of corporate operating systems/intelligent agents allowing them greater control and ownership their data?
+Should any large company develop a mesh of corporate operating systems/intelligent agents allowing them greater control and ownership of their data?
 
-Documents and policies once static can now be alive with their own agent.
+Future Directions
 
-How to be able to manage the complexity?
+Documents and policies, once static, can now be alive with their own agent.
 
-How to be able to leave a project and come back to it and pick up easily?
+How to manage exponential complexity? web of knowledge
 
-How do we curate and compose?
+Working on so many mini-projects, how to juggle a project effectively?
 
-Aida is the work of hundreds of hours working with coding agents, primarily `claude code`.
+Aida is the work of hundreds of hours working with coding agents, is it just a probe?
 
 Organically grow a solution to evolving needs adapting to changing landscape.
 
-Designed for AI by AI with me as a human guinea pig.
+AIDA was primarily designed by AI for AI with me as a human guinea pig.
+
+Are Anthropic and OpenAI building "operating systems"? that is what it feels like.
+
+Linux Foundation: MCP standarization, Goose adoption (sponsored by Block, 13 engineers).
 
 There are probably hundreds of other similar/adjacent projects, some are very advanced.
 
 Do I have a specific goal with AIDA? No, >95% chance this is throwaway heartbreaker.
 
-Make aida fit seamlessly on top of claude/codex/agy
-intermediate layers multiply complexity
-but there is potentially great stuff to leverage (beads/dolt/...)
+Work seamlessly on top of claude/codex/agy with your own layer
 
-How do you build for the future, I built a requirementss/issue tracking system for humans and it feels wrong/out-dated
+Intermediate layers multiply complexity
+
+There is better stuff out there (beads/dolt/goose/*-axi/...)
+
+How do we curate and compose? Slop avoidance, more humans in the loop
+
+Latest idea, inter-human collaboration: think pair programming, don't just use rely on agents to play devils advocate
+
+What if, instead of an LLM on the backend there is a human - Mechanical Turk
+
+Marketplace of ideas, components and integrate into a common team environment.
+
+Expert Scout in the age of AI (see Wasteland)
+
 
 

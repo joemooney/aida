@@ -15,3 +15,6 @@ policy = "blocks-then-fallback"
 
 [hints]
 workflow_hints = true
+
+[field_study]
+enabled = false
