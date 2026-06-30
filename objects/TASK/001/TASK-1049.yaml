@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:57:27.445662820Z
-modified_at: 2026-06-30T05:03:15.719311321Z
+modified_at: 2026-06-30T05:14:06.689772092Z
 req_type: Task
 tags:
 - orchestrator
@@ -25,3 +25,8 @@ comments:
   content: 'Broadened per ADR-7: the real fix is that aida zen must reuse the FULL shared --auto-complete per-spec orchestration (implement->CI->review->merge->pull), identical to burndown — NOT a truncated implement+PR+handoff. The missing independent reviewer is the visible symptom; the root cause is zen ran only the implementer phase. Fix = call the same orchestration primitive, and the review (plus CI-wait, merge-gate, auto-bump) all come for free.'
   created_at: 2026-06-30T04:59:36.481722535Z
   modified_at: 2026-06-30T04:59:36.481722535Z
+- id: 019f16f2-ebe2-7ef0-a072-85372cec3f97
+  author: joe
+  content: 'Lifecycle/hand-off bug (2026-06-29, operator-hit): the TASK-0439 zen drive printed its hand-off-merge-it message but KEPT RUNNING a final GH-verify loop (confirming the PR was indexed). When the integrator merged #1231 with --delete-branch, the drive could no longer find the OPEN PR (now merged/closed) and misread it as eventual-consistency lag, spinning in a retry loop and HANGING the operators session. This is the SAME truncation: zen hands off mid-lifecycle instead of owning it. FIXES (fold into the full-orchestration repair): (1) if zen owns the full lifecycle per ADR-7, the hand-off message goes away entirely — zen merges it itself, no external integrator to race; (2) the GH-verify must treat a merged/closed PR as SUCCESS, not a retry; (3) never print a hand-off while the drive is still running.'
+  created_at: 2026-06-30T05:14:06.689772092Z
+  modified_at: 2026-06-30T05:14:06.689772092Z
