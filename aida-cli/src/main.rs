@@ -31880,7 +31880,10 @@ fn handle_cache_command(cmd: &CacheCommand, backend: &aida_core::CachedGitBacken
             let actual_sha = aida_core::git_ops::head_sha(backend.path()).unwrap_or_default();
             let count = cache.requirement_count()?;
             let built_at = cache.built_at()?.unwrap_or_else(|| "(never)".into());
-            let store_count = backend.list_requirements(true)?.len();
+            // BUG-664: count object files without parsing them — a full
+            // `list_requirements(true)` YAML-parses every object (~1s) just to
+            // print a count; the directory walk is O(files) with no parse.
+            let store_count = backend.inner().object_count()?;
 
             println!("Cache path:       {}", cache.path().display());
             println!("Cached requirements: {}", count);

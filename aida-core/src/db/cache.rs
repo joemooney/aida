@@ -434,6 +434,44 @@ pub fn read_cache_lock_info(cache_path: &Path) -> Result<Option<CacheLockInfo>> 
     Ok(Some(info))
 }
 
+/// True when the cache write-lock is currently held by a DIFFERENT, still-alive
+/// process (it is mid rebuild/write). Read paths consult this so they serve the
+/// last-good committed snapshot instead of contending for the write lock through
+/// the ~25s retry ladder (BUG-664). A lock-info from THIS process, or from a
+/// dead pid (crashed writer), returns false — so a stale lock never wedges
+/// readers and a single process never defers to itself.
+// trace:BUG-664
+pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
+    match read_cache_lock_info(cache_path) {
+        Ok(Some(info)) => info.pid != std::process::id() && pid_is_alive(info.pid),
+        _ => false,
+    }
+}
+
+/// True when `pid` is a live process. Unix uses `kill(pid, 0)` (probes
+/// existence/permission, sends no signal); other platforms conservatively
+/// return true.
+// trace:BUG-664
+fn pid_is_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: signal 0 only probes existence/permission; it sends nothing.
+        let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+        if rc == 0 {
+            return true;
+        }
+        std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        true
+    }
+}
+
 fn open_connection_with_retry(path: &Path) -> Result<Connection> {
     with_cache_retry(path, "open cache", || {
         let conn = Connection::open(path)
@@ -663,6 +701,18 @@ impl Cache {
             .map(|v| v != SCHEMA_VERSION)
             .unwrap_or(false);
         let schema_drifted = fts_schema_drifted(&conn) || cache_schema_drifted(&conn);
+        // BUG-664: a PURE READER must not take the cache write-lock on open. The
+        // old open unconditionally re-applied the schema AND re-stamped the
+        // schema-version meta on every open — both write transactions. With
+        // `busy_timeout=0` + the retry ladder, a reader opening a healthy cache
+        // while another process held the write-lock for a rebuild blocked +
+        // retried for ~25s (the `aida status` telemetry spikes). The schema is
+        // all `CREATE … IF NOT EXISTS`, so once the tables exist and the stamped
+        // version matches, NOTHING needs writing — gate every write on an actual
+        // create/migrate so the steady-state open is read-only. WAL then lets the
+        // reader serve the last-good committed snapshot with zero contention.
+        let tables_present = cache_tables_present(&conn);
+        let needs_schema_apply = version_mismatch || schema_drifted || !tables_present;
         if version_mismatch || schema_drifted {
             // Drop the cache tables — the next stale-check will rebuild
             // from git. `cache_meta` survives so the source HEAD SHA
@@ -675,16 +725,24 @@ impl Cache {
                 .context("Failed to drop cache tables for schema migration")
             })?;
         }
-        with_cache_write(&path, "apply cache schema", || {
-            conn.execute_batch(SCHEMA_SQL)
-                .context("Failed to apply cache schema")
-        })?;
+        if needs_schema_apply {
+            with_cache_write(&path, "apply cache schema", || {
+                conn.execute_batch(SCHEMA_SQL)
+                    .context("Failed to apply cache schema")
+            })?;
+        }
         let cache = Cache {
             conn: Mutex::new(conn),
             lock_info_path: cache_lock_info_path(&path),
             path,
         };
-        cache.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+        // Only stamp the schema version when it is not already current — an
+        // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
+        // lock (BUG-664). A fresh cache (None) or a migrated one (mismatch) needs
+        // the stamp; a current cache must not write here.
+        if on_disk_version.as_deref() != Some(SCHEMA_VERSION) {
+            cache.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+        }
         // After a schema-version bump (or a structural-drift drop, BUG-485)
         // the head SHA is no longer valid for the (now-empty) cache tables —
         // delete it so `is_stale` returns true (None → stale) and the next
@@ -1303,6 +1361,21 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "blocked",
     "yaml_path",
 ];
+
+/// True when the `requirements_cache` table already exists on disk. A read-only
+/// `sqlite_master` lookup (no write lock). Used by `open()` to skip the schema
+/// apply on a healthy cache so a pure reader never takes the write lock.
+// trace:BUG-664
+fn cache_tables_present(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'requirements_cache'",
+        [],
+        |_| Ok(()),
+    )
+    .optional()
+    .unwrap_or(None)
+    .is_some()
+}
 
 /// Returns true when the on-disk `requirements_fts` table exists but is missing
 /// one or more of the columns the current binary writes. A drifted FTS table
@@ -2949,6 +3022,76 @@ mod tests {
 
         assert_eq!(journal_mode.to_lowercase(), "wal");
         assert_eq!(busy_timeout_ms, 0);
+    }
+
+    // BUG-664: re-opening a HEALTHY (current-schema) cache must not take the
+    // write lock — so a pure reader never blocks behind a writer's lock for the
+    // ~25s retry ladder. We hold an exclusive write transaction on a separate
+    // connection and assert the re-open still completes promptly. A regression
+    // (the old unconditional schema-apply / version re-stamp) would block on the
+    // held write lock and the open would not return within the timeout.
+    #[test]
+    fn open_on_healthy_cache_does_not_block_behind_write_lock() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        // First open establishes the current schema + version stamp.
+        drop(Cache::open(&cache_path).unwrap());
+
+        // Hold an exclusive (write) transaction on a separate connection.
+        let holder = Connection::open(&cache_path).unwrap();
+        holder.busy_timeout(Duration::from_millis(0)).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let p = cache_path.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let outcome = Cache::open(&p).map(|_| ()).map_err(|e| e.to_string());
+            let _ = tx.send(outcome);
+        });
+        let result = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("re-opening a healthy cache must not block behind a held write lock (BUG-664)");
+        result.expect("re-open of a current-schema cache should succeed without writing");
+
+        holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    // BUG-664: read paths consult `foreign_writer_holds_lock` to decide whether
+    // to serve the last-good snapshot instead of contending for the write lock.
+    #[test]
+    fn foreign_writer_holds_lock_only_for_live_foreign_pid() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let lock_path = cache_lock_info_path(&cache_path);
+
+        // No lock-info file → no holder.
+        assert!(!foreign_writer_holds_lock(&cache_path));
+
+        let write_lock = |pid: u32| {
+            let info = CacheLockInfo {
+                pid,
+                command: "test-writer".to_string(),
+                started_at: chrono::Utc::now().to_rfc3339(),
+                user: "test".to_string(),
+                session_id: None,
+            };
+            std::fs::write(&lock_path, serde_json::to_string(&info).unwrap()).unwrap();
+        };
+
+        // This process holds it → not "foreign", must never defer to itself.
+        write_lock(std::process::id());
+        assert!(!foreign_writer_holds_lock(&cache_path));
+
+        // A dead pid (crashed writer) → not held, so it never wedges readers.
+        write_lock(0x7fff_fffe);
+        assert!(!foreign_writer_holds_lock(&cache_path));
+
+        // A live, foreign pid (init, pid 1, always alive on unix) → held.
+        #[cfg(unix)]
+        {
+            write_lock(1);
+            assert!(foreign_writer_holds_lock(&cache_path));
+        }
     }
 
     #[test]
