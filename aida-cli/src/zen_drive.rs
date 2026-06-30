@@ -16,7 +16,9 @@
 //!      orchestrator by self-invoking `aida queue work <spec> --auto-complete
 //!      --no-human <mode>` (implement → CI → review → merge → pull) — the SAME
 //!      per-spec engine `aida burndown` / `aida integrate` use (ADR-7), not a
-//!      fork. The review + merge phases come for free because they are already
+//!      fork. The default is FULLY HEADLESS (`both`) — fire-and-forget;
+//!      `--supervised` keeps the implementer interactive. The review + merge
+//!      phases come for free because they are already
 //!      in the shared primitive. trace:TASK-1049
 //!
 //! Because each invocation drives a single spec in its own worktree, the
@@ -92,12 +94,19 @@ impl ZenEligibility {
     }
 }
 
-/// The default autonomy mode for `aida zen <spec>` (no `--no-human` flag):
-/// run the IMPLEMENTER interactively (the supervised pause point — same as
-/// burndown's supervised per-spec drive) but the REVIEWER headless, as an
-/// independent agent that always runs.
+/// The default autonomy mode for `aida zen <spec>` (no flag): FULLY HEADLESS
+/// fire-and-forget — headless implementer + headless reviewer + auto-merge, so
+/// several INDEPENDENT specs can be fired in parallel and left to drive
+/// themselves to main (STORY-721's intent). Matches `aida burndown`'s
+/// per-spec drive.
 // trace:TASK-1049 | ai:claude
-pub(crate) const DEFAULT_DRIVE_MODE: &str = "reviewer-only";
+pub(crate) const DEFAULT_DRIVE_MODE: &str = "both";
+
+/// The autonomy mode `--supervised` maps to: the implementer is interactive
+/// (the operator drives it) but the reviewer still runs headless as an
+/// independent gate before the auto-merge.
+// trace:TASK-1049 | ai:claude
+pub(crate) const SUPERVISED_DRIVE_MODE: &str = "reviewer-only";
 
 /// Assemble the `aida queue work <spec> --auto-complete --no-human <mode>`
 /// argv that the handler self-invokes. Pure, so the exact set of forwarded
@@ -113,13 +122,18 @@ pub(crate) const DEFAULT_DRIVE_MODE: &str = "reviewer-only";
 /// The autonomy mode maps onto the orchestrator's EXISTING `--no-human` ladder
 /// (no zen-specific pause behavior is invented):
 ///
-///   * **default / `reviewer-only`** — the supervised drive: the implementer
-///     pauses for the human (where burndown's supervised per-spec drive
-///     pauses), but the reviewer runs HEADLESS as an independent gate, so the
-///     review phase ALWAYS runs and the spec drives all the way to main.
-///   * **`both`** — fully headless: the implementer runs headless too, so
-///     several INDEPENDENT specs can be fired in parallel (fire-and-forget).
-///     The review still gates and the merge is automatic.
+///   * **default / `both`** — fully headless fire-and-forget: the implementer
+///     AND the reviewer run headless, so several INDEPENDENT specs can be
+///     fired in parallel and drive themselves to main. The review still gates
+///     and the merge is automatic.
+///   * **`--supervised` / `reviewer-only`** — the implementer is interactive
+///     (the operator drives it), but the reviewer runs HEADLESS as an
+///     independent gate, so the review phase ALWAYS runs and the spec drives
+///     all the way to main.
+///
+/// Mode precedence: an explicit `--no-human=<mode>` wins; else `--supervised`
+/// selects `reviewer-only`; else the `both` default. (`--supervised` and
+/// `--no-human` are mutually exclusive at the CLI.)
 ///
 /// TASK-1049: the previous drive shelled to `--auto-complete --zen`, whose
 /// reviewer phase is an INTERACTIVE Claude session. In zen's autonomous /
@@ -128,8 +142,17 @@ pub(crate) const DEFAULT_DRIVE_MODE: &str = "reviewer-only";
 /// (reviewDecision=NONE). Pointing the drive at the headless `--no-human`
 /// reviewer makes the independent review run unconditionally.
 // trace:TASK-1049 | ai:claude
-pub(crate) fn drive_args(spec: &str, no_human: Option<&str>, no_pull: bool) -> Vec<String> {
-    let mode = no_human.unwrap_or(DEFAULT_DRIVE_MODE);
+pub(crate) fn drive_args(
+    spec: &str,
+    no_human: Option<&str>,
+    supervised: bool,
+    no_pull: bool,
+) -> Vec<String> {
+    let mode = match (no_human, supervised) {
+        (Some(m), _) => m,
+        (None, true) => SUPERVISED_DRIVE_MODE,
+        (None, false) => DEFAULT_DRIVE_MODE,
+    };
     let mut args = vec![
         "queue".to_string(),
         "work".to_string(),
@@ -148,11 +171,21 @@ pub(crate) fn drive_args(spec: &str, no_human: Option<&str>, no_pull: bool) -> V
 /// `--auto-complete --no-human <mode>` drive will run. Mirrors the actual drive
 /// so the preview is faithful. `already_queued` toggles the first step between
 /// auto-queue and skip.
-pub(crate) fn format_zen_plan(spec: &str, already_queued: bool, no_human: Option<&str>) -> String {
-    let mode = match no_human.unwrap_or(DEFAULT_DRIVE_MODE) {
-        "both" => "headless implementer + reviewer (--no-human both)".to_string(),
-        // The supervised default: interactive implementer, independent headless
-        // reviewer. trace:TASK-1049
+pub(crate) fn format_zen_plan(
+    spec: &str,
+    already_queued: bool,
+    no_human: Option<&str>,
+    supervised: bool,
+) -> String {
+    let resolved = match (no_human, supervised) {
+        (Some(m), _) => m,
+        (None, true) => SUPERVISED_DRIVE_MODE,
+        (None, false) => DEFAULT_DRIVE_MODE,
+    };
+    let mode = match resolved {
+        "both" => "headless implementer + reviewer (--no-human both, fire-and-forget)".to_string(),
+        // Supervised: interactive implementer, independent headless reviewer.
+        // trace:TASK-1049
         _ => "supervised implementer + independent reviewer (--no-human reviewer-only)".to_string(),
     };
     let mut out = String::new();
@@ -234,13 +267,30 @@ mod tests {
     }
 
     // TASK-1049: the default drive must invoke the FULL shared per-spec
-    // primitive (`--auto-complete`) with the reviewer running headless
-    // (`--no-human reviewer-only`) — NOT the old truncated `--auto-complete
-    // --zen` whose interactive reviewer no-showed in zen's autonomous context.
+    // primitive (`--auto-complete`) FULLY HEADLESS (`--no-human both`) — the
+    // fire-and-forget default — NOT the old truncated `--auto-complete --zen`
+    // whose interactive reviewer no-showed in zen's autonomous context.
     #[test]
-    fn drive_args_default_invokes_full_primitive_with_independent_reviewer() {
+    fn drive_args_default_invokes_full_primitive_fully_headless() {
         assert_eq!(
-            drive_args("STORY-721", None, false),
+            drive_args("STORY-721", None, false, false),
+            vec![
+                "queue",
+                "work",
+                "STORY-721",
+                "--auto-complete",
+                "--no-human",
+                "both"
+            ]
+        );
+    }
+
+    // `--supervised` is the opt-in counterpart: interactive implementer, but
+    // the reviewer still runs headless as an independent gate (`reviewer-only`).
+    #[test]
+    fn drive_args_supervised_maps_to_reviewer_only() {
+        assert_eq!(
+            drive_args("STORY-721", None, true, false),
             vec![
                 "queue",
                 "work",
@@ -252,13 +302,19 @@ mod tests {
         );
     }
 
-    // The drive must reach the full lifecycle (review + merge), so it must NOT
-    // emit a phase-truncating `--auto-complete=through-ci` / `through-merge`
-    // variant, and must NOT fall back to the supervised `--zen` reviewer.
+    // The drive must reach the full lifecycle (review + merge) in EVERY mode,
+    // so it must NOT emit a phase-truncating `--auto-complete=through-ci` /
+    // `through-merge` variant, and must NOT fall back to the `--zen` reviewer.
     #[test]
     fn drive_args_is_not_truncated_and_runs_the_reviewer() {
-        for no_human in [None, Some("reviewer-only"), Some("both")] {
-            let args = drive_args("BUG-9", no_human, false);
+        let cases = [
+            (None, false),                  // default — fully headless
+            (None, true),                   // --supervised
+            (Some("both"), false),          // explicit both
+            (Some("reviewer-only"), false), // explicit reviewer-only
+        ];
+        for (no_human, supervised) in cases {
+            let args = drive_args("BUG-9", no_human, supervised, false);
             // Full lifecycle primitive — bare `--auto-complete` is variant Full
             // (implement -> CI -> review -> merge -> pull -> build).
             assert!(args.iter().any(|a| a == "--auto-complete"));
@@ -275,17 +331,19 @@ mod tests {
         }
     }
 
+    // An explicit `--no-human=<mode>` wins over the `--supervised`/default
+    // resolution, and `--no-pull` is forwarded.
     #[test]
-    fn drive_args_forwards_no_human_both_and_no_pull() {
+    fn drive_args_explicit_no_human_wins_and_forwards_no_pull() {
         assert_eq!(
-            drive_args("BUG-9", Some("both"), true),
+            drive_args("BUG-9", Some("reviewer-only"), false, true),
             vec![
                 "queue",
                 "work",
                 "BUG-9",
                 "--auto-complete",
                 "--no-human",
-                "both",
+                "reviewer-only",
                 "--no-pull"
             ]
         );
@@ -293,20 +351,26 @@ mod tests {
 
     #[test]
     fn plan_lists_every_phase_and_auto_queue_step() {
-        let plan = format_zen_plan("STORY-721", false, None);
+        let plan = format_zen_plan("STORY-721", false, None, false);
         assert!(plan.contains("would zen-drive STORY-721"));
         assert!(plan.contains("queue -> implement -> CI -> review -> merge -> pull"));
         assert!(plan.contains("auto-queue"));
         assert!(plan.contains("squash-merge the PR"));
         assert!(plan.contains("auto-bump"));
-        // The default is the supervised drive with an independent reviewer.
+        // The default is the fully-headless fire-and-forget drive.
+        assert!(plan.contains("fire-and-forget"));
+    }
+
+    #[test]
+    fn plan_supervised_shows_independent_reviewer() {
+        let plan = format_zen_plan("STORY-721", false, None, true);
         assert!(plan.contains("independent reviewer"));
     }
 
     #[test]
     fn plan_skips_queue_step_when_already_queued_and_shows_headless_mode() {
-        let plan = format_zen_plan("BUG-9", true, Some("both"));
+        let plan = format_zen_plan("BUG-9", true, Some("both"), false);
         assert!(plan.contains("skip queue-add"));
-        assert!(plan.contains("headless implementer + reviewer (--no-human both)"));
+        assert!(plan.contains("headless implementer + reviewer (--no-human both"));
     }
 }

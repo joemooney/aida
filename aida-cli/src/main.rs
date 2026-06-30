@@ -3847,6 +3847,7 @@ fn run() -> Result<()> {
         // form. trace:STORY-721 | ai:claude
         Command::Zen {
             spec,
+            supervised,
             no_human,
             no_pull,
             dry_run,
@@ -3858,6 +3859,7 @@ fn run() -> Result<()> {
                 &user_id,
                 spec.as_deref(),
                 no_human.as_deref(),
+                *supervised,
                 *no_pull,
                 *dry_run,
             )?;
@@ -14460,6 +14462,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         // the spec's status before driving it. trace:STORY-721 | ai:claude
         Command::Zen {
             spec,
+            supervised,
             no_human,
             no_pull,
             dry_run,
@@ -14472,6 +14475,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 &user_id,
                 spec.as_deref(),
                 no_human.as_deref(),
+                *supervised,
                 *no_pull,
                 *dry_run,
             );
@@ -134477,6 +134481,7 @@ fn run_zen_drive(
     user_id: &str,
     spec: Option<&str>,
     no_human: Option<&str>,
+    supervised: bool,
     no_pull: bool,
     dry_run: bool,
 ) -> Result<()> {
@@ -134512,7 +134517,7 @@ fn run_zen_drive(
     if dry_run {
         print!(
             "{}",
-            zen_drive::format_zen_plan(&display, already_queued, no_human)
+            zen_drive::format_zen_plan(&display, already_queued, no_human, supervised)
         );
         return Ok(());
     }
@@ -134524,7 +134529,7 @@ fn run_zen_drive(
     // current_exe()) survives a mid-run `cargo build` swap. The drive owns the
     // implement → CI → review → merge → pull sequence.
     let exe = resolve_aida_exe();
-    let args = zen_drive::drive_args(&display, no_human, no_pull);
+    let args = zen_drive::drive_args(&display, no_human, supervised, no_pull);
     eprintln!(
         "  {} zen-driving {} — aida {}",
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
