@@ -3,12 +3,12 @@ spec_id: STORY-723
 agreed_id: STORY-723
 title: 'Front-door actionable launcher: no-args/status/list show live actionable work + lead with zen/ship'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T06:32:07.940435918Z
-modified_at: 2026-06-30T06:32:07.940435918Z
+modified_at: 2026-06-30T07:10:27.064936616Z
 req_type: Story
 tags:
 - cli
