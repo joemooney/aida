@@ -8,13 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:14:26.619412393Z
-modified_at: 2026-06-16T08:29:18.329430456Z
+modified_at: 2026-06-30T16:36:09.098969132Z
 req_type: Task
 tags:
 - autonomy
 - from-product
 - integrator
 - relates:STORY-625
+relationships:
+- rel_type: Parent
+  target_id: 019ecf84-cf43-7321-b0a9-8c263e9dad83
+  created_at: 2026-06-30T16:36:09.098969132Z
 history:
 - id: 019ecf8c-9874-7d02-a864-61c93770ce10
   author: aida-auto-bump
