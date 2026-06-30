@@ -94,6 +94,10 @@ pub(crate) enum Glyph {
     FlowBlocked,
     /// Work-routing: present in a role queue, not yet started (↑). trace:TASK-835
     FlowQueued,
+    // trace:STORY-730 | ai:claude
+    /// Paused / walked-away (⏸) — the "since you were away" morning-after banner
+    /// marker on `aida status`.
+    Pause,
 }
 
 impl Glyph {
@@ -122,6 +126,7 @@ impl Glyph {
             Glyph::FlowActive => "▶",
             Glyph::FlowBlocked => "⊘",
             Glyph::FlowQueued => "↑",
+            Glyph::Pause => "⏸",
         }
     }
 
@@ -150,6 +155,7 @@ impl Glyph {
             Glyph::FlowActive => ">",
             Glyph::FlowBlocked => "x",
             Glyph::FlowQueued => "^",
+            Glyph::Pause => "[paused]",
         }
     }
 
@@ -188,6 +194,7 @@ impl Glyph {
             Glyph::FlowActive => "flow_active",
             Glyph::FlowBlocked => "flow_blocked",
             Glyph::FlowQueued => "flow_queued",
+            Glyph::Pause => "pause",
         }
     }
 
@@ -207,7 +214,7 @@ impl Glyph {
 
     /// Every variant, for iteration (name parsing, exhaustive tests).
     /// trace:STORY-629
-    pub(crate) const ALL: [Glyph; 21] = [
+    pub(crate) const ALL: [Glyph; 22] = [
         Glyph::Check,
         Glyph::Cross,
         Glyph::Pending,
@@ -229,6 +236,7 @@ impl Glyph {
         Glyph::FlowActive,
         Glyph::FlowBlocked,
         Glyph::FlowQueued,
+        Glyph::Pause,
     ];
 }
 

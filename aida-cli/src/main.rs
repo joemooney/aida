@@ -49,6 +49,7 @@ mod findings;
 mod focus;
 mod forge;
 mod global_queue;
+mod last_drain;
 // trace:TASK-974 | ai:claude — AXI #9 lifecycle-aware next-step help block.
 mod help_next;
 mod interview;
@@ -91130,6 +91131,12 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
 /// of SPIKE-57; this verb is just the front door + the named predicate today.
 // trace:TASK-746 | ai:claude
 fn handle_human_command(short: bool, backend: &aida_core::CachedGitBackend) -> Result<()> {
+    // STORY-730: the morning-after banner on `aida status` points the operator at
+    // `aida human` — running it means they have looked, so acknowledge the last
+    // drain outcome and the banner stops nagging. Best-effort. trace:STORY-730
+    if let Ok(root) = find_project_root() {
+        last_drain::acknowledge(&root);
+    }
     handle_list_human(short, backend)
 }
 
@@ -108953,6 +108960,40 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
     }
 }
 
+/// STORY-730: print the "since you were away" morning-after banner ABOVE the
+/// human `aida status` snapshot when a recent, un-acknowledged drain outcome is
+/// persisted at `.aida/last-drain.json`. The single highest-trust moment is "I
+/// walked away — what happened?", and this is the first place that answers it.
+/// No-op when there is no recent/non-empty/un-acknowledged outcome. The pause
+/// marker routes through the glyph registry so an `ascii` profile re-renders it.
+// trace:STORY-730 | ai:claude
+fn print_morning_after_banner(project_root: &std::path::Path) {
+    let Some(outcome) = last_drain::LastDrainOutcome::read(project_root) else {
+        return;
+    };
+    let pause = crate::glyphs::get(crate::glyphs::Glyph::Pause, Some(project_root));
+    if let Some(line) = outcome.banner(chrono::Utc::now(), pause) {
+        println!("{}", line.yellow().bold());
+        if outcome.findings_to_triage > 0 {
+            println!("  {}", "drill down → `aida findings list`".dimmed());
+        }
+        println!();
+    }
+}
+
+/// STORY-730: the AGENT/TOON mirror of [`print_morning_after_banner`] — a single
+/// compact `last_drain` scalar line (no glyph) above the TOON status snapshot,
+/// under the same suppression rules. No-op when nothing recent to report.
+// trace:STORY-730 | ai:claude
+fn print_morning_after_toon(project_root: &std::path::Path) {
+    let Some(outcome) = last_drain::LastDrainOutcome::read(project_root) else {
+        return;
+    };
+    if let Some(compact) = outcome.compact(chrono::Utc::now()) {
+        println!("{}", crate::toon::scalar("last_drain", &compact));
+    }
+}
+
 /// Render the fast `aida status` snapshot. One compact screen: role, branch,
 /// queue depth, and the cache-sourced key counts, plus a footer pointing at the
 /// rich/diagnostic surfaces (`--full`, `aida doctor`).
@@ -109250,11 +109291,14 @@ fn handle_bare_agent_status() -> Result<()> {
     let snap = collect_fast_status_snapshot(&project_root);
     // TASK-964: in TOON agent mode, emit the token-efficient snapshot (this
     // handler is already agent-only, but AIDA_AGENT_OUTPUT=0 force-selects the
-    // human shape for parity with the explicit `aida status`). trace:TASK-964
+    // human shape for parity with the explicit `aida status`). STORY-730: lead
+    // with the morning-after drain banner. trace:TASK-964 trace:STORY-730
     if agent_output_mode() {
+        print_morning_after_toon(&project_root);
         print_toon_status(&snap, &project_root);
         return Ok(());
     }
+    print_morning_after_banner(&project_root);
     print_fast_status(&snap);
 
     let queued = agent_bare_top_queued(&project_root, &snap.role, AGENT_BARE_QUEUE_TOPN);
@@ -109587,10 +109631,13 @@ fn handle_status_command_distributed(
         let snap = collect_fast_status_snapshot(&project_root);
         // TASK-964: AGENT-MODE renders the token-efficient TOON snapshot; the
         // human TTY path keeps the byte-identical emoji/rule snapshot.
-        // trace:TASK-964
+        // STORY-730: each LEADS with the morning-after drain banner when a recent
+        // un-acknowledged outcome is persisted. trace:TASK-964 trace:STORY-730
         if agent_output_mode() {
+            print_morning_after_toon(&project_root);
             print_toon_status(&snap, &project_root);
         } else {
+            print_morning_after_banner(&project_root);
             print_fast_status(&snap);
         }
         return Ok(());
@@ -134179,6 +134226,14 @@ fn finalize_drain_summary(
     let project_root = find_main_worktree_root().ok();
     if usage::is_enabled(project_root.as_deref()) {
         usage::append_value(&record);
+    }
+    // STORY-730: persist the compact outcome to `.aida/last-drain.json` so the
+    // next bare `aida status` can LEAD with a "since you were away" banner —
+    // otherwise this tally dies on the ephemeral stderr render above. Sibling of
+    // the live drain-state file (kept distinct so the "presence ⇒ live-or-crashed"
+    // invariant of `drain-state.json` is unaffected). Best-effort. trace:STORY-730
+    if let Some(root) = project_root.as_deref() {
+        let _ = last_drain::LastDrainOutcome::from_summary(&summary, &ts).write(root);
     }
     // STORY-712: emit the terminal QueueDrained wake — the "agent is done" an
     // overnight loop waits on. Drain-level, so no spec. Best-effort, not
