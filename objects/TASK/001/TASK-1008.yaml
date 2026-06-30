@@ -3,12 +3,12 @@ spec_id: TASK-1008
 agreed_id: TASK-1008
 title: TTL auto-expiry on `leased_at` (reservation-leak mitigation, risk 4)
 description: ''
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:24:45.397700800Z
-modified_at: 2026-06-30T02:24:45.397700800Z
+modified_at: 2026-06-30T03:35:18.137324595Z
 req_type: Task
 relationships:
 - rel_type: Child
