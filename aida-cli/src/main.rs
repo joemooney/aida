@@ -920,6 +920,37 @@ fn render_search_fields(
     }
 }
 
+/// The TOON table name for an `aida graph` walk in a given `mode` (the string
+/// `handle_graph_command` already resolved). Each graph direction gets its own
+/// table name so an agent can key off the relation; `--follow`/unknown modes
+/// fall back to a neutral `related`.
+// trace:BUG-672 | ai:claude — plain `//` keeps the marker out of any doc/help.
+fn graph_agent_table_name(mode: &str) -> &'static str {
+    match mode {
+        "blocked-by" => "blocked_by",
+        "blocks" => "blocks",
+        "impact" => "impact",
+        "tree" => "tree",
+        _ => "related",
+    }
+}
+
+/// Render the agent-mode body of `aida graph`: a `root: <id> (<mode>)` preamble
+/// (the `count:`-style header the other agent surfaces carry) plus a TOON
+/// `<name>[N]{id,title,status}` table over the walk's `rows`. An EMPTY `rows`
+/// still emits a valid `<name>[0]{...}:` header so an agent parses the empty and
+/// filled directions uniformly. Returned as a `String` so the branch is
+/// unit-testable without a store.
+// trace:BUG-672 | ai:claude — plain `//` keeps the marker out of any doc/help.
+fn render_graph_agent(mode: &str, root_label: &str, rows: &[Vec<String>]) -> String {
+    let field_refs = ["id", "title", "status"];
+    let table_name = graph_agent_table_name(mode);
+    format!(
+        "root: {root_label} ({mode})\n{}",
+        crate::toon::table_raw(table_name, &field_refs, rows)
+    )
+}
+
 #[cfg(test)]
 mod task970_agent_output_tests {
     use super::*;
@@ -1107,6 +1138,123 @@ mod task970_agent_output_tests {
         assert!(human.contains("─"), "box-table has a divider rule: {human}");
         assert!(human.contains("STORY-1") && human.contains("in-progress"));
         assert!(human.contains("1 results"));
+    }
+
+    // BUG-672: the DEFAULT `aida search` path (no `--fields`) now routes through
+    // the same lean TOON projection in agent mode instead of the hardcoded human
+    // box-table. The default schema is `toon_list_fields(None)` and the renderer
+    // is the shared `render_search_fields`, so agent mode emits `specs[N]{...}`
+    // with NO `─` rule, while the human path keeps the box-table (with the rule).
+    // trace:BUG-672
+    #[test]
+    fn search_default_agent_emits_toon_not_boxtable() {
+        colored::control::set_override(false); // deterministic, no ANSI
+        let selected = toon_list_fields(None).unwrap(); // the no-`--fields` schema
+        assert_eq!(selected, vec!["id", "title", "status", "type"]);
+
+        let results = vec![fields_summary(
+            "STORY-1",
+            "first thing",
+            "in-progress",
+            "high",
+        )];
+
+        // AGENT mode (what the default path passes): TOON `specs[...]` shape, the
+        // full default schema, and crucially NO box-table divider rule.
+        let agent = render_search_fields(&results, &selected, true);
+        assert!(
+            agent.contains("specs[1]{id,title,status,type}:"),
+            "default agent search emits the TOON specs table: {agent}"
+        );
+        assert!(
+            !agent.contains('─'),
+            "no human box-table rule leaks into the default agent search: {agent}"
+        );
+        assert!(agent.contains("STORY-1") && agent.contains("in-progress"));
+
+        // HUMAN mode keeps the aligned box-table with its divider rule.
+        let human = render_search_fields(&results, &selected, false);
+        assert!(
+            !human.contains("specs["),
+            "human default search keeps the box-table, not TOON: {human}"
+        );
+        assert!(
+            human.contains('─'),
+            "human box-table has a divider rule: {human}"
+        );
+    }
+
+    // BUG-672: `aida graph` in agent mode emits a parseable TOON table named per
+    // direction with a `{id,title,status}` schema — an EMPTY direction still
+    // emits a valid `<name>[0]{...}:` header (NOT the human prose `(no related
+    // specs in this direction)`), so an agent parses empty and filled directions
+    // uniformly. trace:BUG-672
+    #[test]
+    fn graph_agent_emits_toon_table() {
+        colored::control::set_override(false);
+
+        // Direction names map to distinct table names.
+        assert_eq!(graph_agent_table_name("blocked-by"), "blocked_by");
+        assert_eq!(graph_agent_table_name("blocks"), "blocks");
+        assert_eq!(graph_agent_table_name("impact"), "impact");
+        assert_eq!(graph_agent_table_name("tree"), "tree");
+        assert_eq!(graph_agent_table_name("follow"), "related");
+
+        // EMPTY direction: a valid zero-row TOON header, the root preamble, and
+        // none of the human prose.
+        let empty = render_graph_agent("blocked-by", "BUG-672", &[]);
+        assert!(
+            empty.contains("blocked_by[0]{id,title,status}:"),
+            "empty direction is a valid empty TOON table: {empty}"
+        );
+        assert!(empty.contains("root: BUG-672 (blocked-by)"));
+        assert!(
+            !empty.contains("no related specs"),
+            "no human prose leaks into the agent graph: {empty}"
+        );
+
+        // NON-EMPTY direction: one row per related spec, in the table body.
+        let rows = vec![vec![
+            "TASK-5".to_string(),
+            "blocker thing".to_string(),
+            "in-progress".to_string(),
+        ]];
+        let filled = render_graph_agent("blocks", "BUG-672", &rows);
+        assert!(
+            filled.contains("blocks[1]{id,title,status}:"),
+            "filled direction is a 1-row TOON table: {filled}"
+        );
+        assert!(filled.contains("TASK-5") && filled.contains("in-progress"));
+    }
+
+    // BUG-672 (Finding #4): both `aida search` and `aida graph` emit a trailing
+    // `next[]{cmd,to}` drill-in block — `aida show <id>` is the move an agent
+    // reaching for a result/neighbor is missing. trace:BUG-672
+    #[test]
+    fn search_and_graph_emit_next_block() {
+        // Search with results suggests the placeholder drill-in.
+        let s = crate::help_next::render(&crate::help_next::search_next(true)).unwrap();
+        assert!(
+            s.contains("next[1]{cmd,to}:"),
+            "search emits a next block: {s}"
+        );
+        assert!(s.contains("aida show <id>"));
+        // No results => no block.
+        assert!(crate::help_next::search_next(false).is_empty());
+
+        // Graph with neighbors suggests the placeholder drill-in; an empty
+        // direction points at the queried spec's own detail.
+        let g = crate::help_next::render(&crate::help_next::graph_next("BUG-672", true)).unwrap();
+        assert!(
+            g.contains("aida show <id>"),
+            "graph emits a next block: {g}"
+        );
+        let g_empty =
+            crate::help_next::render(&crate::help_next::graph_next("BUG-672", false)).unwrap();
+        assert!(
+            g_empty.contains("aida show BUG-672"),
+            "empty-direction graph nudges the root spec: {g_empty}"
+        );
     }
 
     // STORY-734: an unknown `--fields` name on `aida search` is rejected the same
@@ -18613,6 +18761,29 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 return Ok(());
             }
 
+            // BUG-672: the DEFAULT search path (no `--fields`) was a hardcoded
+            // human box-table even in agent mode — the most-called discovery
+            // verb leaked human chrome (`─` rule, padded columns, count footer)
+            // to agents instead of the lean TOON projection STORY-734 gave the
+            // `--fields` path. Route the default through the SAME minimal
+            // `specs[N]{id,title,status,type}` schema `aida list` emits (reuse
+            // `toon_list_fields(None)` + `render_search_fields`, do NOT reinvent),
+            // so the no-`--fields` case finally reaches STORY-734 parity. The
+            // human TTY path keeps the box-table unchanged. trace:BUG-672
+            if agent_output_mode() {
+                let selected = toon_list_fields(None)?;
+                println!("{}", render_search_fields(&results, &selected, true));
+                // BUG-672 (Finding #4): trailing drill-in next-step block —
+                // `aida show <id>` is the move an agent reaching for a search
+                // result is missing. Placeholder id (multi-row surface), same
+                // rule `list` follows. trace:BUG-672
+                let next = crate::help_next::search_next(!results.is_empty());
+                if let Some(block) = crate::help_next::render(&next) {
+                    println!("{block}");
+                }
+                return Ok(());
+            }
+
             if results.is_empty() {
                 println!("No results for: {}", query);
             } else {
@@ -18630,6 +18801,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     );
                 }
                 println!("\n{} results", results.len());
+            }
+            // BUG-672 (Finding #4): the HUMAN search surface gets the same
+            // drill-in nudge via the `Next:` block (the idiom `aida show` uses),
+            // so the operator sees the next move too. trace:BUG-672
+            let next = crate::help_next::search_next(!results.is_empty());
+            if let Some(block) = crate::help_next::render_human(&next) {
+                println!("{block}");
             }
         }
         Command::Comment(CommentCommand::Add {
@@ -26395,6 +26573,39 @@ fn handle_graph_command(
         return Ok(());
     }
 
+    // BUG-672: in agent mode the relation is emitted as a parseable TOON table
+    // (an EMPTY table when the direction has no neighbors) instead of the human
+    // prose `(no related specs in this direction)` / indented tree — so an agent
+    // parses graph results uniformly regardless of direction or fill. The table
+    // is named per direction (`blocked_by` / `blocks` / `impact` / `tree` /
+    // `related`) with a `{id,title,status}` schema; a `root:` header line states
+    // the queried spec + mode (the `count:`-style preamble the other agent
+    // surfaces use). Status reuses `toon_status_token` so the value matches the
+    // rest of the agent surface. The human TTY path below is unchanged.
+    // trace:BUG-672
+    if agent_output_mode() {
+        let rows: Vec<Vec<String>> = result
+            .nodes
+            .iter()
+            .map(|nid| match store.get_requirement_by_id(nid) {
+                Some(r) => vec![
+                    r.display_id(),
+                    r.title.clone(),
+                    toon_status_token(&format!("{:?}", r.status)),
+                ],
+                None => vec![nid.to_string(), String::new(), "unresolved".to_string()],
+            })
+            .collect();
+        println!("{}", render_graph_agent(mode, &root_label, &rows));
+        // Drill-in next-step block — into a related spec when the walk found
+        // neighbors, else the root spec's own detail. trace:BUG-672
+        let next = crate::help_next::graph_next(&root_label, !result.nodes.is_empty());
+        if let Some(block) = crate::help_next::render(&next) {
+            println!("{block}");
+        }
+        return Ok(());
+    }
+
     println!(
         "{} {} {} — {}",
         "Graph".bold(),
@@ -26404,6 +26615,12 @@ fn handle_graph_command(
     );
     if result.nodes.is_empty() {
         println!("  {}", "(no related specs in this direction)".dimmed());
+        // BUG-672: the human surface gets the same drill-in nudge — point at the
+        // queried spec's own detail when the direction is empty. trace:BUG-672
+        let next = crate::help_next::graph_next(&root_label, false);
+        if let Some(block) = crate::help_next::render_human(&next) {
+            println!("{block}");
+        }
         return Ok(());
     }
     if is_tree {
@@ -26476,6 +26693,12 @@ fn handle_graph_command(
             shelved,
             rejected
         );
+    }
+    // BUG-672 (Finding #4): trailing `Next:` block on the human graph surface —
+    // drill into a related spec (the walk returned neighbors here). trace:BUG-672
+    let next = crate::help_next::graph_next(&root_label, true);
+    if let Some(block) = crate::help_next::render_human(&next) {
+        println!("{block}");
     }
     Ok(())
 }

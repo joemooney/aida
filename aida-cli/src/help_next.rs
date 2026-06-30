@@ -220,6 +220,34 @@ pub fn queue_next(first_id: Option<&str>) -> Vec<NextStep> {
     }
 }
 
+/// Next steps after `aida search`: drill into a result row. `search` is a
+/// MULTI-ROW surface, so the command templates a literal `<id>` placeholder
+/// (the same rule [`list_next`] follows) rather than picking one row's concrete
+/// id — that keeps a real spec id from being echoed a second time into the
+/// machine-parseable id stream. An empty result set yields no step (so the
+/// caller emits no trailing block).
+// trace:BUG-672 | ai:claude — plain `//` keeps the marker out of any doc/help.
+pub fn search_next(has_results: bool) -> Vec<NextStep> {
+    if !has_results {
+        return Vec::new();
+    }
+    vec![NextStep::new("aida show <id>", "detail")]
+}
+
+/// Next steps after `aida graph`: drill into a related spec when the walk
+/// returned neighbors (placeholder `<id>` — `graph` is a multi-row surface, same
+/// rule as [`list_next`]/[`search_next`]), or fall back to the root spec's own
+/// detail when the direction is empty so the agent always has a forward move.
+/// `root` is the queried spec's display id.
+// trace:BUG-672 | ai:claude — plain `//` keeps the marker out of any doc/help.
+pub fn graph_next(root: &str, has_related: bool) -> Vec<NextStep> {
+    if has_related {
+        vec![NextStep::new("aida show <id>", "detail")]
+    } else {
+        vec![NextStep::new(format!("aida show {root}"), "detail")]
+    }
+}
+
 /// Render a slice of next steps as a TOON `next[N]{cmd,to}:` block, or `None`
 /// when there is nothing to suggest (so the caller emits no trailing block).
 /// Round-trippable TOON consistent with the rest of the agent surface.
