@@ -3852,17 +3852,24 @@ fn run() -> Result<()> {
             supervised,
             no_human,
             no_pull,
+            force,
+            solo,
+            into_epic,
             dry_run,
             command: _,
         } => {
             let user_id = current_user_id(None);
             run_zen_drive(
                 &storage,
+                None, // legacy storage path: no git backend for auto-approve
                 &user_id,
                 spec.as_deref(),
                 no_human.as_deref(),
                 *supervised,
                 *no_pull,
+                *force,
+                *solo,
+                *into_epic,
                 *dry_run,
             )?;
         }
@@ -14467,6 +14474,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             supervised,
             no_human,
             no_pull,
+            force,
+            solo,
+            into_epic,
             dry_run,
             command: _,
         } => {
@@ -14474,11 +14484,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let user_id = current_user_id(None);
             return run_zen_drive(
                 &storage,
+                Some(store_path),
                 &user_id,
                 spec.as_deref(),
                 no_human.as_deref(),
                 *supervised,
                 *no_pull,
+                *force,
+                *solo,
+                *into_epic,
                 *dry_run,
             );
         }
@@ -134505,25 +134519,34 @@ fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
 /// reimplemented here — the pure pieces (eligibility, argv, plan formatting)
 /// live in [`crate::zen_drive`].
 // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of any surface.
+// trace:TASK-1037 | ai:claude — slice 2 adds the pre-flight gates around the
+// slice-1 drive: the autopilot approve-gate for a Draft, the suitability checks
+// for an Approved spec, and the ADR-6 scope-routing. The pure decision logic
+// lives in `zen_drive.rs`; this handler does the IO (status write, worktree
+// creation, the self-invoked drive).
+#[allow(clippy::too_many_arguments)]
 fn run_zen_drive(
     storage: &Storage,
+    store_path: Option<&std::path::Path>,
     user_id: &str,
     spec: Option<&str>,
     no_human: Option<&str>,
     supervised: bool,
     no_pull: bool,
+    force: bool,
+    solo: bool,
+    into_epic: bool,
     dry_run: bool,
 ) -> Result<()> {
     let Some(spec) = spec.map(str::trim).filter(|s| !s.is_empty()) else {
         anyhow::bail!(
             "aida zen needs a spec to drive. Usage: aida zen <SPEC> \
-             (the approved spec to autonomously implement and ship). \
+             (the spec to autonomously implement and ship). \
              Add --dry-run to preview the plan without driving it."
         );
     };
 
-    // Resolve + validate against the store. The spec must exist and be
-    // approve-or-beyond; a Draft is refused with approve-first guidance.
+    // Resolve against the store. The spec must exist; status routes it.
     let store = storage.load()?;
     let req = store
         .requirements
@@ -134531,9 +134554,119 @@ fn run_zen_drive(
         .find(|r| spec_matches(r, spec))
         .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
     let display = req.display_id();
-    let eligibility = zen_drive::classify_eligibility(&req.status);
-    if let Some(msg) = eligibility.refusal(&display) {
-        anyhow::bail!(msg);
+    let req_type = req.req_type.to_string();
+    let tags: Vec<String> = req.tags.iter().cloned().collect();
+    let project_root = find_project_root().ok();
+
+    let arrow = crate::glyph(crate::glyphs::Glyph::Arrow);
+    let check = crate::glyph(crate::glyphs::Glyph::Check);
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+
+    // ── Status routing ────────────────────────────────────────────────────
+    // Terminal states (already shipped / shelved / rejected) keep the slice-1
+    // guidance. A Draft runs the autopilot approve-gate; Approved-or-beyond
+    // falls straight through to the suitability gate.
+    match zen_drive::classify_eligibility(&req.status) {
+        zen_drive::ZenEligibility::AlreadyShipped
+        | zen_drive::ZenEligibility::Shelved
+        | zen_drive::ZenEligibility::Rejected => {
+            if let Some(msg) = zen_drive::classify_eligibility(&req.status).refusal(&display) {
+                anyhow::bail!(msg);
+            }
+        }
+        zen_drive::ZenEligibility::NeedsApproval => {
+            // DRAFT → autopilot approve-gate (TASK-1037). The first real
+            // consumer of the merged `autopilot::evaluate` contract.
+            let Some(store_path) = store_path else {
+                // Legacy (centralized) storage can't run the gate or write the
+                // status flip — keep the slice-1 refusal there.
+                anyhow::bail!(zen_drive::ZenEligibility::NeedsApproval
+                    .refusal(&display)
+                    .unwrap_or_else(|| format!("{display} is a draft")));
+            };
+            let env = load_autopilot_envelope(project_root.as_deref());
+            match zen_drive::run_draft_gate(&env, &display, &req_type, &tags) {
+                zen_drive::DraftGate::AutoApprove => {
+                    if dry_run {
+                        println!(
+                            "{display} is a draft — the autopilot approve-gate would \
+                             auto-approve it (status → Approved) and drive."
+                        );
+                    } else {
+                        zen_auto_approve(store_path, req)?;
+                        eprintln!(
+                            "  {} {display} was a draft — the autopilot approve-gate \
+                             auto-approved it; driving.",
+                            check.green()
+                        );
+                    }
+                    // Fall through to the suitability gate + drive.
+                }
+                zen_drive::DraftGate::SurfaceToAdvisor => {
+                    println!("{display} is a draft — routed to the advisor for approval.");
+                    if let Some(pr) = project_root.as_deref() {
+                        zen_surface_to_advisor(pr, &store, req, &display);
+                    }
+                    println!(
+                        "  Approve it (aida edit {display} --status approved) when it's \
+                         ready, then re-run aida zen {display}."
+                    );
+                    return Ok(()); // exit cleanly — no block, no pause.
+                }
+                zen_drive::DraftGate::Escalate(reason) => {
+                    anyhow::bail!(
+                        "aida zen will not drive {display}: {reason}. Triage it manually first."
+                    );
+                }
+            }
+        }
+        zen_drive::ZenEligibility::Ready => {}
+    }
+
+    // ── Scope-routing decision (ADR-6) ────────────────────────────────────
+    // A scoped spec (parent epic, else active focus) routes into its scope
+    // worktree; --solo splits it out; --into-epic forces the cluster route.
+    let parent_epic = resolve_spec_scope(req, &store);
+    let active_focus = project_root
+        .as_deref()
+        .and_then(crate::focus::resolve_focus);
+    let route = zen_drive::resolve_scope_route(
+        parent_epic.as_deref(),
+        active_focus.as_deref(),
+        solo,
+        into_epic,
+    );
+
+    // ── Suitability gate ──────────────────────────────────────────────────
+    // Coupling fires only on the override-into-collision case (ADR-6): --solo
+    // splitting out of a scope that has in-flight work.
+    let scope = parent_epic.as_deref().or(active_focus.as_deref());
+    let coupled = solo
+        && scope
+            .map(|s| scope_has_in_flight_work(&store, s, req))
+            .unwrap_or(false);
+    let suit = zen_drive::classify_suitability(&zen_drive::SuitabilityInput {
+        req_type: &req_type,
+        tags: &tags,
+        has_unsatisfied_blocker: aida_core::pickability::blocked_by_incomplete(req, &store),
+        under_specified: spec_is_under_specified(req),
+        coupled,
+        force,
+    });
+    match suit {
+        zen_drive::Suitability::HardRefuse(msg) => {
+            anyhow::bail!("aida zen will not drive {display}: {msg}")
+        }
+        zen_drive::Suitability::SoftBlock(msg) => {
+            anyhow::bail!("aida zen is holding {display}: {msg}.")
+        }
+        zen_drive::Suitability::WarnProceed(msg) => {
+            eprintln!(
+                "  {} {display}: {msg} — proceeding (--force).",
+                warn.yellow()
+            );
+        }
+        zen_drive::Suitability::Ready => {}
     }
 
     // Is it already queued for the implementer? (Informational only — the
@@ -134548,8 +134681,39 @@ fn run_zen_drive(
             "{}",
             zen_drive::format_zen_plan(&display, already_queued, no_human, supervised)
         );
+        match &route {
+            zen_drive::ScopeRoute::IntoScope(epic) => {
+                println!("  scope: routes into the {epic} worktree (ADR-6) — --solo to split out.")
+            }
+            zen_drive::ScopeRoute::Solo => println!("  scope: own worktree + own PR."),
+        }
         return Ok(());
     }
+
+    // Route into the scope worktree (create if absent) when the spec is scoped
+    // and not --solo. An info line, not a question (ADR-6). On failure we fall
+    // back to the current worktree rather than abort.
+    let drive_cwd: Option<std::path::PathBuf> = match &route {
+        zen_drive::ScopeRoute::IntoScope(epic) => match ensure_epic_worktree(epic, None, None) {
+            Ok(out) => {
+                eprintln!(
+                    "  {} routing {display} into the {} scope worktree ({}) — ADR-6; --solo to split out.",
+                    arrow.cyan(),
+                    out.focus,
+                    out.path.display().to_string().cyan()
+                );
+                Some(out.path)
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} could not prepare the {epic} scope worktree ({e}) — driving in the current worktree.",
+                    warn.yellow()
+                );
+                None
+            }
+        },
+        zen_drive::ScopeRoute::Solo => None,
+    };
 
     // Drive the one spec through the EXISTING orchestrator by self-invoking
     // `aida queue work <spec> --auto-complete --no-human <mode> [...]` — the
@@ -134561,18 +134725,138 @@ fn run_zen_drive(
     let args = zen_drive::drive_args(&display, no_human, supervised, no_pull);
     eprintln!(
         "  {} zen-driving {} — aida {}",
-        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        arrow.cyan(),
         display,
         args.join(" ").dimmed()
     );
-    let status = std::process::Command::new(&exe)
-        .args(&args)
+    let mut cmd = std::process::Command::new(&exe);
+    cmd.args(&args);
+    if let Some(cwd) = &drive_cwd {
+        cmd.current_dir(cwd);
+    }
+    let status = cmd
         .status()
         .context("failed to launch the `aida queue work --auto-complete --no-human` drive")?;
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
     Ok(())
+}
+
+/// Load the autopilot policy envelope from `[autopilot]` in `.aida/config.toml`,
+/// falling back to the conservative [`autopilot::AutopilotEnvelope::default`]
+/// (approve = propose) when there is no project root or no config.
+// trace:TASK-1037
+fn load_autopilot_envelope(
+    project_root: Option<&std::path::Path>,
+) -> crate::autopilot::AutopilotEnvelope {
+    let body = project_root
+        .map(|pr| std::fs::read_to_string(pr.join(".aida").join("config.toml")).unwrap_or_default())
+        .unwrap_or_default();
+    let overrides = crate::autopilot::parse_authority_overrides(&body);
+    crate::autopilot::AutopilotEnvelope::default().with_overrides(overrides)
+}
+
+/// Auto-approve a Draft spec (status → Approved) in-process via the git
+/// backend, the way `aida groom --apply` / the answer path do. Only reached when
+/// the autopilot approve-gate returned `Execute`.
+// trace:TASK-1037 | ai:claude
+fn zen_auto_approve(store_path: &std::path::Path, req: &Requirement) -> Result<()> {
+    let dispenser = load_dispenser(store_path)?;
+    let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+    let mut owned = req.clone();
+    owned.status = RequirementStatus::Approved;
+    owned.modified_at = chrono::Utc::now();
+    backend.update_requirement(&owned)?;
+    Ok(())
+}
+
+/// Record a pending-approval brief in the advisor's mailbox when a Draft zen
+/// request is held for approval. Best-effort — a brief-write failure never
+/// breaks the command (the surface line was already printed). Idempotent via the
+/// pending-brief sentinel.
+// trace:TASK-1037 | ai:claude
+fn zen_surface_to_advisor(
+    project_root: &std::path::Path,
+    store: &RequirementsStore,
+    req: &Requirement,
+    display: &str,
+) {
+    let agent = "advisor";
+    let spec_id = req.spec_id.as_deref().unwrap_or(display);
+    if pending_brief_exists(project_root, agent, spec_id) {
+        return;
+    }
+    let note = format!(
+        "aida zen was requested on draft {display}. Approve it \
+         (aida edit {display} --status approved) if it is ready to implement, \
+         then re-run aida zen {display}."
+    );
+    if let Ok(path) = create_agent_brief(project_root, store, agent, spec_id, Some(&note), None) {
+        eprintln!(
+            "  {} recorded a pending-approval brief for the advisor: {}",
+            crate::glyph(crate::glyphs::Glyph::Check),
+            path.display()
+        );
+    }
+}
+
+/// True when `aida lint`'s EARS heuristics flag the spec's description +
+/// acceptance criteria as under-specified (not clean).
+// trace:TASK-1037
+fn spec_is_under_specified(req: &Requirement) -> bool {
+    let mut text = req.description.clone();
+    if let Some(acc) = req.custom_fields.get("acceptance_criteria") {
+        text.push('\n');
+        text.push_str(acc);
+    }
+    !aida_core::ears_lint::lint_text(&text).is_clean()
+}
+
+/// Resolve a spec's scope epic: walk its `parent:<ID>` tag chain (bounded) to
+/// the nearest ancestor of type Epic. Returns its display id, or `None` when no
+/// epic ancestor is reachable.
+// trace:ADR-6 trace:TASK-1037 | ai:claude
+fn resolve_spec_scope(req: &Requirement, store: &RequirementsStore) -> Option<String> {
+    let mut current = req;
+    let mut seen = std::collections::HashSet::new();
+    seen.insert(current.id);
+    for _ in 0..16 {
+        let parent_ref = current
+            .tags
+            .iter()
+            .find_map(|t| t.strip_prefix("parent:").map(|p| p.trim().to_string()))?;
+        let parent = store
+            .requirements
+            .iter()
+            .find(|r| spec_matches(r, &parent_ref))?;
+        if !seen.insert(parent.id) {
+            break;
+        }
+        if matches!(parent.req_type, RequirementType::Epic) {
+            return Some(parent.display_id());
+        }
+        current = parent;
+    }
+    None
+}
+
+/// Does the scope (epic / focus) have OTHER in-flight work right now? Used for
+/// the ADR-6 override-into-collision warning: a spec directly tagged
+/// `parent:<scope>` that is In Progress.
+// trace:ADR-6 trace:TASK-1037 | ai:claude
+fn scope_has_in_flight_work(store: &RequirementsStore, scope: &str, exclude: &Requirement) -> bool {
+    store.requirements.iter().any(|r| {
+        r.id != exclude.id
+            && matches!(r.status, RequirementStatus::InProgress)
+            && r.tags.iter().any(|t| {
+                t.strip_prefix("parent:")
+                    .map(|p| p.trim().eq_ignore_ascii_case(scope))
+                    .unwrap_or(false)
+            })
+    })
 }
 
 /// Queue `spec` for the implementer role if it isn't already queued for the
