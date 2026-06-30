@@ -3,12 +3,12 @@ spec_id: BUG-635
 agreed_id: BUG-635
 title: 'TUI modals: add a visible scrollbar + make all modals scroll (overflow is currently invisible)'
 description: 'Operator report (2026-06-26): can''t see all the text in a spec modal. INVESTIGATION: the spec preview/show modal (render_modal) DOES scroll (PageDown/PageUp/Up/Down/j/k via .scroll()), but there is NO scrollbar widget anywhere (grep: zero Scrollbar) — only a faint title hint — so the user can''t TELL there''s more text or where they are. SEPARATELY, the verb-output modal (render_verb_modal, used by ''why'' and captured command output) does NOT scroll at all — long output is truncated. FIX: (1) add a ratatui Scrollbar widget to the scrolling modals (render_modal) so overflow is visible + position is shown; (2) make render_verb_modal scroll too (same keys), so ''why''/command output is scrollable; (3) a clear ''↓ more'' overflow cue. Keep the existing scroll keys. ACCEPTANCE: a long spec body shows a scrollbar tracking position; the why/output modal scrolls; overflow is visibly indicated; pure scroll-state logic tested.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T03:36:01.267138461Z
-modified_at: 2026-06-27T04:35:24.537485053Z
+modified_at: 2026-06-30T02:39:31.615152492Z
 req_type: Bug
 tags:
 - modal
