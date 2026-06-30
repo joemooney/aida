@@ -1,0 +1,18 @@
+id: 019f1a62-531a-7f53-9925-dcdfcedf0f5f
+spec_id: BUG-670
+agreed_id: BUG-670
+title: 'aida status agent-mode: queue_depth contradicts queue_actionable and queue list (different user-resolution paths, BUG-89 surface) — unify the path + lead with the actionable count'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T21:14:39.258464103Z
+modified_at: 2026-06-30T21:14:39.258464103Z
+req_type: Bug
+tags:
+- agent-surface
+- bug-89
+- careful
+- from-audit
+- status
