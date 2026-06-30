@@ -87,7 +87,8 @@ When adding a new generic discipline memory, tag it `propagation: scaffolding-pa
 aida list                              # Cache-backed (sub-ms vs full-store load); default excludes archived
 aida list --status draft               # Filter by status
 aida list --archived                   # Only archived rows; --all = both (STORY-441)
-aida search "<query>"                  # Cache-backed FTS5 search (same archive filter as list)
+aida list --fields id,status,title     # Select AND order the displayed columns — human table + agent/TOON output; unknown field errors with the valid set (STORY-734)
+aida search "<query>"                  # Cache-backed FTS5 search (same archive filter as list); --fields selects columns too (STORY-734)
 aida history                           # Recent activity, incl. freshly-Completed; archive hides long-tail (STORY-441)
 aida archive <ID>                      # Mark a spec archived (hidden from default views, audit trail preserved)
 aida archive --older-than 30d --dry-run   # Preview bulk sweep; drop --dry-run to apply

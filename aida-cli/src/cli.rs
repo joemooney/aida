@@ -6657,13 +6657,15 @@ pub enum Command {
         #[clap(long)]
         no_focus: bool,
 
-        /// AGENT-MODE only: widen the token-efficient TOON column schema. By
-        /// default agent-mode `aida list` emits the minimal `id,title,status,type`
-        /// set; pass a comma-separated field list to expand it, e.g.
-        /// `--fields id,title,status,priority,tags`. Valid fields: id, title,
+        /// Select AND order the displayed columns, e.g.
+        /// `--fields id,title,status,priority,tags`. Renders exactly those
+        /// columns in that order — on the human table AND the token-efficient
+        /// agent output (a real token win for agents). Valid fields: id, title,
         /// status, type, priority, feature, owner, assignee, tags, heft, queued,
-        /// in_flight, blocked. No effect on the human TTY table.
+        /// in_flight, blocked. Default (no `--fields`) keeps the standard
+        /// columns; agent mode defaults to the minimal id,title,status,type set.
         // trace:TASK-964 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:STORY-734 | ai:claude — now drives the human table too.
         #[clap(long, value_name = "CSV")]
         fields: Option<String>,
     },
@@ -9228,6 +9230,15 @@ pub enum Command {
         // trace:BUG-531 | ai:claude
         #[clap(long, conflicts_with = "short")]
         json: bool,
+
+        /// Select AND order the displayed columns, e.g.
+        /// `--fields id,title,status,priority,tags`. Valid fields: id, title,
+        /// status, type, priority, feature, owner, assignee, tags. Renders
+        /// exactly those columns in that order; default keeps the standard
+        /// layout. Mirrors `aida list --fields`.
+        // trace:STORY-734 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "CSV", conflicts_with_all = ["short", "json"])]
+        fields: Option<String>,
     },
 
     /// Project activity — what's been touched and how it stands now.
