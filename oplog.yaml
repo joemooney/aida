@@ -27213,5 +27213,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 2604
+- id: 019f16dc-70e4-7570-9b18-057dff2ecf16
+  target_id: 019f16dc-5feb-72a1-a9b0-e3bd0abadb20
+  author: aida
+  node_id: '1'
+  lamport: 2605
+  timestamp: 2026-06-30T04:49:33.412588403Z
+  kind: !Create
+    title: '2-agent bake-off (claude+codex): fan → CI + blind reviewer-judge → pick winner'
+    description: 'Smallest valuable competition. aida zen SPEC --compete fans CLAUDE + CODEX to independently implement the same spec (separate worktrees, same acceptance, no shared context) producing 2 candidate branches. JUDGE: run each candidates CI (a CI-failing candidate is eliminated, no debate); then ONE BLIND reviewer scores the passers side-by-side against acceptance + code quality + diff-size (blind = not told which vendor wrote which). SELECT: highest-scoring passer wins, merge it, close/discard the loser. RECORD the outcome (winner vendor, scores, spec-kind) for dispatch-policy data. Depends on TASK-1048 (the vendor selector). DEFER to follow-ons: N-greater-than-2 agents, AGY in the mix, runner-up synthesis/grafting, the dispatch-policy learning loop. Parent EPIC-57.'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 2605
 node_id: '1'
