@@ -3,12 +3,12 @@ spec_id: TASK-1052
 agreed_id: TASK-1052
 title: 'Queue-GC: prune routed queue entries whose spec is archived/completed/rejected'
 description: 'Surfaced by the front-door overhaul (STORY-723): the implementer role queue holds 163 routed entries that are ALL archived/completed corpses (0 actionable). The front-door fix stops SURFACING them, but the queue file itself still carries the dead entries. Add a queue-GC pass (a command and/or an auto-prune on read) that removes routed queue entries whose target spec is archived/completed/rejected — so the underlying queue stays clean, not just the view.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T07:10:39.301833579Z
-modified_at: 2026-06-30T16:33:19.842235708Z
+modified_at: 2026-06-30T17:12:20.596663058Z
 req_type: Task
 tags:
 - cleanup
