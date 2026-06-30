@@ -16,10 +16,16 @@ priority: Medium
 owner: ''
 feature: cli
 created_at: 2026-06-30T04:08:32.658638894Z
-modified_at: 2026-06-30T04:09:52.129513976Z
+modified_at: 2026-06-30T04:40:20.211547045Z
 req_type: Bug
 tags:
 - aida:list
 - bug
 - papercut
 - tree
+comments:
+- id: 019f16d3-fff3-70a2-a041-b8e21d3ed252
+  author: joe
+  content: 'Advisor-approved for aida zen (2026-06-29): suitability-checked — real bug, non-keystone, unblocked, standalone (no epic scope), well-specified, heft 2. Clean autonomous candidate.'
+  created_at: 2026-06-30T04:40:20.211547045Z
+  modified_at: 2026-06-30T04:40:20.211547045Z
