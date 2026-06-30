@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T04:52:50.921063666Z
-modified_at: 2026-06-30T17:12:35.831357326Z
+modified_at: 2026-06-30T23:04:57.650221484Z
 req_type: Task
 tags:
 - needs-design
 - parent:EPIC-54 redesign tui liveness visibility
 - zen-ready
+comments:
+- id: 019f1ac7-5032-7fc3-843d-783d8596a8cf
+  author: joe
+  content: Commit e8867decc references this requirement
+  created_at: 2026-06-30T23:04:57.650221484Z
+  modified_at: 2026-06-30T23:04:57.650221484Z
