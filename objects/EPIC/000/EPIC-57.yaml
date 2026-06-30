@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:49:10.953504486Z
-modified_at: 2026-06-30T04:49:34.270442200Z
+modified_at: 2026-06-30T06:16:44.149282639Z
 req_type: Epic
 tags:
 - bake-off
@@ -23,3 +23,9 @@ relationships:
 - rel_type: Parent
   target_id: 019f16dc-5feb-72a1-a9b0-e3bd0abadb20
   created_at: 2026-06-30T04:49:34.270442200Z
+comments:
+- id: 019f172c-4175-7131-add0-ea688aa4c532
+  author: joe
+  content: 'From gnhf analysis (2026-06-29): gnhf supports 7 executors (claude/codex/copilot/pi/rovodev/opencode + any ACP target) vs AIDAs Claude-first drain. The --agent selector (TASK-1048) should consider the ACP (Agent Client Protocol) abstraction so a drain phase runs Codex/Gemini/etc without bespoke per-vendor plumbing — keeping the cross-vendor mailbox as the moat.'
+  created_at: 2026-06-30T06:16:44.149282639Z
+  modified_at: 2026-06-30T06:16:44.149282639Z
