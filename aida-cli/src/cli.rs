@@ -4287,6 +4287,20 @@ pub enum QueueCommand {
         // trace:STORY-265 | ai:claude
         #[clap(long, conflicts_with = "auto_complete")]
         plan_only: bool,
+        /// Guided keystone-implementation mode: launch a structured,
+        /// step-by-step decision dialog for the spec instead of a normal
+        /// pickup. Runs `/aida-guided-implement <SPEC>` — the agent surfaces
+        /// each major architectural / security / keystone fork as a
+        /// structured question (options + consequences + a recommendation +
+        /// an "enter your own" escape), records each answer as a traceable
+        /// ADR linked to the spec, agrees the approach before any code, then
+        /// implements between answers. For supervised work that must NOT run
+        /// unattended, so it is interactive-only and conflicts with the
+        /// autonomous drain. Finishes with a PR for human review (no
+        /// auto-merge). Pass an explicit spec id.
+        // trace:STORY-735 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, conflicts_with_all = ["autonomous", "plan_only"])]
+        guided: bool,
         /// Plan-then-ship: run a PLAN phase before the implementer phase, then
         /// the normal autonomous drain. The plan phase produces a `docs/plans/`
         /// file (the same planning session as `--plan-only`) and promotes the
