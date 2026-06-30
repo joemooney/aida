@@ -41,6 +41,7 @@ mod drain_resume;
 mod drain_state;
 mod dryrun;
 mod effort_calibration;
+mod event_wait;
 mod events;
 mod exit_signal;
 mod external_import_bleed;
@@ -125297,6 +125298,8 @@ fn handle_queue_command(
             max,
             rebase,
             strategy,
+            focus,
+            idle_minutes,
             force,
             user,
         } => {
@@ -125308,7 +125311,16 @@ fn handle_queue_command(
             enforce_team_gate(permissions::GatedOp::Integrate, *force)?;
             let user_id = current_user_id(user.as_deref());
             handle_queue_integrate(
-                storage, &user_id, *dry_run, *watch, *interval, *max, *rebase, *strategy,
+                storage,
+                &user_id,
+                *dry_run,
+                *watch,
+                *interval,
+                *max,
+                *rebase,
+                *strategy,
+                focus.clone(),
+                *idle_minutes,
             )?;
         }
     }
@@ -130638,6 +130650,38 @@ fn probe_pr_integration_state(
 /// trace:STORY-520 | ai:claude
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
+/// TASK-1036: build the focus subtree as a set of display SPEC-IDs — the focus
+/// root (`focus_ref`, a spec/agreed/uuid form) plus its transitive descendants
+/// (the cache's `descendant_ids` closure, TASK-955, which INCLUDES the root),
+/// mapped to the same display-id form the integrator keys candidates on. Used to
+/// scope the integrator `--watch` candidate scan and the event-wake filter.
+///
+/// Best-effort: an unresolvable store / focus spec / cache error yields `None`,
+/// which the caller treats as "no scoping" (whole-project scan) rather than
+/// blocking — a focus that no longer resolves must never wedge the integrator.
+// trace:TASK-1036 | ai:claude
+fn build_focus_display_subtree(
+    project_root: &std::path::Path,
+    focus_ref: &str,
+    store: &aida_core::RequirementsStore,
+) -> Option<std::collections::HashSet<String>> {
+    let store_path = detect_distributed_store_from(project_root)?;
+    let backend = advance_backend(&store_path).ok()?;
+    let focus_req = backend
+        .get_requirement_by_spec_id(focus_ref)
+        .ok()
+        .flatten()?;
+    let uuid_subtree = backend.descendant_ids(&focus_req.id).ok()?;
+    let display: std::collections::HashSet<String> = store
+        .requirements
+        .iter()
+        .filter(|r| uuid_subtree.contains(&r.id))
+        .map(|r| r.display_id())
+        .collect();
+    Some(display)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn handle_queue_integrate(
     storage: &Storage,
     _user_id: &str,
@@ -130647,6 +130691,12 @@ fn handle_queue_integrate(
     max: usize,
     rebase: bool,
     strategy: Option<integrate::IntegrateStrategy>,
+    // TASK-1036: scope the candidate scan to a focus subtree. `--focus <id>`
+    // overrides; else the per-worktree `aida focus` marker / `AIDA_FOCUS`.
+    focus_override: Option<String>,
+    // TASK-1036: idle backstop for the event-driven `--watch` loop, in minutes.
+    // `None` falls back to `--interval` seconds (the old blind-timer cadence).
+    idle_minutes: Option<u64>,
 ) -> Result<()> {
     let project_root = find_project_root()?;
 
@@ -130687,6 +130737,31 @@ fn handle_queue_integrate(
 
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
 
+    // TASK-1036: resolve the active focus once — `--focus <id>` wins, else the
+    // per-worktree `aida focus` marker / `AIDA_FOCUS` (STORY-706). The per-pass
+    // subtree is re-resolved inside the loop (cache-backed, cheap) so newly-filed
+    // descendants are picked up. trace:TASK-1036 | ai:claude
+    let active_focus = focus_override.or_else(|| crate::focus::resolve_focus(&project_root));
+
+    // TASK-1036: in `--watch`, wake on real drain events instead of a blind
+    // timer. Seed the event cursor at the stream's CURRENT end so a stale backlog
+    // from a prior drain never re-fires an old wake (the advisor_watch precedent).
+    // The idle backstop is the documented timer fallback: `--idle-minutes` if
+    // given, else the legacy `--interval` seconds. trace:TASK-1036 | ai:claude
+    let events_path = crate::events::events_path(&project_root);
+    let mut event_offset: u64 = std::fs::metadata(&events_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let idle_backstop_secs = idle_minutes
+        .map(|m| m.saturating_mul(60))
+        .unwrap_or(interval);
+
+    // TODO(TASK-1036 slice 2b): UNATTENDED use of this event-driven `--watch`
+    // loop is gated on the own-checkout guard (slice 2b) — the integrator must
+    // refuse to drive merges from a worktree that has its own uncommitted/branched
+    // work. Until 2b lands, run this SUPERVISED only (advisor + operator watching
+    // the first live drives); do NOT leave it running headless. trace:TASK-1036
+
     let mut integrated_total: usize = 0;
     let mut pass: usize = 0;
     // TASK-836: track whether any member was parked (shelvable scenario) or made
@@ -130704,6 +130779,25 @@ fn handle_queue_integrate(
         // `--resume-drain` use) so the integrator sees exactly the reality the
         // drive path will. trace:STORY-520 | ai:claude
         let store = storage.load()?;
+
+        // TASK-1036: re-resolve the focus subtree this pass (cache-backed, cheap)
+        // — the display-id set of the focus root + its transitive descendants —
+        // so an out-of-scope Done spec is never probed or driven. `None` = no
+        // focus set → whole-project scan, exactly as before. trace:TASK-1036
+        let focus_subtree: Option<std::collections::HashSet<String>> = active_focus
+            .as_deref()
+            .and_then(|focus_ref| build_focus_display_subtree(&project_root, focus_ref, &store));
+        if watch {
+            if let (Some(focus_ref), Some(subtree)) = (active_focus.as_deref(), &focus_subtree) {
+                println!(
+                    "  {} focus {} — scanning {} spec(s) in subtree",
+                    crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+                    focus_ref,
+                    subtree.len()
+                );
+            }
+        }
+
         let mut candidates: Vec<integrate::IntegrationCandidate> = Vec::new();
         // STORY-335: keep each candidate's PR branch (for the dry-run forecast)
         // and PR number (for the --rebase step) per ready member. trace:STORY-335
@@ -130721,6 +130815,15 @@ fn handle_queue_integrate(
                 .or(req.spec_id.as_deref())
                 .unwrap_or("?")
                 .to_string();
+            // TASK-1036: focus-scope the scan BEFORE the (forge) probe, so an
+            // out-of-scope Done spec is never probed, reported, or driven. Pure
+            // `integrate::in_focus_scope` over the display-id subtree set.
+            // trace:TASK-1036 | ai:claude
+            if let Some(subtree) = &focus_subtree {
+                if !integrate::in_focus_scope(&id, subtree) {
+                    continue;
+                }
+            }
             // Classify the PR lookup as conclusive-or-not BEFORE probing the
             // richer facts, so a flaky gh never gets read as "no PR".
             let lookup = detect_open_pr_for_spec_via_forge(&project_root, &id);
@@ -131195,9 +131298,44 @@ fn handle_queue_integrate(
         if max != 0 && integrated_total >= max {
             break;
         }
-        // Watch mode: sleep, then rescan. The store reload at the top of the
-        // loop picks up specs producers shipped during the sleep.
-        std::thread::sleep(std::time::Duration::from_secs(interval));
+        // TASK-1036: event-driven wake. Instead of a blind `interval` sleep, BLOCK
+        // until a focus-relevant actionable drain event lands in
+        // `.aida/events.jsonl` (PhaseDonePr / CiTerminal / PrMerged / SpecShelved
+        // — the same `events::is_actionable` taxonomy `aida watch` and the advisor
+        // loop use), the idle backstop elapses (the old blind timer, now the
+        // documented fallback — exactly like `advisor_watch::plan_watch_tick`'s
+        // cadence path), or a live drain we were following stops. The store reload
+        // at the top of the loop then picks up whatever shipped. trace:TASK-1036
+        match event_wait::wait_for_actionable(
+            &project_root,
+            &mut event_offset,
+            idle_backstop_secs,
+            focus_subtree.as_ref(),
+        ) {
+            event_wait::WakeReason::Event(kind) => {
+                let label = match &kind {
+                    crate::events::EventKind::PhaseDonePr { .. } => "a PR is ready",
+                    crate::events::EventKind::CiTerminal { .. } => "CI reached a verdict",
+                    crate::events::EventKind::PrMerged { .. } => "a PR merged",
+                    crate::events::EventKind::SpecShelved { .. } => "a spec shelved",
+                    _ => "a drain event",
+                };
+                println!(
+                    "  {} woke on {} — rescanning",
+                    crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+                    label
+                );
+            }
+            event_wait::WakeReason::DrainCrashed => {
+                println!(
+                    "  {} the drain we were following stopped streaming events — rescanning",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+            event_wait::WakeReason::IdleBackstop => {
+                // Quiet idle re-scan — same cadence the old blind timer gave.
+            }
+        }
     }
 
     // TASK-836: mirror the resilient-drain exit-code contract — exit 2 when any
