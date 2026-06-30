@@ -1,0 +1,12 @@
+id: 019f165a-3176-7892-bb29-f9125d3b0e2e
+spec_id: TASK-1014
+agreed_id: TASK-1014
+title: TASK-0432 — the `mode` field records which composition mode produced the decision (autopilot / zen+autopilot / solo+autopilot)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T02:27:17.494946030Z
+modified_at: 2026-06-30T02:27:17.494946030Z
+req_type: Task
