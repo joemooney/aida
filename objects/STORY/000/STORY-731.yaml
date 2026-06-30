@@ -1,0 +1,18 @@
+id: 019f17b1-9fb9-7f22-9efe-34b7d4d7198d
+spec_id: STORY-731
+agreed_id: STORY-731
+title: 'Single-spec drive failure: name it as shelved-not-crashed + point to findings list (parity with batch)'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T08:42:24.569457595Z
+modified_at: 2026-06-30T08:42:24.569457595Z
+req_type: Story
+tags:
+- drive
+- failure
+- from-audit
+- legibility
+- recovery
