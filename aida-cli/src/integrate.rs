@@ -121,6 +121,28 @@ pub(crate) fn ready_for_integration(
         .collect()
 }
 
+// ── TASK-1036: focus-scope membership for the candidate scan ─────────────────
+//
+// The event-driven integrator `--watch` loop (TASK-1036) optionally scopes its
+// candidate scan to a focus subtree (the `aida focus` epic/spec + its transitive
+// descendants, STORY-706). This is the pure membership predicate: given a
+// candidate's display id and the subtree's display-id set, is the candidate
+// in-scope? The caller builds the subtree set from the cache's `descendant_ids`
+// closure (TASK-955) mapped to display ids; keeping the test pure means the
+// scope filter is unit-testable with synthetic id sets, the same discipline
+// `classify_candidate` follows. trace:TASK-1036
+
+/// Is `candidate_id` (a display SPEC-ID, e.g. `STORY-520`) inside the focus
+/// subtree? A plain set-membership test over the display-id set the caller built
+/// from the focus root's transitive descendants (which INCLUDES the root). PURE.
+// trace:TASK-1036 | ai:claude
+pub(crate) fn in_focus_scope(
+    candidate_id: &str,
+    subtree: &std::collections::HashSet<String>,
+) -> bool {
+    subtree.contains(candidate_id)
+}
+
 // ── TASK-836: pre-merge scenario gate ────────────────────────────────────────
 //
 // `classify_candidate` above answers the *membership* question — "is this a
@@ -717,6 +739,33 @@ mod tests {
     #[test]
     fn empty_batch_yields_empty_ready_set() {
         assert!(ready_for_integration(&[]).is_empty());
+    }
+
+    // ── TASK-1036 focus-scope membership ────────────────────────────────────
+
+    #[test]
+    fn in_focus_scope_filters_out_of_subtree_candidates() {
+        // The subtree set is the focus root + its transitive descendants, as
+        // display ids. A candidate in the set is in-scope; anything else is out.
+        let subtree: std::collections::HashSet<String> = [
+            "EPIC-54".to_string(),
+            "STORY-1".to_string(),
+            "TASK-9".to_string(),
+        ]
+        .into_iter()
+        .collect();
+        assert!(in_focus_scope("EPIC-54", &subtree), "the focus root itself");
+        assert!(in_focus_scope("STORY-1", &subtree), "a descendant");
+        assert!(in_focus_scope("TASK-9", &subtree), "a deeper descendant");
+        assert!(
+            !in_focus_scope("STORY-99", &subtree),
+            "a spec under a DIFFERENT epic is out of scope"
+        );
+        // An empty subtree admits nothing.
+        assert!(!in_focus_scope(
+            "STORY-1",
+            &std::collections::HashSet::new()
+        ));
     }
 
     #[test]
