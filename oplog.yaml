@@ -28792,5 +28792,17 @@ operations:
   timestamp: 2026-06-30T19:09:15.723890083Z
   kind: !SetStatus
     status: Completed
-clock: 2770
+- id: 019f19f4-25bb-7713-a9a5-1ce4ea66af8e
+  target_id: 019f19f4-1878-78b1-ad4c-4e3a929811a9
+  author: aida
+  node_id: '1'
+  lamport: 2771
+  timestamp: 2026-06-30T19:14:18.683438816Z
+  kind: !Create
+    title: Pool-worktree reuse inherits the prior session's stale lease — aida ps mislabels the work (an ADR-7 guided session showed as TASK-0439); acquiring a pool worktree must reset the lease to the new spec
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2771
 node_id: '1'
