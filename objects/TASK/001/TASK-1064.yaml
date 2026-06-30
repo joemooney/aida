@@ -1,0 +1,17 @@
+id: 019f19e6-a842-7ea0-81ed-71f93cbd3af9
+spec_id: TASK-1064
+agreed_id: TASK-1064
+title: 'aida ps: in-progress specs being worked by an advisor fan-out (non-spec-linked harness-worktree lease) should not list under ''Orphaned'' — surface them as ''likely worked by a fan-out'' vs genuinely orph'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T18:59:34.594586260Z
+modified_at: 2026-06-30T18:59:34.594586260Z
+req_type: Task
+tags:
+- aida:ps
+- from-operator
+- liveness
+- ux
