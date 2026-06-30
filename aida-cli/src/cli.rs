@@ -6911,9 +6911,13 @@ pub enum Command {
     },
 
     /// Triage findings filed by headless drain phases (reviewer + implementer).
-    // trace:STORY-278 trace:STORY-285 | ai:claude
-    #[clap(subcommand)]
-    Findings(FindingsCommand),
+    /// Bare `aida findings` defaults to `aida findings list` — the command every
+    /// failure message points the user at, so it must run without a subcommand.
+    // trace:STORY-278 trace:STORY-285 trace:STORY-732 | ai:claude
+    Findings {
+        #[clap(subcommand)]
+        cmd: Option<FindingsCommand>,
+    },
 
     /// The async decision inbox — structured questions the advisor distilled
     /// from forks it couldn't resolve, which you answer OUTSIDE any agent

@@ -4110,7 +4110,7 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
-        Command::Findings(_) => {
+        Command::Findings { .. } => {
             // `aida findings` queries the cache for `from-review:` /
             // `from-implementer:` tags; the deprecated SQLite backend has no
             // equivalent. trace:STORY-278 trace:STORY-285 | ai:claude
@@ -17707,8 +17707,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             backend.delete_requirement(&req.id)?;
             println!("Deleted: {}", id);
         }
-        Command::Findings(findings_cmd) => {
-            handle_findings_command(findings_cmd, &backend, store_path)?;
+        Command::Findings { cmd: findings_cmd } => {
+            // STORY-732 (FIX 8): bare `aida findings` defaults to `findings list`
+            // — the command every failure message tells the user to run, so it
+            // must not be a hard clap error. Mirrors the `aida questions` pattern.
+            // trace:STORY-732 | ai:claude
+            let default_list = FindingsCommand::List {
+                pr: None,
+                source: None,
+                kind: None,
+                count: false,
+            };
+            let cmd = findings_cmd.as_ref().unwrap_or(&default_list);
+            handle_findings_command(cmd, &backend, store_path)?;
         }
         Command::ImportPlan {
             file,
@@ -19069,7 +19080,10 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | TraceCommand::Remove { .. }
                 | TraceCommand::Scan { update: true, .. }
         ),
-        Command::Findings(cmd) => !matches!(cmd, FindingsCommand::List { .. }),
+        // STORY-732: bare `aida findings` (None) defaults to list — read-only.
+        Command::Findings { cmd } => cmd
+            .as_ref()
+            .is_some_and(|c| !matches!(c, FindingsCommand::List { .. })),
         // STORY-522: `aida questions ask` / `answer` write the
         // decision_request field; bare list / `list` are read-only.
         // trace:STORY-522 | ai:claude
@@ -93319,6 +93333,155 @@ fn terminal_why_text(status: aida_core::RequirementStatus, status_label: &str) -
 
 /// STORY-547: `aida why <ID>` — single-spec drill-down using the same
 /// classifier as `burndown explain`. trace:STORY-547 | ai:claude
+/// STORY-732 (FIX 2): render an orchestrator [`FailureReason`] as the same
+/// phase + detail + recovery-hint lines `aida findings list` shows, so `aida why`
+/// and `aida status <spec>` answer "what failed?" inline instead of redirecting
+/// to `aida findings list`. Pure (plain strings; colour applied at the call
+/// site) so the inlining is unit-testable without a store.
+// trace:STORY-732 | ai:claude
+fn failure_reason_lines(fr: &aida_core::FailureReason) -> Vec<String> {
+    let mut out = vec![format!("failure: {} — {}", fr.phase, fr.detail)];
+    if let Some(hint) = fr.recovery_hint.as_deref() {
+        out.push(format!(
+            "{} hint: {hint}",
+            crate::glyph(crate::glyphs::Glyph::SubArrow)
+        ));
+    }
+    out
+}
+
+/// STORY-732 recovery-legibility tests: the three audit fixes are pure-helper
+/// shaped so the "tell the truth" guarantee is checkable without a store, a
+/// lease, or a live process.
+// trace:STORY-732 | ai:claude
+#[cfg(test)]
+mod story_732_recovery_legibility_tests {
+    use super::*;
+    use crate::cli::{Cli, Command, FindingsCommand};
+    use clap::Parser;
+
+    fn failure(phase: &str, detail: &str, hint: Option<&str>) -> aida_core::FailureReason {
+        aida_core::FailureReason {
+            phase: phase.to_string(),
+            phase_index: 2,
+            kind: "ci-red".to_string(),
+            detail: detail.to_string(),
+            recovery_hint: hint.map(|h| h.to_string()),
+            shelved_by: None,
+            shelved_at: chrono::Utc::now(),
+        }
+    }
+
+    /// FIX 2: `aida why` / `aida status <spec>` inline the phase + detail + hint
+    /// the orchestrator recorded — the same three fields `aida findings list`
+    /// renders — instead of only redirecting to `aida findings list`.
+    #[test]
+    fn failure_reason_lines_inline_phase_detail_and_hint() {
+        let fr = failure(
+            "ci",
+            "CI is red on the PR (2 tests failing)",
+            Some("re-run CI / fix the failing test, then re-queue"),
+        );
+        let lines = failure_reason_lines(&fr);
+        assert_eq!(lines.len(), 2, "phase+detail line plus a hint line");
+        assert!(lines[0].contains("ci"), "phase named: {:?}", lines[0]);
+        assert!(
+            lines[0].contains("CI is red on the PR"),
+            "detail inlined: {:?}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("re-run CI / fix the failing test"),
+            "recovery hint inlined: {:?}",
+            lines[1]
+        );
+        // The whole rendering must not redirect away — it answers in place.
+        assert!(
+            !lines.iter().any(|l| l.contains("aida findings list")),
+            "inlined reason must not redirect: {lines:?}"
+        );
+    }
+
+    /// FIX 2: a failure with no recovery hint still inlines phase + detail (no
+    /// empty trailing hint line).
+    #[test]
+    fn failure_reason_lines_without_hint_is_one_line() {
+        let fr = failure("build", "the workspace failed to compile", None);
+        let lines = failure_reason_lines(&fr);
+        assert_eq!(lines.len(), 1, "no hint → single line");
+        assert!(lines[0].contains("build") && lines[0].contains("failed to compile"));
+    }
+
+    /// FIX 3: a Completed (terminal) spec carrying a dormant lease is framed as
+    /// CLEANUP — never "the In-Progress flag is orphaned", which contradicts the
+    /// Completed badge and reads as "is it done or not?".
+    #[test]
+    fn terminal_stale_lease_frames_as_cleanup_not_doubt() {
+        let suffix = stale_cleanup_suffix("a1b2c3d4");
+        assert!(
+            suffix.contains("still attached"),
+            "frames as housekeeping: {suffix}"
+        );
+        assert!(
+            suffix.contains("aida session end a1b2c3d4"),
+            "names the clear command: {suffix}"
+        );
+        assert!(
+            !suffix.to_ascii_lowercase().contains("orphaned"),
+            "no 'orphaned' framing on a terminal spec: {suffix}"
+        );
+        assert!(
+            !suffix.contains("In-Progress"),
+            "no 'In-Progress flag' contradiction on a Completed spec: {suffix}"
+        );
+    }
+
+    /// FIX 3 regression guard: a NON-terminal STALE spec keeps the orphaned
+    /// In-Progress warning (the honest signal there).
+    #[test]
+    fn non_terminal_stale_lease_keeps_orphaned_warning() {
+        let line = stale_orphaned_line("no live process", "3h 12m");
+        assert!(line.contains("orphaned") && line.contains("In-Progress flag"));
+    }
+
+    /// FIX 8: bare `aida findings` parses (it used to be a hard clap error) and
+    /// resolves to the same view as `aida findings list`.
+    #[test]
+    fn bare_findings_parses_to_optional_subcommand() {
+        let bare = Cli::try_parse_from(["aida", "findings"]).expect("bare findings must parse");
+        assert!(
+            matches!(bare.command, Command::Findings { cmd: None }),
+            "bare `aida findings` defaults to no subcommand (→ list)"
+        );
+        let listed =
+            Cli::try_parse_from(["aida", "findings", "list"]).expect("findings list must parse");
+        assert!(matches!(
+            listed.command,
+            Command::Findings {
+                cmd: Some(FindingsCommand::List { .. })
+            }
+        ));
+    }
+}
+
+/// STORY-732 (FIX 3): the cleanup-framed suffix `aida status <spec>` appends to a
+/// TERMINAL spec's status badge when a dormant lease is still attached. Says
+/// "still attached … to clear" — housekeeping, NOT "the In-Progress flag is
+/// orphaned" (which contradicts a Completed status). Pure so the no-contradiction
+/// wording is unit-testable.
+// trace:STORY-732 | ai:claude
+fn stale_cleanup_suffix(end_hint: &str) -> String {
+    format!("(a dormant lease/worktree is still attached — `aida session end {end_hint}` to clear)")
+}
+
+/// STORY-732 (FIX 3): the orphaned-flag warning line for a NON-terminal STALE
+/// spec — preserved verbatim from the pre-STORY-732 behaviour, extracted only so
+/// the terminal-vs-non-terminal split is testable.
+// trace:STORY-732 | ai:claude
+fn stale_orphaned_line(why: &str, elapsed: &str) -> String {
+    format!("STALE — {why}, {elapsed} elapsed; the In-Progress flag is orphaned")
+}
+
 fn handle_why(id: &str, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -93526,6 +93689,13 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
                     .map(|r| serde_json::json!({"source": r.source.key(), "text": r.text}))
                     .collect::<Vec<_>>(),
                 "findings": f.findings,
+                // STORY-732: surface the orchestrator failure inline for machine
+                // consumers too, not just the human render. trace:STORY-732
+                "failure_reason": req.failure_reason.as_ref().map(|fr| serde_json::json!({
+                    "phase": fr.phase,
+                    "detail": fr.detail,
+                    "hint": fr.recovery_hint,
+                })),
                 "needs_human": bucket.needs_human(),
             }))?
         );
@@ -93550,6 +93720,15 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
             burndown::ReasonSource::Derived => continue,
         };
         println!("    {} {}", tag, r.text.dimmed());
+    }
+    // STORY-732 (FIX 2): a NeedsAttention spec the orchestrator shelved carries a
+    // FailureReason (phase + detail + recovery hint). The derived reason only
+    // redirects to `aida findings list`; inline WHAT failed here so "why is this
+    // stuck?" answers in one command. trace:STORY-732 | ai:claude
+    if let Some(fr) = &req.failure_reason {
+        for line in failure_reason_lines(fr) {
+            println!("    {}", line.magenta());
+        }
     }
     // STORY-727: `aida why` previously named no command. The reason text now
     // names it generically (`<id>`); fill in the CONCRETE templated command as a
@@ -94705,6 +94884,12 @@ fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> Result<()> {
                 "idle_secs": idle_secs,
                 "idle_stalled": idle_stalled,
                 "session": lease_json,
+                // STORY-732: inline the orchestrator failure for machine consumers.
+                "failure_reason": req.failure_reason.as_ref().map(|fr| serde_json::json!({
+                    "phase": fr.phase,
+                    "detail": fr.detail,
+                    "hint": fr.recovery_hint,
+                })),
             }))?
         );
         return Ok(());
@@ -94732,28 +94917,48 @@ fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> Result<()> {
         }
         SpecLiveness::Stale => {
             let l = lease.expect("Stale verdict implies a lease");
-            let why = if idle_stalled {
-                format!(
-                    "idle {} with no spec movement",
-                    humanize_duration_secs(idle_secs)
-                )
+            // STORY-732 (FIX 3): a TERMINAL spec (Completed/Rejected) with a
+            // dormant lease is a CLEANUP item, not doubt about whether it's done.
+            // The old "the In-Progress flag is orphaned" line contradicted the
+            // Completed badge `aida why` prints — to a human that reads "is it
+            // done or not?". Frame it as housekeeping instead. trace:STORY-732
+            let terminal = matches!(
+                req.status,
+                aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+            );
+            let end_hint = short_lease_id(l, &leases);
+            if terminal {
+                println!(
+                    "  {} {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    status_label.green().bold(),
+                    stale_cleanup_suffix(&end_hint).dimmed()
+                );
+                print_lease_detail(l, elapsed_secs);
             } else {
-                "no live process".to_string()
-            };
-            println!(
-                "{}",
-                format!(
-                    "  {warn} STALE — {why}, {} elapsed; the In-Progress flag is orphaned",
-                    humanize_duration_secs(elapsed_secs)
-                )
-                .yellow()
-            );
-            print_lease_detail(l, elapsed_secs);
-            println!(
-                "  {} {}",
-                "clear it:".dimmed(),
-                format!("aida session end {}", short_lease_id(l, &leases)).cyan()
-            );
+                let why = if idle_stalled {
+                    format!(
+                        "idle {} with no spec movement",
+                        humanize_duration_secs(idle_secs)
+                    )
+                } else {
+                    "no live process".to_string()
+                };
+                println!(
+                    "{}",
+                    format!(
+                        "  {warn} {}",
+                        stale_orphaned_line(&why, &humanize_duration_secs(elapsed_secs))
+                    )
+                    .yellow()
+                );
+                print_lease_detail(l, elapsed_secs);
+                println!(
+                    "  {} {}",
+                    "clear it:".dimmed(),
+                    format!("aida session end {end_hint}").cyan()
+                );
+            }
         }
         SpecLiveness::FlagOnly => {
             println!(
@@ -94777,6 +94982,17 @@ fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> Result<()> {
                 "no active session".dimmed(),
                 status_label
             );
+        }
+    }
+    // STORY-732 (FIX 2): a shelved (NeedsAttention) spec carries the
+    // orchestrator's FailureReason. The liveness block above only says "no active
+    // session"; inline WHAT failed (phase + detail + hint) so `aida status <spec>`
+    // answers "why is this stuck?" in one command. trace:STORY-732 | ai:claude
+    if let Some(fr) = &req.failure_reason {
+        println!();
+        println!("{}", "Why it's parked".bold());
+        for line in failure_reason_lines(fr) {
+            println!("  {}", line.magenta());
         }
     }
     // STORY-727: the per-spec next-command block — `aida status <spec>` is a
