@@ -3847,6 +3847,7 @@ fn run() -> Result<()> {
         // form. trace:STORY-721 | ai:claude
         Command::Zen {
             spec,
+            supervised,
             no_human,
             no_pull,
             dry_run,
@@ -3858,6 +3859,7 @@ fn run() -> Result<()> {
                 &user_id,
                 spec.as_deref(),
                 no_human.as_deref(),
+                *supervised,
                 *no_pull,
                 *dry_run,
             )?;
@@ -14460,6 +14462,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         // the spec's status before driving it. trace:STORY-721 | ai:claude
         Command::Zen {
             spec,
+            supervised,
             no_human,
             no_pull,
             dry_run,
@@ -14472,6 +14475,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 &user_id,
                 spec.as_deref(),
                 no_human.as_deref(),
+                *supervised,
                 *no_pull,
                 *dry_run,
             );
@@ -134461,10 +134465,12 @@ fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
 
 /// STORY-721: `aida zen <spec>` — the one-shot AUTONOMOUS implement+ship drive.
 ///
-/// A THIN wrapper over the existing `--auto-complete --zen` orchestrator. It
+/// A THIN wrapper over the existing `--auto-complete` orchestrator — the SAME
+/// per-spec engine `aida burndown` / `aida integrate` use (ADR-7). It
 /// resolves + validates the spec (refusing a not-yet-approved Draft with
 /// guidance), then drives the one spec by self-invoking `aida queue work <spec>
-/// --auto-complete --zen [...]`. The drive's own preflight
+/// --auto-complete --no-human <mode>` so the review + merge phases run for free
+/// (TASK-1049). The drive's own preflight
 /// (`ensure_queued_for_implementer`, STORY-246) auto-queues the spec, so the
 /// operator never has to `aida queue add` first. The orchestrator is NOT
 /// reimplemented here — the pure pieces (eligibility, argv, plan formatting)
@@ -134475,6 +134481,7 @@ fn run_zen_drive(
     user_id: &str,
     spec: Option<&str>,
     no_human: Option<&str>,
+    supervised: bool,
     no_pull: bool,
     dry_run: bool,
 ) -> Result<()> {
@@ -134510,17 +134517,19 @@ fn run_zen_drive(
     if dry_run {
         print!(
             "{}",
-            zen_drive::format_zen_plan(&display, already_queued, no_human)
+            zen_drive::format_zen_plan(&display, already_queued, no_human, supervised)
         );
         return Ok(());
     }
 
     // Drive the one spec through the EXISTING orchestrator by self-invoking
-    // `aida queue work <spec> --auto-complete --zen [...]`. resolve_aida_exe()
-    // (not raw current_exe()) survives a mid-run `cargo build` swap. The drive
-    // owns the implement → CI → review → merge → pull sequence.
+    // `aida queue work <spec> --auto-complete --no-human <mode> [...]` — the
+    // SAME full per-spec engine burndown uses (ADR-7), so the independent
+    // reviewer + merge run for free (TASK-1049). resolve_aida_exe() (not raw
+    // current_exe()) survives a mid-run `cargo build` swap. The drive owns the
+    // implement → CI → review → merge → pull sequence.
     let exe = resolve_aida_exe();
-    let args = zen_drive::drive_args(&display, no_human, no_pull);
+    let args = zen_drive::drive_args(&display, no_human, supervised, no_pull);
     eprintln!(
         "  {} zen-driving {} — aida {}",
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
@@ -134530,7 +134539,7 @@ fn run_zen_drive(
     let status = std::process::Command::new(&exe)
         .args(&args)
         .status()
-        .context("failed to launch the `aida queue work --auto-complete --zen` drive")?;
+        .context("failed to launch the `aida queue work --auto-complete --no-human` drive")?;
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
