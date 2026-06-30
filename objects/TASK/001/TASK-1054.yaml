@@ -1,0 +1,17 @@
+id: 019f17a9-0a14-7541-9c74-a8051b4ae98d
+spec_id: TASK-1054
+agreed_id: TASK-1054
+title: 'Drive exit codes: distinguish shelved/parked from hard-fail (preserve EPIC-28 exit-2 contract)'
+description: 'Round-2 audit finding 5: a drive exits 0 for success/punt/held and 2 for BOTH shelved-at-CI and hard-fail-at-CI — a script wrapping a drive cannot branch on outcome from the exit code alone. CAREFUL change: EPIC-28 already established exit 2 = anything shelved/skipped (scripts + /goal conditions depend on it) — do NOT break that. ADD a distinct code (e.g. 3) for HARD-FAILURE (CI red with no shelve, build fail, unrecoverable) while keeping 0=clean, 2=shelved/parked-and-advanced. Document the code table. Needs a deliberate design pass re: every caller that checks the drive exit code (the orchestrator, burndown scripts, /goal).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T08:33:01.972605370Z
+modified_at: 2026-06-30T08:33:01.972605370Z
+req_type: Task
+tags:
+- drive
+- exit-codes
+- from-audit
+- scripting
