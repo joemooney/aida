@@ -52016,6 +52016,45 @@ fn collect_recently_merged_prs(
     project_root: &std::path::Path,
     limit: usize,
 ) -> Vec<(u64, String, Option<String>)> {
+    // TASK-1055: process-lifetime memo, keyed by (canonical root, limit), so a
+    // `--full` run can warm this gh probe concurrently with the others up front
+    // and the recently-merged render below hits a warm cache. Merged-PR state
+    // does not change within a single `status` run — same rationale as the
+    // BUG-613 open-PR memo. trace:TASK-1055
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+    #[allow(clippy::type_complexity)]
+    static CACHE: OnceLock<
+        Mutex<
+            std::collections::HashMap<
+                (std::path::PathBuf, usize),
+                Vec<(u64, String, Option<String>)>,
+            >,
+        >,
+    > = OnceLock::new();
+    let key = (
+        project_root
+            .canonicalize()
+            .unwrap_or_else(|_| project_root.to_path_buf()),
+        limit,
+    );
+    let cache = CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(hit) = guard.get(&key) {
+            return hit.clone();
+        }
+    }
+    let rows = collect_recently_merged_prs_uncached(project_root, limit);
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(key, rows.clone());
+    }
+    rows
+}
+
+fn collect_recently_merged_prs_uncached(
+    project_root: &std::path::Path,
+    limit: usize,
+) -> Vec<(u64, String, Option<String>)> {
     let gh_bin = match resolve_gh_binary() {
         Some(p) => p,
         None => return Vec::new(),
@@ -105534,7 +105573,40 @@ fn upstream_ref_for(project_root: &std::path::Path, _branch: &str) -> Option<Str
     }
 }
 
+/// Process-lifetime memo over [`collect_pr_facts_uncached`]. The rich
+/// `aida status` view resolves the current-branch PR/CI facts from more than
+/// one section (the user-context gather + the awaiting-you report), and a
+/// `--full` run warms this concurrently with the other gh probes up front
+/// (TASK-1055). PR state does not change within a single short-lived `status`
+/// run, so memoize by (canonical root, branch) — same justification as the
+/// BUG-613 open-PR memo.
+// trace:TASK-1055
 fn collect_pr_facts(project_root: &std::path::Path, branch: &str) -> PrFacts {
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<
+        Mutex<std::collections::HashMap<(std::path::PathBuf, String), PrFacts>>,
+    > = OnceLock::new();
+    let key = (
+        project_root
+            .canonicalize()
+            .unwrap_or_else(|_| project_root.to_path_buf()),
+        branch.to_string(),
+    );
+    let cache = CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(hit) = guard.get(&key) {
+            return hit.clone();
+        }
+    }
+    let facts = collect_pr_facts_uncached(project_root, branch);
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(key, facts.clone());
+    }
+    facts
+}
+
+fn collect_pr_facts_uncached(project_root: &std::path::Path, branch: &str) -> PrFacts {
     // BUG-560: `gh` is GitHub-only. On a GitLab / pure-git remote it fails with
     // a raw "none of the git remotes ... point to a known GitHub host" auth
     // error that we used to surface verbatim — telling a corporate GitLab
@@ -106703,6 +106775,60 @@ mod bug_560_status_forge_tests {
             facts.gh_status,
             GhStatus::NotGitHub(forge::ForgeKind::None)
         ));
+    }
+
+    /// TASK-1055: warming the status network probes concurrently must NOT
+    /// change the per-probe results — it only pre-populates the same memo the
+    /// sequential render reads. A `gitlab` forge short-circuits `gh` entirely
+    /// (deterministic, no network — the "mock"), so the probe answer is fixed;
+    /// the test asserts the warmed read matches a direct uncached probe and
+    /// that `warm_status_network_probes` runs cleanly end-to-end.
+    // trace:TASK-1055
+    #[test]
+    fn warming_status_probes_does_not_change_results() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        // A real (empty) git repo so `collect_branch_facts` resolves a branch
+        // name and the warm step exercises the PR-facts thread.
+        for args in [
+            vec!["init", "-q"],
+            vec!["config", "user.email", "t@example.com"],
+            vec!["config", "user.name", "t"],
+        ] {
+            assert!(std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(&args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[forge]\nprovider = \"gitlab\"\n",
+        )
+        .unwrap();
+
+        // Ground truth: the raw, uncached probe.
+        let uncached = collect_pr_facts_uncached(root, "feature-branch");
+
+        // Warming pre-fills the memos concurrently; it must not change anything.
+        warm_status_network_probes(root);
+        let warmed = collect_pr_facts(root, "feature-branch");
+
+        assert_eq!(warmed.number, uncached.number);
+        assert_eq!(warmed.title, uncached.title);
+        assert_eq!(warmed.state, uncached.state);
+        assert_eq!(warmed.ci_rollup, uncached.ci_rollup);
+        assert!(matches!(
+            warmed.gh_status,
+            GhStatus::NotGitHub(forge::ForgeKind::GitLab)
+        ));
+
+        // The open-PR snapshot is likewise short-circuited to empty on a
+        // non-GitHub forge — warmed or not.
+        assert!(collect_open_prs(root).by_branch.is_empty());
     }
 
     /// TASK-833: `parse_open_pr_snapshot` turns a `gh pr list --json` payload
@@ -109794,6 +109920,50 @@ mod story707_fast_status_tests {
     }
 }
 
+/// TASK-1055: warm the independent gh-backed status probes concurrently so a
+/// `--full` render pays the latency of the SLOWEST probe, not the SUM. Each
+/// target is behind a process-lifetime memo (open-PR snapshot via BUG-613,
+/// PR/CI facts + recently-merged via TASK-1055), so calling them here only
+/// pre-populates the cache the sequential render reads next — output is
+/// unchanged. The current-branch facts need the branch name, derived from a
+/// cheap local `git` call. Worktree rows read `collect_open_prs(main_root)`,
+/// so both the cwd root and the main-worktree root are warmed (deduped to one
+/// fetch when they're the same canonical path).
+// trace:TASK-1055
+fn warm_status_network_probes(project_root: &std::path::Path) {
+    let main_root = main_worktree_root_from(project_root);
+    let branch_name = collect_branch_facts(project_root).map(|b| b.name);
+
+    // Distinct canonical roots whose open-PR snapshot the render will read.
+    let proj_canon = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let main_canon = main_root
+        .canonicalize()
+        .unwrap_or_else(|_| main_root.clone());
+    let mut pr_roots: Vec<std::path::PathBuf> = vec![project_root.to_path_buf()];
+    if main_canon != proj_canon {
+        pr_roots.push(main_root.clone());
+    }
+
+    std::thread::scope(|s| {
+        for root in &pr_roots {
+            s.spawn(move || {
+                let _ = collect_open_prs(root);
+            });
+        }
+        s.spawn(|| {
+            // Matches the limit the recently-merged render uses below.
+            let _ = collect_recently_merged_prs(project_root, 5);
+        });
+        if let Some(branch) = branch_name.as_deref() {
+            s.spawn(move || {
+                let _ = collect_pr_facts(project_root, branch);
+            });
+        }
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
@@ -109903,6 +110073,21 @@ fn handle_status_command_distributed(
             .transpose()?;
         print_status_advisor_activity_full(&project_root, since)?;
         return Ok(());
+    }
+
+    // TASK-1055: the rich status view fires several INDEPENDENT gh network
+    // probes as it renders — the current-branch PR/CI facts (`gh pr view`),
+    // the open-PR roster (`gh pr list --state open`), and the recently-merged
+    // tail (`gh pr list --state merged`). Resolved serially section-by-section,
+    // a `--full` run pays the SUM of those round-trips (~22s observed on this
+    // repo). Each is now behind a process-lifetime memo, so warm all three
+    // concurrently up front; the sequential render below then hits warm caches
+    // and the wall-clock collapses to the SLOWEST single probe instead of the
+    // sum. Output is byte-identical — only the fetch ordering changes, and the
+    // warm step is gated on `!no_ci` so `--no-ci` stays network-free.
+    // trace:TASK-1055
+    if !no_ci {
+        warm_status_network_probes(&project_root);
     }
 
     // TASK-220: gather the unified-view facts once. Each section
