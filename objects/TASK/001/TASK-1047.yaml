@@ -1,0 +1,12 @@
+id: 019f16c3-5e3f-7b82-a404-c9c982a02d17
+spec_id: TASK-1047
+agreed_id: TASK-1047
+title: Document the fan-out/subagent burndown drain as Claude-only
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T04:22:10.239222762Z
+modified_at: 2026-06-30T04:22:10.239222762Z
+req_type: Task
