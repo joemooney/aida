@@ -3,12 +3,12 @@ spec_id: TASK-989
 agreed_id: TASK-989
 title: Surface advisor Agent-tool fan-out activity spec-linked in aida ps / throughput view (not orphan flag-only)
 description: 'When the advisor fans worktree-isolated Agent-tool implementers, they take GENERIC harness-worktree leases that are NOT spec-linked, so aida ps shows their specs as orphaned flag-only and the operator cannot see advisor -> agent -> spec X (building). The operator hit this directly 2026-06-29: ran aida ps, saw SPIKE-70/74/STORY-712 as flag-only orphans, asked how to see what the advisor is doing from the CLI -- there is no clean answer today. FIX (composes with STORY-712 events + STORY-718 throughput view): the advisor should record each fan-out spec-linked -- emit an advisor-fanned-agent event (events.jsonl) carrying {agent-id, spec, status} when it spawns an implementer, and surface it in aida ps (a new advisor-activity section) and the integrator throughput view. So aida ps shows live advisor fan-outs against their specs, not generic orphans. Until then the proxies are gh pr list (in-flight) + git log origin/main (landed) + the in-progress flags. This is the visibility half of the integrator/throughput theme.'
-status: Approved
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T16:00:44.646962875Z
-modified_at: 2026-06-30T02:45:53.015262480Z
+modified_at: 2026-06-30T02:45:53.841334907Z
 req_type: Task
 tags:
 - advisor
