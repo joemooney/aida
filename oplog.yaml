@@ -28891,5 +28891,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2780
+- id: 019f1a64-661c-7aa1-8984-73c96428bac0
+  target_id: 019f1a64-5b08-7091-b3fe-e72bdc9f834c
+  author: aida
+  node_id: '1'
+  lamport: 2781
+  timestamp: 2026-06-30T21:16:55.196356279Z
+  kind: !Create
+    title: aida search (default) + aida graph emit human formatting to agents, not TOON, and lack next[] guidance
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 2781
 node_id: '1'

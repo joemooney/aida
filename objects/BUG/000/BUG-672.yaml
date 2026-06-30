@@ -1,0 +1,18 @@
+id: 019f1a64-5b08-7091-b3fe-e72bdc9f834c
+spec_id: BUG-672
+agreed_id: BUG-672
+title: aida search (default) + aida graph emit human formatting to agents, not TOON, and lack next[] guidance
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T21:16:52.360674767Z
+modified_at: 2026-06-30T21:16:52.360674767Z
+req_type: Bug
+tags:
+- agent-surface
+- from-audit
+- graph
+- search
+- toon
