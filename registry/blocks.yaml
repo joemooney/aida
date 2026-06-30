@@ -85,7 +85,7 @@ blocks:
   type_prefix: ADR
   range_start: 1
   range_end: 100
-  next: 8
+  next: 9
   allocated_at: 2026-05-09T18:10:00.750673053Z
 - node_id: '1'
   owner: joe
