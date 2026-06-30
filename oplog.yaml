@@ -26389,5 +26389,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2519
+- id: 019f165b-273d-78e2-95e3-c445e2c54fa3
+  target_id: 019f165b-1672-7d32-81cd-a8e23130c1a4
+  author: aida
+  node_id: '1'
+  lamport: 2520
+  timestamp: 2026-06-30T02:28:20.413719550Z
+  kind: !Create
+    title: TASK-0432 — precedence when autopilot composes with `--zen` / `--no-human` / solo / `intake --apply`; ratify the surface (flag vs posture vs mode)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2520
 node_id: '1'
