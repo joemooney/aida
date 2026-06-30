@@ -7,7 +7,8 @@
 # - git checkout -- . (discards all changes)
 # - git push --force / -f / --force-with-lease to a protected branch
 #   (main/master/develop/aida-store); plain --force/-f to any branch
-# - git branch -D (force-deletes branches)
+# - git branch -d/-D/--delete of a PROTECTED branch (main/master/develop/
+#   aida-store/repo default); deleting a feature branch is allowed
 # - git stash drop (permanently drops stashed work)
 # - git rebase without confirmation context
 #
@@ -146,6 +147,90 @@ $segs
 EOF
 }
 
+# Resolve the branch name(s) targeted by ONE `git branch ...` segment that is a
+# DELETION (`-d` / `-D` / `--delete`). Echoes one target branch per line; echoes
+# nothing when the segment is a branch subcommand that is NOT a delete (list,
+# create, rename, copy); echoes the sentinel "__FAILCLOSED__" when it IS a delete
+# but no branch name can be parsed (the caller treats that as protected, so an
+# ambiguous delete fails CLOSED / is blocked). Handles flags in any order and
+# combined, a `-C <dir>` worktree override (a pre-subcommand global option), and
+# multiple branch names. trace:BUG-662
+resolve_one_branch_segment() {
+    local seg="$1"
+    local -a toks=()
+    read -ra toks <<< "$seg"   # word-split without glob expansion
+    local n=${#toks[@]}
+    local i=1                  # toks[0] is "git"
+    local subcmd_found=0
+    # Walk git's pre-subcommand global options until we reach `branch`. A
+    # `-C <dir>` here is the global worktree override (distinct from branch's own
+    # `-C` copy flag, which can only appear AFTER the subcommand).
+    while [ "$i" -lt "$n" ]; do
+        local t="${toks[$i]}"
+        case "$t" in
+            branch) subcmd_found=1; i=$((i + 1)); break ;;
+            -C) i=$((i + 2)) ;;
+            -c|--git-dir|--work-tree|--namespace) i=$((i + 2)) ;;
+            *) i=$((i + 1)) ;;
+        esac
+    done
+    if [ "$subcmd_found" = "0" ]; then
+        return   # no branch subcommand in this segment → nothing
+    fi
+    # Branch arguments: a delete flag (`--delete`, or a short cluster containing
+    # `d`/`D`) marks the intent; every non-flag token is a branch-name target.
+    local delete_intent=0
+    local found_target=0
+    local out=""
+    while [ "$i" -lt "$n" ]; do
+        local t="${toks[$i]}"
+        i=$((i + 1))
+        case "$t" in
+            --delete) delete_intent=1 ;;
+            --*) : ;;                      # other long flag (e.g. --force); skip
+            -*)
+                case "$t" in
+                    *[dD]*) delete_intent=1 ;;   # short cluster with d/D = delete
+                esac
+                ;;
+            *)
+                found_target=1
+                out="${out}${t}"$'\n'
+                ;;
+        esac
+    done
+    if [ "$delete_intent" = "0" ]; then
+        return   # branch subcommand but not a delete → nothing
+    fi
+    if [ "$found_target" = "1" ]; then
+        printf '%s' "$out"
+    else
+        echo "__FAILCLOSED__"   # delete with no parseable target → fail closed
+    fi
+}
+
+# Resolve the delete target(s) across ALL `git branch` segments in a command.
+# Echoes every delete target (one per line); echoes nothing when the command has
+# no branch-delete; echoes "__FAILCLOSED__" when a delete is present but its
+# target is unparseable. A chained command (`a && git branch -D feat`) is split
+# on shell separators so a protected-branch delete anywhere is still caught.
+# trace:BUG-662
+resolve_branch_delete_targets() {
+    local cmd="$1"
+    local segs
+    segs=$(printf '%s' "$cmd" | grep -oE 'git[^&|;]*\bbranch\b[^&|;]*' || true)
+    if [ -z "$segs" ]; then
+        return   # no branch subcommand anywhere → nothing
+    fi
+    local seg
+    while IFS= read -r seg; do
+        [ -z "$seg" ] && continue
+        resolve_one_branch_segment "$seg"
+    done <<EOF
+$segs
+EOF
+}
+
 # Patterns that indicate destructive git operations
 # Each pattern has an explanation of why it's blocked
 check_destructive() {
@@ -237,11 +322,34 @@ EOF
         fi
     fi
 
-    # git branch -D — force-deletes a branch regardless of merge status
-    if echo "$cmd" | grep -qE 'git\s+branch\s+-D\b'; then
-        echo "BLOCKED: 'git branch -D' force-deletes a branch even if not merged."
-        echo "Alternative: 'git branch -d' (lowercase) only deletes if merged."
-        return 1
+    # Branch-deletion handling (BUG-662). Mirror the force-push TARGET logic:
+    # block only when a DELETE target is a PROTECTED branch (main / repo default /
+    # aida-store / master / develop) — deleting a feature branch is allowed, since
+    # every agent worktree leaves a stale local branch behind. The old guard
+    # blanket-blocked every `git branch -D`, refusing that legitimate cleanup. An
+    # unparseable delete fails CLOSED. Reuses is_protected_branch.
+    local del_targets
+    del_targets=$(resolve_branch_delete_targets "$cmd")
+    if [ -n "$del_targets" ]; then
+        local del_protected=0
+        if printf '%s\n' "$del_targets" | grep -q '__FAILCLOSED__'; then
+            del_protected=1   # delete present but target unparseable → fail closed
+        else
+            local _b
+            while IFS= read -r _b; do
+                [ -z "$_b" ] && continue
+                if is_protected_branch "$_b"; then
+                    del_protected=1
+                fi
+            done <<EOF
+$del_targets
+EOF
+        fi
+        if [ "$del_protected" = "1" ]; then
+            echo "BLOCKED: deleting a protected branch (main/master/develop/aida-store or the repo default)."
+            echo "Protected branches are never deleted locally — only merged feature branches are."
+            return 1
+        fi
     fi
 
     # git stash drop/clear — permanently removes stashed changes
