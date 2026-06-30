@@ -8,9 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:29:22.191258079Z
-modified_at: 2026-06-30T03:35:16.631160283Z
+modified_at: 2026-06-30T04:23:37.171631665Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f1047-d9a5-7673-a495-8cbe9eaa20b5
   created_at: 2026-06-29T17:29:27.164936033Z
+deferred: true
+deferred_at: 2026-06-30T04:23:37.171631665Z
+deferred_until: vague live-debug TUI feed; revisit if an aida watch TUI view is needed
