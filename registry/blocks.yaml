@@ -327,3 +327,11 @@ blocks:
   range_end: 1114
   next: 1049
   allocated_at: 2026-06-29T17:29:50.154419157Z
+- node_id: '1'
+  owner: joe.mooney@gmail.com
+  hostname: imac
+  type_prefix: STORY
+  range_start: 741
+  range_end: 840
+  next: 741
+  allocated_at: 2026-06-30T04:49:30.731751672Z
