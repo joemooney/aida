@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T03:28:50.821671075Z
-modified_at: 2026-06-30T03:28:50.821671075Z
+modified_at: 2026-06-30T04:18:01.140765746Z
 req_type: Story
 tags:
 - autonomy
@@ -17,3 +17,7 @@ tags:
 - integrator
 - workflow
 - zen
+relationships:
+- rel_type: Parent
+  target_id: 019f16bf-75a4-7af1-8964-cd6e3e001f39
+  created_at: 2026-06-30T04:18:01.140765746Z
