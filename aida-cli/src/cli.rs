@@ -8208,22 +8208,25 @@ pub enum Command {
     Orchestrator(OrchestratorCommand),
 
     /// One-shot AUTONOMOUS implement + ship for a single approved spec.
-    /// Auto-queues the spec, then drives it through the `--auto-complete --zen`
-    /// orchestrator (implement → CI → review → merge → pull). Fire-and-forget
-    /// friendly: launch several for INDEPENDENT specs in parallel, each in its
-    /// own worktree. The auto-implement counterpart to `aida ship` (which
-    /// finishes a HUMAN-implemented spec). With no `<spec>` and no subcommand,
-    /// prints help.
+    /// Auto-queues the spec, then drives it through the SAME `--auto-complete`
+    /// orchestrator `aida burndown` uses (implement → CI → review → merge →
+    /// pull). An INDEPENDENT reviewer always runs before the merge. Fire-and-
+    /// forget friendly: launch several for INDEPENDENT specs in parallel, each
+    /// in its own worktree. The auto-implement counterpart to `aida ship`
+    /// (which finishes a HUMAN-implemented spec). With no `<spec>` and no
+    /// subcommand, prints help.
     // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
     Zen {
         /// The approved spec to autonomously implement and ship.
         #[clap(value_name = "SPEC")]
         spec: Option<String>,
 
-        /// Run the drive headless (`claude -p`) so it needs no Ctrl+D —
-        /// forwarded to the orchestrator. Bare `--no-human` runs the reviewer
-        /// headless and pauses at the implementer; `--no-human=both` runs the
-        /// implementer headless too. Aliases: `--unattended`, `--headless`.
+        /// Autonomy mode, forwarded to the orchestrator. The reviewer ALWAYS
+        /// runs headless as an independent gate; this only governs the
+        /// implementer. Default (and bare `--no-human` / `reviewer-only`) keeps
+        /// the implementer interactive — a supervised drive. `--no-human=both`
+        /// runs the implementer headless too, so several specs can be fired in
+        /// parallel unattended. Aliases: `--unattended`, `--headless`.
         #[clap(
             long,
             value_name = "MODE",
