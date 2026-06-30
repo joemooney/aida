@@ -647,6 +647,137 @@ fn toon_status_token(status: &str) -> String {
     }
 }
 
+/// The column header label for a `--fields` field name. The same field
+/// vocabulary [`toon_list_cell`] / [`toon_list_fields`] understand, mapped to a
+/// human-friendly capitalized header for the `aida list --fields` table.
+// trace:STORY-734 | ai:claude
+fn list_field_header(field: &str) -> String {
+    match field {
+        "id" => "ID",
+        "title" => "Title",
+        "status" => "Status",
+        "type" => "Type",
+        "priority" => "Priority",
+        "feature" => "Feature",
+        "owner" => "Owner",
+        "assignee" => "Assignee",
+        "tags" => "Tags",
+        "heft" => "Heft",
+        "queued" => "Queued",
+        "in_flight" => "In-Flight",
+        "blocked" => "Blocked",
+        // Validated against the known set upstream, so this is unreachable in
+        // practice; fall back to the raw name for robustness.
+        other => return other.to_string(),
+    }
+    .to_string()
+}
+
+/// Build the lines of the human `aida list --fields <csv>` table: exactly the
+/// requested columns, in the requested order, each left-aligned and sized to its
+/// widest cell (header included). Cell values reuse [`toon_list_cell`] so the
+/// human and agent surfaces share one field vocabulary; the `status` and `id`
+/// columns are coloured AFTER padding so ANSI escapes don't break alignment, and
+/// the trailing column is not padded. Returned as a `Vec<String>` (header,
+/// divider, then one line per row) so the layout is unit-testable; the colour
+/// helpers no-op when stdout isn't a TTY.
+// trace:STORY-734 | ai:claude — plain `//` keeps the marker out of any doc/help.
+fn build_list_fields_lines<F>(
+    reqs: &[aida_core::RequirementSummary],
+    fields: &[String],
+    routing_of: F,
+) -> Vec<String>
+where
+    F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
+{
+    // Plain (uncoloured) cell text per row per column — width math runs on this.
+    let plain: Vec<Vec<String>> = reqs
+        .iter()
+        .map(|r| {
+            let routing = routing_of(r);
+            fields
+                .iter()
+                .map(|f| toon_list_cell(r, routing, f))
+                .collect()
+        })
+        .collect();
+
+    // Column width = widest of (header, every cell). The last column is left
+    // unpadded so a long Title never trails whitespace.
+    let widths: Vec<usize> = fields
+        .iter()
+        .enumerate()
+        .map(|(c, f)| {
+            let header = list_field_header(f).len();
+            plain
+                .iter()
+                .map(|row| row[c].len())
+                .max()
+                .unwrap_or(0)
+                .max(header)
+        })
+        .collect();
+    let last = fields.len().saturating_sub(1);
+
+    let mut lines = Vec::with_capacity(reqs.len() + 2);
+
+    // Header row + divider.
+    let mut header = String::new();
+    for (c, f) in fields.iter().enumerate() {
+        if c > 0 {
+            header.push(' ');
+        }
+        let label = list_field_header(f);
+        if c == last {
+            header.push_str(&label);
+        } else {
+            header.push_str(&format!("{:<width$}", label, width = widths[c]));
+        }
+    }
+    lines.push(header.bold().to_string());
+    let rule: usize = widths.iter().sum::<usize>() + widths.len().saturating_sub(1);
+    lines.push("─".repeat(rule));
+
+    // Data rows: pad the plain cell to its column width, THEN colour status / id
+    // so the ANSI escapes don't inflate the `{:<}` byte count. trace:STORY-734
+    for (row, req) in plain.iter().zip(reqs.iter()) {
+        let mut line = String::new();
+        for (c, f) in fields.iter().enumerate() {
+            if c > 0 {
+                line.push(' ');
+            }
+            let padded = if c == last {
+                row[c].clone()
+            } else {
+                format!("{:<width$}", row[c], width = widths[c])
+            };
+            let cell = match f.as_str() {
+                "status" => status_display::paint_status(&padded, &req.status).to_string(),
+                "id" => padded.bold().to_string(),
+                _ => padded,
+            };
+            line.push_str(&cell);
+        }
+        lines.push(line);
+    }
+    lines
+}
+
+/// Print the human `aida list --fields <csv>` table. Thin wrapper over
+/// [`build_list_fields_lines`].
+// trace:STORY-734 | ai:claude — plain `//` keeps the marker out of any doc/help.
+fn render_list_fields_table<F>(
+    reqs: &[aida_core::RequirementSummary],
+    fields: &[String],
+    routing_of: F,
+) where
+    F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
+{
+    for line in build_list_fields_lines(reqs, fields, routing_of) {
+        println!("{line}");
+    }
+}
+
 #[cfg(test)]
 mod task970_agent_output_tests {
     use super::*;
@@ -681,6 +812,126 @@ mod task970_agent_output_tests {
         assert_eq!(toon_status_token("NeedsAttention"), "needs-attention");
         assert_eq!(toon_status_token("Draft"), "draft");
         assert_eq!(toon_status_token("Done"), "done");
+    }
+
+    // STORY-734 test fixtures: a minimal RequirementSummary builder so the
+    // `--fields` projection + human table layout are unit-testable.
+    // trace:STORY-734 | ai:claude
+    fn fields_summary(
+        id: &str,
+        title: &str,
+        status: &str,
+        priority: &str,
+    ) -> aida_core::RequirementSummary {
+        aida_core::RequirementSummary {
+            id: uuid::Uuid::new_v4(),
+            spec_id: Some(id.to_string()),
+            agreed_id: None,
+            title: title.to_string(),
+            description: String::new(),
+            status: status.to_string(),
+            priority: priority.to_string(),
+            owner: String::new(),
+            assignee: None,
+            feature: String::new(),
+            req_type: "story".to_string(),
+            tags: Vec::new(),
+            created_at: String::new(),
+            modified_at: String::new(),
+            archived: false,
+            archived_at: None,
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
+            in_degree: 0,
+            out_degree: 0,
+            heft: 0,
+            blocked: false,
+            yaml_path: String::new(),
+        }
+    }
+
+    // STORY-734: `--fields id,status,title` renders exactly those three columns,
+    // in that order, on the HUMAN table — header order + per-row cell order both
+    // follow the requested CSV, not the default id/type/status/priority layout.
+    // trace:STORY-734 | ai:claude
+    #[test]
+    fn fields_selects_and_orders_columns() {
+        colored::control::set_override(false); // deterministic, no ANSI
+        let selected = toon_list_fields(Some("id,status,title")).unwrap();
+        assert_eq!(selected, vec!["id", "status", "title"]);
+
+        let reqs = vec![fields_summary(
+            "STORY-1",
+            "first thing",
+            "in-progress",
+            "high",
+        )];
+        let lines = build_list_fields_lines(&reqs, &selected, |_| (false, false, false));
+
+        // Header columns are exactly ID / Status / Title, in order.
+        assert_eq!(
+            lines[0].split_whitespace().collect::<Vec<_>>(),
+            vec!["ID", "Status", "Title"]
+        );
+        // The data row leads with the id, then the normalized status token, then
+        // the title — the chosen order, nothing else.
+        let row = &lines[2];
+        assert!(row.starts_with("STORY-1"));
+        let id_at = row.find("STORY-1").unwrap();
+        let status_at = row.find("in-progress").unwrap();
+        let title_at = row.find("first thing").unwrap();
+        assert!(id_at < status_at && status_at < title_at);
+        // No stray default column (e.g. priority/type) leaked in.
+        assert!(!row.contains("high"));
+        assert!(!row.contains("story"));
+    }
+
+    // STORY-734: the agent/TOON projection emits ONLY the chosen fields — a
+    // 2-field selection is narrower than the 4-field default, so it's a real
+    // token win. The same `toon_list_fields` + `toon_list_cell` pair drives both
+    // the agent rows and the human table. trace:STORY-734 | ai:claude
+    #[test]
+    fn fields_agent_toon_emits_only_chosen_fields() {
+        let selected = toon_list_fields(Some("id,priority")).unwrap();
+        assert_eq!(selected, vec!["id", "priority"]);
+        // Narrower than the default schema.
+        assert!(selected.len() < toon_list_fields(None).unwrap().len());
+
+        let req = fields_summary("STORY-9", "t", "approved", "low");
+        let cells: Vec<String> = selected
+            .iter()
+            .map(|f| toon_list_cell(&req, (false, false, false), f))
+            .collect();
+        // Exactly two cells, in order, and nothing from the dropped columns.
+        assert_eq!(cells, vec!["STORY-9".to_string(), "low".to_string()]);
+    }
+
+    // STORY-734: an unknown field name is rejected (not silently ignored — the
+    // bug being fixed) with the valid set named in the error. trace:STORY-734
+    #[test]
+    fn fields_unknown_name_errors_with_valid_set() {
+        let err = toon_list_fields(Some("id,bogus")).unwrap_err().to_string();
+        assert!(err.contains("bogus"), "names the offending field: {err}");
+        assert!(err.contains("valid fields"), "names the valid set: {err}");
+        // A few representative valid names appear in the guidance.
+        assert!(err.contains("id"));
+        assert!(err.contains("title"));
+        assert!(err.contains("status"));
+    }
+
+    // STORY-734: the default (no `--fields`) human path is unchanged — the
+    // dynamic renderer is invoked ONLY when `--fields` is present. The handler
+    // guards the dynamic table behind `fields.is_some()`, so `None` keeps the
+    // standard fixed-layout columns. trace:STORY-734 | ai:claude
+    #[test]
+    fn fields_default_none_keeps_standard_columns() {
+        // The agent default schema is the historical id/title/status/type — a
+        // None selection never collapses to the human `--fields` path.
+        assert_eq!(
+            toon_list_fields(None).unwrap(),
+            vec!["id", "title", "status", "type"]
+        );
     }
 
     // AGENT MODE = (AIDA_AGENT_OUTPUT truthy) OR (stdout not a TTY). An explicit
@@ -15334,6 +15585,27 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 return Ok(());
             }
 
+            // STORY-734: `--fields <csv>` selects AND orders the columns of the
+            // HUMAN table too (was agent-mode-only — the operator-reported gap).
+            // Validate the field set (an unknown name errors with the valid set),
+            // then render the dynamic column table and skip the fixed layouts
+            // below. Default (no `--fields`) drops straight through, unchanged.
+            // trace:STORY-734 | ai:claude
+            if let Some(csv) = fields.as_deref() {
+                let selected = toon_list_fields(Some(csv))?;
+                if reqs.is_empty() {
+                    println!("No requirements found.");
+                    print_hidden_hints();
+                } else {
+                    render_list_fields_table(&reqs, &selected, &row_routing);
+                    println!("\n{} requirements", reqs.len());
+                    print_hidden_hints();
+                    print_deferred_triggers(*deferred, &reqs);
+                    maybe_print_whats_left_tip(status.as_deref(), &reqs);
+                }
+                return Ok(());
+            }
+
             if reqs.is_empty() {
                 println!("No requirements found.");
                 print_hidden_hints();
@@ -17848,6 +18120,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             include_meta,
             short,
             json,
+            fields,
             ..
         } => {
             // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
@@ -17935,6 +18208,21 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&out)?);
+                return Ok(());
+            }
+
+            // STORY-734: `--fields <csv>` selects + orders the columns of the
+            // search table too, mirroring `aida list --fields`. Search rows carry
+            // no work-routing axis, so the queued/in_flight/blocked fields render
+            // false here. trace:STORY-734 | ai:claude
+            if let Some(csv) = fields.as_deref() {
+                let selected = toon_list_fields(Some(csv))?;
+                if results.is_empty() {
+                    println!("No results for: {}", query);
+                } else {
+                    render_list_fields_table(&results, &selected, |_| (false, false, false));
+                    println!("\n{} results", results.len());
+                }
                 return Ok(());
             }
 
