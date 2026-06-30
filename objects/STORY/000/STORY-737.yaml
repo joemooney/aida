@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T20:05:19.258750814Z
-modified_at: 2026-06-30T20:05:19.258750814Z
+modified_at: 2026-06-30T20:26:07.038568676Z
 req_type: Story
 tags:
 - delight
 - first-run
 - from-audit
 - newcomer
+comments:
+- id: 019f1a35-e33e-71c0-912e-962ffb297f3b
+  author: joe
+  content: Commit 77678f6d2 references this requirement
+  created_at: 2026-06-30T20:26:07.038568676Z
+  modified_at: 2026-06-30T20:26:07.038568676Z
