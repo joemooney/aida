@@ -3,12 +3,12 @@ spec_id: TASK-1006
 agreed_id: TASK-1006
 title: 'Autopilot slice 1: autonomy-doc section 8 + orthogonal-axes framing (the shared mental model)'
 description: 'TASK-0432 smallest-first-slice (doc-first). New section 8 in docs/architecture/autonomy-and-escalation.md: autopilot is the grooming-stage analog of the cascade, the orthogonal grooming-vs-draining axes, the composition matrix, one keystone classifier. Plus the docs/solo-mode.md compose-with note + glossary entry. Lands the shared mental model that prevents precedence bugs before any code. GATED: operator ratifies the autopilot direction first.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T19:26:56.744627767Z
-modified_at: 2026-06-29T19:27:01.451579669Z
+modified_at: 2026-06-30T02:29:20.866725274Z
 req_type: Task
 tags:
 - autopilot
