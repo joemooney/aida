@@ -26285,5 +26285,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2510
+- id: 019f1658-87d3-7521-9c98-574384ea463c
+  target_id: 019f1658-776a-7b72-b28f-ded2a45f2050
+  author: aida
+  node_id: '1'
+  lamport: 2511
+  timestamp: 2026-06-30T02:25:28.531290806Z
+  kind: !Create
+    title: 'Telemetry: pool hit-rate (reuse vs create) to prove the warm-cache payoff empirically (substrate learning loop)'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2511
 node_id: '1'
