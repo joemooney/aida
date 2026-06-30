@@ -647,6 +647,171 @@ designed at the edges of STORY-306 but not formalized.
 
 ---
 
+## 8. Advisor autopilot — the grooming-stage analog of the cascade
+
+Sections 1-7 describe the **draining** stage: how the implement → CI → review
+→ merge pipeline behaves when a human is or isn't present. Autopilot governs the
+stage *before* that — the advisor **disposition** pass (`aida groom`) that
+decides which specs even enter the ready set the drain works. It is the
+grooming-stage analog of what the three-mode ladder is to draining.
+
+The single most important thing to hold onto: **autopilot is not a fourth rung
+on the three-mode ladder.** The ladder and autopilot live on **orthogonal
+axes** — different stages of the loop, deciding different things, never the same
+prompt. They compose; they do not contend.
+
+### Two orthogonal stages, two posture systems
+
+```
+   GROOMING STAGE                          DRAINING STAGE
+   (advisor: what enters the ready set)    (implementer: work the ready set)
+   ──────────────────────────────────      ──────────────────────────────────
+   groom            (propose-by-default)   default     (pause every step)
+   groom --apply    (binary execute)       --zen       (auto-resolve mechanical)
+   groom --autopilot (envelope) ◄── §8      --no-human  (punt → §2 cascade)
+                                            solo posture (safe-backlog discretion)
+
+   autopilot parameterises the LEFT.       the ladder (§1) parameterises the RIGHT.
+```
+
+The ladder (§1) parameterises a *drain*: how a running implement→merge pipeline
+handles `kind:confirmation` vs `kind:design-fork` prompts. Autopilot
+parameterises the *advisor disposition pass*: how `groom` decides a spec's fate
+(approve / reject / dedupe / tag / queue / park / route / comment / ask). Groom
+decides what enters the ready set; the drain works it. Because they act at
+different stages on different prompt classes, there is no "which wins" between
+`--autopilot` and `--zen` — they never decide the same thing. `--zen` on a
+`groom` command is a no-op (different stage) and should warn-and-ignore.
+
+### Autopilot is a bounded-authority envelope over `groom`, not a new engine
+
+Today `aida groom --apply` is **binary**: a cold-boot advisor proposes a
+disposition per open spec and `--apply` executes *all* of them. The only
+governance is the **candidate fence** (`select_intake_candidates`) — it decides
+*which specs* are touchable (do-not-approve classes, keystone/supervised,
+deferred, risk-above-ceiling are fenced out) but, once a spec is in the fence,
+places no per-**action** limit.
+
+Autopilot adds the missing axis: a per-**action-class authority map** layered
+*inside* the fence. It does not reinvent `groom`, the fence, the cold-boot
+caveat, or the `--apply` path — it is the *authority* layer over them. Surfaced
+as `aida groom --autopilot` (+ a `[autopilot]` config posture), it is explicitly
+a config posture over an existing verb, **not** a new mode, **not** a new command
+family, **not** a role-presence flag (it changes *how much* the advisor seat may
+auto-dispose, not *who* is present).
+
+### The per-action authority map (auto / propose / never)
+
+The nine advisor actions have wildly different blast radius — tagging is
+reversible and cheap; approving a draft onto the buildable queue or rejecting one
+is not. So authority is **per-action-class**, with three levels that map cleanly
+onto the ladder's auto-resolve / pause-and-ask / escalate:
+
+| Authority | Meaning | Default actions |
+|-----------|---------|-----------------|
+| **`auto`** | autopilot may execute it unattended (then audit it) | `tag`, `comment`, `dedupe` (link-only), `route` (to an existing queue), `park`, `queue` of an *already-Approved* spec |
+| **`propose`** | output only — held for human review, never executed | `approve` (draft→Approved), `reject` |
+| **`never`** | autopilot may never do it | anything touching a fenced spec |
+
+The default envelope is **conservative**: zero-config autopilot can only ever
+auto-execute *reversible* actions. A project widens explicitly, action by action
+(`approve = "auto"`), exactly as it can already widen `--risk high`. Two split-verb
+guards keep cold-boot mistakes cheap: `dedupe` auto-adds a `duplicate-of:<ID>`
+tag + comment but the destructive *reject-the-duplicate* half routes through the
+`reject` authority; `ask` (park/escalate-when-uncertain) is a first-class
+recorded action with a reason category, not a silent no-op.
+
+### The four AND-composed gates
+
+An action auto-executes only when **all four** gates pass; any gate failing
+routes it to *propose* or *park/escalate*. The default bias when uncertain is
+**park/escalate, never approve** — the same conservative-escalation bias the
+cascade (§2) runs on.
+
+```
+ for each (spec, proposed action):
+   gate 1  spec in the fence?          ─ no ─► drop (already excluded)
+   gate 2  action authority == auto?   ─ no ─► PROPOSE (hold for human)
+   gate 3  Type-A or recorded-B?       ─ no ─► PARK / ESCALATE
+   gate 4  under the risk ceiling?     ─ no ─► PARK / ESCALATE
+   all pass ───────────────────────────────► AUTO-EXECUTE + durable audit
+```
+
+Gate 1 (the fence) and gate 3 (grounding) are **not** overridable by the
+authority map — substrate-as-bouncer. Even `approve = "auto"` still cannot touch
+a fenced spec and still escalates an ungrounded call. The authority map widens
+*which in-fence, grounded actions* auto-execute; it never disarms the HARD
+bounds.
+
+### Gate 3 reuses the §3 Type A/B/C calibration verbatim
+
+The grounding gate is not a new classifier — it **is** the resolve-vs-escalate
+primitive the advisor tier already runs (§3). Type-A (recorded principle) and
+recorded-B (recorded preference) → autopilot may resolve. Unrecorded-B and
+Type-C (synthesized in-flight context a cold boot can't reconstruct) → escalate.
+Autopilot's authority is therefore *identical in kind* to the advisor escalation
+tier: autopilot is "the §2 cascade + §3 calibration, applied to grooming, with an
+explicit action-authority map." The same corpus-growth feedback loop (§4) that
+shrinks escalations also shrinks autopilot's hold-for-human pile over time. The
+same calibration mode (§3, STORY-347) is the recommended instrument for
+autopilot's first weeks — it shadows cold-boot vs fork-from-live and surfaces a
+mis-graded grounding as a substrate-gap signal.
+
+### The one-keystone-classifier invariant
+
+There is exactly **one** keystone/supervised detector —
+`presence::is_keystone_class` (epic type, or a `keystone` / `architecture` /
+`security` / `supervised` / `needs-supervised-build` / `blast-radius:high` /
+`risk:high` tag). It is shared across **all four** seats that must agree on
+"keystone":
+
+- the **groom fence** (`select_intake_candidates`, gate 1) — fences keystone
+  specs out of autopilot's reach;
+- the **solo posture** (`resolve_solo_posture`) — parks keystone for the human
+  on the drain side (`docs/solo-mode.md`);
+- the **drain** — `--escalate-blocks` semantics for keystone work;
+- **autopilot** — gate 1 routes through it.
+
+Routing every keystone decision through the single classifier is what guarantees
+no stage disagrees. When solo posture is active, autopilot inherits the *exact
+same* "ship safe / park keystone" partition the drain uses — one classifier, two
+stages, consistent behaviour. A test asserts the groom fence and
+`resolve_solo_posture` agree on a keystone fixture.
+
+### The composition matrix
+
+| Context | Grooming stage (`groom`) | Draining stage | Autopilot's effect |
+|---------|--------------------------|----------------|--------------------|
+| **default** (operator at keyboard) | propose-by-default; operator confirms | default ladder (pause every step) | autopilot off — operator drives disposition |
+| **`groom --autopilot`** | envelope auto-executes in-fence, grounded, in-authority actions; rest held/escalated | n/a (grooming only) | the new posture |
+| **`--zen` drain** | unchanged (grooming is a separate stage) | mechanical auto-resolve, design-fork pause | independent — `--zen` is drain-side; on `groom` it warn-and-ignores |
+| **`--no-human` solo loop** | `groom --autopilot` (envelope, headless-tightened) | `burndown --no-human` → §2 advisor cascade | autopilot bounds the headless groom — strictly *more* conservative than binary `--apply` |
+| **solo posture active** | autopilot inherits the safe/keystone partition via `is_keystone_class` | drain uses ProceedOnDefault / ParkForHuman | one classifier, consistent across stages |
+| **`groom --apply` (no `--autopilot`)** | **unchanged** binary execute (back-compat) | n/a | autopilot is opt-in; existing behaviour preserved |
+
+The only real composition question is `groom --autopilot --then-drain` — groom
+under the envelope, then a drain under whatever ladder mode the drain flags
+specify — and the answer is "each stage uses its own setting," which the existing
+`--then-drain` plumbing already expresses. A headless context (`AIDA_HEADLESS`)
+*tightens* autopilot's defaults: it cannot pause-and-ask, so an uncertain auto
+demotes to escalate. The tightening is **demote-only** (never widens), so the
+worst-case precedence bug is over-conservatism (a held action), not an un-gated
+execute.
+
+### Back-compat and the supervised-proof rule
+
+Autopilot is **opt-in** (`--autopilot` / `[autopilot]` config). The binary
+`groom --apply` path is untouched until a project explicitly adopts the envelope.
+Making autopilot the *default* grooming posture inside the solo loop is a later,
+separate, supervised step — prove the autonomy keystone at the keyboard before
+flipping a default that runs unattended.
+
+Trace anchor: EPIC-0428, TASK-0429 (envelope), TASK-0430 (audit/reversal),
+TASK-0431 (product-role evidence), TASK-0432 (mode composition),
+`docs/solo-mode.md`, `feedback_three_mode_autonomy_taxonomy`.
+
+---
+
 ## Where the pieces live
 
 | Concept | Code / docs |

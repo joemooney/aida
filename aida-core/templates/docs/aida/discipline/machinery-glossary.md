@@ -102,6 +102,31 @@ Two orthogonal axes: *is a human present?* and *what kinds of prompts
 warrant pausing?*. See `feedback_three_mode_autonomy_taxonomy` in the
 starter memory pack for the full taxonomy.
 
+### autopilot (autopilot envelope)
+
+A **grooming-stage posture**, *not* a drain mode. Where the three
+[autonomy modes](#autonomy-mode) parameterise the **drain** (how the
+implement→merge pipeline handles prompts while a human is or isn't present),
+autopilot parameterises the **advisor disposition pass** (`aida groom`) — how
+the advisor decides a spec's fate before it ever enters the ready set. The two
+live on **orthogonal axes**: grooming decides *what enters the ready set*,
+draining *works it*. Autopilot is therefore **not a fourth rung** on the autonomy
+ladder; it is the grooming-stage analog of the draining-stage ladder, and the two
+**compose** (a `groom --autopilot --then-drain` runs each stage under its own
+setting) rather than contend.
+
+Mechanically, autopilot is a **bounded-authority envelope** over `groom` (opt-in
+`aida groom --autopilot` + a `[autopilot]` config posture) — *not* a new engine.
+It layers a per-action authority map (`auto` / `propose` / `never`) and four
+AND-composed gates (in-fence, action-authority, substrate-grounded, under
+risk-ceiling) *inside* the existing candidate fence. The default is conservative:
+only reversible actions auto-execute; approvals/rejections are held; uncertain
+calls escalate. It reuses the **same keystone classifier**
+(`presence::is_keystone_class`) as the groom fence, the solo posture, and the
+drain — so all stages agree on "keystone" and no stage can disagree. See
+`docs/architecture/autonomy-and-escalation.md` §8 (the grooming-stage analog of
+the cascade) and `docs/solo-mode.md`.
+
 ### session
 
 An AIDA-tracked Claude Code session: a **lease** + **worktree** + **role**,
