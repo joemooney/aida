@@ -3,12 +3,12 @@ spec_id: STORY-732
 agreed_id: STORY-732
 title: 'Per-spec recovery legibility: inline failure reason, fix why-vs-status contradiction, default aida findings to list'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T08:54:45.595877806Z
-modified_at: 2026-06-30T08:54:45.595877806Z
+modified_at: 2026-06-30T09:20:43.271358192Z
 req_type: Story
 tags:
 - cli
