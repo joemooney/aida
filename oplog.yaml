@@ -26669,5 +26669,17 @@ operations:
   timestamp: 2026-06-30T02:45:35.546076885Z
   kind: !SetStatus
     status: In Progress
-clock: 2547
+- id: 019f166b-05eb-7483-b835-2f570fbcc059
+  target_id: 019f166a-f8f3-7391-b4f7-a713f9f2022e
+  author: aida
+  node_id: '1'
+  lamport: 2548
+  timestamp: 2026-06-30T02:45:40.459827677Z
+  kind: !Create
+    title: 'aida integrate slice 1: throughput view (read-only) — focus-scoped queue + live throughput + active fan-out'
+    description: 'New read-only aida integrate (no drain) / aida integrate status: a glanceable view of what the integrator seat sees. Shows: the focus-scoped queue (queued specs + routed role), live throughput (time since last merge to main, recent merge count, queue depth), a main-idle indicator, and active fan-out work (which agents/sessions are working which specs — absorbs TASK-989). REUSE: queue_list, aida ps (running-work table), aida status snapshot, focus::resolve_focus, the STORY-712 .aida/events.jsonl stream (for merge/drain events), git log origin/main (merge throughput). NO autonomy/drain — pure read. Additive, safe. The visibility half of the integrator; foundation for the slice-2 loop.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 2548
 node_id: '1'

@@ -1,0 +1,17 @@
+id: 019f166a-f8f3-7391-b4f7-a713f9f2022e
+spec_id: TASK-1034
+agreed_id: TASK-1034
+title: 'aida integrate slice 1: throughput view (read-only) — focus-scoped queue + live throughput + active fan-out'
+description: 'New read-only aida integrate (no drain) / aida integrate status: a glanceable view of what the integrator seat sees. Shows: the focus-scoped queue (queued specs + routed role), live throughput (time since last merge to main, recent merge count, queue depth), a main-idle indicator, and active fan-out work (which agents/sessions are working which specs — absorbs TASK-989). REUSE: queue_list, aida ps (running-work table), aida status snapshot, focus::resolve_focus, the STORY-712 .aida/events.jsonl stream (for merge/drain events), git log origin/main (merge throughput). NO autonomy/drain — pure read. Additive, safe. The visibility half of the integrator; foundation for the slice-2 loop.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T02:45:37.139884394Z
+modified_at: 2026-06-30T02:45:37.139884394Z
+req_type: Task
+tags:
+- integrator
+- parent:STORY-718
+- throughput
+- visibility
