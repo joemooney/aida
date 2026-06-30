@@ -4405,10 +4405,14 @@ pub enum QueueCommand {
         // trace:TASK-1005, SPIKE-70 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, requires = "autonomous", conflicts_with = "single_branch")]
         sequential: bool,
-        /// With `--batch`: print the matching queue entries in pickup
-        /// order and exit without starting a session. Useful for
-        /// auditing the batch before draining.
+        /// Preview without acting. For a single spec: print the resolved
+        /// plan — session id, worktree path, branch, role, skill, and the
+        /// lease it WOULD set up — then exit, creating no worktree, no
+        /// lease, and launching no session. With `--batch`: print the
+        /// matching queue entries in pickup order. Lets you safely see what
+        /// a pickup will do before committing to it.
         // trace:TASK-229 | ai:claude
+        // trace:TASK-1053 | ai:claude
         #[clap(long)]
         dry_run: bool,
         /// Resume a prior `claude` conversation for this scope instead of
