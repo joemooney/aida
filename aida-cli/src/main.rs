@@ -784,6 +784,43 @@ fn render_list_fields_table<F>(
     }
 }
 
+/// Render the body of `aida search --fields <csv>` for a non-empty result set,
+/// branching on agent vs human surface the same way `aida list --fields` does.
+/// In agent mode (`agent == true`) it's the lean TOON `specs[N]{...}` projection
+/// — the ~2x token win the agent surface exists for, instead of the verbose
+/// box-table an agent would otherwise pay for. On a human TTY it's the aligned
+/// box-table shared with `aida list` via [`build_list_fields_lines`]. Both
+/// surfaces resolve cells through [`toon_list_cell`] over the already-validated
+/// `selected` field set, so the two surfaces never drift in field vocabulary.
+/// Search rows carry no work-routing axis, so queued/in_flight/blocked render
+/// false. Returned as a `String` so the branch is unit-testable.
+// trace:STORY-734 trace:BUG-668 | ai:claude — plain `//` keeps the marker out of any doc/help.
+fn render_search_fields(
+    results: &[aida_core::RequirementSummary],
+    selected: &[String],
+    agent: bool,
+) -> String {
+    if agent {
+        let field_refs: Vec<&str> = selected.iter().map(String::as_str).collect();
+        let rows: Vec<Vec<String>> = results
+            .iter()
+            .map(|r| {
+                selected
+                    .iter()
+                    .map(|f| toon_list_cell(r, (false, false, false), f))
+                    .collect()
+            })
+            .collect();
+        let mut out = format!("count: {} results\n", results.len());
+        out.push_str(&crate::toon::table_raw("specs", &field_refs, &rows));
+        out
+    } else {
+        let mut lines = build_list_fields_lines(results, selected, |_| (false, false, false));
+        lines.push(format!("\n{} results", results.len()));
+        lines.join("\n")
+    }
+}
+
 #[cfg(test)]
 mod task970_agent_output_tests {
     use super::*;
@@ -924,6 +961,63 @@ mod task970_agent_output_tests {
         assert!(err.contains("id"));
         assert!(err.contains("title"));
         assert!(err.contains("status"));
+    }
+
+    // STORY-734: `aida search --fields` is now humans+agents parity — agent mode
+    // emits the lean TOON `specs[N]{...}` projection (the ~2x token win), a human
+    // TTY emits the aligned box-table, and both surfaces resolve cells through the
+    // same `toon_list_fields`/`toon_list_cell` pair `aida list --fields` uses.
+    // Mirrors `fields_agent_toon_emits_only_chosen_fields` for the search handler.
+    // trace:STORY-734 trace:BUG-668 | ai:claude
+    #[test]
+    fn search_fields_agent_emits_toon_human_emits_table() {
+        colored::control::set_override(false); // deterministic, no ANSI
+        let selected = toon_list_fields(Some("id,status")).unwrap();
+        assert_eq!(selected, vec!["id", "status"]);
+
+        let results = vec![fields_summary(
+            "STORY-1",
+            "first thing",
+            "in-progress",
+            "high",
+        )];
+
+        // AGENT mode: the lean TOON projection — a `specs[N]{id,status}:` header
+        // (NOT the human box-table) with the chosen columns only.
+        let agent = render_search_fields(&results, &selected, true);
+        assert!(
+            agent.contains("specs[1]{id,status}:"),
+            "agent mode emits the TOON specs table: {agent}"
+        );
+        assert!(agent.contains("STORY-1"));
+        assert!(agent.contains("in-progress"));
+        // The verbose human header label must NOT appear in the TOON stream.
+        assert!(
+            !agent.contains("Status"),
+            "no capitalized box-table header leaks into agent output: {agent}"
+        );
+
+        // HUMAN mode: the aligned box-table — capitalized `ID`/`Status` headers,
+        // a divider rule, and the row; NOT the TOON `specs[...]` shape.
+        let human = render_search_fields(&results, &selected, false);
+        assert!(
+            !human.contains("specs["),
+            "human mode emits the box-table, not TOON: {human}"
+        );
+        assert!(human.contains("ID") && human.contains("Status"));
+        assert!(human.contains("─"), "box-table has a divider rule: {human}");
+        assert!(human.contains("STORY-1") && human.contains("in-progress"));
+        assert!(human.contains("1 results"));
+    }
+
+    // STORY-734: an unknown `--fields` name on `aida search` is rejected the same
+    // way `aida list` rejects it — the validation lives in the shared
+    // `toon_list_fields`, so the search surface inherits it. trace:STORY-734
+    #[test]
+    fn search_fields_unknown_name_errors() {
+        let err = toon_list_fields(Some("id,bogus")).unwrap_err().to_string();
+        assert!(err.contains("bogus"));
+        assert!(err.contains("valid fields"));
     }
 
     // STORY-734: the default (no `--fields`) human path is unchanged — the
@@ -18222,14 +18316,21 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // STORY-734: `--fields <csv>` selects + orders the columns of the
             // search table too, mirroring `aida list --fields`. Search rows carry
             // no work-routing axis, so the queued/in_flight/blocked fields render
-            // false here. trace:STORY-734 | ai:claude
+            // false here. In AGENT mode the row set is emitted as the lean TOON
+            // `specs[N]{...}` projection (the ~2x token win the agent surface
+            // exists for) exactly like `aida list --fields`, not the verbose
+            // human box-table; `render_search_fields` branches on the same
+            // `agent_output_mode()` the list handler uses so the two surfaces
+            // stay identical. trace:STORY-734 trace:BUG-668 | ai:claude
             if let Some(csv) = fields.as_deref() {
                 let selected = toon_list_fields(Some(csv))?;
                 if results.is_empty() {
                     println!("No results for: {}", query);
                 } else {
-                    render_list_fields_table(&results, &selected, |_| (false, false, false));
-                    println!("\n{} results", results.len());
+                    println!(
+                        "{}",
+                        render_search_fields(&results, &selected, agent_output_mode())
+                    );
                 }
                 return Ok(());
             }
