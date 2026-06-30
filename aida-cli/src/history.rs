@@ -240,6 +240,24 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
         log_args.push(format!("--until={}", u));
     }
 
+    // Path-scope the log walk to the one spec when `--id` is set. Without
+    // this, git walks the entire orphan-branch history (~15.7k commits on the
+    // AIDA store) and the spec filter happens in-memory below; the pathspec
+    // makes git emit only the handful of commits that touched this spec's
+    // YAML, so a targeted `--id` query is ~as fast as the spec's edit count
+    // rather than the whole-store walk. The in-memory id filter below still
+    // runs (it also resolves UUIDs/agreed-ids to the canonical spec_id), so
+    // correctness is unchanged — this just shrinks the candidate set.
+    // trace:TASK-1055
+    let id_pathspec: Option<String> = opts
+        .id_filter
+        .as_deref()
+        .and_then(|id| aida_core::object_store::relative_object_path(id).ok());
+    if let Some(ref path) = id_pathspec {
+        log_args.push("--".into());
+        log_args.push(path.clone());
+    }
+
     let log_output = run_git(store_path, &log_args)?;
     let commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
 
@@ -250,15 +268,21 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
         // events. The auto-commit "chore: update requirements store" still
         // gets walked because each individual file change inside it is
         // its own event.
-        let changed = run_git(
-            store_path,
-            &[
-                "show".into(),
-                "--name-status".into(),
-                "--format=".into(),
-                commit.sha.clone(),
-            ],
-        )?;
+        let mut show_args: Vec<String> = vec![
+            "show".into(),
+            "--name-status".into(),
+            "--format=".into(),
+            commit.sha.clone(),
+        ];
+        // When path-scoped (`--id`), restrict the file listing to the spec's
+        // YAML so a bulk "chore: update requirements store" commit that
+        // happens to touch this spec doesn't also decode every other file it
+        // changed. trace:TASK-1055
+        if let Some(ref path) = id_pathspec {
+            show_args.push("--".into());
+            show_args.push(path.clone());
+        }
+        let changed = run_git(store_path, &show_args)?;
         for line in changed.lines() {
             // Lines look like:  M\tobjects/FR/000/FR-1-011.yaml
             //                   A\tobjects/TASK/000/TASK-1-021.yaml
@@ -1272,6 +1296,121 @@ fn shorten(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// TASK-1055: a path-scoped `--id` walk only visits the spec's own commits,
+    /// not the whole orphan-branch history. Builds a tiny store with three
+    /// commits — one touching only TASK-1, one touching only STORY-1, and a
+    /// bulk commit touching BOTH — then asserts (a) git's pathspec sees just
+    /// the two commits that touched TASK-1's YAML (not all three), and (b) the
+    /// filtered events come back as TASK-1's only.
+    // trace:TASK-1055
+    #[test]
+    fn history_id_filter_path_scopes_log_walk() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        let git = |args: &[&str]| {
+            let out = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let write = |rel: &str, body: &str| {
+            let path = root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, body).unwrap();
+        };
+        let task_path = "objects/TASK/000/TASK-1.yaml";
+        let story_path = "objects/STORY/000/STORY-1.yaml";
+
+        // Commit 1: TASK-1 only.
+        write(task_path, "spec_id: TASK-1\ntitle: t\nstatus: Draft\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add TASK-1"]);
+
+        // Commit 2: STORY-1 only (a different spec — must NOT be walked).
+        write(story_path, "spec_id: STORY-1\ntitle: s\nstatus: Draft\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "add STORY-1"]);
+
+        // Commit 3: a bulk commit touching BOTH specs.
+        write(task_path, "spec_id: TASK-1\ntitle: t\nstatus: Approved\n");
+        write(story_path, "spec_id: STORY-1\ntitle: s\nstatus: Approved\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "chore: update requirements store"]);
+
+        // (a) git's pathspec sees only the two TASK-1 commits, not all three.
+        let scoped = run_git(
+            root,
+            &[
+                "log".into(),
+                "--oneline".into(),
+                "--".into(),
+                task_path.into(),
+            ],
+        )
+        .unwrap();
+        let full = run_git(root, &["log".into(), "--oneline".into()]).unwrap();
+        assert_eq!(
+            scoped.lines().count(),
+            2,
+            "pathspec must scope the walk to TASK-1's 2 commits"
+        );
+        assert_eq!(
+            full.lines().count(),
+            3,
+            "the full history has all 3 commits — proving the pathspec narrows it"
+        );
+
+        // (b) the filtered events are TASK-1's only.
+        let opts = HistoryOpts {
+            id_filter: Some("TASK-1".to_string()),
+            ..base_opts()
+        };
+        let (events, _) = collect_filtered_events(root, &opts).unwrap();
+        assert!(!events.is_empty(), "expected at least one TASK-1 event");
+        assert!(
+            events.iter().all(|e| e.spec_id == "TASK-1"),
+            "every event must be for the path-scoped spec, got: {:?}",
+            events.iter().map(|e| &e.spec_id).collect::<Vec<_>>()
+        );
+    }
+
+    /// A `HistoryOpts` with every filter off — tests override the one field
+    /// they exercise.
+    // trace:TASK-1055
+    fn base_opts() -> HistoryOpts {
+        HistoryOpts {
+            limit: 1000,
+            max_commits: 1000,
+            events_mode: true,
+            id_filter: None,
+            type_filter: None,
+            author_filter: None,
+            since: None,
+            until: None,
+            status_changes_only: false,
+            shipped_only: false,
+            comments_only: false,
+            oneline: false,
+            archived_specs: std::collections::HashSet::new(),
+            archived_only_specs: None,
+            deferred_specs: std::collections::HashSet::new(),
+            deferred_only_specs: None,
+        }
+    }
 
     /// BUG-424: a multibyte char straddling the truncation point must not panic
     /// (raw byte-slicing did). Titles carry emoji/unicode glyphs.
