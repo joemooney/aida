@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:10:17.133315871Z
-modified_at: 2026-06-30T04:21:48.167148324Z
+modified_at: 2026-06-30T04:22:19.274809353Z
 req_type: Spike
 tags:
 - axi
@@ -30,4 +30,12 @@ relationships:
 - rel_type: Parent
   target_id: 019f16c3-5e3f-7b82-a404-c9c982a02d17
   created_at: 2026-06-30T04:22:15.330930642Z
+comments:
+- id: 019f16c3-8594-7c13-952f-e50f50aee8be
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-29-spike-74-agent-agnostic-backend.md
+    filed 3 task(s): TASK-1045, TASK-1046, TASK-1047
+  created_at: 2026-06-30T04:22:20.308987748Z
+  modified_at: 2026-06-30T04:22:20.308987748Z
 human_only: true
