@@ -3,12 +3,12 @@ spec_id: TASK-1033
 agreed_id: TASK-1033
 title: AIDA store should gc periodically — heavy drives bloat loose objects below gc.auto threshold and tax every targeted write ~4x
 description: 'Observed 2026-06-29 after the away-drive: the shared git object store accumulated 2919 loose objects (~145MB) across 21 packs from heavy write activity (30+ aida edit store commits, 11 PR merges, repeated worktree create/teardown). This sat BELOW gits gc.auto threshold (default 6700) so git never auto-repacked — but it slowed every aida edit (targeted git-commit-to-store) from sub-second to ~4s (and ~20s in the batch with cache-rebuild triggers); a single git gc cut it back to 1.1s (loose 2919 to 0, packs 21 to 2). FIX options: (a) aida runs git gc --auto on the store with a LOWER gc.auto threshold (e.g. 500-1000) so it self-maintains; (b) an aida store gc / aida doctor maintenance verb + a hint after heavy drains; (c) aida pull/db sync opportunistically repacks. The targeted-write path (BUG-634) is correct; the regression is git-object bloat, not a code regression. The residual ~1.1s/edit after gc is the git-commit baseline (acceptable).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:35:27.117249631Z
-modified_at: 2026-06-30T02:36:53.255579870Z
+modified_at: 2026-06-30T03:03:22.835921179Z
 req_type: Task
 tags:
 - from-operator
