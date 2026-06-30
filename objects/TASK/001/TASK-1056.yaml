@@ -3,12 +3,12 @@ spec_id: TASK-1056
 agreed_id: TASK-1056
 title: 'status --full real bottleneck: ~32k git subprocesses fanning over worktrees x branches (not the gh probes)'
 description: 'Per #1255 strace: aida status --full spawns ~32,000 subprocesses (~9,000 git rev-list + ~7,400 git log) across the worktree/remote-activity/coordination sections; on this repo (148 worktrees x 989 remote branches) that is the ~22s, while the four gh probes total only ~1.9s. #1255 parallelized the gh probes (helps normal repos) but does NOT touch the git fan-out. A true 22s->sub-second win needs reducing the git fan-out: cache/scope the per-worktree + per-branch git calls, or batch them. Separate, larger optimization.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T10:09:10.395692110Z
-modified_at: 2026-06-30T16:33:16.373052788Z
+modified_at: 2026-06-30T17:12:18.866494940Z
 req_type: Task
 tags:
 - from-audit
