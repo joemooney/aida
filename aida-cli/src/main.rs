@@ -126,6 +126,8 @@ mod worktree;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
 mod worktree_lease;
 mod zen;
+// trace:STORY-721 | ai:claude — `aida zen <spec>` autonomous implement+ship drive.
+mod zen_drive;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -3103,8 +3105,15 @@ fn run() -> Result<()> {
 
     // BUG-237: zen-context introspection. Like `orchestrator status`, reads
     // only env vars + the drain-state file + session leases — no requirement
-    // store. trace:BUG-237 trace:TASK-336 | ai:claude
-    if let Command::Zen(zen_cmd) = &cli.command {
+    // store. The `aida zen <spec>` autonomous-drive form (STORY-721) needs the
+    // store to validate the spec's status, so only the introspection
+    // subcommands short-circuit here; the spec-drive path falls through to the
+    // post-storage dispatch. trace:BUG-237 trace:TASK-336 trace:STORY-721 | ai:claude
+    if let Command::Zen {
+        command: Some(zen_cmd),
+        ..
+    } = &cli.command
+    {
         return handle_zen_command(zen_cmd);
     }
 
@@ -3831,7 +3840,27 @@ fn run() -> Result<()> {
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
         }
-        Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
+        // STORY-721: `aida zen <spec>` autonomous implement+ship drive on the
+        // legacy (centralized) storage path. The introspection subcommands
+        // short-circuit before storage init; this arm only sees the spec-drive
+        // form. trace:STORY-721 | ai:claude
+        Command::Zen {
+            spec,
+            no_human,
+            no_pull,
+            dry_run,
+            command: _,
+        } => {
+            let user_id = current_user_id(None);
+            run_zen_drive(
+                &storage,
+                &user_id,
+                spec.as_deref(),
+                no_human.as_deref(),
+                *no_pull,
+                *dry_run,
+            )?;
+        }
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
@@ -14423,7 +14452,29 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
         }
-        Command::Zen(_) => unreachable!("zen is dispatched before storage init"),
+        // STORY-721: `aida zen <spec>` autonomous implement+ship drive. The
+        // introspection subcommands (`zen status` / `finish` / `needs-human`)
+        // short-circuit before storage init in `run()`; this arm only sees the
+        // spec-drive form (`command: None`), which needs the store to validate
+        // the spec's status before driving it. trace:STORY-721 | ai:claude
+        Command::Zen {
+            spec,
+            no_human,
+            no_pull,
+            dry_run,
+            command: _,
+        } => {
+            let storage = Storage::new(store_path.to_path_buf());
+            let user_id = current_user_id(None);
+            return run_zen_drive(
+                &storage,
+                &user_id,
+                spec.as_deref(),
+                no_human.as_deref(),
+                *no_pull,
+                *dry_run,
+            );
+        }
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
@@ -134159,6 +134210,84 @@ mod task_266_tests {
 
 fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
     vec!["queue", "add", spec, "--for", "implementer", "--no-scope"]
+}
+
+/// STORY-721: `aida zen <spec>` — the one-shot AUTONOMOUS implement+ship drive.
+///
+/// A THIN wrapper over the existing `--auto-complete --zen` orchestrator. It
+/// resolves + validates the spec (refusing a not-yet-approved Draft with
+/// guidance), then drives the one spec by self-invoking `aida queue work <spec>
+/// --auto-complete --zen [...]`. The drive's own preflight
+/// (`ensure_queued_for_implementer`, STORY-246) auto-queues the spec, so the
+/// operator never has to `aida queue add` first. The orchestrator is NOT
+/// reimplemented here — the pure pieces (eligibility, argv, plan formatting)
+/// live in [`crate::zen_drive`].
+// trace:STORY-721 | ai:claude — plain `//` keeps the marker out of any surface.
+fn run_zen_drive(
+    storage: &Storage,
+    user_id: &str,
+    spec: Option<&str>,
+    no_human: Option<&str>,
+    no_pull: bool,
+    dry_run: bool,
+) -> Result<()> {
+    let Some(spec) = spec.map(str::trim).filter(|s| !s.is_empty()) else {
+        anyhow::bail!(
+            "aida zen needs a spec to drive. Usage: aida zen <SPEC> \
+             (the approved spec to autonomously implement and ship). \
+             Add --dry-run to preview the plan without driving it."
+        );
+    };
+
+    // Resolve + validate against the store. The spec must exist and be
+    // approve-or-beyond; a Draft is refused with approve-first guidance.
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    let display = req.display_id();
+    let eligibility = zen_drive::classify_eligibility(&req.status);
+    if let Some(msg) = eligibility.refusal(&display) {
+        anyhow::bail!(msg);
+    }
+
+    // Is it already queued for the implementer? (Informational only — the
+    // drive auto-queues either way; this just makes the plan honest.)
+    let already_queued = storage
+        .queue_list(user_id, false)
+        .map(|entries| entries.iter().any(|e| e.requirement_id == req.id))
+        .unwrap_or(false);
+
+    if dry_run {
+        print!(
+            "{}",
+            zen_drive::format_zen_plan(&display, already_queued, no_human)
+        );
+        return Ok(());
+    }
+
+    // Drive the one spec through the EXISTING orchestrator by self-invoking
+    // `aida queue work <spec> --auto-complete --zen [...]`. resolve_aida_exe()
+    // (not raw current_exe()) survives a mid-run `cargo build` swap. The drive
+    // owns the implement → CI → review → merge → pull sequence.
+    let exe = resolve_aida_exe();
+    let args = zen_drive::drive_args(&display, no_human, no_pull);
+    eprintln!(
+        "  {} zen-driving {} — aida {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        display,
+        args.join(" ").dimmed()
+    );
+    let status = std::process::Command::new(&exe)
+        .args(&args)
+        .status()
+        .context("failed to launch the `aida queue work --auto-complete --zen` drive")?;
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
 }
 
 /// Queue `spec` for the implementer role if it isn't already queued for the
