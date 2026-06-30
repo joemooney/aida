@@ -16,13 +16,9 @@ priority: Medium
 owner: ''
 feature: cli
 created_at: 2026-06-30T04:08:32.658638894Z
-modified_at: 2026-06-30T04:08:32.658638894Z
+modified_at: 2026-06-30T04:09:52.129513976Z
 req_type: Task
 tags:
 - aida:list
 - papercut
 - tree
-relationships:
-- rel_type: Child
-  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
-  created_at: 2026-06-30T04:08:32.658846789Z
