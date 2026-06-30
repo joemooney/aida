@@ -3,12 +3,12 @@ spec_id: BUG-660
 agreed_id: BUG-660
 title: 'Unattended-drain robustness: no sleep-prevention / exit-summary / backoff (gnhf gap)'
 description: 'From the gnhf competitive analysis (2026-06-29): AIDAs overnight drain (zen --no-human / --auto-complete / integrate --watch) has NO protection against a laptop SLEEPING mid-drive — a real overnight-failure mode gnhf handles. Verified gaps in AIDA source: no caffeinate (macOS) / systemd-inhibit (Linux) sleep-prevention; no permanent exit summary; no exponential backoff on retryable agent errors; resets --hard on failure rather than commit-failure-preserve-for-repair. ADD: (1) system sleep-prevention wrapping a drive, (2) an exit summary at drive end, (3) exp backoff on retryable errors, (4) preserve work on recoverable commit-failure. Aligns with the stability-first phase (a reliability gap, not marketing).'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T06:16:30.712985697Z
-modified_at: 2026-06-30T16:34:18.704081943Z
+modified_at: 2026-06-30T17:12:25.694648823Z
 req_type: Bug
 tags:
 - drain
