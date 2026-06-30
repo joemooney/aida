@@ -1,0 +1,17 @@
+id: 019f1748-2d86-71a0-96a0-b999567fa77c
+spec_id: STORY-724
+agreed_id: STORY-724
+title: 'Polish the now-default TUI: drop the prototype label, no dead scopes/verbs'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T06:47:14.054714520Z
+modified_at: 2026-06-30T06:47:14.054714520Z
+req_type: Story
+tags:
+- epic-54
+- from-audit
+- polish
+- tui

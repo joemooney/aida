@@ -14,6 +14,3 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a2-20e2-7090-a019-58f0f267ee52
   created_at: 2026-06-30T02:27:51.887305938Z
-deferred: true
-deferred_at: 2026-06-30T06:18:20.711147230Z
-deferred_until: premature plan-followup (auto-filed from a design plan); revisit when the parent feature's build reaches the relevant slice
