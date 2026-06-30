@@ -1,0 +1,17 @@
+id: 019f17dd-e79e-7731-b337-b4990d83e25c
+spec_id: BUG-664
+agreed_id: BUG-664
+title: Cache readers block ~25s behind a writer; cache status does a full-store load for a count
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T09:30:46.558425762Z
+modified_at: 2026-06-30T09:30:46.558425762Z
+req_type: Bug
+tags:
+- cache
+- from-audit
+- performance
+- read-path
