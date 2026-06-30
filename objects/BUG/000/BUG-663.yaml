@@ -3,12 +3,12 @@ spec_id: BUG-663
 agreed_id: BUG-663
 title: Store auto-gc repack runs inline on writes — move it off the write path (6-16s spike regression)
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T09:30:31.695391067Z
-modified_at: 2026-06-30T09:30:31.695391067Z
+modified_at: 2026-06-30T09:49:24.401723406Z
 req_type: Bug
 tags:
 - from-audit
