@@ -1,0 +1,17 @@
+id: 019f1aed-6b2c-7dc1-9482-a0677ddf52f5
+spec_id: TASK-1070
+agreed_id: TASK-1070
+title: 'What''s-new distillation: a human-friendly guide to the capabilities the self-improvement loop shipped, organized by user benefit'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T23:46:34.924019785Z
+modified_at: 2026-06-30T23:46:34.924019785Z
+req_type: Task
+tags:
+- distillation
+- docs
+- from-loop
+- whats-new
