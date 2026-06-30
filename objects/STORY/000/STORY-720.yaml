@@ -3,12 +3,12 @@ spec_id: STORY-720
 agreed_id: STORY-720
 title: aida ship — one-shot human-implementer finish (commit, rebase, PR, CI, merge, pull, cleanup)
 description: 'The human-implementer counterpart to the --auto-complete orchestrator. A hand-built branch today needs a cumbersome 7-step ceremony. aida ship condenses it: from inside a worktree (set up via aida queue work SPEC --no-launch), one command commits uncommitted work with the SPEC-ID trailer, rebases onto current origin/main, pushes, opens the PR, waits for CI green, squash-merges, runs aida pull (Done to Completed auto-bump), and removes the worktree. Reuses the orchestrators existing finish phases (CI-wait, merge, pull, worktree-cleanup, rebase-on-divergence) with phase-1 done by the HUMAN instead of a spawned agent. Flags: --no-merge (stop at PR), --no-pr (just rebase+push), --keep-worktree. Operator friction 2026-06-29: the manual procedure is too cumbersome. Pairs with aida integrate (STORY-718): ship is the one-shot human finish, integrate is the continuous auto-drain.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T03:12:27.696774041Z
-modified_at: 2026-06-30T03:35:15.043947937Z
+modified_at: 2026-06-30T04:03:26.414575080Z
 req_type: Story
 tags:
 - cli
