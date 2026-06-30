@@ -1,0 +1,18 @@
+id: 019f166b-19dd-74b2-ace1-13a20c345234
+spec_id: TASK-1035
+agreed_id: TASK-1035
+title: 'aida integrate slice 2 DESIGN SPIKE: the continuous focus-scoped drain loop'
+description: 'Design (plan only, no code) the autonomy core: aida integrate --focus X continuously drains the focus-scoped queue onto main. Resolve the forks: (a) Rust command vs skill-loop; (b) how it consumes the STORY-712 event stream (aida watch / events.jsonl) to wake EVENT-DRIVEN not timer-poll; (c) the idle-trigger (main idle N min AND work queued -> kick a drain); (d) the OWN-CHECKOUT model (BUG-650 — integrate must run in its own checkout/clone, not the advisor shared one); (e) composition with the existing aida queue work --auto-complete drain + --zen/--no-human + the warm-pool; (f) the integrator role (first-class alongside advisor/implementer/reviewer). Keystone (drives merges continuously) -> design for operator review + supervised build. Deliverable: docs/plans/2026-06-29-story-718-integrate-loop.md + slice breakdown.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T02:45:45.565598058Z
+modified_at: 2026-06-30T02:45:45.565598058Z
+req_type: Task
+tags:
+- design-spike
+- drain
+- integrator
+- keystone
+- parent:STORY-718
