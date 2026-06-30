@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T16:00:44.646962875Z
-modified_at: 2026-06-29T16:00:48.361539758Z
+modified_at: 2026-06-30T02:45:53.015262480Z
 req_type: Task
 tags:
 - advisor
@@ -20,3 +20,9 @@ relationships:
 - rel_type: Child
   target_id: 019f140e-7aef-7893-87ca-6c212d6ab7e7
   created_at: 2026-06-29T16:00:48.361539758Z
+comments:
+- id: 019f166b-36f7-75d0-8d8f-084192bfdeac
+  author: joe
+  content: Folded into the aida integrate throughput-view slice (the throughput view surfaces advisor/integrator fan-out activity + queue + throughput in one glanceable view). Superseded by that slice.
+  created_at: 2026-06-30T02:45:53.015262480Z
+  modified_at: 2026-06-30T02:45:53.015262480Z
