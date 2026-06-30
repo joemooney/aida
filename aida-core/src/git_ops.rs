@@ -1061,10 +1061,195 @@ pub fn gc_auto(repo: &Path) -> bool {
 /// `aida db sync`): ensure the lowered `gc.auto` is set (self-heals stores
 /// created before TASK-1033), then run `git gc --auto`. Both legs best-effort —
 /// maintenance rides the sync, never breaks it.
-// trace:TASK-1033 | ai:claude
+///
+/// STORY-733: a third, *occasional* leg — when the store has accumulated many
+/// packs (the symptom of a long, never-compacted history: every push-reject
+/// rebase, fetch, and gc pays for the full ~15k-commit orphan branch), run a
+/// deep `git gc --aggressive` to consolidate them. Aggressive is expensive, so
+/// it only fires when the pack count crosses a high threshold — and because
+/// aggressive collapses many packs into one, it self-throttles: it won't re-fire
+/// until packs climb again. Non-destructive: no history is rewritten, so
+/// `aida history --events` is unaffected. Threshold via
+/// `AIDA_STORE_GC_AGGRESSIVE_PACKS` (default [`STORE_GC_AGGRESSIVE_PACKS_DEFAULT`];
+/// `off`/`0` disables).
+// trace:STORY-733 | ai:claude
 pub fn opportunistic_store_gc(repo: &Path) {
     apply_store_gc_auto_from_env(repo);
     let _ = gc_auto(repo);
+    // STORY-733: the occasional aggressive consolidation. Self-throttling +
+    // best-effort — a failed aggressive repack must never break the sync.
+    let override_val = std::env::var("AIDA_STORE_GC_AGGRESSIVE_PACKS").ok();
+    if let Some(threshold) = resolve_store_gc_aggressive_packs(override_val.as_deref()) {
+        if let Some(counts) = count_objects(repo) {
+            if counts.packs >= threshold as usize {
+                let _ = gc_aggressive(repo);
+            }
+        }
+    }
+}
+
+/// The pack-count high-water mark at which AIDA's opportunistic store
+/// maintenance escalates from a cheap `git gc --auto` to a deep
+/// `git gc --aggressive`. Set high because aggressive is multi-second on the
+/// big orphan store — but aggressive collapses every pack into one, so once it
+/// fires the count resets and it won't re-fire until packs climb back past this
+/// line. Override with `AIDA_STORE_GC_AGGRESSIVE_PACKS`.
+// trace:STORY-733 | ai:claude
+pub const STORE_GC_AGGRESSIVE_PACKS_DEFAULT: u32 = 50;
+
+/// Resolve the aggressive-repack pack-count threshold from an optional override
+/// (the `AIDA_STORE_GC_AGGRESSIVE_PACKS` value). Pure — unit-testable without
+/// git. Mirrors [`resolve_store_gc_auto`]:
+///
+/// - unset / empty -> the [`STORE_GC_AGGRESSIVE_PACKS_DEFAULT`].
+/// - `off` / `disabled` / `none` / `0` -> `None` (never auto-aggressive).
+/// - a positive integer -> that threshold.
+/// - anything unparseable -> the default (never silently disable on garbage).
+// trace:STORY-733 | ai:claude
+pub fn resolve_store_gc_aggressive_packs(override_val: Option<&str>) -> Option<u32> {
+    let Some(raw) = override_val.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Some(STORE_GC_AGGRESSIVE_PACKS_DEFAULT);
+    };
+    if raw.eq_ignore_ascii_case("off")
+        || raw.eq_ignore_ascii_case("disabled")
+        || raw.eq_ignore_ascii_case("none")
+    {
+        return None;
+    }
+    match raw.parse::<u32>() {
+        Ok(0) => None,
+        Ok(n) => Some(n),
+        Err(_) => Some(STORE_GC_AGGRESSIVE_PACKS_DEFAULT),
+    }
+}
+
+/// Loose + packed object counts for a repo, parsed from `git count-objects -v`.
+/// Works regardless of worktree layout (the linked store worktree shares the
+/// common object dir).
+// trace:STORY-733 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StoreObjectCounts {
+    /// Loose (unpacked) objects — the `count:` field.
+    pub loose: usize,
+    /// Number of pack files — the `packs:` field.
+    pub packs: usize,
+    /// Objects already inside packs — the `in-pack:` field.
+    pub in_pack: usize,
+}
+
+/// Read `git count-objects -v` and parse the loose/pack/in-pack counts. Returns
+/// `None` if git is unavailable or the command fails.
+// trace:STORY-733 | ai:claude
+pub fn count_objects(repo: &Path) -> Option<StoreObjectCounts> {
+    let out = git(repo, &["count-objects", "-v"]).ok()?;
+    if !out.success {
+        return None;
+    }
+    let field = |key: &str| -> Option<usize> {
+        out.stdout.lines().find_map(|l| {
+            l.strip_prefix(key)
+                .map(str::trim)
+                .and_then(|v| v.parse::<usize>().ok())
+        })
+    };
+    Some(StoreObjectCounts {
+        loose: field("count:").unwrap_or(0),
+        packs: field("packs:").unwrap_or(0),
+        in_pack: field("in-pack:").unwrap_or(0),
+    })
+}
+
+/// Run a deep `git gc --aggressive` on the store repo — consolidates the full
+/// commit history and any accumulated packs into efficient packs. Expensive
+/// (recomputes deltas), so this is the on-demand / occasional path, not the
+/// per-write one. Safe + non-destructive: rewrites nothing, so `aida history`
+/// is unaffected. Returns the [`GitResult`] (caller decides how loud to be).
+// trace:STORY-733 | ai:claude
+pub fn gc_aggressive(repo: &Path) -> Result<GitResult> {
+    git(repo, &["gc", "--aggressive"])
+}
+
+/// Outcome of squashing the orphan store branch to a single snapshot commit.
+// trace:STORY-733 | ai:claude
+#[derive(Debug, Clone)]
+pub struct SquashOutcome {
+    /// The branch ref that preserves the full pre-squash history (the
+    /// recovery / `aida history` horizon). Force-pushable for cross-clone
+    /// recovery; deletable once the truncation is accepted everywhere.
+    pub backup_ref: String,
+    /// HEAD before the rewrite (tip of `backup_ref`).
+    pub old_head: String,
+    /// The new single root snapshot commit the branch now points at.
+    pub snapshot_sha: String,
+}
+
+/// Squash an orphan store branch to a single snapshot commit. **DESTRUCTIVE**
+/// to local history — the caller MUST have explicit confirmation before calling
+/// this, and is responsible for the coordinated force-push (this NEVER pushes).
+///
+/// Order is safety-critical: the backup ref is created and verified to point at
+/// the current HEAD *before* any history rewrite. If the backup cannot be
+/// created (e.g. the ref name already exists), this bails with HEAD untouched —
+/// so a failure can never leave the store rewritten without a recovery handle.
+///
+/// The snapshot commit carries the current tree verbatim (no working-tree
+/// change), so the cache and every YAML are byte-identical after the squash;
+/// only the commit *history* collapses. The pre-squash history stays reachable
+/// via `backup_ref`, which is the preserved horizon for `aida history --events`
+/// and the recovery point if the force-push needs to be undone.
+// trace:STORY-733 | ai:claude
+pub fn squash_orphan_to_snapshot(
+    repo: &Path,
+    message: &str,
+    backup_ref: &str,
+) -> Result<SquashOutcome> {
+    let head = git(repo, &["rev-parse", "HEAD"])?;
+    if !head.success {
+        anyhow::bail!("cannot resolve store HEAD: {}", head.stderr);
+    }
+    let old_head = head.stdout.clone();
+
+    // ── Guard: create + verify the backup BEFORE any rewrite ──
+    let backup = git(repo, &["branch", backup_ref, &old_head])?;
+    if !backup.success {
+        anyhow::bail!(
+            "refusing to squash: could not create backup ref '{}' ({}) — \
+             no history was rewritten",
+            backup_ref,
+            backup.stderr
+        );
+    }
+    let verify = git(repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])?;
+    if !verify.success || verify.stdout != old_head {
+        anyhow::bail!(
+            "refusing to squash: backup ref '{}' did not record HEAD — \
+             no history was rewritten",
+            backup_ref
+        );
+    }
+
+    // ── Build a fresh root commit carrying the current tree ──
+    let tree = git(repo, &["rev-parse", "HEAD^{tree}"])?;
+    if !tree.success {
+        anyhow::bail!("cannot resolve store tree: {}", tree.stderr);
+    }
+    let snapshot = git(repo, &["commit-tree", &tree.stdout, "-m", message])?;
+    if !snapshot.success {
+        anyhow::bail!("commit-tree failed: {}", snapshot.stderr);
+    }
+    let snapshot_sha = snapshot.stdout.clone();
+
+    // Move the checked-out branch to the snapshot, keeping tree + index intact.
+    let reset = git(repo, &["reset", "--soft", &snapshot_sha])?;
+    if !reset.success {
+        anyhow::bail!("reset --soft to snapshot failed: {}", reset.stderr);
+    }
+
+    Ok(SquashOutcome {
+        backup_ref: backup_ref.to_string(),
+        old_head,
+        snapshot_sha,
+    })
 }
 
 /// Get a git config value (checks local, then global).
@@ -3012,6 +3197,198 @@ mod tests {
         assert_eq!(
             detach.stdout, "true",
             "auto-gc must be detached so it never blocks a write"
+        );
+    }
+
+    // ── Aggressive-repack compaction + opt-in squash (STORY-733) ────────────
+
+    /// Pure resolver mirrors the gc.auto one: unset/empty → default; off-words
+    /// and 0 → disabled (never auto-aggressive); a positive int is honoured;
+    /// garbage falls back to the default.
+    // trace:STORY-733 | ai:claude
+    #[test]
+    fn resolve_store_gc_aggressive_packs_maps_overrides() {
+        assert_eq!(
+            resolve_store_gc_aggressive_packs(None),
+            Some(STORE_GC_AGGRESSIVE_PACKS_DEFAULT)
+        );
+        assert_eq!(
+            resolve_store_gc_aggressive_packs(Some("")),
+            Some(STORE_GC_AGGRESSIVE_PACKS_DEFAULT)
+        );
+        // Disable forms — aggressive must be opt-out-able since it is expensive.
+        assert_eq!(resolve_store_gc_aggressive_packs(Some("off")), None);
+        assert_eq!(resolve_store_gc_aggressive_packs(Some("OFF")), None);
+        assert_eq!(resolve_store_gc_aggressive_packs(Some("disabled")), None);
+        assert_eq!(resolve_store_gc_aggressive_packs(Some("none")), None);
+        assert_eq!(resolve_store_gc_aggressive_packs(Some("0")), None);
+        // Explicit thresholds.
+        assert_eq!(resolve_store_gc_aggressive_packs(Some("20")), Some(20));
+        assert_eq!(resolve_store_gc_aggressive_packs(Some("  8 ")), Some(8));
+        // Garbage → default, never a silent disable.
+        assert_eq!(
+            resolve_store_gc_aggressive_packs(Some("banana")),
+            Some(STORE_GC_AGGRESSIVE_PACKS_DEFAULT)
+        );
+    }
+
+    /// `gc_aggressive` consolidates many accumulated packs into one (the safe,
+    /// non-destructive perf win): seed several packs via repeated
+    /// `git repack -d`, then assert the aggressive repack drops the pack count.
+    // trace:STORY-733 | ai:claude
+    #[test]
+    fn gc_aggressive_reduces_pack_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+
+        // Build several commits, packing into a NEW pack after each so packs
+        // accumulate (repack without -a leaves prior packs in place).
+        for i in 0..5 {
+            std::fs::write(repo.join(format!("f{i}.txt")), format!("content {i}")).unwrap();
+            add(&repo, &[&format!("f{i}.txt")]).unwrap();
+            commit(&repo, &format!("commit {i}")).unwrap();
+            // Pack the just-created loose objects into their own pack.
+            git(&repo, &["repack", "-d"]).unwrap();
+        }
+
+        let before = count_objects(&repo).expect("count-objects before");
+        assert!(
+            before.packs >= 2,
+            "fixture should accumulate multiple packs, got {}",
+            before.packs
+        );
+
+        let res = gc_aggressive(&repo).expect("gc --aggressive runs");
+        assert!(
+            res.success,
+            "gc --aggressive should succeed: {}",
+            res.stderr
+        );
+
+        let after = count_objects(&repo).expect("count-objects after");
+        assert!(
+            after.packs < before.packs,
+            "aggressive repack should reduce packs: {} -> {}",
+            before.packs,
+            after.packs
+        );
+    }
+
+    /// `count_objects` parses the loose/pack counts and tracks a commit landing
+    /// then a pack consolidating it.
+    // trace:STORY-733 | ai:claude
+    #[test]
+    fn count_objects_tracks_loose_and_packed() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+
+        std::fs::write(repo.join("a.txt"), "hello").unwrap();
+        add(&repo, &["a.txt"]).unwrap();
+        commit(&repo, "one").unwrap();
+
+        let loose = count_objects(&repo).expect("counts");
+        assert!(loose.loose > 0, "fresh commit leaves loose objects");
+
+        git(&repo, &["repack", "-ad"]).unwrap();
+        let packed = count_objects(&repo).expect("counts after repack");
+        assert!(packed.packs >= 1, "repack produced a pack");
+        assert!(packed.in_pack > 0, "objects are now in a pack");
+    }
+
+    /// SQUASH GUARD: `squash_orphan_to_snapshot` creates + verifies the backup
+    /// branch BEFORE rewriting history, then collapses the branch to a single
+    /// root snapshot commit carrying the identical tree. The pre-squash history
+    /// stays reachable via the backup ref.
+    // trace:STORY-733 | ai:claude
+    #[test]
+    fn squash_creates_backup_then_collapses_to_root_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+
+        // A few commits — the history we are about to compact.
+        for i in 0..4 {
+            std::fs::write(repo.join(format!("f{i}.txt")), format!("v{i}")).unwrap();
+            add(&repo, &[&format!("f{i}.txt")]).unwrap();
+            commit(&repo, &format!("commit {i}")).unwrap();
+        }
+        let old_head = git(&repo, &["rev-parse", "HEAD"]).unwrap().stdout;
+        let old_tree = git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap().stdout;
+        let commits_before = git(&repo, &["rev-list", "--count", "HEAD"]).unwrap().stdout;
+        assert_eq!(commits_before, "4");
+
+        let backup_ref = "aida-store-pre-squash-test";
+        let out = squash_orphan_to_snapshot(&repo, "snapshot: compacted store", backup_ref)
+            .expect("squash succeeds");
+
+        // Backup ref records the exact pre-squash tip (the recovery handle).
+        assert_eq!(out.old_head, old_head);
+        let backup_sha = git(&repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])
+            .unwrap()
+            .stdout;
+        assert_eq!(
+            backup_sha, old_head,
+            "backup ref must preserve the full pre-squash history"
+        );
+
+        // HEAD is now a single root commit with no parents.
+        let commits_after = git(&repo, &["rev-list", "--count", "HEAD"]).unwrap().stdout;
+        assert_eq!(commits_after, "1", "history collapsed to one snapshot");
+        let parents = git(&repo, &["rev-list", "--parents", "-1", "HEAD"])
+            .unwrap()
+            .stdout;
+        assert_eq!(
+            parents.split_whitespace().count(),
+            1,
+            "snapshot is a root commit (no parents)"
+        );
+
+        // The tree (every YAML, the cache projection) is byte-identical.
+        let new_tree = git(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap().stdout;
+        assert_eq!(
+            new_tree, old_tree,
+            "squash must not change the working tree"
+        );
+        assert_eq!(
+            git(&repo, &["rev-parse", "HEAD"]).unwrap().stdout,
+            out.snapshot_sha
+        );
+    }
+
+    /// SQUASH GUARD: when the backup ref cannot be created (name already taken),
+    /// the squash bails WITHOUT rewriting history — HEAD is untouched, so a
+    /// failure can never strand the store rewritten-without-a-handle.
+    // trace:STORY-733 | ai:claude
+    #[test]
+    fn squash_bails_without_rewrite_when_backup_ref_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+        std::fs::write(repo.join("a.txt"), "hi").unwrap();
+        add(&repo, &["a.txt"]).unwrap();
+        commit(&repo, "one").unwrap();
+        std::fs::write(repo.join("b.txt"), "yo").unwrap();
+        add(&repo, &["b.txt"]).unwrap();
+        commit(&repo, "two").unwrap();
+
+        let head_before = git(&repo, &["rev-parse", "HEAD"]).unwrap().stdout;
+        // Pre-create the backup ref so the squash's branch-create collides.
+        let taken = "aida-store-pre-squash-taken";
+        git(&repo, &["branch", taken, "HEAD"]).unwrap();
+
+        let err = squash_orphan_to_snapshot(&repo, "snapshot", taken);
+        assert!(err.is_err(), "squash must refuse when backup ref is taken");
+
+        let head_after = git(&repo, &["rev-parse", "HEAD"]).unwrap().stdout;
+        assert_eq!(
+            head_before, head_after,
+            "no history may be rewritten when the backup cannot be created"
         );
     }
 }
