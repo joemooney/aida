@@ -3,12 +3,12 @@ spec_id: BUG-669
 agreed_id: BUG-669
 title: Pool-worktree reuse inherits the prior session's stale lease — aida ps mislabels the work (an ADR-7 guided session showed as TASK-0439); acquiring a pool worktree must reset the lease to the new spec
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T19:14:15.288856475Z
-modified_at: 2026-06-30T19:14:15.288856475Z
+modified_at: 2026-06-30T20:22:35.784647164Z
 req_type: Bug
 tags:
 - from-operator
