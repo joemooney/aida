@@ -8,10 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T03:53:59.566369766Z
-modified_at: 2026-06-30T03:53:59.566369766Z
+modified_at: 2026-06-30T03:54:03.948245410Z
 req_type: Task
 tags:
 - drain
 - integrator
 - keystone
 - parent:STORY-718
+relationships:
+- rel_type: Child
+  target_id: 019f140e-7aef-7893-87ca-6c212d6ab7e7
+  created_at: 2026-06-30T03:54:03.948245410Z
