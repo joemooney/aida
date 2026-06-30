@@ -1,13 +1,13 @@
 id: 019f16b6-e492-77e1-a1ee-fa071722cd21
 spec_id: TASK-0439
-title: Show parent requirement details in tree group headers
+title: Tree output hides real parent details in group headers
 description: |-
-  `aida list open --tree` currently renders parent groups like `EPIC-56 (5 items)` without the parent requirement's own title/status/details. That makes the parent look like a synthetic or Unscoped bucket instead of the actual requirement.
+  `aida list open --tree` currently renders real parent-backed groups with only the parent SPEC-ID and item count, for example `EPIC-56 (5 items)`, without the parent requirement's own title/status/details. That makes a real scoped parent look like a synthetic bucket and can be confused with Unscoped grouping.
 
-  Desired behavior: when a tree group is backed by a real parent requirement, render the parent row with its normal identifying details at the parent level, and treat the child count as metadata. For example, prefer output shaped like `EPIC-56 (5 items) Apply AXI...` or `EPIC-56 Apply AXI... [5 items]`, followed by the child rows.
+  Desired behavior: when a tree group is backed by a real parent requirement, render the parent row with its normal identifying details at the parent level, and treat the child count as metadata. For example, output may be shaped like `EPIC-56 (5 items) Apply AXI...` or `EPIC-56 Apply AXI... [5 items]`, followed by the child rows. `EPIC-56` is only an observed example; the fix should apply to all real parent-backed tree groups.
 
   Acceptance criteria:
-  - `aida list open --tree` shows the real parent requirement title/details for scoped parent groups such as `EPIC-56`, not only the item count.
+  - `aida list open --tree` shows the real parent requirement title/details for parent-backed groups, not only the item count.
   - Child rows remain nested below the parent as they are today.
   - Synthetic buckets such as truly unscoped groups remain distinguishable from real parent requirements.
   - Add or update coverage for the tree renderer so parent-backed group headers cannot regress to count-only output.
@@ -17,8 +17,9 @@ owner: ''
 feature: cli
 created_at: 2026-06-30T04:08:32.658638894Z
 modified_at: 2026-06-30T04:09:52.129513976Z
-req_type: Task
+req_type: Bug
 tags:
 - aida:list
+- bug
 - papercut
 - tree
