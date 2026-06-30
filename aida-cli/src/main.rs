@@ -49148,6 +49148,9 @@ mod preflight_spec_status_tests {
             PreflightDecision::Refuse(m) => {
                 assert!(m.contains("STORY-86"), "{m}");
                 assert!(m.contains("Done") || m.contains("shipped"), "{m}");
+                // STORY-729: the refuse names the reopen command, not just
+                // "reopen the spec first".
+                assert!(m.contains("aida edit STORY-86 --status approved"), "{m}");
             }
             other => panic!("expected Refuse, got {:?}", other),
         }
@@ -49174,7 +49177,12 @@ mod preflight_spec_status_tests {
     fn rejected_refuses() {
         let d = preflight_spec_status("TASK-1", Some(&RequirementStatus::Rejected), false);
         match d {
-            PreflightDecision::Refuse(m) => assert!(m.contains("Rejected"), "{m}"),
+            PreflightDecision::Refuse(m) => {
+                assert!(m.contains("Rejected"), "{m}");
+                // STORY-729: the refuse now names the reopen command, where it
+                // previously named no reopen/override path at all.
+                assert!(m.contains("aida edit TASK-1 --status approved"), "{m}");
+            }
             other => panic!("expected Refuse, got {:?}", other),
         }
         // No force-claim escape.
@@ -49411,16 +49419,23 @@ fn preflight_spec_status(
         return PreflightDecision::Allow;
     };
     match status {
+        // STORY-729 (FIX 8c): name the reopen command — the old text said
+        // "reopen the spec first" but never told the user *how*, unlike its
+        // Draft/InProgress siblings which name the command. trace:STORY-729
         RequirementStatus::Done | RequirementStatus::Completed => {
             PreflightDecision::Refuse(format!(
                 "spec `{}` is {:?} — work already shipped, refusing to start a new session. \
-                 Use a different scope, or reopen the spec first.",
-                owns, status
+                 Use a different scope, or reopen the spec first \
+                 (`aida edit {} --status approved --force`).",
+                owns, status, owns
             ))
         }
+        // STORY-729 (FIX 8b): name the reopen command — the old text named no
+        // reopen/override path. trace:STORY-729
         RequirementStatus::Rejected => PreflightDecision::Refuse(format!(
-            "spec `{}` is Rejected — refusing to start a session against work that's been dropped.",
-            owns
+            "spec `{}` is Rejected — refusing to start a session against work that's been dropped. \
+             Reopen it first (`aida edit {} --status approved --force`) if you mean to revive it.",
+            owns, owns
         )),
         RequirementStatus::Draft => PreflightDecision::Refuse(format!(
             "spec `{}` is Draft — not ready for implementation. \
@@ -93279,6 +93294,29 @@ fn why_headline_prefix_for(agent: bool) -> String {
     }
 }
 
+/// STORY-729 (FIX 7): the plain-language reason + headline for a TERMINAL spec
+/// (Completed or Rejected) in `aida why`. Names the branch-vs-merged reality so
+/// a user can tell Completed ("merged to the default branch") from Done
+/// ("finished on a branch, awaiting merge") by the WORDS, not just the colour —
+/// the old single "it's done, nothing keeping it open" read identically for
+/// both terminal statuses and never said "merged". Returns `(machine_reason,
+/// human_clause)`; `status` is the already-formatted `{:?}` status label.
+/// Pure so the wording is unit-testable without a store fixture.
+// trace:STORY-729 | ai:claude
+fn terminal_why_text(status: aida_core::RequirementStatus, status_label: &str) -> (String, String) {
+    match status {
+        aida_core::RequirementStatus::Completed => (
+            format!("{status_label} — merged to the default branch"),
+            "it's merged to the default branch — nothing keeping it open.".to_string(),
+        ),
+        // Rejected (the only other terminal status this path is called for).
+        _ => (
+            format!("{status_label} — not open"),
+            "it was rejected (dropped) — nothing keeping it open.".to_string(),
+        ),
+    }
+}
+
 /// STORY-547: `aida why <ID>` — single-spec drill-down using the same
 /// classifier as `burndown explain`. trace:STORY-547 | ai:claude
 fn handle_why(id: &str, json: bool) -> Result<()> {
@@ -93349,22 +93387,27 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
     ) {
         let status = format!("{:?}", eff_status);
+        // STORY-729 (FIX 7): name the REALITY behind the terminal status, not
+        // just its colour. Pure helper so the Completed-vs-Rejected wording is
+        // unit-testable without a store fixture. trace:STORY-729
+        let (reason, human) = terminal_why_text(eff_status, &status);
         if json {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({
                     "spec": disp,
                     "bucket": "closed",
-                    "reason": format!("{status} — not open"),
+                    "reason": reason,
                     "needs_human": false,
                 }))?
             );
         } else {
             println!(
-                "{}{} is {} — it's done, nothing keeping it open.",
+                "{}{} is {} — {}",
                 why_headline_prefix(),
                 disp.cyan(),
-                status.green()
+                status.green(),
+                human
             );
         }
         return Ok(());
@@ -109332,6 +109375,44 @@ mod story723_front_door_tests {
         assert!(
             !why_headline_prefix_for(false).is_empty(),
             "human path keeps the leading arrow marker"
+        );
+    }
+
+    // STORY-729 (FIX 7): `aida why` on a Completed spec names the merged
+    // reality ("merged to the default branch"), and reads DIFFERENTLY from a
+    // Rejected spec — so a user can tell Completed from Done (which says
+    // "awaiting merge", covered in burndown.rs) by the words, not the colour.
+    #[test]
+    fn terminal_why_text_names_merged_for_completed_and_differs_for_rejected() {
+        let (completed_reason, completed_human) =
+            terminal_why_text(aida_core::RequirementStatus::Completed, "Completed");
+        assert!(
+            completed_reason.contains("merged"),
+            "completed reason must say 'merged': {completed_reason}"
+        );
+        assert!(
+            completed_human.contains("merged to the default branch"),
+            "completed human text must name the merge: {completed_human}"
+        );
+        // Crucially NOT the old generic "it's done, nothing keeping it open".
+        assert!(
+            !completed_human.contains("it's done"),
+            "completed must not read as the old generic 'it's done': {completed_human}"
+        );
+
+        let (rejected_reason, rejected_human) =
+            terminal_why_text(aida_core::RequirementStatus::Rejected, "Rejected");
+        assert!(
+            rejected_human.contains("rejected"),
+            "rejected human text must name the drop: {rejected_human}"
+        );
+        assert!(
+            !rejected_reason.contains("merged"),
+            "rejected must not claim it was merged: {rejected_reason}"
+        );
+        assert_ne!(
+            completed_human, rejected_human,
+            "Completed and Rejected must read differently"
         );
     }
 }

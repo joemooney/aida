@@ -139,10 +139,19 @@ pub async fn get_requirement(server_addr: &str, id: &str) -> Result<()> {
     let request = tonic::Request::new(proto::GetRequirementRequest { id: id.to_string() });
 
     let response = client.get_requirement(request).await?;
-    let req = response
-        .into_inner()
-        .requirement
-        .ok_or_else(|| anyhow::anyhow!("Requirement not found"))?;
+    // STORY-729: the legacy gRPC not-found used to be a bare "Requirement not
+    // found" with no id, no store context, no next step — the exact gap the
+    // engineered `not_found.rs` errors were built to close. Bring this holdout
+    // up to that bar: name the id, say where we looked, name the command.
+    // trace:STORY-729
+    let req = response.into_inner().requirement.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Requirement not found: {id}\n  \
+             Searched in: the AIDA server at {server_addr}\n  \
+             Hint: check the spec ID (try `aida list` or `aida search <terms>`), \
+             or confirm the server points at the right store."
+        )
+    })?;
 
     println!("{}: {}", "ID".blue(), req.id);
     if !req.spec_id.is_empty() {
