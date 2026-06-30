@@ -1,0 +1,18 @@
+id: 019f1778-23db-7050-87cd-8f0eb172d8d3
+spec_id: BUG-662
+agreed_id: BUG-662
+title: git-guardrails also false-blocks feature-branch deletion (analogous to BUG-661 force-push)
+description: 'BUG-661 fixed the force-push false-positive (check the push TARGET, not CWD HEAD). The SAME hook still blanket-blocks git branch -D / git branch -d, so deleting a feature branch (git branch -D task-NNN-foo) is refused — leaving stale local branches after every agent worktree (observed repeatedly: agents report harmless-but-undeleted task-NNN branches). FIX: same pattern as BUG-661 — allow deletion of NON-protected branches, block only deletion of protected branches (main, the dynamic default, aida-store, master/develop). Fail-closed on ambiguity. Reuse the is_protected_branch + target-parsing helpers BUG-661 added.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T07:39:37.307587645Z
+modified_at: 2026-06-30T07:39:37.307587645Z
+req_type: Bug
+tags:
+- branch-delete
+- from-audit
+- git-guardrails
+- hooks
+- papercut
