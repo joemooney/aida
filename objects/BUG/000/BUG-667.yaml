@@ -3,12 +3,12 @@ spec_id: BUG-667
 agreed_id: BUG-667
 title: Flaky CI test gc_aggressive_reduces_pack_count ('failed to run repack') — harden the STORY-733 compaction test against the CI git environment
 description: ''
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:56:17.631012056Z
-modified_at: 2026-06-30T18:55:49.972602565Z
+modified_at: 2026-06-30T19:29:44.789229931Z
 req_type: Bug
 tags:
 - ci
