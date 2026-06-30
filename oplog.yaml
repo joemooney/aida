@@ -26237,5 +26237,17 @@ operations:
   timestamp: 2026-06-30T02:24:41.950717237Z
   kind: !SetStatus
     status: Completed
-clock: 2506
+- id: 019f1657-f1bb-7082-8610-1f03aac63788
+  target_id: 019f1657-df55-7211-bfb6-903027b62feb
+  author: aida
+  node_id: '1'
+  lamport: 2507
+  timestamp: 2026-06-30T02:24:50.107170734Z
+  kind: !Create
+    title: TTL auto-expiry on `leased_at` (reservation-leak mitigation, risk 4)
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2507
 node_id: '1'
