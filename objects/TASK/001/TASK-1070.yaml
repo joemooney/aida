@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T23:46:34.924019785Z
-modified_at: 2026-06-30T23:46:34.924019785Z
+modified_at: 2026-06-30T23:56:44.491980924Z
 req_type: Task
 tags:
 - distillation
 - docs
 - from-loop
 - whats-new
+comments:
+- id: 019f1af6-b84b-71d3-8c85-36a5ded95e18
+  author: joe
+  content: Commit baa6377ab references this requirement
+  created_at: 2026-06-30T23:56:44.491980924Z
+  modified_at: 2026-06-30T23:56:44.491980924Z
