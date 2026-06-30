@@ -38,6 +38,31 @@ use crate::git_ops;
 /// configurable via `[worktree_pool] max_trees` in `.aida/config.toml`.
 pub const DEFAULT_MAX_TREES: usize = 16;
 
+/// Default lease TTL (seconds): a durable lease whose `leased_at` is older than
+/// this is treated as EXPIRED and reclaimable. A pooled lease is reserved by
+/// `acquire` while the short-lived start process exits, so a session that dies
+/// without `return_to_pool` would otherwise pin its tree forever. Six hours is
+/// comfortably longer than any healthy drive yet short enough to recover a
+/// leaked reservation the same working session. Configurable via
+/// `[worktree_pool] lease_ttl_secs` in `.aida/config.toml`.
+// trace:TASK-1008 | ai:claude
+pub const DEFAULT_LEASE_TTL_SECS: i64 = 6 * 60 * 60;
+
+/// Pure decision helper: is a lease stamped at `leased_at` expired at `now`,
+/// given a TTL of `ttl` seconds? A lease with no `leased_at` stamp can't be
+/// judged stale (returns false — never wrongly reclaimed). A non-positive TTL
+/// disables expiry. The boundary is inclusive (age == ttl → expired).
+// trace:TASK-1008 | ai:claude
+pub fn lease_expired(leased_at: Option<i64>, now: i64, ttl: i64) -> bool {
+    if ttl <= 0 {
+        return false;
+    }
+    match leased_at {
+        Some(ts) => now.saturating_sub(ts) >= ttl,
+        None => false,
+    }
+}
+
 fn is_false(b: &bool) -> bool {
     !*b
 }
@@ -78,6 +103,21 @@ impl PoolEntry {
     fn is_idle(&self) -> bool {
         !self.leased && self.owner_pid.is_none() && !self.destroying
     }
+
+    /// True when this leased entry is a stale reservation safe to reclaim: it
+    /// carries a durable lease, has no live owner process, and its `leased_at`
+    /// is older than the TTL. This is the reservation-leak backstop — a session
+    /// that reserved a tree (`acquire` with a `lease_holder`) and then died
+    /// without `return_to_pool` would otherwise pin the tree forever. Reuses
+    /// the same PID-liveness check `heal_state` uses, so a still-live owner is
+    /// never reclaimed even past the TTL.
+    // trace:TASK-1008 | ai:claude
+    fn is_lease_expired(&self, now: i64, ttl: i64) -> bool {
+        self.leased
+            && !self.destroying
+            && !owner_is_live(self)
+            && lease_expired(self.leased_at, now, ttl)
+    }
 }
 
 /// The on-disk registry.
@@ -96,6 +136,10 @@ pub struct AcquireOptions {
     pub lease_holder: Option<String>,
     /// Cap on pool size; falls back to [`DEFAULT_MAX_TREES`] when None.
     pub max_trees: Option<usize>,
+    /// Lease TTL in seconds; falls back to [`DEFAULT_LEASE_TTL_SECS`] when None.
+    /// A stale lease older than this (with no live owner) is reclaimable.
+    // trace:TASK-1008 | ai:claude
+    pub lease_ttl_secs: Option<i64>,
     /// Shell commands run after a fresh `git worktree add` (machine-global
     /// config only — see `worktree_hooks`).
     pub post_create_hooks: Vec<String>,
@@ -110,6 +154,9 @@ pub enum PoolState {
     InUse,
     /// Durably reserved (lease), possibly with no live process.
     Leased,
+    /// A durable lease whose `leased_at` is older than the TTL and whose owner
+    /// process is gone — a stale reservation the next `acquire` may reclaim.
+    Expired,
     /// Idle but has uncommitted changes.
     Dirty,
     /// A destroy is mid-flight.
@@ -124,6 +171,7 @@ impl PoolState {
             PoolState::Available => "available",
             PoolState::InUse => "in-use",
             PoolState::Leased => "leased",
+            PoolState::Expired => "expired",
             PoolState::Dirty => "dirty",
             PoolState::Destroying => "destroying",
             PoolState::Here => "here",
@@ -323,13 +371,26 @@ fn pool_path_for(project_root: &Path, name: &str) -> PathBuf {
 pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
     let base_ref = git_ops::furthest_ahead_default_ref(project_root)?;
     let max_trees = opts.max_trees.unwrap_or(DEFAULT_MAX_TREES);
+    let lease_ttl = opts.lease_ttl_secs.unwrap_or(DEFAULT_LEASE_TTL_SECS);
+    let now = now_ts();
 
     with_state_lock(project_root, |pool| {
-        // 1. Prefer an idle, clean, non-dirty entry → reset + hand out.
-        let idle_idx = pool
-            .entries
-            .iter()
-            .position(|e| e.is_idle() && e.path.exists() && !git_ops::worktree_is_dirty(&e.path));
+        // 1. Prefer a reclaimable entry → reset + hand out. "Reclaimable" is a
+        //    plain idle tree, OR a stale lease whose TTL has elapsed with no
+        //    live owner (the reservation-leak backstop, TASK-1008). An idle
+        //    tree must be clean; a stale-expired lease is reset regardless of
+        //    dirtiness (the dead session's uncommitted changes are abandoned),
+        //    so a leaked dirty reservation can't pin the tree forever.
+        let idle_idx = pool.entries.iter().position(|e| {
+            if e.destroying || !e.path.exists() {
+                return false;
+            }
+            if e.is_lease_expired(now, lease_ttl) {
+                true
+            } else {
+                e.is_idle() && !git_ops::worktree_is_dirty(&e.path)
+            }
+        });
 
         if let Some(idx) = idle_idx {
             let path = pool.entries[idx].path.clone();
@@ -373,6 +434,13 @@ fn stamp_acquired(entry: &mut PoolEntry, opts: &AcquireOptions) {
     entry.owner_pid = Some(std::process::id() as i32);
     entry.owner_started_at = Some(now_ts());
     entry.destroying = false;
+    // Clear any prior lease first — a reclaimed stale-expired lease (TASK-1008)
+    // must not keep the dead session's holder/`leased_at`. Re-stamp only if the
+    // new acquirer asks for a durable reservation. (For a plain idle reuse or a
+    // fresh create the entry already carries no lease, so this is a no-op.)
+    entry.leased = false;
+    entry.lease_holder = None;
+    entry.leased_at = None;
     if let Some(holder) = &opts.lease_holder {
         entry.leased = true;
         entry.lease_holder = Some(holder.clone());
@@ -431,9 +499,15 @@ fn canonical(p: &Path) -> PathBuf {
 // ── Status ───────────────────────────────────────────────────────────────────
 
 /// Classify every pool entry for a read-only status view. `cwd` (when given)
-/// marks the entry the caller is currently inside as `Here`.
-pub fn list(project_root: &Path, cwd: Option<&Path>) -> Result<Vec<PoolStatus>> {
+/// marks the entry the caller is currently inside as `Here`. `lease_ttl_secs`
+/// is the TTL used to flag a stale reservation as `Expired` (TASK-1008).
+pub fn list(
+    project_root: &Path,
+    cwd: Option<&Path>,
+    lease_ttl_secs: i64,
+) -> Result<Vec<PoolStatus>> {
     let cwd_canon = cwd.map(canonical);
+    let now = now_ts();
     with_state_lock(project_root, |pool| {
         let mut out = Vec::with_capacity(pool.entries.len());
         for e in &pool.entries {
@@ -448,6 +522,8 @@ pub fn list(project_root: &Path, cwd: Option<&Path>) -> Result<Vec<PoolStatus>> 
                 PoolState::Destroying
             } else if e.owner_pid.is_some() {
                 PoolState::InUse
+            } else if e.is_lease_expired(now, lease_ttl_secs) {
+                PoolState::Expired
             } else if e.leased {
                 PoolState::Leased
             } else if dirty {
@@ -486,6 +562,56 @@ mod tests {
         e.leased = false;
         e.destroying = true;
         assert!(!e.is_idle());
+    }
+
+    #[test]
+    fn lease_expired_pure_decision() {
+        let ttl = 100;
+        // No stamp → never judged stale.
+        assert!(!lease_expired(None, 10_000, ttl));
+        // Fresh lease (younger than TTL) → not expired.
+        assert!(!lease_expired(Some(9_950), 10_000, ttl));
+        // Exactly at the TTL boundary → expired (inclusive).
+        assert!(lease_expired(Some(9_900), 10_000, ttl));
+        // Older than the TTL → expired.
+        assert!(lease_expired(Some(1), 10_000, ttl));
+        // Non-positive TTL disables expiry entirely.
+        assert!(!lease_expired(Some(1), 10_000, 0));
+        assert!(!lease_expired(Some(1), 10_000, -5));
+        // A clock skew (leased_at in the future) saturates to 0 → not expired.
+        assert!(!lease_expired(Some(20_000), 10_000, ttl));
+    }
+
+    #[test]
+    fn is_lease_expired_requires_lease_dead_owner_and_ttl() {
+        let now = 10_000;
+        let ttl = 100;
+        let mut e = PoolEntry {
+            name: "aida-pool-0".into(),
+            path: PathBuf::from("/tmp/x"),
+            leased: true,
+            leased_at: Some(1), // very old
+            ..Default::default()
+        };
+        // Leased, old, no owner → reclaimable.
+        assert!(e.is_lease_expired(now, ttl));
+        // A live owner (i32::MAX is dead here, so use the current pid) is NOT
+        // reclaimable even past the TTL.
+        e.owner_pid = Some(std::process::id() as i32);
+        assert!(!e.is_lease_expired(now, ttl));
+        e.owner_pid = None;
+        // A fresh lease is not expired.
+        e.leased_at = Some(now);
+        assert!(!e.is_lease_expired(now, ttl));
+        // An un-leased idle entry is never "lease expired" (it's plain idle).
+        e.leased = false;
+        e.leased_at = None;
+        assert!(!e.is_lease_expired(now, ttl));
+        // A mid-destroy entry is never reclaimed via the lease path.
+        e.leased = true;
+        e.leased_at = Some(1);
+        e.destroying = true;
+        assert!(!e.is_lease_expired(now, ttl));
     }
 
     #[test]
@@ -784,6 +910,88 @@ mod git_integration_tests {
         let p2 = acquire(root, &opts()).unwrap();
         assert_eq!(p1, p2);
         assert_eq!(read_state(root).unwrap().entries.len(), 1);
+    }
+
+    /// TASK-1008: a leaked durable lease (the owning session died without
+    /// returning) is reclaimed by the next `acquire` once its TTL elapses.
+    /// Without the TTL the lease survives process death by design, so a leaked
+    /// reservation would pin the tree forever; with it, the stale entry is
+    /// reset + re-handed-out and the new acquirer's holder replaces the dead
+    /// one. A pool with one leased tree must NOT create a second (cap-respecting
+    /// reclaim, not leak-then-grow).
+    // trace:TASK-1008 | ai:claude
+    #[test]
+    fn acquire_reclaims_expired_lease_without_growing_pool() {
+        let repo = init_repo();
+        let root = repo.path();
+
+        // Acquire WITH a durable lease (a headless-drain style reservation).
+        let leasing = AcquireOptions {
+            max_trees: Some(1), // cap of 1 → a leak would block all future work
+            lease_holder: Some("dead-drain".into()),
+            ..Default::default()
+        };
+        let p1 = acquire(root, &leasing).unwrap();
+        // Simulate the short-lived start process exiting: clear the owner pid
+        // but keep the durable lease, and age `leased_at` past any sane TTL.
+        with_state_lock(root, |pool| {
+            pool.entries[0].owner_pid = None;
+            pool.entries[0].owner_started_at = None;
+            pool.entries[0].leased_at = Some(1); // ancient
+            Ok(())
+        })
+        .unwrap();
+
+        // A tiny TTL makes the ancient lease expired. The next acquire reclaims
+        // the SAME tree rather than failing "pool is full".
+        let reclaiming = AcquireOptions {
+            max_trees: Some(1),
+            lease_ttl_secs: Some(1),
+            ..Default::default()
+        };
+        let p2 = acquire(root, &reclaiming).unwrap();
+        assert_eq!(p1, p2, "expired lease should be reclaimed, not a new tree");
+        let pool = read_state(root).unwrap();
+        assert_eq!(pool.entries.len(), 1, "reclaim must not grow the pool");
+        // The dead holder is gone; the reclaimer left no new lease (it asked
+        // for none), so the entry is a plain owned tree.
+        assert!(!pool.entries[0].leased);
+        assert_eq!(pool.entries[0].lease_holder, None);
+        assert_eq!(pool.entries[0].leased_at, None);
+        assert!(pool.entries[0].owner_pid.is_some());
+    }
+
+    /// A NON-expired lease (TTL not yet elapsed) is left reserved — a healthy
+    /// in-flight reservation is never stolen out from under its holder.
+    // trace:TASK-1008 | ai:claude
+    #[test]
+    fn acquire_does_not_reclaim_fresh_lease() {
+        let repo = init_repo();
+        let root = repo.path();
+        let leasing = AcquireOptions {
+            max_trees: Some(1),
+            lease_holder: Some("live-drain".into()),
+            ..Default::default()
+        };
+        let _p1 = acquire(root, &leasing).unwrap();
+        with_state_lock(root, |pool| {
+            pool.entries[0].owner_pid = None; // start process exited
+            pool.entries[0].leased_at = Some(now_ts()); // but lease is fresh
+            Ok(())
+        })
+        .unwrap();
+        // A large TTL means the fresh lease is NOT expired; with a cap of 1 and
+        // the one tree reserved, acquire must refuse (pool full), not steal it.
+        let reclaiming = AcquireOptions {
+            max_trees: Some(1),
+            lease_ttl_secs: Some(1_000_000),
+            ..Default::default()
+        };
+        let err = acquire(root, &reclaiming).unwrap_err();
+        assert!(
+            err.to_string().contains("pool is full"),
+            "fresh lease must stay reserved; got: {err}"
+        );
     }
 
     /// The full session lifecycle the warm-pool relies on: acquire a detached
