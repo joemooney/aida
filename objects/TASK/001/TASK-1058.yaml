@@ -1,0 +1,30 @@
+id: 019f1947-7bb0-77c0-8edb-8586ffe79049
+spec_id: TASK-1058
+agreed_id: TASK-1058
+title: Multi-vendor coordination research + positioning doc refresh (June 2026)
+description: |-
+  Documentation/research batch reflecting the 2026-06-26 market-landscape refresh and the multi-vendor coordination presentation work.
+
+  Includes:
+  - New presentation deck (docs/research/2026-06-28-multi-vendor-coordination-deck.md + .pptx) plus companion research notes with a confidence model.
+  - Orchestration-articles docs audit (control-plane / blackboard-pattern vocabulary applied to AIDA).
+  - Market-refresh reflected into competitive-analysis/marketplace-roster.md: Gas Town now reports OSS cross-vendor + Wasteland federation, so the white space narrows from "cross-vendor is unoccupied" to the more precise plain-git, program-owned, typed+traceable coordination-record slice.
+  - Layered-evaluation-framework update: load-bearing gates vs field-evidence procedural rules; runtime cost-control and trace-data criteria added.
+  - New positioning page vs-langgraph.md (runtime/control-plane neighbor) + README index row.
+  - New architecture note on-complexity.md (renamed from a stray .my extension).
+  - Refresh of AIDA_IN_MY_OWN_WORDS.md (probe framing).
+  - Config: [field_study] enabled = false; pre-commit hook marked executable.
+
+  Acceptance: all docs land on main, cross-references resolve, roster/landscape claims are dated and consistent.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T16:05:42.960172053Z
+modified_at: 2026-06-30T16:05:42.960172053Z
+req_type: Task
+tags:
+- documentation
+- parent:EPIC-48
+- positioning
+- research
