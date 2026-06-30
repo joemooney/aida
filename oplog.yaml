@@ -28879,5 +28879,17 @@ operations:
       2. Only the into-Completed transition gets the crescendo; a non-completion edit still renders Updated:.
       3. The agent/TOON path is unaffected (machine output keeps Updated:).
       4. House style: status glyph + glyphs via the registry (ascii-safe), no raw glyphs; existing workflow-hint line preserved.
-clock: 2779
+- id: 019f1a62-5fb3-73a2-b80e-2be6752c2ed8
+  target_id: 019f1a62-531a-7f53-9925-dcdfcedf0f5f
+  author: aida
+  node_id: '1'
+  lamport: 2780
+  timestamp: 2026-06-30T21:14:42.483637337Z
+  kind: !Create
+    title: 'aida status agent-mode: queue_depth contradicts queue_actionable and queue list (different user-resolution paths, BUG-89 surface) — unify the path + lead with the actionable count'
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2780
 node_id: '1'
