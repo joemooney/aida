@@ -744,20 +744,26 @@ relationship at file-time.
 
 | Outcome | Exit code |
 |---|---|
-| Clean drain — every member shipped | `0` |
-| `--max` cap reached, more queued | `0` |
-| Stalled — head did not advance after a successful run | `1` |
+| Clean drain — every member shipped (or `--max` cap reached, more queued) | `0` |
+| Empty batch, or stalled — head did not advance after a successful run | `1` |
 | **Drained with shelved members (EPIC-28)** | **`2`** |
-| Phase 1 (implementer) failed un-shelvably | `3` |
-| Phase 2 (CI) failed un-shelvably | `4` |
-| Phase 3 (review) failed un-shelvably | `5` |
-| Phase 4 (merge) failed un-shelvably | `6` |
-| Phase 5 (pull) failed un-shelvably | `7` |
-| Phase 6 (build) failed un-shelvably | `8` |
+| **Hard failure — un-shelvable phase fail, build / env / internal (TASK-1054)** | **`3`** |
+| `--max-tokens` / `--max-iterations` / `--max-runtime` cap stop | `7` |
 
-Exit `2` is the new signal: "the drain did its job — independents shipped,
+Exit `2` is the EPIC-28 signal: "the drain did its job — independents shipped,
 failures parked — but you have triage to do." Scripts that wrap a batch
 drain should treat exit `2` as non-failure but actionable.
+
+**TASK-1054: exit `3` is the distinct hard-failure code.** Before TASK-1054 a
+single-spec drive exited the *failed-phase index* (so a CI failure exited `2`)
+— colliding with the EPIC-28 `2 = shelved` sentinel, so a wrapping script could
+not tell "the drive parked a spec and moved on" (recoverable) from "the drive
+hit a wall" (un-shelvable phase fail, build break, OOM, internal error). The two
+are now split: **`2` = shelved / parked-and-advanced (recoverable, re-drivable),
+`3` = hard unrecoverable failure.** This holds for *both* the single-spec drive
+and the batch drain. The `2` contract is preserved exactly; `3` is the new code.
+The same table is the doc-comment on `DRIVE_EXIT_CLEAN` / `DRIVE_EXIT_SHELVED` /
+`DRIVE_EXIT_HARD_FAIL` in `aida-cli/src/auto_complete.rs`.
 
 ### Triage path
 

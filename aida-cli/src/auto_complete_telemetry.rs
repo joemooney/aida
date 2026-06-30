@@ -143,6 +143,41 @@ pub fn read_events() -> Vec<AutoCompleteEvent> {
         .collect()
 }
 
+/// BUG-657: the spec-id of the Draft BUG already auto-filed for an identical
+/// recent failure — same spec, same failed phase, same failure kind, with a
+/// `completed_at` at or after `cutoff` — scanning `events` newest-first.
+///
+/// Pure over a slice so the dedup decision is unit-testable without the global
+/// `~/.aida/auto-complete.jsonl`. The auto-draft path consults this first and,
+/// on a hit, reuses the existing BUG instead of filing a fresh one — so
+/// re-running a still-broken `--auto-complete` does not spam the backlog with
+/// one Draft per retry (the BUG-638 → BUG-644..649 incident filed 6 identical
+/// drafts in a 6-minute window).
+// trace:BUG-657 | ai:claude
+pub fn dedup_failure_bug(
+    events: &[AutoCompleteEvent],
+    spec: &str,
+    failed_phase: u8,
+    failure_kind: &str,
+    cutoff: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    events
+        .iter()
+        .rev()
+        .filter(|ev| {
+            ev.spec_id == spec
+                && ev.failed_phase == Some(failed_phase)
+                && ev.failure_kind.as_deref() == Some(failure_kind)
+                && ev.drafted_bug.is_some()
+        })
+        .find(|ev| {
+            chrono::DateTime::parse_from_rfc3339(&ev.completed_at)
+                .map(|t| t.with_timezone(&chrono::Utc) >= cutoff)
+                .unwrap_or(false)
+        })
+        .and_then(|ev| ev.drafted_bug.clone())
+}
+
 /// Success / failure tallies over a slice of events.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Summary {
@@ -293,6 +328,87 @@ mod tests {
         let events = vec![ev("A", "failed", Some(5)), ev("B", "failed", Some(3))];
         // Equal counts → lower phase index first.
         assert_eq!(failure_histogram(&events), vec![(3, 1), (5, 1)]);
+    }
+
+    fn far_cutoff() -> chrono::DateTime<chrono::Utc> {
+        // Well before every helper event's `completed_at` (2026-05-16T14:23).
+        chrono::DateTime::parse_from_rfc3339("2026-05-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    /// BUG-657: an identical recent failure (same spec / phase / kind, within
+    /// the cutoff, with a drafted BUG) is found and its BUG reused.
+    #[test]
+    fn dedup_finds_matching_recent_failure_bug() {
+        let events = vec![ev("BUG-638", "failed", Some(1))];
+        let hit = dedup_failure_bug(&events, "BUG-638", 1, "ci-red", far_cutoff());
+        assert_eq!(hit, Some("BUG-200".to_string()));
+    }
+
+    /// BUG-657: the dedup key is (spec, phase, kind) — any mismatch means no
+    /// reuse, so a genuinely different failure still files its own BUG.
+    #[test]
+    fn dedup_misses_on_a_different_signature() {
+        let events = vec![ev("BUG-638", "failed", Some(1))];
+        assert_eq!(
+            dedup_failure_bug(&events, "BUG-639", 1, "ci-red", far_cutoff()),
+            None,
+            "different spec"
+        );
+        assert_eq!(
+            dedup_failure_bug(&events, "BUG-638", 2, "ci-red", far_cutoff()),
+            None,
+            "different phase"
+        );
+        assert_eq!(
+            dedup_failure_bug(&events, "BUG-638", 1, "no-pr", far_cutoff()),
+            None,
+            "different kind"
+        );
+    }
+
+    /// BUG-657: an event older than the cutoff is ignored — the BUG would have
+    /// aged out, so a fresh one is filed rather than reviving a stale link.
+    #[test]
+    fn dedup_ignores_events_older_than_cutoff() {
+        let events = vec![ev("BUG-638", "failed", Some(1))];
+        // Cutoff AFTER the helper event's completed_at (14:23) → too old.
+        let cutoff = chrono::DateTime::parse_from_rfc3339("2026-05-16T18:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(
+            dedup_failure_bug(&events, "BUG-638", 1, "ci-red", cutoff),
+            None
+        );
+    }
+
+    /// BUG-657: with several matching events the NEWEST drafted BUG wins
+    /// (newest-first scan), so retries converge on the latest tracking BUG.
+    #[test]
+    fn dedup_returns_the_newest_matching_bug() {
+        let mut older = ev("BUG-638", "failed", Some(1));
+        older.drafted_bug = Some("BUG-100".to_string());
+        let mut newer = ev("BUG-638", "failed", Some(1));
+        newer.drafted_bug = Some("BUG-300".to_string());
+        // Insertion order is oldest-first; the scan reverses it.
+        let events = vec![older, newer];
+        assert_eq!(
+            dedup_failure_bug(&events, "BUG-638", 1, "ci-red", far_cutoff()),
+            Some("BUG-300".to_string())
+        );
+    }
+
+    /// BUG-657: an event with no drafted BUG (the auto-file failed, or it was an
+    /// environmental suppression) does not count as a dedup target.
+    #[test]
+    fn dedup_skips_events_with_no_drafted_bug() {
+        let mut ev_no_bug = ev("BUG-638", "failed", Some(1));
+        ev_no_bug.drafted_bug = None;
+        assert_eq!(
+            dedup_failure_bug(&[ev_no_bug], "BUG-638", 1, "ci-red", far_cutoff()),
+            None
+        );
     }
 
     #[test]

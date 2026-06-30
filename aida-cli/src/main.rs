@@ -131982,7 +131982,9 @@ fn handle_drain_resume(
                 no_auto_rebase,
                 resume_entry,
             );
-            std::process::exit(result.exit_code);
+            // TASK-1054: collapse the failed-phase index to the canonical
+            // 0/2/3 process code so a wrapping script can branch on the outcome.
+            std::process::exit(result.process_exit_code());
         }
     }
 }
@@ -132118,7 +132120,9 @@ fn handle_from_pr(
                 no_auto_rebase,
                 resume_entry,
             );
-            std::process::exit(result.exit_code);
+            // TASK-1054: collapse the failed-phase index to the canonical
+            // 0/2/3 process code so a wrapping script can branch on the outcome.
+            std::process::exit(result.process_exit_code());
         }
     }
 }
@@ -133394,7 +133398,10 @@ fn handle_auto_complete(
     if let Ok(root) = find_main_worktree_root() {
         maybe_digest_mailbox_best_effort(&root.join(".aida-store"), "drain-end");
     }
-    std::process::exit(result.exit_code);
+    // TASK-1054: collapse the failed-phase index to the canonical 0/2/3 process
+    // code (0 clean, 2 shelved/parked, 3 hard fail) so a wrapping script can
+    // branch on the outcome. trace:TASK-1054 | ai:claude
+    std::process::exit(result.process_exit_code());
 }
 
 /// STORY-265 slice 3: execute the `--with-plan` PLAN PRELUDE for one spec —
@@ -133512,6 +133519,29 @@ fn run_auto_complete(
     // have discovered. trace:STORY-492 | ai:claude
     resume: Option<ResumeEntry>,
 ) -> auto_complete::OrchestrationResult {
+    // BUG-657: a spec that is already terminal (Completed / Rejected) is a clean
+    // NO-OP — return BEFORE touching the queue or spawning anything. Driving it
+    // would queue it, spawn an implementer that exits 1 ("nothing to implement"),
+    // and auto-draft a phantom failure BUG — the BUG-638 → BUG-644..649 incident
+    // (6 identical drafts in 6 minutes). A `--resume` / `--from-pr` re-entry
+    // (`resume.is_some()`) is exempt: it legitimately re-drives a spec that
+    // reached Completed mid-pipeline (the merge promoted it; the BUG-241 reconcile
+    // treats that as an out-of-band success). The pure orchestrator carries the
+    // same guard via `PhaseDriver::terminal_status` for defense-in-depth + unit
+    // testing; this earlier check is what keeps the queue side-effect-free.
+    // trace:BUG-657 | ai:claude
+    if resume.is_none() {
+        if let Ok(root) = find_main_worktree_root() {
+            let terminal = match spec_status(&root, spec) {
+                Some(RequirementStatus::Completed) => Some("Completed"),
+                Some(RequirementStatus::Rejected) => Some("Rejected"),
+                _ => None,
+            };
+            if let Some(status) = terminal {
+                return auto_complete::finish_noop(spec, status, json, &std::time::Instant::now());
+            }
+        }
+    }
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
     // `aida add` flows straight into `--auto-complete`.
@@ -136106,6 +136136,19 @@ fn record_auto_complete_run(
                 }
                 event.drafted_bug = Some(existing);
             }
+            // BUG-657: suppress the auto-file entirely when the failure is
+            // ENVIRONMENTAL (disk full / OOM) — the auto-draft text itself tells
+            // the triager to reject those, so filing one just creates a Draft to
+            // immediately reject. The telemetry line still records the failure.
+            None if auto_complete::is_environmental_failure(&failure.reason) => {
+                if !json {
+                    eprintln!(
+                        "  {} environmental failure (disk/OOM) — not auto-drafting a BUG \
+                         (fix the host, then re-drive)",
+                        "📋".dimmed(),
+                    );
+                }
+            }
             None => {
                 let hint = auto_complete::recovery_hint(
                     phase,
@@ -136152,33 +136195,26 @@ fn record_auto_complete_run(
     );
 }
 
-/// TASK-266: find the Draft BUG already auto-filed for an identical recent
-/// failure — same spec, same phase, same failure kind, within the last 24h —
-/// so re-running a still-broken `--auto-complete` reuses one BUG instead of
-/// spamming the backlog. trace:TASK-266 | ai:claude
+/// TASK-266 / BUG-657: find the Draft BUG already auto-filed for an identical
+/// recent failure — same spec, same phase, same failure kind, within the last
+/// 24h — so re-running a still-broken `--auto-complete` reuses one BUG instead
+/// of spamming the backlog. The dedup decision is the pure
+/// [`auto_complete_telemetry::dedup_failure_bug`] over the read events; this
+/// wrapper just supplies the global JSONL log + the 24h cutoff.
+// trace:TASK-266 trace:BUG-657 | ai:claude
 fn existing_failure_bug(
     spec: &str,
     phase: auto_complete::Phase,
     failure: &auto_complete::PhaseFailure,
 ) -> Option<String> {
     let cutoff = chrono::Utc::now() - chrono::Duration::hours(24);
-    let phase_n = phase.index() as u8;
-    let kind = failure.kind.slug();
-    auto_complete_telemetry::read_events()
-        .into_iter()
-        .rev()
-        .filter(|ev| {
-            ev.spec_id == spec
-                && ev.failed_phase == Some(phase_n)
-                && ev.failure_kind.as_deref() == Some(kind)
-                && ev.drafted_bug.is_some()
-        })
-        .find(|ev| {
-            chrono::DateTime::parse_from_rfc3339(&ev.completed_at)
-                .map(|t| t.with_timezone(&chrono::Utc) >= cutoff)
-                .unwrap_or(false)
-        })
-        .and_then(|ev| ev.drafted_bug)
+    auto_complete_telemetry::dedup_failure_bug(
+        &auto_complete_telemetry::read_events(),
+        spec,
+        phase.index() as u8,
+        failure.kind.slug(),
+        cutoff,
+    )
 }
 
 /// TASK-266: auto-file a Draft BUG for an `--auto-complete` phase failure.
@@ -140247,6 +140283,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             // STORY-508/TASK-651: resolve the active forge so recovery hints
             // name the right CLI when a phase fails.
             forge: crate::forge::resolve_forge_kind(&self.project_root),
+        }
+    }
+
+    /// BUG-657: report the target spec's status label when it is already
+    /// terminal (`Completed` / `Rejected`), so the orchestrator finishes as a
+    /// clean NO-OP instead of spawning an implementer that would exit 1 and
+    /// auto-draft a phantom failure BUG. Reads the canonical YAML status (the
+    /// same source `reconcile_failure`'s out-of-band check uses). A store it
+    /// cannot read returns `None` — the drive proceeds exactly as before, so a
+    /// transient read hiccup never wrongly skips real work.
+    // trace:BUG-657 | ai:claude
+    fn terminal_status(&mut self) -> Option<&'static str> {
+        match spec_status(&self.project_root, &self.spec) {
+            Some(RequirementStatus::Completed) => Some("Completed"),
+            Some(RequirementStatus::Rejected) => Some("Rejected"),
+            _ => None,
         }
     }
 
