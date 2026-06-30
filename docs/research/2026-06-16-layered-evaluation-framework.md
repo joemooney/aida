@@ -70,7 +70,8 @@ These nine criteria catch the things that do not show up in a feature demo but d
 
 ### 2.6 Governance / auditability
 - [ ] You can see and police what agents did (who changed what, when, under what authority).
-- [ ] Enforcement is a *gate* you control, not a *policy* you hope is honored (theory §4, P1).
+- [ ] Load-bearing invariants are enforced by a *gate* you control; low-risk procedural rules can remain instructions when field evidence shows agents follow them reliably.
+- [ ] The tool exposes enough trace data to reconstruct which agent ran, what input it received, what output it produced, how long it took, what it cost, and which approval or policy boundary it crossed.
 
 ### 2.7 Reversibility / blast radius
 - [ ] You can back the decision out; failure is contained, not org-wide.
@@ -78,6 +79,7 @@ These nine criteria catch the things that do not show up in a feature demo but d
 
 ### 2.8 Total cost of ownership (incl. churn risk)
 - [ ] Build + maintain + the risk a vendor obsoletes this layer for free within ~12 months (theory §12: "building on sand").
+- [ ] Runtime cost controls exist: token / API-credit budgets, retry caps, loop breakers, and per-agent cost attribution.
 - **Red flag:** you'd be hand-building infrastructure a platform is visibly about to ship.
 
 ### 2.9 Strategic optionality
@@ -103,9 +105,9 @@ For each layer: *what good looks like*, the *layer-specific capture risk*, and a
 - **Default lean:** **Own it** (build or adopt only something fully portable/open). The cost of owning is justified here even if nowhere else, because this is what becomes the competitive asset.
 
 ### L2 — Enforcement & governance
-- **What good looks like:** invariants enforced as programmatic **gates** (refuse the bad action), not documented rules; full audit trail; policy you control and can change.
+- **What good looks like:** high-risk invariants enforced as programmatic **gates** (refuse the bad action), field telemetry showing which stated rules actually fail, full audit trail, policy you control and can change.
 - **Capture risk:** governance logic trapped inside a vendor's agent platform — you can't enforce what you can't reach.
-- **Default lean:** **Own the gates, ride the vendor's execution.** Place enforcement at *your* substrate boundary so it holds regardless of which agent acts.
+- **Default lean:** **Own the load-bearing gates, ride the vendor's execution.** Place approval, merge, authority, and traceability enforcement at *your* substrate boundary; do not build gates for every prompt rule without field evidence.
 
 ### L3 — Collaborative state
 - **What good looks like:** durable store with sane concurrent-edit handling (conflict-light merge, theory §5); open format; survives any single tool; history preserved.
@@ -113,7 +115,7 @@ For each layer: *what good looks like*, the *layer-specific capture risk*, and a
 - **Default lean:** **Own / open-format.** Prefer a store you can read with `git` and a text editor over a service you query only through one vendor's UI.
 
 ### L4 — Autonomy & role orchestration
-- **What good looks like:** role separation (implementer / advisor / human); punt-and-continue resilience; escalation routing; deep observability into what the fleet did and why.
+- **What good looks like:** role separation (implementer / advisor / human); punt-and-continue resilience; escalation routing; resumable checkpoints; retry/fallback/circuit-breaker behavior; deep observability into what the fleet did, why, how long it ran, and what it cost.
 - **Capture risk:** orchestration that only drives *one vendor's* agents; a black-box autonomy loop you can't inspect.
 - **Default lean:** **Build thin or ride carefully + instrument.** This is a frontier; ride native within-vendor where exit cost is low, but keep the orchestration *logic* and observability yours.
 

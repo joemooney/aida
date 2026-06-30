@@ -10,7 +10,7 @@
 
 Software is beginning to be written by **fleets** of autonomous AI agents rather than by individual humans or single AI assistants. **Coordinating** them — keeping them aligned on shared intent, tracking what each has done, verifying their work, recovering from their failures — is already one of the most heavily invested problems in the industry: every major vendor is shipping coordination features (background sessions, agent "teams," shared task lists, orchestration loops). *That investment is the proof the problem matters.*
 
-But it is converging on a single shape: coordination **owned by, and locked to, one vendor.** Whether it runs locally or in the vendor's cloud, the state is *the vendor's* — their format, their retention, their agents only. That suits the vendor; it fails a program that must mix providers, **own** its coordination record, and keep coordinating where a vendor cloud cannot or should not reach. The open slice — which no vendor is incentivized to close — is **coordination the program itself owns: vendor-neutral, portable, and inspectable.**
+But the mainstream product path is converging on a single shape: coordination as a **control plane** owned by a vendor or tool runtime. The current orchestration literature is clear about what a serious control plane must provide: state management, policy-as-code, deterministic checkpoints, human-in-the-loop approval, observability, error handling, and cost controls. That validates the problem. The open research slice is narrower: when that state is *the vendor's* — their format, their retention, their agents only — a program that must mix providers, **own** its coordination record, and keep coordinating where a vendor cloud cannot or should not reach still has an unsolved problem. The target is **coordination the program itself owns: vendor-neutral, portable, and inspectable.**
 
 We are trying to discover the **minimal substrate** that fills that gap: one where *everything agents use to coordinate* — both shared declarative state (a typed requirement graph) and the messages they leave each other (assignments, briefs, reviews, escalations) — lives in one durable, program-owned store rather than a vendor's live runtime.
 
@@ -36,7 +36,7 @@ These runtimes are backed by serious cloud infrastructure — so "it only runs o
 1. **Cross-tool / vendor-neutral** — a vendor coordinates *its own* agents. It has no reason to be the neutral coordination layer for a fleet that *mixes* providers' agents. A program that wants to combine providers — for capability, cost, or second-sourcing over a long lifecycle — needs coordination that sits *above* any single vendor, and no vendor will build it.
 2. **Program-owned, inspectable record** — even when a vendor persists coordination state, that state is the vendor's: their format, their service, their retention, optimized for the active task. It is not a record the *program* holds, can audit end-to-end, and can keep beyond its relationship with that vendor.
 
-No current practice coordinates an autonomous agent fleet across those boundaries with a record the program itself owns — and that gap widens exactly as the program gets larger and longer-lived.
+The gap is no longer an empty market claim: Beads/Gas Town, GNAP, Goosetown, agmsg/tap, and similar efforts all occupy pieces of the durable-coordination space. What remains unproven is the full bundle this proposal tests: a program-owned coordination record that combines typed requirements, traceable code linkage, lifecycle authority, durable inter-agent handoffs, and cross-vendor operation without making one vendor runtime or hosted control plane the source of truth.
 
 ## 3. What is the approach, and how is it new?
 
@@ -52,6 +52,7 @@ This reframes coordination as a **measurable scientific question** rather than a
 - **Calibrated autonomous trust** — the substrate already records a self-assessed effort/complexity estimate at ship time. The *closed loop* is the research and does not yet exist: capture the actual outcome, compute the prediction-vs-reality error, and feed it back so self-assessment grows measurably more accurate — until autonomy rests on a track record, not hope.
 - **Verifiable autonomous escalation** — a formal cascade (agent → reasoning-advisor → human) in which an agent that cannot safely decide is *designed to stop and escalate* rather than guess; measure how reliably it does so — its correctness and false-escalation rates.
 - **Substrate-as-enforcement** — coordination guarantees expressed as *programmatic gates* the substrate enforces, versus *instructions* an agent may ignore; measure where each is necessary.
+- **Production orchestration economics** — can the substrate provide the operational controls serious agent orchestration needs: resumable state, bounded retries, circuit breakers, structured handoffs, cost visibility, and traces of which agent ran with which inputs and outputs?
 
 **Why this is research, not engineering:** the contribution is not the apparatus but the discovery of **the minimal building blocks of agent coordination** and the laws governing fleet coherence, calibration, and safe escalation over a vendor-neutral substrate. **Why now:** agents have just become capable enough for real autonomous coordination, and vendors are proving the *single-vendor* case — de-risking the agent layer and isolating the open problem (vendor-neutral, program-owned coordination). The apparatus exists and is dogfooded daily, so research starts against real fleets on day one.
 
@@ -85,7 +86,8 @@ A checklist of measurable proof points, grouped by what they demonstrate. They a
 - [ ] **Intent-coherence convergence rate** measured as a fleet grows and spans tools: does coherence hold, and under what substrate richness does it break?
 - [ ] **Trust-calibration accuracy improves over time** — the prediction-vs-reality error shrinks measurably as the closed loop runs.
 - [ ] **Autonomous-escalation correctness + false-escalation rate** measured — the agent reliably stops-and-escalates rather than guessing.
-- [ ] **Substrate-as-enforcement:** a gate-vs-rule comparison shows programmatic gates hold an invariant where instructions do not (violation rate per N agent-actions).
+- [ ] **Substrate-as-enforcement:** field instrumentation identifies which invariants require programmatic gates, instead of assuming every stated rule needs one.
+- [ ] **Production-control metrics:** retry count, loop/circuit-breaker trips, token/cost per spec, resume success, and per-agent trace completeness measured across real drains.
 
 ### D. Governance and record
 - [ ] **End-to-end audit** of who/what/when/under-what-authority reconstructable from the program-owned record alone.
