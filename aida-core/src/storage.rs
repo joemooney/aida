@@ -1571,6 +1571,17 @@ impl Storage {
     pub fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
         self.queue_backend()?.queue_clear(user_id, completed_only)
     }
+
+    /// Bulk-remove the given requirement ids from a user's queue in one
+    /// write + commit; returns the removed entries. Powers queue-GC.
+    // trace:TASK-1052 | ai:claude
+    pub fn queue_remove_many(
+        &self,
+        user_id: &str,
+        ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::models::QueueEntry>> {
+        self.queue_backend()?.queue_remove_many(user_id, ids)
+    }
 }
 
 #[cfg(test)]
