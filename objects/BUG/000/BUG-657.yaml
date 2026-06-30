@@ -1,0 +1,17 @@
+id: 019f16d1-b3ea-7b20-8513-9b285dc9db90
+spec_id: BUG-657
+agreed_id: BUG-657
+title: auto-complete drain of an already-completed spec spawns a failing implementer + auto-files duplicate failure bugs
+description: 'aida queue work SPEC --auto-complete on an already-COMPLETED spec (BUG-638, completed) spawned an implementer that exited 1 (nothing to implement) and auto-drafted a failure bug — repeated 6x in a 6-min window produced 6 identical drafts (BUG-644 through BUG-649, all rejected). FIXES: (1) the drain should SKIP/refuse an already-completed (or rejected) spec as a no-op success, not a phase-1 failure; (2) dedupe auto-filed failure bugs by spec+phase+failure-kind (one open draft per failure signature, not one per retry); (3) suppress auto-filing when the failure is environmental (disk-full/OOM in the failure_message) since the auto-draft text itself says to reject those.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T04:37:49.674490290Z
+modified_at: 2026-06-30T04:37:49.674490290Z
+req_type: Bug
+tags:
+- auto-complete
+- from-operator
+- orchestrator
+- papercut
