@@ -1,0 +1,12 @@
+id: 019f16c1-ca6e-7891-a1be-5aaacb690de5
+spec_id: TASK-1039
+agreed_id: TASK-1039
+title: '**TASK (engine):** `drain_batch_single_branch` in `auto_complete.rs` — one worktree/'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T04:20:26.862837717Z
+modified_at: 2026-06-30T04:20:26.862837717Z
+req_type: Task
