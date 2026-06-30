@@ -645,6 +645,11 @@ impl DatabaseBackend for CachedGitBackend {
     fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
         self.inner.queue_clear(user_id, completed_only)
     }
+
+    // trace:TASK-1052 | ai:claude
+    fn queue_remove_many(&self, user_id: &str, ids: &[Uuid]) -> Result<Vec<QueueEntry>> {
+        self.inner.queue_remove_many(user_id, ids)
+    }
 }
 
 #[cfg(test)]

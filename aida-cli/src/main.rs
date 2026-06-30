@@ -1613,6 +1613,7 @@ mod story_423_asciinema_tests {
             "move",
             "clear",
             "prune",
+            "gc",
             "next",
             "advance",
             "done",
@@ -2226,6 +2227,7 @@ fn rewrite_queue_default_list(args: &[String]) -> Vec<String> {
             "move",
             "clear",
             "prune",
+            "gc",
             "next",
             "advance",
             "done",
@@ -19356,6 +19358,7 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | QueueCommand::Done { .. }
                 | QueueCommand::Rework { .. }
                 | QueueCommand::Prune { .. }
+                | QueueCommand::Gc { .. }
         ),
         // STORY-444: `aida backlog groom` writes (queue + tag); list /
         // analyze are read-only. trace:STORY-444 | ai:claude
@@ -123062,9 +123065,78 @@ fn render_all_users_queue(
 
 /// Handle queue commands
 ///
+/// The queue entries whose backing spec is a terminal corpse — archived,
+/// Completed, or Rejected. These linger in the queue file after the work
+/// shipped; the front-door view (STORY-723) hides them but the file itself
+/// still carries them, so a queue-GC sweep removes them here. Pure over
+/// (entries, summaries) so it's cache-fast and unit-testable. The missing-spec
+/// case (an entry whose spec isn't in `summaries`) is the `queue prune
+/// --orphaned` predicate's job, NOT GC's — such an entry is LEFT alone. An
+/// optional `for_role` narrows to one routed role.
+// trace:TASK-1052 | ai:claude
+fn dead_queue_entries<'a>(
+    entries: &'a [aida_core::models::QueueEntry],
+    summaries: &[aida_core::RequirementSummary],
+    for_role: Option<&str>,
+) -> Vec<&'a aida_core::models::QueueEntry> {
+    let by_id: std::collections::HashMap<uuid::Uuid, &aida_core::RequirementSummary> =
+        summaries.iter().map(|s| (s.id, s)).collect();
+    entries
+        .iter()
+        .filter(|e| match for_role {
+            None => true,
+            Some(want) => e
+                .for_role
+                .as_deref()
+                .is_some_and(|have| want.eq_ignore_ascii_case(have)),
+        })
+        .filter(|e| match by_id.get(&e.requirement_id) {
+            // Dead = the spec still exists AND is archived or terminal
+            // (Completed / Rejected). Done is NOT terminal (work on a branch,
+            // not yet merged), so a Done entry survives.
+            Some(s) => s.archived || is_terminal_status_str(&s.status),
+            None => false,
+        })
+        .collect()
+}
+
+/// TASK-1052: opportunistic queue self-heal on read. Drops dead routed entries
+/// (archived/Completed/Rejected targets) from the user's local queue so the
+/// underlying queue stays clean, not just the view. Cheap — reuses the
+/// cache-backed summaries; best-effort, swallowing every error so a `queue
+/// list` read never fails on a GC hiccup. Returns the count pruned.
+// trace:TASK-1052 | ai:claude
+fn opportunistic_queue_gc(storage: &Storage, store_path: &std::path::Path, user_id: &str) -> usize {
+    // include_completed=true so terminal corpses are actually visible to the
+    // sweep (the backend keeps them in the file regardless of this flag, but
+    // be explicit). An empty queue → nothing to do.
+    let entries = match storage.queue_list(user_id, /* include_completed */ true) {
+        Ok(e) if !e.is_empty() => e,
+        _ => return 0,
+    };
+    let summaries = match advance_backend(store_path)
+        .and_then(|b| b.list_summaries(&aida_core::ListFilter::default()))
+    {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    let dead: Vec<uuid::Uuid> = dead_queue_entries(&entries, &summaries, None)
+        .iter()
+        .map(|e| e.requirement_id)
+        .collect();
+    if dead.is_empty() {
+        return 0;
+    }
+    storage
+        .queue_remove_many(user_id, &dead)
+        .map(|removed| removed.len())
+        .unwrap_or(0)
+}
+
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
-/// than the legacy full YAML load. trace:BUG-618 | ai:claude
+/// than the legacy full YAML load.
+// trace:BUG-618 | ai:claude
 fn handle_queue_command(
     cmd: &QueueCommand,
     storage: &Storage,
@@ -123099,6 +123171,18 @@ fn handle_queue_command(
             no_focus,
         } => {
             let user_id = get_user(user);
+
+            // TASK-1052: opportunistic queue self-heal. Before rendering, prune
+            // dead routed entries (archived/Completed/Rejected targets) from the
+            // local queue so the underlying file self-heals on read, not just
+            // the view. Best-effort and silent — only terminal corpses (which
+            // the list view already hides) are removed, so visible output is
+            // unchanged; a hiccup never blocks the read. The `--all-users`
+            // fleet view reads every queue and isn't this shell's to mutate, so
+            // skip the self-heal there. trace:TASK-1052 | ai:claude
+            if !*all_users {
+                let _ = opportunistic_queue_gc(storage, store_path, &user_id);
+            }
 
             // STORY-706: a persistent focus defaults the `--epic` narrowing to
             // the focused subtree, so a plain `aida queue list` under a focus
@@ -125203,6 +125287,94 @@ fn handle_queue_command(
                         crate::glyph(crate::glyphs::Glyph::Check).green(),
                         n.to_string().bold(),
                         if n == 1 { "y" } else { "ies" },
+                    );
+                }
+            }
+        }
+        // TASK-1052: queue-GC — sweep dead routed entries (target spec
+        // archived / Completed / Rejected) and report the count. The explicit
+        // companion to the opportunistic self-heal that runs on `queue list`.
+        // trace:TASK-1052 | ai:claude
+        QueueCommand::Gc {
+            user,
+            r#for,
+            dry_run,
+        } => {
+            let user_id = get_user(user);
+            let entries = storage.queue_list(&user_id, /* include_completed */ true)?;
+            let summaries =
+                advance_backend(store_path)?.list_summaries(&aida_core::ListFilter::default())?;
+            let dead = dead_queue_entries(&entries, &summaries, r#for.as_deref());
+
+            if dead.is_empty() {
+                println!(
+                    "{} No dead queue entries found{}",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    if r#for.is_some() {
+                        format!(" for role {}", r#for.as_deref().unwrap())
+                    } else {
+                        String::new()
+                    }
+                );
+            } else {
+                let n = dead.len();
+                println!(
+                    "{} {} dead queue entr{} ({})",
+                    if *dry_run {
+                        "ℹ".yellow()
+                    } else {
+                        crate::glyph(crate::glyphs::Glyph::Cross).yellow()
+                    },
+                    n.to_string().bold(),
+                    if n == 1 { "y" } else { "ies" },
+                    if *dry_run { "would remove" } else { "removing" },
+                );
+                let by_id: std::collections::HashMap<Uuid, &aida_core::RequirementSummary> =
+                    summaries.iter().map(|s| (s.id, s)).collect();
+                for e in &dead {
+                    let label = by_id
+                        .get(&e.requirement_id)
+                        .map(|s| {
+                            let id = s
+                                .agreed_id
+                                .as_deref()
+                                .or(s.spec_id.as_deref())
+                                .unwrap_or("?");
+                            format!("{} [{}]", id, s.status)
+                        })
+                        .unwrap_or_else(|| e.requirement_id.to_string());
+                    let role = e
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(" [for:{r}]"))
+                        .unwrap_or_default();
+                    println!("  pos {:2}  {}{}", e.position, label.dimmed(), role);
+                }
+                if *dry_run {
+                    println!();
+                    println!("  {}", "Re-run without --dry-run to remove.".dimmed());
+                } else {
+                    // for_role None → bulk remove-by-spec (one commit). With a
+                    // role filter, drop only the matching-role entry per spec so
+                    // a sibling entry routed to another role survives.
+                    let removed = if r#for.is_none() {
+                        let ids: Vec<Uuid> = dead.iter().map(|e| e.requirement_id).collect();
+                        storage.queue_remove_many(&user_id, &ids)?.len()
+                    } else {
+                        for e in &dead {
+                            storage.queue_remove_for_role(
+                                &user_id,
+                                &e.requirement_id,
+                                r#for.as_deref(),
+                            )?;
+                        }
+                        dead.len()
+                    };
+                    println!(
+                        "{} Removed {} dead queue entr{}",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        removed.to_string().bold(),
+                        if removed == 1 { "y" } else { "ies" },
                     );
                 }
             }
@@ -144949,6 +145121,86 @@ mod queue_json_rows_tests {
         let summaries = vec![summary(id, None, None)];
         let rows = queue_json_rows(&[entry(id, None)], &summaries);
         assert_eq!(rows[0]["spec_id"], "?");
+    }
+
+    // TASK-1052: a summary with a chosen status + archived flag, so the GC
+    // predicate can be exercised over the full live/dead spread.
+    fn summary_st(id: Uuid, status: &str, archived: bool) -> aida_core::RequirementSummary {
+        let mut s = summary(id, Some("X-1"), None);
+        s.status = status.to_string();
+        s.archived = archived;
+        s
+    }
+
+    // TASK-1052: queue-GC flags exactly the dead corpses — a spec that is
+    // Completed, Rejected, or archived (any status). Still-actionable specs
+    // (Approved / InProgress / Done) survive, and an entry whose spec is
+    // missing from the cache is LEFT alone (that's `prune --orphaned`'s job).
+    // trace:TASK-1052 | ai:claude
+    #[test]
+    fn dead_queue_entries_flags_terminal_and_archived_only() {
+        let completed = Uuid::new_v4();
+        let rejected = Uuid::new_v4();
+        let archived_draft = Uuid::new_v4();
+        let approved = Uuid::new_v4();
+        let in_progress = Uuid::new_v4();
+        let done = Uuid::new_v4(); // Done is NOT terminal — work on a branch.
+        let orphan = Uuid::new_v4(); // no summary at all
+
+        let summaries = vec![
+            summary_st(completed, "completed", false),
+            summary_st(rejected, "rejected", false),
+            summary_st(archived_draft, "draft", true),
+            summary_st(approved, "approved", false),
+            summary_st(in_progress, "in-progress", false),
+            summary_st(done, "done", false),
+        ];
+        let entries = vec![
+            entry(completed, Some("implementer")),
+            entry(rejected, None),
+            entry(archived_draft, None),
+            entry(approved, Some("implementer")),
+            entry(in_progress, None),
+            entry(done, None),
+            entry(orphan, None),
+        ];
+
+        let dead = dead_queue_entries(&entries, &summaries, None);
+        let dead_ids: std::collections::HashSet<Uuid> =
+            dead.iter().map(|e| e.requirement_id).collect();
+
+        // Exactly the three corpses, by count and by membership.
+        assert_eq!(dead.len(), 3, "only completed/rejected/archived are dead");
+        assert!(dead_ids.contains(&completed));
+        assert!(dead_ids.contains(&rejected));
+        assert!(dead_ids.contains(&archived_draft));
+        // Active work — and the Done-awaiting-merge entry — all survive.
+        assert!(!dead_ids.contains(&approved));
+        assert!(!dead_ids.contains(&in_progress));
+        assert!(!dead_ids.contains(&done));
+        // The orphan (no backing summary) is NOT GC's to remove.
+        assert!(!dead_ids.contains(&orphan));
+    }
+
+    // TASK-1052: the `--for <role>` filter narrows the sweep to one routed
+    // role — a dead spec queued for a different role is not touched by that
+    // run. trace:TASK-1052 | ai:claude
+    #[test]
+    fn dead_queue_entries_respects_role_filter() {
+        let dead_impl = Uuid::new_v4();
+        let dead_review = Uuid::new_v4();
+        let summaries = vec![
+            summary_st(dead_impl, "completed", false),
+            summary_st(dead_review, "completed", false),
+        ];
+        let entries = vec![
+            entry(dead_impl, Some("implementer")),
+            entry(dead_review, Some("reviewer")),
+        ];
+
+        let dead = dead_queue_entries(&entries, &summaries, Some("reviewer"));
+        assert_eq!(dead.len(), 1, "only the reviewer-routed corpse matches");
+        assert_eq!(dead[0].requirement_id, dead_review);
     }
 }
 

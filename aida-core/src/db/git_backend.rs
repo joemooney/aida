@@ -987,6 +987,52 @@ impl DatabaseBackend for GitBackend {
         );
         Ok(())
     }
+
+    // TASK-1052: bulk-remove the given requirement ids from the user's queue
+    // file in a single write + commit. Returns the removed entries. Used by
+    // queue-GC, whose caller has already decided which ids are dead (target
+    // spec archived/Completed/Rejected) from the cache, so this stays a dumb
+    // set-membership prune. trace:TASK-1052 | ai:claude
+    fn queue_remove_many(&self, user_id: &str, ids: &[uuid::Uuid]) -> Result<Vec<QueueEntry>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // trace:TASK-951 — fold case at the lookup boundary.
+        let user_id = self.resolve_queue_user(user_id);
+        let path = self
+            .root
+            .join("registry/queues")
+            .join(format!("{}.yaml", user_id));
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let dead: std::collections::HashSet<uuid::Uuid> = ids.iter().copied().collect();
+        // trace:TASK-712 — abort on parse error rather than overwrite with [].
+        let entries = Self::read_queue_file(&path)?;
+        let mut removed: Vec<QueueEntry> = Vec::new();
+        let mut kept: Vec<QueueEntry> = Vec::new();
+        for entry in entries.into_iter() {
+            if dead.contains(&entry.requirement_id) {
+                removed.push(entry);
+            } else {
+                kept.push(entry);
+            }
+        }
+        if removed.is_empty() {
+            return Ok(Vec::new());
+        }
+        if kept.is_empty() {
+            std::fs::remove_file(&path)?;
+        } else {
+            let yaml = serde_yaml::to_string(&kept)?;
+            std::fs::write(&path, yaml)?;
+        }
+        self.auto_commit_paths(
+            "gc dead queue entries",
+            &[&format!("registry/queues/{}.yaml", user_id)],
+        );
+        Ok(removed)
+    }
 }
 
 /// Buffers a batch of new requirements for write-behind commit. Created via
@@ -1234,6 +1280,46 @@ mod tests {
         let ids: Vec<_> = entries.iter().map(|e| e.requirement_id).collect();
         assert!(ids.contains(&e1.requirement_id));
         assert!(ids.contains(&e2.requirement_id));
+    }
+
+    // TASK-1052: queue-GC's bulk-remove drops exactly the named ids in a single
+    // write and returns the removed entries; entries NOT named survive. (The
+    // dead/alive determination lives in the cache-fast CLI predicate; this is
+    // the dumb set-membership prune underneath it.) trace:TASK-1052 | ai:claude
+    #[test]
+    fn test_queue_remove_many_drops_named_keeps_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let keep1 = sample_queue_entry("carol", 1000);
+        let drop1 = sample_queue_entry("carol", 2000);
+        let keep2 = sample_queue_entry("carol", 3000);
+        let drop2 = sample_queue_entry("carol", 4000);
+        for e in [&keep1, &drop1, &keep2, &drop2] {
+            backend.queue_add(e.clone()).unwrap();
+        }
+
+        let removed = backend
+            .queue_remove_many("carol", &[drop1.requirement_id, drop2.requirement_id])
+            .unwrap();
+        assert_eq!(removed.len(), 2, "both named entries removed");
+        let removed_ids: std::collections::HashSet<_> =
+            removed.iter().map(|e| e.requirement_id).collect();
+        assert!(removed_ids.contains(&drop1.requirement_id));
+        assert!(removed_ids.contains(&drop2.requirement_id));
+
+        let survivors = backend.queue_list("carol", false).unwrap();
+        let survivor_ids: std::collections::HashSet<_> =
+            survivors.iter().map(|e| e.requirement_id).collect();
+        assert_eq!(survivors.len(), 2, "unnamed entries survive");
+        assert!(survivor_ids.contains(&keep1.requirement_id));
+        assert!(survivor_ids.contains(&keep2.requirement_id));
+
+        // An empty id list is a no-op (no spurious write / removal).
+        let none = backend.queue_remove_many("carol", &[]).unwrap();
+        assert!(none.is_empty());
+        assert_eq!(backend.queue_list("carol", false).unwrap().len(), 2);
     }
 
     // TASK-951: the queue is keyed off the shell user, stored as one

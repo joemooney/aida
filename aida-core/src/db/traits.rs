@@ -474,6 +474,19 @@ pub trait DatabaseBackend: Send + Sync {
         anyhow::bail!("Queue not supported for this backend")
     }
 
+    /// Bulk-remove every queue entry whose `requirement_id` is in `ids`, in a
+    /// single write + commit. Returns the entries that were removed (for
+    /// reporting). The caller decides which ids are dead — this is a dumb
+    /// set-membership removal so the (cache-fast) terminal/archived
+    /// determination stays out of the backend. Powers queue-GC (drop routed
+    /// entries whose target spec is archived/Completed/Rejected) without the
+    /// N-commits cost of looping `queue_remove`. Default no-op for backends
+    /// without a queue.
+    // trace:TASK-1052 | ai:claude
+    fn queue_remove_many(&self, _user_id: &str, _ids: &[Uuid]) -> Result<Vec<QueueEntry>> {
+        Ok(Vec::new())
+    }
+
     // =========================================================================
     // Utility Operations
     // =========================================================================
