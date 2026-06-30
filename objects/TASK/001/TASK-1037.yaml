@@ -3,12 +3,12 @@ spec_id: TASK-1037
 agreed_id: TASK-1037
 title: 'aida zen slice 2: suitability gate + scope-routing (refuse epic/keystone/blocked, warn under-specified/coupled, default-route-to-scope, --solo)'
 description: 'Implements ADR-6. Pre-flight suitability gate + scope-routing for aida zen. HARD-REFUSE: epic type (rollup, not a unit — BUG-626), keystone/supervised (reuse presence::is_keystone_class), blocked (BlockedBy to unshipped via the graph). WARN+proceed (--force): under-specified (aida lint), coupled (file-overlap with in-flight work). DEFAULT-ROUTE-TO-SCOPE per ADR-6: a scoped spec (parent epic / active focus) auto-routes into its scope worktree (aida worktree EPIC, create if absent) as an info line, NOT a question; --solo overrides to own-worktree+own-PR; --into-epic forces the cluster route; a coupling signal escalates the scope default soft to enforced. REUSE: the burndown ready-set partition (aida burndown plan computes the fan-out-able safe set — zen-suitable approx in-ready-set), presence::is_keystone_class, the BlockedBy graph, aida lint, the epic-worktree registry (aida worktree, STORY-716). GATED on slice 1 (the zen core) landing first.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:17:54.084875531Z
-modified_at: 2026-06-30T04:18:01.140765746Z
+modified_at: 2026-06-30T06:49:38.845019153Z
 req_type: Task
 tags:
 - integrator
