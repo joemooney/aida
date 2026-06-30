@@ -27001,5 +27001,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2581
+- id: 019f16c2-c459-7cd0-a28d-d009617d5be4
+  target_id: 019f16c2-b2ad-7a21-983d-d9eddb088c13
+  author: aida
+  node_id: '1'
+  lamport: 2582
+  timestamp: 2026-06-30T04:21:30.841197317Z
+  kind: !Create
+    title: '**Relationship to file:** BlockedBy/RelatesTo **BUG-650** (isolated worktree so single-'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2582
 node_id: '1'
