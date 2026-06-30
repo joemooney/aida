@@ -28452,5 +28452,17 @@ operations:
   timestamp: 2026-06-30T17:18:23.164770544Z
   kind: !SetStatus
     status: Completed
-clock: 2744
+- id: 019f1995-8544-73b0-bd81-b807d75f9115
+  target_id: 019f1995-7756-7cb0-8f54-c5f1097aad63
+  author: aida
+  node_id: '1'
+  lamport: 2745
+  timestamp: 2026-06-30T17:30:57.220281961Z
+  kind: !Create
+    title: 'guided-implement: work the spec directly (no Explore/Agent sub-agents) + a simple one-command finish'
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 2745
 node_id: '1'

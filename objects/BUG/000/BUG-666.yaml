@@ -1,0 +1,16 @@
+id: 019f1995-7756-7cb0-8f54-c5f1097aad63
+spec_id: BUG-666
+agreed_id: BUG-666
+title: 'guided-implement: work the spec directly (no Explore/Agent sub-agents) + a simple one-command finish'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-30T17:30:53.654530145Z
+modified_at: 2026-06-30T17:30:53.654530145Z
+req_type: Bug
+tags:
+- from-operator
+- guided-implement
+- ux
