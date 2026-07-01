@@ -29159,5 +29159,17 @@ operations:
   timestamp: 2026-07-01T01:31:10.146106384Z
   kind: !SetStatus
     status: Completed
-clock: 2810
+- id: 019f1b4d-47c1-7ca3-b312-012ea41c90ec
+  target_id: 019f1b4d-3aab-7d21-bb76-eb737d0180fb
+  author: aida
+  node_id: '1'
+  lamport: 2811
+  timestamp: 2026-07-01T01:31:17.313178348Z
+  kind: !Create
+    title: 'Recurring glyph-registry gaps: info/notice glyphs (ⓘ ℹ ⦿ 📨) used raw won''t honor AIDA_GLYPHS=ascii — add them to the registry or have glyph-lint flag new raw glyphs'
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2811
 node_id: '1'
