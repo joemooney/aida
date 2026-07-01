@@ -30,12 +30,12 @@ description: |-
   Slice-2 end-to-end mock binary (needs Slice 0); faithful vendor-interface mocking; the thin real-agent smoke suite that guards against vendor drift (separate follow-up).
 
   Primary caller: the auto_complete / burndown orchestrator loop under cargo test, in-process.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T06:11:26.418122433Z
-modified_at: 2026-07-01T06:11:26.418122433Z
+modified_at: 2026-07-01T08:54:06.527961987Z
 req_type: Story
 tags:
 - autonomy
