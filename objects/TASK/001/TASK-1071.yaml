@@ -2,13 +2,20 @@ id: 019f1b4d-3aab-7d21-bb76-eb737d0180fb
 spec_id: TASK-1071
 agreed_id: TASK-1071
 title: 'Recurring glyph-registry gaps: info/notice glyphs (ⓘ ℹ ⦿ 📨) used raw won''t honor AIDA_GLYPHS=ascii — add them to the registry or have glyph-lint flag new raw glyphs'
-description: ''
+description: |-
+  The info/notice glyphs (information, notice, bullet-notice, mailbox) are emitted raw in some code paths, so AIDA_GLYPHS=ascii does not downgrade them. Route them through the glyph registry and guard against future raw glyphs.
+
+  ## Acceptance
+  - THE info, notice, bullet-notice, and mailbox glyphs SHALL be added to the glyph registry with ascii fallbacks.
+  - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs, not the raw unicode.
+  - THE glyph-lint check SHALL flag any raw glyph not resolved through the registry.
+  - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these glyphs appear as raw unicode in the rendered output.
 status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T01:31:13.963087972Z
-modified_at: 2026-07-01T06:15:56.825763345Z
+modified_at: 2026-07-01T06:42:29.697120451Z
 req_type: Task
 tags:
 - ascii
