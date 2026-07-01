@@ -1,0 +1,16 @@
+id: 019f1b6d-a8de-7a53-8cd7-67b5b885b629
+spec_id: BUG-677
+agreed_id: BUG-677
+title: Lift the /proc liveness probe + lease classifiers from aida-cli into aida-core so aida tui computes liveness in-process (no aida ps shell-out) — durable follow-up to BUG-676
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T02:06:39.326929181Z
+modified_at: 2026-07-01T02:06:39.326929181Z
+req_type: Bug
+tags:
+- performance
+- tech-debt
+- tui
