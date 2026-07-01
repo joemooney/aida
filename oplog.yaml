@@ -30177,5 +30177,13 @@ operations:
       - THE queue prune help SHALL state which entry class each flag targets: orphaned removes entries whose target spec was deleted, merged removes shipped entries, gc removes entries whose target is archived or terminal.
       - WHEN an operator runs queue prune with no flag, THE output SHALL name the available pruning flags and what each removes.
       - A test SHALL assert the queue prune help text names the sibling pruning verbs.
-clock: 2881
+- id: 019f1c6d-49cd-7062-9871-69b1daa1d5bd
+  target_id: 019f1b4d-3aab-7d21-bb76-eb737d0180fb
+  author: aida
+  node_id: '1'
+  lamport: 2882
+  timestamp: 2026-07-01T06:45:52.205721785Z
+  kind: !SetTitle
+    title: Info/notice glyphs render raw and ignore AIDA_GLYPHS=ascii — register them and have glyph-lint flag raw glyphs
+clock: 2882
 node_id: '1'
