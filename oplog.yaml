@@ -30200,5 +30200,23 @@ operations:
       - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for a glyph in this set.
       - WHEN a raw glyph literal bypasses the glyph registry, THE glyph-lint check SHALL flag it.
       - A test SHALL assert that with AIDA_GLYPHS=ascii set, the rendered output contains the ascii fallback for a glyph in this set rather than its raw unicode form.
-clock: 2883
+- id: 019f1c6e-aa7d-73f1-bce9-40af67b38b80
+  target_id: 019f1c6e-85ff-7961-821f-de7796efa567
+  author: aida
+  node_id: '1'
+  lamport: 2884
+  timestamp: 2026-07-01T06:47:22.493310109Z
+  kind: !Create
+    title: EARS lint conflicting-constraint heuristic false-positives on each/none co-occurrence, holding well-specified specs from the zen gate
+    description: |-
+      The aida lint conflicting-constraint check flags a spec when the words "all"/"each" and "none" both appear across title+acceptance, reading them as contradictory even when they describe different clauses (e.g. "each glyph SHALL be registered" + "none appear as raw unicode"). Observed 2026-06-30 grooming TASK-1071: two lint-clean-intent rewrites were held until "none" was removed. Because the zen suitability gate (TASK-1037) runs this lint, a false-positive here blocks a legitimately-specified spec from a headless drive.
+
+      ## Acceptance
+      - WHEN acceptance clauses use "each"/"all" and "none" to describe DIFFERENT, non-overlapping constraints, THE conflicting-constraint check SHALL NOT flag them as contradictory.
+      - THE conflicting-constraint check SHALL only fire when the same subject is constrained to both all and none.
+      - A test SHALL assert that a spec with "each X SHALL be registered" plus "none of X appears raw" passes the lint.
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 2884
 node_id: '1'
