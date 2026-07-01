@@ -3,12 +3,12 @@ spec_id: TASK-1082
 agreed_id: TASK-1082
 title: 'did-you-mean: suggest nearest existing spec id when show/edit hits ''not found'''
 description: 'Surfaced by a wrong-usage error-path UX self-test (2026-07-01). When a user typos a spec id (e.g. TASK-11 instead of TASK-1, or a transposed prefix), aida show/edit/queue-work returns "Requirement not found: <id>" plus a generic "help: aida list" hint. Good, but a fuzzy did-you-mean against existing ids (Levenshtein/prefix match over the cache id set, threshold ~1-2 edits) would close the loop the way clhelp already does for subcommand typos ("some similar subcommands exist: list, lint"). On-brand quiet-depth polish; low priority. Scope: cache already holds all ids, so it is a cheap nearest-match over that set at the not-found branch. Verified NOT a false alarm: the "not found" path is a real branch, exit code is correctly 1. Everything else in the error-path audit was solid (invalid status/type/priority all enumerate valid values, exit codes correct) — this is the one gap.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T13:14:22.937034051Z
-modified_at: 2026-07-01T17:44:45.619363729Z
+modified_at: 2026-07-01T17:55:26.533292373Z
 req_type: Task
 tags:
 - aida:show
@@ -25,3 +25,21 @@ comments:
   content: Commit 29ad1a1c1 references this requirement
   created_at: 2026-07-01T17:44:45.619363729Z
   modified_at: 2026-07-01T17:44:45.619363729Z
+history:
+- id: 019f1ed2-4c63-7702-a8d3-b97e14bc4acd
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:55:26.435015054Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed2-4cc5-7340-90c6-e4091a86c254
+  timestamp: 2026-07-01T17:55:26.533286546Z
+  agent: aida
+  commit_sha: 112a8635410b35402fb23dc6aef7bce7ad04b033
+  summary: Completed via merge 112a8635
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:55:25.279550906Z
+  completion_sha: 112a8635410b35402fb23dc6aef7bce7ad04b033
