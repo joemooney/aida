@@ -1,0 +1,31 @@
+id: 019f1bdc-d7fe-7b93-9fc6-3468066cea13
+spec_id: TASK-1077
+agreed_id: TASK-1077
+title: 'Misplaced doc comment: print_focus_rollup prose now documents struct FocusTally (PR-1291)'
+description: |
+  During review of PR-1291 (BUG-678), the fix inserted `struct FocusTally` and
+  `fn tally_focus_statuses` between `print_focus_rollup`'s doc comment and the
+  function.
+
+  File:  aida-cli/src/main.rs:97472-97480 (doc block) vs :97482 (struct) / :97516 (fn)
+  Issue: the `/// Print a one-line status rollup of the focus spec's transitive
+         subtree (cache-fast: ...)` doc comment now attaches to `struct FocusTally`
+         (wrong subject), and `print_focus_rollup` is left with no doc comment.
+  Impact: cosmetic only — compiles clean (CI green on 8128d19d6), no behavior delta.
+  Fix:   move the "Print a one-line status rollup…" lines back down to immediately
+         above `fn print_focus_rollup`, and give `struct FocusTally` its own concise
+         doc (the "Bucketed status counts…" prose already there is fine for it).
+
+  Raised in review of PR-1291: https://github.com/joemooney/aida/pull/1291#issuecomment-4850161372
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:08:05.886172976Z
+modified_at: 2026-07-01T04:08:05.886172976Z
+req_type: Task
+tags:
+- aida:focus
+- from-review:PR-1291
+- kind:review-finding
+- severity:cosmetic
