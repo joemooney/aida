@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:06.508349535Z
-modified_at: 2026-07-01T06:48:31.351555190Z
+modified_at: 2026-07-01T06:48:57.254748672Z
 req_type: Story
 tags:
 - zen-ready
@@ -35,3 +35,9 @@ relationships:
   target_id: 019f19c1-15cc-7831-8279-ba9292828c05
   created_at: 2026-06-30T18:18:44.413544120Z
   created_by: joe
+comments:
+- id: 019f1c70-1ca6-71a1-9344-8359cf4631b1
+  author: joe
+  content: 'Removed stale needs-design tag (overnight groom): the description carries a BINDING operator decision (2026-06-30 — passive contextual hint chain, aida tour rejected) plus 6 acceptance criteria. The design is resolved; the tag would wrongly trip the needs-design gate (TASK-1078). Spec is drive-ready.'
+  created_at: 2026-07-01T06:48:57.254748672Z
+  modified_at: 2026-07-01T06:48:57.254748672Z
