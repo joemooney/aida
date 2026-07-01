@@ -55,7 +55,7 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-mail-notice.sh",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }
@@ -66,7 +66,7 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-mail-notice.sh",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }

@@ -29,8 +29,17 @@
 # to a clean no-op (empty stdout, exit 0) so a turn never fails because of this.
 # Runs under /bin/sh (dash) — no bashisms.
 #
+# A per-turn hook must be INCAPABLE of blocking a prompt. Two guards: (1) the verb
+# itself bails instantly on cache-lock contention (`--notice` uses a short cache
+# busy-budget, degrading to empty instead of waiting out the full retry ladder —
+# BUG-681); (2) belt-and-braces here, if a `timeout` binary is available we cap
+# the whole invocation so it can NEVER outlast Claude Code's hook timeout, even in
+# a pathological environment. Falls back to running bare (guard #1 already bounds
+# it) so the hook stays portable to hosts without coreutils `timeout`.
+#
 # trace:STORY-585 | ai:claude
 # trace:STORY-741 | ai:claude
+# trace:BUG-681 | ai:claude
 
 # Resolve the project root the same way the role-context hook does, so the verb
 # runs against the right store regardless of the hook's cwd.
@@ -42,5 +51,14 @@ project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-$PWD}}"
 cd "$project_root" 2>/dev/null || exit 0
 command -v aida >/dev/null 2>&1 || exit 0
 
-aida awaiting --notice 2>/dev/null || true
+# Cross-platform outer bound: prefer GNU `timeout`, then macOS/Homebrew
+# `gtimeout`; if neither exists, run bare (the verb's internal fast-fail already
+# guarantees it returns promptly). 4s stays inside the hook's own timeout.
+if command -v timeout >/dev/null 2>&1; then
+    timeout 4 aida awaiting --notice 2>/dev/null || true
+elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout 4 aida awaiting --notice 2>/dev/null || true
+else
+    aida awaiting --notice 2>/dev/null || true
+fi
 exit 0
