@@ -2576,6 +2576,14 @@ impl<'a> McpServer<'a> {
             .map(|s| s.to_string())
             .or_else(|| Some("mcp".to_string()));
 
+        // TASK-349: mirror the CLI `aida punt` nudge — a blocked-dependency
+        // punt that named a blocker spec should suggest recording the
+        // blocked-by graph edge, so the MCP and CLI surfaces don't drift.
+        // Computed before `lean` is moved into the record below. trace:TASK-349
+        let blocked_by_hint =
+            crate::punt::suggest_blocked_by(spec, category, detail, lean.as_deref())
+                .map(|s| s.suggested_command());
+
         let record = PuntRecord {
             timestamp: Utc::now(),
             spec: spec.to_string(),
@@ -2623,7 +2631,7 @@ impl<'a> McpServer<'a> {
             self.storage.save(&store).map_err(|e| e.to_string())?;
         }
 
-        Ok(if flipped {
+        let mut out = if flipped {
             format!("Punt recorded for {spec} [{category}]; spec flipped to NeedsAttention.")
         } else {
             format!(
@@ -2631,7 +2639,14 @@ impl<'a> McpServer<'a> {
                  (only an In Progress spec auto-flips to NeedsAttention); flip \
                  manually with `aida edit {spec} --status needs-attention` if needed."
             )
-        })
+        };
+        // trace:TASK-349 | ai:claude
+        if let Some(cmd) = blocked_by_hint {
+            out.push_str(&format!(
+                "\nBlocked-dependency punt — record the graph edge: `{cmd}`"
+            ));
+        }
+        Ok(out)
     }
 
     fn tool_resolve_punt(&self, args: &Value) -> Result<String, String> {
