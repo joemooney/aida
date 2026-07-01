@@ -30310,5 +30310,13 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2895
+- id: 019f1d76-b014-7021-ad11-48fdec117832
+  target_id: 019f1d61-e10d-7b22-8dc9-ea6533a8dc0f
+  author: aida
+  node_id: '1'
+  lamport: 2896
+  timestamp: 2026-07-01T11:35:45.428310290Z
+  kind: !SetTitle
+    title: Windows pid_is_alive(0) reads true (System Idle Process) — missing pid==0 guard in non-unix impl
+clock: 2896
 node_id: '1'
