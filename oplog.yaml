@@ -30162,5 +30162,20 @@ operations:
       - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs.
       - WHEN a raw glyph literal is not resolved through the glyph registry, THE glyph-lint check SHALL flag it.
       - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these four glyphs appear as raw unicode in the rendered output.
-clock: 2880
+- id: 019f1c6c-704f-7112-bbbf-a9f6ba4e6a45
+  target_id: 019f19b9-202b-76e3-a355-4536bfc2b8c1
+  author: aida
+  node_id: '1'
+  lamport: 2881
+  timestamp: 2026-07-01T06:44:56.527877686Z
+  kind: !SetDescription
+    description: |-
+      From-audit finding: removing dead queue entries is split across queue prune --orphaned, queue prune --merged, and queue gc, and it is not obvious which verb removes which class. Sharpen the surface so the right verb is discoverable (the lower-risk half of the title fork; a new --terminal umbrella verb is out of scope here).
+
+      ## Acceptance
+      - THE help text for queue prune --orphaned, queue prune --merged, and queue gc SHALL each cross-reference the sibling verbs.
+      - THE queue prune help SHALL state which entry class each flag targets: orphaned removes entries whose target spec was deleted, merged removes shipped entries, gc removes entries whose target is archived or terminal.
+      - WHEN an operator runs queue prune with no flag, THE output SHALL name the available pruning flags and what each removes.
+      - A test SHALL assert the queue prune help text names the sibling pruning verbs.
+clock: 2881
 node_id: '1'

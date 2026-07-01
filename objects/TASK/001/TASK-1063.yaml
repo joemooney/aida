@@ -2,13 +2,20 @@ id: 019f19b9-202b-76e3-a355-4536bfc2b8c1
 spec_id: TASK-1063
 agreed_id: TASK-1063
 title: Dead-queue pruning split across queue prune --orphaned/--merged + queue gc — fold into queue prune --terminal or sharpen the cross-references so the right verb is obvious
-description: ''
+description: |-
+  From-audit finding: removing dead queue entries is split across queue prune --orphaned, queue prune --merged, and queue gc, and it is not obvious which verb removes which class. Sharpen the surface so the right verb is discoverable (the lower-risk half of the title fork; a new --terminal umbrella verb is out of scope here).
+
+  ## Acceptance
+  - THE help text for queue prune --orphaned, queue prune --merged, and queue gc SHALL each cross-reference the sibling verbs.
+  - THE queue prune help SHALL state which entry class each flag targets: orphaned removes entries whose target spec was deleted, merged removes shipped entries, gc removes entries whose target is archived or terminal.
+  - WHEN an operator runs queue prune with no flag, THE output SHALL name the available pruning flags and what each removes.
+  - A test SHALL assert the queue prune help text names the sibling pruning verbs.
 status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T18:09:50.635260665Z
-modified_at: 2026-07-01T06:36:42.582471027Z
+modified_at: 2026-07-01T06:44:55.946494319Z
 req_type: Task
 tags:
 - from-audit
