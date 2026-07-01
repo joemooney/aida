@@ -18,12 +18,12 @@ description: |-
   ## Out of scope
   - The planned ## Test Plan section rendering (STORY-699, already shipped).
   - A separate test_plan model field (rejected: duplicate source of truth).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T21:46:01.178361830Z
-modified_at: 2026-07-01T16:27:58.435833234Z
+modified_at: 2026-07-01T16:28:01.286017255Z
 req_type: Story
 tags:
 - human-verification
@@ -37,10 +37,3 @@ relationships:
   target_id: 019f05f9-f9a6-7f00-a04b-a54a885ebc6b
   created_at: 2026-06-26T22:08:46.390683218Z
   created_by: joe
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: no-pr
-  detail: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting
-  recovery_hint: 'The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work STORY-698 --resume 019f1e73867c`'
-  shelved_at: 2026-07-01T16:16:38.719239214Z
