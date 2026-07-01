@@ -3,12 +3,12 @@ spec_id: TASK-1070
 agreed_id: TASK-1070
 title: 'What''s-new distillation: a human-friendly guide to the capabilities the self-improvement loop shipped, organized by user benefit'
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T23:46:34.924019785Z
-modified_at: 2026-06-30T23:56:44.491980924Z
+modified_at: 2026-07-01T00:06:50.343836569Z
 req_type: Task
 tags:
 - distillation
