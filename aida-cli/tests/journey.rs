@@ -92,8 +92,12 @@ fn parse_spec_id(out: &str) -> String {
 /// hooks / roles / agent-config are all skipped to keep init fast.
 fn init_repo() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
     let base = tempfile::tempdir().expect("tempdir");
-    let repo = base.path().join("repo");
-    let home = base.path().join("home");
+    // BUG-671: on macOS the tempdir resolves under /var/folders/… which is a
+    // symlink to /private/var/folders/…; canonicalize once so every path the
+    // test passes matches the path `aida` records internally, on every OS.
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::create_dir_all(&home).unwrap();
 
@@ -115,7 +119,9 @@ fn init_repo() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
         .expect("run aida init");
     assert!(
         init.status.success(),
-        "aida init failed: {}",
+        "aida init failed (exit {:?}):\n--- stdout ---\n{}\n--- stderr ---\n{}",
+        init.status.code(),
+        String::from_utf8_lossy(&init.stdout),
         String::from_utf8_lossy(&init.stderr)
     );
     (base, repo, home)

@@ -38,8 +38,12 @@ fn git(repo: &Path, args: &[&str]) {
 #[test]
 fn single_spec_dry_run_previews_plan_with_no_side_effects() {
     let base = tempfile::tempdir().expect("tempdir");
-    let repo = base.path().join("repo");
-    let home = base.path().join("home");
+    // BUG-671: on macOS the tempdir resolves under /var/folders/… which is a
+    // symlink to /private/var/folders/…; canonicalize once so every path the
+    // test passes matches the path `aida` records internally, on every OS.
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::create_dir_all(&home).unwrap();
 
@@ -62,7 +66,9 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
         .expect("run aida init");
     assert!(
         init.status.success(),
-        "aida init failed: {}",
+        "aida init failed (exit {:?}):\n--- stdout ---\n{}\n--- stderr ---\n{}",
+        init.status.code(),
+        String::from_utf8_lossy(&init.stdout),
         String::from_utf8_lossy(&init.stderr)
     );
 
@@ -95,7 +101,7 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
 
     // Capture the pre-state so we can prove the dry run mutated nothing.
     let sessions_before = list_session_files(&repo);
-    let siblings_before = sibling_worktrees(base.path());
+    let siblings_before = sibling_worktrees(&base_dir);
 
     // The dry run.
     let dry = aida(&repo, &home)
@@ -123,7 +129,7 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
 
     // 1. No worktree directory was created (a real pickup would mint a
     //    `<repo>-<slug>` sibling of the project root).
-    let siblings_after = sibling_worktrees(base.path());
+    let siblings_after = sibling_worktrees(&base_dir);
     assert_eq!(
         siblings_before, siblings_after,
         "dry-run created a worktree sibling: before={siblings_before:?} after={siblings_after:?}"

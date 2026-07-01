@@ -253,6 +253,15 @@ pub fn walk_ancestor_pids(start: u32) -> Vec<u32> {
 /// can't be read — corroboration fails safe (treat as not-orchestrated).
 /// trace:BUG-233 | ai:claude
 pub fn pid_is_alive(pid: u32) -> bool {
+    // pid 0 is never a probeable user process, and it means different dangerous
+    // things per platform: on Unix `kill(0, …)` addresses the caller's WHOLE
+    // process group; on Windows pid 0 is the System Idle Process, which sysinfo
+    // reports as existing. Reject it up front so liveness reads `false` on every
+    // platform (the Windows fallback below has no other way to exclude it).
+    // trace:BUG-613 | ai:claude
+    if pid == 0 {
+        return false;
+    }
     pid_is_alive_impl(pid)
 }
 
@@ -270,14 +279,11 @@ pub fn pid_is_alive(pid: u32) -> bool {
 /// check. `0` → alive and signalable; `EPERM` → the pid exists but is owned by
 /// another user (still alive); `ESRCH` → no such process. Any other errno is
 /// treated as not-alive (fail-safe, matching the prior platform-degrade
-/// contract). `pid == 0` is rejected up front — `kill(0, …)` addresses the
-/// caller's whole process group on Unix, which is never the intent here.
+/// contract). `pid == 0` is rejected by the `pid_is_alive` wrapper before it
+/// reaches here, so `kill` never addresses the caller's whole process group.
 /// trace:BUG-613 | ai:claude
 #[cfg(unix)]
 fn pid_is_alive_impl(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
     // SAFETY: `kill` with signal 0 only probes; it never delivers a signal.
     let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
     if rc == 0 {
