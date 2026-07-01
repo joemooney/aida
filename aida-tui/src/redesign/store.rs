@@ -202,6 +202,51 @@ impl SpecStore {
         Some(SpecStore { backend })
     }
 
+    /// Project every spec into the [`aida_core::liveness::SpecLivenessInput`]
+    /// the in-process liveness pass needs: the display id, the two id forms a
+    /// lease scope can match, whether it is In-Progress (an orphan-pass
+    /// candidate), and whether it is a rollup/stateless type (epic / folder /
+    /// meta) that never holds a spec-scoped lease. Uses `Both` archive + defer
+    /// filters so the scan matches `aida ps`'s full-store sweep (which ignores
+    /// the view flags). Cache-fast (`list_summaries`, no YAML parse). Empty on a
+    /// read error — the cockpit then shows every row Idle rather than crashing.
+    // trace:BUG-677 | ai:claude
+    pub fn liveness_inputs(&self) -> Vec<aida_core::liveness::SpecLivenessInput> {
+        let filter = ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            ..Default::default()
+        };
+        let Ok(summaries) = self.backend.list_summaries(&filter) else {
+            return Vec::new();
+        };
+        summaries
+            .into_iter()
+            .map(|s| {
+                let disp = s
+                    .agreed_id
+                    .clone()
+                    .or_else(|| s.spec_id.clone())
+                    .unwrap_or_else(|| s.id.to_string());
+                let in_progress = aida_core::RequirementStatus::from_filter_str(&s.status)
+                    == Some(aida_core::RequirementStatus::InProgress);
+                // Rollup / stateless types never hold a spec-scoped lease, so
+                // `aida ps` excludes them from the orphan pass. Match the string
+                // form (`ps_orphan_excluded_type_str` in aida-cli). trace:TASK-940
+                let orphan_excluded = s.req_type.eq_ignore_ascii_case("Epic")
+                    || s.req_type.eq_ignore_ascii_case("Folder")
+                    || s.req_type.eq_ignore_ascii_case("Meta");
+                aida_core::liveness::SpecLivenessInput {
+                    disp,
+                    agreed_id: s.agreed_id,
+                    spec_id: s.spec_id,
+                    in_progress,
+                    orphan_excluded,
+                }
+            })
+            .collect()
+    }
+
     /// The target set for a functional scope, read from the cache in-process.
     ///
     /// * [`Scope::Backlog`] → the approved + planned slice.
