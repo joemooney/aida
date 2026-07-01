@@ -10,12 +10,12 @@ description: |-
   - WHEN the gate holds a spec for needs-design, THE hold reason SHALL name the needs-design tag and SHALL direct the operator to resolve the design (supervised drive or design pass) before driving.
   - THE needs-design hold SHALL be overridable by the same --force path that overrides other soft holds.
   - A test SHALL assert a lint-clean spec tagged needs-design is held by the gate.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:50:34.253271938Z
-modified_at: 2026-07-01T06:36:50.519610167Z
+modified_at: 2026-07-01T07:28:03.128371036Z
 req_type: Task
 tags:
 - aida:zen
