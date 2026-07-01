@@ -31674,6 +31674,11 @@ fn handle_doc_command(
             println!("Capture each with: aida doc add --title \"…\" --about <ID>");
             println!("(warn-only — this gate does not block the release)");
         }
+
+        // Diff-driven doc nudge at PR-open. Warn-only. trace:TASK-939 | ai:claude
+        DocCommand::Suggest { range, json } => {
+            return handle_doc_suggest(range.as_deref(), *json);
+        }
     }
 
     Ok(())
@@ -70255,6 +70260,148 @@ mod statusline_tests {
             std::collections::HashMap::new(),
             std::collections::HashMap::new(),
         )
+    }
+
+    // ---- TASK-939: `aida doc suggest` public-surface detector ----
+
+    #[test]
+    fn surface_detects_new_clap_long_flag() {
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "        #[clap(long)]"),
+            Some(PublicSurfaceKind::CliFlag)
+        );
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[arg(long = \"range\")]"),
+            Some(PublicSurfaceKind::CliFlag)
+        );
+        assert_eq!(
+            classify_surface_line(
+                "aida-cli/src/cli.rs",
+                "    #[clap(long, value_delimiter = ',')]"
+            ),
+            Some(PublicSurfaceKind::CliFlag)
+        );
+    }
+
+    #[test]
+    fn surface_ignores_long_help_and_non_flag_attrs() {
+        // `long_help` is a word-boundary miss — not a new flag.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(long_help = \"x\")]"),
+            None
+        );
+        // A plain short attr with no `long`.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(short = 'x')]"),
+            None
+        );
+        // `#[clap(subcommand)]` marks a field, not a new flag/subcommand.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(subcommand)]"),
+            None
+        );
+        // Ordinary code is never surface.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/main.rs", "    let x = long_variable + 1;"),
+            None
+        );
+    }
+
+    #[test]
+    fn surface_detects_named_subcommand() {
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[command(name = \"suggest\")]"),
+            Some(PublicSurfaceKind::CliSubcommand)
+        );
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(name = \"foo\")]"),
+            Some(PublicSurfaceKind::CliSubcommand)
+        );
+    }
+
+    #[test]
+    fn surface_detects_mcp_tool_only_in_mcp_file() {
+        // A snake_case tool name in mcp.rs is a new MCP tool.
+        assert_eq!(
+            classify_surface_line(
+                "aida-cli/src/mcp.rs",
+                "            \"name\": \"doc_suggest\","
+            ),
+            Some(PublicSurfaceKind::McpTool)
+        );
+        // Title-case resource titles are NOT tools.
+        assert_eq!(
+            classify_surface_line(
+                "aida-cli/src/mcp.rs",
+                "        \"name\": \"Project Summary\","
+            ),
+            None
+        );
+        // The server-name line is excluded.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/mcp.rs", "            \"name\": \"aida\","),
+            None
+        );
+        // The same shape in a non-mcp file is not a tool.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/other.rs", "    \"name\": \"doc_suggest\","),
+            None
+        );
+    }
+
+    #[test]
+    fn detect_new_public_surface_over_hunks() {
+        let hunks = vec![
+            ParsedHunk {
+                file: "aida-cli/src/cli.rs".to_string(),
+                new_start: 2320,
+                added: vec![
+                    "    /// A doc comment (not surface)".to_string(),
+                    "    #[clap(long)]".to_string(),
+                    "    range: Option<String>,".to_string(),
+                ],
+                removed: vec![],
+            },
+            ParsedHunk {
+                file: "aida-cli/src/mcp.rs".to_string(),
+                new_start: 6100,
+                added: vec!["            \"name\": \"doc_suggest\",".to_string()],
+                removed: vec![],
+            },
+        ];
+        let hits = detect_new_public_surface(&hunks);
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].kind, PublicSurfaceKind::CliFlag);
+        assert_eq!(hits[0].new_start, 2320);
+        assert_eq!(hits[1].kind, PublicSurfaceKind::McpTool);
+        assert_eq!(hits[1].file, "aida-cli/src/mcp.rs");
+    }
+
+    #[test]
+    fn detect_new_public_surface_empty_for_plain_code() {
+        let hunks = vec![ParsedHunk {
+            file: "aida-cli/src/main.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "    let total = a + b;".to_string(),
+                "    println!(\"{}\", total);".to_string(),
+            ],
+            removed: vec![],
+        }];
+        assert!(detect_new_public_surface(&hunks).is_empty());
+    }
+
+    #[test]
+    fn mcp_tool_name_parses_snake_case_only() {
+        assert_eq!(
+            mcp_tool_name_in_line("\"name\": \"list_requirements\","),
+            Some("list_requirements")
+        );
+        assert_eq!(
+            mcp_tool_name_in_line("\"name\": \"Queue — in-flight\","),
+            None
+        );
+        assert_eq!(mcp_tool_name_in_line("let name = 3;"), None);
     }
 
     #[test]
@@ -121804,6 +121951,369 @@ fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result
     if block && !uncovered.is_empty() {
         std::process::exit(1);
     }
+    Ok(())
+}
+
+// ============================================================================
+// TASK-939: diff-driven doc nudge at PR-open — `aida doc suggest`.
+//
+// `aida doc coverage` is the release-time backstop (every Completed spec should
+// have a Doc). This is the front-of-the-pipeline nudge: at PR-open, when the
+// branch ADDS new public surface (a CLI flag, a named CLI subcommand, or an MCP
+// tool) and the spec that surface traces to has no Doc entry about it, remind
+// the author to capture one while the "why" is fresh. Warn-only — `/aida-pr`
+// calls it and it never blocks the PR (exit 0 always).
+//
+// Reuses the STORY-499 diff machinery (`parse_unified_diff_hunks`,
+// `read_diff_for_range`, `resolve_gate_range`, `coverage_anchor_re`) and the
+// same `Doc References` documented-set logic as `find_uncovered_completed_specs`
+// (TASK-680). The detection core is pure and unit-tested. trace:TASK-939
+// ============================================================================
+
+/// A kind of newly-added public CLI/MCP surface detected in a diff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PublicSurfaceKind {
+    /// A new clap flag (an `#[arg(long…)]` / `#[clap(long…)]` attribute).
+    CliFlag,
+    /// A new named clap subcommand (an `#[command(name = …)]` attribute).
+    CliSubcommand,
+    /// A new MCP tool descriptor (`"name": "<snake_case>"` in `mcp.rs`).
+    McpTool,
+}
+
+impl PublicSurfaceKind {
+    fn label(self) -> &'static str {
+        match self {
+            PublicSurfaceKind::CliFlag => "CLI flag",
+            PublicSurfaceKind::CliSubcommand => "CLI subcommand",
+            PublicSurfaceKind::McpTool => "MCP tool",
+        }
+    }
+}
+
+/// One added line the classifier flagged as new public surface.
+// trace:TASK-939 | ai:claude
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+struct SurfaceHit {
+    file: String,
+    /// 1-based start line of the containing hunk in the post-change file.
+    new_start: usize,
+    kind: PublicSurfaceKind,
+    /// The trimmed added line that matched (for the human report).
+    snippet: String,
+}
+
+/// True when `word` occurs in `hay` bounded by non-identifier chars on both
+/// sides (so `long` matches in `#[clap(long)]` but NOT inside `long_help`).
+// trace:TASK-939 | ai:claude
+fn contains_ident_word(hay: &str, word: &str) -> bool {
+    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let bytes = hay.as_bytes();
+    let mut from = 0;
+    while let Some(pos) = hay[from..].find(word) {
+        let start = from + pos;
+        let end = start + word.len();
+        let before_ok = start == 0 || !is_ident(bytes[start - 1]);
+        let after_ok = end >= bytes.len() || !is_ident(bytes[end]);
+        if before_ok && after_ok {
+            return true;
+        }
+        from = start + 1;
+    }
+    false
+}
+
+/// An added line that declares a new clap long flag: an `#[arg(…)]` /
+/// `#[clap(…)]` attribute carrying a word-boundaried `long`. Excludes
+/// `long_help` / `long_about` (not a flag) and `#[clap(subcommand)]` (no
+/// `long`). PURE.
+// trace:TASK-939 | ai:claude
+fn is_clap_long_flag(line: &str) -> bool {
+    let t = line.trim_start();
+    if !t.starts_with("#[") {
+        return false;
+    }
+    if !(t.contains("clap(") || t.contains("arg(")) {
+        return false;
+    }
+    contains_ident_word(t, "long")
+}
+
+/// An added line that declares a *named* clap subcommand: an `#[command(…)]` /
+/// `#[clap(…)]` attribute carrying `name = "…"`. (Unit-variant subcommands
+/// that derive their name from the variant carry no attribute and are not
+/// detected here — flags added alongside them usually are.) PURE.
+// trace:TASK-939 | ai:claude
+fn is_clap_named_subcommand(line: &str) -> bool {
+    let t = line.trim_start();
+    if !t.starts_with("#[") {
+        return false;
+    }
+    if !(t.contains("clap(") || t.contains("command(")) {
+        return false;
+    }
+    contains_ident_word(t, "name") && t.contains('=')
+}
+
+/// Extract the tool name from an MCP tool descriptor line — `"name": "<value>"`
+/// where `<value>` is a snake_case identifier. Returns `None` for Title-case
+/// resource titles (`"Project Summary"`) or non-descriptor lines. PURE.
+// trace:TASK-939 | ai:claude
+fn mcp_tool_name_in_line(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("\"name\"")?;
+    let rest = rest.trim_start().strip_prefix(':')?;
+    let rest = rest.trim_start().strip_prefix('"')?;
+    let end = rest.find('"')?;
+    let val = &rest[..end];
+    let ident = !val.is_empty()
+        && val.starts_with(|c: char| c.is_ascii_lowercase())
+        && val
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+    ident.then_some(val)
+}
+
+/// Classify a single ADDED diff line as new public surface, or `None`. PURE —
+/// the `file` path only selects the MCP-tool probe (limited to `mcp.rs`).
+// trace:TASK-939 | ai:claude
+fn classify_surface_line(file: &str, line: &str) -> Option<PublicSurfaceKind> {
+    // MCP tool descriptor — only in the MCP surface file. The server-name line
+    // (`"name": "aida"`) is excluded so it never reads as a new tool.
+    if file.ends_with("mcp.rs") {
+        if let Some(name) = mcp_tool_name_in_line(line) {
+            if name != "aida" {
+                return Some(PublicSurfaceKind::McpTool);
+            }
+        }
+    }
+    if is_clap_named_subcommand(line) {
+        return Some(PublicSurfaceKind::CliSubcommand);
+    }
+    if is_clap_long_flag(line) {
+        return Some(PublicSurfaceKind::CliFlag);
+    }
+    None
+}
+
+/// Scan parsed diff hunks for newly-added public surface. PURE — the testable
+/// core of `aida doc suggest`.
+// trace:TASK-939 | ai:claude
+fn detect_new_public_surface(hunks: &[ParsedHunk]) -> Vec<SurfaceHit> {
+    let mut hits = Vec::new();
+    for h in hunks {
+        for line in &h.added {
+            if let Some(kind) = classify_surface_line(&h.file, line) {
+                hits.push(SurfaceHit {
+                    file: h.file.clone(),
+                    new_start: h.new_start,
+                    kind,
+                    snippet: line.trim().to_string(),
+                });
+            }
+        }
+    }
+    hits
+}
+
+/// Collect the spec ids this PR references — commit-trailer ids across `range`
+/// (plan commits skipped) plus inline `trace:` anchors in the added lines.
+/// These are the ids a Doc entry would be `--about`.
+// trace:TASK-939 | ai:claude
+fn specs_referenced_in_range(
+    project_root: &std::path::Path,
+    range: &str,
+    hunks: &[ParsedHunk],
+) -> Vec<String> {
+    use std::process::Command as PCmd;
+    let mut ids: Vec<String> = Vec::new();
+
+    if let Ok(out) = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--no-merges", "--pretty=format:%s", range])
+        .output()
+    {
+        if out.status.success() {
+            for subject in String::from_utf8_lossy(&out.stdout).lines() {
+                if is_plan_commit_subject(subject) {
+                    continue;
+                }
+                ids.extend(extract_spec_ids_from_commit(subject));
+            }
+        }
+    }
+
+    let re = coverage_anchor_re();
+    for h in hunks {
+        for line in &h.added {
+            for cap in re.captures_iter(line) {
+                ids.push(cap[1].to_string());
+            }
+        }
+    }
+
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// CLI handler for `aida doc suggest`. Reads the branch diff, detects new public
+/// surface, resolves the referenced specs against the live graph, and nudges
+/// `aida doc add --about <ID>` for any that carry no Doc entry. Warn-only —
+/// always exits 0.
+// trace:TASK-939 | ai:claude
+fn handle_doc_suggest(range: Option<&str>, json: bool) -> Result<()> {
+    use aida_core::models::{RelationshipType, RequirementStatus, RequirementType};
+
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let range = resolve_gate_range(&project_root, range);
+
+    let diff = read_diff_for_range(&project_root, &range)?;
+    let hunks = parse_unified_diff_hunks(&diff);
+    let surface = detect_new_public_surface(&hunks);
+    let referenced = specs_referenced_in_range(&project_root, &range, &hunks);
+
+    // The live requirement graph — for the documented-set check.
+    let store = load_store_for_lookup(&project_root);
+
+    // Set of spec uuids referenced by at least one Doc.
+    let mut documented: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+    if let Some(s) = store.as_ref() {
+        for doc in s
+            .requirements
+            .iter()
+            .filter(|r| r.req_type == RequirementType::Doc)
+        {
+            for rel in &doc.relationships {
+                if rel.rel_type == RelationshipType::References {
+                    documented.insert(rel.target_id);
+                }
+            }
+        }
+    }
+
+    // Partition the referenced specs into gaps (undocumented, live, non-Doc)
+    // and already-documented.
+    let mut gaps: Vec<(String, String)> = Vec::new();
+    let mut documented_ids: Vec<String> = Vec::new();
+    if let Some(s) = store.as_ref() {
+        for cid in &referenced {
+            let want = cid.to_ascii_uppercase();
+            let found = s.requirements.iter().find(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|x| x.eq_ignore_ascii_case(&want))
+                    || r.agreed_id
+                        .as_deref()
+                        .is_some_and(|x| x.eq_ignore_ascii_case(&want))
+            });
+            match found {
+                // A Doc, a rejected spec, or an unresolvable id is not a target.
+                Some(r) if r.req_type == RequirementType::Doc => {}
+                Some(r) if matches!(r.status, RequirementStatus::Rejected) => {}
+                Some(r) if r.archived => {}
+                Some(r) => {
+                    if documented.contains(&r.id) {
+                        documented_ids.push(r.display_id());
+                    } else {
+                        gaps.push((r.display_id(), r.title.clone()));
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+
+    let has_surface = !surface.is_empty();
+    // "ok" = nothing to nudge: either no new surface, or every referenced spec
+    // already carries a doc.
+    let ok = !has_surface || gaps.is_empty();
+
+    if json {
+        let surface_rows: Vec<serde_json::Value> = surface
+            .iter()
+            .map(|h| {
+                serde_json::json!({
+                    "file": h.file,
+                    "line": h.new_start,
+                    "kind": h.kind,
+                    "snippet": h.snippet,
+                })
+            })
+            .collect();
+        let gap_rows: Vec<serde_json::Value> = gaps
+            .iter()
+            .map(|(id, title)| serde_json::json!({ "id": id, "title": title }))
+            .collect();
+        let payload = serde_json::json!({
+            "range": range,
+            "surface_count": surface.len(),
+            "surface": surface_rows,
+            "referenced_specs": referenced,
+            "documented_specs": documented_ids,
+            "gaps": gap_rows,
+            "ok": ok,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    if !has_surface {
+        println!(
+            "{} No new CLI/MCP surface added in `{}` — nothing to capture.",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            range
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} New public surface added in `{}`:",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        range
+    );
+    for h in &surface {
+        println!(
+            "  {} · {}:{} · {}",
+            h.kind.label().cyan(),
+            h.file,
+            h.new_start,
+            h.snippet
+        );
+    }
+    println!();
+
+    if !gaps.is_empty() {
+        println!(
+            "{} Referenced spec(s) with no doc entry:",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        for (id, title) in &gaps {
+            println!("  {} · {}", id.cyan(), title);
+        }
+        println!();
+        println!("Capture the \"why\" while it's fresh:");
+        for (id, _) in &gaps {
+            println!("  aida doc add --title \"…\" --about {}", id);
+        }
+        println!("(warn-only — this nudge does not block the PR)");
+    } else if !documented_ids.is_empty() {
+        println!(
+            "{} Referenced spec(s) already have doc entries — nothing to capture.",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+    } else {
+        println!(
+            "{} Couldn't resolve which spec this surface belongs to (no live commit trailer or \
+             `trace:` anchor). Capture docs with:",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        println!("  aida doc add --title \"…\" --about <SPEC-ID>");
+        println!("(warn-only — this nudge does not block the PR)");
+    }
+
     Ok(())
 }
 
