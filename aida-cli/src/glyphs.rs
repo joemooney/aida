@@ -98,6 +98,19 @@ pub(crate) enum Glyph {
     /// Paused / walked-away (⏸) — the "since you were away" morning-after banner
     /// marker on `aida status`.
     Pause,
+    // trace:TASK-1071 | ai:claude
+    /// Informational notice — the circled-i prefix on hints, notes and
+    /// skipped-state messages (ⓘ). The most common info marker in the CLI.
+    Info,
+    /// Informational notice, plain variant (ℹ) — the source-information glyph
+    /// used for reclaim/dry-run/no-op notices. Alias-distinct from [`Glyph::Info`]
+    /// so a caller can keep the lighter mark where it already reads that way.
+    InfoAlt,
+    /// "Awaiting you" attention marker (⦿) — the `aida awaiting` roll-up prefix.
+    Awaiting,
+    /// Incoming mail / unread-message marker (📨) — the per-turn unread-mail
+    /// notice. Distinct from [`Glyph::Mailbox`] (✉, the generic mailbox).
+    IncomingMail,
 }
 
 impl Glyph {
@@ -127,6 +140,10 @@ impl Glyph {
             Glyph::FlowBlocked => "⊘",
             Glyph::FlowQueued => "↑",
             Glyph::Pause => "⏸",
+            Glyph::Info => "ⓘ",
+            Glyph::InfoAlt => "ℹ",
+            Glyph::Awaiting => "⦿",
+            Glyph::IncomingMail => "📨",
         }
     }
 
@@ -156,6 +173,10 @@ impl Glyph {
             Glyph::FlowBlocked => "x",
             Glyph::FlowQueued => "^",
             Glyph::Pause => "[paused]",
+            Glyph::Info => "(i)",
+            Glyph::InfoAlt => "i",
+            Glyph::Awaiting => "(*)",
+            Glyph::IncomingMail => "[@]",
         }
     }
 
@@ -195,6 +216,10 @@ impl Glyph {
             Glyph::FlowBlocked => "flow_blocked",
             Glyph::FlowQueued => "flow_queued",
             Glyph::Pause => "pause",
+            Glyph::Info => "info",
+            Glyph::InfoAlt => "info_alt",
+            Glyph::Awaiting => "awaiting",
+            Glyph::IncomingMail => "incoming_mail",
         }
     }
 
@@ -214,7 +239,7 @@ impl Glyph {
 
     /// Every variant, for iteration (name parsing, exhaustive tests).
     /// trace:STORY-629
-    pub(crate) const ALL: [Glyph; 22] = [
+    pub(crate) const ALL: [Glyph; 26] = [
         Glyph::Check,
         Glyph::Cross,
         Glyph::Pending,
@@ -237,6 +262,10 @@ impl Glyph {
         Glyph::FlowBlocked,
         Glyph::FlowQueued,
         Glyph::Pause,
+        Glyph::Info,
+        Glyph::InfoAlt,
+        Glyph::Awaiting,
+        Glyph::IncomingMail,
     ];
 }
 
@@ -632,6 +661,26 @@ mod tests {
         assert_eq!(Glyph::FlowActive.ascii(), ">");
         assert_eq!(Glyph::FlowBlocked.ascii(), "x");
         assert_eq!(Glyph::FlowQueued.ascii(), "^");
+    }
+
+    /// TASK-1071: the info/notice entries must reproduce the historical raw
+    /// literals byte-for-byte under the default Unicode profile, and render a
+    /// clean ASCII fallback under the ascii profile.
+    #[test]
+    fn task1071_info_notice_entries_match_historical_literals() {
+        assert_eq!(Glyph::Info.unicode(), "ⓘ");
+        assert_eq!(Glyph::InfoAlt.unicode(), "ℹ");
+        assert_eq!(Glyph::Awaiting.unicode(), "⦿");
+        assert_eq!(Glyph::IncomingMail.unicode(), "📨");
+        assert_eq!(Glyph::Info.ascii(), "(i)");
+        assert_eq!(Glyph::InfoAlt.ascii(), "i");
+        assert_eq!(Glyph::Awaiting.ascii(), "(*)");
+        assert_eq!(Glyph::IncomingMail.ascii(), "[@]");
+        // Names round-trip through the config-key parser.
+        assert_eq!(Glyph::from_name("info"), Some(Glyph::Info));
+        assert_eq!(Glyph::from_name("info-alt"), Some(Glyph::InfoAlt));
+        assert_eq!(Glyph::from_name("awaiting"), Some(Glyph::Awaiting));
+        assert_eq!(Glyph::from_name("incoming_mail"), Some(Glyph::IncomingMail));
     }
 
     #[test]

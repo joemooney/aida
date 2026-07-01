@@ -199,7 +199,13 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
         ) {
             Ok(crate::coordination::LockAcquireOutcome::Acquired) => true,
             Ok(crate::coordination::LockAcquireOutcome::Reclaimed(reason)) => {
-                eprintln!("  ℹ reclaiming a stale cross-clone drain claim ({reason})");
+                eprintln!(
+                    "  {} reclaiming a stale cross-clone drain claim ({reason})",
+                    crate::glyphs::get(
+                        crate::glyphs::Glyph::InfoAlt,
+                        crate::find_project_root().ok().as_deref(),
+                    )
+                );
                 true
             }
             Ok(crate::coordination::LockAcquireOutcome::Unavailable(reason)) => {
@@ -258,8 +264,13 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
                 );
             } else if let Some(stale) = &existing {
                 eprintln!(
-                    "  ℹ reclaiming a stale drain lock (pid {}, started {} — not running)",
-                    stale.pid, stale.started_at_utc
+                    "  {} reclaiming a stale drain lock (pid {}, started {} — not running)",
+                    crate::glyphs::get(
+                        crate::glyphs::Glyph::InfoAlt,
+                        crate::find_project_root().ok().as_deref(),
+                    ),
+                    stale.pid,
+                    stale.started_at_utc
                 );
             }
 

@@ -1437,7 +1437,7 @@ fn emit_shipped_mismatch(dispatched: &str, shipped: &str, json: bool, elapsed: u
         eprintln!(
             "  {} phase 1 was dispatched for {} but the PR credits {} — \
              crediting {}, {} stays queued",
-            "ⓘ".cyan(),
+            glyph(crate::glyphs::Glyph::Info).cyan(),
             dispatched.bold(),
             shipped.bold(),
             shipped,
@@ -1479,7 +1479,7 @@ pub(crate) fn finish_noop(
         eprintln!();
         eprintln!(
             "{} {} is already {} — nothing to drive.",
-            "ⓘ".cyan().bold(),
+            glyph(crate::glyphs::Glyph::Info).cyan().bold(),
             spec.bold(),
             status,
         );
@@ -1849,7 +1849,7 @@ fn finish_inconclusive_shelved(
                 eprintln!(
                     "  {} could not shelve {} into Needs Attention: {} \
                      — the batch drain will treat it as a pause",
-                    "ⓘ".cyan(),
+                    glyph(crate::glyphs::Glyph::Info).cyan(),
                     spec,
                     e
                 );
@@ -2071,7 +2071,7 @@ fn finish_failure(
                 eprintln!(
                     "  {} could not shelve {} into Needs Attention: {} \
                      — the batch drain will treat the failure as un-shelvable",
-                    "ⓘ".cyan(),
+                    glyph(crate::glyphs::Glyph::Info).cyan(),
                     spec,
                     e
                 );
@@ -2178,7 +2178,7 @@ fn finish_reconciled(
         eprintln!(
             "{} phase {} ({}) ended without its usual artifact — reconciled against \
              reality: {}",
-            "ⓘ".cyan(),
+            glyph(crate::glyphs::Glyph::Info).cyan(),
             phase.index(),
             phase.label(),
             reason,

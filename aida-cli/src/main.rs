@@ -1486,7 +1486,7 @@ fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         eprintln!(
             "{} --asciinema requested but stdin/stdout is not a TTY; running without recording.",
-            "ⓘ".cyan()
+            crate::glyph(crate::glyphs::Glyph::Info).cyan()
         );
         return Ok(None);
     }
@@ -1494,7 +1494,7 @@ fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Result<Option<
     if !asciinema_available() {
         eprintln!(
             "{} --asciinema requested but `asciinema` is not installed or not on PATH; running without recording.",
-            "ⓘ".cyan()
+            crate::glyph(crate::glyphs::Glyph::Info).cyan()
         );
         return Ok(None);
     }
@@ -16257,7 +16257,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     archived_hidden_count,
                     deferred_hidden_count,
                 ) {
-                    println!("{} {}", "ℹ".cyan(), line.dimmed());
+                    println!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                        line.dimmed()
+                    );
                 }
             };
 
@@ -17155,7 +17159,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         Ok(Some(outcome)) => {
                             eprintln!(
                                 "{} Auto-claimed {} (threshold crossed: {} remaining → {})",
-                                "ℹ".cyan(),
+                                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                                 outcome.label,
                                 outcome.previous_remaining,
                                 outcome.new_remaining,
@@ -17358,7 +17362,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 if let Some(from) = &intake_downgraded_from {
                     eprintln!(
                         "{} filed as {} (requested {} needs advisor authority) — queued for advisor triage.",
-                        "ℹ".cyan(),
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                         "draft".yellow(),
                         from.to_string().to_lowercase().dimmed()
                     );
@@ -23708,7 +23712,7 @@ fn pull_store_before_id_allocation(
             // Offline / unreachable: file locally, reconverge later.
             eprintln!(
                 "{} origin unreachable — filing offline; the new id syncs on the next online `aida add` or `aida db sync --push`.",
-                "ℹ".cyan()
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
             );
             return ensure_no_spec_id_collisions(store_path);
         }
@@ -23796,7 +23800,7 @@ fn push_store_after_id_allocation(
                 eprintln!(
                     "{} {} filed locally but not yet published (origin unreachable). \
                      It syncs on the next online `aida add` or `aida db sync --push`.",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     spec_id
                 );
                 return Ok(());
@@ -26275,7 +26279,7 @@ fn add_requirement_cli(
     if let Some(from) = intake_downgraded_from {
         eprintln!(
             "{} filed as {} (requested {} needs advisor authority) — queued for advisor triage.",
-            "ℹ".cyan(),
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
             "draft".yellow(),
             from.to_string().to_lowercase().dimmed()
         );
@@ -44297,7 +44301,7 @@ fn resolve_child_role(
     } else {
         eprintln!(
             "{} no --role given, defaulting to {} (non-interactive launch)",
-            "ℹ".cyan(),
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
             "implementer".cyan()
         );
         Ok(Some("implementer".to_string()))
@@ -44366,7 +44370,7 @@ fn agent_new_claude(
         eprintln!(
             "{} --bg detaches from this terminal (no answerable prompt); forcing \
              --permission-mode bypassPermissions. Pass --permission-mode <mode> to override.",
-            "ℹ".cyan()
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
         );
         default_args.push("--permission-mode".to_string());
         default_args.push("bypassPermissions".to_string());
@@ -44624,7 +44628,7 @@ fn agent_new_with_config(
     }
     eprintln!(
         "  {} multiple concurrent {} sessions are supported; registry entries are PID-keyed.",
-        "ⓘ".cyan(),
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         config.agent_type
     );
 
@@ -45350,7 +45354,7 @@ fn maybe_show_faithful_launcher_notice() {
     }
     eprintln!(
         "{} {}",
-        "ℹ".cyan(),
+        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
         "AIDA launchers now honor Claude's native permission posture (it will \
          prompt). To restore bypass-by-default for every agent, set `[agents] \
          bypass = true` in ~/.aida/agents.toml (or per-project .aida/agents.toml), \
@@ -51733,7 +51737,10 @@ fn session_start(
         ) {
             Ok(coordination::AcquireOutcome::Acquired) => {}
             Ok(coordination::AcquireOutcome::Reclaimed(reason)) => {
-                eprintln!("  ℹ reclaiming a stale cross-clone lease on `{owns}` ({reason})");
+                eprintln!(
+                    "  {} reclaiming a stale cross-clone lease on `{owns}` ({reason})",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt)
+                );
             }
             Ok(coordination::AcquireOutcome::Unavailable(reason)) => {
                 eprintln!(
@@ -52017,7 +52024,7 @@ fn session_start(
                 // trace:TASK-50 | ai:claude
                 eprintln!(
                     "{} {}",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     format!("skipped PR metadata capture: {}", reason).dimmed()
                 );
             }
@@ -52036,7 +52043,7 @@ fn session_start(
         if base.is_some() {
             eprintln!(
                 "{} --base is ignored when checking out the existing branch `{}`",
-                "ⓘ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 branch_name
             );
         }
@@ -52045,7 +52052,7 @@ fn session_start(
             eprintln!(
                 "{} branch `{}` already exists — checking it out \
                  (pass a different --branch to fork a new one)",
-                "ⓘ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 branch_name
             );
         }
@@ -52104,7 +52111,7 @@ fn session_start(
                 if let Some(rb) = &resolved_base {
                     eprintln!(
                         "{} cwd is on `{}`; forking new branch from `{}` (pass --base if you wanted this branch's HEAD)",
-                        "ⓘ".cyan(),
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                         b,
                         rb
                     );
@@ -52137,7 +52144,7 @@ fn session_start(
             if pool_enabled && base.is_some() {
                 eprintln!(
                     "{} --base given — not pooling this session (the pool resets to the default branch)",
-                    "ⓘ".cyan()
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
                 );
             }
             None
@@ -52566,7 +52573,7 @@ fn session_start(
             eprintln!();
             eprintln!(
                 "{} {}",
-                "ℹ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 format!(
                     "sourced .aida/session-env.sh ({}) into launched claude's env",
                     applied_vars.join(", ")
@@ -54799,7 +54806,7 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
         CiProbe::PrNoChecks { pr_number } => {
             eprintln!(
                 "  {} PR-{} opened, CI hasn't started yet — ending anyway.",
-                "ⓘ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 pr_number,
             );
             CiAction::Proceed
@@ -55203,7 +55210,7 @@ pub(crate) fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiPro
     } else {
         eprintln!(
             "  {} stdout is non-interactive or headless mode is active — using quiet CI polling.",
-            "ⓘ".cyan()
+            crate::glyph(crate::glyphs::Glyph::Info).cyan()
         );
         wait_for_ci_terminal(branch)
     }
@@ -56552,7 +56559,7 @@ fn session_end(
                         "{} Claude Code project dir {} is now orphaned (cwd gone). \
                          Run `aida session prune --orphans` to clean up, or pass \
                          `--purge-cc` on `aida session end` next time.",
-                        "ⓘ".dimmed(),
+                        crate::glyph(crate::glyphs::Glyph::Info).dimmed(),
                         cc_dir.display().to_string().dimmed()
                     );
                 }
@@ -59352,9 +59359,17 @@ fn render_auto_queue_outcome(outcome: &AutoQueueOutcome) {
             crate::glyph(crate::glyphs::Glyph::Check).green(),
             outcome.summary
         ),
-        AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
+        AutoQueueStatus::AlreadyExists => println!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            outcome.summary
+        ),
         AutoQueueStatus::SkippedByDesign => {
-            eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed())
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Info).dimmed(),
+                outcome.summary.dimmed()
+            )
         }
         AutoQueueStatus::SkippedNeedsAttention => {
             eprintln!(
@@ -63168,7 +63183,7 @@ fn shelve_spec_on_failure(
         // Best-effort: log and skip rather than crash the failure path.
         eprintln!(
             "  {} could not load spec {} for shelving — store has no matching id",
-            "ⓘ".cyan(),
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             spec,
         );
         return Ok(None);
@@ -63325,7 +63340,7 @@ fn restore_phase1_status_on_lease_failure(
         eprintln!(
             "  {} phase-1 failed but a lease/worktree/commits exist for {} — leaving it \
              shelved for triage, not resetting (run `aida findings list`).",
-            "ⓘ".cyan(),
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             spec
         );
         return Ok(());
@@ -82417,7 +82432,7 @@ fn maybe_hint_advisor_seat() {
     let _ = std::fs::write(&marker, "shown\n");
     eprintln!(
         "{} You're operating as {} — run {} to seat it (your statusline still shows the default role).",
-        "ℹ".cyan(),
+        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
         "advisor".yellow(),
         "aida role enter advisor".cyan()
     );
@@ -84783,7 +84798,7 @@ fn plan_fan_out(
         {
             println!(
                 "  {} low-priority specs are skipped by default; re-run with {} to plan them too.",
-                "ℹ".dimmed(),
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).dimmed(),
                 "--include-low".cyan()
             );
         }
@@ -92387,7 +92402,7 @@ fn handle_burndown_run(
         let _ = crate::drain_state::DrainState::clear(&project_root);
         println!(
             "  {} cleared a stale drain-state (its orchestrator is no longer running)",
-            "ℹ".cyan()
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
         );
     }
 
@@ -98726,7 +98741,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     // Likely worked by a fan-out — informational (a live advisor Agent-tool
     // subagent is plausibly building these; its lease just isn't spec-linked).
     if !fanout_worked.is_empty() {
-        let info = "ⓘ";
+        let info = crate::glyph(crate::glyphs::Glyph::Info);
         println!();
         println!(
             "{}",
@@ -101141,7 +101156,7 @@ fn handle_digest_command(
             digest::run(opts, &project_root, store, reset)?;
             println!(
                 "{} --copy was a no-op (--reset cleared the cadence marker; nothing rendered)",
-                "ℹ".yellow()
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).yellow()
             );
             return Ok(());
         }
@@ -103584,7 +103599,7 @@ fn cascade_rebase_stacked_branches(
         eprintln!(
             "  {} {} stacked branch{} have merged bases; pass `--auto` to rebase \
              (or run `/aida-rebase` interactively): {}",
-            "ⓘ".cyan(),
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             affected.len(),
             if affected.len() == 1 { "" } else { "es" },
             affected
@@ -122215,7 +122230,7 @@ fn acquire_review_lease(
             orchestrator::AutoReleaseDecision::SafelyDormant { process_dead, .. } => {
                 eprintln!(
                     "  {} released stale lease {} on {} ({})",
-                    "ⓘ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                     (&conflict.id[..conflict.id.len().min(8)]).yellow(),
                     spec_id,
                     if process_dead {
@@ -122595,7 +122610,10 @@ fn handle_review_spec(
                 "→".green(),
                 format!("gh pr diff {n}").cyan()
             ),
-            None => println!("\n  {} no open {change_noun} to diff.", "ℹ".cyan()),
+            None => println!(
+                "\n  {} no open {change_noun} to diff.",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            ),
         }
         return Ok(());
     }
@@ -122732,7 +122750,7 @@ fn handle_review_spec(
             }
             None => println!(
                 "\n  {} open a {change_noun} first, then merge it.",
-                "ℹ".cyan()
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
             ),
         }
     } else if choice == rework_label {
@@ -122752,7 +122770,10 @@ fn handle_review_spec(
                     .args(["pr", "diff", &n.to_string()])
                     .status();
             }
-            None => println!("  {} no open {change_noun} to diff.", "ℹ".cyan()),
+            None => println!(
+                "  {} no open {change_noun} to diff.",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            ),
         }
     } else {
         println!(
@@ -123407,7 +123428,10 @@ fn handle_scaffold_command(
                 Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
 
             if *dry_run {
-                println!("{} Dry run - no files will be modified", "ℹ".blue());
+                println!(
+                    "{} Dry run - no files will be modified",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).blue()
+                );
                 println!();
             }
 
@@ -123506,7 +123530,7 @@ fn handle_scaffold_command(
                 } else {
                     println!(
                         "{} Dry run: would create {}, update {} ({} unchanged, {} skipped).",
-                        "ℹ".blue(),
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).blue(),
                         would_create,
                         would_update,
                         unchanged,
@@ -128441,7 +128465,7 @@ fn handle_queue_command(
                 println!(
                     "{} {} {noun} queue entr{} ({})",
                     if *dry_run {
-                        "ℹ".yellow()
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).yellow()
                     } else {
                         crate::glyph(crate::glyphs::Glyph::Cross).yellow()
                     },
@@ -128514,7 +128538,7 @@ fn handle_queue_command(
                 println!(
                     "{} {} dead queue entr{} ({})",
                     if *dry_run {
-                        "ℹ".yellow()
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).yellow()
                     } else {
                         crate::glyph(crate::glyphs::Glyph::Cross).yellow()
                     },
@@ -131670,7 +131694,7 @@ fn resolve_queue_work_plan(
                              2. Queue it:     aida queue add <SPEC-ID>   (the id printed by step 1)\n  \
                              3. Work it:      aida queue work\n  \
                              Browse anytime with `aida list`.",
-                            "ℹ".cyan()
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
                         );
                     } else {
                         eprintln!(
@@ -131678,7 +131702,7 @@ fn resolve_queue_work_plan(
                              Approve a draft and queue it in one step: \
                              `aida add \"<what you're building>\" --queue`, \
                              or queue an existing spec: `aida queue add <id>`.{}",
-                            "ℹ".cyan(),
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                             suffix
                         );
                     }
@@ -131708,7 +131732,7 @@ fn resolve_queue_work_plan(
                 .join(", ");
             eprintln!(
                 "  {} skipped {} un-pickable spec(s) ahead of head: {}",
-                "ℹ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 skipped_unpickable.len(),
                 listed
             );
@@ -131899,7 +131923,7 @@ fn resolve_queue_work_plan(
                 aida_core::pickability::Pickability::Blocked(reason) => {
                     eprintln!(
                         "  {} cluster {} — skipping un-pickable {} ({})",
-                        "ℹ".cyan(),
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                         anchor_id_upper,
                         req.display_id(),
                         aida_core::pickability::pickability_reason_label(&reason),
@@ -132876,7 +132900,11 @@ fn handle_queue_work(
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| std::path::PathBuf::from("."));
         if let Some(note) = orchestrator::detect(&root_for_orch).informational_note() {
-            eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
+            eprintln!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                note.dimmed()
+            );
         }
     }
 
@@ -133015,7 +133043,7 @@ fn handle_queue_work(
                     };
                     eprintln!(
                         "  {} released stale lease {} ({})",
-                        "ⓘ".cyan(),
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                         (&conflict.id[..conflict.id.len().min(8)]).yellow(),
                         cause.dimmed()
                     );
@@ -133500,7 +133528,7 @@ fn handle_queue_work(
     if !applied_vars.is_empty() {
         eprintln!(
             "  {} sourced .aida/session-env.sh ({})",
-            "ℹ".cyan(),
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
             applied_vars.join(", ").dimmed()
         );
     }
@@ -133614,7 +133642,7 @@ fn handle_queue_work(
                 );
                 eprintln!(
                     "  {} headless output → {}",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     log_path.display().to_string().dimmed()
                 );
                 // BUG-342: no-human resumes must use the same structural
@@ -133675,7 +133703,7 @@ fn handle_queue_work(
                 );
                 eprintln!(
                     "  {} headless output → {}",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     log_path.display().to_string().dimmed()
                 );
                 // TASK-307: tee high-signal events so the operator can
@@ -133765,7 +133793,7 @@ fn run_standalone_reviewer(
                 );
                 eprintln!(
                     "  {} headless output → {}",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     log_path.display().to_string().dimmed()
                 );
                 // BUG-342: a no-human reviewer resume is still unattended;
@@ -133818,7 +133846,7 @@ fn run_standalone_reviewer(
                 );
                 eprintln!(
                     "  {} headless output → {}",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     log_path.display().to_string().dimmed()
                 );
                 // TASK-307: tee high-signal events for the standalone
@@ -134011,7 +134039,7 @@ fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String
                 eprintln!(
                     "  {} skipping {} ({}) — the orchestrator drives a full \
                      lifecycle from scratch and cannot resume it",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     id,
                     status
                 );
@@ -134076,7 +134104,11 @@ fn handle_orchestrator_command(cmd: &OrchestratorCommand) -> Result<()> {
             // The note is informational, never alarming — BUG-233's corrected
             // diagnosis: a bare `AIDA_AUTO_COMPLETE` is not a leak to chase.
             if let Some(note) = ctx.informational_note() {
-                eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    note.dimmed()
+                );
             }
             Ok(())
         }
@@ -134303,7 +134335,11 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
             // The note is informational. For the no-provenance case it names
             // a real stale value and suggests `unset AIDA_ZEN`.
             if let Some(note) = ctx.informational_note() {
-                eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    note.dimmed()
+                );
             }
             Ok(())
         }
@@ -134381,7 +134417,7 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
                     match file_zen_review_brief(&project_root, l) {
                         Ok(Some((agent, path))) => eprintln!(
                             "  {} review brief filed to the {} mailbox: {}",
-                            "ⓘ".cyan(),
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                             agent.cyan(),
                             path.display()
                         ),
@@ -134836,7 +134872,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
         NoHumanGate::Acknowledged => {
             eprintln!(
                 "  {} {} (acknowledged via {})",
-                "ℹ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 no_human_scope_line(mode),
                 ack_source.unwrap_or("acknowledgement"),
             );
@@ -135165,7 +135201,7 @@ fn handle_drain_resume(
         drain_resume::ResumeOutcome::NothingToResume => {
             println!(
                 "{} nothing to resume — no member was mid-flight in `{}`.",
-                "ⓘ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 drain_state::drain_state_path(&project_root).display()
             );
             std::process::exit(0);
@@ -135174,7 +135210,7 @@ fn handle_drain_resume(
             println!(
                 "{} `{}` was deliberately shelved, not crashed — leave it parked and triage \
                  with `aida findings list` (don't resume).",
-                "ⓘ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 spec_label
             );
             std::process::exit(0);
@@ -135202,7 +135238,7 @@ fn handle_drain_resume(
                 println!(
                     "{} reconciled to phase {} (CI) — re-entering at phase {} (reviewer) instead \
                      (CI-wait is coupled to the implementer session a resume cannot hold).",
-                    "ⓘ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                     reconciled.index(),
                     start_phase.index()
                 );
@@ -135594,7 +135630,7 @@ fn handle_queue_recover(
     if dry_run {
         println!(
             "{} --dry-run — not executing. Drop it to run the recovery.",
-            "ⓘ".cyan()
+            crate::glyph(crate::glyphs::Glyph::Info).cyan()
         );
         return Ok(());
     }
@@ -135661,7 +135697,10 @@ fn handle_queue_recover(
         queue_recover::RecoverAction::DrivePhasesFromPr => {
             if !confirm("drive phases 3-6 on the open PR (reviewer → merge → pull → build)?")
             {
-                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                println!(
+                    "{} skipped — state left intact.",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
                 return Ok(());
             }
             // Reuse the TASK-405 PR-only orchestrator path.
@@ -135677,7 +135716,10 @@ fn handle_queue_recover(
                 return Ok(());
             };
             if !confirm(&format!("push `{b}`, open a PR, then drive phases 3-6?")) {
-                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                println!(
+                    "{} skipped — state left intact.",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
                 return Ok(());
             }
             let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
@@ -135710,7 +135752,7 @@ fn handle_queue_recover(
             if !confirm("commit the WIP, then push + open PR + drive phases 3-6?") {
                 println!(
                     "{} skipped — commit/stash the WIP yourself, then re-run.",
-                    "ⓘ".cyan()
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
                 );
                 return Ok(());
             }
@@ -135749,10 +135791,13 @@ fn handle_queue_recover(
         queue_recover::RecoverAction::WipCommitPark => {
             println!(
                 "{} preserving uncommitted work as a WIP commit (parked for resumption).",
-                "ⓘ".cyan()
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
             if !confirm("commit the WIP on the branch and park (no PR)?") {
-                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                println!(
+                    "{} skipped — state left intact.",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
                 return Ok(());
             }
             let _ = run_git(&["add", "-A"], &probe_repo)?;
@@ -135773,7 +135818,10 @@ fn handle_queue_recover(
                 spec
             );
             if !confirm("end the session and re-queue the spec?") {
-                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                println!(
+                    "{} skipped — state left intact.",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
                 return Ok(());
             }
             if state.lease_held {
@@ -136914,13 +136962,13 @@ fn run_auto_complete(
                 eprintln!(
                     "  {} headless implementer + reviewer — phase 1 punts to \
                      Needs Attention on a design-fork it cannot resolve",
-                    "ℹ".cyan()
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
                 );
             } else {
                 eprintln!(
                     "  {} headless reviewer phase — phase 1 (implementer) stays \
                      interactive and will pause for you",
-                    "ℹ".cyan()
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
                 );
             }
         }
@@ -137066,7 +137114,7 @@ fn run_auto_complete(
                     eprintln!(
                         "  {} could not restore {}'s status after a lease-less phase-1 \
                          failure: {} — reset it manually with `aida edit {} --status {}`",
-                        "ⓘ".cyan(),
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                         display_id,
                         e,
                         display_id,
@@ -137129,7 +137177,7 @@ fn run_auto_complete(
             eprintln!(
                 "  {} keeping drain-state — fix the blocker, then re-run \
                  `aida queue work --auto-complete --resume-drain`",
-                "ⓘ".cyan()
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
         }
     }
@@ -137251,7 +137299,7 @@ fn resolve_batch_members(
             };
             eprintln!(
                 "  {} batch:{} — skipping {} ({})",
-                "ℹ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 batch_name,
                 req.display_id(),
                 reason_label,
@@ -137268,7 +137316,7 @@ fn resolve_batch_members(
             aida_core::pickability::Pickability::Blocked(reason) => {
                 eprintln!(
                     "  {} batch:{} — skipping un-pickable member {} ({})",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     batch_name,
                     req.display_id(),
                     aida_core::pickability::pickability_reason_label(&reason),
@@ -137423,7 +137471,7 @@ fn handle_auto_complete_batch(
         if let Some(limit) = max {
             eprintln!(
                 "  {} drain capped at {} item{}",
-                "ℹ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 limit,
                 if limit == 1 { "" } else { "s" }
             );
@@ -137680,10 +137728,13 @@ fn handle_auto_complete_single_branch(
         eprintln!(
             "  {} ONE shared branch {} in ONE worktree → ONE cluster PR; \
              commit-per-member, halt-on-failure (prior commits kept)",
-            "ℹ".cyan(),
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
             shared_branch.cyan(),
         );
-        eprintln!("  {} coupled members, in order:", "ℹ".cyan());
+        eprintln!(
+            "  {} coupled members, in order:",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+        );
         for (i, (_, display_id, title, status)) in members.iter().enumerate() {
             eprintln!(
                 "     {:>2}. {} [{}] {}",
@@ -137740,7 +137791,11 @@ fn handle_auto_complete_single_branch(
                 );
             }
             other => {
-                eprintln!("  {} single-branch drain stopped: {:?}", "ℹ".cyan(), other);
+                eprintln!(
+                    "  {} single-branch drain stopped: {:?}",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    other
+                );
             }
         }
     }
@@ -137795,7 +137850,7 @@ fn handle_auto_complete_batches(
         if let Some(limit) = max {
             eprintln!(
                 "  {} drain capped at {} item{} total",
-                "ℹ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 limit,
                 if limit == 1 { "" } else { "s" }
             );
@@ -138120,7 +138175,7 @@ fn emit_batch_chain_summary(
             let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
             eprintln!(
                 "{} batch chain stopped in `batch:{batch}` — dispatched {} but PR credited {}",
-                "ⓘ".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan().bold(),
                 dispatched.bold(),
                 shipped.bold()
             );
@@ -138403,7 +138458,7 @@ fn emit_batch_drain_summary(
             eprintln!(
                 "{} batch `batch:{batch_name}` drain stopped — phase 1 was dispatched \
                  for {} but the PR credited {}",
-                "ⓘ".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan().bold(),
                 dispatched.bold(),
                 shipped.bold(),
             );
@@ -138931,7 +138986,7 @@ fn handle_auto_complete_next_n(
             if drivable < n {
                 eprintln!(
                     "  {} only {} drivable item{} queued — draining those",
-                    "ℹ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     drivable,
                     if drivable == 1 { "" } else { "s" }
                 );
@@ -139238,7 +139293,7 @@ fn emit_next_n_drain_summary(
             eprintln!(
                 "{} next {n} drain stopped — phase 1 was dispatched for {} \
                  but the PR credited {}",
-                "ⓘ".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan().bold(),
                 dispatched.bold(),
                 shipped.bold(),
             );
@@ -140188,7 +140243,7 @@ fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -
     }
     eprintln!(
         "  {} {} is not queued — queueing it for the implementer",
-        "ℹ".cyan(),
+        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
         spec
     );
     let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
@@ -141043,14 +141098,14 @@ fn reconcile_orchestrated_branch(
                 Ok(()) => eprintln!(
                     "  {} branch swapped during the implementer phase: `{}` → `{}` \
                      (lease updated)",
-                    "ⓘ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                     recorded,
                     new_branch,
                 ),
                 Err(e) => eprintln!(
                     "  {} branch swapped to `{}` but the lease could not be updated: {} \
                      (continuing with the live branch)",
-                    "ⓘ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                     new_branch,
                     e,
                 ),
@@ -142470,7 +142525,7 @@ impl RealPhaseDriver {
                             "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
                          search (the implementer branch was swapped by /aida-pr's \
                          merged-branch guard)",
-                            "ⓘ".cyan(),
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                             branch,
                             pr.number,
                             self.spec,
@@ -142756,7 +142811,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         } else {
             eprintln!(
                 "  {} implementer skill signalled completion — session reaped",
-                "ⓘ".cyan()
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
         }
 
@@ -142906,7 +142961,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 eprintln!(
                                     "  {} implementer left {} commit(s) with no PR — opened PR-{} \
                                      for it (BUG-459 recovery)",
-                                    "ⓘ".cyan(),
+                                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                                     ahead,
                                     pr
                                 );
@@ -142990,7 +143045,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 self.pr_number = Some(pr_number);
                 eprintln!(
                     "  {} PR-{pr_number} has no CI checks — nothing to gate on.",
-                    "ⓘ".cyan()
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
                 );
             }
             CiProbe::InProgress { pr_number } => {
@@ -143008,7 +143063,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // gate on CI — proceed with a warning.
                 eprintln!(
                     "  {} CI state unavailable ({reason}) — proceeding without a CI gate.",
-                    "ⓘ".cyan()
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
                 );
             }
         }
@@ -143181,7 +143236,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         if mode == "delegated" {
             eprintln!(
                 "  {} Review mode set to 'delegated' — triggering remote review on PR {}",
-                "ⓘ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 pr
             );
 
@@ -143221,7 +143276,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
             eprintln!(
                 "  {} Head SHA is {}; polling check-runs for severity tally...",
-                "ⓘ".cyan(),
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 sha
             );
 
@@ -143311,7 +143366,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             // Fail-safe trigger: file a finding & park in NeedsAttention
             eprintln!(
                 "  {} Triggering fail-safe: filing ReviewerVerdictUnavailable finding...",
-                "ⓘ".cyan()
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
             if let Err(e) = file_reviewer_verdict_unavailable_finding(&self.project_root, pr) {
                 eprintln!(
@@ -143452,7 +143507,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         } else {
             eprintln!(
                 "  {} reviewer skill signalled completion — session reaped",
-                "ⓘ".cyan()
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
         }
 
@@ -144599,7 +144654,7 @@ fn release_dead_leases_for_resume(project_root: &std::path::Path, scope: &str) {
             orchestrator::AutoReleaseDecision::SafelyDormant { .. } => {
                 eprintln!(
                     "  {} released the crashed drain's lease {} on `{}` (process dead)",
-                    "ⓘ".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                     (&conflict.id[..conflict.id.len().min(8)]).yellow(),
                     scope
                 );
