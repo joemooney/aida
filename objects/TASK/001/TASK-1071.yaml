@@ -1,0 +1,17 @@
+id: 019f1b4d-3aab-7d21-bb76-eb737d0180fb
+spec_id: TASK-1071
+agreed_id: TASK-1071
+title: 'Recurring glyph-registry gaps: info/notice glyphs (ⓘ ℹ ⦿ 📨) used raw won''t honor AIDA_GLYPHS=ascii — add them to the registry or have glyph-lint flag new raw glyphs'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T01:31:13.963087972Z
+modified_at: 2026-07-01T01:31:13.963087972Z
+req_type: Task
+tags:
+- ascii
+- glyph
+- polish
+- registry
