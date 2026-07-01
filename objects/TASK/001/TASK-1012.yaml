@@ -3,12 +3,12 @@ spec_id: TASK-1012
 agreed_id: TASK-1012
 title: 'Telemetry: pool hit-rate (reuse vs create) to prove the warm-cache payoff empirically (substrate learning loop)'
 description: ''
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:25:24.330902944Z
-modified_at: 2026-07-01T05:47:51.725794747Z
+modified_at: 2026-07-01T06:21:24.705717859Z
 req_type: Task
 tags:
 - zen-ready
