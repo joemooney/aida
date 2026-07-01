@@ -29912,5 +29912,44 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2862
+- id: 019f1c4d-d4fe-7510-adef-068d9d2c8797
+  target_id: 019f1c4d-c452-7b30-ba91-c69227065ddf
+  author: aida
+  node_id: '1'
+  lamport: 2863
+  timestamp: 2026-07-01T06:11:30.686244514Z
+  kind: !Create
+    title: 'Slice 1: declarative scenario library on a ScenarioDriver (PhaseDriver) covering every orchestrator branch in-process'
+    description: |-
+      EPIC-59 Tier A (highest ROI). Grow the existing MockPhaseDriver (auto_complete.rs:4055) into a DECLARATIVE, named scenario library so the orchestrator loop can be driven through every branch in-process — fast, deterministic, no real spawn/CI/gh/network.
+
+      ## Decision (BINDING)
+      A scenario is DATA, not ad-hoc driver code: each named fixture specifies the per-phase outcome a ScenarioDriver (impl PhaseDriver) should return (implementer / finish_ci / reviewer / merge / pull / build / advisor / resume). Adding a scenario = adding a fixture, not a new driver struct. Existing one-off mock drivers (MockPhaseDriver, OneHeldDriver, OneInconclusiveDriver) migrate onto the scenario type or coexist without a second parallel mechanism.
+
+      ## Acceptance
+      1. A declarative scenario type + a single ScenarioDriver that replays it against the real orchestrator loop. Adding a case is data-only.
+      2. Seed library covers AT LEAST these branches, each asserting the RESULTING orchestrator outcome (terminal status / shelved-vs-shipped / findings filed / exit code), not just the phase return:
+         - happy path -> ship
+         - CI red -> shelve NeedsAttention
+         - punt (design fork) -> advisor resolves -> resume implementer -> ship
+         - punt -> escalate -> human (park)
+         - CI red then green on retry
+         - reviewer RequestChanges -> fix -> approve
+         - build fail -> shelve
+         - dependent BlockedBy a shelved spec -> skipped
+      3. The seed scenarios encode the EPIC-28 resilient-drain contract: a shelvable failure parks NeedsAttention, the drain continues, dependents skip, and the drain exits 2 when anything shelved/skipped.
+      4. All scenarios run in-process under cargo test (unset AIDA_SESSION_ROLE in the test env — it leaks role-gated behavior), deterministic, fast enough for every-CI execution.
+      5. A documented convention for adding a scenario (where fixtures live, how to assert an outcome) with one worked example, so the library grows without re-learning.
+
+      ## Growth model (PRIN-2)
+      The seed set is a STARTING point, not the target. Do NOT enumerate the full cartesian product up front — grow the library from real incidents: every real drain failure becomes a new scenario regression fixture.
+
+      ## Out of scope
+      Slice-2 end-to-end mock binary (needs Slice 0); faithful vendor-interface mocking; the thin real-agent smoke suite that guards against vendor drift (separate follow-up).
+
+      Primary caller: the auto_complete / burndown orchestrator loop under cargo test, in-process.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 2863
 node_id: '1'
