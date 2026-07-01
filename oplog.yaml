@@ -29611,5 +29611,23 @@ operations:
     req_type: Epic
     status: Draft
     priority: Medium
-clock: 2841
+- id: 019f1c03-481a-7563-a57d-c667df711943
+  target_id: 019f1c03-3907-7c23-af0d-b5686ec552a1
+  author: aida
+  node_id: '1'
+  lamport: 2842
+  timestamp: 2026-07-01T04:50:04.954758255Z
+  kind: !Create
+    title: zen help promises "fire several in parallel" but the global drain.lock refuses concurrent solo drives
+    description: |-
+      aida zen --help says "fire several for INDEPENDENT specs in parallel and walk away", but every drain acquires a GLOBAL per-repo lock (aida-cli/src/drain_lock.rs, BUG-538): a second aida zen --solo while another drive is live fails with "a drain is already running (pid ...)". The help text sets an expectation the substrate refuses. Observed 2026-06-30: STORY-744 drive held the lock; STORY-698 and TASK-841 solo drives both silently failed to start.
+
+      ## Acceptance
+      - THE aida zen help text SHALL NOT claim independent drives can run in parallel within one repo while the global drain lock serializes them.
+      - THE aida zen help text SHALL state that drives are serialized per repo and SHALL point to the burndown fan-out as the mechanism for running multiple specs concurrently.
+      - WHEN a drive is refused because another drain holds the lock, THE error message SHALL name the burndown fan-out (one orchestrator, worktree-isolated subagents) as the supported way to drive multiple specs at once.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2842
 node_id: '1'
