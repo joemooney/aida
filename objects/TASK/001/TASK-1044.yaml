@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:21:26.317452464Z
-modified_at: 2026-07-01T02:19:52.693562012Z
+modified_at: 2026-07-01T02:19:55.553772201Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,3 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 019f052d-04ae-7870-a98e-d581c10300c1
   created_at: 2026-06-30T04:21:34.516018223Z
+comments:
+- id: 019f1b79-cf21-7ba3-bb19-920c5a96fb31
+  author: joe
+  content: 'Rejected: this is a decomposition artifact from the SPIKE-70 plan Followups, not implementable work. Its content (file BlockedBy/RelatesTo relationships) is being actioned directly. See docs/plans/2026-06-29-spike-70-coupled-sequential-drain.md.'
+  created_at: 2026-07-01T02:19:55.553772201Z
+  modified_at: 2026-07-01T02:19:55.553772201Z
