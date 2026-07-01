@@ -30072,5 +30072,20 @@ operations:
   timestamp: 2026-07-01T06:36:50.723144665Z
   kind: !SetStatus
     status: In Progress
-clock: 2874
+- id: 019f1c6a-0e16-7662-8079-ee9f89becc29
+  target_id: 019f1b6d-a8de-7a53-8cd7-67b5b885b629
+  author: aida
+  node_id: '1'
+  lamport: 2875
+  timestamp: 2026-07-01T06:42:20.310248432Z
+  kind: !SetDescription
+    description: |-
+      Durable follow-up to BUG-676. The /proc liveness probe and lease classifiers currently live in aida-cli; the redesign TUI shells out to `aida ps` to compute per-spec liveness. Lift the probe + classifiers into aida-core so aida-tui can compute liveness in-process without a subprocess.
+
+      ## Acceptance
+      - THE /proc liveness probe and lease classifiers SHALL live in aida-core as functions callable by both aida-cli and aida-tui.
+      - WHEN aida-tui computes per-spec liveness, THE TUI SHALL determine live-versus-stale in-process without shelling out to `aida ps`.
+      - THE in-process liveness verdict SHALL equal the verdict the prior aida-cli path produced for the same session set.
+      - A test SHALL assert the aida-core classifier returns the same verdict as the prior path for a live session, a stale session, and a flag-only session.
+clock: 2875
 node_id: '1'
