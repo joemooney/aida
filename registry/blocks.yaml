@@ -335,3 +335,11 @@ blocks:
   range_end: 840
   next: 741
   allocated_at: 2026-06-30T04:49:30.731751672Z
+- node_id: '6'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: FR
+  range_start: 456
+  range_end: 555
+  next: 456
+  allocated_at: 2026-07-01T18:48:35.729515171Z
