@@ -2157,7 +2157,14 @@ pub enum MailboxCommand {
 
     /// Operator overview: agents with mail waiting + unread / urgent-unread
     /// counts, most-recent-activity first.
-    List,
+    List {
+        /// Dead-letter view: only recipients that have UNREAD mail but match no
+        /// known role or registered agent — misaddressed handoffs (a typo'd
+        /// agent name, a wrong role) that no live identity will ever read.
+        // trace:BUG-679
+        #[clap(long)]
+        stranded: bool,
+    },
 
     /// Retract a sent message, leaving a withdrawn tombstone in mailbox views.
     // trace:STORY-583 | ai:codex
