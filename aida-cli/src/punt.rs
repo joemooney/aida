@@ -788,6 +788,136 @@ pub fn dismiss_punt_core(
     )
 }
 
+// --- Blocked-dependency → blocked-by suggestion (TASK-349) ------------------
+//
+// A `blocked-dependency` punt is the honest "I can't proceed — this depends on
+// work that isn't done" signal (see `PuntCategory::BlockedDependency`). The
+// dependency it names belongs in the requirement graph as a `blocked-by` edge
+// so the next `aida graph … --blocked-by` query (and the scheduler) can see it
+// — but the punt flow only records prose. This turns the blocker spec id(s)
+// named in the punt text into a concrete `aida edit <blocked> --blocked-by
+// <blocker>` nudge the operator can run.
+//
+// Deliberately a *suggestion*, not an auto-file: parsing a spec id out of free
+// text is best-effort (a false-positive `UTF-8`-shaped token must not silently
+// mutate the graph), and the operator confirming keeps the edge honest.
+// trace:TASK-349 | ai:claude
+
+/// A suggestion to record a `blocked-by` graph edge, derived from a
+/// `blocked-dependency` punt whose text named one or more blocker specs.
+// trace:TASK-349 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockedBySuggestion {
+    /// The spec being punted — the *blocked* side of the edge.
+    pub blocked: String,
+    /// Blocker spec ids parsed from the punt text: first-seen order, deduped,
+    /// upper-cased, and never including `blocked` itself.
+    pub blockers: Vec<String>,
+}
+
+impl BlockedBySuggestion {
+    /// The `aida edit <blocked> --blocked-by <blocker>…` command that records
+    /// the edge(s). `--blocked-by` is repeatable, so multiple blockers compose
+    /// onto one command.
+    pub fn suggested_command(&self) -> String {
+        let mut cmd = format!("aida edit {} --blocked-by", self.blocked);
+        for b in &self.blockers {
+            cmd.push(' ');
+            cmd.push_str(b);
+        }
+        cmd
+    }
+}
+
+/// Whether `s` has the shape of a spec id: 2+ ASCII letters, a hyphen, then a
+/// digit, then digits/hyphens only (`TASK-349`, `STORY-276`, `FR-1-042`).
+/// Mirrors `main::looks_like_spec_id` but is kept local so the punt module
+/// stays self-contained and pure.
+// trace:TASK-349 | ai:claude
+fn is_spec_id_shape(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() < 3 || b.len() > 40 {
+        return false;
+    }
+    let mut i = 0;
+    while i < b.len() && b[i].is_ascii_alphabetic() {
+        i += 1;
+    }
+    // At least two leading letters, then a hyphen.
+    if i < 2 || i >= b.len() || b[i] != b'-' {
+        return false;
+    }
+    i += 1;
+    // The first char after the hyphen must be a digit.
+    if i >= b.len() || !b[i].is_ascii_digit() {
+        return false;
+    }
+    // The remainder is digits and hyphens only (covers `FR-1-042`).
+    while i < b.len() {
+        if b[i].is_ascii_digit() || b[i] == b'-' {
+            i += 1;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+/// Scan free text for spec-id-shaped tokens. Tokenizes on any character that is
+/// not an ASCII letter/digit/hyphen (so backticks, parens, commas, and periods
+/// all delimit), validates each token with [`is_spec_id_shape`], and returns
+/// the matches upper-cased in first-seen order with duplicates removed. Pure so
+/// [`suggest_blocked_by`] stays unit-testable.
+// trace:TASK-349 | ai:claude
+pub fn scan_spec_ids(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-')) {
+        let tok = raw.trim_matches('-');
+        if is_spec_id_shape(tok) {
+            let up = tok.to_ascii_uppercase();
+            if !out.contains(&up) {
+                out.push(up);
+            }
+        }
+    }
+    out
+}
+
+/// Derive a `blocked-by` suggestion from a punt. Returns `Some` only when the
+/// punt is [`PuntCategory::BlockedDependency`] AND at least one blocker spec id
+/// (other than `blocked_spec` itself) appears in `detail` or `lean`. The
+/// `blocked` side of the returned edge is `blocked_spec` verbatim (trimmed);
+/// blockers are normalized to upper-case.
+// trace:TASK-349 | ai:claude
+pub fn suggest_blocked_by(
+    blocked_spec: &str,
+    category: PuntCategory,
+    detail: &str,
+    lean: Option<&str>,
+) -> Option<BlockedBySuggestion> {
+    if category != PuntCategory::BlockedDependency {
+        return None;
+    }
+    let self_key = blocked_spec.trim().to_ascii_uppercase();
+    let mut blockers: Vec<String> = Vec::new();
+    for text in [Some(detail), lean].into_iter().flatten() {
+        for id in scan_spec_ids(text) {
+            // Never suggest a self-edge, and dedupe across detail + lean.
+            if id != self_key && !blockers.contains(&id) {
+                blockers.push(id);
+            }
+        }
+    }
+    if blockers.is_empty() {
+        None
+    } else {
+        Some(BlockedBySuggestion {
+            blocked: blocked_spec.trim().to_string(),
+            blockers,
+        })
+    }
+}
+
 /// Parse a `--category` value, or return a help-shaped error listing the
 /// valid kebab-case categories.
 pub fn parse_punt_category(raw: &str) -> Result<PuntCategory, String> {
@@ -824,6 +954,82 @@ mod tests {
         assert!(
             err.contains("design-fork"),
             "error should list valid: {err}"
+        );
+    }
+
+    // --- Blocked-dependency → blocked-by suggestion (TASK-349) ----------
+
+    #[test]
+    fn scan_spec_ids_finds_dedupes_and_upcases() {
+        // Backticks, parens, commas, and periods all delimit; `FR-1-042`
+        // (letter-digit-digit) is a valid shape; duplicates collapse.
+        let got = scan_spec_ids("blocked on `story-276` and (FR-1-042), also STORY-276.");
+        assert_eq!(got, vec!["STORY-276".to_string(), "FR-1-042".to_string()]);
+    }
+
+    #[test]
+    fn scan_spec_ids_ignores_non_spec_tokens() {
+        // `blocked-by` has no digit after the hyphen; a bare word is not a
+        // spec id; `--blocked-by` flag text must not match.
+        assert!(scan_spec_ids("this is blocked-by nothing in particular").is_empty());
+        assert!(scan_spec_ids("run aida edit --blocked-by <dep>").is_empty());
+    }
+
+    #[test]
+    fn suggest_blocked_by_only_fires_for_blocked_dependency() {
+        // A design-fork punt naming a spec must NOT produce a blocked-by nudge.
+        assert_eq!(
+            suggest_blocked_by("TASK-2", PuntCategory::DesignFork, "see STORY-9", None),
+            None
+        );
+    }
+
+    #[test]
+    fn suggest_blocked_by_parses_blocker_from_reason() {
+        let s = suggest_blocked_by(
+            "TASK-2",
+            PuntCategory::BlockedDependency,
+            "cannot proceed — depends on STORY-9 landing first",
+            None,
+        )
+        .expect("a blocked-dependency punt naming a blocker should suggest");
+        assert_eq!(s.blocked, "TASK-2");
+        assert_eq!(s.blockers, vec!["STORY-9".to_string()]);
+        assert_eq!(
+            s.suggested_command(),
+            "aida edit TASK-2 --blocked-by STORY-9"
+        );
+    }
+
+    #[test]
+    fn suggest_blocked_by_excludes_self_and_merges_lean() {
+        // The punted spec itself must never become a self-edge; blockers in
+        // the lean text compose with those in the reason, order-preserved.
+        let s = suggest_blocked_by(
+            "TASK-2",
+            PuntCategory::BlockedDependency,
+            "TASK-2 is blocked on STORY-9",
+            Some("really it is BUG-3 and STORY-9 again"),
+        )
+        .expect("should suggest");
+        assert_eq!(s.blockers, vec!["STORY-9".to_string(), "BUG-3".to_string()]);
+        assert_eq!(
+            s.suggested_command(),
+            "aida edit TASK-2 --blocked-by STORY-9 BUG-3"
+        );
+    }
+
+    #[test]
+    fn suggest_blocked_by_none_when_no_blocker_named() {
+        // Right category, but the prose names no spec → nothing to suggest.
+        assert_eq!(
+            suggest_blocked_by(
+                "TASK-2",
+                PuntCategory::BlockedDependency,
+                "blocked on some upstream service that isn't ready",
+                None,
+            ),
+            None
         );
     }
 
