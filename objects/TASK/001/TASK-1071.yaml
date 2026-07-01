@@ -6,16 +6,16 @@ description: |-
   The info/notice glyphs (information, notice, bullet-notice, mailbox) are emitted raw in some code paths, so AIDA_GLYPHS=ascii does not downgrade them. Route them through the glyph registry and guard against future raw glyphs.
 
   ## Acceptance
-  - THE info, notice, bullet-notice, and mailbox glyphs SHALL be added to the glyph registry with ascii fallbacks.
-  - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs, not the raw unicode.
-  - THE glyph-lint check SHALL flag any raw glyph not resolved through the registry.
-  - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these glyphs appear as raw unicode in the rendered output.
+  - THE information, notice, bullet-notice, and mailbox glyphs SHALL each be registered in the glyph registry with an ascii fallback.
+  - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs.
+  - WHEN a raw glyph literal is not resolved through the glyph registry, THE glyph-lint check SHALL flag it.
+  - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these four glyphs appear as raw unicode in the rendered output.
 status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T01:31:13.963087972Z
-modified_at: 2026-07-01T06:42:29.697120451Z
+modified_at: 2026-07-01T06:44:47.284776003Z
 req_type: Task
 tags:
 - ascii
