@@ -3,12 +3,12 @@ spec_id: TASK-841
 agreed_id: TASK-841
 title: 'integrate: stacked-branch accumulation strategy'
 description: 'Follow-up of TASK-836. aida queue integrate has an IntegrateStrategy::Stacked variant that is accepted on the CLI but errors as unbuilt. Design question: when items build on each other (each branch on the previous), the integrator must rebase the whole stack as a unit and merge in order, and the completion semantics of an intermediate-stack spec are ambiguous (is it Completed when its own commit lands, or only when the whole stack lands?). Decide the completion model before implementing.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T08:20:48.067267409Z
-modified_at: 2026-07-01T05:52:22.099034372Z
+modified_at: 2026-07-01T05:55:32.076328796Z
 req_type: Task
 tags:
 - integrator
@@ -34,3 +34,7 @@ comments:
     FOLLOW-UP (filed separately): force-pushing a promoted childs PR branch with the stack-aware git rebase --onto origin/main <parent_sha> so the second+ layer becomes mergeable automatically (today it defers with a /aida-rebase pointer). The cascade (STORY-248) rebases the child worktree locally on aida pull but does not force-push the PR branch.
   created_at: 2026-07-01T05:52:22.099034372Z
   modified_at: 2026-07-01T05:52:22.099034372Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-01T05:55:32.076328796Z
+  implemented_by: joe
