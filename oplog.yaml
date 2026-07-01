@@ -30318,5 +30318,26 @@ operations:
   timestamp: 2026-07-01T11:35:45.428310290Z
   kind: !SetTitle
     title: Windows pid_is_alive(0) reads true (System Idle Process) — missing pid==0 guard in non-unix impl
-clock: 2896
+- id: 019f1d76-c0cc-7780-8b9b-e9c36abbfdac
+  target_id: 019f1d76-b3d6-7eb3-983f-016f203ea621
+  author: aida
+  node_id: '1'
+  lamport: 2897
+  timestamp: 2026-07-01T11:35:49.708071428Z
+  kind: !Create
+    title: Cross-platform e2e suites fail on macOS (aida init exit 1, no output) + Windows (agent_error_channel empty stderr)
+    description: |-
+      The nightly cross-platform matrix (cross-platform.yml, Windows + macOS) is red on the new binary-driving integration tests added this session. Linux PR CI is green, so it only shows on the nightly. Evidence from dispatched run 28513523893 on branch fix/xplat-nightly-green (PR #1314), with the init assertion widened to print exit + stdout + stderr:
+
+      macOS (agent_write_confirm.rs, and by extension journey/newcomer_delight/queue_work_dry_run which share the init_repo harness): aida init exits 1 with EMPTY stdout and EMPTY stderr. A clean exit(1) with zero output. Canonicalizing the tempdir (macOS /var/folders symlink) did NOT fix it. Cannot reproduce on Linux: aida init succeeds in an isolated tempdir/HOME even through a symlinked path (exit 0). Root cause undetermined without macOS access.
+
+      Windows (agent_error_channel.rs): human_mode_keeps_stderr_error_and_empty_stdout_exit_1 and agent_mode_routes_structured_error_to_stdout_exit_1 both fail: assertion left==right, stderr= (empty) where the test expects a structured error. Note: the Windows pid_is_alive(0) failure is SEPARATE and fixed by BUG-687.
+
+      Open question (do NOT gate-and-forget): determine whether the macOS init exit-1-no-output reflects a REAL aida init regression on macOS (from an overnight batch change) or a CI-environment artifact of the isolated-tempdir e2e harness. Real macOS users init under /Users/... (not a symlinked temp path), so a test-env artifact is more likely, but this is unverified.
+
+      Recommended resolution (operator call, needs macOS/Windows access): either (a) make the binary-driving e2e suites portable, or (b) gate them to cfg(target_os=linux) consistent with the project stance that PR CI is Linux-only until there are non-Linux users, with this bug kept open to investigate the real-vs-env question. Reduces cross-platform coverage, so it is a priority/policy call, not an autonomous one.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2897
 node_id: '1'
