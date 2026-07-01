@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:04:16.813844443Z
-modified_at: 2026-07-01T04:38:05.091006777Z
+modified_at: 2026-07-01T16:05:18.867101106Z
 req_type: Task
 tags:
 - aida:tui
@@ -27,3 +27,9 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-07-01T04:04:21.319600227Z
+comments:
+- id: 019f1e6d-7993-7360-9878-512e1db323c0
+  author: joe
+  content: Commit 392bdc749 references this requirement
+  created_at: 2026-07-01T16:05:18.867101106Z
+  modified_at: 2026-07-01T16:05:18.867101106Z
