@@ -29951,5 +29951,46 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 2863
+- id: 019f1c4d-ee07-7492-ad92-258af4e16570
+  target_id: 019f1c4d-e166-7be0-86e3-4853ccb92213
+  author: aida
+  node_id: '1'
+  lamport: 2864
+  timestamp: 2026-07-01T06:11:37.095527709Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on TASK-841'
+    description: |
+      Auto-drafted by `aida queue work TASK-841 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the reviewer session produced no verdict file — the review did not complete — the reviewer's headless log (/home/joe/ai/aida/.aida/headless-logs/pr-1297-019f1c48-1723-75b0-befa-e9d256f55a39.jsonl) contains an AskUserQuestion call, which is forbidden under `--no-human` and likely caused the session to bail before writing the verdict file (BUG-280). The `/aida-review` skill must auto-resolve every confirmation under AIDA_HEADLESS=1 instead of calling AskUserQuestion.
+
+      Failure kind: `no-verdict`
+
+      ## Recovery hint shown to the user
+
+      The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-1297 --steal`
+
+      ## Phase durations
+
+        - phase 1 (implementer): 868214 ms
+        - phase 2 (ci): 546947 ms
+        - phase 3 (reviewer): 390765 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-841","started_at":"2026-07-01T05:41:25.079142929+00:00","completed_at":"2026-07-01T06:11:33.783573622+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"no-verdict","failure_message":"the reviewer session produced no verdict file — the review did not complete — the reviewer's headless log (/home/joe/ai/aida/.aida/headless-logs/pr-1297-019f1c48-1723-75b0-befa-e9d256f55a39.jsonl) contains an AskUserQuestion call, which is forbidden under `--no-human` and likely caused the session to bail before writing the verdict file (BUG-280). The `/aida-review` skill must auto-resolve every confirmation under AIDA_HEADLESS=1 instead of calling AskUserQuestion.","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":868214},{"phase":2,"slug":"ci","elapsed_ms":546947},{"phase":3,"slug":"reviewer","elapsed_ms":390765}],"total_ms":1807055,"binary_sha":"6c779fade"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 2864
 node_id: '1'
