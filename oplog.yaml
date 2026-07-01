@@ -30298,5 +30298,17 @@ operations:
   timestamp: 2026-07-01T08:54:06.733532497Z
   kind: !SetStatus
     status: Done
-clock: 2894
+- id: 019f1d61-eea7-7da2-b592-0227fa092a84
+  target_id: 019f1d61-e10d-7b22-8dc9-ea6533a8dc0f
+  author: aida
+  node_id: '1'
+  lamport: 2895
+  timestamp: 2026-07-01T11:13:05.191336038Z
+  kind: !Create
+    title: 'Cross-platform nightly red: pid_is_alive(0) true on Windows + init-in-tempdir tests fail on macOS'
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2895
 node_id: '1'
