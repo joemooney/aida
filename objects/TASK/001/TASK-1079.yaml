@@ -1,0 +1,38 @@
+id: 019f1c0a-90f6-7fc0-976f-49d3fda52ce4
+spec_id: TASK-1079
+agreed_id: TASK-1079
+title: TUI drive-gate probe reads stderr but CLI emits --json errors on stdout
+description: |
+  In the TUI drive verb (STORY-744), probe_drive_gate (aida-tui/src/redesign/mod.rs)
+  reads out.stderr for the failure message when the gate probe exits non-zero:
+
+      if !out.status.success() {
+          let err = String::from_utf8_lossy(&out.stderr);
+          ...
+      }
+
+  But `aida zen <id> --json`'s error path (run_zen_gate_json bails via anyhow →
+  main) writes the error text to STDOUT, not stderr. So on a probe failure the
+  operator sees the generic fallback "the gate probe failed" instead of the
+  specific reason (e.g. "no requirement matches ...").
+
+  Impact is low: the probe is only ever called with a real spec id taken from the
+  focused list row, so this error path is essentially unreachable from the drive
+  gesture, and the TUI still safely refuses to launch (empty stderr → Err → no
+  false "drive launched"). Cosmetic message-quality nit only.
+
+  Fix options: have probe_drive_gate fall back to out.stdout when stderr is empty,
+  or make the --json path emit errors to stderr.
+
+  Raised in review of PR-1293: https://github.com/joemooney/aida/pull/1293#issuecomment-4850385477
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:58:02.358262988Z
+modified_at: 2026-07-01T04:58:02.358262988Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-1293
+- severity:cosmetic
