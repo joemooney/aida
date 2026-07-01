@@ -139820,7 +139820,32 @@ fn run_zen_gate_json(storage: &Storage, spec: Option<&str>) -> Result<()> {
         coupled: false,
         force: false,
     };
-    let verdict = zen_drive::classify_gate(&display, &req.status, &suit_input);
+    let mut verdict = zen_drive::classify_gate(&display, &req.status, &suit_input);
+    // TASK-1076: also resolve the DEFAULT (no --solo) ADR-6 scope route and stamp
+    // it onto the verdict, so the shell-out consumer (the TUI drive verb) can show
+    // WHERE the drive would run — into the parent-epic / focus worktree vs solo —
+    // and offer a --solo toggle BEFORE launching, instead of silently routing an
+    // epic-parented spec into the epic worktree. classify_gate is routing-agnostic
+    // (defaults to solo); this fills the real route from the store. trace:TASK-1076
+    let parent_epic = resolve_spec_scope(req, &store);
+    let active_focus = find_project_root()
+        .ok()
+        .as_deref()
+        .and_then(crate::focus::resolve_focus);
+    match zen_drive::resolve_scope_route(
+        parent_epic.as_deref(),
+        active_focus.as_deref(),
+        false,
+        false,
+    ) {
+        zen_drive::ScopeRoute::IntoScope(scope) => {
+            verdict.route = "into-scope";
+            verdict.scope = scope;
+        }
+        zen_drive::ScopeRoute::Solo => {
+            verdict.route = "solo";
+        }
+    }
     println!("{}", serde_json::to_string(&verdict)?);
     Ok(())
 }
