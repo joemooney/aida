@@ -3,12 +3,12 @@ spec_id: BUG-683
 agreed_id: BUG-683
 title: Corrupt .aida/cache.db is a no-escape dead-end — every cache read fails with a misleading WAL error and 'aida cache rebuild' also fails; self-heal on corruption
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:52:10.982006810Z
-modified_at: 2026-07-01T04:52:10.982006810Z
+modified_at: 2026-07-01T05:19:05.232627679Z
 req_type: Bug
 tags:
 - cache
