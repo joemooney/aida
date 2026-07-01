@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:06.508349535Z
-modified_at: 2026-07-01T07:13:39.188702469Z
+modified_at: 2026-07-01T17:34:39.222441591Z
 req_type: Story
 tags:
 - zen-ready
@@ -46,3 +46,8 @@ comments:
   content: 'Removed stale needs-design tag: the design was operator-resolved 2026-06-30 (BINDING — passive contextual hint chain, aida tour rejected) and the spec carries full acceptance. It is designed, not needs-design; keeping the tag would wrongly trip the TASK-1078 gate once PR #1305 merges.'
   created_at: 2026-07-01T07:13:39.188702469Z
   modified_at: 2026-07-01T07:13:39.188702469Z
+- id: 019f1ebf-4476-70e0-9acf-a74f43ffde3b
+  author: joe
+  content: Commit 8b95408db references this requirement
+  created_at: 2026-07-01T17:34:39.222441591Z
+  modified_at: 2026-07-01T17:34:39.222441591Z
