@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:49:50.135214184Z
-modified_at: 2026-07-01T04:50:03.377229430Z
+modified_at: 2026-07-01T04:50:03.695280865Z
 req_type: Epic
 tags:
 - from-advisor
@@ -40,4 +40,8 @@ relationships:
 - rel_type: !Custom related
   target_id: 019f16dc-1929-7573-a289-6536dae296fc
   created_at: 2026-07-01T04:50:03.377225103Z
+  created_by: joe
+- rel_type: !Custom related
+  target_id: 019f1bfd-4781-7e13-8088-61225ada2b57
+  created_at: 2026-07-01T04:50:03.695276888Z
   created_by: joe
