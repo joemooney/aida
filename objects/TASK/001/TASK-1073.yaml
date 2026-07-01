@@ -3,12 +3,12 @@ spec_id: TASK-1073
 agreed_id: TASK-1073
 title: 'Integrator role first-class: integrator.md agent config + statusline seat + queue list --role integrator routing (STORY-718 slice 2d)'
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:10:00.459604307Z
-modified_at: 2026-07-01T02:10:00.459604307Z
+modified_at: 2026-07-01T02:33:56.747661008Z
 req_type: Task
 tags:
 - from-loop
