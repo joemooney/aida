@@ -45627,11 +45627,26 @@ fn role_guidance_for(project_root: &std::path::Path, role: &str) -> String {
         }
     }
 
+    default_role_guidance(role)
+}
+
+/// The built-in per-role guidance used when no stored role file (`~/.aida/roles/
+/// <role>.toml` or a project role) provides a Purpose / system prompt. Every
+/// agent-wired seat (`implementer`, `advisor`, `reviewer`, `integrator`) gets a
+/// first-class arm so a fresh machine with no scaffolded role file still ships
+/// seat-specific context; unknown roles fall through to the generic pointer.
+/// Split out from [`role_guidance_for`] so the arms are unit-testable without a
+/// machine's role files shadowing them.
+// trace:STORY-718 | ai:claude
+fn default_role_guidance(role: &str) -> String {
     match role {
         "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked.".to_string(),
         "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
         "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation.".to_string(),
-        "unspecified" => "No role was provided. Determine whether you are acting as advisor, implementer, or reviewer before making changes.".to_string(),
+        // The integrator seat's role-context prompt, mirroring the arms above.
+        // Mechanical merge cascade only; escalate anything that turns on judgment.
+        "integrator" => "You are integrating. Land finished work (Done specs with an open PR) on the default branch one PR at a time in dependency order: rebase stale branches, resolve MECHANICAL conflicts only, watch CI, squash-merge the green-and-reviewed PRs, delete merged branches, and run `aida pull` to auto-bump. Never make a design call — escalate design-judgment conflicts to the advisor and route missing-verdict PRs to the reviewer.".to_string(),
+        "unspecified" => "No role was provided. Determine whether you are acting as advisor, implementer, reviewer, or integrator before making changes.".to_string(),
         other => format!("No stored role file was found for `{other}`. Follow the project discipline in AGENTS.md and the active spec/brief context."),
     }
 }
@@ -47435,6 +47450,36 @@ mod agent_launcher_tests {
         );
         assert!(context.contains("aida mailbox inbox"), "{context}");
         assert!(context.contains("re-check"), "{context}");
+    }
+
+    /// STORY-718: the integrator is a first-class agent-wired role, so its
+    /// built-in role guidance carries seat-specific context (the merge cascade +
+    /// the escalate-never-resolve invariant), not the generic "no stored role
+    /// file" fallback. Mirrors the advisor/implementer/reviewer arms. Targets
+    /// `default_role_guidance` directly so a machine's scaffolded
+    /// `~/.aida/roles/integrator.toml` can't shadow the built-in arm under test.
+    #[test]
+    fn role_guidance_for_integrator_is_first_class() {
+        let guidance = default_role_guidance("integrator");
+        assert!(
+            guidance.contains("integrating"),
+            "integrator guidance names the seat: {guidance}"
+        );
+        assert!(
+            guidance.contains("squash-merge") && guidance.contains("escalate"),
+            "integrator guidance covers the merge cascade + escalation: {guidance}"
+        );
+        assert!(
+            !guidance.contains("No stored role file was found"),
+            "integrator must NOT fall through to the unknown-role arm: {guidance}"
+        );
+
+        // The unspecified arm now names integrator alongside the other seats.
+        let unspecified = default_role_guidance("unspecified");
+        assert!(
+            unspecified.contains("integrator"),
+            "unspecified guidance lists integrator as a candidate seat: {unspecified}"
+        );
     }
 
     #[test]
@@ -66716,6 +66761,20 @@ mod statusline_tests {
         assert!(!mismatch);
     }
 
+    /// STORY-718: the integrator seat renders in the statusline exactly like the
+    /// other agent-wired roles — a plain `role:integrator` segment with no
+    /// mismatch glyph when shell + session agree.
+    #[test]
+    fn role_segment_renders_integrator_seat() {
+        let (text, mismatch) = role_segment_text("integrator", Some("integrator"), true);
+        assert_eq!(text, "role:integrator");
+        assert!(!mismatch);
+        // A roleless statusline (no session role) still names the seat.
+        let (text, mismatch) = role_segment_text("integrator", None, true);
+        assert_eq!(text, "role:integrator");
+        assert!(!mismatch);
+    }
+
     /// TASK-244: shell role disagrees with the active session's role —
     /// both surfaced with the warning glyph.
     #[test]
@@ -72760,6 +72819,25 @@ mod bug_87_queue_filter_tests {
         // No filter, no unrouted-only: everything passes.
         assert!(entry_matches_role_filter(None, None, false));
         assert!(entry_matches_role_filter(Some("anything"), None, false));
+
+        // STORY-718: `queue list --role integrator` routes exactly like the
+        // other agent-wired roles — an integrator-routed entry matches the
+        // integrator filter and nothing else does.
+        assert!(entry_matches_role_filter(
+            Some("integrator"),
+            Some("integrator"),
+            false
+        ));
+        assert!(!entry_matches_role_filter(
+            Some("implementer"),
+            Some("integrator"),
+            false
+        ));
+        assert!(!entry_matches_role_filter(
+            Some("integrator"),
+            Some("reviewer"),
+            false
+        ));
     }
 
     /// BUG-87: the original incident. `--all --for reviewer` against a
