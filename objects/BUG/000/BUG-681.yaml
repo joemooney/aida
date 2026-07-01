@@ -1,0 +1,18 @@
+id: 019f1bcf-b78e-78a3-89bd-69b619e0d59c
+spec_id: BUG-681
+agreed_id: BUG-681
+title: Per-turn coordination-notice hook (aida awaiting --notice) can exceed Claude Code's 5s timeout under cache-lock contention — must bail instantly, never block a prompt
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T03:53:45.614003521Z
+modified_at: 2026-07-01T03:53:45.614003521Z
+req_type: Bug
+tags:
+- coordination
+- from-operator
+- hook
+- performance
+- regression
