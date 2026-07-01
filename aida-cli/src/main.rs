@@ -4025,6 +4025,12 @@ fn run() -> Result<()> {
                  --centralized mode, use `aida edit <spec> --status completed`."
             );
         }
+        // STORY-741: `aida awaiting` (the unified coordination inbox) is a
+        // distributed-mode surface — briefs, findings, escalations, reviewer
+        // verdicts and mail are all distributed-mode concepts. trace:STORY-741
+        Command::Awaiting { .. } => {
+            anyhow::bail!("`aida awaiting` is available in the default (distributed) mode.");
+        }
         // TASK-777: the fasttrack lane is a distributed-mode convention (it
         // queues + batches), so it isn't wired into the deprecated legacy
         // storage path. trace:TASK-777
@@ -15172,6 +15178,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 store_path,
                 &backend,
             );
+        }
+        // STORY-741: `aida awaiting` — the unified coordination inbox as a
+        // first-class command (the same "Awaiting you" report that leads
+        // `aida status`, now including unread mail). `--notice` is the compact,
+        // cache/local-backed per-turn line the UserPromptSubmit hook injects.
+        // trace:STORY-741 | ai:claude
+        Command::Awaiting {
+            notice,
+            json,
+            verbose,
+            no_ci,
+        } => {
+            return handle_awaiting_command(*notice, *json, *verbose, *no_ci, &backend);
         }
         // — `aida focus` set/show/clear.
         Command::Focus {
@@ -110441,13 +110460,104 @@ fn collect_awaiting_report(
         Vec::new()
     };
 
+    // Unread mail — folded into the awaiting-you report so the coordination
+    // inbox is ONE surface (STORY-741). Reads only the local + canonical
+    // mailbox files (never a network call), so this stays cheap enough to ride
+    // the per-turn `aida awaiting --notice` path. Scoped to the same identity
+    // set the mailbox notice / statusline use (shell user + session role +
+    // agent type). Every read degrades to empty on error, never bubbling up.
+    // trace:STORY-741 | ai:claude
+    let mail = {
+        let store_root = project_root.join(".aida-store");
+        let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
+        let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
+        let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+        let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
+        let identities = inbox_identities();
+        let summary = aida_core::mailbox::build_notice(
+            identities.iter().map(String::as_str),
+            &merged,
+            &watermarks,
+            aida_core::mailbox::NOTICE_DEFAULT_CAP,
+        );
+        awaiting_you::MailChannel {
+            unread: summary.total,
+            urgent: summary.urgent,
+        }
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         pending_briefs,
         findings_total,
         reviewer_queue_items,
         escalations,
+        mail,
     }
+}
+
+/// STORY-741: render the unified "Awaiting you" report as a first-class
+/// command. Two shapes:
+///   - `--notice`: the COMPACT one-line per-turn signal the `UserPromptSubmit`
+///     hook injects. Silent when nothing awaits. Cache/local-backed and
+///     network-free — it forces the `no_ci` path (so the gh-backed PR probe
+///     never runs) and builds a lightweight context (role from env, no
+///     full-store load), so a hook firing every prompt stays cheap and
+///     fail-open.
+///   - default: the full multi-channel report (text / `--json`), including the
+///     gh-backed PR channel unless `--no-ci`. Mirrors `aida status --awaiting`.
+// trace:STORY-741 | ai:claude
+fn handle_awaiting_command(
+    notice: bool,
+    json: bool,
+    verbose: bool,
+    no_ci: bool,
+    backend: &aida_core::CachedGitBackend,
+) -> Result<()> {
+    let project_root = std::env::current_dir()?;
+
+    if notice {
+        // CHEAP per-turn path: NO full-store load, NO gh/network. Mail, briefs,
+        // findings and escalations are all cache/local reads; PRs (gh) and the
+        // reviewer-verdict channel (which needs the queue snapshot off the
+        // loaded store) are deliberately omitted here — run bare `aida awaiting`
+        // for those. The lightweight context carries only the role (from env),
+        // so `collect_awaiting_report` sees an empty queue head and skips the
+        // reviewer channel. Fail-open: a caught-up inbox prints nothing.
+        let role = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        let ctx = UserStatusContext {
+            session: None,
+            role,
+            branch: None,
+            pr: None,
+            queue_head: Vec::new(),
+            queue_total: 0,
+            agents: Vec::new(),
+        };
+        let report = collect_awaiting_report(&project_root, backend, &ctx, true);
+        if let Some(line) = report.compact_line() {
+            println!("{line}");
+        }
+        return Ok(());
+    }
+
+    // Full view: reuse the exact same machinery as `aida status --awaiting`.
+    let store = backend.load()?;
+    let ctx = collect_user_context(&project_root, &store, backend, no_ci);
+    let report = collect_awaiting_report(&project_root, backend, &ctx, no_ci);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+    } else if report.is_empty() {
+        println!("{}", "─── Awaiting you (0) ───".bold().dimmed());
+        println!("  Nothing awaits you right now.");
+        println!();
+    } else {
+        let stdout = std::io::stdout();
+        let _ = report.render(verbose, stdout.lock());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -110491,6 +110601,55 @@ mod story_465_awaiting_report_tests {
             "fresh project must have nothing awaiting"
         );
         assert_eq!(report.total(), 0);
+    }
+
+    // STORY-741: unread mail folds into the awaiting-you report, and the
+    // `no_ci` path used by the per-turn notice makes NO network call — the
+    // gh-backed PR channel stays empty. A broadcast from another agent lands
+    // in every identity's inbox and, with no read-watermark, is unread.
+    // trace:STORY-741
+    #[test]
+    fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
+        let dir = tempdir().unwrap();
+        let backend = open_backend(dir.path());
+
+        let msg = aida_core::mailbox::Message {
+            id: "m-awaiting-mail-1".to_string(),
+            thread_id: "t1".to_string(),
+            from: "other-agent".to_string(),
+            to: aida_core::mailbox::Recipient::Broadcast,
+            timestamp: 1_000,
+            in_reply_to: None,
+            body: "please review the drain".to_string(),
+            urgent: true,
+            intent: aida_core::mailbox::Intent::Fyi,
+            retracted: false,
+            deleted: false,
+        };
+        crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
+
+        let ctx = empty_user_ctx(Some("implementer"));
+        // no_ci = true → the gh-backed PR probe is skipped (the network-free
+        // path the per-turn notice rides).
+        let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+
+        assert!(
+            report.mail.unread >= 1,
+            "unread mail must populate the mail channel"
+        );
+        assert_eq!(report.mail.urgent, 1, "urgent flag must carry through");
+        assert!(
+            report.mergeable_prs.is_empty(),
+            "no_ci must skip the network PR probe"
+        );
+        // The report is now non-empty on mail alone, so the per-turn line fires.
+        let line = report
+            .compact_line()
+            .expect("a report with unread mail yields a per-turn line");
+        assert!(
+            line.contains("mail"),
+            "compact line must name the mail channel: {line}"
+        );
     }
 
     // A spec parked in NeedsAttention surfaces as an escalation line —

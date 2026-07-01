@@ -7440,6 +7440,42 @@ pub enum Command {
         no_focus: bool,
     },
 
+    /// The unified coordination inbox — every channel where YOU are the gate,
+    /// in ONE place: mergeable PRs, unacked briefs, findings awaiting triage,
+    /// reviewer verdicts, NeedsAttention escalations, AND unread mail. The same
+    /// "Awaiting you" report that leads `aida status`, promoted to a first-class
+    /// command so the whole coordination inbox is a can't-miss signal — not just
+    /// mail (which had its own per-turn hook while everything else stayed
+    /// invisible mid-session).
+    ///
+    /// `--notice` renders the COMPACT one-line form the per-turn hook injects
+    /// (silent when nothing awaits). That path is cache/local-backed and makes
+    /// NO network call — PRs (the one gh-backed channel) are omitted from the
+    /// line; run the bare command to include them.
+    // trace:STORY-741 | ai:claude
+    Awaiting {
+        /// Compact one-line summary spanning every channel, for the per-turn
+        /// hook. SILENT when nothing awaits. Cache/local-backed, no network
+        /// (PRs are omitted from this line — run bare `aida awaiting` for them).
+        // trace:STORY-741 | ai:claude
+        #[clap(long)]
+        notice: bool,
+        /// Machine-readable JSON of the full report (same shape as
+        /// `aida status --awaiting --json`).
+        // trace:STORY-741 | ai:claude
+        #[clap(long)]
+        json: bool,
+        /// Lift the 5-item cap and show every item.
+        // trace:STORY-741 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
+        /// Skip the gh-backed PR lookup (offline / fast path). Implied by
+        /// `--notice`.
+        // trace:STORY-741 | ai:claude
+        #[clap(long)]
+        no_ci: bool,
+    },
+
     /// The global running-work table — one row per active session/agent
     /// across the project (the `ps`/`docker ps` of AIDA work). Companion to
     /// `aida status <spec>` (per-spec): where that answers "is THIS spec
