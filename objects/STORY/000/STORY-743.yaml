@@ -1,0 +1,18 @@
+id: 019f1bc3-40a8-77c3-8bc9-589393fc0d70
+spec_id: STORY-743
+agreed_id: STORY-743
+title: 'Behavioral journey self-test: drive the real binary through the human + agent core loops end-to-end so shipped behavior can''t silently regress'
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T03:40:08.744490696Z
+modified_at: 2026-07-01T03:40:08.744490696Z
+req_type: Story
+tags:
+- ci
+- from-loop
+- journey
+- regression
+- self-test
