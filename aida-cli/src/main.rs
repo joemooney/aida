@@ -419,7 +419,14 @@ fn main() {
             // trace:TASK-972
             if agent_output_mode() {
                 let (summary, help) = agent_error_summary_help(&msg);
-                println!("{}", toon::error_block(summary, help.as_deref()));
+                // TASK-1082: fold a did-you-mean suggestion into the agent-mode
+                // summary when a "Requirement not found" error is a near-miss of
+                // a real spec id. trace:TASK-1082 | ai:claude
+                let summary_owned = match did_you_mean_for_not_found(&msg) {
+                    Some(hint) => format!("{summary} ({hint})"),
+                    None => summary.to_string(),
+                };
+                println!("{}", toon::error_block(&summary_owned, help.as_deref()));
             } else if err.downcast_ref::<SoftSignpostShown>().is_some() {
                 // STORY-737 (delight #5): the command already rendered a soft,
                 // forward-pointing signpost to stderr — re-printing it as a red
@@ -438,6 +445,14 @@ fn main() {
                 }
                 for rest in lines {
                     eprintln!("{}", rest.dimmed());
+                }
+                // TASK-1082: when the error is a "Requirement not found" near-miss
+                // of a real spec id, add a `did you mean <ID>?` line — the same
+                // affordance clap gives for mistyped subcommands. Best-effort and
+                // only on this branch; the exit code stays non-zero.
+                // trace:TASK-1082 | ai:claude
+                if let Some(hint) = did_you_mean_for_not_found(&msg) {
+                    eprintln!("  {}", hint.dimmed());
                 }
             }
             1
@@ -117444,6 +117459,134 @@ fn nearest_standard_rel_type(input: &str) -> Option<&'static str> {
     }
 }
 
+// TASK-1082: did-you-mean for a mistyped spec id. When `aida show`/`edit`/
+// `queue work` (and every other spec-resolution surface) hits "Requirement not
+// found: <id>", compare the requested id against the existing id set and — if a
+// close match exists — append `did you mean <ID>?`, mirroring the affordance
+// clap gives for mistyped subcommands and `nearest_standard_rel_type`
+// (TASK-887) gives for rel-type typos. Scoped to the not-found branch; the
+// found path is untouched and the exit code stays non-zero.
+
+/// Find the nearest existing spec id to a requested one, for the not-found
+/// did-you-mean hint. Case-insensitive Levenshtein with a length-aware budget:
+/// short ids (≤3 chars) tolerate 1 edit, longer ids up to 2 — so a typo like
+/// `TASK-11` → `TASK-1` is caught while an unrelated id is left alone. An exact
+/// (case-insensitive) match returns None because that would have resolved on
+/// the found path. Deterministic: lowest edit distance wins, ties prefer an id
+/// that is a prefix of / prefixed by the request (the extra-digit / dropped-
+/// suffix typo), then the lexicographically-smallest candidate. Pure over the
+/// caller-supplied id set → unit-testable.
+// trace:TASK-1082 | ai:claude
+fn nearest_spec_id(requested: &str, known_ids: &[String]) -> Option<String> {
+    let needle = requested.trim().to_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    // If the requested id exactly (case-insensitively) exists, it's not a typo
+    // — suggest nothing. In practice this fn only runs on the not-found branch,
+    // but the guard keeps it honest if invoked with a resolvable id.
+    if known_ids
+        .iter()
+        .any(|k| k.trim().eq_ignore_ascii_case(&needle))
+    {
+        return None;
+    }
+    let max_dist = if needle.len() <= 3 { 1 } else { 2 };
+    // Sort key: (distance, not-prefix-related, candidate). Lower is better, so
+    // `!prefix_related` sorts prefix matches first among equal-distance ties.
+    let mut best: Option<(usize, bool, String)> = None;
+    for known in known_ids {
+        let cand = known.trim();
+        if cand.is_empty() {
+            continue;
+        }
+        let cand_lc = cand.to_lowercase();
+        let d = levenshtein(&needle, &cand_lc);
+        // d == 0 is the found path — never suggest the request back to itself.
+        if d == 0 || d > max_dist {
+            continue;
+        }
+        let prefix_related = needle.starts_with(&cand_lc) || cand_lc.starts_with(&needle);
+        let key = (d, !prefix_related, cand.to_string());
+        if best.as_ref().is_none_or(|b| key < *b) {
+            best = Some(key);
+        }
+    }
+    best.map(|(_, _, id)| id)
+}
+
+/// Extract the requested id from a "Requirement not found: <id>" error's first
+/// line, so the top-level handler can compute a did-you-mean suggestion.
+/// Returns None for not-found messages that carry no id (the legacy
+/// `.context("Requirement not found")` chains, whose first line has no `: <id>`).
+/// `invalid_spec_id_format` appends " (not a valid spec ID)" — the trailing
+/// parenthetical is stripped so the bare id is returned. Pure → unit-testable.
+// trace:TASK-1082 | ai:claude
+fn not_found_requested_id(msg: &str) -> Option<String> {
+    let first = msg.lines().next()?.trim();
+    let rest = first.strip_prefix("Requirement not found: ")?;
+    let id = rest.split(" (").next().unwrap_or(rest).trim();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_string())
+    }
+}
+
+/// Best-effort gather of every known spec id (plus agreed id) from the cache,
+/// for the not-found did-you-mean lens. Cache-backed and read-only; any failure
+/// (no store attached, cache locked, wrong directory) yields an empty set so
+/// the caller simply omits the suggestion. Runs only on the not-found error
+/// path, so the one-shot cache read is off the hot path.
+// trace:TASK-1082 | ai:claude
+fn known_spec_ids_for_suggestion(project_root: &std::path::Path) -> Vec<String> {
+    let store_path = project_root.join(".aida-store");
+    let Ok(dispenser) = load_dispenser(&store_path) else {
+        return Vec::new();
+    };
+    let Ok(inner) = aida_core::GitBackend::new(&store_path).map(|b| b.with_dispenser(dispenser))
+    else {
+        return Vec::new();
+    };
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let Ok(backend) = aida_core::CachedGitBackend::with_inner(inner, &cache_path) else {
+        return Vec::new();
+    };
+    // Suggest against EVERY id, including archived/deferred rows — a typo should
+    // still resolve to a real (if hidden) spec.
+    let filter = aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::DeferFilter::Both,
+        ..Default::default()
+    };
+    let Ok(rows) = backend.list_summaries(&filter) else {
+        return Vec::new();
+    };
+    let mut ids = Vec::with_capacity(rows.len());
+    for r in rows {
+        if let Some(s) = r.spec_id {
+            ids.push(s);
+        }
+        if let Some(a) = r.agreed_id {
+            ids.push(a);
+        }
+    }
+    ids
+}
+
+/// Glue for the top-level error handler: if `msg` is a "Requirement not found"
+/// error carrying an id, resolve the nearest existing spec id and return a
+/// ready-to-print `did you mean <ID>?` string. None when the message isn't a
+/// not-found-with-id, or nothing is close enough to suggest.
+// trace:TASK-1082 | ai:claude
+fn did_you_mean_for_not_found(msg: &str) -> Option<String> {
+    let requested = not_found_requested_id(msg)?;
+    let project_root = find_main_worktree_root().ok()?;
+    let known = known_spec_ids_for_suggestion(&project_root);
+    let suggestion = nearest_spec_id(&requested, &known)?;
+    Some(format!("did you mean {suggestion}?"))
+}
+
 fn add_relationship(
     storage: &Storage,
     from_str: &str,
@@ -118082,6 +118225,105 @@ mod task_887_888_input_validation_tests {
         assert!(title_is_rejected("\t\n "));
         assert!(!title_is_rejected("Real title"));
         assert!(!title_is_rejected("  padded but real  "));
+    }
+}
+
+#[cfg(test)]
+mod task_1082_did_you_mean_tests {
+    use super::{nearest_spec_id, not_found_requested_id};
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn near_miss_typo_suggests_the_real_id() {
+        let known = ids(&["TASK-1", "TASK-2", "STORY-3", "BUG-9"]);
+        // The motivating case: TASK-11 is a fat-fingered TASK-1.
+        assert_eq!(
+            nearest_spec_id("TASK-11", &known).as_deref(),
+            Some("TASK-1")
+        );
+        // A transposed prefix (one edit inside the type token).
+        assert_eq!(nearest_spec_id("TSAK-2", &known).as_deref(), Some("TASK-2"));
+        // Case-insensitive match: a mixed-case transposition typo still resolves
+        // to the canonical-cased id. (A pure case-only difference like `story-3`
+        // is NOT a typo — `canonical_spec_id` uppercases, so it resolves on the
+        // found path — and is exercised in `case_only_difference_is_not_a_typo`.)
+        assert_eq!(
+            nearest_spec_id("Stroy-3", &known).as_deref(),
+            Some("STORY-3")
+        );
+    }
+
+    #[test]
+    fn far_off_or_empty_suggests_nothing() {
+        let known = ids(&["TASK-1", "STORY-3", "BUG-9"]);
+        // Nothing within the edit budget → no nagging suggestion.
+        assert_eq!(nearest_spec_id("EPIC-42", &known), None);
+        assert_eq!(nearest_spec_id("QQQQ-9999", &known), None);
+        // Empty / whitespace input never suggests.
+        assert_eq!(nearest_spec_id("", &known), None);
+        assert_eq!(nearest_spec_id("   ", &known), None);
+        // Empty id set never suggests.
+        assert_eq!(nearest_spec_id("TASK-1", &[]), None);
+    }
+
+    #[test]
+    fn exact_match_is_never_suggested_back() {
+        // An exact hit would have resolved on the found path; the did-you-mean
+        // lens must not echo the request back (nor divert to a NEAR neighbour
+        // like TASK-2).
+        let known = ids(&["TASK-1", "TASK-2"]);
+        assert_eq!(nearest_spec_id("TASK-1", &known), None);
+    }
+
+    #[test]
+    fn case_only_difference_is_not_a_typo() {
+        // `canonical_spec_id` uppercases, so `task-1` resolves to TASK-1 on the
+        // found path — a case-only difference is not a typo and suggests nothing.
+        let known = ids(&["TASK-1", "TASK-2"]);
+        assert_eq!(nearest_spec_id("task-1", &known), None);
+    }
+
+    #[test]
+    fn agreed_id_typos_resolve_too() {
+        // Agreed short ids (FR-1, BUG-7) are folded into the known set, so a
+        // typo of one is suggested just like a spec id.
+        let known = ids(&["FR-1", "FR-2", "BUG-7"]);
+        assert_eq!(nearest_spec_id("FR-11", &known).as_deref(), Some("FR-1"));
+    }
+
+    #[test]
+    fn prefix_related_wins_the_distance_tie() {
+        // TASK-1, TASK-10 and TASK-12 are all one edit from TASK-11, but
+        // TASK-1 (a prefix of the request) is the most likely intent.
+        let known = ids(&["TASK-10", "TASK-12", "TASK-1"]);
+        assert_eq!(
+            nearest_spec_id("TASK-11", &known).as_deref(),
+            Some("TASK-1")
+        );
+    }
+
+    #[test]
+    fn requested_id_parsed_from_not_found_message() {
+        // The plain not-found message.
+        assert_eq!(
+            not_found_requested_id("Requirement not found: TASK-11\n  Hint: ...").as_deref(),
+            Some("TASK-11")
+        );
+        // The invalid-format variant appends a parenthetical — strip it.
+        assert_eq!(
+            not_found_requested_id(
+                "Requirement not found: zzz (not a valid spec ID)\n  Expected ..."
+            )
+            .as_deref(),
+            Some("zzz")
+        );
+        // A legacy `.context("Requirement not found")` chain carries no id.
+        assert_eq!(not_found_requested_id("Requirement not found"), None);
+        // Unrelated errors are ignored.
+        assert_eq!(not_found_requested_id("some other error"), None);
     }
 }
 
