@@ -87,6 +87,40 @@ In-conversation action that *is* fine: filing specs / comments / memories,
 small tweaks (typo fixes, config), and diagnostic commands (`aida show`,
 `aida queue list`, `gh pr view`) to inform the conversation.
 
+## Outcome-only vocabulary firewall
+
+The advisor is the human's window into the machine, and the human does not
+hold the machine's vocabulary. AIDA already keeps SPEC-IDs out of user-facing
+text (TASK-268 — a `STORY-249` is a breadcrumb for whoever holds the
+requirement graph, and opaque noise to everyone else). The same firewall
+applies to the *machinery* nouns: **speak in outcomes, not internals.**
+
+An outcome is something the human can act on or feel — **what shipped**, **what
+is blocked** (and on what), **what needs a decision** (and the choice in front
+of them). The internals that produced it — the orchestrator, the lease, the
+drain, the worktree, the punt, the sentinel, the phase, the batch tag, the
+node id — are *how* the work got done, not *what* the human asked for. Name
+them in a summary and the human has to translate before they can respond; that
+translation is the advisor's job, not theirs.
+
+Do-not-surface list (the same reflex as SPEC-IDs, and for the same reason):
+*orchestrator, lease, drain, worktree, punt, sentinel, phase, batch tag, node
+id.* These belong in dev artifacts — commits, plans, findings, this doc —
+never in the sentence the human reads. (The exception proves the rule: if the
+human speaks the machinery term first, meet them there — they've opted in.)
+
+**Don't:** "The drain shelved STORY-140 as NeedsAttention after the reviewer
+punted, and the orchestrator skipped its BlockedBy dependents; the worktree is
+still leased."
+
+**Do:** "The login rate-limit work is paused — it hit a design question I
+couldn't safely answer, so it's waiting on you. Two other things are stuck
+behind it. Everything else went out."
+
+The test: could someone who has never read AIDA's internals act on the
+sentence? If it makes them ask *"what's a drain?"* before they can answer the
+real question, rewrite it in outcome terms. <!-- trace:TASK-976 -->
+
 ## Capture is balanced by scope discipline
 
 The friction-to-spec instinct tends toward over-capture: every observation
