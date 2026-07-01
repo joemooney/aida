@@ -10828,8 +10828,15 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
             spec,
             category,
             resolution,
+            all,
         } => {
             let mut filtered = records;
+            // BUG-674: hide auto-filed session-end visibility warnings by
+            // default so genuine decision-punts aren't buried; `--all` shows
+            // them. trace:BUG-674 | ai:claude
+            if !all {
+                filtered.retain(|r| !punt::is_session_end_noise(r));
+            }
             if let Some(s) = spec {
                 filtered.retain(|r| r.spec.eq_ignore_ascii_case(&s));
             }
@@ -10879,7 +10886,18 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
                 );
             }
         }
-        PuntsCommand::Analyze => {
+        PuntsCommand::Analyze { all } => {
+            // BUG-674: exclude auto-filed session-end visibility warnings from
+            // the analytics by default (they are not decision-punts); `--all`
+            // includes them. trace:BUG-674 | ai:claude
+            let records: Vec<punt::PuntRecord> = if all {
+                records
+            } else {
+                records
+                    .into_iter()
+                    .filter(|r| !punt::is_session_end_noise(r))
+                    .collect()
+            };
             let total = records.len();
             if total == 0 {
                 println!("The punt ledger is empty.");
@@ -10901,9 +10919,14 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
                     *classification_counts.entry(cls.clone()).or_insert(0) += 1;
                 }
 
-                if r.resolution_path == "punted" {
+                // BUG-674: only a genuinely OPEN record is "Awaiting Triage".
+                // Resolved / escalated (incl. the CLI/MCP direct-close slugs)
+                // land in their own buckets; dismissed + shelved-by-failure
+                // records are closed and counted in neither triage bucket.
+                if punt::is_open(r) {
                     punted_count += 1;
                 } else if r.resolution_path == "advisor-resolved"
+                    || r.resolution_path == punt::RESOLUTION_HUMAN_RESOLVED
                     || r.decision.as_deref() == Some("resolved")
                 {
                     resolved_count += 1;
@@ -10913,8 +10936,6 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
                 {
                     escalated_count += 1;
                     total_judged += 1;
-                } else {
-                    punted_count += 1;
                 }
 
                 if let (Some(paused), Some(resolved)) = (r.paused_at, r.resolved_at) {
@@ -11000,6 +11021,104 @@ fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
                 "{}",
                 "──────────────────────────────────────────────────".dimmed()
             );
+        }
+        PuntsCommand::Resolve {
+            id,
+            answer,
+            reasoning,
+            classification,
+        } => {
+            // BUG-674: resolve via the shared core (parity with the
+            // `resolve_punt` MCP tool) — writes the orchestrator resume
+            // response AND closes the open ledger record(s). trace:BUG-674
+            let reasoning =
+                reasoning.unwrap_or_else(|| "resolved via `aida punts resolve`".to_string());
+            let (path, closed) = punt::resolve_punt_core(
+                &project_root,
+                &id,
+                &answer,
+                &reasoning,
+                classification,
+                Some("cli"),
+            )?;
+            if closed == 0 {
+                println!(
+                    "No open punt found for {} — wrote resolution response to {}.",
+                    id.cyan(),
+                    path.display().to_string().dimmed()
+                );
+            } else {
+                println!(
+                    "{} Resolved {} and closed {} ledger record{}. A live drain resumes on the response.",
+                    glyph(crate::glyphs::Glyph::Check).green(),
+                    id.cyan(),
+                    closed,
+                    if closed == 1 { "" } else { "s" }
+                );
+            }
+        }
+        PuntsCommand::Dismiss { id, reason } => {
+            // BUG-674: dismiss just closes the ledger record — no orchestrator
+            // response (a dismissed punt does not resume an implementer).
+            let closed = punt::dismiss_punt_core(&project_root, &id, Some("cli"))?;
+            if closed == 0 {
+                println!("No open punt found for {}.", id.cyan());
+            } else {
+                let note = reason.map(|r| format!(" ({r})")).unwrap_or_default();
+                println!(
+                    "{} Dismissed {} — closed {} ledger record{}{}.",
+                    glyph(crate::glyphs::Glyph::Check).green(),
+                    id.cyan(),
+                    closed,
+                    if closed == 1 { "" } else { "s" },
+                    note
+                );
+            }
+        }
+        PuntsCommand::Escalate {
+            id,
+            reasoning,
+            escalation_reason,
+            classification,
+        } => {
+            // BUG-674: escalate via the shared core (parity with the
+            // `escalate_punt` MCP tool) — writes the park response AND closes
+            // the ledger record as escalated-to-human. trace:BUG-674
+            let (path, closed) = punt::escalate_punt_core(
+                &project_root,
+                &id,
+                &reasoning,
+                escalation_reason,
+                classification,
+                Some("cli"),
+            )?;
+            if closed == 0 {
+                println!(
+                    "No open punt found for {} — wrote escalation response to {}.",
+                    id.cyan(),
+                    path.display().to_string().dimmed()
+                );
+            } else {
+                println!(
+                    "{} Escalated {} to a human and closed {} ledger record{}.",
+                    glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    id.cyan(),
+                    closed,
+                    if closed == 1 { "" } else { "s" }
+                );
+            }
+        }
+        PuntsCommand::Read { id } => {
+            // Most recent record for the spec is the live one (mirrors the
+            // `read_punt` MCP tool). trace:BUG-674
+            let record = records
+                .iter()
+                .rev()
+                .find(|r| r.spec.eq_ignore_ascii_case(&id))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("No punt record found in ledger for spec ID '{}'", id)
+                })?;
+            println!("{}", serde_json::to_string_pretty(record)?);
         }
         PuntsCommand::Promote { id, memory_name } => {
             let record = records
@@ -18658,6 +18777,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     if let Ok(project_root) = find_project_root() {
                         let spec_id = req.spec_id.as_deref().unwrap_or(id);
                         cleanup_escalated_leases_for_spec(&project_root, spec_id);
+                        // BUG-674: a spec triaged out of NeedsAttention no
+                        // longer has an open punt awaiting triage — close its
+                        // ledger record so the punt ledger reflects reality
+                        // instead of a permanent "awaiting triage" row.
+                        // trace:BUG-674 | ai:claude
+                        let _ = punt::close_open_records(
+                            &project_root,
+                            spec_id,
+                            punt::RESOLUTION_HUMAN_RESOLVED,
+                            "resolved",
+                            None,
+                            Some("resume"),
+                        );
                     }
                 }
             } else if blocked_by.is_empty() && remove_blocked_by.is_empty() {
@@ -27452,6 +27584,16 @@ fn edit_requirement_cli(
     if left_needs_attention {
         if let Ok(project_root) = find_project_root() {
             cleanup_escalated_leases_for_spec(&project_root, &spec_id);
+            // BUG-674: close the now-stale open punt-ledger record for a spec
+            // resumed out of NeedsAttention. trace:BUG-674 | ai:claude
+            let _ = punt::close_open_records(
+                &project_root,
+                &spec_id,
+                punt::RESOLUTION_HUMAN_RESOLVED,
+                "resolved",
+                None,
+                Some("resume"),
+            );
         }
     }
 

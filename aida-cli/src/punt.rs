@@ -551,6 +551,243 @@ pub fn read_punt_response(path: &Path) -> Option<PuntResponse> {
     serde_json::from_str(&body).ok()
 }
 
+// --- Direct (non-orchestrator) resolution + ledger close (BUG-674) ----------
+//
+// The `--no-human=both` orchestrator resolves a punt by writing a
+// `PuntResponse` it polls, then appending a fresh `advisor-resolved` /
+// `escalated-to-human` ledger record on resume. OUTSIDE a live drain — a
+// CLI-first advisor, or a human resuming with `aida edit <spec> --status
+// in-progress` — nothing wrote that response OR closed the open ledger record,
+// so every human-handled punt left a permanent "awaiting triage" row and the
+// ledger never closed (BUG-674: 63 of 67 records stuck at "awaiting triage").
+// These shared cores are the ONE place both the `aida punts resolve/dismiss/
+// escalate` CLI verbs AND the `resolve_punt` / `escalate_punt` MCP tools go
+// through, so the two surfaces cannot drift. trace:BUG-674 | ai:claude
+
+/// `resolution_path` slug for a punt a human/advisor resolved directly (via
+/// `aida punts resolve` or the `resolve_punt` MCP tool), outside the
+/// orchestrator's advisor loop.
+pub const RESOLUTION_HUMAN_RESOLVED: &str = "human-resolved";
+
+/// `resolution_path` slug for a punt dismissed as not needing a decision —
+/// closed without a recorded answer.
+pub const RESOLUTION_DISMISSED: &str = "dismissed";
+
+/// `classification` value the auto-filed session-end unshipped-work visibility
+/// warning carries. These are notices, NOT design-fork decision punts, so
+/// `aida punts` hides them from its default views.
+pub const CLASSIFICATION_SESSION_END: &str = "UNSHIPPED-SESSION-END";
+
+/// Whether a ledger record is an auto-filed session-end visibility warning
+/// rather than a genuine decision-punt. The audit found 25 of 67 ledger rows
+/// were these notices, burying the ~2 genuine design-fork punts.
+pub fn is_session_end_noise(r: &PuntRecord) -> bool {
+    r.classification.as_deref() == Some(CLASSIFICATION_SESSION_END)
+}
+
+/// Whether a ledger record is still OPEN — a genuine design-fork punt awaiting
+/// a triage decision. Closed records (advisor-resolved, human-resolved,
+/// dismissed, escalated-to-human), the EPIC-28 `shelved-by-failure` phase
+/// parks, and session-end visibility warnings are all excluded.
+pub fn is_open(r: &PuntRecord) -> bool {
+    if is_session_end_noise(r) {
+        return false;
+    }
+    // Only a plain implementer/MCP punt is awaiting triage; every other
+    // `resolution_path` (advisor-resolved, escalated-to-human, human-resolved,
+    // dismissed, shelved-by-failure) is already a closed/parked record.
+    let awaiting_path = r.resolution_path == "punted" || r.resolution_path.is_empty();
+    let closed_decision = matches!(
+        r.decision.as_deref(),
+        Some("resolved") | Some("dismissed") | Some("escalated")
+    );
+    awaiting_path && !closed_decision
+}
+
+/// Write a [`PuntResponse`] to `path` atomically (temp file + rename), creating
+/// the parent dir if needed. The `--no-human=both` orchestrator polls this file
+/// to resume a live drain — writing it is what lets a CLI/MCP resolution reach a
+/// waiting implementer, exactly as the advisor tier does.
+pub fn write_punt_response(path: &Path, response: &PuntResponse) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let body = serde_json::to_string_pretty(response)?;
+    let tmp_name = format!(
+        ".{}.tmp-{}",
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("aida-tmp"),
+        uuid::Uuid::now_v7()
+    );
+    let tmp = path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(tmp_name);
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(body.as_bytes())?;
+        f.sync_all()?;
+    }
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Close every OPEN punt-ledger record for `spec`, rewriting `.aida/punts.jsonl`
+/// with the given closed `resolution_path` slug + `decision` word, a
+/// `resolved_at` stamp, and (optionally) the resolving `answer` / `answered_by`.
+/// Returns the number of records closed; an absent or already-closed ledger
+/// closes nothing (`Ok(0)`). This is what makes `aida punts analyze`'s
+/// "Awaiting Triage" count actually drop.
+pub fn close_open_records(
+    project_root: &Path,
+    spec: &str,
+    resolution_path: &str,
+    decision: &str,
+    answer: Option<&str>,
+    answered_by: Option<&str>,
+) -> anyhow::Result<usize> {
+    let mut records = read_ledger(project_root);
+    if records.is_empty() {
+        return Ok(0);
+    }
+    let now = Utc::now();
+    let mut closed = 0usize;
+    for r in &mut records {
+        if r.spec.eq_ignore_ascii_case(spec) && is_open(r) {
+            r.resolution_path = resolution_path.to_string();
+            r.decision = Some(decision.to_string());
+            r.resolved_at = Some(now);
+            if r.paused_at.is_none() {
+                r.paused_at = Some(r.timestamp);
+            }
+            if let Some(a) = answer {
+                r.answer = Some(a.to_string());
+            }
+            if let Some(by) = answered_by {
+                r.answered_by = Some(by.to_string());
+            }
+            closed += 1;
+        }
+    }
+    if closed == 0 {
+        return Ok(0);
+    }
+    let mut body = String::new();
+    for r in &records {
+        body.push_str(&serde_json::to_string(r)?);
+        body.push('\n');
+    }
+    let path = ledger_path(project_root);
+    // Reuse the atomic writer's temp-file + rename discipline so a concurrent
+    // reader never sees a truncated ledger. trace:BUG-674 | ai:claude
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp_name = format!(
+        ".{}.tmp-{}",
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("punts.jsonl"),
+        uuid::Uuid::now_v7()
+    );
+    let tmp = path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(tmp_name);
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(body.as_bytes())?;
+        f.sync_all()?;
+    }
+    std::fs::rename(&tmp, &path)?;
+    Ok(closed)
+}
+
+/// Resolve a punt directly (outside the orchestrator loop): (1) write the
+/// [`PuntResponse`] the `--no-human=both` orchestrator polls, so a live drain
+/// resumes the implementer with this answer, AND (2) close the open ledger
+/// record(s) so the triage count drops. Shared by the `resolve_punt` MCP tool
+/// and `aida punts resolve`. Returns `(response_path, records_closed)`.
+pub fn resolve_punt_core(
+    project_root: &Path,
+    spec: &str,
+    answer: &str,
+    reasoning: &str,
+    classification: Option<String>,
+    answered_by: Option<&str>,
+) -> anyhow::Result<(PathBuf, usize)> {
+    let response = PuntResponse {
+        resolution: PuntResolution::Resolved,
+        answer: Some(answer.to_string()),
+        reasoning: reasoning.to_string(),
+        classification,
+        escalation_reason: None,
+    };
+    let path = punt_response_path(project_root, spec);
+    write_punt_response(&path, &response)?;
+    let closed = close_open_records(
+        project_root,
+        spec,
+        RESOLUTION_HUMAN_RESOLVED,
+        "resolved",
+        Some(answer),
+        answered_by,
+    )?;
+    Ok((path, closed))
+}
+
+/// Escalate a punt directly (outside the orchestrator loop): write the
+/// escalation [`PuntResponse`] the orchestrator parks on, and close the open
+/// ledger record(s) as `escalated-to-human` (no longer un-triaged). Shared by
+/// the `escalate_punt` MCP tool and `aida punts escalate`. Returns
+/// `(response_path, records_closed)`.
+pub fn escalate_punt_core(
+    project_root: &Path,
+    spec: &str,
+    reasoning: &str,
+    escalation_reason: Option<String>,
+    classification: Option<String>,
+    answered_by: Option<&str>,
+) -> anyhow::Result<(PathBuf, usize)> {
+    let response = PuntResponse {
+        resolution: PuntResolution::Escalated,
+        answer: None,
+        reasoning: reasoning.to_string(),
+        classification,
+        escalation_reason,
+    };
+    let path = punt_response_path(project_root, spec);
+    write_punt_response(&path, &response)?;
+    let closed = close_open_records(
+        project_root,
+        spec,
+        RESOLUTION_ESCALATED_TO_HUMAN,
+        "escalated",
+        None,
+        answered_by,
+    )?;
+    Ok((path, closed))
+}
+
+/// Dismiss a punt as not needing a decision — close the open ledger record(s)
+/// without writing an orchestrator response (a dismissed punt does not resume
+/// an implementer). Returns the number of records closed.
+pub fn dismiss_punt_core(
+    project_root: &Path,
+    spec: &str,
+    answered_by: Option<&str>,
+) -> anyhow::Result<usize> {
+    close_open_records(
+        project_root,
+        spec,
+        RESOLUTION_DISMISSED,
+        "dismissed",
+        None,
+        answered_by,
+    )
+}
+
 /// Parse a `--category` value, or return a help-shaped error listing the
 /// valid kebab-case categories.
 pub fn parse_punt_category(raw: &str) -> Result<PuntCategory, String> {
@@ -967,5 +1204,158 @@ mod tests {
         let parsed: PuntRecord = serde_json::from_str(old).unwrap();
         assert_eq!(parsed.classification, None);
         assert_eq!(parsed.answer, None);
+    }
+
+    // --- BUG-674: ledger close + open/session-end predicates ----------------
+
+    /// A plain implementer punt is OPEN; a resolved/dismissed/escalated record
+    /// and a session-end visibility warning are all CLOSED (not awaiting
+    /// triage).
+    #[test]
+    fn is_open_distinguishes_awaiting_from_closed_and_noise() {
+        let open = rec("2026-06-20", "punted");
+        assert!(is_open(&open), "a plain punt is awaiting triage");
+
+        let resolved = rec("2026-06-20", "advisor-resolved");
+        assert!(!is_open(&resolved));
+        let human_resolved = rec("2026-06-20", RESOLUTION_HUMAN_RESOLVED);
+        assert!(!is_open(&human_resolved));
+        let escalated = rec("2026-06-20", RESOLUTION_ESCALATED_TO_HUMAN);
+        assert!(!is_open(&escalated));
+        let dismissed = rec("2026-06-20", RESOLUTION_DISMISSED);
+        assert!(!is_open(&dismissed));
+        let shelved = rec("2026-06-20", RESOLUTION_SHELVED_FAILURE);
+        assert!(!is_open(&shelved), "an EPIC-28 shelve is not a triage punt");
+
+        // Session-end noise: resolution_path is "punted" but it carries the
+        // UNSHIPPED-SESSION-END classification — NOT a decision punt.
+        let mut noise = rec("2026-06-20", "punted");
+        noise.classification = Some(CLASSIFICATION_SESSION_END.to_string());
+        assert!(is_session_end_noise(&noise));
+        assert!(
+            !is_open(&noise),
+            "session-end warnings are not awaiting triage"
+        );
+    }
+
+    /// Closing an open ledger record drops it out of the awaiting-triage set
+    /// and stamps a `resolved_at` — the core that makes `analyze` counts fall.
+    #[test]
+    fn close_open_records_closes_and_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // Two open punts for the spec, plus one for a different spec.
+        append_to_ledger(root, &rec_for("STORY-A", "punted")).unwrap();
+        append_to_ledger(root, &rec_for("STORY-A", "punted")).unwrap();
+        append_to_ledger(root, &rec_for("STORY-B", "punted")).unwrap();
+
+        let before = read_ledger(root);
+        assert_eq!(before.iter().filter(|r| is_open(r)).count(), 3);
+
+        let closed = close_open_records(
+            root,
+            "STORY-A",
+            RESOLUTION_HUMAN_RESOLVED,
+            "resolved",
+            Some("A"),
+            Some("cli"),
+        )
+        .unwrap();
+        assert_eq!(closed, 2, "both STORY-A punts close");
+
+        let after = read_ledger(root);
+        assert_eq!(
+            after.iter().filter(|r| is_open(r)).count(),
+            1,
+            "only STORY-B remains open"
+        );
+        for r in after.iter().filter(|r| r.spec == "STORY-A") {
+            assert_eq!(r.resolution_path, RESOLUTION_HUMAN_RESOLVED);
+            assert_eq!(r.decision.as_deref(), Some("resolved"));
+            assert_eq!(r.answer.as_deref(), Some("A"));
+            assert_eq!(r.answered_by.as_deref(), Some("cli"));
+            assert!(r.resolved_at.is_some());
+        }
+
+        // Idempotent: re-closing finds nothing open for the spec.
+        let again = close_open_records(
+            root,
+            "STORY-A",
+            RESOLUTION_HUMAN_RESOLVED,
+            "resolved",
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(again, 0);
+    }
+
+    /// `resolve_punt_core` writes the SAME `PuntResponse` shape the MCP
+    /// `resolve_punt` tool does AND closes the ledger.
+    #[test]
+    fn resolve_punt_core_writes_response_and_closes_ledger() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        append_to_ledger(root, &rec_for("STORY-C", "punted")).unwrap();
+
+        let (path, closed) = resolve_punt_core(
+            root,
+            "STORY-C",
+            "use approach A",
+            "simpler",
+            Some("A".into()),
+            Some("cli"),
+        )
+        .unwrap();
+        assert_eq!(closed, 1);
+        // The response file parses back as a Resolved PuntResponse — the exact
+        // shape the orchestrator (and the MCP tool) round-trip.
+        let resp = read_punt_response(&path).expect("response written");
+        assert_eq!(resp.resolution, PuntResolution::Resolved);
+        assert_eq!(resp.answer.as_deref(), Some("use approach A"));
+        assert_eq!(resp.reasoning, "simpler");
+        // Ledger record closed.
+        assert_eq!(read_ledger(root).iter().filter(|r| is_open(r)).count(), 0);
+    }
+
+    /// `escalate_punt_core` writes an Escalated response and closes the ledger
+    /// as escalated-to-human; `dismiss_punt_core` closes without a response.
+    #[test]
+    fn escalate_and_dismiss_cores_close_ledger() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        append_to_ledger(root, &rec_for("STORY-D", "punted")).unwrap();
+        append_to_ledger(root, &rec_for("STORY-E", "punted")).unwrap();
+
+        let (epath, ec) = escalate_punt_core(
+            root,
+            "STORY-D",
+            "needs a human",
+            Some("strategy".into()),
+            None,
+            Some("cli"),
+        )
+        .unwrap();
+        assert_eq!(ec, 1);
+        let eresp = read_punt_response(&epath).unwrap();
+        assert_eq!(eresp.resolution, PuntResolution::Escalated);
+        assert_eq!(eresp.escalation_reason.as_deref(), Some("strategy"));
+
+        let dc = dismiss_punt_core(root, "STORY-E", Some("cli")).unwrap();
+        assert_eq!(dc, 1);
+        // No response file for a dismiss.
+        assert_eq!(
+            read_punt_response(&punt_response_path(root, "STORY-E")),
+            None
+        );
+
+        assert_eq!(read_ledger(root).iter().filter(|r| is_open(r)).count(), 0);
+    }
+
+    /// Build a minimal OPEN punt record for `spec` on a fixed timestamp.
+    fn rec_for(spec: &str, resolution_path: &str) -> PuntRecord {
+        let mut r = rec("2026-06-20", resolution_path);
+        r.spec = spec.to_string();
+        r
     }
 }
