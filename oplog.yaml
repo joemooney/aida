@@ -29330,5 +29330,24 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2826
+- id: 019f1bcb-fd4a-7231-87f2-e684b72652b8
+  target_id: 019f1bcb-f025-7392-a6a0-16836f9b20f6
+  author: aida
+  node_id: '1'
+  lamport: 2827
+  timestamp: 2026-07-01T03:49:41.322478754Z
+  kind: !Create
+    title: Reconcile descendant_ids vs graph --tree subtree membership (43 vs 44 on EPIC-54)
+    description: |-
+      Split out from BUG-678. Two subtree-closure implementations disagree on membership: backend.descendant_ids() (used by the aida focus rollup) returns a 43-item EPIC-54 subtree, while aida graph --tree returns 44 (3 rejected vs 2). One rejected node reachable in the graph traversal is absent from the descendant_ids closure.
+
+      INVESTIGATE: why the two closures differ (likely a relationship-edge type or direction one follows and the other does not), decide which is correct, and make focus and graph agree on what is in an epic subtree.
+
+      REPRODUCE: aida focus epic-54 (rollup total) vs aida graph epic-54 --tree row count. Note: the rollup total is also distorted by BUG-678 (rejected-counted-as-open); this task is specifically the MEMBERSHIP/closure discrepancy, not the bucketing.
+
+      Lower priority than BUG-678 part 1 (the bucketing fix) — this is a correctness-of-closure investigation, not a visible miscount.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2827
 node_id: '1'
