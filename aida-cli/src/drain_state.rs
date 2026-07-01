@@ -321,6 +321,12 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
     state.run_uuid = run_uuid.to_string();
     state.zen = zen;
     let _ = state.write(project_root);
+    // TASK-993: bound the event stream — rotate at this run-started boundary if
+    // it has outgrown the size cap, so it can't grow unbounded across many
+    // drains. Rotating only here (a drain/member boundary, never mid-phase)
+    // keeps the offset-tracking consumers safe: they reset to offset 0 on the
+    // shrink and re-read the fresh stream. trace:TASK-993
+    crate::events::rotate_if_oversized(project_root);
     // STORY-712: emit the matching event-stream line so a watcher can be woken
     // by a stream-tail instead of polling this snapshot. Best-effort. trace:TASK-988
     crate::events::emit(
