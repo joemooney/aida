@@ -117,7 +117,7 @@ id_config:
     description: Database configuration and templates
 features: []
 next_feature_number: 239
-next_spec_number: 440
+next_spec_number: 441
 prefix_counters: {}
 relationship_definitions:
 - name: parent
