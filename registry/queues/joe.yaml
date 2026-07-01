@@ -433,10 +433,3 @@
   note: auto-queued by `session end` (019e9171); covers 1 spec
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
-- user_id: joe
-  requirement_id: 019f05e5-9a5a-7992-b1ca-ec795a4b78f7
-  position: 342000
-  added_by: joe
-  added_at: 2026-07-01T16:11:35.462069394Z
-  for_role: implementer
-  added_by_machine: imac
