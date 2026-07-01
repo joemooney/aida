@@ -390,19 +390,124 @@ pub(crate) enum IntegrateStrategy {
 /// with a pointer rather than a silent no-op. trace:STORY-335 | ai:claude
 pub(crate) fn strategy_unsupported_message(strategy: IntegrateStrategy) -> Option<String> {
     match strategy {
-        IntegrateStrategy::PerItem => None,
+        // `per-item` is the MVP; `stacked` is built as a stack-aware ordering +
+        // gating layer over the same per-item drive (TASK-841). Only `one-branch`
+        // remains unbuilt.
+        IntegrateStrategy::PerItem | IntegrateStrategy::Stacked => None,
         IntegrateStrategy::OneBranch => Some(
             "the `one-branch` accumulation strategy isn't built yet — all batch items on one \
              branch with a single rebase + PR is a follow-up. Use `--strategy per-item` (default)."
                 .to_string(),
         ),
-        IntegrateStrategy::Stacked => Some(
-            "the `stacked` accumulation strategy isn't built yet — rebasing a stacked branch chain \
-             as a unit is a follow-up (gated on stacked-branch awareness). Use `--strategy \
-             per-item` (default)."
-                .to_string(),
-        ),
     }
+}
+
+// ── TASK-841: stacked-branch integration planning ───────────────────────────
+//
+// COMPLETION MODEL (the design decision this task gated on): a stacked batch
+// integrates with PER-COMMIT completion — each member is Completed when its OWN
+// commit lands on the default branch, via the existing done→completed auto-bump
+// (STORY-86), NOT held until the whole stack lands. `completed` already MEANS
+// "merged to the default branch", so once a member's PR merges it genuinely is
+// on main; an atomic whole-stack model would need a new "pending" barrier and
+// would misreport a landed member as still-Done for zero benefit. The auto-bump
+// fires per-spec per-merged-commit, so no new completion machinery is needed —
+// the integrator's only extra job over `per-item` is to ORDER and GATE.
+//
+// This planner is the pure core of that ordering/gating: given the ready set +
+// each member's PR branch + the recorded stack graph, decide which members are
+// mergeable THIS pass (bottom-of-stack first) and which must be DEFERRED because
+// their stack-parent hasn't landed yet. Side-effect-free → exhaustively
+// unit-tested, exactly like `classify_candidate`.
+//
+// Scope of THIS slice: merge the mergeable bottom layer safely and defer
+// still-stacked members with a legible, actionable line (the drive's `aida pull`
+// then cascade-rebases the next layer's worktree; STORY-248). Force-pushing a
+// promoted child's PR branch with the stack-aware `git rebase --onto
+// origin/main <parent_sha>` — so the second layer becomes mergeable
+// automatically instead of waiting on a manual `/aida-rebase` — is the tracked
+// follow-up (TASK-1080). trace:TASK-841 | ai:claude
+
+/// A ready stacked member held back this pass because its stack-parent hasn't
+/// landed on the default branch yet.
+// trace:TASK-841 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeferredMember {
+    /// The deferred member's spec id.
+    pub id: String,
+    /// The stack-parent branch that must land (merge) first.
+    pub blocked_on_branch: String,
+    /// The ready member that owns `blocked_on_branch`, when the parent is itself
+    /// in this pass's ready set — for a legible "waiting on SPEC-X" line. `None`
+    /// when the parent isn't ready (not Done / no PR yet) or already merged but
+    /// the child's PR branch still needs a stack-aware rebase.
+    pub blocked_on_spec: Option<String>,
+}
+
+/// The bottom-up plan for one integrate pass over a stacked ready set.
+// trace:TASK-841 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct StackedPlan {
+    /// Members mergeable this pass — each a bottom-of-stack (parent is the
+    /// default branch) or an independent branch, so a plain rebase-onto-main is
+    /// correct. Preserves the caller's input order (stable).
+    pub mergeable: Vec<String>,
+    /// Members held back this pass — their stack-parent must land first.
+    pub deferred: Vec<DeferredMember>,
+}
+
+/// Partition a stacked ready set into mergeable-this-pass vs deferred, using the
+/// recorded stack graph. A member is mergeable iff it is NOT stacked behind
+/// another still-open branch: either it has no stack entry (an independent
+/// branch forked from main), or its recorded `parent_branch` IS the default
+/// branch (the bottom of a chain). Anything stacked behind another branch is
+/// deferred — merging it now would drag the parent's un-squashed commits in
+/// under the wrong PR.
+// trace:TASK-841 | ai:claude
+pub(crate) fn plan_stacked_integration(
+    ready_ids: &[String],
+    branch_of: &std::collections::HashMap<String, Option<String>>,
+    graph: &crate::stacks::StackGraph,
+    default_branch: &str,
+) -> StackedPlan {
+    // Reverse map: PR branch -> ready spec id, so a deferred child can name the
+    // ready sibling that owns its parent branch.
+    let mut spec_of_branch: std::collections::HashMap<&str, &str> =
+        std::collections::HashMap::new();
+    for id in ready_ids {
+        if let Some(Some(b)) = branch_of.get(id) {
+            spec_of_branch.insert(b.as_str(), id.as_str());
+        }
+    }
+
+    let mut plan = StackedPlan::default();
+    for id in ready_ids {
+        let branch = match branch_of.get(id).and_then(|b| b.as_deref()) {
+            Some(b) => b,
+            // No resolved PR branch → treat as independent; keep it mergeable so
+            // we never silently drop a ready spec (the drive re-gates it).
+            None => {
+                plan.mergeable.push(id.clone());
+                continue;
+            }
+        };
+        match graph.get(branch) {
+            // Not in the stack graph → an independent branch (or a child the
+            // cascade already un-stacked). Mergeable; the drive re-gates.
+            None => plan.mergeable.push(id.clone()),
+            // Bottom of a chain — nothing un-landed sits beneath it.
+            Some(entry) if entry.parent_branch == default_branch => plan.mergeable.push(id.clone()),
+            // Stacked behind another branch → defer until the parent lands.
+            Some(entry) => plan.deferred.push(DeferredMember {
+                id: id.clone(),
+                blocked_on_branch: entry.parent_branch.clone(),
+                blocked_on_spec: spec_of_branch
+                    .get(entry.parent_branch.as_str())
+                    .map(|s| s.to_string()),
+            }),
+        }
+    }
+    plan
 }
 
 /// Parse a strategy from its CLI/config string form (`per-item`, `one-branch`,
@@ -976,22 +1081,20 @@ mod tests {
     // ── STORY-335 strategy selector ─────────────────────────────────────────
 
     #[test]
-    fn per_item_strategy_is_supported() {
+    fn per_item_and_stacked_strategies_are_supported() {
+        // TASK-841: stacked is now built (a stack-aware layer over per-item).
         assert!(strategy_unsupported_message(IntegrateStrategy::PerItem).is_none());
+        assert!(strategy_unsupported_message(IntegrateStrategy::Stacked).is_none());
     }
 
     #[test]
-    fn one_branch_and_stacked_error_cleanly_pointing_at_followup() {
+    fn one_branch_errors_cleanly_pointing_at_followup() {
         // Accepted on the CLI but not built — must refuse with a pointer to the
         // supported strategy, never silently no-op.
         let one = strategy_unsupported_message(IntegrateStrategy::OneBranch)
             .expect("one-branch is unsupported");
         assert!(one.contains("one-branch"));
         assert!(one.contains("per-item"));
-        let stacked = strategy_unsupported_message(IntegrateStrategy::Stacked)
-            .expect("stacked is unsupported");
-        assert!(stacked.contains("stacked"));
-        assert!(stacked.contains("per-item"));
     }
 
     #[test]
@@ -1012,6 +1115,83 @@ mod tests {
         );
         assert_eq!(parse_strategy("bogus"), None);
         assert_eq!(parse_strategy(""), None);
+    }
+
+    // ── TASK-841 stacked integration planner ────────────────────────────────
+
+    fn branch_map(
+        pairs: &[(&str, Option<&str>)],
+    ) -> std::collections::HashMap<String, Option<String>> {
+        pairs
+            .iter()
+            .map(|(id, b)| (id.to_string(), b.map(|s| s.to_string())))
+            .collect()
+    }
+
+    fn stack_entry(branch: &str, parent: &str) -> crate::stacks::StackEntry {
+        crate::stacks::StackEntry {
+            branch: branch.to_string(),
+            parent_branch: parent.to_string(),
+            parent_branch_sha: "sha".to_string(),
+            spec_id: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn plan_stacked_no_graph_is_all_mergeable() {
+        // No stack entries → every ready member is an independent branch.
+        let ready = vec!["A".to_string(), "B".to_string()];
+        let branches = branch_map(&[("A", Some("a")), ("B", Some("b"))]);
+        let graph = crate::stacks::StackGraph::default();
+        let plan = plan_stacked_integration(&ready, &branches, &graph, "main");
+        assert_eq!(plan.mergeable, vec!["A".to_string(), "B".to_string()]);
+        assert!(plan.deferred.is_empty());
+    }
+
+    #[test]
+    fn plan_stacked_defers_child_behind_ready_parent() {
+        // A (branch a, forked from main) ← B (branch b, forked from a). Both
+        // ready. A is the bottom → mergeable; B is stacked behind a → deferred,
+        // and it names A as the ready sibling it waits on.
+        let ready = vec!["A".to_string(), "B".to_string()];
+        let branches = branch_map(&[("A", Some("a")), ("B", Some("b"))]);
+        let mut graph = crate::stacks::StackGraph::default();
+        crate::stacks::add(&mut graph, stack_entry("a", "main"));
+        crate::stacks::add(&mut graph, stack_entry("b", "a"));
+        let plan = plan_stacked_integration(&ready, &branches, &graph, "main");
+        assert_eq!(plan.mergeable, vec!["A".to_string()]);
+        assert_eq!(plan.deferred.len(), 1);
+        assert_eq!(plan.deferred[0].id, "B");
+        assert_eq!(plan.deferred[0].blocked_on_branch, "a");
+        assert_eq!(plan.deferred[0].blocked_on_spec.as_deref(), Some("A"));
+    }
+
+    #[test]
+    fn plan_stacked_defers_child_whose_parent_is_not_ready() {
+        // The child's parent branch merged already (or isn't in the ready set),
+        // so blocked_on_spec is None — but the child is still deferred until the
+        // stack-aware rebase promotes it (the tracked follow-up).
+        let ready = vec!["B".to_string()];
+        let branches = branch_map(&[("B", Some("b"))]);
+        let mut graph = crate::stacks::StackGraph::default();
+        crate::stacks::add(&mut graph, stack_entry("b", "a"));
+        let plan = plan_stacked_integration(&ready, &branches, &graph, "main");
+        assert!(plan.mergeable.is_empty());
+        assert_eq!(plan.deferred.len(), 1);
+        assert_eq!(plan.deferred[0].blocked_on_spec, None);
+    }
+
+    #[test]
+    fn plan_stacked_member_with_no_branch_stays_mergeable() {
+        // A ready spec whose PR branch couldn't be resolved must not be silently
+        // dropped — keep it mergeable and let the drive re-gate it.
+        let ready = vec!["A".to_string()];
+        let branches = branch_map(&[("A", None)]);
+        let graph = crate::stacks::StackGraph::default();
+        let plan = plan_stacked_integration(&ready, &branches, &graph, "main");
+        assert_eq!(plan.mergeable, vec!["A".to_string()]);
+        assert!(plan.deferred.is_empty());
     }
 
     #[test]
