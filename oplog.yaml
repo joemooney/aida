@@ -29373,5 +29373,13 @@ operations:
       - Regression: with the EPIC-54 subtree, aida focus epic-54 reports the true open count (3 at time of filing), not the rejected-inflated count.
 
       SCOPE: this bug is ONLY the rejected-as-open bucketing. The separate descendant_ids-vs-graph-tree subtree MEMBERSHIP mismatch (43 vs 44) is split out to TASK-1074.
-clock: 2828
+- id: 019f1bcd-b4f1-79e2-8ba3-6d4dca7ce949
+  target_id: 019f1b72-9031-7ea0-a988-0dba23f1d9ce
+  author: aida
+  node_id: '1'
+  lamport: 2829
+  timestamp: 2026-07-01T03:51:33.873995257Z
+  kind: !SetTitle
+    title: aida focus rollup counts rejected specs as "open"
+clock: 2829
 node_id: '1'
