@@ -26,11 +26,19 @@ $ aida zen "warn me when two specs claim the same file"
 
 A raw thought becomes gated, reviewed, merged code — in one line.
 
-**Want to look before you leap?** `--dry-run` shows you what it *would* draft and drive, without filing anything:
+**Want to look before you leap?** `--dry-run` renders the actual spec it *would* draft from your thought — AI-written title, description, and acceptance criteria — without filing anything:
 
 ```
 $ aida zen "warn me when two specs claim the same file" --dry-run
-would draft + file + drive: warn me when two specs claim the same file
+
+▸ would draft + file + drive a new Draft from your thought:
+
+  ◯ Warn when two specs claim the same file
+  ▸ Description:
+    ...
+  ▸ Acceptance (N items):
+    • ...
+  ✓ AI-drafted from your thought.
 ```
 
 **Prefer to skip the AI draft?** Set `AIDA_ZEN_NO_AI=1` and your sentence becomes the spec title verbatim — a fast, offline fallback when you'd rather word it yourself.
@@ -159,3 +167,7 @@ That's it. You described a change in one line and the next time you looked, it w
 | "Wait — what's actually running?" | `aida burndown status` · `aida ps` |
 
 Start at the top, where a sentence is all it takes. Slide down the list as the rhythm gets familiar and you want more of the trip in your own hands. The power was always there — now the front door is a single thought you can type.
+
+---
+
+**What changed lately?** See [`whats-new-2026-06.md`](whats-new-2026-06.md) for the June 2026 round of refinements — organized by who benefits (human, agent, cockpit).
