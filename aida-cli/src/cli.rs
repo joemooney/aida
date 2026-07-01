@@ -1008,6 +1008,14 @@ pub enum SessionCommand {
         // trace:TASK-55 | ai:claude
         #[clap(long)]
         all: bool,
+        /// Emit the lease list as JSON for machine consumers. Each lease
+        /// carries a `drain` cross-reference — the orchestrator drain/run
+        /// driving it (run uuid, phase, mode, orchestrator pid), or null
+        /// when the lease is not the active drain member. Honors `--all`
+        /// (stale leases included) but omits the cross-clone section.
+        // trace:TASK-345 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
 
     /// Show details for one session lease (defaults to the lease covering
