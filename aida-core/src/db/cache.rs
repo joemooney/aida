@@ -381,6 +381,41 @@ const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
 const META_KEY_BUILT_AT: &str = "built_at";
 const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[100, 200, 400, 800, 1600, 3200, 6400, 12800];
 
+// BUG-681: a SHORT bounded retry ladder used only on advisory, skippable read
+// paths (the per-turn `aida awaiting --notice` hook). The default ladder above
+// sums to ~25s worst case; under lock contention that blows past Claude Code's
+// 5s UserPromptSubmit hook timeout and the hook is killed. When fast-fail mode
+// is armed for the current thread, a lock-contended open/read gives up after
+// ~150ms so the notice degrades to empty (prints nothing) instead of blocking a
+// prompt. Scoped to the notice path ONLY — normal reads/writes keep the full
+// resilient ladder. trace:BUG-681
+const FAST_FAIL_CACHE_RETRY_DELAYS_MS: &[u64] = &[50, 100];
+
+thread_local! {
+    // Armed by the `aida awaiting --notice` path before the cache is opened, so
+    // BOTH the connection open and the summary reads honor the short ladder.
+    // trace:BUG-681
+    static FAST_FAIL_CACHE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Arm/disarm fast-fail cache mode for the CURRENT THREAD, returning the prior
+/// value so a caller can restore it. When armed, the cache retry ladder collapses
+/// to a short bounded set of delays (~150ms total) so a lock-contended cache
+/// open/read fails fast and the caller can degrade gracefully instead of blocking
+/// on the full exponential backoff. Scoped to advisory, skippable read paths —
+/// currently the per-turn `aida awaiting --notice` hook, which must never block a
+/// Claude Code prompt. Does NOT change timing for any normal read/write.
+// trace:BUG-681 | ai:claude
+pub fn set_fast_fail_cache(on: bool) -> bool {
+    FAST_FAIL_CACHE.with(|c| c.replace(on))
+}
+
+/// Whether fast-fail cache mode is currently armed on this thread.
+// trace:BUG-681 | ai:claude
+pub fn fast_fail_cache_enabled() -> bool {
+    FAST_FAIL_CACHE.with(|c| c.get())
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct CacheLockInfo {
     pub pid: u32,
@@ -522,6 +557,24 @@ where
 }
 
 fn cache_retry_delays() -> Vec<Duration> {
+    // BUG-681: on the advisory notice path, collapse to the short bounded ladder
+    // so a lock-contended open/read fails fast (~150ms) rather than blocking on
+    // the full ~25s exponential backoff. An explicit AIDA_CACHE_RETRY_COUNT=0
+    // still wins (disables retries entirely) for tests that simulate a hard lock.
+    if fast_fail_cache_enabled() {
+        let disabled = std::env::var("AIDA_CACHE_RETRY_COUNT")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .map(|c| c == 0)
+            .unwrap_or(false);
+        if disabled {
+            return Vec::new();
+        }
+        return FAST_FAIL_CACHE_RETRY_DELAYS_MS
+            .iter()
+            .map(|&ms| Duration::from_millis(ms))
+            .collect();
+    }
     let count = std::env::var("AIDA_CACHE_RETRY_COUNT")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
@@ -3162,6 +3215,88 @@ mod tests {
         assert!(cache_retry_delays().is_empty());
 
         std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+    }
+
+    // BUG-681: on the advisory `aida awaiting --notice` path, the retry ladder
+    // must collapse to a short bounded set so a lock-contended open/read bails in
+    // ~150ms instead of the full ~25s backoff that blows past Claude Code's 5s
+    // UserPromptSubmit hook timeout. Normal (unarmed) reads keep the full ladder.
+    #[test]
+    fn fast_fail_cache_mode_uses_short_bounded_ladder() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+
+        // Off by default → the full, patient production ladder.
+        assert!(!fast_fail_cache_enabled());
+        let full: u128 = cache_retry_delays().iter().map(|d| d.as_millis()).sum();
+        assert!(full >= 10_000, "unarmed reads keep the resilient ladder");
+
+        // Armed → a short bounded ladder that bails well under the 5s hook budget.
+        let prior = set_fast_fail_cache(true);
+        assert!(fast_fail_cache_enabled());
+        let fast = cache_retry_delays()
+            .into_iter()
+            .map(|d| d.as_millis())
+            .collect::<Vec<_>>();
+        assert_eq!(fast, vec![50, 100]);
+        assert!(
+            fast.iter().sum::<u128>() < 1_000,
+            "notice-path ladder must bail far under the 5s hook timeout"
+        );
+
+        // An explicit AIDA_CACHE_RETRY_COUNT=0 still disables retries entirely.
+        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
+        assert!(cache_retry_delays().is_empty());
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+
+        // Restore the thread-local so a reused test thread is unaffected.
+        set_fast_fail_cache(prior);
+        assert!(!fast_fail_cache_enabled());
+    }
+
+    // BUG-681: end-to-end — with fast-fail armed, a lock-contended cache
+    // read/open must GIVE UP quickly rather than block on the full retry budget.
+    // We drive the shared retry driver (`with_cache_retry`) with a closure that
+    // ALWAYS reports SQLITE_BUSY, simulating a writer that never releases the
+    // lock. Without the fix this spins ~25s (well past the 5s hook timeout); with
+    // it, the notice-path short ladder gives up in a fraction of a second.
+    #[test]
+    fn fast_fail_cache_retry_bails_fast_on_persistent_lock() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+
+        // A fresh SQLITE_BUSY error per attempt (rusqlite::Error is not Clone).
+        let busy = || {
+            anyhow::Error::new(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+                Some("database is locked".to_string()),
+            ))
+        };
+
+        let prior = set_fast_fail_cache(true);
+        let started = std::time::Instant::now();
+        let result: Result<()> =
+            with_cache_retry(&cache_path, "simulated locked read", || Err(busy()));
+        let elapsed = started.elapsed();
+        set_fast_fail_cache(prior);
+
+        let err = result.expect_err("a permanently-locked read must surface an error, not hang");
+        assert!(
+            err.to_string().contains("locked"),
+            "the surfaced error should name the lock condition: {err}"
+        );
+        // Short ladder is 50ms + 100ms of sleeps; comfortably under a second and
+        // an order of magnitude under both the ~25s full ladder and the 5s hook
+        // timeout.
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "fast-fail retry must give up in ~150ms, took {elapsed:?}"
+        );
     }
 
     #[test]
