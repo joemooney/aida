@@ -3,12 +3,12 @@ spec_id: TASK-330
 agreed_id: TASK-330
 title: Stamp the Claude session ID onto comments so `aida session list` can
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-18T00:30:12.336534153Z
-modified_at: 2026-06-06T04:17:09.398825213Z
+modified_at: 2026-07-01T18:55:43.901565763Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,5 +20,23 @@ comments:
   content: 'Linkage 2026-05-17: this TASK is the prerequisite wiring for BUG-112''s deferred criterion 3 (dialog fallback to most-recent comment by session ID). Reviewer verdict on PR-80 was Approved with criterion 3 explicitly deferred to this TASK. Once this TASK ships, the follow-up to wire criterion 3 into BUG-112''s behavior can be a small extension (or could be bundled into this TASK''s acceptance if it makes sense to ship together).'
   created_at: 2026-05-18T00:43:08.583145815Z
   modified_at: 2026-05-18T00:43:08.583145815Z
+history:
+- id: 019f1f09-7ebb-75b1-a68f-3d9eff0d8d00
+  author: aida-auto-bump
+  timestamp: 2026-07-01T18:55:43.803871520Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1f09-7f1d-7453-9962-227d21bb4fd9
+  timestamp: 2026-07-01T18:55:43.901559075Z
+  agent: aida
+  commit_sha: 05a3180c19aeb4e230284527fcb2eb8626697e25
+  summary: Completed via merge 05a3180c
 archived: true
 archived_at: 2026-06-06T04:17:09.398825213Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T18:55:42.750595635Z
+  completion_sha: 05a3180c19aeb4e230284527fcb2eb8626697e25

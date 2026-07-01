@@ -3,12 +3,12 @@ spec_id: TASK-345
 agreed_id: TASK-345
 title: '`aida session leases --json` could include the drain cross-reference'
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T06:50:34.100989938Z
-modified_at: 2026-07-01T18:46:27.499443979Z
+modified_at: 2026-07-01T18:55:43.998231498Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,5 +20,23 @@ comments:
   content: Commit b786df572 references this requirement
   created_at: 2026-07-01T18:46:27.499443979Z
   modified_at: 2026-07-01T18:46:27.499443979Z
+history:
+- id: 019f1f09-7f1d-7453-9962-2289fc6c4a50
+  author: aida-auto-bump
+  timestamp: 2026-07-01T18:55:43.901747968Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1f09-7f7e-7910-a5a5-643cdb9d03c9
+  timestamp: 2026-07-01T18:55:43.998225926Z
+  agent: aida
+  commit_sha: 168f4f1b9537b989417f3732fd2d4a07f0c2b615
+  summary: Completed via merge 168f4f1b
 archived: true
 archived_at: 2026-06-06T04:17:23.941798862Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T18:55:42.750595635Z
+  completion_sha: 168f4f1b9537b989417f3732fd2d4a07f0c2b615
