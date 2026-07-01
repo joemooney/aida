@@ -95124,9 +95124,13 @@ fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
         cli::HumanCommand::Away => handle_away_command(),
         cli::HumanCommand::Home => handle_home_command(),
         cli::HumanCommand::Presence | cli::HumanCommand::Status => handle_presence_command(),
-        cli::HumanCommand::Unblock { copy, stdout, json } => {
-            handle_human_unblock(*copy, *stdout, *json)
-        }
+        cli::HumanCommand::Unblock {
+            copy,
+            stdout,
+            json,
+            interactive,
+            then_drain,
+        } => handle_human_unblock(*copy, *stdout, *json, *interactive, *then_drain),
         // STORY-611: the action aliases need a storage handle, so they are
         // dispatched in the main `run()` body (where `backend`/`store_path`
         // are in scope), not here. This arm is unreachable from the early
@@ -95172,6 +95176,8 @@ mod story_611_human_alias_tests {
             copy: false,
             stdout: false,
             json: false,
+            interactive: false,
+            then_drain: false,
         }));
     }
 
@@ -95199,7 +95205,13 @@ mod story_611_human_alias_tests {
 }
 
 /// STORY-563: the `aida human unblock` body. trace:STORY-563 | ai:claude
-fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
+fn handle_human_unblock(
+    copy: bool,
+    stdout: bool,
+    json: bool,
+    interactive: bool,
+    then_drain: bool,
+) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let store = load_store_for_lookup(&project_root).ok_or_else(|| {
@@ -95225,6 +95237,13 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
             })
         })
         .collect();
+
+    // STORY-750: --interactive walks the human-blocked set and resolves each
+    // hurdle inline (self-invoking the existing `aida` verbs) instead of emitting
+    // the paste-ready advisor prompt. trace:STORY-750 | ai:claude
+    if interactive {
+        return run_interactive_unblock_sweep(lines, then_drain);
+    }
 
     // --json: the classification, for machine consumers / the TUI.
     if json {
@@ -95315,6 +95334,227 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
         println!("  {}", line.dimmed());
     }
     Ok(())
+}
+
+/// STORY-750: the `aida human unblock --interactive` sweep — walk the
+/// human-blocked specs CHEAPEST-first and resolve each inline. Impure (TTY
+/// prompts + self-invoked `aida` verbs); the menus + walk order are the pure,
+/// unit-tested `burndown::sweep_*` helpers.
+fn run_interactive_unblock_sweep(
+    lines: Vec<burndown::UnblockLine>,
+    then_drain: bool,
+) -> Result<()> {
+    // Needs a human at the keyboard: `inquire` reads stdin. In a non-TTY / agent
+    // context, degrade with clear guidance rather than hang or silently no-op.
+    if non_interactive_confirm() {
+        anyhow::bail!(
+            "`aida human unblock --interactive` needs a terminal. Run `aida human unblock` \
+             (no flag) for the paste-ready advisor prompt, or `--json` for the machine view."
+        );
+    }
+
+    if lines.is_empty() {
+        println!(
+            "{} nothing blocked on you — every open spec is drive-ready or self-resolving.",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+        return Ok(());
+    }
+
+    let ordered = burndown::sweep_walk_order(lines);
+    let actionable = ordered
+        .iter()
+        .filter(|l| burndown::sweep_is_actionable(l.class))
+        .count();
+
+    println!(
+        "{} {} spec(s) need you — walking cheapest-first ({} actionable). Ctrl-C to stop.",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        ordered.len(),
+        actionable
+    );
+    println!();
+
+    let (mut resolved, mut skipped) = (0usize, 0usize);
+    for line in &ordered {
+        // Informational (leave-parked) rows: list + move on, no prompt.
+        if !burndown::sweep_is_actionable(line.class) {
+            println!(
+                "  {} {} — {} (left parked)",
+                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed(),
+                line.id.dimmed(),
+                line.reason.dimmed()
+            );
+            continue;
+        }
+
+        let menu = burndown::sweep_menu(line.class);
+        let labels: Vec<&str> = menu.iter().map(|c| c.label()).collect();
+        let heading = format!("{} — {}", line.id, line.reason);
+        let picked = match inquire::Select::new(&heading, labels).prompt() {
+            Ok(label) => menu
+                .iter()
+                .copied()
+                .find(|c| c.label() == label)
+                .unwrap_or(burndown::SweepChoice::Skip),
+            // Esc / Ctrl-C: stop the sweep cleanly.
+            Err(inquire::InquireError::OperationCanceled)
+            | Err(inquire::InquireError::OperationInterrupted) => {
+                println!(
+                    "  {} sweep stopped.",
+                    crate::glyph(crate::glyphs::Glyph::Cross).yellow()
+                );
+                break;
+            }
+            Err(e) => anyhow::bail!("prompt failed: {e}"),
+        };
+
+        if apply_sweep_choice(&line.id, picked)? {
+            resolved += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    println!();
+    println!(
+        "{} sweep done — {} resolved, {} left for now.",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        resolved,
+        skipped
+    );
+
+    if then_drain {
+        report_drain_readiness();
+    }
+    Ok(())
+}
+
+/// STORY-750: perform ONE sweep resolution by self-invoking the existing `aida`
+/// verb — so the write path is the SAME one `aida edit` / `aida queue add` use,
+/// never a re-implementation. Returns `true` if it mutated the spec toward
+/// drive-ready, `false` if it only surfaced guidance / the operator skipped.
+// trace:STORY-750 | ai:claude
+fn apply_sweep_choice(id: &str, choice: burndown::SweepChoice) -> Result<bool> {
+    use burndown::SweepChoice;
+    match choice {
+        SweepChoice::ApproveQueue => {
+            self_invoke_aida(&["edit", id, "--status", "approved"])?;
+            self_invoke_aida(&["queue", "add", id])?;
+            println!(
+                "    {} {id} approved & queued.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+            Ok(true)
+        }
+        SweepChoice::Reject => {
+            self_invoke_aida(&["edit", id, "--status", "rejected"])?;
+            println!(
+                "    {} {id} rejected.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+            Ok(true)
+        }
+        SweepChoice::Queue => {
+            self_invoke_aida(&["queue", "add", id])?;
+            println!(
+                "    {} {id} queued.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+            Ok(true)
+        }
+        SweepChoice::LaunchGuided => {
+            // The operator chose to resolve the design NOW — hand off to the real
+            // guided resolver (its own focused session), then return to the sweep.
+            self_invoke_aida(&["queue", "work", id, "--guided"])?;
+            Ok(true)
+        }
+        SweepChoice::AddNote => {
+            let note = inquire::Text::new("Decision note:")
+                .prompt()
+                .unwrap_or_default();
+            if note.trim().is_empty() {
+                println!(
+                    "    {} no note entered — left parked.",
+                    crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+                );
+                return Ok(false);
+            }
+            self_invoke_aida(&["comment", "add", id, note.trim()])?;
+            println!(
+                "    {} note recorded on {id} (left parked).",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+            Ok(false)
+        }
+        SweepChoice::Clarify => {
+            println!(
+                "    {} clarify its acceptance, then it becomes queueable:",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan()
+            );
+            println!("      aida edit {id}   (add a `## Acceptance` section)");
+            Ok(false)
+        }
+        SweepChoice::ShowReview => {
+            println!(
+                "    {} it's built — review it (don't re-queue): aida review {id}  (or reopen its draft PR)",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan()
+            );
+            Ok(false)
+        }
+        SweepChoice::ShowBlocker => {
+            // `aida why` surfaces the dependency chain in detail; best-effort.
+            let _ = self_invoke_aida(&["why", id]);
+            Ok(false)
+        }
+        SweepChoice::Skip => Ok(false),
+    }
+}
+
+/// STORY-750: run `aida <args>` as a child, INHERITING stdio so nested prompts /
+/// sessions work, and surface a non-zero exit as an error.
+fn self_invoke_aida(args: &[&str]) -> Result<()> {
+    let exe =
+        std::env::current_exe().map_err(|e| anyhow::anyhow!("locate the aida binary: {e}"))?;
+    let status = std::process::Command::new(exe)
+        .args(args)
+        .status()
+        .map_err(|e| anyhow::anyhow!("run `aida {}`: {e}", args.join(" ")))?;
+    if !status.success() {
+        anyhow::bail!("`aida {}` exited with {status}", args.join(" "));
+    }
+    Ok(())
+}
+
+/// STORY-750: after a sweep, re-classify and report how many specs still need the
+/// human, naming the drain command for the now-ready set. Read-only + best-effort
+/// (never fails the sweep).
+fn report_drain_readiness() {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let Some(store) = load_store_for_lookup(&project_root) else {
+        return;
+    };
+    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let queued_ids = all_queued_requirement_ids(&project_root);
+    let facts = collect_unblock_facts(&store, &in_flight_scopes, &queued_ids);
+    let still_blocked = facts
+        .iter()
+        .filter(|f| burndown::classify_unblock(f).is_some())
+        .count();
+    println!();
+    println!(
+        "{} {} spec(s) still need you · {} queued and drive-ready.",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        still_blocked,
+        queued_ids.len()
+    );
+    if !queued_ids.is_empty() {
+        println!(
+            "  {}",
+            "Drain the ready set: `aida burndown` (or `aida queue work --auto-complete`).".dimmed()
+        );
+    }
 }
 
 /// STORY-631: `aida intent <ID>` — the cached, drift-stamped, AI-generated

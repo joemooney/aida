@@ -9907,6 +9907,22 @@ pub enum HumanCommand {
         // trace:STORY-563 | ai:claude
         #[clap(long)]
         json: bool,
+
+        /// Walk the human-blocked specs one at a time and resolve each inline
+        /// (approve/queue, capture a decision, clarify, surface a blocker),
+        /// instead of emitting the paste-ready advisor prompt. Needs a
+        /// terminal; resolutions self-invoke the existing `aida` verbs so the
+        /// write path is the same one `aida edit` / `aida queue add` use.
+        // trace:STORY-750 | ai:claude
+        #[clap(long, conflicts_with_all = ["copy", "stdout", "json"])]
+        interactive: bool,
+
+        /// After an interactive sweep, re-classify and report how many specs are
+        /// now drive-ready, naming the drain command to pick them up. Only
+        /// meaningful with `--interactive`.
+        // trace:STORY-750 | ai:claude
+        #[clap(long, requires = "interactive")]
+        then_drain: bool,
     },
 
     /// Answer a pending decision inline. Thin alias for `aida questions answer
