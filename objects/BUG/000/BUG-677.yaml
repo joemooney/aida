@@ -2,13 +2,20 @@ id: 019f1b6d-a8de-7a53-8cd7-67b5b885b629
 spec_id: BUG-677
 agreed_id: BUG-677
 title: Lift the /proc liveness probe + lease classifiers from aida-cli into aida-core so aida tui computes liveness in-process (no aida ps shell-out) — durable follow-up to BUG-676
-description: ''
+description: |-
+  Durable follow-up to BUG-676. The /proc liveness probe and lease classifiers currently live in aida-cli; the redesign TUI shells out to `aida ps` to compute per-spec liveness. Lift the probe + classifiers into aida-core so aida-tui can compute liveness in-process without a subprocess.
+
+  ## Acceptance
+  - THE /proc liveness probe and lease classifiers SHALL live in aida-core as functions callable by both aida-cli and aida-tui.
+  - WHEN aida-tui computes per-spec liveness, THE TUI SHALL determine live-versus-stale in-process without shelling out to `aida ps`.
+  - THE in-process liveness verdict SHALL equal the verdict the prior aida-cli path produced for the same session set.
+  - A test SHALL assert the aida-core classifier returns the same verdict as the prior path for a live session, a stale session, and a flag-only session.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:06:39.326929181Z
-modified_at: 2026-07-01T02:07:11.992398955Z
+modified_at: 2026-07-01T06:42:19.244980631Z
 req_type: Bug
 tags:
 - performance
