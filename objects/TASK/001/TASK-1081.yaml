@@ -16,12 +16,12 @@ description: |-
   5. Unit test: with AIDA_AGENT_CMD pointed at a trivial fake executable, the resolver yields the fake + the expected argv; with it unset, the resolver yields the native vendor binary. No real claude/codex needed.
 
   Primary caller: the orchestrator headless spawn during --auto-complete / burndown drains, and the Slice-2 end-to-end mock tests. trace target: this + Slice 1 unblock the scenario library.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T06:11:15.688780359Z
-modified_at: 2026-07-01T06:11:15.688780359Z
+modified_at: 2026-07-01T08:24:33.127595879Z
 req_type: Task
 tags:
 - batch:mock-agent
