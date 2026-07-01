@@ -1,0 +1,26 @@
+id: 019f1e94-70b7-7a31-bae9-3ad8b27294ea
+spec_id: STORY-751
+agreed_id: STORY-751
+title: 'Review PR-1317: [AI:claude] feat(queue): capture builder''s verification steps at queue done (STORY-698)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019f1e84`) for branch `story-698`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1317>
+  - Branch: `story-698` → `main`
+
+  ## Covers
+
+  - STORY-698
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1317` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T16:47:52.503359620Z
+modified_at: 2026-07-01T16:47:52.503359620Z
+req_type: Story
