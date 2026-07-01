@@ -15,6 +15,17 @@ work is finished. That is what makes an unattended overnight drain possible:
 aida queue work --batch nightly --auto-complete --no-human
 ```
 
+> **This serial engine is the vendor-agnostic drain.** `aida queue work
+> --auto-complete` drives one spec at a time and the **orchestrator** owns the
+> drive, so it runs under any vendor (Codex, Cursor, Amp, a bare `claude -p`
+> loop), not just Claude Code. The *parallel* alternative — `/aida-burndown`,
+> which fans out worktree-isolated implementer subagents over a whole ready set
+> — is **Claude-Code-harness-only**: it depends on the harness's native
+> subagent fan-out (`Agent(isolation: "worktree")`), a primitive no other
+> vendor exposes. Non-Claude vendors therefore drain the *serial* way described
+> here. See `docs/aida/discipline/autonomous-burndown.md` for the fan-out path
+> and the Claude-only caveat in full.
+
 ## The three autonomy modes
 
 `--no-human` is the far end of a three-mode ladder. The middle rung,

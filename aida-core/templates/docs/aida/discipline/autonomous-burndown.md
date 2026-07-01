@@ -36,6 +36,12 @@ The failure mode is not "the agent can't do the work" — it's that the agent *s
 
 `aida` resolves the ready+bounded set; the skill drives the worktree-isolated fan-out + integrator loop with punt-and-continue. Default target: the ready backlog for the active role.
 
+## Harness scope: this fan-out is Claude-only
+
+The parallel fan-out engine is **Claude-Code-harness-only.** Step 2's wave is the harness's native subagent fan-out — `Agent(subagent_type: …, isolation: "worktree")` — a primitive only the Claude Code harness provides. A non-Claude vendor (Codex, Cursor, Amp, a bare `claude -p` script) has no equivalent, so it **cannot** run this loop.
+
+Those vendors drain the same ready set the **serial** way instead: `aida queue work --auto-complete` one spec at a time (add `--batch NAME` to walk a cluster member-by-member). Same lifecycle — implement → CI → review → merge → pull → build — but sequential rather than a parallel wave, and vendor-agnostic because the **orchestrator**, not the harness, owns the drive. The trade is the usual one: lower throughput, universal reach. (SPIKE-74 tracks the agent-agnostic drain backend — a drain engine behind a trait — that would let non-Claude vendors fan out too; until it lands, fan-out is Claude-only and serial is the fallback.)
+
 ## Relationship to the orchestrator drain
 
 This is the **recommended** autonomous-drain path. It deliberately uses the harness's native subagent fan-out rather than `aida queue work --auto-complete` (the orchestrator-spawns-agent path). The two are **not** competitors: the orchestrator drain is hardened in parallel; `/aida-burndown` is the path to reach for now. Don't run both against the same set and wonder which to trust — pick `/aida-burndown` for hands-off backlog draining, and use the orchestrator drain where its single-spec lifecycle is what you want.
