@@ -407,3 +407,11 @@ blocks:
   range_end: 300
   next: 201
   allocated_at: 2026-07-01T18:49:09.647861118Z
+- node_id: '6'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: ADR
+  range_start: 201
+  range_end: 300
+  next: 201
+  allocated_at: 2026-07-01T18:49:14.152679047Z
