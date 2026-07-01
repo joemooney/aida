@@ -635,6 +635,27 @@ impl RequirementType {
             RequirementType::Doc => "DOC",
         }
     }
+
+    /// Depth rank in the spec hierarchy, used to orient an otherwise-ambiguous
+    /// parent/child edge toward the true parent. Lower = closer to a tree root:
+    /// an `Epic` (0) is the parent of a `Story` (1), which is the parent of a
+    /// `Task`/`Bug`/`Spike`/… (2). The one shared subtree-membership rule
+    /// (`graph_walk::orient_hierarchy_edge`, TASK-1074) orients each hierarchy
+    /// edge from the lower-rank (parent) endpoint to the higher-rank (child)
+    /// endpoint; only same-rank pairs (e.g. Story↔Story) fall back to the edge's
+    /// `rel_type`. This lets `aida focus` (via the cache's `descendant_ids`
+    /// closure) and `aida graph --tree` agree on membership regardless of which
+    /// endpoint recorded the edge or which of the two historical orientations it
+    /// used, while still refusing to climb from a child UP to a same-rank second
+    /// parent (the STORY-698 / EPIC-54 leak).
+    // trace:TASK-1074 | ai:claude
+    pub fn hierarchy_rank(&self) -> u8 {
+        match self {
+            RequirementType::Epic => 0,
+            RequirementType::Story => 1,
+            _ => 2,
+        }
+    }
 }
 
 /// Represents the subtype for Meta requirements

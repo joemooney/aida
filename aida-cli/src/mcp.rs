@@ -2087,7 +2087,15 @@ impl<'a> McpServer<'a> {
             }
         };
 
-        let result = walk_union(&store, root_id, &specs, depth);
+        // TASK-1074: `tree` mode routes through the one shared rank-oriented
+        // subtree closure `aida graph --tree` and `aida focus` use, so the MCP
+        // and CLI surfaces agree on membership; other modes keep their walk_union
+        // legs.
+        let result = if canonical_mode == "tree" {
+            aida_core::graph_walk::hierarchy_tree(&store, root_id, depth)
+        } else {
+            walk_union(&store, root_id, &specs, depth)
+        };
         let nodes: Vec<Value> = result
             .nodes
             .iter()

@@ -27010,7 +27010,16 @@ fn handle_graph_command(
     };
     let is_tree = mode == "tree";
 
-    let result = walk_union(store, id, &specs, depth);
+    // TASK-1074: `--tree` membership routes through the shared rank-oriented
+    // hierarchy closure (`graph_walk::hierarchy_tree`) so `aida graph <epic>
+    // --tree` and `aida focus <epic>` (the cache's `descendant_ids`) agree — the
+    // old `walk_union([Child,Parent])` leaked a descendant's same-rank second
+    // parent into the count. The other modes keep their own walk_union legs.
+    let result = if is_tree {
+        aida_core::graph_walk::hierarchy_tree(store, id, depth)
+    } else {
+        walk_union(store, id, &specs, depth)
+    };
 
     if json {
         let nodes: Vec<_> = result
@@ -27940,24 +27949,20 @@ pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
 /// The epic + its TRANSITIVE descendant UUIDs (children + grandchildren + …),
 /// for `aida queue list --epic <ID>`.
 ///
-/// Reuses the same hierarchy closure `aida graph <ID> --tree` walks
-/// (`walk_union` over OUTGOING `Child` + `Parent` edges): the spec-hierarchy
-/// edge can live on EITHER endpoint (a parent carries `Child → child`; a child
-/// carries `Parent → parent`), so unioning both outgoing rel types traverses
-/// the tree whichever side recorded the edge. `walk_union` excludes the root,
-/// so we re-insert the epic's own UUID — an item queued directly against the
-/// epic counts as "under" it.
-// trace:TASK-923 | ai:claude (closure rationale: see BUG-448)
+/// Reuses the one shared subtree closure `aida graph <ID> --tree` and
+/// `aida focus` use (`graph_walk::subtree_ids`, TASK-1074): every hierarchy edge
+/// is oriented parent->child by type rank (rel_type breaking same-rank ties),
+/// then walked downward — so the tree is traversed whichever side recorded the
+/// edge and in whichever of the two historical orientations, without leaking a
+/// descendant's same-rank second parent. `subtree_ids` excludes the root, so we
+/// re-insert the epic's own UUID — an item queued directly against the epic
+/// counts as "under" it.
+// trace:TASK-923 trace:TASK-1074 | ai:claude
 fn epic_descendant_uuid_set(
     store: &RequirementsStore,
     epic_id: uuid::Uuid,
 ) -> std::collections::HashSet<uuid::Uuid> {
-    use aida_core::graph_walk::{walk_union, Direction};
-    let specs = vec![(
-        vec![RelationshipType::Child, RelationshipType::Parent],
-        Direction::Outgoing,
-    )];
-    let result = walk_union(store, epic_id, &specs, None);
+    let result = aida_core::graph_walk::subtree_ids(store, epic_id, None);
     let mut set: std::collections::HashSet<uuid::Uuid> = result.nodes.into_iter().collect();
     set.insert(epic_id);
     set
@@ -28130,6 +28135,56 @@ mod epic_queue_filter_tests {
         let empty: HashSet<Uuid> = HashSet::new();
         let kept = filter_entries_by_descendant_set(&entries, &empty);
         assert!(kept.is_empty(), "empty descendant set → empty result");
+    }
+
+    // TASK-1074: the EPIC-54 discrepancy, at the queue-filter surface. A story is
+    // a child of the epic AND has a SAME-RANK second parent (another story) that
+    // lives outside the epic. The shared rank-oriented closure
+    // (`epic_descendant_uuid_set` → `graph_walk::subtree_ids`) must NOT count that
+    // second parent as under the epic — the leak the old direction-agnostic walk
+    // let through (44 vs 43). trace:TASK-1074 | ai:claude
+    #[test]
+    fn closure_excludes_a_descendants_same_rank_second_parent() {
+        let mut epic = mk_req("EPIC-54", RequirementType::Epic);
+        let mut child = mk_req("STORY-699", RequirementType::Story);
+        let mut second_parent = mk_req("STORY-698", RequirementType::Story);
+        // epic --Parent--> child ; child --Child--> epic
+        epic.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: child.id,
+            created_at: None,
+            created_by: None,
+        });
+        child.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: epic.id,
+            created_at: None,
+            created_by: None,
+        });
+        // second_parent --Parent--> child ; child --Child--> second_parent
+        second_parent.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: child.id,
+            created_at: None,
+            created_by: None,
+        });
+        child.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: second_parent.id,
+            created_at: None,
+            created_by: None,
+        });
+        let (eid, cid, spid) = (epic.id, child.id, second_parent.id);
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![epic, child, second_parent];
+
+        let set = epic_descendant_uuid_set(&store, eid);
+        assert!(set.contains(&eid), "epic itself");
+        assert!(set.contains(&cid), "the real child");
+        assert!(
+            !set.contains(&spid),
+            "the child's same-rank second parent is NOT under the epic"
+        );
     }
 }
 
