@@ -3,10 +3,14 @@ spec_id: TASK-1084
 agreed_id: TASK-1084
 title: STORY-698 throwaway no-flag
 description: ''
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T16:40:47.115710594Z
-modified_at: 2026-07-01T16:40:47.115710594Z
+modified_at: 2026-07-01T16:40:55.246836983Z
 req_type: Task
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-01T16:40:55.246836983Z
+  implemented_by: joe
