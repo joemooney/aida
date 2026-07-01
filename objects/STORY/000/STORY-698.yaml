@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T21:46:01.178361830Z
-modified_at: 2026-07-01T16:47:41.678806620Z
+modified_at: 2026-07-01T16:47:46.032737126Z
 req_type: Story
 tags:
 - human-verification
@@ -39,5 +39,9 @@ relationships:
   created_by: joe
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo test -p aida-cli --bin aida story_698 — 9/9 green
+    cargo build/clippy/fmt — clean
+    manual: throwaway spec queue done --test-plan → captured + aida show renders
   implemented_at: 2026-07-01T16:47:41.678806620Z
   implemented_by: joe
