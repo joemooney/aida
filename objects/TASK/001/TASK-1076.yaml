@@ -1,0 +1,16 @@
+id: 019f1bd9-592d-7eb0-a806-e3aded23595f
+spec_id: TASK-1076
+agreed_id: TASK-1076
+title: 'TUI spawn_drive omits --solo: a drive on an epic-parented spec routes into the epic worktree'
+description: 'spawn_drive in aida-tui/src/redesign/mod.rs runs aida zen <id> without --solo. For a spec parented to an epic (or under an active focus), zen routes the drive INTO the scope worktree (ADR-6) rather than its own. For a standalone bug/task the operator usually wants --solo (own worktree + own PR). Decide the TUI default: always --solo, or offer a solo-vs-into-epic choice in the drive affordance. Small; relates to STORY-744.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:04:16.813844443Z
+modified_at: 2026-07-01T04:04:16.813844443Z
+req_type: Task
+tags:
+- aida:tui
+- drive-verb
+- parent:EPIC-54
