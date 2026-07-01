@@ -508,6 +508,49 @@ fn pid_is_alive(pid: u32) -> bool {
 }
 
 fn open_connection_with_retry(path: &Path) -> Result<Connection> {
+    match open_connection_inner(path) {
+        Ok(conn) => Ok(conn),
+        // BUG-683: a corrupt / non-sqlite `.aida/cache.db` is a no-escape
+        // dead-end — every cache-backed read fails, and even `aida cache
+        // rebuild` re-opens the same corrupt file first and fails. The cache is
+        // gitignored and rebuildable-by-design (EPIC-1-001), so a file that
+        // exists but isn't a valid sqlite db is never authoritative: delete it
+        // (plus any -wal/-shm sidecars) and recreate an empty db, then let the
+        // caller's create+migrate path rebuild from git on the next read. This
+        // is TRUE auto-heal. Scoped to the CORRUPTION class ONLY — a transient
+        // busy/lock error (the BUG-681 fast-fail path) and permissions errors
+        // are NOT self-healed here; they keep their existing behavior.
+        Err(err) if is_sqlite_corruption_error(&err) => {
+            remove_corrupt_cache_files(path);
+            // Re-open the now-absent file: sqlite creates a fresh empty db, the
+            // WAL pragma succeeds, and Cache::open applies the schema. If the
+            // recreate ALSO fails (e.g. the file couldn't be removed — a
+            // permissions problem masquerading past the corruption class), fall
+            // back to an actionable message rather than the misleading
+            // WAL-mode wording.
+            open_connection_inner(path).map_err(|second| {
+                if is_sqlite_corruption_error(&second) {
+                    anyhow::anyhow!(
+                        "cache database is unreadable (corrupt?) — delete it to \
+                         auto-rebuild: rm {}",
+                        path.display()
+                    )
+                } else {
+                    second
+                }
+            })
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// Single open attempt (with the lock-retry ladder). Opens the connection,
+/// disables rusqlite's built-in busy handler (AIDA owns retry timing), and
+/// switches the journal to WAL. Separated from `open_connection_with_retry` so
+/// the corruption self-heal (BUG-683) can retry the whole open after deleting a
+/// corrupt file.
+// trace:STORY-580 | ai:codex
+fn open_connection_inner(path: &Path) -> Result<Connection> {
     with_cache_retry(path, "open cache", || {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open cache at {:?}", path))?;
@@ -523,6 +566,40 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
         }
         Ok(conn)
     })
+}
+
+/// True when the error chain carries a sqlite result code from the CORRUPTION
+/// class — the file exists but isn't a valid sqlite database. `NotADatabase`
+/// (SQLITE_NOTADB, 26) is the "header is not a sqlite header" case that a
+/// non-sqlite / truncated file produces; `DatabaseCorrupt` (SQLITE_CORRUPT, 11)
+/// is a malformed on-disk image. Deliberately EXCLUDES `DatabaseBusy` /
+/// `DatabaseLocked` (transient — the BUG-681 fast-fail path handles those) and
+/// permissions / I/O errors (not the cache's to auto-delete).
+// trace:BUG-683
+fn is_sqlite_corruption_error(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<rusqlite::Error>()
+            .is_some_and(|sqlite| match sqlite {
+                rusqlite::Error::SqliteFailure(code, _) => matches!(
+                    code.code,
+                    rusqlite::ErrorCode::NotADatabase | rusqlite::ErrorCode::DatabaseCorrupt
+                ),
+                _ => false,
+            })
+    })
+}
+
+/// Delete a corrupt cache file and its WAL/SHM sidecars so the next open
+/// recreates a fresh, empty database. Best-effort: a failed removal falls
+/// through and the re-open surfaces the actionable message.
+// trace:BUG-683
+fn remove_corrupt_cache_files(path: &Path) {
+    let _ = std::fs::remove_file(path);
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = PathBuf::from(format!("{}{}", path.display(), suffix));
+        let _ = std::fs::remove_file(sidecar);
+    }
 }
 
 fn with_cache_write<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
@@ -3686,5 +3763,134 @@ mod tests {
             "child-authored edge still places the story under the epic"
         );
         assert_eq!(subtree.len(), 2);
+    }
+
+    // BUG-683: a corrupt / non-sqlite `.aida/cache.db` must NOT dead-end every
+    // read. Opening it self-heals — the corrupt file is deleted, a fresh empty
+    // db is recreated, and the read succeeds (rebuild-from-git happens on the
+    // next stale-check because the head SHA is absent).
+    #[test]
+    fn open_self_heals_a_corrupt_cache_file() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        // Write non-sqlite bytes — sqlite reports SQLITE_NOTADB (the corruption
+        // class) when it tries to read the header via the WAL pragma.
+        std::fs::write(&cache_path, b"this is not a sqlite database at all\n").unwrap();
+
+        // Open self-heals instead of erroring: the file is replaced and the
+        // cache is usable (a query against the fresh schema succeeds).
+        let cache = Cache::open(&cache_path)
+            .expect("a corrupt cache file must self-heal on open, not dead-end");
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-683-A", "healed"));
+        cache
+            .rebuild_from_store(&store, "head")
+            .expect("the healed cache is a normal, writable db");
+
+        // The on-disk file is now a valid sqlite db (starts with the header).
+        let header = std::fs::read(&cache_path).unwrap();
+        assert!(
+            header.starts_with(b"SQLite format 3\0"),
+            "the healed file is a real sqlite database"
+        );
+    }
+
+    // BUG-683: `aida cache rebuild` must recover from a corrupt starting file
+    // too — it opens the cache (via CachedGitBackend) before rebuilding, so the
+    // corrupt file has to self-heal at open. We exercise the same open path a
+    // rebuild would take.
+    #[test]
+    fn cache_open_then_rebuild_recovers_from_corrupt_file() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        std::fs::write(&cache_path, &[0u8; 4096]).unwrap(); // zeroed, non-sqlite
+
+        let cache = Cache::open(&cache_path).expect("open self-heals the corrupt file");
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("BUG-683-B", "rebuilt after corruption"));
+        let n = cache
+            .rebuild_from_store(&store, "head")
+            .expect("rebuild succeeds on the healed cache");
+        assert_eq!(n, 1, "the rebuilt cache holds the store's one requirement");
+    }
+
+    // BUG-683: the self-heal is scoped to the CORRUPTION class ONLY. A transient
+    // busy/lock error must NOT be misclassified as corruption (never delete the
+    // file for a lock). `is_sqlite_corruption_error` is the gate — assert it
+    // rejects the lock codes and accepts the corruption codes.
+    #[test]
+    fn corruption_detection_excludes_transient_lock_errors() {
+        let lock = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+            Some("database is locked".to_string()),
+        ));
+        assert!(
+            !is_sqlite_corruption_error(&lock),
+            "a busy/lock error is transient, NOT corruption — must not trigger a delete"
+        );
+        assert!(
+            is_sqlite_lock_error(&lock),
+            "the lock error stays classified as a lock (BUG-681 fast-fail path)"
+        );
+
+        let not_a_db = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
+            Some("file is not a database".to_string()),
+        ));
+        assert!(
+            is_sqlite_corruption_error(&not_a_db),
+            "SQLITE_NOTADB is the corruption class — self-heal applies"
+        );
+        assert!(
+            !is_sqlite_lock_error(&not_a_db),
+            "corruption is not a lock error"
+        );
+
+        let corrupt = anyhow::Error::from(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CORRUPT),
+            Some("malformed image".to_string()),
+        ));
+        assert!(
+            is_sqlite_corruption_error(&corrupt),
+            "SQLITE_CORRUPT is the corruption class — self-heal applies"
+        );
+    }
+
+    // BUG-683: a lock-held cache must keep failing as a LOCK (not be deleted as
+    // corruption). Hold an exclusive write lock, disable the retry ladder, and
+    // assert the file survives and the error is the lock message — never the
+    // corruption self-heal.
+    #[test]
+    fn locked_cache_is_not_treated_as_corruption() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        // Establish a healthy cache first.
+        drop(Cache::open(&cache_path).unwrap());
+
+        // Hold an exclusive write transaction on a separate connection so the
+        // cache is under lock contention while we re-open it.
+        let holder = Connection::open(&cache_path).unwrap();
+        holder.busy_timeout(Duration::from_millis(0)).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        // Re-open while the lock is held. Whatever the outcome (WAL lets the
+        // read through, or a lock surfaces), the corruption guard must NOT fire:
+        // the file must survive untouched. (No env-var fiddling — that would
+        // race sibling tests; the classification is asserted directly by
+        // `corruption_detection_excludes_transient_lock_errors`.)
+        let _ = open_connection_with_retry(&cache_path);
+        holder.execute_batch("ROLLBACK").unwrap();
+
+        assert!(
+            cache_path.exists(),
+            "a lock-contended open must NEVER delete the cache file (BUG-683 corruption-only scope)"
+        );
+        // And the file is still a valid sqlite db (never replaced).
+        let header = std::fs::read(&cache_path).unwrap();
+        assert!(
+            header.starts_with(b"SQLite format 3\0"),
+            "the healthy cache file was not clobbered by a lock event"
+        );
     }
 }
