@@ -30,6 +30,10 @@ pub use cache::{
 pub use cached_git_backend::CachedGitBackend;
 #[cfg(feature = "native")]
 pub use git_backend::GitBackend;
+// BUG-675: the queue-user case-fold resolver, exposed so the aida-cli statusline
+// `queue_depth` path can resolve identity IDENTICALLY to `aida queue list`.
+#[cfg(feature = "native")]
+pub use git_backend::resolve_queue_user;
 #[cfg(feature = "native")]
 pub use migration::{
     export_to_json, import_from_json, migrate_sqlite_to_yaml, migrate_yaml_to_sqlite,
