@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T21:14:39.258464103Z
-modified_at: 2026-07-01T01:10:35.265067208Z
+modified_at: 2026-07-01T03:48:27.293315642Z
 req_type: Bug
 tags:
 - agent-surface
@@ -16,3 +16,9 @@ tags:
 - careful
 - from-audit
 - status
+comments:
+- id: 019f1bca-dc1d-7ea3-b43f-91505559775d
+  author: joe
+  content: Commit c469795db references this requirement
+  created_at: 2026-07-01T03:48:27.293315642Z
+  modified_at: 2026-07-01T03:48:27.293315642Z
