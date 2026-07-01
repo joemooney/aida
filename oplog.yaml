@@ -29543,5 +29543,20 @@ operations:
       - THE drive affordance SHALL offer a solo toggle that, WHEN selected, launches aida zen <id> --solo.
       - WHEN the operator launches the drive without toggling solo, THE TUI SHALL preserve the current ADR-6 default routing.
       - THE displayed routing text SHALL name the target worktree scope when the drive would route into an epic.
-clock: 2838
+- id: 019f1bf8-60c0-7021-9572-cc6cb7cc1137
+  target_id: 019f1bc8-3d3f-7120-9da6-5e6b11a35fa9
+  author: aida
+  node_id: '1'
+  lamport: 2839
+  timestamp: 2026-07-01T04:38:10.368346734Z
+  kind: !SetDescription
+    description: |-
+      The SPIKE-70 plan Followups were filed as implementation TASKs TWICE: coarse (TASK-1003/1005, implemented+merged) and fine-grained (TASK-1038..1044, duplicates that read as open). The auto-followup-filing path (the [aida:followups] marker / AIDA_AUTO_FOLLOWUPS) did not dedupe against already-Completed tasks tracing the same plan.
+
+      ## Acceptance
+      - WHEN the followup-filing path files a followup derived from a plan file, THE system SHALL record the source plan path on the created spec.
+      - WHEN the followup-filing path would file a followup, IF an existing spec references the same source plan path and carries matching followup text and is in a terminal status (Completed or Rejected), THEN THE system SHALL skip creating a duplicate and SHALL link to the existing spec instead.
+      - WHEN a plan followup is re-filed after its prior round already shipped, THE system SHALL NOT create a second open spec for the same followup.
+      - A unit test SHALL assert that filing the same plan followup twice yields one spec on the second run, not two.
+clock: 2839
 node_id: '1'

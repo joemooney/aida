@@ -3,23 +3,19 @@ spec_id: BUG-680
 agreed_id: BUG-680
 title: 'Plan Followups filed twice: SPIKE-70 followups re-filed as TASK-1038..1044, duplicating already-merged TASK-1003/1005'
 description: |-
-  The SPIKE-70 plan (docs/plans/2026-06-29-spike-70-coupled-sequential-drain.md) Followups section was filed as implementation TASKs TWICE:
+  The SPIKE-70 plan Followups were filed as implementation TASKs TWICE: coarse (TASK-1003/1005, implemented+merged) and fine-grained (TASK-1038..1044, duplicates that read as open). The auto-followup-filing path (the [aida:followups] marker / AIDA_AUTO_FOLLOWUPS) did not dedupe against already-Completed tasks tracing the same plan.
 
-    Round 1 (coarse, IMPLEMENTED + MERGED): TASK-1003 (single-branch engine+flag+cluster-PR+checkpoint, PR #1218) and TASK-1005 (--sequential + burndown docs, PR #1220). Both Completed.
-
-    Round 2 (fine-grained, DUPLICATES): TASK-1038 (cli), 1039 (engine), 1040 (cluster PR), 1041 (checkpoint), 1042 (sequential), 1043 (docs), 1044 (relationships) — one task per plan Followup bullet. These landed as Approved/open and made EPIC-54 read ~8 items open when the feature was already shipped. All 7 have now been rejected (1044 as an artifact, 1038-1043 as duplicates of TASK-1003/1005).
-
-  ROOT CAUSE (hypothesis): the Done/Completed followup-filing path (the [aida:followups] marker described in CLAUDE.md, AIDA_AUTO_FOLLOWUPS) or a manual re-decompose re-filed the same plan Followups without deduping against already-Completed tasks tracing the same plan.
-
-  IMPACT: phantom duplicate specs inflate an epics open count and burn operator/advisor triage time (this incident: a worktree was cut to implement already-merged code before a code-vs-spec check caught it). Also surfaced BUG-678 (focus rollup counted these as open).
-
-  FIX DIRECTION: when auto-filing followups from a plan, dedupe against existing specs that reference the same plan / same Followup text and are already Done/Completed; skip or link instead of re-filing. At minimum, tag auto-filed followups with the plan path so a later filing can detect the prior round.
+  ## Acceptance
+  - WHEN the followup-filing path files a followup derived from a plan file, THE system SHALL record the source plan path on the created spec.
+  - WHEN the followup-filing path would file a followup, IF an existing spec references the same source plan path and carries matching followup text and is in a terminal status (Completed or Rejected), THEN THE system SHALL skip creating a duplicate and SHALL link to the existing spec instead.
+  - WHEN a plan followup is re-filed after its prior round already shipped, THE system SHALL NOT create a second open spec for the same followup.
+  - A unit test SHALL assert that filing the same plan followup twice yields one spec on the second run, not two.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:45:35.551116310Z
-modified_at: 2026-07-01T03:45:40.385259869Z
+modified_at: 2026-07-01T04:38:10.165806826Z
 req_type: Bug
 tags:
 - aida:followups
