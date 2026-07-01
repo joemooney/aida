@@ -3,12 +3,12 @@ spec_id: TASK-769
 agreed_id: TASK-769
 title: Decouple the away presence escalation default from `away_drain` into its own `[presence]` knob (today escalation rides the away_drain rung; (c) questions deferred to STORY-555)
 description: ''
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:31:39.368008246Z
-modified_at: 2026-07-01T05:47:54.525172712Z
+modified_at: 2026-07-01T06:36:01.856198946Z
 req_type: Task
 tags:
 - zen-ready
