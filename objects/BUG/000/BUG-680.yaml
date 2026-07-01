@@ -19,10 +19,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:45:35.551116310Z
-modified_at: 2026-07-01T03:45:35.551116310Z
+modified_at: 2026-07-01T03:45:40.385259869Z
 req_type: Bug
 tags:
 - aida:followups
 - dedup
 - parent:EPIC-54
 - severity:minor
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-07-01T03:45:40.385259869Z
