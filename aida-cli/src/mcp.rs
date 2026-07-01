@@ -80,10 +80,7 @@ use crate::findings::{
     FROM_REVIEW_PREFIX,
 };
 use crate::history::{self, HistoryOpts};
-use crate::punt::{
-    self, append_to_ledger, ledger_path, punt_response_path, read_ledger, PuntRecord,
-    PuntResolution, PuntResponse,
-};
+use crate::punt::{self, append_to_ledger, ledger_path, read_ledger, PuntRecord};
 
 // Mirrors the full RequirementType taxonomy (aida-core models.rs, 19 variants).
 // The ADR / knowledge-graph family (principle, vision, constraint, decision,
@@ -2495,11 +2492,16 @@ impl<'a> McpServer<'a> {
             .map(|s| s.to_string());
 
         let records = read_ledger(&self.project_root);
+        // BUG-674: the default view hides auto-filed session-end visibility
+        // warnings (they bury genuine decision-punts); `awaiting` is the OPEN
+        // set (excludes closed + noise); `all` shows everything.
+        // trace:BUG-674 | ai:claude
         let filtered: Vec<&PuntRecord> = records
             .iter()
             .filter(|r| match status_filter.as_deref() {
-                None => true,
-                Some("awaiting") => r.resolution_path == "punted",
+                None => !punt::is_session_end_noise(r),
+                Some("awaiting") => punt::is_open(r),
+                Some("all") => true,
                 Some(other) => r.resolution_path == other,
             })
             .collect();
@@ -2644,22 +2646,24 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let response = PuntResponse {
-            resolution: PuntResolution::Resolved,
-            answer: Some(answer.to_string()),
-            reasoning: reasoning.to_string(),
+        // BUG-674: resolve through the shared core so the MCP tool and the
+        // `aida punts resolve` CLI verb cannot drift — it writes the
+        // `PuntResponse` the orchestrator polls AND closes the open ledger
+        // record(s) so the triage count actually drops. trace:BUG-674 | ai:claude
+        let (path, closed) = punt::resolve_punt_core(
+            &self.project_root,
+            spec,
+            answer,
+            reasoning,
             classification,
-            escalation_reason: None,
-        };
-
-        let path = punt_response_path(&self.project_root, spec);
-        let body = serde_json::to_string_pretty(&response).map_err(|e| e.to_string())?;
-        // trace:TASK-439 | ai:claude
-        write_atomic(&path, body.as_bytes()).map_err(|e| e.to_string())?;
+            Some("mcp"),
+        )
+        .map_err(|e| e.to_string())?;
 
         Ok(format!(
-            "Resolution written to {} — the orchestrator will resume the implementer with this answer.",
-            path.display()
+            "Resolution written to {} — the orchestrator will resume the implementer with this answer.{}",
+            path.display(),
+            ledger_close_suffix(closed),
         ))
     }
 
@@ -2682,22 +2686,24 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let response = PuntResponse {
-            resolution: PuntResolution::Escalated,
-            answer: None,
-            reasoning: reasoning.to_string(),
-            classification,
+        // BUG-674: escalate through the shared core (parity with `aida punts
+        // escalate`) — writes the escalation `PuntResponse` the orchestrator
+        // parks on AND closes the open ledger record(s) as escalated-to-human.
+        // trace:BUG-674 | ai:claude
+        let (path, closed) = punt::escalate_punt_core(
+            &self.project_root,
+            spec,
+            reasoning,
             escalation_reason,
-        };
-
-        let path = punt_response_path(&self.project_root, spec);
-        let body = serde_json::to_string_pretty(&response).map_err(|e| e.to_string())?;
-        // trace:TASK-439 | ai:claude
-        write_atomic(&path, body.as_bytes()).map_err(|e| e.to_string())?;
+            classification,
+            Some("mcp"),
+        )
+        .map_err(|e| e.to_string())?;
 
         Ok(format!(
-            "Escalation written to {} — the orchestrator will park the spec for human triage.",
-            path.display()
+            "Escalation written to {} — the orchestrator will park the spec for human triage.{}",
+            path.display(),
+            ledger_close_suffix(closed),
         ))
     }
 
@@ -5622,6 +5628,17 @@ fn append_line(path: &Path, line: &str) -> std::io::Result<()> {
 /// Write `bytes` to `path` atomically: write to a sibling `path.tmp-<uuid>` then
 /// `rename` over `path`. Crash mid-write leaves either the old file intact or
 /// the new file intact — never a torn write.
+/// Human-readable suffix noting how many ledger records a resolve/escalate
+/// closed (empty when none). Keeps the MCP resolve/escalate messages honest
+/// about the BUG-674 ledger-close side effect.
+fn ledger_close_suffix(closed: usize) -> String {
+    match closed {
+        0 => String::new(),
+        1 => " Closed 1 open ledger record.".to_string(),
+        n => format!(" Closed {n} open ledger records."),
+    }
+}
+
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
