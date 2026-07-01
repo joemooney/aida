@@ -2,13 +2,20 @@ id: 019f1b3a-76d6-7662-b2f9-76cf22da2d4b
 spec_id: BUG-675
 agreed_id: BUG-675
 title: 'BUG-89 identity unification: queue_depth''s user-resolution path must match the queue list command path so it''s always trustworthy (not just suppressed on mismatch — BUG-670 remainder)'
-description: ''
+description: |-
+  BUG-670 remainder. The queue_depth statusline value resolves the current user via a different path than the `aida queue list` command, so a case or fallback mismatch makes it untrustworthy (BUG-670 suppressed it on mismatch rather than fixing the resolution). Route queue_depth through the same identity path.
+
+  ## Acceptance
+  - THE queue_depth computation SHALL resolve the current user through the same current_user_id path that `aida queue list` uses.
+  - WHEN the shell user and the stored queue key differ only by case, THE queue_depth SHALL equal the count `aida queue list` shows, per the case-insensitive matching in TASK-951.
+  - THE queue_depth SHALL NOT be suppressed to zero on a resolvable identity match.
+  - A test SHALL assert queue_depth equals the queue list count for a user whose identity resolves via the AIDA_USER or USER fallback.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T01:10:44.182769111Z
-modified_at: 2026-07-01T01:10:44.182769111Z
+modified_at: 2026-07-01T06:42:38.925277518Z
 req_type: Bug
 tags:
 - bug-89
