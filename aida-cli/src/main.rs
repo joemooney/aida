@@ -96202,12 +96202,13 @@ fn handle_unclaim(spec: &str) -> Result<()> {
 /// ([`lease_state_for`], which already folds in pid/worktree liveness), and the
 /// elapsed-from-started helper ([`humanize_duration_secs`]).
 // trace:STORY-694 | ai:claude
-/// The outcome of [`ensure_epic_worktree`]: where the epic worktree lives, the
-/// branch it's on, the focus label written into it, and whether THIS call
-/// created it (vs. found it already registered). Lets `add` print "created" vs
-/// "already exists", and `enter` re-affirm the focus on an existing tree.
-// trace:STORY-716 | ai:claude
-struct EpicWorktreeOutcome {
+/// The outcome of [`ensure_epic_worktree`] / [`ensure_spec_worktree`]: where
+/// the worktree lives, the branch it's on, the focus label written into it, and
+/// whether THIS call created it (vs. found it already registered). Lets `add`
+/// print "created" vs "already exists", and `enter` re-affirm the focus on an
+/// existing tree.
+// trace:STORY-716 trace:STORY-742 | ai:claude
+struct WorktreeOutcome {
     path: std::path::PathBuf,
     branch: String,
     focus: String,
@@ -96224,7 +96225,7 @@ fn ensure_epic_worktree(
     epic: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
-) -> Result<EpicWorktreeOutcome> {
+) -> Result<WorktreeOutcome> {
     let main_root = find_main_worktree_root()?;
     let home =
         dirs::home_dir().context("cannot resolve home directory for the default worktree path")?;
@@ -96241,7 +96242,7 @@ fn ensure_epic_worktree_core(
     epic: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
-) -> Result<EpicWorktreeOutcome> {
+) -> Result<WorktreeOutcome> {
     let focus_label = crate::worktree::normalize_epic_label(epic);
 
     let path: std::path::PathBuf = match path_override {
@@ -96266,7 +96267,7 @@ fn ensure_epic_worktree_core(
 
     if crate::worktree::is_registered(&porcelain, &path) {
         crate::focus::write_focus_marker(&path, &focus_label)?;
-        return Ok(EpicWorktreeOutcome {
+        return Ok(WorktreeOutcome {
             path,
             branch,
             focus: focus_label,
@@ -96330,7 +96331,7 @@ fn ensure_epic_worktree_core(
     // apply) at the operator's keyboard.
     crate::focus::write_focus_marker(&path, &focus_label)?;
 
-    Ok(EpicWorktreeOutcome {
+    Ok(WorktreeOutcome {
         path,
         branch,
         focus: focus_label,
@@ -96338,16 +96339,222 @@ fn ensure_epic_worktree_core(
     })
 }
 
+/// Whether a `aida worktree add|enter <arg>` argument names an epic (the
+/// STORY-716 legacy path — a scoping-only worktree, no lease) or a single
+/// non-epic spec (create the worktree AND take the implementer lease so the
+/// spec flips InProgress and shows live). Unresolvable args and epics both take
+/// the epic path; only a resolved non-epic spec takes the lease path.
+// trace:STORY-742 | ai:claude
+enum WorktreeTarget {
+    /// An epic (or an arg that didn't resolve to a stored spec): the STORY-716
+    /// epic-scoped worktree, unchanged.
+    Epic,
+    /// A single non-epic spec: `display` is its canonical id, `focus` the label
+    /// the new worktree is scoped to (the spec itself).
+    Spec { display: String, focus: String },
+}
+
+/// Pure classification half of [`classify_worktree_arg`]: given the requirement
+/// the arg resolved to (or `None`), decide epic-vs-spec. A non-epic spec routes
+/// to the lease path; an epic or an unresolved arg keeps the legacy epic path.
+// trace:STORY-742 | ai:claude
+fn classify_worktree_target(req: Option<&aida_core::Requirement>, arg: &str) -> WorktreeTarget {
+    match req {
+        Some(r) if r.req_type != RequirementType::Epic => {
+            let display = r
+                .agreed_id
+                .as_deref()
+                .or(r.spec_id.as_deref())
+                .unwrap_or(arg)
+                .to_string();
+            WorktreeTarget::Spec {
+                focus: display.clone(),
+                display,
+            }
+        }
+        _ => WorktreeTarget::Epic,
+    }
+}
+
+/// Resolve a `aida worktree add|enter` argument against the store to decide
+/// whether it names an epic or a single spec. Best-effort: any store-load
+/// failure falls back to the legacy epic path so the command never regresses on
+/// a fresh clone / offline store.
+// trace:STORY-742 | ai:claude
+fn classify_worktree_arg(arg: &str) -> WorktreeTarget {
+    let Ok(main_root) = find_main_worktree_root() else {
+        return WorktreeTarget::Epic;
+    };
+    let Ok(store) = Storage::new(main_root.join(".aida-store")).load() else {
+        return WorktreeTarget::Epic;
+    };
+    let req = store.requirements.iter().find(|r| spec_matches(r, arg));
+    classify_worktree_target(req, arg)
+}
+
+/// Testable core of [`ensure_spec_worktree`]: decide create-vs-re-enter for a
+/// single-spec worktree. Inputs: the resolved home dir + spec, whether a lease
+/// already covers the spec (`existing` = its worktree path + branch), and
+/// whether the default path is already a registered git worktree. The `mint`
+/// closure performs the real worktree+lease setup (production wires it to
+/// `session_start` — the same primitive `aida queue work --no-launch` rides)
+/// and returns the created worktree path + branch. Idempotent: an existing
+/// lease OR a registered worktree short-circuits to re-affirming the focus
+/// marker without minting.
+// trace:STORY-742 | ai:claude
+fn ensure_spec_worktree_core(
+    home: &std::path::Path,
+    spec_display: &str,
+    focus_label: &str,
+    path_override: Option<&str>,
+    branch_override: Option<&str>,
+    existing: Option<(std::path::PathBuf, String)>,
+    registered: bool,
+    mint: impl FnOnce(&std::path::Path, &str) -> Result<(std::path::PathBuf, String)>,
+) -> Result<WorktreeOutcome> {
+    let path = match path_override {
+        Some(p) => std::path::PathBuf::from(p),
+        None => crate::worktree::default_worktree_path(home, spec_display),
+    };
+    let branch = branch_override
+        .map(|b| b.to_string())
+        .unwrap_or_else(|| crate::worktree::default_branch(spec_display));
+
+    // Idempotent re-entry: a lease already covers this spec — re-affirm focus at
+    // that worktree and report it, don't mint a second one.
+    if let Some((worktree_path, lease_branch)) = existing {
+        crate::focus::write_focus_marker(&worktree_path, focus_label)?;
+        return Ok(WorktreeOutcome {
+            path: worktree_path,
+            branch: lease_branch,
+            focus: focus_label.to_string(),
+            created: false,
+        });
+    }
+
+    // A worktree is registered at the default path but carries no lease — treat
+    // it as already-there (re-affirm focus) rather than recreating it.
+    if registered {
+        crate::focus::write_focus_marker(&path, focus_label)?;
+        return Ok(WorktreeOutcome {
+            path,
+            branch,
+            focus: focus_label.to_string(),
+            created: false,
+        });
+    }
+
+    // Fresh: mint the worktree + lease, then scope focus to the spec.
+    let (worktree_path, minted_branch) = mint(&path, &branch)?;
+    crate::focus::write_focus_marker(&worktree_path, focus_label)?;
+    Ok(WorktreeOutcome {
+        path: worktree_path,
+        branch: minted_branch,
+        focus: focus_label.to_string(),
+        created: true,
+    })
+}
+
+/// `<spec>` variant of [`ensure_epic_worktree`]: create-if-missing a worktree
+/// for a single non-epic spec and take the implementer lease, reusing the same
+/// `session_start` worktree+lease primitive that `aida queue work --no-launch`
+/// rides — NO agent is launched. Idempotent: an existing lease/worktree for the
+/// spec is re-entered, not recreated. The worktree forks off origin/main and is
+/// auto-scoped (focus) to the spec.
+// trace:STORY-742 | ai:claude
+fn ensure_spec_worktree(
+    spec_display: &str,
+    focus_label: &str,
+    path_override: Option<&str>,
+    branch_override: Option<&str>,
+) -> Result<WorktreeOutcome> {
+    let main_root = find_main_worktree_root()?;
+    let home =
+        dirs::home_dir().context("cannot resolve home directory for the default worktree path")?;
+
+    // Existing lease for this spec → re-enter it (freshest wins).
+    let existing = list_leases(&main_root)
+        .into_iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+        .max_by_key(|l| l.started_at)
+        .map(|l| (l.worktree_path.clone(), l.branch.clone()));
+
+    // Is the default path already a registered (lease-less) git worktree?
+    let default_path = match path_override {
+        Some(p) => std::path::PathBuf::from(p),
+        None => crate::worktree::default_worktree_path(&home, spec_display),
+    };
+    let porcelain = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&main_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    let registered = crate::worktree::is_registered(&porcelain, &default_path);
+
+    ensure_spec_worktree_core(
+        &home,
+        spec_display,
+        focus_label,
+        path_override,
+        branch_override,
+        existing,
+        registered,
+        |path, branch| {
+            // Reuse the queue-work `--no-launch` setup primitive: session_start
+            // mints the worktree + lease + Approved→InProgress bump off
+            // origin/main. use_pool=Some(false) keeps the deterministic
+            // per-spec path (no warm-pool tree); launch=false = no agent.
+            session_start(
+                spec_display,
+                Some(branch),
+                /* base */ None,
+                /* reuse_branch */ false,
+                path.to_str(),
+                /* forge_override */ None,
+                /* branch_style */ "auto",
+                /* launch */ false,
+                /* launch_title */ None,
+                /* launch_name */ None,
+                /* permission_mode */ None,
+                /* launch_contained */ false,
+                /* role */ Some("implementer".to_string()),
+                /* force_claim */ false,
+                /* use_pool */ Some(false),
+            )?;
+            let lease = list_leases(&main_root)
+                .into_iter()
+                .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+                .max_by_key(|l| l.started_at)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "worktree + lease setup completed but no lease for `{}` is visible \
+                         — try `aida session leases`",
+                        spec_display
+                    )
+                })?;
+            Ok((lease.worktree_path.clone(), lease.branch.clone()))
+        },
+    )
+}
+
 /// Dispatch `aida worktree <subcommand>` (STORY-716, EPIC-55 workspace layer).
 // trace:STORY-716 | ai:claude
 fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
     match cmd {
-        WorktreeCommand::Add { epic, path, branch } => {
-            handle_worktree_add(epic, path.as_deref(), branch.as_deref())
-        }
-        WorktreeCommand::Enter { epic, path, branch } => {
-            handle_worktree_enter(epic, path.as_deref(), branch.as_deref())
-        }
+        WorktreeCommand::Add {
+            target,
+            path,
+            branch,
+        } => handle_worktree_add(target, path.as_deref(), branch.as_deref()),
+        WorktreeCommand::Enter {
+            target,
+            path,
+            branch,
+        } => handle_worktree_enter(target, path.as_deref(), branch.as_deref()),
         WorktreeCommand::List { json } => handle_worktree_list(*json),
         // STORY-714 warm-pool surface.
         WorktreeCommand::Pool(pool) => handle_worktree_pool_command(pool),
@@ -96643,15 +96850,22 @@ fn worktree_pool_destroy(
     Ok(())
 }
 
-/// `aida worktree add <epic>` — create (or re-affirm) the epic worktree and
+/// `aida worktree add <epic|spec>` — create (or re-affirm) the worktree and
 /// print its path. Mirrors `git worktree add`: prints the path, does NOT cd.
-// trace:STORY-716 | ai:claude
+/// An epic arg keeps the STORY-716 scoping-only behavior; a single non-epic
+/// spec additionally takes the implementer lease (STORY-742).
+// trace:STORY-716 trace:STORY-742 | ai:claude
 fn handle_worktree_add(
-    epic: &str,
+    arg: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
 ) -> Result<()> {
-    let out = ensure_epic_worktree(epic, path_override, branch_override)?;
+    let out = match classify_worktree_arg(arg) {
+        WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
+        WorktreeTarget::Spec { display, focus } => {
+            ensure_spec_worktree(&display, &focus, path_override, branch_override)?
+        }
+    };
     let verb = if out.created {
         "Created"
     } else {
@@ -96668,27 +96882,34 @@ fn handle_worktree_add(
     if out.created {
         println!(
             "  cd into it with `aida worktree enter {}` (auto-cd via the shell wrapper).",
-            epic
+            arg
         );
     } else {
         println!(
             "  focus re-affirmed; `aida worktree enter {}` to cd in.",
-            epic
+            arg
         );
     }
     Ok(())
 }
 
-/// `aida worktree enter <epic>` — create-if-missing, then emit `cd '<path>'`
-/// on stdout for the `aida()` shell wrapper to auto-eval. Human-facing status
-/// goes to STDERR so it never contaminates the eval'd stdout.
-// trace:STORY-716 | ai:claude
+/// `aida worktree enter <epic|spec>` — create-if-missing, then emit `cd
+/// '<path>'` on stdout for the `aida()` shell wrapper to auto-eval. Human-facing
+/// status goes to STDERR so it never contaminates the eval'd stdout. An epic arg
+/// keeps the STORY-716 scoping-only behavior; a single non-epic spec
+/// additionally takes the implementer lease (STORY-742).
+// trace:STORY-716 trace:STORY-742 | ai:claude
 fn handle_worktree_enter(
-    epic: &str,
+    arg: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
 ) -> Result<()> {
-    let out = ensure_epic_worktree(epic, path_override, branch_override)?;
+    let out = match classify_worktree_arg(arg) {
+        WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
+        WorktreeTarget::Spec { display, focus } => {
+            ensure_spec_worktree(&display, &focus, path_override, branch_override)?
+        }
+    };
     let verb = if out.created {
         "Created and entering"
     } else {
@@ -96712,7 +96933,7 @@ fn handle_worktree_enter(
              Run `aida dev shell-init --install` to enable auto-cd, or \
              `eval \"$(aida worktree enter {})\"`.",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-            epic,
+            arg,
         );
     }
     // The one shell-modifying line the wrapper evals.
@@ -148116,6 +148337,161 @@ detached
         );
         // The detached worktree has no branch line → absent from the map.
         assert!(!map.contains_key(std::path::Path::new("/home/joe/ai/aida-detached")));
+    }
+
+    // ── STORY-742: `aida worktree add|enter <spec>` (single-spec worktree) ──
+
+    fn mk_req(spec_id: &str, kind: RequirementType) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new(format!("req {spec_id}"), String::new());
+        r.spec_id = Some(spec_id.to_string());
+        r.req_type = kind;
+        r
+    }
+
+    // The epic-vs-spec split: an EPIC (or an unresolved arg) keeps the legacy
+    // epic path; a resolved non-epic spec routes to the lease path with focus
+    // scoped to the spec itself.
+    #[test]
+    fn classify_target_routes_epic_vs_spec() {
+        let epic = mk_req("EPIC-54", RequirementType::Epic);
+        assert!(matches!(
+            classify_worktree_target(Some(&epic), "EPIC-54"),
+            WorktreeTarget::Epic
+        ));
+
+        let story = mk_req("STORY-742", RequirementType::Story);
+        match classify_worktree_target(Some(&story), "story-742") {
+            WorktreeTarget::Spec { display, focus } => {
+                assert_eq!(display, "STORY-742", "canonical id resolved");
+                assert_eq!(focus, "STORY-742", "focus scoped to the spec");
+            }
+            WorktreeTarget::Epic => panic!("a non-epic spec must take the spec path"),
+        }
+
+        // Unresolved arg → epic path (legacy behavior preserved).
+        assert!(matches!(
+            classify_worktree_target(None, "EPIC-99"),
+            WorktreeTarget::Epic
+        ));
+    }
+
+    // agreed_id wins over spec_id for the canonical display id.
+    #[test]
+    fn classify_target_prefers_agreed_id() {
+        let mut story = mk_req("STORY-7-042", RequirementType::Story);
+        story.agreed_id = Some("STORY-742".to_string());
+        match classify_worktree_target(Some(&story), "STORY-7-042") {
+            WorktreeTarget::Spec { display, focus } => {
+                assert_eq!(display, "STORY-742");
+                assert_eq!(focus, "STORY-742");
+            }
+            WorktreeTarget::Epic => panic!("resolved story must take the spec path"),
+        }
+    }
+
+    // Fresh single-spec setup: mint runs, the outcome carries the epic-style
+    // path/branch and created=true, and focus is scoped to the spec. A second
+    // call with an existing lease re-enters WITHOUT minting.
+    #[test]
+    fn spec_worktree_core_mints_fresh_then_reenters_via_lease() {
+        let home = tempfile::tempdir().unwrap();
+        let expected_path = home.path().join("ai").join("aida-story742");
+
+        let out = ensure_spec_worktree_core(
+            home.path(),
+            "STORY-742",
+            "STORY-742",
+            None,
+            None,
+            None,  // no existing lease
+            false, // not a registered worktree
+            |path, branch| {
+                // The mint gets the epic-style path/branch the queue-work setup
+                // would fork off origin/main.
+                assert_eq!(path, home.path().join("ai").join("aida-story742"));
+                assert_eq!(branch, "story-742-work");
+                Ok((path.to_path_buf(), branch.to_string()))
+            },
+        )
+        .expect("fresh spec setup succeeds");
+        assert!(out.created, "fresh setup reports created");
+        assert_eq!(out.path, expected_path);
+        assert_eq!(out.branch, "story-742-work");
+        assert_eq!(out.focus, "STORY-742");
+        assert_eq!(
+            crate::focus::read_focus_marker(&out.path).as_deref(),
+            Some("STORY-742"),
+            "focus marker written INSIDE the new worktree"
+        );
+
+        // Re-enter: a lease already covers the spec → mint MUST NOT run, the
+        // outcome reports not-created at the lease's worktree path.
+        let lease_path = home.path().join("ai").join("aida-story742");
+        let again = ensure_spec_worktree_core(
+            home.path(),
+            "STORY-742",
+            "STORY-742",
+            None,
+            None,
+            Some((lease_path.clone(), "story-742-work".to_string())),
+            false,
+            |_p, _b| panic!("mint must NOT run when a lease already exists"),
+        )
+        .expect("re-enter succeeds");
+        assert!(!again.created, "re-enter reports not-created");
+        assert_eq!(again.path, lease_path);
+        assert_eq!(again.branch, "story-742-work");
+    }
+
+    // A worktree already registered (git) at the default path but carrying no
+    // lease re-affirms focus without minting.
+    #[test]
+    fn spec_worktree_core_registered_without_lease_reaffirms() {
+        let home = tempfile::tempdir().unwrap();
+        let out = ensure_spec_worktree_core(
+            home.path(),
+            "TASK-100",
+            "TASK-100",
+            None,
+            None,
+            None, // no lease
+            true, // but already a registered git worktree
+            |_p, _b| panic!("mint must NOT run for an already-registered worktree"),
+        )
+        .expect("registered re-affirm succeeds");
+        assert!(!out.created);
+        assert_eq!(out.path, home.path().join("ai").join("aida-task100"));
+        assert_eq!(out.branch, "task-100-work");
+        assert_eq!(
+            crate::focus::read_focus_marker(&out.path).as_deref(),
+            Some("TASK-100")
+        );
+    }
+
+    // --path / --branch overrides flow through to the mint and the outcome.
+    #[test]
+    fn spec_worktree_core_honors_path_and_branch_overrides() {
+        let home = tempfile::tempdir().unwrap();
+        let custom = home.path().join("custom-spec-tree");
+        let out = ensure_spec_worktree_core(
+            home.path(),
+            "STORY-742",
+            "STORY-742",
+            Some(custom.to_str().unwrap()),
+            Some("my-spec-branch"),
+            None,
+            false,
+            |path, branch| {
+                assert_eq!(path, custom.as_path());
+                assert_eq!(branch, "my-spec-branch");
+                Ok((path.to_path_buf(), branch.to_string()))
+            },
+        )
+        .expect("override setup succeeds");
+        assert!(out.created);
+        assert_eq!(out.path, custom);
+        assert_eq!(out.branch, "my-spec-branch");
+        assert_eq!(out.focus, "STORY-742");
     }
 }
 
