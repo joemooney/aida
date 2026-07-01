@@ -82191,13 +82191,19 @@ fn pr_number_from_scope(scope: &str) -> Option<u64> {
 }
 
 fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Option<usize> {
-    // BUG-89: route through the canonical helper so the statusline depth
-    // counts the same queue file `aida queue list` reads from in this
-    // shell. trace:BUG-89 | ai:claude
-    let user = current_user_id(None);
+    // BUG-89 + BUG-675: resolve identity through the SAME two-step path
+    // `aida queue list` uses — `current_user_id` first, then the queue-file
+    // case-fold (`resolve_queue_user`, TASK-951/TASK-845) — so a shell reporting
+    // `Joe` counts the queue keyed under `joe.yaml` instead of reading zero.
+    // Reading `<current_user_id>.yaml` directly skipped that fold, so the depth
+    // diverged from the queue-list count on a case-only identity mismatch; the
+    // BUG-670 band-aid then suppressed the divergent number instead of fixing the
+    // resolution. trace:BUG-675 trace:BUG-89 | ai:claude
+    let store_path = project_root.join(".aida-store");
+    let user = aida_core::db::resolve_queue_user(&store_path, &current_user_id(None));
 
-    let queue_path = project_root
-        .join(".aida-store/registry/queues")
+    let queue_path = store_path
+        .join("registry/queues")
         .join(format!("{}.yaml", user));
 
     let content = std::fs::read_to_string(&queue_path).ok()?;
@@ -113450,24 +113456,25 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
     println!();
 }
 
-/// BUG-670: assemble the AGENT-MODE scalar head lines for `aida status` with a
-/// single, unambiguous "is there work for me?" signal. `queue_actionable` LEADS:
-/// it is the count that actually answers the question (live, workable, role-
-/// routed specs) and is consistent with `aida queue list`. The raw `queue_depth`
-/// (the role-routed queue-file scan) is padded with archived/completed/deferred
-/// corpses AND resolves user identity down a different path than the queue-list
-/// command (the BUG-89 surface), so when it DIVERGES from `queue_actionable` an
-/// agent is shown a contradictory `queue_depth: 64` next to `queue_actionable: 0`
-/// with no way to tell which is authoritative. To keep the projection honest we
-/// emit `queue_depth` ONLY when it AGREES with `queue_actionable`; on mismatch it
-/// is suppressed so the agent is left with the single authoritative actionable
-/// count. The human TTY path ([`print_fast_status`]) keeps its fully-labelled
-/// "N routed (M actionable)" line unchanged — this is an agent-projection fix.
-/// Pure so the lead-signal + suppression contract is unit-testable without a
-/// queue file or a cache DB. The BUG-89 user-identity UNIFICATION (making the two
-/// paths resolve the SAME identity so `queue_depth` can always be trusted) is
-/// deliberately out of scope here and remains for BUG-670's follow-up.
-// trace:BUG-670 | ai:claude — plain `//` keeps the marker out of any doc/help.
+/// Assemble the AGENT-MODE scalar head lines for `aida status` with a single,
+/// unambiguous "is there work for me?" signal. `queue_actionable` LEADS: it is
+/// the count that actually answers the question (live, workable, role-routed
+/// specs) and is consistent with `aida queue list`. The raw `queue_depth` (the
+/// role-routed queue-file scan) is the total routed count — larger than
+/// actionable when the queue is padded with archived/completed/deferred corpses.
+///
+/// BUG-675: `queue_depth` now resolves user identity through the SAME two-step
+/// path `aida queue list` uses (`current_user_id` + the `resolve_queue_user`
+/// case-fold, TASK-951), so it is trustworthy — it no longer collapses to zero on
+/// a case-only identity mismatch. That removes the reason for BUG-670's
+/// divergence-suppression (which dropped the scalar whenever it disagreed with
+/// `queue_actionable`, partly because the count could be a spurious zero). The
+/// depth now ALWAYS rides along, AFTER the lead actionable signal, giving the
+/// agent both "how many are workable now" and "how many are routed in total".
+/// The human TTY path ([`print_fast_status`]) keeps its fully-labelled "N routed
+/// (M actionable)" line unchanged. Pure, so the ordering contract is
+/// unit-testable without a queue file or a cache DB.
+// trace:BUG-675 trace:BUG-670 | ai:claude — plain `//` keeps the marker out of any doc/help.
 fn toon_status_scalar_lines(snap: &FastStatusSnapshot) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     lines.push(crate::toon::scalar("role", &snap.role));
@@ -113485,15 +113492,13 @@ fn toon_status_scalar_lines(snap: &FastStatusSnapshot) -> Vec<String> {
         "queue_actionable",
         &snap.queue_actionable.to_string(),
     ));
-    // Surface the raw role-routed depth ONLY when it agrees with the actionable
-    // count; on divergence (padding / BUG-89 identity mismatch) drop it so an
-    // agent never has to choose between two contradictory work-signals.
-    if snap.queue_depth == snap.queue_actionable {
-        lines.push(crate::toon::scalar(
-            "queue_depth",
-            &snap.queue_depth.to_string(),
-        ));
-    }
+    // BUG-675: the raw role-routed depth is now identity-trustworthy (same
+    // resolver as `aida queue list`), so it always rides along AFTER the lead
+    // actionable signal — no longer suppressed on divergence.
+    lines.push(crate::toon::scalar(
+        "queue_depth",
+        &snap.queue_depth.to_string(),
+    ));
     if snap.cache_present {
         lines.push(crate::toon::scalar("open", &snap.counts.open.to_string()));
         lines.push(crate::toon::scalar(
@@ -113603,9 +113608,14 @@ fn role_queue_actionable(
     project_root: &std::path::Path,
     role: &str,
 ) -> Vec<(String, String, String)> {
-    let user = current_user_id(None);
-    let queue_path = project_root
-        .join(".aida-store/registry/queues")
+    // BUG-675: fold identity the SAME way read_queue_depth / `aida queue list`
+    // do, so the actionable set is read from the case-correct queue file (a shell
+    // reporting `Joe` finds `joe.yaml`) rather than silently reading zero.
+    // trace:BUG-675 | ai:claude
+    let store_path = project_root.join(".aida-store");
+    let user = aida_core::db::resolve_queue_user(&store_path, &current_user_id(None));
+    let queue_path = store_path
+        .join("registry/queues")
         .join(format!("{}.yaml", user));
     let Ok(content) = std::fs::read_to_string(&queue_path) else {
         return Vec::new();
@@ -113994,9 +114004,11 @@ mod story707_fast_status_tests {
     }
 }
 
-// BUG-670: the AGENT-MODE `aida status` projection must give an unambiguous
-// "is there work for me?" signal — lead with `queue_actionable`, and never emit
-// a `queue_depth` that contradicts it (the `64` vs `0` first-impression trap).
+// BUG-670 → BUG-675: the AGENT-MODE `aida status` projection must give an
+// unambiguous "is there work for me?" signal — lead with `queue_actionable`. With
+// BUG-675 making `queue_depth` identity-trustworthy (same resolver as
+// `aida queue list`), the raw depth now ALWAYS rides along after the lead signal
+// instead of being suppressed on divergence.
 #[cfg(test)]
 mod bug670_agent_status_tests {
     use super::*;
@@ -114005,11 +114017,11 @@ mod bug670_agent_status_tests {
         lines.iter().position(|l| l.starts_with(&format!("{key}:")))
     }
 
-    // The actionable count LEADS and, when the raw depth DIVERGES (padding /
-    // BUG-89 identity mismatch), no `queue_depth` scalar is emitted — so an agent
-    // is never shown `queue_depth: 64` next to `queue_actionable: 0`.
+    // BUG-675: even when the raw depth DIFFERS from actionable (a padded queue),
+    // `queue_depth` is now emitted — trustworthy total-routed context — but always
+    // AFTER the lead `queue_actionable` work-signal.
     #[test]
-    fn divergent_depth_is_suppressed_and_actionable_leads() {
+    fn divergent_depth_rides_along_after_actionable() {
         let snap = FastStatusSnapshot {
             role: "implementer".to_string(),
             queue_depth: 64,
@@ -114021,14 +114033,18 @@ mod bug670_agent_status_tests {
 
         let actionable_at =
             line_index(&lines, "queue_actionable").expect("queue_actionable must be emitted");
-        // Lead signal: actionable appears, and no divergent depth line exists.
+        // Lead signal appears…
         assert!(
             lines.iter().any(|l| l == "queue_actionable: 0"),
             "actionable count must be the work-signal: {lines:?}"
         );
+        // …and the (now trustworthy) raw depth rides along after it.
+        let depth_at = line_index(&lines, "queue_depth")
+            .expect("BUG-675: trustworthy queue_depth is always emitted");
+        assert!(lines.iter().any(|l| l == "queue_depth: 64"));
         assert!(
-            line_index(&lines, "queue_depth").is_none(),
-            "divergent queue_depth must be suppressed, not emitted: {lines:?}"
+            actionable_at < depth_at,
+            "queue_actionable must lead queue_depth: {lines:?}"
         );
         // "Leads" = actionable precedes every requirement-count scalar.
         for k in ["open", "in_progress", "draft", "total"] {
@@ -114038,8 +114054,8 @@ mod bug670_agent_status_tests {
         }
     }
 
-    // When the two counts AGREE there is no ambiguity, so `queue_depth` may ride
-    // along — but still AFTER the lead `queue_actionable`, and never before it.
+    // When the two counts AGREE, `queue_depth` still rides along AFTER the lead
+    // `queue_actionable`, and never before it.
     #[test]
     fn agreeing_depth_rides_along_after_actionable() {
         let snap = FastStatusSnapshot {
@@ -114124,8 +114140,9 @@ mod bug670_agent_status_tests {
             "actionable filters the padded queue to the live/workable set"
         );
 
-        // Fed into the projection, the divergence (4 vs 1) suppresses queue_depth
-        // and leads with the actionable count.
+        // Fed into the projection, the actionable count leads and the (now
+        // identity-trustworthy, BUG-675) raw depth rides along after it — both are
+        // emitted, actionable first.
         let snap = FastStatusSnapshot {
             role: "implementer".to_string(),
             queue_depth: depth,
@@ -114135,9 +114152,78 @@ mod bug670_agent_status_tests {
         };
         let lines = toon_status_scalar_lines(&snap);
         assert!(lines.iter().any(|l| l == "queue_actionable: 1"));
+        assert!(lines.iter().any(|l| l == "queue_depth: 4"));
+        let actionable_at = line_index(&lines, "queue_actionable").unwrap();
+        let depth_at = line_index(&lines, "queue_depth").unwrap();
         assert!(
-            line_index(&lines, "queue_depth").is_none(),
-            "divergent depth must not be emitted: {lines:?}"
+            actionable_at < depth_at,
+            "queue_actionable must lead queue_depth: {lines:?}"
+        );
+    }
+
+    // BUG-675: the statusline `queue_depth` must resolve the current user through
+    // the SAME case-folding identity path `aida queue list` uses (TASK-951), so a
+    // shell whose USER/AIDA_USER differs only in case from the stored queue key
+    // counts the same items — never suppressed to zero on a resolvable identity
+    // match. trace:BUG-675 | ai:claude
+    #[test]
+    fn queue_depth_matches_queue_list_under_case_only_identity() {
+        // Pin identity to `Joe` (upper) under the env lock; the stored queue lives
+        // under lowercase `joe` (a prior shell's casing). EnvVarsGuard holds the
+        // ENV_LOCK for the whole body so no sibling env-mutating test races in.
+        let _g = crate::test_env::EnvVarsGuard::set(&[("AIDA_USER", "Joe"), ("USER", "Joe")]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let store = root.join(".aida-store");
+        let qdir = store.join("registry/queues");
+        std::fs::create_dir_all(&qdir).unwrap();
+
+        let mk = |role: &str, pos: i64| aida_core::QueueEntry {
+            user_id: "joe".to_string(),
+            requirement_id: Uuid::new_v4(),
+            position: pos,
+            added_by: "joe".to_string(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some(role.to_string()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        let entries = vec![
+            mk("implementer", 0),
+            mk("implementer", 1),
+            mk("reviewer", 2),
+        ];
+        std::fs::write(
+            qdir.join("joe.yaml"),
+            serde_yaml::to_string(&entries).unwrap(),
+        )
+        .unwrap();
+
+        // Reference path: `aida queue list` resolves `Joe` → `joe.yaml` (TASK-951)
+        // and returns all three entries; two are routed to implementer.
+        let listed = Storage::new(&store).queue_list("Joe", false).unwrap();
+        let list_impl = listed
+            .iter()
+            .filter(|e| e.for_role.as_deref() == Some("implementer"))
+            .count();
+        assert_eq!(
+            list_impl, 2,
+            "queue list must fold identity and see the queue"
+        );
+
+        // BUG-675: the statusline depth resolves identity the SAME way and EQUALS
+        // the queue-list count — never suppressed to zero on a resolvable match.
+        let depth = read_queue_depth(root, Some("implementer"))
+            .expect("queue_depth must resolve the folded identity, not read zero");
+        assert_eq!(
+            depth, list_impl,
+            "queue_depth must equal the queue-list count under a case-only identity mismatch"
+        );
+        assert_ne!(
+            depth, 0,
+            "queue_depth must not collapse to zero on a resolvable identity match"
         );
     }
 }
