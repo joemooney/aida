@@ -44,6 +44,24 @@ pub(crate) struct AwaitingReport {
     /// Specs parked in `NeedsAttention` — the implementer-→-advisor-→-
     /// human escalation cascade landed here.
     pub escalations: Vec<EscalationItem>,
+    /// Unread inter-agent mail for the resolved identities (shell user +
+    /// session role + agent type). Folded in from the mailbox core so the
+    /// coordination inbox is ONE surface, not split between mail (per-turn
+    /// hook) and everything-else (`aida status`). Cheap: derived from the
+    /// local + canonical mailbox files, never a network call, so it can ride
+    /// the per-turn notice. Zero when the inbox is caught up.
+    // trace:STORY-741 | ai:claude
+    pub mail: MailChannel,
+}
+
+/// Unread-mail summary for the awaiting-you report: the full unread count
+/// plus how many of those are flagged urgent. Both zero → the inbox is
+/// caught up and the mail channel renders nothing.
+// trace:STORY-741 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub(crate) struct MailChannel {
+    pub unread: usize,
+    pub urgent: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +102,7 @@ impl AwaitingReport {
         self.mergeable_prs.len()
             + self.pending_briefs.len()
             + (if self.findings_total > 0 { 1 } else { 0 })
+            + (if self.mail.unread > 0 { 1 } else { 0 })
             + self.reviewer_queue_items.len()
             + self.escalations.len()
     }
@@ -170,6 +189,26 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        if self.mail.unread > 0 {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let urgent = if self.mail.urgent > 0 {
+                    format!(" ({} urgent)", self.mail.urgent)
+                } else {
+                    String::new()
+                };
+                writeln!(
+                    w,
+                    "  📨 {} unread mail{}{} — `{}`",
+                    self.mail.unread,
+                    if self.mail.unread == 1 { "" } else { "s" },
+                    urgent,
+                    "aida mailbox inbox".cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
         for q in &self.reviewer_queue_items {
             if budget == 0 {
                 overflow += 1;
@@ -217,6 +256,10 @@ impl AwaitingReport {
                 "path": b.path.display().to_string(),
             })).collect::<Vec<_>>(),
             "findings_total": self.findings_total,
+            "mail": {
+                "unread": self.mail.unread,
+                "urgent": self.mail.urgent,
+            },
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
                 "title": q.title,
@@ -227,6 +270,70 @@ impl AwaitingReport {
             })).collect::<Vec<_>>(),
         })
     }
+
+    /// One compact line spanning every populated channel, for the per-turn
+    /// notice — the can't-miss signal that SOMETHING awaits across ANY
+    /// coordination channel (not just mail). Returns `None` when nothing
+    /// awaits so the caller stays silent. Pure: renders only the counts the
+    /// caller already gathered — it does NO I/O, so cheapness is the caller's
+    /// job (build the report with `no_ci` on the per-turn path so PRs, the one
+    /// network-backed channel, are omitted; the full `aida awaiting` includes
+    /// them). Example: `⦿ Awaiting you: 2 briefs · 1 finding · 3 mail (1 urgent)
+    /// · 1 escalation — run `aida awaiting``.
+    // trace:STORY-741 | ai:claude
+    pub fn compact_line(&self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        let mut parts: Vec<String> = Vec::new();
+        if !self.mergeable_prs.is_empty() {
+            parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
+        }
+        if !self.pending_briefs.is_empty() {
+            parts.push(pluralize(self.pending_briefs.len(), "brief", "briefs"));
+        }
+        if self.findings_total > 0 {
+            parts.push(pluralize(self.findings_total, "finding", "findings"));
+        }
+        if self.mail.unread > 0 {
+            let urgent = if self.mail.urgent > 0 {
+                format!(" ({} urgent)", self.mail.urgent)
+            } else {
+                String::new()
+            };
+            parts.push(format!(
+                "{}{}",
+                pluralize(self.mail.unread, "mail", "mail"),
+                urgent
+            ));
+        }
+        if !self.reviewer_queue_items.is_empty() {
+            parts.push(pluralize(
+                self.reviewer_queue_items.len(),
+                "verdict",
+                "verdicts",
+            ));
+        }
+        if !self.escalations.is_empty() {
+            parts.push(pluralize(
+                self.escalations.len(),
+                "escalation",
+                "escalations",
+            ));
+        }
+        if parts.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "⦿ Awaiting you: {} — run `aida awaiting`",
+            parts.join(" · ")
+        ))
+    }
+}
+
+/// `"{n} {singular|plural}"` — the tiny count formatter the compact line uses.
+fn pluralize(n: usize, singular: &str, plural: &str) -> String {
+    format!("{} {}", n, if n == 1 { singular } else { plural })
 }
 
 /// Classify a single open PR as "awaiting you." The aida-chat motivating
@@ -430,6 +537,138 @@ mod tests {
         assert_eq!(v["mergeable_prs"][0]["number"], 7);
         assert_eq!(v["findings_total"], 4);
         assert_eq!(v["escalations"][0]["spec_id"], "SPIKE-12");
+    }
+
+    // STORY-741: unread mail is now a first-class channel in the report — the
+    // count folds into the header total and renders its own line, so the
+    // coordination inbox is ONE surface instead of mail-here / everything-
+    // else-there. trace:STORY-741
+    #[test]
+    fn unread_mail_folds_into_report_and_renders_with_urgent() {
+        let r = AwaitingReport {
+            mail: MailChannel {
+                unread: 3,
+                urgent: 1,
+            },
+            ..Default::default()
+        };
+        // A report with ONLY mail is non-empty and counts as one line.
+        assert!(!r.is_empty());
+        assert_eq!(r.total(), 1);
+        let mut buf = Vec::new();
+        let wrote = r.render(false, &mut buf).unwrap();
+        assert!(wrote);
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(s.contains("3 unread mail"), "mail line missing:\n{s}");
+        assert!(s.contains("(1 urgent)"), "urgent flag missing:\n{s}");
+        assert!(
+            s.contains("aida mailbox inbox"),
+            "mail line must point at the inbox:\n{s}"
+        );
+    }
+
+    // STORY-741: the header total counts mail as ONE line regardless of how
+    // many messages are unread — the notice is a breadcrumb, not the inbox.
+    #[test]
+    fn mail_counts_as_one_line_in_the_header_total() {
+        let r = AwaitingReport {
+            mail: MailChannel {
+                unread: 42,
+                urgent: 0,
+            },
+            findings_total: 5,
+            ..Default::default()
+        };
+        // 1 findings line + 1 mail line = 2 (NOT 47).
+        assert_eq!(r.total(), 2);
+    }
+
+    // STORY-741: the compact per-turn line spans EVERY populated channel and is
+    // `None` when nothing awaits — the silent-when-empty contract the hook
+    // relies on. trace:STORY-741
+    #[test]
+    fn compact_line_spans_all_channels_and_is_empty_when_nothing_awaits() {
+        assert!(
+            AwaitingReport::default().compact_line().is_none(),
+            "an empty report must produce no per-turn line (hook stays silent)"
+        );
+
+        let r = AwaitingReport {
+            pending_briefs: vec![
+                PendingBriefItem {
+                    agent: "claude".into(),
+                    spec_id: "TASK-1".into(),
+                    path: std::path::PathBuf::from("/b/1"),
+                },
+                PendingBriefItem {
+                    agent: "claude".into(),
+                    spec_id: "TASK-2".into(),
+                    path: std::path::PathBuf::from("/b/2"),
+                },
+            ],
+            findings_total: 1,
+            mail: MailChannel {
+                unread: 3,
+                urgent: 1,
+            },
+            escalations: vec![EscalationItem {
+                spec_id: "SPIKE-9".into(),
+                title: "punt".into(),
+            }],
+            ..Default::default()
+        };
+        let line = r.compact_line().expect("populated report must have a line");
+        // One line, spanning every channel, with counts + the urgent flag.
+        assert_eq!(line.lines().count(), 1, "must be exactly one line: {line}");
+        assert!(line.contains("2 briefs"), "briefs channel missing: {line}");
+        assert!(
+            line.contains("1 finding"),
+            "findings channel missing: {line}"
+        );
+        assert!(line.contains("3 mail"), "mail channel missing: {line}");
+        assert!(line.contains("(1 urgent)"), "urgent flag missing: {line}");
+        assert!(
+            line.contains("1 escalation"),
+            "escalation channel missing: {line}"
+        );
+        assert!(
+            line.contains("aida awaiting"),
+            "line must point at the full view: {line}"
+        );
+    }
+
+    // STORY-741: PRs are the one network-backed channel, so the per-turn line
+    // omits them (the caller builds the report with `no_ci`). This asserts the
+    // compact line renders cleanly from the cheap channels alone.
+    #[test]
+    fn compact_line_renders_from_cheap_channels_without_prs() {
+        let r = AwaitingReport {
+            mail: MailChannel {
+                unread: 1,
+                urgent: 0,
+            },
+            ..Default::default()
+        };
+        assert!(r.mergeable_prs.is_empty());
+        let line = r.compact_line().unwrap();
+        assert!(line.contains("1 mail"), "{line}");
+        assert!(!line.contains(" PR"), "no PR channel expected: {line}");
+    }
+
+    // STORY-741: the JSON contract gains a stable `mail` object.
+    #[test]
+    fn json_shape_includes_mail_channel() {
+        let r = AwaitingReport {
+            mail: MailChannel {
+                unread: 4,
+                urgent: 2,
+            },
+            ..Default::default()
+        };
+        let v = r.to_json();
+        assert_eq!(v["mail"]["unread"], 4);
+        assert_eq!(v["mail"]["urgent"], 2);
+        assert_eq!(v["total"], 1);
     }
 
     /// Mirrors `status_cleanup::tests::strip_ansi` so assertions can check
