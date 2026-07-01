@@ -32,7 +32,4 @@ relationships:
   target_id: 019e45b6-764c-7b21-a06a-42cd5851db0a
   created_at: 2026-07-01T04:43:44.483846402Z
   created_by: joe
-deferred: true
-deferred_at: 2026-07-01T04:43:43.972891191Z
-deferred_until: vendor-execution adapter (EPIC-35) wired AND advisor tool GA/on the CLI surface AIDA uses
 human_only: true
