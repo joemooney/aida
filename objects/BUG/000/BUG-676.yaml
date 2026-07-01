@@ -1,0 +1,17 @@
+id: 019f1b65-b4ac-7083-843c-f4284a2ef9a2
+spec_id: BUG-676
+agreed_id: BUG-676
+title: aida tui liveness poll spawns aida ps (~1.3s) every 3s and processes pile up — makes the machine sluggish while the TUI is open (TASK-978 regression)
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T01:57:58.060979217Z
+modified_at: 2026-07-01T01:57:58.060979217Z
+req_type: Bug
+tags:
+- from-operator
+- performance
+- regression
+- tui
