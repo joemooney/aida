@@ -29405,5 +29405,13 @@ operations:
       - WHEN run against the EPIC-54 subtree, aida focus epic-54 SHALL report open=3 (the true open count at time of filing), not the rejected-inflated count.
 
       SCOPE: this bug is ONLY the rejected-as-open bucketing. The separate descendant_ids-vs-graph-tree subtree MEMBERSHIP mismatch (43 vs 44) is split out to TASK-1074.
-clock: 2830
+- id: 019f1bd4-2ffb-72e3-864f-a8510ef1ae5a
+  target_id: 019f1bc3-40a8-77c3-8bc9-589393fc0d70
+  author: aida
+  node_id: '1'
+  lamport: 2831
+  timestamp: 2026-07-01T03:58:38.587525981Z
+  kind: !SetStatus
+    status: Completed
+clock: 2831
 node_id: '1'
