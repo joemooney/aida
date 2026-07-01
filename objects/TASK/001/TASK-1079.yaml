@@ -25,12 +25,12 @@ description: |
   or make the --json path emit errors to stderr.
 
   Raised in review of PR-1293: https://github.com/joemooney/aida/pull/1293#issuecomment-4850385477
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:58:02.358262988Z
-modified_at: 2026-07-01T06:04:28.578401384Z
+modified_at: 2026-07-01T06:04:34.453096828Z
 req_type: Task
 tags:
 - docs
