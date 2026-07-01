@@ -370,9 +370,21 @@ fn detect_conflict(lower: &str) -> Option<String> {
     if lower.contains("always") && (lower.contains("except") || lower.contains("but not")) {
         return Some("\"always\" qualified by an exception".to_string());
     }
-    // "all ... none".
-    if lower.contains("all ") && lower.contains("none") {
-        return Some("\"all\" and \"none\" both present".to_string());
+    // "all ... none" — a universal ("all X") contradicted by "none" applied to
+    // the SAME subject. Two guards keep this from false-positing on specs where
+    // "all" and "none" describe DIFFERENT, non-overlapping clauses:
+    //   1. Whole-word matching, so the "all" inside "shall"/"call"/"install"
+    //      never triggers ("each glyph SHALL be registered" + "none appear as
+    //      raw unicode" must NOT flag).
+    //   2. Same-clause co-occurrence: both words must land in ONE clause
+    //      (sentence / bullet / line), a conservative proxy for "same subject".
+    // A genuine self-contradiction ("accepts all inputs but none are accepted")
+    // keeps both words in one clause and still fires.
+    // trace:BUG-686
+    for clause in lower.split(['.', ';', '\n', '\r']) {
+        if contains_word(clause, "all") && contains_word(clause, "none") {
+            return Some("\"all\" and \"none\" both present".to_string());
+        }
     }
     None
 }
@@ -465,6 +477,38 @@ mod tests {
         let report =
             lint_text("The endpoint must return cached data and must not query the cache.");
         assert_eq!(report.count(Category::ConflictingConstraint), 1);
+    }
+
+    // The "all"/"none" conflict heuristic must not fire when the two words
+    // describe DIFFERENT, non-overlapping clauses. The "all" inside "SHALL" used
+    // to trip the old substring check. trace:BUG-686
+    #[test]
+    fn each_none_in_separate_clauses_is_not_flagged() {
+        let report = lint_text(
+            "Each glyph SHALL be registered in the glyph table.\n\
+             None of the glyphs appear as raw unicode in the source.",
+        );
+        assert_eq!(
+            report.count(Category::ConflictingConstraint),
+            0,
+            "\"each ... SHALL\" + \"none ... raw\" describe different subjects and \
+             must not be flagged as a conflict, got {:?}",
+            report.findings
+        );
+    }
+
+    // A genuine same-clause "all X ... none X" contradiction must STILL fire.
+    // trace:BUG-686
+    #[test]
+    fn all_and_none_same_clause_still_flags() {
+        let report =
+            lint_text("The system SHALL accept all inputs but none of the inputs are accepted.");
+        assert_eq!(
+            report.count(Category::ConflictingConstraint),
+            1,
+            "a same-clause all/none contradiction must still be flagged, got {:?}",
+            report.findings
+        );
     }
 
     #[test]
