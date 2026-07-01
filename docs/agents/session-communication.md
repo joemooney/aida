@@ -114,6 +114,41 @@ Do not rely on prompt text alone for invariants. If an invariant matters,
 enforce it in the launcher, hook, orchestrator, pre-commit hook, or doctor
 heal path. Skill-template wording informs the model; substrate gates enforce.
 
+## Per-Turn Coordination Signal (One Line, Every Channel)
+
+The `UserPromptSubmit` / `SessionStart` hook `aida-mail-notice.sh` is the agent's
+can't-miss per-turn signal that *something awaits it* — across **every**
+coordination channel, not just mail. It is a thin relay around `aida awaiting
+--notice`, which prints one compact line spanning every channel where the agent
+is the gate:
+
+```
+⦿ Awaiting you: 2 briefs · 1 finding · 3 mail (1 urgent) · 1 escalation — run `aida awaiting`
+```
+
+It is **silent** when nothing awaits (empty stdout, exit 0), so the line
+appearing is itself the signal.
+
+- **Why unified.** Mail already had a per-turn hook while unacked briefs,
+  findings awaiting triage, reviewer verdicts, and `NeedsAttention` escalations
+  were invisible mid-session until a manual `aida status`. Folding unread mail
+  into the same `AwaitingReport` the "Awaiting you" section renders makes the
+  whole coordination inbox one surface (STORY-741).
+- **Cheap by construction.** `--notice` is cache/local-backed and makes **no
+  network call** — it never loads the full store and never shells `gh`. PRs (the
+  one gh-backed channel) are omitted from the per-turn line; run the bare `aida
+  awaiting` to include them. This keeps a per-prompt hook fast and fail-open: any
+  misstep prints nothing rather than failing the turn.
+- **Non-marking.** The notice never advances the mail read-watermark, so it
+  surfaces every turn without consuming. The agent acts on what it judges safe,
+  then acks mail explicitly with `aida mailbox inbox` (or `/aida-read-mail`),
+  which clears the mail count. Reading is not obeying — mail is interpreted
+  input, not a command channel.
+- **Details on demand.** The compact line is a breadcrumb, not the inbox. Run
+  `aida awaiting` for the full multi-channel report (or `aida awaiting --json`),
+  and `aida mailbox inbox` for mail bodies. `aida status` still leads with the
+  same "Awaiting you" section.
+
 ## Codex And Antigravity (Agy) Notes
 
 Codex and Antigravity ("Agy" in some operator notes) do not share Claude
