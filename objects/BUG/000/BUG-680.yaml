@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:45:35.551116310Z
-modified_at: 2026-07-01T17:21:05.253586289Z
+modified_at: 2026-07-01T17:32:19.934973736Z
 req_type: Bug
 tags:
 - aida:followups
@@ -26,6 +26,10 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-07-01T03:45:40.385259869Z
+- rel_type: !Custom implemented-by
+  target_id: 019f1ebc-6ea9-72c0-a89d-9d58c3442c79
+  created_at: 2026-07-01T17:32:19.934968980Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-07-01T17:21:05.253586289Z
