@@ -30102,5 +30102,20 @@ operations:
       - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs, not the raw unicode.
       - THE glyph-lint check SHALL flag any raw glyph not resolved through the registry.
       - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these glyphs appear as raw unicode in the rendered output.
-clock: 2876
+- id: 019f1c6a-5aca-7550-a9d9-23644aa7f456
+  target_id: 019f1b3a-76d6-7662-b2f9-76cf22da2d4b
+  author: aida
+  node_id: '1'
+  lamport: 2877
+  timestamp: 2026-07-01T06:42:39.946369708Z
+  kind: !SetDescription
+    description: |-
+      BUG-670 remainder. The queue_depth statusline value resolves the current user via a different path than the `aida queue list` command, so a case or fallback mismatch makes it untrustworthy (BUG-670 suppressed it on mismatch rather than fixing the resolution). Route queue_depth through the same identity path.
+
+      ## Acceptance
+      - THE queue_depth computation SHALL resolve the current user through the same current_user_id path that `aida queue list` uses.
+      - WHEN the shell user and the stored queue key differ only by case, THE queue_depth SHALL equal the count `aida queue list` shows, per the case-insensitive matching in TASK-951.
+      - THE queue_depth SHALL NOT be suppressed to zero on a resolvable identity match.
+      - A test SHALL assert queue_depth equals the queue list count for a user whose identity resolves via the AIDA_USER or USER fallback.
+clock: 2877
 node_id: '1'
