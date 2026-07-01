@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:49:37.957794248Z
-modified_at: 2026-07-01T07:55:47.947801143Z
+modified_at: 2026-07-01T07:56:33.186495488Z
 req_type: Task
 tags:
 - aida:focus
@@ -26,3 +26,9 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-07-01T03:49:43.734289668Z
+comments:
+- id: 019f1cae-0022-7ff3-8403-26c7e43487eb
+  author: joe
+  content: 'MORNING FLAG: changed subtree membership across focus/graph/queue/rollup/MCP + cache schema 8->9. Sanity-check epic views (EPIC-54=51, EPIC-39 recovered to ~11). Well-tested + CI green, merged overnight.'
+  created_at: 2026-07-01T07:56:33.186495488Z
+  modified_at: 2026-07-01T07:56:33.186495488Z
