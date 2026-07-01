@@ -22981,7 +22981,14 @@ fn init_worktree_pool_config_section() -> &'static str {
      # lease_ttl_secs = 21600   # a durable lease older than this (with no live\n\
      #                          # owner) is treated as EXPIRED and reclaimed by\n\
      #                          # the next acquire — guards against reservation\n\
-     #                          # leaks when a session dies (default 6h)\n"
+     #                          # leaks when a session dies (default 6h)\n\
+     #\n\
+     # Pre-warm on create: set `prewarm_build = true` to kick off a backgrounded\n\
+     # `cargo build` when a NEW pool tree is created, so its `target/` is warm\n\
+     # before the first fanned agent builds in it (best-effort, non-blocking).\n\
+     # Like every worktree-pool hook, this executes a build, so it is honored\n\
+     # ONLY from your machine-global `~/.aida/config.toml` — never a checked-in\n\
+     # repo config — and is ignored here.\n"
 }
 
 #[cfg(test)]
@@ -97023,7 +97030,12 @@ fn worktree_pool_config_lease_ttl_secs(project_root: &std::path::Path) -> i64 {
 /// the machine-global `~/.aida/config.toml`. Repo-level config is deliberately
 /// ignored — cloning a repo must never run arbitrary shell on your machine
 /// (treehouse's stance).
-// trace:STORY-714 | ai:claude
+///
+/// For `post_create`, the opt-in `[worktree_pool] prewarm_build = true` knob
+/// (also global-only, since it triggers a build) appends the canonical
+/// backgrounded `cargo build` pre-warm so a freshly-created pool tree starts
+/// warm on first use (TASK-1010).
+// trace:STORY-714 trace:TASK-1010 | ai:claude
 fn worktree_pool_global_hooks(key: &str) -> Vec<String> {
     let Some(home) = dirs::home_dir() else {
         return Vec::new();
@@ -97034,8 +97046,17 @@ fn worktree_pool_global_hooks(key: &str) -> Vec<String> {
     let Ok(value) = toml::from_str::<toml::Value>(&body) else {
         return Vec::new();
     };
-    value
-        .get("worktree_pool")
+    worktree_pool_hooks_from_config(&value, key)
+}
+
+/// Pure parse of the `[worktree_pool]` hook list for `key`, plus the TASK-1010
+/// `prewarm_build` injection. Split out so the sourcing rule (global-config
+/// only, in `worktree_pool_global_hooks`) stays where it belongs and this
+/// decision — which commands run for a phase — is unit-testable.
+// trace:TASK-1010 | ai:claude
+fn worktree_pool_hooks_from_config(value: &toml::Value, key: &str) -> Vec<String> {
+    let pool = value.get("worktree_pool");
+    let mut hooks: Vec<String> = pool
         .and_then(|w| w.get(key))
         .and_then(|h| h.as_array())
         .map(|arr| {
@@ -97043,7 +97064,68 @@ fn worktree_pool_global_hooks(key: &str) -> Vec<String> {
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Opt-in cargo pre-warm — turn cold-create into warm-on-first-use. The
+    // command is backgrounded (see PREWARM_BUILD_COMMAND) so it never delays the
+    // handout; appended after any explicit hooks so a user's own post_create
+    // still runs first.
+    if key == "post_create"
+        && pool
+            .and_then(|w| w.get("prewarm_build"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    {
+        hooks.push(aida_core::worktree_hooks::PREWARM_BUILD_COMMAND.to_string());
+    }
+    hooks
+}
+
+#[cfg(test)]
+mod task_1010_prewarm_tests {
+    use super::worktree_pool_hooks_from_config;
+
+    fn parse(body: &str) -> toml::Value {
+        toml::from_str(body).unwrap()
+    }
+
+    // trace:TASK-1010 | ai:claude
+    #[test]
+    fn prewarm_flag_appends_cargo_build_to_post_create() {
+        let v = parse("[worktree_pool]\nprewarm_build = true\n");
+        let hooks = worktree_pool_hooks_from_config(&v, "post_create");
+        assert_eq!(
+            hooks,
+            vec![aida_core::worktree_hooks::PREWARM_BUILD_COMMAND.to_string()]
+        );
+    }
+
+    #[test]
+    fn prewarm_flag_runs_after_explicit_post_create_hooks() {
+        let v = parse("[worktree_pool]\nprewarm_build = true\npost_create = [\"echo hi\"]\n");
+        let hooks = worktree_pool_hooks_from_config(&v, "post_create");
+        assert_eq!(
+            hooks,
+            vec![
+                "echo hi".to_string(),
+                aida_core::worktree_hooks::PREWARM_BUILD_COMMAND.to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn prewarm_flag_does_not_touch_pre_destroy() {
+        let v = parse("[worktree_pool]\nprewarm_build = true\npre_destroy = [\"cargo clean\"]\n");
+        let hooks = worktree_pool_hooks_from_config(&v, "pre_destroy");
+        assert_eq!(hooks, vec!["cargo clean".to_string()]);
+    }
+
+    #[test]
+    fn no_prewarm_flag_means_no_injected_hook() {
+        let v = parse("[worktree_pool]\nenabled = true\n");
+        assert!(worktree_pool_hooks_from_config(&v, "post_create").is_empty());
+        let off = parse("[worktree_pool]\nprewarm_build = false\n");
+        assert!(worktree_pool_hooks_from_config(&off, "post_create").is_empty());
+    }
 }
 
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
