@@ -29582,5 +29582,34 @@ operations:
     req_type: Spike
     status: Draft
     priority: Medium
-clock: 2840
+- id: 019f1c03-19a0-7a43-9455-0d8613ddd6a9
+  target_id: 019f1c03-0e37-7132-a4e5-d51aa6042f37
+  author: aida
+  node_id: '1'
+  lamport: 2841
+  timestamp: 2026-07-01T04:49:53.056242921Z
+  kind: !Create
+    title: 'Model-per-purpose: vendor-neutral tier config, per-model telemetry, multi-model eval loop, evidence-earned dynamic selection'
+    description: |-
+      Today AIDA models the VENDOR axis (claude/codex/gemini) but NOT the MODEL axis (opus/sonnet/haiku): model is a raw passthrough to the vendor CLI via agent --extra-flags (e.g. --model fast). There is no config that says which model serves which purpose (implementer / advisor / reviewer / intent / judge). This epic adds that axis WITHOUT vendor lock-in and WITHOUT speculative knobs.
+
+      Four layers, built in dependency order (out-of-order is the trap):
+
+      L1 STATIC CONFIG (the only near-term slice): map purpose -> capability TIER -> vendor-concrete model, resolved in the vendor adapter. AIDA config says implementer=fast-tier, advisor=frontier-tier, reviewer=mid-tier; each adapter maps frontier->opus/codex/gemini-pro. Keeps which models vendor-neutral — never hardcode a model id in the coordination layer. Default-first: one sane tier map works with zero config. The Anthropic advisor tool (SPIKE-75) is an L1 per-vendor execution detail (an executor+advisor pairing).
+
+      L2 TELEMETRY: record (purpose, model, outcome, cost, latency) per run. Extend usage.jsonl / field_study / the existing calibration substrate (complexity_calibration / effort_calibration already do record-now compare-on-landing for estimates — same loop, aimed at the model axis).
+
+      L3 EVAL HARNESS: multi-model on ONE step + objective gate + PERSIST longitudinal metrics. This is aida compete (EPIC-57) promoted from vendor-granular to model-granular and made to ACCUMULATE per (purpose, model) success/cost/latency instead of print-and-forget.
+
+      L4 DYNAMIC SELECTION (advisor assesses the desired model): a cost/quality DISPATCHER (budget is a first-class input), not just a picker. Only meaningful AFTER L2/L3 give it accumulated evidence to choose from.
+
+      DISCIPLINE (governed by PRIN-2 configurability-earns-its-place): L1 static config with a good default is justified (cost/quality is a real users-differ axis). L4 dynamic selection + per-purpose knob proliferation must be EARNED via the L2/L3 telemetry loop, not guessed. Do not build the selector before the metrics exist to feed it.
+
+      NEAR-TERM SLICE: L1 only. L2-L4 are gated on evidence and on the vendor adapter being wired (EPIC-35 plumbed-not-wired). NOT for the current stabilization / bugs-first phase; architecture-class -> operator sign-off before any PR.
+
+      Related: PRIN-2 (configurability discipline), EPIC-57 (compete = L3 seed), SPIKE-75 (advisor tool = L1 per-vendor detail), the vendor-neutrality standing rule (own the contract, ride vendor execution).
+    req_type: Epic
+    status: Draft
+    priority: Medium
+clock: 2841
 node_id: '1'
