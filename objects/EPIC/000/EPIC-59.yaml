@@ -1,0 +1,37 @@
+id: 019f1c4a-f16d-7890-9ec8-5ecd8c2cf6b5
+spec_id: EPIC-59
+agreed_id: EPIC-59
+title: 'Scenario-mock agent framework: deterministically drive every orchestrator branch without a real vendor'
+description: |-
+  Build a scenario-programmable mock agent so the orchestrator can be driven through every branch (lint-fail, human-required, punt/design-fork, CI-red-then-green, RequestChanges-then-fix, build-fail-shelve, blocked-by-shelved dependent, clean happy path) deterministically, with zero real-API cost and zero store pollution. The test substrate for AIDAs one differentiated layer (orchestration).
+
+  WHY CORE (not deferred): directly answers two standing rules — do NOT E2E-test drains on a real spec (parks NeedsAttention + files findings), and reliability fixes for the autonomy keystone must not ride unsupervised drains (recursive-failure risk). This makes the untestable deterministically testable. It ENABLES the stabilization/bugs-first phase rather than deferring behind it.
+
+  ARCHITECTURE ALREADY LEANS THIS WAY (verified 2026-06-30): the PhaseDriver trait (auto_complete.rs:993) exists explicitly "so it can be exercised end-to-end"; every branch is a scriptable method (run_implementer/finish_ci/run_reviewer/merge/pull/build/reconcile_failure/run_advisor/resume_implementer/shelve_on_failure). MockPhaseDriver already exists (auto_complete.rs:4055) + OneHeldDriver/OneInconclusiveDriver/MockBatchDriver. This epic COMPLETES an existing design intent.
+
+  REFRAME: do not mock claude/codex/antigravity interfaces faithfully — build a scenario-programmable BEHAVIOR SOURCE at the agent seam whose job is to trigger AIDAs branches, not imitate a vendor.
+
+  SLICES (build in order; near-term = 0+1):
+  - Slice 0 (ENABLER, small): make the agent binary overridable via env/config (e.g. AIDA_AGENT_CMD) — today Command::new("claude")/Command::new("codex") in session.rs is hardcoded, so no mock can slot into the real spawn path. Independently useful (helps aida compete + any agent wrapper).
+  - Slice 1 (TIER A, highest ROI): grow MockPhaseDriver into a DECLARATIVE SCENARIO LIBRARY — named scenarios replayed in-process. Gets the full combinatorial matrix of orchestrator branches as fast deterministic tests.
+  - Slice 2 (TIER B, few-deep): a scenario-agent binary behind the Slice-0 override, running a handful of key scenarios through the REAL spawn -> parse -> CI/escalate/punt -> store path end-to-end. Catches integration bugs the trait mock cannot.
+
+  GROWTH DISCIPLINE (PRIN-2): do NOT enumerate the full cartesian product up front. Seed with the branches that actually break real drains; grow the library from real incidents — every drain failure becomes a new scenario regression fixture. Library grows from bugs, not imagination.
+
+  FAITHFULNESS CAVEAT: the mock tests AIDAs orchestration, NOT that real claude behaves a given way. Keep a thin real-agent smoke suite to catch vendor-interface drift (output format, new stop reasons).
+
+  Related: EPIC-58 (this substrate also makes the model-per-purpose eval loop testable), the resilient-drain work (EPIC-28), PRIN-2 (grow-from-evidence discipline).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T06:08:21.357491704Z
+modified_at: 2026-07-01T06:08:21.357491704Z
+req_type: Epic
+tags:
+- autonomy
+- core
+- from-advisor
+- multi-vendor
+- reliability
+- testing
