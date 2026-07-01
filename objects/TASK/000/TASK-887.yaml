@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T17:29:17.398938668Z
-modified_at: 2026-06-19T17:50:43.800169203Z
+modified_at: 2026-07-01T17:43:48.774483979Z
 req_type: Task
 tags:
 - error-paths
 - from-dogfood
 - ux
+comments:
+- id: 019f1ec7-a726-7b23-b7fe-90f17becd34b
+  author: joe
+  content: Commit 7c87d9e8e references this requirement
+  created_at: 2026-07-01T17:43:48.774483979Z
+  modified_at: 2026-07-01T17:43:48.774483979Z
 history:
 - id: 019ee101-ac53-7a12-aa31-100d6716a0c9
   author: aida-auto-bump
