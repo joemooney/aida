@@ -30147,5 +30147,20 @@ operations:
       - WHEN away_drain is disabled and the new escalation knob is enabled, THE escalation SHALL still fire.
       - THE new knob SHALL default to the current behavior so an existing config is unchanged.
       - THE new knob SHALL be documented in the config reference, and in docs/environment-variables.md if it is backed by an env var.
-clock: 2879
+- id: 019f1c6c-4edb-7ce0-8f5a-651e10e51193
+  target_id: 019f1b4d-3aab-7d21-bb76-eb737d0180fb
+  author: aida
+  node_id: '1'
+  lamport: 2880
+  timestamp: 2026-07-01T06:44:47.963274686Z
+  kind: !SetDescription
+    description: |-
+      The info/notice glyphs (information, notice, bullet-notice, mailbox) are emitted raw in some code paths, so AIDA_GLYPHS=ascii does not downgrade them. Route them through the glyph registry and guard against future raw glyphs.
+
+      ## Acceptance
+      - THE information, notice, bullet-notice, and mailbox glyphs SHALL each be registered in the glyph registry with an ascii fallback.
+      - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs.
+      - WHEN a raw glyph literal is not resolved through the glyph registry, THE glyph-lint check SHALL flag it.
+      - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these four glyphs appear as raw unicode in the rendered output.
+clock: 2880
 node_id: '1'
