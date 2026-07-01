@@ -1,0 +1,48 @@
+id: 019f1ec1-b972-7b00-9078-cf9d776a5a18
+spec_id: BUG-690
+agreed_id: BUG-690
+title: 'auto-complete failure: phase 5 (pull) on BUG-680'
+description: |
+  Auto-drafted by `aida queue work BUG-680 --auto-complete` after phase 5 (pull) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  `aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint)
+
+  Failure kind: `failed`
+
+  ## Recovery hint shown to the user
+
+  Classify the divergence: `aida rebase --dry-run --json`
+
+  ## Phase durations
+
+    - phase 1 (implementer): 878056 ms
+    - phase 2 (ci): 664044 ms
+    - phase 3 (reviewer): 267673 ms
+    - phase 4 (merge): 4211 ms
+    - phase 5 (pull): 7850 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"BUG-680","started_at":"2026-07-01T17:06:51.355298128+00:00","completed_at":"2026-07-01T17:37:19.749482717+00:00","outcome":"failed","variant":"full","failed_phase":5,"failure_kind":"failed","failure_message":"`aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":878056},{"phase":2,"slug":"ci","elapsed_ms":664044},{"phase":3,"slug":"reviewer","elapsed_ms":267673},{"phase":4,"slug":"merge","elapsed_ms":4211},{"phase":5,"slug":"pull","elapsed_ms":7850}],"total_ms":1822437,"binary_sha":"4a2912120"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T17:37:20.242072308Z
+modified_at: 2026-07-01T17:37:20.242072308Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-5
+- pull
