@@ -10,12 +10,12 @@ description: |-
   - WHEN aida-tui computes per-spec liveness, THE TUI SHALL determine live-versus-stale in-process without shelling out to `aida ps`.
   - THE in-process liveness verdict SHALL equal the verdict the prior aida-cli path produced for the same session set.
   - A test SHALL assert the aida-core classifier returns the same verdict as the prior path for a live session, a stale session, and a flag-only session.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:06:39.326929181Z
-modified_at: 2026-07-01T18:01:47.516372364Z
+modified_at: 2026-07-01T18:18:28.508259126Z
 req_type: Bug
 tags:
 - performance
@@ -32,3 +32,21 @@ comments:
   content: Commit d4cea80d8 references this requirement
   created_at: 2026-07-01T18:01:47.516372364Z
   modified_at: 2026-07-01T18:01:47.516372364Z
+history:
+- id: 019f1ee7-62b7-7ad2-a1f7-c5e8260a347b
+  author: aida-auto-bump
+  timestamp: 2026-07-01T18:18:28.407409563Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ee7-631c-70c0-a1a6-20a9d7e65000
+  timestamp: 2026-07-01T18:18:28.508253169Z
+  agent: aida
+  commit_sha: b7ca343d49dd81fef990bf77df668119ff7fc47e
+  summary: Completed via merge b7ca343d
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T18:18:27.344473485Z
+  completion_sha: b7ca343d49dd81fef990bf77df668119ff7fc47e
