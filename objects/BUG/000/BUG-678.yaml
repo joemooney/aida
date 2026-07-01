@@ -1,7 +1,7 @@
 id: 019f1b72-9031-7ea0-a988-0dba23f1d9ce
 spec_id: BUG-678
 agreed_id: BUG-678
-title: aida focus rollup counts rejected specs as "open" (+ descendant_ids/graph-tree subtree mismatch)
+title: aida focus rollup counts rejected specs as "open"
 description: |-
   The aida focus rollup line (subtree: N items (X completed - Y in-progress - Z open)) over-counts "open" work because it buckets terminal REJECTED specs into the open count.
 
@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:12:00.689378740Z
-modified_at: 2026-07-01T03:50:10.763959105Z
+modified_at: 2026-07-01T03:51:33.672701543Z
 req_type: Bug
 tags:
 - aida:focus
