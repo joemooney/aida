@@ -9880,6 +9880,23 @@ fn handle_punt_command(
         )
         .dimmed()
     );
+
+    // TASK-349: a blocked-dependency punt names the work it's blocked on — that
+    // dependency belongs in the requirement graph as a blocked-by edge, not
+    // just in the punt prose. If the reason/lean text named blocker spec(s),
+    // nudge the operator to record the edge. A suggestion, not an auto-file:
+    // id-parsing from free text is best-effort, so the operator confirms.
+    // trace:TASK-349 | ai:claude
+    if let Some(suggestion) = punt::suggest_blocked_by(&display_id, category, reason, lean) {
+        let blockers = suggestion.blockers.join(", ");
+        println!(
+            "{} Looks blocked on {blockers} — record it in the graph so \
+             `aida graph {display_id} --blocked-by` sees the dependency:",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan()
+        );
+        println!("  {}", suggestion.suggested_command().cyan());
+    }
+
     Ok(())
 }
 
