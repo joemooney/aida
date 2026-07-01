@@ -3,12 +3,12 @@ spec_id: STORY-742
 agreed_id: STORY-742
 title: 'aida worktree enter <spec>: one bare command to create-if-missing + cd into a worktree for a single spec (no agent), not just epics'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:08:40.453426198Z
-modified_at: 2026-07-01T02:08:40.453426198Z
+modified_at: 2026-07-01T02:41:28.028821099Z
 req_type: Story
 tags:
 - ergonomics
