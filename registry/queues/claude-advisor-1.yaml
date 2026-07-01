@@ -1,0 +1,7 @@
+- user_id: claude-advisor-1
+  requirement_id: 019f1c0a-90f6-7fc0-976f-49d3fda52ce4
+  position: 1000
+  added_by: claude-advisor-1
+  note: Promoted from finding TASK-1079 via `aida findings promote`
+  added_at: 2026-07-01T06:04:34.076099501Z
+  for_role: implementer
