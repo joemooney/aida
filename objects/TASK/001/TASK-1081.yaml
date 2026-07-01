@@ -1,0 +1,31 @@
+id: 019f1c4d-9a68-7830-ba88-16b08706b5a5
+spec_id: TASK-1081
+agreed_id: TASK-1081
+title: 'Slice 0: override the hardcoded agent binary via AIDA_AGENT_CMD so a mock can slot into the real spawn path'
+description: |-
+  ENABLER for EPIC-59 Tier B. Today headless agent spawns hardcode the vendor binary (Command::new("claude") / Command::new("codex") in session.rs; also claude_agents.rs), so no mock can be substituted into the REAL spawn path. Add a single explicit opt-in override.
+
+  ## Decision (BINDING)
+  Single env var AIDA_AGENT_CMD (confirmed free 2026-06-30). When set, it replaces the PROGRAM invoked for headless agent spawns; the full argument vector (flags + prompt/brief) is preserved so the substitute receives exactly what the real vendor CLI would. Per-vendor overrides (AIDA_CLAUDE_CMD, etc.) are explicitly OUT of scope — a single redirect is all the mock substrate needs; do not build the granular knob speculatively (PRIN-2).
+
+  ## Acceptance
+  1. When AIDA_AGENT_CMD is unset, behavior is byte-identical to today: the native vendor binary (claude/codex) is spawned directly. This is the faithful-launcher invariant — the override is the ONE explicit opt-in, no hidden behavior change.
+  2. When AIDA_AGENT_CMD is set, that program is invoked in place of the vendor binary at every headless spawn site, with the original argv (all flags + the brief/prompt positional) passed through unchanged.
+  3. Every headless spawn site that currently hardcodes the vendor binary is covered — enumerate the call sites in session.rs (tracked/headless/resume paths) and claude_agents.rs and route them through one resolver. Interactive TTY launches are out of scope for this slice.
+  4. A row is added to docs/environment-variables.md in the same change (repo convention: every AIDA_* read gets documented).
+  5. Unit test: with AIDA_AGENT_CMD pointed at a trivial fake executable, the resolver yields the fake + the expected argv; with it unset, the resolver yields the native vendor binary. No real claude/codex needed.
+
+  Primary caller: the orchestrator headless spawn during --auto-complete / burndown drains, and the Slice-2 end-to-end mock tests. trace target: this + Slice 1 unblock the scenario library.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T06:11:15.688780359Z
+modified_at: 2026-07-01T06:11:15.688780359Z
+req_type: Task
+tags:
+- batch:mock-agent
+- core
+- parent:EPIC-59
+- reliability
+- testing
