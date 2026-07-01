@@ -1,0 +1,26 @@
+id: 019f1bd9-8490-7822-b9da-6400e0affe6f
+spec_id: STORY-745
+agreed_id: STORY-745
+title: 'Review PR-1291: [AI:claude] fix(focus): exclude rejected specs from subtree "open" count (BUG-678)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019f1bce`) for branch `bug-678`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1291>
+  - Branch: `bug-678` → `main`
+
+  ## Covers
+
+  - BUG-678
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1291` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:04:27.920243155Z
+modified_at: 2026-07-01T04:04:27.920243155Z
+req_type: Story
