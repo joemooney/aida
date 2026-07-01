@@ -10,12 +10,12 @@ description: |-
   - WHEN the shell user and the stored queue key differ only by case, THE queue_depth SHALL equal the count `aida queue list` shows, per the case-insensitive matching in TASK-951.
   - THE queue_depth SHALL NOT be suppressed to zero on a resolvable identity match.
   - A test SHALL assert queue_depth equals the queue list count for a user whose identity resolves via the AIDA_USER or USER fallback.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T01:10:44.182769111Z
-modified_at: 2026-07-01T06:42:38.925277518Z
+modified_at: 2026-07-01T17:55:26.434849439Z
 req_type: Bug
 tags:
 - bug-89
@@ -23,3 +23,21 @@ tags:
 - from-audit
 - identity
 - queue
+history:
+- id: 019f1ed2-4bfe-7111-8c97-7083192a3514
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:55:26.334993305Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed2-4c62-73d1-8ba9-4007428dba8d
+  timestamp: 2026-07-01T17:55:26.434842811Z
+  agent: aida
+  commit_sha: d93a59a89e834573b98e8701c848f12822806868
+  summary: Completed via merge d93a59a8
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:55:25.279550906Z
+  completion_sha: d93a59a89e834573b98e8701c848f12822806868
