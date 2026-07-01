@@ -97888,9 +97888,6 @@ fn handle_focus_command(
     Ok(())
 }
 
-/// Print a one-line status rollup of the focus spec's transitive subtree
-/// (cache-fast: one descendant-id closure + one summary read).
-///
 // trace:BUG-678 | ai:claude
 /// Bucketed status counts for a focused subtree.
 ///
@@ -97932,6 +97929,8 @@ fn tally_focus_statuses<'a>(statuses: impl IntoIterator<Item = &'a str>) -> Focu
     t
 }
 
+/// Print a one-line status rollup of the focus spec's transitive subtree
+/// (cache-fast: one descendant-id closure + one summary read).
 fn print_focus_rollup(
     backend: &aida_core::CachedGitBackend,
     focus_req: &aida_core::Requirement,
