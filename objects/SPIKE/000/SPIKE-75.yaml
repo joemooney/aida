@@ -1,0 +1,30 @@
+id: 019f1bfd-4781-7e13-8088-61225ada2b57
+spec_id: SPIKE-75
+agreed_id: SPIKE-75
+title: Evaluate Anthropic advisor tool (executor+advisor in-inference pairing) as a per-vendor EXECUTION capability behind the vendor adapter
+description: |-
+  Anthropic shipped an "advisor tool" (API beta advisor-tool-2026-03-01): a fast executor model consults a stronger advisor model mid-generation for a plan/course-correction, then continues. Anthropic-only (both models must be Claude), server-side, runs under Anthropics own system prompt, no tools/context-mgmt. Source: https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool.md
+
+  DECISION FRAME (operator standing rule: dont lock in, but use the best of each vendor):
+  - This is an EXECUTION-layer optimization inside ONE vendors session. It must live BEHIND the vendor adapter as an opt-in per-vendor capability, NEVER in AIDAs cross-vendor coordination layer (substrate, advisor ROLE, escalation cascade, mailbox). The AIDA-level contract stays identical (implementer produces work; a stronger reviewer weighs in before commit); each adapter fills it with that vendors best native mechanism (Anthropic -> advisor tool; Codex/Gemini -> their own or a plain second pass).
+  - NAMING: the Anthropic "advisor tool" (in-inference model-pairing) is NOT AIDAs advisor ROLE (cross-vendor durable disposition seat). Keep them distinct in docs/config.
+  - Conceptually the vendor-native cousin of SPIKE-11 fork-from-live. Competitor investment here validates the executor+advisor pattern; AIDA occupies the cross-vendor layer they do not.
+
+  WHY DEFERRED (capture-now, build-later): (1) it is a raw-API beta, but AIDA rides CLIs (claude -p), not /v1/messages directly — not a drop-in until exposed on the CLI surface or AIDA makes direct API calls; (2) the vendor/forge adapter it belongs behind is plumbed-not-wired (EPIC-35); (3) bugs-before-marketing / stabilization phase.
+
+  Spike questions when revisited: does the claude CLI expose the advisor tool? what is the cross-vendor equivalent per adapter? does the per-vendor capability fit cleanly under the (future, wired) adapter contract without leaking into coordination? cost/quality on an AIDA implementer drain (Sonnet executor + Opus advisor vs Opus-solo).
+
+  REVISIT TRIGGER: the vendor-execution adapter (EPIC-35 forge / agent-launcher) is actually WIRED AND the advisor tool is GA / exposed on the CLI surface AIDA uses.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:43:31.585327146Z
+modified_at: 2026-07-01T04:43:31.585327146Z
+req_type: Spike
+tags:
+- execution
+- from-advisor
+- multi-vendor
+- vendor-adapter
+human_only: true
