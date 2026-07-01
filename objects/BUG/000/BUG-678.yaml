@@ -28,10 +28,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:12:00.689378740Z
-modified_at: 2026-07-01T02:12:00.689378740Z
+modified_at: 2026-07-01T02:12:04.497806775Z
 req_type: Bug
 tags:
 - aida:focus
 - parent:EPIC-54
 - rollup
 - severity:minor
+relationships:
+- rel_type: Child
+  target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
+  created_at: 2026-07-01T02:12:04.497806775Z
