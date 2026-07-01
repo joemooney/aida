@@ -166,6 +166,7 @@ doesn't match.
 | `AIDA_CACHE_RETRY_COUNT` | Number of retry attempts for cache operations. | `8` (length of the default backoff schedule). `0` disables retries. | user / test | process env |
 | `AIDA_CACHE_RETRY_MS` | Comma-separated millisecond backoff delays for cache retries. | `100,200,400,800,1600,3200,6400,12800`. | user / test | process env |
 | `AIDA_DOCTOR_COMPLETED_SINCE` | Ref/date that exempts legacy history from `aida doctor completed-without-commit`. | unset = built-in recent cutoff. | user | process env |
+| `AIDA_EVENTS_MAX_BYTES` | Size cap (bytes) above which the drain event stream `.aida/events.jsonl` is rotated. Checked at each `run-started` boundary (never mid-phase): when the live file exceeds the cap it is renamed to `.aida/events.jsonl.1` (one generation kept) and the next event recreates a fresh stream, so cumulative growth across many drains is bounded at ~2× the cap. Offset-tracking consumers reopen by path and reset to offset 0 on the shrink, so a rotation never drops a live actionable event. | `5242880` (5 MiB). Garbage/absent falls back to the default. | user / test | process env |
 
 ---
 
