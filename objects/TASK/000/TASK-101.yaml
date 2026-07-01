@@ -27,12 +27,12 @@ description: |-
   - [ ] Cache-backed: no git fetch on every render; refresh on ~5 min TTL or cache invalidation
   - [ ] Configurable thresholds + on/off via aida.toml [statusline] section
   - [ ] No new fetch on first run if offline (gracefully shows 'base:?' or hides)
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:42:44.740624074Z
-modified_at: 2026-06-06T04:16:43.308357Z
+modified_at: 2026-07-01T18:28:23.191727191Z
 req_type: Task
 tags:
 - base-freshness
@@ -43,5 +43,23 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T05:42:46.772178044Z
+history:
+- id: 019f1ef0-75b5-7441-8e6f-bae973935ee4
+  author: aida-auto-bump
+  timestamp: 2026-07-01T18:28:23.093483987Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ef0-7617-7b80-8a64-6e2863487f22
+  timestamp: 2026-07-01T18:28:23.191717630Z
+  agent: aida
+  commit_sha: f000dd5fa5f77f3c67616739dcf38ed47a663b18
+  summary: Completed via merge f000dd5f
 archived: true
 archived_at: 2026-06-06T04:16:43.308357Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T18:28:22.037690268Z
+  completion_sha: f000dd5fa5f77f3c67616739dcf38ed47a663b18
