@@ -20,11 +20,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:43:31.585327146Z
-modified_at: 2026-07-01T04:43:31.585327146Z
+modified_at: 2026-07-01T04:43:43.972891191Z
 req_type: Spike
 tags:
 - execution
 - from-advisor
 - multi-vendor
 - vendor-adapter
+deferred: true
+deferred_at: 2026-07-01T04:43:43.972891191Z
+deferred_until: vendor-execution adapter (EPIC-35) wired AND advisor tool GA/on the CLI surface AIDA uses
 human_only: true
