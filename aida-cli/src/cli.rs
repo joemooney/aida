@@ -2391,6 +2391,24 @@ pub enum DocCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Diff-driven doc nudge for a PR. Scan the changes a branch adds for NEW
+    /// public surface (a CLI flag, a CLI subcommand, or an MCP tool) and, when
+    /// the spec that surface traces to has no `aida doc` entry about it, nudge
+    /// the author to capture one. Warn-only — exits 0 — so `/aida-pr` can call
+    /// it without ever blocking the PR.
+    // trace:TASK-939 | ai:claude
+    Suggest {
+        /// Git range to scan (e.g. `origin/main..HEAD`). When absent, the
+        /// commits this branch adds over the default branch are scanned
+        /// (`<default-branch>..HEAD`).
+        #[clap(long, value_name = "RANGE")]
+        range: Option<String>,
+
+        /// Emit the nudge as JSON instead of a human block.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

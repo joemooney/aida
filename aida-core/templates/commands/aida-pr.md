@@ -20,6 +20,7 @@ Follow the workflow in `.claude/skills/aida-pr.md`:
 1. Walk `git log <base>..HEAD --oneline` and extract `(REQ-ID)` suffixes from each commit subject
 2. Verify every derived REQ-ID is in `Completed` status (pause and ask if any are still open)
 3. Pre-flight `cargo fmt --all -- --check` on Rust workspaces — refuse to proceed if drift exists (TASK-61)
+3b. Run `aida doc suggest --range <base>..HEAD` — warn-only nudge to capture a `Doc` when the batch adds new public CLI/MCP surface with no linked doc; never blocks (TASK-939)
 4. Print the "about to happen" banner — Completed / Now I will / Then you can — then pause ~3s so the user can abort before any side effect; `--quiet` or `AIDA_NO_BANNER=1` skips it (TASK-259)
 5. Push code + orphan store (`aida push` or equivalent two-step) before opening the PR
 6. Compose a PR title (`EPIC-N batch M: <one-line summary>`) and a body that mirrors recent PRs (per-spec sections, test plan)
