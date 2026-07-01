@@ -3,12 +3,12 @@ spec_id: BUG-679
 agreed_id: BUG-679
 title: Mail to an unrecognized recipient strands silently — no warning at send, no stranded-mail surface
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:11:28.770140689Z
-modified_at: 2026-07-01T03:24:16.120634352Z
+modified_at: 2026-07-01T03:37:06.350767740Z
 req_type: Bug
 tags:
 - coordination
