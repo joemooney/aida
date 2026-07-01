@@ -30087,5 +30087,20 @@ operations:
       - WHEN aida-tui computes per-spec liveness, THE TUI SHALL determine live-versus-stale in-process without shelling out to `aida ps`.
       - THE in-process liveness verdict SHALL equal the verdict the prior aida-cli path produced for the same session set.
       - A test SHALL assert the aida-core classifier returns the same verdict as the prior path for a live session, a stale session, and a flag-only session.
-clock: 2875
+- id: 019f1c6a-33fb-75a1-b94b-49822fb06d1e
+  target_id: 019f1b4d-3aab-7d21-bb76-eb737d0180fb
+  author: aida
+  node_id: '1'
+  lamport: 2876
+  timestamp: 2026-07-01T06:42:30.011432551Z
+  kind: !SetDescription
+    description: |-
+      The info/notice glyphs (information, notice, bullet-notice, mailbox) are emitted raw in some code paths, so AIDA_GLYPHS=ascii does not downgrade them. Route them through the glyph registry and guard against future raw glyphs.
+
+      ## Acceptance
+      - THE info, notice, bullet-notice, and mailbox glyphs SHALL be added to the glyph registry with ascii fallbacks.
+      - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs, not the raw unicode.
+      - THE glyph-lint check SHALL flag any raw glyph not resolved through the registry.
+      - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these glyphs appear as raw unicode in the rendered output.
+clock: 2876
 node_id: '1'
