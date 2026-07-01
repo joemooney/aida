@@ -5620,6 +5620,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 heft: d.heft,
                 // trace:TASK-902 | ai:claude
                 blocked: blocked.contains(&r.id),
+                // trace:TASK-1065 | ai:claude
+                has_pending_decision: r.decision_request.as_ref().is_some_and(|d| d.is_pending()),
                 yaml_path: String::new(),
             }
         })

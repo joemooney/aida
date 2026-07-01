@@ -644,6 +644,8 @@ mod tests {
             heft: 0,
             // trace:TASK-902 | ai:claude
             blocked: false,
+            // trace:TASK-1065 | ai:claude
+            has_pending_decision: false,
             yaml_path: String::new(),
         }
     }

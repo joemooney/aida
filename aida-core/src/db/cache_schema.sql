@@ -40,6 +40,12 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- so authoritative only after a full rebuild — same rebuildable-projection
     -- contract as in_degree/heft. NEVER stored in canonical YAML.
     blocked INTEGER NOT NULL DEFAULT 0,
+    -- TASK-1065: "has an unanswered DecisionRequest" projected into the cache so
+    -- `aida status --full`'s decision-inbox count reads the cache instead of a
+    -- full backend.load() over every object. Per-row projection of
+    -- `decision_request.is_pending()`; authoritative after any single-row upsert
+    -- (unlike the graph-derived `blocked`). NEVER stored in canonical YAML.
+    has_pending_decision INTEGER NOT NULL DEFAULT 0,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 

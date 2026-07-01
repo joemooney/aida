@@ -60,6 +60,14 @@ pub struct RequirementSummary {
     /// a full backend.load() — same rebuildable-projection contract as the
     /// degree fields. trace:TASK-902 | ai:claude
     pub blocked: bool,
+    /// Whether this spec carries a still-pending DecisionRequest (an unanswered
+    /// `aida questions` gate). Projected into the cache so the `aida status
+    /// --full` decision-inbox count reads the cache instead of a full
+    /// `backend.load()` over every object. Per-row fact (unlike the graph-derived
+    /// `blocked`), so authoritative after any single-row upsert as well as a full
+    /// rebuild.
+    // trace:TASK-1065 | ai:claude
+    pub has_pending_decision: bool,
     pub yaml_path: String,
 }
 
@@ -353,7 +361,11 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // (`graph_walk::oriented_hierarchy_edges`), so the `descendant_ids` closure that
 // `aida focus` reads agrees with `aida graph --tree`. Existing caches rebuild on
 // next read to re-orient their edges. trace:TASK-1074 | ai:claude
-const SCHEMA_VERSION: &str = "9";
+// TASK-1065: bumped to "10" when the `has_pending_decision` column was added (a
+// per-row projection of `decision_request.is_pending()`) so `aida status --full`'s
+// decision-inbox count reads the cache instead of a full backend.load(). Existing
+// caches rebuild on next read to populate the new column. trace:TASK-1065 | ai:claude
+const SCHEMA_VERSION: &str = "10";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -1112,7 +1124,8 @@ impl Cache {
             "SELECT id, spec_id, agreed_id, title, description, status, priority,
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
-                    in_degree, out_degree, heft, yaml_path, assignee, blocked
+                    in_degree, out_degree, heft, yaml_path, assignee, blocked,
+                    has_pending_decision
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -1303,7 +1316,7 @@ impl Cache {
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
                           c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
-                          c.blocked
+                          c.blocked, c.has_pending_decision
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1322,6 +1335,22 @@ impl Cache {
     pub fn requirement_count(&self) -> Result<usize> {
         let conn = self.conn.lock().unwrap();
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM requirements_cache", [], |r| r.get(0))?;
+        Ok(n as usize)
+    }
+
+    /// TASK-1065: count non-archived specs with a still-pending DecisionRequest,
+    /// read straight from the `has_pending_decision` cache column. This is the
+    /// cache-backed replacement for the `aida status --full` decision-inbox
+    /// count, which previously counted over a full `backend.load()`. Matches the
+    /// old predicate exactly: `!archived && decision_request.is_pending()`.
+    // trace:TASK-1065 | ai:claude
+    pub fn pending_decision_count(&self) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let n: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM requirements_cache WHERE has_pending_decision = 1 AND archived = 0",
+            [],
+            |r| r.get(0),
+        )?;
         Ok(n as usize)
     }
 
@@ -1477,6 +1506,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "out_degree",
     "heft",
     "blocked",
+    // trace:TASK-1065 | ai:claude
+    "has_pending_decision",
     "yaml_path",
 ];
 
@@ -1670,13 +1701,20 @@ fn insert_one(
         .clone()
         .unwrap_or_else(|| format!("{:?}", req.priority));
 
+    // TASK-1065: per-row projection of "has an unanswered DecisionRequest" so the
+    // `aida status --full` decision-inbox count reads the cache. trace:TASK-1065
+    let has_pending_decision = req
+        .decision_request
+        .as_ref()
+        .is_some_and(|d| d.is_pending());
     conn.execute(
         "INSERT INTO requirements_cache (
             id, spec_id, agreed_id, title, description, status, priority,
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
-            in_degree, out_degree, heft, blocked, yaml_path, assignee
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+            in_degree, out_degree, heft, blocked, yaml_path, assignee,
+            has_pending_decision
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -1704,6 +1742,8 @@ fn insert_one(
             yaml_path,
             // trace:STORY-639 | ai:claude
             req.assignee,
+            // trace:TASK-1065 | ai:claude
+            if has_pending_decision { 1 } else { 0 },
         ],
     )?;
 
@@ -1764,6 +1804,8 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         assignee: row.get(22)?,
         // trace:TASK-902 | ai:claude — column index 23, INTEGER 0/1.
         blocked: row.get::<_, i64>(23)? != 0,
+        // trace:TASK-1065 | ai:claude — column index 24, INTEGER 0/1.
+        has_pending_decision: row.get::<_, i64>(24)? != 0,
     })
 }
 
