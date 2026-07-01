@@ -15,10 +15,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T01:31:13.963087972Z
-modified_at: 2026-07-01T06:46:00.120559092Z
+modified_at: 2026-07-01T17:17:14.738381363Z
 req_type: Task
 tags:
 - ascii
 - glyph
 - polish
 - registry
+comments:
+- id: 019f1eaf-5472-7f10-aafd-82cfda1adeab
+  author: joe
+  content: Commit 839033ab7 references this requirement
+  created_at: 2026-07-01T17:17:14.738381363Z
+  modified_at: 2026-07-01T17:17:14.738381363Z
