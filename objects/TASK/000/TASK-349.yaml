@@ -3,17 +3,35 @@ spec_id: TASK-349
 agreed_id: TASK-349
 title: A `blocked-dependency` punt should auto-suggest filing a blocked-by relationship
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:37:11.947455809Z
-modified_at: 2026-06-06T04:17:26.794225296Z
+modified_at: 2026-07-01T18:24:22.276044113Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e4095-b7da-7621-921e-1316079f0f3f
   created_at: 2026-05-19T16:37:15.542940573Z
+history:
+- id: 019f1eec-c8a3-71b1-944b-3ac4530d6b8a
+  author: aida-auto-bump
+  timestamp: 2026-07-01T18:24:22.179687073Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1eec-c904-7bf3-bb21-59ed01a28659
+  timestamp: 2026-07-01T18:24:22.276034683Z
+  agent: aida
+  commit_sha: dd03ae2867ffc4d45ac24259d23c01eb63445d5a
+  summary: Completed via merge dd03ae28
 archived: true
 archived_at: 2026-06-06T04:17:26.794225296Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T18:24:21.124891479Z
+  completion_sha: dd03ae2867ffc4d45ac24259d23c01eb63445d5a
 human_only: true
