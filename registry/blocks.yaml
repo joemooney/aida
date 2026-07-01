@@ -367,3 +367,11 @@ blocks:
   range_end: 308
   next: 209
   allocated_at: 2026-07-01T18:48:50.817545510Z
+- node_id: '6'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: STORY
+  range_start: 841
+  range_end: 940
+  next: 841
+  allocated_at: 2026-07-01T18:48:54.388775627Z
