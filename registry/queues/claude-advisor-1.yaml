@@ -5,3 +5,10 @@
   note: Promoted from finding TASK-1079 via `aida findings promote`
   added_at: 2026-07-01T06:04:34.076099501Z
   for_role: implementer
+- user_id: claude-advisor-1
+  requirement_id: 019f1bdc-d7fe-7b93-9fc6-3468066cea13
+  position: 2000
+  added_by: claude-advisor-1
+  note: Promoted from finding TASK-1077 via `aida findings promote`
+  added_at: 2026-07-01T06:04:39.764238107Z
+  for_role: implementer
