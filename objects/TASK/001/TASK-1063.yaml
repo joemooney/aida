@@ -10,12 +10,12 @@ description: |-
   - THE queue prune help SHALL state which entry class each flag targets: orphaned removes entries whose target spec was deleted, merged removes shipped entries, gc removes entries whose target is archived or terminal.
   - WHEN an operator runs queue prune with no flag, THE output SHALL name the available pruning flags and what each removes.
   - A test SHALL assert the queue prune help text names the sibling pruning verbs.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T18:09:50.635260665Z
-modified_at: 2026-07-01T07:25:07.862204821Z
+modified_at: 2026-07-01T07:35:16.978145813Z
 req_type: Task
 tags:
 - from-audit
