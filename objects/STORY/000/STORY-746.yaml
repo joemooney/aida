@@ -11,9 +11,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:50:08.536821809Z
-modified_at: 2026-07-01T04:50:08.536821809Z
+modified_at: 2026-07-01T04:50:33.803656233Z
 req_type: Story
 tags:
 - aida:zen
 - concurrency
 - drain-lock
+deferred: true
+deferred_at: 2026-07-01T04:50:33.803656233Z
+deferred_until: burndown fan-out demonstrably cannot serve parallel independent --solo drives
