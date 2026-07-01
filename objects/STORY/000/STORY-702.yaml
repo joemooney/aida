@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:52:00.133019412Z
-modified_at: 2026-07-01T07:13:40.940577943Z
+modified_at: 2026-07-01T17:27:44.031291159Z
 req_type: Story
 tags:
 - zen-ready
@@ -36,3 +36,8 @@ comments:
   content: 'Removed stale needs-design tag: the IN-SCOPE slice (Reason::owner classification + you-plate aggregation, unit-tested) is concrete and defined; the design-laden part (the lens/toggle GESTURE) is explicitly EPIC-54 scope, not this spec. This EPIC-53 classification slice is ready.'
   created_at: 2026-07-01T07:13:40.940577943Z
   modified_at: 2026-07-01T07:13:40.940577943Z
+- id: 019f1eb8-ee9f-7431-9450-6dd00426f249
+  author: joe
+  content: Commit 8711fc23b references this requirement
+  created_at: 2026-07-01T17:27:44.031291159Z
+  modified_at: 2026-07-01T17:27:44.031291159Z
