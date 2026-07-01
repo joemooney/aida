@@ -185,6 +185,81 @@ pub fn events_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("events.jsonl")
 }
 
+/// Path to the single rotated archive of the previous run's events — the file
+/// [`rotate_if_oversized`] renames the live stream to when it outgrows the cap.
+/// One generation is kept (each rotation overwrites the prior archive), so
+/// on-disk footprint is bounded at ~2× the cap.
+// trace:TASK-993 | ai:claude
+pub fn events_archive_path(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("events.jsonl.1")
+}
+
+/// Default size cap (bytes) above which the event stream is rotated at the next
+/// run-started boundary. 5 MiB — a drain emits a handful of lines per member,
+/// so even a very long overnight loop stays well under this; the cap exists to
+/// stop the *cumulative* file from many drains growing without bound.
+const DEFAULT_EVENTS_MAX_BYTES: u64 = 5 * 1024 * 1024;
+
+/// The active rotation size cap, honoring the `AIDA_EVENTS_MAX_BYTES` override
+/// (used by tests to force rotation with a tiny file; also a tuning knob). An
+/// unparseable or absent value falls back to [`DEFAULT_EVENTS_MAX_BYTES`].
+// trace:TASK-993 | ai:claude
+fn events_max_bytes() -> u64 {
+    std::env::var("AIDA_EVENTS_MAX_BYTES")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_EVENTS_MAX_BYTES)
+}
+
+/// Rotate `.aida/events.jsonl` when it has grown past the size cap, so the drain
+/// event stream can't grow unbounded across many drains (TASK-993).
+///
+/// **Rotate-at-boundary contract.** This is called ONLY from a `RunStarted`
+/// emission (a drain/member boundary — see [`crate::drain_state::set_run`]),
+/// never mid-phase. That is what keeps the offset-tracking consumers safe: the
+/// stream shrinks only at a moment no phase is streaming into it, and every
+/// consumer ([`crate::event_wait::scan_new_actionable_event`], the advisor /
+/// integrator watch loops) reopens the file *by path* each tick and already
+/// resets its byte offset to `0` when it sees the file has shrunk (`len < pos`).
+/// So after a rotation a follower re-reads the fresh (small) stream from the top
+/// — it re-processes only the just-started run's own events, and over-waking on
+/// a re-read is explicitly recoverable (a silently-dropped actionable event is
+/// the only unrecoverable failure, and rotation never drops one from the live
+/// stream: the old lines are preserved in the archive).
+///
+/// The rotation itself is a single `rename` (atomic on one filesystem), so a
+/// concurrent reader opening the path sees either the full old file or the fresh
+/// empty one — never a partially-clobbered stream. The subsequent [`emit`]
+/// recreates `events.jsonl` via its `create(true)` open.
+///
+/// **Best-effort**: any error (stat, rename) is swallowed — like [`emit`], this
+/// sits at the head of the drain's hot path and must never stall it. A file
+/// that does not exist yet, or is under the cap, is a no-op.
+// trace:TASK-993 | ai:claude
+pub fn rotate_if_oversized(project_root: &Path) {
+    rotate_over_cap(project_root, events_max_bytes());
+}
+
+/// The cap-parameterized body of [`rotate_if_oversized`]; kept separate so tests
+/// can force rotation with a tiny explicit cap without mutating the process-wide
+/// `AIDA_EVENTS_MAX_BYTES` env var (which would race parallel tests).
+// trace:TASK-993 | ai:claude
+fn rotate_over_cap(project_root: &Path, max_bytes: u64) {
+    let path = events_path(project_root);
+    let len = match std::fs::metadata(&path) {
+        Ok(m) => m.len(),
+        // No stream yet (or unreadable) — nothing to rotate.
+        Err(_) => return,
+    };
+    if len <= max_bytes {
+        return;
+    }
+    // Archive the prior run's events as events.jsonl.1 (one generation kept),
+    // replacing any older archive. Best-effort; emit recreates the live file.
+    let archive = events_archive_path(project_root);
+    let _ = std::fs::rename(&path, &archive);
+}
+
 /// Append one event to `.aida/events.jsonl`, creating the file (and `.aida/`)
 /// if needed. One JSON object per line.
 ///
@@ -327,5 +402,100 @@ mod tests {
         emit(&file_as_root, &Event::new(None, "", EventKind::RunStarted));
         // And nothing was written (the path was unwritable).
         assert!(!events_path(&file_as_root).exists());
+    }
+
+    #[test]
+    fn rotate_is_noop_when_absent_or_under_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        // No stream yet — rotation is a no-op and creates nothing.
+        rotate_if_oversized(dir.path());
+        assert!(!events_path(dir.path()).exists());
+        assert!(!events_archive_path(dir.path()).exists());
+
+        // A small stream (well under the default 5 MiB cap) is left untouched.
+        emit(
+            dir.path(),
+            &Event::new(Some("STORY-712".into()), "run-1", EventKind::RunStarted),
+        );
+        let before = std::fs::read_to_string(events_path(dir.path())).unwrap();
+        rotate_if_oversized(dir.path());
+        let after = std::fs::read_to_string(events_path(dir.path())).unwrap();
+        assert_eq!(before, after, "under-cap stream must not rotate");
+        assert!(
+            !events_archive_path(dir.path()).exists(),
+            "no archive created under the cap"
+        );
+    }
+
+    #[test]
+    fn rotate_archives_when_over_cap_and_emit_starts_fresh() {
+        // A tiny explicit cap forces rotation on a small file — no multi-MiB
+        // fixture, no env mutation (uses the cap-parameterized inner helper).
+        let dir = tempfile::tempdir().unwrap();
+
+        // Prime the stream past the 10-byte cap.
+        emit(
+            dir.path(),
+            &Event::new(Some("STORY-712".into()), "old-run", EventKind::RunStarted),
+        );
+        let old_body = std::fs::read_to_string(events_path(dir.path())).unwrap();
+        assert!(old_body.len() > 10, "fixture must exceed the tiny cap");
+
+        // Rotate at the next run-started boundary: live file is archived...
+        rotate_over_cap(dir.path(), 10);
+        assert!(
+            !events_path(dir.path()).exists(),
+            "live stream is renamed away by rotation"
+        );
+        let archived = std::fs::read_to_string(events_archive_path(dir.path())).unwrap();
+        assert_eq!(
+            archived, old_body,
+            "prior run's events preserved in archive"
+        );
+
+        // ...and the next emit recreates a fresh, small live stream holding only
+        // the new run's events (the RunStarted emit that co-triggers rotation in
+        // the real drain path).
+        emit(
+            dir.path(),
+            &Event::new(Some("STORY-712".into()), "new-run", EventKind::RunStarted),
+        );
+        let fresh = std::fs::read_to_string(events_path(dir.path())).unwrap();
+        assert_eq!(fresh.lines().count(), 1, "fresh stream holds only new run");
+        let ev: Event = serde_json::from_str(fresh.trim_end()).unwrap();
+        assert_eq!(ev.run_uuid, "new-run");
+    }
+
+    #[test]
+    fn rotate_overwrites_prior_archive_bounding_footprint() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // First over-cap generation → archived.
+        emit(
+            dir.path(),
+            &Event::new(Some("STORY-1".into()), "gen-1", EventKind::RunStarted),
+        );
+        rotate_over_cap(dir.path(), 10);
+        let gen1 = std::fs::read_to_string(events_archive_path(dir.path())).unwrap();
+        assert!(gen1.contains("gen-1"));
+
+        // Second over-cap generation → the archive is OVERWRITTEN, not grown
+        // (only one generation kept, so on-disk footprint stays bounded).
+        emit(
+            dir.path(),
+            &Event::new(Some("STORY-2".into()), "gen-2", EventKind::RunStarted),
+        );
+        rotate_over_cap(dir.path(), 10);
+        let gen2 = std::fs::read_to_string(events_archive_path(dir.path())).unwrap();
+        assert!(gen2.contains("gen-2"));
+        assert!(!gen2.contains("gen-1"), "archive keeps only one generation");
+    }
+
+    #[test]
+    fn events_max_bytes_honors_env_override_else_default() {
+        // Default when unset (and un-parseable) is the 5 MiB constant.
+        assert_eq!(DEFAULT_EVENTS_MAX_BYTES, 5 * 1024 * 1024);
+        // The env parse tolerates surrounding whitespace.
+        assert_eq!("  42  ".trim().parse::<u64>().unwrap(), 42);
     }
 }
