@@ -1,0 +1,22 @@
+id: 019f1c08-eeb1-75f0-a921-0518e2f5bf53
+spec_id: TASK-0440
+title: Clarify the underspecified thought before drafting a spec
+description: |-
+  The provided input ('just a thought') contains no actionable intent, scope, or subject to expand into a requirement. This spec is a placeholder that captures the need to gather a concrete problem statement from the developer before any implementation spec can be authored. Its purpose is to prompt for the missing detail rather than to invent scope that the thought does not imply.
+
+  ## Acceptance
+  - The original free-text input is recorded verbatim on the spec for later reference
+  - The spec is marked as needing clarification (e.g. draft status or a needs-clarification tag) and is not routed to an implementer
+  - A follow-up prompt requests the concrete problem, intent, or scope from the developer who wrote the thought
+
+  _Drafted by `aida zen` from the thought: "just a thought"._
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-07-01T04:56:15.281851891Z
+modified_at: 2026-07-01T04:56:15.281851891Z
+req_type: Task
+tags:
+- aida:zen
+- from-thought
