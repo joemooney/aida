@@ -582,6 +582,25 @@ fn non_interactive_confirm_from(agent_mode: bool, stdin_is_tty: bool) -> bool {
 /// hints the not_found module and friends already embed — see
 /// [`extract_aida_suggestion`] — so "where known" comes for free.
 // trace:TASK-972
+/// BUG-684: the soft-signpost line for a truly-EMPTY `aida list` (human path).
+/// Returns `Some(line)` only when nothing is merely hidden behind a filter —
+/// a fresh zero-spec repo — so the hint teaches the create move. When rows exist
+/// but are filtered out (closed/archived/deferred), returns `None` because the
+/// hidden-hints already point at `--all`. Pure, so the empty-state decision is
+/// unit-testable without the surrounding render machinery.
+// trace:BUG-684 | ai:claude
+fn empty_list_hint_line(
+    closed_hidden: usize,
+    archived_hidden: usize,
+    deferred_hidden: usize,
+) -> Option<&'static str> {
+    if closed_hidden == 0 && archived_hidden == 0 && deferred_hidden == 0 {
+        Some("Nothing here yet — file your first spec: aida add --title \"...\"")
+    } else {
+        None
+    }
+}
+
 fn agent_error_summary_help(msg: &str) -> (&str, Option<String>) {
     let first = msg.lines().next().unwrap_or("").trim();
     let summary = first
@@ -1347,6 +1366,22 @@ mod task970_agent_output_tests {
     // TASK-972 (AXI #6): the agent-mode error block reuses the rich next-command
     // hint AIDA's not-found errors already embed, and the summary drops any
     // human `Error:` prefix so it doesn't double under the TOON `error:` key.
+    // BUG-684: a truly-empty listing (fresh repo, nothing hidden) yields the
+    // create signpost; a listing that's empty only because rows are filtered out
+    // (closed/archived/deferred hidden) yields None so the hidden-hints stand
+    // alone.
+    #[test]
+    fn empty_list_hint_only_fires_when_nothing_hidden() {
+        let line = empty_list_hint_line(0, 0, 0).expect("fresh repo → create hint");
+        assert!(line.contains("aida add --title"));
+        assert!(line.contains("Nothing here yet"));
+
+        // Any hidden bucket suppresses the create hint.
+        assert!(empty_list_hint_line(3, 0, 0).is_none());
+        assert!(empty_list_hint_line(0, 5, 0).is_none());
+        assert!(empty_list_hint_line(0, 0, 2).is_none());
+    }
+
     #[test]
     fn agent_error_summary_strips_prefix_and_extracts_suggestion() {
         let msg = "Requirement not found: NOSUCH-1\n  \
@@ -16209,6 +16244,23 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
             };
 
+            // BUG-684: a truly empty listing dead-ends the FIRST command a new
+            // user runs — `No requirements found.` with no next step. Teach the
+            // create move with a soft, forward-pointing signpost (matches the
+            // empty `queue work` tone). Fires only when NOTHING is merely hidden
+            // behind a filter (else the hidden-hints above already point at
+            // `--all` — the specs exist, they're just filtered out).
+            // trace:BUG-684 | ai:claude
+            let print_empty_list_hint = || {
+                if let Some(line) = empty_list_hint_line(
+                    closed_hidden_count,
+                    archived_hidden_count,
+                    deferred_hidden_count,
+                ) {
+                    println!("{} {}", "ℹ".cyan(), line.dimmed());
+                }
+            };
+
             // STORY-244: internal JSON output for the TUI launcher's
             // Backlog / History panes. Hidden from --help; schema is
             // internal and may change. Emits the row set straight as
@@ -16317,6 +16369,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // the valid next transition for that state. trace:TASK-974
                 let next = crate::help_next::list_next(&crate::help_next::ListContext {
                     status: status.as_deref(),
+                    // BUG-684: an empty result routes the next[] block to `aida
+                    // add` instead of the nonsensical `aida show <id>`.
+                    is_empty: reqs.is_empty(),
                 });
                 if let Some(block) = crate::help_next::render(&next) {
                     println!("{block}");
@@ -16359,6 +16414,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 if reqs.is_empty() {
                     println!("No requirements found.");
                     print_hidden_hints();
+                    print_empty_list_hint();
                     return Ok(());
                 }
                 let store = backend.load()?;
@@ -16475,6 +16531,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 if reqs.is_empty() {
                     println!("No requirements found.");
                     print_hidden_hints();
+                    print_empty_list_hint();
                 } else {
                     render_list_fields_table(&reqs, &selected, &row_routing);
                     println!("\n{} requirements", reqs.len());
@@ -16488,6 +16545,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if reqs.is_empty() {
                 println!("No requirements found.");
                 print_hidden_hints();
+                print_empty_list_hint();
             } else {
                 // Default rendering: one ID column (canonical = agreed_id
                 // when present, else spec_id). Pass --show-origin to
@@ -128827,9 +128885,15 @@ fn handle_queue_command(
                         "scope has no approved+ready children either — try `aida list --status approved`".dimmed()
                     );
                 } else {
+                    // BUG-684: the old hint pointed at `aida role enter dialog` —
+                    // `dialog` is the DEPRECATED alias for `advisor`, AND the
+                    // advisor seat is the wrong next step for a default
+                    // implementer with an empty queue. Mirror the sibling hint
+                    // above: fill the queue from the approved backlog, or drive a
+                    // scope directly. trace:BUG-684 | ai:claude
                     println!(
                         "  ({})",
-                        "pick up new work via `aida role enter dialog` or wait for items".dimmed()
+                        "no items queued — try `aida list --status approved` or `aida queue work <scope>`".dimmed()
                     );
                 }
                 return Ok(());
@@ -129136,6 +129200,28 @@ fn handle_queue_command(
                     eprintln!("Cancelled. Requirement and queue untouched.");
                     return Ok(());
                 }
+            }
+
+            // BUG-684: `queue done` promotes ANY status straight to Done — a
+            // Draft/Approved/Planned spec (never started) flips to Done with a
+            // green check, so a typo'd id silently corrupts state. This is
+            // asymmetric with the strong re-open guard that gates Done → *. Warn
+            // (non-blocking) when marking done a spec that was never In Progress
+            // so the mistake is VISIBLE, then proceed — a legitimate "I finished,
+            // don't nag" agent path exists, so we don't hard-block. Statuses
+            // that HAVE been worked (InProgress, NeedsAttention) and the
+            // already-terminal ones (Done/Completed) don't trip the warning.
+            // trace:BUG-684 | ai:claude
+            if matches!(
+                req.status,
+                RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned
+            ) {
+                eprintln!(
+                    "{} {} was never In Progress (was {}) — marking done anyway.",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    display_id.bold(),
+                    req.status
+                );
             }
 
             // Update status to Done via update_atomically — works across

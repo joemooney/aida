@@ -102,20 +102,51 @@ pub fn scalar(key: &str, value: &str) -> String {
     format!("{key}: {}", escape(value))
 }
 
+/// Force-quote a value regardless of whether [`needs_quote`] would trigger, with
+/// the same inner escaping as [`escape`]. Used where the emitted shape must be
+/// UNIFORM across values — an agent grepping `error: (.*)` should get the same
+/// (always-quoted) form whether or not the message happens to carry a colon.
+fn escape_quoted(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Emit a single scalar field line whose value is ALWAYS quoted (via
+/// [`escape_quoted`]), so callers that need a byte-uniform shape don't inherit
+/// `escape`'s quote-only-when-structural behavior.
+fn scalar_quoted(key: &str, value: &str) -> String {
+    format!("{key}: {}", escape_quoted(value))
+}
+
 /// Render an agent-mode error as a structured TOON block: an `error:` scalar
 /// carrying the one-line summary, plus an optional `help:` scalar carrying a
 /// suggested next command. Reuses [`scalar`] so the block is valid,
-/// round-trippable TOON consistent with the rest of the agent surface (a value
-/// with a structural colon — like `Requirement not found: NOSUCH-1` — is quoted
-/// per the TOON rule).
+/// round-trippable TOON consistent with the rest of the agent surface.
+///
+/// The `error:` value is ALWAYS quoted (via [`scalar_quoted`]) so the emitted
+/// shape is UNIFORM: an agent parsing `error: (.*)` gets the same quoted form
+/// whether the message happens to carry a structural colon (`Requirement not
+/// found: NOSUCH-1`) or not (`TASK-2 is Rejected …`) — previously the former was
+/// quoted and the latter bare, so the two error classes didn't parse alike.
 ///
 /// This exists because agents read STDOUT: an error printed to stderr with a
 /// human `Error:` prefix is invisible to the agent loop, forcing blind retries.
 /// In AGENT MODE the central error handler routes here and prints the block to
 /// stdout instead.
-// trace:TASK-972
+// trace:TASK-972 trace:BUG-684
 pub fn error_block(summary: &str, help: Option<&str>) -> String {
-    let mut out = scalar("error", summary);
+    let mut out = scalar_quoted("error", summary);
     if let Some(h) = help {
         out.push('\n');
         out.push_str(&scalar("help", h));
@@ -427,8 +458,9 @@ mod tests {
     }
 
     // TASK-972: the agent-mode error block is an `error:` scalar plus an optional
-    // `help:` scalar. A colon in the summary triggers TOON quoting, and the block
-    // round-trips through parse_scalar (so an agent can parse it deterministically).
+    // `help:` scalar. The `error:` value is ALWAYS quoted (BUG-684) so the shape
+    // is uniform, and the block round-trips through parse_scalar (so an agent can
+    // parse it deterministically).
     #[test]
     fn error_block_with_help_is_two_scalars() {
         let block = error_block("Requirement not found: NOSUCH-1", Some("aida list"));
@@ -443,10 +475,24 @@ mod tests {
         assert_eq!(hv, "aida list");
     }
 
+    // BUG-684: the `error:` value is quoted even when it carries no structural
+    // char (no colon/comma), so an agent parsing `error: (.*)` sees ONE uniform
+    // shape across not-found, wrong-state, and invalid-status errors. It still
+    // round-trips back to the exact bare summary via parse_scalar.
+    #[test]
+    fn error_block_summary_is_always_quoted() {
+        let block = error_block("TASK-2 is Rejected", None);
+        assert_eq!(block, "error: \"TASK-2 is Rejected\"");
+        let (k, v) = parse_scalar(block.lines().next().unwrap()).unwrap();
+        assert_eq!(k, "error");
+        assert_eq!(v, "TASK-2 is Rejected");
+        assert!(!block.contains("help:"));
+    }
+
     #[test]
     fn error_block_without_help_is_single_scalar() {
         let block = error_block("boom", None);
-        assert_eq!(block, "error: boom");
+        assert_eq!(block, "error: \"boom\"");
         assert!(!block.contains("help:"));
     }
 }

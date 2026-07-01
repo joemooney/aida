@@ -136,6 +136,11 @@ pub fn spec_next(status: &str, id: &str) -> Vec<NextStep> {
 pub struct ListContext<'a> {
     /// The `--status <s>` filter in effect, if any.
     pub status: Option<&'a str>,
+    /// Whether the listing returned any rows. An EMPTY result has no id to drill
+    /// into, so `aida show <id>` is nonsensical — the forward move is to CREATE
+    /// the first spec instead.
+    // trace:BUG-684 | ai:claude — plain `//` keeps the marker out of any doc/help.
+    pub is_empty: bool,
 }
 
 /// Next steps after a `list`: drill into a row, and — when a status filter is
@@ -147,6 +152,13 @@ pub struct ListContext<'a> {
 /// the trailing block would make a `list | grep id | uniq -d` collision check
 /// see a false duplicate). The per-spec `show` view supplies the concrete id.
 pub fn list_next(ctx: &ListContext) -> Vec<NextStep> {
+    // BUG-684: an EMPTY listing has no id to drill into — the hardcoded `aida
+    // show <id>` was a dead-end for a fresh user whose first command turned up
+    // nothing. Point at the create move instead. This is the agent-surface
+    // analog of the human empty-list signpost.
+    if ctx.is_empty {
+        return vec![NextStep::new("aida add --title \"...\"", "create")];
+    }
     let id = "<id>";
     let mut steps = vec![NextStep::new(format!("aida show {id}"), "detail")];
     // Carry the active status filter forward into the lifecycle-aware next move.
@@ -307,6 +319,7 @@ fn human_hint(to: &str) -> &'static str {
         "rejected" => "reject it",
         "archived" => "hide it from the default views",
         "detail" => "see the full detail",
+        "create" => "file your first spec",
         "triage" => "triage the draft inbox",
         "fill-queue" => "fill the queue from the approved backlog",
         _ => "",
@@ -436,6 +449,7 @@ mod tests {
     fn list_next_carries_status_filter_forward() {
         let ctx = ListContext {
             status: Some("draft"),
+            is_empty: false,
         };
         let steps = list_next(&ctx);
         assert_eq!(
@@ -447,6 +461,27 @@ mod tests {
         // placeholder id (never echoes a concrete spec id into the id stream).
         let bare = list_next(&ListContext::default());
         assert_eq!(cmds(&bare), vec!["aida show <id>"]);
+    }
+
+    // BUG-684: an EMPTY listing has no id to drill into, so the next[] block
+    // points at the CREATE move (`aida add`) rather than the dead-end `aida show
+    // <id>`. The status filter is irrelevant when there are no rows.
+    #[test]
+    fn list_next_empty_points_at_create() {
+        let empty = list_next(&ListContext {
+            status: None,
+            is_empty: true,
+        });
+        assert_eq!(cmds(&empty), vec!["aida add --title \"...\""]);
+        assert_eq!(empty[0].to, "create");
+
+        // Even with a status filter, an empty result still teaches create — not
+        // a lifecycle transition on a spec that doesn't exist.
+        let empty_filtered = list_next(&ListContext {
+            status: Some("draft"),
+            is_empty: true,
+        });
+        assert_eq!(cmds(&empty_filtered), vec!["aida add --title \"...\""]);
     }
 
     #[test]
