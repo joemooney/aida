@@ -3632,6 +3632,18 @@ impl<'a> McpServer<'a> {
             None
         };
 
+        // STORY-698: capture the verification steps the builder ran, into
+        // implementation_info.test_coverage_notes (the PR-body audit trail).
+        // MCP has no TTY, so it is flag-shaped only: a `test_plan` string array.
+        // Absent ⇒ left untouched, exactly like a non-interactive CLI
+        // `queue done` with no `--test-plan`. trace:STORY-698 | ai:claude
+        let test_plan = str_array("test_plan");
+        let captured_test_plan: Option<String> = if test_plan.is_empty() {
+            None
+        } else {
+            Some(test_plan.join("\n"))
+        };
+
         self.storage
             .update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
@@ -3647,6 +3659,9 @@ impl<'a> McpServer<'a> {
                     }
                     if let Some(ref tool) = source_tool {
                         info.source_tool.get_or_insert_with(|| tool.clone());
+                    }
+                    if let Some(ref tp) = captured_test_plan {
+                        info.test_coverage_notes = Some(tp.clone());
                     }
                     if let Some(ref ic) = captured_ic {
                         r.interface_changes = Some(ic.clone());
@@ -7090,7 +7105,7 @@ fn queue_tool_descriptors() -> Value {
         },
         {
             "name": "queue_done",
-            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec.",
+            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec. Optionally record the verification steps the builder ran via test_plan (surfaced in the PR body).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -7100,7 +7115,8 @@ fn queue_tool_descriptors() -> Value {
                     "interface_mcp": { "type": "array", "items": { "type": "string" }, "description": "User-facing MCP surface changes (new tools, gating, schema).", "example": ["queue_add — now advisor-gated"] },
                     "interface_tui": { "type": "array", "items": { "type": "string" }, "description": "User-facing TUI surface changes (keybindings, panes, overlays).", "example": [] },
                     "interface_other": { "type": "array", "items": { "type": "string" }, "description": "Any other user-facing interface change (not cli/mcp/tui).", "example": ["REST /digest endpoint added"] },
-                    "no_interface_change": { "type": "boolean", "description": "Explicitly mark this spec as having no user-facing interface change (clippy/refactor/test). Keeps it out of the operator digest.", "example": true }
+                    "no_interface_change": { "type": "boolean", "description": "Explicitly mark this spec as having no user-facing interface change (clippy/refactor/test). Keeps it out of the operator digest.", "example": true },
+                    "test_plan": { "type": "array", "items": { "type": "string" }, "description": "The verification steps the builder actually ran — the implementation audit trail stored in implementation_info.test_coverage_notes and surfaced in the PR body.", "example": ["cargo test -p aida-cli", "manual: aida queue done at a TTY"] }
                 },
                 "required": ["id"]
             },

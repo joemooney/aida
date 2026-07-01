@@ -4261,6 +4261,19 @@ pub enum QueueCommand {
         // trace:STORY-542 | ai:claude
         #[clap(long)]
         no_interface_change: bool,
+        /// Record a verification step the builder actually ran (the
+        /// implementation audit trail). Repeatable — one flag per step, e.g.
+        /// `--test-plan "cargo test -p aida-cli" --test-plan "manual: aida
+        /// queue done at a TTY"`. Stored in implementation_info and surfaced in
+        /// the PR body. Any `--test-plan` skips the interactive capture prompt.
+        // trace:STORY-698 | ai:claude
+        #[clap(long = "test-plan", value_name = "STEP")]
+        test_plan: Vec<String>,
+        /// Skip the verification-step capture prompt and record nothing (the
+        /// spec's existing test-plan notes, if any, are left untouched).
+        // trace:STORY-698 | ai:claude
+        #[clap(long)]
+        no_test_plan: bool,
     },
     /// Pick up a queued item (or scope-cluster of queued items) and launch
     /// claude in a fresh session worktree, with the role + skill routed
