@@ -359,3 +359,11 @@ blocks:
   range_end: 1214
   next: 1115
   allocated_at: 2026-07-01T18:48:47.358754445Z
+- node_id: '6'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: EPIC
+  range_start: 209
+  range_end: 308
+  next: 209
+  allocated_at: 2026-07-01T18:48:50.817545510Z
