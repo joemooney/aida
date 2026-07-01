@@ -267,6 +267,28 @@ impl CachedGitBackend {
         self.cache.list_summaries(filter)
     }
 
+    /// TASK-1065: count non-archived specs with a still-pending DecisionRequest,
+    /// read from the `has_pending_decision` cache column. Cache-backed so the
+    /// `aida status --full` decision-inbox count no longer needs a full
+    /// `backend.load()`. Triggers a stale-check first so the count reflects the
+    /// latest committed store.
+    // trace:TASK-1065 | ai:claude
+    pub fn pending_decision_count(&self) -> Result<usize> {
+        self.ensure_cache_fresh_for_read()?;
+        self.cache.pending_decision_count()
+    }
+
+    /// TASK-1065: load ONLY the store metadata (name/title/description/features/
+    /// id_config/…) — a single `metadata.yaml` read, NOT a scan of every object
+    /// YAML. The returned `RequirementsStore` has an EMPTY `requirements` vec; it
+    /// is the cheap metadata half of the `aida status --full` store that the rich
+    /// status path needs (Project name + scaffolding preview) without paying for a
+    /// full `backend.load()`.
+    // trace:TASK-1065 | ai:claude
+    pub fn load_metadata_only(&self) -> Result<RequirementsStore> {
+        self.inner.load_metadata_only()
+    }
+
     /// STORY-632: deterministic local graph-centrality (in/out degree + heft)
     /// for a single spec, read from the cache. Triggers a stale-check first so
     /// the inbound axis reflects the latest committed relationship graph (a
