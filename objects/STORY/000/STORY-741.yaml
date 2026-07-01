@@ -3,12 +3,12 @@ spec_id: STORY-741
 agreed_id: STORY-741
 title: 'One can''t-miss per-turn coordination signal: fold mail into the Awaiting-you report + surface all channels per-turn (not just mail)'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T00:47:43.556440263Z
-modified_at: 2026-07-01T00:47:43.556440263Z
+modified_at: 2026-07-01T01:31:09.950217482Z
 req_type: Story
 tags:
 - awaiting
