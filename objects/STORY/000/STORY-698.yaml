@@ -15,12 +15,12 @@ description: |-
   WHY IT MATTERS: making agent-built work human-verifiable is core agent-collaboration value (the probe thesis: a human must be able to check what agents built). Complements aida goal (machine) + acceptance (contract) with the missing human-verification layer.
 
   ACCEPTANCE (when built): a spec can carry a test plan; an implementer/done flow can capture it; a PR-body generator aggregates the test plans of closed specs.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T21:46:01.178361830Z
-modified_at: 2026-06-30T16:35:30.289106913Z
+modified_at: 2026-07-01T17:58:54.964576422Z
 req_type: Story
 tags:
 - human-verification
@@ -34,3 +34,21 @@ relationships:
   target_id: 019f05f9-f9a6-7f00-a04b-a54a885ebc6b
   created_at: 2026-06-26T22:08:46.390683218Z
   created_by: joe
+history:
+- id: 019f1ed5-7af4-7b83-8639-878799d8c4f3
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:58:54.964572674Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed5-7af4-7b83-8639-879bac9774e0
+  timestamp: 2026-07-01T17:58:54.964576366Z
+  agent: aida
+  commit_sha: 7c87d9e8e1d752dec69b7669e4c746a70cd83f48
+  summary: Completed via merge 7c87d9e8
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:58:54.881650345Z
+  completion_sha: 7c87d9e8e1d752dec69b7669e4c746a70cd83f48

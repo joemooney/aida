@@ -3,12 +3,12 @@ spec_id: TASK-1063
 agreed_id: TASK-1063
 title: Dead-queue pruning split across queue prune --orphaned/--merged + queue gc — fold into queue prune --terminal or sharpen the cross-references so the right verb is obvious
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T18:09:50.635260665Z
-modified_at: 2026-06-30T18:09:50.635260665Z
+modified_at: 2026-07-01T17:58:54.964653163Z
 req_type: Task
 tags:
 - from-audit
@@ -16,3 +16,21 @@ tags:
 - redundancy
 - ux
 - zen-ready
+history:
+- id: 019f1ed5-7af4-7b83-8639-88a3b9258d57
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:58:54.964649621Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed5-7af4-7b83-8639-88bb3e37b4bc
+  timestamp: 2026-07-01T17:58:54.964653072Z
+  agent: aida
+  commit_sha: 2349f2ae109eee739a7cc4499c20f9bcc2def39b
+  summary: Completed via merge 2349f2ae
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:58:54.881650345Z
+  completion_sha: 2349f2ae109eee739a7cc4499c20f9bcc2def39b

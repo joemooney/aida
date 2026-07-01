@@ -3,12 +3,12 @@ spec_id: TASK-841
 agreed_id: TASK-841
 title: 'integrate: stacked-branch accumulation strategy'
 description: 'Follow-up of TASK-836. aida queue integrate has an IntegrateStrategy::Stacked variant that is accepted on the CLI but errors as unbuilt. Design question: when items build on each other (each branch on the previous), the integrator must rebase the whole stack as a unit and merge in order, and the completion semantics of an intermediate-stack spec are ambiguous (is it Completed when its own commit lands, or only when the whole stack lands?). Decide the completion model before implementing.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T08:20:48.067267409Z
-modified_at: 2026-06-30T16:36:09.098969132Z
+modified_at: 2026-07-01T17:58:54.964683851Z
 req_type: Task
 tags:
 - integrator
@@ -24,3 +24,21 @@ comments:
   content: 'Deferred (advisor): the integrator already parks stacked branches legibly (exit 2 → triage), and the intermediate-stack-spec completion model is a genuine design question not worth speculative handling for a rare scenario. Revisit when the solo loop actually hits it in practice. TASK-842/843 (the bounded siblings) are being implemented now.'
   created_at: 2026-06-16T08:32:02.866622144Z
   modified_at: 2026-06-16T08:32:02.866622144Z
+history:
+- id: 019f1ed5-7af4-7b83-8639-88e4eca7c30d
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:58:54.964680113Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed5-7af4-7b83-8639-88f24861ceca
+  timestamp: 2026-07-01T17:58:54.964683786Z
+  agent: aida
+  commit_sha: cc8844bae41a9842b789459a45a8d7a647e06bd6
+  summary: Completed via merge cc8844ba
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:58:54.881650345Z
+  completion_sha: cc8844bae41a9842b789459a45a8d7a647e06bd6

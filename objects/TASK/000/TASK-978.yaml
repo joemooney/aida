@@ -3,14 +3,32 @@ spec_id: TASK-978
 agreed_id: TASK-978
 title: 'TUI: per-row liveness glyph in the Targets list (●live / ⚠STALE / idle)'
 description: 'Render a per-row work-liveness glyph in the redesign Targets list, sourced from the same data as `aida ps`: ● live (a session/lease is actively backing the spec), ⚠ STALE (flag set but no live session), or blank (idle/no session). Complements TASK-953 (the on-demand `status` verb) by making liveness ambient — visible without drilling into a verb. Motivating gap: an operator who just queued a spec to the implementer cannot tell from the list whether anything is working it. Reframes the rejected idea of putting liveness in the one-shot queue-confirmation message (wrong surface: that fires at queue-time when no session exists yet).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T04:52:50.921063666Z
-modified_at: 2026-06-30T17:12:35.831357326Z
+modified_at: 2026-07-01T17:58:54.964710537Z
 req_type: Task
 tags:
 - needs-design
 - parent:EPIC-54 redesign tui liveness visibility
 - zen-ready
+history:
+- id: 019f1ed5-7af4-7b83-8639-894e759e1da4
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:58:54.964706460Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed5-7af4-7b83-8639-8956d4a52aa5
+  timestamp: 2026-07-01T17:58:54.964710432Z
+  agent: aida
+  commit_sha: d04690d1f99de9f8fa952382b505820686675476
+  summary: Completed via merge d04690d1
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:58:54.881650345Z
+  completion_sha: d04690d1f99de9f8fa952382b505820686675476

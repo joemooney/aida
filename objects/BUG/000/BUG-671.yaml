@@ -3,15 +3,33 @@ spec_id: BUG-671
 agreed_id: BUG-671
 title: 'agent-mode write verbs: queue done silently no-ops on EOF; guard errors hide the --force/-y override an agent needs'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T21:15:49.741373186Z
-modified_at: 2026-06-30T21:15:49.741373186Z
+modified_at: 2026-07-01T17:58:54.964554667Z
 req_type: Bug
 tags:
 - agent-surface
 - confirm
 - from-audit
 - queue
+history:
+- id: 019f1ed5-7af4-7b83-8639-8746aa57d5e7
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:58:54.964549852Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed5-7af4-7b83-8639-875acbae389e
+  timestamp: 2026-07-01T17:58:54.964554551Z
+  agent: aida
+  commit_sha: 208937e15d174f978be637d1452768f1cf0da347
+  summary: Completed via merge 208937e1
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:58:54.881650345Z
+  completion_sha: 208937e15d174f978be637d1452768f1cf0da347
