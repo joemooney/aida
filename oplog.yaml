@@ -29005,5 +29005,26 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2792
+- id: 019f1f10-2833-7d71-b5e1-9d69ccb75e6c
+  target_id: 019f1f10-1796-7fc1-bbc1-9ea14ab179ce
+  author: aida
+  node_id: '1'
+  lamport: 2793
+  timestamp: 2026-07-01T19:03:00.403551890Z
+  kind: !Create
+    title: scaffold status reports permanent false drift in the AIDA source repo (symlinked templates)
+    description: |-
+      aida scaffold status always reports drift (~122 modified, 48 missing, 5 extra) when run in the AIDA source repo itself, even on a freshly-built binary matching HEAD.
+
+      Root cause: check_scaffold_status (aida-core/src/report.rs:400) compares files on disk against scaffolder.preview() — the generated/substituted artifact content. In this repo, .claude/commands/*.md and .claude/skills/* are per-file symlinks to the raw master templates (aida-core/templates/) by design (dogfooding). The raw template != the generated artifact (frontmatter/substitution wrapping adds ~3 lines), so every symlinked file reports as modified. CLAUDE.md also reports 18-expected-vs-351-found because this repo's is hand-maintained.
+
+      This makes scaffold status produce permanent, unactionable noise in the source repo. make sync-templates does not (and cannot) resolve it.
+
+      Proposed fix: when a scaffold target resolves through a symlink into aida-core/templates/, treat it as matching (or skip it). Optionally special-case a hand-maintained CLAUDE.md.
+
+      Found: v0.14.0 (sha 112a86354), debug build. Filed with GitLab issue on gitlab.joemooney.com (first remote issue).
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 2793
 node_id: '1'
