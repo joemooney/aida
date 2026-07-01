@@ -95,6 +95,7 @@ close.
 | `AIDA_CALIBRATE` | Forces advisor calibration mode on/off. | unset = config `[advisor] calibration_mode`. `1` = force on, `0` = force off. | launch-path (`--calibrate` dispatch) | process env |
 | `AIDA_LIFECYCLE_TAGS` | Comma-separated lifecycle short-circuit tokens (e.g. `lifecycle:no-ci-wait`). | unset = normal lifecycle. | user | process env |
 | `AIDA_HINTS` | Enables/disables workflow hints. | unset = config `[hints] workflow_hints`, else enabled. Opt-out *and* opt-in idioms both honoured. | user | process env |
+| `AIDA_FIRST_RUN_HINTS` | Enables/disables the passive first-run hint chain that guides a new user through file-spec → trace → review → merge → auto-complete (STORY-700). Auto-silent off a TTY; also folded under the `AIDA_HINTS` umbrella. | unset = config `[hints] first_run`, else enabled. Opt-out (`false`/`0`/`no`/`off`) *and* opt-in (`true`/`1`/`yes`/`on`) idioms both honoured. | user | process env |
 | `AIDA_WITH_PLAN` | Runs a plan-prelude session before phase 1 of a drain. | unset = no prelude. Enabled with `1`. | launch-path (`--with-plan` dispatch) | process env |
 | `AIDA_AUTO_FOLLOWUPS` | Files each `## Followups` bullet as a child TASK on reaching Done/Completed. | enabled. Opt-out with `false`/`0`/`no`/`off`. | user | process env |
 | `AIDA_AUTO_BUMP` | Auto-promotes `done → completed` on `aida pull` when a referencing commit lands on main. | enabled. Opt-out with `false`/`0`/`no`/`off`. | user | process env |
