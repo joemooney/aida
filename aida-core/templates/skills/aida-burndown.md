@@ -18,6 +18,11 @@ Run the autonomous backlog burn-down that empirically works (memory
 that keep it from stalling are **structural**, not something the driving agent
 must remember. The engine is Claude-Code-native and only the harness can run it:
 fan out implementer subagents in isolated worktrees, integrate their PRs, loop.
+The subagent fan-out is the harness's native `Agent(isolation: "worktree")`
+primitive, so this is **Claude-harness-only** — a non-Claude vendor (Codex,
+Cursor, Amp) has no equivalent and drains the same ready set the serial way
+instead: `aida queue work --auto-complete` per spec (the vendor-agnostic
+orchestrator engine). SPIKE-74 tracks closing that gap.
 
 The safety property is delegated to `aida burndown plan` (STORY-527 slice 1):
 **only bounded + unblocked + decision-free specs are ever fanned out.** That is
