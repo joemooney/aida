@@ -18,12 +18,12 @@ description: |-
   ## Out of scope
   - The planned ## Test Plan section rendering (STORY-699, already shipped).
   - A separate test_plan model field (rejected: duplicate source of truth).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T21:46:01.178361830Z
-modified_at: 2026-07-01T16:48:00.791262156Z
+modified_at: 2026-07-01T17:01:48.483837447Z
 req_type: Story
 tags:
 - human-verification
@@ -41,6 +41,22 @@ relationships:
   target_id: 019f1e94-70b7-7a31-bae9-3ad8b27294ea
   created_at: 2026-07-01T16:48:00.791256568Z
   created_by: joe
+history:
+- id: 019f1ea1-31ce-71c0-a092-3d18398e4a42
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:01:48.366435034Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f1ea1-3243-7363-b0d7-a607c8070668
+  timestamp: 2026-07-01T17:01:48.483832411Z
+  agent: aida
+  commit_sha: 7c87d9e8e1d752dec69b7669e4c746a70cd83f48
+  summary: Completed via merge 7c87d9e8
+  punted:
+  - 'punted: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting'
 implementation_info:
   implemented: true
   test_coverage_notes: |-
@@ -49,3 +65,5 @@ implementation_info:
     manual: throwaway spec queue done --test-plan → captured + aida show renders
   implemented_at: 2026-07-01T16:47:41.678806620Z
   implemented_by: joe
+  completed_at: 2026-07-01T17:01:47.317546147Z
+  completion_sha: 7c87d9e8e1d752dec69b7669e4c746a70cd83f48
