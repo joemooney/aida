@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T08:20:48.067267409Z
-modified_at: 2026-07-01T05:41:21.260947255Z
+modified_at: 2026-07-01T05:52:22.099034372Z
 req_type: Task
 tags:
 - integrator
@@ -24,3 +24,13 @@ comments:
   content: 'Deferred (advisor): the integrator already parks stacked branches legibly (exit 2 → triage), and the intermediate-stack-spec completion model is a genuine design question not worth speculative handling for a rare scenario. Revisit when the solo loop actually hits it in practice. TASK-842/843 (the bounded siblings) are being implemented now.'
   created_at: 2026-06-16T08:32:02.866622144Z
   modified_at: 2026-06-16T08:32:02.866622144Z
+- id: 019f1c3c-4e53-76a2-b501-f53bacbb53b5
+  author: joe
+  content: |-
+    DECISION — completion model: PER-COMMIT. Each stacked member is Completed when its OWN commit lands on the default branch (via the existing done->completed auto-bump, STORY-86), NOT held until the whole stack lands. Rationale: completed already MEANS merged-to-default-branch, so once a members PR merges it genuinely is on main; an atomic whole-stack model would need a new pending barrier and would misreport a landed member as still-Done for zero benefit. No new completion machinery required.
+
+    IMPLEMENTED (this task): --strategy stacked is now a stack-aware ordering+gating layer over the per-item drive. Pure planner integrate::plan_stacked_integration partitions the ready set into mergeable-this-pass (bottom-of-stack / independent) vs deferred (stacked behind another still-open branch). Only the bottom layer merges; deferred members print an actionable line and the run exits 2 so --watch / a wrapping loop re-checks after the layer lands. 7 unit tests.
+
+    FOLLOW-UP (filed separately): force-pushing a promoted childs PR branch with the stack-aware git rebase --onto origin/main <parent_sha> so the second+ layer becomes mergeable automatically (today it defers with a /aida-rebase pointer). The cascade (STORY-248) rebases the child worktree locally on aida pull but does not force-push the PR branch.
+  created_at: 2026-07-01T05:52:22.099034372Z
+  modified_at: 2026-07-01T05:52:22.099034372Z
