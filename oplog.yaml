@@ -29442,5 +29442,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 2832
+- id: 019f1bd8-c935-79e2-9a94-42d4a4ece678
+  target_id: 019f1bd8-b818-7ac1-bce6-88638a23bacd
+  author: aida
+  node_id: '1'
+  lamport: 2833
+  timestamp: 2026-07-01T04:03:39.957232273Z
+  kind: !Create
+    title: 'TUI drive: full auto-remedy loop — gate hold to inline advisor remedy to auto re-run zen, one gesture'
+    description: 'Vision follow-up to STORY-744. Instead of a manual clarify hop, chain the whole stream as ONE gesture: on a suitability-gate hold, open an inline advisor round-trip in the cockpit that authors the missing acceptance criteria, then re-evaluate the gate and auto-launch the drive when it passes. Larger than the STORY-744 MVP because it embeds an interactive advisor session in the read+dispose cockpit surface. Deferred until the MVP (surface + clarify follow-on) is in use and the demand for full automation is real.'
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 2833
 node_id: '1'
