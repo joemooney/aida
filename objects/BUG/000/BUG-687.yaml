@@ -1,0 +1,15 @@
+id: 019f1d61-e10d-7b22-8dc9-ea6533a8dc0f
+spec_id: BUG-687
+agreed_id: BUG-687
+title: 'Cross-platform nightly red: pid_is_alive(0) true on Windows + init-in-tempdir tests fail on macOS'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T11:13:01.709426638Z
+modified_at: 2026-07-01T11:13:01.709426638Z
+req_type: Bug
+tags:
+- batch:xplat-green
+- lifecycle:no-review
