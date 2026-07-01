@@ -219,6 +219,22 @@ State lives under `.aida/worktree-pool/` (per-clone runtime state, already cover
 
 **Hook safety.** `post_create` / `pre_destroy` hook commands are sourced **only from the machine-global `~/.aida/config.toml`**, never a checked-in repo-level `.aida/config.toml` — cloning a repo must not be able to run arbitrary shell on your machine.
 
+**Pre-warm on create (TASK-1010).** A *reused* pool tree is already warm; a *newly-created* one (the pool was empty or below `max_trees`) starts with a cold `target/`, so the first fanned agent pays the full build. The `post_create` hook is where that gets fixed — kick off a `cargo build` the moment the tree is created so `target/` is warm by first real use. Two ways to enable it, both **machine-global only** (like every hook — a build is a code-exec surface):
+
+```toml
+# ~/.aida/config.toml  — opt-in convenience knob
+[worktree_pool]
+prewarm_build = true      # appends a backgrounded `cargo build` to post_create
+```
+
+```toml
+# ~/.aida/config.toml  — or write your own recipe (non-Rust project, narrower build)
+[worktree_pool]
+post_create = ["nohup cargo build -p aida-cli >/dev/null 2>&1 &"]
+```
+
+The pre-warm is **best-effort, opt-in, and non-blocking**: it is backgrounded (`nohup … &`) so it never delays the tree handout, its output is discarded, and a failed or incomplete build just means the first real build is colder — never an error. `prewarm_build` is off by default. Set it in `~/.aida/config.toml`, not a repo `.aida/config.toml` (a repo-level setting is ignored by design).
+
 **Status.** Fully shipped: pool primitives + `aida worktree pool` surface + `session end --return` (TASK-981); acquire-on-start wired into `session_start` (TASK-982); doctor/GC teardowns routed through the hook-aware tiered teardown (TASK-983); `session end --return` made robust to dirty trees (BUG-652). The default was flipped **ON** (TASK-985) once the build-delta measurement proved the payoff — `--no-pool` / `--remove` / `enabled = false` remain the escape hatches.
 
 ---
