@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:56:23.071157144Z
-modified_at: 2026-07-01T04:56:23.071157144Z
+modified_at: 2026-07-01T05:12:02.791896699Z
 req_type: Bug
 tags:
 - agent-surface
@@ -16,3 +16,9 @@ tags:
 - error
 - from-audit
 - hint
+comments:
+- id: 019f1c17-63e7-7b81-824d-09fbc8a00100
+  author: joe
+  content: Commit b36bcabc0 references this requirement
+  created_at: 2026-07-01T05:12:02.791896699Z
+  modified_at: 2026-07-01T05:12:02.791896699Z
