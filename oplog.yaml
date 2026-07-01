@@ -29349,5 +29349,29 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 2827
+- id: 019f1bcc-6c6a-70d2-a1d0-fb096f58963d
+  target_id: 019f1b72-9031-7ea0-a988-0dba23f1d9ce
+  author: aida
+  node_id: '1'
+  lamport: 2828
+  timestamp: 2026-07-01T03:50:09.770523541Z
+  kind: !SetDescription
+    description: |-
+      The aida focus rollup line (subtree: N items (X completed - Y in-progress - Z open)) over-counts "open" work because it buckets terminal REJECTED specs into the open count.
+
+      REPRODUCTION (EPIC-54, 2026-06-30): after rejecting several specs, aida focus epic-54 reported "12 open" when only 3 specs were actually open (Approved) — the other 9 were rejected specs miscounted as open.
+
+      ROOT CAUSE: print_focus_rollup in aida-cli/src/main.rs (~line 96876). The status match buckets completed|done and inprogress explicitly, then a catch-all _ => open += 1 sweeps EVERYTHING else — including rejected (a terminal status) — into open.
+
+      FIX: add an explicit rejected arm so rejected is excluded from the open count (and from total, to match the actionable framing); optionally surface a rejected count when non-zero. Draft/approved/planned correctly remain open.
+
+      ## Acceptance
+      - WHEN a focused epic subtree contains rejected specs, THE rollup SHALL NOT count them in the "open" figure.
+      - THE "open" figure SHALL equal the number of specs whose status is draft, approved, or planned within the subtree.
+      - Rejected specs SHALL be excluded from the subtree "total" (total = completed + in-progress + open), OR shown as a separate "rejected" figure — not folded into open.
+      - A unit test on print_focus_rollup (or its extracted tally helper) SHALL assert a subtree of {1 approved, 1 completed, 1 rejected} yields open=1, completed=1, rejected excluded from open.
+      - Regression: with the EPIC-54 subtree, aida focus epic-54 reports the true open count (3 at time of filing), not the rejected-inflated count.
+
+      SCOPE: this bug is ONLY the rejected-as-open bucketing. The separate descendant_ids-vs-graph-tree subtree MEMBERSHIP mismatch (43 vs 44) is split out to TASK-1074.
+clock: 2828
 node_id: '1'
