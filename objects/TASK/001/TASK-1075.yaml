@@ -19,6 +19,3 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-07-01T04:03:43.950542281Z
-deferred: true
-deferred_at: 2026-07-01T04:04:06.034920910Z
-deferred_until: STORY-744 MVP shipped and in use; operators ask for full automation
