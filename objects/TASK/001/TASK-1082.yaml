@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T13:14:22.937034051Z
-modified_at: 2026-07-01T13:14:22.937034051Z
+modified_at: 2026-07-01T17:43:42.007461308Z
 req_type: Task
 tags:
 - aida:show
 - papercut
 - ux
+comments:
+- id: 019f1ec7-8cb7-7a53-8a85-aee20586366a
+  author: joe
+  content: Commit 7c87d9e8e references this requirement
+  created_at: 2026-07-01T17:43:42.007461308Z
+  modified_at: 2026-07-01T17:43:42.007461308Z
