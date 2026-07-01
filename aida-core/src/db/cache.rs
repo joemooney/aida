@@ -145,32 +145,6 @@ fn own_outbound(relationships: &[Relationship]) -> (u32, u32) {
     (out_degree, heft)
 }
 
-/// Extract the parent->child hierarchy edges a single requirement contributes,
-/// normalized so the first element is always the PARENT and the second the
-/// CHILD. The spec hierarchy edge can live on EITHER endpoint. In THIS store the
-/// rel_type names the OTHER node's role relative to `req` (the same convention
-/// `aida list --parent` direct-children filtering already relies on, and what
-/// `aida add --parent` writes): a `Parent` edge on `req` points at `req`'s CHILD
-/// (req is the parent), while a `Child` edge on `req` points at `req`'s PARENT
-/// (req is the child). Unioning both forms — normalized to (parent, child) —
-/// captures the hierarchy from whichever endpoint recorded the edge, the same
-/// either-endpoint union `aida graph --tree` traverses, letting `--recursive`
-/// walk the subtree from a cache CTE.
-// trace:TASK-955 | ai:claude — the either-endpoint union mirrors BUG-448.
-fn hierarchy_edges_for(req: &Requirement) -> Vec<(Uuid, Uuid)> {
-    let mut edges = Vec::new();
-    for rel in &req.relationships {
-        match rel.rel_type {
-            // `req` is the parent; target is its child.
-            RelationshipType::Parent => edges.push((req.id, rel.target_id)),
-            // `req` is the child; target is its parent.
-            RelationshipType::Child => edges.push((rel.target_id, req.id)),
-            _ => {}
-        }
-    }
-    edges
-}
-
 /// TASK-902: compute the set of requirement UUIDs that have an incomplete
 /// BlockedBy edge, over the WHOLE store. A spec is "blocked" when any of its
 /// BlockedBy targets hasn't reached Completed (or is a dangling edge) — exactly
@@ -374,7 +348,12 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // so `aida list --parent <id> --recursive` can walk the transitive subtree with a
 // WITH RECURSIVE query instead of a full backend.load().
 // trace:TASK-955 | ai:claude
-const SCHEMA_VERSION: &str = "8";
+// TASK-1074: bumped to "9" when `hierarchy_edges` switched from the per-endpoint
+// convention-B normalization to the shared rank-oriented rule
+// (`graph_walk::oriented_hierarchy_edges`), so the `descendant_ids` closure that
+// `aida focus` reads agrees with `aida graph --tree`. Existing caches rebuild on
+// next read to re-orient their edges. trace:TASK-1074 | ai:claude
+const SCHEMA_VERSION: &str = "9";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -979,6 +958,13 @@ impl Cache {
         // an epic with no non-rejected children keeps its stored status (the
         // derivation returns None). trace:BUG-626 | ai:claude
         let epic_status = compute_epic_statuses(store);
+        // TASK-1074: materialize the ONE shared subtree substrate — every
+        // hierarchy edge oriented parent->child by the same rank rule
+        // `graph_walk::subtree_ids` walks — so the `descendant_ids` CTE and
+        // `aida graph --tree` agree on membership. Computed once over the whole
+        // store (both endpoints' types available) rather than per-req, so the
+        // orientation is authoritative after a rebuild. trace:TASK-1074 | ai:claude
+        let hierarchy_edges = crate::graph_walk::oriented_hierarchy_edges(store);
         let count = {
             let conn = self.conn.lock().unwrap();
             with_cache_write(&self.path, "rebuild cache", || {
@@ -991,11 +977,13 @@ impl Cache {
                     let d = degrees.get(&req.id).copied().unwrap_or_default();
                     let status_override = epic_status.get(&req.id).map(String::as_str);
                     insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
-                    // TASK-955: materialize this spec's parent->child hierarchy
-                    // edges so the recursive-descendant CTE has its substrate.
-                    // trace:TASK-955 | ai:claude
-                    insert_edges(&tx, req)?;
                     count += 1;
+                }
+                for (parent, child) in &hierarchy_edges {
+                    tx.execute(
+                        "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id) VALUES (?1, ?2)",
+                        params![parent.to_string(), child.to_string()],
+                    )?;
                 }
                 tx.commit()?;
                 Ok(count)
@@ -1802,17 +1790,52 @@ fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
     Ok(())
 }
 
+/// Rank of a cache-stored `req_type` string (the `format!("{:?}", …)` Debug
+/// form `insert_one` writes) — mirrors
+/// [`crate::models::RequirementType::hierarchy_rank`] without a parse. An
+/// unknown/absent type defaults to child-rank (2) so a dangling parent-ref does
+/// not invert an edge.
+// trace:TASK-1074 | ai:claude
+fn rank_from_cache_type(s: &str) -> u8 {
+    match s {
+        "Epic" => 0,
+        "Story" => 1,
+        _ => 2,
+    }
+}
+
 /// Write a single spec's parent->child hierarchy edges into the
-/// `hierarchy_edges` table. Idempotent via the (parent_id, child_id) primary
-/// key (`INSERT OR IGNORE`), so a re-insert after delete_one_uncommitted — or a
-/// duplicate edge recorded on both endpoints — never errors.
-// trace:TASK-955 | ai:claude
+/// `hierarchy_edges` table, oriented by the same shared rank rule the full
+/// rebuild uses (`graph_walk::orient_hierarchy_edge`). The target's rank is read
+/// from its cache row (child-rank if it is not yet cached — the full rebuild
+/// re-derives the authoritative orientation from both endpoints' types, the same
+/// authoritative-after-rebuild contract as in_degree/blocked). Idempotent via
+/// the (parent_id, child_id) primary key (`INSERT OR IGNORE`).
+// trace:TASK-955 trace:TASK-1074 | ai:claude
 fn insert_edges(conn: &Connection, req: &Requirement) -> Result<()> {
-    for (parent, child) in hierarchy_edges_for(req) {
-        conn.execute(
-            "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id) VALUES (?1, ?2)",
-            params![parent.to_string(), child.to_string()],
-        )?;
+    let src_rank = req.req_type.hierarchy_rank();
+    for rel in &req.relationships {
+        let tgt_rank = conn
+            .query_row(
+                "SELECT req_type FROM requirements_cache WHERE id = ?1",
+                params![rel.target_id.to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .map(|s| rank_from_cache_type(&s))
+            .unwrap_or(2);
+        if let Some((parent, child)) = crate::graph_walk::orient_hierarchy_edge(
+            req.id,
+            src_rank,
+            &rel.rel_type,
+            rel.target_id,
+            tgt_rank,
+        ) {
+            conn.execute(
+                "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id) VALUES (?1, ?2)",
+                params![parent.to_string(), child.to_string()],
+            )?;
+        }
     }
     Ok(())
 }
@@ -3763,6 +3786,73 @@ mod tests {
             "child-authored edge still places the story under the epic"
         );
         assert_eq!(subtree.len(), 2);
+    }
+
+    // TASK-1074: the EPIC-54 discrepancy — `aida focus`'s `descendant_ids` closure
+    // and `aida graph --tree`'s `graph_walk::subtree_ids` must reach the SAME
+    // subtree. The pathology: a story that is a child of the epic AND has a
+    // SAME-RANK second parent (another story) OUTSIDE the epic. The old agnostic
+    // tree walk leaked the second parent in (44 vs 43); the shared rank-oriented
+    // rule excludes it. This test proves the cache CTE and the in-memory closure
+    // now AGREE on that exact shape. trace:TASK-1074 | ai:claude
+    #[test]
+    fn descendant_ids_agrees_with_subtree_ids_on_same_rank_second_parent() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut epic = sample_req("EPIC-54", "epic");
+        epic.req_type = RequirementType::Epic;
+        let mut child = sample_req("STORY-699", "real child");
+        child.req_type = RequirementType::Story;
+        let mut second_parent = sample_req("STORY-698", "same-rank second parent");
+        second_parent.req_type = RequirementType::Story;
+
+        // epic --Parent--> child ; child --Child--> epic (convention B, both ends).
+        epic.relationships
+            .push(rel(RelationshipType::Parent, child.id));
+        child
+            .relationships
+            .push(rel(RelationshipType::Child, epic.id));
+        // second_parent --Parent--> child ; child --Child--> second_parent
+        // (the 698<->699 shape: same STORY rank, so type gives no signal and the
+        // rel_type places 698 ABOVE 699 — a parent, not a descendant of the epic).
+        second_parent
+            .relationships
+            .push(rel(RelationshipType::Parent, child.id));
+        child
+            .relationships
+            .push(rel(RelationshipType::Child, second_parent.id));
+
+        let (epic_id, child_id, second_parent_id) = (epic.id, child.id, second_parent.id);
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, child, second_parent]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Cache CTE closure (includes the root); in-memory closure (excludes root).
+        let desc = cache.descendant_ids(&epic_id).unwrap();
+        let sub: std::collections::HashSet<Uuid> =
+            crate::graph_walk::subtree_ids(&store, epic_id, None)
+                .nodes
+                .into_iter()
+                .collect();
+
+        assert!(desc.contains(&child_id), "real child in the cache closure");
+        assert!(sub.contains(&child_id), "real child in the graph closure");
+        assert!(
+            !desc.contains(&second_parent_id),
+            "same-rank second parent is NOT a descendant (cache)"
+        );
+        assert!(
+            !sub.contains(&second_parent_id),
+            "same-rank second parent is NOT a descendant (graph)"
+        );
+        // Exact agreement: descendant_ids minus the root == subtree_ids nodes.
+        let desc_no_root: std::collections::HashSet<Uuid> =
+            desc.into_iter().filter(|id| *id != epic_id).collect();
+        assert_eq!(
+            desc_no_root, sub,
+            "aida focus and aida graph --tree agree on subtree membership"
+        );
     }
 
     // BUG-683: a corrupt / non-sqlite `.aida/cache.db` must NOT dead-end every

@@ -17,7 +17,7 @@
 //! trace:STORY-489 | ai:claude
 
 use crate::models::{RelationshipType, RequirementStatus, RequirementsStore};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use uuid::Uuid;
 
 /// Which way to follow an edge during a walk.
@@ -131,6 +131,223 @@ pub fn walk_union(
     merged
 }
 
+// ---------------------------------------------------------- subtree membership
+//
+// TASK-1074: `descendant_ids` (the cache CTE behind `aida focus`) and
+// `aida graph --tree` used to compute epic-subtree membership two different
+// ways and disagreed (e.g. EPIC-54: 43 vs 44). The graph walk was a
+// direction-AGNOSTIC `walk_union([Child, Parent])` connected-component walk, so
+// from a subtree node it climbed the reciprocal edge UP to that node's OTHER
+// (same-rank) parent and counted it as a member — one rejected node (STORY-698)
+// that is a *parent* of a child of the epic, not a descendant of it. The cache
+// CTE, by contrast, only understood ONE of the two orientation conventions the
+// store carries, so it under-counted convention-A epics entirely.
+//
+// The fix routes BOTH surfaces through ONE rule: orient every hierarchy edge
+// parent->child (by type rank, `rel_type` breaking same-rank ties), then walk
+// strictly downward. `orient_hierarchy_edge` is the atom; `oriented_hierarchy_edges`
+// is the whole-store edge set the cache materializes into `hierarchy_edges`;
+// `subtree_ids` is the downward closure both the graph and rollup use.
+
+/// Orient a single hierarchy edge `src -(rel_type)-> tgt` into
+/// `(parent_id, child_id)` under the one shared subtree rule. The lower-rank
+/// endpoint (see [`crate::models::RequirementType::hierarchy_rank`]) is the
+/// parent — an Epic parents a Story parents a Task/Bug/Spike — so the edge is
+/// oriented correctly no matter which endpoint recorded it or which of the two
+/// historical conventions it used (`epic --Parent--> child` /
+/// `child --Child--> parent`, or the inverse `epic --Child--> child` /
+/// `child --Parent--> parent`). Only same-rank endpoints (Story↔Story,
+/// FR↔FR, …), where type gives no signal, fall back to the `rel_type`
+/// convention "I am X to target": a `Parent` edge names the SOURCE as parent, a
+/// `Child` edge names the TARGET as parent. Returns `None` for a non-hierarchy
+/// edge.
+// trace:TASK-1074 | ai:claude
+pub fn orient_hierarchy_edge(
+    src_id: Uuid,
+    src_rank: u8,
+    rel_type: &RelationshipType,
+    tgt_id: Uuid,
+    tgt_rank: u8,
+) -> Option<(Uuid, Uuid)> {
+    match rel_type {
+        RelationshipType::Parent | RelationshipType::Child => {}
+        _ => return None,
+    }
+    Some(match src_rank.cmp(&tgt_rank) {
+        // Source is higher in the tree (smaller rank) ⇒ source is the parent.
+        std::cmp::Ordering::Less => (src_id, tgt_id),
+        // Target is higher ⇒ target is the parent.
+        std::cmp::Ordering::Greater => (tgt_id, src_id),
+        // Equal rank — no type signal; trust the rel_type's stated role.
+        std::cmp::Ordering::Equal => match rel_type {
+            RelationshipType::Parent => (src_id, tgt_id), // "src is Parent of tgt"
+            _ => (tgt_id, src_id),                        // "src is Child of tgt"
+        },
+    })
+}
+
+/// The whole-store set of hierarchy edges, each oriented `(parent_id, child_id)`
+/// by [`orient_hierarchy_edge`] and deduped. This is the single substrate the
+/// cache materializes into its `hierarchy_edges` table (so the `descendant_ids`
+/// CTE walks the very same edges [`subtree_ids`] does) and the input to the
+/// in-memory downward closure.
+// trace:TASK-1074 | ai:claude
+pub fn oriented_hierarchy_edges(store: &RequirementsStore) -> Vec<(Uuid, Uuid)> {
+    let rank_of: HashMap<Uuid, u8> = store
+        .requirements
+        .iter()
+        .map(|r| (r.id, r.req_type.hierarchy_rank()))
+        .collect();
+    let mut edges: Vec<(Uuid, Uuid)> = Vec::new();
+    let mut seen: HashSet<(Uuid, Uuid)> = HashSet::new();
+    for req in &store.requirements {
+        let src_rank = req.req_type.hierarchy_rank();
+        for rel in &req.relationships {
+            // An edge to a spec not in the store defaults the target to
+            // child-rank (2): a dangling parent-ref should not invert the edge.
+            let tgt_rank = rank_of.get(&rel.target_id).copied().unwrap_or(2);
+            if let Some(edge) =
+                orient_hierarchy_edge(req.id, src_rank, &rel.rel_type, rel.target_id, tgt_rank)
+            {
+                if seen.insert(edge) {
+                    edges.push(edge);
+                }
+            }
+        }
+    }
+    edges
+}
+
+/// The transitive downward subtree of `root` — the single shared
+/// subtree-membership computation behind `aida graph --tree` (via
+/// [`hierarchy_tree`]), `aida focus`'s rollup (via the cache's `descendant_ids`
+/// CTE, which walks the identical [`oriented_hierarchy_edges`]),
+/// `queue list --epic`, and the epic-close rollup ([`child_status_rollup`]).
+/// Every hierarchy edge is oriented parent->child, then walked downward from
+/// `root` with a visited-set (cycle-safe). Returns nodes in BFS order EXCLUDING
+/// the root (matching the [`walk`] contract) plus the traversed edges emitted as
+/// `Child` edges (`from`=parent, `to`=child) so [`tree_layout`] nests them
+/// correctly. `max_depth` bounds the hops as in [`walk`].
+///
+/// Unlike the old `walk_union([Child, Parent])` tree walk this does NOT climb
+/// from a descendant UP to its OTHER parents, so a same-rank second parent (the
+/// STORY-698 / EPIC-54 leak) is correctly excluded.
+// trace:TASK-1074 | ai:claude
+pub fn subtree_ids(store: &RequirementsStore, root: Uuid, max_depth: Option<usize>) -> GraphResult {
+    let mut children: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    for (parent, child) in oriented_hierarchy_edges(store) {
+        children.entry(parent).or_default().push(child);
+    }
+    downward_closure(root, &children, max_depth)
+}
+
+/// BFS the pre-oriented `parent -> [children]` adjacency downward from `root`.
+/// Shared by [`subtree_ids`] and [`hierarchy_tree`]. Cycle-safe via the
+/// visited-set; root excluded from `nodes`.
+// trace:TASK-1074 | ai:claude
+fn downward_closure(
+    root: Uuid,
+    children: &HashMap<Uuid, Vec<Uuid>>,
+    max_depth: Option<usize>,
+) -> GraphResult {
+    let mut result = GraphResult {
+        root,
+        ..Default::default()
+    };
+    let mut visited: HashSet<Uuid> = HashSet::new();
+    visited.insert(root);
+    let mut queue: VecDeque<(Uuid, usize)> = VecDeque::new();
+    queue.push_back((root, 0));
+    while let Some((node, depth)) = queue.pop_front() {
+        if max_depth.is_some_and(|max| depth >= max) {
+            continue;
+        }
+        if let Some(kids) = children.get(&node) {
+            for &child in kids {
+                result.edges.push(GraphEdge {
+                    from: node,
+                    rel_type: RelationshipType::Child,
+                    to: child,
+                });
+                if visited.insert(child) {
+                    result.nodes.push(child);
+                    queue.push_back((child, depth + 1));
+                }
+            }
+        }
+    }
+    result
+}
+
+/// The full hierarchy TREE that contains `start`, for `aida graph --tree`.
+/// Climbs to the structural root(s) — the topmost ancestors via the oriented
+/// parent edges — then takes the downward [`subtree_ids`] closure from each. For
+/// a query ON an epic (which has no parent) this collapses to the plain downward
+/// subtree, so `aida graph <epic> --tree` and `aida focus <epic>` report the
+/// SAME membership (TASK-1074); for a query on a descendant it still surfaces the
+/// whole epic tree — the queried node's ancestors AND its siblings (BUG-534).
+/// Roots and every descendant are included; `start` is excluded from `nodes`
+/// (re-added by [`tree_layout`]). Cycle-safe.
+// trace:TASK-1074 | ai:claude
+pub fn hierarchy_tree(
+    store: &RequirementsStore,
+    start: Uuid,
+    max_depth: Option<usize>,
+) -> GraphResult {
+    // Orient once; build both directions so we can climb up and walk down.
+    let mut children: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    let mut parents: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    for (parent, child) in oriented_hierarchy_edges(store) {
+        children.entry(parent).or_default().push(child);
+        parents.entry(child).or_default().push(parent);
+    }
+
+    // Climb to structural roots (nodes with no parent), cycle-safe.
+    let mut roots: Vec<Uuid> = Vec::new();
+    let mut climbed: HashSet<Uuid> = HashSet::new();
+    let mut up: VecDeque<Uuid> = VecDeque::new();
+    up.push_back(start);
+    climbed.insert(start);
+    while let Some(n) = up.pop_front() {
+        match parents.get(&n) {
+            Some(ps) if !ps.is_empty() => {
+                for &p in ps {
+                    if climbed.insert(p) {
+                        up.push_back(p);
+                    }
+                }
+            }
+            _ => {
+                if !roots.contains(&n) {
+                    roots.push(n);
+                }
+            }
+        }
+    }
+
+    // Downward closure from each root, unioned; the roots themselves (other than
+    // `start`, which tree_layout re-adds) are members too.
+    let mut result = GraphResult {
+        root: start,
+        ..Default::default()
+    };
+    let mut in_nodes: HashSet<Uuid> = HashSet::new();
+    in_nodes.insert(start);
+    for &r in &roots {
+        if in_nodes.insert(r) {
+            result.nodes.push(r);
+        }
+        let sub = downward_closure(r, &children, max_depth);
+        result.edges.extend(sub.edges);
+        for n in sub.nodes {
+            if in_nodes.insert(n) {
+                result.nodes.push(n);
+            }
+        }
+    }
+    result
+}
+
 /// Resolve one hop of neighbors from `node` for the given direction.
 fn neighbors(
     store: &RequirementsStore,
@@ -204,28 +421,21 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
     r
 }
 
-/// BUG-543: the status rollup over a spec's child subtree — the SAME walk +
-/// rollup `aida graph --tree` prints, exposed as a reusable primitive. We
-/// deliberately reuse the tree walk's OUTGOING `Child`+`Parent` union rather than
-/// invent a new "downward-only" traversal: the hierarchy edge is stored
-/// inconsistently across conventions (canonically `epic --Parent--> child`
-/// post-TASK-679; legacy `epic --Child--> child`; some stores also carry the
-/// reciprocal `child --Parent--> epic`), and the union resolves the children
-/// whichever form was written. Matching the tree walk also guarantees this
-/// detector AGREES with the rollup numbers an operator sees in `aida graph
-/// --tree <epic>` — the contract BUG-543 references ("Rollup: 4 total · 4
-/// completed").
+/// BUG-543: the status rollup over a spec's child subtree — the SAME membership
+/// `aida graph --tree` prints, exposed as a reusable primitive. Routes through
+/// the one shared [`subtree_ids`] downward closure (TASK-1074), so this detector
+/// AGREES with the rollup numbers an operator sees in `aida graph --tree <epic>`
+/// (the contract BUG-543 references, "Rollup: 4 total · 4 completed") AND with
+/// the `aida focus` subtree count — the three used to drift when the tree walk
+/// was a direction-agnostic union that leaked a descendant's same-rank second
+/// parent into the count.
 ///
 /// Drives the "epic ready to close" surface: an epic whose rollup has
 /// `total > 0 && completed == total` is fully delivered and can be closed. The
-/// root itself is excluded from the count (the walk excludes the root).
-/// trace:BUG-543 | ai:claude
+/// root itself is excluded from the count (the closure excludes the root).
+// trace:BUG-543 trace:TASK-1074 | ai:claude
 pub fn child_status_rollup(store: &RequirementsStore, root: Uuid) -> StatusRollup {
-    let specs = [(
-        vec![RelationshipType::Child, RelationshipType::Parent],
-        Direction::Outgoing,
-    )];
-    let result = walk_union(store, root, &specs, None);
+    let result = subtree_ids(store, root, None);
     status_rollup(store, &result.nodes)
 }
 
@@ -317,9 +527,19 @@ mod tests {
     use crate::models::{Relationship, Requirement};
 
     fn make_req(spec_id: &str, status: RequirementStatus) -> Requirement {
+        use crate::models::RequirementType;
         let mut r = Requirement::new(format!("title for {spec_id}"), String::new());
         r.spec_id = Some(spec_id.to_string());
         r.status = status;
+        // TASK-1074: the shared subtree rule orients edges by type rank, so the
+        // hierarchy fixtures need real types. Infer from the spec_id prefix.
+        r.req_type = match spec_id.split('-').next() {
+            Some("EPIC") => RequirementType::Epic,
+            Some("STORY") => RequirementType::Story,
+            Some("SPIKE") => RequirementType::Spike,
+            Some("BUG") => RequirementType::Bug,
+            _ => RequirementType::Task,
+        };
         r
     }
 
@@ -753,5 +973,108 @@ mod tests {
             vec![b2id],
             "both edge forms ⇒ B2 once, not twice"
         );
+    }
+
+    // TASK-1074: the EPIC-54 discrepancy. A story is a child of the epic AND has
+    // a SAME-RANK second parent (another story) that lives OUTSIDE the epic. The
+    // old direction-agnostic tree walk climbed the reciprocal edge up to that
+    // second parent and counted it as a subtree member (44 vs 43); the shared
+    // rank-oriented downward closure excludes it. trace:TASK-1074 | ai:claude
+    #[test]
+    fn subtree_ids_excludes_same_rank_second_parent() {
+        let mut epic = make_req("EPIC-54", RequirementStatus::InProgress);
+        let mut child = make_req("STORY-699", RequirementStatus::Completed);
+        let mut second_parent = make_req("STORY-698", RequirementStatus::Approved);
+        // epic --Parent--> child ; child --Child--> epic (convention B, both ends)
+        link(&mut epic, RelationshipType::Parent, child.id);
+        link(&mut child, RelationshipType::Child, epic.id);
+        // second_parent --Parent--> child ; child --Child--> second_parent
+        // (same STORY↔STORY shape as 698↔699 in the real store).
+        link(&mut second_parent, RelationshipType::Parent, child.id);
+        link(&mut child, RelationshipType::Child, second_parent.id);
+        let (eid, cid, spid) = (epic.id, child.id, second_parent.id);
+        let store = store_with(vec![epic, child, second_parent]);
+
+        let nodes: HashSet<Uuid> = subtree_ids(&store, eid, None).nodes.into_iter().collect();
+        assert!(nodes.contains(&cid), "the real child is in the subtree");
+        assert!(
+            !nodes.contains(&spid),
+            "a descendant's same-rank second parent is NOT a subtree member"
+        );
+        assert_eq!(
+            nodes.len(),
+            1,
+            "exactly the one child, not the leaked parent"
+        );
+    }
+
+    // TASK-1074: the shared rule is robust to BOTH storage orientations. The
+    // "convention A" store records `epic --Child--> story` (+ `story --Parent-->
+    // epic`); type rank (Epic < Story) still orients the epic as the parent, so
+    // the downward closure reaches the children that the old strict cache CTE
+    // missed entirely. trace:TASK-1074 | ai:claude
+    #[test]
+    fn subtree_ids_handles_inverted_convention_via_type_rank() {
+        let mut epic = make_req("EPIC-39", RequirementStatus::InProgress);
+        let mut s1 = make_req("STORY-572", RequirementStatus::Approved);
+        let mut s2 = make_req("STORY-573", RequirementStatus::Approved);
+        // Inverted (convention-A) orientation on both endpoints.
+        link(&mut epic, RelationshipType::Child, s1.id);
+        link(&mut s1, RelationshipType::Parent, epic.id);
+        link(&mut epic, RelationshipType::Child, s2.id);
+        link(&mut s2, RelationshipType::Parent, epic.id);
+        let (eid, s1id, s2id) = (epic.id, s1.id, s2.id);
+        let store = store_with(vec![epic, s1, s2]);
+
+        let nodes: HashSet<Uuid> = subtree_ids(&store, eid, None).nodes.into_iter().collect();
+        assert_eq!(nodes, HashSet::from([s1id, s2id]), "both children reached");
+    }
+
+    // TASK-1074: grandchildren nest transitively (EPIC → STORY → TASK).
+    #[test]
+    fn subtree_ids_is_transitive() {
+        let mut epic = make_req("EPIC-1", RequirementStatus::InProgress);
+        let mut story = make_req("STORY-1", RequirementStatus::Approved);
+        let mut task = make_req("TASK-1", RequirementStatus::Approved);
+        link(&mut epic, RelationshipType::Parent, story.id);
+        link(&mut story, RelationshipType::Parent, task.id);
+        let (eid, sid, tid) = (epic.id, story.id, task.id);
+        let store = store_with(vec![epic, story, task]);
+
+        let nodes: HashSet<Uuid> = subtree_ids(&store, eid, None).nodes.into_iter().collect();
+        assert_eq!(nodes, HashSet::from([sid, tid]));
+    }
+
+    // TASK-1074: `hierarchy_tree` (the `aida graph --tree` membership) rooted at
+    // an EPIC equals the plain `subtree_ids` closure — this is what makes
+    // `aida graph <epic> --tree` and `aida focus <epic>` agree — while a query on
+    // a child still climbs to the epic and back down (BUG-534 preserved).
+    #[test]
+    fn hierarchy_tree_epic_query_equals_subtree_ids() {
+        let mut epic = make_req("EPIC-1", RequirementStatus::InProgress);
+        let mut s1 = make_req("STORY-1", RequirementStatus::Approved);
+        let mut s2 = make_req("STORY-2", RequirementStatus::Approved);
+        for s in [&mut s1, &mut s2] {
+            link(&mut epic, RelationshipType::Parent, s.id);
+            link(s, RelationshipType::Child, epic.id);
+        }
+        let (eid, s1id, s2id) = (epic.id, s1.id, s2.id);
+        let store = store_with(vec![epic, s1, s2]);
+
+        let tree: HashSet<Uuid> = hierarchy_tree(&store, eid, None)
+            .nodes
+            .into_iter()
+            .collect();
+        let subtree: HashSet<Uuid> = subtree_ids(&store, eid, None).nodes.into_iter().collect();
+        assert_eq!(tree, subtree, "epic-rooted tree == focus subtree");
+        assert_eq!(tree, HashSet::from([s1id, s2id]));
+
+        // Querying a child climbs to the epic and includes its sibling.
+        let from_child: HashSet<Uuid> = hierarchy_tree(&store, s1id, None)
+            .nodes
+            .into_iter()
+            .collect();
+        assert!(from_child.contains(&eid), "climbs up to the epic");
+        assert!(from_child.contains(&s2id), "and back down to the sibling");
     }
 }
