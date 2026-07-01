@@ -29644,5 +29644,24 @@ operations:
     req_type: Story
     status: Draft
     priority: Low
-clock: 2843
+- id: 019f1c03-c776-7110-9ea7-7ce9f95d856d
+  target_id: 019f1c03-ba8d-7563-97bc-847dfbbfad88
+  author: aida
+  node_id: '1'
+  lamport: 2844
+  timestamp: 2026-07-01T04:50:37.558318679Z
+  kind: !Create
+    title: zen suitability gate must hold needs-design specs, not just lint-under-specified ones
+    description: |-
+      The zen suitability gate (TASK-1037) holds a spec when aida lint flags missing/vague acceptance. But a spec can be lint-CLEAN yet carry a needs-design tag — design decisions unresolved. Observed 2026-06-30: STORY-700 and STORY-702 are both lint-clean AND tagged needs-design AND zen-ready; the gate would fire them headless, letting a headless implementer invent the UX unsupervised. The gate checks acceptance-criteria presence but not the needs-design signal. Follow-on to STORY-744 (which surfaces gate holds in the TUI).
+
+      ## Acceptance
+      - WHEN the zen suitability gate evaluates a spec that carries a needs-design tag, THE gate SHALL hold the spec rather than driving it headless.
+      - WHEN the gate holds a spec for needs-design, THE hold reason SHALL name the needs-design tag and SHALL direct the operator to resolve the design (supervised drive or design pass) before driving.
+      - THE needs-design hold SHALL be overridable by the same --force path that overrides other soft holds.
+      - A test SHALL assert a lint-clean spec tagged needs-design is held by the gate.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2844
 node_id: '1'
