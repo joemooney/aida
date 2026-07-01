@@ -53040,6 +53040,86 @@ fn behind_origin_warning(behind: u32, branch: &str) -> Option<String> {
     ))
 }
 
+/// Default warn threshold (commits behind `origin/main`) at or above which
+/// the statusline surfaces the `base behind by N` staleness indicator for an
+/// active lease. Kept a touch loud so a one-commit drift doesn't nag every
+/// prompt; the queue-list surface uses a lower (any-non-zero) floor.
+// trace:TASK-101 | ai:claude
+const BASE_BEHIND_STATUSLINE_THRESHOLD: u32 = 5;
+
+/// Pure formatting for the "base behind by N" staleness indicator.
+/// Given how many commits an active lease's branch is BEHIND `origin/main`
+/// (from [`commits_behind_origin_main`]) and a noise-floor `threshold`,
+/// produce the compact `base behind by N` label — or `None` when the base is
+/// current (`behind == 0`) or the drift is below the caller's threshold. The
+/// statusline passes a higher warn threshold; `aida queue list` passes `1` so
+/// any non-zero drift surfaces. Side-effect-free so the behind-count → label
+/// mapping is unit-testable without git/CWD.
+// trace:TASK-101 | ai:claude
+fn base_behind_indicator(behind: u32, threshold: u32) -> Option<String> {
+    if behind == 0 || behind < threshold {
+        return None;
+    }
+    Some(format!("base behind by {}", behind))
+}
+
+#[cfg(test)]
+mod task_101_base_behind_tests {
+    use super::*;
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn zero_behind_is_silent() {
+        assert_eq!(base_behind_indicator(0, 1), None);
+        assert_eq!(base_behind_indicator(0, 5), None);
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn below_threshold_is_silent() {
+        // Statusline default (5): a 1-4 commit drift stays quiet.
+        assert_eq!(base_behind_indicator(1, 5), None);
+        assert_eq!(base_behind_indicator(4, 5), None);
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn at_or_above_threshold_surfaces_count() {
+        assert_eq!(
+            base_behind_indicator(5, 5).as_deref(),
+            Some("base behind by 5")
+        );
+        assert_eq!(
+            base_behind_indicator(12, 5).as_deref(),
+            Some("base behind by 12")
+        );
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn queue_list_floor_surfaces_any_nonzero() {
+        // `aida queue list` uses threshold 1: any non-zero drift shows.
+        assert_eq!(
+            base_behind_indicator(1, 1).as_deref(),
+            Some("base behind by 1")
+        );
+        assert_eq!(
+            base_behind_indicator(3, 1).as_deref(),
+            Some("base behind by 3")
+        );
+        assert_eq!(base_behind_indicator(0, 1), None);
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn embeds_the_exact_count() {
+        for n in [5u32, 6, 20, 99] {
+            let label = base_behind_indicator(n, 5).expect("surfaces at/above threshold");
+            assert!(label.contains(&n.to_string()), "{label} should contain {n}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod task_99_behind_origin_tests {
     use super::*;
@@ -82662,6 +82742,59 @@ fn statusline_role_mismatch_enabled(project_dir: &std::path::Path) -> bool {
     true
 }
 
+/// Read `[statusline] base_freshness_check` (on/off) and
+/// `threshold_warn` (commits behind `origin/main` at/above which the
+/// statusline surfaces the `base behind by N` indicator) from
+/// `.aida/config.toml`. Defaults to enabled + [`BASE_BEHIND_STATUSLINE_THRESHOLD`]
+/// when the keys, section, or file are absent — so the feature is on by
+/// default and a project can dial it down or off without a code change.
+/// Pure over the file contents; best-effort (any parse miss keeps the
+/// default).
+// trace:TASK-101 | ai:claude
+fn statusline_base_freshness_config(project_dir: &std::path::Path) -> (bool, u32) {
+    let default = (true, BASE_BEHIND_STATUSLINE_THRESHOLD);
+    let Ok(content) = std::fs::read_to_string(project_dir.join(".aida").join("config.toml")) else {
+        return default;
+    };
+    let (mut enabled, mut threshold) = default;
+    let mut in_section = false;
+    for raw in content.lines() {
+        let line = strip_toml_inline_comment(raw).trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_section = rest.trim_end_matches(']').trim() == "statusline";
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("base_freshness_check") {
+            if let Some(val) = rest.split('=').nth(1) {
+                let v = val
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_ascii_lowercase();
+                enabled = !matches!(v.as_str(), "false" | "0" | "no" | "off");
+            }
+        } else if let Some(rest) = line.strip_prefix("threshold_warn") {
+            if let Some(val) = rest.split('=').nth(1) {
+                if let Ok(n) = val
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .parse::<u32>()
+                {
+                    threshold = n.max(1);
+                }
+            }
+        }
+    }
+    (enabled, threshold)
+}
+
 /// TASK-244: render the statusline `role:` segment, surfacing a mismatch
 /// between the shell-persistent role (`$AIDA_SESSION_ROLE`, set by `aida
 /// role enter`) and the active AIDA session's role (the lease). When
@@ -83605,6 +83738,31 @@ fn handle_statusline_command(color: &str, title: bool) -> Result<()> {
                 _ => format!("cache:{}", label).red().to_string(),
             };
             parts.push(colored);
+        }
+    }
+    // TASK-101: base-freshness — surface when the active lease's branch has
+    // fallen behind `origin/main` by N >= threshold commits, so an in-flight
+    // session sees it's working on a stale base *during* the session, not just
+    // at the queue-work/queue-done gates. Threshold-gated (default 5) + on/off
+    // via `[statusline] base_freshness_check`. Cheap + best-effort: only
+    // sessions with a live lease on a non-default branch pay the local
+    // `git rev-list --count` (NO fetch — reads whatever `origin/main` is locally
+    // known), and any git failure stays silent. Loud (red) past 4× threshold.
+    // trace:TASK-101 | ai:claude
+    if let Some(l) = lease.as_ref() {
+        let (bf_enabled, bf_threshold) = statusline_base_freshness_config(&project_root);
+        if bf_enabled && !l.branch.is_empty() && l.branch != "main" {
+            if let Some(behind) = commits_behind_origin_main(&project_root, &l.branch) {
+                if let Some(text) = base_behind_indicator(behind, bf_threshold) {
+                    let loud = behind >= bf_threshold.saturating_mul(4);
+                    let seg = if loud {
+                        text.red().bold().to_string()
+                    } else {
+                        text.yellow().to_string()
+                    };
+                    parts.push(seg);
+                }
+            }
         }
     }
     // sess:<scope> segment — emitted when cwd resolves into an active
@@ -129418,6 +129576,59 @@ fn handle_queue_command(
                         be.req.title,
                         label_styled,
                     );
+                }
+            }
+
+            // TASK-101: base-freshness — flag any active session lease whose
+            // branch has fallen behind origin/main, so the operator sees when
+            // in-flight work is on a stale base *during* the session (not just
+            // at the queue-work/queue-done gates). Subtle by default; only live
+            // (non-stale) leases on a non-default branch are probed, and each
+            // row's `git rev-list --count` reads local refs — NO fetch here — so
+            // it's cheap + best-effort (a git miss just omits that row).
+            // trace:TASK-101 | ai:claude
+            if !*in_flight_only {
+                if let Some(root) = find_main_worktree_root()
+                    .ok()
+                    .or_else(|| find_project_root().ok())
+                {
+                    let now = chrono::Utc::now();
+                    let live = process_probe::probe_live_claude_sessions();
+                    let mut stale_base_rows: Vec<(String, String, String)> = Vec::new();
+                    for l in list_leases(&root) {
+                        if matches!(lease_state_for(&l, &live, now), LeaseState::Stale) {
+                            continue;
+                        }
+                        if l.branch.is_empty() || l.branch == "main" {
+                            continue;
+                        }
+                        let Some(behind) = commits_behind_origin_main(&root, &l.branch) else {
+                            continue;
+                        };
+                        // Threshold 1: the queue-list surface shows any non-zero
+                        // drift (the statusline uses the higher warn threshold).
+                        let Some(text) = base_behind_indicator(behind, 1) else {
+                            continue;
+                        };
+                        stale_base_rows.push((l.scope.clone(), l.branch.clone(), text));
+                    }
+                    if !stale_base_rows.is_empty() {
+                        println!();
+                        println!(
+                            "{} ({} lease{})",
+                            "Active leases on stale base".yellow().bold(),
+                            stale_base_rows.len(),
+                            if stale_base_rows.len() == 1 { "" } else { "s" }
+                        );
+                        for (scope, branch, text) in &stale_base_rows {
+                            println!(
+                                "  {}  {}  {}",
+                                truncate(scope, 20).bold(),
+                                truncate(branch, 24).dimmed(),
+                                text.yellow(),
+                            );
+                        }
+                    }
                 }
             }
 
