@@ -440,11 +440,3 @@
   added_at: 2026-07-01T16:11:35.462069394Z
   for_role: implementer
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 019f1e8d-f30b-7b00-96cc-5ff42d24f04a
-  position: 343000
-  added_by: joe
-  added_at: 2026-07-01T16:40:53.873506314Z
-  for_role: implementer
-  for_scope: STORY-698
-  added_by_machine: imac
