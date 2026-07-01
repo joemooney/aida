@@ -5238,6 +5238,7 @@ fn handle_findings_command(
                 parent_id: None,
                 replies: Vec::new(),
                 reactions: Vec::new(),
+                session_id: resolve_current_session_id(), // trace:TASK-330
             });
             req.status = RequirementStatus::Rejected;
             req.modified_at = now;
@@ -5310,6 +5311,7 @@ fn handle_findings_command(
                         parent_id: None,
                         replies: Vec::new(),
                         reactions: Vec::new(),
+                        session_id: resolve_current_session_id(), // trace:TASK-330
                     });
                     if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
                         req.comments.push(Comment {
@@ -5324,6 +5326,7 @@ fn handle_findings_command(
                             parent_id: None,
                             replies: Vec::new(),
                             reactions: Vec::new(),
+                            session_id: resolve_current_session_id(), // trace:TASK-330
                         });
                     }
                     req.status = RequirementStatus::Completed;
@@ -5374,6 +5377,7 @@ fn handle_findings_command(
                     parent_id: None,
                     replies: Vec::new(),
                     reactions: Vec::new(),
+                    session_id: resolve_current_session_id(), // trace:TASK-330
                 });
             }
             req.status = RequirementStatus::Approved;
@@ -6279,6 +6283,7 @@ fn push_why_open(req: &mut Requirement, label: &str, consequence: &str) {
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
 }
 
@@ -6995,6 +7000,7 @@ fn handle_research_command(
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
 
     // Escalate the decision (if any) — never auto-apply it. A pending decision
@@ -8510,6 +8516,7 @@ fn handle_findings_recur(
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
     req.modified_at = now;
     backend.update_requirement(&req)?;
@@ -8688,6 +8695,7 @@ fn handle_import_plan_command(
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
 
     if request_review {
@@ -19391,6 +19399,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 parent_id: None,
                 replies: Vec::new(),
                 reactions: Vec::new(),
+                // trace:TASK-330 | ai:claude — stamp the producing session
+                session_id: resolve_current_session_id(),
             };
 
             req.comments.push(comment);
@@ -89200,6 +89210,7 @@ fn plan_scan(
             parent_id: None,
             replies: Vec::new(),
             reactions: Vec::new(),
+            session_id: resolve_current_session_id(), // trace:TASK-330
         });
         req.modified_at = now;
         backend.update_requirement(&req)?;
@@ -119261,11 +119272,13 @@ fn add_comment_interactive(
 
     let content = inquire::Editor::new("Comment content:").prompt()?;
 
+    // trace:TASK-330 | ai:claude — stamp the session that produced this comment
+    let session_id = resolve_current_session_id();
     let comment = if let Some(parent_str) = parent_id {
         let parent_uuid = Uuid::parse_str(parent_str).context("Invalid parent comment ID")?;
-        Comment::new_reply(author, content, parent_uuid)
+        Comment::new_reply(author, content, parent_uuid).with_session_id(session_id)
     } else {
-        Comment::new(author, content)
+        Comment::new(author, content).with_session_id(session_id)
     };
 
     if let Some(parent_str) = parent_id {
@@ -119278,6 +119291,25 @@ fn add_comment_interactive(
     storage.save(&store)?;
     println!("{}", "Comment added successfully".green());
     Ok(())
+}
+
+/// Best-effort resolution of the Claude/AIDA session id for the shell that
+/// is adding a comment. Reads the session id AIDA exports on the launch path
+/// (`AIDA_SESSION_ID`), falling back to Claude Code's own `CLAUDE_CODE_SESSION_ID`.
+/// Returns `None` (never errors) when neither is set — comments added outside
+/// a tracked session simply carry no session id. Stamping it lets tooling
+/// correlate a comment back to the session that produced it.
+// trace:TASK-330 | ai:claude
+fn resolve_current_session_id() -> Option<String> {
+    for var in ["AIDA_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
+        if let Ok(val) = std::env::var(var) {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn add_comment_cli(
@@ -119300,11 +119332,13 @@ fn add_comment_cli(
         .map(|a| a.to_string())
         .unwrap_or_else(get_default_author);
 
+    // trace:TASK-330 | ai:claude — stamp the session that produced this comment
+    let session_id = resolve_current_session_id();
     let comment = if let Some(parent_str) = parent_id {
         let parent_uuid = Uuid::parse_str(parent_str).context("Invalid parent comment ID")?;
-        Comment::new_reply(author, content.to_string(), parent_uuid)
+        Comment::new_reply(author, content.to_string(), parent_uuid).with_session_id(session_id)
     } else {
-        Comment::new(author, content.to_string())
+        Comment::new(author, content.to_string()).with_session_id(session_id)
     };
 
     if let Some(parent_str) = parent_id {
@@ -119560,6 +119594,11 @@ fn print_comment(comment: &Comment, indent: usize) {
             .dimmed(),
         edited_marker,
     );
+    // trace:TASK-330 | ai:claude — surface the producing session so a reader
+    // can correlate the comment back to a session (`aida session list`).
+    if let Some(short) = comment.short_session_id() {
+        println!("{}  {} {}", indent_str, "Session:".dimmed(), short.dimmed());
+    }
     println!("{}  {}", indent_str, comment.content);
 
     if !comment.replies.is_empty() {
