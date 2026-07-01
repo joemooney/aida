@@ -1,0 +1,18 @@
+id: 019f1b3a-76d6-7662-b2f9-76cf22da2d4b
+spec_id: BUG-675
+agreed_id: BUG-675
+title: 'BUG-89 identity unification: queue_depth''s user-resolution path must match the queue list command path so it''s always trustworthy (not just suppressed on mismatch — BUG-670 remainder)'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T01:10:44.182769111Z
+modified_at: 2026-07-01T01:10:44.182769111Z
+req_type: Bug
+tags:
+- bug-89
+- careful
+- from-audit
+- identity
+- queue

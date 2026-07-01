@@ -29139,5 +29139,17 @@ operations:
   timestamp: 2026-07-01T01:10:35.626732586Z
   kind: !SetStatus
     status: Completed
-clock: 2808
+- id: 019f1b3a-8e28-7ac2-9d71-957a3ab6ea7f
+  target_id: 019f1b3a-76d6-7662-b2f9-76cf22da2d4b
+  author: aida
+  node_id: '1'
+  lamport: 2809
+  timestamp: 2026-07-01T01:10:50.152023426Z
+  kind: !Create
+    title: 'BUG-89 identity unification: queue_depth''s user-resolution path must match the queue list command path so it''s always trustworthy (not just suppressed on mismatch — BUG-670 remainder)'
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2809
 node_id: '1'
