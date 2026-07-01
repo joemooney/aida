@@ -17,10 +17,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:35:46.390020492Z
-modified_at: 2026-07-01T11:35:46.390020492Z
+modified_at: 2026-07-01T12:09:35.516112471Z
 req_type: Bug
 tags:
 - blocks:release-xplat-gate
 - needs:operator
 - platform:macos
 - platform:windows
+comments:
+- id: 019f1d95-aa1c-7410-859a-8f8d2ab59fff
+  author: joe
+  content: |-
+    Static-analysis candidate root cause (no CI cycle, Linux-only inspection) to speed the investigation:
+
+    WINDOWS (agent_error_channel.rs) — likely TEST-HARNESS non-portability, not a product bug. The helper runs `aida show NOSUCH-1` with HOME=std::env::temp_dir() and does NOT set current_dir. Two Unix assumptions break on Windows: (1) the `dirs` crate resolves home from %USERPROFILE% on Windows and IGNORES $HOME, so the HOME override is a silent no-op and the test is not hermetic there; (2) the failing assertion is the exit-code check (expected Some(1)) with empty stdout+stderr, i.e. `aida show NOSUCH-1` produced no output and a non-1 exit on Windows — consistent with store/CWD resolution differing, not with a broken error channel. Linux baseline confirmed: same invocation exits 1 with a not-found error. Fix direction: make the e2e helpers hermetic cross-platform (set current_dir to an isolated tempdir; on Windows also override USERPROFILE/APPDATA, not just HOME) — or gate to Linux.
+
+    MACOS (agent_write_confirm/journey/newcomer/queue_work_dry_run) — separate; `aida init` exits 1 with EMPTY stdout+stderr in the isolated-tempdir harness. Same HOME-isolation caveat does NOT apply on macOS (dirs uses $HOME there), so this one still needs macOS RUNTIME debugging to see why init exits silently. Could be the same store-attach/CWD assumption or a genuine macOS init path — determine before gating.
+
+    Common thread: these new binary-driving e2e suites assume a Unix env (HOME isolation, CWD, store attachment). The unit/lib tests pass cross-platform (3500+ green on both). Recommend the operator decide make-portable vs gate-to-Linux with this bug kept open on the macOS runtime question.
+  created_at: 2026-07-01T12:09:35.516112471Z
+  modified_at: 2026-07-01T12:09:35.516112471Z
