@@ -782,11 +782,14 @@ fn render_dormant_leases(
     for item in items.iter().take(cap) {
         let role = item.role.as_deref().unwrap_or("-");
         // BUG-376: annotate the "lingering implementer with done queue"
-        // subcategory inline. Informational tag (ℹ), not a warning —
+        // subcategory inline. Informational tag (info glyph), not a warning —
         // the work shipped; the only issue is that the agent did not
         // exit. Recovery verb is the same as a plain dormant lease.
         let lingering_tag = if item.spec_done {
-            format!(" {} lingering after ship", "ℹ".cyan())
+            format!(
+                " {} lingering after ship",
+                glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            )
         } else {
             String::new()
         };
@@ -810,7 +813,7 @@ fn render_dormant_leases(
         writeln!(
             w,
             "    {} `lingering after ship`: BUG-376 — implementer shipped + queue-done correctly but did not exit; safe to `aida session end`",
-            "ℹ".cyan(),
+            glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
         )?;
     }
     writeln!(w)?;

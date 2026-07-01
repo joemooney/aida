@@ -146,7 +146,7 @@ pub fn persist_setting(project_root: &Path, value: bool) -> anyhow::Result<Optio
 }
 
 /// Emit a hint block to stderr. No-op when disabled. The first line gets
-/// the dimmed `ⓘ` prefix; subsequent lines are continuation indents.
+/// the dimmed info-glyph prefix; subsequent lines are continuation indents.
 pub fn emit(project_root: Option<&Path>, lines: &[String]) {
     if !enabled(project_root) {
         return;
@@ -154,7 +154,7 @@ pub fn emit(project_root: Option<&Path>, lines: &[String]) {
     if lines.is_empty() {
         return;
     }
-    let prefix = "ⓘ".dimmed();
+    let prefix = crate::glyph(crate::glyphs::Glyph::Info).dimmed();
     let label = "Workflow hint:".dimmed();
     eprintln!("\n{} {} {}", prefix, label, lines[0].dimmed());
     for line in &lines[1..] {
@@ -578,14 +578,18 @@ pub fn after_session_end_with_pr(
     let lines = session_end_pr_hint_lines(kind, pr_number, covered_specs, tty);
     if !tty {
         // Single-line summary routes through `emit` for the standard
-        // `ⓘ Workflow hint:` prefix.
+        // info-glyph `Workflow hint:` prefix.
         emit(project_root, &lines);
         return;
     }
     // TTY: numbered block under its own `Next steps for PR #N:` header
     // (no "Workflow hint:" label — the numbered list is self-describing).
     eprintln!();
-    eprintln!("{} {}", "ⓘ".dimmed(), lines[0].dimmed());
+    eprintln!(
+        "{} {}",
+        crate::glyph(crate::glyphs::Glyph::Info).dimmed(),
+        lines[0].dimmed()
+    );
     for line in &lines[1..] {
         eprintln!("{}", line.dimmed());
     }

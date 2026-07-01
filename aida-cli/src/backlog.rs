@@ -908,7 +908,7 @@ fn handle_groom(
             println!(
                 "  {} queued for the drainer (user:{}), not this session's queue (AIDA_USER={}). \
                  Drain from that identity.",
-                "ℹ".cyan(),
+                glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 user_id,
                 aida_user
             );

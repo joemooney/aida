@@ -138,7 +138,13 @@ pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
     ) {
         Ok(crate::coordination::LockAcquireOutcome::Acquired) => true,
         Ok(crate::coordination::LockAcquireOutcome::Reclaimed(reason)) => {
-            eprintln!("  ℹ reclaiming a stale cross-clone solo claim ({reason})");
+            eprintln!(
+                "  {} reclaiming a stale cross-clone solo claim ({reason})",
+                crate::glyphs::get(
+                    crate::glyphs::Glyph::InfoAlt,
+                    crate::find_project_root().ok().as_deref(),
+                )
+            );
             true
         }
         Ok(crate::coordination::LockAcquireOutcome::Unavailable(reason)) => {
@@ -174,8 +180,13 @@ pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
             // re-run after a Ctrl-C isn't silently surprising. trace:STORY-627
             if let Some(stale) = &existing {
                 eprintln!(
-                    "  ℹ reclaiming a stale solo lock (pid {}, started {} — not running)",
-                    stale.pid, stale.started_at_utc
+                    "  {} reclaiming a stale solo lock (pid {}, started {} — not running)",
+                    crate::glyphs::get(
+                        crate::glyphs::Glyph::InfoAlt,
+                        crate::find_project_root().ok().as_deref(),
+                    ),
+                    stale.pid,
+                    stale.started_at_utc
                 );
             }
             // Best-effort parent-dir create — `.aida/` normally already exists.
