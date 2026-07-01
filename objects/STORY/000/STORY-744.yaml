@@ -20,12 +20,12 @@ description: |-
   - WHEN the suitability gate passes, THE TUI SHALL launch the drive as the current STORY-728 behavior does.
 
   SCOPE: the interactive TUI drive verb only. The full chained auto-remedy loop (advisor remedies inline then auto re-runs) is the vision follow-up. The missing --solo on spawn_drive is a separate related task.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:03:02.631218645Z
-modified_at: 2026-07-01T04:19:28.595684965Z
+modified_at: 2026-07-01T04:43:02.040517393Z
 req_type: Story
 tags:
 - aida:tui
@@ -43,3 +43,7 @@ relationships:
   target_id: 019f1bd9-592d-7eb0-a806-e3aded23595f
   created_at: 2026-07-01T04:04:29.480036453Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-01T04:43:02.040517393Z
+  implemented_by: joe
