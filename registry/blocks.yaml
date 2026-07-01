@@ -343,3 +343,11 @@ blocks:
   range_end: 555
   next: 456
   allocated_at: 2026-07-01T18:48:35.729515171Z
+- node_id: '6'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: BUG
+  range_start: 917
+  range_end: 1016
+  next: 917
+  allocated_at: 2026-07-01T18:48:38.705875797Z
