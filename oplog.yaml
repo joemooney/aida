@@ -30454,5 +30454,17 @@ operations:
   timestamp: 2026-07-01T16:28:01.496055332Z
   kind: !SetStatus
     status: Approved
-clock: 2903
+- id: 019f1e8d-3675-70b1-8416-2f994f6aec2c
+  target_id: 019f1e8d-2b50-7ab3-99ea-557f71b06712
+  author: aida
+  node_id: '1'
+  lamport: 2904
+  timestamp: 2026-07-01T16:39:58.837919790Z
+  kind: !Create
+    title: STORY-698 throwaway capture test
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2904
 node_id: '1'
