@@ -8,8 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T16:39:55.984085957Z
-modified_at: 2026-07-01T16:41:07.228952981Z
+modified_at: 2026-07-01T16:41:09.956821813Z
 req_type: Task
+archived: true
+archived_at: 2026-07-01T16:41:09.956821813Z
 implementation_info:
   implemented: true
   test_coverage_notes: |-
