@@ -3,24 +3,27 @@ spec_id: STORY-698
 agreed_id: STORY-698
 title: 'Human test plan per spec: capture builder''s verification steps + aggregate into PR bodies'
 description: |-
-  Specs should carry a HUMAN TEST PLAN — "do this → expect that" steps a person can follow to verify the work WITHOUT reading code — distinct from acceptance criteria ("what must be true") and `aida goal` ("machine-checkable condition"). Surfaced 2026-06-26 reviewing the TUI redesign PR: a human reviewer of autonomous work needs a verification script, not just a contract.
+  Capture the verification steps the builder ACTUALLY ran when a spec is marked done, and surface them in the PR body — an implementation audit trail. Design LOCKED 2026-07-01 (operator): reuse the existing implementation_info.test_coverage_notes field, mirror the shipped capture_interface_changes prompt (STORY-542). NO new model field, NO cache-schema migration. The planned ## Test Plan section is a separate surface already rendered by STORY-699.
 
-  KEY INSIGHT: implementers ALREADY produce this — every agent report ends with "launch X, press Y, expect Z." The PR #1145 per-spec test plan was hand-assembled from exactly that. The substrate just doesn't capture it. So the leverage is CAPTURE, not authoring.
+  ## Acceptance
+  - WHEN a spec is marked done via queue done at an interactive TTY, THE command SHALL offer to record the verification steps the builder ran, mirroring the capture_interface_changes prompt.
+  - THE captured steps SHALL be stored in implementation_info.test_coverage_notes; no new model field and no cache-schema migration SHALL be introduced.
+  - THE queue done command SHALL accept a repeatable --test-plan STEP flag and a --no-test-plan flag; WHEN either is given THE interactive prompt SHALL be skipped.
+  - WHEN queue done runs non-interactively with no flag, THE capture SHALL leave test_coverage_notes untouched and print no prompt.
+  - THE capture SHALL be best-effort: an error during capture SHALL NOT fail queue done.
+  - WHEN test_coverage_notes is already set and no flag overrides it, THE capture SHALL leave the existing value unchanged.
+  - WHEN a PR body is generated for a spec whose test_coverage_notes is set, THE body SHALL include those verification steps.
+  - THE capture SHALL be disableable via AIDA_AUTO_TEST_PLAN_CAPTURE=false, mirroring AIDA_AUTO_FOLLOWUPS.
 
-  SHAPE:
-  1. A `## Test Plan` section / `verification` field on specs (concise do→expect steps; human-runnable; notes which steps MUTATE state).
-  2. Populated by the IMPLEMENTER at done-time (it knows how to exercise what it built), or the author at file-time; could derive a skeleton from acceptance criteria.
-  3. AGGREGATED INTO PR BODIES automatically — generate the per-spec test plan section from the specs a PR closes (turn the hand-written #1145 walkthrough into one command). Pairs with the (SPEC-ID)-trailer→auto-complete machinery.
-
-  WHY IT MATTERS: making agent-built work human-verifiable is core agent-collaboration value (the probe thesis: a human must be able to check what agents built). Complements aida goal (machine) + acceptance (contract) with the missing human-verification layer.
-
-  ACCEPTANCE (when built): a spec can carry a test plan; an implementer/done flow can capture it; a PR-body generator aggregates the test plans of closed specs.
+  ## Out of scope
+  - The planned ## Test Plan section rendering (STORY-699, already shipped).
+  - A separate test_plan model field (rejected: duplicate source of truth).
 status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T21:46:01.178361830Z
-modified_at: 2026-07-01T16:16:38.719239214Z
+modified_at: 2026-07-01T16:27:58.435833234Z
 req_type: Story
 tags:
 - human-verification

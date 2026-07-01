@@ -30423,5 +30423,28 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 2901
+- id: 019f1e82-3936-7960-9f98-0183c43cab11
+  target_id: 019f05e5-9a5a-7992-b1ca-ec795a4b78f7
+  author: aida
+  node_id: '1'
+  lamport: 2902
+  timestamp: 2026-07-01T16:27:58.646151086Z
+  kind: !SetDescription
+    description: |-
+      Capture the verification steps the builder ACTUALLY ran when a spec is marked done, and surface them in the PR body — an implementation audit trail. Design LOCKED 2026-07-01 (operator): reuse the existing implementation_info.test_coverage_notes field, mirror the shipped capture_interface_changes prompt (STORY-542). NO new model field, NO cache-schema migration. The planned ## Test Plan section is a separate surface already rendered by STORY-699.
+
+      ## Acceptance
+      - WHEN a spec is marked done via queue done at an interactive TTY, THE command SHALL offer to record the verification steps the builder ran, mirroring the capture_interface_changes prompt.
+      - THE captured steps SHALL be stored in implementation_info.test_coverage_notes; no new model field and no cache-schema migration SHALL be introduced.
+      - THE queue done command SHALL accept a repeatable --test-plan STEP flag and a --no-test-plan flag; WHEN either is given THE interactive prompt SHALL be skipped.
+      - WHEN queue done runs non-interactively with no flag, THE capture SHALL leave test_coverage_notes untouched and print no prompt.
+      - THE capture SHALL be best-effort: an error during capture SHALL NOT fail queue done.
+      - WHEN test_coverage_notes is already set and no flag overrides it, THE capture SHALL leave the existing value unchanged.
+      - WHEN a PR body is generated for a spec whose test_coverage_notes is set, THE body SHALL include those verification steps.
+      - THE capture SHALL be disableable via AIDA_AUTO_TEST_PLAN_CAPTURE=false, mirroring AIDA_AUTO_FOLLOWUPS.
+
+      ## Out of scope
+      - The planned ## Test Plan section rendering (STORY-699, already shipped).
+      - A separate test_plan model field (rejected: duplicate source of truth).
+clock: 2902
 node_id: '1'
