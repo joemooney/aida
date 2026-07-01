@@ -3,12 +3,12 @@ spec_id: BUG-674
 agreed_id: BUG-674
 title: 'The punt ledger never closes: no CLI resolve/dismiss verb, resolving the spec doesn''t clear the punt, and session-end warnings bury genuine punts'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T00:47:43.319006433Z
-modified_at: 2026-07-01T00:47:43.319006433Z
+modified_at: 2026-07-01T01:33:43.384729269Z
 req_type: Bug
 tags:
 - cli-mcp-parity
