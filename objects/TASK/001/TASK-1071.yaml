@@ -3,12 +3,12 @@ spec_id: TASK-1071
 agreed_id: TASK-1071
 title: 'Recurring glyph-registry gaps: info/notice glyphs (ⓘ ℹ ⦿ 📨) used raw won''t honor AIDA_GLYPHS=ascii — add them to the registry or have glyph-lint flag new raw glyphs'
 description: ''
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T01:31:13.963087972Z
-modified_at: 2026-07-01T01:31:13.963087972Z
+modified_at: 2026-07-01T05:47:40.273371148Z
 req_type: Task
 tags:
 - ascii
