@@ -22,10 +22,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:06.508349535Z
-modified_at: 2026-06-30T18:18:44.413550388Z
+modified_at: 2026-07-01T06:48:31.351555190Z
 req_type: Story
 tags:
-- needs-design
 - zen-ready
 relationships:
 - rel_type: Child
