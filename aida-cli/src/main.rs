@@ -49794,16 +49794,46 @@ struct StrandedPrimary {
     lease_count: usize,
 }
 
+/// TASK-977: count leases that are LIVE (their backing process is alive) from a
+/// SINGLE already-probed `live_sessions` snapshot. The stranded-primary alarm
+/// gates on THIS count, not the raw lease-file count, so a dead-holder lease (a
+/// crashed agent / exited session whose stale record still sits under
+/// `.aida/sessions/`) never false-alarms, and a genuinely live one is never
+/// missed. Reuses [`lease_state_for`] — the exact classifier `aida ps` /
+/// `aida session leases` render under the ● live glyph (worktree/claude/age for
+/// session leases, `creator_pid` for review/claim advisory leases) — so the
+/// alarm can't drift from the process-liveness truth those views show. Mirrors
+/// [`live_lease_worktrees`]' bounded-probe contract: takes the shared snapshot
+/// by reference, so it performs zero live-session `/proc` walks itself.
+// trace:TASK-977 | ai:claude
+fn live_lease_count(
+    now: chrono::DateTime<chrono::Utc>,
+    leases: &[SessionLease],
+    live_sessions: &[process_probe::LiveSession],
+) -> usize {
+    leases
+        .iter()
+        .filter(|l| lease_state_for(l, live_sessions, now) == LeaseState::Live)
+        .count()
+}
+
 /// Resolve the PRIMARY checkout from `cwd`, then return `Some` iff it is stranded
-/// on a feature branch with in-flight leases. Network-free: `main_worktree_root_from`
-/// + `current_branch_at` + `local_default_branch_name` are local git probes and
-/// `list_leases` is a `.aida/sessions/` file scan — no `gh`, no full store load.
-// trace:TASK-965 | ai:claude
+/// on a feature branch with LIVE in-flight leases. Network-free:
+/// `main_worktree_root_from` + `current_branch_at` + `local_default_branch_name`
+/// are local git probes, `list_leases` is a `.aida/sessions/` file scan, and the
+/// TASK-977 liveness gate uses one memoized `probe_live_claude_sessions` walk —
+/// no `gh`, no full store load. Only leases whose backing process is alive count
+/// toward the alarm, so a dead-holder lease can't false-alarm the primary.
+// trace:TASK-965 trace:TASK-977 | ai:claude
 fn detect_stranded_primary(cwd: &std::path::Path) -> Option<StrandedPrimary> {
     let primary_root = main_worktree_root_from(cwd);
     let branch = current_branch_at(&primary_root)?;
     let default_branch = local_default_branch_name(&primary_root)?;
-    let lease_count = list_leases(&primary_root).len();
+    // TASK-977: gate on the process-liveness probe, not the raw lease-file count.
+    // ONE memoized live-session walk drives liveness for every lease.
+    let now = chrono::Utc::now();
+    let live_sessions = process_probe::probe_live_claude_sessions();
+    let lease_count = live_lease_count(now, &list_leases(&primary_root), &live_sessions);
     if primary_stranded_on_feature_branch(Some(&branch), Some(&default_branch), lease_count) {
         Some(StrandedPrimary {
             primary_root,
@@ -49938,6 +49968,116 @@ mod task965_worktree_tangle_tests {
             Some("main"),
             2
         ));
+    }
+}
+
+// TASK-977: the stranded-primary alarm must gate on process-liveness, not the
+// raw lease-file count. These tests lock the fix at the `live_lease_count` layer
+// (the pure fold `detect_stranded_primary` feeds into
+// `primary_stranded_on_feature_branch`): a dead-holder lease (crashed agent /
+// exited session, worktree gone or claim-holder pid dead) is NOT counted, so it
+// can't false-alarm; a genuinely live lease IS counted, so it isn't missed.
+#[cfg(test)]
+mod task977_stranded_liveness_tests {
+    use super::*;
+    use process_probe::LiveSession;
+
+    // A session lease pointing at `worktree`. Advisory-lease flags off, so it
+    // classifies through the worktree/claude/age matrix like a real fan-out lease.
+    fn session_lease_at(worktree: &std::path::Path) -> SessionLease {
+        SessionLease {
+            id: "abc123".into(),
+            scope: "TASK-1".into(),
+            slug: "task-1".into(),
+            owner: "tester".into(),
+            worktree_path: worktree.to_path_buf(),
+            branch: "task-1".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+            claim_verb: false,
+        }
+    }
+
+    // A no-worktree advisory claim lease (TASK-957) whose liveness is its
+    // `creator_pid` alone.
+    fn claim_lease_with_pid(pid: u32) -> SessionLease {
+        let mut l = session_lease_at(std::path::Path::new(""));
+        l.claim_verb = true;
+        l.creator_pid = Some(pid);
+        l
+    }
+
+    fn live_session_at(cwd: &std::path::Path) -> LiveSession {
+        LiveSession {
+            pid: 4242,
+            cwd: cwd.to_path_buf(),
+            jsonl: None,
+            stale_cwd: false,
+        }
+    }
+
+    // Two session leases, ONE live-session snapshot: the lease whose (existing)
+    // worktree is covered by a live session counts; the lease whose worktree no
+    // longer exists (dead holder) does NOT — so the raw lease-file count of 2
+    // reduces to a live count of 1. Pre-fix, both counted and the alarm fired.
+    #[test]
+    fn live_lease_count_excludes_dead_holder_lease() {
+        let now = chrono::Utc::now();
+        let live_dir = tempfile::tempdir().unwrap();
+        let live = session_lease_at(live_dir.path());
+        // A worktree path that does not exist → classify_lease_state → Stale.
+        let dead = session_lease_at(std::path::Path::new("/no/such/worktree/task-2"));
+        let leases = vec![live.clone(), dead];
+        let snapshot = vec![live_session_at(live_dir.path())];
+        assert_eq!(
+            live_lease_count(now, &leases, &snapshot),
+            1,
+            "only the process-alive lease counts toward the stranded alarm"
+        );
+    }
+
+    // A dormant session lease (worktree exists, but no live session covers it and
+    // it's younger than the 24h stale cutoff) is NOT live → not counted. Guards
+    // the "dead/quiet holder never false-alarms" invariant.
+    #[test]
+    fn live_lease_count_excludes_dormant_lease() {
+        let now = chrono::Utc::now();
+        let dir = tempfile::tempdir().unwrap();
+        let lease = session_lease_at(dir.path());
+        // Empty snapshot → no live claude covers the worktree → Dormant, not Live.
+        assert_eq!(live_lease_count(now, &[lease], &[]), 0);
+    }
+
+    // A claim lease whose creator process is dead → Stale → not counted, even
+    // with no worktree to probe. This is the exact false-alarm the spec targets:
+    // a lease-on-record whose holder is gone must not trip the alarm.
+    #[test]
+    fn live_lease_count_excludes_claim_lease_with_dead_creator_pid() {
+        let now = chrono::Utc::now();
+        // A pid that (essentially) never exists → pid_is_alive == false.
+        let dead = claim_lease_with_pid(4_000_000_000);
+        assert_eq!(live_lease_count(now, &[dead], &[]), 0);
+    }
+
+    // A claim lease whose creator process IS alive (this very test process) →
+    // Live → counted. Guards the "a live lease is never missed" half of the fix.
+    #[test]
+    fn live_lease_count_counts_claim_lease_with_live_creator_pid() {
+        let now = chrono::Utc::now();
+        let alive = claim_lease_with_pid(std::process::id());
+        assert_eq!(live_lease_count(now, &[alive], &[]), 1);
     }
 }
 
