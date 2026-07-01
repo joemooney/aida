@@ -3,12 +3,12 @@ spec_id: TASK-841
 agreed_id: TASK-841
 title: 'integrate: stacked-branch accumulation strategy'
 description: 'Follow-up of TASK-836. aida queue integrate has an IntegrateStrategy::Stacked variant that is accepted on the CLI but errors as unbuilt. Design question: when items build on each other (each branch on the previous), the integrator must rebase the whole stack as a unit and merge in order, and the completion semantics of an intermediate-stack spec are ambiguous (is it Completed when its own commit lands, or only when the whole stack lands?). Decide the completion model before implementing.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T08:20:48.067267409Z
-modified_at: 2026-07-01T06:11:33.348535038Z
+modified_at: 2026-07-01T15:51:04.286753095Z
 req_type: Task
 tags:
 - integrator
@@ -38,14 +38,25 @@ comments:
     FOLLOW-UP (filed separately): force-pushing a promoted childs PR branch with the stack-aware git rebase --onto origin/main <parent_sha> so the second+ layer becomes mergeable automatically (today it defers with a /aida-rebase pointer). The cascade (STORY-248) rebases the child worktree locally on aida pull but does not force-push the PR branch.
   created_at: 2026-07-01T05:52:22.099034372Z
   modified_at: 2026-07-01T05:52:22.099034372Z
+history:
+- id: 019f1e60-6efb-7320-a8e5-da6c638f8d6d
+  author: aida-auto-bump
+  timestamp: 2026-07-01T15:51:04.187470150Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f1e60-6f5e-74c0-9dad-818301c4c9e8
+  timestamp: 2026-07-01T15:51:04.286744720Z
+  agent: aida
+  commit_sha: cc8844bae41a9842b789459a45a8d7a647e06bd6
+  summary: Completed via merge cc8844ba
+  punted:
+  - 'punted: the reviewer session produced no verdict file — the review did not complete — the reviewer''s headless log (/home/joe/ai/aida/.aida/headless-logs/pr-1297-019f1c48-1723-75b0-befa-e9d256f55a39.jsonl) contains an AskUserQuestion call, which is forbidden under `--no-human` and likely caused the session to bail before writing the verdict file (BUG-280). The `/aida-review` skill must auto-resolve every confirmation under AIDA_HEADLESS=1 instead of calling AskUserQuestion.'
 implementation_info:
   implemented: true
   implemented_at: 2026-07-01T05:55:32.076328796Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: no-verdict
-  detail: the reviewer session produced no verdict file — the review did not complete — the reviewer's headless log (/home/joe/ai/aida/.aida/headless-logs/pr-1297-019f1c48-1723-75b0-befa-e9d256f55a39.jsonl) contains an AskUserQuestion call, which is forbidden under `--no-human` and likely caused the session to bail before writing the verdict file (BUG-280). The `/aida-review` skill must auto-resolve every confirmation under AIDA_HEADLESS=1 instead of calling AskUserQuestion.
-  recovery_hint: 'The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-1297 --steal`'
-  shelved_at: 2026-07-01T06:11:33.348535038Z
+  completed_at: 2026-07-01T15:51:03.106578648Z
+  completion_sha: cc8844bae41a9842b789459a45a8d7a647e06bd6
