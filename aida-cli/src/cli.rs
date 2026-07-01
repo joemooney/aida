@@ -8473,6 +8473,15 @@ pub enum Command {
         #[clap(long)]
         dry_run: bool,
 
+        /// Emit the drive-suitability GATE VERDICT as JSON and exit WITHOUT
+        /// driving — the machine-readable pre-flight a shell-out consumer (the
+        /// TUI drive verb) reads to surface a gate hold, and its clarify / force
+        /// remedy, instead of a false "drive launched". Implies a dry run; needs
+        /// a real SPEC id (not a free-text thought).
+        // trace:STORY-744 | ai:claude
+        #[clap(long)]
+        json: bool,
+
         /// Inspect the corroborated zen context — whether `AIDA_ZEN=1` is backed
         /// by a verifiable provenance or is a stale / leaked value. A skill
         /// introspection hook, not a daily-driver.
