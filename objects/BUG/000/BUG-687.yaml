@@ -8,8 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:13:01.709426638Z
-modified_at: 2026-07-01T11:13:01.709426638Z
+modified_at: 2026-07-01T11:15:02.209192773Z
 req_type: Bug
 tags:
 - batch:xplat-green
 - lifecycle:no-review
+comments:
+- id: 019f1d63-b7c1-73d0-a16a-18e55aecfe4f
+  author: joe
+  content: Commit 197c3ede0 references this requirement
+  created_at: 2026-07-01T11:15:02.209192773Z
+  modified_at: 2026-07-01T11:15:02.209192773Z
