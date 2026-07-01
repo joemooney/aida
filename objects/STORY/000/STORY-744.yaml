@@ -1,0 +1,33 @@
+id: 019f1bd8-3767-7773-8e4b-fa34d38093bf
+spec_id: STORY-744
+agreed_id: STORY-744
+title: 'TUI drive verb: surface zen suitability-gate holds + clarify follow-on affordance'
+description: |-
+  The redesign TUI drive verb (STORY-728, spawn_drive in aida-tui/src/redesign/mod.rs) launches `aida zen <id>` DETACHED with stdio nulled and returns success when the CHILD SPAWNED, not when the drive succeeded. So when the zen suitability gate HOLDS a spec (e.g. under-specified — aida lint flags vague/missing acceptance), the hold message dies in the nulled stderr and the TUI reports "drive launched" — a false positive. The operator never sees the gate rejection.
+
+  This mirrors a path the DRAIN already handles: burndown.rs classifies under-specified specs as UnblockClass::UnderSpecified -> UnblockAction::Clarify (clarify FIRST, author acceptance criteria). The TUI drive verb should surface the same hold and offer the same clarify remedy.
+
+  Two slices:
+  - Slice 1 (honest gate): run the zen suitability gate before reporting the drive launched; on a HOLD, show the gate/lint reason in the TUI instead of a launched confirmation.
+  - Slice 2 (clarify follow-on): when the hold reason is under-specified, offer a clarify affordance that launches aida clarify <id> to author acceptance criteria, then re-offers drive. A force affordance maps to aida zen <id> --force for soft holds.
+
+  ## Acceptance
+  - WHEN the operator invokes the drive verb on a spec, THE TUI SHALL evaluate the zen suitability gate for that spec before it reports the drive as launched.
+  - WHEN the suitability gate holds the spec, THE TUI SHALL display the hold reason text and SHALL NOT display a drive-launched confirmation.
+  - WHEN a spec is held with an under-specified reason, THE TUI SHALL present a clarify follow-on affordance bound to a key.
+  - WHEN the operator selects the clarify affordance, THE TUI SHALL launch aida clarify for that spec, and on clarify completion THE TUI SHALL present the drive verb again for that spec.
+  - WHEN the operator selects the force affordance on a held spec, THE TUI SHALL launch aida zen <id> --force.
+  - WHEN the suitability gate passes, THE TUI SHALL launch the drive as the current STORY-728 behavior does.
+
+  SCOPE: the interactive TUI drive verb only. The full chained auto-remedy loop (advisor remedies inline then auto re-runs) is the vision follow-up. The missing --solo on spawn_drive is a separate related task.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:03:02.631218645Z
+modified_at: 2026-07-01T04:03:02.631218645Z
+req_type: Story
+tags:
+- aida:tui
+- drive-verb
+- parent:EPIC-54
