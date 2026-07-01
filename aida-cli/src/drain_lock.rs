@@ -226,7 +226,10 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
         LockDecision::Refuse(holder) => {
             anyhow::bail!(
                 "a drain is already running (pid {}, started {}, cmd `{}`{}).\n  \
-                 Wait for it to finish, or — if you're certain it's dead — remove {} \
+                 Drives are serialized per repo — to drive several specs at once, use \
+                 the `aida burndown` fan-out (one orchestrator over worktree-isolated \
+                 subagents) instead of a second drive.\n  \
+                 Otherwise wait for it to finish, or — if you're certain it's dead — remove {} \
                  or set AIDA_DRAIN_FORCE=1 to override.",
                 holder.pid,
                 holder.started_at_utc,

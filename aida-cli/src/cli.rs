@@ -8405,11 +8405,15 @@ pub enum Command {
     /// the thought, file it, and drive that — thought to (gated) merged in one
     /// line. Auto-queues the spec, then drives it through the SAME
     /// `--auto-complete` orchestrator `aida burndown` uses (implement → CI →
-    /// review → merge → pull). FULLY HEADLESS by default — fire several for
-    /// INDEPENDENT specs in parallel and walk away; an INDEPENDENT reviewer
-    /// always runs before the auto-merge. Use `--supervised` to drive the
-    /// implementer yourself. The auto-implement counterpart to `aida ship`
-    /// (which finishes a HUMAN-implemented spec). With no argument, prints help.
+    /// review → merge → pull). FULLY HEADLESS by default — kick one off and
+    /// walk away; an INDEPENDENT reviewer always runs before the auto-merge.
+    /// Drives are SERIALIZED per repo: a global drain lock allows one drive at
+    /// a time, so a second `aida zen` while one is live is refused. To drive
+    /// several specs at once, use the `aida burndown` fan-out — one
+    /// orchestrator over worktree-isolated implementer subagents. Use
+    /// `--supervised` to drive the implementer yourself. The auto-implement
+    /// counterpart to `aida ship` (which finishes a HUMAN-implemented spec).
+    /// With no argument, prints help.
     // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:STORY-725 | ai:claude
     Zen {
@@ -8431,7 +8435,8 @@ pub enum Command {
         /// Explicit autonomy mode override, forwarded to the orchestrator. The
         /// reviewer ALWAYS runs headless as an independent gate; this only
         /// governs the implementer. The DEFAULT is `both` (fully headless
-        /// fire-and-forget — fire several for INDEPENDENT specs and walk away).
+        /// fire-and-forget — kick one off and walk away; drives are serialized
+        /// per repo, use `aida burndown` to drive several specs at once).
         /// `--no-human=reviewer-only` (= `--supervised`) keeps the implementer
         /// interactive. Aliases: `--unattended`, `--headless`.
         #[clap(
