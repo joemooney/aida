@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:12:00.689378740Z
-modified_at: 2026-07-01T03:50:09.569603736Z
+modified_at: 2026-07-01T03:50:10.763959105Z
 req_type: Bug
 tags:
 - aida:focus
@@ -35,3 +35,7 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-07-01T02:12:04.497806775Z
+- rel_type: References
+  target_id: 019f1bcb-f025-7392-a6a0-16836f9b20f6
+  created_at: 2026-07-01T03:50:10.763947994Z
+  created_by: joe
