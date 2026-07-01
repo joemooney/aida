@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:20:26.862837717Z
-modified_at: 2026-07-01T02:20:18.380110640Z
+modified_at: 2026-07-01T03:44:48.578796625Z
 req_type: Task
 tags:
 - zen-ready
@@ -32,3 +32,9 @@ relationships:
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-01T02:20:18.380102482Z
   created_by: joe
+comments:
+- id: 019f1bc7-85c2-7fc2-9438-2a0532b280e2
+  author: joe
+  content: 'Rejected as a DUPLICATE. This is a re-filing of a SPIKE-70 plan Followup that was already implemented and merged under TASK-1003 (PR #1218). The feature (single-branch/sequential coupled drain, engine, cluster PR, checkpoint, docs) is live in main: drain_batch_single_branch in aida-cli/src/auto_complete.rs, flags in cli.rs, docs in aida-core/templates/skills/aida-burndown.md. No implementation needed.'
+  created_at: 2026-07-01T03:44:48.578796625Z
+  modified_at: 2026-07-01T03:44:48.578796625Z
