@@ -17,12 +17,12 @@ description: |-
   6. Hint text is user-facing first-run copy: NO SPEC-IDs in the strings (per docs/user-facing-text-conventions.md / TASK-268) — a first-run user does not yet hold the requirement graph.
 
   Primary caller: a human at an interactive TTY immediately after a fresh aida init (verify each criterion in that env). Out of scope: the in-TUI quiet-depth reveal (sibling TASK-936); any aida tour command (rejected above).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:06.508349535Z
-modified_at: 2026-07-01T17:34:39.222441591Z
+modified_at: 2026-07-01T17:41:30.654131236Z
 req_type: Story
 tags:
 - zen-ready
@@ -51,3 +51,21 @@ comments:
   content: Commit 8b95408db references this requirement
   created_at: 2026-07-01T17:34:39.222441591Z
   modified_at: 2026-07-01T17:34:39.222441591Z
+history:
+- id: 019f1ec5-8b39-7593-a819-12286aad0dbf
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:41:30.553640169Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ec5-8b9e-7e41-8427-3d00fbc4d459
+  timestamp: 2026-07-01T17:41:30.654125388Z
+  agent: aida
+  commit_sha: 41a35ff9f63ce43407589ccf2c797fe2bee5f2ee
+  summary: Completed via merge 41a35ff9
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T17:41:29.496500990Z
+  completion_sha: 41a35ff9f63ce43407589ccf2c797fe2bee5f2ee
