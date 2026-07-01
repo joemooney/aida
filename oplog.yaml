@@ -30132,5 +30132,20 @@ operations:
       - WHEN aida status --full runs, THE command SHALL NOT call backend.load() over the full store.
       - THE aida status --full output SHALL be byte-identical to the pre-change output for the same store state.
       - A test SHALL confirm aida status --full does not trigger a full-store load.
-clock: 2878
+- id: 019f1c6a-a0aa-7b20-85f6-9ee963827d36
+  target_id: 019ebd88-7d68-7b71-9a0b-a06eb25f87a9
+  author: aida
+  node_id: '1'
+  lamport: 2879
+  timestamp: 2026-07-01T06:42:57.834362947Z
+  kind: !SetDescription
+    description: |-
+      Today the away presence escalation rides the [presence] away_drain rung, so an operator cannot enable escalation without enabling away-drain. Give escalation its own [presence] knob.
+
+      ## Acceptance
+      - THE away presence escalation SHALL be controlled by its own [presence] config knob, independent of [presence] away_drain.
+      - WHEN away_drain is disabled and the new escalation knob is enabled, THE escalation SHALL still fire.
+      - THE new knob SHALL default to the current behavior so an existing config is unchanged.
+      - THE new knob SHALL be documented in the config reference, and in docs/environment-variables.md if it is backed by an env var.
+clock: 2879
 node_id: '1'

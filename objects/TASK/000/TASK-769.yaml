@@ -2,13 +2,20 @@ id: 019ebd88-7d68-7b71-9a0b-a06eb25f87a9
 spec_id: TASK-769
 agreed_id: TASK-769
 title: Decouple the away presence escalation default from `away_drain` into its own `[presence]` knob (today escalation rides the away_drain rung; (c) questions deferred to STORY-555)
-description: ''
+description: |-
+  Today the away presence escalation rides the [presence] away_drain rung, so an operator cannot enable escalation without enabling away-drain. Give escalation its own [presence] knob.
+
+  ## Acceptance
+  - THE away presence escalation SHALL be controlled by its own [presence] config knob, independent of [presence] away_drain.
+  - WHEN away_drain is disabled and the new escalation knob is enabled, THE escalation SHALL still fire.
+  - THE new knob SHALL default to the current behavior so an existing config is unchanged.
+  - THE new knob SHALL be documented in the config reference, and in docs/environment-variables.md if it is backed by an env var.
 status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:31:39.368008246Z
-modified_at: 2026-07-01T06:36:01.856198946Z
+modified_at: 2026-07-01T06:42:56.159271095Z
 req_type: Task
 tags:
 - zen-ready
