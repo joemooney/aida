@@ -18,12 +18,12 @@ description: |-
   ## Out of scope
   - The planned ## Test Plan section rendering (STORY-699, already shipped).
   - A separate test_plan model field (rejected: duplicate source of truth).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T21:46:01.178361830Z
-modified_at: 2026-07-01T16:30:25.698333708Z
+modified_at: 2026-07-01T16:47:41.678806620Z
 req_type: Story
 tags:
 - human-verification
@@ -37,3 +37,7 @@ relationships:
   target_id: 019f05f9-f9a6-7f00-a04b-a54a885ebc6b
   created_at: 2026-06-26T22:08:46.390683218Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-01T16:47:41.678806620Z
+  implemented_by: joe
