@@ -8,8 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:06:49.001258888Z
-modified_at: 2026-07-01T02:06:49.001258888Z
+modified_at: 2026-07-01T02:07:12.317496635Z
 req_type: Task
 tags:
 - cli
 - performance
+comments:
+- id: 019f1b6e-29bd-7200-be91-e522ae4a759a
+  author: joe
+  content: Measured ~1.34s on the operator machine. Surfaced by BUG-676 (aida tui polled it every 3s). Even at the new 20s TTL, a faster ps helps aida status/why/ps interactivity. Profile the /proc walk + session-lease scan in handle_ps.
+  created_at: 2026-07-01T02:07:12.317496635Z
+  modified_at: 2026-07-01T02:07:12.317496635Z
