@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T06:45:57.393557976Z
-modified_at: 2026-06-30T16:35:52.325846638Z
+modified_at: 2026-07-01T06:45:06.575195082Z
 req_type: Story
 tags:
 - advisor
@@ -28,3 +28,8 @@ comments:
   content: 'RESHAPED (operator 2026-06-27): split this. (1) The branch/worktree-LOCK half targeted the two-agents-one-tree collision — but a lock on a SHARED tree treats the symptom; the real fix is ISOLATION (each agent its own clone/worktree) = EPIC-46/47 multi-clone work. That half moves there, not built here. (2) What survives in STORY-711 is the ADVISOR-AUTHORIZATION GATE: an agent refuses to commit unless it can verify it is acting for an advisor that authorized this work (a fail-safe, substrate-as-bouncer like STORY-684 commit gate). This BUILDS ON BUG-637 spec-claim/lease — it is the enforcement layer on top. So STORY-711 is now a FOLLOW-ON to BUG-637, scoped to the authorization gate only.'
   created_at: 2026-06-27T15:26:02.892271283Z
   modified_at: 2026-06-27T15:26:02.892271283Z
+- id: 019f1c6c-978f-7702-b5f9-6452c17da184
+  author: joe
+  content: 'Advisor note (overnight groom): keystone — advisor-directed branch/worktree lock touches the drain-lock/autonomy substrate. Do NOT make this a headless zen target; ship supervised at the keyboard. Left un-groomed for headless on purpose.'
+  created_at: 2026-07-01T06:45:06.575195082Z
+  modified_at: 2026-07-01T06:45:06.575195082Z
