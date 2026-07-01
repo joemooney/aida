@@ -1,0 +1,26 @@
+id: 019f1c05-0595-7e20-ba78-e924dc656e96
+spec_id: STORY-747
+agreed_id: STORY-747
+title: 'Review PR-1293: [AI:claude] feat(tui): drive verb surfaces zen suitability-gate holds + clarify/force remedy (STORY-744)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019f1be7`) for branch `story-744`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1293>
+  - Branch: `story-744` → `main`
+
+  ## Covers
+
+  - STORY-744
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1293` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:51:58.997021843Z
+modified_at: 2026-07-01T04:51:58.997021843Z
+req_type: Story
