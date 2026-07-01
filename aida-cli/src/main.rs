@@ -63867,6 +63867,203 @@ mod story_696_ps_tests {
         assert!(!ps_orphan_excluded_type(&RequirementType::Spike));
     }
 
+    /// TASK-1072: the cache-fast path decodes the excluded-type set from the
+    /// cache's Debug-form string ("Epic", …) rather than a parsed enum. This
+    /// asserts the string form and the enum form agree for EVERY
+    /// `RequirementType` variant, so switching `aida ps` to the cache summaries
+    /// can't drift the orphan pass's type exclusion.
+    // trace:TASK-1072 | ai:claude
+    #[test]
+    fn ps_orphan_excluded_type_str_matches_enum_for_all_types() {
+        use aida_core::RequirementType::*;
+        for t in [
+            Functional,
+            NonFunctional,
+            System,
+            User,
+            ChangeRequest,
+            Bug,
+            Epic,
+            Story,
+            Task,
+            Spike,
+            Sprint,
+            Folder,
+            Meta,
+            Principle,
+            Vision,
+            Constraint,
+            Decision,
+            Term,
+            Doc,
+        ] {
+            // The cache stores `format!("{:?}", req_type)` (STORY-707 projection),
+            // so that's the exact string the cache-fast path feeds the _str form.
+            let cache_form = format!("{t:?}");
+            assert_eq!(
+                ps_orphan_excluded_type_str(&cache_form),
+                ps_orphan_excluded_type(&t),
+                "string / enum orphan-exclusion disagree for {t:?}"
+            );
+        }
+    }
+
+    fn ps_summary(
+        spec_id: Option<&str>,
+        agreed_id: Option<&str>,
+        title: &str,
+        status: &str,
+        req_type: &str,
+    ) -> aida_core::RequirementSummary {
+        aida_core::RequirementSummary {
+            id: uuid::Uuid::new_v4(),
+            spec_id: spec_id.map(str::to_string),
+            agreed_id: agreed_id.map(str::to_string),
+            title: title.to_string(),
+            description: String::new(),
+            status: status.to_string(),
+            priority: "Medium".into(),
+            owner: String::new(),
+            assignee: None,
+            feature: "Uncategorized".into(),
+            req_type: req_type.to_string(),
+            tags: Vec::new(),
+            created_at: String::new(),
+            modified_at: String::new(),
+            archived: false,
+            archived_at: None,
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
+            in_degree: 0,
+            out_degree: 0,
+            heft: 0,
+            blocked: false,
+            yaml_path: String::new(),
+        }
+    }
+
+    /// TASK-1072: the pure summary→projection mapping. Disp id follows the
+    /// agreed_id → spec_id → uuid precedence, In-Progress candidacy is decoded
+    /// from the cache status string, and the excluded-type flag from the type
+    /// string.
+    // trace:TASK-1072 | ai:claude
+    #[test]
+    fn running_work_spec_from_summary_maps_fields() {
+        // agreed_id wins the disp slot; InProgress → orphan candidate; Task is
+        // not an excluded type.
+        let a = running_work_spec_from_summary(ps_summary(
+            Some("TASK-7-001"),
+            Some("TASK-7"),
+            "do the thing",
+            "InProgress",
+            "Task",
+        ));
+        assert_eq!(a.disp, "TASK-7");
+        assert_eq!(a.agreed_id.as_deref(), Some("TASK-7"));
+        assert_eq!(a.spec_id.as_deref(), Some("TASK-7-001"));
+        assert_eq!(a.title, "do the thing");
+        assert!(a.in_progress);
+        assert!(!a.orphan_excluded_type);
+
+        // No agreed_id → spec_id fills disp; Draft is not a candidate.
+        let b = running_work_spec_from_summary(ps_summary(
+            Some("STORY-9-002"),
+            None,
+            "later",
+            "Draft",
+            "Story",
+        ));
+        assert_eq!(b.disp, "STORY-9-002");
+        assert!(!b.in_progress);
+        assert!(!b.orphan_excluded_type);
+
+        // An In-Progress epic is an excluded (rollup) type — must NOT surface as
+        // an orphan even though its status flag is InProgress.
+        let c = running_work_spec_from_summary(ps_summary(
+            Some("EPIC-4-001"),
+            Some("EPIC-4"),
+            "big rollup",
+            "InProgress",
+            "Epic",
+        ));
+        assert!(c.in_progress);
+        assert!(c.orphan_excluded_type);
+    }
+
+    /// TASK-1072: end-to-end fixture over the pure [`build_running_work`] core,
+    /// mocking the /proc live-slice + lease state. Asserts the row/orphan output
+    /// is exactly what the prior full-store path produced: a live lease resolves
+    /// its scope to a spec display id and is NOT orphaned; an In-Progress spec
+    /// with no lease surfaces as flag-only; an excluded (epic) type never
+    /// surfaces. The `live` slice is passed ONCE (the single-probe discipline).
+    // trace:TASK-1072 | ai:claude
+    #[test]
+    fn build_running_work_resolves_specs_and_orphans_on_fixture() {
+        let now = chrono::Utc::now();
+        let live_dir = tempfile::tempdir().unwrap();
+
+        // Spec index (what the cache summaries would project).
+        let specs = vec![
+            RunningWorkSpec {
+                disp: "TASK-1".into(),
+                agreed_id: Some("TASK-1".into()),
+                spec_id: Some("TASK-1-001".into()),
+                title: "live one".into(),
+                in_progress: true,
+                orphan_excluded_type: false,
+            },
+            RunningWorkSpec {
+                disp: "STORY-2".into(),
+                agreed_id: Some("STORY-2".into()),
+                spec_id: Some("STORY-2-001".into()),
+                title: "flag-only".into(),
+                in_progress: true,
+                orphan_excluded_type: false,
+            },
+            RunningWorkSpec {
+                disp: "EPIC-3".into(),
+                agreed_id: Some("EPIC-3".into()),
+                spec_id: Some("EPIC-3-001".into()),
+                title: "rollup".into(),
+                in_progress: true,
+                orphan_excluded_type: true,
+            },
+        ];
+
+        // ONE lease, scoped to TASK-1, backed by a live claude in its worktree.
+        let leases = vec![ps_lease(
+            "sess-live",
+            "TASK-1",
+            live_dir.path().to_path_buf(),
+        )];
+        // ONE /proc snapshot, reused for every liveness check (single probe).
+        let live = vec![process_probe::LiveSession {
+            pid: 4242,
+            cwd: live_dir.path().to_path_buf(),
+            jsonl: None,
+            stale_cwd: false,
+        }];
+
+        let (rows, orphans) = build_running_work(&specs, &leases, &live, now);
+
+        // Row: TASK-1's scope resolved to its display id; live pid attached.
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec.as_deref(), Some("TASK-1"));
+        assert_eq!(rows[0].state, LeaseState::Live);
+        assert_eq!(rows[0].pid, Some(4242));
+
+        // Orphans: STORY-2 is In-Progress with no lease → flag-only orphan.
+        // TASK-1 is live (not orphaned). EPIC-3 is an excluded rollup type.
+        assert_eq!(orphans.len(), 1);
+        assert_eq!(orphans[0].spec, "STORY-2");
+        assert!(!orphans[0].stale_lease, "no lease → flag-only, not crashed");
+        assert!(
+            !orphans[0].likely_fanout,
+            "no live harness lease → not a fan-out"
+        );
+    }
+
     /// The `--json` row shape: every session row carries the documented keys,
     /// and an orphaned spec is emitted under `orphaned` with a `flag-only`
     /// liveness. Builds the same JSON the handler emits from in-memory rows.
@@ -97917,6 +98114,115 @@ fn handle_integrate(json: bool) -> Result<()> {
     Ok(())
 }
 
+/// TASK-1072: the minimal per-spec projection `gather_running_work` needs — a
+/// lease scope's display id (row spec resolution) plus the In-Progress /
+/// excluded-type flags for the orphan pass. Deliberately tiny so it can be built
+/// from the cache-fast SQLite summaries (the STORY-707 pattern) instead of a
+/// full `backend.load()` (which parses every YAML — ~1.0s of `aida ps`'s ~1.3s).
+// trace:TASK-1072 | ai:claude
+struct RunningWorkSpec {
+    /// agreed_id || spec_id || uuid — what a resolved row / orphan displays.
+    disp: String,
+    agreed_id: Option<String>,
+    spec_id: Option<String>,
+    title: String,
+    /// The spec is currently In Progress (orphan-pass candidate).
+    in_progress: bool,
+    /// Rollup / stateless type (epic / folder / meta) — excluded from the
+    /// orphan pass because it never holds a spec-scoped lease.
+    // trace:TASK-940 | ai:claude
+    orphan_excluded_type: bool,
+}
+
+/// TASK-1072: string form of [`ps_orphan_excluded_type`], for the cache-fast
+/// path where the type arrives as the cache's Debug-form string ("Epic",
+/// "Folder", "Meta") rather than a parsed [`aida_core::RequirementType`]. Kept
+/// in lockstep with the enum variant so the two paths agree.
+// trace:TASK-1072 trace:TASK-940 | ai:claude
+fn ps_orphan_excluded_type_str(req_type: &str) -> bool {
+    req_type.eq_ignore_ascii_case("Epic")
+        || req_type.eq_ignore_ascii_case("Folder")
+        || req_type.eq_ignore_ascii_case("Meta")
+}
+
+/// TASK-1072: pure mapping from a cache summary's raw fields to a
+/// [`RunningWorkSpec`] — the disp-id precedence (agreed_id → spec_id → uuid) and
+/// the two derived flags (In-Progress candidacy, orphan-excluded type). Extracted
+/// so the cache-fast projection is unit-testable without a live backend, and so
+/// the string-form status/type decoding stays in one audited place.
+// trace:TASK-1072 | ai:claude
+fn running_work_spec_from_summary(s: aida_core::RequirementSummary) -> RunningWorkSpec {
+    let disp = s
+        .agreed_id
+        .clone()
+        .or_else(|| s.spec_id.clone())
+        .unwrap_or_else(|| s.id.to_string());
+    RunningWorkSpec {
+        disp,
+        in_progress: aida_core::RequirementStatus::from_filter_str(&s.status)
+            == Some(aida_core::RequirementStatus::InProgress),
+        orphan_excluded_type: ps_orphan_excluded_type_str(&s.req_type),
+        agreed_id: s.agreed_id,
+        spec_id: s.spec_id,
+        title: s.title,
+    }
+}
+
+/// TASK-1072: build the [`RunningWorkSpec`] index cache-fast. Reads the SQLite
+/// summary projection (`list_summaries`, which triggers a stale-check +
+/// auto-rebuild first — the same freshness contract bare `aida status` /
+/// `aida list` ride) instead of a full `backend.load()`. The summaries carry
+/// exactly the fields the running-work picture needs (ids, title, status,
+/// req_type), so no YAML parse is required. Uses `ArchiveFilter::Both` +
+/// `DeferFilter::Both` to match the prior full-store scan, which iterated every
+/// requirement regardless of the archive/defer view flags. Falls back to the
+/// full store load only when the cached backend is unreachable (legacy /
+/// un-attached clones), preserving `load_store_for_lookup`'s degrade path.
+/// Read-only; returns an empty index when no store is reachable.
+// trace:TASK-1072 | ai:claude
+fn running_work_spec_index(project_root: &std::path::Path) -> Vec<RunningWorkSpec> {
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
+        if let Ok(backend) = advance_backend(&store_path) {
+            let filter = aida_core::ListFilter {
+                archive: aida_core::ArchiveFilter::Both,
+                defer: aida_core::DeferFilter::Both,
+                ..Default::default()
+            };
+            if let Ok(summaries) = backend.list_summaries(&filter) {
+                return summaries
+                    .into_iter()
+                    .map(running_work_spec_from_summary)
+                    .collect();
+            }
+        }
+    }
+    // Legacy / un-attached fallback: the full store load (same degrade path as
+    // `load_store_for_lookup`). trace:TASK-1072 | ai:claude
+    load_store_for_lookup(project_root)
+        .map(|store| {
+            store
+                .requirements
+                .iter()
+                .map(|r| {
+                    let disp = r
+                        .agreed_id
+                        .clone()
+                        .or_else(|| r.spec_id.clone())
+                        .unwrap_or_else(|| r.id.to_string());
+                    RunningWorkSpec {
+                        disp,
+                        agreed_id: r.agreed_id.clone(),
+                        spec_id: r.spec_id.clone(),
+                        title: r.title.clone(),
+                        in_progress: matches!(r.status, aida_core::RequirementStatus::InProgress),
+                        orphan_excluded_type: ps_orphan_excluded_type(&r.req_type),
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Build the GLOBAL running-work picture: one [`PsRow`] per active session
 /// lease (with liveness/pid/elapsed/spec resolved) plus the orphaned
 /// In-Progress specs with no live spec-scoped lease. Extracted from `handle_ps`
@@ -97929,18 +98235,44 @@ fn handle_integrate(json: bool) -> Result<()> {
 // trace:TASK-1034 trace:STORY-696 | ai:claude
 fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let now = chrono::Utc::now();
+    // ONE /proc pass, reused for every liveness check below (memoized by
+    // `probe_live_claude_sessions`'s OnceLock — BUG-613). The row + orphan
+    // passes look each session up in this in-memory slice; they never re-probe
+    // per lease. trace:TASK-1072 | ai:claude
     let live = process_probe::probe_live_claude_sessions();
     let leases = list_leases(project_root);
 
     // The store gives us (a) the set of known spec ids (so a lease scope can be
     // resolved to a spec vs. a generic harness scope) and (b) the In-Progress
-    // specs for the orphan pass. Read-only; degrade gracefully if unreachable.
-    let store = load_store_for_lookup(project_root);
+    // specs for the orphan pass. TASK-1072: this is the cache-fast summary
+    // projection (the STORY-707 pattern), NOT a full `backend.load()` — profiling
+    // showed the full YAML parse was ~1.0s of `aida ps`'s ~1.3s. Read-only;
+    // degrades gracefully (empty index) when the store is unreachable.
+    // trace:TASK-1072 | ai:claude
+    let specs = running_work_spec_index(project_root);
 
+    build_running_work(&specs, &leases, &live, now)
+}
+
+/// TASK-1072: the pure core of [`gather_running_work`] — given the resolved spec
+/// index, the session leases, and the ONE already-computed live-session slice,
+/// build the row + orphan picture. Extracted from the store/proc/lease I/O so
+/// the running-work logic (scope→spec resolution, the orphan verdict, the
+/// fan-out framing, the sort) is unit-testable on fixtures without touching the
+/// filesystem or `/proc`. Takes `live` by reference — the single-probe
+/// discipline (`aida ps` probes `/proc` once, not once per lease) is a caller
+/// invariant this signature enforces.
+// trace:TASK-1072 trace:STORY-696 | ai:claude
+fn build_running_work(
+    specs: &[RunningWorkSpec],
+    leases: &[SessionLease],
+    live: &[process_probe::LiveSession],
+    now: chrono::DateTime<chrono::Utc>,
+) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
         .map(|l| {
-            let state = lease_state_for(l, &live, now);
+            let state = lease_state_for(l, live, now);
             let live_in_worktree = live.iter().find(|s| {
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });
@@ -97950,23 +98282,15 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
                 None
             });
             let elapsed_secs = now.signed_duration_since(l.started_at).num_seconds().max(0) as u64;
-            let spec = store.as_ref().and_then(|s| {
-                s.requirements
-                    .iter()
-                    .filter_map(|r| {
-                        let disp = r
-                            .agreed_id
-                            .clone()
-                            .or_else(|| r.spec_id.clone())
-                            .unwrap_or_else(|| r.id.to_string());
-                        let matches = [r.agreed_id.as_deref(), r.spec_id.as_deref()]
-                            .into_iter()
-                            .flatten()
-                            .any(|id| l.scope.eq_ignore_ascii_case(id));
-                        matches.then_some(disp)
-                    })
-                    .next()
-            });
+            let spec = specs
+                .iter()
+                .find(|s| {
+                    [s.agreed_id.as_deref(), s.spec_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|id| l.scope.eq_ignore_ascii_case(id))
+                })
+                .map(|s| s.disp.clone());
             PsRow {
                 lease: l.clone(),
                 state,
@@ -97986,45 +98310,38 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     // In-Progress spec (no spec-scoped lease) is most likely being built by it
     // (the fan-out takes a generic non-spec-linked harness lease) — surface it
     // informationally instead of as a genuine orphan. trace:TASK-1064 | ai:claude
-    let fanout_active = live_fanout_harness_lease(&leases, &live, now);
-    if let Some(store) = store.as_ref() {
-        for r in &store.requirements {
-            if !matches!(r.status, aida_core::RequirementStatus::InProgress) {
-                continue;
-            }
-            // Rollup / stateless types (epic, folder, meta) never hold a
-            // spec-scoped lease, so they'd all read as orphaned — skip them so
-            // only real work-item In-Progress specs surface. trace:TASK-940
-            if ps_orphan_excluded_type(&r.req_type) {
-                continue;
-            }
-            let disp = r
-                .agreed_id
-                .clone()
-                .or_else(|| r.spec_id.clone())
-                .unwrap_or_else(|| r.id.to_string());
-            let mut id_owned: Vec<String> = Vec::new();
-            if let Some(a) = r.agreed_id.as_deref() {
-                id_owned.push(a.to_string());
-            }
-            if let Some(s) = r.spec_id.as_deref() {
-                id_owned.push(s.to_string());
-            }
-            let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
-            let lease = spec_scoped_lease(&leases, &id_refs);
-            let lease_state = lease.map(|l| lease_state_for(l, &live, now));
-            if let Some(stale_lease) = ps_orphan_verdict(lease_state) {
-                orphans.push(PsOrphan {
-                    spec: disp,
-                    title: r.title.clone(),
-                    stale_lease,
-                    // trace:TASK-1064 | ai:claude
-                    likely_fanout: ps_orphan_likely_fanout(stale_lease, fanout_active),
-                });
-            }
+    let fanout_active = live_fanout_harness_lease(leases, live, now);
+    for s in specs {
+        if !s.in_progress {
+            continue;
         }
-        orphans.sort_by(|a, b| a.spec.cmp(&b.spec));
+        // Rollup / stateless types (epic, folder, meta) never hold a
+        // spec-scoped lease, so they'd all read as orphaned — skip them so
+        // only real work-item In-Progress specs surface. trace:TASK-940
+        if s.orphan_excluded_type {
+            continue;
+        }
+        let mut id_owned: Vec<String> = Vec::new();
+        if let Some(a) = s.agreed_id.as_deref() {
+            id_owned.push(a.to_string());
+        }
+        if let Some(sp) = s.spec_id.as_deref() {
+            id_owned.push(sp.to_string());
+        }
+        let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
+        let lease = spec_scoped_lease(leases, &id_refs);
+        let lease_state = lease.map(|l| lease_state_for(l, live, now));
+        if let Some(stale_lease) = ps_orphan_verdict(lease_state) {
+            orphans.push(PsOrphan {
+                spec: s.disp.clone(),
+                title: s.title.clone(),
+                stale_lease,
+                // trace:TASK-1064 | ai:claude
+                likely_fanout: ps_orphan_likely_fanout(stale_lease, fanout_active),
+            });
+        }
     }
+    orphans.sort_by(|a, b| a.spec.cmp(&b.spec));
 
     (rows, orphans)
 }
