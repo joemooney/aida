@@ -15124,7 +15124,26 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
-    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+    // BUG-681: the per-turn `aida awaiting --notice` line is fired by the
+    // UserPromptSubmit hook under Claude Code's 5s timeout. The notice is
+    // ADVISORY — under cache-lock contention it must bail instantly (degrade to
+    // empty) rather than block a prompt on the full ~25s cache retry ladder. Arm
+    // fast-fail cache mode BEFORE opening the backend so BOTH the connection open
+    // and the summary reads use the short (~150ms) ladder; on a lock-contended
+    // open, print nothing and exit clean instead of erroring. Scoped to this one
+    // command — every other command keeps the full resilient ladder.
+    let notice_fast_fail = matches!(command, Command::Awaiting { notice: true, .. });
+    if notice_fast_fail {
+        aida_core::db::set_fast_fail_cache(true);
+    }
+    let backend = match aida_core::CachedGitBackend::with_inner(inner, &cache_path) {
+        Ok(backend) => backend,
+        Err(_) if notice_fast_fail => {
+            // Cache momentarily locked — the advisory notice degrades to empty.
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    };
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
