@@ -49,7 +49,10 @@ impl ClaudeAgentEntry {
 /// the command fails, or stdout isn't valid JSON — `aida status` MUST NOT
 /// fail when Claude Code isn't installed.
 pub fn list_agents() -> Option<Vec<ClaudeAgentEntry>> {
-    let output = Command::new("claude")
+    // TASK-1081: route the vendor binary through the single headless-spawn
+    // resolver so an `AIDA_AGENT_CMD` mock also serves the liveness query; unset
+    // yields the native `claude` (byte-identical). trace:TASK-1081
+    let output = Command::new(crate::session::resolve_agent_program("claude"))
         .args(["agents", "--json"])
         .output()
         .ok()?;

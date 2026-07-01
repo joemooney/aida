@@ -825,9 +825,12 @@ pub fn spawn_vendor_headless(
     // program is the vendor binary (`claude` / `codex`), not hardcoded `claude`.
     // trace:STORY-612 trace:STORY-683 | ai:claude
     let worktree = headless_worktree_root();
+    // TASK-1081: route the vendor binary through the mock-substitution resolver
+    // before wrapping — `AIDA_AGENT_CMD` swaps the program, argv unchanged; unset
+    // yields the native vendor binary (byte-identical). trace:TASK-1081
     let (program, args) = os_wrapped_program_and_args(
         &worktree,
-        vendor.program(),
+        &resolve_agent_program(vendor.program()),
         headless_vendor_args(vendor, prompt, session_id, contained),
     )?;
     let status = Command::new(program)
@@ -1420,6 +1423,31 @@ pub(crate) fn bwrap_confinement_args_inner(
     args
 }
 
+/// The single resolver for the PROGRAM a HEADLESS agent spawn actually invokes.
+/// Every headless spawn site (drain phase, headless resume, advisor tier, the
+/// `claude agents --json` liveness query) passes the vendor binary name it would
+/// otherwise hardcode (`claude` / `codex`) through here.
+///
+/// - `AIDA_AGENT_CMD` unset (or empty/whitespace) → returns the vendor program
+///   unchanged, so an un-configured drain is byte-identical to today. This is the
+///   faithful-launcher invariant — the override is the ONE explicit opt-in, no
+///   hidden behavior change.
+/// - `AIDA_AGENT_CMD` set → returns that program in place of the vendor binary.
+///   The caller passes the ORIGINAL argv (all flags + the brief/prompt positional)
+///   through unchanged, so a mock substitute receives exactly what the real vendor
+///   CLI would. Per-vendor overrides are intentionally NOT supported — one redirect
+///   is all the mock substrate needs (PRIN-2).
+///
+/// Interactive TTY launches are out of scope — they resolve their program
+/// independently and are not routed through this resolver.
+// trace:TASK-1081
+pub(crate) fn resolve_agent_program(vendor_program: &str) -> String {
+    match std::env::var("AIDA_AGENT_CMD") {
+        Ok(cmd) if !cmd.trim().is_empty() => cmd,
+        _ => vendor_program.to_string(),
+    }
+}
+
 /// Compose the program + argv to actually exec for a headless `claude` launch,
 /// applying the STORY-612 OS-boundary wrapper when `[contained] os_wrap` is on.
 ///
@@ -1428,13 +1456,19 @@ pub(crate) fn bwrap_confinement_args_inner(
 ///   binding the worktree + store + cargo/npm/claude caches rw, everything else
 ///   ro. Errors (fail-closed) if `bwrap` is not on PATH.
 ///
+/// TASK-1081: both callers are HEADLESS (`exec_claude_headless`,
+/// `spawn_claude_headless_resume`), so the wrapped program is routed through
+/// `resolve_agent_program` — an `AIDA_AGENT_CMD` override swaps the vendor binary
+/// for a mock while the argv is unchanged. Unset → the native `claude` as before.
+///
 /// `worktree_root` is the code worktree the drain runs in (its `.aida-store`
-/// sibling is bound rw). trace:STORY-612 | ai:claude
+/// sibling is bound rw).
+// trace:STORY-612 trace:TASK-1081 | ai:claude
 fn claude_program_and_args(
     worktree_root: &Path,
     claude_args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
-    os_wrapped_program_and_args(worktree_root, "claude", claude_args)
+    os_wrapped_program_and_args(worktree_root, &resolve_agent_program("claude"), claude_args)
 }
 
 /// Generalized form of `claude_program_and_args` that wraps an ARBITRARY program
@@ -1779,13 +1813,20 @@ pub fn advisor_tier_program_and_args(
             } else {
                 claude_headless_args(seeded_prompt, advisor_uuid)
             };
-            (HeadlessVendor::Claude.program().to_string(), args)
+            // TASK-1081: route the vendor binary through the mock resolver — an
+            // `AIDA_AGENT_CMD` override swaps the program, argv unchanged; unset
+            // yields the native binary. trace:TASK-1081
+            (
+                resolve_agent_program(HeadlessVendor::Claude.program()),
+                args,
+            )
         }
         HeadlessVendor::Codex => {
             // No resume model — a fresh spawn per punt against the seeded prompt.
             // `is_fork` is intentionally ignored here. trace:TASK-894 | ai:claude
+            // TASK-1081: same mock resolver as the Claude arm. trace:TASK-1081
             (
-                HeadlessVendor::Codex.program().to_string(),
+                resolve_agent_program(HeadlessVendor::Codex.program()),
                 codex_headless_args(seeded_prompt),
             )
         }
@@ -2582,6 +2623,87 @@ mod tests {
                 None => std::env::remove_var("AIDA_OS_WRAP"),
             }
         }
+    }
+
+    /// RAII guard for the `AIDA_AGENT_CMD` resolver tests. It shares the
+    /// `OS_WRAP_ENV_LOCK` so it is mutually exclusive with the os_wrap
+    /// program-resolution tests — those call `claude_program_and_args`, which now
+    /// reads `AIDA_AGENT_CMD`, so a concurrently-set override must never leak into
+    /// their clean-baseline `program == "claude"` assertions. Saves + clears both
+    /// `AIDA_AGENT_CMD` and `AIDA_OS_WRAP` on construct (a clean, os_wrap-off
+    /// baseline), restores both on drop.
+    // trace:TASK-1081 | ai:claude
+    struct AgentCmdEnvGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        saved_cmd: Option<std::ffi::OsString>,
+        saved_wrap: Option<std::ffi::OsString>,
+    }
+
+    impl AgentCmdEnvGuard {
+        fn acquire() -> Self {
+            let lock = OS_WRAP_ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let saved_cmd = std::env::var_os("AIDA_AGENT_CMD");
+            let saved_wrap = std::env::var_os("AIDA_OS_WRAP");
+            std::env::remove_var("AIDA_AGENT_CMD");
+            std::env::remove_var("AIDA_OS_WRAP");
+            Self {
+                _lock: lock,
+                saved_cmd,
+                saved_wrap,
+            }
+        }
+    }
+
+    impl Drop for AgentCmdEnvGuard {
+        fn drop(&mut self) {
+            match &self.saved_cmd {
+                Some(v) => std::env::set_var("AIDA_AGENT_CMD", v),
+                None => std::env::remove_var("AIDA_AGENT_CMD"),
+            }
+            match &self.saved_wrap {
+                Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
+                None => std::env::remove_var("AIDA_OS_WRAP"),
+            }
+        }
+    }
+
+    /// With `AIDA_AGENT_CMD` unset the resolver yields the native vendor binary
+    /// (faithful-launcher invariant); set at a trivial fake exe it yields the
+    /// fake, and the spawn site passes the ORIGINAL argv through unchanged. No
+    /// real claude/codex is spawned — the resolver never launches the program,
+    /// it only names it.
+    // trace:TASK-1081 | ai:claude
+    #[test]
+    fn agent_cmd_override_swaps_program_keeps_argv() {
+        let _env = AgentCmdEnvGuard::acquire();
+
+        // Unset → the native vendor binaries, byte-identical to today.
+        assert_eq!(resolve_agent_program("claude"), "claude");
+        assert_eq!(resolve_agent_program("codex"), "codex");
+
+        // Set at a trivial fake exe → that program replaces every vendor binary.
+        let fake = "/tmp/aida-fake-agent-task-1081";
+        std::env::set_var("AIDA_AGENT_CMD", fake);
+        assert_eq!(resolve_agent_program("claude"), fake);
+        assert_eq!(resolve_agent_program("codex"), fake);
+
+        // The headless spawn site swaps only the PROGRAM; the argv (all flags +
+        // the trailing prompt positional) is passed through unchanged. os_wrap is
+        // off (guard cleared AIDA_OS_WRAP; the temp root has no config).
+        let tmp = tempfile::tempdir().unwrap();
+        let claude_args = claude_headless_args("/aida-review", "sid");
+        let (program, args) = claude_program_and_args(tmp.path(), claude_args.clone())
+            .expect("unwrapped launch never errors");
+        assert_eq!(program, fake, "override swaps the vendor program");
+        assert_eq!(args, claude_args, "argv is passed through unchanged");
+
+        // Empty / whitespace override is treated as unset — fall back to native.
+        std::env::set_var("AIDA_AGENT_CMD", "   ");
+        assert_eq!(resolve_agent_program("claude"), "claude");
+        std::env::remove_var("AIDA_AGENT_CMD");
+        assert_eq!(resolve_agent_program("claude"), "claude");
     }
 
     // TASK-865: the doctor/init bwrap row distils bwrap_preflight's long
