@@ -362,6 +362,17 @@ impl GitBackend {
         Ok(meta)
     }
 
+    /// TASK-1065: load ONLY the store metadata into a `RequirementsStore` whose
+    /// `requirements` vec is EMPTY. Reads a single `metadata.yaml` file — never
+    /// scans the object YAMLs — so callers that need the store's name / features /
+    /// id-config (e.g. the `aida status --full` Project + scaffolding sections)
+    /// can get them without a full `load()`.
+    // trace:TASK-1065 | ai:claude
+    pub fn load_metadata_only(&self) -> Result<RequirementsStore> {
+        let meta = self.load_metadata()?;
+        Ok(self.assemble_store(meta, Vec::new()))
+    }
+
     /// Save metadata to the metadata.yaml file.
     fn save_metadata(&self, meta: &StoreMetadata) -> Result<()> {
         let content = serde_yaml::to_string(meta)?;

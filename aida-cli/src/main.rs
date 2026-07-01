@@ -1056,6 +1056,8 @@ mod task970_agent_output_tests {
             out_degree: 0,
             heft: 0,
             blocked: false,
+            // trace:TASK-1065 | ai:claude
+            has_pending_decision: false,
             yaml_path: String::new(),
         }
     }
@@ -6562,16 +6564,15 @@ fn collect_decision_requests(
     Ok((pending, answered))
 }
 
-/// TASK-1061: pending-DecisionRequest count drawn from an ALREADY-LOADED store
-/// instead of a fresh full-store load. The decision-inbox line in
-/// `aida status --full`'s presence section used to call
-/// `collect_decision_requests(backend)`, which delegates to
-/// `list_requirements(false)` — a SECOND full-store load (read every YAML
-/// object from the orphan store) duplicating the `backend.load()` the rich
-/// status path already paid for. Counting over `store.requirements` reuses that
-/// load: identical result (same `decision_request.is_pending()` predicate, same
-/// archived-excluded set the rich path operates on), zero extra I/O.
-// trace:TASK-1061
+/// TASK-1061 → TASK-1065: the store-based pending-DecisionRequest count. This is
+/// now the **reference oracle** for the cache-backed
+/// `CachedGitBackend::pending_decision_count`: the `has_pending_decision` cache
+/// column projects exactly this predicate (non-archived +
+/// `decision_request.is_pending()`) per row, so `aida status --full`'s
+/// decision-inbox line reads the cache column instead of a full store load. Kept
+/// (test-only) as the equivalence anchor its test module asserts against.
+// trace:TASK-1065 (supersedes TASK-1061)
+#[cfg(test)]
 fn pending_decision_request_count(store: &aida_core::models::RequirementsStore) -> usize {
     store
         .requirements
@@ -64702,6 +64703,8 @@ mod story_696_ps_tests {
             out_degree: 0,
             heft: 0,
             blocked: false,
+            // trace:TASK-1065 | ai:claude
+            has_pending_decision: false,
             yaml_path: String::new(),
         }
     }
@@ -109896,7 +109899,6 @@ const KEYSTONE_TAG: &str = "needs-supervised-build";
 fn print_status_presence_consumers(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
-    store: &aida_core::models::RequirementsStore,
 ) {
     let cfg = presence::read_presence_config(&config_path_for_project(project_root));
     if cfg.consumers == presence::ConsumersMode::Off {
@@ -109911,10 +109913,12 @@ fn print_status_presence_consumers(
     }
 
     // (c) decision inbox — pending DecisionRequests awaiting the operator.
-    // TASK-1061: count over the already-loaded `store` rather than re-loading
-    // the whole store via `collect_decision_requests(backend)` (a second
-    // full-store read on the rich status path). trace:TASK-1061
-    let pending = pending_decision_request_count(store);
+    // TASK-1065: read the count from the `has_pending_decision` cache column so
+    // the rich `aida status` path no longer needs a full `backend.load()` to
+    // surface it. Matches the prior store-based predicate exactly (non-archived +
+    // `decision_request.is_pending()`); see `pending_decision_request_count` for
+    // the reference oracle. trace:TASK-1065 (supersedes TASK-1061)
+    let pending = backend.pending_decision_count().unwrap_or(0);
     if pending > 0 {
         println!(
             "  {} {} decision{} await your call — {}",
@@ -114535,6 +114539,189 @@ fn warm_status_network_probes(project_root: &std::path::Path) {
     });
 }
 
+/// TASK-1065: assemble the `RequirementsStore` the rich `aida status` sections
+/// consume from the CACHE read-projection instead of a full `backend.load()`.
+///
+/// The store's metadata (name / title / description / features / id-config) comes
+/// from one cheap `metadata.yaml` read; its `requirements` are reconstructed from
+/// `list_summaries` (archive + defer = Both, so the projection mirrors the full
+/// on-disk set `backend.load()` returned). Each lightweight `Requirement` carries
+/// exactly the fields the `aida status --full` hygiene/cleanup doctor scans, the
+/// queue snapshot, and the Project/Requirements sections read: id, spec_id,
+/// agreed_id, title, status, req_type, modified_at, archived. Fields not projected
+/// into the cache (description body, comments, relationships, the decision-request
+/// payload, …) are left at their `Requirement::new` defaults — the status sections
+/// never read them (the decision-inbox count reads the `has_pending_decision`
+/// cache column via `backend.pending_decision_count()` instead).
+///
+/// Fidelity notes (same cache-vs-load divergences `aida list` already carries):
+/// an EPIC's status is the cache's derived rollup rather than its stored value,
+/// and a spec with a *custom* status string maps to `Draft` + `custom_status`
+/// since it isn't one of the eight canonical variants. Both are exotic and do not
+/// affect the doctor scans (which exclude epics and only match canonical
+/// statuses).
+// trace:TASK-1065 | ai:claude
+fn build_status_store_from_cache(
+    backend: &aida_core::CachedGitBackend,
+) -> Result<aida_core::models::RequirementsStore> {
+    use aida_core::{RequirementStatus, RequirementType};
+
+    let mut store = backend.load_metadata_only()?;
+
+    let summaries = backend.list_summaries(&aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::db::DeferFilter::Both,
+        ..Default::default()
+    })?;
+
+    store.requirements = summaries
+        .into_iter()
+        .map(|s| {
+            let mut req = aida_core::Requirement::new(s.title, String::new());
+            req.id = s.id;
+            req.spec_id = s.spec_id;
+            req.agreed_id = s.agreed_id;
+            req.owner = s.owner;
+            req.assignee = s.assignee;
+            req.feature = s.feature;
+            req.archived = s.archived;
+            req.deferred = s.deferred;
+            // The cache stores RequirementType's Debug form; map it back. An
+            // unrecognized (custom) type falls back to Task — it won't match any
+            // status-scan type predicate, which is the safe default.
+            req.req_type =
+                RequirementType::from_cache_str(&s.req_type).unwrap_or(RequirementType::Task);
+            // Canonical status → the typed enum. A custom status string isn't one
+            // of the eight variants, so preserve it verbatim in `custom_status`
+            // (and leave the enum at Draft) rather than mis-map it.
+            match RequirementStatus::from_filter_str(&s.status) {
+                Some(st) => req.status = st,
+                None => {
+                    req.status = RequirementStatus::Draft;
+                    req.custom_status = Some(s.status);
+                }
+            }
+            req.modified_at = chrono::DateTime::parse_from_rfc3339(&s.modified_at)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or(req.modified_at);
+            req
+        })
+        .collect();
+
+    Ok(store)
+}
+
+// TASK-1065: the rich `aida status --full` store is sourced from the cache
+// read-projection, never a full `backend.load()` over the object YAMLs, and the
+// decision-inbox count reads the `has_pending_decision` cache column. These tests
+// lock both contracts. trace:TASK-1065 | ai:claude
+#[cfg(test)]
+mod task_1065_status_cacheback_tests {
+    use super::*;
+    use aida_core::{
+        DecisionChoice, DecisionRequest, Requirement, RequirementStatus, RequirementType,
+    };
+
+    fn backend_in(dir: &std::path::Path) -> aida_core::CachedGitBackend {
+        let store_root = dir.join("store");
+        let cache_path = dir.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap()
+    }
+
+    fn pending_dr() -> DecisionRequest {
+        DecisionRequest {
+            question: "Ship or promote?".into(),
+            choices: vec![DecisionChoice {
+                label: "Ship".into(),
+                consequence: "implement".into(),
+                resolution: "status:approved".into(),
+            }],
+            recommended: Some(0),
+            rationale: None,
+            answered: None,
+            note: None,
+            asked_at: None,
+            answered_at: None,
+        }
+    }
+
+    // Acceptance: `aida status --full` SHALL NOT trigger a full-store load. Build a
+    // backend, populate it, then DELETE the object YAMLs so a real `backend.load()`
+    // yields nothing (HEAD is unchanged, so the cache stays fresh and no rebuild
+    // fires). The cache-projected status store must STILL carry the row — proving
+    // it is sourced from the cache, not a full load.
+    #[test]
+    fn status_store_comes_from_cache_not_full_load() {
+        use aida_core::DatabaseBackend;
+        let dir = tempfile::tempdir().unwrap();
+        let backend = backend_in(dir.path());
+
+        let mut r = Requirement::new("cache-backed row".into(), String::new());
+        r.spec_id = Some("TASK-1".into());
+        r.status = RequirementStatus::InProgress;
+        r.req_type = RequirementType::Task;
+        backend.add_requirement(r).unwrap();
+
+        // Nuke the object YAMLs — a real full load now sees an empty object store.
+        let objects = dir.path().join("store").join("objects");
+        if objects.exists() {
+            std::fs::remove_dir_all(&objects).unwrap();
+        }
+        assert_eq!(
+            backend.load().map(|s| s.requirements.len()).unwrap_or(0),
+            0,
+            "precondition: a full backend.load() must NOT see the row after the objects are removed"
+        );
+
+        // The cache-projected status store still carries the row.
+        let store = build_status_store_from_cache(&backend).unwrap();
+        assert_eq!(store.requirements.len(), 1);
+        let req = &store.requirements[0];
+        assert_eq!(req.spec_id.as_deref(), Some("TASK-1"));
+        assert_eq!(req.status, RequirementStatus::InProgress);
+        assert_eq!(req.req_type, RequirementType::Task);
+    }
+
+    // The decision-inbox count reads the `has_pending_decision` cache column and
+    // matches the store-based reference oracle exactly (non-archived + pending).
+    #[test]
+    fn pending_decision_count_reads_cache_column() {
+        use aida_core::DatabaseBackend;
+        let dir = tempfile::tempdir().unwrap();
+        let backend = backend_in(dir.path());
+        assert_eq!(backend.pending_decision_count().unwrap(), 0);
+
+        let mut r = Requirement::new("needs a call".into(), String::new());
+        r.spec_id = Some("TASK-2".into());
+        r.decision_request = Some(pending_dr());
+        backend.add_requirement(r).unwrap();
+
+        // Answered decisions do not count.
+        let mut answered = Requirement::new("already decided".into(), String::new());
+        answered.spec_id = Some("TASK-4".into());
+        let mut dr = pending_dr();
+        dr.answered = Some(0);
+        answered.decision_request = Some(dr);
+        backend.add_requirement(answered).unwrap();
+
+        // Archived pending is excluded (matches the old store predicate).
+        let mut a = Requirement::new("archived pending".into(), String::new());
+        a.spec_id = Some("TASK-3".into());
+        a.decision_request = Some(pending_dr());
+        a.archived = true;
+        backend.add_requirement(a).unwrap();
+
+        assert_eq!(backend.pending_decision_count().unwrap(), 1);
+        // Cache-column count equals the store-based reference oracle.
+        let loaded = backend.load().unwrap();
+        assert_eq!(
+            backend.pending_decision_count().unwrap(),
+            pending_decision_request_count(&loaded),
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
@@ -114555,7 +114742,9 @@ fn handle_status_command_distributed(
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
-    use aida_core::DatabaseBackend;
+    // TASK-1065: the `DatabaseBackend::load` trait method is no longer called on
+    // this path — the rich view is built from the cache read-projection via
+    // `build_status_store_from_cache`. trace:TASK-1065 | ai:claude
 
     // STORY-707: the BARE `aida status` (no flags) takes the FAST cache-backed
     // path — sub-second, NO `backend.load()`, NO `gh`/network, NO live-session
@@ -114600,7 +114789,17 @@ fn handle_status_command_distributed(
         return Ok(());
     }
 
-    let store = backend.load()?;
+    // TASK-1065: the rich `aida status` view (any flag, incl. `--full`) is built
+    // from the CACHE read-projection, NOT a full `backend.load()` over every
+    // object YAML. `build_status_store_from_cache` assembles a `RequirementsStore`
+    // from `list_summaries` (the same sqlite projection `aida list` reads) plus a
+    // single cheap `metadata.yaml` read — finishing the STORY-707 floor: the bare
+    // status was already load-free; this takes the `--full` hygiene/cleanup doctor
+    // scans, the queue snapshot, and the Project/Requirements sections off the
+    // full-store load too. The one section that needs YAML-only data (the pending
+    // decision-inbox count) reads the `has_pending_decision` cache column instead.
+    // trace:TASK-1065 | ai:claude
+    let store = build_status_store_from_cache(backend)?;
     let project_root = std::env::current_dir()?;
 
     // BUG-609: `--all` reveals stale agents AND lists every worktree; `--stale`
@@ -114728,7 +114927,7 @@ fn handle_status_command_distributed(
     let _ = awaiting_report.render(verbose, stdout.lock());
 
     print_status_presence_line(&project_root);
-    print_status_presence_consumers(&project_root, backend, &store);
+    print_status_presence_consumers(&project_root, backend);
     print_status_session_section(&user_ctx);
     print_status_branch_section(&user_ctx);
     if !no_ci {
@@ -149815,6 +150014,8 @@ mod queue_json_rows_tests {
             heft: 0,
             // trace:TASK-902 | ai:claude
             blocked: false,
+            // trace:TASK-1065 | ai:claude
+            has_pending_decision: false,
             yaml_path: String::new(),
         }
     }

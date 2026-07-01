@@ -656,6 +656,39 @@ impl RequirementType {
             _ => 2,
         }
     }
+
+    /// Parse a requirement type from its cache/Debug form (e.g. "Task",
+    /// "NonFunctional", "ChangeRequest") — the exact `format!("{:?}", …)`
+    /// projection the `req_type` cache column stores. Case-insensitive so a
+    /// casing drift in the projection still resolves. Returns `None` for an
+    /// unrecognized token. The reverse of the cache's `req_type` projection,
+    /// letting a cache-backed status view reconstruct the typed enum without a
+    /// full `backend.load()`.
+    // trace:TASK-1065 | ai:claude
+    pub fn from_cache_str(s: &str) -> Option<RequirementType> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "functional" => Some(RequirementType::Functional),
+            "nonfunctional" => Some(RequirementType::NonFunctional),
+            "system" => Some(RequirementType::System),
+            "user" => Some(RequirementType::User),
+            "changerequest" => Some(RequirementType::ChangeRequest),
+            "bug" => Some(RequirementType::Bug),
+            "epic" => Some(RequirementType::Epic),
+            "story" => Some(RequirementType::Story),
+            "task" => Some(RequirementType::Task),
+            "spike" => Some(RequirementType::Spike),
+            "sprint" => Some(RequirementType::Sprint),
+            "folder" => Some(RequirementType::Folder),
+            "meta" => Some(RequirementType::Meta),
+            "principle" => Some(RequirementType::Principle),
+            "vision" => Some(RequirementType::Vision),
+            "constraint" => Some(RequirementType::Constraint),
+            "decision" => Some(RequirementType::Decision),
+            "term" => Some(RequirementType::Term),
+            "doc" => Some(RequirementType::Doc),
+            _ => None,
+        }
+    }
 }
 
 /// Represents the subtype for Meta requirements
@@ -6852,6 +6885,50 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// TASK-1065: `RequirementType::from_cache_str` is the reverse of the cache's
+    /// `format!("{:?}", req_type)` projection — it must round-trip EVERY variant's
+    /// Debug form (that's the exact string the `req_type` column stores), be
+    /// case-insensitive, and reject unknown tokens.
+    // trace:TASK-1065 | ai:claude
+    #[test]
+    fn from_cache_str_round_trips_every_debug_form() {
+        for t in [
+            RequirementType::Functional,
+            RequirementType::NonFunctional,
+            RequirementType::System,
+            RequirementType::User,
+            RequirementType::ChangeRequest,
+            RequirementType::Bug,
+            RequirementType::Epic,
+            RequirementType::Story,
+            RequirementType::Task,
+            RequirementType::Spike,
+            RequirementType::Sprint,
+            RequirementType::Folder,
+            RequirementType::Meta,
+            RequirementType::Principle,
+            RequirementType::Vision,
+            RequirementType::Constraint,
+            RequirementType::Decision,
+            RequirementType::Term,
+            RequirementType::Doc,
+        ] {
+            let debug = format!("{t:?}");
+            assert_eq!(
+                RequirementType::from_cache_str(&debug),
+                Some(t.clone()),
+                "Debug form {debug:?} must round-trip back to its variant"
+            );
+            // Case-insensitive.
+            assert_eq!(
+                RequirementType::from_cache_str(&debug.to_ascii_lowercase()),
+                Some(t)
+            );
+        }
+        assert_eq!(RequirementType::from_cache_str("NotAType"), None);
+        assert_eq!(RequirementType::from_cache_str(""), None);
+    }
 
     /// STORY-542: `InterfaceChanges` round-trips through YAML, empties skip
     /// serialization, and `is_empty()` reflects the captured surfaces.
