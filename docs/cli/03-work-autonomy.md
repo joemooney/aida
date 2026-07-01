@@ -142,7 +142,17 @@ Three cross-cutting truths the tree assumes:
 
 **Don't reach for it when** — you want to *force* headless vs interactive regardless of presence — pass the explicit `--no-human` / `--escalate-*` flags instead; presence is the *default*, not an override.
 
-**Gotchas.** `away` has a TTL (default 8h) — it lapses on its own so you don't get stuck headless forever. Tune the away-drain behavior under `[presence]` in `.aida/config.toml`. (`aida human away/home/presence` are the same verbs under the `human` role vector — same state, different front door.)
+**Gotchas.** `away` has a TTL (default 8h) — it lapses on its own so you don't get stuck headless forever. Tune the away-drain behavior under `[presence]` in `.aida/config.toml`:
+
+```toml
+[presence]
+consumers  = "on"              # master switch (default on) | "off"
+away_drain = "headless-both"   # default | "headless-escalate-defaults" | "headless-park"
+escalation = "park"            # punt handling, its OWN knob — "defaults" ships the defensible default, "park" shelves NeedsAttention. UNSET = derive from away_drain (headless-park → park, else defaults).
+home_offer = "surface"         # home-side (default surface) | "dont-block"
+```
+
+`escalation` is decoupled from `away_drain`: you can run a max-throughput `headless-both` drain but still `park` punts for triage (or the reverse) — previously the punt-handling default rode the `away_drain` rung and could not be picked independently. Leaving `escalation` unset reproduces the historical coupled behavior exactly. (`aida human away/home/presence` are the same verbs under the `human` role vector — same state, different front door.)
 
 **Chains with** — `away` → `queue work --auto-complete` (now defaults headless) → `home` → `aida status` surfaces what's waiting for you.
 
