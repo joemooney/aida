@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T06:04:37.998326382Z
-modified_at: 2026-07-01T15:51:04.286976703Z
+modified_at: 2026-07-01T15:51:32.250672485Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,6 +35,11 @@ comments:
   content: 'Auto-completed: PR #1297 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
   created_at: 2026-07-01T15:51:04.286974529Z
   modified_at: 2026-07-01T15:51:04.286974529Z
+- id: 019f1e60-dc9a-7fe3-9893-7a4b229b9cde
+  author: joe
+  content: 'PR-1297 (TASK-841 stacked-branch strategy) reviewed + merged: clean combined-merge, all 68 integrate tests green incl. the 5 new stacked-strategy tests. Review task done.'
+  created_at: 2026-07-01T15:51:32.250672485Z
+  modified_at: 2026-07-01T15:51:32.250672485Z
 history:
 - id: 019f1e60-6f5e-74c0-9dad-81921cd61b22
   author: aida-auto-bump
