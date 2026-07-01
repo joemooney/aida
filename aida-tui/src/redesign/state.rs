@@ -777,6 +777,56 @@ impl NewSpecInput {
     }
 }
 
+/// A pending drive-gate HOLD popup (STORY-744). When the operator runs `drive`
+/// on a spec that the zen suitability gate holds, the parent probes the gate
+/// (`aida zen <id> --json`) and — instead of a false "drive launched" — opens
+/// this popup carrying the hold `reason` and which remedy affordances apply. The
+/// state machine only tracks that one is open + its data; the parent renders it
+/// and shells out on the chosen key. Pure + Clone so the affordance derivation
+/// is unit-testable without a terminal.
+// trace:STORY-744 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GateHold {
+    /// The spec the drive was held for.
+    pub id: String,
+    /// The operator-facing hold reason (from the gate verdict).
+    pub reason: String,
+    /// The hold is under-specified → offer the `c` clarify affordance (author
+    /// acceptance criteria, then re-offer drive).
+    pub clarifiable: bool,
+    /// The hold is soft → offer the `f` force affordance (`aida zen <id> --force`).
+    pub forceable: bool,
+}
+
+impl GateHold {
+    /// The key-legend affordance lines to render, given which remedies apply.
+    /// Order is remedy-first (clarify, then force) then the always-present
+    /// dismiss line, so the popup surfaces the constructive path before the
+    /// override. Pure.
+    // trace:STORY-744 | ai:claude
+    pub fn affordances(&self) -> Vec<String> {
+        let mut v = Vec::new();
+        if self.clarifiable {
+            v.push("c: clarify — author acceptance criteria, then re-offer drive".to_string());
+        }
+        if self.forceable {
+            v.push("f: force — drive anyway (aida zen --force)".to_string());
+        }
+        v.push("Esc / q: dismiss".to_string());
+        v
+    }
+
+    /// Does the operator have a `c` clarify affordance in this hold?
+    pub fn offers_clarify(&self) -> bool {
+        self.clarifiable
+    }
+
+    /// Does the operator have an `f` force affordance in this hold?
+    pub fn offers_force(&self) -> bool {
+        self.forceable
+    }
+}
+
 /// The braille spinner frames cycled while a verb runs in the background.
 /// trace:BUG-633 | ai:claude
 pub const SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -957,6 +1007,12 @@ pub struct RedesignState {
     pub verb_modal: Option<VerbModal>,
     /// Pending "apply to all?" confirmation, if any.
     pub confirm: Option<ConfirmAll>,
+    /// Pending drive-gate HOLD popup, if any (STORY-744): set when `drive` is
+    /// run on a spec the zen suitability gate holds, so the operator sees the
+    /// hold reason (and its clarify / force remedy) instead of a false "drive
+    /// launched". Rendered + shelled-out-from by the parent.
+    // trace:STORY-744 | ai:claude
+    pub gate_hold: Option<GateHold>,
     /// Pending revisit-trigger input for the `defer` verb, if open. Holds the
     /// typed buffer + the target ids captured when `defer` was run.
     /// trace:TASK-921 | ai:claude
@@ -1028,6 +1084,7 @@ impl RedesignState {
             modal_scroll: 0,
             verb_modal: None,
             confirm: None,
+            gate_hold: None,
             defer_input: None,
             new_input: None,
             focus_epic: None,
@@ -2282,6 +2339,58 @@ fn item_legend() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- STORY-744: drive-gate hold affordances -----------------------------
+
+    /// An under-specified SOFT hold offers BOTH remedies: clarify (author
+    /// acceptance) and force (drive anyway), plus the always-present dismiss.
+    #[test]
+    fn gate_hold_soft_under_specified_offers_clarify_and_force() {
+        let hold = GateHold {
+            id: "TASK-1".to_string(),
+            reason: "under-specified (aida lint flags vague/missing acceptance)".to_string(),
+            clarifiable: true,
+            forceable: true,
+        };
+        assert!(hold.offers_clarify());
+        assert!(hold.offers_force());
+        let aff = hold.affordances();
+        assert!(
+            aff.iter().any(|a| a.starts_with("c:")),
+            "clarify line: {aff:?}"
+        );
+        assert!(
+            aff.iter().any(|a| a.starts_with("f:")),
+            "force line: {aff:?}"
+        );
+        assert!(
+            aff.iter().any(|a| a.contains("Esc")),
+            "dismiss line: {aff:?}"
+        );
+    }
+
+    /// A HARD refusal (e.g. blocked) offers NEITHER remedy — only dismiss.
+    #[test]
+    fn gate_hold_hard_refuse_offers_only_dismiss() {
+        let hold = GateHold {
+            id: "TASK-2".to_string(),
+            reason: "blocked by an unshipped dependency".to_string(),
+            clarifiable: false,
+            forceable: false,
+        };
+        assert!(!hold.offers_clarify());
+        assert!(!hold.offers_force());
+        let aff = hold.affordances();
+        assert_eq!(aff.len(), 1, "only the dismiss line: {aff:?}");
+        assert!(aff[0].contains("Esc"));
+    }
+
+    /// A fresh state has no drive-gate hold pending.
+    #[test]
+    fn fresh_state_has_no_gate_hold() {
+        let st = RedesignState::new(vec![], "advisor");
+        assert!(st.gate_hold.is_none());
+    }
 
     #[test]
     fn pending_op_new_starts_at_first_frame() {

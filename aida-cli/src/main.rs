@@ -4496,22 +4496,29 @@ fn run() -> Result<()> {
             solo,
             into_epic,
             dry_run,
+            json,
             command: _,
         } => {
-            let user_id = current_user_id(None);
-            run_zen_drive(
-                &storage,
-                None, // legacy storage path: no git backend for auto-approve
-                &user_id,
-                spec.as_deref(),
-                no_human.as_deref(),
-                *supervised,
-                *no_pull,
-                *force,
-                *solo,
-                *into_epic,
-                *dry_run,
-            )?;
+            // STORY-744: the machine-readable gate probe short-circuits the
+            // drive entirely — it resolves + classifies and prints the verdict.
+            if *json {
+                run_zen_gate_json(&storage, spec.as_deref())?;
+            } else {
+                let user_id = current_user_id(None);
+                run_zen_drive(
+                    &storage,
+                    None, // legacy storage path: no git backend for auto-approve
+                    &user_id,
+                    spec.as_deref(),
+                    no_human.as_deref(),
+                    *supervised,
+                    *no_pull,
+                    *force,
+                    *solo,
+                    *into_epic,
+                    *dry_run,
+                )?;
+            }
         }
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
@@ -15586,9 +15593,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             solo,
             into_epic,
             dry_run,
+            json,
             command: _,
         } => {
             let storage = Storage::new(store_path.to_path_buf());
+            // STORY-744: the machine-readable gate probe short-circuits the
+            // drive — resolve + classify the suitability gate and print the
+            // verdict as JSON so a shell-out consumer (the TUI drive verb) reads
+            // the SAME gate the drive runs instead of parsing human prose.
+            if *json {
+                return run_zen_gate_json(&storage, spec.as_deref());
+            }
             let user_id = current_user_id(None);
             return run_zen_drive(
                 &storage,
@@ -139586,6 +139601,54 @@ fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
 // for an Approved spec, and the ADR-6 scope-routing. The pure decision logic
 // lives in `zen_drive.rs`; this handler does the IO (status write, worktree
 // creation, the self-invoked drive).
+/// `aida zen <spec> --json` — the machine-readable drive-gate PROBE. Resolves
+/// the spec, evaluates the SAME eligibility + suitability gate the drive runs
+/// (via the pure [`zen_drive::classify_gate`]), and prints the structured
+/// verdict as JSON — WITHOUT driving. A shell-out consumer (the TUI drive verb,
+/// STORY-744) reads this to surface a gate hold (and its clarify / force remedy)
+/// instead of a false "drive launched".
+///
+/// The probe reports the HONEST, un-forced verdict: it classifies with
+/// `force = false` (so a soft hold surfaces as `soft-block` + `forceable`,
+/// letting the consumer decide whether to offer a force affordance) and
+/// `coupled = false` (coupling only fires on `--solo`, which the probe does not
+/// model — the drive it stands in for does not pass it).
+// trace:STORY-744 | ai:claude
+fn run_zen_gate_json(storage: &Storage, spec: Option<&str>) -> Result<()> {
+    let Some(spec) = spec.map(str::trim).filter(|s| !s.is_empty()) else {
+        anyhow::bail!(
+            "aida zen --json needs a spec to probe. Usage: aida zen <SPEC> --json \
+             (emit the drive-gate verdict as JSON without driving)."
+        );
+    };
+    if !zen_drive::looks_like_spec_id(spec) {
+        anyhow::bail!(
+            "aida zen --json needs a real SPEC id (e.g. TASK-123), not a free-text \
+             thought — the gate probe classifies an existing spec."
+        );
+    }
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    let display = req.display_id();
+    let req_type = req.req_type.to_string();
+    let tags: Vec<String> = req.tags.iter().cloned().collect();
+    let suit_input = zen_drive::SuitabilityInput {
+        req_type: &req_type,
+        tags: &tags,
+        has_unsatisfied_blocker: aida_core::pickability::blocked_by_incomplete(req, &store),
+        under_specified: spec_is_under_specified(req),
+        coupled: false,
+        force: false,
+    };
+    let verdict = zen_drive::classify_gate(&display, &req.status, &suit_input);
+    println!("{}", serde_json::to_string(&verdict)?);
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_zen_drive(
     storage: &Storage,

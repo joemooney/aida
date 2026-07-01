@@ -43,7 +43,7 @@ use ratatui::widgets::{
     Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
 };
 use ratatui::{Frame, Terminal};
-use state::{Focus, Level};
+use state::{Focus, GateHold, Level};
 use std::io::Stdout;
 use std::process::Command;
 
@@ -688,6 +688,39 @@ fn handle_key(
         return Ok(false);
     }
 
+    // The drive-gate HOLD popup captures input until resolved (STORY-744): `c`
+    // clarifies (when the hold is under-specified), `f` forces the drive (when
+    // the hold is soft), Esc / q dismiss. A distinct, exclusive popup raised by
+    // the drive verb when the zen suitability gate holds the focused spec — so it
+    // is handled before the confirm / modal overlays. trace:STORY-744 | ai:claude
+    if let Some(hold) = st.gate_hold.clone() {
+        match key.code {
+            KeyCode::Char('c') | KeyCode::Char('C') if hold.offers_clarify() => {
+                clarify_and_reoffer(terminal, st, store, loaded_spec, pending, &hold.id)?;
+            }
+            KeyCode::Char('f') | KeyCode::Char('F') if hold.offers_force() => {
+                st.gate_hold = None;
+                if spawn_drive(&hold.id, true) {
+                    st.status = Some(format!(
+                        "drive FORCE-launched for {} — watch it with `aida drain status`",
+                        hold.id
+                    ));
+                } else {
+                    st.status = Some(format!(
+                        "drive: FAILED to force-launch the drive for {}",
+                        hold.id
+                    ));
+                }
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                st.gate_hold = None;
+                st.status = Some("drive hold dismissed".to_string());
+            }
+            _ => {}
+        }
+        return Ok(false);
+    }
+
     // A confirmation popup captures input until resolved.
     if st.confirm.is_some() {
         match key.code {
@@ -1222,12 +1255,42 @@ fn apply_outcome(
             // queue/approve/defer verbs this does NOT use `start_pending`: that
             // captures output and blocks on completion, which is exactly wrong
             // for a drive that runs for minutes. trace:STORY-728 | ai:claude
-            if spawn_drive(&id) {
-                st.status = Some(format!(
-                    "drive launched for {id} — watch it with `aida drain status`"
-                ));
-            } else {
-                st.status = Some(format!("drive: FAILED to launch the drive for {id}"));
+            //
+            // STORY-744: the detached drive nulls its stdio, so a zen
+            // suitability-gate HOLD (e.g. under-specified) would die silently and
+            // the TUI would report a false "drive launched". PROBE the gate first
+            // (`aida zen <id> --json`) and only launch when it reports ready; a
+            // hold opens the gate-hold popup (reason + clarify / force remedy)
+            // instead of a launch confirmation. trace:STORY-744 | ai:claude
+            match probe_drive_gate(&id) {
+                Ok(v) if v.verdict == "ready" => {
+                    if spawn_drive(&id, false) {
+                        st.status = Some(format!(
+                            "drive launched for {id} — watch it with `aida drain status`"
+                        ));
+                    } else {
+                        st.status = Some(format!("drive: FAILED to launch the drive for {id}"));
+                    }
+                }
+                Ok(v) => {
+                    // The gate held the spec — surface the reason + remedies
+                    // instead of a false launch. Under-specified → clarify;
+                    // soft → force.
+                    st.status = Some(format!("drive held for {id} — see the popup"));
+                    st.gate_hold = Some(GateHold {
+                        id,
+                        reason: v.reason,
+                        clarifiable: v.under_specified,
+                        forceable: v.forceable,
+                    });
+                }
+                Err(msg) => {
+                    // Could not evaluate the gate — refuse to report a launch we
+                    // cannot vouch for.
+                    st.status = Some(format!(
+                        "drive: could not evaluate the gate for {id} — {msg}"
+                    ));
+                }
             }
         }
         RunOutcome::NeedsConfirm(_) => { /* popup already raised by run_verb */ }
@@ -1237,17 +1300,24 @@ fn apply_outcome(
 }
 
 /// Launch the autonomous drive on `id` as a DETACHED background process:
-/// `aida zen <id>`. Returns `true` if the child spawned. The cockpit can't host
-/// the long-running interactive drive in-terminal, so the child's stdio is
-/// nulled and it is left to run independently (the operator watches it with
-/// `aida drain status`). Mirrors the other verbs' launchers but uses `spawn`
-/// (fire-and-forget) instead of `output` (capture-and-wait), and carries advisor
-/// authority on the spawned command so the drive isn't refused by the role gate.
+/// `aida zen <id>` (`--force` when `force`). Returns `true` if the child
+/// spawned. The cockpit can't host the long-running interactive drive
+/// in-terminal, so the child's stdio is nulled and it is left to run
+/// independently (the operator watches it with `aida drain status`). Mirrors the
+/// other verbs' launchers but uses `spawn` (fire-and-forget) instead of `output`
+/// (capture-and-wait), and carries advisor authority on the spawned command so
+/// the drive isn't refused by the role gate. `--force` is the operator's answer
+/// to a SOFT gate hold (STORY-744): it overrides the under-specified / coupled
+/// warnings, never the hard refusals.
 // trace:STORY-728 | ai:claude
-fn spawn_drive(id: &str) -> bool {
+// trace:STORY-744 | ai:claude — the `force` path is the gate-hold override.
+fn spawn_drive(id: &str, force: bool) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["zen", id]);
+    if force {
+        cmd.arg("--force");
+    }
     // Kicking off the drive commits the team to autonomously execute the spec —
     // an advisor-authority act (like routing it onto the implementer queue), so
     // carry advisor authority on the spawned command.
@@ -1261,6 +1331,113 @@ fn spawn_drive(id: &str) -> bool {
         cmd.current_dir(cwd);
     }
     cmd.spawn().is_ok()
+}
+
+/// Handle the `c` (clarify) affordance on a drive-gate hold (STORY-744): SUSPEND
+/// the cockpit, launch the INTERACTIVE clarifier (`aida questions clarify <id>`,
+/// which hosts `/aida-clarify`) so the operator authors acceptance criteria,
+/// then RE-OFFER the drive — re-run the drive gesture, which re-probes the gate
+/// and either launches (now ready) or re-opens the hold popup (still held). The
+/// hold is cleared before suspending so the popup is gone while the child owns
+/// the terminal; the cockpit repaints from scratch on return.
+// trace:STORY-744 | ai:claude
+fn clarify_and_reoffer(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    st: &mut RedesignState,
+    store: Option<&SpecStore>,
+    loaded_spec: &mut Option<LoadedSpec>,
+    pending: &mut Option<Pending>,
+    id: &str,
+) -> Result<()> {
+    st.gate_hold = None;
+    let exe = crate::app::aida_exe();
+    let id_owned = id.to_string();
+    // Hand the terminal to the interactive clarifier while it runs.
+    let status = term::suspend_for_child(|| {
+        let mut cmd = Command::new(&exe);
+        cmd.args(["questions", "clarify", &id_owned]);
+        cmd.env("AIDA_SESSION_ROLE", "advisor");
+        if let Ok(cwd) = std::env::current_dir() {
+            cmd.current_dir(cwd);
+        }
+        cmd.status()
+    });
+    // The child scribbled over the alt screen — force a full repaint next frame.
+    terminal.clear()?;
+    match status {
+        Ok(s) if s.success() => {
+            // Acceptance authored — PRESENT THE DRIVE VERB AGAIN: re-run the
+            // drive gesture so the (now hopefully clean) gate is re-evaluated.
+            apply_outcome(
+                terminal,
+                st,
+                store,
+                loaded_spec,
+                pending,
+                RunOutcome::Drive { id: id.to_string() },
+            )?;
+        }
+        Ok(_) => {
+            st.status = Some(format!(
+                "clarify exited without finishing for {id} — run drive again when it's ready"
+            ));
+        }
+        Err(e) => {
+            st.status = Some(format!("clarify: could not launch the clarifier ({e})"));
+        }
+    }
+    Ok(())
+}
+
+/// The drive-gate verdict `aida zen <id> --json` emits (STORY-744) — the
+/// deserialized mirror of `zen_drive::GateVerdict`. The TUI reads this to
+/// evaluate the SAME suitability gate the drive runs, so a gate hold surfaces
+/// honestly instead of a false "drive launched".
+// trace:STORY-744 | ai:claude
+#[derive(Debug, Clone, serde::Deserialize)]
+struct DriveGateVerdict {
+    /// `"ready"` (clear to drive) or `"hold"` (a gate held it).
+    verdict: String,
+    /// The operator-facing hold reason (empty when ready).
+    reason: String,
+    /// The hold is under-specified → a clarify remedy applies.
+    under_specified: bool,
+    /// The hold is soft → `--force` overrides it.
+    forceable: bool,
+}
+
+/// Probe the drive-suitability gate for `id` by shelling out to
+/// `aida zen <id> --json` and parsing the verdict. Returns `Ok(verdict)` on a
+/// clean probe, or `Err(message)` when the probe could not be run or parsed —
+/// the caller then refuses to launch (an unverifiable gate must not report a
+/// false "drive launched"). Synchronous: the probe is a fast local store read +
+/// pure classification (no LLM, no network), like the `show` / `why` reads.
+// trace:STORY-744 | ai:claude
+fn probe_drive_gate(id: &str) -> std::result::Result<DriveGateVerdict, String> {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["zen", id, "--json"]);
+    // Advisor authority for parity with the drive it stands in for (the probe
+    // itself only reads, but keeps the provenance consistent).
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    let out = cmd
+        .output()
+        .map_err(|e| format!("could not run the gate probe ({e})"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        let msg = err.trim();
+        return Err(if msg.is_empty() {
+            "the gate probe failed".to_string()
+        } else {
+            msg.to_string()
+        });
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    serde_json::from_str::<DriveGateVerdict>(stdout.trim())
+        .map_err(|e| format!("could not read the gate verdict ({e})"))
 }
 
 /// The argument vector for the cockpit's `groom` gesture: `aida groom` with NO
@@ -1885,6 +2062,12 @@ fn render(
     }
     if let Some(c) = st.confirm {
         render_confirm(f, f.area(), theme, c.verb, c.count);
+    }
+    // The drive-gate HOLD popup (STORY-744) overlays the panels — a distinct,
+    // exclusive popup raised by the drive verb when the zen suitability gate
+    // holds the focused spec. trace:STORY-744 | ai:claude
+    if let Some(h) = &st.gate_hold {
+        render_gate_hold(f, f.area(), theme, h);
     }
     // The defer revisit-trigger input overlays everything else. trace:TASK-921
     if let Some(di) = &st.defer_input {
@@ -2868,6 +3051,41 @@ fn render_confirm(f: &mut Frame, area: Rect, theme: &Theme, verb: Verb, count: u
         Paragraph::new(lines)
             .block(block)
             .alignment(Alignment::Center),
+        popup,
+    );
+}
+
+/// Render the drive-gate HOLD popup (STORY-744): the held spec id in the title,
+/// a "was NOT launched" headline, the wrapped gate reason, and the remedy
+/// affordances the hold offers (clarify / force / dismiss). Warn-bordered like
+/// the confirm popup — a drive-gate hold is a refusal, not a success.
+// trace:STORY-744 | ai:claude
+fn render_gate_hold(f: &mut Frame, area: Rect, theme: &Theme, hold: &GateHold) {
+    let popup = centered(area, 64, 45);
+    f.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.warn))
+        .title(format!(" drive held — {} ", hold.id));
+    let mut lines: Vec<Line> = vec![
+        Line::from(Span::styled(
+            "The suitability gate held this spec — it was NOT launched.",
+            Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            hold.reason.clone(),
+            Style::default().fg(theme.fg),
+        )),
+        Line::from(""),
+    ];
+    for aff in hold.affordances() {
+        lines.push(Line::from(vec![
+            Span::styled("  • ", Style::default().fg(theme.dim)),
+            Span::styled(aff, Style::default().fg(theme.fg)),
+        ]));
+    }
+    f.render_widget(
+        Paragraph::new(lines).block(block).wrap(Wrap { trim: true }),
         popup,
     );
 }

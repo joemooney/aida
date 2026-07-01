@@ -413,6 +413,96 @@ pub(crate) fn classify_suitability(i: &SuitabilityInput) -> Suitability {
     }
 }
 
+// ── 2b. STRUCTURED GATE VERDICT (STORY-744) ───────────────────────────────
+//
+// A machine-readable composition of the eligibility + suitability gates, so a
+// shell-out consumer (the TUI drive verb) can read the SAME verdict the drive
+// runs instead of parsing the human refusal prose. Emitted by
+// `aida zen <spec> --json`.
+
+/// The drive-gate verdict for one spec, as `aida zen <spec> --json` serializes
+/// it. Composes [`classify_eligibility`] (status) and [`classify_suitability`]
+/// (type / blockers / lint / coupling) into one decision: `verdict` is the
+/// headline (`ready` | `hold`), `class` names WHICH gate held, and the two
+/// booleans tell a consumer which remedy affordance to offer — `under_specified`
+/// → a clarify remedy (author acceptance criteria); `forceable` → `--force`
+/// overrides a SOFT hold.
+// trace:STORY-744 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct GateVerdict {
+    /// The spec's display id (echoed back for the consumer's convenience).
+    pub spec: String,
+    /// `"ready"` (clear to drive) or `"hold"` (a gate held it).
+    pub verdict: &'static str,
+    /// Which gate produced the verdict: `"ready"`, `"not-eligible"` (a
+    /// terminal / draft status), `"hard-refuse"` (epic / keystone / blocked —
+    /// `--force` does NOT override), or `"soft-block"` (under-specified /
+    /// coupled — `--force` overrides).
+    pub class: &'static str,
+    /// The operator-facing hold reason (empty when `ready`).
+    pub reason: String,
+    /// The hold is (at least partly) because the spec is under-specified — a
+    /// clarify remedy applies (author acceptance criteria, then re-offer drive).
+    /// Only ever set on a SOFT hold; a hard refusal (e.g. blocked) dominates and
+    /// clarifying would not unblock it, so it reports `false`.
+    pub under_specified: bool,
+    /// The hold is SOFT — re-running with `--force` overrides it.
+    pub forceable: bool,
+}
+
+/// Compose the eligibility + suitability classifications into one structured
+/// [`GateVerdict`]. Pure: the caller reads the status + facts from the store and
+/// passes them in, so the whole gate is unit-testable without storage. The
+/// eligibility gate is checked first — a terminal / draft status is a hold
+/// regardless of suitability.
+// trace:STORY-744 | ai:claude
+pub(crate) fn classify_gate(
+    spec: &str,
+    status: &RequirementStatus,
+    suit_input: &SuitabilityInput,
+) -> GateVerdict {
+    let ready = |class: &'static str| GateVerdict {
+        spec: spec.to_string(),
+        verdict: "ready",
+        class,
+        reason: String::new(),
+        under_specified: false,
+        forceable: false,
+    };
+    // Eligibility first: a not-Ready status holds regardless of suitability.
+    if let Some(reason) = classify_eligibility(status).refusal(spec) {
+        return GateVerdict {
+            spec: spec.to_string(),
+            verdict: "hold",
+            class: "not-eligible",
+            reason,
+            under_specified: false,
+            forceable: false,
+        };
+    }
+    match classify_suitability(suit_input) {
+        Suitability::Ready => ready("ready"),
+        // `--force` was passed and flipped a soft block to proceed: still ready.
+        Suitability::WarnProceed(_) => ready("ready"),
+        Suitability::HardRefuse(reason) => GateVerdict {
+            spec: spec.to_string(),
+            verdict: "hold",
+            class: "hard-refuse",
+            reason,
+            under_specified: false,
+            forceable: false,
+        },
+        Suitability::SoftBlock(reason) => GateVerdict {
+            spec: spec.to_string(),
+            verdict: "hold",
+            class: "soft-block",
+            reason,
+            under_specified: suit_input.under_specified,
+            forceable: true,
+        },
+    }
+}
+
 // ── 3. SCOPE-ROUTING (ADR-6) ──────────────────────────────────────────────
 //
 // A scoped spec (parent epic / active focus) auto-routes into its scope
@@ -980,6 +1070,102 @@ mod tests {
             suitability("task", &["papercut"], false, false),
             Suitability::Ready
         );
+    }
+
+    // --- STORY-744: structured gate verdict ---------------------------------
+
+    fn gate(
+        status: RequirementStatus,
+        req_type: &str,
+        tags: &[&str],
+        blocked: bool,
+        under: bool,
+    ) -> GateVerdict {
+        let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+        classify_gate(
+            "TASK-1",
+            &status,
+            &SuitabilityInput {
+                req_type,
+                tags: &owned,
+                has_unsatisfied_blocker: blocked,
+                under_specified: under,
+                coupled: false,
+                force: false,
+            },
+        )
+    }
+
+    /// A clean, approved, bounded spec → ready to drive.
+    // trace:STORY-744
+    #[test]
+    fn gate_clean_approved_is_ready() {
+        let v = gate(RequirementStatus::Approved, "task", &[], false, false);
+        assert_eq!(v.verdict, "ready");
+        assert_eq!(v.class, "ready");
+        assert!(v.reason.is_empty());
+        assert!(!v.under_specified);
+        assert!(!v.forceable);
+    }
+
+    /// A not-yet-approved (Draft) spec → a not-eligible HOLD, never forceable.
+    // trace:STORY-744
+    #[test]
+    fn gate_draft_is_not_eligible_hold() {
+        let v = gate(RequirementStatus::Draft, "task", &[], false, false);
+        assert_eq!(v.verdict, "hold");
+        assert_eq!(v.class, "not-eligible");
+        assert!(!v.reason.is_empty());
+        assert!(!v.forceable);
+        assert!(!v.under_specified);
+    }
+
+    /// An under-specified approved spec → a SOFT hold: forceable AND flagged
+    /// under_specified so a consumer can offer the clarify remedy.
+    // trace:STORY-744
+    #[test]
+    fn gate_under_specified_is_soft_and_clarifiable() {
+        let v = gate(RequirementStatus::Approved, "task", &[], false, true);
+        assert_eq!(v.verdict, "hold");
+        assert_eq!(v.class, "soft-block");
+        assert!(v.forceable, "a soft block is forceable");
+        assert!(
+            v.under_specified,
+            "under-specified drives the clarify remedy"
+        );
+        assert!(v.reason.contains("under-specified"));
+    }
+
+    /// A blocked spec (BlockedBy → unshipped) → a HARD refusal: NOT forceable,
+    /// and under_specified is suppressed (clarifying would not unblock it).
+    // trace:STORY-744
+    #[test]
+    fn gate_blocked_is_hard_refuse_not_forceable() {
+        // Even when the spec ALSO happens to be under-specified, the hard
+        // refusal dominates and no soft remedy is offered.
+        let v = gate(RequirementStatus::Approved, "task", &[], true, true);
+        assert_eq!(v.verdict, "hold");
+        assert_eq!(v.class, "hard-refuse");
+        assert!(!v.forceable, "a hard refusal is not overridable");
+        assert!(
+            !v.under_specified,
+            "a hard refusal suppresses the clarify remedy"
+        );
+    }
+
+    /// A keystone spec → a hard refusal (it ships human-supervised).
+    // trace:STORY-744
+    #[test]
+    fn gate_keystone_is_hard_refuse() {
+        let v = gate(
+            RequirementStatus::Approved,
+            "task",
+            &["keystone"],
+            false,
+            false,
+        );
+        assert_eq!(v.class, "hard-refuse");
+        assert!(!v.forceable);
     }
 
     // --- TASK-1037: scope-routing (ADR-6) -----------------------------------

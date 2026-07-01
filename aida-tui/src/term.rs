@@ -152,6 +152,38 @@ pub fn sanitize_after_child() {
     let _ = out.flush();
 }
 
+/// Run `f` with the TUI SUSPENDED: leave the alternate screen + raw mode and
+/// show the cursor so a spawned INTERACTIVE child (e.g. `aida questions clarify`,
+/// which itself hosts an interactive `claude`) owns the real terminal, then
+/// re-enter raw mode + the alternate screen when it returns. Returns whatever
+/// `f` returns.
+///
+/// The outer [`TermGuard`]'s restore flag ([`TERMINAL_NEEDS_RESTORE`]) is left
+/// untouched, so a panic inside the child still tears the terminal down exactly
+/// once on unwind (the flag is armed, the guard's Drop / panic-hook runs the
+/// single restore). The re-enter is best-effort — every step swallows its error
+/// the same way [`restore_terminal`] does — because the child may have left the
+/// terminal in any state; the caller repaints from scratch afterwards.
+// trace:STORY-744 | ai:claude
+pub fn suspend_for_child<T>(f: impl FnOnce() -> T) -> T {
+    let mut out = stdout();
+    // Hand the terminal to the child: cooked mode, main screen, visible cursor.
+    let _ = out.execute(LeaveAlternateScreen);
+    let _ = out.execute(cursor::Show);
+    let _ = terminal::disable_raw_mode();
+    let _ = out.flush();
+
+    let result = f();
+
+    // Reclaim it: mirror TermGuard::enter's sequence (raw mode → alt screen →
+    // hide cursor). Best-effort — the caller clears + redraws next frame.
+    let _ = terminal::enable_raw_mode();
+    let _ = out.execute(EnterAlternateScreen);
+    let _ = out.execute(cursor::Hide);
+    let _ = out.flush();
+    result
+}
+
 /// Rows available to a hosted PTY child: the full terminal height minus
 /// the one row reserved for the always-visible status strip. Never
 /// returns 0 — a degenerate 1-row terminal still gets a 1-row child.
