@@ -200,7 +200,8 @@ impl AwaitingReport {
                 };
                 writeln!(
                     w,
-                    "  📨 {} unread mail{}{} — `{}`",
+                    "  {} {} unread mail{}{} — `{}`",
+                    crate::glyph(crate::glyphs::Glyph::IncomingMail),
                     self.mail.unread,
                     if self.mail.unread == 1 { "" } else { "s" },
                     urgent,
@@ -278,8 +279,8 @@ impl AwaitingReport {
     /// caller already gathered — it does NO I/O, so cheapness is the caller's
     /// job (build the report with `no_ci` on the per-turn path so PRs, the one
     /// network-backed channel, are omitted; the full `aida awaiting` includes
-    /// them). Example: `⦿ Awaiting you: 2 briefs · 1 finding · 3 mail (1 urgent)
-    /// · 1 escalation — run `aida awaiting``.
+    /// them). Example (awaiting-glyph prefix elided): `Awaiting you: 2 briefs ·
+    /// 1 finding · 3 mail (1 urgent) · 1 escalation — run `aida awaiting``.
     // trace:STORY-741 | ai:claude
     pub fn compact_line(&self) -> Option<String> {
         if self.is_empty() {
@@ -325,7 +326,8 @@ impl AwaitingReport {
             return None;
         }
         Some(format!(
-            "⦿ Awaiting you: {} — run `aida awaiting`",
+            "{} Awaiting you: {} — run `aida awaiting`",
+            crate::glyph(crate::glyphs::Glyph::Awaiting),
             parts.join(" · ")
         ))
     }
