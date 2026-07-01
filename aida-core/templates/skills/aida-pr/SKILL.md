@@ -324,6 +324,14 @@ comments, and pass it to `gh pr create --body-file -`.
 - [ ] <other smoke tests run during development>
 ```
 
+**Seed the Test plan from each spec's captured verification steps (STORY-698).**
+When `aida queue done` closed a spec, the builder may have recorded the
+verification steps they actually ran; `aida show <REQ-ID>` prints them under a
+**Verification steps** block. For each REQ-ID in the batch, fold any captured
+steps into the `## Test plan` list (as `[x]` already-run items) so the PR body
+carries the implementation audit trail rather than re-deriving it from memory.
+A spec with no captured steps contributes nothing — don't invent items.
+
 ### 9. Confirm with the user
 
 <!-- kind:confirmation -->

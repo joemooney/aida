@@ -18227,6 +18227,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 println!("    {}", line);
                             }
                         }
+                        // STORY-698: the verification steps the builder ran,
+                        // captured at `aida queue done` — the audit trail the
+                        // PR body surfaces. trace:STORY-698 | ai:claude
+                        if let Some(steps) = info
+                            .test_coverage_notes
+                            .as_ref()
+                            .filter(|s| !s.trim().is_empty())
+                        {
+                            println!("  Verification:");
+                            for line in steps.lines().filter(|l| !l.trim().is_empty()) {
+                                println!("    - {}", line);
+                            }
+                        }
                     }
                     // STORY-332: surface the punt reason when the spec is
                     // paused in NeedsAttention, so triage sees the fork
@@ -26611,6 +26624,21 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
                     println!("  {} {}", format!("[{label}]").cyan(), line);
                 }
             }
+        }
+    }
+
+    // STORY-698: the verification steps the builder ran, captured at
+    // `aida queue done` — the implementation audit trail the PR body surfaces.
+    // trace:STORY-698 | ai:claude
+    if let Some(steps) = req
+        .implementation_info
+        .as_ref()
+        .and_then(|info| info.test_coverage_notes.as_ref())
+        .filter(|s| !s.trim().is_empty())
+    {
+        println!("\n{}:", "Verification steps".green());
+        for line in steps.lines().filter(|l| !l.trim().is_empty()) {
+            println!("  {} {}", "-".dimmed(), line);
         }
     }
 
@@ -58862,6 +58890,198 @@ fn capture_interface_changes(
             summary.dimmed()
         );
     }
+    Ok(())
+}
+
+/// True when verification-step capture is disabled via
+/// `AIDA_AUTO_TEST_PLAN_CAPTURE=0|false|no`. Mirrors [`auto_followups_disabled`]
+/// and [`capture_interface_changes_disabled`] — the env-opt-out keeps the
+/// close-checkpoint prompt out of unattended drains.
+// trace:STORY-698 | ai:claude
+fn capture_test_plan_disabled() -> bool {
+    matches!(
+        std::env::var("AIDA_AUTO_TEST_PLAN_CAPTURE")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "0" | "false" | "no"
+    )
+}
+
+/// What [`capture_test_plan`] should do with the verification steps, given the
+/// resolved flag / TTY / opt-out state. Split out as a pure decision so the
+/// precedence rules are unit-testable without a TTY.
+// trace:STORY-698 | ai:claude
+#[derive(Debug, PartialEq)]
+enum TestPlanCapture {
+    /// Leave `test_coverage_notes` untouched (no prompt, no write).
+    Skip,
+    /// Store exactly these joined steps (the flag / deterministic path).
+    Record(String),
+    /// Prompt the builder at the TTY for the steps.
+    Prompt,
+}
+
+/// Precedence for verification-step capture at `aida queue done`:
+///
+/// 1. Any `--test-plan STEP` flag ⇒ record exactly those steps, no prompt.
+/// 2. `--no-test-plan` ⇒ skip (leave any existing notes untouched), no prompt.
+/// 3. Otherwise, at a TTY, interactive (not `--yes`), not env-disabled, and
+///    with nothing already captured ⇒ prompt.
+/// 4. Any other case (non-interactive, no TTY, opted out, already set) ⇒ skip.
+///
+/// A `--test-plan` flag overrides an existing value (explicit intent); the
+/// interactive path never re-prompts once a value is set.
+// trace:STORY-698 | ai:claude
+fn decide_test_plan_capture(
+    flag_steps: &[String],
+    no_test_plan: bool,
+    interactive: bool,
+    at_tty: bool,
+    disabled: bool,
+    already_set: bool,
+) -> TestPlanCapture {
+    if !flag_steps.is_empty() {
+        return TestPlanCapture::Record(flag_steps.join("\n"));
+    }
+    if no_test_plan || !interactive || !at_tty || disabled || already_set {
+        return TestPlanCapture::Skip;
+    }
+    TestPlanCapture::Prompt
+}
+
+/// Prompt at a TTY for the verification steps the builder ran: one step per
+/// `Enter`, blank line ends. Mirrors [`prompt_interface_surface`]. Returns the
+/// collected lines.
+// trace:STORY-698 | ai:claude
+fn prompt_test_plan_steps() -> Vec<String> {
+    use std::io::Write;
+    let mut lines = Vec::new();
+    eprintln!(
+        "  {} verification steps you ran? One per line, blank line when done.",
+        "→".cyan()
+    );
+    eprintln!(
+        "    {} {}",
+        "e.g.".dimmed(),
+        "cargo test -p aida-cli · manual: aida queue done at a TTY".dimmed()
+    );
+    loop {
+        eprint!("    > ");
+        let _ = std::io::stderr().flush();
+        let mut answer = String::new();
+        if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+            break;
+        }
+        let trimmed = answer.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        lines.push(trimmed.to_string());
+    }
+    lines
+}
+
+/// Capture the verification steps the builder actually ran at close (`aida
+/// queue done`) — the implementation audit trail surfaced in the PR body
+/// (STORY-698). Stored in `implementation_info.test_coverage_notes` (no new
+/// model field, no cache migration — design LOCKED 2026-07-01). Steps are
+/// joined newline-separated.
+///
+/// Best-effort — any failure returns `Ok(())` so it never breaks `queue done`.
+/// Idempotent: an existing non-empty `test_coverage_notes` is left alone unless
+/// a `--test-plan` flag explicitly overrides it.
+// trace:STORY-698 | ai:claude
+fn capture_test_plan(
+    storage: &Storage,
+    req_id: uuid::Uuid,
+    display_id: &str,
+    flag_steps: &[String],
+    no_test_plan: bool,
+    interactive: bool,
+) -> Result<()> {
+    // Cheap pre-checks (flags / opt-out) decide most cases without a load.
+    let at_tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+    let disabled = capture_test_plan_disabled();
+
+    // Idempotency only matters for the interactive path; check it there.
+    let already_set = |storage: &Storage| -> bool {
+        storage
+            .load()
+            .ok()
+            .and_then(|store| {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == req_id)
+                    .and_then(|r| r.implementation_info.as_ref())
+                    .and_then(|info| info.test_coverage_notes.as_ref())
+                    .map(|notes| !notes.trim().is_empty())
+            })
+            .unwrap_or(false)
+    };
+
+    // Resolve without touching the store when the flags already decide it.
+    let decision = if !flag_steps.is_empty() {
+        decide_test_plan_capture(
+            flag_steps,
+            no_test_plan,
+            interactive,
+            at_tty,
+            disabled,
+            false,
+        )
+    } else if no_test_plan || !interactive || !at_tty || disabled {
+        TestPlanCapture::Skip
+    } else {
+        decide_test_plan_capture(
+            flag_steps,
+            no_test_plan,
+            interactive,
+            at_tty,
+            disabled,
+            already_set(storage),
+        )
+    };
+
+    let notes = match decision {
+        TestPlanCapture::Skip => return Ok(()),
+        TestPlanCapture::Record(joined) => joined,
+        TestPlanCapture::Prompt => {
+            eprintln!();
+            eprintln!(
+                "{} How did you verify {}? (recorded as the PR's audit trail)",
+                "→".cyan().bold(),
+                display_id.bold()
+            );
+            eprintln!("  {} nothing to record? Just press Enter.", "·".dimmed());
+            let lines = prompt_test_plan_steps();
+            if lines.is_empty() {
+                return Ok(());
+            }
+            lines.join("\n")
+        }
+    };
+
+    let now = chrono::Utc::now();
+    let step_count = notes.lines().filter(|l| !l.trim().is_empty()).count();
+    storage.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+            let info = r
+                .implementation_info
+                .get_or_insert_with(aida_core::ImplementationInfo::default);
+            info.test_coverage_notes = Some(notes.clone());
+            r.modified_at = now;
+        }
+    })?;
+
+    println!(
+        "  {} verification steps captured for {} ({} step{})",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        display_id.bold(),
+        step_count,
+        if step_count == 1 { "" } else { "s" }
+    );
     Ok(())
 }
 
@@ -129413,6 +129633,8 @@ fn handle_queue_command(
             interface_tui,
             interface_other,
             no_interface_change,
+            test_plan,
+            no_test_plan,
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
@@ -129706,6 +129928,27 @@ fn handle_queue_command(
             ) {
                 eprintln!(
                     "{} interface-change capture skipped: {}",
+                    "Warning:".yellow().bold(),
+                    e
+                );
+            }
+
+            // STORY-698: capture the verification steps the builder actually
+            // ran — the implementation audit trail surfaced in the PR body.
+            // Stored in implementation_info.test_coverage_notes (no new field).
+            // `--test-plan` flags win and skip the prompt; otherwise at a TTY
+            // (and unless --yes / --no-test-plan) ask. Best-effort — a failure
+            // here never blocks `queue done`. trace:STORY-698 | ai:claude
+            if let Err(e) = capture_test_plan(
+                storage,
+                req_id,
+                display_id,
+                test_plan,
+                *no_test_plan,
+                /* interactive = */ !yes,
+            ) {
+                eprintln!(
+                    "{} verification-step capture skipped: {}",
                     "Warning:".yellow().bold(),
                     e
                 );
@@ -150036,5 +150279,133 @@ mod bug_678_focus_rollup_tally_tests {
         assert_eq!(t.in_progress, 2);
         assert_eq!(t.open, 0);
         assert_eq!(t.total, 4);
+    }
+}
+
+// STORY-698: verification-step capture at `aida queue done`. The precedence
+// decision is factored into `decide_test_plan_capture` precisely so it can be
+// exercised without a TTY. trace:STORY-698 | ai:claude
+#[cfg(test)]
+mod story_698_test_plan_capture_tests {
+    use super::*;
+
+    fn steps(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn flags_win_and_join_steps_skipping_the_prompt() {
+        // Acceptance: `--test-plan STEP` (repeatable) records exactly those
+        // steps, joined newline-separated, and never prompts — even at a TTY.
+        let d = decide_test_plan_capture(
+            &steps(&["cargo test -p aida-cli", "manual: aida queue done"]),
+            /* no_test_plan = */ false,
+            /* interactive = */ true,
+            /* at_tty = */ true,
+            /* disabled = */ false,
+            /* already_set = */ false,
+        );
+        assert_eq!(
+            d,
+            TestPlanCapture::Record("cargo test -p aida-cli\nmanual: aida queue done".to_string())
+        );
+    }
+
+    #[test]
+    fn flag_overrides_an_already_set_value() {
+        // A `--test-plan` flag is explicit intent — it overwrites even when
+        // notes already exist (the "no flag overrides" carve-out is #6).
+        let d = decide_test_plan_capture(
+            &steps(&["new step"]),
+            false,
+            true,
+            true,
+            false,
+            /* already_set = */ true,
+        );
+        assert_eq!(d, TestPlanCapture::Record("new step".to_string()));
+    }
+
+    #[test]
+    fn no_test_plan_flag_skips_the_prompt() {
+        // Acceptance: `--no-test-plan` skips the interactive prompt and records
+        // nothing, leaving any existing value untouched.
+        let d = decide_test_plan_capture(
+            &[],
+            /* no_test_plan = */ true,
+            true,
+            true,
+            false,
+            false,
+        );
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn non_interactive_no_flag_is_a_silent_skip() {
+        // Acceptance: non-interactive (`--yes`) with no flag ⇒ leave
+        // test_coverage_notes untouched and print no prompt.
+        let d = decide_test_plan_capture(
+            &[],
+            false,
+            /* interactive = */ false,
+            true,
+            false,
+            false,
+        );
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn no_tty_never_prompts() {
+        // A non-TTY interactive invocation (piped stdin) must not block on a
+        // prompt that nobody can answer.
+        let d = decide_test_plan_capture(&[], false, true, /* at_tty = */ false, false, false);
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn env_opt_out_skips_the_prompt() {
+        // Acceptance: `AIDA_AUTO_TEST_PLAN_CAPTURE=false` disables the capture.
+        let d = decide_test_plan_capture(&[], false, true, true, /* disabled = */ true, false);
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn already_set_leaves_the_value_unchanged_on_the_prompt_path() {
+        // Acceptance #6: with a value already captured and no flag override,
+        // the interactive path skips (never re-prompts, never clobbers).
+        let d =
+            decide_test_plan_capture(&[], false, true, true, false, /* already_set = */ true);
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn tty_interactive_first_time_prompts() {
+        // The one path that reaches the prompt: TTY + interactive + not opted
+        // out + nothing captured yet + no flags.
+        let d = decide_test_plan_capture(&[], false, true, true, false, false);
+        assert_eq!(d, TestPlanCapture::Prompt);
+    }
+
+    #[test]
+    fn env_disabled_predicate_matches_falsey_values() {
+        for (val, want) in [
+            ("0", true),
+            ("false", true),
+            ("no", true),
+            ("FALSE", true),
+            ("1", false),
+            ("true", false),
+            ("", false),
+        ] {
+            std::env::set_var("AIDA_AUTO_TEST_PLAN_CAPTURE", val);
+            assert_eq!(
+                capture_test_plan_disabled(),
+                want,
+                "AIDA_AUTO_TEST_PLAN_CAPTURE={val:?}"
+            );
+        }
+        std::env::remove_var("AIDA_AUTO_TEST_PLAN_CAPTURE");
     }
 }
