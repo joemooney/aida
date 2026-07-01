@@ -383,6 +383,20 @@ pub(crate) fn classify_suitability(i: &SuitabilityInput) -> Suitability {
                 .to_string(),
         );
     }
+    // TASK-1078: a spec tagged `needs-design` / `needs-operator-design` carries
+    // unresolved design decisions the operator must make — it can be lint-CLEAN
+    // yet still not be safe for an autonomous drive. Route it to the supervised
+    // guided-implement lane instead of driving it headless.
+    // trace:TASK-1078 | ai:claude
+    if let Some(tag) = i.tags.iter().find(|t| {
+        t.eq_ignore_ascii_case("needs-design") || t.eq_ignore_ascii_case("needs-operator-design")
+    }) {
+        return Suitability::HardRefuse(format!(
+            "tagged `{tag}` — it needs operator design input, not an autonomous zen \
+             drive. Run `aida queue work <spec> --guided` to decide the design forks \
+             at the keyboard."
+        ));
+    }
     if i.has_unsatisfied_blocker {
         return Suitability::HardRefuse(
             "blocked by an unshipped dependency (BlockedBy) — ship the blocker first.".to_string(),
@@ -1020,6 +1034,33 @@ mod tests {
         // The supervised-build marker also trips it, and --force cannot override.
         assert!(matches!(
             suitability("story", &["needs-supervised-build"], false, true),
+            Suitability::HardRefuse(_)
+        ));
+    }
+
+    /// A spec tagged `needs-design` / `needs-operator-design` is hard-refused —
+    /// it needs operator design input, and `--force` cannot override it. The
+    /// refusal routes to the supervised `--guided` lane.
+    // trace:TASK-1078
+    #[test]
+    fn approved_needs_design_is_refused() {
+        for tag in ["needs-design", "needs-operator-design"] {
+            match suitability("task", &[tag], false, false) {
+                Suitability::HardRefuse(msg) => {
+                    assert!(msg.contains(tag), "reason names the tag: {msg}");
+                    assert!(msg.contains("--guided"), "reason routes to --guided: {msg}");
+                }
+                other => panic!("expected hard refuse for `{tag}`, got {other:?}"),
+            }
+            // --force does NOT override a hard refusal.
+            assert!(matches!(
+                suitability("task", &[tag], false, true),
+                Suitability::HardRefuse(_)
+            ));
+        }
+        // Case-insensitive tag match.
+        assert!(matches!(
+            suitability("story", &["Needs-Design"], false, false),
             Suitability::HardRefuse(_)
         ));
     }
