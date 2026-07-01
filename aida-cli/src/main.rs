@@ -111740,13 +111740,25 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
     println!();
 }
 
-/// AGENT-MODE token-efficient TOON render of the fast status snapshot. Scalar
-/// head fields (role / branch / queue depth / the cache counts) then a uniform
-/// TOON table of the top queued items for the active role. No emoji, no section
-/// rules — the token-efficient analog of [`print_fast_status`], which stays
-/// byte-identical for the human TTY path.
-// trace:TASK-964
-fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) {
+/// BUG-670: assemble the AGENT-MODE scalar head lines for `aida status` with a
+/// single, unambiguous "is there work for me?" signal. `queue_actionable` LEADS:
+/// it is the count that actually answers the question (live, workable, role-
+/// routed specs) and is consistent with `aida queue list`. The raw `queue_depth`
+/// (the role-routed queue-file scan) is padded with archived/completed/deferred
+/// corpses AND resolves user identity down a different path than the queue-list
+/// command (the BUG-89 surface), so when it DIVERGES from `queue_actionable` an
+/// agent is shown a contradictory `queue_depth: 64` next to `queue_actionable: 0`
+/// with no way to tell which is authoritative. To keep the projection honest we
+/// emit `queue_depth` ONLY when it AGREES with `queue_actionable`; on mismatch it
+/// is suppressed so the agent is left with the single authoritative actionable
+/// count. The human TTY path ([`print_fast_status`]) keeps its fully-labelled
+/// "N routed (M actionable)" line unchanged — this is an agent-projection fix.
+/// Pure so the lead-signal + suppression contract is unit-testable without a
+/// queue file or a cache DB. The BUG-89 user-identity UNIFICATION (making the two
+/// paths resolve the SAME identity so `queue_depth` can always be trusted) is
+/// deliberately out of scope here and remains for BUG-670's follow-up.
+// trace:BUG-670 | ai:claude — plain `//` keeps the marker out of any doc/help.
+fn toon_status_scalar_lines(snap: &FastStatusSnapshot) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     lines.push(crate::toon::scalar("role", &snap.role));
     lines.push(crate::toon::scalar(
@@ -111757,16 +111769,21 @@ fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) 
         "branch",
         snap.branch.as_deref().unwrap_or(""),
     ));
-    lines.push(crate::toon::scalar(
-        "queue_depth",
-        &snap.queue_depth.to_string(),
-    ));
-    // STORY-723: the actionable subset of the role-routed depth, so an agent can
-    // tell a padded queue (archived/completed corpses) from real live work.
+    // LEAD with the actionable count — the unambiguous work-signal an agent acts
+    // on. STORY-723 introduced it as the reconcilable subset of the padded depth.
     lines.push(crate::toon::scalar(
         "queue_actionable",
         &snap.queue_actionable.to_string(),
     ));
+    // Surface the raw role-routed depth ONLY when it agrees with the actionable
+    // count; on divergence (padding / BUG-89 identity mismatch) drop it so an
+    // agent never has to choose between two contradictory work-signals.
+    if snap.queue_depth == snap.queue_actionable {
+        lines.push(crate::toon::scalar(
+            "queue_depth",
+            &snap.queue_depth.to_string(),
+        ));
+    }
     if snap.cache_present {
         lines.push(crate::toon::scalar("open", &snap.counts.open.to_string()));
         lines.push(crate::toon::scalar(
@@ -111778,7 +111795,17 @@ fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) 
     } else {
         lines.push(crate::toon::scalar("cache", "absent"));
     }
-    println!("{}", lines.join("\n"));
+    lines
+}
+
+/// AGENT-MODE token-efficient TOON render of the fast status snapshot. Scalar
+/// head fields (role / branch / the lead `queue_actionable` signal / the cache
+/// counts) then a uniform TOON table of the top queued items for the active
+/// role. No emoji, no section rules — the token-efficient analog of
+/// [`print_fast_status`], which stays byte-identical for the human TTY path.
+// trace:TASK-964 trace:BUG-670
+fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) {
+    println!("{}", toon_status_scalar_lines(snap).join("\n"));
 
     // STORY-723: the queued[] table + the `next` head are the ACTIONABLE set
     // (archived/completed/deferred/blocked corpses filtered out), so an agent is
@@ -111798,9 +111825,12 @@ fn print_toon_status(snap: &FastStatusSnapshot, project_root: &std::path::Path) 
     );
     // TASK-974 (AXI #9) / STORY-723: next-step block — lead with the fastest
     // thought-to-merged path for the actionable head (`aida zen` / `aida ship`),
-    // else point at the approvable backlog. trace:TASK-974 trace:STORY-723
+    // else point at the approvable backlog. BUG-670: drive the nudge off the
+    // ACTIONABLE count, never the padded/divergent `queue_depth`, so a
+    // `fill-queue` hint only ever appears alongside `queue_actionable: 0` (never
+    // next to a non-zero depth the agent can't reconcile). trace:TASK-974 trace:STORY-723 trace:BUG-670
     let next = crate::help_next::status_next(
-        snap.queue_depth,
+        snap.queue_actionable,
         top.as_ref().map(|(id, st)| (id.as_str(), st.as_str())),
     );
     if let Some(block) = crate::help_next::render(&next) {
@@ -112251,6 +112281,154 @@ mod story707_fast_status_tests {
         assert_eq!(snap.counts.total, 2);
         assert_eq!(snap.counts.open, 2);
         assert_eq!(snap.counts.in_progress, 1);
+    }
+}
+
+// BUG-670: the AGENT-MODE `aida status` projection must give an unambiguous
+// "is there work for me?" signal — lead with `queue_actionable`, and never emit
+// a `queue_depth` that contradicts it (the `64` vs `0` first-impression trap).
+#[cfg(test)]
+mod bug670_agent_status_tests {
+    use super::*;
+
+    fn line_index(lines: &[String], key: &str) -> Option<usize> {
+        lines.iter().position(|l| l.starts_with(&format!("{key}:")))
+    }
+
+    // The actionable count LEADS and, when the raw depth DIVERGES (padding /
+    // BUG-89 identity mismatch), no `queue_depth` scalar is emitted — so an agent
+    // is never shown `queue_depth: 64` next to `queue_actionable: 0`.
+    #[test]
+    fn divergent_depth_is_suppressed_and_actionable_leads() {
+        let snap = FastStatusSnapshot {
+            role: "implementer".to_string(),
+            queue_depth: 64,
+            queue_actionable: 0,
+            cache_present: true,
+            ..Default::default()
+        };
+        let lines = toon_status_scalar_lines(&snap);
+
+        let actionable_at =
+            line_index(&lines, "queue_actionable").expect("queue_actionable must be emitted");
+        // Lead signal: actionable appears, and no divergent depth line exists.
+        assert!(
+            lines.iter().any(|l| l == "queue_actionable: 0"),
+            "actionable count must be the work-signal: {lines:?}"
+        );
+        assert!(
+            line_index(&lines, "queue_depth").is_none(),
+            "divergent queue_depth must be suppressed, not emitted: {lines:?}"
+        );
+        // "Leads" = actionable precedes every requirement-count scalar.
+        for k in ["open", "in_progress", "draft", "total"] {
+            if let Some(i) = line_index(&lines, k) {
+                assert!(actionable_at < i, "queue_actionable must precede {k}");
+            }
+        }
+    }
+
+    // When the two counts AGREE there is no ambiguity, so `queue_depth` may ride
+    // along — but still AFTER the lead `queue_actionable`, and never before it.
+    #[test]
+    fn agreeing_depth_rides_along_after_actionable() {
+        let snap = FastStatusSnapshot {
+            role: "implementer".to_string(),
+            queue_depth: 3,
+            queue_actionable: 3,
+            cache_present: true,
+            ..Default::default()
+        };
+        let lines = toon_status_scalar_lines(&snap);
+        let actionable_at = line_index(&lines, "queue_actionable").unwrap();
+        let depth_at = line_index(&lines, "queue_depth").expect("agreeing depth may be emitted");
+        assert!(
+            actionable_at < depth_at,
+            "queue_actionable must lead queue_depth: {lines:?}"
+        );
+        assert!(lines.iter().any(|l| l == "queue_actionable: 3"));
+        assert!(lines.iter().any(|l| l == "queue_depth: 3"));
+    }
+
+    // Consistency-on-a-fixture: `role_queue_actionable` (which feeds the lead
+    // `queue_actionable` scalar) filters a padded role queue down to the SAME
+    // live/workable set `aida queue list` would surface — archived / completed /
+    // draft / done corpses drop out — while the raw depth stays padded. Proves
+    // the status lead-signal and the queue-list count agree on whether there is
+    // actionable work.
+    #[test]
+    fn actionable_matches_queue_list_on_a_padded_fixture() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let user = current_user_id(None);
+
+        // A role queue padded with corpses: one live Approved spec plus a
+        // Completed, an archived-Approved, and a Draft that queue list also hides.
+        let queue_dir = root.join(".aida-store/registry/queues");
+        std::fs::create_dir_all(&queue_dir).unwrap();
+        std::fs::write(
+            queue_dir.join(format!("{user}.yaml")),
+            "- requirement_id: u-live\n  for_role: implementer\n  position: 0\n\
+             - requirement_id: u-done\n  for_role: implementer\n  position: 1\n\
+             - requirement_id: u-archived\n  for_role: implementer\n  position: 2\n\
+             - requirement_id: u-draft\n  for_role: implementer\n  position: 3\n",
+        )
+        .unwrap();
+
+        // Cache with the liveness fields role_queue_actionable reads.
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let cache_path = root.join(".aida/cache.db");
+        let conn = rusqlite::Connection::open(&cache_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE requirements_cache (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 agreed_id TEXT,
+                 spec_id TEXT,
+                 title TEXT NOT NULL,
+                 status TEXT NOT NULL,
+                 archived INTEGER NOT NULL DEFAULT 0,
+                 deferred INTEGER NOT NULL DEFAULT 0,
+                 blocked INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO requirements_cache VALUES
+                 ('u-live','STORY-1',NULL,'Live one','Approved',0,0,0),
+                 ('u-done','STORY-2',NULL,'Shipped','Completed',0,0,0),
+                 ('u-archived','STORY-3',NULL,'Old one','Approved',1,0,0),
+                 ('u-draft','STORY-4',NULL,'Not yet','Draft',0,0,0);",
+        )
+        .unwrap();
+        drop(conn);
+
+        // Raw depth is padded (all four routed entries); actionable resolves to
+        // exactly the one live/workable spec — the queue-list-consistent count.
+        let depth = read_queue_depth(root, Some("implementer")).unwrap();
+        assert_eq!(depth, 4, "raw depth counts every routed entry");
+        let actionable = role_queue_actionable(root, "implementer");
+        assert_eq!(
+            actionable,
+            vec![(
+                "STORY-1".to_string(),
+                "Live one".to_string(),
+                "Approved".to_string()
+            )],
+            "actionable filters the padded queue to the live/workable set"
+        );
+
+        // Fed into the projection, the divergence (4 vs 1) suppresses queue_depth
+        // and leads with the actionable count.
+        let snap = FastStatusSnapshot {
+            role: "implementer".to_string(),
+            queue_depth: depth,
+            queue_actionable: actionable.len(),
+            cache_present: true,
+            ..Default::default()
+        };
+        let lines = toon_status_scalar_lines(&snap);
+        assert!(lines.iter().any(|l| l == "queue_actionable: 1"));
+        assert!(
+            line_index(&lines, "queue_depth").is_none(),
+            "divergent depth must not be emitted: {lines:?}"
+        );
     }
 }
 
