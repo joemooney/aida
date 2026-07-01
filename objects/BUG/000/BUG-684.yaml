@@ -1,0 +1,18 @@
+id: 019f1c09-0d1f-78e1-b2fc-a9c318ec17dd
+spec_id: BUG-684
+agreed_id: BUG-684
+title: Empty aida list dead-ends a fresh user; queue-next hint uses deprecated 'dialog'; queue done <draft> silently skips lifecycle; agent error quoting inconsistent
+description: ''
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-01T04:56:23.071157144Z
+modified_at: 2026-07-01T04:56:23.071157144Z
+req_type: Bug
+tags:
+- agent-surface
+- empty-state
+- error
+- from-audit
+- hint
