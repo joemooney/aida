@@ -903,6 +903,8 @@ pub(crate) enum UnblockAction {
 pub(crate) struct UnblockFacts {
     /// Display SPEC-ID.
     pub id: String,
+    /// The spec's title (for the STORY-750 interactive walk).
+    pub title: String,
     /// Lowercased requirement type (`task`, `story`, `epic`, …).
     pub req_type: String,
     /// Normalized status key (`draft`, `approved`, `inprogress`, `done`, …).
@@ -1056,6 +1058,9 @@ pub(crate) fn classify_unblock(f: &UnblockFacts) -> Option<UnblockClass> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnblockLine {
     pub id: String,
+    /// The spec's title — shown in the interactive walk so the operator can
+    /// decide without a separate lookup (STORY-750).
+    pub title: String,
     pub class: UnblockClass,
     pub reason: String,
 }
@@ -1108,6 +1113,11 @@ pub(crate) enum SweepChoice {
     ShowReview,
     /// Blocked-by → surface what's blocking it.
     ShowBlocker,
+    /// Print the spec's full detail (description + acceptance), then re-prompt.
+    ShowDetails,
+    /// Hand this one to the advisor instead of deciding it yourself — it joins
+    /// the advisor-delegate prompt emitted at the end of the sweep.
+    AskAdvisor,
     /// Leave this one parked and move on.
     Skip,
 }
@@ -1124,6 +1134,8 @@ impl SweepChoice {
             SweepChoice::AddNote => "Add a decision note (leave parked)",
             SweepChoice::ShowReview => "Show the review command",
             SweepChoice::ShowBlocker => "Show what's blocking it",
+            SweepChoice::ShowDetails => "Show details (description + acceptance)",
+            SweepChoice::AskAdvisor => "Ask the advisor to handle it",
             SweepChoice::Skip => "Skip — leave it for now",
         }
     }
@@ -1132,25 +1144,39 @@ impl SweepChoice {
 /// STORY-750: the ordered menu of resolutions the sweep offers for one hurdle
 /// class. `Skip` is ALWAYS last. Pure.
 pub(crate) fn sweep_menu(class: UnblockClass) -> Vec<SweepChoice> {
+    // Every actionable hurdle ends with the universal tail: see the detail, hand
+    // it to the advisor, or skip. `with_tail` keeps `Skip` last.
+    let with_tail = |mut v: Vec<SweepChoice>| {
+        v.push(SweepChoice::ShowDetails);
+        v.push(SweepChoice::AskAdvisor);
+        v.push(SweepChoice::Skip);
+        v
+    };
     match class {
-        UnblockClass::NeedsApproval => vec![
-            SweepChoice::ApproveQueue,
-            SweepChoice::Reject,
-            SweepChoice::Skip,
-        ],
-        UnblockClass::ApprovedUnqueued => vec![SweepChoice::Queue, SweepChoice::Skip],
-        UnblockClass::UnderSpecified => vec![SweepChoice::Clarify, SweepChoice::Skip],
-        UnblockClass::DecisionPending => vec![
-            SweepChoice::LaunchGuided,
-            SweepChoice::AddNote,
-            SweepChoice::Skip,
-        ],
-        UnblockClass::HeldForReview => vec![SweepChoice::ShowReview, SweepChoice::Skip],
-        UnblockClass::BlockedBy => vec![SweepChoice::ShowBlocker, SweepChoice::Skip],
+        UnblockClass::NeedsApproval => {
+            with_tail(vec![SweepChoice::ApproveQueue, SweepChoice::Reject])
+        }
+        UnblockClass::ApprovedUnqueued => with_tail(vec![SweepChoice::Queue]),
+        UnblockClass::UnderSpecified => with_tail(vec![SweepChoice::Clarify]),
+        UnblockClass::DecisionPending => {
+            with_tail(vec![SweepChoice::LaunchGuided, SweepChoice::AddNote])
+        }
+        UnblockClass::HeldForReview => with_tail(vec![SweepChoice::ShowReview]),
+        UnblockClass::BlockedBy => with_tail(vec![SweepChoice::ShowBlocker]),
         // Parked-by-choice: nothing to resolve inline — the sweep lists these as
         // informational rows rather than prompting.
         UnblockClass::BuildSupervised | UnblockClass::Deferred => vec![SweepChoice::Skip],
     }
+}
+
+/// STORY-750: is this hurdle ADVISOR grooming (draft approval / queueing) rather
+/// than a genuinely-human decision? These are bulk-delegated to the advisor at
+/// the top of the sweep instead of dumped on the human one at a time. Pure.
+pub(crate) fn sweep_is_advisor_groomable(class: UnblockClass) -> bool {
+    matches!(
+        class,
+        UnblockClass::NeedsApproval | UnblockClass::ApprovedUnqueued
+    )
 }
 
 /// STORY-750: walk-order rank for the interactive sweep — CHEAPEST-first, so the
@@ -1212,15 +1238,44 @@ mod story_750_sweep_tests {
     }
 
     #[test]
-    fn needs_approval_offers_approve_reject_skip() {
+    fn needs_approval_offers_approve_reject_then_common_tail() {
         assert_eq!(
             sweep_menu(UnblockClass::NeedsApproval),
             vec![
                 SweepChoice::ApproveQueue,
                 SweepChoice::Reject,
+                SweepChoice::ShowDetails,
+                SweepChoice::AskAdvisor,
                 SweepChoice::Skip
             ]
         );
+    }
+
+    #[test]
+    fn actionable_menus_carry_details_and_ask_advisor() {
+        for class in [
+            UnblockClass::NeedsApproval,
+            UnblockClass::ApprovedUnqueued,
+            UnblockClass::UnderSpecified,
+            UnblockClass::DecisionPending,
+            UnblockClass::HeldForReview,
+            UnblockClass::BlockedBy,
+        ] {
+            let menu = sweep_menu(class);
+            assert!(menu.contains(&SweepChoice::ShowDetails), "{class:?}");
+            assert!(menu.contains(&SweepChoice::AskAdvisor), "{class:?}");
+        }
+        // Info rows have no tail — just Skip.
+        assert_eq!(sweep_menu(UnblockClass::Deferred), vec![SweepChoice::Skip]);
+    }
+
+    #[test]
+    fn only_draft_and_approved_unqueued_are_advisor_groomable() {
+        assert!(sweep_is_advisor_groomable(UnblockClass::NeedsApproval));
+        assert!(sweep_is_advisor_groomable(UnblockClass::ApprovedUnqueued));
+        assert!(!sweep_is_advisor_groomable(UnblockClass::DecisionPending));
+        assert!(!sweep_is_advisor_groomable(UnblockClass::UnderSpecified));
+        assert!(!sweep_is_advisor_groomable(UnblockClass::BlockedBy));
     }
 
     #[test]
@@ -1248,6 +1303,7 @@ mod story_750_sweep_tests {
     fn walk_order_is_cheapest_first_and_stable() {
         let mk = |id: &str, class| UnblockLine {
             id: id.to_string(),
+            title: String::new(),
             class,
             reason: String::new(),
         };
@@ -2906,6 +2962,7 @@ mod tests {
     ) -> UnblockFacts {
         UnblockFacts {
             id: id.to_string(),
+            title: format!("title of {id}"),
             req_type: req_type.to_string(),
             status: status.to_string(),
             tags: tags.iter().map(|s| s.to_string()).collect(),
@@ -3282,22 +3339,26 @@ mod tests {
         let lines = vec![
             UnblockLine {
                 id: "TASK-2".to_string(),
+                title: String::new(),
                 class: UnblockClass::ApprovedUnqueued,
                 reason: unblock_reason(UnblockClass::ApprovedUnqueued).to_string(),
             },
             UnblockLine {
                 id: "TASK-3".to_string(),
+                title: String::new(),
                 class: UnblockClass::UnderSpecified,
                 reason: unblock_reason(UnblockClass::UnderSpecified).to_string(),
             },
             UnblockLine {
                 id: "T-1".to_string(),
+                title: String::new(),
                 class: UnblockClass::BlockedBy,
                 reason: unblock_reason(UnblockClass::BlockedBy).to_string(),
             },
             // BUG-502: a built-and-held spec must render under REVIEW.
             UnblockLine {
                 id: "STORY-543".to_string(),
+                title: String::new(),
                 class: UnblockClass::HeldForReview,
                 reason: unblock_reason(UnblockClass::HeldForReview).to_string(),
             },

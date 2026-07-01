@@ -95091,6 +95091,7 @@ fn collect_unblock_facts(
             contains_any(&text, &["acceptance", "acceptance criteria", "acceptance:"]);
         facts.push(burndown::UnblockFacts {
             id,
+            title: req.title.clone(),
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
             status: norm(&format!("{:?}", req.status)),
             tags: req.tags.iter().cloned().collect(),
@@ -95232,6 +95233,7 @@ fn handle_human_unblock(
         .filter_map(|f| {
             burndown::classify_unblock(f).map(|class| burndown::UnblockLine {
                 id: f.id.clone(),
+                title: f.title.clone(),
                 class,
                 reason: burndown::unblock_reason(class).to_string(),
             })
@@ -95344,6 +95346,8 @@ fn run_interactive_unblock_sweep(
     lines: Vec<burndown::UnblockLine>,
     then_drain: bool,
 ) -> Result<()> {
+    use burndown::SweepChoice;
+
     // Needs a human at the keyboard: `inquire` reads stdin. In a non-TTY / agent
     // context, degrade with clear guidance rather than hang or silently no-op.
     if non_interactive_confirm() {
@@ -95362,67 +95366,158 @@ fn run_interactive_unblock_sweep(
     }
 
     let ordered = burndown::sweep_walk_order(lines);
-    let actionable = ordered
-        .iter()
-        .filter(|l| burndown::sweep_is_actionable(l.class))
-        .count();
+    // Partition into: advisor-groomable (bulk-delegate, not the human's call),
+    // genuinely-human decisions (walk), and leave-parked info rows. trace:STORY-750
+    let (groomable, rest): (Vec<_>, Vec<_>) = ordered
+        .into_iter()
+        .partition(|l| burndown::sweep_is_advisor_groomable(l.class));
+    let (mut human, info): (Vec<_>, Vec<_>) = rest
+        .into_iter()
+        .partition(|l| burndown::sweep_is_actionable(l.class));
 
-    println!(
-        "{} {} spec(s) need you — walking cheapest-first ({} actionable). Ctrl-C to stop.",
-        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
-        ordered.len(),
-        actionable
-    );
-    println!();
+    // Everything the operator hands off (the bulk groomable set + per-spec
+    // "Ask the advisor" picks) → one advisor-delegate prompt at the end.
+    let mut delegated: Vec<burndown::UnblockLine> = Vec::new();
 
-    let (mut resolved, mut skipped) = (0usize, 0usize);
-    for line in &ordered {
-        // Informational (leave-parked) rows: list + move on, no prompt.
-        if !burndown::sweep_is_actionable(line.class) {
-            println!(
-                "  {} {} — {} (left parked)",
-                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed(),
-                line.id.dimmed(),
-                line.reason.dimmed()
-            );
-            continue;
-        }
-
-        let menu = burndown::sweep_menu(line.class);
-        let labels: Vec<&str> = menu.iter().map(|c| c.label()).collect();
-        let heading = format!("{} — {}", line.id, line.reason);
-        let picked = match inquire::Select::new(&heading, labels).prompt() {
-            Ok(label) => menu
-                .iter()
-                .copied()
-                .find(|c| c.label() == label)
-                .unwrap_or(burndown::SweepChoice::Skip),
-            // Esc / Ctrl-C: stop the sweep cleanly.
+    // --- Bulk advisor-grooming step: don't dump 100 draft-approvals on the human.
+    if !groomable.is_empty() {
+        let heading = format!(
+            "{} spec(s) are advisor grooming (drafts to approve / approved to queue) — the advisor's call, not yours",
+            groomable.len()
+        );
+        let opts = vec![
+            "Hand them all to the advisor (recommended)",
+            "Walk them myself anyway",
+            "Skip them",
+        ];
+        match inquire::Select::new(&heading, opts).prompt() {
+            Ok(pick) if pick.starts_with("Hand") => delegated.extend(groomable),
+            Ok(pick) if pick.starts_with("Walk") => {
+                let mut merged = groomable;
+                merged.extend(human);
+                human = merged;
+            }
+            Ok(_) => {} // Skip them.
             Err(inquire::InquireError::OperationCanceled)
             | Err(inquire::InquireError::OperationInterrupted) => {
                 println!(
                     "  {} sweep stopped.",
                     crate::glyph(crate::glyphs::Glyph::Cross).yellow()
                 );
-                break;
+                return Ok(());
             }
             Err(e) => anyhow::bail!("prompt failed: {e}"),
-        };
+        }
+    }
 
-        if apply_sweep_choice(&line.id, picked)? {
-            resolved += 1;
-        } else {
-            skipped += 1;
+    // --- Interactive human walk (cheapest-first; title shown so you can decide).
+    println!();
+    if human.is_empty() {
+        println!(
+            "{} no genuinely-human decisions to walk.",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+    } else {
+        println!(
+            "{} {} spec(s) need your judgment — walking cheapest-first. Ctrl-C to stop.",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+            human.len()
+        );
+        println!();
+    }
+
+    let (mut resolved, mut skipped) = (0usize, 0usize);
+    'walk: for line in &human {
+        // Per-spec loop so "Show details" re-prompts the same spec.
+        loop {
+            let menu = burndown::sweep_menu(line.class);
+            let labels: Vec<&str> = menu.iter().map(|c| c.label()).collect();
+            let heading = format!("{} — {} — {}", line.id, line.title, line.reason);
+            let picked = match inquire::Select::new(&heading, labels).prompt() {
+                Ok(label) => menu
+                    .iter()
+                    .copied()
+                    .find(|c| c.label() == label)
+                    .unwrap_or(SweepChoice::Skip),
+                Err(inquire::InquireError::OperationCanceled)
+                | Err(inquire::InquireError::OperationInterrupted) => {
+                    println!(
+                        "  {} sweep stopped.",
+                        crate::glyph(crate::glyphs::Glyph::Cross).yellow()
+                    );
+                    break 'walk;
+                }
+                Err(e) => anyhow::bail!("prompt failed: {e}"),
+            };
+            match picked {
+                // Show the full spec, then re-prompt the SAME one.
+                SweepChoice::ShowDetails => {
+                    let _ = self_invoke_aida(&["show", &line.id, "--no-git"]);
+                    continue;
+                }
+                // Hand this one to the advisor instead of deciding it.
+                SweepChoice::AskAdvisor => {
+                    delegated.push(line.clone());
+                    println!(
+                        "    {} {} handed to the advisor.",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        line.id
+                    );
+                    skipped += 1;
+                    break;
+                }
+                other => {
+                    if apply_sweep_choice(&line.id, other)? {
+                        resolved += 1;
+                    } else {
+                        skipped += 1;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // --- Leave-parked info rows: list, no prompt.
+    if !info.is_empty() {
+        println!();
+        println!(
+            "{} left parked (nothing to resolve inline):",
+            crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+        );
+        for line in &info {
+            println!(
+                "  {} {} — {}",
+                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed(),
+                line.id.dimmed(),
+                line.reason.dimmed()
+            );
         }
     }
 
     println!();
     println!(
-        "{} sweep done — {} resolved, {} left for now.",
+        "{} sweep done — {} resolved, {} skipped, {} handed to the advisor.",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         resolved,
-        skipped
+        skipped,
+        delegated.len()
     );
+
+    // --- Emit ONE advisor-delegate prompt for everything handed off.
+    if !delegated.is_empty() {
+        let prompt = burndown::assemble_unblock_prompt(&delegated);
+        println!();
+        println!(
+            "{} paste this to the advisor to groom the {} handed-off spec(s) (or `aida human unblock --copy`):",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+            delegated.len()
+        );
+        println!();
+        for l in prompt.lines() {
+            println!("  {}", l.dimmed());
+        }
+    }
 
     if then_drain {
         report_drain_readiness();
@@ -95507,7 +95602,9 @@ fn apply_sweep_choice(id: &str, choice: burndown::SweepChoice) -> Result<bool> {
             let _ = self_invoke_aida(&["why", id]);
             Ok(false)
         }
-        SweepChoice::Skip => Ok(false),
+        // Handled by the walk loop before reaching here (they re-prompt / delegate),
+        // but the match must be exhaustive.
+        SweepChoice::ShowDetails | SweepChoice::AskAdvisor | SweepChoice::Skip => Ok(false),
     }
 }
 
