@@ -47,6 +47,8 @@ mod events;
 mod exit_signal;
 mod external_import_bleed;
 mod findings;
+// trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
+mod first_run;
 mod focus;
 mod forge;
 mod global_queue;
@@ -13301,6 +13303,13 @@ fn complete_init_scaffolding(
         }
     }
 
+    // STORY-700: kick off the passive first-run hint chain — this prints the
+    // "file your first spec" nudge and records that the arc has started, so the
+    // subsequent add / queue-done / pull anchors carry it forward. Idempotent:
+    // a re-run of init over a started-or-finished arc is a silent no-op.
+    // trace:STORY-700 | ai:claude
+    first_run::after_init(root);
+
     Ok(())
 }
 
@@ -17656,6 +17665,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             )
                         );
                     }
+                }
+                // STORY-700: passive first-run chain — advancing past the "file
+                // your first spec" step. Only fires when the arc is sitting at
+                // exactly that step (the first `add` after a fresh `init`); every
+                // later `add` is a silent no-op. trace:STORY-700 | ai:claude
+                if let Ok(project_root) = find_project_root() {
+                    first_run::after_first_spec(&project_root);
                 }
             }
         }
@@ -104026,6 +104042,15 @@ fn handle_pull_command(
                                 if !quiet {
                                     print_auto_bump_summary(&flips);
                                 }
+                                // STORY-700: the first-run payoff — a spec the
+                                // user filed just auto-completed via the merge.
+                                // Only fires when the arc sits at the work-done
+                                // step, and terminates the chain. Suppressed in
+                                // --quiet (orchestrator/scripted) runs.
+                                // trace:STORY-700 | ai:claude
+                                if !quiet && !flips.is_empty() {
+                                    first_run::after_spec_completed(&project_root);
+                                }
                             }
                             Err(e) => {
                                 eprintln!(
@@ -130182,6 +130207,14 @@ fn handle_queue_command(
             // skips the hint silently rather than failing the command.
             // trace:STORY-106 | ai:claude
             maybe_hint_after_queue_drain(storage, &user_id);
+
+            // STORY-700: passive first-run chain — advancing past the first
+            // `queue done` to the review → merge → `aida pull` hint. Only fires
+            // when the arc sits at exactly the spec-filed step; no-op otherwise.
+            // trace:STORY-700 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                first_run::after_work_done(&project_root);
+            }
 
             // BUG-378: substrate-as-bouncer for the scratchpad-drift ceiling.
             // An agent about to declare "all done" gets told here, before it
