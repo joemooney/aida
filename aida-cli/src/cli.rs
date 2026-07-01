@@ -4090,16 +4090,24 @@ pub enum QueueCommand {
         #[clap(long)]
         completed: bool,
     },
-    /// Prune queue entries matching a predicate. Today the only predicate is
-    /// `--orphaned` (queue entries pointing at deleted/missing specs); future
-    /// predicates may be added. Use `--dry-run` to preview before applying.
+    /// Prune dead queue entries by predicate. Two flags, two entry classes:
+    /// `--orphaned` (target spec was DELETED) and `--merged` (auto-queued
+    /// reviewer row whose PR already shipped). Combine them to sweep both.
+    /// Neither touches an entry whose spec still exists but is done-with
+    /// (archived / Completed / Rejected) — that class is `aida queue gc`'s
+    /// job. Rule of thumb: spec gone → `prune --orphaned`; PR merged but the
+    /// review row lingers → `prune --merged`; spec archived / terminal → `gc`.
+    /// Pair any predicate with `--dry-run` to preview before applying.
     // trace:TASK-537 | ai:claude — plain `//` so SPEC-ID doesn't leak into
     // user-facing --help output per TASK-268 convention.
+    // trace:TASK-1063 | ai:claude
     Prune {
         /// Remove queue entries whose backing spec no longer exists in the
         /// store (the "??? (deleted)" ghosts in `aida queue list`). Auto-
         /// queued reviewer entries from `aida pr` / `session end` can become
         /// orphans when the spec they cover is later deleted or rejected.
+        /// Sibling verbs: `--merged` (PR shipped) and `aida queue gc` (spec
+        /// still present but archived / terminal).
         #[clap(long)]
         orphaned: bool,
         /// Remove auto-queued reviewer entries whose PR has already merged. A
@@ -4107,7 +4115,8 @@ pub enum QueueCommand {
         /// reviewer's `aida queue done` flow (e.g. a hand-merge); the backing
         /// spec is often still non-terminal so `--orphaned` misses it. Checks
         /// each review row's PR state with `gh`. Combine with `--orphaned` to
-        /// sweep both.
+        /// sweep both. Sibling verb for done-with-but-not-deleted specs:
+        /// `aida queue gc`.
         #[clap(long)]
         merged: bool,
         /// Preview the entries that would be removed; don't actually remove
@@ -4128,12 +4137,14 @@ pub enum QueueCommand {
     /// linger in the queue file after the work shipped). The default `aida
     /// queue list` view already hides them, but the underlying queue file
     /// still carries them; this sweeps them and reports the count. Sibling of
-    /// `aida queue prune --orphaned` (which targets DELETED specs) — `gc`
-    /// targets specs that still exist but are done with. Use `--dry-run` to
-    /// preview. Still-actionable entries (Draft/Approved/Planned/InProgress/
-    /// Done) always survive.
+    /// the two `aida queue prune` predicates — `prune --orphaned` targets
+    /// DELETED specs and `prune --merged` targets shipped reviewer rows, while
+    /// `gc` targets specs that still exist but are done with (archived /
+    /// terminal). Use `--dry-run` to preview. Still-actionable entries
+    /// (Draft/Approved/Planned/InProgress/Done) always survive.
     // trace:TASK-1052 | ai:claude — plain `//` so the SPEC-ID doesn't leak
     // into user-facing --help output per the TASK-268 convention.
+    // trace:TASK-1063 | ai:claude
     Gc {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]

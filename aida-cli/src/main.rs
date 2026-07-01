@@ -126313,6 +126313,20 @@ fn render_all_users_queue(
     Ok(())
 }
 
+/// The error `aida queue prune` bails with when no predicate flag is passed.
+/// Names every dead-queue-pruning verb and the entry class each removes so an
+/// operator can pick the right one without opening three separate --help
+/// pages. Shared with the unit test so the surface stays honest.
+// trace:TASK-1063 | ai:claude
+fn queue_prune_no_predicate_message() -> String {
+    "no prune predicate specified. Available pruning verbs:\n  \
+     --orphaned         remove entries whose backing spec was DELETED\n  \
+     --merged           remove auto-queued reviewer entries whose PR already merged\n  \
+     aida queue gc      remove entries whose spec is archived / Completed / Rejected\n\
+     \nCombine --orphaned --merged to sweep both; add --dry-run to preview."
+        .to_string()
+}
+
 /// Handle queue commands
 ///
 /// The queue entries whose backing spec is a terminal corpse — archived,
@@ -128397,10 +128411,11 @@ fn handle_queue_command(
                 );
             }
         }
-        // Prune queue entries matching a predicate. Today only `--orphaned`
-        // is supported — removes entries pointing at deleted/missing specs
-        // (the "??? (deleted)" ghosts from auto-queued reviewer items).
+        // Prune queue entries matching a predicate: `--orphaned` (spec deleted)
+        // and/or `--merged` (shipped reviewer row). The sibling `queue gc`
+        // handles the archived/terminal-but-present class.
         // trace:TASK-537 | ai:claude
+        // trace:TASK-1063 | ai:claude
         QueueCommand::Prune {
             orphaned,
             merged,
@@ -128409,11 +128424,10 @@ fn handle_queue_command(
             r#for,
         } => {
             if !*orphaned && !*merged {
-                anyhow::bail!(
-                    "no prune predicate specified — pass `--orphaned` to remove queue \
-                     entries whose backing spec no longer exists, or `--merged` to remove \
-                     auto-queued reviewer entries whose PR has already merged"
-                );
+                // trace:TASK-1063 | ai:claude — name every pruning verb + the
+                // entry class each removes so the operator can pick without
+                // reading three separate --help pages.
+                anyhow::bail!("{}", queue_prune_no_predicate_message());
             }
             let user_id = get_user(user);
             let entries = storage.queue_list(&user_id, /* include_completed */ false)?;
@@ -149381,6 +149395,87 @@ mod zen_front_door_tests {
         assert!(!zen_drive::looks_like_spec_id(
             "make the tree header show the parent title"
         ));
+    }
+}
+
+// TASK-1063: the three dead-queue-pruning verbs (`queue prune --orphaned`,
+// `queue prune --merged`, `queue gc`) must cross-reference one another in
+// their --help so an operator can pick the right one without reading all
+// three pages — and `queue prune` with no predicate must name every verb.
+// trace:TASK-1063 | ai:claude
+#[cfg(test)]
+mod task_1063_prune_verb_crossref_tests {
+    use clap::{CommandFactory, Parser};
+
+    /// Render the --help for a nested `queue <sub>` subcommand.
+    fn queue_sub_help(sub: &str) -> String {
+        let mut cli = crate::cli::Cli::command();
+        let queue = cli
+            .get_subcommands_mut()
+            .find(|c| c.get_name() == "queue")
+            .expect("queue subcommand exists");
+        let cmd = queue
+            .get_subcommands_mut()
+            .find(|c| c.get_name() == sub)
+            .unwrap_or_else(|| panic!("queue {sub} subcommand exists"));
+        cmd.render_long_help().to_string()
+    }
+
+    #[test]
+    fn queue_prune_help_names_sibling_pruning_verbs() {
+        let help = queue_sub_help("prune");
+        // Names its own two predicates …
+        assert!(
+            help.contains("--orphaned"),
+            "prune --help must name --orphaned:\n{help}"
+        );
+        assert!(
+            help.contains("--merged"),
+            "prune --help must name --merged:\n{help}"
+        );
+        // … and cross-references the sibling `queue gc` verb.
+        assert!(
+            help.contains("queue gc"),
+            "prune --help must cross-reference `aida queue gc`:\n{help}"
+        );
+        // States which entry class each predicate targets.
+        assert!(
+            help.to_lowercase().contains("delete"),
+            "prune --help must say --orphaned targets DELETED specs:\n{help}"
+        );
+        assert!(
+            help.to_lowercase().contains("merged"),
+            "prune --help must say --merged targets shipped/merged rows:\n{help}"
+        );
+    }
+
+    #[test]
+    fn queue_gc_help_cross_references_prune() {
+        let help = queue_sub_help("gc");
+        assert!(
+            help.contains("queue prune"),
+            "gc --help must cross-reference `aida queue prune`:\n{help}"
+        );
+    }
+
+    #[test]
+    fn queue_prune_no_predicate_error_names_the_verbs() {
+        // Parse-level: `aida queue prune` (no predicate) is accepted by clap —
+        // the guard is a runtime bail, not a clap constraint.
+        let parsed = crate::cli::Cli::try_parse_from(["aida", "queue", "prune"]);
+        assert!(
+            parsed.is_ok(),
+            "aida queue prune (no flag) must parse; the guard is a runtime bail"
+        );
+        // The guard message is the surface an operator sees — assert it names
+        // every dead-queue-pruning verb + what each removes.
+        let msg = crate::queue_prune_no_predicate_message();
+        for frag in ["--orphaned", "--merged", "queue gc", "DELETED"] {
+            assert!(
+                msg.contains(frag),
+                "prune-no-predicate error must name `{frag}`:\n{msg}"
+            );
+        }
     }
 }
 
