@@ -13,7 +13,8 @@ categories = ["development-tools"]
 [features]
 default = ["native"]
 # Native platform features - file system, SQLite, etc.
-native = ["rusqlite", "fs2", "dirs"]
+# `sysinfo` backs the /proc process-liveness probe in `liveness` (BUG-677).
+native = ["rusqlite", "fs2", "dirs", "sysinfo"]
 # PostgreSQL database backend
 postgres = ["dep:postgres", "dep:r2d2", "dep:r2d2_postgres"]
 # GitLab integration
@@ -45,6 +46,10 @@ ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serd
 dirs = { workspace = true, optional = true }
 fs2 = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
+# /proc process-liveness probe for the shared `liveness` module (BUG-677).
+# Native-only (matches the aida-cli declaration it is lifted from); the probe
+# module is `#[cfg(feature = "native")]`-gated so this never enters a wasm build.
+sysinfo = { version = "0.30", optional = true }
 
 # PostgreSQL dependencies (optional) — opt-in via the `postgres` feature.
 # trace:BUG-66 | ai:claude — must live under [dependencies], not the

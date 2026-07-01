@@ -91,6 +91,14 @@ mod pr_rebase;
 mod pr_ship;
 mod presence;
 mod process_probe;
+// BUG-677: the /proc probe + lease/spec liveness classifiers moved to
+// aida-core so aida-tui can compute liveness in-process. Re-export the shared
+// classifier types + fns at the crate root so `crate::LeaseState` /
+// `classify_lease_state` etc. keep resolving for every existing call site.
+// trace:BUG-677 | ai:claude
+pub(crate) use aida_core::liveness::{
+    classify_lease_state, classify_spec_liveness, LeaseState, SpecLiveness,
+};
 mod prompts;
 mod ship;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
@@ -62997,21 +63005,18 @@ fn current_git_branch(project_root: &std::path::Path) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// TASK-55: lease liveness classification used by `session leases`.
-/// trace:TASK-55 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LeaseState {
-    /// Live claude found inside the worktree — actively working.
-    Live,
-    /// Worktree exists, no live claude inside, <24h old. Could be a
-    /// shell-only session or a paused claude — not yet abandoned.
-    Dormant,
-    /// Worktree missing OR (no live claude AND >24h old) — the lease
-    /// is almost certainly leaked.
-    Stale,
+/// BUG-677: `LeaseState` + `classify_lease_state` moved to `aida_core::liveness`
+/// (re-exported at the crate root, see the top-of-file `pub(crate) use`). The
+/// pure enum + classifier is now shared with `aida-tui`; only the CLI glyph
+/// rendering stays here, as an extension trait (glyph() reaches into the CLI
+/// glyph palette, which aida-core has no business knowing). `label()` moved with
+/// the enum (pure strings).
+// trace:BUG-677 | ai:claude
+trait LeaseStateGlyph {
+    fn glyph(self) -> &'static str;
 }
 
-impl LeaseState {
+impl LeaseStateGlyph for LeaseState {
     fn glyph(self) -> &'static str {
         match self {
             LeaseState::Live => "●",
@@ -63019,33 +63024,6 @@ impl LeaseState {
             LeaseState::Stale => crate::glyph(crate::glyphs::Glyph::Warning),
         }
     }
-    fn label(self) -> &'static str {
-        match self {
-            LeaseState::Live => "live",
-            LeaseState::Dormant => "dormant",
-            LeaseState::Stale => "stale",
-        }
-    }
-}
-
-/// TASK-55: classify a lease using its worktree existence, live-claude
-/// probe result, and age. Pure given pre-collected inputs so the
-/// decision matrix is unit-testable. trace:TASK-55 | ai:claude
-fn classify_lease_state(
-    worktree_exists: bool,
-    has_live_claude: bool,
-    age_hours: i64,
-) -> LeaseState {
-    if !worktree_exists {
-        return LeaseState::Stale;
-    }
-    if has_live_claude {
-        return LeaseState::Live;
-    }
-    if age_hours >= 24 {
-        return LeaseState::Stale;
-    }
-    LeaseState::Dormant
 }
 
 /// TASK-56: find the Claude Code session id matching a worktree path,
@@ -96774,50 +96752,10 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// The liveness verdict for a spec, derived from its spec-scoped session lease
-/// (if any) and the spec's own lifecycle status. This is the operator's #1
-/// legibility ask: for an In-Progress spec, is a LIVE process actually working
-/// it, or is the flag orphaned?
-// trace:STORY-694 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum SpecLiveness {
-    /// A spec-scoped lease exists and its holder process is alive (a live
-    /// claude is in the worktree). The In-Progress flag is liveness-backed.
-    Live,
-    /// A spec-scoped lease exists but no live process backs it (pid dead, or
-    /// the worktree has gone idle past the threshold with no spec movement).
-    /// The In-Progress flag is orphaned.
-    // trace:BUG-623
-    Stale,
-    /// No spec-scoped lease is linked to this spec. When the spec is
-    /// In-Progress this is DRIFT — the status flag is not liveness-backed.
-    /// This is also the CORRECT honest signal for advisor Agent-tool
-    /// fan-outs, which take generic `harness-worktree`-scoped leases that are
-    /// NOT spec-linked (making the spec-to-session link is a documented
-    /// follow-up, not this change).
-    // trace:STORY-694
-    FlagOnly,
-    /// The spec is not In-Progress — no live session is expected.
-    NoSession,
-}
-
-/// Pure verdict — given the spec-scoped lease's classified [`LeaseState`] (when
-/// one was found) and whether the spec is In-Progress, decide the
-/// [`SpecLiveness`]. Kept side-effect-free so the matrix (live lease → Live;
-/// dead/stale lease → Stale; in-progress + no lease → FlagOnly; not-in-progress
-/// → NoSession) is unit-testable without a store, a lease dir, or a real
-/// process. A `Dormant` lease (worktree present, no live claude, <24h) counts
-/// as Stale here: the operator asked specifically "is a LIVE process working
-/// it?", and dormant means no live process.
-// trace:STORY-694 | ai:claude
-fn classify_spec_liveness(lease_state: Option<LeaseState>, in_progress: bool) -> SpecLiveness {
-    match lease_state {
-        Some(LeaseState::Live) => SpecLiveness::Live,
-        Some(LeaseState::Dormant) | Some(LeaseState::Stale) => SpecLiveness::Stale,
-        None if in_progress => SpecLiveness::FlagOnly,
-        None => SpecLiveness::NoSession,
-    }
-}
+// BUG-677: `SpecLiveness` + `classify_spec_liveness` (the operator's "is a LIVE
+// process working this In-Progress spec?" verdict) moved to
+// `aida_core::liveness`, re-exported at the crate root, so `aida-tui` shares the
+// exact same classifier. trace:BUG-677 | ai:claude
 
 /// Find the LOCAL session lease whose scope is this spec — the happy-path link
 /// for AIDA-launched work (`aida queue work`, `aida agent new`) where the lease
