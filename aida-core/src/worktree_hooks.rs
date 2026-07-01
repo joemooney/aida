@@ -16,6 +16,26 @@
 use std::path::Path;
 use std::process::Command;
 
+/// Canonical `post_create` pre-warm command (TASK-1010): kick off a
+/// `cargo build` so a freshly-created pool worktree's `target/` is warm before
+/// the first fanned agent builds in it — turning cold-create into
+/// warm-on-first-use.
+///
+/// It is **backgrounded** (`nohup … &`): `run_hooks` runs each hook via
+/// `sh -c`, and the trailing `&` lets that shell return immediately, so the
+/// pre-warm never delays the tree handout (non-blocking). `nohup` detaches the
+/// build from the short-lived acquire process so it survives that process
+/// exiting; output is discarded because a pre-warm is advisory — a broken or
+/// incomplete build just means the first real build is colder, never an error.
+///
+/// This is the command the opt-in `[worktree_pool] prewarm_build = true` knob
+/// (honored **only** from the machine-global `~/.aida/config.toml`, like every
+/// other hook — see the module docs) appends to the `post_create` hooks. Users
+/// who want a different pre-warm (a non-Rust project, a narrower `-p` build)
+/// write their own `post_create` hook line instead.
+// trace:TASK-1010 | ai:claude
+pub const PREWARM_BUILD_COMMAND: &str = "nohup cargo build >/dev/null 2>&1 &";
+
 /// Run each hook command (a shell line) sequentially in `work_dir`. A failing
 /// hook is logged to stderr and skipped — hooks are best-effort, never fatal:
 /// a broken pre-warm must not block a worktree handout, and a broken
@@ -70,6 +90,33 @@ mod tests {
             "pre_destroy",
         );
         assert!(dir.path().join("after.marker").exists());
+    }
+
+    // TASK-1010: the pre-warm command must be backgrounded so it never blocks
+    // the tree handout, and detached so it survives the acquire process exiting.
+    #[test]
+    fn prewarm_build_command_is_backgrounded_and_detached() {
+        assert!(PREWARM_BUILD_COMMAND.trim_end().ends_with('&'));
+        assert!(PREWARM_BUILD_COMMAND.contains("cargo build"));
+        assert!(PREWARM_BUILD_COMMAND.contains("nohup"));
+    }
+
+    // TASK-1010: running a backgrounded post_create hook returns promptly and
+    // is non-fatal, matching how the pre-warm command is dispatched.
+    #[test]
+    fn run_hooks_backgrounded_command_is_non_blocking() {
+        let dir = tempfile::tempdir().unwrap();
+        // Sleep-then-touch, backgrounded: run_hooks must return before the
+        // marker appears (the shell backgrounds it and exits immediately).
+        run_hooks(
+            &["nohup sh -c 'sleep 5; touch late.marker' >/dev/null 2>&1 &".to_string()],
+            dir.path(),
+            "post_create",
+        );
+        assert!(
+            !dir.path().join("late.marker").exists(),
+            "backgrounded hook must not block run_hooks"
+        );
     }
 
     #[test]
