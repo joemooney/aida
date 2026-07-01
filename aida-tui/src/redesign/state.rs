@@ -20,11 +20,11 @@ pub struct TargetItem {
     pub id: String,
     pub title: String,
     /// The requirement type (e.g. "Task", "Story", "Bug"), carried so the
-    /// Open scope's rows render id / type / status / title. trace:STORY-690
+    // Open scope's rows render id / type / status / title. trace:STORY-690
     pub req_type: String,
     pub status: String,
     /// Priority, when the data path supplies it (the cache-fast
-    /// `aida list --json` does not today; left empty then). trace:STORY-690
+    // `aida list --json` does not today; left empty then). trace:STORY-690
     pub priority: String,
     /// Full body text for the item modal (Slice 1 renders it as a plain
     /// paragraph; STORY-689 makes it markdown later).
@@ -32,7 +32,7 @@ pub struct TargetItem {
     /// Does this spec's description carry a `## Test Plan` section? Populated
     /// only for the [`Scope::Test`] item set (the in-process load checks the
     /// description); `false` everywhere else. Drives the per-row "has a test
-    /// plan" marker in the Test scope. trace:STORY-699 | ai:claude
+    // plan" marker in the Test scope. trace:STORY-699 | ai:claude
     pub has_test_plan: bool,
     /// The role this item is routed to, when it sits on a role's work queue.
     /// Populated only for the [`Scope::Queue`] item set (read from each
@@ -55,7 +55,7 @@ impl TargetItem {
     /// Is this item in the Draft state? The item-state-conditional verb logic
     /// keys off this — `request approval` only applies to drafts. Matched
     /// case-insensitively so a "Draft" / "draft" status both qualify.
-    /// trace:STORY-690 | ai:claude
+    // trace:STORY-690 | ai:claude
     pub fn is_draft(&self) -> bool {
         self.status.eq_ignore_ascii_case("draft")
     }
@@ -63,7 +63,7 @@ impl TargetItem {
     /// Is this item in the Approved state? The mirror of [`Self::is_draft`]
     /// for the `queue` verb, which only routes Approved specs to the
     /// implementer queue. Matched case-insensitively.
-    /// trace:TASK-915 | ai:claude
+    // trace:TASK-915 | ai:claude
     pub fn is_approved(&self) -> bool {
         self.status.eq_ignore_ascii_case("approved")
     }
@@ -71,7 +71,7 @@ impl TargetItem {
     /// Is this item in the Done state? The mirror of [`Self::is_approved`] for
     /// the `accept` verb — the reviewer's implementation-approval, which only
     /// applies to finished-on-a-branch (Done) work. Matched case-insensitively.
-    /// trace:TASK-933 | ai:claude
+    // trace:TASK-933 | ai:claude
     pub fn is_done(&self) -> bool {
         self.status.eq_ignore_ascii_case("done")
     }
@@ -164,7 +164,7 @@ impl Scope {
 
     /// The fuller help text shown in the '?' help popup when this scope is
     /// highlighted — expands [`Self::hint`] into a sentence describing what the
-    /// scope shows (and whether it is wired yet). trace:TASK-922 | ai:claude
+    // scope shows (and whether it is wired yet). trace:TASK-922 | ai:claude
     pub fn help(self) -> &'static str {
         match self {
             Scope::Backlog => {
@@ -230,7 +230,7 @@ impl Scope {
     /// pair (`show` / `why`); item-state-conditional verbs (`request
     /// approval`, only for Draft specs) are layered on by
     /// [`verb_list_for`]. Slice 1 hardcodes the sets (the §5 "lean registry"
-    /// fork is deferred). trace:STORY-690 | ai:claude
+    // fork is deferred). trace:STORY-690 | ai:claude
     pub fn verbs(self) -> Vec<Verb> {
         match self {
             Scope::Backlog => vec![Verb::Groom, Verb::Approve, Verb::Reject, Verb::Archive],
@@ -265,7 +265,7 @@ impl Scope {
 /// The Open-scope order is preserved from the historical draft view —
 /// `request approval` = 3, `approve` = 4, `reject` = 5 — with `queue`, `accept`
 /// then the always-on `defer` last, so existing draft-verb index navigation is
-/// undisturbed. trace:STORY-690 trace:TASK-947 | ai:claude
+// undisturbed. trace:STORY-690 trace:TASK-947 | ai:claude
 pub fn verb_list_for(scope: Scope) -> Vec<Verb> {
     let mut verbs = scope.verbs();
     if scope == Scope::Open {
@@ -324,7 +324,7 @@ pub fn verb_required_status(scope: Scope, verb: Verb) -> Option<&'static str> {
 /// focused item's `focused_status`. `None` required -> any status (always
 /// applicable). Otherwise the focused status must match (case-insensitive); a
 /// missing focus (`None`) is NOT applicable for a status-gated verb. The STATUS
-/// analog of [`role_permits_verb`]. trace:TASK-947 | ai:claude
+// analog of [`role_permits_verb`]. trace:TASK-947 | ai:claude
 pub fn status_permits_verb(focused_status: Option<&str>, required: Option<&str>) -> bool {
     match required {
         None => true,
@@ -342,7 +342,7 @@ pub enum Verb {
     /// `aida edit <id> --status approved` transition (advisor-gated, so the
     /// spawned command carries advisor authority) on the selected drafts.
     /// The do-it-yourself counterpart to [`Verb::RequestApproval`].
-    /// trace:TASK-920
+    // trace:TASK-920
     Approve,
     /// Open scope, Draft-only: the advisor's DIRECT reject — run the
     /// `aida edit <id> --status rejected` transition (advisor-gated, so the
@@ -364,23 +364,23 @@ pub enum Verb {
     // trace:TASK-953 | ai:claude
     Status,
     /// Open scope, Draft-only: route the selected drafts to the advisor
-    /// queue via `aida queue add --for advisor`. trace:STORY-690
+    // queue via `aida queue add --for advisor`. trace:STORY-690
     RequestApproval,
     /// Open scope, Approved-only: route the selected Approved specs to the
     /// implementer queue via `aida queue add --for implementer`. The mirror
-    /// of [`Verb::RequestApproval`]. trace:TASK-915
+    // of [`Verb::RequestApproval`]. trace:TASK-915
     Queue,
     /// Open scope, Done-only: the reviewer's IMPLEMENTATION-approval — accept
     /// the finished work on the selected Done specs, driving them Done →
     /// Completed (`aida edit <id> --status completed`, run with reviewer
     /// authority) and recording a reviewer-acceptance comment. The Done-status
     /// counterpart to [`Verb::Approve`] (which is SPEC-approval, Draft →
-    /// Approved). Distinct from `approve`. trace:TASK-933
+    // Approved). Distinct from `approve`. trace:TASK-933
     Accept,
     /// Open scope, any open spec (NOT status-conditional): park the selected
     /// specs off the active view with a revisit trigger via
     /// `aida defer <id> --until "<trigger>"`. Set-level; the trigger is
-    /// captured by a single-line input modal before execution. trace:TASK-921
+    // captured by a single-line input modal before execution. trace:TASK-921
     Defer,
     /// Open / Queue scope, Approved + non-keystone only: kick off the headline
     /// autonomous drive on the focused spec — `aida zen <id>`, the same gated
@@ -431,7 +431,7 @@ impl Verb {
     /// The fuller help text shown in the '?' help popup when this verb is
     /// highlighted — what it does plus what set it operates on (item-level vs
     /// set-level) and any status condition. Expands [`Self::hint`].
-    /// trace:TASK-922 | ai:claude
+    // trace:TASK-922 | ai:claude
     pub fn help(self) -> &'static str {
         match self {
             Verb::Groom => {
@@ -508,7 +508,7 @@ impl Verb {
     /// Does this verb operate on the single focused item (N=1), rather than
     /// the multi-select target set? `show` / `why` are item-level; they
     /// open a modal on the focused row. `request approval` is set-level.
-    /// trace:STORY-690 | ai:claude
+    // trace:STORY-690 | ai:claude
     pub fn is_item_level(self) -> bool {
         matches!(self, Verb::Show | Verb::Why | Verb::Status)
     }
@@ -681,7 +681,7 @@ pub struct ConfirmAll {
 
 /// A modal showing the captured stdout of a one-shot item verb (`show` /
 /// `why`). The title is the breadcrumb-style header; `body` is the raw
-/// command output. trace:STORY-690 | ai:claude
+// command output. trace:STORY-690 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerbModal {
     pub title: String,
@@ -693,7 +693,7 @@ pub struct VerbModal {
 /// will apply to (captured at the moment `defer` was run, before the input
 /// opened). Enter confirms (runs the defer on `targets` with `buffer`); Esc
 /// cancels. Kept pure (push_char / backspace / take) so it is unit-testable
-/// without a terminal. trace:TASK-921 | ai:claude
+// without a terminal. trace:TASK-921 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeferInput {
     /// The revisit-trigger text typed so far.
@@ -739,7 +739,7 @@ impl DeferInput {
 /// [`DeferInput`]). Enter confirms (creates the Draft from the trimmed title);
 /// Esc cancels; an empty/whitespace title cancels without creating. Kept pure
 /// (push_char / backspace / title) so it is unit-testable without a terminal.
-/// trace:TASK-931 | ai:claude
+// trace:TASK-931 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct NewSpecInput {
     /// The spec title typed so far.
@@ -766,7 +766,7 @@ impl NewSpecInput {
 
     /// The trimmed title to create with, or `None` when nothing meaningful was
     /// typed — so the confirm path cancels rather than creating an empty-titled
-    /// draft. trace:TASK-931 | ai:claude
+    // draft. trace:TASK-931 | ai:claude
     pub fn title(&self) -> Option<String> {
         let t = self.buffer.trim();
         if t.is_empty() {
@@ -827,15 +827,50 @@ impl GateHold {
     }
 }
 
+/// A pending drive-ROUTING affordance (TASK-1076): raised when `drive` is run on
+/// a READY spec whose DEFAULT (no `--solo`) ADR-6 route would carry it into a
+/// scope (epic / focus) worktree. The popup names the target scope so the
+/// operator sees WHERE the drive would run, and offers a `--solo` toggle to split
+/// it out into its own worktree + PR instead. Launching without toggling
+/// preserves the default route (does NOT force `--solo`). Pure + Clone so the
+/// affordance is unit-testable without a terminal.
+// trace:TASK-1076 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DriveRouting {
+    /// The spec the drive is being routed.
+    pub id: String,
+    /// The scope (parent epic / active focus) the default drive routes into.
+    pub scope: String,
+    /// The `--solo` toggle state — starts `false` (default ADR-6 route). `s`
+    /// flips it; launching passes it straight to `aida zen [--solo]`.
+    pub solo: bool,
+}
+
+impl DriveRouting {
+    /// The routing line shown in the popup, reflecting the current toggle state:
+    /// solo = own worktree + own PR; default = routes into the named scope
+    // worktree. Pure. trace:TASK-1076 | ai:claude
+    pub fn routing_line(&self) -> String {
+        if self.solo {
+            "solo: own worktree + own PR (--solo)".to_string()
+        } else {
+            format!(
+                "into scope: routes into the {} worktree (ADR-6)",
+                self.scope
+            )
+        }
+    }
+}
+
 /// The braille spinner frames cycled while a verb runs in the background.
-/// trace:BUG-633 | ai:claude
+// trace:BUG-633 | ai:claude
 pub const SPINNER_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 /// The DISPLAY half of a background verb execution (BUG-633): the label shown
 /// while it runs (e.g. `approving TASK-930…`) plus the current spinner frame
 /// index. Pure (no IO, no channel) so the spinner cycling + status-line
 /// rendering are unit-testable; the parent module pairs this with the
-/// completion channel in its own integration shim. trace:BUG-633 | ai:claude
+// completion channel in its own integration shim. trace:BUG-633 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingOp {
     /// The human label of the in-flight verb (no spinner glyph).
@@ -854,7 +889,7 @@ impl PendingOp {
     }
 
     /// Advance the spinner one frame (wrapping). Called once per idle event-loop
-    /// tick while the op is in flight. trace:BUG-633 | ai:claude
+    // tick while the op is in flight. trace:BUG-633 | ai:claude
     pub fn tick(&mut self) {
         self.frame = (self.frame + 1) % SPINNER_FRAMES.len();
     }
@@ -872,7 +907,7 @@ impl PendingOp {
 
 /// One selectable row in the EPIC focus picker (STORY-697): an open epic's
 /// display id + title (+ its status, carried for an optional progress hint).
-/// The picker fuzzy-filters over `id` + `title`. trace:STORY-697 | ai:claude
+// The picker fuzzy-filters over `id` + `title`. trace:STORY-697 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EpicRow {
     pub id: String,
@@ -885,7 +920,7 @@ pub struct EpicRow {
 /// opens it with `F`; navigates with ↑/↓; types to fuzzy-filter (reusing
 /// [`crate::cmd_palette::fuzzy_score`]); Enter focuses the highlighted epic;
 /// Esc cancels. Kept PURE (filter / navigate / select are IO-free) so the
-/// selection logic is unit-tested without a terminal. trace:STORY-697 | ai:claude
+// selection logic is unit-tested without a terminal. trace:STORY-697 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EpicPicker {
     /// The full open-epic list (fetched once when the picker opens).
@@ -910,7 +945,7 @@ impl EpicPicker {
     /// The indices (into `epics`) that survive the current fuzzy filter, in
     /// display order. An empty filter passes every row. Matches against each
     /// epic's `"<id> <title>"` so typing a known id narrows to it too.
-    /// trace:STORY-697 | ai:claude
+    // trace:STORY-697 | ai:claude
     pub fn filtered_indices(&self) -> Vec<usize> {
         if self.filter.trim().is_empty() {
             return (0..self.epics.len()).collect();
@@ -965,7 +1000,7 @@ impl EpicPicker {
     }
 
     /// The display id of the highlighted epic, or `None` when the filtered list
-    /// is empty (nothing to focus). trace:STORY-697 | ai:claude
+    // is empty (nothing to focus). trace:STORY-697 | ai:claude
     pub fn selected_epic(&self) -> Option<String> {
         let idxs = self.filtered_indices();
         idxs.get(self.selected).map(|&i| self.epics[i].id.clone())
@@ -998,12 +1033,12 @@ pub struct RedesignState {
     pub modal: Option<usize>,
     /// Vertical scroll offset (in rendered lines) for the open item modal, so
     /// a body taller than the popup can be paged with Up/Down/PageUp/PageDown.
-    /// Reset to 0 whenever a modal opens or closes. trace:TASK-913 | ai:claude
+    // Reset to 0 whenever a modal opens or closes. trace:TASK-913 | ai:claude
     pub modal_scroll: u16,
     /// Verb-output modal content, if any — the captured stdout of a deliberate
     /// one-shot item verb (`show` / `why`) plus a title. Distinct from
     /// [`Self::modal`] (which previews an item's cached body); this carries
-    /// command output. trace:STORY-690 | ai:claude
+    // command output. trace:STORY-690 | ai:claude
     pub verb_modal: Option<VerbModal>,
     /// Pending "apply to all?" confirmation, if any.
     pub confirm: Option<ConfirmAll>,
@@ -1013,31 +1048,36 @@ pub struct RedesignState {
     /// launched". Rendered + shelled-out-from by the parent.
     // trace:STORY-744 | ai:claude
     pub gate_hold: Option<GateHold>,
+    /// Pending drive-ROUTING affordance popup, if any (TASK-1076): set when
+    /// `drive` is run on a READY spec whose default ADR-6 route would carry it
+    /// into a scope worktree, so the operator sees the routing and can toggle
+    // `--solo` before launching. trace:TASK-1076 | ai:claude
+    pub drive_routing: Option<DriveRouting>,
     /// Pending revisit-trigger input for the `defer` verb, if open. Holds the
     /// typed buffer + the target ids captured when `defer` was run.
-    /// trace:TASK-921 | ai:claude
+    // trace:TASK-921 | ai:claude
     pub defer_input: Option<DeferInput>,
     /// Pending new-spec title input for the `new` action, if open. Holds the
     /// typed title buffer; Enter creates a Draft from it, Esc (or an empty
-    /// title) cancels. trace:TASK-931 | ai:claude
+    // title) cancels. trace:TASK-931 | ai:claude
     pub new_input: Option<NewSpecInput>,
     /// The EPIC focus lens (STORY-695): when `Some`, the whole TUI is scoped to
     /// this epic id + its transitive children. Set from `AIDA_TUI_EPIC` at
     /// launch or by the change-focus key; cleared by the clear-focus key.
     /// Ambient context the status line shows; every scope-list fetch respects
-    /// it. trace:STORY-695 | ai:claude
+    // it. trace:STORY-695 | ai:claude
     pub focus_epic: Option<String>,
     /// A short progress summary of the focus set (e.g. "6 done · 2 draft"),
     /// computed by the parent from the filtered set when the focus is set.
-    /// `None` when unfocused. trace:STORY-695 | ai:claude
+    // `None` when unfocused. trace:STORY-695 | ai:claude
     pub focus_summary: Option<String>,
     /// The open EPIC focus picker, if any (STORY-697): a fuzzy-filterable list
     /// of open epics. Opened by `F`; Enter focuses the highlighted epic, Esc
-    /// cancels. Replaces the old type-an-id `FocusInput`. trace:STORY-697 | ai:claude
+    // cancels. Replaces the old type-an-id `FocusInput`. trace:STORY-697 | ai:claude
     pub epic_picker: Option<EpicPicker>,
     /// Is the context-sensitive '?' help popup open? Its content is derived
     /// purely from the current focus via [`Self::help_content`]; the popup
-    /// only tracks that it is showing. trace:TASK-922 | ai:claude
+    // only tracks that it is showing. trace:TASK-922 | ai:claude
     pub help: bool,
     /// Is the explicit `/` FIND mode active? When `false` (NORMAL mode)
     /// printable chars are hotkeys and the top-level list filter is frozen;
@@ -1045,7 +1085,7 @@ pub struct RedesignState {
     /// list. Enter confirms (keeps the filter, returns to normal), Esc cancels
     /// (clears the filter, returns to normal). The dedicated modal/picker text
     /// inputs own their own typing and are unaffected by this flag.
-    /// trace:TASK-945 | ai:claude
+    // trace:TASK-945 | ai:claude
     pub find_mode: bool,
     /// Ambient context shown in the status line.
     pub role: String,
@@ -1054,7 +1094,7 @@ pub struct RedesignState {
     /// The active palette. Defaults to the reference Catppuccin Mocha; the
     /// launcher overrides it from `[tui] theme`. Carried here so the pure
     /// state owns no render code yet the parent can paint in the user's
-    /// palette. trace:STORY-690 | ai:claude
+    // palette. trace:STORY-690 | ai:claude
     pub theme: crate::theme::Theme,
     /// Per-spec work-liveness for the Targets list — the ambient "is anything
     /// live working this row?" signal (TASK-978). The cached verdict map +
@@ -1085,6 +1125,7 @@ impl RedesignState {
             verb_modal: None,
             confirm: None,
             gate_hold: None,
+            drive_routing: None,
             defer_input: None,
             new_input: None,
             focus_epic: None,
@@ -1101,7 +1142,7 @@ impl RedesignState {
 
     /// Replace the target set (e.g. when the highlighted scope changes from
     /// Backlog to Open). Resets the selection and the bottom cursor; clears
-    /// any open modal that pointed into the old set. trace:STORY-690
+    // any open modal that pointed into the old set. trace:STORY-690
     pub fn set_items(&mut self, items: Vec<TargetItem>) {
         self.selected = vec![false; items.len()];
         self.items = items;
@@ -1134,7 +1175,7 @@ impl RedesignState {
 
     /// The bottom-panel item under the cursor, if any (filter-aware). The
     /// item-state-conditional verb list keys off this item's status.
-    /// trace:STORY-690 | ai:claude
+    // trace:STORY-690 | ai:claude
     pub fn focused_item(&self) -> Option<&TargetItem> {
         let idxs = self.bottom_indices();
         idxs.get(self.bottom_idx).and_then(|&i| self.items.get(i))
@@ -1144,7 +1185,7 @@ impl RedesignState {
     /// for the focused item's status (item-state-conditional verbs). At the
     /// scope level this is empty. Every verb-list accessor routes through
     /// this so the rendered list, the breadcrumb, and execution agree.
-    /// trace:STORY-690 | ai:claude
+    // trace:STORY-690 | ai:claude
     pub fn current_verbs(&self) -> Vec<Verb> {
         let Some(scope) = self.scope else {
             return Vec::new();
@@ -1170,7 +1211,7 @@ impl RedesignState {
     /// `accept` on a non-Done) renders greyed + non-selectable in the palette
     /// and refuses to execute. The two axes COMPOSE: a verb is enabled iff BOTH
     /// gates pass. Delegates to [`status_permits_verb`] over the scope-aware
-    /// [`verb_required_status`]. trace:TASK-947 | ai:claude
+    // [`verb_required_status`]. trace:TASK-947 | ai:claude
     pub fn verb_status_permitted(&self, verb: Verb) -> bool {
         let Some(scope) = self.scope else {
             return true;
@@ -1187,7 +1228,7 @@ impl RedesignState {
     /// selected — otherwise it would silently mutate the merely-focused item.
     /// The READ verbs (`show` / `why` / `status`) and `groom` (its own
     /// confirm-all guard) are always permitted on this axis. A verb is enabled
-    /// iff ALL THREE axes pass. trace:TASK-954 | ai:claude
+    // iff ALL THREE axes pass. trace:TASK-954 | ai:claude
     pub fn verb_selection_permitted(&self, verb: Verb) -> bool {
         !verb.requires_selection() || self.selected_count() > 0
     }
@@ -1213,7 +1254,7 @@ impl RedesignState {
     /// The lifecycle status `verb` is gated to in the CURRENT scope, if any —
     /// drives a status-disabled row's "only for &lt;Status&gt; specs" hint and
     /// the matching `run_verb` refusal message. `None` for status-agnostic verbs
-    /// or outside a drilled scope. trace:TASK-947 | ai:claude
+    // or outside a drilled scope. trace:TASK-947 | ai:claude
     pub fn verb_status_hint(&self, verb: Verb) -> Option<&'static str> {
         self.scope
             .and_then(|scope| verb_required_status(scope, verb))
@@ -1367,7 +1408,7 @@ impl RedesignState {
     /// the resulting verb list reflects the focused item's status, because
     /// `bottom_idx` is preserved and [`Self::current_verbs`] keys off the
     /// focused item). Always lands the keyboard on the verbs (top) panel.
-    /// Returns `true` if a drill happened. trace:TASK-944 | ai:claude
+    // Returns `true` if a drill happened. trace:TASK-944 | ai:claude
     pub fn drill(&mut self) -> bool {
         if self.level != Level::Scopes {
             return false;
@@ -1452,7 +1493,7 @@ impl RedesignState {
     /// of any selected non-drafts that were skipped. If nothing is selected,
     /// the focused item stands in (the N=1 default) when it is itself a
     /// Draft. Used by `request approval`, which only routes drafts.
-    /// Returns `(draft_ids, skipped_non_draft_ids)`. trace:STORY-690
+    // Returns `(draft_ids, skipped_non_draft_ids)`. trace:STORY-690
     pub fn draft_selection(&self) -> (Vec<String>, Vec<String>) {
         let selected: Vec<&TargetItem> = self
             .items
@@ -1484,7 +1525,7 @@ impl RedesignState {
     /// selected, the focused item stands in (the N=1 default) when it is
     /// itself Approved. The mirror of [`Self::draft_selection`], used by the
     /// `queue` verb, which only routes Approved specs.
-    /// Returns `(approved_ids, skipped_non_approved_ids)`. trace:TASK-915
+    // Returns `(approved_ids, skipped_non_approved_ids)`. trace:TASK-915
     pub fn approved_selection(&self) -> (Vec<String>, Vec<String>) {
         let selected: Vec<&TargetItem> = self
             .items
@@ -1516,7 +1557,7 @@ impl RedesignState {
     /// focused item stands in (the N=1 default) when it is itself Done. The
     /// mirror of [`Self::approved_selection`], used by the `accept` verb (the
     /// reviewer's implementation-approval), which only accepts Done specs.
-    /// Returns `(done_ids, skipped_non_done_ids)`. trace:TASK-933 | ai:claude
+    // Returns `(done_ids, skipped_non_done_ids)`. trace:TASK-933 | ai:claude
     pub fn done_selection(&self) -> (Vec<String>, Vec<String>) {
         let selected: Vec<&TargetItem> = self
             .items
@@ -1546,7 +1587,7 @@ impl RedesignState {
     /// The ids `defer` will target: the marked selection, or — when nothing is
     /// selected — the focused item (the N=1 default). Unlike
     /// [`Self::draft_selection`] / [`Self::approved_selection`], `defer` is NOT
-    /// status-conditional, so every target is kept (no skip set). trace:TASK-921
+    // status-conditional, so every target is kept (no skip set). trace:TASK-921
     pub fn defer_selection(&self) -> Vec<String> {
         let selected = self.selected_ids();
         if !selected.is_empty() {
@@ -1563,12 +1604,12 @@ impl RedesignState {
 
     /// Open the revisit-trigger input modal over the given target ids. The
     /// parent calls this when `defer` is run; the buffer starts empty and the
-    /// operator types the `--until` trigger. trace:TASK-921 | ai:claude
+    // operator types the `--until` trigger. trace:TASK-921 | ai:claude
     pub fn open_defer_input(&mut self, targets: Vec<String>) {
         self.defer_input = Some(DeferInput::new(targets));
     }
 
-    /// Is the defer-trigger input modal open? trace:TASK-921
+    // Is the defer-trigger input modal open? trace:TASK-921
     pub fn defer_input_open(&self) -> bool {
         self.defer_input.is_some()
     }
@@ -1594,7 +1635,7 @@ impl RedesignState {
 
     /// Confirm the defer input (Enter) — take the pending input out and return
     /// the `(targets, trigger)` for the parent to execute, closing the modal.
-    /// `None` when no input is open. trace:TASK-921 | ai:claude
+    // `None` when no input is open. trace:TASK-921 | ai:claude
     pub fn take_defer_input(&mut self) -> Option<(Vec<String>, String)> {
         self.defer_input
             .take()
@@ -1605,12 +1646,12 @@ impl RedesignState {
 
     /// Open the new-spec title input modal with an empty buffer. The parent
     /// calls this when the `new` key is pressed; the operator types the title
-    /// and Enter creates a Draft. trace:TASK-931 | ai:claude
+    // and Enter creates a Draft. trace:TASK-931 | ai:claude
     pub fn open_new_input(&mut self) {
         self.new_input = Some(NewSpecInput::new());
     }
 
-    /// Is the new-spec title input modal open? trace:TASK-931
+    // Is the new-spec title input modal open? trace:TASK-931
     pub fn new_input_open(&self) -> bool {
         self.new_input.is_some()
     }
@@ -1637,20 +1678,20 @@ impl RedesignState {
     /// Confirm the new-spec input (Enter) — take the pending input out and
     /// return the trimmed title for the parent to create, closing the modal.
     /// `None` when the buffer is empty/whitespace (cancel — no creation) or no
-    /// input is open. trace:TASK-931 | ai:claude
+    // input is open. trace:TASK-931 | ai:claude
     pub fn take_new_input(&mut self) -> Option<String> {
         self.new_input.take().and_then(|ni| ni.title())
     }
 
     // --- EPIC focus lens (STORY-695) -------------------------------------
 
-    /// Is an EPIC focus lens active? trace:STORY-695 | ai:claude
+    // Is an EPIC focus lens active? trace:STORY-695 | ai:claude
     pub fn focused(&self) -> bool {
         self.focus_epic.is_some()
     }
 
     /// Clear the EPIC focus lens (back to all items). The parent re-fetches the
-    /// unfiltered scope set after this. trace:STORY-695 | ai:claude
+    // unfiltered scope set after this. trace:STORY-695 | ai:claude
     pub fn clear_focus(&mut self) {
         self.focus_epic = None;
         self.focus_summary = None;
@@ -1660,24 +1701,24 @@ impl RedesignState {
 
     /// Open the EPIC focus picker over `epics` (the open-epic list fetched by
     /// the parent from the store). Replaces the old type-an-id focus input with
-    /// a fuzzy-filterable selectable list. trace:STORY-697 | ai:claude
+    // a fuzzy-filterable selectable list. trace:STORY-697 | ai:claude
     pub fn open_epic_picker(&mut self, epics: Vec<EpicRow>) {
         self.epic_picker = Some(EpicPicker::new(epics));
     }
 
-    /// Is the EPIC picker open? trace:STORY-697 | ai:claude
+    // Is the EPIC picker open? trace:STORY-697 | ai:claude
     pub fn epic_picker_open(&self) -> bool {
         self.epic_picker.is_some()
     }
 
-    /// Move the picker highlight down (no-op when closed). trace:STORY-697
+    // Move the picker highlight down (no-op when closed). trace:STORY-697
     pub fn picker_move_down(&mut self) {
         if let Some(p) = &mut self.epic_picker {
             p.move_down();
         }
     }
 
-    /// Move the picker highlight up (no-op when closed). trace:STORY-697
+    // Move the picker highlight up (no-op when closed). trace:STORY-697
     pub fn picker_move_up(&mut self) {
         if let Some(p) = &mut self.epic_picker {
             p.move_up();
@@ -1699,31 +1740,31 @@ impl RedesignState {
     }
 
     /// Cancel the picker (Esc) — closes it, leaves the current focus unchanged.
-    /// trace:STORY-697 | ai:claude
+    // trace:STORY-697 | ai:claude
     pub fn cancel_epic_picker(&mut self) {
         self.epic_picker = None;
     }
 
     /// Confirm the picker (Enter) — take the highlighted epic id out and close
     /// the modal. `None` when the filtered list was empty (nothing to focus) or
-    /// no picker is open. trace:STORY-697 | ai:claude
+    // no picker is open. trace:STORY-697 | ai:claude
     pub fn take_epic_selection(&mut self) -> Option<String> {
         self.epic_picker.take().and_then(|p| p.selected_epic())
     }
 
     // --- Help popup (TASK-922) -------------------------------------------
 
-    /// Open the context-sensitive '?' help popup. trace:TASK-922 | ai:claude
+    // Open the context-sensitive '?' help popup. trace:TASK-922 | ai:claude
     pub fn open_help(&mut self) {
         self.help = true;
     }
 
-    /// Close the '?' help popup. trace:TASK-922 | ai:claude
+    // Close the '?' help popup. trace:TASK-922 | ai:claude
     pub fn close_help(&mut self) {
         self.help = false;
     }
 
-    /// Is the '?' help popup open? trace:TASK-922 | ai:claude
+    // Is the '?' help popup open? trace:TASK-922 | ai:claude
     pub fn help_open(&self) -> bool {
         self.help
     }
@@ -1731,7 +1772,7 @@ impl RedesignState {
     /// The current focus, distilled to the element the '?' help popup should
     /// describe: the highlighted scope, the highlighted verb, or the focused
     /// item. Pure — drives [`Self::help_content`] (and `help_for`).
-    /// trace:TASK-922 | ai:claude
+    // trace:TASK-922 | ai:claude
     pub fn focus_target(&self) -> FocusTarget {
         match self.focus {
             Focus::Bottom => match self.focused_item() {
@@ -1757,7 +1798,7 @@ impl RedesignState {
 
     /// The context-sensitive help content for the current focus. Pure wrapper
     /// over [`help_for`] so the parent renders without re-deriving the target.
-    /// trace:TASK-922 | ai:claude
+    // trace:TASK-922 | ai:claude
     pub fn help_content(&self) -> HelpContent {
         help_for(self.focus_target())
     }
@@ -1772,7 +1813,7 @@ impl RedesignState {
     ///   * everything else (`groom`, …) → operate on the multi-select, with
     ///     none-selected raising the "apply to all N?" confirmation.
     ///
-    /// The pure machine only decides; the parent shells out. trace:STORY-690
+    // The pure machine only decides; the parent shells out. trace:STORY-690
     pub fn run_verb(&mut self) -> RunOutcome {
         let Some(verb) = self.top_verb() else {
             return RunOutcome::None;
@@ -1961,7 +2002,7 @@ impl RedesignState {
     /// Open scope's `show` verb (run from top focus), whose loaded spec lives
     /// in the parent module's `loaded_spec`, not in `self.items`. The stored
     /// index is a sentinel ("a modal is open"); the parent renders from the
-    /// loaded spec, not from this index. trace:STORY-693 | ai:claude
+    // loaded spec, not from this index. trace:STORY-693 | ai:claude
     pub fn open_modal_external(&mut self) {
         self.modal = Some(usize::MAX);
         self.modal_scroll = 0;
@@ -1975,19 +2016,19 @@ impl RedesignState {
 
     /// Scroll the open item modal down by `n` lines. The render clamps the
     /// offset to the body height, so an over-scroll simply pins to the last
-    /// page rather than going blank. trace:TASK-913 | ai:claude
+    // page rather than going blank. trace:TASK-913 | ai:claude
     pub fn modal_scroll_down(&mut self, n: u16) {
         self.modal_scroll = self.modal_scroll.saturating_add(n);
     }
 
     /// Scroll the open item modal up by `n` lines (floored at the top).
-    /// trace:TASK-913 | ai:claude
+    // trace:TASK-913 | ai:claude
     pub fn modal_scroll_up(&mut self, n: u16) {
         self.modal_scroll = self.modal_scroll.saturating_sub(n);
     }
 
     /// Show a verb's captured stdout in the modal (`show` / `why` output).
-    /// trace:STORY-690 | ai:claude
+    // trace:STORY-690 | ai:claude
     pub fn open_verb_modal(&mut self, title: impl Into<String>, body: impl Into<String>) {
         self.verb_modal = Some(VerbModal {
             title: title.into(),
@@ -1996,7 +2037,7 @@ impl RedesignState {
     }
 
     /// Is any modal (item-body or verb-output) open? The key router uses
-    /// this to know it should capture close keys. trace:STORY-690
+    // this to know it should capture close keys. trace:STORY-690
     pub fn modal_open(&self) -> bool {
         self.modal.is_some() || self.verb_modal.is_some()
     }
@@ -2018,13 +2059,13 @@ impl RedesignState {
 
     /// Is a top-level list filter currently applied (find mode confirmed a
     /// non-empty query)? Drives the Esc layering: a live filter is cleared
-    /// before a level is popped. trace:TASK-945 | ai:claude
+    // before a level is popped. trace:TASK-945 | ai:claude
     pub fn filter_active(&self) -> bool {
         !self.filter.trim().is_empty()
     }
 
     /// `/` → ENTER find mode. Starts a FRESH query (clears any prior filter)
-    /// so the prompt opens empty, vim/less-style. trace:TASK-945 | ai:claude
+    // so the prompt opens empty, vim/less-style. trace:TASK-945 | ai:claude
     ///
     /// TASK-943: the filter already follows focus, but at the SCOPES level the
     /// top (focused) panel is a fixed nav rail (Backlog/Open/Test/Queue/…) — the
@@ -2044,13 +2085,13 @@ impl RedesignState {
     }
 
     /// Enter in find mode → CONFIRM: keep the typed filter applied and return
-    /// to normal mode so hotkeys act on the filtered list. trace:TASK-945
+    // to normal mode so hotkeys act on the filtered list. trace:TASK-945
     pub fn confirm_find(&mut self) {
         self.find_mode = false;
     }
 
     /// Esc in find mode → CANCEL: clear the filter and return to normal mode.
-    /// trace:TASK-945 | ai:claude
+    // trace:TASK-945 | ai:claude
     pub fn cancel_find(&mut self) {
         self.filter.clear();
         self.find_mode = false;
@@ -2058,7 +2099,7 @@ impl RedesignState {
     }
 
     /// Clear an applied filter (without touching `find_mode`). Used by the
-    /// normal-mode Esc layering. trace:TASK-945 | ai:claude
+    // normal-mode Esc layering. trace:TASK-945 | ai:claude
     pub fn clear_filter(&mut self) {
         self.filter.clear();
         self.clamp_indices();
@@ -2067,7 +2108,7 @@ impl RedesignState {
     /// Esc semantics for the top-level list in NORMAL mode: if a filter is
     /// applied, clear it and report `true` (handled — consume the Esc);
     /// otherwise report `false` so the caller pops a level. The vim-like
-    /// layering — clear the filter before unwinding the stack. trace:TASK-945
+    // layering — clear the filter before unwinding the stack. trace:TASK-945
     pub fn esc_clears_filter(&mut self) -> bool {
         if self.filter_active() {
             self.clear_filter();
@@ -2080,7 +2121,7 @@ impl RedesignState {
     /// Route a printable char by mode: in FIND mode it extends the top-level
     /// filter (and is consumed → `true`); in NORMAL mode it is NOT a filter
     /// keystroke (the filter is untouched → `false`, leaving it to act as a
-    /// hotkey). The key router shares this gate. trace:TASK-945 | ai:claude
+    // hotkey). The key router shares this gate. trace:TASK-945 | ai:claude
     pub fn type_char(&mut self, c: char) -> bool {
         if self.find_mode {
             self.push_filter(c);
@@ -2119,10 +2160,10 @@ pub enum RunOutcome {
     Execute { verb: Verb, ids: Vec<String> },
     /// An item-level verb (`show` / `why`) on the focused item — the parent
     /// shells out and shows the command's stdout in the item modal.
-    /// trace:STORY-690
+    // trace:STORY-690
     ShowItem { verb: Verb, id: String },
     /// `request approval` on the Draft selection: route `drafts` to the
-    /// advisor queue, report `skipped` non-drafts. trace:STORY-690
+    // advisor queue, report `skipped` non-drafts. trace:STORY-690
     RequestApproval {
         drafts: Vec<String>,
         skipped: Vec<String>,
@@ -2130,7 +2171,7 @@ pub enum RunOutcome {
     /// `approve` on the Draft selection: directly approve `drafts` (the
     /// advisor-gated `aida edit <id> --status approved` transition), report
     /// `skipped` non-drafts. The do-it-yourself mirror of
-    /// [`Self::RequestApproval`]. trace:TASK-920
+    // [`Self::RequestApproval`]. trace:TASK-920
     Approve {
         drafts: Vec<String>,
         skipped: Vec<String>,
@@ -2145,7 +2186,7 @@ pub enum RunOutcome {
     },
     /// `queue` on the Approved selection: route `approved` specs to the
     /// implementer queue, report `skipped` non-Approved. The mirror of
-    /// [`Self::RequestApproval`]. trace:TASK-915
+    // [`Self::RequestApproval`]. trace:TASK-915
     Queue {
         approved: Vec<String>,
         skipped: Vec<String>,
@@ -2154,7 +2195,7 @@ pub enum RunOutcome {
     /// on `done` (the `aida edit <id> --status completed` transition, run with
     /// reviewer authority, plus a reviewer-acceptance comment), reporting
     /// `skipped` non-Done. The Done-status mirror of [`Self::Approve`].
-    /// trace:TASK-933
+    // trace:TASK-933
     Accept {
         done: Vec<String>,
         skipped: Vec<String>,
@@ -2162,11 +2203,11 @@ pub enum RunOutcome {
     /// `defer` on the selection: the parent should OPEN the revisit-trigger
     /// input modal over these `ids` (the defer itself runs on Enter, via
     /// [`Self::Defer`]). Two-step because `defer` needs the operator-supplied
-    /// `--until` trigger before it can run. trace:TASK-921
+    // `--until` trigger before it can run. trace:TASK-921
     OpenDeferInput { ids: Vec<String> },
     /// Confirmed `defer`: park each id in `ids` with the captured `trigger`
     /// via `aida defer <id> --until "<trigger>"`. Emitted by the parent's
-    /// input-modal confirm path, not by `run_verb`. trace:TASK-921
+    // input-modal confirm path, not by `run_verb`. trace:TASK-921
     Defer { ids: Vec<String>, trigger: String },
     /// `drive` on the focused Approved + non-keystone spec: the parent launches
     /// `aida zen <id>` as a DETACHED background drive (the cockpit holds the
@@ -2182,28 +2223,28 @@ pub enum RunOutcome {
 
 /// A short, human-readable label for the top-level quit key — surfaced in the
 /// help popup's key legend so the quit gesture is documented where the user
-/// asks for help. trace:TASK-922 | ai:claude
+// asks for help. trace:TASK-922 | ai:claude
 pub const QUIT_KEY_LABEL: &str = "q (or Esc at the top) / Ctrl-C: quit";
 
 /// The EPIC focus-lens key legend entry, surfaced in every '?' help context so
 /// the ambient lens is discoverable wherever the operator asks for help.
-/// trace:STORY-695 | ai:claude
+// trace:STORY-695 | ai:claude
 pub const FOCUS_KEY_LABEL: &str =
     "F: pick an EPIC to focus the whole TUI on (+ its children) · C: clear the focus";
 
 /// The `new` action key legend entry — surfaced in every '?' help context so
 /// creating a Draft spec is discoverable wherever the operator asks for help.
-/// trace:TASK-931 | ai:claude
+// trace:TASK-931 | ai:claude
 pub const NEW_KEY_LABEL: &str = "n: new — create a Draft spec (opens a title input)";
 
 /// The live-refresh key legend entry — surfaced in every '?' help context so
 /// re-reading the store (to witness state changes made outside the TUI) is
-/// discoverable wherever the operator asks for help. trace:TASK-934 | ai:claude
+// discoverable wherever the operator asks for help. trace:TASK-934 | ai:claude
 pub const REFRESH_KEY_LABEL: &str = "r: refresh — re-read the store (pick up external changes)";
 
 /// The element the '?' help popup should describe, distilled from the focus
 /// state. A pure value so [`help_for`] is a total, unit-testable function.
-/// trace:TASK-922 | ai:claude
+// trace:TASK-922 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FocusTarget {
     /// Scopes panel, a scope highlighted.
@@ -2223,7 +2264,7 @@ pub enum FocusTarget {
 /// The content of the '?' help popup: a header (where you are / what's
 /// selected), the focused element's help body, and a short key legend for the
 /// current context. Pure data so the parent render and the unit tests both
-/// consume the same thing. trace:TASK-922 | ai:claude
+// consume the same thing. trace:TASK-922 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HelpContent {
     /// "Where you are / what's selected" — the popup title line.
@@ -2239,7 +2280,7 @@ pub struct HelpContent {
 /// — every focus shape maps to a header + body + key legend, so the unit
 /// tests assert the right help is selected without a terminal. The verb/scope
 /// bodies come straight from their `help()` strings (data-driven).
-/// trace:TASK-922 | ai:claude
+// trace:TASK-922 | ai:claude
 pub fn help_for(target: FocusTarget) -> HelpContent {
     match target {
         FocusTarget::ScopeEntry(scope) => HelpContent {
@@ -2288,7 +2329,7 @@ pub fn help_for(target: FocusTarget) -> HelpContent {
     }
 }
 
-/// The key legend for the scopes panel context. trace:TASK-922 | ai:claude
+// The key legend for the scopes panel context. trace:TASK-922 | ai:claude
 fn scope_legend() -> Vec<String> {
     vec![
         "↵ / Tab: descend to the items panel".to_string(),
@@ -2303,7 +2344,7 @@ fn scope_legend() -> Vec<String> {
     ]
 }
 
-/// The key legend for the verbs panel context. trace:TASK-922 | ai:claude
+// The key legend for the verbs panel context. trace:TASK-922 | ai:claude
 fn verb_legend() -> Vec<String> {
     vec![
         "↵: run the highlighted verb".to_string(),
@@ -2319,7 +2360,7 @@ fn verb_legend() -> Vec<String> {
     ]
 }
 
-/// The key legend for the items panel context. trace:TASK-922 | ai:claude
+// The key legend for the items panel context. trace:TASK-922 | ai:claude
 fn item_legend() -> Vec<String> {
     vec![
         "Space: toggle-select this item".to_string(),
@@ -2390,6 +2431,34 @@ mod tests {
     fn fresh_state_has_no_gate_hold() {
         let st = RedesignState::new(vec![], "advisor");
         assert!(st.gate_hold.is_none());
+    }
+
+    // A fresh state has no drive-routing affordance pending. trace:TASK-1076
+    #[test]
+    fn fresh_state_has_no_drive_routing() {
+        let st = RedesignState::new(vec![], "advisor");
+        assert!(st.drive_routing.is_none());
+    }
+
+    /// The routing line names the scope worktree by default and flips to the
+    // solo phrasing when toggled. trace:TASK-1076
+    #[test]
+    fn drive_routing_line_reflects_solo_toggle() {
+        let mut r = DriveRouting {
+            id: "TASK-1".to_string(),
+            scope: "EPIC-54".to_string(),
+            solo: false,
+        };
+        let default_line = r.routing_line();
+        assert!(
+            default_line.contains("EPIC-54"),
+            "names the scope: {default_line}"
+        );
+        assert!(default_line.contains("into"), "default routes into scope");
+        r.solo = true;
+        let solo_line = r.routing_line();
+        assert!(solo_line.contains("--solo"), "solo phrasing: {solo_line}");
+        assert!(solo_line.contains("own worktree"));
     }
 
     #[test]
@@ -3156,7 +3225,7 @@ mod tests {
     /// The full, status-INDEPENDENT Open-scope verb vocabulary — the complete
     /// list `verb_list_for(Scope::Open)` returns post-TASK-947 (hide → grey).
     /// Draft-trio indices are preserved (request approval = 3, approve = 4,
-    /// reject = 5); queue = 6, accept = 7, defer = 8. trace:TASK-947
+    // reject = 5); queue = 6, accept = 7, defer = 8. trace:TASK-947
     fn open_full_verbs() -> Vec<Verb> {
         vec![
             Verb::Show,
@@ -3645,7 +3714,7 @@ mod tests {
 
     /// Items for the accept tests: a Done spec mixed with non-Done so the
     /// Done-conditional verb + the done-selection filtering can be exercised.
-    /// Index 0 + 2 are Done; 1 is Approved, 3 is Draft. trace:TASK-933
+    // Index 0 + 2 are Done; 1 is Approved, 3 is Draft. trace:TASK-933
     fn accept_items() -> Vec<TargetItem> {
         ["Done", "Approved", "Done", "Draft"]
             .iter()
