@@ -17,12 +17,12 @@ description: |
          doc (the "Bucketed status counts…" prose already there is fine for it).
 
   Raised in review of PR-1291: https://github.com/joemooney/aida/pull/1291#issuecomment-4850161372
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:08:05.886172976Z
-modified_at: 2026-07-01T04:08:05.886172976Z
+modified_at: 2026-07-01T06:04:39.970855874Z
 req_type: Task
 tags:
 - aida:focus
