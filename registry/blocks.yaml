@@ -351,3 +351,11 @@ blocks:
   range_end: 1016
   next: 917
   allocated_at: 2026-07-01T18:48:38.705875797Z
+- node_id: '6'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: TASK
+  range_start: 1115
+  range_end: 1214
+  next: 1115
+  allocated_at: 2026-07-01T18:48:47.358754445Z
