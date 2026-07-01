@@ -33,6 +33,13 @@ human, because the gate already excluded it.
 
 - There's one specific spec to do → use `/aida-pickup`.
 - You want a single-spec lifecycle with the orchestrator → `aida queue work <id> --auto-complete` (see "Relationship to the orchestrator" below).
+- **You are not running on the Claude Code harness** (Codex, Gemini, …) → this
+  skill's fan-out needs the harness's native subagent Task tool
+  (`Agent(subagent_type: …, isolation: "worktree")`), which those vendors don't
+  expose, so the wave can't be spawned. Drain the ready set **serially** through
+  the vendor-neutral engine instead: `aida queue work <id> --auto-complete` per
+  spec (loop over the ready set) — see "Relationship to the orchestrator drain"
+  below.
 
 ## Procedure
 
@@ -313,5 +320,17 @@ the harness's native subagent fan-out rather than `aida queue work
 parallel. They are **not** competitors: reach for `/aida-burndown` to drain a
 *ready set*; reach for the orchestrator drain when its single-spec lifecycle is
 what you want. Don't run both against the same set.
+
+**This fan-out drain is Claude-harness-only.** The engine is the Claude Code
+harness's native subagent Task tool — `Agent(subagent_type: …, isolation:
+"worktree")` spawns the parallel worktree-isolated implementers. No CLI verb
+drives it; only the harness can. Non-Claude vendors (Codex, Gemini, …) have no
+equivalent subagent fan-out, so this skill **cannot run there.** Their
+vendor-neutral path is the per-spec `aida queue work <id> --auto-complete`
+engine (the orchestrator drain above) run **serially** over the ready set — one
+spec's full implement → CI → review → merge lifecycle at a time. It trades the
+fan-out's parallelism for a loop that runs anywhere the `aida` binary does. In
+short: **fan-out burndown = Claude harness; serial `aida queue work
+--auto-complete` = every agent, including non-Claude.**
 
 trace:STORY-527 trace:TASK-792 trace:TASK-992 | ai:claude

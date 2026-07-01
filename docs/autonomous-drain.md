@@ -15,6 +15,15 @@ work is finished. That is what makes an unattended overnight drain possible:
 aida queue work --batch nightly --auto-complete --no-human
 ```
 
+> **This orchestrator drain is the vendor-neutral engine.** It is a CLI verb, so
+> it runs on any agent that can invoke `aida` — Claude, Codex, Gemini, or a plain
+> shell loop. The parallel **fan-out burndown** (`/aida-burndown`) is the
+> faster hands-off path, but it is **Claude-harness-only**: it spawns its wave
+> with the Claude Code harness's native subagent Task tool, which non-Claude
+> vendors don't expose. On those vendors, drive this per-spec drain **serially**
+> over the ready set instead. See `docs/aida/discipline/autonomous-burndown.md`
+> ("Relationship to the orchestrator drain") for the full contrast.
+
 ## The three autonomy modes
 
 `--no-human` is the far end of a three-mode ladder. The middle rung,
