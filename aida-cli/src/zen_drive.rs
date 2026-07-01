@@ -327,7 +327,8 @@ pub(crate) fn run_draft_gate(
 // ── 2. APPROVED → suitability checks ──────────────────────────────────────
 //
 // HARD-REFUSE (not overridable): epic (read-only rollup), keystone/supervised,
-// blocked (BlockedBy → unshipped). WARN + `--force` to override: under-specified
+// needs-design (unresolved design decisions → route to --guided), blocked
+// (BlockedBy → unshipped). WARN + `--force` to override: under-specified
 // (`aida lint`), coupled (file-overlap with in-flight work).
 
 /// Already-probed facts for [`classify_suitability`]. Built in `main.rs` from
@@ -363,9 +364,9 @@ pub(crate) enum Suitability {
 }
 
 /// Classify an Approved spec's drive-suitability. Hard refusals are checked
-/// first and ordered most-fundamental-first (epic → keystone → blocked); the
-/// soft warnings (under-specified, coupled) only matter once the hard gates
-/// pass, and `--force` flips a `SoftBlock` into a `WarnProceed`. Pure.
+/// first and ordered most-fundamental-first (epic → keystone → needs-design →
+/// blocked); the soft warnings (under-specified, coupled) only matter once the
+/// hard gates pass, and `--force` flips a `SoftBlock` into a `WarnProceed`. Pure.
 // trace:TASK-1037 | ai:claude
 pub(crate) fn classify_suitability(i: &SuitabilityInput) -> Suitability {
     // Hard refusals — NOT overridable by --force.
@@ -462,6 +463,20 @@ pub(crate) struct GateVerdict {
     pub under_specified: bool,
     /// The hold is SOFT — re-running with `--force` overrides it.
     pub forceable: bool,
+    /// The ADR-6 scope route the DEFAULT drive (no `--solo`) would take:
+    /// `"solo"` (own worktree + own PR) or `"into-scope"` (routes into the scope
+    /// worktree named by `scope`). Lets a shell-out consumer (the TUI drive verb)
+    /// show the resolved routing and offer a `--solo` toggle BEFORE launching,
+    /// instead of silently routing an epic-parented spec into the epic worktree.
+    /// [`classify_gate`] defaults this to `"solo"` (it is routing-agnostic); the
+    /// caller that has the store fills the real route.
+    // trace:TASK-1076 | ai:claude
+    pub route: &'static str,
+    /// The scope (parent epic / active focus) the default drive routes into,
+    /// when `route == "into-scope"`; empty otherwise. Named in the TUI routing
+    /// affordance so the operator sees WHICH worktree the drive would join.
+    // trace:TASK-1076 | ai:claude
+    pub scope: String,
 }
 
 /// Compose the eligibility + suitability classifications into one structured
@@ -475,6 +490,9 @@ pub(crate) fn classify_gate(
     status: &RequirementStatus,
     suit_input: &SuitabilityInput,
 ) -> GateVerdict {
+    // `route`/`scope` default to solo here — classify_gate is routing-agnostic;
+    // the caller that holds the store overrides them with the resolved ADR-6
+    // route. trace:TASK-1076 | ai:claude
     let ready = |class: &'static str| GateVerdict {
         spec: spec.to_string(),
         verdict: "ready",
@@ -482,6 +500,8 @@ pub(crate) fn classify_gate(
         reason: String::new(),
         under_specified: false,
         forceable: false,
+        route: "solo",
+        scope: String::new(),
     };
     // Eligibility first: a not-Ready status holds regardless of suitability.
     if let Some(reason) = classify_eligibility(status).refusal(spec) {
@@ -492,6 +512,8 @@ pub(crate) fn classify_gate(
             reason,
             under_specified: false,
             forceable: false,
+            route: "solo",
+            scope: String::new(),
         };
     }
     match classify_suitability(suit_input) {
@@ -505,6 +527,8 @@ pub(crate) fn classify_gate(
             reason,
             under_specified: false,
             forceable: false,
+            route: "solo",
+            scope: String::new(),
         },
         Suitability::SoftBlock(reason) => GateVerdict {
             spec: spec.to_string(),
@@ -513,6 +537,8 @@ pub(crate) fn classify_gate(
             reason,
             under_specified: suit_input.under_specified,
             forceable: true,
+            route: "solo",
+            scope: String::new(),
         },
     }
 }

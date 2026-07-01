@@ -48,12 +48,12 @@ use std::io::Stdout;
 use std::process::Command;
 
 /// Lines scrolled per PageUp / PageDown (and Space) in the item modal.
-/// trace:TASK-913 | ai:claude
+// trace:TASK-913 | ai:claude
 const MODAL_PAGE: u16 = 10;
 
 /// The trailing marker on a Test-scope row whose spec carries a `## Test Plan`
 /// section. A small suffix glyph so the operator sees which shipped specs have
-/// verification steps. trace:STORY-699 | ai:claude
+// verification steps. trace:STORY-699 | ai:claude
 const TEST_PLAN_MARKER: &str = "🧪";
 
 /// Is the action→target redesign selected? Checked by `aida_tui::run` and the
@@ -93,7 +93,7 @@ fn startup_status(store_available: bool) -> String {
 /// `project_root` is the directory holding `.aida/config.toml` (resolved by
 /// the launcher). It opens the cache-backed git backend ONCE
 /// ([`SpecStore`]) so every scope-list + show-modal read is in-process —
-/// no per-read `aida` subprocess cold-start. trace:STORY-693 | ai:claude
+// no per-read `aida` subprocess cold-start. trace:STORY-693 | ai:claude
 pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
     term::install_panic_hook();
     term::install_signal_handler()?;
@@ -166,7 +166,7 @@ pub fn run(theme: Theme, project_root: &std::path::Path) -> Result<()> {
 /// [`store::resolve_focus_epic`]; when both are absent we *infer* the epic from
 /// the current branch's trailered specs' most-common parent epic (the stretch).
 /// Returns the epic id (still to be closure-resolved by the caller), or `None`
-/// when nothing resolves. trace:STORY-697 | ai:claude
+// when nothing resolves. trace:STORY-697 | ai:claude
 fn launch_focus_epic(project_root: &std::path::Path, store: Option<&SpecStore>) -> Option<String> {
     let env = std::env::var("AIDA_TUI_EPIC").ok();
     let marker = store::read_focus_marker(project_root);
@@ -181,7 +181,7 @@ fn launch_focus_epic(project_root: &std::path::Path, store: Option<&SpecStore>) 
 /// (STORY-697 stretch): read the branch's `(SPEC-ID)` trailers, map each
 /// trailered spec to its parent epic, and take the mode. Returns `None` when
 /// the store is unavailable, git can't be read, or no trailered spec has an
-/// epic parent. trace:STORY-697 | ai:claude
+// epic parent. trace:STORY-697 | ai:claude
 fn infer_focus_from_branch(
     project_root: &std::path::Path,
     store: Option<&SpecStore>,
@@ -200,7 +200,7 @@ fn infer_focus_from_branch(
 /// newline-joined — the input to the branch-inference trailer scan. Falls back
 /// to the last 50 subjects when `origin/main` is unknown (a fresh clone with no
 /// upstream). One bounded `git` shell-out, fired ONCE at launch only when env +
-/// marker are both unset. trace:STORY-697 | ai:claude
+// marker are both unset. trace:STORY-697 | ai:claude
 fn branch_commit_subjects(project_root: &std::path::Path) -> Option<String> {
     let run = |range: &str| -> Option<String> {
         let out = std::process::Command::new("git")
@@ -222,7 +222,7 @@ fn branch_commit_subjects(project_root: &std::path::Path) -> Option<String> {
 
 /// Recompute and store the focus-line progress summary for the active focus set
 /// (e.g. "EPIC-54: 6 done · 2 draft"). Stored on `st.focus_summary` for the
-/// status-line render. trace:STORY-695 | ai:claude
+// status-line render. trace:STORY-695 | ai:claude
 fn refresh_focus_summary(
     st: &mut RedesignState,
     store: &SpecStore,
@@ -237,7 +237,7 @@ fn refresh_focus_summary(
 /// per-scope item cache so the next sync re-fetches narrowed lists. A blank /
 /// unresolvable epic clears the focus instead. The `loaded` sentinel is reset
 /// so [`sync_scope_items`] re-fetches even when the active scope is unchanged.
-/// trace:STORY-695 | ai:claude
+// trace:STORY-695 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn apply_focus(
     st: &mut RedesignState,
@@ -274,7 +274,7 @@ fn apply_focus(
 
 /// Clear the runtime focus (the clear-focus key): drop the lens + summary and
 /// invalidate the item cache so every scope re-fetches unfiltered.
-/// trace:STORY-695 | ai:claude
+// trace:STORY-695 | ai:claude
 fn clear_focus(
     st: &mut RedesignState,
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
@@ -313,7 +313,7 @@ fn clear_focus(
 ///
 /// When focused on an epic, the descendant closure + progress summary are also
 /// recomputed so a child added or a status flipped inside the focus epic is
-/// reflected. trace:TASK-934 | ai:claude
+// reflected. trace:TASK-934 | ai:claude
 fn refresh(
     st: &mut RedesignState,
     store: Option<&SpecStore>,
@@ -344,7 +344,7 @@ fn refresh(
 
 /// Drop the per-scope item cache and reset the `loaded` sentinel to a value no
 /// functional scope equals, so the next [`sync_scope_items`] re-fetches the
-/// active scope under the new focus. trace:STORY-695 | ai:claude
+// active scope under the new focus. trace:STORY-695 | ai:claude
 fn invalidate_scope_cache(cache: &mut HashMap<Scope, Vec<TargetItem>>, loaded: &mut Scope) {
     cache.clear();
     // Sessions is non-functional, so it can never equal the active functional
@@ -355,7 +355,7 @@ fn invalidate_scope_cache(cache: &mut HashMap<Scope, Vec<TargetItem>>, loaded: &
 /// The scope whose item-set the bottom panel should currently show: the
 /// drilled-into scope when at the verb level, else the highlighted scope at
 /// the scope level. Only functional scopes have a target set; others keep
-/// the last loaded set. trace:STORY-690 | ai:claude
+// the last loaded set. trace:STORY-690 | ai:claude
 fn active_item_scope(st: &RedesignState) -> Option<Scope> {
     match st.scope {
         Some(scope) => Some(scope),
@@ -365,7 +365,7 @@ fn active_item_scope(st: &RedesignState) -> Option<Scope> {
 
 /// Keep the bottom panel's items in sync with the active scope, fetching
 /// (and caching) on first visit. The fetch is now an in-process cache read
-/// via the open [`SpecStore`] — no subprocess. trace:STORY-690 trace:STORY-693
+// via the open [`SpecStore`] — no subprocess. trace:STORY-690 trace:STORY-693
 fn sync_scope_items(
     st: &mut RedesignState,
     store: Option<&SpecStore>,
@@ -405,7 +405,7 @@ fn resolve_role() -> String {
 /// Load the focused item's full spec for the show modal — in-process, via the
 /// open [`SpecStore`] (no `aida show` subprocess). The loaded record is held in
 /// `loaded_spec` and rendered natively by [`render_modal`]. Fires only on
-/// modal-open, never on cursor move. trace:STORY-693 | ai:claude
+// modal-open, never on cursor move. trace:STORY-693 | ai:claude
 fn load_focused_spec(st: &RedesignState, store: Option<&SpecStore>) -> Option<LoadedSpec> {
     let idxs = st.bottom_indices();
     let real = *idxs.get(st.bottom_idx)?;
@@ -417,7 +417,7 @@ fn load_focused_spec(st: &RedesignState, store: Option<&SpecStore>) -> Option<Lo
 }
 
 /// A placeholder spec for the modal when the store is unavailable or the id
-/// can't be found — rendered the same way as a real one. trace:STORY-693
+// can't be found — rendered the same way as a real one. trace:STORY-693
 fn missing_spec(id: &str) -> LoadedSpec {
     LoadedSpec {
         id: id.to_string(),
@@ -438,7 +438,7 @@ fn missing_spec(id: &str) -> LoadedSpec {
 
 /// The outcome of a background verb run, sent back over the completion channel:
 /// the final status-line message plus whether the affected scope cache must be
-/// invalidated so the new state shows. trace:BUG-633 | ai:claude
+// invalidated so the new state shows. trace:BUG-633 | ai:claude
 struct VerbResult {
     /// The status-line text to show on completion (the existing `*_status`
     /// message — e.g. "approved 2: TASK-1, TASK-2").
@@ -451,7 +451,7 @@ struct VerbResult {
 /// An in-flight background verb: the DISPLAY state ([`PendingOp`], pure) paired
 /// with the completion channel the worker thread sends its [`VerbResult`] over.
 /// Held as an event-loop local (like `loaded_spec`), never in the pure state.
-/// trace:BUG-633 | ai:claude
+// trace:BUG-633 | ai:claude
 struct Pending {
     op: PendingOp,
     rx: Receiver<VerbResult>,
@@ -464,7 +464,7 @@ struct Pending {
 /// "busy — <label> in progress" status and leaves the existing op untouched
 /// (returns `false`). Navigation stays live because only the verb-START paths
 /// call this; movement keys never do. On success spawns the worker, installs
-/// the [`Pending`], and returns `true`. trace:BUG-633 | ai:claude
+// the [`Pending`], and returns `true`. trace:BUG-633 | ai:claude
 fn start_pending(
     pending: &mut Option<Pending>,
     st: &mut RedesignState,
@@ -490,7 +490,7 @@ fn start_pending(
 
 /// Apply a finished verb's [`VerbResult`] to the state: write the final status
 /// line and report whether the scope cache must be invalidated. Pure (no IO, no
-/// threads) so the completion transition is unit-testable. trace:BUG-633 | ai:claude
+// threads) so the completion transition is unit-testable. trace:BUG-633 | ai:claude
 fn apply_verb_result(st: &mut RedesignState, result: &VerbResult) -> bool {
     st.status = Some(result.status.clone());
     result.invalidate
@@ -700,7 +700,9 @@ fn handle_key(
             }
             KeyCode::Char('f') | KeyCode::Char('F') if hold.offers_force() => {
                 st.gate_hold = None;
-                if spawn_drive(&hold.id, true) {
+                // Force overrides the SOFT hold; it keeps the ADR-6 default
+                // route (solo = false), it does NOT split out. trace:TASK-1076
+                if spawn_drive(&hold.id, true, false) {
                     st.status = Some(format!(
                         "drive FORCE-launched for {} — watch it with `aida drain status`",
                         hold.id
@@ -715,6 +717,56 @@ fn handle_key(
             KeyCode::Esc | KeyCode::Char('q') => {
                 st.gate_hold = None;
                 st.status = Some("drive hold dismissed".to_string());
+            }
+            _ => {}
+        }
+        return Ok(false);
+    }
+
+    // The drive-ROUTING popup captures input until resolved (TASK-1076): `s`
+    // toggles the --solo route (split out vs route into the scope worktree),
+    // Enter / d launches with the current toggle, Esc / q cancels. Raised by the
+    // drive verb on a READY spec whose default ADR-6 route would carry it into a
+    // scope worktree — so the operator sees WHERE it would run and can split it
+    // out before launching. trace:TASK-1076 | ai:claude
+    if let Some(routing) = st.drive_routing.clone() {
+        match key.code {
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                if let Some(r) = st.drive_routing.as_mut() {
+                    r.solo = !r.solo;
+                    st.status = Some(if r.solo {
+                        format!("drive {}: --solo (own worktree) — Enter to launch", r.id)
+                    } else {
+                        format!(
+                            "drive {}: into {} worktree (ADR-6) — Enter to launch",
+                            r.id, r.scope
+                        )
+                    });
+                }
+            }
+            KeyCode::Enter | KeyCode::Char('d') | KeyCode::Char('D') => {
+                st.drive_routing = None;
+                // solo == false preserves the ADR-6 default route (no --solo).
+                if spawn_drive(&routing.id, false, routing.solo) {
+                    let how = if routing.solo {
+                        "solo (own worktree)".to_string()
+                    } else {
+                        format!("into the {} scope worktree", routing.scope)
+                    };
+                    st.status = Some(format!(
+                        "drive launched for {} {how} — watch it with `aida drain status`",
+                        routing.id
+                    ));
+                } else {
+                    st.status = Some(format!(
+                        "drive: FAILED to launch the drive for {}",
+                        routing.id
+                    ));
+                }
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                st.drive_routing = None;
+                st.status = Some("drive routing cancelled".to_string());
             }
             _ => {}
         }
@@ -911,7 +963,7 @@ fn handle_key(
 
 /// Open the item modal for the focused row, loading its full spec in-process
 /// (via the open [`SpecStore`]) into `loaded_spec` for native rendering. No
-/// `aida show` subprocess. trace:STORY-693 | ai:claude
+// `aida show` subprocess. trace:STORY-693 | ai:claude
 fn open_modal_with_body(
     st: &mut RedesignState,
     store: Option<&SpecStore>,
@@ -986,7 +1038,7 @@ fn carousel_modal(
 /// its extracted `## Test Plan` section so the modal renders the do→expect steps
 /// prominently; falls back to the full description when there is no test plan,
 /// and leaves every other scope's spec untouched. The structured field header
-/// (type/status/priority/tags) is preserved either way. trace:STORY-699 | ai:claude
+// (type/status/priority/tags) is preserved either way. trace:STORY-699 | ai:claude
 fn test_plan_view(st: &RedesignState, spec: LoadedSpec) -> LoadedSpec {
     if active_item_scope(st) != Some(Scope::Test) {
         return spec;
@@ -1264,7 +1316,21 @@ fn apply_outcome(
             // instead of a launch confirmation. trace:STORY-744 | ai:claude
             match probe_drive_gate(&id) {
                 Ok(v) if v.verdict == "ready" => {
-                    if spawn_drive(&id, false) {
+                    // TASK-1076: when the DEFAULT drive would route into a scope
+                    // (epic / focus) worktree, DON'T silently launch — surface the
+                    // resolved routing + a --solo toggle first, so an epic-parented
+                    // spec doesn't quietly join the epic worktree. A solo-by-default
+                    // spec (no scope) has nothing to toggle, so it launches straight
+                    // away, preserving the pre-TASK-1076 behavior. trace:TASK-1076
+                    if v.routes_into_scope() {
+                        st.status =
+                            Some(format!("drive: confirm routing for {id} — see the popup"));
+                        st.drive_routing = Some(state::DriveRouting {
+                            id,
+                            scope: v.scope,
+                            solo: false,
+                        });
+                    } else if spawn_drive(&id, false, false) {
                         st.status = Some(format!(
                             "drive launched for {id} — watch it with `aida drain status`"
                         ));
@@ -1300,23 +1366,31 @@ fn apply_outcome(
 }
 
 /// Launch the autonomous drive on `id` as a DETACHED background process:
-/// `aida zen <id>` (`--force` when `force`). Returns `true` if the child
-/// spawned. The cockpit can't host the long-running interactive drive
-/// in-terminal, so the child's stdio is nulled and it is left to run
-/// independently (the operator watches it with `aida drain status`). Mirrors the
-/// other verbs' launchers but uses `spawn` (fire-and-forget) instead of `output`
-/// (capture-and-wait), and carries advisor authority on the spawned command so
-/// the drive isn't refused by the role gate. `--force` is the operator's answer
-/// to a SOFT gate hold (STORY-744): it overrides the under-specified / coupled
-/// warnings, never the hard refusals.
+/// `aida zen <id>` (`--force` when `force`, `--solo` when `solo`). Returns
+/// `true` if the child spawned. The cockpit can't host the long-running
+/// interactive drive in-terminal, so the child's stdio is nulled and it is left
+/// to run independently (the operator watches it with `aida drain status`).
+/// Mirrors the other verbs' launchers but uses `spawn` (fire-and-forget) instead
+/// of `output` (capture-and-wait), and carries advisor authority on the spawned
+/// command so the drive isn't refused by the role gate. `--force` is the
+/// operator's answer to a SOFT gate hold (STORY-744): it overrides the
+/// under-specified / coupled warnings, never the hard refusals. `--solo` (when
+/// `solo`) is the operator's answer to the ADR-6 routing affordance (TASK-1076):
+/// split the drive out into its OWN worktree + PR instead of routing into the
+/// parent-epic / focus scope worktree. `solo == false` preserves the ADR-6
+/// default route — it does NOT force `--solo`.
 // trace:STORY-728 | ai:claude
 // trace:STORY-744 | ai:claude — the `force` path is the gate-hold override.
-fn spawn_drive(id: &str, force: bool) -> bool {
+// trace:TASK-1076 | ai:claude — the `solo` path is the routing toggle.
+fn spawn_drive(id: &str, force: bool, solo: bool) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
     cmd.args(["zen", id]);
     if force {
         cmd.arg("--force");
+    }
+    if solo {
+        cmd.arg("--solo");
     }
     // Kicking off the drive commits the team to autonomously execute the spec —
     // an advisor-authority act (like routing it onto the implementer queue), so
@@ -1404,6 +1478,25 @@ struct DriveGateVerdict {
     under_specified: bool,
     /// The hold is soft → `--force` overrides it.
     forceable: bool,
+    /// The DEFAULT (no `--solo`) ADR-6 scope route: `"solo"` or `"into-scope"`.
+    /// `#[serde(default)]` keeps an older `aida` binary (which does not emit this
+    /// field) parsing — it falls back to `"solo"`, preserving the pre-TASK-1076
+    // behavior of launching straight away. trace:TASK-1076 | ai:claude
+    #[serde(default)]
+    route: String,
+    /// The scope (parent epic / active focus) the default drive routes into,
+    // when `route == "into-scope"`; empty for solo. trace:TASK-1076 | ai:claude
+    #[serde(default)]
+    scope: String,
+}
+
+impl DriveGateVerdict {
+    /// True when the DEFAULT drive would route into a scope (epic / focus)
+    /// worktree rather than a solo own-worktree drive — the case that warrants
+    // showing the routing + a `--solo` toggle before launching. trace:TASK-1076
+    fn routes_into_scope(&self) -> bool {
+        self.route == "into-scope" && !self.scope.trim().is_empty()
+    }
 }
 
 /// Probe the drive-suitability gate for `id` by shelling out to
@@ -1426,16 +1519,40 @@ fn probe_drive_gate(id: &str) -> std::result::Result<DriveGateVerdict, String> {
     let out = cmd
         .output()
         .map_err(|e| format!("could not run the gate probe ({e})"))?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        let msg = err.trim();
-        return Err(if msg.is_empty() {
-            "the gate probe failed".to_string()
-        } else {
-            msg.to_string()
-        });
-    }
     let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    parse_gate_probe(out.status.success(), &stdout, &stderr)
+}
+
+/// Interpret an `aida zen <id> --json` probe's captured streams into a verdict
+/// (or an error message). PURE — split out of [`probe_drive_gate`] so the
+/// stream-selection + parse is unit-testable without spawning.
+///
+/// TASK-1079: the failure branch consults BOTH streams. The TUI captures the
+/// child's stdio with pipes, so the child's stdout is NOT a TTY → it runs in
+/// AGENT MODE, and TASK-972 makes agent-mode errors print as a structured block
+/// on STDOUT, not stderr. Reading only stderr (the pre-TASK-1079 behavior) lost
+/// the real reason and reported a generic "the gate probe failed". We prefer
+/// stderr (the human-path channel) and fall back to stdout (the agent-error
+/// block) so the operator sees the actual failure either way.
+// trace:TASK-1079 | ai:claude
+fn parse_gate_probe(
+    success: bool,
+    stdout: &str,
+    stderr: &str,
+) -> std::result::Result<DriveGateVerdict, String> {
+    if !success {
+        let err = stderr.trim();
+        let out = stdout.trim();
+        let msg = if !err.is_empty() {
+            err
+        } else if !out.is_empty() {
+            out
+        } else {
+            "the gate probe failed"
+        };
+        return Err(msg.to_string());
+    }
     serde_json::from_str::<DriveGateVerdict>(stdout.trim())
         .map_err(|e| format!("could not read the gate verdict ({e})"))
 }
@@ -1534,7 +1651,7 @@ fn archive_status(archived: &[String], failed: &[String]) -> String {
 /// `aida why <id>`. Its state classifier lives in `aida-cli/burndown.rs` (not
 /// in `aida-core`), so making it in-process is a separate task —
 /// TODO(why in-process). `show` and the scope lists are now in-process via
-/// [`SpecStore`] and never reach here. trace:STORY-693 | ai:claude
+// [`SpecStore`] and never reach here. trace:STORY-693 | ai:claude
 fn run_item_verb(verb: Verb, id: &str) -> (String, String) {
     let title = format!("{id} — {}", verb.label());
     // `why` and `status` shell out to the matching `aida` subcommand; any other
@@ -1572,7 +1689,7 @@ fn run_item_verb(verb: Verb, id: &str) -> (String, String) {
 
 /// Route one draft spec to the advisor queue. Returns `true` on success.
 /// Uses `aida queue add --for advisor <id>` — the reliable routing path.
-/// trace:STORY-690 | ai:claude
+// trace:STORY-690 | ai:claude
 fn queue_for_advisor(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
@@ -1590,7 +1707,7 @@ fn queue_for_advisor(id: &str) -> bool {
 
 /// The status-line confirmation for a `request approval` run: which ids were
 /// routed, which failed to route, and which were skipped as non-drafts.
-/// Pure (no IO) so it is render-smoke / unit testable. trace:STORY-690
+// Pure (no IO) so it is render-smoke / unit testable. trace:STORY-690
 fn request_approval_status(routed: &[String], failed: &[String], skipped: &[String]) -> String {
     let mut parts = Vec::new();
     if !routed.is_empty() {
@@ -1618,7 +1735,7 @@ fn request_approval_status(routed: &[String], failed: &[String], skipped: &[Stri
 
 /// Route one Approved spec to the implementer queue. Returns `true` on
 /// success. Uses `aida queue add --for implementer <id>` — the reliable
-/// routing path, the mirror of [`queue_for_advisor`]. trace:TASK-915 | ai:claude
+// routing path, the mirror of [`queue_for_advisor`]. trace:TASK-915 | ai:claude
 fn queue_for_implementer(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
@@ -1636,7 +1753,7 @@ fn queue_for_implementer(id: &str) -> bool {
 /// The status-line confirmation for a `queue` run: which ids were routed to
 /// the implementer queue, which failed to route, and which were skipped as
 /// non-Approved. Pure (no IO) so it is unit testable. The mirror of
-/// [`request_approval_status`]. trace:TASK-915 | ai:claude
+// [`request_approval_status`]. trace:TASK-915 | ai:claude
 fn queue_status(routed: &[String], failed: &[String], skipped: &[String]) -> String {
     let mut parts = Vec::new();
     if !routed.is_empty() {
@@ -1666,7 +1783,7 @@ fn queue_status(routed: &[String], failed: &[String], skipped: &[String]) -> Str
 /// advisor-gated transition `aida edit <id> --status approved` — the approval
 /// transition is REFUSED from a non-advisor identity, so the spawned command
 /// carries advisor authority via `AIDA_SESSION_ROLE=advisor` in its env. The
-/// do-it-yourself mirror of [`queue_for_advisor`]. trace:TASK-920 | ai:claude
+// do-it-yourself mirror of [`queue_for_advisor`]. trace:TASK-920 | ai:claude
 fn approve_spec(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
@@ -1682,7 +1799,7 @@ fn approve_spec(id: &str) -> bool {
 
 /// The status-line confirmation for an `approve` run: which ids were approved,
 /// which failed the transition, and which were skipped as non-drafts. Pure (no
-/// IO) so it is unit testable. The mirror of [`queue_status`]. trace:TASK-920 | ai:claude
+// IO) so it is unit testable. The mirror of [`queue_status`]. trace:TASK-920 | ai:claude
 fn approve_status(approved: &[String], failed: &[String], skipped: &[String]) -> String {
     let mut parts = Vec::new();
     if !approved.is_empty() {
@@ -1760,7 +1877,7 @@ fn reject_status(rejected: &[String], failed: &[String], skipped: &[String]) -> 
 /// `aida edit <id> --status completed`. The Done-status counterpart to
 /// `approve`'s `--status approved`. Kept as a pure arg vector (passed to
 /// `Command::args`, never a shell string) so the id — and the verb shape — are
-/// unit-testable without spawning. trace:TASK-933 | ai:claude
+// unit-testable without spawning. trace:TASK-933 | ai:claude
 fn accept_edit_args(id: &str) -> Vec<&str> {
     vec!["edit", id, "--status", "completed"]
 }
@@ -1768,7 +1885,7 @@ fn accept_edit_args(id: &str) -> Vec<&str> {
 /// The argument vector for the reviewer-acceptance comment recorded alongside
 /// the accept transition: `aida comment add <id> "<note>"`. The note is a
 /// SINGLE arg-vector element, so it is never shell-parsed (no command
-/// substitution, no globbing). Pure so it is unit-testable. trace:TASK-933 | ai:claude
+// substitution, no globbing). Pure so it is unit-testable. trace:TASK-933 | ai:claude
 fn accept_comment_args(id: &str) -> [&str; 4] {
     [
         "comment",
@@ -1796,7 +1913,7 @@ fn accept_comment_args(id: &str) -> [&str; 4] {
 /// NUANCE: in the *full* multi-machine flow, final Completed still comes from
 /// the merge auto-bump on `aida pull`; this in-TUI accept completes the spec for
 /// the reviewer-at-the-keyboard walkthrough. The Done-status mirror of
-/// [`approve_spec`]. trace:TASK-933 | ai:claude
+// [`approve_spec`]. trace:TASK-933 | ai:claude
 fn accept_spec(id: &str) -> bool {
     let exe = crate::app::aida_exe();
     let cwd = std::env::current_dir().ok();
@@ -1828,7 +1945,7 @@ fn accept_spec(id: &str) -> bool {
 /// The status-line confirmation for an `accept` run: which ids the reviewer
 /// accepted (Done → Completed), which failed the transition, and which were
 /// skipped as non-Done. Pure (no IO) so it is unit testable. The mirror of
-/// [`approve_status`]. trace:TASK-933 | ai:claude
+// [`approve_status`]. trace:TASK-933 | ai:claude
 fn accept_status(accepted: &[String], failed: &[String], skipped: &[String]) -> String {
     let mut parts = Vec::new();
     if !accepted.is_empty() {
@@ -1856,7 +1973,7 @@ fn accept_status(accepted: &[String], failed: &[String], skipped: &[String]) -> 
 
 /// Park one spec off the active view with a revisit trigger. Returns `true` on
 /// success. Runs `aida defer <id> --until "<trigger>"` — the trigger is passed
-/// as a single argument (no shell), so embedded spaces are safe. trace:TASK-921 | ai:claude
+// as a single argument (no shell), so embedded spaces are safe. trace:TASK-921 | ai:claude
 fn defer_spec(id: &str, trigger: &str) -> bool {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
@@ -1869,7 +1986,7 @@ fn defer_spec(id: &str, trigger: &str) -> bool {
 
 /// The status-line confirmation for a `defer` run: which ids were parked (with
 /// the revisit trigger) and which failed. Pure (no IO) so it is unit testable.
-/// The mirror of [`approve_status`]. trace:TASK-921 | ai:claude
+// The mirror of [`approve_status`]. trace:TASK-921 | ai:claude
 fn defer_status(deferred: &[String], failed: &[String], trigger: &str) -> String {
     let mut parts = Vec::new();
     if !deferred.is_empty() {
@@ -1916,7 +2033,7 @@ fn new_spec_args<'a>(title: &'a str, parent: Option<&'a str>) -> Vec<&'a str> {
 /// Parse the spec id out of `aida add`'s success line (`Added: TASK-932 - …`).
 /// Returns `None` when no such line is present (or the id is the `?` placeholder
 /// the CLI prints when a spec_id wasn't assigned). Pure so it is unit-testable.
-/// trace:TASK-931 | ai:claude
+// trace:TASK-931 | ai:claude
 fn parse_created_spec_id(stdout: &str) -> Option<String> {
     stdout.lines().find_map(|l| {
         let rest = l.strip_prefix("Added: ")?;
@@ -2069,6 +2186,12 @@ fn render(
     if let Some(h) = &st.gate_hold {
         render_gate_hold(f, f.area(), theme, h);
     }
+    // The drive-ROUTING popup (TASK-1076) overlays the panels — a distinct,
+    // exclusive popup raised by the drive verb to surface the resolved ADR-6
+    // route + a --solo toggle before launching. trace:TASK-1076 | ai:claude
+    if let Some(r) = &st.drive_routing {
+        render_drive_routing(f, f.area(), theme, r);
+    }
     // The defer revisit-trigger input overlays everything else. trace:TASK-921
     if let Some(di) = &st.defer_input {
         render_defer_input(f, f.area(), theme, di);
@@ -2091,7 +2214,7 @@ fn render(
 /// Render the context-sensitive '?' help popup: a header (where you are /
 /// what's selected), the focused element's help body, and a key legend for
 /// the current context. Content comes from the pure [`state::help_for`] via
-/// `st.help_content()`, so this is render-only. trace:TASK-922 | ai:claude
+// `st.help_content()`, so this is render-only. trace:TASK-922 | ai:claude
 fn render_help(f: &mut Frame, area: Rect, theme: &Theme, hc: &state::HelpContent) {
     let popup = centered(area, 70, 70);
     f.render_widget(Clear, popup);
@@ -2515,7 +2638,7 @@ fn render_hint(
 /// the structured fields (type / status / priority / tags) plus the
 /// description body rendered as MARKDOWN. `scroll` is the vertical line
 /// offset (clamped here so an over-scroll pins to the last page rather than
-/// scrolling the body off the top). trace:STORY-693 trace:TASK-913 | ai:claude
+// scrolling the body off the top). trace:STORY-693 trace:TASK-913 | ai:claude
 fn render_modal(
     f: &mut Frame,
     area: Rect,
@@ -2566,7 +2689,7 @@ fn render_modal(
 /// rendered into a bordered, `Wrap { trim: false }` Paragraph of inner size
 /// `inner_w` x `inner_h`. The clamp is against the WRAPPED row count (what the
 /// Paragraph actually paints) rather than `lines.len()` (the logical count),
-/// because long lines wrap into many visual rows. trace:BUG-635 | ai:claude
+// because long lines wrap into many visual rows. trace:BUG-635 | ai:claude
 fn modal_max_scroll(lines: &[Line], inner_w: u16, inner_h: u16) -> u16 {
     // `Paragraph::line_count(width)` returns the wrapped row count PLUS the
     // block's vertical space (top+bottom borders = 2). We pass the same
@@ -2582,7 +2705,7 @@ fn modal_max_scroll(lines: &[Line], inner_w: u16, inner_h: u16) -> u16 {
 /// Render the modal's vertical scrollbar on the right inner edge — only when
 /// the content actually overflows (`max_scroll > 0`). `content_length` is the
 /// scrollable range and `position` the current offset, so the thumb tracks
-/// where the body is. trace:BUG-635 | ai:claude
+// where the body is. trace:BUG-635 | ai:claude
 fn render_modal_scrollbar(f: &mut Frame, popup: Rect, theme: &Theme, max_scroll: u16, scroll: u16) {
     if max_scroll == 0 {
         return;
@@ -2602,7 +2725,7 @@ fn render_modal_scrollbar(f: &mut Frame, popup: Rect, theme: &Theme, max_scroll:
 
 /// Build the native modal body: a structured header (title + a color-coded
 /// field row + tags) then the description rendered as markdown. Pure (no IO)
-/// so it is render-smoke / unit testable. trace:STORY-693 trace:TASK-913
+// so it is render-smoke / unit testable. trace:STORY-693 trace:TASK-913
 fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Vec<Line<'a>> {
     let mut lines: Vec<Line> = Vec::new();
 
@@ -2687,7 +2810,7 @@ fn spec_lines<'a>(spec: &'a LoadedSpec, theme: &Theme) -> Vec<Line<'a>> {
 /// per comment followed by its markdown body, blank-line separated; an empty
 /// list renders a single dim "No comments." line. A PURE function (no IO) so
 /// the comment→lines mapping is render-smoke testable: N comments produce N
-/// headers, empty produces the empty-state message. trace:TASK-932 | ai:claude
+// headers, empty produces the empty-state message. trace:TASK-932 | ai:claude
 fn comment_lines<'a>(comments: &'a [LoadedComment], theme: &Theme) -> Vec<Line<'a>> {
     if comments.is_empty() {
         return vec![Line::from(Span::styled(
@@ -2816,7 +2939,7 @@ fn relation_row<'a>(rel: &'a LoadedRelation, mode: list_row::GlyphMode, theme: &
 /// - paragraphs → plain `fg` text with a blank line between blocks.
 ///
 /// Anything unrecognised degrades to plain `fg` text; the parser never panics.
-/// trace:TASK-913 | ai:claude
+// trace:TASK-913 | ai:claude
 fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
     use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 
@@ -2988,13 +3111,13 @@ fn markdown_to_lines<'a>(src: &str, theme: &Theme) -> Vec<Line<'a>> {
 }
 
 /// Is a [`Line`] visually blank (no spans, or only empty-content spans)? Used
-/// to trim trailing blank lines from rendered markdown. trace:TASK-913
+// to trim trailing blank lines from rendered markdown. trace:TASK-913
 fn line_is_blank(line: &Line) -> bool {
     line.spans.iter().all(|s| s.content.is_empty())
 }
 
 /// Render a verb-output modal (the captured stdout of `show` / `why`).
-/// trace:STORY-690 | ai:claude
+// trace:STORY-690 | ai:claude
 fn render_verb_modal(
     f: &mut Frame,
     area: Rect,
@@ -3090,9 +3213,60 @@ fn render_gate_hold(f: &mut Frame, area: Rect, theme: &Theme, hold: &GateHold) {
     );
 }
 
+/// Render the drive-ROUTING popup (TASK-1076): the spec id in the title, the
+/// resolved ADR-6 route (into-scope vs solo — reflecting the current toggle),
+/// and the toggle / launch / cancel affordances. Accent-bordered like the other
+// input popups — this is a decision, not a refusal. trace:TASK-1076 | ai:claude
+fn render_drive_routing(f: &mut Frame, area: Rect, theme: &Theme, routing: &state::DriveRouting) {
+    let popup = centered(area, 64, 40);
+    f.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.accent))
+        .title(format!(" drive routing — {} ", routing.id));
+    // Highlight the ACTIVE route line in accent; the toggle re-styles it live.
+    let route_style = if routing.solo {
+        Style::default()
+            .fg(theme.accent)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)
+    };
+    let lines: Vec<Line> = vec![
+        Line::from(Span::styled(
+            "This drive would route:",
+            Style::default().fg(theme.dim),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(routing.routing_line(), route_style)),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  • ", Style::default().fg(theme.dim)),
+            Span::styled(
+                "s: toggle --solo (split out into own worktree + PR)",
+                Style::default().fg(theme.fg),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  • ", Style::default().fg(theme.dim)),
+            Span::styled(
+                "Enter / d: launch with the route above",
+                Style::default().fg(theme.fg),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("  • ", Style::default().fg(theme.dim)),
+            Span::styled("Esc / q: cancel", Style::default().fg(theme.fg)),
+        ]),
+    ];
+    f.render_widget(
+        Paragraph::new(lines).block(block).wrap(Wrap { trim: true }),
+        popup,
+    );
+}
+
 /// Render the single-line revisit-trigger input modal for the `defer` verb:
 /// a prompt, the typed buffer with a block cursor, the target count, and the
-/// confirm/cancel keys. trace:TASK-921 | ai:claude
+// confirm/cancel keys. trace:TASK-921 | ai:claude
 fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::DeferInput) {
     let popup = centered(area, 60, 25);
     f.render_widget(Clear, popup);
@@ -3129,7 +3303,7 @@ fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::Defe
 /// Render the new-spec TITLE input modal (TASK-931): a single-line prompt with
 /// a block cursor for the title of a fresh Draft spec. Mirrors the defer-input
 /// modal's shape. Enter creates; Esc (or an empty title) cancels.
-/// trace:TASK-931 | ai:claude
+// trace:TASK-931 | ai:claude
 fn render_new_input(f: &mut Frame, area: Rect, theme: &Theme, ni: &state::NewSpecInput) {
     let popup = centered(area, 60, 25);
     f.render_widget(Clear, popup);
@@ -3164,7 +3338,7 @@ fn render_new_input(f: &mut Frame, area: Rect, theme: &Theme, ni: &state::NewSpe
 /// block cursor, then the (filtered) open-epic list — one row per epic showing
 /// its id + title + status, with the highlighted row reverse-styled. Mirrors
 /// the selectable-list + fuzzy-filter patterns of the main panels.
-/// trace:STORY-697 | ai:claude
+// trace:STORY-697 | ai:claude
 fn render_epic_picker(f: &mut Frame, area: Rect, theme: &Theme, p: &state::EpicPicker) {
     let popup = centered(area, 70, 70);
     f.render_widget(Clear, popup);
@@ -3594,7 +3768,7 @@ mod render_tests {
     }
 
     /// Flatten the painted backend into one string so a render test can assert
-    /// a glyph sequence is (or is not) present. trace:TASK-945 | ai:claude
+    // a glyph sequence is (or is not) present. trace:TASK-945 | ai:claude
     fn rendered_text(st: &RedesignState, w: u16, h: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("test backend");
         terminal
@@ -3610,7 +3784,7 @@ mod render_tests {
 
     /// The `/query` find prompt renders ONLY in find mode (TASK-945): a
     /// confirmed-but-applied filter narrows silently (no prompt); entering find
-    /// mode shows the live `/…` prompt. trace:TASK-945 | ai:claude
+    // mode shows the live `/…` prompt. trace:TASK-945 | ai:claude
     #[test]
     fn find_prompt_renders_only_in_find_mode() {
         // Normal mode with a confirmed filter applied → NO `/zz` prompt.
@@ -3644,7 +3818,7 @@ mod render_tests {
     /// mixed statuses/priorities + a selection + the cursor paints over the
     /// TestBackend without panicking, at a realistic and a tiny size. The pure
     /// column-layout + status→glyph/colour mapping is unit-tested in
-    /// `super::list_row`. trace:TASK-914 | ai:claude
+    // `super::list_row`. trace:TASK-914 | ai:claude
     #[test]
     fn renders_columnar_scope_list() {
         let mut st = sample(8);
@@ -3661,7 +3835,7 @@ mod render_tests {
 
     /// The Test scope (STORY-699): a row carrying a `## Test Plan` gets the
     /// trailing marker, and the render paints over the backend without
-    /// panicking. trace:STORY-699
+    // panicking. trace:STORY-699
     #[test]
     fn renders_test_scope_row_marker() {
         let mut st = sample(4);
@@ -3674,7 +3848,7 @@ mod render_tests {
 
     /// `test_plan_view` (STORY-699): swaps the body to the extracted `## Test
     /// Plan` ONLY in the Test scope; falls back to the full description when the
-    /// section is absent; leaves other scopes' specs untouched. trace:STORY-699
+    // section is absent; leaves other scopes' specs untouched. trace:STORY-699
     #[test]
     fn test_plan_view_extracts_only_in_test_scope() {
         let mut st = sample(3);
@@ -4299,7 +4473,7 @@ mod render_tests {
     /// visual rows, so the scroll range computed from the WRAPPED row count must
     /// be larger than the old buggy clamp computed from the LOGICAL line count —
     /// otherwise PageDown stops short and the body bottom is unreachable.
-    /// trace:BUG-635 | ai:claude
+    // trace:BUG-635 | ai:claude
     #[test]
     fn modal_max_scroll_uses_wrapped_not_logical_count() {
         let theme = Theme::default();
@@ -4335,7 +4509,7 @@ mod render_tests {
 
     /// The verb-output modal now scrolls long captured output instead of
     /// truncating it — a long body scrolled past its end pins to the last page
-    /// and never panics. trace:BUG-635 | ai:claude
+    // and never panics. trace:BUG-635 | ai:claude
     #[test]
     fn verb_modal_scrolls_long_output() {
         let mut st = sample(5);
@@ -4349,7 +4523,7 @@ mod render_tests {
     }
 
     /// `comment_lines` (TASK-932): N comments → N author headers + bodies;
-    /// an empty list → the "No comments." empty-state line. trace:TASK-932
+    // an empty list → the "No comments." empty-state line. trace:TASK-932
     #[test]
     fn comment_lines_maps_each_and_empty_state() {
         let theme = Theme::default();
@@ -4532,5 +4706,92 @@ mod gate_tests {
                 "expected redesign-on for {v:?}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod drive_gate_probe_tests {
+    //! The drive-gate probe stream-selection (TASK-1079) + scope-route surfacing
+    //! (TASK-1076): pure parsing, unit-testable without spawning `aida zen`.
+    use super::{parse_gate_probe, DriveGateVerdict};
+
+    const READY_SOLO: &str = r#"{"spec":"TASK-1","verdict":"ready","class":"ready","reason":"","under_specified":false,"forceable":false,"route":"solo","scope":""}"#;
+    const READY_INTO_SCOPE: &str = r#"{"spec":"TASK-2","verdict":"ready","class":"ready","reason":"","under_specified":false,"forceable":false,"route":"into-scope","scope":"EPIC-54"}"#;
+    const HOLD_SOFT: &str = r#"{"spec":"TASK-3","verdict":"hold","class":"soft-block","reason":"under-specified","under_specified":true,"forceable":true,"route":"solo","scope":""}"#;
+
+    // A clean success parses the READY verdict off stdout. trace:TASK-1079
+    #[test]
+    fn success_parses_ready_verdict_from_stdout() {
+        let v = parse_gate_probe(true, READY_SOLO, "").expect("verdict parses");
+        assert_eq!(v.verdict, "ready");
+        assert!(!v.routes_into_scope());
+    }
+
+    /// A HOLD verdict is exit-zero JSON on stdout → parsed like any verdict, so
+    // the hold surfaces (not a false launch). trace:TASK-1079
+    #[test]
+    fn success_parses_hold_verdict_from_stdout() {
+        let v = parse_gate_probe(true, HOLD_SOFT, "").expect("verdict parses");
+        assert_eq!(v.verdict, "hold");
+        assert!(v.forceable);
+        assert!(v.under_specified);
+    }
+
+    /// TASK-1079: a non-zero exit whose error text landed on STDOUT (agent mode —
+    /// TASK-972 routes agent-mode errors to stdout, and the TUI's captured child
+    /// runs in agent mode) is surfaced, NOT swallowed as a generic failure.
+    #[test]
+    fn failure_reads_error_from_stdout_when_stderr_empty() {
+        let err = parse_gate_probe(false, "error: no requirement matches `TASK-9`", "")
+            .expect_err("a failed probe is an error");
+        assert!(
+            err.contains("no requirement matches"),
+            "the stdout agent-error must surface, got: {err}"
+        );
+    }
+
+    /// A non-zero exit with the error on stderr (human path) still surfaces.
+    // trace:TASK-1079
+    #[test]
+    fn failure_reads_error_from_stderr_when_present() {
+        let err = parse_gate_probe(false, "", "Error: boom").expect_err("error");
+        assert!(err.contains("boom"), "got: {err}");
+    }
+
+    /// Both streams empty on failure → a non-empty generic message, never a
+    // silent success. trace:TASK-1079
+    #[test]
+    fn failure_with_no_output_falls_back_to_generic_message() {
+        let err = parse_gate_probe(false, "", "").expect_err("error");
+        assert!(!err.trim().is_empty());
+    }
+
+    /// TASK-1076: a verdict emitting `route=into-scope` with a named scope is
+    /// recognized as a scope drive (→ the TUI shows the routing + --solo toggle).
+    #[test]
+    fn into_scope_route_is_recognized() {
+        let v = parse_gate_probe(true, READY_INTO_SCOPE, "").expect("verdict parses");
+        assert!(v.routes_into_scope());
+        assert_eq!(v.scope, "EPIC-54");
+    }
+
+    /// TASK-1076: back-compat — an OLDER `aida` binary omits `route`/`scope`;
+    /// `#[serde(default)]` fills them so the verdict still parses and defaults to
+    /// solo (launch straight away, pre-TASK-1076 behavior).
+    #[test]
+    fn missing_route_fields_default_to_solo() {
+        let legacy = r#"{"spec":"TASK-4","verdict":"ready","class":"ready","reason":"","under_specified":false,"forceable":false}"#;
+        let v: DriveGateVerdict = serde_json::from_str(legacy).expect("legacy verdict parses");
+        assert!(!v.routes_into_scope(), "no route field → treated as solo");
+        assert_eq!(v.route, "");
+    }
+
+    /// `route=into-scope` but an EMPTY scope is NOT a scope drive (nothing to
+    // name / route into). trace:TASK-1076
+    #[test]
+    fn into_scope_with_empty_scope_is_not_a_scope_drive() {
+        let s = r#"{"spec":"TASK-5","verdict":"ready","class":"ready","reason":"","under_specified":false,"forceable":false,"route":"into-scope","scope":"  "}"#;
+        let v: DriveGateVerdict = serde_json::from_str(s).expect("parses");
+        assert!(!v.routes_into_scope());
     }
 }
