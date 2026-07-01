@@ -3,12 +3,12 @@ spec_id: BUG-687
 agreed_id: BUG-687
 title: Windows pid_is_alive(0) reads true (System Idle Process) — missing pid==0 guard in non-unix impl
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:13:01.709426638Z
-modified_at: 2026-07-01T11:35:45.221753510Z
+modified_at: 2026-07-01T11:36:37.828304638Z
 req_type: Bug
 tags:
 - batch:xplat-green
@@ -19,3 +19,21 @@ comments:
   content: Commit 197c3ede0 references this requirement
   created_at: 2026-07-01T11:15:02.209192773Z
   modified_at: 2026-07-01T11:15:02.209192773Z
+history:
+- id: 019f1d77-7c63-7cd3-958e-f8b9e34efdd5
+  author: aida-auto-bump
+  timestamp: 2026-07-01T11:36:37.731830073Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1d77-7cc4-7be1-8bf6-99ae18765dbc
+  timestamp: 2026-07-01T11:36:37.828298686Z
+  agent: aida
+  commit_sha: 87684169bb5a45376749ef04cb41007bbac4036b
+  summary: Completed via merge 87684169
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T11:36:36.693589541Z
+  completion_sha: 87684169bb5a45376749ef04cb41007bbac4036b
