@@ -212,6 +212,19 @@ impl Scope {
         )
     }
 
+    /// Does this scope surface the per-row liveness glyph meaningfully — i.e.
+    /// can it hold a spec that a live session might be working RIGHT NOW? Only
+    /// then is it worth paying for the `aida ps` liveness probe (BUG-676: the
+    /// probe is ~1.3s, so it must fire only when the glyph is actually on screen
+    /// and can be non-Idle). Open (unfinished specs, incl. In-Progress), Queue
+    /// (routed/driven work), and Test (shipped work being verified) all qualify;
+    /// Backlog holds only approved + planned specs that are never live-worked, so
+    /// its glyph is always Idle and the probe is pure waste there.
+    // trace:BUG-676 | ai:claude
+    pub fn shows_liveness(self) -> bool {
+        matches!(self, Scope::Open | Scope::Queue | Scope::Test)
+    }
+
     /// The *static* verbs this scope exposes — those that do not depend on
     /// the focused item's state. For the Open scope this is the always-on
     /// pair (`show` / `why`); item-state-conditional verbs (`request
