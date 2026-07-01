@@ -128,6 +128,7 @@ aida changelog refresh|generate|preview     # Rewrite/print structured CHANGELOG
 aida queue gc [--for <role>] [--dry-run]    # Garbage-collect dead routed queue entries — prunes entries whose target spec is archived/Completed/Rejected; still-actionable (incl. Done — awaiting merge) survive. Sibling of `queue prune --orphaned` (which targets DELETED specs)
 aida brief <agent> <SPEC> --note "..."      # Write/list/ack local pickup briefs under .aida/agent-briefs/ (list --for-agent, ack <path>)
 aida agent new claude --role implementer|advisor --spec <ID>  # Supervised launcher w/ registry + role-context snapshot (--show-context)
+aida worktree enter <EPIC|SPEC>        # One command → a ready worktree, cd'd in (bare; the aida() wrapper auto-evals the emitted `cd`). EPIC arg = scoping-only worktree (auto-focus). A single non-epic SPEC arg ALSO takes the implementer lease (spec → In Progress) so you can start working it by hand — NO agent launched. Idempotent re-enter. `aida worktree add <EPIC|SPEC>` = create + print path, no cd (STORY-716/STORY-742)
 aida --asciinema <subcommand>          # Record a demo/training/audit cast under .aida/casts/ (falls back to ~/.aida/casts/)
 ```
 
