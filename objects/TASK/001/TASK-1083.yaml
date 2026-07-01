@@ -3,10 +3,14 @@ spec_id: TASK-1083
 agreed_id: TASK-1083
 title: STORY-698 throwaway capture test
 description: ''
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T16:39:55.984085957Z
-modified_at: 2026-07-01T16:39:55.984085957Z
+modified_at: 2026-07-01T16:40:06.191395827Z
 req_type: Task
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-01T16:40:06.191395827Z
+  implemented_by: joe
