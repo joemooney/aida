@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:34.192837945Z
-modified_at: 2026-06-30T16:35:56.944530094Z
+modified_at: 2026-07-01T06:45:08.861486171Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,3 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 019edd85-f965-76e0-90bf-ce458f1de256
   created_at: 2026-06-26T18:22:39.765043469Z
+comments:
+- id: 019f1c6c-a07d-7bd0-b0e3-6962a908a5c3
+  author: joe
+  content: 'Advisor note (overnight groom): NOT headless-implementable — this is a data/analysis task (join field-study violations against run windows over collected data), not a code deliverable. Needs the harvest data to exist first. Leave parked, do not queue for a headless implementer.'
+  created_at: 2026-07-01T06:45:08.861486171Z
+  modified_at: 2026-07-01T06:45:08.861486171Z
