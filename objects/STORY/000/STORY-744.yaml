@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:03:02.631218645Z
-modified_at: 2026-07-01T04:03:08.138704337Z
+modified_at: 2026-07-01T04:04:28.619743170Z
 req_type: Story
 tags:
 - aida:tui
@@ -35,3 +35,7 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-07-01T04:03:08.138704337Z
+- rel_type: References
+  target_id: 019f1bd8-b818-7ac1-bce6-88638a23bacd
+  created_at: 2026-07-01T04:04:28.619736630Z
+  created_by: joe
