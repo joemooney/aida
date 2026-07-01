@@ -58445,6 +58445,46 @@ fn followup_filed_anywhere(existing_titles: &[String], bullet: &str) -> bool {
     existing_titles.iter().any(|t| *t == want)
 }
 
+/// BUG-680: tag prefix that records the source plan path on a followup TASK the
+/// auto-followup path files. The BUG-656 marker comment records the extraction
+/// on the *completing spec*, but that comment can be lost or arrive unsynced
+/// (two commits completing before either marker syncs — the same window BUG-655
+/// flagged), and it says nothing once the followup itself has shipped and been
+/// archived away from the parent. Stamping the provenance on the child spec
+/// makes it durable and queryable: the followup carries its own origin, so a
+/// later re-extraction can recognise "this bullet already shipped from this
+/// plan" straight from the store even when the parent's marker is gone. Flat,
+/// colon-namespaced provenance tag (like `parent:`, `batch:`) per the tag
+/// conventions.
+// trace:BUG-680 | ai:claude
+const FOLLOWUP_SRC_TAG_PREFIX: &str = "followup-src:";
+
+/// BUG-680: a followup bullet already filed from the SAME source plan that has
+/// since reached a terminal status (Completed / Rejected — the work shipped or
+/// was rejected). `filed_from_plan` is `(recorded_plan_path, title, spec_id,
+/// is_terminal)` for every spec carrying a [`FOLLOWUP_SRC_TAG_PREFIX`] tag;
+/// `owned_plans` is the set of source plans currently being extracted. Returns
+/// the id of a terminal spec previously filed from one of `owned_plans` whose
+/// title matches `bullet` — re-filing it would create a second open spec for a
+/// followup that already ran its course, so the caller skips and links to the
+/// returned id. Match is trim + case-insensitive on the title; the plan path is
+/// exact (both sides are the store-relative path). Pure + total so it is
+/// unit-testable in isolation.
+// trace:BUG-680 | ai:claude
+fn followup_shipped_from_plan<'a>(
+    filed_from_plan: &'a [(String, String, String, bool)],
+    owned_plans: &std::collections::HashSet<String>,
+    bullet: &str,
+) -> Option<&'a str> {
+    let want = bullet.trim().to_ascii_lowercase();
+    filed_from_plan
+        .iter()
+        .find(|(plan, title, _, terminal)| {
+            *terminal && owned_plans.contains(plan) && title.trim().to_ascii_lowercase() == want
+        })
+        .map(|(_, _, id, _)| id.as_str())
+}
+
 /// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
 /// in the `# Plan:` title line or the `Specs:` header line. Cross-references
 /// in a `## Related` section don't count (that plan owns a different spec).
@@ -58684,29 +58724,40 @@ fn discover_plan_context(
 /// Self-invoke `aida add` to file one followup as a child TASK of
 /// `parent_spec`. Always passes `--force-parent` — the parent is Done or
 /// Completed by the time we file, and we explicitly want the children
-/// regardless. Returns the new spec id on success.
+/// regardless. When `source_plan` is set, stamps the plan's provenance as a
+/// [`FOLLOWUP_SRC_TAG_PREFIX`] tag so a later re-extraction can dedup against
+/// this followup even after it ships (BUG-680). Returns the new spec id on
+/// success.
 fn aida_subcmd_add_followup_task(
     project_root: &std::path::Path,
     parent_spec: &str,
     title: &str,
+    source_plan: Option<&str>,
 ) -> Option<String> {
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let mut args: Vec<String> = vec![
+        "add".into(),
+        "--type".into(),
+        "task".into(),
+        "--status".into(),
+        "approved".into(),
+        "--priority".into(),
+        "low".into(),
+        "--parent".into(),
+        parent_spec.into(),
+        "--force-parent".into(),
+        "--title".into(),
+        title.into(),
+    ];
+    // BUG-680: durable source-plan provenance on the child, so re-filing after
+    // this followup ships is a no-op straight from the store. trace:BUG-680
+    if let Some(plan) = source_plan {
+        args.push("--tags".into());
+        args.push(format!("{FOLLOWUP_SRC_TAG_PREFIX}{plan}"));
+    }
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
-        .args([
-            "add",
-            "--type",
-            "task",
-            "--status",
-            "approved",
-            "--priority",
-            "low",
-            "--parent",
-            parent_spec,
-            "--force-parent",
-            "--title",
-            title,
-        ])
+        .args(&args)
         .output()
         .ok()?;
     if !out.status.success() {
@@ -59211,8 +59262,37 @@ fn extract_plan_followups(
         titles
     };
 
-    // Collect + dedupe followup bullets across every owning plan file.
-    let mut followups: Vec<String> = Vec::new();
+    // BUG-680: shipped-followup guard. Every spec that a prior run filed carries
+    // a `followup-src:<plan>` tag recording its origin plan; collect
+    // (plan, title, id, is_terminal) for each so a bullet already filed from one
+    // of THIS spec's plans that has since shipped (Completed) or been rejected is
+    // not re-filed as a fresh open spec. This is the durable, store-backed
+    // guarantee the parent's marker comment can't make: it survives the marker
+    // being lost/unsynced and survives the followup being archived away from the
+    // parent. `owned_plans` is the store-relative path set we match against.
+    // trace:BUG-680 | ai:claude
+    let owned_plans: std::collections::HashSet<String> = owned_rel_paths.iter().cloned().collect();
+    let filed_from_plan: Vec<(String, String, String, bool)> = store
+        .requirements
+        .iter()
+        .flat_map(|r| {
+            let title = r.title.clone();
+            let id = r.display_id();
+            let terminal = matches!(
+                r.status,
+                RequirementStatus::Completed | RequirementStatus::Rejected
+            );
+            r.tags
+                .iter()
+                .filter_map(|t| t.strip_prefix(FOLLOWUP_SRC_TAG_PREFIX))
+                .map(move |plan| (plan.to_string(), title.clone(), id.clone(), terminal))
+        })
+        .collect();
+
+    // Collect + dedupe followup bullets across every owning plan file. Each
+    // bullet keeps the first plan it appeared in as its source, so a filed
+    // followup can be stamped with its origin plan (BUG-680).
+    let mut followups: Vec<(String, String)> = Vec::new(); // (bullet, source plan)
     let mut sources: Vec<String> = Vec::new();
     for path in &plan_files {
         let Ok(content) = std::fs::read_to_string(path) else {
@@ -59227,10 +59307,10 @@ fn extract_plan_followups(
             .unwrap_or(path)
             .display()
             .to_string();
-        sources.push(rel);
+        sources.push(rel.clone());
         for f in parsed {
-            if !followups.contains(&f) {
-                followups.push(f);
+            if !followups.iter().any(|(b, _)| b == &f) {
+                followups.push((f, rel.clone()));
             }
         }
     }
@@ -59250,9 +59330,21 @@ fn extract_plan_followups(
     let mut filed: Vec<(String, String)> = Vec::new(); // (new_spec, title)
     let mut declined: Vec<String> = Vec::new();
     let mut deduped: Vec<String> = Vec::new(); // BUG-655: already-filed bullets
+    let mut shipped: Vec<(String, String)> = Vec::new(); // BUG-680: (bullet, existing id)
     let mut skip_rest = false;
 
-    for followup in &followups {
+    for (followup, source_plan) in &followups {
+        // BUG-680: a bullet already filed from one of this spec's plans that has
+        // since shipped (Completed) or been rejected — re-filing it would open a
+        // duplicate for work that already ran its course. Skip and link to the
+        // shipped spec. Checked first so the audit trail attributes it to the
+        // shipped guard rather than the generic already-filed one.
+        if let Some(existing_id) =
+            followup_shipped_from_plan(&filed_from_plan, &owned_plans, followup)
+        {
+            shipped.push((followup.clone(), existing_id.to_string()));
+            continue;
+        }
         // BUG-655: a bullet whose title already exists as a child of this
         // parent has already been filed (this run, a prior run, or a sibling
         // commit's run) — skip it without prompting, so a plan landed by
@@ -59293,7 +59385,8 @@ fn extract_plan_followups(
         };
 
         if accept {
-            match aida_subcmd_add_followup_task(project_root, spec_id, followup) {
+            match aida_subcmd_add_followup_task(project_root, spec_id, followup, Some(source_plan))
+            {
                 Some(new_id) => {
                     // Record the title so a later identical bullet in the same
                     // plan is recognised as already-filed (BUG-655), both
@@ -59337,6 +59430,15 @@ fn extract_plan_followups(
             marker.push_str(&format!("\n  - {d}"));
         }
     }
+    if !shipped.is_empty() {
+        // BUG-680: bullets skipped because a followup filed from the same plan
+        // already shipped (Completed/Rejected) — linked to the existing spec so
+        // the audit trail shows the re-file was prevented, not lost.
+        marker.push_str(&format!("\nskipped {} already-shipped:", shipped.len()));
+        for (bullet, id) in &shipped {
+            marker.push_str(&format!("\n  - {bullet} → {id}"));
+        }
+    }
     let now = chrono::Utc::now();
     let author = get_default_author();
     let req_uuid = req.id;
@@ -59374,6 +59476,16 @@ fn extract_plan_followups(
             "·".dimmed(),
             deduped.len(),
         );
+    }
+    if !shipped.is_empty() {
+        for (bullet, id) in &shipped {
+            println!(
+                "  {} already shipped as {} — skipped {}",
+                "·".dimmed(),
+                id.bold(),
+                bullet.dimmed(),
+            );
+        }
     }
 
     Ok(())
@@ -71149,6 +71261,117 @@ diff --git a/gone.rs b/gone.rs
         assert!(followup_filed_anywhere(&filed, "  ALPHA  "));
         assert!(!followup_filed_anywhere(&filed, "beta"));
         assert!(!followup_filed_anywhere(&[], "anything"));
+    }
+
+    /// BUG-680: the shipped-followup guard skips a bullet already filed from the
+    /// SAME source plan when that spec has reached a terminal status (Completed
+    /// or Rejected), and links to it. An open prior filing (not terminal), a
+    /// different plan, or a non-matching title do NOT count — those cases are the
+    /// existing BUG-655/656 guards' job.
+    #[test]
+    fn followup_shipped_from_plan_skips_terminal_prior_filing() {
+        let plan = "docs/plans/2026-06-30-spike-70.md".to_string();
+        let other = "docs/plans/2026-06-30-other.md".to_string();
+        let owned: std::collections::HashSet<String> = [plan.clone()].into_iter().collect();
+
+        let filed_from_plan = vec![
+            // Completed followup from THIS plan → the re-file it must block.
+            (
+                plan.clone(),
+                "Wire the metrics dashboard".to_string(),
+                "TASK-1003".to_string(),
+                true,
+            ),
+            // Rejected followup from THIS plan → terminal, also blocks.
+            (
+                plan.clone(),
+                "Add the retry budget".to_string(),
+                "TASK-1005".to_string(),
+                true,
+            ),
+            // Still-open followup from THIS plan → NOT terminal, does not block.
+            (
+                plan.clone(),
+                "Open item".to_string(),
+                "TASK-1100".to_string(),
+                false,
+            ),
+            // Completed followup from a DIFFERENT plan → wrong plan, does not block.
+            (
+                other.clone(),
+                "Elsewhere item".to_string(),
+                "TASK-2000".to_string(),
+                true,
+            ),
+        ];
+
+        // Terminal + same plan + matching title (trim/case-insensitive) → linked.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "  wire the metrics dashboard "),
+            Some("TASK-1003")
+        );
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Add the retry budget"),
+            Some("TASK-1005")
+        );
+        // Open prior filing → not blocked here (BUG-655/656 handle the open case).
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Open item"),
+            None
+        );
+        // A completed followup filed from a plan this spec does not own → skipped.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Elsewhere item"),
+            None
+        );
+        // Genuinely-new bullet → nothing to link.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Brand new work"),
+            None
+        );
+        // Empty history → never blocks.
+        assert_eq!(followup_shipped_from_plan(&[], &owned, "anything"), None);
+    }
+
+    /// BUG-680 (acceptance): filing the same plan followup twice yields ONE spec,
+    /// not two — once the first filing ships (Completed), a re-extraction of the
+    /// same plan recognises the followup as already-shipped straight from the
+    /// child's recorded `followup-src:` provenance and does not open a duplicate.
+    /// Models the store-backed `filed_from_plan` set the real path builds from
+    /// tags. This is the guarantee the parent's marker comment cannot make (it
+    /// can be lost/unsynced); the child's tag is durable.
+    #[test]
+    fn followup_refiled_after_ship_yields_one_spec() {
+        let plan = "docs/plans/2026-06-30-spike-70.md".to_string();
+        let owned: std::collections::HashSet<String> = [plan.clone()].into_iter().collect();
+        let bullet = "Wire the metrics dashboard";
+
+        // First extraction: no followup has been filed from this plan yet, so the
+        // shipped guard does not fire and the bullet is filed as a new TASK.
+        let filed_from_plan: Vec<(String, String, String, bool)> = Vec::new();
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, bullet),
+            None,
+            "first run must file the followup"
+        );
+
+        // That TASK later ships: it carries `followup-src:<plan>` and is now
+        // Completed. Rebuild the store-backed set exactly as the real path does.
+        let filed_from_plan = vec![(
+            plan.clone(),
+            bullet.to_string(),
+            "TASK-1003".to_string(),
+            true, // Completed
+        )];
+
+        // Second extraction of the same plan (parent marker lost/unsynced): the
+        // shipped guard now links to the existing spec instead of opening a
+        // second one — one spec total, not two.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, bullet),
+            Some("TASK-1003"),
+            "re-filing after the followup shipped must be a no-op"
+        );
     }
 
     /// BUG-105: when multiple plan files own the same spec, discover_plan_context
