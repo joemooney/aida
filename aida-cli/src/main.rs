@@ -97472,35 +97472,72 @@ fn handle_focus_command(
 /// Print a one-line status rollup of the focus spec's transitive subtree
 /// (cache-fast: one descendant-id closure + one summary read).
 ///
+// trace:BUG-678 | ai:claude
+/// Bucketed status counts for a focused subtree.
+///
+/// `total` is completed + in_progress + open and deliberately EXCLUDES
+/// terminal `rejected` specs (surfaced separately via `rejected`), so the
+/// "open" figure never counts terminal work as outstanding.
+#[derive(Default, Debug, PartialEq, Eq)]
+struct FocusTally {
+    total: usize,
+    completed: usize,
+    in_progress: usize,
+    open: usize,
+    rejected: usize,
+}
+
+// trace:BUG-678 | ai:claude
+/// Tally subtree statuses into buckets. `open` = draft/approved/planned (and any
+/// other non-terminal status); `rejected` is terminal and excluded from both
+/// `open` and `total`.
+fn tally_focus_statuses<'a>(statuses: impl IntoIterator<Item = &'a str>) -> FocusTally {
+    let mut t = FocusTally::default();
+    for status in statuses {
+        match status.to_ascii_lowercase().as_str() {
+            "completed" | "done" => {
+                t.completed += 1;
+                t.total += 1;
+            }
+            "inprogress" | "in-progress" | "in_progress" => {
+                t.in_progress += 1;
+                t.total += 1;
+            }
+            "rejected" => t.rejected += 1,
+            _ => {
+                t.open += 1;
+                t.total += 1;
+            }
+        }
+    }
+    t
+}
+
 fn print_focus_rollup(
     backend: &aida_core::CachedGitBackend,
     focus_req: &aida_core::Requirement,
 ) -> Result<()> {
     let subtree = backend.descendant_ids(&focus_req.id)?;
     let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
-    let mut total = 0usize;
-    let mut completed = 0usize;
-    let mut in_progress = 0usize;
-    let mut open = 0usize;
-    for s in &summaries {
-        if !subtree.contains(&s.id) || s.id == focus_req.id {
-            continue;
-        }
-        total += 1;
-        match s.status.to_ascii_lowercase().as_str() {
-            "completed" | "done" => completed += 1,
-            "inprogress" | "in-progress" | "in_progress" => in_progress += 1,
-            _ => open += 1,
-        }
-    }
-    println!(
-        "  subtree: {} item{} ({} completed · {} in-progress · {} open)",
-        total,
-        if total == 1 { "" } else { "s" },
-        completed,
-        in_progress,
-        open,
+    let tally = tally_focus_statuses(
+        summaries
+            .iter()
+            .filter(|s| subtree.contains(&s.id) && s.id != focus_req.id)
+            .map(|s| s.status.as_str()),
     );
+    let mut line = format!(
+        "  subtree: {} item{} ({} completed · {} in-progress · {} open",
+        tally.total,
+        if tally.total == 1 { "" } else { "s" },
+        tally.completed,
+        tally.in_progress,
+        tally.open,
+    );
+    if tally.rejected > 0 {
+        line.push_str(&format!(" · {} rejected", tally.rejected));
+    }
+    line.push(')');
+    println!("{line}");
     Ok(())
 }
 
@@ -149253,5 +149290,54 @@ mod task_1056_batched_git_fanout_tests {
         assert_eq!(map.get("story-202").copied(), Some(2));
         assert_eq!(map.get("bug-303").copied(), Some(3));
         assert_eq!(map.get("main").copied(), Some(0));
+    }
+}
+
+#[cfg(test)]
+mod bug_678_focus_rollup_tally_tests {
+    use super::*;
+
+    #[test]
+    fn rejected_excluded_from_open_and_total() {
+        // Acceptance: one approved + one completed + one rejected → open=1,
+        // completed=1, rejected excluded from open (and from total).
+        let t = tally_focus_statuses(["approved", "completed", "rejected"]);
+        assert_eq!(t.open, 1, "rejected must not inflate open");
+        assert_eq!(t.completed, 1);
+        assert_eq!(t.rejected, 1);
+        assert_eq!(
+            t.total, 2,
+            "total = completed + in_progress + open, excludes rejected"
+        );
+    }
+
+    #[test]
+    fn open_bucket_is_draft_approved_planned() {
+        let t = tally_focus_statuses(["draft", "approved", "planned"]);
+        assert_eq!(t.open, 3);
+        assert_eq!(t.total, 3);
+        assert_eq!(t.rejected, 0);
+    }
+
+    #[test]
+    fn epic_54_repro_reports_true_open_three() {
+        // BUG-678 repro: 3 approved (open) + 9 rejected → open=3, not 12.
+        let statuses: Vec<&str> = std::iter::repeat("approved")
+            .take(3)
+            .chain(std::iter::repeat("rejected").take(9))
+            .collect();
+        let t = tally_focus_statuses(statuses);
+        assert_eq!(t.open, 3, "true open count, not rejected-inflated");
+        assert_eq!(t.rejected, 9);
+        assert_eq!(t.total, 3);
+    }
+
+    #[test]
+    fn status_variants_and_case_insensitivity() {
+        let t = tally_focus_statuses(["Done", "IN-PROGRESS", "in_progress", "Completed"]);
+        assert_eq!(t.completed, 2);
+        assert_eq!(t.in_progress, 2);
+        assert_eq!(t.open, 0);
+        assert_eq!(t.total, 4);
     }
 }
