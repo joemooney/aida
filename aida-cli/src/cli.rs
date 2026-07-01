@@ -8703,6 +8703,7 @@ pub enum Command {
     /// apply. Tune under `[presence]` in `.aida/config.toml`:
     ///   consumers  = "on" | "off"            (master switch; default on)
     ///   away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
+    ///   escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain)
     ///   home_offer = "surface" | "dont-block" (home-side; default surface)
     ///
     /// Hidden alias for `aida presence away` (kept for muscle memory).

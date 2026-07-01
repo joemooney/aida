@@ -13,15 +13,15 @@
 //! The TASK-756 primitive was READ-ONLY state. Consumer wiring (STORY-561) has
 //! since landed: presence now sets DEFAULTS for mode selection via the
 //! `[presence]` config block — `consumers` (master switch), `away_drain`
-//! (consumer a: `aida burndown run` drain mode + the coupled escalation
-//! default, see `resolve_drain_mode`), and `home_offer` (consumer d: home-side
-//! keystone surfacing). Presence is ADVISORY only: explicit per-command flags
-//! always win and integrity gates (CI / merge-on-green / authority) always
-//! apply. Still un-wired: consumer (c) `aida questions` quiet-when-away
-//! accumulation, which is gated on the questions inbox (STORY-555); and a
-//! standalone escalation knob decoupled from `away_drain` (TASK-769).
+//! (consumer a: `aida burndown run` drain mode), `escalation` (consumer b: the
+//! punt-handling default when away, its OWN knob decoupled from `away_drain` —
+//! see `resolve_drain_mode`), and `home_offer` (consumer d: home-side keystone
+//! surfacing). Presence is ADVISORY only: explicit per-command flags always win
+//! and integrity gates (CI / merge-on-green / authority) always apply. Still
+//! un-wired: consumer (c) `aida questions` quiet-when-away accumulation, which
+//! is gated on the questions inbox (STORY-555).
 //!
-// trace:TASK-756 trace:STORY-561 | ai:claude
+// trace:TASK-756 trace:STORY-561 trace:TASK-769 | ai:claude
 
 use std::path::{Path, PathBuf};
 
@@ -504,6 +504,25 @@ pub(crate) enum AwayDrain {
     HeadlessPark,
 }
 
+/// P1b — `presence.escalation` (TASK-769): the punt-handling default when away,
+/// as its OWN knob DECOUPLED from `away_drain`. Splits the escalate-vs-park
+/// choice out of the `away_drain` rung so the operator can, e.g., pick a
+/// max-throughput `headless-both` drain but still PARK punts for triage rather
+/// than shipping a default (previously impossible — escalation rode the rung).
+///
+/// The knob is deliberately absent-by-default: when `[presence] escalation` is
+/// unset, escalation is DERIVED from `away_drain` exactly as before
+/// (`headless-park` → park, every other rung → ship defaults), so existing
+/// configs are byte-for-byte unchanged. Setting it explicitly decouples the two.
+// trace:TASK-769 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Escalation {
+    /// Punts ship the defensible default (escalate defaults).
+    Defaults,
+    /// Punts PARK (`NeedsAttention`) for triage (escalate blocks).
+    Park,
+}
+
 /// P2 — `presence.home_offer`: the home-side behavior. `Surface` (default)
 /// surfaces keystone / needs-supervised-build specs as "ready for `--zen`" in
 /// `aida status` (presence is useful in BOTH directions). `DontBlock` keeps
@@ -522,6 +541,10 @@ pub(crate) enum HomeOffer {
 pub(crate) struct PresenceConfig {
     pub consumers: ConsumersMode,
     pub away_drain: AwayDrain,
+    /// P1b — punt-handling default, decoupled from `away_drain` (TASK-769).
+    /// `None` = derive from `away_drain` (the historical coupling, unchanged);
+    /// `Some(_)` = the operator picked escalation independently of the rung.
+    pub escalation: Option<Escalation>,
     pub home_offer: HomeOffer,
 }
 
@@ -543,6 +566,17 @@ impl AwayDrain {
                 Some(Self::HeadlessEscalateDefaults)
             }
             "headless-park" | "park" => Some(Self::HeadlessPark),
+            _ => None,
+        }
+    }
+}
+
+impl Escalation {
+    // trace:TASK-769 | ai:claude
+    fn from_config_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "defaults" | "escalate-defaults" | "ship-defaults" => Some(Self::Defaults),
+            "park" | "escalate-blocks" | "blocks" => Some(Self::Park),
             _ => None,
         }
     }
@@ -580,6 +614,14 @@ pub(crate) fn read_presence_config(config_path: &Path) -> PresenceConfig {
     if let Some(s) = table.get("away_drain").and_then(|v| v.as_str()) {
         if let Some(m) = AwayDrain::from_config_str(s) {
             cfg.away_drain = m;
+        }
+    }
+    // TASK-769: the standalone escalation knob. Absent → `None` → derived from
+    // `away_drain` at resolve time (the historical coupling); an unparseable
+    // value also leaves it absent (falls back, never errors).
+    if let Some(s) = table.get("escalation").and_then(|v| v.as_str()) {
+        if let Some(m) = Escalation::from_config_str(s) {
+            cfg.escalation = Some(m);
         }
     }
     if let Some(s) = table.get("home_offer").and_then(|v| v.as_str()) {
@@ -636,9 +678,20 @@ pub(crate) fn resolve_drain_mode(
     }
 
     // Away + consumers on + no explicit steering → apply the away_drain advice.
-    let (no_human, escalate_defaults) = match cfg.away_drain {
+    // `away_drain` still chooses the `--no-human` axis (always headless-both
+    // today) and supplies the LEGACY escalation default it used to imply.
+    let (no_human, away_drain_escalate) = match cfg.away_drain {
         AwayDrain::HeadlessBoth | AwayDrain::HeadlessEscalateDefaults => (Some("both"), true),
         AwayDrain::HeadlessPark => (Some("both"), false),
+    };
+    // TASK-769: escalation is its OWN axis. When `[presence] escalation` is set
+    // it wins outright (decoupled); when unset we fall back to the value the
+    // away_drain rung implied — preserving the historical coupling exactly.
+    // trace:TASK-769 | ai:claude
+    let escalate_defaults = match cfg.escalation {
+        Some(Escalation::Defaults) => true,
+        Some(Escalation::Park) => false,
+        None => away_drain_escalate,
     };
     DrainModeResolution {
         no_human: no_human.map(|s| s.to_string()),
@@ -1074,6 +1127,8 @@ mod tests {
         assert_eq!(cfg.consumers, ConsumersMode::Off);
         assert_eq!(cfg.away_drain, AwayDrain::HeadlessPark);
         assert_eq!(cfg.home_offer, HomeOffer::DontBlock);
+        // No `escalation` key → absent (derives from away_drain). trace:TASK-769
+        assert_eq!(cfg.escalation, None);
 
         // A garbage value for one key falls back to that key's default without
         // poisoning the others.
@@ -1083,6 +1138,75 @@ mod tests {
         assert_eq!(cfg.consumers, ConsumersMode::Off); // parsed
     }
 
+    // trace:TASK-769 | ai:claude
+    #[test]
+    fn presence_config_parses_escalation_knob() {
+        // The standalone escalation knob parses independently of away_drain.
+        let f = write_config("[presence]\nescalation = \"park\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).escalation,
+            Some(Escalation::Park)
+        );
+        let f = write_config("[presence]\nescalation = \"defaults\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).escalation,
+            Some(Escalation::Defaults)
+        );
+        // Aliases + underscore normalization.
+        let f = write_config("[presence]\nescalation = \"escalate_blocks\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).escalation,
+            Some(Escalation::Park)
+        );
+        let f = write_config("[presence]\nescalation = \"ship-defaults\"\n");
+        assert_eq!(
+            read_presence_config(f.path()).escalation,
+            Some(Escalation::Defaults)
+        );
+        // Garbage → absent (falls back to away_drain-derived), never errors.
+        let f = write_config("[presence]\nescalation = \"nonsense\"\n");
+        assert_eq!(read_presence_config(f.path()).escalation, None);
+    }
+
+    // trace:TASK-769 | ai:claude
+    #[test]
+    fn escalation_knob_decouples_from_away_drain() {
+        let away = Presence::Away;
+        // headless-both (would imply escalate-defaults) + escalation=park →
+        // PARK wins: max-throughput drain but punts still park for triage. This
+        // combination was impossible before the decoupling.
+        let cfg = PresenceConfig {
+            consumers: ConsumersMode::On,
+            home_offer: HomeOffer::Surface,
+            away_drain: AwayDrain::HeadlessBoth,
+            escalation: Some(Escalation::Park),
+        };
+        let r = resolve_drain_mode(None, false, false, away, &cfg);
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert!(!r.escalate_defaults); // decoupled: park despite headless-both
+        assert!(r.presence_applied);
+
+        // headless-park (would imply park) + escalation=defaults → DEFAULTS
+        // wins: the symmetric override.
+        let cfg = PresenceConfig {
+            away_drain: AwayDrain::HeadlessPark,
+            escalation: Some(Escalation::Defaults),
+            ..cfg
+        };
+        let r = resolve_drain_mode(None, false, false, away, &cfg);
+        assert!(r.escalate_defaults); // decoupled: defaults despite headless-park
+
+        // escalation=None → falls back to the away_drain-derived value exactly
+        // as before (backward-compatible: headless-park → park).
+        let cfg = PresenceConfig {
+            away_drain: AwayDrain::HeadlessPark,
+            escalation: None,
+            ..cfg
+        };
+        let r = resolve_drain_mode(None, false, false, away, &cfg);
+        assert!(!r.escalate_defaults);
+    }
+
     #[test]
     fn away_drain_advice_maps_three_rungs() {
         let away = Presence::Away;
@@ -1090,6 +1214,7 @@ mod tests {
             consumers: ConsumersMode::On,
             home_offer: HomeOffer::Surface,
             away_drain: AwayDrain::HeadlessBoth,
+            escalation: None,
         };
         // headless-both → both + escalate defaults
         let r = resolve_drain_mode(None, false, false, away, &on);
