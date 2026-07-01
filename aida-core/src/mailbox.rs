@@ -375,6 +375,88 @@ where
     out
 }
 
+// trace:BUG-679 | ai:claude
+/// One dead-letter recipient (`aida mailbox list --stranded` / `aida doctor`):
+/// a direct recipient string that has unread mail addressed to it but matches
+/// no known role / registered agent — a misaddressed handoff no live identity
+/// will ever read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrandedRecipient {
+    /// The unrecognized recipient string (as addressed).
+    pub recipient: String,
+    /// Total non-deleted direct messages addressed to it.
+    pub total: usize,
+    /// Of those, how many are unread relative to the recipient's watermark.
+    pub unread: usize,
+    /// Timestamp of the most recent direct message (for sort + display).
+    pub latest_ts: i64,
+}
+
+/// Dead-letter detection: recipients with UNREAD direct mail that match no
+/// known identity. `is_known(recipient)` decides membership — the caller owns
+/// the known-identity set (canonical roles + role files + registered agents)
+/// and any case-folding. Only explicit `Recipient::Agent(..)` targets are
+/// considered — a broadcast reaches everyone, so it can never be "stranded".
+/// A recipient is listed only when it has at least one unread direct message,
+/// so a fully-read misaddressed thread stops nagging. Ordered
+/// most-recent-first. Pure over the mailbox + the known set (no I/O), so the
+/// CLI surface and `aida doctor` compose over it without re-deriving the
+/// classification.
+// trace:BUG-679 | ai:claude
+pub fn stranded_recipients<F>(
+    messages: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+    is_known: F,
+) -> Vec<StrandedRecipient>
+where
+    F: Fn(&str) -> bool,
+{
+    use std::collections::BTreeSet;
+    // Distinct direct-recipient strings across all live (non-deleted) mail.
+    let mut recipients: BTreeSet<&str> = BTreeSet::new();
+    for m in messages {
+        if m.deleted {
+            continue;
+        }
+        if let Recipient::Agent(a) = &m.to {
+            recipients.insert(a.as_str());
+        }
+    }
+    let mut out: Vec<StrandedRecipient> = Vec::new();
+    for r in recipients {
+        if is_known(r) {
+            continue;
+        }
+        // Direct messages addressed to this recipient (broadcasts excluded; a
+        // recipient's own sends excluded to mirror `inbox_for` semantics).
+        let direct: Vec<&Message> = messages
+            .iter()
+            .filter(|m| !m.deleted && m.from != r && matches!(&m.to, Recipient::Agent(a) if a == r))
+            .collect();
+        if direct.is_empty() {
+            continue;
+        }
+        let mark = watermarks.get(r).copied().unwrap_or(i64::MIN);
+        let unread = direct.iter().filter(|m| m.timestamp > mark).count();
+        if unread == 0 {
+            continue; // read (even if by no live reader) — not a live dead-letter
+        }
+        let latest_ts = direct.iter().map(|m| m.timestamp).max().unwrap_or(0);
+        out.push(StrandedRecipient {
+            recipient: r.to_string(),
+            total: direct.len(),
+            unread,
+            latest_ts,
+        });
+    }
+    out.sort_by(|a, b| {
+        b.latest_ts
+            .cmp(&a.latest_ts)
+            .then_with(|| a.recipient.cmp(&b.recipient))
+    });
+    out
+}
+
 /// The unread slice of one agent's inbox: messages strictly newer than its
 /// read-watermark, oldest-first. `None` watermark = never read, so the whole
 /// inbox is unread. Read side of the notice surface — pure so the CLI's
@@ -929,6 +1011,59 @@ mod tests {
         assert_eq!(agents, vec!["advisor"]);
         assert_eq!(rows[0].total, 1);
         assert_eq!(rows[0].unread, 1);
+    }
+
+    // ── BUG-679: dead-letter detection ───────────────────────────────────
+
+    #[test]
+    fn stranded_recipients_flags_only_unknown_unread_direct_recipients() {
+        let msgs = vec![
+            // Unknown recipient with unread direct mail → stranded.
+            msg("1", "t1", "advisor", Recipient::Agent("bob".into()), 10),
+            msg("2", "t2", "advisor", Recipient::Agent("bob".into()), 20),
+            // Known recipient with unread direct mail → NOT stranded.
+            msg(
+                "3",
+                "t3",
+                "advisor",
+                Recipient::Agent("implementer".into()),
+                30,
+            ),
+            // Broadcast → never stranded (reaches everyone).
+            msg("4", "t4", "advisor", Recipient::Broadcast, 40),
+        ];
+        let wm = std::collections::HashMap::new();
+        let known: std::collections::HashSet<&str> =
+            ["advisor", "implementer", "reviewer", "integrator"]
+                .into_iter()
+                .collect();
+        let rows = stranded_recipients(&msgs, &wm, |r| known.contains(r));
+        let names: Vec<&str> = rows.iter().map(|s| s.recipient.as_str()).collect();
+        assert_eq!(names, vec!["bob"], "only the unknown recipient is stranded");
+        assert_eq!(rows[0].total, 2);
+        assert_eq!(rows[0].unread, 2);
+        assert_eq!(rows[0].latest_ts, 20);
+    }
+
+    #[test]
+    fn stranded_recipients_excludes_fully_read_and_deleted_mail() {
+        let msgs = vec![
+            msg("1", "t1", "advisor", Recipient::Agent("ghost".into()), 10),
+            msg("2", "t2", "advisor", Recipient::Agent("ghost".into()), 20),
+            Message {
+                deleted: true,
+                ..msg("3", "t3", "advisor", Recipient::Agent("gone".into()), 30)
+            },
+        ];
+        // ghost has read everything (watermark past its newest) → not stranded.
+        let mut wm = std::collections::HashMap::new();
+        wm.insert("ghost".to_string(), 20i64);
+        let none_known = |_: &str| false;
+        let rows = stranded_recipients(&msgs, &wm, none_known);
+        assert!(
+            rows.is_empty(),
+            "fully-read + deleted-only recipients are not stranded, got {rows:?}"
+        );
     }
 
     // ── STORY-585: the notice/read half ──────────────────────────────────

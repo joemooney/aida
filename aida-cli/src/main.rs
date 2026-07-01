@@ -33313,6 +33313,23 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             } else {
                 anyhow::bail!("specify --to <agent> or --broadcast");
             };
+            // BUG-679: dead-letter guard. A direct message whose recipient
+            // matches no known role AND no registered agent may never be read
+            // (a typo'd name, a wrong role) — warn but still send, since the
+            // recipient might be a legitimate not-yet-live identity. Reuses the
+            // same known-identity set as the stranded-mail surface. Broadcasts
+            // reach everyone, so they are never flagged. trace:BUG-679 | ai:claude
+            if let Recipient::Agent(agent) = &recipient {
+                let known = known_mailbox_identities(project_root);
+                if !known.contains(&agent.trim().to_lowercase()) {
+                    eprintln!(
+                        "{} '{}' matches no known role or registered agent — this message may never be read.\n  Known roles: {}. Register agents with `aida agent new`.",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        agent.yellow(),
+                        AGENT_ROLES.join(", ")
+                    );
+                }
+            }
             // trace:TASK-782 | ai:claude
             let parsed_intent = aida_core::mailbox::Intent::parse(intent).ok_or_else(|| {
                 anyhow::anyhow!(
@@ -33515,11 +33532,52 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             print!("{}", render_mailbox_notice(&summary, &identities));
             Ok(())
         }
-        MailboxCommand::List => {
+        MailboxCommand::List { stranded } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let merged = merge_dedup(&local, &canonical);
             let watermarks = mailbox_store::read_all_watermarks(project_root)?;
+            // BUG-679: dead-letter view — recipients with unread mail that
+            // match no known role / registered agent. Pure classification over
+            // the mailbox + the same known-identity set the send-time warning
+            // uses, so a misaddressed handoff is visible instead of silently
+            // stranded. trace:BUG-679 | ai:claude
+            if *stranded {
+                let known = known_mailbox_identities(project_root);
+                let rows = aida_core::mailbox::stranded_recipients(&merged, &watermarks, |r| {
+                    known.contains(&r.trim().to_lowercase())
+                });
+                if rows.is_empty() {
+                    println!(
+                        "{} no stranded mail — every recipient with unread mail matches a known role or registered agent",
+                        crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
+                    );
+                    return Ok(());
+                }
+                println!(
+                    "{} {}",
+                    "Stranded mail".bold(),
+                    "(unread mail addressed to no known role or registered agent)".dimmed()
+                );
+                for s in &rows {
+                    let when = chrono::DateTime::from_timestamp_millis(s.latest_ts)
+                        .map(|dt| humanize_relative(dt.with_timezone(&chrono::Utc)))
+                        .unwrap_or_else(|| "?".to_string());
+                    println!(
+                        "  {} {:<14} {} unread / {} total  {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        s.recipient.yellow().bold(),
+                        s.unread.to_string().cyan(),
+                        s.total,
+                        when.dimmed()
+                    );
+                }
+                println!(
+                    "{}",
+                    "  Check for a typo'd recipient, or register the intended reader with `aida agent new`.".dimmed()
+                );
+                return Ok(());
+            }
             // trace:BUG-513 | ai:codex
             let known_agents: Vec<String> = list_roles(project_root)
                 .unwrap_or_default()
@@ -33846,6 +33904,39 @@ fn inbox_identities() -> Vec<String> {
         }
     }
     ids
+}
+
+/// The set of identities a mailbox recipient can legitimately resolve to: the
+/// canonical agent roles (`AGENT_ROLES`), every role file (`list_roles`), and
+/// every registered agent (its stable id, its short type, and its display
+/// name). Lowercased + trimmed for case-insensitive matching, mirroring the
+/// queue's `canonical_user_id` fold. A recipient outside this set is a
+/// dead-letter candidate — the send-time warning and the `mailbox list
+/// --stranded` surface both classify against it, so the two can't drift.
+// trace:BUG-679 | ai:claude
+fn known_mailbox_identities(project_root: &std::path::Path) -> std::collections::HashSet<String> {
+    let mut set: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut add = |s: &str| {
+        let t = s.trim().to_lowercase();
+        if !t.is_empty() {
+            set.insert(t);
+        }
+    };
+    for role in AGENT_ROLES {
+        add(role);
+    }
+    for role in list_roles(project_root).unwrap_or_default() {
+        add(&role.name);
+    }
+    let ctx = agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, Vec::new());
+    for view in agent_registry::list_agent_views(project_root, &ctx) {
+        add(&view.id);
+        add(&view.agent_type);
+        if let Some(name) = &view.name {
+            add(name);
+        }
+    }
+    set
 }
 
 /// Render an unread-mail notice as plain, agent-facing context text (no ANSI —
@@ -73207,6 +73298,33 @@ mod bug_231_findings_promote_tests {
         assert_eq!(after_other, 1, "assigning to another user sends one notice");
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// BUG-679: the dead-letter known-identity set includes every canonical
+    /// role (case-insensitively) so a recipient like `advisor` / `ADVISOR` is
+    /// recognized, while an arbitrary unrecognized recipient is not — the
+    /// classification behind the send-time warning and the `mailbox list
+    /// --stranded` surface.
+    // trace:BUG-679 | ai:claude
+    #[test]
+    fn known_mailbox_identities_recognizes_roles_case_insensitively() {
+        let tmp = tempfile::tempdir().unwrap();
+        let known = known_mailbox_identities(tmp.path());
+        for role in AGENT_ROLES {
+            assert!(
+                known.contains(&role.to_lowercase()),
+                "canonical role `{role}` must be a known recipient"
+            );
+        }
+        // The send/stranded paths lowercase the recipient before lookup, so a
+        // mixed-case address for a known role still resolves.
+        assert!(known.contains(&"ADVISOR".trim().to_lowercase()));
+        // A recipient that matches no role/registered-agent (a typo'd name, a
+        // wrong role) is NOT known → it would warn on send and show under
+        // `--stranded`. A fresh uuid can't collide with any real identity, so
+        // this stays hermetic regardless of the machine's global roles.
+        let bogus = format!("no-such-recipient-{}", uuid::Uuid::new_v4());
+        assert!(!known.contains(&bogus));
     }
 
     /// TASK-818: when both the stable per-instance name (`AIDA_USER`) and the
