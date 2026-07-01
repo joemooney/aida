@@ -30185,5 +30185,20 @@ operations:
   timestamp: 2026-07-01T06:45:52.205721785Z
   kind: !SetTitle
     title: Info/notice glyphs render raw and ignore AIDA_GLYPHS=ascii — register them and have glyph-lint flag raw glyphs
-clock: 2882
+- id: 019f1c6d-6ae6-7a92-abb2-35a09fdf4983
+  target_id: 019f1b4d-3aab-7d21-bb76-eb737d0180fb
+  author: aida
+  node_id: '1'
+  lamport: 2883
+  timestamp: 2026-07-01T06:46:00.678180820Z
+  kind: !SetDescription
+    description: |-
+      The info/notice glyphs (information, notice, bullet-notice, mailbox) are emitted raw in some code paths, so AIDA_GLYPHS=ascii does not downgrade them. Route them through the glyph registry and guard against future raw glyphs.
+
+      ## Acceptance
+      - THE information, notice, bullet-notice, and mailbox glyphs SHALL each be registered in the glyph registry with an ascii fallback.
+      - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for a glyph in this set.
+      - WHEN a raw glyph literal bypasses the glyph registry, THE glyph-lint check SHALL flag it.
+      - A test SHALL assert that with AIDA_GLYPHS=ascii set, the rendered output contains the ascii fallback for a glyph in this set rather than its raw unicode form.
+clock: 2883
 node_id: '1'

@@ -7,15 +7,15 @@ description: |-
 
   ## Acceptance
   - THE information, notice, bullet-notice, and mailbox glyphs SHALL each be registered in the glyph registry with an ascii fallback.
-  - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for each of these glyphs.
-  - WHEN a raw glyph literal is not resolved through the glyph registry, THE glyph-lint check SHALL flag it.
-  - A test SHALL assert that with AIDA_GLYPHS=ascii set, none of these four glyphs appear as raw unicode in the rendered output.
+  - WHEN AIDA_GLYPHS=ascii is set, THE rendered output SHALL emit the ascii fallback for a glyph in this set.
+  - WHEN a raw glyph literal bypasses the glyph registry, THE glyph-lint check SHALL flag it.
+  - A test SHALL assert that with AIDA_GLYPHS=ascii set, the rendered output contains the ascii fallback for a glyph in this set rather than its raw unicode form.
 status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T01:31:13.963087972Z
-modified_at: 2026-07-01T06:45:51.787688406Z
+modified_at: 2026-07-01T06:46:00.120559092Z
 req_type: Task
 tags:
 - ascii
