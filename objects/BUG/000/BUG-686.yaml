@@ -14,10 +14,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T06:47:13.151127866Z
-modified_at: 2026-07-01T06:47:13.151127866Z
+modified_at: 2026-07-01T17:49:16.846932152Z
 req_type: Bug
 tags:
 - aida:lint
 - false-positive
 - severity:minor
 - suitability-gate
+comments:
+- id: 019f1ecc-a8ae-7942-8987-000fdf81a4cb
+  author: joe
+  content: Commit 07e70d8d2 references this requirement
+  created_at: 2026-07-01T17:49:16.846932152Z
+  modified_at: 2026-07-01T17:49:16.846932152Z
