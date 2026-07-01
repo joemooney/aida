@@ -21,10 +21,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T16:12:38.050036436Z
-modified_at: 2026-07-01T16:12:38.050036436Z
+modified_at: 2026-07-01T16:35:12.143078344Z
 req_type: Story
 tags:
 - aida:human
 - autonomy
 - human-role
 - ux
+comments:
+- id: 019f1e88-d68f-7163-819b-f1305e37574c
+  author: joe
+  content: Commit 767413e2f references this requirement
+  created_at: 2026-07-01T16:35:12.143078344Z
+  modified_at: 2026-07-01T16:35:12.143078344Z
