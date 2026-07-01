@@ -7502,4 +7502,737 @@ mod tests {
         assert_eq!(m.cluster_finishes, 0);
         assert!(r.committed.is_empty());
     }
+
+    // =====================================================================
+    // STORY-749: declarative scenario library on a single ScenarioDriver
+    // =====================================================================
+    //
+    // CONVENTION — read this before adding a scenario:
+    //
+    // A *scenario* is DATA. A `Scenario` value names the outcome each
+    // `PhaseDriver` method should return; the single `ScenarioDriver` replays it
+    // against the REAL `orchestrate*` loop. Adding a case means adding a fixture
+    // (a named `fn` under `mod scenarios`), NOT writing a new `impl PhaseDriver`.
+    //
+    //  - WHERE FIXTURES LIVE: `mod scenarios` below — one `fn name() -> Scenario`
+    //    per branch. Build with `Scenario::builder()` + its fluent setters.
+    //  - REPLAY MODEL: every phase field is a SEQUENCE consumed one entry per
+    //    call (the last entry repeats once exhausted). A single-entry sequence
+    //    always returns that entry; a multi-entry one advances across calls — so
+    //    a phase can return "red then green" across two `orchestrate()` runs on
+    //    the SAME driver. That is how the CI-retry / reviewer-fix scenarios work.
+    //    An empty sequence yields the phase's clean default (PR opened / Ok /
+    //    Approved).
+    //  - HOW TO ASSERT AN OUTCOME: run the scenario through `orchestrate(...)`
+    //    (single-spec) or a `ScenarioBatchDriver` + `drain_batch(...)` (batch),
+    //    then assert on the RESULTING orchestrator outcome — shelved-vs-shipped,
+    //    escalation recorded, process/batch exit code, phases run — NOT merely
+    //    the phase return value. `scenario_happy_path_ships` is the worked
+    //    example.
+    //  - GROWTH MODEL (PRIN-2): the seed set is a STARTING point. Grow it from
+    //    real incidents — every real drain failure becomes a new regression
+    //    fixture — not by enumerating the cartesian product up front.
+
+    /// One programmed outcome for a phase returning `ImplementerOutcome`
+    /// (phase-1 `run_implementer` and the advisor-resume `resume_implementer`).
+    #[derive(Clone)]
+    enum ImplStep {
+        /// A PR was opened — the pipeline continues to CI.
+        Pr,
+        /// The headless implementer punted on a design-fork.
+        Punt(String),
+        /// The post-implementer PR lookup was inconclusive (transient API blip).
+        Inconclusive(String),
+        /// The implementer deliberately held the PR for a manual gate.
+        Held(String),
+        /// The phase failed with this kind + reason.
+        Fail(FailureKind, String),
+    }
+
+    /// One programmed outcome for a `Result<(), PhaseFailure>` gate phase
+    /// (`finish_ci`, `merge`, `pull`, `build`).
+    #[derive(Clone)]
+    enum GateStep {
+        Ok,
+        Fail(FailureKind, String),
+    }
+
+    /// One programmed outcome for phase-3 `run_reviewer`.
+    #[derive(Clone)]
+    enum ReviewStep {
+        Verdict(Verdict),
+        Escalate(String),
+        Fail(FailureKind, String),
+    }
+
+    /// One programmed outcome for the STORY-306 advisor tier `run_advisor`.
+    #[derive(Clone)]
+    enum AdvisorStep {
+        Resolve(String),
+        Escalate(String),
+    }
+
+    /// A declarative drain scenario: DATA describing the outcome each
+    /// `PhaseDriver` method returns, replayed by `ScenarioDriver`. Every phase
+    /// field is a sequence consumed one entry per call (the last entry repeats),
+    /// so a scenario can encode a multi-run retry ("CI red then green"). Empty
+    /// ⇒ the phase's clean default.
+    // trace:STORY-749 | ai:claude
+    #[derive(Clone, Default)]
+    struct Scenario {
+        implementer: Vec<ImplStep>,
+        finish_ci: Vec<GateStep>,
+        reviewer: Vec<ReviewStep>,
+        merge: Vec<GateStep>,
+        pull: Vec<GateStep>,
+        build: Vec<GateStep>,
+        advisor: Vec<AdvisorStep>,
+        resume: Vec<ImplStep>,
+        /// When set, `terminal_status` reports the spec already-terminal — the
+        /// orchestrator finishes as a clean NO-OP without a phase running.
+        terminal: Option<&'static str>,
+        /// BUG-245: what `shipped_spec_id` returns (a PR-credit mismatch).
+        shipped_spec_id: Option<String>,
+        /// BUG-241: what `reconcile_failure` returns (default GenuineFailure).
+        reconcile: Option<PhaseReconcile>,
+        /// EPIC-28: when true, `shelve_on_failure` parks the spec (returns a
+        /// `FailureReason`) the way a real store-backed driver does — so a
+        /// shelvable failure sets `shelved_reason` and the drive exits `2`.
+        shelve_succeeds: bool,
+    }
+
+    impl Scenario {
+        fn builder() -> Self {
+            Self::default()
+        }
+        fn implementer(mut self, steps: Vec<ImplStep>) -> Self {
+            self.implementer = steps;
+            self
+        }
+        fn finish_ci(mut self, steps: Vec<GateStep>) -> Self {
+            self.finish_ci = steps;
+            self
+        }
+        fn reviewer(mut self, steps: Vec<ReviewStep>) -> Self {
+            self.reviewer = steps;
+            self
+        }
+        fn build(mut self, steps: Vec<GateStep>) -> Self {
+            self.build = steps;
+            self
+        }
+        fn advisor(mut self, steps: Vec<AdvisorStep>) -> Self {
+            self.advisor = steps;
+            self
+        }
+        fn resume(mut self, steps: Vec<ImplStep>) -> Self {
+            self.resume = steps;
+            self
+        }
+        /// EPIC-28: a shelvable phase failure parks the spec (NeedsAttention)
+        /// instead of leaving the failure un-shelved.
+        fn shelves(mut self) -> Self {
+            self.shelve_succeeds = true;
+            self
+        }
+    }
+
+    /// Pop the next programmed step: the entry at `*i`, or the last entry once
+    /// the sequence is exhausted (so a single-entry sequence always returns that
+    /// entry, and a multi-entry one advances across calls — the retry
+    /// mechanism). `None` only for an empty sequence ⇒ the phase's clean
+    /// default.
+    // trace:STORY-749 | ai:claude
+    fn next_step<T: Clone>(steps: &[T], i: &mut usize) -> Option<T> {
+        if steps.is_empty() {
+            return None;
+        }
+        let idx = (*i).min(steps.len() - 1);
+        *i += 1;
+        Some(steps[idx].clone())
+    }
+
+    /// Map an `ImplStep` onto the driver's `ImplementerOutcome` result.
+    fn impl_outcome(step: ImplStep) -> Result<ImplementerOutcome, PhaseFailure> {
+        match step {
+            ImplStep::Pr => Ok(ImplementerOutcome::PrOpened),
+            ImplStep::Punt(reason) => Ok(ImplementerOutcome::Punted { reason }),
+            ImplStep::Inconclusive(reason) => Ok(ImplementerOutcome::Inconclusive {
+                reason,
+                retry_hint: None,
+            }),
+            ImplStep::Held(reason) => Ok(ImplementerOutcome::Held {
+                reason: Some(reason),
+                branch: "held-branch".to_string(),
+            }),
+            ImplStep::Fail(kind, reason) => Err(PhaseFailure::of(kind, reason)),
+        }
+    }
+
+    /// Map a `GateStep` onto a gate phase's `Result<(), PhaseFailure>`.
+    fn gate_outcome(step: Option<GateStep>) -> Result<(), PhaseFailure> {
+        match step {
+            None | Some(GateStep::Ok) => Ok(()),
+            Some(GateStep::Fail(kind, reason)) => Err(PhaseFailure::of(kind, reason)),
+        }
+    }
+
+    /// The single declarative-scenario driver: replays a `Scenario` against the
+    /// real `orchestrate*` loop. One driver, N scenarios — adding a case is
+    /// data, not a new `impl PhaseDriver`.
+    // trace:STORY-749 | ai:claude
+    struct ScenarioDriver {
+        sc: Scenario,
+        calls: Vec<Phase>,
+        advisor_calls: usize,
+        mark_escalated_calls: usize,
+        impl_i: usize,
+        ci_i: usize,
+        rev_i: usize,
+        merge_i: usize,
+        pull_i: usize,
+        build_i: usize,
+        resume_i: usize,
+    }
+
+    impl ScenarioDriver {
+        fn new(sc: Scenario) -> Self {
+            Self {
+                sc,
+                calls: Vec::new(),
+                advisor_calls: 0,
+                mark_escalated_calls: 0,
+                impl_i: 0,
+                ci_i: 0,
+                rev_i: 0,
+                merge_i: 0,
+                pull_i: 0,
+                build_i: 0,
+                resume_i: 0,
+            }
+        }
+    }
+
+    impl PhaseDriver for ScenarioDriver {
+        fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure> {
+            assert!(
+                self.sc.terminal.is_none(),
+                "run_implementer must never be called for a terminal-status spec",
+            );
+            self.calls.push(Phase::Implementer);
+            match next_step(&self.sc.implementer, &mut self.impl_i) {
+                None => Ok(ImplementerOutcome::PrOpened),
+                Some(step) => impl_outcome(step),
+            }
+        }
+        fn finish_ci(&mut self) -> Result<(), PhaseFailure> {
+            self.calls.push(Phase::Ci);
+            gate_outcome(next_step(&self.sc.finish_ci, &mut self.ci_i))
+        }
+        fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure> {
+            self.calls.push(Phase::Reviewer);
+            match next_step(&self.sc.reviewer, &mut self.rev_i) {
+                None => Ok(ReviewerOutcome::Verdict(Verdict::Approved)),
+                Some(ReviewStep::Verdict(v)) => Ok(ReviewerOutcome::Verdict(v)),
+                Some(ReviewStep::Escalate(reason)) => {
+                    Ok(ReviewerOutcome::EscalatedToHuman { reason })
+                }
+                Some(ReviewStep::Fail(kind, reason)) => Err(PhaseFailure::of(kind, reason)),
+            }
+        }
+        fn merge(&mut self) -> Result<(), PhaseFailure> {
+            self.calls.push(Phase::Merge);
+            gate_outcome(next_step(&self.sc.merge, &mut self.merge_i))
+        }
+        fn pull(&mut self) -> Result<(), PhaseFailure> {
+            self.calls.push(Phase::Pull);
+            gate_outcome(next_step(&self.sc.pull, &mut self.pull_i))
+        }
+        fn build(&mut self) -> Result<(), PhaseFailure> {
+            self.calls.push(Phase::Build);
+            gate_outcome(next_step(&self.sc.build, &mut self.build_i))
+        }
+        fn hint_context(&self) -> HintContext {
+            HintContext {
+                spec: "TASK-247".to_string(),
+                branch: Some("task-247".to_string()),
+                pr_number: Some(46),
+                implementer_session: Some("019e2f423e7c".to_string()),
+                ci_run_id: Some("9988776655".to_string()),
+                forge: crate::forge::ForgeKind::GitHub,
+            }
+        }
+        fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
+            self.sc
+                .reconcile
+                .clone()
+                .unwrap_or(PhaseReconcile::GenuineFailure)
+        }
+        fn terminal_status(&mut self) -> Option<&'static str> {
+            self.sc.terminal
+        }
+        fn shipped_spec_id(&mut self) -> Option<String> {
+            self.sc.shipped_spec_id.clone()
+        }
+        fn run_advisor(&mut self) -> Result<AdvisorOutcome, PhaseFailure> {
+            self.advisor_calls += 1;
+            match self.sc.advisor.first().cloned() {
+                Some(AdvisorStep::Resolve(answer)) => Ok(AdvisorOutcome::Resolved {
+                    answer,
+                    reasoning: "scenario advisor reasoning".to_string(),
+                }),
+                Some(AdvisorStep::Escalate(reason)) => Ok(AdvisorOutcome::Escalated {
+                    reason,
+                    category: "strategy".to_string(),
+                }),
+                None => Err(PhaseFailure::of(
+                    FailureKind::Internal,
+                    "scenario: no advisor outcome configured",
+                )),
+            }
+        }
+        fn resume_implementer(
+            &mut self,
+            _answer: &str,
+        ) -> Result<ImplementerOutcome, PhaseFailure> {
+            match next_step(&self.sc.resume, &mut self.resume_i) {
+                None => Err(PhaseFailure::of(
+                    FailureKind::Internal,
+                    "scenario: no resume outcome configured",
+                )),
+                Some(step) => impl_outcome(step),
+            }
+        }
+        fn mark_implementer_lease_escalated(&mut self) {
+            self.mark_escalated_calls += 1;
+        }
+        fn shelve_on_failure(
+            &mut self,
+            _spec: &str,
+            phase: Phase,
+            failure: &PhaseFailure,
+            recovery_hint: &str,
+        ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+            if !self.sc.shelve_succeeds {
+                return Ok(None);
+            }
+            Ok(Some(aida_core::FailureReason {
+                phase: phase.slug().to_string(),
+                phase_index: phase.index() as u8,
+                kind: failure.kind.slug().to_string(),
+                detail: failure.reason.clone(),
+                recovery_hint: Some(recovery_hint.to_string()),
+                shelved_by: None,
+                shelved_at: chrono::Utc::now(),
+            }))
+        }
+    }
+
+    /// One member of a batch scenario: its spec-id, the `Scenario` its drive
+    /// replays, and (optionally) the spec it is `BlockedBy`.
+    // trace:STORY-749 | ai:claude
+    struct ScenarioBatchMember {
+        spec: String,
+        scenario: Scenario,
+        blocked_by: Option<String>,
+    }
+
+    impl ScenarioBatchMember {
+        fn new(spec: &str, scenario: Scenario) -> Self {
+            Self {
+                spec: spec.to_string(),
+                scenario,
+                blocked_by: None,
+            }
+        }
+        fn blocked_by(mut self, blocker: &str) -> Self {
+            self.blocked_by = Some(blocker.to_string());
+            self
+        }
+    }
+
+    /// Composes per-spec `Scenario`s into a batch drain. `run_spec` runs the
+    /// member's scenario through the real `orchestrate` loop (batch mode); on a
+    /// shelve it drops every dependent `BlockedBy` the shelved spec — mirroring
+    /// `resolve_batch_members`' pickability filter (a `BlockedBy → <shelved>`
+    /// member becomes un-pickable). Drives the real `drain_batch`, so the
+    /// EPIC-28 resilient-drain contract (park, continue, skip dependents, exit
+    /// 2) is asserted end-to-end.
+    // trace:STORY-749 EPIC-28 | ai:claude
+    struct ScenarioBatchDriver {
+        heads: Vec<ScenarioBatchMember>,
+        shelved: Vec<String>,
+        skipped: Vec<(String, String)>,
+    }
+
+    impl ScenarioBatchDriver {
+        fn new(members: Vec<ScenarioBatchMember>) -> Self {
+            Self {
+                heads: members,
+                shelved: Vec::new(),
+                skipped: Vec::new(),
+            }
+        }
+    }
+
+    impl BatchDriver for ScenarioBatchDriver {
+        fn next_head(&mut self) -> Option<String> {
+            self.heads.first().map(|m| m.spec.clone())
+        }
+        fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
+            let scenario = self
+                .heads
+                .iter()
+                .find(|m| m.spec == spec)
+                .map(|m| m.scenario.clone())
+                .expect("run_spec called for a queued head member");
+            let mut driver = ScenarioDriver::new(scenario);
+            let result = orchestrate_with_lifecycle_skip(
+                &mut driver,
+                spec,
+                AutoCompleteVariant::Full,
+                true, // json — keep the drive quiet under test
+                EscalateMode::Blocks,
+                LifecycleSkip::none(),
+                true, // batch — a phase-1 Inconclusive shelve-and-advances
+            );
+            // The head leaves the queue whether it shipped, punted, escalated,
+            // or shelved (a real completed / NeedsAttention spec is no longer
+            // pickable). Dependents of a shelved spec drop off too.
+            self.heads.retain(|m| m.spec != spec);
+            if result.shelved_reason.is_some() {
+                self.shelved.push(spec.to_string());
+                let deps: Vec<String> = self
+                    .heads
+                    .iter()
+                    .filter(|m| m.blocked_by.as_deref() == Some(spec))
+                    .map(|m| m.spec.clone())
+                    .collect();
+                for dep in deps {
+                    self.heads.retain(|m| m.spec != dep);
+                    self.skipped
+                        .push((dep, format!("blocked by shelved {spec}")));
+                }
+            }
+            result
+        }
+    }
+
+    /// The seed scenario library (STORY-749 acceptance #2). Each fn returns the
+    /// DATA for one orchestrator branch; the tests below replay it and assert
+    /// the resulting outcome. Grow this from real incidents (PRIN-2), one fn
+    /// per new regression.
+    mod scenarios {
+        use super::*;
+
+        /// Happy path: every phase clean → the spec ships.
+        pub(super) fn happy_path() -> Scenario {
+            Scenario::builder()
+        }
+
+        /// CI goes red → the phase shelves the spec into NeedsAttention.
+        pub(super) fn ci_red() -> Scenario {
+            Scenario::builder()
+                .finish_ci(vec![GateStep::Fail(FailureKind::CiRed, "CI is red".into())])
+                .shelves()
+        }
+
+        /// CI red on the first drive, green on the retry (a second drive on the
+        /// same driver pops the next `finish_ci` step).
+        pub(super) fn ci_red_then_green() -> Scenario {
+            Scenario::builder()
+                .finish_ci(vec![
+                    GateStep::Fail(FailureKind::CiRed, "CI is red".into()),
+                    GateStep::Ok,
+                ])
+                .shelves()
+        }
+
+        /// A design-fork punt the advisor resolves; the implementer resumes,
+        /// opens a PR, and the full pipeline runs → ship.
+        pub(super) fn punt_advisor_resolves() -> Scenario {
+            Scenario::builder()
+                .implementer(vec![ImplStep::Punt("auth flow fork".into())])
+                .advisor(vec![AdvisorStep::Resolve(
+                    "use the recorded convention".into(),
+                )])
+                .resume(vec![ImplStep::Pr])
+        }
+
+        /// A design-fork punt the advisor escalates to a human; under the
+        /// conservative `--escalate-blocks` the run parks after phase 1.
+        pub(super) fn punt_advisor_escalates() -> Scenario {
+            Scenario::builder()
+                .implementer(vec![ImplStep::Punt("project-strategy fork".into())])
+                .advisor(vec![AdvisorStep::Escalate("no recorded principle".into())])
+        }
+
+        /// Reviewer RequestChanges on the first drive, Approved on the retry.
+        pub(super) fn reviewer_request_changes_then_approve() -> Scenario {
+            Scenario::builder()
+                .reviewer(vec![
+                    ReviewStep::Verdict(Verdict::RequestChanges),
+                    ReviewStep::Verdict(Verdict::Approved),
+                ])
+                .shelves()
+        }
+
+        /// The build phase fails → the spec shelves into NeedsAttention.
+        pub(super) fn build_fail() -> Scenario {
+            Scenario::builder()
+                .build(vec![GateStep::Fail(
+                    FailureKind::Failed,
+                    "cargo build failed".into(),
+                )])
+                .shelves()
+        }
+    }
+
+    /// Worked example (STORY-749 acceptance #5): a fixture (DATA) replayed
+    /// through the real `orchestrate` loop; the assertion is on the RESULTING
+    /// outcome — a clean ship that ran all six phases — not the phase returns.
+    #[test]
+    fn scenario_happy_path_ships() {
+        let mut driver = ScenarioDriver::new(scenarios::happy_path());
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_CLEAN, "clean ship");
+        assert!(result.failed_phase.is_none());
+        assert!(result.shelved_reason.is_none());
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ],
+        );
+    }
+
+    /// CI red → the spec shelves into NeedsAttention; the drive exits `2`.
+    #[test]
+    fn scenario_ci_red_shelves_needs_attention() {
+        let mut driver = ScenarioDriver::new(scenarios::ci_red());
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert!(
+            result.shelved_reason.is_some(),
+            "a red-CI drive parks the spec",
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Ci));
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_SHELVED);
+        // The pipeline stopped at CI — reviewer/merge/pull/build never ran.
+        assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+    }
+
+    /// Punt → advisor resolves → implementer resumes → ship. A clean success:
+    /// neither a punt nor an escalation, and all six phases ran.
+    #[test]
+    fn scenario_punt_advisor_resolves_then_ships() {
+        let mut driver = ScenarioDriver::new(scenarios::punt_advisor_resolves());
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_CLEAN);
+        assert!(
+            result.punt_reason.is_none(),
+            "a resolved punt is not a punt"
+        );
+        assert!(result.escalation.is_none(), "not an escalation");
+        assert_eq!(driver.advisor_calls, 1);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ],
+        );
+    }
+
+    /// Punt → advisor escalates → human (park). Under `--escalate-blocks` the
+    /// run stops clean after phase 1, records the escalation, and stamps the
+    /// implementer lease exactly once.
+    #[test]
+    fn scenario_punt_advisor_escalates_parks() {
+        let mut driver = ScenarioDriver::new(scenarios::punt_advisor_escalates());
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(
+            result.process_exit_code(),
+            DRIVE_EXIT_CLEAN,
+            "escalation is clean",
+        );
+        assert!(result.failed_phase.is_none());
+        let escalation = result.escalation.expect("escalation recorded");
+        assert_eq!(escalation.kind, EscalationKind::DesignFork);
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
+        assert_eq!(driver.advisor_calls, 1);
+        assert_eq!(driver.mark_escalated_calls, 1);
+    }
+
+    /// CI red then green on retry: two drives on the SAME driver — the first
+    /// shelves, the second (popping the next `finish_ci` step) ships.
+    #[test]
+    fn scenario_ci_red_then_green_on_retry_ships() {
+        let mut driver = ScenarioDriver::new(scenarios::ci_red_then_green());
+        let first = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert!(
+            first.shelved_reason.is_some(),
+            "first drive parks on red CI"
+        );
+        assert_eq!(first.process_exit_code(), DRIVE_EXIT_SHELVED);
+
+        let second = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(
+            second.process_exit_code(),
+            DRIVE_EXIT_CLEAN,
+            "the retry passes CI and ships",
+        );
+        assert!(second.shelved_reason.is_none());
+    }
+
+    /// Reviewer RequestChanges → fix → approve: the first drive fails/shelves at
+    /// the reviewer, the retry (popping the next verdict) approves and ships.
+    #[test]
+    fn scenario_reviewer_request_changes_then_approve_ships() {
+        let mut driver = ScenarioDriver::new(scenarios::reviewer_request_changes_then_approve());
+        let first = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(first.failed_phase, Some(Phase::Reviewer));
+        assert!(
+            first.shelved_reason.is_some(),
+            "RequestChanges parks the spec",
+        );
+        assert_eq!(first.process_exit_code(), DRIVE_EXIT_SHELVED);
+
+        let second = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(
+            second.process_exit_code(),
+            DRIVE_EXIT_CLEAN,
+            "the fix is approved",
+        );
+        assert!(second.shelved_reason.is_none());
+    }
+
+    /// Build fail → shelve. The pipeline runs through merge + pull, then the
+    /// build phase fails and parks the spec (exit `2`).
+    #[test]
+    fn scenario_build_fail_shelves() {
+        let mut driver = ScenarioDriver::new(scenarios::build_fail());
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Build));
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_SHELVED);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ],
+        );
+    }
+
+    /// EPIC-28 resilient-drain contract (STORY-749 acceptance #3): a member's
+    /// shelvable failure parks it, the drain CONTINUES, the dependent
+    /// `BlockedBy` it is SKIPPED (never run), and the batch exits `2`.
+    #[test]
+    fn scenario_dependent_of_shelved_is_skipped_and_batch_exits_2() {
+        let members = vec![
+            ScenarioBatchMember::new("TASK-A", scenarios::ci_red()),
+            ScenarioBatchMember::new("TASK-B", scenarios::happy_path()).blocked_by("TASK-A"),
+        ];
+        let mut driver = ScenarioBatchDriver::new(members);
+        let result = drain_batch(&mut driver, None, None);
+
+        // TASK-A parked; TASK-B skipped because it was BlockedBy a shelved spec.
+        assert_eq!(driver.shelved, vec!["TASK-A".to_string()]);
+        assert_eq!(driver.skipped.len(), 1, "the dependent was skipped");
+        assert_eq!(driver.skipped[0].0, "TASK-B");
+        // The drain drained the whole batch but >=1 member shelved/skipped → the
+        // preserved EPIC-28 `2` sentinel, NOT a hard stop.
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.exit_code, DRIVE_EXIT_SHELVED);
+        assert_eq!(result.shelved, vec!["TASK-A".to_string()]);
+        // TASK-B never shipped (it was skipped, not driven).
+        assert!(result.shipped.is_empty());
+    }
+
+    /// A healthy batch (no shelves, no dependents) drains clean and exits `0` —
+    /// the resilient-drain machinery does not penalize an all-green batch.
+    #[test]
+    fn scenario_all_green_batch_drains_clean() {
+        let members = vec![
+            ScenarioBatchMember::new("TASK-A", scenarios::happy_path()),
+            ScenarioBatchMember::new("TASK-B", scenarios::happy_path()),
+        ];
+        let mut driver = ScenarioBatchDriver::new(members);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.exit_code, DRIVE_EXIT_CLEAN);
+        assert!(driver.shelved.is_empty());
+        assert!(driver.skipped.is_empty());
+        assert_eq!(
+            result.shipped,
+            vec!["TASK-A".to_string(), "TASK-B".to_string()],
+        );
+    }
 }
