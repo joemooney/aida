@@ -2397,7 +2397,9 @@ impl<'a> McpServer<'a> {
             .get_requirement_by_spec_id_mut(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
-        let comment = Comment::new("mcp".to_string(), text.to_string());
+        // trace:TASK-330 | ai:claude — stamp the producing session (best-effort)
+        let comment = Comment::new("mcp".to_string(), text.to_string())
+            .with_session_id(crate::resolve_current_session_id());
         req.add_comment(comment);
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
