@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:06:39.326929181Z
-modified_at: 2026-07-01T06:42:19.244980631Z
+modified_at: 2026-07-01T18:01:47.516372364Z
 req_type: Bug
 tags:
 - performance
@@ -27,3 +27,8 @@ comments:
   content: 'Seam: aida-cli/src/process_probe.rs (pid_is_alive / probe_live_claude_sessions) + the session-lease read + classify_spec_liveness matrix behind handle_ps move to a new aida-core::liveness module. Both handle_ps (aida ps) and aida-tui/src/redesign/liveness.rs then call it in-process — no subprocess. Blocks fully closing the BUG-676 perf hotfix (which shipped the TTL/lazy/single-flight mitigations).'
   created_at: 2026-07-01T02:07:11.992398955Z
   modified_at: 2026-07-01T02:07:11.992398955Z
+- id: 019f1ed8-1cfc-7133-a1d4-64fe045f7fac
+  author: joe
+  content: Commit d4cea80d8 references this requirement
+  created_at: 2026-07-01T18:01:47.516372364Z
+  modified_at: 2026-07-01T18:01:47.516372364Z
