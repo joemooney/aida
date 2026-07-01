@@ -29526,5 +29526,22 @@ operations:
   timestamp: 2026-07-01T04:17:33.588510522Z
   kind: !SetStatus
     status: Completed
-clock: 2837
+- id: 019f1bf8-4cf3-7b02-b325-7f6234a6b0a5
+  target_id: 019f1bd9-592d-7eb0-a806-e3aded23595f
+  author: aida
+  node_id: '1'
+  lamport: 2838
+  timestamp: 2026-07-01T04:38:05.299062412Z
+  kind: !SetDescription
+    description: |-
+      spawn_drive in aida-tui/src/redesign/mod.rs runs aida zen <id> without --solo. For a spec parented to an epic (or under an active focus), zen routes the drive INTO the scope worktree per ADR-6, rather than its own worktree/PR. The operator cannot see which routing will happen and cannot choose — a standalone bug/task silently lands in the epic worktree.
+
+      DESIGN DECISION (advisor): do NOT override ADR-6 default-into-scope silently in either direction. Instead make the routing VISIBLE and give the operator a per-drive toggle.
+
+      ## Acceptance
+      - WHEN the operator invokes the drive verb on a spec that would route into a scope worktree, THE TUI SHALL display the resolved routing (into-scope vs solo) before launching the drive.
+      - THE drive affordance SHALL offer a solo toggle that, WHEN selected, launches aida zen <id> --solo.
+      - WHEN the operator launches the drive without toggling solo, THE TUI SHALL preserve the current ADR-6 default routing.
+      - THE displayed routing text SHALL name the target worktree scope when the drive would route into an epic.
+clock: 2838
 node_id: '1'
