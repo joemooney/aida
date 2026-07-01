@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T06:08:21.357491704Z
-modified_at: 2026-07-01T06:08:34.688783851Z
+modified_at: 2026-07-01T06:08:35.049343762Z
 req_type: Epic
 tags:
 - autonomy
@@ -39,4 +39,8 @@ relationships:
 - rel_type: References
   target_id: 019f19c1-15cc-7831-8279-ba9292828c05
   created_at: 2026-07-01T06:08:34.688776315Z
+  created_by: joe
+- rel_type: !Custom related
+  target_id: 019f1c03-0e37-7132-a4e5-d51aa6042f37
+  created_at: 2026-07-01T06:08:35.049337298Z
   created_by: joe
