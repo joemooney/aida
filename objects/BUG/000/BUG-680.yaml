@@ -10,12 +10,12 @@ description: |-
   - WHEN the followup-filing path would file a followup, IF an existing spec references the same source plan path and carries matching followup text and is in a terminal status (Completed or Rejected), THEN THE system SHALL skip creating a duplicate and SHALL link to the existing spec instead.
   - WHEN a plan followup is re-filed after its prior round already shipped, THE system SHALL NOT create a second open spec for the same followup.
   - A unit test SHALL assert that filing the same plan followup twice yields one spec on the second run, not two.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:45:35.551116310Z
-modified_at: 2026-07-01T04:38:10.165806826Z
+modified_at: 2026-07-01T17:06:47.544573432Z
 req_type: Bug
 tags:
 - aida:followups
