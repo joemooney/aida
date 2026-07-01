@@ -3,12 +3,12 @@ spec_id: STORY-743
 agreed_id: STORY-743
 title: 'Behavioral journey self-test: drive the real binary through the human + agent core loops end-to-end so shipped behavior can''t silently regress'
 description: ''
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:40:08.744490696Z
-modified_at: 2026-07-01T03:40:08.744490696Z
+modified_at: 2026-07-01T03:58:38.387543644Z
 req_type: Story
 tags:
 - ci
