@@ -136532,7 +136532,50 @@ fn handle_queue_integrate(
         }
 
         // --- Act: drive each ready spec, serially, through the PR-only path. ---
-        let ready_ids: Vec<String> = ready.iter().map(|c| c.id.clone()).collect();
+        let mut ready_ids: Vec<String> = ready.iter().map(|c| c.id.clone()).collect();
+
+        // TASK-841: `--strategy stacked` — order + gate the ready set by the
+        // recorded stack graph. A member stacked behind another still-open branch
+        // is DEFERRED this pass (merging it now would drag the parent's
+        // un-squashed commits in under the wrong PR); only the mergeable
+        // bottom-of-stack layer is driven. Completion stays per-commit (each
+        // member auto-bumps when its own commit lands), so no special barrier is
+        // needed — just this ordering. The drive's `aida pull` then cascade-
+        // rebases the next layer's worktree (STORY-248); a later `--watch` pass
+        // (or re-run) picks it up. trace:TASK-841 | ai:claude
+        if matches!(strategy, integrate::IntegrateStrategy::Stacked) && !ready_ids.is_empty() {
+            let graph = stacks::load(&project_root);
+            let default_short = detect_default_branch_ref(&project_root)
+                .as_deref()
+                .map(|s| s.strip_prefix("origin/").unwrap_or(s).to_string())
+                .unwrap_or_else(|| "main".to_string());
+            let plan =
+                integrate::plan_stacked_integration(&ready_ids, &branches, &graph, &default_short);
+            for d in &plan.deferred {
+                match &d.blocked_on_spec {
+                    Some(parent_spec) => println!(
+                        "  {} {} — stacked behind {} (branch `{}`); deferring until it lands",
+                        "⏸".yellow(),
+                        d.id,
+                        parent_spec,
+                        d.blocked_on_branch
+                    ),
+                    None => println!(
+                        "  {} {} — stacked behind `{}` (parent not yet integrated / needs a stack-aware rebase); deferring. Run `/aida-rebase` in its worktree, then re-run.",
+                        "⏸".yellow(),
+                        d.id,
+                        d.blocked_on_branch
+                    ),
+                }
+            }
+            if !plan.deferred.is_empty() {
+                // Mirror the resilient-drain contract: something was held back, so
+                // the run exits 2 and a wrapping loop (or `--watch`) re-checks
+                // after the bottom layer merges. trace:TASK-836 | ai:claude
+                any_parked_or_waited = true;
+            }
+            ready_ids = plan.mergeable;
+        }
 
         // STORY-335: dry-run rebase-conflict forecast. Each ready member's PR
         // branch is checked (read-only, via `git merge-tree`) against current
