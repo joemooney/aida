@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T17:31:13.138421089Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-07-01T17:34:44.559315654Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -98,6 +98,11 @@ comments:
     Follow-up: child TASK-287 filed for the clap `--help` doc-comment leak (~250 cli.rs lines).
   created_at: 2026-05-16T20:59:37.598167727Z
   modified_at: 2026-05-16T20:59:37.598167727Z
+- id: 019f1ebf-594f-7440-9cde-e44cd8ba12c5
+  author: joe
+  content: Commit 8b95408db references this requirement
+  created_at: 2026-07-01T17:34:44.559315654Z
+  modified_at: 2026-07-01T17:34:44.559315654Z
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
