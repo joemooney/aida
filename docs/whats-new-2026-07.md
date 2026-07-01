@@ -109,6 +109,30 @@ The reliability and speed work — the kind you feel as "it just recovered" or "
 
 ---
 
+## A batch of workflow papercuts, gone
+
+A fast follow-on run cleared a stack of small frictions — the kind you only notice because they stop happening.
+
+**For the human at the keyboard**
+- **`did you mean TASK-1?`** Typo a spec id (`aida show TASK-11`, a transposed prefix) and instead of a bare "not found," AIDA fuzzy-matches it against the real id set and suggests the closest one — the same courtesy `--help` already gives for mistyped subcommands.
+- **`base behind by N`.** `aida statusline` and `aida queue list` now flag when a live lease's branch has fallen behind `origin/main`, so you catch stale-base work *before* you build on it.
+- **First run feels like the core loop.** A passive first-run hint chain walks a brand-new project through file → approve → drive → merge without a wall of docs.
+- **A blocked punt files its own dependency.** When an agent punts "blocked on SPEC-X," AIDA suggests recording the `blocked-by` graph edge — so the dependency lands in the graph, not just in prose.
+
+**For the agent / integrator**
+- **`aida doc suggest`.** A warn-only PR-open check that spots new CLI flags / subcommands / MCP tools a diff adds with no linked `Doc`, and nudges `aida doc add --about <ID>`. Wired into `/aida-pr`.
+- **`aida session leases --json`** now carries a per-lease **drain cross-reference** (run uuid / phase / mode / batch), so tooling can correlate a lease to the drain that owns it.
+- **Comments carry their session id.** Every comment records the session that wrote it (optional, backward-compatible), so `aida session list` can correlate a comment back to its origin.
+- **The cockpit's `owner` lens** pivots the board by who-must-act — you / advisor / role.
+
+**Quietly truer and faster**
+- **`queue_depth` tells the truth.** The statusline depth now resolves user identity through the exact path `aida queue list` uses, so the two can't disagree (the BUG-89 identity lineage).
+- **`aida status --full` lost its last slow floor** — the hygiene/cleanup doctor scans are cache-backed and the final full-store load is gone.
+- **Liveness moved into `aida-core`** — the TUI computes it in-process instead of shelling out to `aida ps`.
+- **The EARS lint stopped crying wolf** — the conflicting-constraint check no longer false-positives when "each" and "none" describe *different* clauses, so well-specified specs stop getting held from the zen gate.
+
+---
+
 ## Where to go next
 
 - The autonomy front door: [`aida-power-features.md`](aida-power-features.md) — `aida zen` / `aida ship` / `aida burndown` / `aida integrate --watch`.
