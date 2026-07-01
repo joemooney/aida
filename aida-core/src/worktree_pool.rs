@@ -125,6 +125,38 @@ impl PoolEntry {
 pub struct Pool {
     #[serde(default)]
     pub entries: Vec<PoolEntry>,
+    /// Lifetime count of acquires satisfied by reusing an already-warm pooled
+    /// worktree (reset-not-create). Half of the warm-cache payoff proof
+    /// (reuse / total = the hit rate). Counts only — no paths, no content
+    /// (TASK-1012). `#[serde(default)]` so a pre-telemetry `pool.json` loads.
+    // trace:TASK-1012 | ai:claude
+    #[serde(default)]
+    pub reuse_count: u64,
+    /// Lifetime count of acquires that minted a fresh worktree (`git worktree
+    /// add`) because none idle was reclaimable — a cache miss.
+    // trace:TASK-1012 | ai:claude
+    #[serde(default)]
+    pub create_count: u64,
+}
+
+impl Pool {
+    /// Total acquires observed (reuse + create). Zero until the first acquire.
+    // trace:TASK-1012 | ai:claude
+    pub fn total_acquires(&self) -> u64 {
+        self.reuse_count + self.create_count
+    }
+
+    /// Warm-pool hit rate = reuse / total, in `0.0..=1.0`. `None` until at
+    /// least one acquire has been observed (no rate to report yet).
+    // trace:TASK-1012 | ai:claude
+    pub fn hit_rate(&self) -> Option<f64> {
+        let total = self.total_acquires();
+        if total == 0 {
+            None
+        } else {
+            Some(self.reuse_count as f64 / total as f64)
+        }
+    }
 }
 
 /// Options controlling `acquire`.
@@ -397,6 +429,10 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
             git_ops::reset_worktree_to(&path, &base_ref)
                 .with_context(|| format!("reset pooled worktree {}", path.display()))?;
             stamp_acquired(&mut pool.entries[idx], opts);
+            // Warm-cache HIT: an already-built worktree was reused. Counts only,
+            // no paths/content — the hit-rate telemetry (TASK-1012).
+            // trace:TASK-1012 | ai:claude
+            pool.reuse_count = pool.reuse_count.saturating_add(1);
             return Ok(path);
         }
 
@@ -426,6 +462,9 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         };
         stamp_acquired(&mut entry, opts);
         pool.entries.push(entry);
+        // Warm-cache MISS: a fresh worktree had to be minted (cold `target/`).
+        // trace:TASK-1012 | ai:claude
+        pool.create_count = pool.create_count.saturating_add(1);
         Ok(path)
     })
 }
@@ -571,6 +610,31 @@ pub fn list(
 mod tests {
     use super::*;
 
+    // trace:TASK-1012 | ai:claude
+    #[test]
+    fn hit_rate_is_reuse_over_total_and_none_when_empty() {
+        let mut pool = Pool::default();
+        assert_eq!(pool.total_acquires(), 0);
+        assert_eq!(pool.hit_rate(), None, "no acquires yet → no rate");
+
+        pool.reuse_count = 3;
+        pool.create_count = 1;
+        assert_eq!(pool.total_acquires(), 4);
+        assert_eq!(pool.hit_rate(), Some(0.75));
+
+        // All-miss and all-hit boundaries.
+        let all_miss = Pool {
+            create_count: 5,
+            ..Default::default()
+        };
+        assert_eq!(all_miss.hit_rate(), Some(0.0));
+        let all_hit = Pool {
+            reuse_count: 5,
+            ..Default::default()
+        };
+        assert_eq!(all_hit.hit_rate(), Some(1.0));
+    }
+
     #[test]
     fn idle_entry_is_idle_only_when_unleased_unowned_not_destroying() {
         let mut e = PoolEntry {
@@ -662,6 +726,7 @@ mod tests {
                     ..Default::default()
                 },
             ],
+            ..Default::default()
         };
         heal_state(&mut pool);
         // dead owner cleared
@@ -680,6 +745,7 @@ mod tests {
                 path: PathBuf::from("/nonexistent/aida-pool-99"),
                 ..Default::default()
             }],
+            ..Default::default()
         };
         heal_state(&mut pool);
         assert!(pool.entries.is_empty());
@@ -699,6 +765,7 @@ mod tests {
                     ..Default::default()
                 },
             ],
+            ..Default::default()
         };
         let (name, n) = next_pool_name(&pool, root);
         assert_eq!(name, "aida-pool-myrepo-2");
@@ -722,6 +789,8 @@ mod tests {
                 created_at: Some(42),
                 ..Default::default()
             }],
+            reuse_count: 7,
+            create_count: 3,
         };
         write_state(dir.path(), &pool).unwrap();
         let back = read_state(dir.path()).unwrap();
@@ -731,6 +800,10 @@ mod tests {
         // default/empty fields are skipped on serialize but decode back to default
         assert_eq!(back.entries[0].owner_pid, None);
         assert!(!back.entries[0].leased);
+        // Hit-rate telemetry counters round-trip through pool.json (TASK-1012).
+        assert_eq!(back.reuse_count, 7);
+        assert_eq!(back.create_count, 3);
+        assert_eq!(back.hit_rate(), Some(0.7));
     }
 
     // The advisory `pool.lock` must serialize concurrent `with_state_lock`
@@ -882,6 +955,12 @@ mod git_integration_tests {
             1,
             "no second tree should be created when an idle one exists"
         );
+        // Hit-rate telemetry: first acquire was a fresh mint (miss), the second
+        // reused the warm tree (hit) → 1/2 = 50% (TASK-1012).
+        let pool = read_state(root).unwrap();
+        assert_eq!(pool.create_count, 1, "first acquire minted a fresh tree");
+        assert_eq!(pool.reuse_count, 1, "second acquire reused the warm tree");
+        assert_eq!(pool.hit_rate(), Some(0.5));
     }
 
     #[test]

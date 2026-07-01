@@ -97103,6 +97103,10 @@ fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()
     let cwd = std::env::current_dir().ok();
     let lease_ttl = worktree_pool_config_lease_ttl_secs(project_root);
     let rows = aida_core::worktree_pool::list(project_root, cwd.as_deref(), lease_ttl)?;
+    // Warm-pool HIT-RATE telemetry (reuse vs create) — proves the warm-cache
+    // payoff empirically. Counts live in the pool state (counts only, no
+    // paths/content). trace:TASK-1012 | ai:claude
+    let pool_state = aida_core::worktree_pool::read_state(project_root).unwrap_or_default();
 
     if json {
         let arr: Vec<_> = rows
@@ -97122,13 +97126,22 @@ fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()
             .collect();
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({ "pool": arr }))?
+            serde_json::to_string_pretty(&serde_json::json!({
+                "pool": arr,
+                "telemetry": {
+                    "reuse_count": pool_state.reuse_count,
+                    "create_count": pool_state.create_count,
+                    "total_acquires": pool_state.total_acquires(),
+                    "hit_rate": pool_state.hit_rate(),
+                },
+            }))?
         );
         return Ok(());
     }
 
     if rows.is_empty() {
         println!("warm-pool is empty — `aida worktree pool acquire` creates the first tree");
+        print_worktree_pool_hit_rate(&pool_state);
         return Ok(());
     }
 
@@ -97170,7 +97183,29 @@ fn worktree_pool_status(project_root: &std::path::Path, json: bool) -> Result<()
             holder.cyan()
         );
     }
+    print_worktree_pool_hit_rate(&pool_state);
     Ok(())
+}
+
+/// Render the warm-pool HIT-RATE line — reuse (warm-cache hit) vs create (cold
+/// mint), and the ratio that proves the warm-cache payoff empirically. Silent
+/// until the first acquire is observed (nothing to report yet). Counts only, no
+/// paths/content.
+// trace:TASK-1012 | ai:claude
+fn print_worktree_pool_hit_rate(pool: &aida_core::worktree_pool::Pool) {
+    match pool.hit_rate() {
+        Some(rate) => {
+            let pct = format!("{:.0}%", rate * 100.0);
+            println!(
+                "  hit-rate {}  ({} reuse / {} total, {} fresh mint)",
+                pct.bold(),
+                pool.reuse_count,
+                pool.total_acquires(),
+                pool.create_count,
+            );
+        }
+        None => println!("{}", "  hit-rate n/a  (no acquires observed yet)".dimmed()),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
