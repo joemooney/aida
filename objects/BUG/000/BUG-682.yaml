@@ -9,12 +9,12 @@ description: |-
   - THE aida zen help text SHALL NOT claim independent drives can run in parallel within one repo while the global drain lock serializes them.
   - THE aida zen help text SHALL state that drives are serialized per repo and SHALL point to the burndown fan-out as the mechanism for running multiple specs concurrently.
   - WHEN a drive is refused because another drain holds the lock, THE error message SHALL name the burndown fan-out (one orchestrator, worktree-isolated subagents) as the supported way to drive multiple specs at once.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:50:01.095214108Z
-modified_at: 2026-07-01T04:50:01.095214108Z
+modified_at: 2026-07-01T05:47:38.749580914Z
 req_type: Bug
 tags:
 - aida:zen
