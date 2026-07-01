@@ -12,12 +12,12 @@ description: |-
   - THE drive affordance SHALL offer a solo toggle that, WHEN selected, launches aida zen <id> --solo.
   - WHEN the operator launches the drive without toggling solo, THE TUI SHALL preserve the current ADR-6 default routing.
   - THE displayed routing text SHALL name the target worktree scope when the drive would route into an epic.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:04:16.813844443Z
-modified_at: 2026-07-01T16:05:18.867101106Z
+modified_at: 2026-07-01T16:18:04.405996197Z
 req_type: Task
 tags:
 - aida:tui
@@ -33,3 +33,21 @@ comments:
   content: Commit 392bdc749 references this requirement
   created_at: 2026-07-01T16:05:18.867101106Z
   modified_at: 2026-07-01T16:05:18.867101106Z
+history:
+- id: 019f1e79-2793-7232-a590-5816cafe4924
+  author: aida-auto-bump
+  timestamp: 2026-07-01T16:18:04.307796124Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1e79-27f5-7350-a3e3-a0181925381e
+  timestamp: 2026-07-01T16:18:04.405991104Z
+  agent: aida
+  commit_sha: 4a29121206394dd363e69203acbfc6edf4e2a96a
+  summary: Completed via merge 4a291212
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-01T16:18:03.238117797Z
+  completion_sha: 4a29121206394dd363e69203acbfc6edf4e2a96a
