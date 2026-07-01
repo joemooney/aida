@@ -30339,5 +30339,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2897
+- id: 019f1dd1-088e-7241-8ce0-7dea4f7d9d17
+  target_id: 019f1dd0-fb59-7742-8a3a-cf7c54f1303d
+  author: aida
+  node_id: '1'
+  lamport: 2898
+  timestamp: 2026-07-01T13:14:26.318556352Z
+  kind: !Create
+    title: 'did-you-mean: suggest nearest existing spec id when show/edit hits ''not found'''
+    description: 'Surfaced by a wrong-usage error-path UX self-test (2026-07-01). When a user typos a spec id (e.g. TASK-11 instead of TASK-1, or a transposed prefix), aida show/edit/queue-work returns "Requirement not found: <id>" plus a generic "help: aida list" hint. Good, but a fuzzy did-you-mean against existing ids (Levenshtein/prefix match over the cache id set, threshold ~1-2 edits) would close the loop the way clhelp already does for subcommand typos ("some similar subcommands exist: list, lint"). On-brand quiet-depth polish; low priority. Scope: cache already holds all ids, so it is a cheap nearest-match over that set at the not-found branch. Verified NOT a false alarm: the "not found" path is a real branch, exit code is correctly 1. Everything else in the error-path audit was solid (invalid status/type/priority all enumerate valid values, exit codes correct) — this is the one gap.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2898
 node_id: '1'
