@@ -30117,5 +30117,20 @@ operations:
       - WHEN the shell user and the stored queue key differ only by case, THE queue_depth SHALL equal the count `aida queue list` shows, per the case-insensitive matching in TASK-951.
       - THE queue_depth SHALL NOT be suppressed to zero on a resolvable identity match.
       - A test SHALL assert queue_depth equals the queue list count for a user whose identity resolves via the AIDA_USER or USER fallback.
-clock: 2877
+- id: 019f1c6a-7f45-7fe1-85a9-0922f377520f
+  target_id: 019f19fa-aecb-7df2-8a35-6c67327e054f
+  author: aida
+  node_id: '1'
+  lamport: 2878
+  timestamp: 2026-07-01T06:42:49.285577025Z
+  kind: !SetDescription
+    description: |-
+      Deferred from TASK-1061 to avoid output drift. The `aida status --full` view still runs the hygiene and cleanup doctor scans plus one backend.load() over the full store. Cache-back those so status --full does not load the full store.
+
+      ## Acceptance
+      - THE aida status --full hygiene and cleanup doctor scans SHALL read from the cache rather than loading the full store.
+      - WHEN aida status --full runs, THE command SHALL NOT call backend.load() over the full store.
+      - THE aida status --full output SHALL be byte-identical to the pre-change output for the same store state.
+      - A test SHALL confirm aida status --full does not trigger a full-store load.
+clock: 2878
 node_id: '1'

@@ -2,13 +2,20 @@ id: 019f19fa-aecb-7df2-8a35-6c67327e054f
 spec_id: TASK-1065
 agreed_id: TASK-1065
 title: 'status --full remaining floor: cache-back the hygiene/cleanup doctor scans + the single still-needed backend.load() (deferred from TASK-1061 to avoid output drift)'
-description: ''
+description: |-
+  Deferred from TASK-1061 to avoid output drift. The `aida status --full` view still runs the hygiene and cleanup doctor scans plus one backend.load() over the full store. Cache-back those so status --full does not load the full store.
+
+  ## Acceptance
+  - THE aida status --full hygiene and cleanup doctor scans SHALL read from the cache rather than loading the full store.
+  - WHEN aida status --full runs, THE command SHALL NOT call backend.load() over the full store.
+  - THE aida status --full output SHALL be byte-identical to the pre-change output for the same store state.
+  - A test SHALL confirm aida status --full does not trigger a full-store load.
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T19:21:26.987566259Z
-modified_at: 2026-06-30T19:21:26.987566259Z
+modified_at: 2026-07-01T06:42:48.406777244Z
 req_type: Task
 tags:
 - from-audit
