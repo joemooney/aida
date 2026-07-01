@@ -383,3 +383,11 @@ blocks:
   range_end: 304
   next: 205
   allocated_at: 2026-07-01T18:48:57.360633115Z
+- node_id: '6'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: PRIN
+  range_start: 201
+  range_end: 300
+  next: 201
+  allocated_at: 2026-07-01T18:49:00.237727383Z
