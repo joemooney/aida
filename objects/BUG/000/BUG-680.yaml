@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T03:45:35.551116310Z
-modified_at: 2026-07-01T17:32:19.934973736Z
+modified_at: 2026-07-01T17:37:14.280138827Z
 req_type: Bug
 tags:
 - aida:followups
@@ -34,3 +34,10 @@ implementation_info:
   implemented: true
   implemented_at: 2026-07-01T17:21:05.253586289Z
   implemented_by: joe
+failure_reason:
+  phase: pull
+  phase_index: 5
+  kind: failed
+  detail: '`aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint)'
+  recovery_hint: 'Classify the divergence: `aida rebase --dry-run --json`'
+  shelved_at: 2026-07-01T17:37:14.280138827Z
