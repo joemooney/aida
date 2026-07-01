@@ -29179,5 +29179,37 @@ operations:
   timestamp: 2026-07-01T01:33:43.579872383Z
   kind: !SetStatus
     status: Completed
-clock: 2812
+- id: 019f1b72-9b1c-7823-b717-a3413144119c
+  target_id: 019f1b72-9031-7ea0-a988-0dba23f1d9ce
+  author: aida
+  node_id: '1'
+  lamport: 2813
+  timestamp: 2026-07-01T02:12:03.484905233Z
+  kind: !Create
+    title: aida focus rollup counts rejected specs as "open" (+ descendant_ids/graph-tree subtree mismatch)
+    description: |-
+      The focus rollup line printed by `aida focus` (and its statusline surface) over-counts "open" work because it buckets terminal `rejected` specs into the open count.
+
+      REPRODUCTION (EPIC-54, 2026-06-30):
+        aida focus epic-54
+        -> subtree: 43 items (33 completed - 0 in-progress - 10 open)
+        aida graph epic-54 --tree tally -> 8 approved + 33 completed + 3 rejected
+
+      The rollup reports 10 open, but only 8 specs are actually open (Approved). The other 2 are rejected specs (of TASK-930 / TASK-941 / TASK-946) miscounted as open.
+
+      ROOT CAUSE (primary): print_focus_rollup in aida-cli/src/main.rs (~line 96876). The status match is:
+          "completed" | "done"                     => completed += 1
+          "inprogress"|"in-progress"|"in_progress" => in_progress += 1
+          _                                        => open += 1
+      The catch-all _ sweeps rejected (a terminal status) into open. draft/approved/planned also fall through, which is fine, but rejected must not count as open.
+
+      SECONDARY DISCREPANCY: descendant_ids() returns a 43-item subtree while `aida graph --tree` returns 44 (3 rejected vs the 2 the focus closure sees). The two subtree-closure implementations disagree on membership by one rejected node. Worth reconciling so focus and graph agree on what is in an epic subtree.
+
+      FIX (primary): add an explicit `"rejected" => {}` (or a rejected counter) arm before the catch-all so rejected is excluded from open; decide whether rejected should count toward `total` at all (recommend excluding, to match the actionable framing). Consider surfacing the rejected count if non-zero.
+
+      IMPACT: the operator sees inflated open-work counts on an epic that is effectively done, undermining the focus rollup as a truthful progress signal (EPIC-54 reads 10 open when 8 are real).
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2813
 node_id: '1'
