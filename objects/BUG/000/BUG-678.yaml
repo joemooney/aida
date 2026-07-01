@@ -3,32 +3,28 @@ spec_id: BUG-678
 agreed_id: BUG-678
 title: aida focus rollup counts rejected specs as "open" (+ descendant_ids/graph-tree subtree mismatch)
 description: |-
-  The focus rollup line printed by `aida focus` (and its statusline surface) over-counts "open" work because it buckets terminal `rejected` specs into the open count.
+  The aida focus rollup line (subtree: N items (X completed - Y in-progress - Z open)) over-counts "open" work because it buckets terminal REJECTED specs into the open count.
 
-  REPRODUCTION (EPIC-54, 2026-06-30):
-    aida focus epic-54
-    -> subtree: 43 items (33 completed - 0 in-progress - 10 open)
-    aida graph epic-54 --tree tally -> 8 approved + 33 completed + 3 rejected
+  REPRODUCTION (EPIC-54, 2026-06-30): after rejecting several specs, aida focus epic-54 reported "12 open" when only 3 specs were actually open (Approved) — the other 9 were rejected specs miscounted as open.
 
-  The rollup reports 10 open, but only 8 specs are actually open (Approved). The other 2 are rejected specs (of TASK-930 / TASK-941 / TASK-946) miscounted as open.
+  ROOT CAUSE: print_focus_rollup in aida-cli/src/main.rs (~line 96876). The status match buckets completed|done and inprogress explicitly, then a catch-all _ => open += 1 sweeps EVERYTHING else — including rejected (a terminal status) — into open.
 
-  ROOT CAUSE (primary): print_focus_rollup in aida-cli/src/main.rs (~line 96876). The status match is:
-      "completed" | "done"                     => completed += 1
-      "inprogress"|"in-progress"|"in_progress" => in_progress += 1
-      _                                        => open += 1
-  The catch-all _ sweeps rejected (a terminal status) into open. draft/approved/planned also fall through, which is fine, but rejected must not count as open.
+  FIX: add an explicit rejected arm so rejected is excluded from the open count (and from total, to match the actionable framing); optionally surface a rejected count when non-zero. Draft/approved/planned correctly remain open.
 
-  SECONDARY DISCREPANCY: descendant_ids() returns a 43-item subtree while `aida graph --tree` returns 44 (3 rejected vs the 2 the focus closure sees). The two subtree-closure implementations disagree on membership by one rejected node. Worth reconciling so focus and graph agree on what is in an epic subtree.
+  ## Acceptance
+  - WHEN a focused epic subtree contains rejected specs, THE rollup SHALL NOT count them in the "open" figure.
+  - THE "open" figure SHALL equal the number of specs whose status is draft, approved, or planned within the subtree.
+  - Rejected specs SHALL be excluded from the subtree "total" (total = completed + in-progress + open), OR shown as a separate "rejected" figure — not folded into open.
+  - A unit test on print_focus_rollup (or its extracted tally helper) SHALL assert a subtree of {1 approved, 1 completed, 1 rejected} yields open=1, completed=1, rejected excluded from open.
+  - Regression: with the EPIC-54 subtree, aida focus epic-54 reports the true open count (3 at time of filing), not the rejected-inflated count.
 
-  FIX (primary): add an explicit `"rejected" => {}` (or a rejected counter) arm before the catch-all so rejected is excluded from open; decide whether rejected should count toward `total` at all (recommend excluding, to match the actionable framing). Consider surfacing the rejected count if non-zero.
-
-  IMPACT: the operator sees inflated open-work counts on an epic that is effectively done, undermining the focus rollup as a truthful progress signal (EPIC-54 reads 10 open when 8 are real).
+  SCOPE: this bug is ONLY the rejected-as-open bucketing. The separate descendant_ids-vs-graph-tree subtree MEMBERSHIP mismatch (43 vs 44) is split out to TASK-1074.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T02:12:00.689378740Z
-modified_at: 2026-07-01T02:12:04.497806775Z
+modified_at: 2026-07-01T03:50:09.569603736Z
 req_type: Bug
 tags:
 - aida:focus
