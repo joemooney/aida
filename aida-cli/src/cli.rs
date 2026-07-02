@@ -9057,6 +9057,13 @@ pub enum Command {
         #[clap(long)]
         force: bool,
 
+        /// Markdown-only first run: scaffold just a `specs/` folder + a runnable
+        /// `aida why` demo — no orphan branch, cache, MCP, skills, or roles. The
+        /// 60-second magic with zero machine; add full `aida init` later.
+        // trace:STORY-757 | ai:claude
+        #[clap(long)]
+        minimal: bool,
+
         /// (deprecated, accepted for backwards compat) Initialize in
         /// distributed mode. Distributed is now the default, so this
         /// flag is a no-op. Use `--centralized` to opt out.
