@@ -47,7 +47,23 @@ comments:
     Recommend: re-scope TASK-769 to (b)-only (decouple escalation from away_drain into its own [presence] knob); track (c) separately under/after STORY-555. Advisory framing + integrity gates unchanged.
   created_at: 2026-06-30T16:53:23.096024714Z
   modified_at: 2026-06-30T16:53:23.096024714Z
+history:
+- id: 019f1ed5-7af4-7b83-8639-88c45a871d87
+  author: aida-auto-bump
+  timestamp: 2026-07-01T17:58:54.964665908Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f1ed5-7af4-7b83-8639-88df7ead33c6
+  timestamp: 2026-07-01T17:58:54.964669510Z
+  agent: aida
+  commit_sha: fc1b9d4705a31e506fc5746495bfe11d2ec6b569
+  summary: Completed via merge fc1b9d47
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T02:14:48.325488870Z
   implemented_by: joe
+  completed_at: 2026-07-01T17:58:54.881650345Z
+  completion_sha: fc1b9d4705a31e506fc5746495bfe11d2ec6b569
