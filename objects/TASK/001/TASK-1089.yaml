@@ -1,0 +1,25 @@
+id: 019f21be-f0cd-7661-a166-5fa5834761df
+spec_id: TASK-1089
+agreed_id: TASK-1089
+title: 'Sharpen the completed-without-commit doctor scan: exempt non-code work-types + date-scope to post-git-canonical migration'
+description: |-
+  The completed-without-commit doctor scan flags every completed spec that git cannot corroborate (no (SPEC-ID) commit on origin/main, no trace comment). It currently reports 353 specs — verified to be overwhelmingly false positives: pre-git-canonical-era completions (predating the (SPEC-ID) trailer + trace convention) and work-types that legitimately produce no trailered commit. Sampled recent hits confirm zero true positives: TASK-980 (a real statusline focus feature that exists on main, merely untraced), TASK-1057 (an ops/prune task — its work was running git commands, no commit by nature), TASK-1035 (a design spike — deliverable is a decision/doc). The noise buries any genuine signal (a completion with no merge behind it).
+
+  ## Acceptance
+  - WHEN the scan evaluates a completed spec whose type is spike or doc, THE scan SHALL NOT flag it as completed-without-commit.
+  - WHEN the scan evaluates a completed spec tagged as an ops/cleanup task (a task whose deliverable is an action, not a code change), THE scan SHALL NOT flag it.
+  - WHEN the scan evaluates a completed spec whose completion predates the git-canonical storage migration cutoff, THE scan SHALL exclude it (the cutoff derived from the earliest orphan-store commit, or a configurable date).
+  - THE scan SHALL flag a spec ONLY when its completion is uncorroborated by git AND its type is code-producing AND it post-dates the migration cutoff.
+  - Regression: running the sharpened scan against the current store SHALL report far fewer than the current 353 (target: only genuinely-stranded recent completions).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T07:33:09.453575954Z
+modified_at: 2026-07-02T07:33:09.453575954Z
+req_type: Task
+tags:
+- aida:doctor
+- completed-without-commit
+- false-positive
+- signal-quality
