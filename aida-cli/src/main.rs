@@ -44429,6 +44429,15 @@ fn dispatch_fallback_guidance(vendor: &str, spec: &str) -> String {
     }
 }
 
+// The no-progress liveness DELTA-comparator: given a prior and a current
+// snapshot, decide whether an agent is stalled (child reaped AND neither HEAD
+// nor the dirty fingerprint moved). Fully unit-tested, but not yet wired into
+// the single-shot `dispatch health` report — surfacing it live needs
+// cross-invocation snapshot persistence (store the prior snapshot per agent,
+// compare on the next run). That stateful wiring is the tracked slice-1b
+// follow-up; the comparator lands now, tested, so the follow-up only wires it.
+// trace:STORY-759 | ai:codex+claude
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DispatchLivenessSnapshot {
     child_reaped: bool,
@@ -44436,6 +44445,7 @@ struct DispatchLivenessSnapshot {
     dirty_fingerprint: String,
 }
 
+#[allow(dead_code)] // wired by the slice-1b snapshot-persistence follow-up. trace:STORY-759
 fn dispatch_liveness_stalled(
     previous: &DispatchLivenessSnapshot,
     current: &DispatchLivenessSnapshot,
