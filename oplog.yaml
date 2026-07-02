@@ -31060,5 +31060,28 @@ operations:
       CONTEXT: discovered 2026-07-02 reconciling node 6 (spock) store commits from gitlab into the local store. That reconcile was pushed to gitlab ONLY and HELD from GitHub precisely to avoid adding more copies pending this scrub; the reconciled+scrubbed store returns to GitHub in one clean pass after the rewrite.
 
       ACCEPTANCE: no employer email domain, no employer corporate-network detail, no employer alias context remains in ANY commit reachable from public GitHub aida-store or main; code builds + tests pass on the rewritten tip; all active clones re-synced; gitlab scrubbed to match.
-clock: 2943
+- id: 019f23ce-e4e4-7831-ab12-87da4dc0f0a2
+  target_id: 019f23ce-d79d-7bb3-8088-464e517cd6b6
+  author: aida
+  node_id: '1'
+  lamport: 2944
+  timestamp: 2026-07-02T17:09:49.412893798Z
+  kind: !Create
+    title: 'Prevent github/gitlab remote drift: detect + fan-out push + reconcile'
+    description: |-
+      ROOT CAUSE (observed 2026-07-02): AIDA git-canonical store sync (aida db sync + the auto-push paths) targets a SINGLE remote named origin. A clone whose canonical hub is a different remote (e.g. a work machine pushing the store to gitlab, not github) drifts silently: the two remotes accumulate different commits with no fan-out and no detection. Today a node-6 clone pushed store commits to gitlab that github never saw; reconciling by hand took a careful union merge. We must make this drift hard to create and easy to see.
+
+      APPROACH (slices, ship independently):
+      1. DETECTION (safe, read-only): aida surfaces per-branch ahead/behind across origin + configured mirror remotes and flags divergence loudly. Lands in aida doctor as a Remote drift section, plus a focused aida remote status. Would have caught todays drift immediately.
+      2. FAN-OUT PUSH: a [store.sync] mirror_remotes = ["gitlam", ...] config key. After a successful push to origin, aida also pushes the store branch to each mirror remote, BEST-EFFORT: a non-fast-forward mirror leg WARNS and suggests reconcile rather than failing the whole sync (so an intentionally-behind remote does not break every push). Same treatment on the code-branch push if feasible.
+      3. RECONCILE HELPER: aida remote reconcile automates the union-merge-and-fast-forward-all dance (merge divergent remote tips, verify, push to all) so a drift that does happen is one command to heal.
+      4. SCAFFOLD + DOCS: aida init writes the mirror_remotes stub (commented) and documents the multi-remote posture; a docs/git-verb-surface.md / environment-variables.md update; consider a pre-push guard.
+
+      WHY IT MATTERS: keeping two hubs in sync is core to the multi-vendor / multi-machine thesis (agents on different networks, some hubs blocked by corporate filters per EPIC-44). Silent divergence corrupts the shared substrate. This is reliability infrastructure for the store.
+
+      ACCEPTANCE (per slice, verified independently): (1) aida doctor / aida remote status reports ahead/behind per remote and exits nonzero / flags on divergence; (2) a store push with mirror_remotes set pushes to all remotes, warning (not failing) on a non-ff mirror leg; (3) aida remote reconcile heals a two-way divergence to a single fast-forwardable state; (4) init scaffolds the config stub and docs describe the posture. Non-integrity: never force-push in any of these paths.
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 2944
 node_id: '1'
