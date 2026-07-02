@@ -2587,10 +2587,9 @@ mod tests {
     // runs tests in parallel threads sharing ONE process environment, so a
     // mutator test mid-flight (with AIDA_OS_WRAP set) leaks into reader tests
     // that assume a clean baseline and they fail intermittently in CI. This
-    // single MODULE-LEVEL lock + the `OsWrapEnvGuard` RAII helper below give all
-    // os_wrap tests mutual exclusion AND a deterministic clean env.
-    // trace:BUG-581 | ai:claude
-    static OS_WRAP_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // BUG-697: the `OsWrapEnvGuard` RAII helper below acquires the ONE shared
+    // process-global env lock (crate::test_env::env_lock) so os_wrap swaps
+    // can't race a read/swap under any other test helper. trace:BUG-581
 
     /// RAII guard for the os_wrap env tests (BUG-581). On construction it locks
     /// the shared `OS_WRAP_ENV_LOCK` (recovering from a poisoned lock so one
@@ -2607,9 +2606,7 @@ mod tests {
 
     impl OsWrapEnvGuard {
         fn acquire() -> Self {
-            let lock = OS_WRAP_ENV_LOCK
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
             let saved = std::env::var_os("AIDA_OS_WRAP");
             std::env::remove_var("AIDA_OS_WRAP");
             Self { _lock: lock, saved }
@@ -2641,9 +2638,7 @@ mod tests {
 
     impl AgentCmdEnvGuard {
         fn acquire() -> Self {
-            let lock = OS_WRAP_ENV_LOCK
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
             let saved_cmd = std::env::var_os("AIDA_AGENT_CMD");
             let saved_wrap = std::env::var_os("AIDA_OS_WRAP");
             std::env::remove_var("AIDA_AGENT_CMD");
@@ -3500,10 +3495,9 @@ mod tests {
             )));
     }
 
-    // STORY-683: serialize the tests that mutate the process-global
-    // `AIDA_HEADLESS_VENDOR` env var — same parallel-env hazard as the os_wrap
-    // tests (BUG-581). trace:STORY-683 | ai:claude
-    static HEADLESS_VENDOR_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // STORY-683 / BUG-697: serialize the tests that mutate the process-global
+    // `AIDA_HEADLESS_VENDOR` env var on the ONE shared env lock
+    // (crate::test_env::env_lock) — same parallel-env hazard as os_wrap.
 
     struct HeadlessVendorEnvGuard {
         _lock: std::sync::MutexGuard<'static, ()>,
@@ -3512,9 +3506,7 @@ mod tests {
 
     impl HeadlessVendorEnvGuard {
         fn acquire() -> Self {
-            let lock = HEADLESS_VENDOR_ENV_LOCK
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
             let saved = std::env::var_os("AIDA_HEADLESS_VENDOR");
             std::env::remove_var("AIDA_HEADLESS_VENDOR");
             Self { _lock: lock, saved }

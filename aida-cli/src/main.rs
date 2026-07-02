@@ -68669,9 +68669,8 @@ mod statusline_tests {
     /// the same process; we serialize via a static mutex so they
     /// don't trample each other's env.
     fn with_bg_fetch_env<R>(val: Option<&str>, f: impl FnOnce() -> R) -> R {
-        use std::sync::Mutex;
-        static LOCK: Mutex<()> = Mutex::new(());
-        let _guard = LOCK.lock().unwrap();
+        // BUG-697: shared process-global env lock (was a module-local mutex).
+        let _guard = crate::test_env::env_lock();
         let prev = std::env::var("AIDA_BG_FETCH").ok();
         match val {
             Some(v) => std::env::set_var("AIDA_BG_FETCH", v),
@@ -82386,8 +82385,8 @@ mod resolve_gh_binary_tests {
     // Serialize PATH-mutating tests against each other. Prepending (vs
     // replacing) PATH means other parallel tests keep finding `git` and
     // friends, but two concurrent PATH mutators still need to serialize
-    // so they don't restore the wrong predecessor value. trace:BUG-79
-    static PATH_LOCK: Mutex<()> = Mutex::new(());
+    // so they don't restore the wrong predecessor value. BUG-697: use the ONE
+    // shared env lock so a PATH swap can't race any other env read. trace:BUG-79
 
     /// Acquire the PATH lock and prepend `dir` to PATH for the test's
     /// duration. Returns an RAII guard that restores PATH on drop.
@@ -82406,7 +82405,7 @@ mod resolve_gh_binary_tests {
                 }
             }
         }
-        let lock = PATH_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
         let prev = std::env::var("PATH").ok();
         let new = match &prev {
             Some(v) => format!("{}:{}", dir.display(), v),

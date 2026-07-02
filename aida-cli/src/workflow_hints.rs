@@ -605,8 +605,8 @@ mod tests {
     /// parallel within a single process, so without this they trample
     /// each other's env state intermittently.
     fn with_hints_env<R>(val: Option<&str>, f: impl FnOnce() -> R) -> R {
-        static LOCK: Mutex<()> = Mutex::new(());
-        let _guard = LOCK.lock().unwrap();
+        // BUG-697: shared process-global env lock (was a module-local mutex).
+        let _guard = crate::test_env::env_lock();
         let prev = std::env::var("AIDA_HINTS").ok();
         match val {
             Some(v) => std::env::set_var("AIDA_HINTS", v),

@@ -880,9 +880,9 @@ max_source_size_mb = 50
     }
 
     fn with_env_vars(keys: &[(&str, Option<&str>)], f: impl FnOnce()) {
-        use std::sync::Mutex;
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        // BUG-697: serialise on the ONE shared process-global env lock, not a
+        // module-local mutex — env swaps under different locks still data-race.
+        let _guard = crate::test_env::env_lock();
         let prior: Vec<(&str, Option<std::ffi::OsString>)> = keys
             .iter()
             .map(|(key, _)| (*key, std::env::var_os(key)))

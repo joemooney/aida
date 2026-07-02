@@ -404,11 +404,9 @@ fn expand_inner(args: &[String], emit_cycle_warning: bool) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    // Env mutation (AIDA_TEST_HOME, AIDA_AGENT_TYPE, …) + cwd is process-global,
-    // so serialize the tests that touch it.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    // BUG-697: env mutation (AIDA_TEST_HOME, AIDA_AGENT_TYPE, …) + cwd is
+    // process-global; serialise on the ONE shared env lock (was a local mutex)
+    // so these swaps can't race a read/swap under any other test helper.
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
@@ -486,7 +484,7 @@ mod tests {
     // --- expansion ----------------------------------------------------------
 
     fn with_test_home<T>(home: &Path, f: impl FnOnce() -> T) -> T {
-        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = crate::test_env::env_lock();
         std::env::remove_var("AIDA_AGENT_TYPE");
         std::env::remove_var("AIDA_HEADLESS");
         std::env::set_var("AIDA_TEST_HOME", home);
@@ -534,7 +532,7 @@ mod tests {
             &proj.join(".aida").join("aliases.toml"),
             "[alias]\ndup = \"list --status done\"\n",
         );
-        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = crate::test_env::env_lock();
         std::env::remove_var("AIDA_AGENT_TYPE");
         std::env::remove_var("AIDA_HEADLESS");
         std::env::set_var("AIDA_TEST_HOME", home);
@@ -607,7 +605,7 @@ mod tests {
             &home.join("home").join(".aida").join("aliases.toml"),
             "[alias]\napproved = \"list --status approved\"\n",
         );
-        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = crate::test_env::env_lock();
         std::env::set_var("AIDA_TEST_HOME", home);
         std::env::set_var("AIDA_AGENT_TYPE", "codex");
         std::env::remove_var("AIDA_HEADLESS");
@@ -644,7 +642,7 @@ mod tests {
             &home.join("home").join(".aida").join("aliases.toml"),
             "[alias]\napproved = \"list --status approved\"\n",
         );
-        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = crate::test_env::env_lock();
         std::env::set_var("AIDA_TEST_HOME", home);
         std::env::remove_var("AIDA_AGENT_TYPE");
         std::env::set_var("AIDA_HEADLESS", "1");
