@@ -43,12 +43,12 @@ description: |
   A future per-spec driver routes through the engine or consciously joins the
   exception list. burndown's fan-out is sanctioned and documented, not silently
   non-conforming. The invariant is checked at CI, not trusted to prose.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:39:58.466702878Z
-modified_at: 2026-07-02T02:21:26.867444204Z
+modified_at: 2026-07-02T04:00:21.798721267Z
 req_type: Decision
 tags:
 - adr
@@ -67,3 +67,21 @@ comments:
   created_at: 2026-07-02T02:21:26.867444204Z
   modified_at: 2026-07-02T02:21:26.867444204Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f20fc-1eb9-7553-b4ca-20a6e500882b
+  author: aida-auto-bump
+  timestamp: 2026-07-02T04:00:21.689227943Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f20fc-1f26-7183-a4a1-1a06a723f43c
+  timestamp: 2026-07-02T04:00:21.798715289Z
+  agent: aida
+  commit_sha: db15c14650e1d0d53f11ee8b24ecd71f28a9ec1f
+  summary: Completed via merge db15c146
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T04:00:20.632594018Z
+  completion_sha: db15c14650e1d0d53f11ee8b24ecd71f28a9ec1f
