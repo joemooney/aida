@@ -256,6 +256,10 @@ struct StoreSyncConfig {
     auto_push: StoreAutoPushMode,
     periodic_threshold: Option<u64>,
     periodic_interval: Option<String>,
+    // Extra remotes to mirror the store push to after `origin` succeeds — the
+    // drift-prevention fan-out. Best-effort: a non-ff / unreachable mirror leg
+    // warns, never fails the sync. trace:TASK-1096 | ai:claude
+    mirror_remotes: Vec<String>,
     source: String,
 }
 
@@ -265,6 +269,7 @@ impl Default for StoreSyncConfig {
             auto_push: StoreAutoPushMode::Manual,
             periodic_threshold: None,
             periodic_interval: None,
+            mirror_remotes: Vec::new(),
             source: "default".to_string(),
         }
     }
@@ -20088,15 +20093,57 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
 
             if *push {
                 println!("Pushing to origin/{}...", branch);
-                match aida_core::git_ops::push(store_path, "origin", &branch) {
-                    Ok(true) => println!("  Push complete."),
+                let origin_ok = match aida_core::git_ops::push(store_path, "origin", &branch) {
+                    Ok(true) => {
+                        println!("  Push complete.");
+                        true
+                    }
                     Ok(false) => {
                         println!("  Push rejected. Pulling and retrying...");
                         aida_core::git_ops::pull_rebase(store_path, "origin", &branch)?;
                         aida_core::git_ops::push(store_path, "origin", &branch)?;
                         println!("  Push complete after rebase.");
+                        true
                     }
-                    Err(e) => eprintln!("  Push failed: {}", e),
+                    Err(e) => {
+                        eprintln!("  Push failed: {}", e);
+                        false
+                    }
+                };
+
+                // TASK-1096: fan out the store push to every configured mirror
+                // remote so a clone can't silently leave one hub behind — the
+                // drift-prevention leg. Best-effort: a non-ff / unreachable
+                // mirror warns (with a reconcile hint) and is skipped; it never
+                // fails the sync, since `origin` is the source of record and a
+                // mirror may be intentionally behind (e.g. mid-reconcile).
+                // trace:TASK-1096 | ai:claude
+                if origin_ok {
+                    if let Some(project_root) = store_path.parent() {
+                        let cfg = read_store_sync_config(project_root).unwrap_or_default();
+                        let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+                        for mirror in &cfg.mirror_remotes {
+                            if mirror == "origin" {
+                                continue;
+                            }
+                            if !aida_core::git_ops::has_remote(store_path, mirror) {
+                                eprintln!(
+                                    "  {warn} mirror remote `{mirror}` not configured — skipping"
+                                );
+                                continue;
+                            }
+                            println!("Mirroring to {mirror}/{branch}...");
+                            match aida_core::git_ops::push(store_path, mirror, &branch) {
+                                Ok(true) => println!("  Mirror push complete."),
+                                Ok(false) => eprintln!(
+                                    "  {warn} mirror `{mirror}` rejected (diverged) — reconcile then re-push (see `aida remote status`)"
+                                ),
+                                Err(e) => eprintln!(
+                                    "  {warn} mirror `{mirror}` push failed: {e} — skipped"
+                                ),
+                            }
+                        }
+                    }
                 }
             }
 
@@ -23173,6 +23220,22 @@ fn init_intake_config_section() -> &'static str {
      # on_apply = \"queue\"\n"
 }
 
+/// The `[store.sync] mirror_remotes` scaffold — commented. Store pushes go to
+/// `origin` only by default; listing extra remotes here fans every store push
+/// out to additional hubs (drift prevention). Best-effort per mirror leg.
+// trace:TASK-1096 | ai:claude
+fn init_store_mirror_config_section() -> &'static str {
+    "\n# Store-sync fan-out (STORY-760). By default `aida db sync --push` (and the\n\
+     # auto-push paths) push the orphan store ONLY to `origin`. List extra remote\n\
+     # names here to mirror every store push to additional hubs (e.g. a personal\n\
+     # GitLab), so a clone can't silently leave one remote behind. Best-effort: a\n\
+     # non-fast-forward or unreachable mirror leg WARNS and is skipped — it never\n\
+     # fails the sync. Check drift anytime with `aida remote status`.\n\
+     #\n\
+     # [store.sync]\n\
+     # mirror_remotes = [\"gitlab\"]\n"
+}
+
 /// The `[worktree_pool]` scaffold section. Pooling is ON by default (TASK-985):
 /// `aida session start` (and the agent-new / queue-work / orchestrator paths)
 /// reuse a recycled warm worktree instead of `git worktree add`, keeping the
@@ -23726,6 +23789,18 @@ fn read_store_sync_config(project_root: &std::path::Path) -> Result<StoreSyncCon
             raw
         );
     };
+    // TASK-1096: mirror_remotes = ["gitlab", ...] — extra hubs the store push
+    // fans out to. Non-string entries are skipped; a bare string is tolerated as
+    // a single-remote shorthand.
+    let mirror_remotes = match sync.get("mirror_remotes") {
+        Some(toml::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(str::to_string)
+            .collect(),
+        Some(toml::Value::String(s)) => vec![s.to_string()],
+        _ => Vec::new(),
+    };
     Ok(StoreSyncConfig {
         auto_push,
         periodic_threshold: sync
@@ -23736,6 +23811,7 @@ fn read_store_sync_config(project_root: &std::path::Path) -> Result<StoreSyncCon
             .get("periodic_interval")
             .and_then(|v| v.as_str())
             .map(str::to_string),
+        mirror_remotes,
         source: path.display().to_string(),
     })
 }
@@ -24350,6 +24426,59 @@ fn maybe_auto_archive_sweep(
             "  {} {count} spec(s) older than {days}d (auto-sweep, opt out via AIDA_AUTO_ARCHIVE=0)",
             "auto-archived:".cyan()
         );
+    }
+}
+
+#[cfg(test)]
+mod story_760_store_mirror_tests {
+    use super::*;
+
+    fn write_config(root: &std::path::Path, body: &str) {
+        let config_dir = root.join(".aida");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("config.toml"), body).unwrap();
+    }
+
+    // TASK-1096: mirror_remotes parses a string array.
+    #[test]
+    fn mirror_remotes_parses_array() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[store.sync]\nmirror_remotes = [\"gitlab\", \"backup\"]\n",
+        );
+        let cfg = read_store_sync_config(tmp.path()).unwrap();
+        assert_eq!(
+            cfg.mirror_remotes,
+            vec!["gitlab".to_string(), "backup".to_string()]
+        );
+    }
+
+    // A bare string is tolerated as a single-remote shorthand.
+    #[test]
+    fn mirror_remotes_parses_bare_string() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[store.sync]\nmirror_remotes = \"gitlab\"\n");
+        let cfg = read_store_sync_config(tmp.path()).unwrap();
+        assert_eq!(cfg.mirror_remotes, vec!["gitlab".to_string()]);
+    }
+
+    // Absent key / absent section => empty (origin-only, unchanged behaviour).
+    #[test]
+    fn mirror_remotes_absent_is_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[store.sync]\nauto_push = \"manual\"\n");
+        assert!(read_store_sync_config(tmp.path())
+            .unwrap()
+            .mirror_remotes
+            .is_empty());
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        write_config(tmp2.path(), "[node]\nid = \"1\"\n");
+        assert!(read_store_sync_config(tmp2.path())
+            .unwrap()
+            .mirror_remotes
+            .is_empty());
     }
 }
 
@@ -25438,6 +25567,8 @@ fn handle_init_distributed_worktree(
     let config_content = config_content + init_intake_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
+    // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
+    let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // STORY-511: surface the auto-detected forge so the operator sees the
@@ -25626,6 +25757,8 @@ fn handle_init_post_clone(
     let config_content = config_content + init_intake_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
+    // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
+    let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
@@ -26184,6 +26317,8 @@ fn handle_init_distributed_sibling(
     let config_content = config_content + init_intake_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
+    // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
+    let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
