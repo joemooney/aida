@@ -1,0 +1,19 @@
+id: 019f21e0-5b29-7b41-9484-25a119787b2e
+spec_id: STORY-755
+agreed_id: STORY-755
+title: aida why <file:line> plain-markdown fallback — resolve intent from a spec .md file when no git-canonical store is attached
+description: 'Goal move (collapse substrate toward plain-markdown; prove the magic needs no machine). Verified in a bare folder (no aida init, no store): aida why auth.py:3 FINDS the trace (STORY-1) but cannot resolve title/why because it only reads the git-canonical store. Add a fallback: when load_store_for_lookup returns None (or the id is not found in it), search the working tree for a markdown spec that identifies as <ID> — a file named <ID>.md, or any .md whose frontmatter has id: <ID> — and read its title (frontmatter title: or first # heading) + first prose line as the why. This makes aida why deliver the full 60-second magic on a plain llm-wiki-style folder of markdown + trace comments, ZERO aida setup, orchestrator/cache/store all off. The strongest proof of the north-star thesis: the differentiator (code to decision linkage) does not require the machine. Child of STORY-754.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T08:09:39.369408218Z
+modified_at: 2026-07-02T08:09:39.369408218Z
+req_type: Story
+tags:
+- aida:why
+- from-goal
+- north-star
+- parent:STORY-754
+- plain-markdown
+- zero-setup
