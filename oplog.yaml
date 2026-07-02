@@ -30682,5 +30682,17 @@ operations:
   timestamp: 2026-07-02T04:29:36.488547655Z
   kind: !SetStatus
     status: Completed
-clock: 2917
+- id: 019f212b-5c32-7571-9a5e-8b0b65bd6dc0
+  target_id: 019f212b-4e9f-7283-b0bf-c466147119ed
+  author: aida
+  node_id: '1'
+  lamport: 2918
+  timestamp: 2026-07-02T04:51:57.618120091Z
+  kind: !Create
+    title: 'aida human unblock --interactive: make the advisor-handoff step legible — split into Groom / Groom+approve options + a ''?'' help item with examples'
+    description: 'Operator hit the bulk advisor-grooming step of `aida human unblock --interactive` and asked what "Hand them all to the advisor (recommended)" actually does. Today it only collects the groomable specs and prints a paste-ready advisor prompt at the end (assemble_unblock_prompt) — nothing is dispatched or mutated; the label over-promises. Fix per operator direction: (1) replace the single vague option with concrete top-level options — "Groom them" (fires `aida groom`, propose-only) and "Groom + approve" (`aida groom --apply`) — keeping the paste-prompt as a relabeled "emit a paste-prompt for a live advisor" option; (2) add a "? what do these mean?" menu item that prints simple practical examples of each and re-prompts (inquire 0.9.1 has no native ? keybinding, so a re-prompting menu item is the affordance); (3) with_help_message points at the ? item. Honest scope note in help: groom considers the advisor full open-spec candidate set (these included), not only the shown rows. Follow-up to STORY-750.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2918
 node_id: '1'
