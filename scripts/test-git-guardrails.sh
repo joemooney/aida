@@ -143,6 +143,34 @@ echo "== MUST BLOCK: unparseable delete fails CLOSED =="
 check "delete with no branch name (-D)"           block "$REPO" "git branch -D"
 check "delete with no branch name (--delete)"     block "$REPO" "git branch --delete"
 
+# --- Quoted-argument prose (BUG-692) ---------------------------------------
+# A destructive-git TOKEN appearing only inside a QUOTED ARGUMENT of a non-git
+# command (e.g. filing a spec whose description mentions those command names)
+# must NOT be blocked — the command runs no git. Real destructive git
+# invocations (unquoted) must still block.
+echo
+echo "== MUST ALLOW: destructive tokens inside a quoted argument =="
+check "aida add prose: reset --hard + force-push (single-quoted)" allow "$REPO" \
+    "aida add --title bug --description 'the git reset --hard and git push --force flags are dangerous'"
+check "aida add prose: git stash drop (single-quoted)"           allow "$REPO" \
+    "aida add --description 'do not run git stash drop by hand'"
+check "aida comment prose: force-push origin main (single-quoted)" allow "$REPO" \
+    "aida comment add BUG-1 'blocked git push --force origin main earlier'"
+check "aida add prose: git branch -D main (single-quoted)"        allow "$REPO" \
+    "aida add --description 'we must never git branch -D main locally'"
+check "aida add prose: rm -rf .git (single-quoted)"               allow "$REPO" \
+    "aida add --description 'do not rm -rf .git ever'"
+check "git commit -m mentioning reset --hard (double-quoted)"     allow "$REPO" \
+    "git commit -m \"note: avoided git reset --hard here\""
+
+echo
+echo "== MUST BLOCK: real destructive git commands still blocked (regression) =="
+check "real git reset --hard (unquoted)"                          block "$REPO" "git reset --hard origin/main"
+check "real git stash drop (unquoted)"                            block "$REPO" "git stash drop"
+check "real rm -rf .git (unquoted)"                               block "$REPO" "rm -rf .git"
+check "real force-push main alongside quoted prose"               block "$REPO" \
+    "git push --force origin main # 'reset --hard note'"
+
 echo
 echo "----------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
