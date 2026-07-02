@@ -31037,5 +31037,28 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2942
+- id: 019f23c8-569e-7c51-b506-8f44b60fe3ec
+  target_id: 019f23c2-81d3-7c33-8bdc-2f396116d2bf
+  author: aida
+  node_id: '1'
+  lamport: 2943
+  timestamp: 2026-07-02T17:02:39.774465410Z
+  kind: !SetDescription
+    description: |-
+      The public GitHub aida-store branch (and a few code-branch specs) contain employer-identifying content that predates 2026-07-02 and is already in committed history.
+
+      LEDGER (locations; employer strings redacted here to avoid compounding the leak in this very spec):
+      - registry/nodes.toml, registry/blocks.yaml, oplog.yaml: an employer email domain appears as node owner/email provenance (16+ occurrences).
+      - objects/EPIC/000/EPIC-44.yaml: a comment describes the employer corporate network in detail — a corporate firewall host, a named policy group, and a category-denied web-filter verdict. This reveals employer security posture and is the most sensitive item.
+      - objects/TASK/000/TASK-845.yaml, TASK-951.yaml, objects/BUG/000/BUG-89.yaml: reference the employer alias plus corporate-network context.
+      - CODE (main branch): the employer email is used as live example/test data in aida-cli/src/cli.rs, aida-core/src/alias.rs, aida-core/src/node.rs (a passing unit test), aida-core/src/team.rs (test fixture), and docs/plans/2026-03-15-distributed-architecture-identity.md. The code scrub must keep the tree compiling and tests green.
+
+      WHY IT MATTERS: joemooney/aida is a PUBLIC repo. Employer-confidential content in a public repo is a serious, hard-to-reverse exposure. Editing the tip does not remove it — the strings live in ancestor commits, so a real scrub requires a git history rewrite (git filter-repo).
+
+      APPROACH: see docs/plans/2026-07-02-bug-700-employer-content-scrub.md for the full plan. Summary: reduce blast radius (close open PRs, prune dead branches), fresh mirror clone, filter-repo --replace-text with a local-only replacement map, verify (no strings remain + code builds + cache rebuilds), coordinated force-push during a quiet window, all clones re-sync.
+
+      CONTEXT: discovered 2026-07-02 reconciling node 6 (spock) store commits from gitlab into the local store. That reconcile was pushed to gitlab ONLY and HELD from GitHub precisely to avoid adding more copies pending this scrub; the reconciled+scrubbed store returns to GitHub in one clean pass after the rewrite.
+
+      ACCEPTANCE: no employer email domain, no employer corporate-network detail, no employer alias context remains in ANY commit reachable from public GitHub aida-store or main; code builds + tests pass on the rewritten tip; all active clones re-synced; gitlab scrubbed to match.
+clock: 2943
 node_id: '1'
