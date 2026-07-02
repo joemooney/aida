@@ -102545,6 +102545,12 @@ struct UsageRow {
     count: u32,
     errors: u32,
     total_ms: u64,
+    // BUG-699: the same stats restricted to a recent window, so a since-resolved
+    // historical batch (e.g. `rel list` errors, a slow pre-cache `status`) can't
+    // masquerade as current in the `since`-window aggregate.
+    recent_count: u32,
+    recent_errors: u32,
+    recent_total_ms: u64,
 }
 
 impl UsageRow {
@@ -102553,6 +102559,13 @@ impl UsageRow {
             0
         } else {
             self.total_ms / u64::from(self.count)
+        }
+    }
+    fn recent_avg_ms(&self) -> u64 {
+        if self.recent_count == 0 {
+            0
+        } else {
+            self.recent_total_ms / u64::from(self.recent_count)
         }
     }
     fn error_rate(&self) -> f64 {
@@ -102567,13 +102580,15 @@ impl UsageRow {
 fn aggregate_events(
     events: &[usage::UsageEvent],
     since: chrono::DateTime<chrono::Utc>,
+    recent_since: chrono::DateTime<chrono::Utc>,
 ) -> std::collections::HashMap<String, UsageRow> {
     let mut by_cmd: std::collections::HashMap<String, UsageRow> = std::collections::HashMap::new();
     for ev in events {
         let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) else {
             continue;
         };
-        if ts.with_timezone(&chrono::Utc) < since {
+        let ts = ts.with_timezone(&chrono::Utc);
+        if ts < since {
             continue;
         }
         let row = by_cmd.entry(ev.cmd.clone()).or_insert_with(|| UsageRow {
@@ -102581,12 +102596,24 @@ fn aggregate_events(
             count: 0,
             errors: 0,
             total_ms: 0,
+            recent_count: 0,
+            recent_errors: 0,
+            recent_total_ms: 0,
         });
+        let is_err = ev.exit_code != 0;
         row.count = row.count.saturating_add(1);
-        if ev.exit_code != 0 {
+        if is_err {
             row.errors = row.errors.saturating_add(1);
         }
         row.total_ms = row.total_ms.saturating_add(ev.duration_ms);
+        // BUG-699: the recent sub-window.
+        if ts >= recent_since {
+            row.recent_count = row.recent_count.saturating_add(1);
+            if is_err {
+                row.recent_errors = row.recent_errors.saturating_add(1);
+            }
+            row.recent_total_ms = row.recent_total_ms.saturating_add(ev.duration_ms);
+        }
     }
     by_cmd
 }
@@ -103618,7 +103645,10 @@ fn handle_usage_command(
         return Ok(());
     }
 
-    let by_cmd = aggregate_events(&events, since);
+    // BUG-699: a recent sub-window (7d, or the whole window if it's shorter) so
+    // a stale aggregate can't read as current.
+    let recent_since = std::cmp::max(since, now - chrono::Duration::days(7));
+    let by_cmd = aggregate_events(&events, since, recent_since);
     let mut rows: Vec<UsageRow> = by_cmd.into_values().collect();
     if errors_only {
         rows.retain(|r| r.errors > 0);
@@ -103688,6 +103718,32 @@ fn handle_usage_command(
             err_cell,
             row.avg_ms()
         );
+        // BUG-699: flag a STALE aggregate — errors or latency the recent 7d
+        // window no longer shows, so a since-resolved batch doesn't read as a
+        // live problem (what misled the advisor into a wrong call).
+        if row.recent_count > 0 {
+            let stale_errs = row.errors > 0 && row.recent_errors == 0;
+            let stale_slow =
+                row.avg_ms() > 2000 && row.recent_avg_ms().saturating_mul(3) < row.avg_ms();
+            if stale_errs || stale_slow {
+                let mut parts = Vec::new();
+                if stale_errs {
+                    parts.push("0 errors".to_string());
+                }
+                if stale_slow {
+                    parts.push(format!("{}ms avg", row.recent_avg_ms()));
+                }
+                println!(
+                    "    {}",
+                    format!(
+                        "recent 7d: {} — the row above is the {} aggregate (a since-resolved batch)",
+                        parts.join(", "),
+                        since_raw
+                    )
+                    .dimmed()
+                );
+            }
+        }
     }
     if rows.len() > limit {
         println!(

@@ -161,6 +161,12 @@ pub fn read_events() -> Vec<UsageEvent> {
         .lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str::<UsageEvent>(l).ok())
+        // BUG-699: collapse any leaked positional id from historical shapes so
+        // every report lens sees clean command shapes (`show story-74` → `show`).
+        .map(|mut ev| {
+            ev.cmd = normalize_shape(&ev.cmd);
+            ev
+        })
         .collect()
 }
 
@@ -207,11 +213,38 @@ fn is_subcommand_token(tok: &str) -> bool {
     if tok.is_empty() {
         return false;
     }
-    let bytes = tok.as_bytes();
-    // Subcommands are lowercase ASCII with optional internal hyphens.
-    bytes
-        .iter()
-        .all(|b| b.is_ascii_lowercase() || *b == b'-' || b.is_ascii_digit())
+    // BUG-699: a real aida subcommand is lowercase ASCII with optional internal
+    // hyphens and NEVER contains a digit (verified: no subcommand has one). Every
+    // id/positional value a user passes carries a digit or uppercase — `STORY-74`,
+    // `story-74`, `12345`, `tsk-1`, `pr-43` — so excluding digits keeps arg values
+    // out of the command shape and honors the "no argument values" privacy floor.
+    // Cheap (no clap-tree walk) so the hot `statusline` log path stays fast.
+    // trace:BUG-699 | ai:claude
+    tok.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
+}
+
+/// BUG-699: re-normalize a stored command-shape string, collapsing any positional
+/// arg value that leaked in before the [`is_subcommand_token`] fix (e.g.
+/// `"show story-74"` → `"show"`, `"show not-a-real-id"` → `"show"`). Idempotent
+/// for already-clean shapes and a no-op for `"<root>"`. Applied at
+/// [`read_events`] so every report lens sees clean shapes with no leaked ids.
+// trace:BUG-699 | ai:claude
+pub fn normalize_shape(cmd: &str) -> String {
+    if cmd == "<root>" || cmd.is_empty() {
+        return cmd.to_string();
+    }
+    let kept: Vec<&str> = cmd
+        .split_whitespace()
+        .take_while(|t| is_subcommand_token(t))
+        .take(2)
+        .collect();
+    if kept.is_empty() {
+        // First token isn't subcommand-shaped (shouldn't happen for a logged
+        // shape) — return as-is rather than silently dropping it.
+        cmd.to_string()
+    } else {
+        kept.join(" ")
+    }
 }
 
 /// How a logged command shape relates to the requirement/intent graph.
@@ -385,6 +418,32 @@ enabled = true
             "STORY-42".to_string(),
         ];
         assert_eq!(derive_cmd_shape(&argv), "show");
+    }
+
+    // BUG-699: the leak the operator caught — a LOWERCASE id slipped the old
+    // `is_ascii_digit()` allowance and got captured into the shape.
+    #[test]
+    fn derive_cmd_shape_stops_at_lowercase_id() {
+        for id in ["story-74", "task-931", "12345", "tsk-1", "pr-43"] {
+            let argv = vec!["aida".to_string(), "show".to_string(), id.to_string()];
+            assert_eq!(derive_cmd_shape(&argv), "show", "id `{id}` must not leak");
+        }
+        // A real hyphenated subcommand (no digit) is still captured.
+        let argv = vec![
+            "aida".to_string(),
+            "doctor".to_string(),
+            "verify-relationships".to_string(),
+        ];
+        assert_eq!(derive_cmd_shape(&argv), "doctor verify-relationships");
+    }
+
+    #[test]
+    fn normalize_shape_collapses_leaked_ids() {
+        assert_eq!(normalize_shape("show story-74"), "show");
+        assert_eq!(normalize_shape("show 12345"), "show");
+        assert_eq!(normalize_shape("queue list"), "queue list"); // already clean
+        assert_eq!(normalize_shape("<root>"), "<root>");
+        assert_eq!(normalize_shape("rel add"), "rel add");
     }
 
     #[test]

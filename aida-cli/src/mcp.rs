@@ -4847,7 +4847,9 @@ impl<'a> McpServer<'a> {
             return Ok(out);
         }
 
-        let by_cmd = crate::aggregate_events(&events, since);
+        // BUG-699: recent sub-window (mirrors the CLI report).
+        let recent_since = std::cmp::max(since, now - chrono::Duration::days(7));
+        let by_cmd = crate::aggregate_events(&events, since, recent_since);
         let mut rows: Vec<_> = by_cmd.into_values().collect();
         if errors_only {
             rows.retain(|r| r.errors > 0);
