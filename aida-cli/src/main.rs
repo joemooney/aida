@@ -113274,6 +113274,62 @@ fn handle_awaiting_command(
     let report = collect_awaiting_report(&project_root, backend, &ctx, no_ci);
     if json {
         println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+    } else if agent_output_mode() {
+        // BUG-695: honor AIDA_AGENT_OUTPUT like `aida integrate`/`ps`/`status` —
+        // emit token-efficient TOON (flat scalars + uniform tables) instead of the
+        // human box-drawing header + status emoji, which waste agent tokens and
+        // ignore the `[ui] glyphs` profile. `--json` above still wins for
+        // structured consumers; the `--notice` compact path returned earlier.
+        // trace:BUG-695 | ai:claude
+        println!("view: awaiting");
+        println!("awaiting: {}", report.total());
+        println!("findings: {}", report.findings_total);
+        println!("mail_unread: {}", report.mail.unread);
+        println!("mail_urgent: {}", report.mail.urgent);
+        let prs: Vec<Vec<String>> = report
+            .mergeable_prs
+            .iter()
+            .map(|p| {
+                vec![
+                    p.number.to_string(),
+                    p.title.clone(),
+                    // "?" = CI unknown/not-set, matching the codebase convention
+                    // (status_cleanup.rs renders the same column with unwrap_or("?")).
+                    p.ci_rollup.clone().unwrap_or_else(|| "?".to_string()),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw("prs", &["number", "title", "ci"], &prs)
+        );
+        let briefs: Vec<Vec<String>> = report
+            .pending_briefs
+            .iter()
+            .map(|b| vec![b.agent.clone(), b.spec_id.clone()])
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw("briefs", &["agent", "spec"], &briefs)
+        );
+        let reviewer: Vec<Vec<String>> = report
+            .reviewer_queue_items
+            .iter()
+            .map(|r| vec![r.spec_id.clone(), r.title.clone()])
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw("reviewer", &["spec", "title"], &reviewer)
+        );
+        let escalations: Vec<Vec<String>> = report
+            .escalations
+            .iter()
+            .map(|e| vec![e.spec_id.clone(), e.title.clone()])
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw("escalations", &["spec", "title"], &escalations)
+        );
     } else if report.is_empty() {
         println!("{}", "─── Awaiting you (0) ───".bold().dimmed());
         println!("  Nothing awaits you right now.");
