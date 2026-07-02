@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T07:33:36.342708449Z
-modified_at: 2026-07-02T16:42:58.761214300Z
+modified_at: 2026-07-02T16:43:39.256369287Z
 req_type: Spike
 tags:
 - dispatch
@@ -53,4 +53,13 @@ comments:
   created_at: 2026-07-02T14:51:06.760600667Z
   modified_at: 2026-07-02T14:51:06.760600667Z
   session_id: f4d11ca5-b346-47fd-9bcf-f215893dae03
+- id: 019f23b6-f3b1-7db3-813d-0a8b5fdaea28
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-07-02-spike-76-dispatch-resilience.md
+    filed 4 task(s): TASK-1090, TASK-1091, TASK-1092, TASK-1093
+    declined 1:
+      - Repeat the cross-vendor portability experiment for AGY and one additional vendor
+  created_at: 2026-07-02T16:43:40.337819166Z
+  modified_at: 2026-07-02T16:43:40.337819166Z
 human_only: true
