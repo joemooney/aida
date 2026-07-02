@@ -44246,6 +44246,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
         AgentCommand::Ls => agent_ls(),
         AgentCommand::Status => agent_ls(),
+        AgentCommand::DispatchHealth { force } => agent_dispatch_health(*force),
         AgentCommand::Pause {
             agent,
             reason,
@@ -44254,6 +44255,454 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         AgentCommand::Resume { agent } => agent_resume(agent),
         AgentCommand::Stop { name } => agent_stop(name),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
+    }
+}
+
+// trace:STORY-759 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DispatchHealthState {
+    Moving,
+    Stalled,
+    Salvageable,
+}
+
+impl DispatchHealthState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Moving => "moving",
+            Self::Stalled => "stalled",
+            Self::Salvageable => "salvageable",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DispatchReportInput {
+    agent: String,
+    agent_type: String,
+    spec: Option<String>,
+    status: agent_registry::AgentStatus,
+    paused: bool,
+    worktree: std::path::PathBuf,
+    branch: Option<String>,
+    dirty: bool,
+    ahead_main: Option<u32>,
+    ahead_upstream: Option<u32>,
+    has_upstream: bool,
+    pending_briefs: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DispatchReportRow {
+    agent: String,
+    agent_type: String,
+    spec: String,
+    state: DispatchHealthState,
+    worktree: String,
+    branch: String,
+    dirty: bool,
+    ahead_main: Option<u32>,
+    pushed: bool,
+    pending_briefs: usize,
+    guidance: String,
+}
+
+fn dispatch_report_row(
+    input: &DispatchReportInput,
+    paused_vendor_types: &[String],
+    force_fallback: bool,
+) -> DispatchReportRow {
+    let state = if input.status == agent_registry::AgentStatus::Stale && input.dirty {
+        DispatchHealthState::Salvageable
+    } else if input.status == agent_registry::AgentStatus::Stale {
+        DispatchHealthState::Stalled
+    } else {
+        DispatchHealthState::Moving
+    };
+    let spec = input.spec.clone().unwrap_or_else(|| "(none)".to_string());
+    let branch = input
+        .branch
+        .clone()
+        .unwrap_or_else(|| "(unknown)".to_string());
+    let pushed = input.ahead_main.unwrap_or(0) > 0
+        && input.has_upstream
+        && input.ahead_upstream.unwrap_or(0) == 0;
+    let fallback = select_dispatch_fallback(
+        &input.agent_type,
+        &["codex", "antigravity", "claude"],
+        paused_vendor_types,
+        force_fallback,
+    );
+    let mut guidance = match state {
+        DispatchHealthState::Moving => {
+            if input.paused {
+                "paused marker set; do not route new fallback unless forced".to_string()
+            } else {
+                "watch for HEAD or dirty-status progress".to_string()
+            }
+        }
+        DispatchHealthState::Salvageable => format!(
+            "dead agent with dirty worktree; salvage in `{}` and commit before rebriefing",
+            input.worktree.display()
+        ),
+        DispatchHealthState::Stalled => {
+            "dead agent with no worktree progress; resume from durable branch state".to_string()
+        }
+    };
+    if pushed && spec != "(none)" {
+        guidance = format!(
+            "fresh-launch resume: aida agent new {} --spec {} --cwd {}",
+            input.agent_type,
+            spec,
+            input.worktree.display()
+        );
+    } else if matches!(state, DispatchHealthState::Stalled) {
+        if let Some(vendor) = fallback {
+            guidance = dispatch_fallback_guidance(&vendor, &spec);
+        }
+    }
+
+    DispatchReportRow {
+        agent: input.agent.clone(),
+        agent_type: input.agent_type.clone(),
+        spec,
+        state,
+        worktree: input.worktree.display().to_string(),
+        branch,
+        dirty: input.dirty,
+        ahead_main: input.ahead_main,
+        pushed,
+        pending_briefs: input.pending_briefs,
+        guidance,
+    }
+}
+
+fn select_dispatch_fallback(
+    current_vendor: &str,
+    candidates: &[&str],
+    paused_vendor_types: &[String],
+    force: bool,
+) -> Option<String> {
+    candidates
+        .iter()
+        .copied()
+        .filter(|v| *v != current_vendor)
+        .find(|v| force || !paused_vendor_types.iter().any(|p| p == v))
+        .map(str::to_string)
+}
+
+fn dispatch_fallback_guidance(vendor: &str, spec: &str) -> String {
+    match compete::vendor_adapter(vendor) {
+        Some(compete::VendorAdapter::HumanBriefed) => {
+            format!("human-briefed fallback: aida brief {vendor} {spec} --notify")
+        }
+        Some(adapter) => {
+            let argv = compete::headless_argv(&adapter, "BRIEF")
+                .unwrap_or_default()
+                .into_iter()
+                .take_while(|arg| arg != "BRIEF")
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!("headless fallback: aida agent new {vendor} --spec {spec} ({argv})")
+        }
+        None => format!("unknown fallback vendor `{vendor}`"),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DispatchLivenessSnapshot {
+    child_reaped: bool,
+    head: String,
+    dirty_fingerprint: String,
+}
+
+fn dispatch_liveness_stalled(
+    previous: &DispatchLivenessSnapshot,
+    current: &DispatchLivenessSnapshot,
+) -> bool {
+    current.child_reaped
+        && previous.head == current.head
+        && previous.dirty_fingerprint == current.dirty_fingerprint
+}
+
+fn render_dispatch_toon(rows: &[DispatchReportRow]) -> String {
+    let body: Vec<Vec<String>> = rows
+        .iter()
+        .map(|r| {
+            vec![
+                r.agent.clone(),
+                r.spec.clone(),
+                r.state.as_str().to_string(),
+                r.agent_type.clone(),
+                r.branch.clone(),
+                r.dirty.to_string(),
+                r.ahead_main.map(|n| n.to_string()).unwrap_or_default(),
+                r.pushed.to_string(),
+                r.pending_briefs.to_string(),
+                r.guidance.clone(),
+            ]
+        })
+        .collect();
+    crate::toon::table_raw(
+        "dispatch",
+        &[
+            "agent",
+            "spec",
+            "state",
+            "vendor",
+            "branch",
+            "dirty",
+            "ahead_main",
+            "pushed",
+            "pending_briefs",
+            "guidance",
+        ],
+        &body,
+    )
+}
+
+fn dispatch_worktree_dirty_fingerprint(path: &std::path::Path) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["status", "--porcelain"])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
+fn dispatch_head_at(path: &std::path::Path) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["rev-parse", "HEAD"])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
+fn agent_identity(view: &agent_registry::AgentRegistryView) -> String {
+    view.name
+        .clone()
+        .unwrap_or_else(|| format!("{}#{}", view.agent_type, view.pid))
+}
+
+fn agent_dispatch_health(force_fallback: bool) -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let leases = list_leases(&project_root);
+    let ctx = build_agent_classify_context(&project_root, &leases);
+    let registry_agents = agent_registry::list_agent_views(&project_root, &ctx);
+    let agents =
+        merge_agent_views_with_lease_fallback(&project_root, &leases, registry_agents, &ctx);
+    let pending: std::collections::HashMap<String, usize> =
+        collect_pending_brief_counts(&project_root)
+            .into_iter()
+            .collect();
+    let paused_vendor_types: Vec<String> = agents
+        .iter()
+        .filter(|a| a.availability.is_paused())
+        .map(|a| a.agent_type.clone())
+        .collect();
+    let rows: Vec<DispatchReportRow> = agents
+        .iter()
+        .filter(|a| a.current_spec.is_some())
+        .map(|agent| {
+            let worktree = &agent.worktree_path;
+            let branch = current_branch_at(worktree);
+            let dirty_text = dispatch_worktree_dirty_fingerprint(worktree);
+            let dirty = !dirty_text.is_empty() && dirty_text != "unknown";
+            let (ahead_main, _behind_main) = branch
+                .as_deref()
+                .and_then(|b| {
+                    ahead_behind_vs_ref(worktree, b, "origin/main")
+                        .or_else(|| ahead_behind_vs_ref(worktree, b, "main"))
+                })
+                .map(|(a, b)| (Some(a), Some(b)))
+                .unwrap_or((None, None));
+            let upstream = upstream_ref_for(worktree, branch.as_deref().unwrap_or(""));
+            let (ahead_upstream, has_upstream) = match (branch.as_deref(), upstream) {
+                (Some(b), Some(u)) => (ahead_behind_vs_ref(worktree, b, &u).map(|(a, _)| a), true),
+                _ => (None, false),
+            };
+            let input = DispatchReportInput {
+                agent: agent_identity(agent),
+                agent_type: agent.agent_type.clone(),
+                spec: agent.current_spec.clone(),
+                status: agent.status,
+                paused: agent.availability.is_paused(),
+                worktree: worktree.clone(),
+                branch,
+                dirty,
+                ahead_main,
+                ahead_upstream,
+                has_upstream,
+                pending_briefs: pending.get(&agent.agent_type).copied().unwrap_or(0),
+            };
+            dispatch_report_row(&input, &paused_vendor_types, force_fallback)
+        })
+        .collect();
+
+    if agent_output_mode() {
+        println!("{}", render_dispatch_toon(&rows));
+        return Ok(());
+    }
+
+    println!("{}", "Dispatch health".bold());
+    if rows.is_empty() {
+        println!("  (no active agent/spec rows)");
+        return Ok(());
+    }
+    for row in rows {
+        println!(
+            "  {} [{}] {} via {} on {}",
+            row.spec.bold(),
+            row.state.as_str(),
+            row.agent.cyan(),
+            row.agent_type,
+            row.branch
+        );
+        println!(
+            "      worktree: {}{}",
+            row.worktree.dimmed(),
+            if row.dirty {
+                " (dirty)".yellow().to_string()
+            } else {
+                String::new()
+            }
+        );
+        if let Some(ahead) = row.ahead_main {
+            println!(
+                "      branch: {} ahead of main{}",
+                ahead,
+                if row.pushed { " (pushed)" } else { "" }
+            );
+        }
+        if row.pending_briefs > 0 {
+            println!("      pending briefs: {}", row.pending_briefs);
+        }
+        println!("      guidance: {}", row.guidance);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod dispatch_health_tests {
+    use super::*;
+
+    fn input(status: agent_registry::AgentStatus, dirty: bool) -> DispatchReportInput {
+        DispatchReportInput {
+            agent: "codex-1".to_string(),
+            agent_type: "codex".to_string(),
+            spec: Some("STORY-759".to_string()),
+            status,
+            paused: false,
+            worktree: std::path::PathBuf::from("/tmp/story-759"),
+            branch: Some("story-759-dispatch-report".to_string()),
+            dirty,
+            ahead_main: Some(0),
+            ahead_upstream: Some(0),
+            has_upstream: false,
+            pending_briefs: 0,
+        }
+    }
+
+    #[test]
+    fn dispatch_report_marks_dead_agent_dirty_worktree_salvageable() {
+        let row = dispatch_report_row(&input(agent_registry::AgentStatus::Stale, true), &[], false);
+        assert_eq!(row.state, DispatchHealthState::Salvageable);
+        assert!(row.guidance.contains("salvage"));
+        assert!(row.guidance.contains("dirty worktree"));
+        assert!(!row.guidance.contains("delete"));
+    }
+
+    #[test]
+    fn dispatch_report_marks_pushed_branch_resumable() {
+        let mut facts = input(agent_registry::AgentStatus::Stale, false);
+        facts.ahead_main = Some(2);
+        facts.has_upstream = true;
+        facts.ahead_upstream = Some(0);
+        let row = dispatch_report_row(&facts, &[], false);
+        assert_eq!(row.state, DispatchHealthState::Stalled);
+        assert!(row.pushed);
+        assert!(
+            row.guidance
+                .contains("aida agent new codex --spec STORY-759 --cwd /tmp/story-759"),
+            "{}",
+            row.guidance
+        );
+    }
+
+    #[test]
+    fn dispatch_report_skips_paused_vendor_for_fallback() {
+        let paused = vec!["codex".to_string()];
+        assert_eq!(
+            select_dispatch_fallback("claude", &["codex", "antigravity"], &paused, false),
+            Some("antigravity".to_string())
+        );
+        assert_eq!(
+            select_dispatch_fallback("claude", &["codex", "antigravity"], &paused, true),
+            Some("codex".to_string())
+        );
+    }
+
+    #[test]
+    fn dispatch_policy_routes_agy_as_human_briefed() {
+        let guidance = dispatch_fallback_guidance("antigravity", "STORY-759");
+        assert!(guidance.contains("aida brief antigravity STORY-759 --notify"));
+        assert!(!guidance.contains("headless fallback"));
+    }
+
+    #[test]
+    fn dispatch_liveness_resets_on_dirty_diff_or_commit() {
+        let previous = DispatchLivenessSnapshot {
+            child_reaped: false,
+            head: "a".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        let dirty_changed = DispatchLivenessSnapshot {
+            child_reaped: true,
+            head: "a".to_string(),
+            dirty_fingerprint: " M aida-cli/src/main.rs".to_string(),
+        };
+        let head_changed = DispatchLivenessSnapshot {
+            child_reaped: true,
+            head: "b".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        assert!(!dispatch_liveness_stalled(&previous, &dirty_changed));
+        assert!(!dispatch_liveness_stalled(&previous, &head_changed));
+    }
+
+    #[test]
+    fn dispatch_liveness_fires_on_dead_child_no_progress() {
+        let previous = DispatchLivenessSnapshot {
+            child_reaped: false,
+            head: "a".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        let current = DispatchLivenessSnapshot {
+            child_reaped: true,
+            head: "a".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        assert!(dispatch_liveness_stalled(&previous, &current));
+    }
+
+    #[test]
+    fn dispatch_cli_output_uses_toon_in_agent_mode() {
+        let row = dispatch_report_row(&input(agent_registry::AgentStatus::Busy, false), &[], false);
+        let out = render_dispatch_toon(&[row]);
+        assert!(
+            out.starts_with("dispatch[1]{agent,spec,state,vendor,branch,dirty,ahead_main,pushed,pending_briefs,guidance}:"),
+            "{out}"
+        );
+        assert!(out.contains("STORY-759"));
+        assert!(!out.contains("Dispatch health"));
     }
 }
 

@@ -38,6 +38,17 @@ Only use the CLI fallback for the brief channel. For spec graph and
 coordination work, MCP remains the preferred Antigravity interface when it is
 available.
 
+## Dispatch Recovery Discipline
+
+- Make an early local WIP commit as soon as the first coherent edit compiles.
+- Push the branch at the first verified boundary, such as a passing targeted
+  test or build, so a fresh vendor launch can resume from git instead of a dirty
+  local diff.
+- Antigravity fallback is human-briefed: recovery routing should use
+  `aida brief antigravity <SPEC> --notify`, not an unattended headless spawn.
+- Use `aida agent dispatch-health` for a read-only recovery snapshot; in
+  `AIDA_AGENT_OUTPUT=1` mode it emits TOON for machine parsing.
+
 ## Safety Notes
 
 - Treat brief files as local runtime state under `.aida/agent-briefs/`.
