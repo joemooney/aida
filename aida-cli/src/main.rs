@@ -97730,6 +97730,130 @@ fn why_first_sentence(desc: &str) -> String {
     }
 }
 
+/// STORY-755: a spec's intent, resolved from EITHER the git-canonical store or
+/// a plain markdown file — so `aida why <file:line>` works with the machine off.
+struct ResolvedIntent {
+    title: String,
+    status: Option<String>,
+    why: String,
+    /// `None` = store; `Some(path)` = a plain markdown spec file.
+    markdown: Option<std::path::PathBuf>,
+}
+
+/// Read a single frontmatter scalar (`key: value`) from a leading `---` block.
+// trace:STORY-755 | ai:claude
+fn markdown_frontmatter_field(content: &str, key: &str) -> Option<String> {
+    let mut lines = content.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+    for line in lines {
+        let t = line.trim();
+        if t == "---" {
+            break;
+        }
+        if let Some((k, v)) = t.split_once(':') {
+            if k.trim().eq_ignore_ascii_case(key) {
+                return Some(v.trim().trim_matches('"').trim_matches('\'').to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Body after a leading `---` frontmatter block (or the whole content).
+fn strip_frontmatter(content: &str) -> &str {
+    let trimmed = content.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("---") {
+        if let Some(end) = rest.find("\n---") {
+            return rest[end + 4..].trim_start();
+        }
+    }
+    content
+}
+
+/// STORY-755: resolve a SPEC-ID's intent from a plain markdown file when the
+/// git-canonical store isn't attached — so `aida why <file:line>` delivers the
+/// full title + why on a BARE folder of markdown + trace comments, zero setup.
+/// Matches a file named `<ID>.md` (case-insensitive) or any `.md` whose
+/// frontmatter carries `id: <ID>`. Bounded walk; skips vcs/build dirs.
+// trace:STORY-755 | ai:claude
+fn resolve_spec_from_markdown(root: &std::path::Path, id: &str) -> Option<ResolvedIntent> {
+    let want = id.to_ascii_uppercase();
+    let name_target = format!("{want}.MD");
+    let mut stack = vec![root.to_path_buf()];
+    let mut budget: usize = 5000;
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in rd.flatten() {
+            if budget == 0 {
+                return None;
+            }
+            budget -= 1;
+            let path = entry.path();
+            let Ok(ft) = entry.file_type() else {
+                continue;
+            };
+            if ft.is_dir() {
+                let n = entry.file_name();
+                let n = n.to_string_lossy();
+                if matches!(
+                    n.as_ref(),
+                    ".git" | "target" | "node_modules" | ".aida-store" | ".claude"
+                ) {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+            if path
+                .extension()
+                .and_then(|x| x.to_str())
+                .map(|e| e.eq_ignore_ascii_case("md"))
+                != Some(true)
+            {
+                continue;
+            }
+            let by_name = path
+                .file_name()
+                .map(|f| f.to_string_lossy().to_ascii_uppercase() == name_target)
+                .unwrap_or(false);
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let by_fm = markdown_frontmatter_field(&content, "id")
+                .map(|v| v.eq_ignore_ascii_case(&want))
+                .unwrap_or(false);
+            if by_name || by_fm {
+                let title = markdown_frontmatter_field(&content, "title").unwrap_or_else(|| {
+                    content
+                        .lines()
+                        .find_map(|l| {
+                            l.trim()
+                                .strip_prefix('#')
+                                .map(|h| h.trim_start_matches('#').trim().to_string())
+                        })
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| {
+                            path.file_stem()
+                                .map(|s| s.to_string_lossy().to_string())
+                                .unwrap_or_default()
+                        })
+                });
+                return Some(ResolvedIntent {
+                    title,
+                    status: markdown_frontmatter_field(&content, "status"),
+                    why: why_first_sentence(strip_frontmatter(&content)),
+                    markdown: Some(path),
+                });
+            }
+        }
+    }
+    None
+}
+
 /// STORY-754: `aida why <file>[:<line>]` — answer "why does this CODE exist?"
 /// from the nearest `trace:SPEC-ID` comment, resolved to the spec's intent.
 /// AIDA's one genuine edge over a plain LLM wiki: code↔decision linkage, felt
@@ -97819,18 +97943,32 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
             })
         })
     };
+    // STORY-755: the git-canonical store first, then the plain-markdown fallback
+    // so the answer still lands with the machine switched off.
+    let resolve = |id: &str| -> Option<ResolvedIntent> {
+        if let Some(r) = lookup(id) {
+            return Some(ResolvedIntent {
+                title: r.title.clone(),
+                status: Some(format!("{:?}", r.status).to_ascii_lowercase()),
+                why: why_first_sentence(&r.description),
+                markdown: None,
+            });
+        }
+        resolve_spec_from_markdown(&project_root, id)
+    };
 
     if json {
         let traces: Vec<serde_json::Value> = ids
             .iter()
             .map(|id| {
-                let req = lookup(id);
+                let it = resolve(id);
                 serde_json::json!({
                     "id": id,
-                    "found": req.is_some(),
-                    "title": req.map(|r| r.title.clone()),
-                    "status": req.map(|r| format!("{:?}", r.status).to_ascii_lowercase()),
-                    "why": req.map(|r| why_first_sentence(&r.description)),
+                    "found": it.is_some(),
+                    "title": it.as_ref().map(|i| i.title.clone()),
+                    "status": it.as_ref().and_then(|i| i.status.clone()),
+                    "why": it.as_ref().map(|i| i.why.clone()),
+                    "source": it.as_ref().map(|i| if i.markdown.is_some() { "markdown" } else { "store" }),
                 })
             })
             .collect();
@@ -97851,28 +97989,35 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
     );
     println!();
     for id in &ids {
-        match lookup(id) {
-            Some(r) => {
+        match resolve(id) {
+            Some(it) => {
+                let badge = it
+                    .status
+                    .as_deref()
+                    .map(|s| format!("({s})"))
+                    .unwrap_or_default();
                 println!(
                     "  this code exists because of {} {}",
                     id.cyan(),
-                    format!("({})", format!("{:?}", r.status).to_ascii_lowercase()).dimmed()
+                    badge.dimmed()
                 );
-                println!("    {}", r.title.bold());
-                let why = why_first_sentence(&r.description);
-                if !why.is_empty() {
-                    println!("    {} {why}", "why:".dimmed());
+                println!("    {}", it.title.bold());
+                if !it.why.is_empty() {
+                    println!("    {} {}", "why:".dimmed(), it.why);
                 }
-                println!(
-                    "    {} aida show {id}  |  aida graph {id} --impact",
-                    "more:".dimmed()
-                );
+                match &it.markdown {
+                    Some(p) => println!("    {} {}", "spec:".dimmed(), p.display()),
+                    None => println!(
+                        "    {} aida show {id}  |  aida graph {id} --impact",
+                        "more:".dimmed()
+                    ),
+                }
             }
             None => {
                 println!(
                     "  traces to {} — {}",
                     id.cyan(),
-                    "not in the store (stale trace, or store not attached)".yellow()
+                    "no matching spec (add a `<id>.md`, or attach the store)".yellow()
                 );
             }
         }
@@ -97883,7 +98028,37 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
 
 #[cfg(test)]
 mod why_code_tests {
-    use super::{looks_like_code_arg, why_first_sentence};
+    use super::{looks_like_code_arg, resolve_spec_from_markdown, why_first_sentence};
+
+    #[test]
+    fn markdown_fallback_resolves_intent_from_a_bare_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("specs")).unwrap();
+        // Frontmatter id + title + status.
+        std::fs::write(
+            dir.path().join("specs/STORY-1.md"),
+            "---\nid: STORY-1\ntitle: Rate-limit login\nstatus: completed\n---\nWe saw stuffing attacks. Throttle it.\n",
+        )
+        .unwrap();
+        let it = resolve_spec_from_markdown(dir.path(), "story-1").expect("case-insensitive id");
+        assert_eq!(it.title, "Rate-limit login");
+        assert_eq!(it.status.as_deref(), Some("completed"));
+        assert_eq!(it.why, "We saw stuffing attacks.");
+        assert!(it.markdown.is_some());
+
+        // By filename, title from the first `#` heading, no frontmatter.
+        std::fs::write(
+            dir.path().join("STORY-2.md"),
+            "# Second thing\n\nBecause reasons.\n",
+        )
+        .unwrap();
+        let it2 = resolve_spec_from_markdown(dir.path(), "STORY-2").expect("by filename");
+        assert_eq!(it2.title, "Second thing");
+        assert_eq!(it2.why, "Because reasons.");
+
+        // Unknown id → None (no false positive).
+        assert!(resolve_spec_from_markdown(dir.path(), "NOPE-9").is_none());
+    }
 
     #[test]
     fn code_args_vs_spec_ids_are_distinguished() {
