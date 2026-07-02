@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T01:29:10.420064490Z
-modified_at: 2026-07-02T01:29:10.420064490Z
+modified_at: 2026-07-02T04:04:26.670048023Z
 req_type: Bug
 tags:
 - aida:hooks
@@ -22,3 +22,10 @@ tags:
 - git-guardrails
 - papercut
 - severity:cosmetic
+comments:
+- id: 019f20ff-dbae-77a0-b1bd-72d99adcef77
+  author: joe
+  content: Commit 6fd3d1d84 references this requirement
+  created_at: 2026-07-02T04:04:26.670048023Z
+  modified_at: 2026-07-02T04:04:26.670048023Z
+  session_id: f4d11ca5-b346-47fd-9bcf-f215893dae03
