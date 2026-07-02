@@ -1,0 +1,18 @@
+id: 019f213a-20c5-7dd2-bbca-b6c8d99ba161
+spec_id: STORY-753
+agreed_id: STORY-753
+title: 'Agent-surface TOON coverage gap: ps / backlog list / history emit human tables under AIDA_AGENT_OUTPUT'
+description: 'An agent-surface audit (sampling read commands under AIDA_AGENT_OUTPUT) found several read commands that do NOT honor agent-output mode — they emit human tables/decoration instead of token-efficient TOON, unlike aida integrate/status which have agent_output_mode() branches. Confirmed leakers: (1) aida ps — emits "Running work" + a human column table in agent mode (has --json as an escape hatch); (2) aida backlog list — emits a SPEC/TYPE/PRI/RISK/TITLE human table AND has no --json fallback, so agents have no clean structured output at all; (3) aida history — human table, also no --json. Fix pattern (mechanical, per command): add an agent_output_mode() branch emitting `view: <name>` + flat scalars + crate::toon::table_raw tables, mirroring handle_integrate; where a command lacks --json, add that too. First instance already fixed: BUG-695 (aida awaiting). Not-yet-triaged as leaks (emit prose, may be intentional): usage, doctor, findings calibration. Parent EPIC-56 (AXI agent ergonomics). trace:BUG-695'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T05:08:05.445894436Z
+modified_at: 2026-07-02T05:08:05.445894436Z
+req_type: Story
+tags:
+- agent-surface
+- aida:agent-surface
+- from-self-test
+- parent:EPIC-56
+- toon
