@@ -1,0 +1,33 @@
+id: 019f23b7-0020-79d0-86c5-e36bf6514421
+spec_id: STORY-759
+agreed_id: STORY-759
+title: 'Slice 1: CLI-first dispatch health/recovery report + commit-early discipline (SPIKE-76)'
+description: |-
+  SPIKE-76 slice 1 — the smallest slice that measurably reduces halts, no new infra. A read-only CLI report that says which dispatched work is moving, stalled, or salvageable, with resume/fallback hints, plus the commit-early/push-early discipline documented for vendor pickups. Reuses existing helpers (list_agent_views, leases, dirty-worktree detection, network_retry, ci_idle_timeout, event_wait, exit_signal watchdog, compete vendor_adapter) per the SPIKE-76 plan — do NOT reimplement them.
+
+  ## Acceptance
+  - THE new dispatch health report command SHALL list each active agent/spec with a state of moving, stalled, or salvageable, derived from the agent registry, leases, branch-ahead count, dirty worktrees, pending briefs, and paused agents.
+  - WHEN an agents process is dead and its worktree has a dirty diff, THE report SHALL mark it salvageable and emit salvage/resume guidance rather than proposing deletion.
+  - WHEN a specs branch is ahead of main with pushed commits, THE report SHALL emit a fresh-launch resume command for it.
+  - WHEN a candidate fallback vendor is paused or rate-limited, THE report SHALL skip it unless explicitly forced.
+  - WHEN AGY is the fallback for a spec, THE report SHALL emit a notify-brief route (human-briefed), not a headless spawn.
+  - THE no-progress liveness signal SHALL reset on a concrete progress signal (HEAD movement or dirty-status change) and SHALL fire only on a reaped child with unchanged worktree.
+  - WHEN AIDA_AGENT_OUTPUT=1 is set, THE report output SHALL be TOON/machine-readable.
+  - THE commit-early/push-early dispatch discipline SHALL be documented in the vendor pickup docs under docs/agents/.
+  - The seven named tests from the SPIKE-76 plan (dispatch_report_*, dispatch_policy_*, dispatch_liveness_*, dispatch_cli_output_*) SHALL pass.
+
+  ## Out of scope (later slices)
+  - Headless Codex drain adapter, cross-vendor routing config file, daemon-grade supervisor (SPIKE-76 defers these until telemetry shows the discipline is insufficient).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T16:43:43.520028140Z
+modified_at: 2026-07-02T16:43:43.520028140Z
+req_type: Story
+tags:
+- dispatch
+- multi-vendor
+- parent:SPIKE-76
+- resilience
+- slice-1
