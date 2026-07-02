@@ -16,12 +16,12 @@ description: |-
   Motivation link: the needs-design gate is now a HARD refusal (TASK-1078 / #1307) that routes to --guided one spec at a time; this batch pass is the pressure-relief that lets the operator resolve all design hurdles in one sitting, then drain.
 
   Build gate: the interactive dialog is UX/design-laden + touches the human-escalation surface -> sketch-first sign-off with the operator BEFORE implementing (present the per-hurdle dialog shapes for approval). Slice as: (1) --interactive resolving the two cheapest hurdles (needs-approval, blocked-by surface) end-to-end, (2) wire --guided for needs-design/decision-pending, (3) --then-drain.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T16:12:38.050036436Z
-modified_at: 2026-07-01T16:56:45.541627524Z
+modified_at: 2026-07-02T02:01:02.000460659Z
 req_type: Story
 tags:
 - aida:human
@@ -39,3 +39,21 @@ comments:
   content: Commit e07d21789 references this requirement
   created_at: 2026-07-01T16:56:45.541627524Z
   modified_at: 2026-07-01T16:56:45.541627524Z
+history:
+- id: 019f208e-decc-7081-82b7-1042d87d421b
+  author: aida-auto-bump
+  timestamp: 2026-07-02T02:01:01.900983864Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f208e-df30-7071-90e8-dc42107fb4e0
+  timestamp: 2026-07-02T02:01:02.000455041Z
+  agent: aida
+  commit_sha: 87e2fed08736a6b04560fae2e61dcf1c756bc45a
+  summary: Completed via merge 87e2fed0
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T02:01:00.827310326Z
+  completion_sha: 87e2fed08736a6b04560fae2e61dcf1c756bc45a
