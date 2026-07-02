@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T07:38:09.336674231Z
-modified_at: 2026-07-02T07:38:09.336674231Z
+modified_at: 2026-07-02T07:44:51.894705050Z
 req_type: Story
 tags:
 - aida:why
@@ -17,3 +17,10 @@ tags:
 - magic-moment
 - north-star
 - ux
+comments:
+- id: 019f21c9-a8b6-7a83-8d9c-4f014a0e47a4
+  author: joe
+  content: Commit 728d33cd5 references this requirement
+  created_at: 2026-07-02T07:44:51.894705050Z
+  modified_at: 2026-07-02T07:44:51.894705050Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
