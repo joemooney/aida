@@ -67,7 +67,7 @@ libc = "0.2"
 
 [features]
 default = ["tui"]
-remote = ["tonic", "prost", "tonic-build"]
+remote = ["tonic", "prost", "tonic-build", "protox"]
 # EPIC-26 TUI shell. Default-on as of STORY-137 — the first vertical
 # (PTY host + overlay + multi-tab + crash recovery) is complete, so
 # `aida tui` ships in release binaries. trace:STORY-137 | ai:claude
@@ -78,6 +78,7 @@ tempfile = "3.8"
 
 [build-dependencies]
 tonic-build = { workspace = true, optional = true }
+protox = { workspace = true, optional = true }
 
 [package.metadata.features]
 # Note: The "remote" feature enables gRPC client functionality

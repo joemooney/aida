@@ -9,12 +9,16 @@ use std::process::Command;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "remote")]
     {
-        // Compile proto for client
+        // Compile proto for client with protox (pure Rust) — no external `protoc`
+        // binary; tonic-build generates the client from the descriptor set.
+        // trace:FR-0227 | ai:claude
+        println!("cargo:rerun-if-changed=../proto/aida.proto");
+        let fds = protox::compile(["../proto/aida.proto"], ["../proto"])?;
         tonic_build::configure()
             .build_server(false)
             .build_client(true)
             .out_dir("src/generated")
-            .compile_protos(&["../proto/aida.proto"], &["../proto"])?;
+            .compile_fds(fds)?;
     }
 
     // ---- Build-time stamps (EPIC-1-001) -------------------------------------
