@@ -3,12 +3,12 @@ spec_id: BUG-693
 agreed_id: BUG-693
 title: aida integrate running-work view shows stale leases that aida ps hides — surface inconsistency
 description: 'aida integrate reuses gather_running_work() (same as aida ps) but does NOT apply the stale-hide filter that ps applies (main.rs handle_ps partitions LeaseState::Stale behind a footer count unless --all). Result: a 24-day-dead lease/mcp-claim (e.g. a Completed spec whose worktree is gone) clutters the integrator throughput view in both human and agent/TOON modes, while aida ps and aida session leases correctly hide it. Fix: after the JSON block (which keeps all rows for structured consumers), drop LeaseState::Stale rows from run_rows in the TOON + human renders and note the hidden count — mirror the ps pattern.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T04:26:04.906292971Z
-modified_at: 2026-07-02T04:28:43.108762986Z
+modified_at: 2026-07-02T04:58:03.875987933Z
 req_type: Bug
 tags:
 - aida:integrate
@@ -22,3 +22,21 @@ comments:
   created_at: 2026-07-02T04:28:43.108762986Z
   modified_at: 2026-07-02T04:28:43.108762986Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f2130-f281-7b83-aa99-58f9782c66f6
+  author: aida-auto-bump
+  timestamp: 2026-07-02T04:58:03.777501363Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f2130-f2e3-7bc1-80cf-472526f85171
+  timestamp: 2026-07-02T04:58:03.875981173Z
+  agent: aida
+  commit_sha: 3fabad3e5c4616cc6b34259754715014b58e7464
+  summary: Completed via merge 3fabad3e
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T04:58:02.713764448Z
+  completion_sha: 3fabad3e5c4616cc6b34259754715014b58e7464
