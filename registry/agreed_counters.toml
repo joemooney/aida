@@ -1,11 +1,11 @@
-UR = 2
+FR = 281
 EPIC = 18
-FOLDER = 6
-SR = 1
 DOC = 2
 CR = 6
+UR = 2
+FOLDER = 6
 BUG = 34
-FR = 281
+SR = 1
 SPIKE = 5
 SPRINT = 3
 STORY = 82
