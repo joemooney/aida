@@ -1,0 +1,17 @@
+id: 019f208f-f7b3-7e01-a3bb-1d33d4c2e52f
+spec_id: TASK-1086
+agreed_id: TASK-1086
+title: 'aida human unblock --interactive: auto-clear the needs-design tag on decision-capture (make it drive-ready)'
+description: 'Deferred during STORY-750. The interactive sweep resolves decision-pending/needs-design by launching --guided or capturing a note, but does NOT auto-clear the needs-design tag to mark the spec drive-ready (generic tag/decision clearing across the varied DecisionPending sub-types was judged too fiddly to do safely in the first slice). Follow-up: when the human captures the design decision inline, offer to clear the needs-design tag (or resolve the pending DecisionRequest) so the spec becomes drive-ready without a separate edit. Operator flagged "tweak later" at merge.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T02:02:13.811843942Z
+modified_at: 2026-07-02T02:02:13.811843942Z
+req_type: Task
+tags:
+- aida:human
+- followup:STORY-750
+- human-role
+- ux

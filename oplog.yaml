@@ -30638,5 +30638,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2913
+- id: 019f2090-09ed-7dc3-91ce-07f12c3e9be3
+  target_id: 019f208f-f7b3-7e01-a3bb-1d33d4c2e52f
+  author: aida
+  node_id: '1'
+  lamport: 2914
+  timestamp: 2026-07-02T02:02:18.477396007Z
+  kind: !Create
+    title: 'aida human unblock --interactive: auto-clear the needs-design tag on decision-capture (make it drive-ready)'
+    description: 'Deferred during STORY-750. The interactive sweep resolves decision-pending/needs-design by launching --guided or capturing a note, but does NOT auto-clear the needs-design tag to mark the spec drive-ready (generic tag/decision clearing across the varied DecisionPending sub-types was judged too fiddly to do safely in the first slice). Follow-up: when the human captures the design decision inline, offer to clear the needs-design tag (or resolve the pending DecisionRequest) so the spec becomes drive-ready without a separate edit. Operator flagged "tweak later" at merge.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 2914
 node_id: '1'
