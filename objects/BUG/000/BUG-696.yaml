@@ -3,12 +3,12 @@ spec_id: BUG-696
 agreed_id: BUG-696
 title: salvage_worktree_patch omits untracked file content — aida doctor --heal loses untracked files in orphan-worktrees
 description: 'During a hygiene cleanup, aida doctor reported 85 orphan-worktrees ALL with safe_heal=true. Spot-checking 6, three had uncommitted and/or unmerged work (aida-epic0428 dirty 4 files; aida-gitlab dirty 2 + 1 unmerged commit; aida-spike73-bench dirty 6 files). Across all 85: 11 were dirty. So safe_heal=true does NOT verify the worktree is clean AND its branch merged — running `aida doctor --heal --category orphan-worktrees --yes` could `git worktree remove --force` a dirty worktree and lose uncommitted work. Fix: the orphan-worktree classifier must set safe_heal=false (or save-patch-first) when `git status --porcelain` is non-empty OR the branch has commits not in origin/main; only clean+merged worktrees are safe_heal=true. Belt-and-suspenders in the healer: never pass --force on a dirty worktree without stashing/patch-saving first. Found by hand-verifying before trusting the flag during operator hygiene cleanup.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T05:26:10.389461181Z
-modified_at: 2026-07-02T05:33:48.326057696Z
+modified_at: 2026-07-02T05:50:25.997543874Z
 req_type: Bug
 tags:
 - aida:doctor
@@ -29,3 +29,21 @@ comments:
   created_at: 2026-07-02T05:33:48.326057696Z
   modified_at: 2026-07-02T05:33:48.326057696Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f2160-e46f-7f02-9c7e-2c687e875a9a
+  author: aida-auto-bump
+  timestamp: 2026-07-02T05:50:25.903328118Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f2160-e4cd-70a3-a0ad-bf82f20d6d39
+  timestamp: 2026-07-02T05:50:25.997537415Z
+  agent: aida
+  commit_sha: 728d33cd554a0568331f197a9e7a26598fedff65
+  summary: Completed via merge 728d33cd
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T05:50:24.841943655Z
+  completion_sha: 728d33cd554a0568331f197a9e7a26598fedff65
