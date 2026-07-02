@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T05:08:05.445894436Z
-modified_at: 2026-07-02T05:08:05.445894436Z
+modified_at: 2026-07-02T05:08:09.721742436Z
 req_type: Story
 tags:
 - agent-surface
@@ -16,3 +16,7 @@ tags:
 - from-self-test
 - parent:EPIC-56
 - toon
+relationships:
+- rel_type: Child
+  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
+  created_at: 2026-07-02T05:08:09.721742436Z
