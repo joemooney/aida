@@ -100343,6 +100343,71 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         return Ok(());
     }
 
+    // Agent mode: token-efficient TOON, mirroring `aida integrate` / `awaiting`
+    // so agents orienting via `aida ps` get flat scalars + uniform tables, not
+    // the human column table. `--json` above still wins for structured
+    // consumers; stale rows are hidden behind a count as in the human view.
+    // trace:STORY-753 | ai:claude
+    if agent_output_mode() {
+        let (shown, hidden_stale): (Vec<&PsRow>, Vec<&PsRow>) = if all {
+            (rows.iter().collect(), Vec::new())
+        } else {
+            rows.iter()
+                .partition(|r| !matches!(r.state, LeaseState::Stale))
+        };
+        println!("view: ps");
+        println!("running: {}", shown.len());
+        println!("stale_hidden: {}", hidden_stale.len());
+        println!("orphaned: {}", orphans.len());
+        let run: Vec<Vec<String>> = shown
+            .iter()
+            .map(|r| {
+                vec![
+                    r.lease.id.clone(),
+                    r.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    r.lease.role.clone().unwrap_or_else(|| "-".to_string()),
+                    r.pid
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                    humanize_duration_secs(r.elapsed_secs),
+                    r.state.label().to_string(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "running",
+                &["session", "spec", "role", "pid", "elapsed", "live"],
+                &run
+            )
+        );
+        let orph: Vec<Vec<String>> = orphans
+            .iter()
+            .map(|o| {
+                vec![
+                    o.spec.clone(),
+                    o.title.clone(),
+                    if o.stale_lease {
+                        "stale".to_string()
+                    } else {
+                        "flag-only".to_string()
+                    },
+                    o.likely_fanout.to_string(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "orphaned",
+                &["spec", "title", "liveness", "likely_fanout"],
+                &orph
+            )
+        );
+        return Ok(());
+    }
+
     // Hide STALE session rows behind a footer count unless --all, mirroring
     // `aida session leases`. trace:STORY-696
     let (shown, hidden_stale): (Vec<&PsRow>, Vec<&PsRow>) = if all {
