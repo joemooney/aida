@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:21:44.207546149Z
-modified_at: 2026-07-02T17:25:09.988580606Z
+modified_at: 2026-07-02T17:26:13.718879133Z
 req_type: Bug
 tags:
 - aida:add
@@ -17,3 +17,10 @@ tags:
 - performance
 - regression-suspect
 - severity:major
+comments:
+- id: 019f23dd-e9d6-7811-81f9-1c71a6dc1cc9
+  author: joe
+  content: 'DIAGNOSIS (tested, hypothesis refuted twice — held the recency + verify-before-claiming discipline). (1) It is add-SPECIFIC, not the shared write path: aida edit (same targeted read-modify-write) = 1.6s; aida add = 8.5s. So the extra ~7s is what add does that edit does not: SPEC-ID ALLOCATION (main.rs add path ~14969: load_dispenser + GitBackend::with_dispenser + next-free-id). (2) GIT-BLOAT REFUTED: the orphan store is huge (16448 commits, 2764 yaml files) so I hypothesized slow git ops, but aida store compact (544 loose objects to 0, 6 to 2 packs, took 134s) did NOT change edit time (1.63s to 1.59s). So the write commit itself is fine; bloat is not the cause. (3) SUSPECT: dispenser id allocation does multiple git operations (dispenser.rs has 4 git-op sites) to reserve an id distributed-safely — 4x ~1.5s/op ≈ the ~7s delta. Needs a profiler/targeted timing to pin the exact slow op before fixing; likely direction = reduce/localize the git round-trips in id dispensing. SECONDARY: edit at 1.6s is itself not the sub-second BUG-634 advertises — smaller issue. Compaction was good hygiene regardless.'
+  created_at: 2026-07-02T17:26:13.718879133Z
+  modified_at: 2026-07-02T17:26:13.718879133Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
