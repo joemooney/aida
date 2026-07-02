@@ -1,0 +1,19 @@
+id: 019f2220-0f71-7c90-8659-ef9d5822cd51
+spec_id: STORY-757
+agreed_id: STORY-757
+title: aida init --minimal — the markdown-only first-run (specs/ folder + a runnable aida why demo, zero machine)
+description: 'Goal move: delete meta-machine from first-run. aida init scaffolds the full machine (orphan branch, cache, MCP, 48 skills, roles, hooks). Add aida init --minimal: scaffold ONLY specs/EXAMPLE-1.md (a markdown spec) + example.py (code with a # trace:EXAMPLE-1 comment), then print the exact aida why example.py:2 command. No .aida, no orphan branch, no cache, no skills, no roles. Proves the 60-second magic needs no setup and gives a first-user the whole idea in one command. Short-circuits at the top of the Init dispatch before any heavy path. Child of STORY-754.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T09:19:14.289286604Z
+modified_at: 2026-07-02T09:19:14.289286604Z
+req_type: Story
+tags:
+- aida:init
+- first-run
+- from-goal
+- north-star
+- parent:STORY-754
+- zero-setup
