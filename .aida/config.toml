@@ -18,3 +18,13 @@ workflow_hints = true
 
 [field_study]
 enabled = false
+
+# STORY-760: store-sync fan-out. This project mirrors to a personal GitLab
+# (gitlab.joemooney.com) alongside github `origin`. Listing it here makes every
+# `aida db sync --push` push the store to BOTH hubs, so a clone can't silently
+# leave one behind. Best-effort: while the store is mid-reconcile (BUG-700
+# employer-content scrub), the gitlab leg will WARN as non-fast-forward — that is
+# expected and self-heals once the histories are reconciled. Check drift anytime
+# with `aida remote status`.
+[store.sync]
+mirror_remotes = ["gitlab"]
