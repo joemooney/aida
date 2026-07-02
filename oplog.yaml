@@ -30974,5 +30974,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 2939
+- id: 019f23bf-d165-7882-a970-2b8f0cc33c84
+  target_id: 019f23bf-c49a-7351-9963-ab8e09d6aafa
+  author: aida
+  node_id: '1'
+  lamport: 2940
+  timestamp: 2026-07-02T16:53:21.381541388Z
+  kind: !Create
+    title: 'Fix aida usage: command-shape leaks arg ids (privacy-floor violation) + 30d aggregates mislead vs recent behavior'
+    description: 'Operator-directed (2026-07-02). Two defects in aida usage telemetry. (1) PRIVACY + DATA-QUALITY: is_subcommand_token allows digits, so positional id args are captured INTO the command shape — "show story-74", "show 12345", "show pr-43", "show tsk-1" instead of "show". This violates the stated privacy floor ("no argument values") and pollutes the --unused (show story-137, show pr-43) and --errors (show not-a-real-id 6/6) lists. Fix: a real subcommand never contains a digit → exclude digit-bearing tokens from is_subcommand_token (cheap, safe — verified no subcommand has a digit; keeps the hot statusline path fast, no clap-tree walk). Add normalize_shape() and apply it in read_events() so ALL consumers (top report, --unused, --errors, --slowest) collapse historical leaked shapes in one place. (2) RECENCY: the top report shows 30d aggregate avg_ms/error-rate with no recent signal — a since-fixed historical batch (rel list 52% errs, status 17s avg) reads as a current crisis when recent behavior is healthy (status 0.22s, rel list 0 recent failures). Add a recent-window (7d) column/flag so a stale aggregate cannot masquerade as current. This misled the advisor into a wrong recommendation.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2940
 node_id: '1'
