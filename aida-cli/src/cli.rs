@@ -2235,6 +2235,23 @@ pub enum RemoteCommand {
         /// The existing repo's clone URL (SSH or HTTPS).
         url: String,
     },
+
+    /// Report how far each configured remote has drifted from local — and from
+    /// each other — for the shared branches (the trunk + the store branch).
+    /// Read-only: refreshes refs best-effort but never writes or pushes. Exits
+    /// non-zero when two remotes hold different tips for a branch, so it can
+    /// gate CI or a pre-push hook.
+    // trace:TASK-1095 | ai:claude
+    Status {
+        /// Emit machine-readable JSON instead of the table.
+        #[clap(long)]
+        json: bool,
+
+        /// Skip the best-effort `git fetch`; compare using the existing
+        /// remote-tracking refs only (offline-friendly, may be stale).
+        #[clap(long)]
+        no_fetch: bool,
+    },
 }
 
 /// Claude Code path-gated rules sync.

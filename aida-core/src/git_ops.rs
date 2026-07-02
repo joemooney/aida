@@ -1176,6 +1176,52 @@ pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option
     }
 }
 
+/// List the git remotes configured for this repo (`git remote`), one name
+/// per line in git's own order. Returns an empty Vec on any git error so
+/// callers treat "can't tell" as "no remotes". Excludes nothing — the caller
+/// decides which remotes (e.g. an `all` fan-out pseudo-remote) to skip.
+// trace:TASK-1095 | ai:claude
+pub fn list_remotes(repo: &Path) -> Vec<String> {
+    match git(repo, &["remote"]) {
+        Ok(r) if r.success => r
+            .stdout
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Count how far `left` is ahead of and behind `right` via
+/// `git rev-list --left-right --count <left>...<right>`. Returns
+/// `(ahead, behind)` where `ahead` = commits reachable from `left` but not
+/// `right`, and `behind` = the reverse. Both refs must resolve locally
+/// (e.g. `main` and `origin/main`, or two remote-tracking refs); returns
+/// `None` if either is missing or git errors, so a caller can degrade to a
+/// SHA-equality check.
+// trace:TASK-1095 | ai:claude
+pub fn ahead_behind(repo: &Path, left: &str, right: &str) -> Option<(u32, u32)> {
+    let r = git(
+        repo,
+        &[
+            "rev-list",
+            "--left-right",
+            "--count",
+            &format!("{left}...{right}"),
+        ],
+    )
+    .ok()?;
+    if !r.success {
+        return None;
+    }
+    let mut it = r.stdout.split_whitespace();
+    let ahead = it.next()?.parse::<u32>().ok()?;
+    let behind = it.next()?.parse::<u32>().ok()?;
+    Some((ahead, behind))
+}
+
 /// Fetch a single branch from a remote into a local tracking branch.
 /// Equivalent to `git fetch <remote> <branch>:<branch>` — creates the
 /// local branch if missing, fast-forwards otherwise.
@@ -2564,6 +2610,64 @@ mod tests {
         // Nothing to commit now
         let committed2 = commit(&repo, "empty").unwrap();
         assert!(!committed2);
+    }
+
+    // TASK-1095: list_remotes reports every configured remote; empty on none.
+    #[test]
+    fn list_remotes_reports_configured_remotes() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("r");
+        init(&repo).unwrap();
+        assert!(list_remotes(&repo).is_empty(), "fresh repo has no remotes");
+
+        git(
+            &repo,
+            &["remote", "add", "origin", "https://example.com/a.git"],
+        )
+        .unwrap();
+        git(
+            &repo,
+            &["remote", "add", "gitlab", "https://example.com/b.git"],
+        )
+        .unwrap();
+        let mut got = list_remotes(&repo);
+        got.sort();
+        assert_eq!(got, vec!["gitlab".to_string(), "origin".to_string()]);
+    }
+
+    // TASK-1095: ahead_behind counts left-only / right-only commits; None on a
+    // missing ref so callers can degrade.
+    #[test]
+    fn ahead_behind_counts_divergence() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("r");
+        init(&repo).unwrap();
+        configure_user(&repo, "T", "t@example.com").unwrap();
+        std::fs::write(repo.join("f"), "0").unwrap();
+        add(&repo, &["f"]).unwrap();
+        commit(&repo, "base").unwrap();
+
+        // Two branches off the shared base (avoid depending on the default name).
+        git(&repo, &["branch", "a"]).unwrap();
+        git(&repo, &["branch", "b"]).unwrap();
+
+        git(&repo, &["checkout", "a"]).unwrap();
+        for i in 0..2 {
+            std::fs::write(repo.join("f"), format!("a{i}")).unwrap();
+            add(&repo, &["f"]).unwrap();
+            commit(&repo, &format!("a{i}")).unwrap();
+        }
+        git(&repo, &["checkout", "b"]).unwrap();
+        std::fs::write(repo.join("g"), "x").unwrap();
+        add(&repo, &["g"]).unwrap();
+        commit(&repo, "b0").unwrap();
+
+        // a is 2 ahead of, 1 behind b.
+        assert_eq!(ahead_behind(&repo, "a", "b"), Some((2, 1)));
+        // Identical ref => in sync.
+        assert_eq!(ahead_behind(&repo, "a", "a"), Some((0, 0)));
+        // Missing ref => None (degrade path).
+        assert_eq!(ahead_behind(&repo, "a", "does-not-exist"), None);
     }
 
     #[test]
