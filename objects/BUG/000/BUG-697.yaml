@@ -4,11 +4,11 @@ agreed_id: BUG-697
 title: 'Flaky CI test: bug670_agent_status_tests::actionable_matches_queue_list_on_a_padded_fixture fails intermittently, passes locally'
 description: 'This test has failed the ubuntu-latest Build in CI on at least two unrelated PRs this session (a TASK-330 PR earlier, and PR #1341 aida ps TOON) while passing reliably LOCALLY (env -u AIDA_SESSION_ROLE cargo test on both main and the branch: 1 passed). The changes under test were unrelated to queue/status, so it is a flake, not a real regression. Observed alongside a git error in the same Run tests step: "The following untracked working tree files would be overwritten by merge" — suggests test-isolation leakage (a test writing untracked files into the repo tree, and/or a parallel-thread race on process-global state: current_user_id resolves USER/AIDA_USER env; cargo runs tests as parallel threads in one process). Cannot reproduce locally, so NOT speculative-fixing. Candidate fixes for whoever can reproduce CI-side: (a) pin the test user deterministically and avoid any process-global env/CWD dependency in read_queue_depth/role_queue_actionable resolution during tests; (b) add serial_test / an env-CWD mutex for the env-sensitive tests; (c) audit for tests leaving untracked files in the repo working tree. Impact: blocks legitimate green PRs; forces gh run rerun. trace:BUG-675'
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T06:15:34.796572510Z
-modified_at: 2026-07-02T06:39:39.179947497Z
+modified_at: 2026-07-02T06:39:40.134510766Z
 req_type: Bug
 tags:
 - ci
