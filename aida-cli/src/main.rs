@@ -133849,7 +133849,13 @@ fn handle_queue_command(
             // `--no-human` is effective we actively clear `AIDA_ZEN` so a
             // stale flag (or an inherited env var) never reaches a headless
             // session. trace:STORY-287 | ai:claude
-            match resolve_autonomy_mode(*zen, no_human.is_some()) {
+            // TASK-1060 / ADR-10: resolve the autonomy mode ONCE here and carry
+            // the typed value; in-process reads (the pre-flight banner below)
+            // consult it instead of re-reading the bare `AIDA_ZEN` env var. The
+            // env var is still SET below strictly as the cross-process transport
+            // to spawned phase children / skill templates. trace:ADR-10 trace:TASK-1060
+            let autonomy = resolve_autonomy_mode(*zen, no_human.is_some());
+            match autonomy {
                 AutonomyMode::Zen => {
                     std::env::set_var(zen::ZEN_ENV, "1");
                     // STORY-564: propagate `--pause-always` to the launched
@@ -133898,12 +133904,7 @@ fn handle_queue_command(
             // STORY-564: `--pause-always` only governs the standalone-`--zen`
             // finish; flag it as a no-op when `--zen` isn't effective so a
             // mistyped invocation isn't silently ignored. trace:STORY-564
-            if *pause_always
-                && !matches!(
-                    resolve_autonomy_mode(*zen, no_human.is_some()),
-                    AutonomyMode::Zen
-                )
-            {
+            if *pause_always && !matches!(autonomy, AutonomyMode::Zen) {
                 eprintln!(
                     "  {} --pause-always has no effect without --zen (it governs the \
                      standalone --zen finish checkpoint only)",
@@ -134566,6 +134567,8 @@ fn handle_queue_command(
                 // this session headless. The orchestrator appends a bare
                 // `--no-human` to its reviewer subprocess.
                 no_human.is_some(),
+                // TASK-1060 / ADR-10: the typed autonomy resolved once above.
+                autonomy,
                 // TASK-272: the resolved `--batch NAME` (None for a plain
                 // or item-mode pickup) — recorded on the session manifest.
                 effective_batch,
@@ -135710,6 +135713,9 @@ fn handle_queue_rework(
             /* session_id */ None,
             /* vendor */ "claude",
             /* no_human */ false,
+            // TASK-1060: the `queue add --work` convenience chain has no `--zen`.
+            /* autonomy */
+            AutonomyMode::Default,
             /* batch_name */ None,
             /* quiet */ false,
             /* allow_stale_base */ false,
@@ -136689,6 +136695,10 @@ fn handle_queue_work(
     // drain resolves its own vendor via STORY-683. trace:TASK-895 | ai:claude
     vendor: &str,
     no_human: bool,
+    // TASK-1060 / ADR-10: the autonomy mode, resolved ONCE at dispatch and
+    // threaded in as a typed value so in-process logic (the pre-flight banner)
+    // never re-reads the bare `AIDA_ZEN` env var. trace:TASK-1060 | ai:claude
+    autonomy: AutonomyMode,
     // TASK-272: the batch this pickup belongs to, when resolved from
     // `aida queue work --batch NAME`. Recorded on the session manifest so
     // /aida-pickup can detect batch context. `None` for a plain pickup.
@@ -137099,17 +137109,15 @@ fn handle_queue_work(
     );
     line("skill", prompt.cyan().to_string());
     // STORY-287: surface the `--zen` autonomy mode in the pre-flight so the
-    // user sees the flag took. Read straight off `AIDA_ZEN` (set by the
-    // dispatch when `--zen` is effective) rather than threading a parameter
-    // — the env var is the propagation mechanism. The full three-mode
-    // pre-launch banner is TASK-306's job. trace:STORY-287 | ai:claude
-    // TASK-327: match the exact value `1`, not merely non-empty — the
-    // documented contract (`--zen` help text) is `AIDA_ZEN=1`, and the
-    // sibling autonomy var `AIDA_HEADLESS` is likewise checked for `1`.
-    // Treating any non-empty string as on made `AIDA_ZEN=0` (and
-    // `AIDA_ZEN=false`) counter-intuitively *enable* zen.
-    // trace:TASK-327 | ai:claude
-    if std::env::var("AIDA_ZEN").map(|v| v == "1").unwrap_or(false) {
+    // user sees the flag took. ADR-10 / TASK-1060: consult the typed `autonomy`
+    // value (resolved ONCE at dispatch and threaded in) instead of re-reading
+    // the bare `AIDA_ZEN` env var — the env var stays as the cross-process
+    // transport to phase children, not the in-process source of truth. This
+    // also subsumes the old TASK-327 value-semantics guard (`AIDA_ZEN=0`/`false`
+    // must not enable zen): `resolve_autonomy_mode` already handles it.
+    // The full three-mode pre-launch banner is TASK-306's job.
+    // trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude
+    if autonomy.is_zen() {
         // BUG-232: `--zen`'s end-of-session behavior differs by whether an
         // orchestrator is present to hand off to. With one, `--auto-complete`
         // drives PR → CI → review → merge; without one, `--zen` auto-opens
