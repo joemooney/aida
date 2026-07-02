@@ -1985,7 +1985,16 @@ mod story_423_asciinema_tests {
         );
 
         // Recognized subcommands pass through unchanged.
-        for sub in ["new", "ls", "status", "register", "pause", "resume", "stop"] {
+        for sub in [
+            "new",
+            "ls",
+            "status",
+            "dispatch-health",
+            "register",
+            "pause",
+            "resume",
+            "stop",
+        ] {
             assert_eq!(
                 rewrite_agent_default_new(&s(&["aida", "agent", sub])),
                 s(&["aida", "agent", sub]),
@@ -2003,6 +2012,16 @@ mod story_423_asciinema_tests {
                 .unwrap()
                 .command,
             Command::Agent(AgentCommand::Ls)
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(rewrite_agent_default_new(&s(&[
+                "aida",
+                "agent",
+                "dispatch-health"
+            ])))
+            .unwrap()
+            .command,
+            Command::Agent(AgentCommand::DispatchHealth { force: false })
         ));
 
         // Help flags + the `help` verb keep clap's parent help (untouched).
@@ -2610,11 +2629,11 @@ fn rewrite_groom_alias(args: &[String]) -> (Vec<String>, Option<String>) {
 
 /// TASK-858: bare `aida agent` (no recognized subcommand) defaults to
 /// `aida agent new`, git-style, forwarding any flags/args to `new`. The
-/// recognized subcommands (`new`, `register`, `ls`, `status`, `pause`,
-/// `resume`, `stop`, `list-roles`) pass through unchanged, and `aida agent
-/// --help` / `-h` keeps clap's parent help (so the surface stays
-/// discoverable). Mirrors the pre-clap argv-rewrite pattern used for the
-/// `list` lens aliases and `advisor assess`.
+/// recognized subcommands (`new`, `register`, `ls`, `status`,
+/// `dispatch-health`, `pause`, `resume`, `stop`, `list-roles`) pass through
+/// unchanged, and `aida agent --help` / `-h` keeps clap's parent help (so the
+/// surface stays discoverable). Mirrors the pre-clap argv-rewrite pattern used
+/// for the `list` lens aliases and `advisor assess`.
 // trace:TASK-858 | ai:claude
 fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
     if args.len() >= 2 && args[1] == "agent" {
@@ -2626,6 +2645,7 @@ fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
             "register",
             "ls",
             "status",
+            "dispatch-health",
             "pause",
             "resume",
             "stop",
@@ -44466,18 +44486,6 @@ fn dispatch_worktree_dirty_fingerprint(path: &std::path::Path) -> String {
         .arg("-C")
         .arg(path)
         .args(["status", "--porcelain"])
-        .output();
-    match out {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        _ => "unknown".to_string(),
-    }
-}
-
-fn dispatch_head_at(path: &std::path::Path) -> String {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(path)
-        .args(["rev-parse", "HEAD"])
         .output();
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
