@@ -10,12 +10,12 @@ description: |-
   - WHEN aida pull encounters an index lock held by another process, THE command SHALL either wait-and-retry briefly or fail BEFORE creating an autostash, so it never strands work.
   - WHEN aida pull exits after a failed code leg, THE error message SHALL name any autostash it could not restore and the recovery step.
   - A test SHALL assert that a simulated update failure after autostash leaves the working tree in its pre-pull state, not stashed away.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T01:26:23.037086684Z
-modified_at: 2026-07-02T01:26:23.037086684Z
+modified_at: 2026-07-02T04:29:36.277140545Z
 req_type: Bug
 tags:
 - aida:pull
