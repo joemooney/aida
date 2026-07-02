@@ -23,10 +23,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:56:17.619777771Z
-modified_at: 2026-07-02T17:02:39.560935087Z
+modified_at: 2026-07-02T17:04:50.440892821Z
 req_type: Bug
 tags:
 - needs-history-rewrite
 - privacy
 - security
 - store
+comments:
+- id: 019f23ca-5508-7022-8a5f-0d796766a379
+  author: joe
+  content: 'Scrub plan drafted: docs/plans/2026-07-02-bug-700-employer-content-scrub.md (sanitized — no literal strings). The operational git-filter-repo --replace-text map with the literal old→new pairs is kept LOCAL-ONLY (not committed) so it does not itself re-add the strings to the public repo. Ready to execute once open PRs are closed/merged and a quiet push-window is agreed; the rewrite covers BOTH main and aida-store in one mirror pass, then all clones re-sync.'
+  created_at: 2026-07-02T17:04:50.440892821Z
+  modified_at: 2026-07-02T17:04:50.440892821Z
+  session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5
