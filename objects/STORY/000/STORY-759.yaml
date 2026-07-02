@@ -18,12 +18,12 @@ description: |-
 
   ## Out of scope (later slices)
   - Headless Codex drain adapter, cross-vendor routing config file, daemon-grade supervisor (SPIKE-76 defers these until telemetry shows the discipline is insufficient).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:43:43.520028140Z
-modified_at: 2026-07-02T16:43:47.743627771Z
+modified_at: 2026-07-02T17:10:44.151290681Z
 req_type: Story
 tags:
 - dispatch
