@@ -57,6 +57,9 @@ tonic-build = "0.12"
 tonic-web = "0.12"
 prost = "0.13"
 prost-types = "0.13"
+# protox: pure-Rust protobuf compiler — lets build.rs skip the external `protoc`
+# binary (tonic-build still does the Rust codegen via compile_fds). trace:FR-0227
+protox = "0.7"
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = "0.1"
 
