@@ -1,0 +1,19 @@
+id: 019f2208-aa09-77d1-afb1-8c03a77d9f26
+spec_id: STORY-756
+agreed_id: STORY-756
+title: Surface aida why <file:line> as the README hero — lead with the 60-second magic, demote probe-framing
+description: Goal move (make the magic discoverable, not buried). The README opens with "AIDA is a research probe... promoting it isnt the goal" then 8 abstract "what makes AIDA distinct" bullets — value asserted not felt, and the north-star command aida why is not mentioned once. Reshape the opening to LEAD with the 60-second magic (aida why <file:line> demo + the zero-setup / plain-markdown proof from STORY-755), frame the machinery as optional depth, and demote the probe/honesty preamble to a one-line pointer at the existing "Where this is and isnt proven" section (which stays). Front-door framing is the operators call → ships as a PR for review, not auto-merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T08:53:41.001936419Z
+modified_at: 2026-07-02T08:53:41.001936419Z
+req_type: Story
+tags:
+- aida:why
+- from-goal
+- north-star
+- onboarding
+- parent:STORY-754
+- readme
