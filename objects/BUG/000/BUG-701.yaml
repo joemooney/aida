@@ -4,11 +4,11 @@ agreed_id: BUG-701
 title: aida add is systemically slow — p50 8.8s (min 6.8s, max 15s) on a core write command, contradicts BUG-634 sub-second claim
 description: 'Surfaced by the now-trustworthy telemetry (BUG-699). Recent (2026-07-02) aida add events: n=20, min=6769ms, p50=8799ms, max=14941ms — EVERY recent add is 7-15s, uniform (not bimodal), so it is systemic, not contention. aida add is a core write verb (2567 uses/30d) and sits on the magic-first getting-started screen (Capture a new spec) — a first-user waits ~9s to file their first spec, undermining the 60-second on-ramp. This contradicts CLAUDE.md BUG-634 which claims single-spec writes are sub-second (was ~13-20s) via targeted single-YAML read/modify/write. Either a regression, or BUG-634 only fixed the cache-read path while the write path (orphan-store worktree targeted git commit + cache write-through) is still slow. Also observed slow: pull 5-13s (two-leg git sync, network — plausibly expected), doctor 17s (full scan — plausibly expected), edit 5s (same write path as add). NEXT: profile where the ~9s in add goes (git commit on the orphan worktree? full-store load? cache rebuild?) — verify against a timed run before fixing. NOT yet root-caused; do not assume the cause.'
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:21:44.207546149Z
-modified_at: 2026-07-02T17:21:44.207546149Z
+modified_at: 2026-07-02T17:22:53.966931510Z
 req_type: Bug
 tags:
 - aida:add
