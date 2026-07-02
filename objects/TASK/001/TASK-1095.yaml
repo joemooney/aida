@@ -1,0 +1,31 @@
+id: 019f23cf-6248-7063-a14c-86f3e3e55b70
+spec_id: TASK-1095
+agreed_id: TASK-1095
+title: 'aida remote status + doctor: detect and report github/gitlab drift (read-only)'
+description: |-
+  Slice 1 of STORY-760 (detection). Add a read-only surface that reports how far the local branches diverge across configured remotes, so drift is visible before it becomes a painful reconcile.
+
+  SCOPE:
+  - New aida remote status subcommand: for each of {main/code branch, aida-store branch} and each configured git remote (origin + any others, or a configured mirror set), fetch (read-only, best-effort) and print ahead/behind counts. Flag any remote-vs-remote divergence prominently. Honor AIDA_AGENT_OUTPUT for the agent-mode table.
+  - Add a Remote drift section to aida doctor that runs the same check and includes it in the health report; nonzero/flag on divergence.
+  - Reuse git ahead/behind plumbing; do NOT write or push anything. A fetch failure (offline / blocked remote) degrades to a warning, not an error.
+
+  ACCEPTANCE:
+  - WHEN two configured remotes hold different tips for a branch, aida remote status SHALL print each remotes ahead/behind vs local and mark the pair DIVERGED.
+  - WHEN all remotes agree, it SHALL report in sync and exit 0.
+  - aida doctor SHALL include the same drift finding.
+  - No path writes to any remote. Offline remote = warning, not failure.
+
+  VERIFY: a throwaway repo with two remotes, push a commit to only one, assert aida remote status marks it DIVERGED and aida doctor surfaces it.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T17:10:21.512037382Z
+modified_at: 2026-07-02T17:10:21.512037382Z
+req_type: Task
+tags:
+- aida:remote:status
+- reliability
+- remote
+- sync
