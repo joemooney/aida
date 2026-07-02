@@ -30730,5 +30730,13 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 2921
+- id: 019f214e-93b8-7580-ac9c-8e0d56a67a03
+  target_id: 019f214a-aed5-7ae2-a450-8d91878bd196
+  author: aida
+  node_id: '1'
+  lamport: 2922
+  timestamp: 2026-07-02T05:30:25.592239307Z
+  kind: !SetTitle
+    title: salvage_worktree_patch omits untracked file content — aida doctor --heal loses untracked files in orphan-worktrees
+clock: 2922
 node_id: '1'
