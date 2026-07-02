@@ -204,6 +204,8 @@ For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the work
 
 The convention behind the two-leg git-mirror verbs (`fetch` / `pull` / `push` / `rebase`) — what bundles, what's a deliberate non-mirror, and the `--code-only` / `--store-only` / `--dry-run` / `--json` rules a new verb must follow — is `docs/git-verb-surface.md` (TASK-109).
 
+**Multi-hub drift prevention** (STORY-760): when a project has more than one hub (github `origin` + a personal gitlab mirror), keep both `main` and `aida-store` identical on every hub. `aida remote status` (and `aida doctor --category remote-drift`) *detect* divergence; `[store.sync] mirror_remotes = ["gitlab"]` *fans out* the store push best-effort (warns, never fails, on a mid-reconcile mirror leg). The full model — the three legs, the native-multi-pushurl caveat while the store is diverged, and the reconcile procedure — is `docs/multi-hub-sync.md`.
+
 `aida pull` for the **code** leg uses `git pull --ff-only` by design (see `aida-cli/src/main.rs:20120` — refuses to surprise the working tree with auto-rebase). On divergence it prints `git pull --rebase origin main` as a hint. The **store** leg uses `--rebase` (line 19678) because store conflicts are rare and the worktree is AIDA-managed.
 
 When the code leg refuses (or raw `git pull` hits "Need to specify how to reconcile"):
