@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:39:58.466702878Z
-modified_at: 2026-06-30T17:40:40.665013740Z
+modified_at: 2026-07-02T02:21:26.867444204Z
 req_type: Decision
 tags:
 - adr
@@ -60,3 +60,10 @@ relationships:
   target_id: 019f16e5-8b1a-7d62-9dc9-3f27222d2918
   created_at: 2026-06-30T17:40:40.665007580Z
   created_by: joe
+comments:
+- id: 019f20a1-8fd3-7f33-af1b-ae98f158238d
+  author: joe
+  content: Commit 87e2fed08 references this requirement
+  created_at: 2026-07-02T02:21:26.867444204Z
+  modified_at: 2026-07-02T02:21:26.867444204Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
