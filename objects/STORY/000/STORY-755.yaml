@@ -3,12 +3,12 @@ spec_id: STORY-755
 agreed_id: STORY-755
 title: aida why <file:line> plain-markdown fallback — resolve intent from a spec .md file when no git-canonical store is attached
 description: 'Goal move (collapse substrate toward plain-markdown; prove the magic needs no machine). Verified in a bare folder (no aida init, no store): aida why auth.py:3 FINDS the trace (STORY-1) but cannot resolve title/why because it only reads the git-canonical store. Add a fallback: when load_store_for_lookup returns None (or the id is not found in it), search the working tree for a markdown spec that identifies as <ID> — a file named <ID>.md, or any .md whose frontmatter has id: <ID> — and read its title (frontmatter title: or first # heading) + first prose line as the why. This makes aida why deliver the full 60-second magic on a plain llm-wiki-style folder of markdown + trace comments, ZERO aida setup, orchestrator/cache/store all off. The strongest proof of the north-star thesis: the differentiator (code to decision linkage) does not require the machine. Child of STORY-754.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T08:09:39.369408218Z
-modified_at: 2026-07-02T08:34:35.509261111Z
+modified_at: 2026-07-02T08:51:21.767143503Z
 req_type: Story
 tags:
 - aida:why
@@ -28,3 +28,21 @@ comments:
   created_at: 2026-07-02T08:34:35.509261111Z
   modified_at: 2026-07-02T08:34:35.509261111Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f2206-89c6-7f10-bd31-c1164e6aabaa
+  author: aida-auto-bump
+  timestamp: 2026-07-02T08:51:21.670703754Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f2206-8a27-75e3-a166-a4ea816e8376
+  timestamp: 2026-07-02T08:51:21.767137623Z
+  agent: aida
+  commit_sha: 548b8a7185756c2b4128e36c5f493c01c625250b
+  summary: Completed via merge 548b8a71
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T08:51:20.616211131Z
+  completion_sha: 548b8a7185756c2b4128e36c5f493c01c625250b
