@@ -1,23 +1,35 @@
-# AIDA — Your project's missing index — *of intent, not just code*
+# AIDA — ask your codebase *why*
 
-> **What this is — read first.** AIDA is a **research probe** into how AI agents coordinate (especially across vendors) — the artifact is the *instrument*, the deliverable is *knowledge*. Promoting it as a product isn't the goal; the roll-your-own verdict is honestly **open**, and its own failures are data. Thesis + open verdict: [docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md](docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md) (EPIC-48). The rest of this README describes the instrument.
+**Point at any line of code and get the decision behind it.**
 
-**A hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.**
+```text
+$ aida why src/auth.py:42
+▸ src/auth.py:42
 
-**Without it**, *"why did we choose X?"* gets re-debated; cross-references between code and intent rot silently; coding agents (when you use them) start every session cold. **With it**, both questions are one query away — and AI-assisted work becomes auditable instead of opaque, since every line traces to a spec and every commit names what it implements.
+  this code exists because of STORY-118 (completed)
+    Rate-limit the login endpoint
+    why: We were seeing credential-stuffing attacks — throttle to 5/min per IP.
+    spec: specs/STORY-118.md
+```
+
+A trace comment links the line to a spec; `aida why` reads the intent back to you, with a citation. **No database, no server, no account** — it works on a plain folder of markdown + trace comments with **zero setup**: the answer lands whether or not you've run `aida init`.
+
+Karpathy's *LLM Wiki* showed that a folder of markdown you can **ask** beats a heavyweight app. AIDA adds the one thing a notes-wiki can't: your intent is **wired to the code**, so you can also ask *"what breaks if I change this?"* — `aida graph <id> --impact`.
+
+### The whole thing in 60 seconds
+
+1. Write a spec as markdown — `specs/STORY-1.md`: a title and a sentence of *why*.
+2. Drop a trace comment above the code it explains — `# trace:STORY-1`.
+3. `aida why <file>:<line>` — intent, instantly.
 
 ```rust
-// trace:FR-042 | ai:claude
+// trace:STORY-1 | ai:claude
 fn validate_token(token: &str) -> Result<Session> { ... }
 ```
 
-```
-[AI:claude] feat(auth): add token validation (FR-042)
-```
+Everything else in AIDA — the typed spec graph, stable IDs that never rot, an MCP server that serves the graph to any agent, the queue and review lifecycle — is **optional depth** for when a folder of markdown isn't enough. Start with the one command above.
 
-Every line of code links back to a requirement. Every commit references what it implements. The MCP server exposes the whole graph to any agent.
-
-The niche the probe's evidence points to: a **neutral, cross-vendor intent + coordination substrate** any vendor's agent reads and writes — and because the [shared substrate shapes every vendor's output](docs/research/ablations/2026-06-18-open-brief-convergence.md), running a spec through N vendors (`aida compete`) pays as quality-variance QA, a capability only a neutral substrate-owner can offer.
+> **Status — honest about it:** AIDA is alpha, and began as a research probe into cross-vendor agent coordination (that thesis, and exactly what's proven vs. hypothesised, is in [Where this is and isn't proven](#where-this-is-and-isnt-proven) below). The neutral cross-vendor substrate angle — running a spec through N vendors as quality-variance QA (`aida compete`) — is the deeper bet a substrate-owner can make.
 
 ## What makes AIDA distinct
 
