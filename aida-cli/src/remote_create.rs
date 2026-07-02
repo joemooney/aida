@@ -518,6 +518,178 @@ fn interactive_menu(
     anyhow::bail!("no valid choice — aborting");
 }
 
+// ───────────────────────────── remote drift status ──────────────────────
+
+/// Branches that must stay byte-identical across every hub: the code trunk and
+/// the orphan requirement store. If these diverge across remotes, the shared
+/// substrate has forked.
+// trace:TASK-1095 | ai:claude
+const DRIFT_BRANCHES: [&str; 2] = ["main", "aida-store"];
+
+/// One remote's standing for a branch: its current head (via `ls-remote`, no
+/// object transfer) and how far the local branch is ahead/behind it.
+struct RemoteBranchStanding {
+    remote: String,
+    head: Option<String>,
+    ahead_behind: Option<(u32, u32)>,
+}
+
+/// `aida remote status` — read-only drift readout across all configured
+/// remotes. Best-effort refresh, then compare each remote's tip for the shared
+/// branches; exit 2 when any branch's tips disagree so the command can gate a
+/// hook or CI. Never writes to a remote.
+// trace:TASK-1095 | ai:claude
+pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> Result<()> {
+    // Compare only real remotes. Skip the `all` fan-out pseudo-remote (a single
+    // name with multiple push URLs) — comparing it against its own members is
+    // noise, not drift.
+    let remotes: Vec<String> = aida_core::git_ops::list_remotes(project_root)
+        .into_iter()
+        .filter(|r| r != "all")
+        .collect();
+
+    if remotes.len() < 2 {
+        let msg = format!(
+            "Only {} remote(s) configured — nothing to drift against.",
+            remotes.len()
+        );
+        if json {
+            println!(
+                "{}",
+                serde_json::json!({ "remotes": remotes, "branches": [], "diverged": false, "note": msg })
+            );
+        } else {
+            println!("{msg}");
+        }
+        return Ok(());
+    }
+
+    // Best-effort refresh so ahead/behind reflects reality. A fetch failure
+    // (offline, corporate-blocked remote) is a warning, not a hard error — we
+    // fall back to whatever tracking refs exist. Read-only: fetch never writes
+    // to the remote.
+    if !no_fetch {
+        for r in &remotes {
+            for b in &DRIFT_BRANCHES {
+                let ok = Command::new("git")
+                    .arg("-C")
+                    .arg(project_root)
+                    .args(["fetch", "--quiet", r, b])
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false);
+                if !ok && !json {
+                    eprintln!(
+                        "  {} could not fetch {r}/{b} — comparing against stale refs",
+                        crate::glyph(crate::glyphs::Glyph::Warning)
+                    );
+                }
+            }
+        }
+    }
+
+    let mut any_diverged = false;
+    // (branch, standings, diverged) per branch.
+    let mut branch_reports: Vec<(String, Vec<RemoteBranchStanding>, bool)> = Vec::new();
+
+    for b in &DRIFT_BRANCHES {
+        let mut standings = Vec::new();
+        for r in &remotes {
+            let head = aida_core::git_ops::remote_branch_head_sha(project_root, r, b);
+            let ahead_behind =
+                aida_core::git_ops::ahead_behind(project_root, b, &format!("{r}/{b}"));
+            standings.push(RemoteBranchStanding {
+                remote: r.clone(),
+                head,
+                ahead_behind,
+            });
+        }
+        // Diverged when the present tips disagree, OR some remotes have the
+        // branch and others don't (mixed presence is drift too).
+        let present: Vec<&String> = standings.iter().filter_map(|s| s.head.as_ref()).collect();
+        let absent = standings.len() - present.len();
+        let distinct = {
+            let mut v: Vec<&String> = present.clone();
+            v.sort();
+            v.dedup();
+            v.len()
+        };
+        let diverged = distinct > 1 || (distinct >= 1 && absent > 0);
+        if diverged {
+            any_diverged = true;
+        }
+        branch_reports.push((b.to_string(), standings, diverged));
+    }
+
+    if json {
+        let branches: Vec<serde_json::Value> = branch_reports
+            .iter()
+            .map(|(branch, standings, diverged)| {
+                let rows: Vec<serde_json::Value> = standings
+                    .iter()
+                    .map(|s| {
+                        serde_json::json!({
+                            "remote": s.remote,
+                            "head": s.head,
+                            "local_ahead": s.ahead_behind.map(|(a, _)| a),
+                            "local_behind": s.ahead_behind.map(|(_, b)| b),
+                        })
+                    })
+                    .collect();
+                serde_json::json!({ "branch": branch, "diverged": diverged, "remotes": rows })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::json!({ "remotes": remotes, "branches": branches, "diverged": any_diverged })
+        );
+    } else {
+        println!("Remote sync status  ({})", remotes.join(", "));
+        for (branch, standings, diverged) in &branch_reports {
+            let verdict = if *diverged {
+                format!("{} DIVERGED", crate::glyph(crate::glyphs::Glyph::Cross))
+            } else {
+                format!("{} in sync", crate::glyph(crate::glyphs::Glyph::Check))
+            };
+            println!();
+            println!("{branch:<16} {verdict}");
+            for s in standings {
+                // `+ahead / -behind` of local vs this remote (ASCII: no down-arrow
+                // glyph in the theme, and +/- reads naturally to git users).
+                let ab = match s.ahead_behind {
+                    Some((a, b)) => format!("+{a}/-{b}"),
+                    None => "?".to_string(),
+                };
+                let head = s
+                    .head
+                    .as_deref()
+                    .map(|h| h.chars().take(12).collect::<String>())
+                    .unwrap_or_else(|| "absent".to_string());
+                println!("  {:<12} {:<10} {}", s.remote, ab, head);
+            }
+        }
+        println!();
+        if any_diverged {
+            println!(
+                "{} remotes disagree on a shared branch. Heal it (reconcile the divergent tips,",
+                crate::glyph(crate::glyphs::Glyph::Cross)
+            );
+            println!("  then push to every remote) — never force-push a shared branch to resolve.");
+        } else {
+            println!(
+                "{} all remotes agree on every shared branch.",
+                crate::glyph(crate::glyphs::Glyph::Check)
+            );
+        }
+    }
+
+    if any_diverged {
+        // Non-zero so a pre-push hook / CI step can gate on this.
+        std::process::exit(2);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
