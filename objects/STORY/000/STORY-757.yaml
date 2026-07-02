@@ -3,12 +3,12 @@ spec_id: STORY-757
 agreed_id: STORY-757
 title: aida init --minimal — the markdown-only first-run (specs/ folder + a runnable aida why demo, zero machine)
 description: 'Goal move: delete meta-machine from first-run. aida init scaffolds the full machine (orphan branch, cache, MCP, 48 skills, roles, hooks). Add aida init --minimal: scaffold ONLY specs/EXAMPLE-1.md (a markdown spec) + example.py (code with a # trace:EXAMPLE-1 comment), then print the exact aida why example.py:2 command. No .aida, no orphan branch, no cache, no skills, no roles. Proves the 60-second magic needs no setup and gives a first-user the whole idea in one command. Short-circuits at the top of the Init dispatch before any heavy path. Child of STORY-754.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T09:19:14.289286604Z
-modified_at: 2026-07-02T09:23:47.048623536Z
+modified_at: 2026-07-02T10:02:54.608509927Z
 req_type: Story
 tags:
 - aida:init
@@ -28,3 +28,21 @@ comments:
   created_at: 2026-07-02T09:23:47.048623536Z
   modified_at: 2026-07-02T09:23:47.048623536Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f2248-0aaf-7680-9a7b-d7538013a7a4
+  author: aida-auto-bump
+  timestamp: 2026-07-02T10:02:54.512020209Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f2248-0b10-70e1-99dd-0d5f80cf1fd5
+  timestamp: 2026-07-02T10:02:54.608503987Z
+  agent: aida
+  commit_sha: 9579653b3a55980bbc1d13df24fd513b15c832de
+  summary: Completed via merge 9579653b
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T10:02:53.445792567Z
+  completion_sha: 9579653b3a55980bbc1d13df24fd513b15c832de
