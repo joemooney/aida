@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T06:15:34.796572510Z
-modified_at: 2026-07-02T07:46:08.737731324Z
+modified_at: 2026-07-02T09:45:30.872644715Z
 req_type: Bug
 tags:
 - ci
@@ -35,6 +35,12 @@ comments:
   content: Commit df94994de references this requirement
   created_at: 2026-07-02T07:31:44.701083850Z
   modified_at: 2026-07-02T07:31:44.701083850Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f2238-1df8-7bf2-a6bc-6b1eb310bca4
+  author: joe
+  content: 'REOPENING — the env-lock unification (#1342) helped a LOT but did NOT fully eliminate the flake. Post-fix: 8/8 then 3/3 clean full-suite runs locally, but it flaked ONCE in CI on PR #1346 (an unrelated init --minimal change). The panic CHANGED: now `read_queue_depth(root, Some("implementer")).unwrap()` returns None (main.rs ~116018) instead of the earlier empty-actionable assertion — the queue file for the resolved user was not found, still a user/path-resolution race. The git error "The following untracked working tree files would be overwritten by merge" co-occurs in the same Run tests step (appears twice). Two hypotheses for the residual: (a) a SECOND isolation issue — a test doing git merge/checkout/stash in a shared/real tree that leaves untracked files and corrupts state for a sibling; (b) a residual env/path mutation not routed through test_env::ENV_LOCK (my unification covered the 9 with_env-style locks + guards; a bare std::env::set_var or a set_current_dir somewhere could still race). NOT reproducible locally after the fix, so this needs CI-side instrumentation (or --test-threads scoping for the git-ops group), and ships supervised — not a loop-rush. Frequency is now low enough that a single rerun clears an innocent PR.'
+  created_at: 2026-07-02T09:45:30.872644715Z
+  modified_at: 2026-07-02T09:45:30.872644715Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f21ca-d480-7fd1-9e54-49d8583b0a97
