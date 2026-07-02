@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:53:18.106068726Z
-modified_at: 2026-07-02T16:53:18.106068726Z
+modified_at: 2026-07-02T17:00:29.199021291Z
 req_type: Bug
 tags:
 - aida:usage
@@ -17,3 +17,10 @@ tags:
 - privacy
 - reliability
 - telemetry
+comments:
+- id: 019f23c6-588f-7bf1-8240-e3fe288d37bf
+  author: joe
+  content: Commit 8ee56db6f references this requirement
+  created_at: 2026-07-02T17:00:29.199021291Z
+  modified_at: 2026-07-02T17:00:29.199021291Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
