@@ -15,10 +15,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:00:57.094846148Z
-modified_at: 2026-07-02T17:00:57.094846148Z
+modified_at: 2026-07-02T17:01:03.852545218Z
 req_type: Task
 tags:
 - dispatch
 - parent:SPIKE-76
 - resilience
 - slice-1b
+relationships:
+- rel_type: Child
+  target_id: 019f21bf-59d6-77e1-9d7d-e5519f5b0b59
+  created_at: 2026-07-02T17:01:03.852545218Z
