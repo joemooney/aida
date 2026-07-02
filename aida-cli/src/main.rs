@@ -97307,33 +97307,93 @@ fn run_interactive_unblock_sweep(
     let mut delegated: Vec<burndown::UnblockLine> = Vec::new();
 
     // --- Bulk advisor-grooming step: don't dump 100 draft-approvals on the human.
+    // "Hand them to the advisor" used to be one vague option that merely printed a
+    // paste-prompt. TASK-1087: make it legible — offer the two concrete groom
+    // actions as top-level picks (propose vs apply), keep the paste-prompt as an
+    // explicit option, and add a re-prompting "?" item that explains each with
+    // simple examples (inquire 0.9.1 has no native '?' keybinding).
+    // trace:STORY-750 trace:TASK-1087 | ai:claude
     if !groomable.is_empty() {
+        const GROOM_PROPOSE: &str =
+            "Groom them — the advisor proposes approve/queue/reject; you review";
+        const GROOM_APPLY: &str = "Groom + approve — the advisor decides AND applies now";
+        const PASTE: &str = "Emit a paste-prompt for a live advisor session";
+        const WALK: &str = "Walk them myself anyway";
+        const SKIP: &str = "Skip them";
+        const HELP: &str = "? — what do these mean? (examples)";
+
         let heading = format!(
             "{} spec(s) are advisor grooming (drafts to approve / approved to queue) — the advisor's call, not yours",
             groomable.len()
         );
-        let opts = vec![
-            "Hand them all to the advisor (recommended)",
-            "Walk them myself anyway",
-            "Skip them",
-        ];
-        match inquire::Select::new(&heading, opts).prompt() {
-            Ok(pick) if pick.starts_with("Hand") => delegated.extend(groomable),
-            Ok(pick) if pick.starts_with("Walk") => {
+
+        // A tiny action enum so the re-prompting menu (the '?' item loops back to
+        // the same prompt) is decoupled from the code that consumes `groomable`.
+        enum GroomAction {
+            Propose,
+            Apply,
+            Paste,
+            Walk,
+            Skip,
+        }
+
+        let action = loop {
+            let opts = vec![GROOM_PROPOSE, GROOM_APPLY, PASTE, WALK, SKIP, HELP];
+            let pick = match inquire::Select::new(&heading, opts)
+                .with_help_message("Up/Down to move, Enter to select, or pick '?' for examples")
+                .prompt()
+            {
+                Ok(p) => p,
+                Err(inquire::InquireError::OperationCanceled)
+                | Err(inquire::InquireError::OperationInterrupted) => {
+                    println!(
+                        "  {} sweep stopped.",
+                        crate::glyph(crate::glyphs::Glyph::Cross).yellow()
+                    );
+                    return Ok(());
+                }
+                Err(e) => anyhow::bail!("prompt failed: {e}"),
+            };
+            match pick {
+                GROOM_PROPOSE => break GroomAction::Propose,
+                GROOM_APPLY => break GroomAction::Apply,
+                PASTE => break GroomAction::Paste,
+                WALK => break GroomAction::Walk,
+                SKIP => break GroomAction::Skip,
+                HELP => {
+                    print_groom_handoff_help();
+                    continue;
+                }
+                _ => continue,
+            }
+        };
+
+        match action {
+            // "Groom them" / "Groom + approve" fire the advisor's own disposition
+            // pass via the SAME `aida groom` verb the advisor runs by hand — no
+            // re-implementation. Propose writes nothing; apply executes.
+            GroomAction::Propose => {
+                println!(
+                    "  {} firing the advisor's groom pass (propose-only — writes nothing until you apply)…",
+                    crate::glyph(crate::glyphs::Glyph::Robot).cyan()
+                );
+                self_invoke_aida(&["groom"])?;
+            }
+            GroomAction::Apply => {
+                println!(
+                    "  {} firing the advisor's groom pass with --apply — it will approve/queue/reject…",
+                    crate::glyph(crate::glyphs::Glyph::Robot).cyan()
+                );
+                self_invoke_aida(&["groom", "--apply"])?;
+            }
+            // Relay to a warm advisor session as a paste-prompt (the old behavior).
+            GroomAction::Paste => delegated.extend(groomable),
+            GroomAction::Walk => {
                 let mut merged = groomable;
                 merged.extend(human);
                 human = merged;
             }
-            Ok(_) => {} // Skip them.
-            Err(inquire::InquireError::OperationCanceled)
-            | Err(inquire::InquireError::OperationInterrupted) => {
-                println!(
-                    "  {} sweep stopped.",
-                    crate::glyph(crate::glyphs::Glyph::Cross).yellow()
-                );
-                return Ok(());
-            }
-            Err(e) => anyhow::bail!("prompt failed: {e}"),
+            GroomAction::Skip => {}
         }
     }
 
@@ -97450,6 +97510,48 @@ fn run_interactive_unblock_sweep(
         report_drain_readiness();
     }
     Ok(())
+}
+
+/// TASK-1087: the '?' item on the bulk advisor-grooming menu — explain each
+/// choice in plain terms with concrete examples, then the caller re-prompts.
+// trace:TASK-1087 | ai:claude
+fn print_groom_handoff_help() {
+    let arrow = crate::glyph(crate::glyphs::Glyph::Arrow);
+    println!();
+    println!("  {}", "What each choice does".bold());
+    println!();
+    println!("  {}", "Groom them (propose)".cyan());
+    println!("    Fires the advisor — a fresh `claude -p` that reads the open drafts /");
+    println!("    approved-unqueued specs and proposes a fate for each. Writes NOTHING");
+    println!("    until you apply. For example:");
+    println!("      DRAFT-812  {arrow} approve + queue   (clear, in scope)");
+    println!("      DRAFT-820  {arrow} reject            (duplicate of an existing story)");
+    println!("      SPIKE-9    {arrow} park              (needs a demand signal first)");
+    println!("    You review, then run `aida groom --apply` to execute.");
+    println!();
+    println!("  {}", "Groom + approve (apply)".cyan());
+    println!("    The same advisor pass, but it EXECUTES its calls immediately —");
+    println!("    approvals get queued, rejects rejected, parks parked. For example:");
+    println!("      \"11 approved & queued, 3 rejected, 2 parked\" — nothing left for you.");
+    println!("    Use when you trust the advisor on these low-stakes grooming calls.");
+    println!();
+    println!("  {}", "Emit a paste-prompt for a live advisor".cyan());
+    println!("    Changes nothing. Prints a ready-made prompt (grouped by action) for");
+    println!("    you to paste into your WARM advisor session — richer context than a");
+    println!("    cold-boot agent.");
+    println!();
+    println!("  {}", "Walk them myself".cyan());
+    println!("    Adds them back to your one-by-one review; you decide each.");
+    println!();
+    println!("  {}", "Skip them".cyan());
+    println!("    Leave them parked and untouched this pass.");
+    println!();
+    println!(
+        "  {}",
+        "Note: groom considers the advisor's full open-spec candidate set (these included), not only the rows shown here."
+            .dimmed()
+    );
+    println!();
 }
 
 /// STORY-750: perform ONE sweep resolution by self-invoking the existing `aida`
