@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T06:15:34.796572510Z
-modified_at: 2026-07-02T06:39:40.134510766Z
+modified_at: 2026-07-02T07:31:16.885852514Z
 req_type: Bug
 tags:
 - ci
@@ -23,4 +23,10 @@ comments:
   content: 'REPRODUCED + ROOT-CAUSED locally. Running the FULL aida-cli suite in parallel (the CI condition) reproduces a 1-test failure ~1 in 3 runs; running the single test alone ALWAYS passes. The failing test VARIES across runs (run 2 failed on a different test than bug670) — so this is a SYSTEMIC parallel-test race, not bug670-specific. Mechanism: cargo runs unit tests as parallel THREADS in one process, so std::env set_var/remove_var is process-global. There are 182 set_var/remove_var sites in aida-cli tests (glyphs.rs alone churns AIDA_TEST_HOME dozens of times; advisor.rs, first_run.rs, etc.). The with_env helpers use a PER-MODULE static Mutex, which serializes mutators WITHIN a module but NOT across modules, and env-READING tests (e.g. bug670 reads current_user_id) take no lock at all. When a reader interleaves with another module s mutate/restore window, it sees a transient env and computes the wrong result (bug670: current_user_id resolves a different user -> empty queue -> actionable []). CI shows a co-occurring "untracked working tree files would be overwritten by merge" from some other test doing real git ops, reinforcing test-isolation leakage. FIX OPTIONS (test-infra, ships supervised): (a) one crate-global env Mutex that EVERY env-touching test takes (mutators AND readers) — correct but touches many sites; (b) adopt serial_test and annotate env/cwd tests; (c) run the suite (or an env-sensitive nextest group) with --test-threads=1; (d) make the affected readers not depend on process env (inject user explicitly). Recommend (b) or a shared global lock. Impact: intermittently reds EVERY PR, forces gh run rerun.'
   created_at: 2026-07-02T06:39:39.179947497Z
   modified_at: 2026-07-02T06:39:39.179947497Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f21bd-3915-7732-9202-48d00929304a
+  author: joe
+  content: Commit 728d33cd5 references this requirement
+  created_at: 2026-07-02T07:31:16.885852514Z
+  modified_at: 2026-07-02T07:31:16.885852514Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
