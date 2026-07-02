@@ -29,3 +29,7 @@ tags:
 - reliability
 - remote
 - sync
+relationships:
+- rel_type: Child
+  target_id: 019f23ce-d79d-7bb3-8088-464e517cd6b6
+  created_at: 2026-07-02T18:00:06.611107686Z
