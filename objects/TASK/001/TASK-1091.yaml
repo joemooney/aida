@@ -1,0 +1,14 @@
+id: 019f23b6-8478-7aa1-90cb-cabb5944ed7e
+spec_id: TASK-1091
+agreed_id: TASK-1091
+title: Add a documented commit-early/push-early policy to vendor pickup docs
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T16:43:11.864690714Z
+modified_at: 2026-07-02T16:43:11.864690714Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md
