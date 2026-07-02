@@ -44302,6 +44302,7 @@ struct DispatchReportInput {
     agent_type: String,
     spec: Option<String>,
     status: agent_registry::AgentStatus,
+    liveness_stalled: Option<bool>,
     paused: bool,
     worktree: std::path::PathBuf,
     branch: Option<String>,
@@ -44334,7 +44335,7 @@ fn dispatch_report_row(
 ) -> DispatchReportRow {
     let state = if input.status == agent_registry::AgentStatus::Stale && input.dirty {
         DispatchHealthState::Salvageable
-    } else if input.status == agent_registry::AgentStatus::Stale {
+    } else if input.liveness_stalled == Some(true) {
         DispatchHealthState::Stalled
     } else {
         DispatchHealthState::Moving
@@ -44432,20 +44433,15 @@ fn dispatch_fallback_guidance(vendor: &str, spec: &str) -> String {
 // The no-progress liveness DELTA-comparator: given a prior and a current
 // snapshot, decide whether an agent is stalled (child reaped AND neither HEAD
 // nor the dirty fingerprint moved). Fully unit-tested, but not yet wired into
-// the single-shot `dispatch health` report — surfacing it live needs
-// cross-invocation snapshot persistence (store the prior snapshot per agent,
-// compare on the next run). That stateful wiring is the tracked slice-1b
-// follow-up; the comparator lands now, tested, so the follow-up only wires it.
+// the `dispatch health` report through per-clone snapshot persistence.
 // trace:STORY-759 | ai:codex+claude
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 struct DispatchLivenessSnapshot {
     child_reaped: bool,
     head: String,
     dirty_fingerprint: String,
 }
 
-#[allow(dead_code)] // wired by the slice-1b snapshot-persistence follow-up. trace:STORY-759
 fn dispatch_liveness_stalled(
     previous: &DispatchLivenessSnapshot,
     current: &DispatchLivenessSnapshot,
@@ -44453,6 +44449,47 @@ fn dispatch_liveness_stalled(
     current.child_reaped
         && previous.head == current.head
         && previous.dirty_fingerprint == current.dirty_fingerprint
+}
+
+type DispatchSnapshotLedger = std::collections::BTreeMap<String, DispatchLivenessSnapshot>;
+
+fn dispatch_snapshot_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida").join("dispatch-snapshots.json")
+}
+
+fn load_dispatch_snapshots(project_root: &std::path::Path) -> DispatchSnapshotLedger {
+    let path = dispatch_snapshot_path(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return DispatchSnapshotLedger::new();
+    };
+    serde_json::from_str(&body).unwrap_or_default()
+}
+
+fn persist_dispatch_snapshots(project_root: &std::path::Path, snapshots: &DispatchSnapshotLedger) {
+    let path = dispatch_snapshot_path(project_root);
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    // trace:TASK-1094 | ai:codex
+    if std::fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let Ok(body) = serde_json::to_string_pretty(snapshots) else {
+        return;
+    };
+    let _ = std::fs::write(path, body);
+}
+
+fn dispatch_liveness_snapshot(
+    status: agent_registry::AgentStatus,
+    head: String,
+    dirty_fingerprint: String,
+) -> DispatchLivenessSnapshot {
+    DispatchLivenessSnapshot {
+        child_reaped: status == agent_registry::AgentStatus::Stale,
+        head,
+        dirty_fingerprint,
+    }
 }
 
 fn render_dispatch_toon(rows: &[DispatchReportRow]) -> String {
@@ -44526,14 +44563,26 @@ fn agent_dispatch_health(force_fallback: bool) -> Result<()> {
         .filter(|a| a.availability.is_paused())
         .map(|a| a.agent_type.clone())
         .collect();
+    let previous_snapshots = load_dispatch_snapshots(&project_root);
+    let mut current_snapshots = DispatchSnapshotLedger::new();
     let rows: Vec<DispatchReportRow> = agents
         .iter()
         .filter(|a| a.current_spec.is_some())
         .map(|agent| {
             let worktree = &agent.worktree_path;
+            let agent_name = agent_identity(agent);
             let branch = current_branch_at(worktree);
             let dirty_text = dispatch_worktree_dirty_fingerprint(worktree);
             let dirty = !dirty_text.is_empty() && dirty_text != "unknown";
+            let current_snapshot = dispatch_liveness_snapshot(
+                agent.status,
+                git_capture(worktree, &["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".into()),
+                dirty_text.clone(),
+            );
+            let liveness_stalled = previous_snapshots
+                .get(&agent_name)
+                .map(|previous| dispatch_liveness_stalled(previous, &current_snapshot));
+            current_snapshots.insert(agent_name.clone(), current_snapshot);
             let (ahead_main, _behind_main) = branch
                 .as_deref()
                 .and_then(|b| {
@@ -44548,10 +44597,11 @@ fn agent_dispatch_health(force_fallback: bool) -> Result<()> {
                 _ => (None, false),
             };
             let input = DispatchReportInput {
-                agent: agent_identity(agent),
+                agent: agent_name,
                 agent_type: agent.agent_type.clone(),
                 spec: agent.current_spec.clone(),
                 status: agent.status,
+                liveness_stalled,
                 paused: agent.availability.is_paused(),
                 worktree: worktree.clone(),
                 branch,
@@ -44564,6 +44614,7 @@ fn agent_dispatch_health(force_fallback: bool) -> Result<()> {
             dispatch_report_row(&input, &paused_vendor_types, force_fallback)
         })
         .collect();
+    persist_dispatch_snapshots(&project_root, &current_snapshots);
 
     if agent_output_mode() {
         println!("{}", render_dispatch_toon(&rows));
@@ -44618,6 +44669,11 @@ mod dispatch_health_tests {
             agent_type: "codex".to_string(),
             spec: Some("STORY-759".to_string()),
             status,
+            liveness_stalled: if status == agent_registry::AgentStatus::Stale {
+                Some(true)
+            } else {
+                Some(false)
+            },
             paused: false,
             worktree: std::path::PathBuf::from("/tmp/story-759"),
             branch: Some("story-759-dispatch-report".to_string()),
@@ -44709,6 +44765,63 @@ mod dispatch_health_tests {
             dirty_fingerprint: String::new(),
         };
         assert!(dispatch_liveness_stalled(&previous, &current));
+    }
+
+    #[test]
+    fn dispatch_liveness_snapshot_persistence_round_trip_classifies_progress_and_stall() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let agent = "codex-1".to_string();
+        let previous = DispatchLivenessSnapshot {
+            child_reaped: false,
+            head: "a".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        let mut ledger = DispatchSnapshotLedger::new();
+        ledger.insert(agent.clone(), previous);
+        persist_dispatch_snapshots(root, &ledger);
+
+        let changed = DispatchLivenessSnapshot {
+            child_reaped: true,
+            head: "b".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        let loaded = load_dispatch_snapshots(root);
+        assert!(!dispatch_liveness_stalled(
+            loaded.get(&agent).unwrap(),
+            &changed
+        ));
+
+        let unchanged_reaped = DispatchLivenessSnapshot {
+            child_reaped: true,
+            head: "a".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        assert!(dispatch_liveness_stalled(
+            loaded.get(&agent).unwrap(),
+            &unchanged_reaped
+        ));
+    }
+
+    #[test]
+    fn dispatch_liveness_first_run_has_no_false_stall() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let loaded = load_dispatch_snapshots(root);
+        let current = DispatchLivenessSnapshot {
+            child_reaped: true,
+            head: "a".to_string(),
+            dirty_fingerprint: String::new(),
+        };
+        let liveness_stalled = loaded
+            .get("codex-1")
+            .map(|previous| dispatch_liveness_stalled(previous, &current));
+        assert_eq!(liveness_stalled, None);
+
+        let mut facts = input(agent_registry::AgentStatus::Stale, false);
+        facts.liveness_stalled = liveness_stalled;
+        let row = dispatch_report_row(&facts, &[], false);
+        assert_eq!(row.state, DispatchHealthState::Moving);
     }
 
     #[test]
