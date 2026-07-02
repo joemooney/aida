@@ -1,0 +1,36 @@
+id: 019f21bf-59d6-77e1-9d7d-e5519f5b0b59
+spec_id: SPIKE-76
+agreed_id: SPIKE-76
+title: 'Resilience for multi-vendor agent dispatch: survive connection drops, agent crashes, and single-vendor dependence'
+description: |-
+  Directive (operator, 2026-07-02): do not let connection failures be a limiting factor — leverage the full Claude + Codex + AGY fleet and begin building resilience into how work is dispatched. Grounded in concrete failures observed over this sessions batch runs:
+
+  1. MCP server disconnected/reconnected repeatedly — dispatch that depends on MCP stalls; the CLI (AIDA_AGENT_OUTPUT/TOON) is the resilient surface. Lesson: never route load-bearing dispatch through a single flaky channel.
+  2. Two worktree-isolated implementer agents died mid-flight BEFORE committing — their work was salvageable only because the diffs survived in the worktree; a commit-early discipline would have made recovery trivial.
+  3. One agent paused waiting on a background-test notification that never arrived (its child was reaped) — recovered by SendMessage resume. Dispatch needs a liveness/timeout + resume path, not indefinite waits.
+  4. All fan-out was single-vendor (Claude). Codex and AGY sat idle — no cross-vendor redundancy, so a Claude/MCP outage would have halted everything.
+
+  ## Investigate (deliverable: a plan + smallest-valuable-slice recommendation)
+  - What resilience concretely means here: connection-failure tolerance, crash-resilient dispatch (commit-early / resumable / salvageable), agent-liveness timeouts, and cross-vendor redundancy/fallback (Claude <-> Codex <-> AGY).
+  - Which failures are worth engineering against now vs accepting (avoid over-engineering a daemon where a retry/commit-early discipline suffices).
+  - How cross-vendor dispatch composes with the existing brief/mailbox substrate and the per-vendor policies (AGY: draft-for-review + cross-validate; Codex: sandbox posture).
+  - The smallest slice that measurably reduces halts (candidate: a commit-early + resumable-agent + CLI-not-MCP dispatch pattern, before any new infra).
+
+  ## Acceptance
+  - THE spike SHALL produce a docs/plans/ design naming the resilience failure-modes, the accept-vs-engineer split, and a ranked smallest-valuable-slice.
+  - THE design SHALL specify how work fans across Claude/Codex/AGY with a fallback path when one vendor or channel is unavailable.
+  - THE design SHALL NOT propose new daemon-grade infrastructure without evidence a lighter discipline (commit-early, retry, resume) is insufficient.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T07:33:36.342708449Z
+modified_at: 2026-07-02T07:33:36.342708449Z
+req_type: Spike
+tags:
+- dispatch
+- from-incident
+- multi-vendor
+- orchestrator
+- resilience
+human_only: true
