@@ -30738,5 +30738,17 @@ operations:
   timestamp: 2026-07-02T05:30:25.592239307Z
   kind: !SetTitle
     title: salvage_worktree_patch omits untracked file content — aida doctor --heal loses untracked files in orphan-worktrees
-clock: 2922
+- id: 019f2165-8c93-7060-a9e1-6fc9b6db6d40
+  target_id: 019f2165-7c49-7aa1-bd21-86554116c6d8
+  author: aida
+  node_id: '1'
+  lamport: 2923
+  timestamp: 2026-07-02T05:55:31.091877708Z
+  kind: !Create
+    title: 'aida ps: emit TOON in agent mode instead of the human running-work table (STORY-753 slice)'
+    description: 'Slice of STORY-753. aida ps rendered the human "Running work" column table under AIDA_AGENT_OUTPUT; add an agent_output_mode() TOON branch (view: ps + running/orphaned toon tables + stale_hidden scalar), mirroring aida integrate. --json still wins. trace:STORY-753'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2923
 node_id: '1'
