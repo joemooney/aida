@@ -903,6 +903,8 @@ pub(crate) enum UnblockAction {
 pub(crate) struct UnblockFacts {
     /// Display SPEC-ID.
     pub id: String,
+    /// The spec's title (for the STORY-750 interactive walk).
+    pub title: String,
     /// Lowercased requirement type (`task`, `story`, `epic`, …).
     pub req_type: String,
     /// Normalized status key (`draft`, `approved`, `inprogress`, `done`, …).
@@ -1056,6 +1058,9 @@ pub(crate) fn classify_unblock(f: &UnblockFacts) -> Option<UnblockClass> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnblockLine {
     pub id: String,
+    /// The spec's title — shown in the interactive walk so the operator can
+    /// decide without a separate lookup (STORY-750).
+    pub title: String,
     pub class: UnblockClass,
     pub reason: String,
 }
@@ -1082,6 +1087,243 @@ pub(crate) fn unblock_reason(class: UnblockClass) -> &'static str {
         }
         UnblockClass::Deferred => "deliberately deferred",
         UnblockClass::BlockedBy => "blocked by an unsatisfied dependency (BlockedBy)",
+    }
+}
+
+/// STORY-750: one resolution the interactive sweep (`aida human unblock
+/// --interactive`) can offer for a hurdle. The per-hurdle MENU and the walk
+/// ORDER are pure here so they're exhaustively unit-testable; the impure half
+/// (the `inquire::Select` prompt + the self-invoked `aida` verb that performs
+/// the write) lives in `main.rs`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SweepChoice {
+    /// Draft → approve it and queue it into the burndown.
+    ApproveQueue,
+    /// Draft → reject it.
+    Reject,
+    /// Approved-but-unqueued → queue it.
+    Queue,
+    /// Under-specified → open the spec to add acceptance.
+    Clarify,
+    /// Decision-pending / needs-design → drive the supervised guided dialog.
+    LaunchGuided,
+    /// Decision-pending → record a decision note without leaving the sweep.
+    AddNote,
+    /// Held-for-review → surface the review command.
+    ShowReview,
+    /// Blocked-by → surface what's blocking it.
+    ShowBlocker,
+    /// Print the spec's full detail (description + acceptance), then re-prompt.
+    ShowDetails,
+    /// Hand this one to the advisor instead of deciding it yourself — it joins
+    /// the advisor-delegate prompt emitted at the end of the sweep.
+    AskAdvisor,
+    /// Leave this one parked and move on.
+    Skip,
+}
+
+impl SweepChoice {
+    /// The label shown in the `inquire::Select`.
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            SweepChoice::ApproveQueue => "Approve & queue",
+            SweepChoice::Reject => "Reject",
+            SweepChoice::Queue => "Queue it into the burndown",
+            SweepChoice::Clarify => "Clarify — open the spec to add acceptance",
+            SweepChoice::LaunchGuided => "Resolve the design now (guided dialog)",
+            SweepChoice::AddNote => "Add a decision note (leave parked)",
+            SweepChoice::ShowReview => "Show the review command",
+            SweepChoice::ShowBlocker => "Show what's blocking it",
+            SweepChoice::ShowDetails => "Show details (description + acceptance)",
+            SweepChoice::AskAdvisor => "Ask the advisor to handle it",
+            SweepChoice::Skip => "Skip — leave it for now",
+        }
+    }
+}
+
+/// STORY-750: the ordered menu of resolutions the sweep offers for one hurdle
+/// class. `Skip` is ALWAYS last. Pure.
+pub(crate) fn sweep_menu(class: UnblockClass) -> Vec<SweepChoice> {
+    // Every actionable hurdle ends with the universal tail: see the detail, hand
+    // it to the advisor, or skip. `with_tail` keeps `Skip` last.
+    let with_tail = |mut v: Vec<SweepChoice>| {
+        v.push(SweepChoice::ShowDetails);
+        v.push(SweepChoice::AskAdvisor);
+        v.push(SweepChoice::Skip);
+        v
+    };
+    match class {
+        UnblockClass::NeedsApproval => {
+            with_tail(vec![SweepChoice::ApproveQueue, SweepChoice::Reject])
+        }
+        UnblockClass::ApprovedUnqueued => with_tail(vec![SweepChoice::Queue]),
+        UnblockClass::UnderSpecified => with_tail(vec![SweepChoice::Clarify]),
+        UnblockClass::DecisionPending => {
+            with_tail(vec![SweepChoice::LaunchGuided, SweepChoice::AddNote])
+        }
+        UnblockClass::HeldForReview => with_tail(vec![SweepChoice::ShowReview]),
+        UnblockClass::BlockedBy => with_tail(vec![SweepChoice::ShowBlocker]),
+        // Parked-by-choice: nothing to resolve inline — the sweep lists these as
+        // informational rows rather than prompting.
+        UnblockClass::BuildSupervised | UnblockClass::Deferred => vec![SweepChoice::Skip],
+    }
+}
+
+/// STORY-750: is this hurdle ADVISOR grooming (draft approval / queueing) rather
+/// than a genuinely-human decision? These are bulk-delegated to the advisor at
+/// the top of the sweep instead of dumped on the human one at a time. Pure.
+pub(crate) fn sweep_is_advisor_groomable(class: UnblockClass) -> bool {
+    matches!(
+        class,
+        UnblockClass::NeedsApproval | UnblockClass::ApprovedUnqueued
+    )
+}
+
+/// STORY-750: walk-order rank for the interactive sweep — CHEAPEST-first, so the
+/// operator clears the one-keystroke approvals/queues before reaching the design
+/// forks that need real thought. Lower sorts earlier. Pure.
+pub(crate) fn sweep_cost_rank(class: UnblockClass) -> u8 {
+    match class {
+        UnblockClass::NeedsApproval => 0,
+        UnblockClass::ApprovedUnqueued => 1,
+        UnblockClass::BlockedBy => 2,
+        UnblockClass::HeldForReview => 3,
+        UnblockClass::UnderSpecified => 4,
+        UnblockClass::DecisionPending => 5,
+        UnblockClass::BuildSupervised => 6,
+        UnblockClass::Deferred => 7,
+    }
+}
+
+/// STORY-750: does the sweep offer a real inline resolution for this class, or is
+/// it an informational (leave-parked) row it just lists?
+pub(crate) fn sweep_is_actionable(class: UnblockClass) -> bool {
+    !matches!(
+        class,
+        UnblockClass::BuildSupervised | UnblockClass::Deferred
+    )
+}
+
+/// STORY-750: sort classified lines into the interactive walk order
+/// (cheapest-first, stable within a rank so store order is preserved). Pure.
+// trace:STORY-750 | ai:claude
+pub(crate) fn sweep_walk_order(mut lines: Vec<UnblockLine>) -> Vec<UnblockLine> {
+    lines.sort_by_key(|l| sweep_cost_rank(l.class));
+    lines
+}
+
+#[cfg(test)]
+mod story_750_sweep_tests {
+    use super::*;
+
+    #[test]
+    fn every_menu_ends_with_skip() {
+        for class in [
+            UnblockClass::NeedsApproval,
+            UnblockClass::ApprovedUnqueued,
+            UnblockClass::UnderSpecified,
+            UnblockClass::DecisionPending,
+            UnblockClass::HeldForReview,
+            UnblockClass::BlockedBy,
+            UnblockClass::BuildSupervised,
+            UnblockClass::Deferred,
+        ] {
+            let menu = sweep_menu(class);
+            assert_eq!(
+                *menu.last().unwrap(),
+                SweepChoice::Skip,
+                "menu for {class:?} must end with Skip"
+            );
+        }
+    }
+
+    #[test]
+    fn needs_approval_offers_approve_reject_then_common_tail() {
+        assert_eq!(
+            sweep_menu(UnblockClass::NeedsApproval),
+            vec![
+                SweepChoice::ApproveQueue,
+                SweepChoice::Reject,
+                SweepChoice::ShowDetails,
+                SweepChoice::AskAdvisor,
+                SweepChoice::Skip
+            ]
+        );
+    }
+
+    #[test]
+    fn actionable_menus_carry_details_and_ask_advisor() {
+        for class in [
+            UnblockClass::NeedsApproval,
+            UnblockClass::ApprovedUnqueued,
+            UnblockClass::UnderSpecified,
+            UnblockClass::DecisionPending,
+            UnblockClass::HeldForReview,
+            UnblockClass::BlockedBy,
+        ] {
+            let menu = sweep_menu(class);
+            assert!(menu.contains(&SweepChoice::ShowDetails), "{class:?}");
+            assert!(menu.contains(&SweepChoice::AskAdvisor), "{class:?}");
+        }
+        // Info rows have no tail — just Skip.
+        assert_eq!(sweep_menu(UnblockClass::Deferred), vec![SweepChoice::Skip]);
+    }
+
+    #[test]
+    fn only_draft_and_approved_unqueued_are_advisor_groomable() {
+        assert!(sweep_is_advisor_groomable(UnblockClass::NeedsApproval));
+        assert!(sweep_is_advisor_groomable(UnblockClass::ApprovedUnqueued));
+        assert!(!sweep_is_advisor_groomable(UnblockClass::DecisionPending));
+        assert!(!sweep_is_advisor_groomable(UnblockClass::UnderSpecified));
+        assert!(!sweep_is_advisor_groomable(UnblockClass::BlockedBy));
+    }
+
+    #[test]
+    fn decision_pending_offers_guided_before_note() {
+        let menu = sweep_menu(UnblockClass::DecisionPending);
+        assert_eq!(menu[0], SweepChoice::LaunchGuided);
+        assert_eq!(menu[1], SweepChoice::AddNote);
+    }
+
+    #[test]
+    fn cheapest_first_puts_approval_before_design() {
+        assert!(
+            sweep_cost_rank(UnblockClass::NeedsApproval)
+                < sweep_cost_rank(UnblockClass::DecisionPending),
+            "one-keystroke approvals must walk before design forks"
+        );
+        assert!(
+            sweep_cost_rank(UnblockClass::DecisionPending)
+                < sweep_cost_rank(UnblockClass::Deferred),
+            "leave-parked rows sink below actionable ones"
+        );
+    }
+
+    #[test]
+    fn walk_order_is_cheapest_first_and_stable() {
+        let mk = |id: &str, class| UnblockLine {
+            id: id.to_string(),
+            title: String::new(),
+            class,
+            reason: String::new(),
+        };
+        let ordered = sweep_walk_order(vec![
+            mk("A", UnblockClass::DecisionPending),
+            mk("B", UnblockClass::NeedsApproval),
+            mk("C", UnblockClass::NeedsApproval),
+            mk("D", UnblockClass::BlockedBy),
+        ]);
+        let ids: Vec<&str> = ordered.iter().map(|l| l.id.as_str()).collect();
+        // approvals first (B,C stable), then blocked-by, then the design fork.
+        assert_eq!(ids, vec!["B", "C", "D", "A"]);
+    }
+
+    #[test]
+    fn parked_classes_are_not_actionable() {
+        assert!(!sweep_is_actionable(UnblockClass::Deferred));
+        assert!(!sweep_is_actionable(UnblockClass::BuildSupervised));
+        assert!(sweep_is_actionable(UnblockClass::NeedsApproval));
+        assert!(sweep_is_actionable(UnblockClass::BlockedBy));
     }
 }
 
@@ -2720,6 +2962,7 @@ mod tests {
     ) -> UnblockFacts {
         UnblockFacts {
             id: id.to_string(),
+            title: format!("title of {id}"),
             req_type: req_type.to_string(),
             status: status.to_string(),
             tags: tags.iter().map(|s| s.to_string()).collect(),
@@ -3096,22 +3339,26 @@ mod tests {
         let lines = vec![
             UnblockLine {
                 id: "TASK-2".to_string(),
+                title: String::new(),
                 class: UnblockClass::ApprovedUnqueued,
                 reason: unblock_reason(UnblockClass::ApprovedUnqueued).to_string(),
             },
             UnblockLine {
                 id: "TASK-3".to_string(),
+                title: String::new(),
                 class: UnblockClass::UnderSpecified,
                 reason: unblock_reason(UnblockClass::UnderSpecified).to_string(),
             },
             UnblockLine {
                 id: "T-1".to_string(),
+                title: String::new(),
                 class: UnblockClass::BlockedBy,
                 reason: unblock_reason(UnblockClass::BlockedBy).to_string(),
             },
             // BUG-502: a built-and-held spec must render under REVIEW.
             UnblockLine {
                 id: "STORY-543".to_string(),
+                title: String::new(),
                 class: UnblockClass::HeldForReview,
                 reason: unblock_reason(UnblockClass::HeldForReview).to_string(),
             },
