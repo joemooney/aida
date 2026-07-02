@@ -30589,5 +30589,24 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 2910
+- id: 019f206f-3685-75b2-9fd9-a9c842d7319c
+  target_id: 019f206f-263d-7c02-83d0-f5bc87a6557e
+  author: aida
+  node_id: '1'
+  lamport: 2911
+  timestamp: 2026-07-02T01:26:27.205299486Z
+  kind: !Create
+    title: aida pull strands its autostash on index.lock contention — the hard-reset step fails, stash left un-restored
+    description: |-
+      aida pull (code leg) creates an autostash, then runs a hard-reset / ff-only update. When a concurrent process holds the git index lock (another drive, a worktree op, a parallel pull), the update step fails with an index-lock error AFTER the autostash was created — so the autostash is left in the stash list, un-restored. Over a session with many drives plus concurrent git activity this stacks up multiple orphaned autostash entries silently. Observed 2026-07-01: a BUG-680 auto-complete drive parked at phase 5 (pull) with this error; the working tree recovered on a later pull, but three autostash entries accumulated. In this incident all three turned out superseded, but the mechanism can strand genuinely-uncommitted work with no signal to the user.
+
+      ## Acceptance
+      - WHEN aida pull creates an autostash and the subsequent update step fails, THE command SHALL restore the autostash before returning the error, leaving no orphaned autostash.
+      - WHEN aida pull encounters an index lock held by another process, THE command SHALL either wait-and-retry briefly or fail BEFORE creating an autostash, so it never strands work.
+      - WHEN aida pull exits after a failed code leg, THE error message SHALL name any autostash it could not restore and the recovery step.
+      - A test SHALL assert that a simulated update failure after autostash leaves the working tree in its pre-pull state, not stashed away.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2911
 node_id: '1'
