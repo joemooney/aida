@@ -1,0 +1,24 @@
+id: 019f2071-b414-72c1-9ec6-4d55440ff539
+spec_id: BUG-692
+agreed_id: BUG-692
+title: git-guardrails hook false-positives on destructive-git tokens inside a quoted argument (blocks legit aida commands)
+description: |-
+  The aida-git-guardrails PreToolUse hook (.claude/hooks/aida-git-guardrails.sh) scans the whole command string for destructive-git command tokens (the hard-reset flag, force-push, stash-drop/pop, etc.). It matches those tokens even when they appear as PROSE inside a quoted argument rather than as an executed command — e.g. an `aida add --description "..."` whose text merely mentions those command names. Observed 2026-07-01: filing BUG-691 (whose description explained an autostash/reset failure) was blocked because the description text contained those command names; rewording to avoid the literal tokens let it through. So a legitimate, non-git command is refused because of documentation text.
+
+  ## Acceptance
+  - WHEN a command is not itself a git invocation (e.g. it is `aida add`/`aida edit` with the tokens only inside a quoted value), THE guardrail SHALL NOT block it on destructive-git-token match.
+  - THE guardrail SHALL match destructive git operations at the level of the actual command/argv being executed (the git subcommand + flags), not a substring scan of the whole line including quoted argument bodies.
+  - A test SHALL assert that `aida add --description "...mentions the hard-reset and force-push flags..."` is allowed, while an actual destructive git invocation is still blocked.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T01:29:10.420064490Z
+modified_at: 2026-07-02T01:29:10.420064490Z
+req_type: Bug
+tags:
+- aida:hooks
+- false-positive
+- git-guardrails
+- papercut
+- severity:cosmetic
