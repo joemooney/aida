@@ -20113,36 +20113,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
 
                 // TASK-1096: fan out the store push to every configured mirror
                 // remote so a clone can't silently leave one hub behind — the
-                // drift-prevention leg. Best-effort: a non-ff / unreachable
-                // mirror warns (with a reconcile hint) and is skipped; it never
-                // fails the sync, since `origin` is the source of record and a
-                // mirror may be intentionally behind (e.g. mid-reconcile).
-                // trace:TASK-1096 | ai:claude
+                // drift-prevention leg. trace:TASK-1096 | ai:claude
                 if origin_ok {
                     if let Some(project_root) = store_path.parent() {
-                        let cfg = read_store_sync_config(project_root).unwrap_or_default();
-                        let warn = crate::glyph(crate::glyphs::Glyph::Warning);
-                        for mirror in &cfg.mirror_remotes {
-                            if mirror == "origin" {
-                                continue;
-                            }
-                            if !aida_core::git_ops::has_remote(store_path, mirror) {
-                                eprintln!(
-                                    "  {warn} mirror remote `{mirror}` not configured — skipping"
-                                );
-                                continue;
-                            }
-                            println!("Mirroring to {mirror}/{branch}...");
-                            match aida_core::git_ops::push(store_path, mirror, &branch) {
-                                Ok(true) => println!("  Mirror push complete."),
-                                Ok(false) => eprintln!(
-                                    "  {warn} mirror `{mirror}` rejected (diverged) — reconcile then re-push (see `aida remote status`)"
-                                ),
-                                Err(e) => eprintln!(
-                                    "  {warn} mirror `{mirror}` push failed: {e} — skipped"
-                                ),
-                            }
-                        }
+                        fan_out_mirror_push(store_path, &branch, project_root);
                     }
                 }
             }
@@ -105900,6 +105874,39 @@ fn push_notice_suppressed_by_env() -> bool {
     }
 }
 
+/// Best-effort fan-out of a just-pushed `branch` to every configured mirror
+/// remote (`[store.sync] mirror_remotes`). `repo` is the git dir to push from,
+/// `project_root` is where `.aida/config.toml` lives. A non-ff / unreachable /
+/// unconfigured mirror WARNS (with a reconcile hint) and is skipped — it never
+/// errors, because a mirror may be intentionally behind (mid-reconcile). Shared
+/// by `aida db sync --push` (store leg) and `aida push` (both legs) so a clone
+/// can't silently leave one hub behind.
+// trace:STORY-760 | ai:claude
+fn fan_out_mirror_push(repo: &std::path::Path, branch: &str, project_root: &std::path::Path) {
+    let cfg = read_store_sync_config(project_root).unwrap_or_default();
+    if cfg.mirror_remotes.is_empty() {
+        return;
+    }
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    for mirror in &cfg.mirror_remotes {
+        if mirror == "origin" {
+            continue;
+        }
+        if !aida_core::git_ops::has_remote(repo, mirror) {
+            eprintln!("  {warn} mirror remote `{mirror}` not configured — skipping");
+            continue;
+        }
+        println!("Mirroring {branch} → {mirror}...");
+        match aida_core::git_ops::push(repo, mirror, branch) {
+            Ok(true) => println!("  Mirror push complete."),
+            Ok(false) => eprintln!(
+                "  {warn} mirror `{mirror}` rejected (diverged) — reconcile then re-push (see `aida remote status`)"
+            ),
+            Err(e) => eprintln!("  {warn} mirror `{mirror}` push failed: {e} — skipped"),
+        }
+    }
+}
+
 fn handle_push_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -106115,6 +106122,9 @@ fn handle_push_command(
             match res {
                 Ok(s) if s.success() => {
                     println!("  {}", "code push complete".green());
+                    // STORY-760: fan the code branch out to every mirror hub so
+                    // `aida push` can't leave one behind. Best-effort.
+                    fan_out_mirror_push(&project_root, &branch, &project_root);
                 }
                 Ok(s) => {
                     eprintln!(
@@ -106168,7 +106178,11 @@ fn handle_push_command(
             let branch =
                 git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
             match git_ops::push(store_path, "origin", &branch) {
-                Ok(true) => println!("  {}", "store push complete".green()),
+                Ok(true) => {
+                    println!("  {}", "store push complete".green());
+                    // STORY-760: fan the store branch out to every mirror hub.
+                    fan_out_mirror_push(store_path, &branch, &project_root);
+                }
                 Ok(false) => {
                     eprintln!(
                         "  {} push rejected — pull/rebase first (`aida db sync --pull`)",
