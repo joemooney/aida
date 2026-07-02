@@ -614,14 +614,13 @@ fn aida_home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, MutexGuard};
+    use std::sync::MutexGuard;
 
-    // `AIDA_GLYPHS` / `AIDA_TEST_HOME` are process-global; serialize the tests
-    // that mutate them so they don't race.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
+    // BUG-697: `AIDA_GLYPHS` / `AIDA_TEST_HOME` are process-global. Delegate to
+    // the ONE shared env lock so these swaps can't race a read/swap under any
+    // other test helper (env mutation under different locks still data-races).
     fn lock() -> MutexGuard<'static, ()> {
-        ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+        crate::test_env::env_lock()
     }
 
     fn write_config(dir: &Path, glyphs: &str) {

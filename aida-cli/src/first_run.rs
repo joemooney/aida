@@ -262,8 +262,8 @@ mod tests {
     /// Serialize tests mutating the env knobs (cargo runs tests in-process,
     /// parallel).
     fn with_env<R>(vars: &[(&str, Option<&str>)], f: impl FnOnce() -> R) -> R {
-        static LOCK: Mutex<()> = Mutex::new(());
-        let _guard = LOCK.lock().unwrap();
+        // BUG-697: shared process-global env lock (was a module-local mutex).
+        let _guard = crate::test_env::env_lock();
         let prev: Vec<(String, Option<String>)> = vars
             .iter()
             .map(|(k, _)| (k.to_string(), std::env::var(k).ok()))

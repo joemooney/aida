@@ -10,13 +10,18 @@
 //! the per-test temp-path variant (Codex's BUG-371 fix) used when the
 //! state crosses a subprocess boundary instead of staying in-process.
 //!
-//! Existing module-local mutexes (`with_env_vars` in `advisor.rs`,
-//! `with_bg_fetch_env` and `scoped_prepend_path` in `main.rs`, the
-//! `workflow_hints` LOCK) predate this helper and are functionally
-//! equivalent — they each guard a single distinct key, so they don't
-//! race with each other or with `ENV_LOCK` here. New tests should reach
-//! for `EnvVarGuard` rather than coining another local mutex.
-//! trace:TASK-521 | ai:claude
+//! BUG-697: module-local mutexes (`with_env_vars` in `advisor.rs`, the
+//! `with_env` helpers in `glyphs.rs` / `first_run.rs`, `user_alias.rs`,
+//! `workflow_hints`, the `OS_WRAP` / `HEADLESS_VENDOR` / `PATH` locks in
+//! `session.rs` / `main.rs`) predate this helper. The old claim that they
+//! "guard a distinct key so they don't race" was WRONG: `std::env::set_var`
+//! mutates the process-global `environ` and is not thread-safe *across keys*
+//! (a `setenv` can realloc `environ` while another thread `getenv`s an
+//! unrelated key), so a swap under one lock genuinely data-races a read
+//! under another. They now all acquire the SAME [`env_lock`] so every
+//! env-touching test — whatever helper it uses — serialises against every
+//! other. New tests should reach for `EnvVarGuard` rather than coining a
+//! local mutex. trace:TASK-521 trace:BUG-697 | ai:claude
 
 use std::ffi::{OsStr, OsString};
 use std::sync::{Mutex, MutexGuard};
@@ -28,6 +33,17 @@ use std::sync::{Mutex, MutexGuard};
 /// and parallel tests don't need finer-grained locking — env-var
 /// mutations are not hot.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+/// BUG-697: the ONE process-global env lock. Every test helper that mutates
+/// or reads env-derived state must serialise on this — the module-local
+/// mutexes that used to guard individual keys now delegate here so a swap
+/// under one helper can never overlap a read/swap under another (the
+/// `setenv` realloc race). Poison-tolerant like the guards. Hold the returned
+/// guard for the whole mutate→read→restore window; do NOT nest a second
+/// acquisition (incl. an `EnvVarGuard`) under it — the lock is not reentrant.
+pub(crate) fn env_lock() -> MutexGuard<'static, ()> {
+    ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
 
 /// RAII guard that sets (or unsets) an env var for the guard's lifetime
 /// and restores the prior value on drop. Holds `ENV_LOCK` for the whole
