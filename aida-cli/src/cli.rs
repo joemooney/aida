@@ -6131,6 +6131,15 @@ pub enum AgentCommand {
     // trace:STORY-528 | ai:claude
     Status,
 
+    /// Report dispatch health and recovery hints for active agent/spec work.
+    // trace:STORY-759 | ai:codex
+    #[clap(name = "dispatch-health")]
+    DispatchHealth {
+        /// Include paused/rate-limited vendors when choosing fallback guidance.
+        #[clap(long)]
+        force: bool,
+    },
+
     /// Set a dispatch marker (NOT a process pause): marks the agent busy
     /// (e.g. budget exhausted / rate-limited) so status and brief-time dispatch
     /// logic skip it. The process keeps running — use `aida agent stop` to
