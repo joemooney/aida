@@ -1,0 +1,17 @@
+id: 019f207f-e3bd-7872-af6a-9079f6a83e37
+spec_id: TASK-1085
+agreed_id: TASK-1085
+title: 'Swap protoc → protox: drop the external protoc build dependency'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T01:44:40.125941460Z
+modified_at: 2026-07-02T01:44:40.125941460Z
+req_type: Task
+tags:
+- aida:server
+- build
+- dependency
+- grpc
