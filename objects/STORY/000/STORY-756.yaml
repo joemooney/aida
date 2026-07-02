@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T08:53:41.001936419Z
-modified_at: 2026-07-02T08:53:45.267399792Z
+modified_at: 2026-07-02T08:54:46.044541980Z
 req_type: Story
 tags:
 - aida:why
@@ -21,3 +21,10 @@ relationships:
 - rel_type: Child
   target_id: 019f21c3-8438-7b31-b063-8d41f1623797
   created_at: 2026-07-02T08:53:45.267399792Z
+comments:
+- id: 019f2209-a81c-7f70-944d-9e09b21d9636
+  author: joe
+  content: Commit 548b8a718 references this requirement
+  created_at: 2026-07-02T08:54:46.044541980Z
+  modified_at: 2026-07-02T08:54:46.044541980Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
