@@ -1,0 +1,27 @@
+id: 019f241c-96e4-7760-a3ff-2c8d865429a8
+spec_id: TASK-1097
+agreed_id: TASK-1097
+title: 'Code-leg fan-out: aida remote mirror + pre-push hook mirrors code branches to every hub'
+description: |-
+  Slice 4 of STORY-760. Slices 1-2 gave detection + store-leg fan-out. The CODE leg is still pushed by plain git (aida does not wrap it), so a raw git push origin main reaches only one hub.
+
+  SCOPE:
+  - aida remote mirror <name> [--url URL]: add the remote if missing; add it to [store.sync] mirror_remotes; install a pre-push hook. Idempotent.
+  - pre-push hook: when pushing to origin, best-effort fan out each CODE ref (skip refs/heads/aida-store — the store leg is handled by mirror_remotes) to every mirror hub. A mirror failure WARNS and never blocks the origin push.
+  - The hook should be a thin shim calling an aida subcommand (e.g. aida remote mirror-push) so the fan-out logic stays in tested Rust, not bash.
+
+  CAVEAT (why not native multi-pushurl now): git remote set-url --add --push origin <mirror> would fan out BOTH code and store; while aida-store is intentionally diverged (BUG-700 scrub pending) the store leg to the mirror is non-ff and breaks aida db sync. The pre-push hook skips aida-store, so it works NOW without waiting for the scrub. After the scrub, native multi-pushurl becomes the simplest clean end-state.
+
+  ACCEPTANCE: a code push to origin also lands on each mirror hub; a mirror failure warns without blocking; aida-store is NOT touched by the code hook; setup is one command.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T18:34:41.252951047Z
+modified_at: 2026-07-02T18:34:41.252951047Z
+req_type: Task
+tags:
+- aida:remote
+- reliability
+- remote
+- sync
