@@ -1,0 +1,31 @@
+id: 019f23fc-ce70-75e3-9c44-2a413843711e
+spec_id: TASK-1096
+agreed_id: TASK-1096
+title: 'Store-sync fan-out: [store.sync] mirror_remotes pushes aida-store to every hub'
+description: |-
+  Slice 2 of STORY-760 (prevention). Make aida db sync (and the auto-push paths) push the orphan store to EVERY configured hub, not just origin, so a clone cannot silently leave one remote behind.
+
+  SCOPE:
+  - New [store.sync] mirror_remotes = ["gitlab", ...] config key (array of remote names). Read it in read_store_sync_config into StoreSyncConfig.
+  - After the successful push to origin in the db sync push block, loop over mirror_remotes and push the store branch to each. BEST-EFFORT: a non-fast-forward or unreachable mirror leg prints a WARNING (with a reconcile hint) and does NOT fail the overall sync — an intentionally-behind or offline remote must not break every push.
+  - Scaffold a commented mirror_remotes stub in the init config writers.
+  - Unit-test the config parse (array present / absent / empty).
+
+  ACCEPTANCE:
+  - WHEN mirror_remotes is set and reachable+ff, the store branch is pushed to origin AND each mirror.
+  - WHEN a mirror leg is non-ff or unreachable, the command WARNS and still exits success (origin leg succeeded).
+  - WHEN mirror_remotes is absent/empty, behaviour is unchanged (origin only).
+
+  NOTE: complements the native git multi-pushurl posture (a follow-up aida remote mirror helper + docs). This is the AIDA-controlled store leg.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T17:59:58.320745459Z
+modified_at: 2026-07-02T17:59:58.320745459Z
+req_type: Task
+tags:
+- aida:store:sync
+- reliability
+- remote
+- sync
