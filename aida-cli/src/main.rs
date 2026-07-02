@@ -40390,11 +40390,31 @@ fn salvage_worktree_patch(
     ));
     let untracked = git_output_lossy(worktree, &["ls-files", "--others", "--exclude-standard"]);
     if !untracked.trim().is_empty() {
-        body.push_str("\n# Untracked files present at salvage time:\n");
+        // BUG-696: index the untracked files as comments AND capture their
+        // CONTENT below — previously only the names were recorded, so an
+        // orphan-worktree's untracked files (new, never `git add`ed) were lost
+        // when `aida doctor --heal` tore the worktree down after salvage.
+        body.push_str("\n# Untracked files captured below as new-file diffs:\n");
         for line in untracked.lines() {
             body.push_str("#   ");
             body.push_str(line);
             body.push('\n');
+        }
+        // `git diff --no-index --binary /dev/null <file>` emits an appliable
+        // "new file" hunk (binary-safe) with no index mutation. It exits
+        // non-zero because the two sides differ — `git_output_lossy` keeps
+        // stdout and ignores the status, so on any platform where the idiom
+        // is unsupported the salvage simply degrades to the name-only index
+        // above rather than failing the heal. trace:BUG-696 | ai:claude
+        for line in untracked.lines() {
+            let f = line.trim();
+            if f.is_empty() {
+                continue;
+            }
+            body.push_str(&git_output_lossy(
+                worktree,
+                &["diff", "--no-index", "--binary", "/dev/null", f],
+            ));
         }
     }
     if body.trim().is_empty() {
@@ -42010,6 +42030,59 @@ mod story_462_doctor_tests {
         assert!(body.contains("# AIDA salvage patch"));
         assert!(body.contains("-before"));
         assert!(body.contains("+after"));
+    }
+
+    // BUG-696: the salvage patch must capture untracked files' CONTENT, not
+    // just their names — otherwise `aida doctor --heal` loses them when it
+    // tears down the orphan-worktree after salvage.
+    #[test]
+    fn salvage_worktree_patch_captures_untracked_file_content() {
+        let project = tempfile::tempdir().unwrap();
+        let worktree = tempfile::tempdir().unwrap();
+        for args in [
+            vec!["init"],
+            vec!["config", "user.email", "t@example.com"],
+            vec!["config", "user.name", "Test"],
+        ] {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(worktree.path())
+                .args(&args)
+                .output()
+                .unwrap();
+        }
+        // Commit a file, then dirty it (guarantees salvage runs) AND drop an
+        // untracked file whose content must survive.
+        let tracked = worktree.path().join("tracked.txt");
+        std::fs::write(&tracked, "before\n").unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .args(["add", "tracked.txt"])
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .args(["commit", "-m", "init"])
+            .output()
+            .unwrap();
+        std::fs::write(&tracked, "after\n").unwrap();
+        std::fs::write(
+            worktree.path().join("new_idea.txt"),
+            "SALVAGE_ME_UNIQUE_MARKER untracked body\n",
+        )
+        .unwrap();
+
+        let patch = salvage_worktree_patch(project.path(), "TASK-1", None, worktree.path())
+            .unwrap()
+            .expect("dirty worktree should produce salvage patch");
+        let body = std::fs::read_to_string(&patch).unwrap();
+        assert!(body.contains("new_idea.txt"), "untracked filename indexed");
+        assert!(
+            body.contains("SALVAGE_ME_UNIQUE_MARKER"),
+            "untracked file CONTENT must be captured, not just the name:\n{body}"
+        );
     }
 
     // ── TASK-752: legacy-store-cruft detection + guard ──
