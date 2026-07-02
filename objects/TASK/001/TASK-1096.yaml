@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:59:58.320745459Z
-modified_at: 2026-07-02T17:59:58.320745459Z
+modified_at: 2026-07-02T18:05:58.252826168Z
 req_type: Task
 tags:
 - aida:store:sync
@@ -33,3 +33,10 @@ relationships:
 - rel_type: Child
   target_id: 019f23ce-d79d-7bb3-8088-464e517cd6b6
   created_at: 2026-07-02T18:00:06.611107686Z
+comments:
+- id: 019f2402-4c6c-7b72-9e8e-56faa879df36
+  author: joe
+  content: Commit 7db9157b4 references this requirement
+  created_at: 2026-07-02T18:05:58.252826168Z
+  modified_at: 2026-07-02T18:05:58.252826168Z
+  session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5
