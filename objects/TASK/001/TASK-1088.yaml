@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T05:55:26.921783412Z
-modified_at: 2026-07-02T05:55:32.024909088Z
+modified_at: 2026-07-02T05:56:07.091275963Z
 req_type: Task
 tags:
 - agent-surface
@@ -19,3 +19,10 @@ relationships:
 - rel_type: Child
   target_id: 019f213a-20c5-7dd2-bbca-b6c8d99ba161
   created_at: 2026-07-02T05:55:32.024909088Z
+comments:
+- id: 019f2166-1933-7f50-9496-c288daf4a5e7
+  author: joe
+  content: Commit 728d33cd5 references this requirement
+  created_at: 2026-07-02T05:56:07.091275963Z
+  modified_at: 2026-07-02T05:56:07.091275963Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
