@@ -91064,28 +91064,24 @@ fn working_tree_is_dirty(project_root: &std::path::Path) -> bool {
 /// The curated "Getting started" set — the core spec loop a newcomer needs to
 /// be productive on day one. Kept deliberately short so the default help reads
 /// as approachable, not as a 40-command wall. trace:STORY-556
+// STORY-758: the first screen LEADS with the magic — `aida why` (code↔decision)
+// and the plain-markdown on-ramp — then the spec core. The autonomy verbs
+// (zen/ship/solo) are earned depth: still in `aida help --all` and their groups,
+// just not the newcomer's first impression. trace:STORY-758 | ai:claude
 const GETTING_STARTED: &[(&str, &str)] = &[
-    ("init", "Set up AIDA in the current project"),
-    ("add", "Add a new requirement"),
-    ("list", "List requirements"),
-    ("show", "Show details for one requirement"),
-    // trace:STORY-723 | ai:claude — the two shortest thought-to-merged paths belong
-    // on the first screen: `zen` autonomously implements + ships an approved
-    // spec; `ship` finishes one you implemented yourself.
     (
-        "zen",
-        "Autonomously implement + ship an approved spec, end-to-end",
+        "why",
+        "Ask your code why it exists — the decision behind any line",
     ),
     (
-        "ship",
-        "Finish the current spec — commit, open a PR, CI, merge",
+        "init",
+        "Set up AIDA (`init --minimal` = a folder of markdown, zero setup)",
     ),
-    ("done", "Mark a spec done — the simple \"I finished it\""),
-    // trace:TASK-879 | ai:claude — surface the solo loop on the first screen.
-    (
-        "solo",
-        "Run your project solo — groom → implement → integrate, end-to-end",
-    ),
+    ("show", "Show a spec — its intent, status, and links"),
+    ("add", "Capture a new spec (a title + a line of why)"),
+    ("list", "List specs"),
+    ("search", "Search specs"),
+    ("graph", "Trace impact — what a change affects"),
 ];
 
 /// The full grouped command surface, organized by function. Used by both the
@@ -91097,6 +91093,11 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
         (
             "Getting started",
             &[
+                // STORY-758: the magic leads here too.
+                (
+                    "why",
+                    "Ask your code why it exists — the decision behind any line",
+                ),
                 ("init", "Set up AIDA in the current project"),
                 ("add", "Add a new requirement"),
                 ("list", "List requirements"),
@@ -91263,9 +91264,11 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
 /// list the group headings so the depth is visible but not in the newcomer's
 /// face. Full rows are one step away via `aida help --all`. trace:STORY-556
 fn print_tiered_help() {
+    // STORY-758: lead with the magic, matching the README front door.
+    println!("{}", "AIDA — ask your codebase why".bold());
     println!(
         "{}",
-        "AIDA — AI-native requirements management for agent-readable specs".bold()
+        "Point at any line of code and get the decision behind it.".dimmed()
     );
     println!();
     println!("{}", "Usage: aida <command> [options]".dimmed());
@@ -91305,8 +91308,11 @@ fn print_tiered_help() {
         "`aida help --all`".bold(),
         "`aida <command> --help`".bold()
     );
+    // STORY-758: the magic is the entry point; `aida status` is for orientation
+    // once you're set up.
     println!(
-        "{} is the best entry point for \"what's going on here?\"",
+        "{} — point at code, get the decision behind it.  {} for \"what's going on here?\"",
+        "`aida why <file:line>`".bold(),
         "`aida status`".bold()
     );
     // trace:SPIKE-66 | ai:claude
@@ -91415,14 +91421,16 @@ mod help_grouping_tests {
 
     // trace:STORY-556 | ai:claude
     #[test]
-    fn getting_started_is_the_curated_core_loop() {
+    fn getting_started_leads_with_the_why_magic() {
         let names: Vec<&str> = GETTING_STARTED.iter().map(|(n, _)| *n).collect();
-        // trace:TASK-879 | ai:claude — `solo` joins the curated first screen.
-        // trace:STORY-723 | ai:claude — `zen` + `ship` (the shortest
-        // thought-to-merged paths) lead the loop right after the read verbs.
+        // STORY-758 (Strategy B): the first screen leads with the magic —
+        // `why` first, then the spec core. The autonomy verbs (zen/ship/solo)
+        // moved to their grouped depth (still in `aida help --all`); the first
+        // impression is the 60-second magic, not the machine.
+        assert_eq!(names[0], "why", "the magic leads the first screen");
         assert_eq!(
             names,
-            ["init", "add", "list", "show", "zen", "ship", "done", "solo"]
+            ["why", "init", "show", "add", "list", "search", "graph"]
         );
     }
 
