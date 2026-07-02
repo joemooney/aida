@@ -3450,6 +3450,9 @@ fn run() -> Result<()> {
             crate::cli::RemoteCommand::Attach { url } => {
                 remote_create::handle_remote_attach(&project_root, url)
             }
+            crate::cli::RemoteCommand::Status { json, no_fetch } => {
+                remote_create::handle_remote_status(&project_root, *json, *no_fetch)
+            }
         };
     }
 
@@ -37315,6 +37318,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold
+    // the same tip on every configured remote? Uses cheap `ls-remote` (refs
+    // only, no object transfer), so it is kept OUT of the hot
+    // `collect_doctor_findings` path and appended here. Honours the same
+    // `--category` filter. trace:TASK-1095 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "remote-drift")? {
+        findings.extend(scan_remote_drift(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     let mut report = DoctorReport::from_findings(findings);
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
@@ -37967,13 +37980,17 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         | "tracked-runtime"
         | "store-node-toml"
         | "store-runtime-cruft" => "store-tracked-runtime",
+        // TASK-1095: shared branches (trunk + store) holding different tips
+        // across configured remotes (github vs gitlab drift).
+        // trace:TASK-1095 | ai:claude
+        "remote-drift" | "remote-sync" | "drift" | "remotes" => "remote-drift",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, stale-remote-branches, merged-agent-worktrees, \
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
-             store-tracked-runtime)",
+             store-tracked-runtime, remote-drift)",
             other
         ),
     };
@@ -38366,6 +38383,57 @@ fn spec_id_from_work_branch(branch: &str) -> Option<String> {
         return None;
     }
     Some(format!("{}-{}", kind.to_ascii_uppercase(), digits))
+}
+
+/// Do the shared branches (code trunk + orphan store) hold the same tip on
+/// every configured remote? A mismatch means the substrate has forked across
+/// hubs (e.g. a clone pushed the store to gitlab but not github). Uses cheap
+/// `ls-remote` (refs only, no object transfer) for current truth; a remote we
+/// can't reach is skipped (not a false alarm). Never writes. Emits one finding
+/// per diverged branch.
+// trace:TASK-1095 | ai:claude
+fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let remotes: Vec<String> = aida_core::git_ops::list_remotes(project_root)
+        .into_iter()
+        .filter(|r| r != "all")
+        .collect();
+    if remotes.len() < 2 {
+        return Vec::new();
+    }
+
+    let mut findings = Vec::new();
+    for branch in ["main", "aida-store"] {
+        // (remote, short-sha) for every remote that currently has the branch.
+        let tips: Vec<(String, String)> = remotes
+            .iter()
+            .filter_map(|r| {
+                aida_core::git_ops::remote_branch_head_sha(project_root, r, branch)
+                    .map(|sha| (r.clone(), sha.chars().take(12).collect::<String>()))
+            })
+            .collect();
+        if tips.len() < 2 {
+            continue; // can't compare (offline, or only one hub has it)
+        }
+        let distinct: std::collections::BTreeSet<&String> = tips.iter().map(|(_, s)| s).collect();
+        if distinct.len() > 1 {
+            let detail = tips
+                .iter()
+                .map(|(r, s)| format!("{r}={s}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            findings.push(DoctorFinding {
+                category: "remote-drift".to_string(),
+                id: format!("remote-drift-{branch}"),
+                summary: format!("branch `{branch}` differs across remotes: {detail}"),
+                action:
+                    "reconcile the divergent tips and push to every remote (see `aida remote status`); \
+                     never force-push a shared branch to resolve"
+                        .to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+    findings
 }
 
 /// TASK-717: scan stale `origin/*` branches and classify each under the
