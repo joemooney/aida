@@ -231,6 +231,20 @@ $segs
 EOF
 }
 
+# Blank out the BODIES of single- and double-quoted substrings in a command, so
+# a dangerous git token that appears only as PROSE inside a quoted ARGUMENT
+# (e.g. `aida add --description '...the git reset --hard flag...'`) is NOT matched
+# as if it were a real git invocation. The quotes themselves are kept (bodies
+# emptied) so word boundaries are preserved. A genuine destructive git command
+# never wraps its subcommand/flags in quotes, so every real block still fires;
+# a quoted ref (`git push --force "main"`) collapses to an unparseable target
+# and fails CLOSED (blocked), which is the safe direction. Single quotes are
+# stripped before double so an apostrophe inside a double-quoted string can't
+# eat the wrong span. trace:BUG-692 | ai:claude
+strip_quoted_args() {
+    printf '%s' "$1" | sed -e "s/'[^']*'/''/g" -e 's/"[^"]*"/""/g'
+}
+
 # Patterns that indicate destructive git operations
 # Each pattern has an explanation of why it's blocked
 check_destructive() {
@@ -368,7 +382,11 @@ EOF
     return 0
 }
 
-if ! check_destructive "$COMMAND"; then
+# Scan a copy with quoted-argument bodies neutralized so prose inside a quoted
+# value can't trip the destructive-pattern checks (BUG-692).
+SCAN_COMMAND=$(strip_quoted_args "$COMMAND")
+
+if ! check_destructive "$SCAN_COMMAND"; then
     echo ""
     echo "To proceed anyway, ask the user to confirm the destructive operation."
     exit 2
