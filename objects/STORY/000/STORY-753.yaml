@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T05:08:05.445894436Z
-modified_at: 2026-07-02T05:55:26.261897509Z
+modified_at: 2026-07-02T05:55:32.024909088Z
 req_type: Story
 tags:
 - agent-surface
@@ -20,6 +20,9 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-07-02T05:08:09.721742436Z
+- rel_type: Parent
+  target_id: 019f2165-7c49-7aa1-bd21-86554116c6d8
+  created_at: 2026-07-02T05:55:32.024909088Z
 comments:
 - id: 019f2165-79b5-7923-a13d-c02a2e3a5c47
   author: joe
