@@ -2933,8 +2933,17 @@ fn run() -> Result<()> {
         git_init,
         commit_scaffold,
         node_name,
+        minimal,
     } = &cli.command
     {
+        // STORY-757: the markdown-only first run — scaffold just a `specs/`
+        // folder + a runnable `aida why` demo, none of the orphan-branch / cache
+        // / MCP / skills / roles machine. Proves the 60-second magic needs no
+        // setup. Short-circuits before every heavy init path. trace:STORY-757
+        if *minimal {
+            handle_init_minimal(*force)?;
+            return Ok(());
+        }
         // Default: distributed (git-canonical) mode per EPIC-1-001.
         // --sibling implies distributed-sibling. --centralized opts into
         // the deprecated SQLite-canonical path.
@@ -11623,6 +11632,105 @@ fn confirm_destructive_reset(count: usize, store_path: &std::path::Path) -> Resu
     } else {
         eprintln!("Cancelled. Store untouched.");
         Ok(false)
+    }
+}
+
+/// STORY-757: the markdown-only first run. Scaffolds ONLY a `specs/` folder with
+/// one example spec + a sample source file carrying a trace comment, then points
+/// at `aida why`. No orphan branch, cache, MCP, skills, roles, or queue — the
+/// 60-second magic with zero machine, so a first-user gets the whole idea in one
+/// command and only reaches for `aida init` when a folder of markdown isn't
+/// enough.
+// trace:STORY-757 | ai:claude
+/// Write the minimal scaffold under `root`. Returns the created paths, or an
+/// empty vec when a target already exists and `force` is false (caller reports
+/// it). Split out from [`handle_init_minimal`] so it's testable without a
+/// process-global `set_current_dir` (the BUG-697 race).
+// trace:STORY-757 | ai:claude
+fn scaffold_minimal_specs(root: &std::path::Path, force: bool) -> Result<Vec<std::path::PathBuf>> {
+    let specs = root.join("specs");
+    let spec_file = specs.join("EXAMPLE-1.md");
+    let demo = root.join("example.py");
+    if (spec_file.exists() || demo.exists()) && !force {
+        return Ok(Vec::new());
+    }
+    std::fs::create_dir_all(&specs).with_context(|| "creating specs/")?;
+    std::fs::write(
+        &spec_file,
+        "---\nid: EXAMPLE-1\ntitle: Rate-limit the login endpoint\nstatus: draft\n---\n\
+         We were seeing credential-stuffing attacks. Throttle login attempts to 5/min per IP.\n",
+    )
+    .with_context(|| "writing specs/EXAMPLE-1.md")?;
+    std::fs::write(
+        &demo,
+        "def login(req):\n    # trace:EXAMPLE-1\n    if too_many_attempts(req.ip):\n        return deny()\n",
+    )
+    .with_context(|| "writing example.py")?;
+    Ok(vec![spec_file, demo])
+}
+
+fn handle_init_minimal(force: bool) -> Result<()> {
+    let root = std::env::current_dir()?;
+    let created = scaffold_minimal_specs(&root, force)?;
+    if created.is_empty() {
+        println!(
+            "  {} specs/EXAMPLE-1.md or example.py already exists — pass --force to overwrite.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        return Ok(());
+    }
+
+    let check = crate::glyph(crate::glyphs::Glyph::Check).green();
+    println!("{check} minimal AIDA — a folder of markdown, zero machine.");
+    println!();
+    println!("  created  specs/EXAMPLE-1.md   a spec: a title + one line of why");
+    println!("  created  example.py           code with a `# trace:EXAMPLE-1` comment");
+    println!();
+    println!("  Now ask your code why it exists:");
+    println!("    {}", "aida why example.py:2".cyan().bold());
+    println!();
+    println!(
+        "  {}",
+        "That's the whole idea — add `# trace:<ID>` comments to your own code and ask.".dimmed()
+    );
+    println!(
+        "  {}",
+        "When a folder of markdown isn't enough, `aida init` adds the graph, IDs, and MCP."
+            .dimmed()
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod init_minimal_tests {
+    use super::{resolve_spec_from_markdown, scaffold_minimal_specs};
+
+    #[test]
+    fn minimal_scaffold_is_a_bare_folder_that_the_magic_can_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let created = scaffold_minimal_specs(dir.path(), false).unwrap();
+        assert_eq!(created.len(), 2, "creates the spec + the demo file");
+
+        // Only markdown + a code file — no machine.
+        assert!(dir.path().join("specs/EXAMPLE-1.md").exists());
+        assert!(dir.path().join("example.py").exists());
+        assert!(
+            !dir.path().join(".aida").exists(),
+            "no orphan-branch machine"
+        );
+        assert!(!dir.path().join(".aida-store").exists());
+
+        // The whole point: `aida why` resolves the scaffolded id from the bare
+        // folder — init --minimal and the magic compose with zero setup.
+        let it =
+            resolve_spec_from_markdown(dir.path(), "EXAMPLE-1").expect("resolves the demo spec");
+        assert_eq!(it.title, "Rate-limit the login endpoint");
+        assert!(it.markdown.is_some());
+
+        // Idempotent guard: a second run without --force writes nothing.
+        assert!(scaffold_minimal_specs(dir.path(), false)
+            .unwrap()
+            .is_empty());
     }
 }
 
