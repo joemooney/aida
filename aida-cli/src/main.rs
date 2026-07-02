@@ -47,6 +47,8 @@ mod events;
 mod exit_signal;
 mod external_import_bleed;
 mod findings;
+// trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
+mod first_run;
 mod focus;
 mod forge;
 mod global_queue;
@@ -91,6 +93,14 @@ mod pr_rebase;
 mod pr_ship;
 mod presence;
 mod process_probe;
+// BUG-677: the /proc probe + lease/spec liveness classifiers moved to
+// aida-core so aida-tui can compute liveness in-process. Re-export the shared
+// classifier types + fns at the crate root so `crate::LeaseState` /
+// `classify_lease_state` etc. keep resolving for every existing call site.
+// trace:BUG-677 | ai:claude
+pub(crate) use aida_core::liveness::{
+    classify_lease_state, classify_spec_liveness, LeaseState, SpecLiveness,
+};
 mod prompts;
 mod ship;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
@@ -417,7 +427,14 @@ fn main() {
             // trace:TASK-972
             if agent_output_mode() {
                 let (summary, help) = agent_error_summary_help(&msg);
-                println!("{}", toon::error_block(summary, help.as_deref()));
+                // TASK-1082: fold a did-you-mean suggestion into the agent-mode
+                // summary when a "Requirement not found" error is a near-miss of
+                // a real spec id. trace:TASK-1082 | ai:claude
+                let summary_owned = match did_you_mean_for_not_found(&msg) {
+                    Some(hint) => format!("{summary} ({hint})"),
+                    None => summary.to_string(),
+                };
+                println!("{}", toon::error_block(&summary_owned, help.as_deref()));
             } else if err.downcast_ref::<SoftSignpostShown>().is_some() {
                 // STORY-737 (delight #5): the command already rendered a soft,
                 // forward-pointing signpost to stderr — re-printing it as a red
@@ -436,6 +453,14 @@ fn main() {
                 }
                 for rest in lines {
                     eprintln!("{}", rest.dimmed());
+                }
+                // TASK-1082: when the error is a "Requirement not found" near-miss
+                // of a real spec id, add a `did you mean <ID>?` line — the same
+                // affordance clap gives for mistyped subcommands. Best-effort and
+                // only on this branch; the exit code stays non-zero.
+                // trace:TASK-1082 | ai:claude
+                if let Some(hint) = did_you_mean_for_not_found(&msg) {
+                    eprintln!("  {}", hint.dimmed());
                 }
             }
             1
@@ -1039,6 +1064,8 @@ mod task970_agent_output_tests {
             out_degree: 0,
             heft: 0,
             blocked: false,
+            // trace:TASK-1065 | ai:claude
+            has_pending_decision: false,
             yaml_path: String::new(),
         }
     }
@@ -5211,6 +5238,7 @@ fn handle_findings_command(
                 parent_id: None,
                 replies: Vec::new(),
                 reactions: Vec::new(),
+                session_id: resolve_current_session_id(), // trace:TASK-330
             });
             req.status = RequirementStatus::Rejected;
             req.modified_at = now;
@@ -5283,6 +5311,7 @@ fn handle_findings_command(
                         parent_id: None,
                         replies: Vec::new(),
                         reactions: Vec::new(),
+                        session_id: resolve_current_session_id(), // trace:TASK-330
                     });
                     if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
                         req.comments.push(Comment {
@@ -5297,6 +5326,7 @@ fn handle_findings_command(
                             parent_id: None,
                             replies: Vec::new(),
                             reactions: Vec::new(),
+                            session_id: resolve_current_session_id(), // trace:TASK-330
                         });
                     }
                     req.status = RequirementStatus::Completed;
@@ -5347,6 +5377,7 @@ fn handle_findings_command(
                     parent_id: None,
                     replies: Vec::new(),
                     reactions: Vec::new(),
+                    session_id: resolve_current_session_id(), // trace:TASK-330
                 });
             }
             req.status = RequirementStatus::Approved;
@@ -6252,6 +6283,7 @@ fn push_why_open(req: &mut Requirement, label: &str, consequence: &str) {
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
 }
 
@@ -6545,16 +6577,15 @@ fn collect_decision_requests(
     Ok((pending, answered))
 }
 
-/// TASK-1061: pending-DecisionRequest count drawn from an ALREADY-LOADED store
-/// instead of a fresh full-store load. The decision-inbox line in
-/// `aida status --full`'s presence section used to call
-/// `collect_decision_requests(backend)`, which delegates to
-/// `list_requirements(false)` — a SECOND full-store load (read every YAML
-/// object from the orphan store) duplicating the `backend.load()` the rich
-/// status path already paid for. Counting over `store.requirements` reuses that
-/// load: identical result (same `decision_request.is_pending()` predicate, same
-/// archived-excluded set the rich path operates on), zero extra I/O.
-// trace:TASK-1061
+/// TASK-1061 → TASK-1065: the store-based pending-DecisionRequest count. This is
+/// now the **reference oracle** for the cache-backed
+/// `CachedGitBackend::pending_decision_count`: the `has_pending_decision` cache
+/// column projects exactly this predicate (non-archived +
+/// `decision_request.is_pending()`) per row, so `aida status --full`'s
+/// decision-inbox line reads the cache column instead of a full store load. Kept
+/// (test-only) as the equivalence anchor its test module asserts against.
+// trace:TASK-1065 (supersedes TASK-1061)
+#[cfg(test)]
 fn pending_decision_request_count(store: &aida_core::models::RequirementsStore) -> usize {
     store
         .requirements
@@ -6969,6 +7000,7 @@ fn handle_research_command(
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
 
     // Escalate the decision (if any) — never auto-apply it. A pending decision
@@ -8484,6 +8516,7 @@ fn handle_findings_recur(
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
     req.modified_at = now;
     backend.update_requirement(&req)?;
@@ -8662,6 +8695,7 @@ fn handle_import_plan_command(
         parent_id: None,
         replies: Vec::new(),
         reactions: Vec::new(),
+        session_id: resolve_current_session_id(), // trace:TASK-330
     });
 
     if request_review {
@@ -9862,6 +9896,23 @@ fn handle_punt_command(
         )
         .dimmed()
     );
+
+    // TASK-349: a blocked-dependency punt names the work it's blocked on — that
+    // dependency belongs in the requirement graph as a blocked-by edge, not
+    // just in the punt prose. If the reason/lean text named blocker spec(s),
+    // nudge the operator to record the edge. A suggestion, not an auto-file:
+    // id-parsing from free text is best-effort, so the operator confirms.
+    // trace:TASK-349 | ai:claude
+    if let Some(suggestion) = punt::suggest_blocked_by(&display_id, category, reason, lean) {
+        let blockers = suggestion.blockers.join(", ");
+        println!(
+            "{} Looks blocked on {blockers} — record it in the graph so \
+             `aida graph {display_id} --blocked-by` sees the dependency:",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan()
+        );
+        println!("  {}", suggestion.suggested_command().cyan());
+    }
+
     Ok(())
 }
 
@@ -13300,6 +13351,13 @@ fn complete_init_scaffolding(
             );
         }
     }
+
+    // STORY-700: kick off the passive first-run hint chain — this prints the
+    // "file your first spec" nudge and records that the arc has started, so the
+    // subsequent add / queue-done / pull anchors carry it forward. Idempotent:
+    // a re-run of init over a started-or-finished arc is a silent no-op.
+    // trace:STORY-700 | ai:claude
+    first_run::after_init(root);
 
     Ok(())
 }
@@ -17657,6 +17715,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         );
                     }
                 }
+                // STORY-700: passive first-run chain — advancing past the "file
+                // your first spec" step. Only fires when the arc is sitting at
+                // exactly that step (the first `add` after a fresh `init`); every
+                // later `add` is a silent no-op. trace:STORY-700 | ai:claude
+                if let Ok(project_root) = find_project_root() {
+                    first_run::after_first_spec(&project_root);
+                }
             }
         }
         Command::Graph {
@@ -18225,6 +18290,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             println!("  Summary:");
                             for line in summary.lines() {
                                 println!("    {}", line);
+                            }
+                        }
+                        // STORY-698: the verification steps the builder ran,
+                        // captured at `aida queue done` — the audit trail the
+                        // PR body surfaces. trace:STORY-698 | ai:claude
+                        if let Some(steps) = info
+                            .test_coverage_notes
+                            .as_ref()
+                            .filter(|s| !s.trim().is_empty())
+                        {
+                            println!("  Verification:");
+                            for line in steps.lines().filter(|l| !l.trim().is_empty()) {
+                                println!("    - {}", line);
                             }
                         }
                     }
@@ -19321,6 +19399,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 parent_id: None,
                 replies: Vec::new(),
                 reactions: Vec::new(),
+                // trace:TASK-330 | ai:claude — stamp the producing session
+                session_id: resolve_current_session_id(),
             };
 
             req.comments.push(comment);
@@ -26614,6 +26694,21 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         }
     }
 
+    // STORY-698: the verification steps the builder ran, captured at
+    // `aida queue done` — the implementation audit trail the PR body surfaces.
+    // trace:STORY-698 | ai:claude
+    if let Some(steps) = req
+        .implementation_info
+        .as_ref()
+        .and_then(|info| info.test_coverage_notes.as_ref())
+        .filter(|s| !s.trim().is_empty())
+    {
+        println!("\n{}:", "Verification steps".green());
+        for line in steps.lines().filter(|l| !l.trim().is_empty()) {
+            println!("  {} {}", "-".dimmed(), line);
+        }
+    }
+
     if !req.relationships.is_empty() {
         println!("\n{}:", "Relationships".green());
         for relationship in &req.relationships {
@@ -31645,6 +31740,11 @@ fn handle_doc_command(
             println!();
             println!("Capture each with: aida doc add --title \"…\" --about <ID>");
             println!("(warn-only — this gate does not block the release)");
+        }
+
+        // Diff-driven doc nudge at PR-open. Warn-only. trace:TASK-939 | ai:claude
+        DocCommand::Suggest { range, json } => {
+            return handle_doc_suggest(range.as_deref(), *json);
         }
     }
 
@@ -43923,7 +44023,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *return_to_pool,
             *remove,
         ),
-        SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
+        SessionCommand::Leases { verbose, all, json } => session_leases(*verbose, *all, *json),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
         SessionCommand::Prune {
             days,
@@ -52975,6 +53075,86 @@ fn behind_origin_warning(behind: u32, branch: &str) -> Option<String> {
     ))
 }
 
+/// Default warn threshold (commits behind `origin/main`) at or above which
+/// the statusline surfaces the `base behind by N` staleness indicator for an
+/// active lease. Kept a touch loud so a one-commit drift doesn't nag every
+/// prompt; the queue-list surface uses a lower (any-non-zero) floor.
+// trace:TASK-101 | ai:claude
+const BASE_BEHIND_STATUSLINE_THRESHOLD: u32 = 5;
+
+/// Pure formatting for the "base behind by N" staleness indicator.
+/// Given how many commits an active lease's branch is BEHIND `origin/main`
+/// (from [`commits_behind_origin_main`]) and a noise-floor `threshold`,
+/// produce the compact `base behind by N` label — or `None` when the base is
+/// current (`behind == 0`) or the drift is below the caller's threshold. The
+/// statusline passes a higher warn threshold; `aida queue list` passes `1` so
+/// any non-zero drift surfaces. Side-effect-free so the behind-count → label
+/// mapping is unit-testable without git/CWD.
+// trace:TASK-101 | ai:claude
+fn base_behind_indicator(behind: u32, threshold: u32) -> Option<String> {
+    if behind == 0 || behind < threshold {
+        return None;
+    }
+    Some(format!("base behind by {}", behind))
+}
+
+#[cfg(test)]
+mod task_101_base_behind_tests {
+    use super::*;
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn zero_behind_is_silent() {
+        assert_eq!(base_behind_indicator(0, 1), None);
+        assert_eq!(base_behind_indicator(0, 5), None);
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn below_threshold_is_silent() {
+        // Statusline default (5): a 1-4 commit drift stays quiet.
+        assert_eq!(base_behind_indicator(1, 5), None);
+        assert_eq!(base_behind_indicator(4, 5), None);
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn at_or_above_threshold_surfaces_count() {
+        assert_eq!(
+            base_behind_indicator(5, 5).as_deref(),
+            Some("base behind by 5")
+        );
+        assert_eq!(
+            base_behind_indicator(12, 5).as_deref(),
+            Some("base behind by 12")
+        );
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn queue_list_floor_surfaces_any_nonzero() {
+        // `aida queue list` uses threshold 1: any non-zero drift shows.
+        assert_eq!(
+            base_behind_indicator(1, 1).as_deref(),
+            Some("base behind by 1")
+        );
+        assert_eq!(
+            base_behind_indicator(3, 1).as_deref(),
+            Some("base behind by 3")
+        );
+        assert_eq!(base_behind_indicator(0, 1), None);
+    }
+
+    // trace:TASK-101 | ai:claude
+    #[test]
+    fn embeds_the_exact_count() {
+        for n in [5u32, 6, 20, 99] {
+            let label = base_behind_indicator(n, 5).expect("surfaces at/above threshold");
+            assert!(label.contains(&n.to_string()), "{label} should contain {n}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod task_99_behind_origin_tests {
     use super::*;
@@ -58417,6 +58597,46 @@ fn followup_filed_anywhere(existing_titles: &[String], bullet: &str) -> bool {
     existing_titles.iter().any(|t| *t == want)
 }
 
+/// BUG-680: tag prefix that records the source plan path on a followup TASK the
+/// auto-followup path files. The BUG-656 marker comment records the extraction
+/// on the *completing spec*, but that comment can be lost or arrive unsynced
+/// (two commits completing before either marker syncs — the same window BUG-655
+/// flagged), and it says nothing once the followup itself has shipped and been
+/// archived away from the parent. Stamping the provenance on the child spec
+/// makes it durable and queryable: the followup carries its own origin, so a
+/// later re-extraction can recognise "this bullet already shipped from this
+/// plan" straight from the store even when the parent's marker is gone. Flat,
+/// colon-namespaced provenance tag (like `parent:`, `batch:`) per the tag
+/// conventions.
+// trace:BUG-680 | ai:claude
+const FOLLOWUP_SRC_TAG_PREFIX: &str = "followup-src:";
+
+/// BUG-680: a followup bullet already filed from the SAME source plan that has
+/// since reached a terminal status (Completed / Rejected — the work shipped or
+/// was rejected). `filed_from_plan` is `(recorded_plan_path, title, spec_id,
+/// is_terminal)` for every spec carrying a [`FOLLOWUP_SRC_TAG_PREFIX`] tag;
+/// `owned_plans` is the set of source plans currently being extracted. Returns
+/// the id of a terminal spec previously filed from one of `owned_plans` whose
+/// title matches `bullet` — re-filing it would create a second open spec for a
+/// followup that already ran its course, so the caller skips and links to the
+/// returned id. Match is trim + case-insensitive on the title; the plan path is
+/// exact (both sides are the store-relative path). Pure + total so it is
+/// unit-testable in isolation.
+// trace:BUG-680 | ai:claude
+fn followup_shipped_from_plan<'a>(
+    filed_from_plan: &'a [(String, String, String, bool)],
+    owned_plans: &std::collections::HashSet<String>,
+    bullet: &str,
+) -> Option<&'a str> {
+    let want = bullet.trim().to_ascii_lowercase();
+    filed_from_plan
+        .iter()
+        .find(|(plan, title, _, terminal)| {
+            *terminal && owned_plans.contains(plan) && title.trim().to_ascii_lowercase() == want
+        })
+        .map(|(_, _, id, _)| id.as_str())
+}
+
 /// Find the docs/plans/ files that *belong to* `spec_id` — the id appears
 /// in the `# Plan:` title line or the `Specs:` header line. Cross-references
 /// in a `## Related` section don't count (that plan owns a different spec).
@@ -58656,29 +58876,40 @@ fn discover_plan_context(
 /// Self-invoke `aida add` to file one followup as a child TASK of
 /// `parent_spec`. Always passes `--force-parent` — the parent is Done or
 /// Completed by the time we file, and we explicitly want the children
-/// regardless. Returns the new spec id on success.
+/// regardless. When `source_plan` is set, stamps the plan's provenance as a
+/// [`FOLLOWUP_SRC_TAG_PREFIX`] tag so a later re-extraction can dedup against
+/// this followup even after it ships (BUG-680). Returns the new spec id on
+/// success.
 fn aida_subcmd_add_followup_task(
     project_root: &std::path::Path,
     parent_spec: &str,
     title: &str,
+    source_plan: Option<&str>,
 ) -> Option<String> {
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let mut args: Vec<String> = vec![
+        "add".into(),
+        "--type".into(),
+        "task".into(),
+        "--status".into(),
+        "approved".into(),
+        "--priority".into(),
+        "low".into(),
+        "--parent".into(),
+        parent_spec.into(),
+        "--force-parent".into(),
+        "--title".into(),
+        title.into(),
+    ];
+    // BUG-680: durable source-plan provenance on the child, so re-filing after
+    // this followup ships is a no-op straight from the store. trace:BUG-680
+    if let Some(plan) = source_plan {
+        args.push("--tags".into());
+        args.push(format!("{FOLLOWUP_SRC_TAG_PREFIX}{plan}"));
+    }
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
-        .args([
-            "add",
-            "--type",
-            "task",
-            "--status",
-            "approved",
-            "--priority",
-            "low",
-            "--parent",
-            parent_spec,
-            "--force-parent",
-            "--title",
-            title,
-        ])
+        .args(&args)
         .output()
         .ok()?;
     if !out.status.success() {
@@ -58865,6 +59096,198 @@ fn capture_interface_changes(
     Ok(())
 }
 
+/// True when verification-step capture is disabled via
+/// `AIDA_AUTO_TEST_PLAN_CAPTURE=0|false|no`. Mirrors [`auto_followups_disabled`]
+/// and [`capture_interface_changes_disabled`] — the env-opt-out keeps the
+/// close-checkpoint prompt out of unattended drains.
+// trace:STORY-698 | ai:claude
+fn capture_test_plan_disabled() -> bool {
+    matches!(
+        std::env::var("AIDA_AUTO_TEST_PLAN_CAPTURE")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "0" | "false" | "no"
+    )
+}
+
+/// What [`capture_test_plan`] should do with the verification steps, given the
+/// resolved flag / TTY / opt-out state. Split out as a pure decision so the
+/// precedence rules are unit-testable without a TTY.
+// trace:STORY-698 | ai:claude
+#[derive(Debug, PartialEq)]
+enum TestPlanCapture {
+    /// Leave `test_coverage_notes` untouched (no prompt, no write).
+    Skip,
+    /// Store exactly these joined steps (the flag / deterministic path).
+    Record(String),
+    /// Prompt the builder at the TTY for the steps.
+    Prompt,
+}
+
+/// Precedence for verification-step capture at `aida queue done`:
+///
+/// 1. Any `--test-plan STEP` flag ⇒ record exactly those steps, no prompt.
+/// 2. `--no-test-plan` ⇒ skip (leave any existing notes untouched), no prompt.
+/// 3. Otherwise, at a TTY, interactive (not `--yes`), not env-disabled, and
+///    with nothing already captured ⇒ prompt.
+/// 4. Any other case (non-interactive, no TTY, opted out, already set) ⇒ skip.
+///
+/// A `--test-plan` flag overrides an existing value (explicit intent); the
+/// interactive path never re-prompts once a value is set.
+// trace:STORY-698 | ai:claude
+fn decide_test_plan_capture(
+    flag_steps: &[String],
+    no_test_plan: bool,
+    interactive: bool,
+    at_tty: bool,
+    disabled: bool,
+    already_set: bool,
+) -> TestPlanCapture {
+    if !flag_steps.is_empty() {
+        return TestPlanCapture::Record(flag_steps.join("\n"));
+    }
+    if no_test_plan || !interactive || !at_tty || disabled || already_set {
+        return TestPlanCapture::Skip;
+    }
+    TestPlanCapture::Prompt
+}
+
+/// Prompt at a TTY for the verification steps the builder ran: one step per
+/// `Enter`, blank line ends. Mirrors [`prompt_interface_surface`]. Returns the
+/// collected lines.
+// trace:STORY-698 | ai:claude
+fn prompt_test_plan_steps() -> Vec<String> {
+    use std::io::Write;
+    let mut lines = Vec::new();
+    eprintln!(
+        "  {} verification steps you ran? One per line, blank line when done.",
+        "→".cyan()
+    );
+    eprintln!(
+        "    {} {}",
+        "e.g.".dimmed(),
+        "cargo test -p aida-cli · manual: aida queue done at a TTY".dimmed()
+    );
+    loop {
+        eprint!("    > ");
+        let _ = std::io::stderr().flush();
+        let mut answer = String::new();
+        if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+            break;
+        }
+        let trimmed = answer.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        lines.push(trimmed.to_string());
+    }
+    lines
+}
+
+/// Capture the verification steps the builder actually ran at close (`aida
+/// queue done`) — the implementation audit trail surfaced in the PR body
+/// (STORY-698). Stored in `implementation_info.test_coverage_notes` (no new
+/// model field, no cache migration — design LOCKED 2026-07-01). Steps are
+/// joined newline-separated.
+///
+/// Best-effort — any failure returns `Ok(())` so it never breaks `queue done`.
+/// Idempotent: an existing non-empty `test_coverage_notes` is left alone unless
+/// a `--test-plan` flag explicitly overrides it.
+// trace:STORY-698 | ai:claude
+fn capture_test_plan(
+    storage: &Storage,
+    req_id: uuid::Uuid,
+    display_id: &str,
+    flag_steps: &[String],
+    no_test_plan: bool,
+    interactive: bool,
+) -> Result<()> {
+    // Cheap pre-checks (flags / opt-out) decide most cases without a load.
+    let at_tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+    let disabled = capture_test_plan_disabled();
+
+    // Idempotency only matters for the interactive path; check it there.
+    let already_set = |storage: &Storage| -> bool {
+        storage
+            .load()
+            .ok()
+            .and_then(|store| {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == req_id)
+                    .and_then(|r| r.implementation_info.as_ref())
+                    .and_then(|info| info.test_coverage_notes.as_ref())
+                    .map(|notes| !notes.trim().is_empty())
+            })
+            .unwrap_or(false)
+    };
+
+    // Resolve without touching the store when the flags already decide it.
+    let decision = if !flag_steps.is_empty() {
+        decide_test_plan_capture(
+            flag_steps,
+            no_test_plan,
+            interactive,
+            at_tty,
+            disabled,
+            false,
+        )
+    } else if no_test_plan || !interactive || !at_tty || disabled {
+        TestPlanCapture::Skip
+    } else {
+        decide_test_plan_capture(
+            flag_steps,
+            no_test_plan,
+            interactive,
+            at_tty,
+            disabled,
+            already_set(storage),
+        )
+    };
+
+    let notes = match decision {
+        TestPlanCapture::Skip => return Ok(()),
+        TestPlanCapture::Record(joined) => joined,
+        TestPlanCapture::Prompt => {
+            eprintln!();
+            eprintln!(
+                "{} How did you verify {}? (recorded as the PR's audit trail)",
+                "→".cyan().bold(),
+                display_id.bold()
+            );
+            eprintln!("  {} nothing to record? Just press Enter.", "·".dimmed());
+            let lines = prompt_test_plan_steps();
+            if lines.is_empty() {
+                return Ok(());
+            }
+            lines.join("\n")
+        }
+    };
+
+    let now = chrono::Utc::now();
+    let step_count = notes.lines().filter(|l| !l.trim().is_empty()).count();
+    storage.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+            let info = r
+                .implementation_info
+                .get_or_insert_with(aida_core::ImplementationInfo::default);
+            info.test_coverage_notes = Some(notes.clone());
+            r.modified_at = now;
+        }
+    })?;
+
+    println!(
+        "  {} verification steps captured for {} ({} step{})",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        display_id.bold(),
+        step_count,
+        if step_count == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
+
 /// Extract the Followups section of any plan owned by `spec_id` and file
 /// the accepted bullets as child TASKs. Idempotent via [`FOLLOWUPS_MARKER`].
 ///
@@ -58991,8 +59414,37 @@ fn extract_plan_followups(
         titles
     };
 
-    // Collect + dedupe followup bullets across every owning plan file.
-    let mut followups: Vec<String> = Vec::new();
+    // BUG-680: shipped-followup guard. Every spec that a prior run filed carries
+    // a `followup-src:<plan>` tag recording its origin plan; collect
+    // (plan, title, id, is_terminal) for each so a bullet already filed from one
+    // of THIS spec's plans that has since shipped (Completed) or been rejected is
+    // not re-filed as a fresh open spec. This is the durable, store-backed
+    // guarantee the parent's marker comment can't make: it survives the marker
+    // being lost/unsynced and survives the followup being archived away from the
+    // parent. `owned_plans` is the store-relative path set we match against.
+    // trace:BUG-680 | ai:claude
+    let owned_plans: std::collections::HashSet<String> = owned_rel_paths.iter().cloned().collect();
+    let filed_from_plan: Vec<(String, String, String, bool)> = store
+        .requirements
+        .iter()
+        .flat_map(|r| {
+            let title = r.title.clone();
+            let id = r.display_id();
+            let terminal = matches!(
+                r.status,
+                RequirementStatus::Completed | RequirementStatus::Rejected
+            );
+            r.tags
+                .iter()
+                .filter_map(|t| t.strip_prefix(FOLLOWUP_SRC_TAG_PREFIX))
+                .map(move |plan| (plan.to_string(), title.clone(), id.clone(), terminal))
+        })
+        .collect();
+
+    // Collect + dedupe followup bullets across every owning plan file. Each
+    // bullet keeps the first plan it appeared in as its source, so a filed
+    // followup can be stamped with its origin plan (BUG-680).
+    let mut followups: Vec<(String, String)> = Vec::new(); // (bullet, source plan)
     let mut sources: Vec<String> = Vec::new();
     for path in &plan_files {
         let Ok(content) = std::fs::read_to_string(path) else {
@@ -59007,10 +59459,10 @@ fn extract_plan_followups(
             .unwrap_or(path)
             .display()
             .to_string();
-        sources.push(rel);
+        sources.push(rel.clone());
         for f in parsed {
-            if !followups.contains(&f) {
-                followups.push(f);
+            if !followups.iter().any(|(b, _)| b == &f) {
+                followups.push((f, rel.clone()));
             }
         }
     }
@@ -59030,9 +59482,21 @@ fn extract_plan_followups(
     let mut filed: Vec<(String, String)> = Vec::new(); // (new_spec, title)
     let mut declined: Vec<String> = Vec::new();
     let mut deduped: Vec<String> = Vec::new(); // BUG-655: already-filed bullets
+    let mut shipped: Vec<(String, String)> = Vec::new(); // BUG-680: (bullet, existing id)
     let mut skip_rest = false;
 
-    for followup in &followups {
+    for (followup, source_plan) in &followups {
+        // BUG-680: a bullet already filed from one of this spec's plans that has
+        // since shipped (Completed) or been rejected — re-filing it would open a
+        // duplicate for work that already ran its course. Skip and link to the
+        // shipped spec. Checked first so the audit trail attributes it to the
+        // shipped guard rather than the generic already-filed one.
+        if let Some(existing_id) =
+            followup_shipped_from_plan(&filed_from_plan, &owned_plans, followup)
+        {
+            shipped.push((followup.clone(), existing_id.to_string()));
+            continue;
+        }
         // BUG-655: a bullet whose title already exists as a child of this
         // parent has already been filed (this run, a prior run, or a sibling
         // commit's run) — skip it without prompting, so a plan landed by
@@ -59073,7 +59537,8 @@ fn extract_plan_followups(
         };
 
         if accept {
-            match aida_subcmd_add_followup_task(project_root, spec_id, followup) {
+            match aida_subcmd_add_followup_task(project_root, spec_id, followup, Some(source_plan))
+            {
                 Some(new_id) => {
                     // Record the title so a later identical bullet in the same
                     // plan is recognised as already-filed (BUG-655), both
@@ -59117,6 +59582,15 @@ fn extract_plan_followups(
             marker.push_str(&format!("\n  - {d}"));
         }
     }
+    if !shipped.is_empty() {
+        // BUG-680: bullets skipped because a followup filed from the same plan
+        // already shipped (Completed/Rejected) — linked to the existing spec so
+        // the audit trail shows the re-file was prevented, not lost.
+        marker.push_str(&format!("\nskipped {} already-shipped:", shipped.len()));
+        for (bullet, id) in &shipped {
+            marker.push_str(&format!("\n  - {bullet} → {id}"));
+        }
+    }
     let now = chrono::Utc::now();
     let author = get_default_author();
     let req_uuid = req.id;
@@ -59154,6 +59628,16 @@ fn extract_plan_followups(
             "·".dimmed(),
             deduped.len(),
         );
+    }
+    if !shipped.is_empty() {
+        for (bullet, id) in &shipped {
+            println!(
+                "  {} already shipped as {} — skipped {}",
+                "·".dimmed(),
+                id.bold(),
+                bullet.dimmed(),
+            );
+        }
     }
 
     Ok(())
@@ -62777,21 +63261,18 @@ fn current_git_branch(project_root: &std::path::Path) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// TASK-55: lease liveness classification used by `session leases`.
-/// trace:TASK-55 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LeaseState {
-    /// Live claude found inside the worktree — actively working.
-    Live,
-    /// Worktree exists, no live claude inside, <24h old. Could be a
-    /// shell-only session or a paused claude — not yet abandoned.
-    Dormant,
-    /// Worktree missing OR (no live claude AND >24h old) — the lease
-    /// is almost certainly leaked.
-    Stale,
+/// BUG-677: `LeaseState` + `classify_lease_state` moved to `aida_core::liveness`
+/// (re-exported at the crate root, see the top-of-file `pub(crate) use`). The
+/// pure enum + classifier is now shared with `aida-tui`; only the CLI glyph
+/// rendering stays here, as an extension trait (glyph() reaches into the CLI
+/// glyph palette, which aida-core has no business knowing). `label()` moved with
+/// the enum (pure strings).
+// trace:BUG-677 | ai:claude
+trait LeaseStateGlyph {
+    fn glyph(self) -> &'static str;
 }
 
-impl LeaseState {
+impl LeaseStateGlyph for LeaseState {
     fn glyph(self) -> &'static str {
         match self {
             LeaseState::Live => "●",
@@ -62799,33 +63280,6 @@ impl LeaseState {
             LeaseState::Stale => crate::glyph(crate::glyphs::Glyph::Warning),
         }
     }
-    fn label(self) -> &'static str {
-        match self {
-            LeaseState::Live => "live",
-            LeaseState::Dormant => "dormant",
-            LeaseState::Stale => "stale",
-        }
-    }
-}
-
-/// TASK-55: classify a lease using its worktree existence, live-claude
-/// probe result, and age. Pure given pre-collected inputs so the
-/// decision matrix is unit-testable. trace:TASK-55 | ai:claude
-fn classify_lease_state(
-    worktree_exists: bool,
-    has_live_claude: bool,
-    age_hours: i64,
-) -> LeaseState {
-    if !worktree_exists {
-        return LeaseState::Stale;
-    }
-    if has_live_claude {
-        return LeaseState::Live;
-    }
-    if age_hours >= 24 {
-        return LeaseState::Stale;
-    }
-    LeaseState::Dormant
 }
 
 /// TASK-56: find the Claude Code session id matching a worktree path,
@@ -62917,10 +63371,179 @@ fn print_cross_clone_leases(
     foreign.len()
 }
 
-fn session_leases(verbose: bool, all: bool) -> Result<()> {
+/// TASK-345: build the `drain` cross-reference for a lease whose scope is the
+/// active drain's current member, or `None` when this lease is not the drain's
+/// active member (or no drain is live). Lets `aida session leases --json`
+/// correlate a lease to the orchestrator drain/run driving it — `run_uuid`
+/// (the per-spec orchestration id), the current phase, the drain mode/batch,
+/// the launching command, the orchestrator pid, and its start time.
+// trace:TASK-345 | ai:claude
+fn lease_drain_xref(
+    scope: &str,
+    drain: Option<&drain_state::DrainState>,
+) -> Option<serde_json::Value> {
+    let d = drain?;
+    // Only the drain's *current* member is an orchestrator phase child.
+    if d.current.as_deref() != Some(scope) {
+        return None;
+    }
+    Some(serde_json::json!({
+        "run_uuid": (!d.run_uuid.is_empty()).then(|| d.run_uuid.clone()),
+        "member": d.current.clone(),
+        "phase": d.current_phase.clone(),
+        "mode": d.mode.clone(),
+        "batch": d.batch.clone(),
+        "command": d.command.clone(),
+        "orchestrator_pid": d.orchestrator_pid,
+        "started_at": d.started_at.clone(),
+    }))
+}
+
+/// TASK-345: assemble the `aida session leases --json` rows. Pure over the
+/// classified leases + optional live drain snapshot so the JSON shape is
+/// unit-testable. Each row mirrors the human columns (id/scope/branch/role/
+/// worktree/state/pid) and adds the `drain` cross-reference (null for leases
+/// the orchestrator isn't currently driving).
+// trace:TASK-345 | ai:claude
+fn leases_json_rows(
+    shown: &[(SessionLease, LeaseState, Option<u32>)],
+    drain: Option<&drain_state::DrainState>,
+) -> Vec<serde_json::Value> {
+    shown
+        .iter()
+        .map(|(l, state, pid)| {
+            serde_json::json!({
+                "id": l.id,
+                "scope": l.scope,
+                "branch": l.branch,
+                "role": l.role,
+                "worktree": l.worktree_path.display().to_string(),
+                "state": state.label(),
+                "pid": pid,
+                "drain": lease_drain_xref(&l.scope, drain),
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod task345_leases_json_tests {
+    use super::*;
+
+    // A minimal fan-out lease at `scope` for shaping the JSON rows.
+    fn lease(scope: &str) -> SessionLease {
+        SessionLease {
+            id: "abc123def456".into(),
+            scope: scope.into(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".into(),
+            worktree_path: std::path::PathBuf::from("/tmp/wt").join(scope),
+            branch: format!("{scope}-branch"),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+            claim_verb: false,
+        }
+    }
+
+    // TASK-345: the drain xref is present + fully populated only for the lease
+    // whose scope is the drain's current member; every other lease is null.
+    #[test]
+    fn drain_xref_only_on_current_member() {
+        let mut drain = drain_state::DrainState::new_single("STORY-1", "run-uuid-xyz", false);
+        drain.current_phase = Some("1 (implementer)".to_string());
+
+        let shown = vec![
+            (lease("STORY-1"), LeaseState::Live, Some(4242u32)),
+            (lease("TASK-9"), LeaseState::Dormant, None),
+        ];
+        let rows = leases_json_rows(&shown, Some(&drain));
+        assert_eq!(rows.len(), 2);
+
+        // Row 0 is the drain's current member → drain xref populated.
+        let r0 = &rows[0];
+        assert_eq!(r0["scope"], "STORY-1");
+        assert_eq!(r0["state"], "live");
+        assert_eq!(r0["pid"], 4242);
+        assert_eq!(r0["role"], "implementer");
+        let x = &r0["drain"];
+        assert!(x.is_object(), "current member must carry a drain xref");
+        assert_eq!(x["run_uuid"], "run-uuid-xyz");
+        assert_eq!(x["member"], "STORY-1");
+        assert_eq!(x["phase"], "1 (implementer)");
+        assert_eq!(x["mode"], "single");
+        assert_eq!(x["orchestrator_pid"], drain.orchestrator_pid);
+        assert!(x["started_at"].is_string());
+        // Single-spec drain → no batch.
+        assert!(x["batch"].is_null());
+
+        // Row 1 is not the drain member → drain xref is null.
+        assert_eq!(rows[1]["scope"], "TASK-9");
+        assert!(
+            rows[1]["drain"].is_null(),
+            "non-member lease omits the xref"
+        );
+        assert_eq!(rows[1]["pid"], serde_json::Value::Null);
+    }
+
+    // TASK-345: with no live drain every lease's xref is null, but the row
+    // shape (all documented keys) is still stable + backward-compatible.
+    #[test]
+    fn no_drain_yields_null_xref_stable_shape() {
+        let shown = vec![(lease("TASK-3"), LeaseState::Stale, None)];
+        let rows = leases_json_rows(&shown, None);
+        assert_eq!(rows.len(), 1);
+        let r = &rows[0];
+        for key in [
+            "id", "scope", "branch", "role", "worktree", "state", "pid", "drain",
+        ] {
+            assert!(r.get(key).is_some(), "row must always carry `{key}`");
+        }
+        assert_eq!(r["state"], "stale");
+        assert!(r["drain"].is_null());
+    }
+
+    // TASK-345: an empty batch (`run_uuid` unset between members) still renders
+    // a valid, null-run_uuid xref for the current member.
+    #[test]
+    fn batch_member_xref_carries_batch_name() {
+        let mut drain =
+            drain_state::DrainState::new_batch("cleanup-batch", &["BUG-1".into(), "BUG-2".into()]);
+        drain.current = Some("BUG-1".to_string());
+        drain.current_phase = Some("3 (reviewer)".to_string());
+
+        let shown = vec![(lease("BUG-1"), LeaseState::Live, Some(7u32))];
+        let rows = leases_json_rows(&shown, Some(&drain));
+        let x = &rows[0]["drain"];
+        assert_eq!(x["mode"], "batch");
+        assert_eq!(x["batch"], "cleanup-batch");
+        assert_eq!(x["phase"], "3 (reviewer)");
+        // run_uuid is empty between members → serialized as null, not "".
+        assert!(x["run_uuid"].is_null());
+    }
+}
+
+fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
+        // TASK-345: JSON consumers get an empty array, not the human hints.
+        // trace:TASK-345 | ai:claude
+        if json {
+            println!("{}", serde_json::to_string_pretty(&serde_json::json!([]))?);
+            return Ok(());
+        }
         // STORY-637: even with no LOCAL leases, a peer clone may hold a
         // cross-clone lease — surface it before the "no sessions" hint so a
         // refused `session start` has a place to point.
@@ -62979,13 +63602,32 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
     // whose scope is the drain's current member is an orchestrator phase
     // child — annotate it so `aida session leases` shows which session the
     // orchestrator is driving, and at which phase. trace:STORY-301 | ai:claude
-    let drain_current: Option<(String, Option<String>)> = match find_main_worktree_root()
+    // TASK-345: retain the full live DrainState so the `--json` path can emit
+    // the drain cross-reference (run uuid / mode / orchestrator pid) per lease,
+    // not just the phase string the human view needs. trace:TASK-345 | ai:claude
+    let drain_active: Option<drain_state::DrainState> = match find_main_worktree_root()
         .map(|r| drain_state::probe(&r))
         .unwrap_or(drain_state::DrainStatus::None)
     {
-        drain_state::DrainStatus::Active(s) => s.current.map(|c| (c, s.current_phase)),
+        drain_state::DrainStatus::Active(s) => Some(s),
         _ => None,
     };
+    let drain_current: Option<(String, Option<String>)> = drain_active
+        .as_ref()
+        .and_then(|s| s.current.clone().map(|c| (c, s.current_phase.clone())));
+
+    // TASK-345: machine-readable lease list. Each row carries a `drain`
+    // cross-reference so a consumer can correlate a lease to the orchestrator
+    // drain/run driving it. Emitted before any human rendering.
+    // trace:TASK-345 | ai:claude
+    if json {
+        let rows = leases_json_rows(&shown, drain_active.as_ref());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!(rows))?
+        );
+        return Ok(());
+    }
 
     println!("{}", "Active session leases".bold());
     println!();
@@ -64339,6 +64981,8 @@ mod story_696_ps_tests {
             out_degree: 0,
             heft: 0,
             blocked: false,
+            // trace:TASK-1065 | ai:claude
+            has_pending_decision: false,
             yaml_path: String::new(),
         }
     }
@@ -70037,6 +70681,148 @@ mod statusline_tests {
         )
     }
 
+    // ---- TASK-939: `aida doc suggest` public-surface detector ----
+
+    #[test]
+    fn surface_detects_new_clap_long_flag() {
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "        #[clap(long)]"),
+            Some(PublicSurfaceKind::CliFlag)
+        );
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[arg(long = \"range\")]"),
+            Some(PublicSurfaceKind::CliFlag)
+        );
+        assert_eq!(
+            classify_surface_line(
+                "aida-cli/src/cli.rs",
+                "    #[clap(long, value_delimiter = ',')]"
+            ),
+            Some(PublicSurfaceKind::CliFlag)
+        );
+    }
+
+    #[test]
+    fn surface_ignores_long_help_and_non_flag_attrs() {
+        // `long_help` is a word-boundary miss — not a new flag.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(long_help = \"x\")]"),
+            None
+        );
+        // A plain short attr with no `long`.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(short = 'x')]"),
+            None
+        );
+        // `#[clap(subcommand)]` marks a field, not a new flag/subcommand.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(subcommand)]"),
+            None
+        );
+        // Ordinary code is never surface.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/main.rs", "    let x = long_variable + 1;"),
+            None
+        );
+    }
+
+    #[test]
+    fn surface_detects_named_subcommand() {
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[command(name = \"suggest\")]"),
+            Some(PublicSurfaceKind::CliSubcommand)
+        );
+        assert_eq!(
+            classify_surface_line("aida-cli/src/cli.rs", "    #[clap(name = \"foo\")]"),
+            Some(PublicSurfaceKind::CliSubcommand)
+        );
+    }
+
+    #[test]
+    fn surface_detects_mcp_tool_only_in_mcp_file() {
+        // A snake_case tool name in mcp.rs is a new MCP tool.
+        assert_eq!(
+            classify_surface_line(
+                "aida-cli/src/mcp.rs",
+                "            \"name\": \"doc_suggest\","
+            ),
+            Some(PublicSurfaceKind::McpTool)
+        );
+        // Title-case resource titles are NOT tools.
+        assert_eq!(
+            classify_surface_line(
+                "aida-cli/src/mcp.rs",
+                "        \"name\": \"Project Summary\","
+            ),
+            None
+        );
+        // The server-name line is excluded.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/mcp.rs", "            \"name\": \"aida\","),
+            None
+        );
+        // The same shape in a non-mcp file is not a tool.
+        assert_eq!(
+            classify_surface_line("aida-cli/src/other.rs", "    \"name\": \"doc_suggest\","),
+            None
+        );
+    }
+
+    #[test]
+    fn detect_new_public_surface_over_hunks() {
+        let hunks = vec![
+            ParsedHunk {
+                file: "aida-cli/src/cli.rs".to_string(),
+                new_start: 2320,
+                added: vec![
+                    "    /// A doc comment (not surface)".to_string(),
+                    "    #[clap(long)]".to_string(),
+                    "    range: Option<String>,".to_string(),
+                ],
+                removed: vec![],
+            },
+            ParsedHunk {
+                file: "aida-cli/src/mcp.rs".to_string(),
+                new_start: 6100,
+                added: vec!["            \"name\": \"doc_suggest\",".to_string()],
+                removed: vec![],
+            },
+        ];
+        let hits = detect_new_public_surface(&hunks);
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].kind, PublicSurfaceKind::CliFlag);
+        assert_eq!(hits[0].new_start, 2320);
+        assert_eq!(hits[1].kind, PublicSurfaceKind::McpTool);
+        assert_eq!(hits[1].file, "aida-cli/src/mcp.rs");
+    }
+
+    #[test]
+    fn detect_new_public_surface_empty_for_plain_code() {
+        let hunks = vec![ParsedHunk {
+            file: "aida-cli/src/main.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "    let total = a + b;".to_string(),
+                "    println!(\"{}\", total);".to_string(),
+            ],
+            removed: vec![],
+        }];
+        assert!(detect_new_public_surface(&hunks).is_empty());
+    }
+
+    #[test]
+    fn mcp_tool_name_parses_snake_case_only() {
+        assert_eq!(
+            mcp_tool_name_in_line("\"name\": \"list_requirements\","),
+            Some("list_requirements")
+        );
+        assert_eq!(
+            mcp_tool_name_in_line("\"name\": \"Queue — in-flight\","),
+            None
+        );
+        assert_eq!(mcp_tool_name_in_line("let name = 3;"), None);
+    }
+
     #[test]
     fn coverage_file_classifier_exemptions() {
         // F1 tests
@@ -70929,6 +71715,117 @@ diff --git a/gone.rs b/gone.rs
         assert!(followup_filed_anywhere(&filed, "  ALPHA  "));
         assert!(!followup_filed_anywhere(&filed, "beta"));
         assert!(!followup_filed_anywhere(&[], "anything"));
+    }
+
+    /// BUG-680: the shipped-followup guard skips a bullet already filed from the
+    /// SAME source plan when that spec has reached a terminal status (Completed
+    /// or Rejected), and links to it. An open prior filing (not terminal), a
+    /// different plan, or a non-matching title do NOT count — those cases are the
+    /// existing BUG-655/656 guards' job.
+    #[test]
+    fn followup_shipped_from_plan_skips_terminal_prior_filing() {
+        let plan = "docs/plans/2026-06-30-spike-70.md".to_string();
+        let other = "docs/plans/2026-06-30-other.md".to_string();
+        let owned: std::collections::HashSet<String> = [plan.clone()].into_iter().collect();
+
+        let filed_from_plan = vec![
+            // Completed followup from THIS plan → the re-file it must block.
+            (
+                plan.clone(),
+                "Wire the metrics dashboard".to_string(),
+                "TASK-1003".to_string(),
+                true,
+            ),
+            // Rejected followup from THIS plan → terminal, also blocks.
+            (
+                plan.clone(),
+                "Add the retry budget".to_string(),
+                "TASK-1005".to_string(),
+                true,
+            ),
+            // Still-open followup from THIS plan → NOT terminal, does not block.
+            (
+                plan.clone(),
+                "Open item".to_string(),
+                "TASK-1100".to_string(),
+                false,
+            ),
+            // Completed followup from a DIFFERENT plan → wrong plan, does not block.
+            (
+                other.clone(),
+                "Elsewhere item".to_string(),
+                "TASK-2000".to_string(),
+                true,
+            ),
+        ];
+
+        // Terminal + same plan + matching title (trim/case-insensitive) → linked.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "  wire the metrics dashboard "),
+            Some("TASK-1003")
+        );
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Add the retry budget"),
+            Some("TASK-1005")
+        );
+        // Open prior filing → not blocked here (BUG-655/656 handle the open case).
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Open item"),
+            None
+        );
+        // A completed followup filed from a plan this spec does not own → skipped.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Elsewhere item"),
+            None
+        );
+        // Genuinely-new bullet → nothing to link.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, "Brand new work"),
+            None
+        );
+        // Empty history → never blocks.
+        assert_eq!(followup_shipped_from_plan(&[], &owned, "anything"), None);
+    }
+
+    /// BUG-680 (acceptance): filing the same plan followup twice yields ONE spec,
+    /// not two — once the first filing ships (Completed), a re-extraction of the
+    /// same plan recognises the followup as already-shipped straight from the
+    /// child's recorded `followup-src:` provenance and does not open a duplicate.
+    /// Models the store-backed `filed_from_plan` set the real path builds from
+    /// tags. This is the guarantee the parent's marker comment cannot make (it
+    /// can be lost/unsynced); the child's tag is durable.
+    #[test]
+    fn followup_refiled_after_ship_yields_one_spec() {
+        let plan = "docs/plans/2026-06-30-spike-70.md".to_string();
+        let owned: std::collections::HashSet<String> = [plan.clone()].into_iter().collect();
+        let bullet = "Wire the metrics dashboard";
+
+        // First extraction: no followup has been filed from this plan yet, so the
+        // shipped guard does not fire and the bullet is filed as a new TASK.
+        let filed_from_plan: Vec<(String, String, String, bool)> = Vec::new();
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, bullet),
+            None,
+            "first run must file the followup"
+        );
+
+        // That TASK later ships: it carries `followup-src:<plan>` and is now
+        // Completed. Rebuild the store-backed set exactly as the real path does.
+        let filed_from_plan = vec![(
+            plan.clone(),
+            bullet.to_string(),
+            "TASK-1003".to_string(),
+            true, // Completed
+        )];
+
+        // Second extraction of the same plan (parent marker lost/unsynced): the
+        // shipped guard now links to the existing spec instead of opening a
+        // second one — one spec total, not two.
+        assert_eq!(
+            followup_shipped_from_plan(&filed_from_plan, &owned, bullet),
+            Some("TASK-1003"),
+            "re-filing after the followup shipped must be a no-op"
+        );
     }
 
     /// BUG-105: when multiple plan files own the same spec, discover_plan_context
@@ -81971,13 +82868,19 @@ fn pr_number_from_scope(scope: &str) -> Option<u64> {
 }
 
 fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Option<usize> {
-    // BUG-89: route through the canonical helper so the statusline depth
-    // counts the same queue file `aida queue list` reads from in this
-    // shell. trace:BUG-89 | ai:claude
-    let user = current_user_id(None);
+    // BUG-89 + BUG-675: resolve identity through the SAME two-step path
+    // `aida queue list` uses — `current_user_id` first, then the queue-file
+    // case-fold (`resolve_queue_user`, TASK-951/TASK-845) — so a shell reporting
+    // `Joe` counts the queue keyed under `joe.yaml` instead of reading zero.
+    // Reading `<current_user_id>.yaml` directly skipped that fold, so the depth
+    // diverged from the queue-list count on a case-only identity mismatch; the
+    // BUG-670 band-aid then suppressed the divergent number instead of fixing the
+    // resolution. trace:BUG-675 trace:BUG-89 | ai:claude
+    let store_path = project_root.join(".aida-store");
+    let user = aida_core::db::resolve_queue_user(&store_path, &current_user_id(None));
 
-    let queue_path = project_root
-        .join(".aida-store/registry/queues")
+    let queue_path = store_path
+        .join("registry/queues")
         .join(format!("{}.yaml", user));
 
     let content = std::fs::read_to_string(&queue_path).ok()?;
@@ -82030,6 +82933,59 @@ fn statusline_role_mismatch_enabled(project_dir: &std::path::Path) -> bool {
         }
     }
     true
+}
+
+/// Read `[statusline] base_freshness_check` (on/off) and
+/// `threshold_warn` (commits behind `origin/main` at/above which the
+/// statusline surfaces the `base behind by N` indicator) from
+/// `.aida/config.toml`. Defaults to enabled + [`BASE_BEHIND_STATUSLINE_THRESHOLD`]
+/// when the keys, section, or file are absent — so the feature is on by
+/// default and a project can dial it down or off without a code change.
+/// Pure over the file contents; best-effort (any parse miss keeps the
+/// default).
+// trace:TASK-101 | ai:claude
+fn statusline_base_freshness_config(project_dir: &std::path::Path) -> (bool, u32) {
+    let default = (true, BASE_BEHIND_STATUSLINE_THRESHOLD);
+    let Ok(content) = std::fs::read_to_string(project_dir.join(".aida").join("config.toml")) else {
+        return default;
+    };
+    let (mut enabled, mut threshold) = default;
+    let mut in_section = false;
+    for raw in content.lines() {
+        let line = strip_toml_inline_comment(raw).trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_section = rest.trim_end_matches(']').trim() == "statusline";
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("base_freshness_check") {
+            if let Some(val) = rest.split('=').nth(1) {
+                let v = val
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_ascii_lowercase();
+                enabled = !matches!(v.as_str(), "false" | "0" | "no" | "off");
+            }
+        } else if let Some(rest) = line.strip_prefix("threshold_warn") {
+            if let Some(val) = rest.split('=').nth(1) {
+                if let Ok(n) = val
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .parse::<u32>()
+                {
+                    threshold = n.max(1);
+                }
+            }
+        }
+    }
+    (enabled, threshold)
 }
 
 /// TASK-244: render the statusline `role:` segment, surfacing a mismatch
@@ -82975,6 +83931,31 @@ fn handle_statusline_command(color: &str, title: bool) -> Result<()> {
                 _ => format!("cache:{}", label).red().to_string(),
             };
             parts.push(colored);
+        }
+    }
+    // TASK-101: base-freshness — surface when the active lease's branch has
+    // fallen behind `origin/main` by N >= threshold commits, so an in-flight
+    // session sees it's working on a stale base *during* the session, not just
+    // at the queue-work/queue-done gates. Threshold-gated (default 5) + on/off
+    // via `[statusline] base_freshness_check`. Cheap + best-effort: only
+    // sessions with a live lease on a non-default branch pay the local
+    // `git rev-list --count` (NO fetch — reads whatever `origin/main` is locally
+    // known), and any git failure stays silent. Loud (red) past 4× threshold.
+    // trace:TASK-101 | ai:claude
+    if let Some(l) = lease.as_ref() {
+        let (bf_enabled, bf_threshold) = statusline_base_freshness_config(&project_root);
+        if bf_enabled && !l.branch.is_empty() && l.branch != "main" {
+            if let Some(behind) = commits_behind_origin_main(&project_root, &l.branch) {
+                if let Some(text) = base_behind_indicator(behind, bf_threshold) {
+                    let loud = behind >= bf_threshold.saturating_mul(4);
+                    let seg = if loud {
+                        text.red().bold().to_string()
+                    } else {
+                        text.yellow().to_string()
+                    };
+                    parts.push(seg);
+                }
+            }
         }
     }
     // sess:<scope> segment — emitted when cwd resolves into an active
@@ -88417,6 +89398,7 @@ fn plan_scan(
             parent_id: None,
             replies: Vec::new(),
             reactions: Vec::new(),
+            session_id: resolve_current_session_id(), // trace:TASK-330
         });
         req.modified_at = now;
         backend.update_requirement(&req)?;
@@ -96891,50 +97873,10 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// The liveness verdict for a spec, derived from its spec-scoped session lease
-/// (if any) and the spec's own lifecycle status. This is the operator's #1
-/// legibility ask: for an In-Progress spec, is a LIVE process actually working
-/// it, or is the flag orphaned?
-// trace:STORY-694 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum SpecLiveness {
-    /// A spec-scoped lease exists and its holder process is alive (a live
-    /// claude is in the worktree). The In-Progress flag is liveness-backed.
-    Live,
-    /// A spec-scoped lease exists but no live process backs it (pid dead, or
-    /// the worktree has gone idle past the threshold with no spec movement).
-    /// The In-Progress flag is orphaned.
-    // trace:BUG-623
-    Stale,
-    /// No spec-scoped lease is linked to this spec. When the spec is
-    /// In-Progress this is DRIFT — the status flag is not liveness-backed.
-    /// This is also the CORRECT honest signal for advisor Agent-tool
-    /// fan-outs, which take generic `harness-worktree`-scoped leases that are
-    /// NOT spec-linked (making the spec-to-session link is a documented
-    /// follow-up, not this change).
-    // trace:STORY-694
-    FlagOnly,
-    /// The spec is not In-Progress — no live session is expected.
-    NoSession,
-}
-
-/// Pure verdict — given the spec-scoped lease's classified [`LeaseState`] (when
-/// one was found) and whether the spec is In-Progress, decide the
-/// [`SpecLiveness`]. Kept side-effect-free so the matrix (live lease → Live;
-/// dead/stale lease → Stale; in-progress + no lease → FlagOnly; not-in-progress
-/// → NoSession) is unit-testable without a store, a lease dir, or a real
-/// process. A `Dormant` lease (worktree present, no live claude, <24h) counts
-/// as Stale here: the operator asked specifically "is a LIVE process working
-/// it?", and dormant means no live process.
-// trace:STORY-694 | ai:claude
-fn classify_spec_liveness(lease_state: Option<LeaseState>, in_progress: bool) -> SpecLiveness {
-    match lease_state {
-        Some(LeaseState::Live) => SpecLiveness::Live,
-        Some(LeaseState::Dormant) | Some(LeaseState::Stale) => SpecLiveness::Stale,
-        None if in_progress => SpecLiveness::FlagOnly,
-        None => SpecLiveness::NoSession,
-    }
-}
+// BUG-677: `SpecLiveness` + `classify_spec_liveness` (the operator's "is a LIVE
+// process working this In-Progress spec?" verdict) moved to
+// `aida_core::liveness`, re-exported at the crate root, so `aida-tui` shares the
+// exact same classifier. trace:BUG-677 | ai:claude
 
 /// Find the LOCAL session lease whose scope is this spec — the happy-path link
 /// for AIDA-launched work (`aida queue work`, `aida agent new`) where the lease
@@ -103920,6 +104862,15 @@ fn handle_pull_command(
                                 if !quiet {
                                     print_auto_bump_summary(&flips);
                                 }
+                                // STORY-700: the first-run payoff — a spec the
+                                // user filed just auto-completed via the merge.
+                                // Only fires when the arc sits at the work-done
+                                // step, and terminates the chain. Suppressed in
+                                // --quiet (orchestrator/scripted) runs.
+                                // trace:STORY-700 | ai:claude
+                                if !quiet && !flips.is_empty() {
+                                    first_run::after_spec_completed(&project_root);
+                                }
                             }
                             Err(e) => {
                                 eprintln!(
@@ -109744,7 +110695,6 @@ const KEYSTONE_TAG: &str = "needs-supervised-build";
 fn print_status_presence_consumers(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
-    store: &aida_core::models::RequirementsStore,
 ) {
     let cfg = presence::read_presence_config(&config_path_for_project(project_root));
     if cfg.consumers == presence::ConsumersMode::Off {
@@ -109759,10 +110709,12 @@ fn print_status_presence_consumers(
     }
 
     // (c) decision inbox — pending DecisionRequests awaiting the operator.
-    // TASK-1061: count over the already-loaded `store` rather than re-loading
-    // the whole store via `collect_decision_requests(backend)` (a second
-    // full-store read on the rich status path). trace:TASK-1061
-    let pending = pending_decision_request_count(store);
+    // TASK-1065: read the count from the `has_pending_decision` cache column so
+    // the rich `aida status` path no longer needs a full `backend.load()` to
+    // surface it. Matches the prior store-based predicate exactly (non-archived +
+    // `decision_request.is_pending()`); see `pending_decision_request_count` for
+    // the reference oracle. trace:TASK-1065 (supersedes TASK-1061)
+    let pending = backend.pending_decision_count().unwrap_or(0);
     if pending > 0 {
         println!(
             "  {} {} decision{} await your call — {}",
@@ -113567,24 +114519,25 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
     println!();
 }
 
-/// BUG-670: assemble the AGENT-MODE scalar head lines for `aida status` with a
-/// single, unambiguous "is there work for me?" signal. `queue_actionable` LEADS:
-/// it is the count that actually answers the question (live, workable, role-
-/// routed specs) and is consistent with `aida queue list`. The raw `queue_depth`
-/// (the role-routed queue-file scan) is padded with archived/completed/deferred
-/// corpses AND resolves user identity down a different path than the queue-list
-/// command (the BUG-89 surface), so when it DIVERGES from `queue_actionable` an
-/// agent is shown a contradictory `queue_depth: 64` next to `queue_actionable: 0`
-/// with no way to tell which is authoritative. To keep the projection honest we
-/// emit `queue_depth` ONLY when it AGREES with `queue_actionable`; on mismatch it
-/// is suppressed so the agent is left with the single authoritative actionable
-/// count. The human TTY path ([`print_fast_status`]) keeps its fully-labelled
-/// "N routed (M actionable)" line unchanged — this is an agent-projection fix.
-/// Pure so the lead-signal + suppression contract is unit-testable without a
-/// queue file or a cache DB. The BUG-89 user-identity UNIFICATION (making the two
-/// paths resolve the SAME identity so `queue_depth` can always be trusted) is
-/// deliberately out of scope here and remains for BUG-670's follow-up.
-// trace:BUG-670 | ai:claude — plain `//` keeps the marker out of any doc/help.
+/// Assemble the AGENT-MODE scalar head lines for `aida status` with a single,
+/// unambiguous "is there work for me?" signal. `queue_actionable` LEADS: it is
+/// the count that actually answers the question (live, workable, role-routed
+/// specs) and is consistent with `aida queue list`. The raw `queue_depth` (the
+/// role-routed queue-file scan) is the total routed count — larger than
+/// actionable when the queue is padded with archived/completed/deferred corpses.
+///
+/// BUG-675: `queue_depth` now resolves user identity through the SAME two-step
+/// path `aida queue list` uses (`current_user_id` + the `resolve_queue_user`
+/// case-fold, TASK-951), so it is trustworthy — it no longer collapses to zero on
+/// a case-only identity mismatch. That removes the reason for BUG-670's
+/// divergence-suppression (which dropped the scalar whenever it disagreed with
+/// `queue_actionable`, partly because the count could be a spurious zero). The
+/// depth now ALWAYS rides along, AFTER the lead actionable signal, giving the
+/// agent both "how many are workable now" and "how many are routed in total".
+/// The human TTY path ([`print_fast_status`]) keeps its fully-labelled "N routed
+/// (M actionable)" line unchanged. Pure, so the ordering contract is
+/// unit-testable without a queue file or a cache DB.
+// trace:BUG-675 trace:BUG-670 | ai:claude — plain `//` keeps the marker out of any doc/help.
 fn toon_status_scalar_lines(snap: &FastStatusSnapshot) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     lines.push(crate::toon::scalar("role", &snap.role));
@@ -113602,15 +114555,13 @@ fn toon_status_scalar_lines(snap: &FastStatusSnapshot) -> Vec<String> {
         "queue_actionable",
         &snap.queue_actionable.to_string(),
     ));
-    // Surface the raw role-routed depth ONLY when it agrees with the actionable
-    // count; on divergence (padding / BUG-89 identity mismatch) drop it so an
-    // agent never has to choose between two contradictory work-signals.
-    if snap.queue_depth == snap.queue_actionable {
-        lines.push(crate::toon::scalar(
-            "queue_depth",
-            &snap.queue_depth.to_string(),
-        ));
-    }
+    // BUG-675: the raw role-routed depth is now identity-trustworthy (same
+    // resolver as `aida queue list`), so it always rides along AFTER the lead
+    // actionable signal — no longer suppressed on divergence.
+    lines.push(crate::toon::scalar(
+        "queue_depth",
+        &snap.queue_depth.to_string(),
+    ));
     if snap.cache_present {
         lines.push(crate::toon::scalar("open", &snap.counts.open.to_string()));
         lines.push(crate::toon::scalar(
@@ -113720,9 +114671,14 @@ fn role_queue_actionable(
     project_root: &std::path::Path,
     role: &str,
 ) -> Vec<(String, String, String)> {
-    let user = current_user_id(None);
-    let queue_path = project_root
-        .join(".aida-store/registry/queues")
+    // BUG-675: fold identity the SAME way read_queue_depth / `aida queue list`
+    // do, so the actionable set is read from the case-correct queue file (a shell
+    // reporting `Joe` finds `joe.yaml`) rather than silently reading zero.
+    // trace:BUG-675 | ai:claude
+    let store_path = project_root.join(".aida-store");
+    let user = aida_core::db::resolve_queue_user(&store_path, &current_user_id(None));
+    let queue_path = store_path
+        .join("registry/queues")
         .join(format!("{}.yaml", user));
     let Ok(content) = std::fs::read_to_string(&queue_path) else {
         return Vec::new();
@@ -114111,9 +115067,11 @@ mod story707_fast_status_tests {
     }
 }
 
-// BUG-670: the AGENT-MODE `aida status` projection must give an unambiguous
-// "is there work for me?" signal — lead with `queue_actionable`, and never emit
-// a `queue_depth` that contradicts it (the `64` vs `0` first-impression trap).
+// BUG-670 → BUG-675: the AGENT-MODE `aida status` projection must give an
+// unambiguous "is there work for me?" signal — lead with `queue_actionable`. With
+// BUG-675 making `queue_depth` identity-trustworthy (same resolver as
+// `aida queue list`), the raw depth now ALWAYS rides along after the lead signal
+// instead of being suppressed on divergence.
 #[cfg(test)]
 mod bug670_agent_status_tests {
     use super::*;
@@ -114122,11 +115080,11 @@ mod bug670_agent_status_tests {
         lines.iter().position(|l| l.starts_with(&format!("{key}:")))
     }
 
-    // The actionable count LEADS and, when the raw depth DIVERGES (padding /
-    // BUG-89 identity mismatch), no `queue_depth` scalar is emitted — so an agent
-    // is never shown `queue_depth: 64` next to `queue_actionable: 0`.
+    // BUG-675: even when the raw depth DIFFERS from actionable (a padded queue),
+    // `queue_depth` is now emitted — trustworthy total-routed context — but always
+    // AFTER the lead `queue_actionable` work-signal.
     #[test]
-    fn divergent_depth_is_suppressed_and_actionable_leads() {
+    fn divergent_depth_rides_along_after_actionable() {
         let snap = FastStatusSnapshot {
             role: "implementer".to_string(),
             queue_depth: 64,
@@ -114138,14 +115096,18 @@ mod bug670_agent_status_tests {
 
         let actionable_at =
             line_index(&lines, "queue_actionable").expect("queue_actionable must be emitted");
-        // Lead signal: actionable appears, and no divergent depth line exists.
+        // Lead signal appears…
         assert!(
             lines.iter().any(|l| l == "queue_actionable: 0"),
             "actionable count must be the work-signal: {lines:?}"
         );
+        // …and the (now trustworthy) raw depth rides along after it.
+        let depth_at = line_index(&lines, "queue_depth")
+            .expect("BUG-675: trustworthy queue_depth is always emitted");
+        assert!(lines.iter().any(|l| l == "queue_depth: 64"));
         assert!(
-            line_index(&lines, "queue_depth").is_none(),
-            "divergent queue_depth must be suppressed, not emitted: {lines:?}"
+            actionable_at < depth_at,
+            "queue_actionable must lead queue_depth: {lines:?}"
         );
         // "Leads" = actionable precedes every requirement-count scalar.
         for k in ["open", "in_progress", "draft", "total"] {
@@ -114155,8 +115117,8 @@ mod bug670_agent_status_tests {
         }
     }
 
-    // When the two counts AGREE there is no ambiguity, so `queue_depth` may ride
-    // along — but still AFTER the lead `queue_actionable`, and never before it.
+    // When the two counts AGREE, `queue_depth` still rides along AFTER the lead
+    // `queue_actionable`, and never before it.
     #[test]
     fn agreeing_depth_rides_along_after_actionable() {
         let snap = FastStatusSnapshot {
@@ -114241,8 +115203,9 @@ mod bug670_agent_status_tests {
             "actionable filters the padded queue to the live/workable set"
         );
 
-        // Fed into the projection, the divergence (4 vs 1) suppresses queue_depth
-        // and leads with the actionable count.
+        // Fed into the projection, the actionable count leads and the (now
+        // identity-trustworthy, BUG-675) raw depth rides along after it — both are
+        // emitted, actionable first.
         let snap = FastStatusSnapshot {
             role: "implementer".to_string(),
             queue_depth: depth,
@@ -114252,9 +115215,78 @@ mod bug670_agent_status_tests {
         };
         let lines = toon_status_scalar_lines(&snap);
         assert!(lines.iter().any(|l| l == "queue_actionable: 1"));
+        assert!(lines.iter().any(|l| l == "queue_depth: 4"));
+        let actionable_at = line_index(&lines, "queue_actionable").unwrap();
+        let depth_at = line_index(&lines, "queue_depth").unwrap();
         assert!(
-            line_index(&lines, "queue_depth").is_none(),
-            "divergent depth must not be emitted: {lines:?}"
+            actionable_at < depth_at,
+            "queue_actionable must lead queue_depth: {lines:?}"
+        );
+    }
+
+    // BUG-675: the statusline `queue_depth` must resolve the current user through
+    // the SAME case-folding identity path `aida queue list` uses (TASK-951), so a
+    // shell whose USER/AIDA_USER differs only in case from the stored queue key
+    // counts the same items — never suppressed to zero on a resolvable identity
+    // match. trace:BUG-675 | ai:claude
+    #[test]
+    fn queue_depth_matches_queue_list_under_case_only_identity() {
+        // Pin identity to `Joe` (upper) under the env lock; the stored queue lives
+        // under lowercase `joe` (a prior shell's casing). EnvVarsGuard holds the
+        // ENV_LOCK for the whole body so no sibling env-mutating test races in.
+        let _g = crate::test_env::EnvVarsGuard::set(&[("AIDA_USER", "Joe"), ("USER", "Joe")]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let store = root.join(".aida-store");
+        let qdir = store.join("registry/queues");
+        std::fs::create_dir_all(&qdir).unwrap();
+
+        let mk = |role: &str, pos: i64| aida_core::QueueEntry {
+            user_id: "joe".to_string(),
+            requirement_id: Uuid::new_v4(),
+            position: pos,
+            added_by: "joe".to_string(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some(role.to_string()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        let entries = vec![
+            mk("implementer", 0),
+            mk("implementer", 1),
+            mk("reviewer", 2),
+        ];
+        std::fs::write(
+            qdir.join("joe.yaml"),
+            serde_yaml::to_string(&entries).unwrap(),
+        )
+        .unwrap();
+
+        // Reference path: `aida queue list` resolves `Joe` → `joe.yaml` (TASK-951)
+        // and returns all three entries; two are routed to implementer.
+        let listed = Storage::new(&store).queue_list("Joe", false).unwrap();
+        let list_impl = listed
+            .iter()
+            .filter(|e| e.for_role.as_deref() == Some("implementer"))
+            .count();
+        assert_eq!(
+            list_impl, 2,
+            "queue list must fold identity and see the queue"
+        );
+
+        // BUG-675: the statusline depth resolves identity the SAME way and EQUALS
+        // the queue-list count — never suppressed to zero on a resolvable match.
+        let depth = read_queue_depth(root, Some("implementer"))
+            .expect("queue_depth must resolve the folded identity, not read zero");
+        assert_eq!(
+            depth, list_impl,
+            "queue_depth must equal the queue-list count under a case-only identity mismatch"
+        );
+        assert_ne!(
+            depth, 0,
+            "queue_depth must not collapse to zero on a resolvable identity match"
         );
     }
 }
@@ -114303,6 +115335,189 @@ fn warm_status_network_probes(project_root: &std::path::Path) {
     });
 }
 
+/// TASK-1065: assemble the `RequirementsStore` the rich `aida status` sections
+/// consume from the CACHE read-projection instead of a full `backend.load()`.
+///
+/// The store's metadata (name / title / description / features / id-config) comes
+/// from one cheap `metadata.yaml` read; its `requirements` are reconstructed from
+/// `list_summaries` (archive + defer = Both, so the projection mirrors the full
+/// on-disk set `backend.load()` returned). Each lightweight `Requirement` carries
+/// exactly the fields the `aida status --full` hygiene/cleanup doctor scans, the
+/// queue snapshot, and the Project/Requirements sections read: id, spec_id,
+/// agreed_id, title, status, req_type, modified_at, archived. Fields not projected
+/// into the cache (description body, comments, relationships, the decision-request
+/// payload, …) are left at their `Requirement::new` defaults — the status sections
+/// never read them (the decision-inbox count reads the `has_pending_decision`
+/// cache column via `backend.pending_decision_count()` instead).
+///
+/// Fidelity notes (same cache-vs-load divergences `aida list` already carries):
+/// an EPIC's status is the cache's derived rollup rather than its stored value,
+/// and a spec with a *custom* status string maps to `Draft` + `custom_status`
+/// since it isn't one of the eight canonical variants. Both are exotic and do not
+/// affect the doctor scans (which exclude epics and only match canonical
+/// statuses).
+// trace:TASK-1065 | ai:claude
+fn build_status_store_from_cache(
+    backend: &aida_core::CachedGitBackend,
+) -> Result<aida_core::models::RequirementsStore> {
+    use aida_core::{RequirementStatus, RequirementType};
+
+    let mut store = backend.load_metadata_only()?;
+
+    let summaries = backend.list_summaries(&aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::db::DeferFilter::Both,
+        ..Default::default()
+    })?;
+
+    store.requirements = summaries
+        .into_iter()
+        .map(|s| {
+            let mut req = aida_core::Requirement::new(s.title, String::new());
+            req.id = s.id;
+            req.spec_id = s.spec_id;
+            req.agreed_id = s.agreed_id;
+            req.owner = s.owner;
+            req.assignee = s.assignee;
+            req.feature = s.feature;
+            req.archived = s.archived;
+            req.deferred = s.deferred;
+            // The cache stores RequirementType's Debug form; map it back. An
+            // unrecognized (custom) type falls back to Task — it won't match any
+            // status-scan type predicate, which is the safe default.
+            req.req_type =
+                RequirementType::from_cache_str(&s.req_type).unwrap_or(RequirementType::Task);
+            // Canonical status → the typed enum. A custom status string isn't one
+            // of the eight variants, so preserve it verbatim in `custom_status`
+            // (and leave the enum at Draft) rather than mis-map it.
+            match RequirementStatus::from_filter_str(&s.status) {
+                Some(st) => req.status = st,
+                None => {
+                    req.status = RequirementStatus::Draft;
+                    req.custom_status = Some(s.status);
+                }
+            }
+            req.modified_at = chrono::DateTime::parse_from_rfc3339(&s.modified_at)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or(req.modified_at);
+            req
+        })
+        .collect();
+
+    Ok(store)
+}
+
+// TASK-1065: the rich `aida status --full` store is sourced from the cache
+// read-projection, never a full `backend.load()` over the object YAMLs, and the
+// decision-inbox count reads the `has_pending_decision` cache column. These tests
+// lock both contracts. trace:TASK-1065 | ai:claude
+#[cfg(test)]
+mod task_1065_status_cacheback_tests {
+    use super::*;
+    use aida_core::{
+        DecisionChoice, DecisionRequest, Requirement, RequirementStatus, RequirementType,
+    };
+
+    fn backend_in(dir: &std::path::Path) -> aida_core::CachedGitBackend {
+        let store_root = dir.join("store");
+        let cache_path = dir.join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap()
+    }
+
+    fn pending_dr() -> DecisionRequest {
+        DecisionRequest {
+            question: "Ship or promote?".into(),
+            choices: vec![DecisionChoice {
+                label: "Ship".into(),
+                consequence: "implement".into(),
+                resolution: "status:approved".into(),
+            }],
+            recommended: Some(0),
+            rationale: None,
+            answered: None,
+            note: None,
+            asked_at: None,
+            answered_at: None,
+        }
+    }
+
+    // Acceptance: `aida status --full` SHALL NOT trigger a full-store load. Build a
+    // backend, populate it, then DELETE the object YAMLs so a real `backend.load()`
+    // yields nothing (HEAD is unchanged, so the cache stays fresh and no rebuild
+    // fires). The cache-projected status store must STILL carry the row — proving
+    // it is sourced from the cache, not a full load.
+    #[test]
+    fn status_store_comes_from_cache_not_full_load() {
+        use aida_core::DatabaseBackend;
+        let dir = tempfile::tempdir().unwrap();
+        let backend = backend_in(dir.path());
+
+        let mut r = Requirement::new("cache-backed row".into(), String::new());
+        r.spec_id = Some("TASK-1".into());
+        r.status = RequirementStatus::InProgress;
+        r.req_type = RequirementType::Task;
+        backend.add_requirement(r).unwrap();
+
+        // Nuke the object YAMLs — a real full load now sees an empty object store.
+        let objects = dir.path().join("store").join("objects");
+        if objects.exists() {
+            std::fs::remove_dir_all(&objects).unwrap();
+        }
+        assert_eq!(
+            backend.load().map(|s| s.requirements.len()).unwrap_or(0),
+            0,
+            "precondition: a full backend.load() must NOT see the row after the objects are removed"
+        );
+
+        // The cache-projected status store still carries the row.
+        let store = build_status_store_from_cache(&backend).unwrap();
+        assert_eq!(store.requirements.len(), 1);
+        let req = &store.requirements[0];
+        assert_eq!(req.spec_id.as_deref(), Some("TASK-1"));
+        assert_eq!(req.status, RequirementStatus::InProgress);
+        assert_eq!(req.req_type, RequirementType::Task);
+    }
+
+    // The decision-inbox count reads the `has_pending_decision` cache column and
+    // matches the store-based reference oracle exactly (non-archived + pending).
+    #[test]
+    fn pending_decision_count_reads_cache_column() {
+        use aida_core::DatabaseBackend;
+        let dir = tempfile::tempdir().unwrap();
+        let backend = backend_in(dir.path());
+        assert_eq!(backend.pending_decision_count().unwrap(), 0);
+
+        let mut r = Requirement::new("needs a call".into(), String::new());
+        r.spec_id = Some("TASK-2".into());
+        r.decision_request = Some(pending_dr());
+        backend.add_requirement(r).unwrap();
+
+        // Answered decisions do not count.
+        let mut answered = Requirement::new("already decided".into(), String::new());
+        answered.spec_id = Some("TASK-4".into());
+        let mut dr = pending_dr();
+        dr.answered = Some(0);
+        answered.decision_request = Some(dr);
+        backend.add_requirement(answered).unwrap();
+
+        // Archived pending is excluded (matches the old store predicate).
+        let mut a = Requirement::new("archived pending".into(), String::new());
+        a.spec_id = Some("TASK-3".into());
+        a.decision_request = Some(pending_dr());
+        a.archived = true;
+        backend.add_requirement(a).unwrap();
+
+        assert_eq!(backend.pending_decision_count().unwrap(), 1);
+        // Cache-column count equals the store-based reference oracle.
+        let loaded = backend.load().unwrap();
+        assert_eq!(
+            backend.pending_decision_count().unwrap(),
+            pending_decision_request_count(&loaded),
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
@@ -114323,7 +115538,9 @@ fn handle_status_command_distributed(
     store_path: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
-    use aida_core::DatabaseBackend;
+    // TASK-1065: the `DatabaseBackend::load` trait method is no longer called on
+    // this path — the rich view is built from the cache read-projection via
+    // `build_status_store_from_cache`. trace:TASK-1065 | ai:claude
 
     // STORY-707: the BARE `aida status` (no flags) takes the FAST cache-backed
     // path — sub-second, NO `backend.load()`, NO `gh`/network, NO live-session
@@ -114368,7 +115585,17 @@ fn handle_status_command_distributed(
         return Ok(());
     }
 
-    let store = backend.load()?;
+    // TASK-1065: the rich `aida status` view (any flag, incl. `--full`) is built
+    // from the CACHE read-projection, NOT a full `backend.load()` over every
+    // object YAML. `build_status_store_from_cache` assembles a `RequirementsStore`
+    // from `list_summaries` (the same sqlite projection `aida list` reads) plus a
+    // single cheap `metadata.yaml` read — finishing the STORY-707 floor: the bare
+    // status was already load-free; this takes the `--full` hygiene/cleanup doctor
+    // scans, the queue snapshot, and the Project/Requirements sections off the
+    // full-store load too. The one section that needs YAML-only data (the pending
+    // decision-inbox count) reads the `has_pending_decision` cache column instead.
+    // trace:TASK-1065 | ai:claude
+    let store = build_status_store_from_cache(backend)?;
     let project_root = std::env::current_dir()?;
 
     // BUG-609: `--all` reveals stale agents AND lists every worktree; `--stale`
@@ -114496,7 +115723,7 @@ fn handle_status_command_distributed(
     let _ = awaiting_report.render(verbose, stdout.lock());
 
     print_status_presence_line(&project_root);
-    print_status_presence_consumers(&project_root, backend, &store);
+    print_status_presence_consumers(&project_root, backend);
     print_status_session_section(&user_ctx);
     print_status_branch_section(&user_ctx);
     if !no_ci {
@@ -117227,6 +118454,134 @@ fn nearest_standard_rel_type(input: &str) -> Option<&'static str> {
     }
 }
 
+// TASK-1082: did-you-mean for a mistyped spec id. When `aida show`/`edit`/
+// `queue work` (and every other spec-resolution surface) hits "Requirement not
+// found: <id>", compare the requested id against the existing id set and — if a
+// close match exists — append `did you mean <ID>?`, mirroring the affordance
+// clap gives for mistyped subcommands and `nearest_standard_rel_type`
+// (TASK-887) gives for rel-type typos. Scoped to the not-found branch; the
+// found path is untouched and the exit code stays non-zero.
+
+/// Find the nearest existing spec id to a requested one, for the not-found
+/// did-you-mean hint. Case-insensitive Levenshtein with a length-aware budget:
+/// short ids (≤3 chars) tolerate 1 edit, longer ids up to 2 — so a typo like
+/// `TASK-11` → `TASK-1` is caught while an unrelated id is left alone. An exact
+/// (case-insensitive) match returns None because that would have resolved on
+/// the found path. Deterministic: lowest edit distance wins, ties prefer an id
+/// that is a prefix of / prefixed by the request (the extra-digit / dropped-
+/// suffix typo), then the lexicographically-smallest candidate. Pure over the
+/// caller-supplied id set → unit-testable.
+// trace:TASK-1082 | ai:claude
+fn nearest_spec_id(requested: &str, known_ids: &[String]) -> Option<String> {
+    let needle = requested.trim().to_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    // If the requested id exactly (case-insensitively) exists, it's not a typo
+    // — suggest nothing. In practice this fn only runs on the not-found branch,
+    // but the guard keeps it honest if invoked with a resolvable id.
+    if known_ids
+        .iter()
+        .any(|k| k.trim().eq_ignore_ascii_case(&needle))
+    {
+        return None;
+    }
+    let max_dist = if needle.len() <= 3 { 1 } else { 2 };
+    // Sort key: (distance, not-prefix-related, candidate). Lower is better, so
+    // `!prefix_related` sorts prefix matches first among equal-distance ties.
+    let mut best: Option<(usize, bool, String)> = None;
+    for known in known_ids {
+        let cand = known.trim();
+        if cand.is_empty() {
+            continue;
+        }
+        let cand_lc = cand.to_lowercase();
+        let d = levenshtein(&needle, &cand_lc);
+        // d == 0 is the found path — never suggest the request back to itself.
+        if d == 0 || d > max_dist {
+            continue;
+        }
+        let prefix_related = needle.starts_with(&cand_lc) || cand_lc.starts_with(&needle);
+        let key = (d, !prefix_related, cand.to_string());
+        if best.as_ref().is_none_or(|b| key < *b) {
+            best = Some(key);
+        }
+    }
+    best.map(|(_, _, id)| id)
+}
+
+/// Extract the requested id from a "Requirement not found: <id>" error's first
+/// line, so the top-level handler can compute a did-you-mean suggestion.
+/// Returns None for not-found messages that carry no id (the legacy
+/// `.context("Requirement not found")` chains, whose first line has no `: <id>`).
+/// `invalid_spec_id_format` appends " (not a valid spec ID)" — the trailing
+/// parenthetical is stripped so the bare id is returned. Pure → unit-testable.
+// trace:TASK-1082 | ai:claude
+fn not_found_requested_id(msg: &str) -> Option<String> {
+    let first = msg.lines().next()?.trim();
+    let rest = first.strip_prefix("Requirement not found: ")?;
+    let id = rest.split(" (").next().unwrap_or(rest).trim();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_string())
+    }
+}
+
+/// Best-effort gather of every known spec id (plus agreed id) from the cache,
+/// for the not-found did-you-mean lens. Cache-backed and read-only; any failure
+/// (no store attached, cache locked, wrong directory) yields an empty set so
+/// the caller simply omits the suggestion. Runs only on the not-found error
+/// path, so the one-shot cache read is off the hot path.
+// trace:TASK-1082 | ai:claude
+fn known_spec_ids_for_suggestion(project_root: &std::path::Path) -> Vec<String> {
+    let store_path = project_root.join(".aida-store");
+    let Ok(dispenser) = load_dispenser(&store_path) else {
+        return Vec::new();
+    };
+    let Ok(inner) = aida_core::GitBackend::new(&store_path).map(|b| b.with_dispenser(dispenser))
+    else {
+        return Vec::new();
+    };
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let Ok(backend) = aida_core::CachedGitBackend::with_inner(inner, &cache_path) else {
+        return Vec::new();
+    };
+    // Suggest against EVERY id, including archived/deferred rows — a typo should
+    // still resolve to a real (if hidden) spec.
+    let filter = aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::DeferFilter::Both,
+        ..Default::default()
+    };
+    let Ok(rows) = backend.list_summaries(&filter) else {
+        return Vec::new();
+    };
+    let mut ids = Vec::with_capacity(rows.len());
+    for r in rows {
+        if let Some(s) = r.spec_id {
+            ids.push(s);
+        }
+        if let Some(a) = r.agreed_id {
+            ids.push(a);
+        }
+    }
+    ids
+}
+
+/// Glue for the top-level error handler: if `msg` is a "Requirement not found"
+/// error carrying an id, resolve the nearest existing spec id and return a
+/// ready-to-print `did you mean <ID>?` string. None when the message isn't a
+/// not-found-with-id, or nothing is close enough to suggest.
+// trace:TASK-1082 | ai:claude
+fn did_you_mean_for_not_found(msg: &str) -> Option<String> {
+    let requested = not_found_requested_id(msg)?;
+    let project_root = find_main_worktree_root().ok()?;
+    let known = known_spec_ids_for_suggestion(&project_root);
+    let suggestion = nearest_spec_id(&requested, &known)?;
+    Some(format!("did you mean {suggestion}?"))
+}
+
 fn add_relationship(
     storage: &Storage,
     from_str: &str,
@@ -117868,6 +119223,105 @@ mod task_887_888_input_validation_tests {
     }
 }
 
+#[cfg(test)]
+mod task_1082_did_you_mean_tests {
+    use super::{nearest_spec_id, not_found_requested_id};
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn near_miss_typo_suggests_the_real_id() {
+        let known = ids(&["TASK-1", "TASK-2", "STORY-3", "BUG-9"]);
+        // The motivating case: TASK-11 is a fat-fingered TASK-1.
+        assert_eq!(
+            nearest_spec_id("TASK-11", &known).as_deref(),
+            Some("TASK-1")
+        );
+        // A transposed prefix (one edit inside the type token).
+        assert_eq!(nearest_spec_id("TSAK-2", &known).as_deref(), Some("TASK-2"));
+        // Case-insensitive match: a mixed-case transposition typo still resolves
+        // to the canonical-cased id. (A pure case-only difference like `story-3`
+        // is NOT a typo — `canonical_spec_id` uppercases, so it resolves on the
+        // found path — and is exercised in `case_only_difference_is_not_a_typo`.)
+        assert_eq!(
+            nearest_spec_id("Stroy-3", &known).as_deref(),
+            Some("STORY-3")
+        );
+    }
+
+    #[test]
+    fn far_off_or_empty_suggests_nothing() {
+        let known = ids(&["TASK-1", "STORY-3", "BUG-9"]);
+        // Nothing within the edit budget → no nagging suggestion.
+        assert_eq!(nearest_spec_id("EPIC-42", &known), None);
+        assert_eq!(nearest_spec_id("QQQQ-9999", &known), None);
+        // Empty / whitespace input never suggests.
+        assert_eq!(nearest_spec_id("", &known), None);
+        assert_eq!(nearest_spec_id("   ", &known), None);
+        // Empty id set never suggests.
+        assert_eq!(nearest_spec_id("TASK-1", &[]), None);
+    }
+
+    #[test]
+    fn exact_match_is_never_suggested_back() {
+        // An exact hit would have resolved on the found path; the did-you-mean
+        // lens must not echo the request back (nor divert to a NEAR neighbour
+        // like TASK-2).
+        let known = ids(&["TASK-1", "TASK-2"]);
+        assert_eq!(nearest_spec_id("TASK-1", &known), None);
+    }
+
+    #[test]
+    fn case_only_difference_is_not_a_typo() {
+        // `canonical_spec_id` uppercases, so `task-1` resolves to TASK-1 on the
+        // found path — a case-only difference is not a typo and suggests nothing.
+        let known = ids(&["TASK-1", "TASK-2"]);
+        assert_eq!(nearest_spec_id("task-1", &known), None);
+    }
+
+    #[test]
+    fn agreed_id_typos_resolve_too() {
+        // Agreed short ids (FR-1, BUG-7) are folded into the known set, so a
+        // typo of one is suggested just like a spec id.
+        let known = ids(&["FR-1", "FR-2", "BUG-7"]);
+        assert_eq!(nearest_spec_id("FR-11", &known).as_deref(), Some("FR-1"));
+    }
+
+    #[test]
+    fn prefix_related_wins_the_distance_tie() {
+        // TASK-1, TASK-10 and TASK-12 are all one edit from TASK-11, but
+        // TASK-1 (a prefix of the request) is the most likely intent.
+        let known = ids(&["TASK-10", "TASK-12", "TASK-1"]);
+        assert_eq!(
+            nearest_spec_id("TASK-11", &known).as_deref(),
+            Some("TASK-1")
+        );
+    }
+
+    #[test]
+    fn requested_id_parsed_from_not_found_message() {
+        // The plain not-found message.
+        assert_eq!(
+            not_found_requested_id("Requirement not found: TASK-11\n  Hint: ...").as_deref(),
+            Some("TASK-11")
+        );
+        // The invalid-format variant appends a parenthetical — strip it.
+        assert_eq!(
+            not_found_requested_id(
+                "Requirement not found: zzz (not a valid spec ID)\n  Expected ..."
+            )
+            .as_deref(),
+            Some("zzz")
+        );
+        // A legacy `.context("Requirement not found")` chain carries no id.
+        assert_eq!(not_found_requested_id("Requirement not found"), None);
+        // Unrelated errors are ignored.
+        assert_eq!(not_found_requested_id("some other error"), None);
+    }
+}
+
 /// Modern `aida rel list` over the git-canonical backend. Supports three
 /// modes (global / outgoing / incoming) plus `--type`, `--dangling`, and
 /// `--all` filters. Output uses a uniform `FROM → TO   TITLE` row format
@@ -118343,11 +119797,13 @@ fn add_comment_interactive(
 
     let content = inquire::Editor::new("Comment content:").prompt()?;
 
+    // trace:TASK-330 | ai:claude — stamp the session that produced this comment
+    let session_id = resolve_current_session_id();
     let comment = if let Some(parent_str) = parent_id {
         let parent_uuid = Uuid::parse_str(parent_str).context("Invalid parent comment ID")?;
-        Comment::new_reply(author, content, parent_uuid)
+        Comment::new_reply(author, content, parent_uuid).with_session_id(session_id)
     } else {
-        Comment::new(author, content)
+        Comment::new(author, content).with_session_id(session_id)
     };
 
     if let Some(parent_str) = parent_id {
@@ -118360,6 +119816,25 @@ fn add_comment_interactive(
     storage.save(&store)?;
     println!("{}", "Comment added successfully".green());
     Ok(())
+}
+
+/// Best-effort resolution of the Claude/AIDA session id for the shell that
+/// is adding a comment. Reads the session id AIDA exports on the launch path
+/// (`AIDA_SESSION_ID`), falling back to Claude Code's own `CLAUDE_CODE_SESSION_ID`.
+/// Returns `None` (never errors) when neither is set — comments added outside
+/// a tracked session simply carry no session id. Stamping it lets tooling
+/// correlate a comment back to the session that produced it.
+// trace:TASK-330 | ai:claude
+fn resolve_current_session_id() -> Option<String> {
+    for var in ["AIDA_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
+        if let Ok(val) = std::env::var(var) {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn add_comment_cli(
@@ -118382,11 +119857,13 @@ fn add_comment_cli(
         .map(|a| a.to_string())
         .unwrap_or_else(get_default_author);
 
+    // trace:TASK-330 | ai:claude — stamp the session that produced this comment
+    let session_id = resolve_current_session_id();
     let comment = if let Some(parent_str) = parent_id {
         let parent_uuid = Uuid::parse_str(parent_str).context("Invalid parent comment ID")?;
-        Comment::new_reply(author, content.to_string(), parent_uuid)
+        Comment::new_reply(author, content.to_string(), parent_uuid).with_session_id(session_id)
     } else {
-        Comment::new(author, content.to_string())
+        Comment::new(author, content.to_string()).with_session_id(session_id)
     };
 
     if let Some(parent_str) = parent_id {
@@ -118642,6 +120119,11 @@ fn print_comment(comment: &Comment, indent: usize) {
             .dimmed(),
         edited_marker,
     );
+    // trace:TASK-330 | ai:claude — surface the producing session so a reader
+    // can correlate the comment back to a session (`aida session list`).
+    if let Some(short) = comment.short_session_id() {
+        println!("{}  {} {}", indent_str, "Session:".dimmed(), short.dimmed());
+    }
     println!("{}  {}", indent_str, comment.content);
 
     if !comment.replies.is_empty() {
@@ -121921,6 +123403,369 @@ fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result
     if block && !uncovered.is_empty() {
         std::process::exit(1);
     }
+    Ok(())
+}
+
+// ============================================================================
+// TASK-939: diff-driven doc nudge at PR-open — `aida doc suggest`.
+//
+// `aida doc coverage` is the release-time backstop (every Completed spec should
+// have a Doc). This is the front-of-the-pipeline nudge: at PR-open, when the
+// branch ADDS new public surface (a CLI flag, a named CLI subcommand, or an MCP
+// tool) and the spec that surface traces to has no Doc entry about it, remind
+// the author to capture one while the "why" is fresh. Warn-only — `/aida-pr`
+// calls it and it never blocks the PR (exit 0 always).
+//
+// Reuses the STORY-499 diff machinery (`parse_unified_diff_hunks`,
+// `read_diff_for_range`, `resolve_gate_range`, `coverage_anchor_re`) and the
+// same `Doc References` documented-set logic as `find_uncovered_completed_specs`
+// (TASK-680). The detection core is pure and unit-tested. trace:TASK-939
+// ============================================================================
+
+/// A kind of newly-added public CLI/MCP surface detected in a diff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PublicSurfaceKind {
+    /// A new clap flag (an `#[arg(long…)]` / `#[clap(long…)]` attribute).
+    CliFlag,
+    /// A new named clap subcommand (an `#[command(name = …)]` attribute).
+    CliSubcommand,
+    /// A new MCP tool descriptor (`"name": "<snake_case>"` in `mcp.rs`).
+    McpTool,
+}
+
+impl PublicSurfaceKind {
+    fn label(self) -> &'static str {
+        match self {
+            PublicSurfaceKind::CliFlag => "CLI flag",
+            PublicSurfaceKind::CliSubcommand => "CLI subcommand",
+            PublicSurfaceKind::McpTool => "MCP tool",
+        }
+    }
+}
+
+/// One added line the classifier flagged as new public surface.
+// trace:TASK-939 | ai:claude
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+struct SurfaceHit {
+    file: String,
+    /// 1-based start line of the containing hunk in the post-change file.
+    new_start: usize,
+    kind: PublicSurfaceKind,
+    /// The trimmed added line that matched (for the human report).
+    snippet: String,
+}
+
+/// True when `word` occurs in `hay` bounded by non-identifier chars on both
+/// sides (so `long` matches in `#[clap(long)]` but NOT inside `long_help`).
+// trace:TASK-939 | ai:claude
+fn contains_ident_word(hay: &str, word: &str) -> bool {
+    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let bytes = hay.as_bytes();
+    let mut from = 0;
+    while let Some(pos) = hay[from..].find(word) {
+        let start = from + pos;
+        let end = start + word.len();
+        let before_ok = start == 0 || !is_ident(bytes[start - 1]);
+        let after_ok = end >= bytes.len() || !is_ident(bytes[end]);
+        if before_ok && after_ok {
+            return true;
+        }
+        from = start + 1;
+    }
+    false
+}
+
+/// An added line that declares a new clap long flag: an `#[arg(…)]` /
+/// `#[clap(…)]` attribute carrying a word-boundaried `long`. Excludes
+/// `long_help` / `long_about` (not a flag) and `#[clap(subcommand)]` (no
+/// `long`). PURE.
+// trace:TASK-939 | ai:claude
+fn is_clap_long_flag(line: &str) -> bool {
+    let t = line.trim_start();
+    if !t.starts_with("#[") {
+        return false;
+    }
+    if !(t.contains("clap(") || t.contains("arg(")) {
+        return false;
+    }
+    contains_ident_word(t, "long")
+}
+
+/// An added line that declares a *named* clap subcommand: an `#[command(…)]` /
+/// `#[clap(…)]` attribute carrying `name = "…"`. (Unit-variant subcommands
+/// that derive their name from the variant carry no attribute and are not
+/// detected here — flags added alongside them usually are.) PURE.
+// trace:TASK-939 | ai:claude
+fn is_clap_named_subcommand(line: &str) -> bool {
+    let t = line.trim_start();
+    if !t.starts_with("#[") {
+        return false;
+    }
+    if !(t.contains("clap(") || t.contains("command(")) {
+        return false;
+    }
+    contains_ident_word(t, "name") && t.contains('=')
+}
+
+/// Extract the tool name from an MCP tool descriptor line — `"name": "<value>"`
+/// where `<value>` is a snake_case identifier. Returns `None` for Title-case
+/// resource titles (`"Project Summary"`) or non-descriptor lines. PURE.
+// trace:TASK-939 | ai:claude
+fn mcp_tool_name_in_line(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("\"name\"")?;
+    let rest = rest.trim_start().strip_prefix(':')?;
+    let rest = rest.trim_start().strip_prefix('"')?;
+    let end = rest.find('"')?;
+    let val = &rest[..end];
+    let ident = !val.is_empty()
+        && val.starts_with(|c: char| c.is_ascii_lowercase())
+        && val
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+    ident.then_some(val)
+}
+
+/// Classify a single ADDED diff line as new public surface, or `None`. PURE —
+/// the `file` path only selects the MCP-tool probe (limited to `mcp.rs`).
+// trace:TASK-939 | ai:claude
+fn classify_surface_line(file: &str, line: &str) -> Option<PublicSurfaceKind> {
+    // MCP tool descriptor — only in the MCP surface file. The server-name line
+    // (`"name": "aida"`) is excluded so it never reads as a new tool.
+    if file.ends_with("mcp.rs") {
+        if let Some(name) = mcp_tool_name_in_line(line) {
+            if name != "aida" {
+                return Some(PublicSurfaceKind::McpTool);
+            }
+        }
+    }
+    if is_clap_named_subcommand(line) {
+        return Some(PublicSurfaceKind::CliSubcommand);
+    }
+    if is_clap_long_flag(line) {
+        return Some(PublicSurfaceKind::CliFlag);
+    }
+    None
+}
+
+/// Scan parsed diff hunks for newly-added public surface. PURE — the testable
+/// core of `aida doc suggest`.
+// trace:TASK-939 | ai:claude
+fn detect_new_public_surface(hunks: &[ParsedHunk]) -> Vec<SurfaceHit> {
+    let mut hits = Vec::new();
+    for h in hunks {
+        for line in &h.added {
+            if let Some(kind) = classify_surface_line(&h.file, line) {
+                hits.push(SurfaceHit {
+                    file: h.file.clone(),
+                    new_start: h.new_start,
+                    kind,
+                    snippet: line.trim().to_string(),
+                });
+            }
+        }
+    }
+    hits
+}
+
+/// Collect the spec ids this PR references — commit-trailer ids across `range`
+/// (plan commits skipped) plus inline `trace:` anchors in the added lines.
+/// These are the ids a Doc entry would be `--about`.
+// trace:TASK-939 | ai:claude
+fn specs_referenced_in_range(
+    project_root: &std::path::Path,
+    range: &str,
+    hunks: &[ParsedHunk],
+) -> Vec<String> {
+    use std::process::Command as PCmd;
+    let mut ids: Vec<String> = Vec::new();
+
+    if let Ok(out) = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--no-merges", "--pretty=format:%s", range])
+        .output()
+    {
+        if out.status.success() {
+            for subject in String::from_utf8_lossy(&out.stdout).lines() {
+                if is_plan_commit_subject(subject) {
+                    continue;
+                }
+                ids.extend(extract_spec_ids_from_commit(subject));
+            }
+        }
+    }
+
+    let re = coverage_anchor_re();
+    for h in hunks {
+        for line in &h.added {
+            for cap in re.captures_iter(line) {
+                ids.push(cap[1].to_string());
+            }
+        }
+    }
+
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// CLI handler for `aida doc suggest`. Reads the branch diff, detects new public
+/// surface, resolves the referenced specs against the live graph, and nudges
+/// `aida doc add --about <ID>` for any that carry no Doc entry. Warn-only —
+/// always exits 0.
+// trace:TASK-939 | ai:claude
+fn handle_doc_suggest(range: Option<&str>, json: bool) -> Result<()> {
+    use aida_core::models::{RelationshipType, RequirementStatus, RequirementType};
+
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let range = resolve_gate_range(&project_root, range);
+
+    let diff = read_diff_for_range(&project_root, &range)?;
+    let hunks = parse_unified_diff_hunks(&diff);
+    let surface = detect_new_public_surface(&hunks);
+    let referenced = specs_referenced_in_range(&project_root, &range, &hunks);
+
+    // The live requirement graph — for the documented-set check.
+    let store = load_store_for_lookup(&project_root);
+
+    // Set of spec uuids referenced by at least one Doc.
+    let mut documented: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+    if let Some(s) = store.as_ref() {
+        for doc in s
+            .requirements
+            .iter()
+            .filter(|r| r.req_type == RequirementType::Doc)
+        {
+            for rel in &doc.relationships {
+                if rel.rel_type == RelationshipType::References {
+                    documented.insert(rel.target_id);
+                }
+            }
+        }
+    }
+
+    // Partition the referenced specs into gaps (undocumented, live, non-Doc)
+    // and already-documented.
+    let mut gaps: Vec<(String, String)> = Vec::new();
+    let mut documented_ids: Vec<String> = Vec::new();
+    if let Some(s) = store.as_ref() {
+        for cid in &referenced {
+            let want = cid.to_ascii_uppercase();
+            let found = s.requirements.iter().find(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|x| x.eq_ignore_ascii_case(&want))
+                    || r.agreed_id
+                        .as_deref()
+                        .is_some_and(|x| x.eq_ignore_ascii_case(&want))
+            });
+            match found {
+                // A Doc, a rejected spec, or an unresolvable id is not a target.
+                Some(r) if r.req_type == RequirementType::Doc => {}
+                Some(r) if matches!(r.status, RequirementStatus::Rejected) => {}
+                Some(r) if r.archived => {}
+                Some(r) => {
+                    if documented.contains(&r.id) {
+                        documented_ids.push(r.display_id());
+                    } else {
+                        gaps.push((r.display_id(), r.title.clone()));
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+
+    let has_surface = !surface.is_empty();
+    // "ok" = nothing to nudge: either no new surface, or every referenced spec
+    // already carries a doc.
+    let ok = !has_surface || gaps.is_empty();
+
+    if json {
+        let surface_rows: Vec<serde_json::Value> = surface
+            .iter()
+            .map(|h| {
+                serde_json::json!({
+                    "file": h.file,
+                    "line": h.new_start,
+                    "kind": h.kind,
+                    "snippet": h.snippet,
+                })
+            })
+            .collect();
+        let gap_rows: Vec<serde_json::Value> = gaps
+            .iter()
+            .map(|(id, title)| serde_json::json!({ "id": id, "title": title }))
+            .collect();
+        let payload = serde_json::json!({
+            "range": range,
+            "surface_count": surface.len(),
+            "surface": surface_rows,
+            "referenced_specs": referenced,
+            "documented_specs": documented_ids,
+            "gaps": gap_rows,
+            "ok": ok,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    if !has_surface {
+        println!(
+            "{} No new CLI/MCP surface added in `{}` — nothing to capture.",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            range
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} New public surface added in `{}`:",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        range
+    );
+    for h in &surface {
+        println!(
+            "  {} · {}:{} · {}",
+            h.kind.label().cyan(),
+            h.file,
+            h.new_start,
+            h.snippet
+        );
+    }
+    println!();
+
+    if !gaps.is_empty() {
+        println!(
+            "{} Referenced spec(s) with no doc entry:",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        for (id, title) in &gaps {
+            println!("  {} · {}", id.cyan(), title);
+        }
+        println!();
+        println!("Capture the \"why\" while it's fresh:");
+        for (id, _) in &gaps {
+            println!("  aida doc add --title \"…\" --about {}", id);
+        }
+        println!("(warn-only — this nudge does not block the PR)");
+    } else if !documented_ids.is_empty() {
+        println!(
+            "{} Referenced spec(s) already have doc entries — nothing to capture.",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+    } else {
+        println!(
+            "{} Couldn't resolve which spec this surface belongs to (no live commit trailer or \
+             `trace:` anchor). Capture docs with:",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        println!("  aida doc add --title \"…\" --about <SPEC-ID>");
+        println!("(warn-only — this nudge does not block the PR)");
+    }
+
     Ok(())
 }
 
@@ -128253,6 +130098,59 @@ fn handle_queue_command(
                 }
             }
 
+            // TASK-101: base-freshness — flag any active session lease whose
+            // branch has fallen behind origin/main, so the operator sees when
+            // in-flight work is on a stale base *during* the session (not just
+            // at the queue-work/queue-done gates). Subtle by default; only live
+            // (non-stale) leases on a non-default branch are probed, and each
+            // row's `git rev-list --count` reads local refs — NO fetch here — so
+            // it's cheap + best-effort (a git miss just omits that row).
+            // trace:TASK-101 | ai:claude
+            if !*in_flight_only {
+                if let Some(root) = find_main_worktree_root()
+                    .ok()
+                    .or_else(|| find_project_root().ok())
+                {
+                    let now = chrono::Utc::now();
+                    let live = process_probe::probe_live_claude_sessions();
+                    let mut stale_base_rows: Vec<(String, String, String)> = Vec::new();
+                    for l in list_leases(&root) {
+                        if matches!(lease_state_for(&l, &live, now), LeaseState::Stale) {
+                            continue;
+                        }
+                        if l.branch.is_empty() || l.branch == "main" {
+                            continue;
+                        }
+                        let Some(behind) = commits_behind_origin_main(&root, &l.branch) else {
+                            continue;
+                        };
+                        // Threshold 1: the queue-list surface shows any non-zero
+                        // drift (the statusline uses the higher warn threshold).
+                        let Some(text) = base_behind_indicator(behind, 1) else {
+                            continue;
+                        };
+                        stale_base_rows.push((l.scope.clone(), l.branch.clone(), text));
+                    }
+                    if !stale_base_rows.is_empty() {
+                        println!();
+                        println!(
+                            "{} ({} lease{})",
+                            "Active leases on stale base".yellow().bold(),
+                            stale_base_rows.len(),
+                            if stale_base_rows.len() == 1 { "" } else { "s" }
+                        );
+                        for (scope, branch, text) in &stale_base_rows {
+                            println!(
+                                "  {}  {}  {}",
+                                truncate(scope, 20).bold(),
+                                truncate(branch, 24).dimmed(),
+                                text.yellow(),
+                            );
+                        }
+                    }
+                }
+            }
+
             // STORY-565: "how do I get to zero?" footer. SIGNPOSTING over the
             // SAME classifier `aida queue advance` uses — disambiguate drain
             // (`aida burndown run`, does the work) from clear (`aida queue
@@ -129750,6 +131648,8 @@ fn handle_queue_command(
             interface_tui,
             interface_other,
             no_interface_change,
+            test_plan,
+            no_test_plan,
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
@@ -130048,11 +131948,40 @@ fn handle_queue_command(
                 );
             }
 
+            // STORY-698: capture the verification steps the builder actually
+            // ran — the implementation audit trail surfaced in the PR body.
+            // Stored in implementation_info.test_coverage_notes (no new field).
+            // `--test-plan` flags win and skip the prompt; otherwise at a TTY
+            // (and unless --yes / --no-test-plan) ask. Best-effort — a failure
+            // here never blocks `queue done`. trace:STORY-698 | ai:claude
+            if let Err(e) = capture_test_plan(
+                storage,
+                req_id,
+                display_id,
+                test_plan,
+                *no_test_plan,
+                /* interactive = */ !yes,
+            ) {
+                eprintln!(
+                    "{} verification-step capture skipped: {}",
+                    "Warning:".yellow().bold(),
+                    e
+                );
+            }
+
             // STORY-106: workflow hint when the queue is now empty for the
             // active role+scope. Best-effort: any state-detection failure
             // skips the hint silently rather than failing the command.
             // trace:STORY-106 | ai:claude
             maybe_hint_after_queue_drain(storage, &user_id);
+
+            // STORY-700: passive first-run chain — advancing past the first
+            // `queue done` to the review → merge → `aida pull` hint. Only fires
+            // when the arc sits at exactly the spec-filed step; no-op otherwise.
+            // trace:STORY-700 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                first_run::after_work_done(&project_root);
+            }
 
             // BUG-378: substrate-as-bouncer for the scratchpad-drift ceiling.
             // An agent about to declare "all done" gets told here, before it
@@ -149325,6 +151254,8 @@ mod queue_json_rows_tests {
             heft: 0,
             // trace:TASK-902 | ai:claude
             blocked: false,
+            // trace:TASK-1065 | ai:claude
+            has_pending_decision: false,
             yaml_path: String::new(),
         }
     }
@@ -150373,5 +152304,133 @@ mod bug_678_focus_rollup_tally_tests {
         assert_eq!(t.in_progress, 2);
         assert_eq!(t.open, 0);
         assert_eq!(t.total, 4);
+    }
+}
+
+// STORY-698: verification-step capture at `aida queue done`. The precedence
+// decision is factored into `decide_test_plan_capture` precisely so it can be
+// exercised without a TTY. trace:STORY-698 | ai:claude
+#[cfg(test)]
+mod story_698_test_plan_capture_tests {
+    use super::*;
+
+    fn steps(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn flags_win_and_join_steps_skipping_the_prompt() {
+        // Acceptance: `--test-plan STEP` (repeatable) records exactly those
+        // steps, joined newline-separated, and never prompts — even at a TTY.
+        let d = decide_test_plan_capture(
+            &steps(&["cargo test -p aida-cli", "manual: aida queue done"]),
+            /* no_test_plan = */ false,
+            /* interactive = */ true,
+            /* at_tty = */ true,
+            /* disabled = */ false,
+            /* already_set = */ false,
+        );
+        assert_eq!(
+            d,
+            TestPlanCapture::Record("cargo test -p aida-cli\nmanual: aida queue done".to_string())
+        );
+    }
+
+    #[test]
+    fn flag_overrides_an_already_set_value() {
+        // A `--test-plan` flag is explicit intent — it overwrites even when
+        // notes already exist (the "no flag overrides" carve-out is #6).
+        let d = decide_test_plan_capture(
+            &steps(&["new step"]),
+            false,
+            true,
+            true,
+            false,
+            /* already_set = */ true,
+        );
+        assert_eq!(d, TestPlanCapture::Record("new step".to_string()));
+    }
+
+    #[test]
+    fn no_test_plan_flag_skips_the_prompt() {
+        // Acceptance: `--no-test-plan` skips the interactive prompt and records
+        // nothing, leaving any existing value untouched.
+        let d = decide_test_plan_capture(
+            &[],
+            /* no_test_plan = */ true,
+            true,
+            true,
+            false,
+            false,
+        );
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn non_interactive_no_flag_is_a_silent_skip() {
+        // Acceptance: non-interactive (`--yes`) with no flag ⇒ leave
+        // test_coverage_notes untouched and print no prompt.
+        let d = decide_test_plan_capture(
+            &[],
+            false,
+            /* interactive = */ false,
+            true,
+            false,
+            false,
+        );
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn no_tty_never_prompts() {
+        // A non-TTY interactive invocation (piped stdin) must not block on a
+        // prompt that nobody can answer.
+        let d = decide_test_plan_capture(&[], false, true, /* at_tty = */ false, false, false);
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn env_opt_out_skips_the_prompt() {
+        // Acceptance: `AIDA_AUTO_TEST_PLAN_CAPTURE=false` disables the capture.
+        let d = decide_test_plan_capture(&[], false, true, true, /* disabled = */ true, false);
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn already_set_leaves_the_value_unchanged_on_the_prompt_path() {
+        // Acceptance #6: with a value already captured and no flag override,
+        // the interactive path skips (never re-prompts, never clobbers).
+        let d =
+            decide_test_plan_capture(&[], false, true, true, false, /* already_set = */ true);
+        assert_eq!(d, TestPlanCapture::Skip);
+    }
+
+    #[test]
+    fn tty_interactive_first_time_prompts() {
+        // The one path that reaches the prompt: TTY + interactive + not opted
+        // out + nothing captured yet + no flags.
+        let d = decide_test_plan_capture(&[], false, true, true, false, false);
+        assert_eq!(d, TestPlanCapture::Prompt);
+    }
+
+    #[test]
+    fn env_disabled_predicate_matches_falsey_values() {
+        for (val, want) in [
+            ("0", true),
+            ("false", true),
+            ("no", true),
+            ("FALSE", true),
+            ("1", false),
+            ("true", false),
+            ("", false),
+        ] {
+            std::env::set_var("AIDA_AUTO_TEST_PLAN_CAPTURE", val);
+            assert_eq!(
+                capture_test_plan_disabled(),
+                want,
+                "AIDA_AUTO_TEST_PLAN_CAPTURE={val:?}"
+            );
+        }
+        std::env::remove_var("AIDA_AUTO_TEST_PLAN_CAPTURE");
     }
 }

@@ -518,16 +518,23 @@ fn event_loop(
         // (highlighted at the scope level, drilled-into at the verb level).
         sync_scope_items(st, store, cache, loaded, focus_set.as_ref());
         // Refresh the per-row liveness verdict (TASK-978) on a poll cadence: the
-        // `aida ps --json` shell-out runs a real process probe (~1.3s), so
+        // liveness read runs a real `/proc` process probe (~1.3s), so
         // `refresh_if_due` guards it three ways (BUG-676) — a long TTL, a
         // single-flight background thread, and this lazy-when-visible gate: probe
         // ONLY when the current scope actually surfaces the liveness glyph (the
         // running-work scopes). On Backlog / the scope panel of a glyph-less scope
         // we never pay for the probe. The render path only reads the cached map.
-        // trace:TASK-978 trace:BUG-676 | ai:claude
+        //
+        // BUG-677: this now computes liveness IN-PROCESS via
+        // `aida_core::liveness` (same probe + classifiers `aida ps` uses) instead
+        // of shelling out to `aida ps --json`. The spec projection is built
+        // lazily — only on a frame that actually fires the probe — from the
+        // already-open store. trace:TASK-978 trace:BUG-676 trace:BUG-677 | ai:claude
         let liveness_visible = st.scope.map(|s| s.shows_liveness()).unwrap_or(false);
         st.liveness
-            .refresh_if_due(&crate::app::aida_exe(), project_root, liveness_visible);
+            .refresh_if_due(project_root, liveness_visible, || {
+                store.map(|s| s.liveness_inputs()).unwrap_or_default()
+            });
         terminal.draw(|f| render(f, st, loaded_spec.as_ref(), pending.as_ref().map(|p| &p.op)))?;
 
         // Drain a finished background verb (BUG-633): on completion set the

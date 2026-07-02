@@ -71,16 +71,30 @@ impl Reason {
         }
     }
 
-    /// Who must act on this reason — shown after the count in the Nav.
+    /// Who must act on this reason — shown after the count in the Nav. A thin
+    /// display shim over [`Reason::owner_class`], preserving the original
+    /// `&'static str` so the existing nav row-label formatting is unchanged.
     pub fn owner(self) -> &'static str {
+        self.owner_class().label()
+    }
+
+    /// The typed default owner of this reason-group — the full owner set
+    /// STORY-702 classifies. `NeedsApproval` / `NeedsAnswer` are yours; the
+    /// in-motion and handed-off reasons belong to their role (implementer /
+    /// reviewer); blocked / deferred have no actor (dependency / trigger). The
+    /// advisor-backlog SUB-class of needs-approval is refined to
+    /// [`Owner::Advisor`] at the item level by [`item_owner`] — a reason alone
+    /// can't see the sub-class flag.
+    // trace:STORY-702 | ai:claude
+    pub fn owner_class(self) -> Owner {
         match self {
-            Reason::InFlight => "impl",
-            Reason::Blocked => "wait",
-            Reason::NeedsAttention => "impl",
-            Reason::AwaitingReview => "reviewer",
-            Reason::NeedsAnswer => "you",
-            Reason::NeedsApproval => "you",
-            Reason::Deferred => "trigger",
+            Reason::InFlight => Owner::Implementer,
+            Reason::Blocked => Owner::Dependency,
+            Reason::NeedsAttention => Owner::Implementer,
+            Reason::AwaitingReview => Owner::Reviewer,
+            Reason::NeedsAnswer => Owner::You,
+            Reason::NeedsApproval => Owner::You,
+            Reason::Deferred => Owner::Trigger,
         }
     }
 
@@ -95,6 +109,54 @@ impl Reason {
             Reason::NeedsAnswer => RowKind::ReasonNeedsAnswer,
             Reason::NeedsApproval => RowKind::ReasonNeedsApproval,
             Reason::Deferred => RowKind::ReasonDeferred,
+        }
+    }
+}
+
+/// The full set of actors the cockpit can name as owning a reason-group —
+/// the "who must act" axis STORY-702 classifies. Every open spec's reason maps
+/// to exactly one default owner via [`Reason::owner_class`]; a needs-approval
+/// row is further refined by [`item_owner`] (a blessed-but-unrouted
+/// advisor-backlog row is the advisor's to route, not yours).
+///
+/// This is CLASSIFICATION only. The lens/toggle GESTURE that re-groups the
+/// board *by* this owner axis is EPIC-54's action->target verb and is
+/// deliberately NOT built here.
+// trace:STORY-702 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Owner {
+    /// You (the operator) must personally act: approve/reject a draft, answer
+    /// a pending decision, or read/reply to mail.
+    You,
+    /// The advisor seat must act: a blessed-but-unrouted (advisor-backlog)
+    /// spec awaiting routing onto the implementer queue. Constructed only by
+    /// [`item_owner`], whose consumer is EPIC-54's owner-lens shell.
+    #[allow(dead_code)] // consumed by the EPIC-54 owner-lens shell. trace:STORY-702
+    Advisor,
+    /// An implementer must act: work is in flight, or a punt needs triage.
+    Implementer,
+    /// A reviewer must act: Done-on-branch with an open PR awaiting review.
+    Reviewer,
+    /// No actor — waiting on an incomplete dependency to clear.
+    Dependency,
+    /// No actor — parked until a revisit trigger fires.
+    Trigger,
+}
+
+impl Owner {
+    /// The short label shown after a reason-group's count in the Nav pane.
+    /// Preserves the exact strings the pre-STORY-702 `Reason::owner()` emitted
+    /// (`you` / `impl` / `reviewer` / `wait` / `trigger`) so the nav rendering
+    /// is unchanged; `advisor` is new (only reachable via [`item_owner`]).
+    // trace:STORY-702 | ai:claude
+    pub fn label(self) -> &'static str {
+        match self {
+            Owner::You => "you",
+            Owner::Advisor => "advisor",
+            Owner::Implementer => "impl",
+            Owner::Reviewer => "reviewer",
+            Owner::Dependency => "wait",
+            Owner::Trigger => "trigger",
         }
     }
 }
@@ -389,6 +451,89 @@ pub fn advisor_queue_depth(items: &[ClassifiedItem]) -> usize {
         .iter()
         .filter(|it| it.reason == Reason::NeedsApproval)
         .count()
+}
+
+/// Refine a classified item to its actual owner (STORY-702) — the same as
+/// `item.reason.owner_class()` EXCEPT an advisor-backlog needs-approval row (an
+/// Approved-but-not-queued spec the advisor has blessed but not routed) is
+/// owned by the ADVISOR, who must route it — not you. A reason alone can't see
+/// the sub-class flag, so this item-level refinement is where [`Owner::Advisor`]
+/// is produced. Pure over the item.
+// trace:STORY-702 | ai:claude
+// The owner-lens shell that consumes this is EPIC-54's; the classifier lands
+// ahead of it as a pure, unit-tested function (per the EPIC-53↔54 seam plan).
+#[allow(dead_code)]
+pub fn item_owner(item: &ClassifiedItem) -> Owner {
+    if item.reason == Reason::NeedsApproval && item.advisor_backlog {
+        Owner::Advisor
+    } else {
+        item.reason.owner_class()
+    }
+}
+
+/// The "you-plate": everything YOU (the operator) must personally clear,
+/// aggregated into ONE view regardless of which reason-group each item fell
+/// into — the needs-approval drafts + the needs-answer decisions + your unread
+/// mail. Pure over the classified item set plus an `unread_mail` count.
+///
+/// Classification + aggregation ONLY (STORY-702). The lens/toggle GESTURE that
+/// swaps the board into this owner-grouped view is EPIC-54's action->target
+/// verb and is deliberately NOT built here.
+// trace:STORY-702 | ai:claude
+// Lands ahead of its EPIC-54 owner-lens consumer as a pure aggregation.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct YouPlate {
+    /// Draft specs awaiting your approve/reject verdict — the needs-approval
+    /// group MINUS the advisor-backlog sub-class (which the advisor routes,
+    /// per [`item_owner`]).
+    pub needs_approval: Vec<String>,
+    /// Specs with a pending decision only you can answer (needs-answer).
+    pub needs_answer: Vec<String>,
+    /// Count of unread messages in your mailbox. The mail SOURCE
+    /// (`unread_inbox` -> rows) lands with STORY-701's mailbox group; until
+    /// then a caller passes its unread count (0 folds cleanly to "no mail").
+    pub unread_mail: usize,
+}
+
+#[allow(dead_code)] // methods consumed by the EPIC-54 owner-lens shell.
+impl YouPlate {
+    /// Total number of things on your plate: approvals + answers + unread mail.
+    // trace:STORY-702 | ai:claude
+    pub fn total(&self) -> usize {
+        self.needs_approval.len() + self.needs_answer.len() + self.unread_mail
+    }
+
+    /// True when nothing is awaiting you — the plate is clear.
+    // trace:STORY-702 | ai:claude
+    pub fn is_clear(&self) -> bool {
+        self.total() == 0
+    }
+}
+
+/// Aggregate the classified board into the operator's [`YouPlate`] (STORY-702):
+/// the single "what must I personally clear" view — needs-approval (your
+/// drafts) + needs-answer + unread mail. Items the advisor owns (advisor-backlog
+/// rows, resolved by [`item_owner`]) are excluded — the plate is what YOU owe,
+/// not what the advisor owes. Pure over the items plus the mail count.
+// trace:STORY-702 | ai:claude
+// Consumer is EPIC-54's owner-lens shell; the aggregation lands ahead of it.
+#[allow(dead_code)]
+pub fn you_plate(items: &[ClassifiedItem], unread_mail: usize) -> YouPlate {
+    let mut plate = YouPlate {
+        unread_mail,
+        ..YouPlate::default()
+    };
+    for it in items.iter().filter(|it| item_owner(it) == Owner::You) {
+        match it.reason {
+            Reason::NeedsApproval => plate.needs_approval.push(it.spec_id.clone()),
+            Reason::NeedsAnswer => plate.needs_answer.push(it.spec_id.clone()),
+            // owner_class maps only NeedsApproval / NeedsAnswer to You, so no
+            // other reason reaches here; keep the arm exhaustive.
+            _ => {}
+        }
+    }
+    plate
 }
 
 /// True for the advisor-backlog sub-class of needs-approval (TASK-901): an
@@ -1243,5 +1388,117 @@ Answered (1)
         let items = classify(&inputs);
         // 1 backlog + 2 drafts = 3; the deferred + queued rows don't count.
         assert_eq!(advisor_queue_depth(&items), 3);
+    }
+
+    // --- Owner classification + you-plate aggregation (STORY-702). ---
+
+    #[test]
+    fn owner_class_covers_every_reason() {
+        // The full owner set: each of the 7 reasons maps to exactly one typed
+        // owner, and the display shim `Reason::owner()` still emits the exact
+        // pre-STORY-702 strings so the nav rendering is unchanged.
+        let expect = [
+            (Reason::InFlight, Owner::Implementer, "impl"),
+            (Reason::Blocked, Owner::Dependency, "wait"),
+            (Reason::NeedsAttention, Owner::Implementer, "impl"),
+            (Reason::AwaitingReview, Owner::Reviewer, "reviewer"),
+            (Reason::NeedsAnswer, Owner::You, "you"),
+            (Reason::NeedsApproval, Owner::You, "you"),
+            (Reason::Deferred, Owner::Trigger, "trigger"),
+        ];
+        for (reason, owner, label) in expect {
+            assert_eq!(reason.owner_class(), owner, "owner_class for {reason:?}");
+            assert_eq!(reason.owner(), label, "owner() label for {reason:?}");
+            assert_eq!(owner.label(), label, "Owner::label for {owner:?}");
+        }
+        // Every reason in the precedence list is covered (no panic, total map).
+        for reason in Reason::all() {
+            let _ = reason.owner_class();
+        }
+    }
+
+    #[test]
+    fn item_owner_refines_advisor_backlog_to_advisor() {
+        // A plain draft is yours; the advisor-backlog sub-class of the SAME
+        // needs-approval reason is the advisor's to route.
+        let inputs = BoardInputs {
+            all_rows: vec![row("STORY-1", "Approved", false, false, false)], // backlog
+            draft_rows: vec![row("STORY-2", "Draft", false, false, false)],  // draft
+            pending_question_ids: vec!["STORY-3".to_string()],               // needs-answer
+            done_rows: vec![row("STORY-4", "Done", false, false, false)],    // reviewer
+            ..BoardInputs::default()
+        };
+        let items = classify(&inputs);
+        let find = |id: &str| items.iter().find(|i| i.spec_id == id).unwrap();
+        assert_eq!(
+            item_owner(find("STORY-1")),
+            Owner::Advisor,
+            "backlog → advisor"
+        );
+        assert_eq!(item_owner(find("STORY-2")), Owner::You, "draft → you");
+        assert_eq!(
+            item_owner(find("STORY-3")),
+            Owner::You,
+            "needs-answer → you"
+        );
+        assert_eq!(
+            item_owner(find("STORY-4")),
+            Owner::Reviewer,
+            "done → reviewer"
+        );
+    }
+
+    #[test]
+    fn you_plate_groups_approval_answer_and_mail() {
+        // The you-plate is the single "what must I clear" view: needs-approval
+        // drafts + needs-answer + unread mail. The advisor-backlog row (STORY-1)
+        // is the advisor's to route and is excluded.
+        let inputs = BoardInputs {
+            all_rows: vec![
+                row("STORY-1", "Approved", false, false, false), // advisor backlog → excluded
+                row("STORY-9", "InProgress", false, true, false), // in-flight → not yours
+            ],
+            draft_rows: vec![
+                row("STORY-2", "Draft", false, false, false),
+                row("STORY-3", "Draft", false, false, false),
+            ],
+            needs_attention_rows: vec![row("BUG-8", "NeedsAttention", false, false, false)],
+            pending_question_ids: vec!["STORY-4".to_string()],
+            deferred_rows: vec![deferred_row("STORY-5", "later")],
+            ..BoardInputs::default()
+        };
+        let items = classify(&inputs);
+        let plate = you_plate(&items, 2);
+
+        assert_eq!(
+            plate.needs_approval,
+            vec!["STORY-2".to_string(), "STORY-3".to_string()],
+            "drafts only; advisor-backlog excluded"
+        );
+        assert_eq!(plate.needs_answer, vec!["STORY-4".to_string()]);
+        assert_eq!(plate.unread_mail, 2);
+        // 2 approvals + 1 answer + 2 mail = 5.
+        assert_eq!(plate.total(), 5);
+        assert!(!plate.is_clear());
+
+        // The advisor-backlog, in-flight, needs-attention, and deferred rows
+        // are NOT on your plate.
+        assert!(!plate.needs_approval.contains(&"STORY-1".to_string()));
+    }
+
+    #[test]
+    fn you_plate_empty_and_mail_only() {
+        // No items, no mail → a clear plate.
+        let empty = you_plate(&[], 0);
+        assert!(empty.is_clear());
+        assert_eq!(empty.total(), 0);
+
+        // Mail with no specs still lands you on the plate (nothing to approve or
+        // answer, but you owe the inbox).
+        let mail_only = you_plate(&[], 3);
+        assert!(!mail_only.is_clear());
+        assert_eq!(mail_only.total(), 3);
+        assert!(mail_only.needs_approval.is_empty());
+        assert!(mail_only.needs_answer.is_empty());
     }
 }

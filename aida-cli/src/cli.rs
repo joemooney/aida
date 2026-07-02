@@ -1008,6 +1008,14 @@ pub enum SessionCommand {
         // trace:TASK-55 | ai:claude
         #[clap(long)]
         all: bool,
+        /// Emit the lease list as JSON for machine consumers. Each lease
+        /// carries a `drain` cross-reference — the orchestrator drain/run
+        /// driving it (run uuid, phase, mode, orchestrator pid), or null
+        /// when the lease is not the active drain member. Honors `--all`
+        /// (stale leases included) but omits the cross-clone section.
+        // trace:TASK-345 | ai:claude
+        #[clap(long)]
+        json: bool,
     },
 
     /// Show details for one session lease (defaults to the lease covering
@@ -2388,6 +2396,24 @@ pub enum DocCommand {
         since: Option<String>,
 
         /// Emit the gap list as JSON instead of a human warning block.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Diff-driven doc nudge for a PR. Scan the changes a branch adds for NEW
+    /// public surface (a CLI flag, a CLI subcommand, or an MCP tool) and, when
+    /// the spec that surface traces to has no `aida doc` entry about it, nudge
+    /// the author to capture one. Warn-only — exits 0 — so `/aida-pr` can call
+    /// it without ever blocking the PR.
+    // trace:TASK-939 | ai:claude
+    Suggest {
+        /// Git range to scan (e.g. `origin/main..HEAD`). When absent, the
+        /// commits this branch adds over the default branch are scanned
+        /// (`<default-branch>..HEAD`).
+        #[clap(long, value_name = "RANGE")]
+        range: Option<String>,
+
+        /// Emit the nudge as JSON instead of a human block.
         #[clap(long)]
         json: bool,
     },
@@ -4261,6 +4287,19 @@ pub enum QueueCommand {
         // trace:STORY-542 | ai:claude
         #[clap(long)]
         no_interface_change: bool,
+        /// Record a verification step the builder actually ran (the
+        /// implementation audit trail). Repeatable — one flag per step, e.g.
+        /// `--test-plan "cargo test -p aida-cli" --test-plan "manual: aida
+        /// queue done at a TTY"`. Stored in implementation_info and surfaced in
+        /// the PR body. Any `--test-plan` skips the interactive capture prompt.
+        // trace:STORY-698 | ai:claude
+        #[clap(long = "test-plan", value_name = "STEP")]
+        test_plan: Vec<String>,
+        /// Skip the verification-step capture prompt and record nothing (the
+        /// spec's existing test-plan notes, if any, are left untouched).
+        // trace:STORY-698 | ai:claude
+        #[clap(long)]
+        no_test_plan: bool,
     },
     /// Pick up a queued item (or scope-cluster of queued items) and launch
     /// claude in a fresh session worktree, with the role + skill routed

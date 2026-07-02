@@ -118,6 +118,56 @@ impl Default for StoreMetadata {
     }
 }
 
+/// Resolve the queue-file user-id to use for `requested`, folding case at the
+/// LOOKUP boundary only, rooted at `store_root` (the `.aida-store` directory).
+/// The queue is stored as one YAML file per user-id
+/// (`registry/queues/<user_id>.yaml`). Historically the lookup was
+/// case-SENSITIVE, so a shell reporting `Joe` and another reporting `joe` split
+/// one human across two queue files.
+///
+/// This scans the queues directory for an existing file whose stem matches
+/// `requested` case-insensitively (composing the TASK-845 person-alias map on
+/// top of the TASK-951 case-fold) and, if found, returns that EXISTING stem — so
+/// `Joe` reads the queue already keyed under `joe`. When no existing file
+/// matches, `requested` is returned unchanged, so a brand-new queue keeps the
+/// shell's original casing: the stored key stays the raw shell `$USER`; we never
+/// rewrite it, we only fold when comparing.
+///
+/// Read-only and side-effect-free (unlike [`GitBackend::new`], it never creates
+/// directories), so the fast statusline `queue_depth` path can call it to fold
+/// identity the SAME way `aida queue list` does.
+// trace:BUG-675 trace:TASK-951 trace:TASK-845 | ai:claude
+pub fn resolve_queue_user(store_root: &Path, requested: &str) -> String {
+    let dir = store_root.join("registry/queues");
+    let aliases = crate::alias::AliasRegistry::load(store_root);
+    let target = aliases.resolve(requested);
+    let read = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd,
+        // No queues dir yet → nothing to match against; keep original casing.
+        Err(_) => return requested.to_string(),
+    };
+    for entry in read.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+            continue;
+        }
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            // An exact (case-sensitive) hit always wins — return immediately so
+            // the common path never rewrites the casing it was handed.
+            if stem == requested {
+                return requested.to_string();
+            }
+            // Resolve each existing queue file to its canonical person too, so an
+            // alias's stored queue file is matched even when the lookup uses a
+            // different alias of the same person.
+            if aliases.resolve(stem) == target {
+                return stem.to_string();
+            }
+        }
+    }
+    requested.to_string()
+}
+
 impl GitBackend {
     /// Create a new git backend rooted at the given directory.
     /// Creates the directory structure if it doesn't exist.
@@ -293,40 +343,11 @@ impl GitBackend {
     // BUG-89 (queue keyed off raw shell user; storage unchanged).
     // trace:TASK-951 | ai:claude
     fn resolve_queue_user(&self, requested: &str) -> String {
-        let dir = self.root.join("registry/queues");
-        // trace:TASK-845 — compose TASK-951's case-fold (first) with the
-        // operator-curated person-alias map (second): `requested` resolves to
-        // its CANONICAL person, so a queue keyed under any of a person's aliases
-        // (`joe.mooney@gmail.com`) is found when looked up under another (`joe`).
-        // The map is empty by default, in which case `resolve` is exactly the
-        // TASK-951 case-fold and the behaviour is unchanged.
-        let aliases = crate::alias::AliasRegistry::load(&self.root);
-        let target = aliases.resolve(requested);
-        let read = match std::fs::read_dir(&dir) {
-            Ok(rd) => rd,
-            // No queues dir yet → nothing to match against; keep original casing.
-            Err(_) => return requested.to_string(),
-        };
-        for entry in read.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
-                continue;
-            }
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                // An exact (case-sensitive) hit always wins — return immediately
-                // so the common path never rewrites the casing it was handed.
-                if stem == requested {
-                    return requested.to_string();
-                }
-                // Resolve each existing queue file to its canonical person too,
-                // so an alias's stored queue file is matched even when the
-                // lookup uses a different alias of the same person.
-                if aliases.resolve(stem) == target {
-                    return stem.to_string();
-                }
-            }
-        }
-        requested.to_string()
+        // Delegate to the free-function form so a caller OUTSIDE the backend
+        // (the statusline `queue_depth` path) can fold identity IDENTICALLY
+        // without constructing a `GitBackend` (whose `new` has directory-
+        // creating side effects). trace:BUG-675 | ai:claude
+        resolve_queue_user(&self.root, requested)
     }
 
     /// Load metadata from the metadata.yaml file.
@@ -339,6 +360,17 @@ impl GitBackend {
         let meta: StoreMetadata = serde_yaml::from_str(&content)
             .with_context(|| format!("Failed to parse {}", self.metadata_path.display()))?;
         Ok(meta)
+    }
+
+    /// TASK-1065: load ONLY the store metadata into a `RequirementsStore` whose
+    /// `requirements` vec is EMPTY. Reads a single `metadata.yaml` file — never
+    /// scans the object YAMLs — so callers that need the store's name / features /
+    /// id-config (e.g. the `aida status --full` Project + scaffolding sections)
+    /// can get them without a full `load()`.
+    // trace:TASK-1065 | ai:claude
+    pub fn load_metadata_only(&self) -> Result<RequirementsStore> {
+        let meta = self.load_metadata()?;
+        Ok(self.assemble_store(meta, Vec::new()))
     }
 
     /// Save metadata to the metadata.yaml file.

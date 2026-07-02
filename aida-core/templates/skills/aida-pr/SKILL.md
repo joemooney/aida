@@ -152,6 +152,30 @@ Skip silently for non-Rust projects (no `Cargo.toml` at the repo root). This is 
 
 Bypass: `--skip-fmt-check` for the rare case where drift is intentional (e.g. an in-flight rustfmt config change). Default is to refuse.
 
+### 4b. Doc-surface nudge (warn-only) — trace:TASK-939
+
+Front-of-the-pipeline companion to the release-time `aida doc coverage`
+gate. When this batch adds **new public surface** — a CLI flag, a named
+CLI subcommand, or an MCP tool — and the spec it traces to has no `aida
+doc` entry about it, remind the author to capture the "why" while it's
+fresh (before the PR lands and the context is lost).
+
+```bash
+aida doc suggest --range <base>..HEAD
+```
+
+- **Never blocks.** The command always exits 0 — it is a nudge, not a
+  gate. Surface its output and move on.
+- When it reports gaps, mention them in the confirm step so the author
+  can capture a `Doc` (`aida doc add --title "…" --about <ID>`) either
+  now or as a follow-up — their call.
+- Silent-pass (`✓ No new CLI/MCP surface …` / `already have doc
+  entries`) needs no action.
+
+Skip silently for non-Rust projects (the detector keys off clap / MCP
+surface) or when `aida doc suggest` is unavailable on the installed
+binary.
+
 ### 5. Print the "about to happen" banner — trace:TASK-259
 
 `/aida-pr` performs side effects — per-spec comments, a branch push, the
@@ -323,6 +347,14 @@ comments, and pass it to `gh pr create --body-file -`.
 - [ ] Manual: <one item per significant spec>
 - [ ] <other smoke tests run during development>
 ```
+
+**Seed the Test plan from each spec's captured verification steps (STORY-698).**
+When `aida queue done` closed a spec, the builder may have recorded the
+verification steps they actually ran; `aida show <REQ-ID>` prints them under a
+**Verification steps** block. For each REQ-ID in the batch, fold any captured
+steps into the `## Test plan` list (as `[x]` already-run items) so the PR body
+carries the implementation audit trail rather than re-deriving it from memory.
+A spec with no captured steps contributes nothing — don't invent items.
 
 ### 9. Confirm with the user
 

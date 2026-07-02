@@ -2397,7 +2397,9 @@ impl<'a> McpServer<'a> {
             .get_requirement_by_spec_id_mut(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
-        let comment = Comment::new("mcp".to_string(), text.to_string());
+        // trace:TASK-330 | ai:claude — stamp the producing session (best-effort)
+        let comment = Comment::new("mcp".to_string(), text.to_string())
+            .with_session_id(crate::resolve_current_session_id());
         req.add_comment(comment);
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
@@ -2576,6 +2578,14 @@ impl<'a> McpServer<'a> {
             .map(|s| s.to_string())
             .or_else(|| Some("mcp".to_string()));
 
+        // TASK-349: mirror the CLI `aida punt` nudge — a blocked-dependency
+        // punt that named a blocker spec should suggest recording the
+        // blocked-by graph edge, so the MCP and CLI surfaces don't drift.
+        // Computed before `lean` is moved into the record below. trace:TASK-349
+        let blocked_by_hint =
+            crate::punt::suggest_blocked_by(spec, category, detail, lean.as_deref())
+                .map(|s| s.suggested_command());
+
         let record = PuntRecord {
             timestamp: Utc::now(),
             spec: spec.to_string(),
@@ -2623,7 +2633,7 @@ impl<'a> McpServer<'a> {
             self.storage.save(&store).map_err(|e| e.to_string())?;
         }
 
-        Ok(if flipped {
+        let mut out = if flipped {
             format!("Punt recorded for {spec} [{category}]; spec flipped to NeedsAttention.")
         } else {
             format!(
@@ -2631,7 +2641,14 @@ impl<'a> McpServer<'a> {
                  (only an In Progress spec auto-flips to NeedsAttention); flip \
                  manually with `aida edit {spec} --status needs-attention` if needed."
             )
-        })
+        };
+        // trace:TASK-349 | ai:claude
+        if let Some(cmd) = blocked_by_hint {
+            out.push_str(&format!(
+                "\nBlocked-dependency punt — record the graph edge: `{cmd}`"
+            ));
+        }
+        Ok(out)
     }
 
     fn tool_resolve_punt(&self, args: &Value) -> Result<String, String> {
@@ -3632,6 +3649,18 @@ impl<'a> McpServer<'a> {
             None
         };
 
+        // STORY-698: capture the verification steps the builder ran, into
+        // implementation_info.test_coverage_notes (the PR-body audit trail).
+        // MCP has no TTY, so it is flag-shaped only: a `test_plan` string array.
+        // Absent ⇒ left untouched, exactly like a non-interactive CLI
+        // `queue done` with no `--test-plan`. trace:STORY-698 | ai:claude
+        let test_plan = str_array("test_plan");
+        let captured_test_plan: Option<String> = if test_plan.is_empty() {
+            None
+        } else {
+            Some(test_plan.join("\n"))
+        };
+
         self.storage
             .update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
@@ -3647,6 +3676,9 @@ impl<'a> McpServer<'a> {
                     }
                     if let Some(ref tool) = source_tool {
                         info.source_tool.get_or_insert_with(|| tool.clone());
+                    }
+                    if let Some(ref tp) = captured_test_plan {
+                        info.test_coverage_notes = Some(tp.clone());
                     }
                     if let Some(ref ic) = captured_ic {
                         r.interface_changes = Some(ic.clone());
@@ -5605,6 +5637,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 heft: d.heft,
                 // trace:TASK-902 | ai:claude
                 blocked: blocked.contains(&r.id),
+                // trace:TASK-1065 | ai:claude
+                has_pending_decision: r.decision_request.as_ref().is_some_and(|d| d.is_pending()),
                 yaml_path: String::new(),
             }
         })
@@ -7090,7 +7124,7 @@ fn queue_tool_descriptors() -> Value {
         },
         {
             "name": "queue_done",
-            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec.",
+            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec. Optionally record the verification steps the builder ran via test_plan (surfaced in the PR body).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -7100,7 +7134,8 @@ fn queue_tool_descriptors() -> Value {
                     "interface_mcp": { "type": "array", "items": { "type": "string" }, "description": "User-facing MCP surface changes (new tools, gating, schema).", "example": ["queue_add — now advisor-gated"] },
                     "interface_tui": { "type": "array", "items": { "type": "string" }, "description": "User-facing TUI surface changes (keybindings, panes, overlays).", "example": [] },
                     "interface_other": { "type": "array", "items": { "type": "string" }, "description": "Any other user-facing interface change (not cli/mcp/tui).", "example": ["REST /digest endpoint added"] },
-                    "no_interface_change": { "type": "boolean", "description": "Explicitly mark this spec as having no user-facing interface change (clippy/refactor/test). Keeps it out of the operator digest.", "example": true }
+                    "no_interface_change": { "type": "boolean", "description": "Explicitly mark this spec as having no user-facing interface change (clippy/refactor/test). Keeps it out of the operator digest.", "example": true },
+                    "test_plan": { "type": "array", "items": { "type": "string" }, "description": "The verification steps the builder actually ran — the implementation audit trail stored in implementation_info.test_coverage_notes and surfaced in the PR body.", "example": ["cargo test -p aida-cli", "manual: aida queue done at a TTY"] }
                 },
                 "required": ["id"]
             },

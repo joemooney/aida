@@ -683,6 +683,40 @@ mod tests {
         assert_eq!(Glyph::from_name("incoming_mail"), Some(Glyph::IncomingMail));
     }
 
+    /// TASK-1071 acceptance: with `AIDA_GLYPHS=ascii` set, the rendered output
+    /// (via the env → profile → render path, not `.ascii()` directly) emits the
+    /// ASCII fallback for every glyph in the info/notice set rather than its raw
+    /// unicode. This is the env-path guarantee that the raw-literal bug broke.
+    #[test]
+    fn task1071_ascii_env_renders_fallback_not_raw_unicode_for_info_set() {
+        let _g = lock();
+        std::env::set_var("AIDA_GLYPHS", "ascii");
+        // Rendered through the active profile resolved from the env.
+        assert_eq!(get(Glyph::Info, None), "(i)");
+        assert_eq!(get(Glyph::InfoAlt, None), "i");
+        assert_eq!(get(Glyph::Awaiting, None), "(*)");
+        assert_eq!(get(Glyph::IncomingMail, None), "[@]");
+        // And explicitly NOT the raw unicode literal.
+        for g in [
+            Glyph::Info,
+            Glyph::InfoAlt,
+            Glyph::Awaiting,
+            Glyph::IncomingMail,
+        ] {
+            assert_ne!(
+                get(g, None),
+                g.unicode(),
+                "{} rendered raw under ascii",
+                g.name()
+            );
+        }
+        // Round-trip back to unicode so the env override is directional.
+        std::env::set_var("AIDA_GLYPHS", "unicode");
+        assert_eq!(get(Glyph::Info, None), "ⓘ");
+        assert_eq!(get(Glyph::IncomingMail, None), "📨");
+        std::env::remove_var("AIDA_GLYPHS");
+    }
+
     #[test]
     fn parse_is_case_insensitive_and_rejects_garbage() {
         assert_eq!(GlyphProfile::parse("ASCII"), Some(GlyphProfile::Ascii));

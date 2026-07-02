@@ -656,6 +656,39 @@ impl RequirementType {
             _ => 2,
         }
     }
+
+    /// Parse a requirement type from its cache/Debug form (e.g. "Task",
+    /// "NonFunctional", "ChangeRequest") — the exact `format!("{:?}", …)`
+    /// projection the `req_type` cache column stores. Case-insensitive so a
+    /// casing drift in the projection still resolves. Returns `None` for an
+    /// unrecognized token. The reverse of the cache's `req_type` projection,
+    /// letting a cache-backed status view reconstruct the typed enum without a
+    /// full `backend.load()`.
+    // trace:TASK-1065 | ai:claude
+    pub fn from_cache_str(s: &str) -> Option<RequirementType> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "functional" => Some(RequirementType::Functional),
+            "nonfunctional" => Some(RequirementType::NonFunctional),
+            "system" => Some(RequirementType::System),
+            "user" => Some(RequirementType::User),
+            "changerequest" => Some(RequirementType::ChangeRequest),
+            "bug" => Some(RequirementType::Bug),
+            "epic" => Some(RequirementType::Epic),
+            "story" => Some(RequirementType::Story),
+            "task" => Some(RequirementType::Task),
+            "spike" => Some(RequirementType::Spike),
+            "sprint" => Some(RequirementType::Sprint),
+            "folder" => Some(RequirementType::Folder),
+            "meta" => Some(RequirementType::Meta),
+            "principle" => Some(RequirementType::Principle),
+            "vision" => Some(RequirementType::Vision),
+            "constraint" => Some(RequirementType::Constraint),
+            "decision" => Some(RequirementType::Decision),
+            "term" => Some(RequirementType::Term),
+            "doc" => Some(RequirementType::Doc),
+            _ => None,
+        }
+    }
 }
 
 /// Represents the subtype for Meta requirements
@@ -3299,6 +3332,16 @@ pub struct Comment {
     /// Reactions on this comment
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<CommentReaction>,
+
+    /// Claude/AIDA session id that produced this comment, when known.
+    /// Best-effort: comments added outside a tracked session (and every
+    /// comment written before this field existed) carry `None`. Stamping
+    /// it lets tooling correlate a comment back to the session that wrote
+    /// it (`aida session list`). Optional + `skip_serializing_if` keeps the
+    /// on-disk YAML unchanged for comments that have no session id.
+    // trace:TASK-330 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 impl Comment {
@@ -3314,6 +3357,7 @@ impl Comment {
             parent_id: None,
             replies: Vec::new(),
             reactions: Vec::new(),
+            session_id: None,
         }
     }
 
@@ -3329,7 +3373,32 @@ impl Comment {
             parent_id: Some(parent_id),
             replies: Vec::new(),
             reactions: Vec::new(),
+            session_id: None,
         }
+    }
+
+    /// Stamp the session id that produced this comment (builder-style).
+    /// A `None` or blank id is a no-op, so callers can pass a best-effort
+    /// resolver result directly without branching.
+    // trace:TASK-330 | ai:claude
+    pub fn with_session_id(mut self, session_id: Option<String>) -> Self {
+        if let Some(sid) = session_id {
+            let trimmed = sid.trim();
+            if !trimmed.is_empty() {
+                self.session_id = Some(trimmed.to_string());
+            }
+        }
+        self
+    }
+
+    /// Short (8-char) form of the stamped session id for compact display,
+    /// mirroring how `aida session list` truncates session ids. `None` when
+    /// the comment carries no session id.
+    // trace:TASK-330 | ai:claude
+    pub fn short_session_id(&self) -> Option<String> {
+        self.session_id
+            .as_ref()
+            .map(|s| s.chars().take(8).collect())
     }
 
     /// Adds a reaction to this comment
@@ -6852,6 +6921,106 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-330 | ai:claude
+    #[test]
+    fn comment_new_has_no_session_id() {
+        let c = Comment::new("joe".into(), "hi".into());
+        assert_eq!(c.session_id, None);
+        assert_eq!(c.short_session_id(), None);
+    }
+
+    // trace:TASK-330 | ai:claude
+    #[test]
+    fn with_session_id_stamps_and_trims() {
+        let c = Comment::new("joe".into(), "hi".into())
+            .with_session_id(Some("  019e71f4-abcd  ".into()));
+        assert_eq!(c.session_id.as_deref(), Some("019e71f4-abcd"));
+        // Short form mirrors `aida session list`'s 8-char truncation.
+        assert_eq!(c.short_session_id().as_deref(), Some("019e71f4"));
+    }
+
+    // trace:TASK-330 | ai:claude
+    #[test]
+    fn with_session_id_none_or_blank_is_noop() {
+        let c = Comment::new("joe".into(), "hi".into()).with_session_id(None);
+        assert_eq!(c.session_id, None);
+        let c2 = Comment::new("joe".into(), "hi".into()).with_session_id(Some("   ".into()));
+        assert_eq!(c2.session_id, None);
+    }
+
+    // trace:TASK-330 | ai:claude
+    #[test]
+    fn comment_without_session_id_omits_field_in_yaml() {
+        // Backward-compatible on disk: a comment with no session id must not
+        // add a `session_id:` key, so existing YAML round-trips unchanged.
+        let c = Comment::new("joe".into(), "hi".into());
+        let yaml = serde_yaml::to_string(&c).unwrap();
+        assert!(!yaml.contains("session_id"), "unexpected key in: {yaml}");
+
+        let stamped = c.with_session_id(Some("abc123".into()));
+        let yaml2 = serde_yaml::to_string(&stamped).unwrap();
+        assert!(yaml2.contains("session_id"));
+        // And it deserializes back.
+        let round: Comment = serde_yaml::from_str(&yaml2).unwrap();
+        assert_eq!(round.session_id.as_deref(), Some("abc123"));
+    }
+
+    // trace:TASK-330 | ai:claude
+    #[test]
+    fn comment_deserializes_legacy_yaml_without_session_id() {
+        // A pre-TASK-330 comment YAML has no session_id; serde default fills None.
+        let now = Utc::now().to_rfc3339();
+        let yaml = format!(
+            "id: 019e71f4-0000-7000-8000-000000000000\nauthor: joe\ncontent: hi\ncreated_at: {now}\nmodified_at: {now}\n"
+        );
+        let c: Comment = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(c.session_id, None);
+    }
+
+    /// TASK-1065: `RequirementType::from_cache_str` is the reverse of the cache's
+    /// `format!("{:?}", req_type)` projection — it must round-trip EVERY variant's
+    /// Debug form (that's the exact string the `req_type` column stores), be
+    /// case-insensitive, and reject unknown tokens.
+    // trace:TASK-1065 | ai:claude
+    #[test]
+    fn from_cache_str_round_trips_every_debug_form() {
+        for t in [
+            RequirementType::Functional,
+            RequirementType::NonFunctional,
+            RequirementType::System,
+            RequirementType::User,
+            RequirementType::ChangeRequest,
+            RequirementType::Bug,
+            RequirementType::Epic,
+            RequirementType::Story,
+            RequirementType::Task,
+            RequirementType::Spike,
+            RequirementType::Sprint,
+            RequirementType::Folder,
+            RequirementType::Meta,
+            RequirementType::Principle,
+            RequirementType::Vision,
+            RequirementType::Constraint,
+            RequirementType::Decision,
+            RequirementType::Term,
+            RequirementType::Doc,
+        ] {
+            let debug = format!("{t:?}");
+            assert_eq!(
+                RequirementType::from_cache_str(&debug),
+                Some(t.clone()),
+                "Debug form {debug:?} must round-trip back to its variant"
+            );
+            // Case-insensitive.
+            assert_eq!(
+                RequirementType::from_cache_str(&debug.to_ascii_lowercase()),
+                Some(t)
+            );
+        }
+        assert_eq!(RequirementType::from_cache_str("NotAType"), None);
+        assert_eq!(RequirementType::from_cache_str(""), None);
+    }
 
     /// STORY-542: `InterfaceChanges` round-trips through YAML, empties skip
     /// serialization, and `is_empty()` reflects the captured surfaces.
