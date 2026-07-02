@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:09:46.013699292Z
-modified_at: 2026-07-02T17:09:46.013699292Z
+modified_at: 2026-07-02T18:35:10.517500983Z
 req_type: Story
 tags:
 - aida:remote
@@ -36,3 +36,10 @@ relationships:
 - rel_type: Parent
   target_id: 019f241c-96e4-7760-a3ff-2c8d865429a8
   created_at: 2026-07-02T18:34:47.063306100Z
+comments:
+- id: 019f241d-0935-70e0-b235-1531fd056674
+  author: joe
+  content: Commit 42877019b references this requirement
+  created_at: 2026-07-02T18:35:10.517500983Z
+  modified_at: 2026-07-02T18:35:10.517500983Z
+  session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5
