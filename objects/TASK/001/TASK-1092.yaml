@@ -1,0 +1,14 @@
+id: 019f23b6-a688-7980-b034-74813e48557b
+spec_id: TASK-1092
+agreed_id: TASK-1092
+title: Add cross-vendor routing config for role-to-vendor fallback order
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T16:43:20.584543900Z
+modified_at: 2026-07-02T16:43:20.584543900Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md
