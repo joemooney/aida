@@ -3,12 +3,12 @@ spec_id: STORY-756
 agreed_id: STORY-756
 title: Surface aida why <file:line> as the README hero — lead with the 60-second magic, demote probe-framing
 description: Goal move (make the magic discoverable, not buried). The README opens with "AIDA is a research probe... promoting it isnt the goal" then 8 abstract "what makes AIDA distinct" bullets — value asserted not felt, and the north-star command aida why is not mentioned once. Reshape the opening to LEAD with the 60-second magic (aida why <file:line> demo + the zero-setup / plain-markdown proof from STORY-755), frame the machinery as optional depth, and demote the probe/honesty preamble to a one-line pointer at the existing "Where this is and isnt proven" section (which stays). Front-door framing is the operators call → ships as a PR for review, not auto-merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T08:53:41.001936419Z
-modified_at: 2026-07-02T08:54:46.044541980Z
+modified_at: 2026-07-02T16:29:01.028736761Z
 req_type: Story
 tags:
 - aida:why
@@ -28,3 +28,21 @@ comments:
   created_at: 2026-07-02T08:54:46.044541980Z
   modified_at: 2026-07-02T08:54:46.044541980Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f23a9-8881-71e2-98c1-7139be7bcfb3
+  author: aida-auto-bump
+  timestamp: 2026-07-02T16:29:00.929177230Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f23a9-88e4-7550-84c0-6f0a0a600e31
+  timestamp: 2026-07-02T16:29:01.028730223Z
+  agent: aida
+  commit_sha: 0bb393f67d1f11bc83f3638154ab4422de609ab6
+  summary: Completed via merge 0bb393f6
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T16:28:59.854706775Z
+  completion_sha: 0bb393f67d1f11bc83f3638154ab4422de609ab6
