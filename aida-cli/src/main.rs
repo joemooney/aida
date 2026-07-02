@@ -98099,16 +98099,16 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
     for id in &ids {
         match resolve(id) {
             Some(it) => {
-                let badge = it
-                    .status
-                    .as_deref()
-                    .map(|s| format!("({s})"))
-                    .unwrap_or_default();
-                println!(
-                    "  this code exists because of {} {}",
-                    id.cyan(),
-                    badge.dimmed()
-                );
+                // STORY-758 polish: only append the status badge when present,
+                // so a spec without a `status:` doesn't render a trailing space.
+                match it.status.as_deref() {
+                    Some(s) => println!(
+                        "  this code exists because of {} {}",
+                        id.cyan(),
+                        format!("({s})").dimmed()
+                    ),
+                    None => println!("  this code exists because of {}", id.cyan()),
+                }
                 println!("    {}", it.title.bold());
                 if !it.why.is_empty() {
                     println!("    {} {}", "why:".dimmed(), it.why);
