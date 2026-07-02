@@ -8216,8 +8216,8 @@ pub enum Command {
     /// signals (status, type, tags, blockers, decisions, live leases).
     Why {
         /// A SPEC-ID (why is this spec still open?) OR a code location
-        /// `file[:line]` (why does this code exist?). A `file:line` resolves the
-        /// nearest `trace:SPEC-ID` comment to the spec's intent — code↔decision.
+        /// `file[:line]` (why does this code exist?) — a `file:line` resolves the
+        /// nearest code→spec trace comment to the spec's intent (code↔decision).
         id: String,
         /// Machine-readable JSON.
         #[clap(long)]
