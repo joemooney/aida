@@ -1,0 +1,19 @@
+id: 019f2134-98b7-7231-a845-7c6ca037cdc8
+spec_id: BUG-695
+agreed_id: BUG-695
+title: aida awaiting ignores AIDA_AGENT_OUTPUT — leaks box-drawing + emoji to agents instead of TOON
+description: 'handle_awaiting_command (main.rs) has no agent_output_mode() branch, unlike aida integrate / ps / status which all emit TOON in agent mode. So bare `aida awaiting` renders the human report (─── Awaiting you (N) ─── box-drawing header + a raw 🟢 status emoji that is not even in the glyphs.rs registry, so it also ignores [ui] glyphs=ascii) regardless of AIDA_AGENT_OUTPUT. An agent orienting via `aida awaiting` gets human decoration wasting tokens. Fix: add an agent_output_mode() TOON branch to handle_awaiting_command (after --notice, before the human render; --json still wins) emitting `view: awaiting`, `awaiting: <total>` + flat scalars (findings/mail) + toon::table_raw for prs/briefs/reviewer/escalations — mirroring handle_integrate. The report exposes all channels as pub(crate) fields. --notice path is unaffected (already compact). Found by an agent-surface audit self-test.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T05:02:02.935890807Z
+modified_at: 2026-07-02T05:02:02.935890807Z
+req_type: Bug
+tags:
+- agent-surface
+- aida:awaiting
+- from-self-test
+- papercut
+- parent:EPIC-56
+- severity:minor
