@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T09:19:14.289286604Z
-modified_at: 2026-07-02T09:19:18.730808669Z
+modified_at: 2026-07-02T09:23:47.048623536Z
 req_type: Story
 tags:
 - aida:init
@@ -21,3 +21,10 @@ relationships:
 - rel_type: Child
   target_id: 019f21c3-8438-7b31-b063-8d41f1623797
   created_at: 2026-07-02T09:19:18.730808669Z
+comments:
+- id: 019f2224-38e8-7283-8d1f-f3b1d25cd22d
+  author: joe
+  content: Commit cee2eec7d references this requirement
+  created_at: 2026-07-02T09:23:47.048623536Z
+  modified_at: 2026-07-02T09:23:47.048623536Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
