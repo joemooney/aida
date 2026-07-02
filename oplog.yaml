@@ -30718,5 +30718,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 2920
+- id: 019f214a-beb8-7943-b35b-77aeb5cf88c6
+  target_id: 019f214a-aed5-7ae2-a450-8d91878bd196
+  author: aida
+  node_id: '1'
+  lamport: 2921
+  timestamp: 2026-07-02T05:26:14.456210912Z
+  kind: !Create
+    title: aida doctor marks dirty/unmerged orphan-worktrees as safe_heal=true — --heal could destroy uncommitted work
+    description: 'During a hygiene cleanup, aida doctor reported 85 orphan-worktrees ALL with safe_heal=true. Spot-checking 6, three had uncommitted and/or unmerged work (aida-epic0428 dirty 4 files; aida-gitlab dirty 2 + 1 unmerged commit; aida-spike73-bench dirty 6 files). Across all 85: 11 were dirty. So safe_heal=true does NOT verify the worktree is clean AND its branch merged — running `aida doctor --heal --category orphan-worktrees --yes` could `git worktree remove --force` a dirty worktree and lose uncommitted work. Fix: the orphan-worktree classifier must set safe_heal=false (or save-patch-first) when `git status --porcelain` is non-empty OR the branch has commits not in origin/main; only clean+merged worktrees are safe_heal=true. Belt-and-suspenders in the healer: never pass --force on a dirty worktree without stashing/patch-saving first. Found by hand-verifying before trusting the flag during operator hygiene cleanup.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 2921
 node_id: '1'
