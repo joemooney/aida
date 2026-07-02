@@ -3,12 +3,12 @@ spec_id: BUG-699
 agreed_id: BUG-699
 title: 'Fix aida usage: command-shape leaks arg ids (privacy-floor violation) + 30d aggregates mislead vs recent behavior'
 description: 'Operator-directed (2026-07-02). Two defects in aida usage telemetry. (1) PRIVACY + DATA-QUALITY: is_subcommand_token allows digits, so positional id args are captured INTO the command shape — "show story-74", "show 12345", "show pr-43", "show tsk-1" instead of "show". This violates the stated privacy floor ("no argument values") and pollutes the --unused (show story-137, show pr-43) and --errors (show not-a-real-id 6/6) lists. Fix: a real subcommand never contains a digit → exclude digit-bearing tokens from is_subcommand_token (cheap, safe — verified no subcommand has a digit; keeps the hot statusline path fast, no clap-tree walk). Add normalize_shape() and apply it in read_events() so ALL consumers (top report, --unused, --errors, --slowest) collapse historical leaked shapes in one place. (2) RECENCY: the top report shows 30d aggregate avg_ms/error-rate with no recent signal — a since-fixed historical batch (rel list 52% errs, status 17s avg) reads as a current crisis when recent behavior is healthy (status 0.22s, rel list 0 recent failures). Add a recent-window (7d) column/flag so a stale aggregate cannot masquerade as current. This misled the advisor into a wrong recommendation.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:53:18.106068726Z
-modified_at: 2026-07-02T17:00:29.199021291Z
+modified_at: 2026-07-02T17:18:33.164105337Z
 req_type: Bug
 tags:
 - aida:usage
@@ -24,3 +24,21 @@ comments:
   created_at: 2026-07-02T17:00:29.199021291Z
   modified_at: 2026-07-02T17:00:29.199021291Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f23d6-e269-7412-ac3d-0a0798282430
+  author: aida-auto-bump
+  timestamp: 2026-07-02T17:18:33.065646501Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f23d6-e2cc-7560-9dc5-b12fb9b910dc
+  timestamp: 2026-07-02T17:18:33.164099948Z
+  agent: aida
+  commit_sha: 7746d1c6f06979ede65d4a3ad52ca57ac5330609
+  summary: Completed via merge 7746d1c6
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-02T17:18:31.997850460Z
+  completion_sha: 7746d1c6f06979ede65d4a3ad52ca57ac5330609
