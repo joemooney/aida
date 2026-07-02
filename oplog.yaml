@@ -31018,5 +31018,24 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 2941
+- id: 019f23c6-d32e-7721-868c-a7d836f7b401
+  target_id: 019f23c6-c586-7c52-a12e-553f14bbd80b
+  author: aida
+  node_id: '1'
+  lamport: 2942
+  timestamp: 2026-07-02T17:01:00.590327318Z
+  kind: !Create
+    title: 'Slice 1b: wire the dispatch liveness delta-comparator with cross-invocation snapshot persistence'
+    description: |-
+      STORY-759 landed the pure dispatch_liveness_stalled comparator + DispatchLivenessSnapshot, unit-tested, but gated allow(dead_code) — it is not wired into the single-shot dispatch health report because detecting no-progress-over-time needs the prior snapshot persisted between runs. Wire it: persist a per-agent snapshot under .aida/ runtime state (deny-by-default convention), compare current vs stored on each report run, and surface a stalled verdict when the comparator fires. Reuse the existing comparator (do not rebuild it).
+
+      ## Acceptance
+      - WHEN the dispatch health report runs, THE command SHALL load each agents prior snapshot (if any) from per-clone runtime state, compute the current snapshot, and call dispatch_liveness_stalled to decide the stalled verdict.
+      - THE report SHALL persist the current snapshot for the next runs comparison.
+      - WHEN no prior snapshot exists, THE report SHALL treat the agent as not-yet-classifiable for the no-progress signal (no false stall).
+      - THE allow(dead_code) gates on DispatchLivenessSnapshot and dispatch_liveness_stalled SHALL be removed once wired.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2942
 node_id: '1'
