@@ -10,12 +10,12 @@ description: |-
   - THE report SHALL persist the current snapshot for the next runs comparison.
   - WHEN no prior snapshot exists, THE report SHALL treat the agent as not-yet-classifiable for the no-progress signal (no false stall).
   - THE allow(dead_code) gates on DispatchLivenessSnapshot and dispatch_liveness_stalled SHALL be removed once wired.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:00:57.094846148Z
-modified_at: 2026-07-02T17:01:03.852545218Z
+modified_at: 2026-07-02T17:27:50.605377829Z
 req_type: Task
 tags:
 - dispatch

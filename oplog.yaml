@@ -31153,5 +31153,13 @@ operations:
   timestamp: 2026-07-02T17:26:14.886558537Z
   kind: !SetTitle
     title: aida add is ~8.5s (edit is 1.6s) — the ~7s delta is spec-id allocation, not the git commit or store bloat
-clock: 2950
+- id: 019f23df-6522-7922-b213-b7eb92286ac4
+  target_id: 019f23c6-c586-7c52-a12e-553f14bbd80b
+  author: aida
+  node_id: '1'
+  lamport: 2951
+  timestamp: 2026-07-02T17:27:50.818137186Z
+  kind: !SetStatus
+    status: Completed
+clock: 2951
 node_id: '1'
