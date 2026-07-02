@@ -97679,7 +97679,251 @@ fn stale_orphaned_line(why: &str, elapsed: &str) -> String {
     format!("STALE — {why}, {elapsed} elapsed; the In-Progress flag is orphaned")
 }
 
+/// STORY-754: does `arg` name a code location (`file` or `file:line`) rather
+/// than a SPEC-ID? A SPEC-ID is `LETTERS-DIGITS` (STORY-750, FR-1-042) — never
+/// contains `/` or `.`. Anything with a path separator, a dotted extension, or
+/// that names an existing file (optionally with a trailing `:<line>`) is code.
+// trace:STORY-754 | ai:claude
+fn looks_like_code_arg(arg: &str) -> bool {
+    let stripped = match arg.rsplit_once(':') {
+        Some((p, n)) if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => p,
+        _ => arg,
+    };
+    stripped.contains('/') || stripped.contains('.') || std::path::Path::new(stripped).exists()
+}
+
+/// First sentence (or first ~160 chars) of a spec description, single-lined —
+/// the one-breath "why" for the code-location answer.
+// trace:STORY-754 | ai:claude
+fn why_first_sentence(desc: &str) -> String {
+    // Drop leading markdown header lines (`## Why`, `# Context`, …) and blank
+    // lines so the one-breath summary starts at the actual prose.
+    let body: String = desc
+        .lines()
+        .skip_while(|l| {
+            let t = l.trim();
+            t.is_empty() || t.starts_with('#')
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let d = body.trim();
+    if d.is_empty() {
+        return String::new();
+    }
+    // Prefer a clean sentence boundary (no ellipsis); else hard-cap at ~160
+    // chars on a char boundary and mark the truncation with an ellipsis.
+    let (slice, truncated) = match d.find(". ") {
+        Some(i) => (&d[..=i], false),
+        None => {
+            let mut cut = d.len().min(160);
+            while cut < d.len() && !d.is_char_boundary(cut) {
+                cut += 1;
+            }
+            (&d[..cut], cut < d.len())
+        }
+    };
+    let s = slice.trim();
+    if truncated {
+        format!("{s}…")
+    } else {
+        s.to_string()
+    }
+}
+
+/// STORY-754: `aida why <file>[:<line>]` — answer "why does this CODE exist?"
+/// from the nearest `trace:SPEC-ID` comment, resolved to the spec's intent.
+/// AIDA's one genuine edge over a plain LLM wiki: code↔decision linkage, felt
+/// instantly, with zero setup beyond the trace comments already in the tree.
+// trace:STORY-754 | ai:claude
+fn handle_why_code(arg: &str, json: bool) -> Result<()> {
+    // Parse `file[:line]` — a trailing `:<digits>` is the line number.
+    let (path_str, line_no): (&str, Option<usize>) = match arg.rsplit_once(':') {
+        Some((p, n)) if !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => {
+            (p, n.parse::<usize>().ok())
+        }
+        _ => (arg, None),
+    };
+    let path = std::path::Path::new(path_str);
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("cannot read `{}`", path.display()))?;
+    let lines: Vec<&str> = content.lines().collect();
+
+    // Find trace ids: the NEAREST at/above the line, else every id in the file.
+    let re = regex::Regex::new(r"trace:([A-Za-z]{2,}-[0-9][0-9-]*)").expect("valid regex");
+    let mut ids: Vec<String> = Vec::new();
+    let mut anchor: Option<usize> = line_no;
+    if let Some(ln) = line_no {
+        let start = ln.saturating_sub(1).min(lines.len().saturating_sub(1));
+        for i in (0..=start).rev() {
+            let hits: Vec<String> = re
+                .captures_iter(lines[i])
+                .map(|c| c[1].to_ascii_uppercase())
+                .collect();
+            if !hits.is_empty() {
+                ids = hits;
+                anchor = Some(i + 1);
+                break;
+            }
+        }
+    } else {
+        for l in &lines {
+            for c in re.captures_iter(l) {
+                let id = c[1].to_ascii_uppercase();
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+        }
+    }
+
+    let loc = match anchor {
+        Some(l) => format!("{path_str}:{l}"),
+        None => path_str.to_string(),
+    };
+
+    if ids.is_empty() {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "file": path_str, "line": line_no, "traces": [],
+                }))?
+            );
+        } else {
+            let where_ = match line_no {
+                Some(l) => format!("at or above {path_str}:{l}"),
+                None => format!("in {path_str}"),
+            };
+            println!(
+                "  {} no trace comment {where_} — this code isn't linked to a spec yet.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            println!(
+                "  {}",
+                "add `// trace:SPEC-ID` above it to record why it exists.".dimmed()
+            );
+        }
+        return Ok(());
+    }
+
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root);
+    let lookup = |id: &str| {
+        store.as_ref().and_then(|s| {
+            s.requirements.iter().find(|r| {
+                [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|x| x.eq_ignore_ascii_case(id))
+            })
+        })
+    };
+
+    if json {
+        let traces: Vec<serde_json::Value> = ids
+            .iter()
+            .map(|id| {
+                let req = lookup(id);
+                serde_json::json!({
+                    "id": id,
+                    "found": req.is_some(),
+                    "title": req.map(|r| r.title.clone()),
+                    "status": req.map(|r| format!("{:?}", r.status).to_ascii_lowercase()),
+                    "why": req.map(|r| why_first_sentence(&r.description)),
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "file": path_str, "line": anchor, "traces": traces,
+            }))?
+        );
+        return Ok(());
+    }
+
+    // Human: the magic answer.
+    println!(
+        "{} {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        loc.bold()
+    );
+    println!();
+    for id in &ids {
+        match lookup(id) {
+            Some(r) => {
+                println!(
+                    "  this code exists because of {} {}",
+                    id.cyan(),
+                    format!("({})", format!("{:?}", r.status).to_ascii_lowercase()).dimmed()
+                );
+                println!("    {}", r.title.bold());
+                let why = why_first_sentence(&r.description);
+                if !why.is_empty() {
+                    println!("    {} {why}", "why:".dimmed());
+                }
+                println!(
+                    "    {} aida show {id}  |  aida graph {id} --impact",
+                    "more:".dimmed()
+                );
+            }
+            None => {
+                println!(
+                    "  traces to {} — {}",
+                    id.cyan(),
+                    "not in the store (stale trace, or store not attached)".yellow()
+                );
+            }
+        }
+        println!();
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod why_code_tests {
+    use super::{looks_like_code_arg, why_first_sentence};
+
+    #[test]
+    fn code_args_vs_spec_ids_are_distinguished() {
+        // SPEC-IDs → spec path (false).
+        for id in ["STORY-750", "BUG-1", "FR-1-042", "TASK-1088"] {
+            assert!(!looks_like_code_arg(id), "{id} should read as a SPEC-ID");
+        }
+        // Code locations → code path (true).
+        for loc in [
+            "src/main.rs",
+            "aida-cli/src/main.rs:40408",
+            "foo.rs",
+            "path/to/thing",
+        ] {
+            assert!(looks_like_code_arg(loc), "{loc} should read as code");
+        }
+    }
+
+    #[test]
+    fn first_sentence_strips_markdown_headers_and_truncates() {
+        // Leading `## Why` header is dropped; prose starts clean.
+        let s = why_first_sentence("## Why\n\nThe cache was stale. More detail here.");
+        assert_eq!(s, "The cache was stale.");
+        // No sentence break → char-safe truncation with an ellipsis.
+        let long = "x".repeat(300);
+        let out = why_first_sentence(&long);
+        assert!(out.ends_with('…'));
+        assert!(out.len() <= 161 + "…".len());
+        // Empty / header-only → empty.
+        assert_eq!(why_first_sentence("### Heading only"), "");
+    }
+}
+
 fn handle_why(id: &str, json: bool) -> Result<()> {
+    // STORY-754: `aida why <file>[:<line>]` answers "why does this CODE exist?"
+    // from the nearest trace comment — AIDA's code↔decision edge. A bare SPEC-ID
+    // keeps the existing spec-liveness explanation. trace:STORY-754 | ai:claude
+    if looks_like_code_arg(id) {
+        return handle_why_code(id, json);
+    }
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let store = load_store_for_lookup(&project_root).ok_or_else(|| {
