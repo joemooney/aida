@@ -1,0 +1,19 @@
+id: 019f21c3-8438-7b31-b063-8d41f1623797
+spec_id: STORY-754
+agreed_id: STORY-754
+title: aida why <file:line> — answer 'why does this code exist?' from the nearest trace comment (the 60-second magic moment)
+description: 'North-star capability surfacing AIDAs one genuine, non-commoditized edge over llm-wiki: code-to-decision linkage. aida why already answers why is this SPEC open; extend it so aida why <file>[:<line>] answers why does this CODE exist by finding the nearest trace:SPEC-ID comment at/above the line (or all trace ids in the file), resolving each to its spec, and printing title + the why (first sentence of description) + status, plus a pointer to aida graph <id> --impact for what-breaks-if-changed. Zero setup beyond trace comments already in the tree (8851 in this repo). Detection: an arg containing / or . (or an existing file) routes to the code path; a SPEC-ID token keeps the existing spec-liveness behavior. This is the anti-over-engineering move: one command, instant value, no orchestrator/cache/MCP required. trace:none'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T07:38:09.336674231Z
+modified_at: 2026-07-02T07:38:09.336674231Z
+req_type: Story
+tags:
+- aida:why
+- code-to-intent
+- from-operator
+- magic-moment
+- north-star
+- ux
