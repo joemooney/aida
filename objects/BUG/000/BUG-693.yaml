@@ -1,0 +1,17 @@
+id: 019f2113-aaea-70e1-886e-bea67c6c0916
+spec_id: BUG-693
+agreed_id: BUG-693
+title: aida integrate running-work view shows stale leases that aida ps hides — surface inconsistency
+description: 'aida integrate reuses gather_running_work() (same as aida ps) but does NOT apply the stale-hide filter that ps applies (main.rs handle_ps partitions LeaseState::Stale behind a footer count unless --all). Result: a 24-day-dead lease/mcp-claim (e.g. a Completed spec whose worktree is gone) clutters the integrator throughput view in both human and agent/TOON modes, while aida ps and aida session leases correctly hide it. Fix: after the JSON block (which keeps all rows for structured consumers), drop LeaseState::Stale rows from run_rows in the TOON + human renders and note the hidden count — mirror the ps pattern.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T04:26:04.906292971Z
+modified_at: 2026-07-02T04:26:04.906292971Z
+req_type: Bug
+tags:
+- aida:integrate
+- from-self-test
+- papercut
+- severity:minor
