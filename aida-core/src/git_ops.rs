@@ -552,6 +552,177 @@ pub fn has_changes(repo: &Path) -> Result<bool> {
 }
 
 // ---------------------------------------------------------------------------
+// Index-lock precheck + autostash recovery (BUG-691)
+// ---------------------------------------------------------------------------
+//
+// `aida pull`'s code leg shells out to `git pull --ff-only`. When the user has
+// git's built-in autostash enabled (the project recommends the global
+// `rebase.autoStash=true` / `merge.autoStash=true`), a fast-forward over a
+// dirty tree makes git create an autostash, do the update, then re-apply the
+// stash. If another git process holds `.git/index.lock` at the moment git
+// tries the reset/checkout, git dies with "could not reset --hard" AFTER it
+// created the autostash and BEFORE it re-applied it — silently stranding the
+// user's uncommitted work in the stash list. These helpers let the pull path
+// (1) refuse before anything is stashed when the index is already locked, and
+// (2) restore a stranded autostash after a failed code leg.
+// trace:BUG-691 | ai:claude
+
+/// Whether `.git/index.lock` currently exists for `repo`.
+///
+/// Resolved via `git rev-parse --git-path index.lock` so it points at the
+/// correct per-worktree git dir (a linked worktree's index.lock lives under
+/// `.git/worktrees/<name>/`, not the top-level `.git/`). Any git error is
+/// treated as "not locked" — the precheck is an optimization, never a hard
+/// gate on its own; `git pull` itself remains the source of truth.
+// trace:BUG-691 | ai:claude
+pub fn index_lock_present(repo: &Path) -> bool {
+    let result = match git(repo, &["rev-parse", "--git-path", "index.lock"]) {
+        Ok(r) if r.success => r,
+        _ => return false,
+    };
+    let rel = result.stdout.trim();
+    if rel.is_empty() {
+        return false;
+    }
+    let path = Path::new(rel);
+    let full = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        repo.join(path)
+    };
+    full.exists()
+}
+
+/// Wait briefly for a transiently-held `.git/index.lock` to clear.
+///
+/// Polls `index_lock_present` up to `attempts` times, sleeping `interval_ms`
+/// between checks. Returns `true` as soon as the lock is absent (or was never
+/// present), `false` if it is still held after all attempts — in which case the
+/// caller should refuse the operation BEFORE anything gets stashed, so no work
+/// can be stranded. The total wait is deliberately short (sub-second by
+/// default) so a genuinely stuck lock surfaces quickly rather than hanging.
+// trace:BUG-691 | ai:claude
+pub fn wait_for_index_lock_clear(repo: &Path, attempts: u32, interval_ms: u64) -> bool {
+    let attempts = attempts.max(1);
+    for i in 0..attempts {
+        if !index_lock_present(repo) {
+            return true;
+        }
+        if i + 1 < attempts {
+            std::thread::sleep(std::time::Duration::from_millis(interval_ms));
+        }
+    }
+    !index_lock_present(repo)
+}
+
+/// The commit SHA at the top of the stash stack (`refs/stash`), if any.
+///
+/// `None` when there is no stash. Used to snapshot the stash state immediately
+/// before a pull so a stranded autostash can be detected afterwards by the top
+/// of the stack having moved.
+// trace:BUG-691 | ai:claude
+pub fn stash_top_sha(repo: &Path) -> Option<String> {
+    let result = git(repo, &["rev-parse", "-q", "--verify", "refs/stash"]).ok()?;
+    if result.success && !result.stdout.trim().is_empty() {
+        Some(result.stdout.trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// Outcome of attempting to restore an autostash stranded by a failed pull.
+// trace:BUG-691 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AutostashRestore {
+    /// No stranded autostash was found — nothing to do.
+    Nothing,
+    /// A stranded autostash was found and successfully re-applied to the
+    /// working tree; carries the stash commit SHA that was restored.
+    Restored(String),
+    /// A stranded autostash was found but could NOT be restored automatically
+    /// (e.g. the index lock is still held, or applying it conflicts). Carries
+    /// the stash commit SHA so the caller can name it in the error and point
+    /// the user at the manual recovery step.
+    Stranded { sha: String, reason: String },
+}
+
+/// Detect and restore an autostash that a failed `git pull` (or merge) left
+/// behind, so the working tree is returned to its pre-pull state instead of
+/// having the user's uncommitted work silently parked in the stash list.
+///
+/// `pre_stash_top` is the `stash_top_sha` value captured immediately BEFORE the
+/// pull ran. A restore is attempted only when git's autostash mechanism left a
+/// leftover:
+///  - a `MERGE_AUTOSTASH` ref (git's in-progress merge-autostash holding pen), or
+///  - a NEW entry on top of `refs/stash` whose subject mentions "autostash"
+///    (the conflict/failed-apply path pushes the autostash onto the stack).
+///
+/// Restoring pops/applies that entry back onto the working tree. This is
+/// deliberately conservative: it never touches a pre-existing stash, and if the
+/// re-apply fails it leaves the stash in place and reports `Stranded` rather
+/// than risk losing the work. Best-effort — any git error maps to `Nothing`
+/// (the pull's own error is what the caller surfaces).
+// trace:BUG-691 | ai:claude
+pub fn restore_stranded_autostash(repo: &Path, pre_stash_top: Option<&str>) -> AutostashRestore {
+    // (1) merge-in-progress autostash holding pen. Git records the autostash
+    // here while a merge is underway and normally consumes it on finish; a hard
+    // die (e.g. index.lock during the reset) can leave it behind.
+    if let Ok(r) = git(repo, &["rev-parse", "-q", "--verify", "MERGE_AUTOSTASH"]) {
+        if r.success && !r.stdout.trim().is_empty() {
+            let sha = r.stdout.trim().to_string();
+            let applied = git(repo, &["stash", "apply", "--index", &sha])
+                .map(|a| a.success)
+                .unwrap_or(false)
+                || git(repo, &["stash", "apply", &sha])
+                    .map(|a| a.success)
+                    .unwrap_or(false);
+            if applied {
+                // Drop the holding-pen ref now that its contents are back in
+                // the working tree, so the next merge starts clean.
+                let _ = git(repo, &["update-ref", "-d", "MERGE_AUTOSTASH"]);
+                return AutostashRestore::Restored(sha);
+            }
+            return AutostashRestore::Stranded {
+                sha,
+                reason: "could not re-apply MERGE_AUTOSTASH (index may still be locked, \
+                         or re-applying conflicts)"
+                    .to_string(),
+            };
+        }
+    }
+
+    // (2) a new entry pushed onto refs/stash by the autostash machinery.
+    let top = match stash_top_sha(repo) {
+        Some(t) => t,
+        None => return AutostashRestore::Nothing,
+    };
+    if Some(top.as_str()) == pre_stash_top {
+        // The stack top is unchanged from before the pull — nothing new was
+        // stranded; do not touch the user's pre-existing stash.
+        return AutostashRestore::Nothing;
+    }
+    // A new top appeared. Only treat it as ours if it looks like an autostash,
+    // so a concurrent manual `git stash` is never silently popped.
+    let subject = git(repo, &["log", "-1", "--format=%s", &top])
+        .map(|r| r.stdout)
+        .unwrap_or_default();
+    if !subject.to_lowercase().contains("autostash") {
+        return AutostashRestore::Nothing;
+    }
+    // Pop the top (our autostash). On success the work is back in the tree and
+    // the entry is dropped; on failure leave it in place and report Stranded.
+    match git(repo, &["stash", "pop"]) {
+        Ok(r) if r.success => AutostashRestore::Restored(top),
+        _ => AutostashRestore::Stranded {
+            sha: top,
+            reason: "could not pop the autostash (index may still be locked, \
+                     or applying it conflicts)"
+                .to_string(),
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Orphan Branch + Worktree
 // ---------------------------------------------------------------------------
 
@@ -2413,6 +2584,123 @@ mod tests {
         // Modify the file
         std::fs::write(repo.join("test.txt"), "modified").unwrap();
         assert!(has_changes(&repo).unwrap());
+    }
+
+    // BUG-691: index-lock precheck sees a lock and clears when it goes away.
+    // trace:BUG-691 | ai:claude
+    #[test]
+    fn test_index_lock_present_and_wait() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("test-repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("test.txt"), "hello").unwrap();
+        add(&repo, &["test.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+
+        // No lock initially.
+        assert!(!index_lock_present(&repo));
+        assert!(wait_for_index_lock_clear(&repo, 3, 5));
+
+        // Create a stale index.lock and confirm it is detected and the short
+        // wait times out (returns false) rather than proceeding to stash.
+        std::fs::write(repo.join(".git/index.lock"), "").unwrap();
+        assert!(index_lock_present(&repo));
+        assert!(
+            !wait_for_index_lock_clear(&repo, 2, 5),
+            "a held lock must make the precheck return false so the caller refuses \
+             before stashing"
+        );
+
+        // Once cleared, the precheck passes.
+        std::fs::remove_file(repo.join(".git/index.lock")).unwrap();
+        assert!(!index_lock_present(&repo));
+        assert!(wait_for_index_lock_clear(&repo, 3, 5));
+    }
+
+    // BUG-691: a simulated update failure that stranded an autostash must be
+    // restored — the working tree returns to its pre-pull (dirty) state, not
+    // left stashed away. trace:BUG-691 | ai:claude
+    #[test]
+    fn test_restore_stranded_autostash_returns_worktree_to_pre_pull_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("test-repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("f.txt"), "one\n").unwrap();
+        add(&repo, &["f.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+
+        // Snapshot the stash top before the "pull" — no stash yet.
+        let pre = stash_top_sha(&repo);
+        assert!(pre.is_none());
+
+        // Dirty the tree (uncommitted work the user has not saved anywhere).
+        std::fs::write(repo.join("f.txt"), "one\ndirty edit\n").unwrap();
+        assert!(has_changes(&repo).unwrap());
+
+        // Simulate exactly what git's autostash mechanism leaves behind when a
+        // fast-forward fails mid-update: the dirty change is pushed onto the
+        // stash stack with an "autostash" message, and the working tree is
+        // clean (git had reset it before dying). This is the stranded state.
+        let stashed = git(&repo, &["stash", "push", "-m", "autostash", "f.txt"]).unwrap();
+        assert!(stashed.success, "stash push failed: {}", stashed.stderr);
+        assert!(
+            !has_changes(&repo).unwrap(),
+            "precondition: working tree is clean while work sits in the stash"
+        );
+        assert!(stash_top_sha(&repo).is_some());
+
+        // The fix restores it.
+        let outcome = restore_stranded_autostash(&repo, pre.as_deref());
+        assert!(
+            matches!(outcome, AutostashRestore::Restored(_)),
+            "expected Restored, got {outcome:?}"
+        );
+
+        // Working tree is back to its pre-pull (dirty) state...
+        assert!(
+            has_changes(&repo).unwrap(),
+            "the autostash must be restored to the working tree, not left stashed"
+        );
+        let contents = std::fs::read_to_string(repo.join("f.txt")).unwrap();
+        assert_eq!(contents, "one\ndirty edit\n");
+        // ...and the stranded stash entry is gone.
+        assert!(
+            stash_top_sha(&repo).is_none(),
+            "the restored autostash entry must be popped off the stack"
+        );
+    }
+
+    // BUG-691: a pre-existing, unrelated stash the user made themselves must
+    // NOT be touched when the pull did not actually strand anything.
+    // trace:BUG-691 | ai:claude
+    #[test]
+    fn test_restore_stranded_autostash_leaves_unrelated_stash_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("test-repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("f.txt"), "one\n").unwrap();
+        add(&repo, &["f.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+
+        // User stashes some work of their own (normal "WIP on ..." message).
+        std::fs::write(repo.join("f.txt"), "one\nmy wip\n").unwrap();
+        let stashed = git(&repo, &["stash", "push", "f.txt"]).unwrap();
+        assert!(stashed.success, "stash push failed: {}", stashed.stderr);
+        let user_stash_top = stash_top_sha(&repo);
+        assert!(user_stash_top.is_some());
+
+        // A pull runs and fails but did NOT create a new autostash: the stash
+        // top is unchanged from the pre-pull snapshot. Nothing must be popped.
+        let outcome = restore_stranded_autostash(&repo, user_stash_top.as_deref());
+        assert_eq!(outcome, AutostashRestore::Nothing);
+        assert_eq!(
+            stash_top_sha(&repo),
+            user_stash_top,
+            "an unrelated pre-existing stash must be left untouched"
+        );
     }
 
     #[test]

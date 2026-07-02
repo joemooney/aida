@@ -104716,6 +104716,40 @@ fn print_pull_plan(
     }
 }
 
+// BUG-691: after a failed code-leg pull, restore any autostash git's built-in
+// autostash mechanism left un-applied (the ff-update died — e.g. an index.lock
+// race — after stashing the dirty tree and before re-applying it). Prints a
+// note when it restores, and a clear warning naming the stash SHA + recovery
+// step when it cannot. `pre_stash_top` is the stash-stack top captured before
+// the pull, used to avoid touching a pre-existing/unrelated stash.
+// trace:BUG-691 | ai:claude
+fn report_autostash_restore(project_root: &std::path::Path, pre_stash_top: Option<&str>) {
+    use aida_core::git_ops::AutostashRestore;
+    let short = |sha: &str| sha.chars().take(9).collect::<String>();
+    match aida_core::git_ops::restore_stranded_autostash(project_root, pre_stash_top) {
+        AutostashRestore::Restored(sha) => {
+            eprintln!(
+                "  {} restored autostash {} to your working tree — the failed pull \
+                 had left your uncommitted changes stashed.",
+                "Note:".dimmed(),
+                short(&sha),
+            );
+        }
+        AutostashRestore::Stranded { sha, reason } => {
+            eprintln!(
+                "  {} the failed pull left an autostash ({}) that could not be \
+                 restored automatically ({}). Your uncommitted work is safe in the \
+                 stash — recover it with `git stash list` then \
+                 `git stash pop` (once no other git process is running).",
+                "Warning:".yellow().bold(),
+                short(&sha),
+                reason,
+            );
+        }
+        AutostashRestore::Nothing => {}
+    }
+}
+
 /// `aida pull` — symmetric counterpart of `aida push`. Pulls both the
 /// current code branch (via `git pull --ff-only`) and the orphan store
 /// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
@@ -104764,6 +104798,35 @@ fn handle_pull_command(
             // commit / empty repo — the helper falls back to HEAD~50.
             // trace:STORY-86 | ai:claude
             let pre_code_sha = git_ops::head_sha(&project_root).ok();
+            // BUG-691: snapshot the stash-stack top BEFORE the pull. If git's
+            // built-in autostash (the recommended global `rebase.autoStash` /
+            // `merge.autoStash`) leaves a stash un-restored after a failed
+            // ff-update, we detect + restore it below by the top having moved.
+            // trace:BUG-691 | ai:claude
+            let pre_stash_top = git_ops::stash_top_sha(&project_root);
+            // BUG-691: refuse the pull UP FRONT if another git process holds the
+            // index lock. Otherwise git's autostash can stash the dirty tree,
+            // then die on the reset when the lock reappears — stranding the
+            // user's work. A short wait absorbs a transient lock; a genuinely
+            // stuck one surfaces in ~1s and we fail before anything is stashed.
+            // trace:BUG-691 | ai:claude
+            let index_clear = git_ops::wait_for_index_lock_clear(&project_root, 10, 100);
+            if !index_clear {
+                eprintln!(
+                    "  {} another git process holds this repo's index lock \
+                     (.git/index.lock) — refusing the pull before anything is \
+                     stashed, so your uncommitted work is not stranded.\n  \
+                     {} wait for the other git command to finish (or remove a \
+                     stale .git/index.lock if none is running), then re-run \
+                     `aida pull`.",
+                    "Warning:".yellow().bold(),
+                    "Note:".dimmed(),
+                );
+                code_failed = Some(format!(
+                    "git index locked (.git/index.lock held) on branch {}",
+                    branch
+                ));
+            }
             // --ff-only refuses if the local branch has diverged from
             // origin (user has unpushed commits AND origin has new
             // commits). Safer default than --rebase for a working
@@ -104771,66 +104834,71 @@ fn handle_pull_command(
             // whether to rebase, merge, or stash. Matches the task's
             // acceptance shape ("equivalent to `git pull --ff-only`").
             // trace:TASK-43 | ai:claude
-            let res = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&project_root)
-                .args(["pull", "--ff-only", "origin", &branch])
-                .status();
-            match res {
-                Ok(s) if s.success() => {
-                    println!("  {}", "code pull complete".green());
-                    // STORY-86: scan the just-pulled commits for
-                    // refs to specs currently in Done and bump them.
-                    // Best-effort: any failure prints a warning but
-                    // doesn't fail the pull. trace:STORY-86 | ai:claude
-                    //
-                    // BUG-404: the narrow `pre_code_sha..HEAD` range assumes
-                    // THIS pull is what advanced main. But `aida pr ship`
-                    // step 3 (`gh pr merge --squash`) fast-forwards local
-                    // main to the squash commit BEFORE step 4's pull runs —
-                    // so the pull is a no-op ("Already up to date"),
-                    // pre_code_sha == post_head, and the narrow range is
-                    // empty. The merged spec then never bumps (confirmed by
-                    // AIDA_DEBUG_AUTOBUMP instrumentation: 0 commits in the
-                    // range, 0 flips). When the pull moved nothing, fall back
-                    // to the wide scan so a main advanced outside this pull
-                    // (gh merge, or a manual merge-then-pull) is still
-                    // covered. The Done-guard inside the helper keeps the
-                    // wide scan idempotent. trace:BUG-404 | ai:claude
-                    let post_code_sha = git_ops::head_sha(&project_root).ok();
-                    let pull_was_noop = match (pre_code_sha.as_deref(), post_code_sha.as_deref()) {
-                        (Some(a), Some(b)) => a == b,
-                        _ => false,
-                    };
-                    // STORY-127 detectors (1)+(2): a no-op code pull. If the
-                    // user holds a reviewer lease on an unmerged PR, this is
-                    // the PR-27-style "ran catch-up before the merge happened"
-                    // mistake — warn so they wait for the merge. Otherwise a
-                    // quiet one-liner. Suppressed in --quiet (orchestrator /
-                    // scripted) runs. trace:STORY-127 | ai:claude
-                    if pull_was_noop && !quiet {
-                        let reviewer_pr = active_reviewer_unmerged_pr(&project_root);
-                        if let Some(msg) = pull_noop_warning(true, reviewer_pr.as_deref()) {
-                            let tag = if reviewer_pr.is_some() {
-                                "Warning:".yellow().bold()
-                            } else {
-                                "Note:".dimmed()
+            //
+            // Skipped entirely when the index lock is held (handled above) so
+            // nothing is stashed and stranded. trace:BUG-691 | ai:claude
+            if index_clear {
+                let res = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&project_root)
+                    .args(["pull", "--ff-only", "origin", &branch])
+                    .status();
+                match res {
+                    Ok(s) if s.success() => {
+                        println!("  {}", "code pull complete".green());
+                        // STORY-86: scan the just-pulled commits for
+                        // refs to specs currently in Done and bump them.
+                        // Best-effort: any failure prints a warning but
+                        // doesn't fail the pull. trace:STORY-86 | ai:claude
+                        //
+                        // BUG-404: the narrow `pre_code_sha..HEAD` range assumes
+                        // THIS pull is what advanced main. But `aida pr ship`
+                        // step 3 (`gh pr merge --squash`) fast-forwards local
+                        // main to the squash commit BEFORE step 4's pull runs —
+                        // so the pull is a no-op ("Already up to date"),
+                        // pre_code_sha == post_head, and the narrow range is
+                        // empty. The merged spec then never bumps (confirmed by
+                        // AIDA_DEBUG_AUTOBUMP instrumentation: 0 commits in the
+                        // range, 0 flips). When the pull moved nothing, fall back
+                        // to the wide scan so a main advanced outside this pull
+                        // (gh merge, or a manual merge-then-pull) is still
+                        // covered. The Done-guard inside the helper keeps the
+                        // wide scan idempotent. trace:BUG-404 | ai:claude
+                        let post_code_sha = git_ops::head_sha(&project_root).ok();
+                        let pull_was_noop =
+                            match (pre_code_sha.as_deref(), post_code_sha.as_deref()) {
+                                (Some(a), Some(b)) => a == b,
+                                _ => false,
                             };
-                            eprintln!("  {} {}", tag, msg);
+                        // STORY-127 detectors (1)+(2): a no-op code pull. If the
+                        // user holds a reviewer lease on an unmerged PR, this is
+                        // the PR-27-style "ran catch-up before the merge happened"
+                        // mistake — warn so they wait for the merge. Otherwise a
+                        // quiet one-liner. Suppressed in --quiet (orchestrator /
+                        // scripted) runs. trace:STORY-127 | ai:claude
+                        if pull_was_noop && !quiet {
+                            let reviewer_pr = active_reviewer_unmerged_pr(&project_root);
+                            if let Some(msg) = pull_noop_warning(true, reviewer_pr.as_deref()) {
+                                let tag = if reviewer_pr.is_some() {
+                                    "Warning:".yellow().bold()
+                                } else {
+                                    "Note:".dimmed()
+                                };
+                                eprintln!("  {} {}", tag, msg);
+                            }
                         }
-                    }
-                    let scan_pre: Option<&str> = if pull_was_noop {
-                        None
-                    } else {
-                        pre_code_sha.as_deref()
-                    };
-                    // Opt-in instrumentation (default off) — permanent
-                    // visibility into why an auto-bump did or didn't fire.
-                    let dbg_autobump = std::env::var("AIDA_DEBUG_AUTOBUMP")
-                        .map(|v| v != "0" && !v.is_empty())
-                        .unwrap_or(false);
-                    if dbg_autobump {
-                        eprintln!(
+                        let scan_pre: Option<&str> = if pull_was_noop {
+                            None
+                        } else {
+                            pre_code_sha.as_deref()
+                        };
+                        // Opt-in instrumentation (default off) — permanent
+                        // visibility into why an auto-bump did or didn't fire.
+                        let dbg_autobump = std::env::var("AIDA_DEBUG_AUTOBUMP")
+                            .map(|v| v != "0" && !v.is_empty())
+                            .unwrap_or(false);
+                        if dbg_autobump {
+                            eprintln!(
                             "  [autobump-debug] enabled={} pre_code_sha={:?} post_head={:?} pull_was_noop={} scan_range={} store_path={}",
                             auto_bump_enabled(),
                             pre_code_sha,
@@ -104842,95 +104910,96 @@ fn handle_pull_command(
                             },
                             store_path.display()
                         );
-                    }
-                    if auto_bump_enabled() {
-                        let storage = Storage::new(store_path);
-                        match auto_bump_done_to_completed(
-                            &project_root,
-                            store_path,
-                            scan_pre,
-                            &storage,
-                        ) {
-                            Ok(flips) => {
-                                if dbg_autobump {
-                                    eprintln!(
+                        }
+                        if auto_bump_enabled() {
+                            let storage = Storage::new(store_path);
+                            match auto_bump_done_to_completed(
+                                &project_root,
+                                store_path,
+                                scan_pre,
+                                &storage,
+                            ) {
+                                Ok(flips) => {
+                                    if dbg_autobump {
+                                        eprintln!(
                                         "  [autobump-debug] auto_bump_done_to_completed → {} flip(s): {:?}",
                                         flips.len(),
                                         flips.iter().map(|f| f.spec_id.clone()).collect::<Vec<_>>()
                                     );
+                                    }
+                                    if !quiet {
+                                        print_auto_bump_summary(&flips);
+                                    }
+                                    // STORY-700: the first-run payoff — a spec the
+                                    // user filed just auto-completed via the merge.
+                                    // Only fires when the arc sits at the work-done
+                                    // step, and terminates the chain. Suppressed in
+                                    // --quiet (orchestrator/scripted) runs.
+                                    // trace:STORY-700 | ai:claude
+                                    if !quiet && !flips.is_empty() {
+                                        first_run::after_spec_completed(&project_root);
+                                    }
                                 }
-                                if !quiet {
-                                    print_auto_bump_summary(&flips);
-                                }
-                                // STORY-700: the first-run payoff — a spec the
-                                // user filed just auto-completed via the merge.
-                                // Only fires when the arc sits at the work-done
-                                // step, and terminates the chain. Suppressed in
-                                // --quiet (orchestrator/scripted) runs.
-                                // trace:STORY-700 | ai:claude
-                                if !quiet && !flips.is_empty() {
-                                    first_run::after_spec_completed(&project_root);
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "  {} auto-bump failed: {} (specs stay at Done; \
+                                Err(e) => {
+                                    eprintln!(
+                                        "  {} auto-bump failed: {} (specs stay at Done; \
                                      re-run `aida pull` after fixing)",
-                                    "Warning:".yellow().bold(),
-                                    e
-                                );
+                                        "Warning:".yellow().bold(),
+                                        e
+                                    );
+                                }
                             }
                         }
-                    }
-                    // STORY-248: stacked-branch cascade. Walks
-                    // `.aida/stacks.json`; for each entry whose parent
-                    // branch is no longer reachable locally + on origin
-                    // (= it was merged + auto-deleted), rebase it onto
-                    // origin/main using the recorded fork-point SHA.
-                    // Best-effort: a failure prints a warning but does
-                    // NOT fail the pull (BUG-254 contract — pull's exit
-                    // reflects code + store legs only).
-                    // trace:STORY-248 | ai:claude
-                    if let Err(e) = cascade_rebase_stacked_branches(&project_root, auto) {
-                        eprintln!(
-                            "  {} stacked-branch cascade failed: {} (some stacked branches \
+                        // STORY-248: stacked-branch cascade. Walks
+                        // `.aida/stacks.json`; for each entry whose parent
+                        // branch is no longer reachable locally + on origin
+                        // (= it was merged + auto-deleted), rebase it onto
+                        // origin/main using the recorded fork-point SHA.
+                        // Best-effort: a failure prints a warning but does
+                        // NOT fail the pull (BUG-254 contract — pull's exit
+                        // reflects code + store legs only).
+                        // trace:STORY-248 | ai:claude
+                        if let Err(e) = cascade_rebase_stacked_branches(&project_root, auto) {
+                            eprintln!(
+                                "  {} stacked-branch cascade failed: {} (some stacked branches \
                              may be unrebased; run `/aida-rebase` in each, or \
                              `aida stack show` to inspect)",
-                            "Warning:".yellow().bold(),
-                            e
-                        );
-                    }
+                                "Warning:".yellow().bold(),
+                                e
+                            );
+                        }
 
-                    // STORY-441: opt-in auto-archive sweep after the auto-bump
-                    // settles. Reads `[archive] auto_after_days` from
-                    // `.aida/config.toml`; absent → no-op. AIDA_AUTO_ARCHIVE=0
-                    // disables it. Best-effort: errors are warnings.
-                    // trace:STORY-441 | ai:claude
-                    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
-                    if let Ok(sweep_backend) =
-                        aida_core::CachedGitBackend::open(store_path, &cache_path)
-                    {
-                        maybe_auto_archive_sweep(&project_root, &sweep_backend, quiet);
-                    }
+                        // STORY-441: opt-in auto-archive sweep after the auto-bump
+                        // settles. Reads `[archive] auto_after_days` from
+                        // `.aida/config.toml`; absent → no-op. AIDA_AUTO_ARCHIVE=0
+                        // disables it. Best-effort: errors are warnings.
+                        // trace:STORY-441 | ai:claude
+                        let cache_path =
+                            aida_core::CachedGitBackend::default_cache_path(store_path);
+                        if let Ok(sweep_backend) =
+                            aida_core::CachedGitBackend::open(store_path, &cache_path)
+                        {
+                            maybe_auto_archive_sweep(&project_root, &sweep_backend, quiet);
+                        }
 
-                    // BUG-665: HEAD just advanced. If a dev-activated in-repo
-                    // build is on PATH and is now behind HEAD, the user's `aida`
-                    // (tui / integrate / anything) is silently running old code
-                    // until they rebuild. Nudge once. Suppressed in --quiet
-                    // (orchestrator / scripted) runs. trace:BUG-665 | ai:claude
-                    if !quiet {
-                        warn_if_pulled_binary_stale(&project_root);
+                        // BUG-665: HEAD just advanced. If a dev-activated in-repo
+                        // build is on PATH and is now behind HEAD, the user's `aida`
+                        // (tui / integrate / anything) is silently running old code
+                        // until they rebuild. Nudge once. Suppressed in --quiet
+                        // (orchestrator / scripted) runs. trace:BUG-665 | ai:claude
+                        if !quiet {
+                            warn_if_pulled_binary_stale(&project_root);
+                        }
                     }
-                }
-                Ok(s) => {
-                    // BUG-254: surface the recovery hint and an explicit
-                    // auto-bump-skipped note. The hint covers the two
-                    // common causes — an untracked file that would be
-                    // overwritten, and a diverged branch — because
-                    // `git pull --ff-only` itself prints which case
-                    // applies right above this line. trace:BUG-254
-                    eprintln!(
-                        "  {} git pull --ff-only exited with status {} — \
+                    Ok(s) => {
+                        // BUG-254: surface the recovery hint and an explicit
+                        // auto-bump-skipped note. The hint covers the two
+                        // common causes — an untracked file that would be
+                        // overwritten, and a diverged branch — because
+                        // `git pull --ff-only` itself prints which case
+                        // applies right above this line. trace:BUG-254
+                        eprintln!(
+                            "  {} git pull --ff-only exited with status {} — \
                          your branch may have diverged from origin/{}, or \
                          the merge would overwrite an untracked file.\n  \
                          To recover:\n    \
@@ -104941,18 +105010,30 @@ fn handle_pull_command(
                          {} auto-bump skipped — code leg did not advance, \
                          so any Done→Completed bumps for the missed \
                          commits will fire on the next successful pull.",
-                        "Warning:".yellow().bold(),
-                        s,
-                        branch,
-                        branch,
-                        "Note:".dimmed(),
-                    );
-                    code_failed = Some(format!(
-                        "git pull --ff-only exited {} on branch {}",
-                        s, branch
-                    ));
+                            "Warning:".yellow().bold(),
+                            s,
+                            branch,
+                            branch,
+                            "Note:".dimmed(),
+                        );
+                        code_failed = Some(format!(
+                            "git pull --ff-only exited {} on branch {}",
+                            s, branch
+                        ));
+                        // BUG-691: if git's autostash stashed the working tree and
+                        // then the ff-update failed, restore it so the user's
+                        // uncommitted work is not silently stranded in the stash.
+                        // trace:BUG-691 | ai:claude
+                        report_autostash_restore(&project_root, pre_stash_top.as_deref());
+                    }
+                    Err(e) => {
+                        // BUG-691: same recovery on the process-spawn failure path
+                        // before bailing — never leave a stranded autostash behind.
+                        // trace:BUG-691 | ai:claude
+                        report_autostash_restore(&project_root, pre_stash_top.as_deref());
+                        anyhow::bail!("git pull failed: {}", e);
+                    }
                 }
-                Err(e) => anyhow::bail!("git pull failed: {}", e),
             }
         }
     }
