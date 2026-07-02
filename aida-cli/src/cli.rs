@@ -8215,9 +8215,11 @@ pub enum Command {
     /// SPEC-ID from being done?" with a bucket + reason derived from store
     /// signals (status, type, tags, blockers, decisions, live leases).
     Why {
-        /// The SPEC-ID to explain (a story, task, or bug id).
+        /// A SPEC-ID (why is this spec still open?) OR a code location
+        /// `file[:line]` (why does this code exist?). A `file:line` resolves the
+        /// nearest `trace:SPEC-ID` comment to the spec's intent — code↔decision.
         id: String,
-        /// Machine-readable JSON (`{spec, bucket, reason, needs_human}`).
+        /// Machine-readable JSON.
         #[clap(long)]
         json: bool,
     },
