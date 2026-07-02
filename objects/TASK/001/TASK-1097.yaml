@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T18:34:41.252951047Z
-modified_at: 2026-07-02T18:34:41.252951047Z
+modified_at: 2026-07-02T19:03:34.587153994Z
 req_type: Task
 tags:
 - aida:remote
@@ -29,3 +29,10 @@ relationships:
 - rel_type: Child
   target_id: 019f23ce-d79d-7bb3-8088-464e517cd6b6
   created_at: 2026-07-02T18:34:47.063306100Z
+comments:
+- id: 019f2437-09bb-7b91-8bbc-f9625406605b
+  author: joe
+  content: Commit 24deae48d references this requirement
+  created_at: 2026-07-02T19:03:34.587153994Z
+  modified_at: 2026-07-02T19:03:34.587153994Z
+  session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5
