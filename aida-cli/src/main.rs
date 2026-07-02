@@ -99790,6 +99790,19 @@ fn handle_integrate(json: bool) -> Result<()> {
         return Ok(());
     }
 
+    // Hide STALE running rows (dead leases: worktree gone OR no live process
+    // and >24h old) behind a footer count in the two consumption-facing renders
+    // below, mirroring `aida ps`, which hides stale rows unless `--all`. The
+    // JSON block above deliberately keeps every row so structured consumers can
+    // filter on `live`/`liveness` themselves. Without this, a long-dead lease
+    // (e.g. a Completed spec whose worktree was removed) clutters the
+    // integrator's throughput view. trace:BUG-693 | ai:claude
+    let stale_hidden = run_rows
+        .iter()
+        .filter(|r| matches!(r.state, LeaseState::Stale))
+        .count();
+    run_rows.retain(|r| !matches!(r.state, LeaseState::Stale));
+
     // --------------------------------------------------- AGENT (TOON) mode ----
     // Token-efficient rendering for non-TTY / AIDA_AGENT_OUTPUT consumers, the
     // TASK-964 AXI pattern: flat scalars + uniform TOON tables, no glyphs/color.
@@ -99808,6 +99821,7 @@ fn handle_integrate(json: bool) -> Result<()> {
         println!("drains_last_day: {drains_last_day}");
         println!("queue_depth: {}", queue_rows.len());
         println!("running: {}", run_rows.len());
+        println!("stale_hidden: {stale_hidden}");
         let q: Vec<Vec<String>> = queue_rows
             .iter()
             .map(|(id, title, status, role)| {
@@ -99956,6 +99970,16 @@ fn handle_integrate(json: bool) -> Result<()> {
                 live_col,
             );
         }
+    }
+    if stale_hidden > 0 {
+        println!(
+            "  {}",
+            format!(
+                "({stale_hidden} stale session{} hidden — `aida ps --all` for detail)",
+                if stale_hidden == 1 { "" } else { "s" }
+            )
+            .dimmed()
+        );
     }
     println!();
     println!(
