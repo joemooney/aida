@@ -1,0 +1,14 @@
+id: 019f23b6-c8f7-77c1-b0c5-638c34c63b69
+spec_id: TASK-1093
+agreed_id: TASK-1093
+title: Port selected headless phases to a Codex adapter only after discipline telemetry shows remaining halt risk
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-02T16:43:29.399510347Z
+modified_at: 2026-07-02T16:43:29.399510347Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md
