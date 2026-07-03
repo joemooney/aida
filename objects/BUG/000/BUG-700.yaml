@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:56:17.619777771Z
-modified_at: 2026-07-02T17:04:50.440892821Z
+modified_at: 2026-07-03T04:48:31.177941982Z
 req_type: Bug
 tags:
 - needs-history-rewrite
@@ -37,3 +37,9 @@ comments:
   created_at: 2026-07-02T17:04:50.440892821Z
   modified_at: 2026-07-02T17:04:50.440892821Z
   session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5
+- id: 019f264e-91ca-7ee0-b885-03c0cc59376e
+  author: joe
+  content: 'Progress 2026-07-02 (scrub owned by advisor session, decoupled scope per operator): PUBLIC GITHUB SCRUBBED + verified — main b5948e4b2->b1a4563d1, aida-store b772f361a->214f7bacc, all 24 release tags rewritten; 0 case-insensitive residual across all refs, 2766->2766 specs (no loss), build+56 tests green. Map fixed mid-run (v1 was case-sensitive; uppercase domain variant survived, caught by alias.rs test gate -> v2 case-insensitive). Local machine re-synced (main + .aida-store + cache). REMAINING: (1) GitLab mirror blocked — main+aida-store are PROTECTED branches (force-push denied) + tag force-update hook-blocked; needs operator to temporarily unprotect. (2) ~670 stale + 79 orphan + 2 PR branches on GitHub still carry pre-scrub commits with employer strings — safe-partition + delete pending (story-585 has unmerged work). (3) PRs #1336/#1338 based on pre-scrub main — re-cut onto new main. TASK-1115 node-1/node-6 id double-reservation (0 consumed) routed to STORY-760.'
+  created_at: 2026-07-03T04:48:31.177941982Z
+  modified_at: 2026-07-03T04:48:31.177941982Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
