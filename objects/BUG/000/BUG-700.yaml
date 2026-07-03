@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:56:17.619777771Z
-modified_at: 2026-07-03T04:48:31.177941982Z
+modified_at: 2026-07-03T18:19:09.080896107Z
 req_type: Bug
 tags:
 - needs-history-rewrite
@@ -42,4 +42,10 @@ comments:
   content: 'Progress 2026-07-02 (scrub owned by advisor session, decoupled scope per operator): PUBLIC GITHUB SCRUBBED + verified — main b5948e4b2->b1a4563d1, aida-store b772f361a->214f7bacc, all 24 release tags rewritten; 0 case-insensitive residual across all refs, 2766->2766 specs (no loss), build+56 tests green. Map fixed mid-run (v1 was case-sensitive; uppercase domain variant survived, caught by alias.rs test gate -> v2 case-insensitive). Local machine re-synced (main + .aida-store + cache). REMAINING: (1) GitLab mirror blocked — main+aida-store are PROTECTED branches (force-push denied) + tag force-update hook-blocked; needs operator to temporarily unprotect. (2) ~670 stale + 79 orphan + 2 PR branches on GitHub still carry pre-scrub commits with employer strings — safe-partition + delete pending (story-585 has unmerged work). (3) PRs #1336/#1338 based on pre-scrub main — re-cut onto new main. TASK-1115 node-1/node-6 id double-reservation (0 consumed) routed to STORY-760.'
   created_at: 2026-07-03T04:48:31.177941982Z
   modified_at: 2026-07-03T04:48:31.177941982Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f2934-b998-7ce1-b804-769a2de963d6
+  author: joe
+  content: 'COMPLETE 2026-07-03. Full public scrub verified 0 residual (all 5 sensitive literals, case-insensitive) across BOTH forges + every ref: origin+gitlab main (b1a4563d1) & aida-store (origin 214f7bacc / gitlab f90aa8fdc) + 22 release tags; all 7 remaining GitHub branches clean (main, aida-store, 3 parked rebased onto scrubbed main [task-724/research-theory/repositioning], 2 open-PR re-cut [#1336/#1338 stay OPEN for review]). GitHub branch count 674->7 (667 deleted: 582 merged/patch-present + 37 no-work + 48 resolved-or-junk; full audit in session scratchpad deleted_branches_audit.txt). Spec counts preserved 2766. Build+56 tests green on scrubbed main. Method: git filter-repo --replace-text case-insensitive map (v1 was case-sensitive; caught+fixed via alias.rs test gate). Local machine re-synced to scrubbed tips + cache rebuilt. RESIDUAL TODO (non-exposure): operator to re-protect gitlab main force-push toggle; local recovery refs refs/recovery/bug700/* + session scratchpad hold unscrubbed history for rollback safety, delete+gc after operator all-clear. TASK-1115 id double-reservation deferred to STORY-760.'
+  created_at: 2026-07-03T18:19:09.080896107Z
+  modified_at: 2026-07-03T18:19:09.080896107Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
