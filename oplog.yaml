@@ -31209,5 +31209,20 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2953
+- id: 019f2934-04d2-7fa2-824b-9da9a461bf9a
+  target_id: 019f2933-f7b2-7182-95e1-69420ae3d639
+  author: aida
+  node_id: '1'
+  lamport: 2954
+  timestamp: 2026-07-03T18:18:22.802056495Z
+  kind: !Create
+    title: '"aida help commands" a command that will print a comprehensive list of all commands and subcommands'
+    description: |-
+      A comprehensive list of every command and subcommand, one line each
+      Every command that could show up in `aida usage` would be listed here with a short description.
+      The goal is a large catalog that makes it easier to find a forgotten command.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2954
 node_id: '1'
