@@ -3,10 +3,10 @@ spec_id: TASK-1100
 agreed_id: TASK-1100
 title: BUG-701 profiling throwaway 2 DELETEME
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-03T18:25:21.125409812Z
-modified_at: 2026-07-03T18:25:21.125409812Z
+modified_at: 2026-07-03T18:34:15.464294758Z
 req_type: Task
