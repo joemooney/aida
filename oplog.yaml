@@ -31284,5 +31284,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2959
+- id: 019f2940-beb5-7aa2-95a3-ca088bf588b4
+  target_id: 019f2940-b148-77e0-baa1-719432a8d04c
+  author: aida
+  node_id: '1'
+  lamport: 2960
+  timestamp: 2026-07-03T18:32:16.821536466Z
+  kind: !Create
+    title: BUG-701 wrapper trace DELETEME
+    description: ''
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2960
 node_id: '1'
