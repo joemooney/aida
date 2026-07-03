@@ -31260,5 +31260,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2957
+- id: 019f293d-0204-7620-a08c-ee2935bc985f
+  target_id: 019f293c-f8f1-78b1-9445-6eeccd2a2d0e
+  author: aida
+  node_id: '1'
+  lamport: 2958
+  timestamp: 2026-07-03T18:28:11.908942008Z
+  kind: !Create
+    title: BUG-701 nosync DELETEME
+    description: ''
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 2958
 node_id: '1'
