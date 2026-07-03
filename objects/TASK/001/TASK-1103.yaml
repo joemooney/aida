@@ -3,10 +3,10 @@ spec_id: TASK-1103
 agreed_id: TASK-1103
 title: BUG-701 nosync2 DELETEME
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-03T18:28:12.965200338Z
-modified_at: 2026-07-03T18:28:12.965200338Z
+modified_at: 2026-07-03T18:34:20.970068003Z
 req_type: Task
