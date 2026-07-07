@@ -1,0 +1,28 @@
+id: 019f3edb-7437-7db0-98cb-704548a8b2d2
+spec_id: BUG-707
+agreed_id: BUG-707
+title: aida-demo.sh broken by TOON agent output + top-level 'local'
+description: |-
+  Found live during a first-user end-to-end demo run (2026-07-07).
+
+  Three defects in scripts/aida-demo.sh:
+
+  1. Spec-ID capture assumes the human table format. Lines 606 (HELLO_SPEC) and 809-810 (GOODBYE_SPEC) parse 'aida list' output with awk '{print $1}'. Since the token-efficient agent output landed (SPIKE-73), non-TTY stdout (command substitution) emits TOON/CSV, so the captured id is 'STORY-1,"Print' / 'TASK-2,"Add'. The corrupted id then propagates into the trace comment in hello.sh, the commit (SPEC-ID) trailer (so the aida pull auto-bump never fires), the claude -p implementer prompt, and every verify step ('aida show STORY-1,"Print' errors).
+
+  2. 'local' at top level: lines 839 (claude_prompt) and 849 (claude_exit) use 'local' outside any function -> 'local: can only be used in a function'.
+
+  3. Consequence of (2) under set -u: line 851 reads claude_exit -> 'claude_exit: unbound variable', so the claude -p success/fallback check never runs.
+
+  Acceptance:
+  - HELLO_SPEC/GOODBYE_SPEC capture yields a bare TYPE-SEQ id under BOTH the human table and TOON output (strip from the first comma).
+  - No 'local' outside a function; claude_exit is assigned plainly and the substep-3 fallback check executes.
+  - bash -n passes; a scripted run (--auto-cleanup) completes with 'aida show <id>' resolving and the auto-bump firing.
+
+  Broader observation (separate call, not this bug): any user shell script doing $(aida list ...) now gets TOON. Our own demo broke this way; downstream scripts will too. Worth a product decision: document TOON-when-piped loudly, or offer an explicit --format human escape hatch.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-07T23:13:17.367861419Z
+modified_at: 2026-07-07T23:13:17.367861419Z
+req_type: Bug
