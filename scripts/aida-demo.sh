@@ -603,7 +603,9 @@ show_cmd "demo$" aida add --type story --status approved --priority medium \
     --description "Add hello.sh that prints 'Hello, World!' to stdout. Acceptance: ./hello.sh prints the literal string and exits 0."
 
 # Find what ID it got assigned
-HELLO_SPEC=$(aida list --type story 2>/dev/null | awk '/Hello, World/ {print $1; exit}')
+# trace:BUG-707 | ai:claude — $1 must survive both the human table and the
+# TOON agent format `aida list` emits when stdout is not a TTY (id,"title",…)
+HELLO_SPEC=$(aida list --type story 2>/dev/null | awk '/Hello, World/ {sub(/,.*/, "", $1); print $1; exit}')
 [ -z "$HELLO_SPEC" ] && HELLO_SPEC="STORY-1"
 ok "Filed as $HELLO_SPEC"
 echo
@@ -806,8 +808,9 @@ while true; do
                 --title "Add 'Goodbye, World!' to README.md" \
                 --description "Append the literal text 'Goodbye, World!' as a new line to README.md."
 
+            # trace:BUG-707 | ai:claude — same TOON-vs-table tolerance as HELLO_SPEC
             GOODBYE_SPEC=$(aida list --type task --status approved 2>/dev/null | \
-                awk '/Goodbye/ {print $1; exit}')
+                awk '/Goodbye/ {sub(/,.*/, "", $1); print $1; exit}')
             [ -z "$GOODBYE_SPEC" ] && GOODBYE_SPEC="TASK-2"
             ok "Filed as $GOODBYE_SPEC"
             echo
@@ -836,7 +839,7 @@ while true; do
               "Expect ~30-60s while claude thinks and acts."
             echo
 
-            local claude_prompt
+            # trace:BUG-707 | ai:claude — top-level code, `local` is illegal here
             claude_prompt="You are the implementer in headless mode for spec $GOODBYE_SPEC of an AIDA demo. Do EXACTLY this and nothing more:
 
 1. Run: echo 'Goodbye, World!' >> README.md
@@ -846,7 +849,7 @@ while true; do
 When done, print the single line: DONE — committed $GOODBYE_SPEC"
 
             show_cmd "demo$" claude -p --permission-mode bypassPermissions "$claude_prompt"
-            local claude_exit=$?
+            claude_exit=$?
 
             if [ "$claude_exit" -ne 0 ] || ! git log -1 --pretty=%s | grep -qF "($GOODBYE_SPEC)"; then
                 fail "claude -p didn't land the expected commit (exit $claude_exit)"
