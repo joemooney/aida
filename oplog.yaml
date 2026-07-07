@@ -31538,5 +31538,20 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 2983
+- id: 019f3afe-08a7-70f2-b119-af49aabcd07d
+  target_id: 019f3afd-fbbe-7362-b924-4f5d1597a1df
+  author: aida
+  node_id: '1'
+  lamport: 2984
+  timestamp: 2026-07-07T05:12:34.727383649Z
+  kind: !Create
+    title: Kill remaining hard-coded claude defaults on the launch/identity paths
+    description: |-
+      Sweep of literal "claude" defaults that bypass vendor resolution, found 2026-07-06: handle_queue_rework passes vendor "claude" into the queue add --work convenience chain (aida-cli/src/main.rs ~135896); AIDA_INTENT_MODEL unwrap_or defaults to claude (~98524); agent_type == "claude" conditional branches around the launcher (~45742, ~45873, ~47070) need a pass to confirm they are vendor-dispatch, not claude-assumption. Each site should route through the [agents] vendor resolution (see the one-knob story) or be documented as intentionally claude-specific.
+
+      Acceptance: grep for the literal in launch/identity paths comes back only with per-vendor dispatch arms or documented intentional sites; queue add --work honors the resolved vendor; intent-model default follows the resolved vendor where sensible.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2984
 node_id: '1'
