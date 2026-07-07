@@ -135840,7 +135840,10 @@ mod headless_hint_tests {
     /// too. TASK-894 added `advisor_tier_program_and_args` — the advisor-tier
     /// analogue that delegates to the same Claude builders (resume/cold-boot)
     /// and to `codex_headless_args` — so it counts as a shared builder too.
-    // trace:BUG-342 trace:STORY-683 trace:TASK-894 | ai:codex
+    /// BUG-705 added `compose_headless_command` — the single composition BOTH
+    /// the spawn and exec paths build from (it wraps `headless_vendor_args` +
+    /// the agent-program resolver + the OS wrapper) — so it counts too.
+    // trace:BUG-342 trace:STORY-683 trace:TASK-894 trace:BUG-705 | ai:codex
     #[test]
     fn headless_env_launches_route_through_shared_argv_builders() {
         fn assert_env_setter_has_builder_context(file: &str, src: &str) {
@@ -135856,7 +135859,8 @@ mod headless_hint_tests {
                     window.contains("claude_headless_args")
                         || window.contains("claude_headless_resume_args")
                         || window.contains("headless_vendor_args")
-                        || window.contains("advisor_tier_program_and_args"),
+                        || window.contains("advisor_tier_program_and_args")
+                        || window.contains("compose_headless_command"),
                     "{file}: AIDA_HEADLESS claude launch at line {} does not use a shared headless argv builder:\n{window}",
                     idx + 1
                 );
