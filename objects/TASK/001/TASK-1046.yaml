@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:22:00.826668483Z
-modified_at: 2026-07-07T05:12:48.167245261Z
+modified_at: 2026-07-07T07:29:50.478129642Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,3 +16,10 @@ relationships:
 - rel_type: Child
   target_id: 019f1048-89ad-7543-aa2a-c82643852675
   created_at: 2026-06-30T04:22:06.243724420Z
+comments:
+- id: 019f3b7b-b38e-7c43-a1bc-07d26f6f87b1
+  author: joe
+  content: 'Re-scope 2026-07-07 (advisor, during STORY-763 slice work): the static per-project codex MCP registration ALREADY ships — aida init writes .codex/config.toml registering the AIDA MCP server (TASK-0424, template-class, tracked → drain worktrees inherit it, so a headless codex exec drain session discovers AIDA MCP without translation). What remains of this task: (a) VERIFY a real headless codex drain session in a worktree actually discovers the MCP server (one E2E check, fold into the STORY-762 claude-less runbook run); (b) gemini MCP-config translation — defer until gemini is a supported drain vendor (parent SPIKE-74). Recommend narrowing this task to the verification check or closing in favor of the runbook validation. Priority high->low pending that call.'
+  created_at: 2026-07-07T07:29:50.478129642Z
+  modified_at: 2026-07-07T07:29:50.478129642Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
