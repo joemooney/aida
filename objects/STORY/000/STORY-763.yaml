@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:38.618931909Z
-modified_at: 2026-07-07T05:12:38.618931909Z
+modified_at: 2026-07-07T07:40:29.165189196Z
 req_type: Story
 tags:
 - codex-first-class migration:claude-to-codex
@@ -25,3 +25,10 @@ relationships:
 - rel_type: Parent
   target_id: 019f3b75-7d47-7712-8b31-4782c1b712a4
   created_at: 2026-07-07T07:23:14.331103945Z
+comments:
+- id: 019f3b85-726d-7222-b2c3-2171b9adea83
+  author: joe
+  content: Commit 573ffc69f references this requirement
+  created_at: 2026-07-07T07:40:29.165189196Z
+  modified_at: 2026-07-07T07:40:29.165189196Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
