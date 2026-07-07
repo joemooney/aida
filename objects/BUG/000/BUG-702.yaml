@@ -1,0 +1,14 @@
+id: 019f3aad-33fd-7df3-9cf2-e6d6510c0857
+spec_id: BUG-702
+agreed_id: BUG-702
+title: 'aida pull emits ''fatal: Not a valid object name <sha>'' when a registered agent''s build_sha was purged by a history rewrite'
+description: 'The post-pull "is the active build behind HEAD" check (BUG-665) runs git rev-parse / merge-base against each registered agents build_sha from .aida/agents/*.toml. After a history rewrite (e.g. the BUG-700 scrub force-push + local gc) purges the recorded SHA, git rev-parse errors with "fatal: Not a valid object name <sha>", which leaks to aida pull output. Non-fatal (pull completes) but noisy and confusing. Fix: treat an unresolvable build_sha as unknown/skip (guard the rev-parse) rather than surfacing the raw git fatal. Generalizes beyond the scrub to any orphaned/rebased build. Repro: register an agent, rewrite history so its build_sha becomes unreachable, run aida pull.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-07T03:44:17.405575209Z
+modified_at: 2026-07-07T03:44:17.405575209Z
+req_type: Bug
+tags:
+- aida:pull from-self-test papercut history-rewrite severity:cosmetic
