@@ -8,7 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T16:35:04.581298188Z
-modified_at: 2026-07-07T16:35:04.581298188Z
+modified_at: 2026-07-07T23:25:23.863339582Z
 req_type: Bug
 tags:
 - papercut headless from-self-test codex-first-class
+comments:
+- id: 019f3ee6-8a17-7d02-928c-e60dad008b27
+  author: joe
+  content: Commit 26de99a70 references this requirement
+  created_at: 2026-07-07T23:25:23.863339582Z
+  modified_at: 2026-07-07T23:25:23.863339582Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
