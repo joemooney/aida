@@ -3,12 +3,12 @@ spec_id: TASK-1087
 agreed_id: TASK-1087
 title: 'aida human unblock --interactive: make the advisor-handoff step legible — split into Groom / Groom+approve options + a ''?'' help item with examples'
 description: 'Operator hit the bulk advisor-grooming step of `aida human unblock --interactive` and asked what "Hand them all to the advisor (recommended)" actually does. Today it only collects the groomable specs and prints a paste-ready advisor prompt at the end (assemble_unblock_prompt) — nothing is dispatched or mutated; the label over-promises. Fix per operator direction: (1) replace the single vague option with concrete top-level options — "Groom them" (fires `aida groom`, propose-only) and "Groom + approve" (`aida groom --apply`) — keeping the paste-prompt as a relabeled "emit a paste-prompt for a live advisor" option; (2) add a "? what do these mean?" menu item that prints simple practical examples of each and re-prompts (inquire 0.9.1 has no native ? keybinding, so a re-prompting menu item is the affordance); (3) with_help_message points at the ? item. Honest scope note in help: groom considers the advisor full open-spec candidate set (these included), not only the shown rows. Follow-up to STORY-750.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T04:51:54.143583848Z
-modified_at: 2026-07-02T04:57:04.181789096Z
+modified_at: 2026-07-07T04:00:17.614977854Z
 req_type: Task
 tags:
 - aida:groom
@@ -24,3 +24,21 @@ comments:
   created_at: 2026-07-02T04:57:04.181789096Z
   modified_at: 2026-07-02T04:57:04.181789096Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3abb-da6b-7b60-8306-254cd0c83009
+  author: aida-auto-bump
+  timestamp: 2026-07-07T04:00:17.516011015Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3abb-dace-7d11-b2b4-8944500d203f
+  timestamp: 2026-07-07T04:00:17.614967813Z
+  agent: aida
+  commit_sha: 355ba8da52484c22af81927e7acf6a9d2797e6d6
+  summary: Completed via merge 355ba8da
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T04:00:16.440679142Z
+  completion_sha: 355ba8da52484c22af81927e7acf6a9d2797e6d6
