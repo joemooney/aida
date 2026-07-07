@@ -3,10 +3,10 @@ spec_id: TASK-1106
 agreed_id: TASK-1106
 title: BUG-701 newbin online DELETEME
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T03:22:59.729108809Z
-modified_at: 2026-07-07T03:22:59.729108809Z
+modified_at: 2026-07-07T03:30:55.988110036Z
 req_type: Task
