@@ -6,12 +6,12 @@ description: |-
   Sweep of literal "claude" defaults that bypass vendor resolution, found 2026-07-06: handle_queue_rework passes vendor "claude" into the queue add --work convenience chain (aida-cli/src/main.rs ~135896); AIDA_INTENT_MODEL unwrap_or defaults to claude (~98524); agent_type == "claude" conditional branches around the launcher (~45742, ~45873, ~47070) need a pass to confirm they are vendor-dispatch, not claude-assumption. Each site should route through the [agents] vendor resolution (see the one-knob story) or be documented as intentionally claude-specific.
 
   Acceptance: grep for the literal in launch/identity paths comes back only with per-vendor dispatch arms or documented intentional sites; queue add --work honors the resolved vendor; intent-model default follows the resolved vendor where sensible.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:31.422766141Z
-modified_at: 2026-07-07T07:40:30.022063564Z
+modified_at: 2026-07-07T07:50:29.091405557Z
 req_type: Task
 tags:
 - codex-first-class migration:claude-to-codex
@@ -32,3 +32,21 @@ comments:
   created_at: 2026-07-07T07:40:30.022063564Z
   modified_at: 2026-07-07T07:40:30.022063564Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3b8e-9981-7c12-92a6-6dd8bc563661
+  author: aida-auto-bump
+  timestamp: 2026-07-07T07:50:28.993780666Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3b8e-99e3-7df2-b2f5-4106f84b51a3
+  timestamp: 2026-07-07T07:50:29.091399675Z
+  agent: aida
+  commit_sha: c02c65ceb2c42997d6ebe91c91ab0809911605f7
+  summary: Completed via merge c02c65ce
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T07:50:27.815205981Z
+  completion_sha: c02c65ceb2c42997d6ebe91c91ab0809911605f7

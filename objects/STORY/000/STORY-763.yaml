@@ -9,12 +9,12 @@ description: |-
   - Master-template single-source: one edit propagates to both vendor scaffolds.
   - aida init (vendor codex or a flag) writes the Codex prompt set; existing Claude scaffolding unchanged.
   - The subset that cannot port (hook-dependent skills) is explicitly listed in the scaffold output rather than silently dropped, pointing at the TASK-0422 replacement path.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:38.618931909Z
-modified_at: 2026-07-07T07:40:29.165189196Z
+modified_at: 2026-07-07T07:50:28.993613895Z
 req_type: Story
 tags:
 - codex-first-class migration:claude-to-codex
@@ -32,3 +32,21 @@ comments:
   created_at: 2026-07-07T07:40:29.165189196Z
   modified_at: 2026-07-07T07:40:29.165189196Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3b8e-991f-7452-94fc-6963bc55ad2b
+  author: aida-auto-bump
+  timestamp: 2026-07-07T07:50:28.895525951Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3b8e-9981-7c12-92a6-6dca72a3d35b
+  timestamp: 2026-07-07T07:50:28.993604200Z
+  agent: aida
+  commit_sha: c02c65ceb2c42997d6ebe91c91ab0809911605f7
+  summary: Completed via merge c02c65ce
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T07:50:27.815205981Z
+  completion_sha: c02c65ceb2c42997d6ebe91c91ab0809911605f7
