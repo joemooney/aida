@@ -23887,7 +23887,57 @@ fn spec_id_collision_recovery_message(
     out
 }
 
+/// Group the flat `(spec_id, uuid, title)` rows the cache returns into
+/// `SpecIdCollision`s — one per spec_id claimed by ≥2 distinct uuids. Same shape
+/// `find_spec_id_collisions` produces from a full store, so the recovery message
+/// is identical whichever path detected the clash.
+// trace:BUG-701 | ai:claude
+fn group_spec_id_collisions(rows: Vec<(String, Uuid, String)>) -> Vec<SpecIdCollision> {
+    use std::collections::BTreeMap;
+    let mut by_spec: BTreeMap<String, Vec<SpecIdClaimant>> = BTreeMap::new();
+    for (spec_id, uuid, title) in rows {
+        by_spec
+            .entry(spec_id)
+            .or_default()
+            .push(SpecIdClaimant { uuid, title });
+    }
+    by_spec
+        .into_iter()
+        .filter_map(|(spec_id, mut claimants)| {
+            claimants.sort_by(|a, b| a.uuid.cmp(&b.uuid));
+            claimants.dedup_by(|a, b| a.uuid == b.uuid);
+            if claimants.len() <= 1 {
+                return None;
+            }
+            Some(SpecIdCollision { spec_id, claimants })
+        })
+        .collect()
+}
+
 fn ensure_no_spec_id_collisions(store_path: &std::path::Path) -> Result<()> {
+    // BUG-701: on the hot `aida add` path this ran a full O(n) `GitBackend::load()`
+    // (re-parsing every spec YAML) purely to detect duplicate spec_ids — ~2s and
+    // growing with the store. Use the cache's indexed spec_id group-by instead
+    // (sub-ms, size-independent). `spec_id_collisions` freshens the cache first,
+    // so a collision a just-completed pre-allocation pull introduced is still
+    // caught. Fall back to the authoritative full-store scan whenever the cache
+    // is unavailable/unreadable (legacy centralized mode, torn cache) so the
+    // duplicate guard never silently weakens. trace:BUG-701 | ai:claude
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    if let Ok(backend) = aida_core::CachedGitBackend::open(store_path, &cache_path) {
+        if let Ok(rows) = backend.spec_id_collisions() {
+            let collisions = group_spec_id_collisions(rows);
+            if collisions.is_empty() {
+                return Ok(());
+            }
+            anyhow::bail!(
+                "{}",
+                spec_id_collision_recovery_message(&collisions, store_path)
+            );
+        }
+    }
+
+    // Fallback: authoritative full-store scan (cache absent or unreadable).
     let backend = aida_core::GitBackend::new(store_path)?;
     let store = backend.load()?;
     let collisions = find_spec_id_collisions(&store);
@@ -24689,6 +24739,36 @@ mod story_284_store_sync_tests {
             ..RequirementsStore::new()
         };
         assert!(find_spec_id_collisions(&store).is_empty());
+    }
+
+    // BUG-701: the cache-backed path returns flat (spec_id, uuid, title) rows;
+    // `group_spec_id_collisions` reshapes them into the same `SpecIdCollision`s
+    // `find_spec_id_collisions` produces from a full store. trace:BUG-701
+    #[test]
+    fn group_spec_id_collisions_matches_full_store_grouping() {
+        let u1 = Uuid::new_v4();
+        let u2 = Uuid::new_v4();
+        // Two distinct uuids claim FR-1 → a collision; a lone claimant does not.
+        let rows = vec![
+            ("FR-1".to_string(), u1, "first".to_string()),
+            ("FR-1".to_string(), u2, "second".to_string()),
+            ("BUG-2".to_string(), Uuid::new_v4(), "unique".to_string()),
+        ];
+        let collisions = group_spec_id_collisions(rows);
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].spec_id, "FR-1");
+        assert_eq!(collisions[0].claimants.len(), 2);
+    }
+
+    #[test]
+    fn group_spec_id_collisions_dedups_repeated_uuid_rows() {
+        let u1 = Uuid::new_v4();
+        // A single spec appearing twice under the same uuid is NOT a collision.
+        let rows = vec![
+            ("FR-1".to_string(), u1, "same".to_string()),
+            ("FR-1".to_string(), u1, "same".to_string()),
+        ];
+        assert!(group_spec_id_collisions(rows).is_empty());
     }
 
     #[test]

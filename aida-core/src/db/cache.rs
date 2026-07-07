@@ -1397,6 +1397,46 @@ impl Cache {
         Ok(spec_id)
     }
 
+    /// Cache-backed spec-id collision scan: every `(spec_id, uuid, title)` row
+    /// whose upper-cased `spec_id` is claimed by more than one distinct uuid.
+    /// Empty when the store is collision-free.
+    ///
+    /// Replaces the O(n) full-store `GitBackend::load()` scan on the `aida add`
+    /// hot path (BUG-701) with a single indexed SQL group-by: the cache already
+    /// holds every spec_id, so the duplicate check is sub-millisecond regardless
+    /// of store size. Same semantics as the old `find_spec_id_collisions` (a
+    /// collision = one spec_id, ≥2 distinct uuids). Callers must ensure the
+    /// cache is fresh (see `CachedGitBackend::spec_id_collisions`) before
+    /// trusting an empty result.
+    // trace:BUG-701 | ai:claude
+    pub fn spec_id_collisions(&self) -> Result<Vec<(String, Uuid, String)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT UPPER(spec_id) AS sid, id, title \
+             FROM requirements_cache \
+             WHERE spec_id IS NOT NULL AND spec_id != '' \
+               AND UPPER(spec_id) IN ( \
+                   SELECT UPPER(spec_id) FROM requirements_cache \
+                   WHERE spec_id IS NOT NULL AND spec_id != '' \
+                   GROUP BY UPPER(spec_id) HAVING COUNT(DISTINCT id) > 1 \
+               ) \
+             ORDER BY sid, id",
+        )?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(sid, id, title)| Uuid::parse_str(&id).ok().map(|u| (sid, u, title)))
+            .collect())
+    }
+
     /// Resolve a stable spec_id back to its UUID using the cached row. Used by
     /// the incremental cache update to turn a DELETED object file's spec_id
     /// (parsed from its path) into the UUID `delete_requirement` keys on.
@@ -3733,6 +3773,57 @@ mod tests {
         assert_eq!(cached_status(&cache, child_id), "InProgress");
         cache.upsert_requirement(&epic).unwrap();
         assert_eq!(cached_status(&cache, epic_id), "InProgress");
+    }
+
+    // BUG-701: the cache-backed spec_id collision scan that replaces the O(n)
+    // full-store load on the `aida add` path. A collision = one spec_id claimed
+    // by ≥2 distinct uuids (a bad distributed merge). trace:BUG-701
+    #[test]
+    fn spec_id_collisions_flags_duplicate_and_ignores_unique() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let a = sample_req("FR-1", "first claimant");
+        let b = sample_req("FR-1", "second claimant"); // same spec_id, new uuid
+        let c = sample_req("BUG-2", "unique");
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([a.clone(), b.clone(), c]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache.spec_id_collisions().unwrap();
+        // Only FR-1 collided; both of its claimants are returned, BUG-2 is not.
+        let sids: std::collections::BTreeSet<_> = rows.iter().map(|(s, _, _)| s.clone()).collect();
+        assert_eq!(sids, ["FR-1".to_string()].into_iter().collect());
+        let uuids: std::collections::BTreeSet<_> = rows.iter().map(|(_, u, _)| *u).collect();
+        assert!(uuids.contains(&a.id) && uuids.contains(&b.id));
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn spec_id_collisions_empty_when_all_unique() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([sample_req("FR-1", "a"), sample_req("BUG-2", "b")]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+        assert!(cache.spec_id_collisions().unwrap().is_empty());
+    }
+
+    // Case-insensitive, matching the old `find_spec_id_collisions` (upper-cased
+    // grouping): `fr-1` and `FR-1` are the same id → a collision. trace:BUG-701
+    #[test]
+    fn spec_id_collisions_is_case_insensitive() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([sample_req("FR-1", "upper"), sample_req("fr-1", "lower")]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let rows = cache.spec_id_collisions().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|(s, _, _)| s == "FR-1")); // normalized upper
     }
 
     // TASK-955: a 3-level hierarchy (epic -> story -> task) where --parent shows

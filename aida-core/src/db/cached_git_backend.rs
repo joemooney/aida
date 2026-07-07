@@ -78,6 +78,20 @@ impl CachedGitBackend {
         &self.inner
     }
 
+    /// Cache-backed spec-id collision scan for the `aida add` hot path
+    /// (BUG-701). Brings the cache up to the store's current HEAD first — so a
+    /// collision that a just-completed pre-allocation pull introduced is visible
+    /// — then runs the indexed group-by. In the steady state (cache already
+    /// fresh, the common case) this is a sub-millisecond query instead of the
+    /// old O(n) full-store `GitBackend::load()` scan; on the rare divergent-pull
+    /// it pays a cache refresh that also serves the subsequent reads. Returns
+    /// `(spec_id, uuid, title)` for every claimant of a collided spec_id.
+    // trace:BUG-701 | ai:claude
+    pub fn spec_id_collisions(&self) -> Result<Vec<(String, Uuid, String)>> {
+        self.ensure_cache_fresh()?;
+        self.cache.spec_id_collisions()
+    }
+
     /// Read the current git HEAD on the store branch. Empty string if not in a
     /// git repo (e.g., test fixture); stale check then collapses to "always
     /// fresh" which is fine for non-git scenarios.
