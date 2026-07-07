@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:24.297134485Z
-modified_at: 2026-07-07T16:34:39.481316134Z
+modified_at: 2026-07-07T16:35:03.754208685Z
 req_type: Story
 tags:
 - codex-first-class migration:claude-to-codex
@@ -40,4 +40,21 @@ comments:
   content: Commit c02c65ceb references this requirement
   created_at: 2026-07-07T16:34:39.481316134Z
   modified_at: 2026-07-07T16:34:39.481316134Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f3d6e-ddca-7cc3-aabb-bb5f67a9b6ee
+  author: joe
+  content: |-
+    FULL claude-less lifecycle validation executed 2026-07-07 (throwaway private github project, claude stripped from PATH, codex-cli 0.142.3, adapted from the migration validation runbook). RESULTS:
+
+    PASS: aida init (46 codex prompts auto-written via the vendor knob init hook); status/list/doctor/push/add all clean, zero claude-missing errors; doctor vendor-binary correct in all three scenarios; .codex/config.toml + skills tracked -> present in drain worktrees; FULL PIPELINE after the fix: queue work --auto-complete --no-human=both ran a real codex implementer that shipped a traced commit ([AI:codex] + trace comment), opened and merged the PR, spec auto-bumped to Completed with git linkage, 5m09s, orchestrator reconciliation handled the codex-finished-early shape correctly.
+
+    BUGS FOUND (the point of the run): the phase-1 no-human exec path never consulted the headless vendor — always spawned claude (HIGH, fixed same-day, fix PR validated by re-running this lifecycle); project agents.toml gitignored so worktree phases cannot see the project vendor knob (latent, open); trace SPEC-ID leaked in the no-human ack warning text (papercut, open).
+
+    FRICTION FINDINGS (non-TTY/headless operation): --queue on add needs advisor authority (by design; env role works); autonomous drain needs advisor role (by design); --no-human needs AIDA_NO_HUMAN_ACKNOWLEDGED=1 (by design); session end --force STILL prompts Continue? [y/N] on non-TTY so headless lease cleanup is blocked without piping y — worth its own papercut; queue work --steal handles takeover cleanly.
+
+    MCP: live probe FAILED — codex exec did not discover the project .codex/config.toml mcp_servers registration (recorded on the mcp-translation task with re-scope); CLI-as-primary-surface mitigation held: the codex implementer completed everything via CLI alone.
+
+    REMAINING for full acceptance: repeat on the real work machine (setup = global ~/.aida/agents.toml [agents] vendor=codex + aida init; awaiting operator's machine-type answer).
+  created_at: 2026-07-07T16:35:03.754208685Z
+  modified_at: 2026-07-07T16:35:03.754208685Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
