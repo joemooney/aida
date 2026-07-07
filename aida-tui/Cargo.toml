@@ -67,3 +67,7 @@ tui-markdown = { version = "0.3.7", default-features = false }
 # Windows. Mirrors the `libc = "0.2"` declaration in aida-cli/aida-core.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+# STORY-761: tempdir fixtures for the `[agents] vendor` knob seeding test.
+tempfile = "3.8"

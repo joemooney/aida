@@ -133924,6 +133924,16 @@ fn handle_queue_command(
             strict,
         } => {
             let user_id = get_user(user);
+            // STORY-761: resolve the interactive host vendor — explicit
+            // `--vendor` flag > the uniform `[agents] vendor` knob
+            // (agents.toml, project over global) > `claude`. Shadowed so
+            // everything downstream reads the resolved value.
+            let vendor: String = vendor.clone().unwrap_or_else(|| {
+                find_project_root()
+                    .ok()
+                    .and_then(|root| aida_core::agents_config::resolve_default_vendor(&root))
+                    .unwrap_or_else(|| "claude".to_string())
+            });
             // STORY-717: focus-scope drift guard at the queue-work work-start
             // moment. When an explicit spec `id` is named and the worktree has
             // a focus set, refuse/nudge if the spec is outside the focus
@@ -134743,8 +134753,9 @@ fn handle_queue_command(
                 *list_sessions,
                 session_id.as_deref(),
                 // TASK-895: which vendor CLI hosts the interactive session
-                // (`claude` default / `codex`). trace:TASK-895 | ai:claude
-                vendor,
+                // (resolved above: flag > [agents] vendor > claude).
+                // trace:TASK-895 STORY-761 | ai:claude
+                &vendor,
                 // STORY-263: presence of `--no-human` (any value) launches
                 // this session headless. The orchestrator appends a bare
                 // `--no-human` to its reviewer subprocess.
@@ -135893,7 +135904,12 @@ fn handle_queue_rework(
             /* fresh */ false,
             /* list_sessions */ false,
             /* session_id */ None,
-            /* vendor */ "claude",
+            // STORY-761: the convenience chain honors the uniform
+            // `[agents] vendor` knob instead of hard-coding claude.
+            &find_project_root()
+                .ok()
+                .and_then(|root| aida_core::agents_config::resolve_default_vendor(&root))
+                .unwrap_or_else(|| "claude".to_string()),
             /* no_human */ false,
             // TASK-1060: the `queue add --work` convenience chain has no `--zen`.
             /* autonomy */

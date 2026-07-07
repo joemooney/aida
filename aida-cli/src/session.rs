@@ -963,8 +963,11 @@ impl HeadlessVendor {
 ///   1. `AIDA_HEADLESS_VENDOR` env (per-host / per-invocation override) — mirrors
 ///      the `AIDA_OS_WRAP` precedence convention; an unrecognized value is ignored.
 ///   2. `[orchestrator] headless_vendor` in the project config.
-///   3. `Claude` (default) — so an un-configured drain is unchanged.
-/// `worktree_root` roots the config read. trace:STORY-683 | ai:claude
+///   3. `[agents] vendor` in agents.toml (project over global) — the STORY-761
+///      set-once default-vendor knob for codex-first machines.
+///   4. `Claude` (default) — so an un-configured drain is unchanged.
+/// `worktree_root` roots the config read.
+// trace:STORY-683 STORY-761 | ai:claude
 pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
     if let Some(raw) = std::env::var("AIDA_HEADLESS_VENDOR").ok() {
         if let Some(v) = HeadlessVendor::parse(&raw) {
@@ -975,6 +978,11 @@ pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
     crate::config_lookup(cfg.as_ref(), "orchestrator", "headless_vendor")
         .and_then(|v| v.as_str())
         .and_then(HeadlessVendor::parse)
+        .or_else(|| {
+            aida_core::agents_config::resolve_default_vendor(worktree_root)
+                .as_deref()
+                .and_then(HeadlessVendor::parse)
+        })
         .unwrap_or(HeadlessVendor::Claude)
 }
 
@@ -3667,6 +3675,34 @@ mod tests {
             HeadlessVendor::Claude,
             "unrecognized env value must fall through to the default"
         );
+    }
+
+    /// STORY-761: the uniform `[agents] vendor` knob in the project
+    /// `.aida/agents.toml` flips the headless vendor when neither the env
+    /// override nor the per-surface `[orchestrator] headless_vendor` is set —
+    /// and the per-surface config still wins over it.
+    // trace:STORY-761 | ai:claude
+    #[test]
+    fn resolve_headless_vendor_agents_knob_fallback_and_precedence() {
+        let _env = HeadlessVendorEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+
+        // Knob alone → codex.
+        std::fs::write(
+            tmp.path().join(".aida/agents.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
+
+        // Per-surface `[orchestrator] headless_vendor` beats the knob.
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[orchestrator]\nheadless_vendor = \"claude\"\n",
+        )
+        .unwrap();
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
     }
 
     /// `--bare` strips OAuth/keychain auth and breaks login (spike Q1) — the

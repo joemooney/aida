@@ -156,6 +156,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "tempfile",
  "tui-markdown",
  "uuid",
  "vt100",

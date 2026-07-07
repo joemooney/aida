@@ -66,6 +66,7 @@
 //!
 //! trace:STORY-266 | ai:claude
 
+pub mod agents_config;
 pub mod ai;
 pub mod alias;
 pub mod analytics;
