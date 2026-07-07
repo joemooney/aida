@@ -1,10 +1,10 @@
-FR = 281
-EPIC = 18
-CR = 6
 STORY = 82
-BUG = 34
 SR = 1
 SPIKE = 5
+BUG = 34
+EPIC = 18
+FR = 281
+CR = 6
 UR = 2
 DOC = 2
 TASK = 140
