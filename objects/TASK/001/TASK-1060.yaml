@@ -3,12 +3,12 @@ spec_id: TASK-1060
 agreed_id: TASK-1060
 title: Make --zen a typed engine parameter (kill the AIDA_ZEN env-var side-channel) — fully realize ADR-7 uniform autonomy parameterization
 description: 'ADR-7 holds that autonomy mode parameterizes the per-spec engine pauses uniformly across zen/integrate/queue-work. Today only half-realized: --no-human is a clean typed engine parameter, but --zen is threaded as an AIDA_ZEN env-var side-channel read in scattered spots. Converge --zen to a typed parameter threaded through the engine like --no-human, removing the env-var reads, so autonomy mode is uniformly parameterized. CAREFUL: touches the autonomy keystone engine threading - ship supervised at the keyboard, not via unattended zen/drain. Surfaced by the ADR-7 guided-implement decision dialog.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:34:59.717863882Z
-modified_at: 2026-07-02T04:19:21.047647409Z
+modified_at: 2026-07-07T04:21:01.769501846Z
 req_type: Task
 tags:
 - adr-7
@@ -23,3 +23,21 @@ comments:
   created_at: 2026-07-02T04:19:21.047647409Z
   modified_at: 2026-07-02T04:19:21.047647409Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3ace-d666-73f3-ba82-94c19dd9412f
+  author: aida-auto-bump
+  timestamp: 2026-07-07T04:21:01.670516577Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3ace-d6c9-7eb1-a67c-0d1849f4f464
+  timestamp: 2026-07-07T04:21:01.769493338Z
+  agent: aida
+  commit_sha: 149fbc09e164ea9c34d8c1ee075071f3f2d40d57
+  summary: Completed via merge 149fbc09
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T04:21:00.591176174Z
+  completion_sha: 149fbc09e164ea9c34d8c1ee075071f3f2d40d57
