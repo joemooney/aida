@@ -31579,5 +31579,17 @@ operations:
   timestamp: 2026-07-07T05:12:48.382951804Z
   kind: !SetPriority
     priority: High
-clock: 2986
+- id: 019f3b28-f96f-73d2-82a6-935dda78e084
+  target_id: 019f3b28-e10b-7720-9b13-cdea7a5e7b77
+  author: aida
+  node_id: '1'
+  lamport: 2987
+  timestamp: 2026-07-07T05:59:28.879950482Z
+  kind: !Create
+    title: 'STORY-762 slice 1: claude-shell audit + doctor vendor-binary check + graceful codex-only degrades'
+    description: 'The code slice of the codex-only story: (1) audited every unconditional claude-binary site — list_agents liveness already graceful-None, session launchers vendor-dispatched upstream, exec-resume/agent-new-claude intentionally claude, generate_intent TTY-gated with guided error; (2) new doctor category vendor-binary — probes ONLY the vendors the project resolves to (interactive default via the agents knob, orchestrator headless, configured TUI), so a codex-only machine reports clean without claude and a missing resolved vendor is flagged with install-or-repoint guidance; (3) questions clarify missing-claude error now names the codex-only alternatives (questions answer / manual edit) instead of demanding an install. Acid-tested: status/list/doctor clean on a claude-less PATH with vendor=codex; doctor flags codex when it too is absent; normal machines unchanged. Remaining story acceptance (full TASK-0425 runbook claude-less) stays on STORY-762.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2987
 node_id: '1'
