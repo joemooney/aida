@@ -138347,15 +138347,29 @@ fn handle_queue_work(
                     .join(".aida")
                     .join("headless-logs")
                     .join(format!("{}-{}.jsonl", lease.branch, id));
+                // BUG-705: the banner names the RESOLVED headless vendor —
+                // before, it always said claude even when the drain was
+                // routed to codex, hiding the unrouted-exec bug.
+                let headless_vendor = crate::session::resolve_headless_vendor(
+                    &find_project_root().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+                );
+                let launch_detail = match headless_vendor {
+                    crate::session::HeadlessVendor::Claude => format!(
+                        "claude -p, {}",
+                        claude_posture_display(permission_mode.as_deref(), contained)
+                    ),
+                    crate::session::HeadlessVendor::Codex => "codex exec".to_string(),
+                };
                 eprintln!(
                     "{} {}",
                     crate::glyph(crate::glyphs::Glyph::FlowActive)
                         .green()
                         .bold(),
                     format!(
-                        "launching claude headless in {} (claude -p, {}, prompt `{}`)",
+                        "launching {} headless in {} ({}, prompt `{}`)",
+                        headless_vendor.as_str(),
                         lease.worktree_path.display(),
-                        claude_posture_display(permission_mode.as_deref(), contained),
+                        launch_detail,
                         prompt
                     )
                     .cyan()

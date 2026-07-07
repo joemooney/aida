@@ -787,6 +787,28 @@ pub fn spawn_claude_headless(
     spawn_vendor_headless(vendor, prompt, session_id, log_path, tee_opts, contained)
 }
 
+/// Compose the (program, argv) for a headless run of `vendor`'s CLI — the ONE
+/// place both the spawn path ([`spawn_vendor_headless`]) and the exec path
+/// ([`exec_claude_headless`], the `--no-human` phase-1 implementer) build the
+/// command, so a vendor knob can never route one and miss the other again.
+/// Applies the opt-in OS-boundary wrapper (`bwrap`, STORY-612) around whichever
+/// program, and routes the binary through the `AIDA_AGENT_CMD` mock resolver
+/// (TASK-1081) before wrapping.
+// trace:BUG-705 STORY-683 STORY-612 TASK-1081 | ai:claude
+pub(crate) fn compose_headless_command(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> Result<(String, Vec<String>)> {
+    let worktree = headless_worktree_root();
+    os_wrapped_program_and_args(
+        &worktree,
+        &resolve_agent_program(vendor.program()),
+        headless_vendor_args(vendor, prompt, session_id, contained),
+    )
+}
+
 /// STORY-683: spawn (not exec) a headless run of `vendor`'s CLI and wait,
 /// returning the exit status. The vendor-neutral generalization of
 /// [`spawn_claude_headless`]: it builds the right argv per vendor
@@ -820,19 +842,7 @@ pub fn spawn_vendor_headless(
             vendor.as_str()
         );
     }
-    // STORY-612: apply the opt-in OS-boundary wrapper (`bwrap`) around the whole
-    // headless process when `[contained] os_wrap` is on. STORY-683: the wrapped
-    // program is the vendor binary (`claude` / `codex`), not hardcoded `claude`.
-    // trace:STORY-612 trace:STORY-683 | ai:claude
-    let worktree = headless_worktree_root();
-    // TASK-1081: route the vendor binary through the mock-substitution resolver
-    // before wrapping — `AIDA_AGENT_CMD` swaps the program, argv unchanged; unset
-    // yields the native vendor binary (byte-identical). trace:TASK-1081
-    let (program, args) = os_wrapped_program_and_args(
-        &worktree,
-        &resolve_agent_program(vendor.program()),
-        headless_vendor_args(vendor, prompt, session_id, contained),
-    )?;
+    let (program, args) = compose_headless_command(vendor, prompt, session_id, contained)?;
     let status = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
@@ -1721,18 +1731,26 @@ pub fn exec_claude_headless(
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
-    // STORY-612: OS-boundary wrapper, same as spawn_claude_headless.
-    let worktree = headless_worktree_root();
-    let (program, args) = claude_program_and_args(
-        &worktree,
-        claude_headless_args_with_posture(prompt, session_id, contained),
-    )?;
+    // BUG-705: this exec path used to compose the claude argv directly and
+    // never consulted the headless vendor, so a codex-routed drain's phase-1
+    // implementer always tried claude (fatal on a claude-less machine). It now
+    // shares the spawn path's per-vendor composition; the claude arm is
+    // byte-identical to the spawn path's claude arm.
+    let vendor = resolve_headless_vendor(&headless_worktree_root());
+    if vendor != HeadlessVendor::Claude {
+        eprintln!(
+            "{} headless implementer phase on vendor `{}`",
+            "Vendor:".cyan().bold(),
+            vendor.as_str()
+        );
+    }
+    let (program, args) = compose_headless_command(vendor, prompt, session_id, contained)?;
     let status = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
-        .context("failed to spawn claude")?;
+        .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     std::process::exit(status.code().unwrap_or(1));
 }
@@ -3679,6 +3697,32 @@ mod tests {
             resolve_headless_vendor(tmp.path()),
             HeadlessVendor::Claude,
             "unrecognized env value must fall through to the default"
+        );
+    }
+
+    /// BUG-705: the shared composition routes per vendor — with Codex the
+    /// program is `codex` and the argv is the exec form; with Claude it is the
+    /// unchanged `claude -p` form. This is the helper BOTH the spawn path and
+    /// the `--no-human` phase-1 exec path build from, so the exec site can
+    /// never silently miss the vendor again.
+    // trace:BUG-705 | ai:claude
+    #[test]
+    fn compose_headless_command_routes_per_vendor() {
+        let _env = AgentCmdEnvGuard::acquire();
+        let (prog, args) =
+            compose_headless_command(HeadlessVendor::Codex, "do a thing", "sid", false).unwrap();
+        assert!(prog.ends_with("codex"), "{prog}");
+        assert_eq!(args.first().map(String::as_str), Some("exec"), "{args:?}");
+        assert!(!args.contains(&"-p".to_string()), "{args:?}");
+
+        let (prog, args) =
+            compose_headless_command(HeadlessVendor::Claude, "do a thing", "sid", false).unwrap();
+        assert!(prog.ends_with("claude"), "{prog}");
+        assert!(args.contains(&"-p".to_string()), "{args:?}");
+        assert_eq!(
+            args,
+            claude_headless_args("do a thing", "sid"),
+            "claude arm must be byte-identical to the dedicated builder"
         );
     }
 
