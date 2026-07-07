@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T16:18:38.020833661Z
-modified_at: 2026-07-07T16:23:24.110329750Z
+modified_at: 2026-07-07T23:06:14.239801746Z
 req_type: Bug
 tags:
 - codex-first-class from-self-test severity:major
@@ -21,4 +21,10 @@ comments:
   content: 'Correction from continued validation: BUG-704 (gitignored project agents.toml invisible to worktrees) is REAL but was NOT the proximate cause of the observed claude spawn — retesting with the tracked [orchestrator] headless_vendor=codex knob present in BOTH the project root and the pool worktree still spawned claude. Code inspection found the true blocker: the no-human phase-1 exec path never consults resolve_headless_vendor at all (filed separately as the unrouted-exec-site bug). BUG-704 remains valid as the second, latent gap for the project-scoped agents.toml knob.'
   created_at: 2026-07-07T16:23:24.110329750Z
   modified_at: 2026-07-07T16:23:24.110329750Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f3ed4-ff5f-7a30-b5d1-8f680da48b9c
+  author: joe
+  content: Commit a6dc16aef references this requirement
+  created_at: 2026-07-07T23:06:14.239801746Z
+  modified_at: 2026-07-07T23:06:14.239801746Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
