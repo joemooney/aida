@@ -1,0 +1,23 @@
+id: 019f3afd-dfe9-74a3-ae60-5ca4e4eadf5e
+spec_id: STORY-762
+agreed_id: STORY-762
+title: 'Codex-only machine operation: AIDA fully functional when the claude binary is absent'
+description: |-
+  Work machines are Codex-mandated: claude may not be installed or permitted at all. Exclusive-codex operation means no AIDA path may hard-fail or noisily error because the claude binary is missing when the resolved vendor is codex.
+
+  Known claude-shell sites to audit: the claude agents --json liveness query, AIDA_INTENT_MODEL fallback (defaults to claude), statusline/hooks assumptions, doctor checks, agent new bare default, anything in session lifecycle that probes claude.
+
+  Acceptance:
+  - With vendor resolved to codex and no claude on PATH: add/list/edit/queue work --auto-complete (headless codex phases) / briefs / MCP serve / doctor all work with no claude-missing errors.
+  - aida doctor gains a vendor-binary check for the RESOLVED vendor only (codex-only machine: checks codex, silent about claude).
+  - Execute the TASK-0425 migration validation runbook end-to-end in a claude-less environment (container or PATH-stripped shell) and attach results as a spec comment.
+  - Any site that cannot degrade gracefully is filed as its own follow-up bug rather than left as a TODO.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-07T05:12:24.297134485Z
+modified_at: 2026-07-07T05:12:24.297134485Z
+req_type: Story
+tags:
+- codex-first-class migration:claude-to-codex
