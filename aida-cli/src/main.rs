@@ -128152,6 +128152,43 @@ fn handle_scaffold_command(
                 println!("  Use --force to overwrite existing files");
             }
         }
+        ScaffoldCommand::CodexPrompts { dest, force } => {
+            // STORY-763: the slash-command parity piece — Codex reads custom
+            // prompts from ~/.codex/prompts; each file becomes an invokable
+            // /aida-... prompt inside a Codex session.
+            let dest_dir = match dest {
+                Some(d) => d.clone(),
+                None => dirs::home_dir()
+                    .ok_or_else(|| anyhow::anyhow!("cannot resolve home directory"))?
+                    .join(".codex")
+                    .join("prompts"),
+            };
+            let outcome =
+                aida_core::scaffolding::codex_prompts::scaffold_codex_prompts(&dest_dir, *force)?;
+            println!(
+                "{} Codex custom prompts at {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                dest_dir.display()
+            );
+            println!(
+                "  written: {}   skipped (already present): {}",
+                outcome.written.len(),
+                outcome.skipped_existing.len()
+            );
+            if !outcome.excluded.is_empty() {
+                println!("  excluded (Claude-specific — not ported):");
+                for (name, reason) in &outcome.excluded {
+                    println!("    - {} — {}", name.cyan(), reason.dimmed());
+                }
+            }
+            if !outcome.skipped_existing.is_empty() {
+                println!(
+                    "  {} re-run with --force to overwrite existing prompt files",
+                    "·".dimmed()
+                );
+            }
+        }
+
         ScaffoldCommand::Upgrade {
             project_root,
             dry_run,

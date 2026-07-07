@@ -127,3 +127,4 @@ docs/book/
 
 # mdbook-mermaid vendored lib (2.6MB — regenerate via `mdbook-mermaid install docs`)
 docs/mermaid.min.js
+__pycache__/

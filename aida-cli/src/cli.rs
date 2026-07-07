@@ -452,6 +452,22 @@ pub enum ScaffoldCommand {
         force: bool,
     },
 
+    /// Write the AIDA command set as Codex CLI custom prompts so `/aida-...`
+    /// works in a Codex session — the slash-command parity piece for
+    /// codex-first machines. Generated from the same embedded masters that
+    /// back `.claude/commands/`; commands that depend on Claude-only
+    /// mechanics are excluded with a stated reason. Existing prompt files
+    /// are never overwritten without --force.
+    CodexPrompts {
+        /// Destination directory (defaults to ~/.codex/prompts)
+        #[clap(long)]
+        dest: Option<PathBuf>,
+
+        /// Overwrite existing prompt files
+        #[clap(long)]
+        force: bool,
+    },
+
     /// Apply category-aware upgrades to scaffolded files. The right
     /// follow-up to `scaffold status` reporting drift — does the right
     /// thing per file category instead of `apply --force`'s blast-radius.

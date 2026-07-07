@@ -39,6 +39,9 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ---
 
+
+**Codex parity.** `aida scaffold codex-prompts` writes the AIDA command set as Codex CLI custom prompts (default `~/.codex/prompts`) so `/aida-...` works inside a Codex session — generated from the same embedded masters as `.claude/commands/`; Claude-only commands are excluded with a stated reason; existing files are never overwritten without `--force`.
+
 ### `aida config`
 
 **One line** — set the project's ID scheme (prefix format, numbering, digits) and a couple of user-level preferences.
