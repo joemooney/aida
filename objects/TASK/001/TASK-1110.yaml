@@ -3,10 +3,10 @@ spec_id: TASK-1110
 agreed_id: TASK-1110
 title: new rel 2 DELETEME
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T03:29:03.095774631Z
-modified_at: 2026-07-07T03:29:03.095774631Z
+modified_at: 2026-07-07T03:31:05.684398597Z
 req_type: Task
