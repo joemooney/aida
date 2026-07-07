@@ -3579,6 +3579,11 @@ mod tests {
     // trace:TASK-894 | ai:claude
     #[test]
     fn advisor_tier_program_and_args_builds_correct_command_per_vendor() {
+        // BUG-698 family: `advisor_tier_program_and_args` reads `AIDA_AGENT_CMD`
+        // via `resolve_agent_program`; without the guard, a concurrently-running
+        // guarded WRITER test flips the env between this test's two evaluations
+        // and the byte-identical assertion flakes (seen on CI 2026-07-07).
+        let _env = AgentCmdEnvGuard::acquire();
         let seeded = "advisor-context\n\n/aida-advise";
         let advisor_uuid = "019e0000-0000-7000-8000-000000000aaa";
 
