@@ -7,6 +7,13 @@
 //! `default_flags`): user base `~/.aida/agents.toml`, overridable by the
 //! project `.aida/agents.toml` — the same precedence as STORY-495's `bypass`.
 //!
+//! BUG-704: because `.aida/agents.toml` is gitignored (it carries per-clone
+//! permission-posture keys), a fresh drain/pool worktree never sees the
+//! project-level knob and headless phases silently fell back to claude. So the
+//! knob is ALSO read from the TRACKED, worktree-inherited `.aida/config.toml`
+//! `[agents] vendor` — the team-shared project knob. Precedence:
+//! project `agents.toml` > project `config.toml` > global `agents.toml`.
+//!
 //! Per-surface config and flags keep priority; this knob only replaces the
 //! built-in `claude` fallback at the bottom of each surface's chain:
 //!
@@ -36,14 +43,25 @@ fn vendor_from_file(path: &Path) -> Option<String> {
 }
 
 /// Resolve the default vendor from explicit file paths — the testable core.
-/// Project wins over global; absent everywhere is `None` (callers keep their
-/// built-in default).
+/// Precedence, highest first:
+///   1. project `.aida/agents.toml` — the per-clone personal knob (gitignored,
+///      alongside the permission-posture keys, so it is NOT visible to a fresh
+///      drain/pool worktree);
+///   2. project `.aida/config.toml` — the TRACKED, worktree-inherited team knob
+///      (BUG-704: this is the one a headless drain phase running in a pool
+///      worktree can actually see; without it the project knob silently missed
+///      worktrees and phases fell back to claude);
+///   3. global `~/.aida/agents.toml` — the machine-wide default.
+/// Absent everywhere is `None` (callers keep their built-in default).
+// trace:BUG-704 | ai:claude
 pub fn resolve_default_vendor_from(
     global_agents_toml: Option<&Path>,
+    project_config_toml: Option<&Path>,
     project_agents_toml: Option<&Path>,
 ) -> Option<String> {
     project_agents_toml
         .and_then(vendor_from_file)
+        .or_else(|| project_config_toml.and_then(vendor_from_file))
         .or_else(|| global_agents_toml.and_then(vendor_from_file))
 }
 
@@ -53,8 +71,13 @@ pub fn resolve_default_vendor_from(
 #[cfg(feature = "native")]
 pub fn resolve_default_vendor(project_root: &Path) -> Option<String> {
     let global = dirs::home_dir().map(|h| h.join(".aida").join("agents.toml"));
-    let project = project_root.join(".aida").join("agents.toml");
-    resolve_default_vendor_from(global.as_deref(), Some(&project))
+    let project_config = project_root.join(".aida").join("config.toml");
+    let project_agents = project_root.join(".aida").join("agents.toml");
+    resolve_default_vendor_from(
+        global.as_deref(),
+        Some(&project_config),
+        Some(&project_agents),
+    )
 }
 
 #[cfg(test)]
@@ -69,7 +92,7 @@ mod tests {
 
     #[test]
     fn absent_everywhere_is_none() {
-        assert_eq!(resolve_default_vendor_from(None, None), None);
+        assert_eq!(resolve_default_vendor_from(None, None, None), None);
     }
 
     #[test]
@@ -77,7 +100,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let g = write(tmp.path(), "g.toml", "[agents]\nvendor = \"codex\"\n");
         assert_eq!(
-            resolve_default_vendor_from(Some(&g), None).as_deref(),
+            resolve_default_vendor_from(Some(&g), None, None).as_deref(),
             Some("codex")
         );
     }
@@ -88,7 +111,7 @@ mod tests {
         let g = write(tmp.path(), "g.toml", "[agents]\nvendor = \"codex\"\n");
         let p = write(tmp.path(), "p.toml", "[agents]\nvendor = \"claude\"\n");
         assert_eq!(
-            resolve_default_vendor_from(Some(&g), Some(&p)).as_deref(),
+            resolve_default_vendor_from(Some(&g), None, Some(&p)).as_deref(),
             Some("claude")
         );
     }
@@ -100,7 +123,7 @@ mod tests {
         let p = write(tmp.path(), "p.toml", "[agents]\nvendor = \"gemini\"\n");
         // Project's unknown token doesn't shadow the recognized global value.
         assert_eq!(
-            resolve_default_vendor_from(Some(&g), Some(&p)).as_deref(),
+            resolve_default_vendor_from(Some(&g), None, Some(&p)).as_deref(),
             Some("codex")
         );
     }
@@ -110,7 +133,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let p = write(tmp.path(), "p.toml", "[agents]\nvendor = \" Codex \"\n");
         assert_eq!(
-            resolve_default_vendor_from(None, Some(&p)).as_deref(),
+            resolve_default_vendor_from(None, None, Some(&p)).as_deref(),
             Some("codex")
         );
     }
@@ -124,7 +147,7 @@ mod tests {
             "[agents]\nbypass = true\nvendor = \"codex\"\n\n[agents.claude]\ndefault_flags = [\"--foo\"]\n",
         );
         assert_eq!(
-            resolve_default_vendor_from(None, Some(&p)).as_deref(),
+            resolve_default_vendor_from(None, None, Some(&p)).as_deref(),
             Some("codex")
         );
     }
@@ -133,6 +156,40 @@ mod tests {
     fn missing_file_is_none() {
         let tmp = tempfile::tempdir().unwrap();
         let ghost = tmp.path().join("nope.toml");
-        assert_eq!(resolve_default_vendor_from(None, Some(&ghost)), None);
+        assert_eq!(resolve_default_vendor_from(None, None, Some(&ghost)), None);
+    }
+
+    // BUG-704: the tracked project config.toml supplies the knob when the
+    // gitignored agents.toml is absent — the exact state of a fresh drain/pool
+    // worktree, where the silent claude-fallback used to happen.
+    #[test]
+    fn tracked_config_toml_supplies_knob_when_agents_toml_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = write(tmp.path(), "config.toml", "[agents]\nvendor = \"codex\"\n");
+        let absent_agents = tmp.path().join("agents.toml"); // never created
+        assert_eq!(
+            resolve_default_vendor_from(None, Some(&cfg), Some(&absent_agents)).as_deref(),
+            Some("codex"),
+            "a worktree with only the tracked config.toml must still resolve the knob"
+        );
+    }
+
+    // Full precedence: per-clone agents.toml beats tracked config.toml beats global.
+    #[test]
+    fn precedence_agents_over_config_over_global() {
+        let tmp = tempfile::tempdir().unwrap();
+        let g = write(tmp.path(), "g.toml", "[agents]\nvendor = \"claude\"\n");
+        let cfg = write(tmp.path(), "config.toml", "[agents]\nvendor = \"codex\"\n");
+        // config beats global.
+        assert_eq!(
+            resolve_default_vendor_from(Some(&g), Some(&cfg), None).as_deref(),
+            Some("codex")
+        );
+        // per-clone agents.toml beats config.
+        let ag = write(tmp.path(), "agents.toml", "[agents]\nvendor = \"claude\"\n");
+        assert_eq!(
+            resolve_default_vendor_from(Some(&g), Some(&cfg), Some(&ag)).as_deref(),
+            Some("claude")
+        );
     }
 }
