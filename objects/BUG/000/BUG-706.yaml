@@ -1,0 +1,14 @@
+id: 019f3d6e-e105-76f3-bc4d-3befaf6b0644
+spec_id: BUG-706
+agreed_id: BUG-706
+title: session end --force still prompts Continue? [y/N] on non-TTY — headless lease cleanup impossible without piping y
+description: 'Found during the codex-only validation: ending a stale session lease from a non-interactive context aborts at the confirmation even WITH --force (--force should mean no prompt, or a --yes flag should exist). Blocks unattended recovery from a dead phase-1 lease; workaround is queue work --steal or piping y. Fix: --force (or a new --yes) skips the prompt in non-TTY contexts; keep the interactive confirmation for bare invocations.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-07T16:35:04.581298188Z
+modified_at: 2026-07-07T16:35:04.581298188Z
+req_type: Bug
+tags:
+- papercut headless from-self-test codex-first-class
