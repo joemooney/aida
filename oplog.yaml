@@ -31553,5 +31553,23 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2984
+- id: 019f3afe-2508-70d2-81df-aee43fa72ff3
+  target_id: 019f3afe-17da-7300-ae58-337466da1f1b
+  author: aida
+  node_id: '1'
+  lamport: 2985
+  timestamp: 2026-07-07T05:12:41.992191772Z
+  kind: !Create
+    title: 'Skills parity on Codex: ship the AIDA skill/command masters as Codex custom prompts'
+    description: |-
+      The 48 .claude/skills + .claude/commands are Claude-Code-only surface; Codex CLI supports custom prompts (~/.codex/prompts) plus AGENTS.md guidance. TASK-0422 designed the replacement flows; this implements the scaffolding: generate Codex prompt equivalents from the same master templates (aida-core/templates) so aida init on a codex-first project (or an explicit aida scaffold codex-prompts command) writes the daily-driver set (/aida-pickup, /aida-commit, /aida-req, /aida-capture, /aida-plan, ...) in Codex prompt format, embedded via build.rs like the Claude set.
+
+      Acceptance:
+      - Master-template single-source: one edit propagates to both vendor scaffolds.
+      - aida init (vendor codex or a flag) writes the Codex prompt set; existing Claude scaffolding unchanged.
+      - The subset that cannot port (hook-dependent skills) is explicitly listed in the scaffold output rather than silently dropped, pointing at the TASK-0422 replacement path.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 2985
 node_id: '1'
