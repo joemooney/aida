@@ -15,3 +15,7 @@ modified_at: 2026-07-07T05:12:31.422766141Z
 req_type: Task
 tags:
 - codex-first-class migration:claude-to-codex
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-07-07T05:12:35.490587696Z
