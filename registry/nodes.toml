@@ -41,3 +41,13 @@ email = "joe.mooney@gmail.com"
 clone_path = "/home/joe/ai/aida_dup"
 user = "joe"
 registered = "2026-06-16T22:02:56.035862116Z"
+
+[[nodes]]
+id = "6"
+user_id = 1
+hostname = "spock"
+email = "Joe.Mooney@work.example"
+clone_path = "/home/joe.mooney/ai/aida_joe"
+name = "spock-aida-1-gitlab-joemooney"
+user = "joe"
+registered = "2026-07-01T18:48:26.039609521Z"
