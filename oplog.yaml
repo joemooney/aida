@@ -31638,5 +31638,20 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 2991
+- id: 019f3d64-25d1-7681-b597-17ca8cf62407
+  target_id: 019f3d64-0ac3-7510-86e3-4df5f0a9242b
+  author: aida
+  node_id: '1'
+  lamport: 2992
+  timestamp: 2026-07-07T16:23:21.297918889Z
+  kind: !Create
+    title: no-human phase-1 implementer launch ignores the headless vendor — exec path hard-builds claude argv, so codex-routed drains always try claude
+    description: |-
+      Found by the codex-only lifecycle validation (2026-07-07), verified against code: the queue work --no-human phase-1 launch calls session exec_claude_headless, which composes claude_program_and_args + claude_headless_args_with_posture DIRECTLY and never consults resolve_headless_vendor — unlike spawn_claude_headless (the orchestrator reviewer/advisor spawn sites), which the codex generalization routed per-vendor. Result: with the headless vendor resolved to codex via ANY knob (env, [orchestrator] headless_vendor committed and present in both the project root and the pool worktree — both verified), phase 1 still printed launching claude headless and died with failed to spawn claude on a claude-less machine. Reproduced twice with different knob placements before code inspection confirmed the unrouted site.
+
+      Fix: resolve the vendor at the top of the exec path exactly like the spawn path (resolve_headless_vendor + per-vendor argv builder + the agent-program override resolver), keep the claude arm byte-identical, add the codex arm (exec-style, stdout to the same log file), and make the launch banner name the RESOLVED vendor. Wiring test: with the orchestrator knob set to codex, the composed program must be codex and argv must be the codex exec form.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 2992
 node_id: '1'
