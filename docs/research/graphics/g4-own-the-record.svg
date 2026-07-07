@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="The idealized substrate: a program-owned coordination record spanning L1 to L5, riding vendor runtimes">
+  <style>
+    .mono { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+    .sans { font-family: "Avenir Next", Seravek, "Segoe UI", system-ui, sans-serif; }
+    .eyebrow { font-size: 14px; letter-spacing: 3.5px; fill: #e8a33d; }
+    .title { font-size: 40px; font-weight: 650; fill: #e7ebf2; }
+    .subtitle { font-size: 18px; fill: #8b94a7; }
+    .lid { font-size: 13px; fill: #5f6b80; }
+    .lname { font-size: 14px; font-weight: 600; fill: #cdd4e0; }
+    .prophead { font-size: 12px; letter-spacing: 3px; fill: #5f6b80; }
+    .plead { font-size: 15px; font-weight: 650; fill: #e7ebf2; }
+    .pbody { font-size: 13px; fill: #8b94a7; }
+    .chiptxt { font-size: 12px; fill: #d8c08a; }
+    .vchip { font-size: 13px; font-weight: 600; fill: #cdd4e0; }
+    .foot { font-size: 16px; fill: #a7b0c0; }
+  </style>
+  <rect width="1280" height="720" fill="#101318"/>
+
+  <text class="mono eyebrow" x="100" y="80">THE IDEALIZED SUBSTRATE · WHERE A NOTIONAL &#8220;AIDA&#8221; SITS</text>
+  <text class="sans title" x="100" y="128">Own the record. Ride the runtime.</text>
+  <text class="sans subtitle" x="100" y="158">A program-owned coordination record — the layer the market under-serves</text>
+
+  <!-- compact stack, rows h=50 gap=8, y0=200, x=100 w=340 -->
+  <rect x="100" y="200" width="340" height="50" rx="5" fill="#2b2313" stroke="#e8a33d" stroke-width="1"/>
+  <text class="mono lid" x="118" y="230" fill="#e8a33d">L5</text><text class="sans lname" x="152" y="230" fill="#f0c063">Cross-vendor fleet</text>
+  <rect x="100" y="258" width="340" height="50" rx="5" fill="#1e4054"/>
+  <text class="mono lid" x="118" y="288">L4</text><text class="sans lname" x="152" y="288">Autonomy &amp; escalation</text>
+  <rect x="100" y="316" width="340" height="50" rx="5" fill="#1d384d"/>
+  <text class="mono lid" x="118" y="346">L3</text><text class="sans lname" x="152" y="346">Collaborative state</text>
+  <rect x="100" y="374" width="340" height="50" rx="5" fill="#1c3145"/>
+  <text class="mono lid" x="118" y="404">L2</text><text class="sans lname" x="152" y="404">Governance</text>
+  <rect x="100" y="432" width="340" height="50" rx="5" fill="#1b2a3c"/>
+  <text class="mono lid" x="118" y="462">L1</text><text class="sans lname" x="152" y="462">Intent substrate</text>
+  <rect x="100" y="490" width="340" height="50" rx="5" fill="#191c24" stroke="#3a4150" stroke-width="1" stroke-dasharray="5 4"/>
+  <text class="mono lid" x="118" y="520">L0</text><text class="sans lname" x="152" y="520" fill="#6d7688">Capability — ride it, don&#8217;t own it</text>
+
+  <!-- ticks from L5..L1 rows into the spine -->
+  <line x1="440" y1="225" x2="466" y2="225" stroke="#e8a33d" stroke-width="1.2"/>
+  <line x1="440" y1="283" x2="466" y2="283" stroke="#e8a33d" stroke-width="1.2"/>
+  <line x1="440" y1="341" x2="466" y2="341" stroke="#e8a33d" stroke-width="1.2"/>
+  <line x1="440" y1="399" x2="466" y2="399" stroke="#e8a33d" stroke-width="1.2"/>
+  <line x1="440" y1="457" x2="466" y2="457" stroke="#e8a33d" stroke-width="1.2"/>
+
+  <!-- the spine: spans L5..L1 -->
+  <rect x="466" y="200" width="52" height="282" rx="6" fill="#e8a33d"/>
+  <text class="mono" transform="rotate(-90 492 341)" x="492" y="341" font-size="12.5" letter-spacing="2.5" fill="#101318" font-weight="700" text-anchor="middle">PROGRAM-OWNED RECORD</text>
+
+  <!-- vendor chips plugging in from the right -->
+  <line x1="518" y1="245" x2="556" y2="245" stroke="#4a4331" stroke-width="1.2"/>
+  <rect x="556" y="228" width="104" height="34" rx="17" fill="#171c26" stroke="#2c3342" stroke-width="1"/>
+  <text class="sans vchip" x="608" y="250" text-anchor="middle">Claude</text>
+  <line x1="518" y1="303" x2="556" y2="303" stroke="#4a4331" stroke-width="1.2"/>
+  <rect x="556" y="286" width="104" height="34" rx="17" fill="#171c26" stroke="#2c3342" stroke-width="1"/>
+  <text class="sans vchip" x="608" y="308" text-anchor="middle">Codex</text>
+  <line x1="518" y1="361" x2="556" y2="361" stroke="#4a4331" stroke-width="1.2"/>
+  <rect x="556" y="344" width="104" height="34" rx="17" fill="#171c26" stroke="#2c3342" stroke-width="1"/>
+  <text class="sans vchip" x="608" y="366" text-anchor="middle">Gemini</text>
+  <line x1="518" y1="419" x2="556" y2="419" stroke="#4a4331" stroke-width="1.2"/>
+  <rect x="556" y="402" width="104" height="34" rx="17" fill="#171c26" stroke="#2c3342" stroke-width="1"/>
+  <text class="sans vchip" x="608" y="424" text-anchor="middle">next&#8230;</text>
+  <text class="sans pbody" x="556" y="462">any agent joins by</text>
+  <text class="sans pbody" x="556" y="480">reading files — zero</text>
+  <text class="sans pbody" x="556" y="498">bespoke integration</text>
+
+  <!-- properties column -->
+  <text class="mono prophead" x="740" y="206">PROPERTIES OF THE RECORD</text>
+  <text class="sans plead" x="740" y="238">Vendor-neutral</text>
+  <text class="sans pbody" x="740" y="257">plugs into every runtime; owned by the program, not a vendor</text>
+  <text class="sans plead" x="740" y="288">Git-native</text>
+  <text class="sans pbody" x="740" y="307">plain files, versioned, auditable — no server to run or trust</text>
+  <text class="sans plead" x="740" y="338">Stable identity</text>
+  <text class="sans pbody" x="740" y="357">every decision and requirement addressable, forever</text>
+  <text class="sans plead" x="740" y="388">Typed relationships</text>
+  <text class="sans pbody" x="740" y="407">depends-on · blocks · traces-to — queryable by agents</text>
+  <text class="sans plead" x="740" y="438">Code &#8596; decision traceability</text>
+  <text class="sans pbody" x="740" y="457">the &#8220;why&#8221; reachable from any line of code</text>
+  <text class="sans plead" x="740" y="488">Escalation-aware</text>
+  <text class="sans pbody" x="740" y="507">autonomy bounded by the substrate; humans in the loop by design</text>
+
+  <!-- evidence chips -->
+  <rect x="100" y="566" width="524" height="36" rx="18" fill="#171c26" stroke="#3d3116" stroke-width="1"/>
+  <text class="mono chiptxt" x="124" y="589">PILOT n=1 — new vendor onboarded to a live fleet in ~50 s</text>
+  <rect x="648" y="566" width="532" height="36" rx="18" fill="#171c26" stroke="#3d3116" stroke-width="1"/>
+  <text class="mono chiptxt" x="672" y="589">TWO VENDORS, SAME BRIEF &#8594; SAME DESIGN — the substrate is the lever</text>
+
+  <!-- decision footer -->
+  <text class="sans foot" x="100" y="648"><tspan font-weight="600" fill="#e7ebf2">Ride native</tspan> where vendors are strongest.  <tspan font-weight="600" fill="#e8a33d">Own what compounds:</tspan> intent, links, traces, decisions.</text>
+  <text class="sans foot" x="100" y="676" font-size="14" fill="#7d8698">Build vs. adopt vs. wait is a cost/benefit call — the stack is how you ask the question.</text>
+</svg>

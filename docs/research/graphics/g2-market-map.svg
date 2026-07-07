@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Market map: where today's tools sit on the coordination stack">
+  <style>
+    .mono { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+    .sans { font-family: "Avenir Next", Seravek, "Segoe UI", system-ui, sans-serif; }
+    .eyebrow { font-size: 14px; letter-spacing: 3.5px; fill: #e8a33d; }
+    .title { font-size: 40px; font-weight: 650; fill: #e7ebf2; }
+    .subtitle { font-size: 19px; fill: #8b94a7; }
+    .lid { font-size: 14px; letter-spacing: 1px; fill: #5f6b80; }
+    .lname { font-size: 16px; font-weight: 600; fill: #dfe5ee; }
+    .tools { font-size: 14px; fill: #aab3c3; }
+    .tools2 { font-size: 13px; fill: #7d8698; }
+    .chip { font-size: 11px; letter-spacing: 2px; fill: #101318; font-weight: 700; }
+    .cap { font-size: 17px; fill: #a7b0c0; }
+  </style>
+  <rect width="1280" height="720" fill="#101318"/>
+
+  <text class="mono eyebrow" x="100" y="84">MARKETPLACE · MID-2026</text>
+  <text class="sans title" x="100" y="134">Everyone is solving coordination — inside their own walls</text>
+  <text class="sans subtitle" x="100" y="166">Where today&#8217;s tools sit on the stack</text>
+
+  <!-- rows h=64 gap=8, y0=200; label zone to x=430, tools from x=452 -->
+  <!-- L5 (white space) -->
+  <rect x="100" y="200" width="1080" height="64" rx="6" fill="#2b2313" stroke="#e8a33d" stroke-width="1.5"/>
+  <text class="mono lid" x="122" y="228" fill="#e8a33d">L5</text>
+  <text class="sans lname" x="164" y="228" fill="#f0c063">Cross-vendor fleet</text>
+  <line x1="430" y1="210" x2="430" y2="254" stroke="#4a3d1e" stroke-width="1"/>
+  <text class="sans tools" x="452" y="226" fill="#d8c08a">Gas Town / Wasteland — power-operator, costly · GNAP — an RFC and four JSON files</text>
+  <text class="sans tools2" x="452" y="248" fill="#a08a55">agmsg · tap — messaging only: no tasks, no graph, no shared record</text>
+  <rect x="1046" y="212" width="116" height="22" rx="11" fill="#e8a33d"/>
+  <text class="mono chip" x="1104" y="227" text-anchor="middle">WHITE SPACE</text>
+
+  <!-- L4 -->
+  <rect x="100" y="272" width="1080" height="64" rx="6" fill="#1e4054"/>
+  <text class="mono lid" x="122" y="300">L4</text>
+  <text class="sans lname" x="164" y="300">Autonomy &amp; escalation</text>
+  <line x1="430" y1="282" x2="430" y2="326" stroke="#2c4d63" stroke-width="1"/>
+  <text class="sans tools" x="452" y="298">Vendor-native: Claude Code subagents · Teams · Devin — stop at the vendor boundary</text>
+  <text class="sans tools2" x="452" y="320">Build-your-own: LangGraph · CrewAI · MS Agent Framework — app/service-owned state, thread-scoped</text>
+
+  <!-- L3 -->
+  <rect x="100" y="344" width="1080" height="64" rx="6" fill="#1d384d"/>
+  <text class="mono lid" x="122" y="372">L3</text>
+  <text class="sans lname" x="164" y="372">Collaborative state</text>
+  <line x1="430" y1="354" x2="430" y2="398" stroke="#2a475d" stroke-width="1"/>
+  <text class="sans tools" x="452" y="370">Beads — the richest typed-link vocabulary, versioned SQL store</text>
+  <text class="sans tools2" x="452" y="392">positioned as execution-only: defers planning &amp; requirements to external tools</text>
+
+  <!-- L2 -->
+  <rect x="100" y="416" width="1080" height="64" rx="6" fill="#1c3145"/>
+  <text class="mono lid" x="122" y="444">L2</text>
+  <text class="sans lname" x="164" y="444">Governance</text>
+  <line x1="430" y1="426" x2="430" y2="470" stroke="#294157" stroke-width="1"/>
+  <text class="sans tools" x="452" y="442">CI gates · review bots · vendor permission modes</text>
+  <text class="sans tools2" x="452" y="464">real enforcement exists — none of it portable across vendors</text>
+
+  <!-- L1 -->
+  <rect x="100" y="488" width="1080" height="64" rx="6" fill="#1b2a3c"/>
+  <text class="mono lid" x="122" y="516">L1</text>
+  <text class="sans lname" x="164" y="516">Intent substrate</text>
+  <line x1="430" y1="498" x2="430" y2="542" stroke="#273a4e" stroke-width="1"/>
+  <text class="sans tools" x="452" y="514">Spec Kit · Kiro · markdown-in-repo (&#8220;a wiki your agent can read&#8221;)</text>
+  <text class="sans tools2" x="452" y="536">SaaS PM (Jira, Linear) — human-paced, no first-class agent surface</text>
+
+  <!-- L0 -->
+  <rect x="100" y="560" width="1080" height="64" rx="6" fill="#20242e" stroke="#3a4150" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text class="mono lid" x="122" y="588">L0</text>
+  <text class="sans lname" x="164" y="588" fill="#9aa3b2">Capability</text>
+  <line x1="430" y1="570" x2="430" y2="614" stroke="#31374a" stroke-width="1"/>
+  <text class="sans tools" x="452" y="586">Anthropic · OpenAI · Google · open-weights — plus LangChain&#8217;s model abstraction</text>
+  <text class="sans tools2" x="452" y="608">cross-vendor is already solved at THIS layer — evidence the commoditization arrow is real</text>
+
+  <!-- pattern callout -->
+  <text class="sans cap" x="100" y="660">The pattern: <tspan font-weight="600" fill="#e7ebf2">rich below · single-vendor in the middle · </tspan><tspan font-weight="700" fill="#e8a33d">white space at the top.</tspan></text>
+  <text class="sans" x="100" y="688" font-size="14" fill="#7d8698">Watch the L4 orchestration incumbents — LangChain and Microsoft have the distribution to contest the top.</text>
+</svg>

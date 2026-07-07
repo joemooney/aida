@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Closing: the model writes the code; the record is what your program still owns">
+  <style>
+    .mono { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+    .sans { font-family: "Avenir Next", Seravek, "Segoe UI", system-ui, sans-serif; }
+  </style>
+  <rect width="1280" height="720" fill="#101318"/>
+
+  <!-- faint stack echo, right edge -->
+  <g opacity="0.35">
+    <rect x="1132" y="208" width="76" height="40" rx="4" fill="#2b2313" stroke="#e8a33d" stroke-width="1"/>
+    <rect x="1132" y="256" width="76" height="40" rx="4" fill="#1e4054"/>
+    <rect x="1132" y="304" width="76" height="40" rx="4" fill="#1d384d"/>
+    <rect x="1132" y="352" width="76" height="40" rx="4" fill="#1c3145"/>
+    <rect x="1132" y="400" width="76" height="40" rx="4" fill="#1b2a3c"/>
+    <rect x="1132" y="448" width="76" height="40" rx="4" fill="#20242e" stroke="#3a4150" stroke-width="1" stroke-dasharray="4 3"/>
+  </g>
+
+  <text class="mono" x="100" y="96" font-size="14" letter-spacing="3.5" fill="#5f6b80">CLOSING</text>
+
+  <text class="sans" x="100" y="308" font-size="38" fill="#e7ebf2">The model writes the code.</text>
+  <text class="sans" x="100" y="380" font-size="50" font-weight="700" fill="#e8a33d">The record is what your</text>
+  <text class="sans" x="100" y="442" font-size="50" font-weight="700" fill="#e8a33d">program still owns.</text>
+
+  <text class="sans" x="100" y="524" font-size="18" fill="#8b94a7">Agents are confident, forgetful, and concurrent — the substrate is what remembers.</text>
+
+  <text class="mono" x="100" y="648" font-size="13" letter-spacing="2" fill="#4d5668">MULTI-VENDOR AGENTIC AI · RESEARCH PROBE · 2026</text>
+</svg>

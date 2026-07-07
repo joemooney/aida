@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="The coordination stack: six layers of the multi-vendor agentic AI problem">
+  <style>
+    .mono { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+    .sans { font-family: "Avenir Next", Seravek, "Segoe UI", system-ui, sans-serif; }
+    .eyebrow { font-size: 14px; letter-spacing: 3.5px; fill: #e8a33d; }
+    .title { font-size: 40px; font-weight: 650; fill: #e7ebf2; }
+    .subtitle { font-size: 19px; fill: #8b94a7; }
+    .lid { font-size: 15px; letter-spacing: 1px; fill: #5f6b80; }
+    .lname { font-size: 18px; font-weight: 600; fill: #dfe5ee; }
+    .ldesc { font-size: 13.5px; fill: #8b94a7; }
+    .note { font-size: 14px; fill: #8b94a7; }
+    .notehead { font-size: 12px; letter-spacing: 2.5px; fill: #e8a33d; }
+    .noteheadmut { font-size: 12px; letter-spacing: 2.5px; fill: #5f6b80; }
+    .cap { font-size: 17px; fill: #a7b0c0; }
+  </style>
+  <rect width="1280" height="720" fill="#101318"/>
+
+  <!-- header -->
+  <text class="mono eyebrow" x="100" y="84">MULTI-VENDOR AGENTIC AI · RESEARCH</text>
+  <text class="sans title" x="100" y="134">Where does durable value live?</text>
+  <text class="sans subtitle" x="100" y="166">Six layers of the agent-coordination problem</text>
+
+  <!-- stack: L5 (top) .. L0 (bottom); rows h=58 gap=10, y0=208 -->
+  <!-- L5 -->
+  <rect x="100" y="208" width="760" height="58" rx="6" fill="#2b2313" stroke="#e8a33d" stroke-width="1.5"/>
+  <text class="mono lid" x="124" y="243" fill="#e8a33d">L5</text>
+  <text class="sans lname" x="172" y="243" fill="#f0c063">CROSS-VENDOR FLEET COORDINATION</text>
+  <text class="sans ldesc" x="836" y="242" text-anchor="end" fill="#b79754">shared record · roles · handoffs across vendors</text>
+  <!-- L4 -->
+  <rect x="100" y="276" width="760" height="58" rx="6" fill="#1e4054"/>
+  <text class="mono lid" x="124" y="311">L4</text>
+  <text class="sans lname" x="172" y="311">AUTONOMY &amp; ESCALATION</text>
+  <text class="sans ldesc" x="836" y="310" text-anchor="end">who decides — and when the machine must ask</text>
+  <!-- L3 -->
+  <rect x="100" y="344" width="760" height="58" rx="6" fill="#1d384d"/>
+  <text class="mono lid" x="124" y="379">L3</text>
+  <text class="sans lname" x="172" y="379">COLLABORATIVE STATE</text>
+  <text class="sans ldesc" x="836" y="378" text-anchor="end">many concurrent agents, one durable truth</text>
+  <!-- L2 -->
+  <rect x="100" y="412" width="760" height="58" rx="6" fill="#1c3145"/>
+  <text class="mono lid" x="124" y="447">L2</text>
+  <text class="sans lname" x="172" y="447">ENFORCEMENT &amp; GOVERNANCE</text>
+  <text class="sans ldesc" x="836" y="446" text-anchor="end">invariants the substrate enforces, not asks</text>
+  <!-- L1 -->
+  <rect x="100" y="480" width="760" height="58" rx="6" fill="#1b2a3c"/>
+  <text class="mono lid" x="124" y="515">L1</text>
+  <text class="sans lname" x="172" y="515">INTENT SUBSTRATE</text>
+  <text class="sans ldesc" x="836" y="514" text-anchor="end">stable IDs · typed links · code-to-decision traces</text>
+  <!-- L0 -->
+  <rect x="100" y="548" width="760" height="58" rx="6" fill="#20242e" stroke="#3a4150" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text class="mono lid" x="124" y="583">L0</text>
+  <text class="sans lname" x="172" y="583" fill="#9aa3b2">MODEL / AGENT CAPABILITY</text>
+  <text class="sans ldesc" x="836" y="582" text-anchor="end">the models themselves — vendor turf</text>
+
+  <!-- value-migration arrow -->
+  <line x1="920" y1="600" x2="920" y2="226" stroke="#e8a33d" stroke-width="2"/>
+  <polygon points="920,208 912,228 928,228" fill="#e8a33d"/>
+  <text class="mono" x="920" y="0" transform="rotate(-90 946 414)" font-size="14" letter-spacing="4" fill="#e8a33d" text-anchor="middle">
+    <tspan x="946" y="414">VALUE MIGRATES UP</tspan>
+  </text>
+
+  <!-- right annotations -->
+  <text class="mono notehead" x="984" y="232">THE BET</text>
+  <text class="sans note" x="984" y="256">the one layer a single</text>
+  <text class="sans note" x="984" y="276">vendor is disincentivized</text>
+  <text class="sans note" x="984" y="296">to serve well</text>
+
+  <text class="mono noteheadmut" x="984" y="530">VENDOR TURF</text>
+  <text class="sans note" x="984" y="554">commoditizing — and being</text>
+  <text class="sans note" x="984" y="574">absorbed upward into</text>
+  <text class="sans note" x="984" y="594">walled gardens (L1–L2)</text>
+
+  <!-- caption -->
+  <text class="sans cap" x="100" y="656">As code generation gets cheap, the scarce artifact is no longer code —</text>
+  <text class="sans cap" x="100" y="680">it&#8217;s an <tspan font-weight="600" fill="#e7ebf2">addressable, queryable model of intent</tspan> that survives the churn.</text>
+</svg>

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Four market forces; the gap at the top is an incentive gap, not a capability gap">
+  <style>
+    .mono { font-family: "SF Mono", "Cascadia Code", Consolas, Menlo, monospace; }
+    .sans { font-family: "Avenir Next", Seravek, "Segoe UI", system-ui, sans-serif; }
+    .eyebrow { font-size: 14px; letter-spacing: 3.5px; fill: #e8a33d; }
+    .title { font-size: 38px; font-weight: 650; fill: #e7ebf2; }
+    .subtitle { font-size: 19px; fill: #8b94a7; }
+    .ftag { font-size: 12px; letter-spacing: 2.5px; fill: #5f6b80; }
+    .fhead { font-size: 19px; font-weight: 600; fill: #dfe5ee; }
+    .fbody { font-size: 14px; fill: #8b94a7; }
+    .bhead { font-size: 12px; letter-spacing: 3px; fill: #e8a33d; }
+    .bline1 { font-size: 21px; fill: #e7ebf2; }
+    .bline2 { font-size: 23px; font-weight: 700; fill: #e8a33d; }
+  </style>
+  <rect width="1280" height="720" fill="#101318"/>
+
+  <text class="mono eyebrow" x="100" y="84">MARKET FORCES</text>
+  <text class="sans title" x="100" y="132">The gap at the top is an incentive gap, not a capability gap</text>
+  <text class="sans subtitle" x="100" y="164">Four forces, one structural conclusion</text>
+
+  <!-- 2x2 force cards: (100,204) (656,204) (100,368) (656,368), w=524 h=144 -->
+  <rect x="100" y="204" width="524" height="144" rx="8" fill="#171c26" stroke="#242b39" stroke-width="1"/>
+  <text class="mono ftag" x="128" y="240">FROM BELOW</text>
+  <text class="sans fhead" x="128" y="272">Commoditization</text>
+  <text class="sans fbody" x="128" y="300">Model capability differences shrink; switching costs fall.</text>
+  <text class="sans fbody" x="128" y="322">Code generation trends toward a utility.</text>
+
+  <rect x="656" y="204" width="524" height="144" rx="8" fill="#171c26" stroke="#242b39" stroke-width="1"/>
+  <text class="mono ftag" x="684" y="240">FROM THE VENDORS</text>
+  <text class="sans fhead" x="684" y="272">Walled-garden absorption</text>
+  <text class="sans fbody" x="684" y="300">Each vendor rebuilds memory, skills, sub-agents, task graphs —</text>
+  <text class="sans fbody" x="684" y="322">inside its own walls. Coordination stops at the boundary.</text>
+
+  <rect x="100" y="368" width="524" height="144" rx="8" fill="#171c26" stroke="#242b39" stroke-width="1"/>
+  <text class="mono ftag" x="128" y="404">FROM THE BUYERS</text>
+  <text class="sans fhead" x="128" y="436">Multi-vendor is the enterprise reality</text>
+  <text class="sans fbody" x="128" y="464">Mandates, procurement, pricing, risk — real organizations</text>
+  <text class="sans fbody" x="128" y="486">already run mixed fleets. Lived reality, not a forecast.</text>
+
+  <rect x="656" y="368" width="524" height="144" rx="8" fill="#171c26" stroke="#3d3116" stroke-width="1.2"/>
+  <text class="mono ftag" x="684" y="404" fill="#e8a33d">THE STRUCTURAL ONE</text>
+  <text class="sans fhead" x="684" y="436">The incentive split</text>
+  <text class="sans fbody" x="684" y="464">Every vendor is rewarded for coordinating its own agents</text>
+  <text class="sans fbody" x="684" y="486">brilliantly — and disincentivized to make that portable.</text>
+
+  <!-- convergence ticks into the banner -->
+  <line x1="362" y1="512" x2="362" y2="548" stroke="#3a4150" stroke-width="1.5"/>
+  <line x1="918" y1="512" x2="918" y2="548" stroke="#3a4150" stroke-width="1.5"/>
+
+  <!-- conclusion banner -->
+  <rect x="100" y="548" width="1080" height="112" rx="8" fill="#1c1810" stroke="#e8a33d" stroke-width="1.5"/>
+  <text class="mono bhead" x="132" y="584">STRUCTURAL CONCLUSION</text>
+  <text class="sans bline1" x="132" y="614">Each vendor will coordinate its own agents well.</text>
+  <text class="sans bline2" x="132" y="644">Nobody is paid to coordinate all of yours.</text>
+</svg>
