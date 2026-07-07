@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:16.575646258Z
-modified_at: 2026-07-07T05:12:16.575646258Z
+modified_at: 2026-07-07T05:27:38.764781270Z
 req_type: Story
 tags:
 - codex-first-class migration:claude-to-codex
@@ -25,3 +25,10 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-07-07T05:12:21.165661667Z
+comments:
+- id: 019f3b0b-d40c-7ae3-8935-9f41739c7edb
+  author: joe
+  content: Commit 149fbc09e references this requirement
+  created_at: 2026-07-07T05:27:38.764781270Z
+  modified_at: 2026-07-07T05:27:38.764781270Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
