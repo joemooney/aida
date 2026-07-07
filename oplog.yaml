@@ -31591,5 +31591,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2987
+- id: 019f3b75-a0c4-7f50-b47c-7a0bd9c0b22a
+  target_id: 019f3b75-7d47-7712-8b31-4782c1b712a4
+  author: aida
+  node_id: '1'
+  lamport: 2988
+  timestamp: 2026-07-07T07:23:12.452734252Z
+  kind: !Create
+    title: 'STORY-763 slice 1: aida scaffold codex-prompts — command set as Codex custom prompts'
+    description: 'The slash-command parity piece: new aida scaffold codex-prompts writes the AIDA command set (46 of 50) as Codex CLI custom prompts under ~/.codex/prompts (or --dest), generated from the same embedded masters as .claude/commands (single-source verified). Conversion strips the Claude frontmatter and rewrites .claude/skills refs to the .codex/skills copies where those ship. Four commands excluded with stated reasons (solo/burndown = Agent-tool fan-out, insights = hook telemetry, advise = orchestrator-internal). Skip-existing unless --force; idempotent (verified E2E: 46 written, second run 0/46 skipped, user edit survives non-force). Discovery during implementation: .codex/skills (19 skills) + .codex/config.toml MCP registration ALREADY ship at init (TASK-0424) — the story was narrower than filed. REMAINING on STORY-763: auto-run at aida init when the [agents] vendor knob resolves to codex.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2988
 node_id: '1'
