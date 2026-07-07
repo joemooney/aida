@@ -31611,5 +31611,17 @@ operations:
   timestamp: 2026-07-07T07:29:51.749624741Z
   kind: !SetPriority
     priority: Low
-clock: 2989
+- id: 019f3d5e-9806-79d2-af49-657780443d70
+  target_id: 019f3d5e-8c4a-78d1-834a-2f70677243be
+  author: aida
+  node_id: '1'
+  lamport: 2990
+  timestamp: 2026-07-07T16:17:17.318958459Z
+  kind: !Create
+    title: no-human acknowledgement warning leaks a trace SPEC-ID marker into user-facing CLI output
+    description: 'Caught during the codex-only lifecycle validation (2026-07-07): the --no-human one-time scope acknowledgement warning printed to stderr ends with a literal trace marker (trace:TASK-394) — a SPEC-ID in user-facing CLI output, violating docs/user-facing-text-conventions.md (SPEC-IDs stay in developer artifacts; to a first-user they are opaque noise). The marker was presumably meant as a code comment and landed inside the println string. Fix: move the trace token to a plain code comment above the print; sweep siblings with a grep for "trace:" inside string literals that reach stdout/stderr.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 2990
 node_id: '1'

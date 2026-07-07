@@ -1,0 +1,14 @@
+id: 019f3d5e-8c4a-78d1-834a-2f70677243be
+spec_id: BUG-703
+agreed_id: BUG-703
+title: no-human acknowledgement warning leaks a trace SPEC-ID marker into user-facing CLI output
+description: 'Caught during the codex-only lifecycle validation (2026-07-07): the --no-human one-time scope acknowledgement warning printed to stderr ends with a literal trace marker (trace:TASK-394) — a SPEC-ID in user-facing CLI output, violating docs/user-facing-text-conventions.md (SPEC-IDs stay in developer artifacts; to a first-user they are opaque noise). The marker was presumably meant as a code comment and landed inside the println string. Fix: move the trace token to a plain code comment above the print; sweep siblings with a grep for "trace:" inside string literals that reach stdout/stderr.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-07T16:17:14.314668993Z
+modified_at: 2026-07-07T16:17:14.314668993Z
+req_type: Bug
+tags:
+- papercut severity:cosmetic user-facing-text from-self-test
