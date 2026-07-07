@@ -6,7 +6,7 @@ blocks:
   range_start: 1
   range_end: 1000
   next: 1
-  allocated_at: 2026-05-24 01:16:52.687552+00:00
+  allocated_at: 2026-05-24T01:16:52.687552Z
 - node_id: '5'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -14,7 +14,7 @@ blocks:
   range_start: 1001
   range_end: 2000
   next: 1001
-  allocated_at: 2026-06-16 19:41:35.983521+00:00
+  allocated_at: 2026-06-16T19:41:35.983521Z
 - node_id: JM
   owner: joe.mooney@gmail.com
   hostname: imac
@@ -22,7 +22,7 @@ blocks:
   range_start: 2001
   range_end: 3000
   next: 2001
-  allocated_at: 2026-06-16 22:02:57.947796+00:00
+  allocated_at: 2026-06-16T22:02:57.947796Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -30,7 +30,7 @@ blocks:
   range_start: 1
   range_end: 100
   next: 11
-  allocated_at: 2026-05-09 18:10:00.750673+00:00
+  allocated_at: 2026-05-09T18:10:00.750673Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -38,7 +38,7 @@ blocks:
   range_start: 101
   range_end: 200
   next: 101
-  allocated_at: 2026-05-11 17:03:02.135064+00:00
+  allocated_at: 2026-05-11T17:03:02.135064Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -46,7 +46,7 @@ blocks:
   range_start: 201
   range_end: 300
   next: 201
-  allocated_at: 2026-07-01 18:49:14.152679+00:00
+  allocated_at: 2026-07-01T18:49:14.152679Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -54,7 +54,7 @@ blocks:
   range_start: 17
   range_end: 116
   next: 117
-  allocated_at: 2026-05-09 04:40:29.791723+00:00
+  allocated_at: 2026-05-09T04:40:29.791723Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -62,7 +62,7 @@ blocks:
   range_start: 117
   range_end: 216
   next: 117
-  allocated_at: 2026-05-11 17:02:50.011748+00:00
+  allocated_at: 2026-05-11T17:02:50.011748Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -70,7 +70,7 @@ blocks:
   range_start: 217
   range_end: 316
   next: 317
-  allocated_at: 2026-05-15 14:31:52.484798+00:00
+  allocated_at: 2026-05-15T14:31:52.484798Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -78,7 +78,7 @@ blocks:
   range_start: 317
   range_end: 416
   next: 417
-  allocated_at: 2026-05-16 00:10:25.220823+00:00
+  allocated_at: 2026-05-16T00:10:25.220823Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -86,7 +86,7 @@ blocks:
   range_start: 417
   range_end: 516
   next: 517
-  allocated_at: 2026-05-16 19:14:46.285823+00:00
+  allocated_at: 2026-05-16T19:14:46.285823Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -94,7 +94,7 @@ blocks:
   range_start: 517
   range_end: 616
   next: 617
-  allocated_at: 2026-05-16 20:38:49.330503+00:00
+  allocated_at: 2026-05-16T20:38:49.330503Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -102,7 +102,7 @@ blocks:
   range_start: 617
   range_end: 916
   next: 703
-  allocated_at: 2026-05-18 05:41:02.603715+00:00
+  allocated_at: 2026-05-18T05:41:02.603715Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -110,7 +110,7 @@ blocks:
   range_start: 917
   range_end: 1016
   next: 918
-  allocated_at: 2026-07-01 18:48:38.705875+00:00
+  allocated_at: 2026-07-01T18:48:38.705875Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -118,7 +118,7 @@ blocks:
   range_start: 1
   range_end: 100
   next: 2
-  allocated_at: 2026-05-09 18:09:58.248053+00:00
+  allocated_at: 2026-05-09T18:09:58.248053Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -126,7 +126,7 @@ blocks:
   range_start: 101
   range_end: 200
   next: 101
-  allocated_at: 2026-05-11 17:03:00.604188+00:00
+  allocated_at: 2026-05-11T17:03:00.604188Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -134,7 +134,7 @@ blocks:
   range_start: 201
   range_end: 300
   next: 201
-  allocated_at: 2026-07-01 18:49:09.647861+00:00
+  allocated_at: 2026-07-01T18:49:09.647861Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -142,7 +142,7 @@ blocks:
   range_start: 9
   range_end: 108
   next: 60
-  allocated_at: 2026-05-09 04:40:34.146191+00:00
+  allocated_at: 2026-05-09T04:40:34.146191Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -150,7 +150,7 @@ blocks:
   range_start: 109
   range_end: 208
   next: 109
-  allocated_at: 2026-05-11 17:02:53.215026+00:00
+  allocated_at: 2026-05-11T17:02:53.215026Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -158,7 +158,7 @@ blocks:
   range_start: 209
   range_end: 308
   next: 209
-  allocated_at: 2026-07-01 18:48:50.817545+00:00
+  allocated_at: 2026-07-01T18:48:50.817545Z
 - node_id: '2'
   owner: joe.mooney
   hostname: spock
@@ -166,7 +166,7 @@ blocks:
   range_start: 1
   range_end: 100
   next: 101
-  allocated_at: 2026-05-05 21:10:59.226465+00:00
+  allocated_at: 2026-05-05T21:10:59.226465Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -174,7 +174,7 @@ blocks:
   range_start: 256
   range_end: 355
   next: 283
-  allocated_at: 2026-05-09 04:40:27.408565+00:00
+  allocated_at: 2026-05-09T04:40:27.408565Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -182,7 +182,7 @@ blocks:
   range_start: 356
   range_end: 455
   next: 356
-  allocated_at: 2026-05-11 17:02:48.562695+00:00
+  allocated_at: 2026-05-11T17:02:48.562695Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -190,7 +190,7 @@ blocks:
   range_start: 456
   range_end: 555
   next: 456
-  allocated_at: 2026-07-01 18:48:35.729515+00:00
+  allocated_at: 2026-07-01T18:48:35.729515Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -198,7 +198,7 @@ blocks:
   range_start: 1
   range_end: 100
   next: 3
-  allocated_at: 2026-05-09 18:09:51.978243+00:00
+  allocated_at: 2026-05-09T18:09:51.978243Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -206,7 +206,7 @@ blocks:
   range_start: 101
   range_end: 200
   next: 101
-  allocated_at: 2026-05-11 17:02:57.508619+00:00
+  allocated_at: 2026-05-11T17:02:57.508619Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -214,7 +214,7 @@ blocks:
   range_start: 201
   range_end: 300
   next: 201
-  allocated_at: 2026-07-01 18:49:00.237727+00:00
+  allocated_at: 2026-07-01T18:49:00.237727Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -222,7 +222,7 @@ blocks:
   range_start: 5
   range_end: 104
   next: 77
-  allocated_at: 2026-05-09 04:40:40.163752+00:00
+  allocated_at: 2026-05-09T04:40:40.163752Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -230,7 +230,7 @@ blocks:
   range_start: 105
   range_end: 204
   next: 105
-  allocated_at: 2026-05-11 17:02:56.073593+00:00
+  allocated_at: 2026-05-11T17:02:56.073593Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -238,7 +238,7 @@ blocks:
   range_start: 205
   range_end: 304
   next: 205
-  allocated_at: 2026-07-01 18:48:57.360633+00:00
+  allocated_at: 2026-07-01T18:48:57.360633Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -246,7 +246,7 @@ blocks:
   range_start: 41
   range_end: 140
   next: 141
-  allocated_at: 2026-05-09 04:40:37.967307+00:00
+  allocated_at: 2026-05-09T04:40:37.967307Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -254,7 +254,7 @@ blocks:
   range_start: 141
   range_end: 240
   next: 141
-  allocated_at: 2026-05-11 17:02:54.570723+00:00
+  allocated_at: 2026-05-11T17:02:54.570723Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -262,7 +262,7 @@ blocks:
   range_start: 241
   range_end: 340
   next: 341
-  allocated_at: 2026-05-15 23:49:01.499479+00:00
+  allocated_at: 2026-05-15T23:49:01.499479Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -270,7 +270,7 @@ blocks:
   range_start: 341
   range_end: 640
   next: 641
-  allocated_at: 2026-05-18 05:41:19.938863+00:00
+  allocated_at: 2026-05-18T05:41:19.938863Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -278,15 +278,15 @@ blocks:
   range_start: 641
   range_end: 740
   next: 741
-  allocated_at: 2026-05-19 14:14:32.116755+00:00
+  allocated_at: 2026-05-19T14:14:32.116755Z
 - node_id: '1'
   owner: joe.mooney@gmail.com
   hostname: imac
   type_prefix: STORY
   range_start: 741
   range_end: 840
-  next: 761
-  allocated_at: 2026-06-30 04:49:30.731751+00:00
+  next: 762
+  allocated_at: 2026-06-30T04:49:30.731751Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -294,7 +294,7 @@ blocks:
   range_start: 841
   range_end: 940
   next: 841
-  allocated_at: 2026-07-01 18:48:54.388775+00:00
+  allocated_at: 2026-07-01T18:48:54.388775Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -302,7 +302,7 @@ blocks:
   range_start: 15
   range_end: 114
   next: 115
-  allocated_at: 2026-05-09 04:40:32.055300+00:00
+  allocated_at: 2026-05-09T04:40:32.055300Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -310,7 +310,7 @@ blocks:
   range_start: 115
   range_end: 214
   next: 115
-  allocated_at: 2026-05-11 17:02:51.641403+00:00
+  allocated_at: 2026-05-11T17:02:51.641403Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -318,7 +318,7 @@ blocks:
   range_start: 215
   range_end: 314
   next: 315
-  allocated_at: 2026-05-13 05:58:59.756030+00:00
+  allocated_at: 2026-05-13T05:58:59.756030Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -326,7 +326,7 @@ blocks:
   range_start: 315
   range_end: 414
   next: 415
-  allocated_at: 2026-05-16 19:34:03.868877+00:00
+  allocated_at: 2026-05-16T19:34:03.868877Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -334,7 +334,7 @@ blocks:
   range_start: 415
   range_end: 514
   next: 515
-  allocated_at: 2026-05-17 07:12:20.304858+00:00
+  allocated_at: 2026-05-17T07:12:20.304858Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -342,7 +342,7 @@ blocks:
   range_start: 515
   range_end: 614
   next: 615
-  allocated_at: 2026-05-17 07:56:08.446962+00:00
+  allocated_at: 2026-05-17T07:56:08.446962Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -350,7 +350,7 @@ blocks:
   range_start: 615
   range_end: 914
   next: 915
-  allocated_at: 2026-05-18 05:41:12.164122+00:00
+  allocated_at: 2026-05-18T05:41:12.164122Z
 - node_id: '1'
   owner: joe.mooney@gmail.com
   hostname: imac
@@ -358,7 +358,7 @@ blocks:
   range_start: 915
   range_end: 1014
   next: 1015
-  allocated_at: 2026-06-25 07:46:43.874902+00:00
+  allocated_at: 2026-06-25T07:46:43.874902Z
 - node_id: '1'
   owner: joe.mooney@gmail.com
   hostname: imac
@@ -366,7 +366,7 @@ blocks:
   range_start: 1015
   range_end: 1114
   next: 1112
-  allocated_at: 2026-06-29 17:29:50.154419+00:00
+  allocated_at: 2026-06-29T17:29:50.154419Z
 - node_id: '1'
   owner: joe.mooney@gmail.com
   hostname: imac
@@ -374,7 +374,7 @@ blocks:
   range_start: 1115
   range_end: 1214
   next: 1115
-  allocated_at: 2026-07-02 18:00:02.008204+00:00
+  allocated_at: 2026-07-02T18:00:02.008204Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -382,7 +382,7 @@ blocks:
   range_start: 1
   range_end: 100
   next: 2
-  allocated_at: 2026-05-09 18:10:03.237103+00:00
+  allocated_at: 2026-05-09T18:10:03.237103Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -390,7 +390,7 @@ blocks:
   range_start: 101
   range_end: 200
   next: 101
-  allocated_at: 2026-05-11 17:03:03.738894+00:00
+  allocated_at: 2026-05-11T17:03:03.738894Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -398,7 +398,7 @@ blocks:
   range_start: 201
   range_end: 300
   next: 201
-  allocated_at: 2026-07-01 18:50:14.039652+00:00
+  allocated_at: 2026-07-01T18:50:14.039652Z
 - node_id: '1'
   owner: joe
   hostname: imac
@@ -406,7 +406,7 @@ blocks:
   range_start: 1
   range_end: 100
   next: 2
-  allocated_at: 2026-05-09 18:09:55.276370+00:00
+  allocated_at: 2026-05-09T18:09:55.276370Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -414,7 +414,7 @@ blocks:
   range_start: 101
   range_end: 200
   next: 101
-  allocated_at: 2026-05-11 17:02:59.061065+00:00
+  allocated_at: 2026-05-11T17:02:59.061065Z
 - node_id: '6'
   owner: Joe.Mooney@work.example
   hostname: spock
@@ -422,4 +422,4 @@ blocks:
   range_start: 201
   range_end: 300
   next: 201
-  allocated_at: 2026-07-01 18:49:04.250337+00:00
+  allocated_at: 2026-07-01T18:49:04.250337Z

@@ -31496,5 +31496,26 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 2981
+- id: 019f3afd-d0bf-79f3-baec-816e4cfd4fe6
+  target_id: 019f3afd-c1bf-7161-b9dc-cf5797ee6b73
+  author: aida
+  node_id: '1'
+  lamport: 2982
+  timestamp: 2026-07-07T05:12:20.415503068Z
+  kind: !Create
+    title: 'One default-vendor knob: [agents] vendor = codex|claude resolved by every launch surface'
+    description: |-
+      Codex-first today requires setting 3-4 separate knobs: [orchestrator] headless_vendor (STORY-683), [tui] vendor (TASK-895), per-command --vendor on queue work, and picking aida agent new codex by hand. A work machine where Codex is mandated needs ONE project/global config knob, e.g. [agents] vendor = "codex", that every launch surface resolves through, with the existing per-surface config/env/flag overrides keeping precedence (flag > env > per-surface config > [agents] vendor > built-in claude default).
+
+      Surfaces that must consult it: queue work interactive host, orchestrator headless phases (resolve_headless_vendor), headless advisor tier + resume, TUI tab vendor, aida zen (TASK-1048 selector), agent new bare invocation default, compete judge default, and the queue-add --work convenience chain (currently hard-codes vendor claude in handle_queue_rework).
+
+      Acceptance:
+      - Setting the knob in .aida/config.toml (project) or ~/.aida/config.toml (machine) flips every surface above to codex with zero other config.
+      - Existing per-surface overrides still win; unrecognized value ignored with a warning.
+      - docs/environment-variables.md + config docs updated; aida config show surfaces the resolved vendor.
+      - Unit tests for the precedence chain.
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 2982
 node_id: '1'
