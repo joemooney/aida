@@ -6,12 +6,12 @@ description: |-
   Found by the codex-only lifecycle validation (2026-07-07), verified against code: the queue work --no-human phase-1 launch calls session exec_claude_headless, which composes claude_program_and_args + claude_headless_args_with_posture DIRECTLY and never consults resolve_headless_vendor — unlike spawn_claude_headless (the orchestrator reviewer/advisor spawn sites), which the codex generalization routed per-vendor. Result: with the headless vendor resolved to codex via ANY knob (env, [orchestrator] headless_vendor committed and present in both the project root and the pool worktree — both verified), phase 1 still printed launching claude headless and died with failed to spawn claude on a claude-less machine. Reproduced twice with different knob placements before code inspection confirmed the unrouted site.
 
   Fix: resolve the vendor at the top of the exec path exactly like the spawn path (resolve_headless_vendor + per-vendor argv builder + the agent-program override resolver), keep the claude arm byte-identical, add the codex arm (exec-style, stdout to the same log file), and make the launch banner name the RESOLVED vendor. Wiring test: with the orchestrator knob set to codex, the composed program must be codex and argv must be the codex exec form.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T16:23:14.371806040Z
-modified_at: 2026-07-07T16:34:38.829041334Z
+modified_at: 2026-07-07T16:53:42.826957225Z
 req_type: Bug
 tags:
 - codex-first-class from-self-test severity:major
@@ -22,3 +22,21 @@ comments:
   created_at: 2026-07-07T16:34:38.829041334Z
   modified_at: 2026-07-07T16:34:38.829041334Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3d7f-f0c7-7f92-94c5-a52698bf9b6f
+  author: aida-auto-bump
+  timestamp: 2026-07-07T16:53:42.727046925Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3d7f-f12a-7ae1-90d4-0451d2964552
+  timestamp: 2026-07-07T16:53:42.826948721Z
+  agent: aida
+  commit_sha: a6dc16aef3d5ba970095ee8063bb40aa6c436c11
+  summary: Completed via merge a6dc16ae
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T16:53:41.644341647Z
+  completion_sha: a6dc16aef3d5ba970095ee8063bb40aa6c436c11
