@@ -12,12 +12,12 @@ description: |-
   - Existing per-surface overrides still win; unrecognized value ignored with a warning.
   - docs/environment-variables.md + config docs updated; aida config show surfaces the resolved vendor.
   - Unit tests for the precedence chain.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:16.575646258Z
-modified_at: 2026-07-07T05:27:38.764781270Z
+modified_at: 2026-07-07T05:50:31.085911705Z
 req_type: Story
 tags:
 - codex-first-class migration:claude-to-codex
@@ -32,3 +32,21 @@ comments:
   created_at: 2026-07-07T05:27:38.764781270Z
   modified_at: 2026-07-07T05:27:38.764781270Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3b20-c44e-74a0-b89e-a23ec1be99fc
+  author: aida-auto-bump
+  timestamp: 2026-07-07T05:50:30.990418135Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3b20-c4ad-7ff3-b72f-a1036e67e51d
+  timestamp: 2026-07-07T05:50:31.085904106Z
+  agent: aida
+  commit_sha: de98d50fc2967a8bd673847dab832a64ee1f23f3
+  summary: Completed via merge de98d50f
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T05:50:29.918717118Z
+  completion_sha: de98d50fc2967a8bd673847dab832a64ee1f23f3
