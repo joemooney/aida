@@ -3,12 +3,12 @@ spec_id: BUG-703
 agreed_id: BUG-703
 title: no-human acknowledgement warning leaks a trace SPEC-ID marker into user-facing CLI output
 description: 'Caught during the codex-only lifecycle validation (2026-07-07): the --no-human one-time scope acknowledgement warning printed to stderr ends with a literal trace marker (trace:TASK-394) — a SPEC-ID in user-facing CLI output, violating docs/user-facing-text-conventions.md (SPEC-IDs stay in developer artifacts; to a first-user they are opaque noise). The marker was presumably meant as a code comment and landed inside the println string. Fix: move the trace token to a plain code comment above the print; sweep siblings with a grep for "trace:" inside string literals that reach stdout/stderr.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T16:17:14.314668993Z
-modified_at: 2026-07-07T23:25:23.240166094Z
+modified_at: 2026-07-07T23:35:18.513325382Z
 req_type: Bug
 tags:
 - papercut severity:cosmetic user-facing-text from-self-test
@@ -19,3 +19,21 @@ comments:
   created_at: 2026-07-07T23:25:23.240166094Z
   modified_at: 2026-07-07T23:25:23.240166094Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3eef-9c8e-7403-9d6d-25652b6ec0e6
+  author: aida-auto-bump
+  timestamp: 2026-07-07T23:35:18.414954106Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3eef-9cf1-7d50-b40b-b255aee7393a
+  timestamp: 2026-07-07T23:35:18.513316142Z
+  agent: aida
+  commit_sha: 1985b1906260525001e566f5a83f88b01837292f
+  summary: Completed via merge 1985b190
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T23:35:17.327524158Z
+  completion_sha: 1985b1906260525001e566f5a83f88b01837292f
