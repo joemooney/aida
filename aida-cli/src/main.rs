@@ -25688,7 +25688,44 @@ fn handle_init_distributed_worktree(
     }
     println!();
 
+    // STORY-763: on a codex-first machine (the uniform `[agents] vendor`
+    // knob resolves to codex), also write the Codex custom-prompt set so
+    // /aida-... works in Codex sessions from the first init. Idempotent and
+    // conservative (skip-existing), best-effort — a failure here must not
+    // fail init.
+    maybe_scaffold_codex_prompts_on_init(std::path::Path::new("."));
+
     Ok(())
+}
+
+/// STORY-763: init-time hook — when the resolved default vendor is codex,
+/// write the Codex custom prompts to ~/.codex/prompts (skip-existing, never
+/// forced). Quiet no-op for claude-default machines. Best-effort: warns
+/// instead of failing init.
+fn maybe_scaffold_codex_prompts_on_init(project_root: &std::path::Path) {
+    if aida_core::agents_config::resolve_default_vendor(project_root).as_deref() != Some("codex") {
+        return;
+    }
+    let Some(dest) = dirs::home_dir().map(|h| h.join(".codex").join("prompts")) else {
+        return;
+    };
+    match aida_core::scaffolding::codex_prompts::scaffold_codex_prompts(&dest, false) {
+        Ok(outcome) if !outcome.written.is_empty() => {
+            println!(
+                "  {} codex-first machine: wrote {} Codex custom prompt(s) to {} (/aida-... now works in Codex sessions)",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                outcome.written.len(),
+                dest.display()
+            );
+        }
+        Ok(_) => {} // everything already present — quiet.
+        Err(e) => {
+            eprintln!(
+                "  {} codex prompt scaffold skipped ({e}) — run `aida scaffold codex-prompts` by hand",
+                "Warning:".yellow()
+            );
+        }
+    }
 }
 
 /// Bootstrap an AIDA clone: the user just `git clone`d a repo whose origin
