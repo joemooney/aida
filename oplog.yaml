@@ -31428,5 +31428,13 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 2973
+- id: 019f3aa0-f130-7503-a1a6-9ff94d63eeae
+  target_id: 019f3a99-abc4-7770-9e96-5894d02d25f2
+  author: aida
+  node_id: '1'
+  lamport: 2974
+  timestamp: 2026-07-07T03:30:53.872358153Z
+  kind: !SetStatus
+    status: Rejected
+clock: 2974
 node_id: '1'
