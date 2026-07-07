@@ -922,7 +922,9 @@ pub enum SessionCommand {
         #[clap(long, conflicts_with = "spec")]
         branch: Option<String>,
 
-        /// Skip the y/N confirmation.
+        /// Skip the y/N confirmation (also implied by `--force`). Required to
+        /// end a session non-interactively — a non-terminal stdin errors
+        /// without it rather than silently aborting.
         #[clap(long, short = 'y')]
         yes: bool,
 
