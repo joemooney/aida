@@ -13,6 +13,7 @@
 mod aida_md;
 mod claude_md;
 mod codex_md;
+pub mod codex_prompts;
 mod hooks;
 mod managed_merge;
 mod settings;
