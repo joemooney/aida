@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:24.297134485Z
-modified_at: 2026-07-07T16:35:03.754208685Z
+modified_at: 2026-07-07T23:06:15.271103206Z
 req_type: Story
 tags:
 - codex-first-class migration:claude-to-codex
@@ -57,4 +57,10 @@ comments:
     REMAINING for full acceptance: repeat on the real work machine (setup = global ~/.aida/agents.toml [agents] vendor=codex + aida init; awaiting operator's machine-type answer).
   created_at: 2026-07-07T16:35:03.754208685Z
   modified_at: 2026-07-07T16:35:03.754208685Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f3ed5-0367-7d32-8510-d4197c1c3100
+  author: joe
+  content: Commit a6dc16aef references this requirement
+  created_at: 2026-07-07T23:06:15.271103206Z
+  modified_at: 2026-07-07T23:06:15.271103206Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
