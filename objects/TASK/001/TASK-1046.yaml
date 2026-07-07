@@ -4,11 +4,11 @@ agreed_id: TASK-1046
 title: '`.mcp.json` → codex/gemini MCP config translation for headless drain agents'
 description: ''
 status: Approved
-priority: High
+priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:22:00.826668483Z
-modified_at: 2026-07-07T07:29:50.478129642Z
+modified_at: 2026-07-07T07:29:51.531834387Z
 req_type: Task
 tags:
 - zen-ready
