@@ -4591,14 +4591,16 @@ pub enum QueueCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "UUID", conflicts_with = "resume")]
         session_id: Option<String>,
-        /// Which vendor CLI hosts the interactive session: `claude` (default)
-        /// or `codex`. The AIDA TUI passes `--vendor codex` to host a Codex
+        /// Which vendor CLI hosts the interactive session: `claude` or
+        /// `codex`. The AIDA TUI passes `--vendor codex` to host a Codex
         /// tab. Codex has no caller-minted session id, so `--vendor codex`
         /// hosts a fresh interactive session and ignores `--session-id` /
         /// `--resume`. Only affects the interactive (non-headless) launch.
-        // trace:TASK-895 | ai:claude
-        #[clap(long, value_name = "VENDOR", default_value = "claude")]
-        vendor: String,
+        /// Unset: the `[agents] vendor` knob in agents.toml (project over
+        /// global), else `claude`.
+        // trace:TASK-895 STORY-761 | ai:claude
+        #[clap(long, value_name = "VENDOR")]
+        vendor: Option<String>,
         /// Drive the full implementer → CI → reviewer → merge → pull →
         /// build lifecycle for one SPEC in a single command, instead of
         /// running the 5+ steps by hand. The orchestrator spawns each

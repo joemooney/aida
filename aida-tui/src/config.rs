@@ -130,6 +130,15 @@ impl TuiConfig {
         let Some(root) = find_project_root(cwd) else {
             return cfg;
         };
+        // STORY-761: seed from the uniform `[agents] vendor` knob (agents.toml,
+        // project over global) BEFORE scanning `[tui]`, so the per-surface
+        // `[tui] vendor` and `AIDA_TUI_VENDOR` both still override it.
+        // trace:STORY-761 | ai:claude
+        if let Some(v) = aida_core::agents_config::resolve_default_vendor(&root)
+            .and_then(|s| TabVendor::parse(&s))
+        {
+            cfg.vendor = v;
+        }
         let Ok(content) = std::fs::read_to_string(root.join(".aida").join("config.toml")) else {
             return cfg;
         };
@@ -384,6 +393,31 @@ permission_mode = \"auto\"
         // Unknown token keeps the caller's default.
         assert_eq!(TabVendor::parse("gemini"), None);
         assert_eq!(TabVendor::parse(""), None);
+    }
+
+    /// STORY-761: the uniform `[agents] vendor` knob (project agents.toml)
+    /// seeds the tab vendor, and the per-surface `[tui] vendor` still
+    /// overrides it.
+    // trace:STORY-761 | ai:claude
+    #[test]
+    fn vendor_seeded_from_agents_knob_and_tui_section_overrides() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(tmp.path().join(".aida/config.toml"), "[tui]\n").unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/agents.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+        assert_eq!(TuiConfig::load(tmp.path()).vendor, TabVendor::Codex);
+
+        // Per-surface `[tui] vendor` beats the knob.
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[tui]\nvendor = \"claude\"\n",
+        )
+        .unwrap();
+        assert_eq!(TuiConfig::load(tmp.path()).vendor, TabVendor::Claude);
     }
 
     #[test]
