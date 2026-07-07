@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:31.422766141Z
-modified_at: 2026-07-07T07:40:08.710063397Z
+modified_at: 2026-07-07T07:40:30.022063564Z
 req_type: Task
 tags:
 - codex-first-class migration:claude-to-codex
@@ -25,4 +25,10 @@ comments:
   content: 'Audit 2026-07-07 (the sweep): all three agent_type=="claude" launcher branches are LEGITIMATE per-vendor dispatch, not claude-assumptions — two guard the faithful-launcher notice (a Claude-specific UX pointer, STORY-495) and one applies the claude-only OS-boundary wrapper (TASK-864; non-claude agents take the bare path). AIDA_INTENT_MODEL unwrap_or("claude") labels sidecar metadata for a spawn that genuinely IS claude (claude -p /aida-intent, skill-dependent; TTY-gated with guided error — codex parity for intent arrives with skills parity, not a binary swap). The queue add --work hard-coded vendor was already fixed by the one-knob story. Net: no defaults needing change; the one real gap found was the missing init auto-run of codex prompts on a codex-knob machine, shipped in this task-1112 branch.'
   created_at: 2026-07-07T07:40:08.710063397Z
   modified_at: 2026-07-07T07:40:08.710063397Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f3b85-75c6-7c12-a048-0780f6491bc8
+  author: joe
+  content: Commit 573ffc69f references this requirement
+  created_at: 2026-07-07T07:40:30.022063564Z
+  modified_at: 2026-07-07T07:40:30.022063564Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
