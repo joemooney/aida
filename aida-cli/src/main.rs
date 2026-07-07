@@ -7335,15 +7335,22 @@ fn questions_clarify(
 
     // Interactive: inherit the terminal so the human can converse. `claude` is
     // resolved off PATH (matching every other launch site); a missing binary
-    // surfaces as a guided error, not a raw ENOENT.
+    // surfaces as a guided error, not a raw ENOENT. STORY-762: on a
+    // codex-only machine the guidance names the alternatives instead of just
+    // demanding an install the machine may not permit — the clarify loop
+    // drives a Claude Code skill, so Codex parity arrives with the
+    // skills-parity work, not by swapping the binary here.
     let status_code = std::process::Command::new("claude")
         .arg(&prompt)
         .env("AIDA_SESSION_ROLE", "advisor")
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
-                "failed to launch `claude` ({e}) — the acceptance-authoring loop needs the \
-                 Claude Code CLI on PATH. Install it, then re-run."
+                "failed to launch `claude` ({e}) — the acceptance-authoring loop drives a \
+                 Claude Code skill and needs the Claude Code CLI on PATH.\n\
+                 On a Codex-only machine, instead:\n\
+                 - answer questions directly: aida questions list / aida questions answer\n\
+                 - or edit acceptance by hand: aida edit <spec-id> --description ..."
             )
         })?;
 
@@ -37758,6 +37765,51 @@ fn collect_doctor_findings(
         }
     }
 
+    // STORY-762: vendor-binary check — is every vendor this project RESOLVES
+    // to actually on PATH? Codex-only machines (no claude installed) must get
+    // a clean doctor: only vendors a surface can reach are probed, so an
+    // un-configured claude on a codex machine is never flagged (and vice
+    // versa). Surfaces: the interactive/agents default ([agents] vendor knob,
+    // else claude), the orchestrator headless vendor, and the TUI tab vendor
+    // when explicitly configured. trace:STORY-762 | ai:claude
+    {
+        let mut vendors: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        // The effective default vendor for interactive/agent launches.
+        vendors.insert(
+            aida_core::agents_config::resolve_default_vendor(project_root)
+                .unwrap_or_else(|| "claude".to_string()),
+        );
+        // The orchestrator headless vendor (env > [orchestrator] > knob > claude).
+        vendors.insert(
+            crate::session::resolve_headless_vendor(project_root)
+                .as_str()
+                .to_string(),
+        );
+        // The TUI tab vendor only when the project explicitly configures it.
+        let cfg = read_project_config_value(project_root);
+        if let Some(v) = config_lookup(cfg.as_ref(), "tui", "vendor").and_then(|v| v.as_str()) {
+            let t = v.trim().to_ascii_lowercase();
+            if t == "claude" || t == "codex" {
+                vendors.insert(t);
+            }
+        }
+        for vendor in vendors {
+            if which_binary(&vendor).is_none() {
+                push(DoctorFinding {
+                    category: "vendor-binary".to_string(),
+                    id: vendor.clone(),
+                    summary: format!(
+                        "resolved agent vendor `{vendor}` is not on PATH — launches routed to it will fail"
+                    ),
+                    action: format!(
+                        "install the {vendor} CLI, or point the project at an installed vendor (agents.toml `[agents] vendor`, or the per-surface knobs)"
+                    ),
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+
     let cache_path =
         aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
     let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
@@ -38104,6 +38156,29 @@ fn collect_doctor_findings(
     Ok(out)
 }
 
+/// Locate `binary` on PATH (the portable `command -v`). `None` when absent.
+/// Used by the doctor vendor-binary check so a codex-only machine (no claude
+/// installed) reports cleanly for the vendors it actually resolves to.
+// trace:STORY-762 | ai:claude
+fn which_binary(binary: &str) -> Option<std::path::PathBuf> {
+    let paths = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&paths) {
+        let candidate = dir.join(binary);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        // Windows: also try the .exe form.
+        #[cfg(windows)]
+        {
+            let exe = dir.join(format!("{binary}.exe"));
+            if exe.is_file() {
+                return Some(exe);
+            }
+        }
+    }
+    None
+}
+
 fn normalize_doctor_category(raw: &str) -> Result<String> {
     let s = raw.trim().to_ascii_lowercase().replace('_', "-");
     let normalized = match s.as_str() {
@@ -38173,13 +38248,17 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // across configured remotes (github vs gitlab drift).
         // trace:TASK-1095 | ai:claude
         "remote-drift" | "remote-sync" | "drift" | "remotes" => "remote-drift",
+        // STORY-762: a vendor this project resolves to (interactive default,
+        // headless, or configured TUI) whose CLI binary is missing from PATH.
+        // trace:STORY-762 | ai:claude
+        "vendor-binary" | "vendor-binaries" | "vendor" | "vendors" => "vendor-binary",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, stale-remote-branches, merged-agent-worktrees, \
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
-             store-tracked-runtime, remote-drift)",
+             store-tracked-runtime, remote-drift, vendor-binary)",
             other
         ),
     };
@@ -38193,6 +38272,29 @@ fn doctor_category_selected(filter: Option<&str>, category: &str) -> Result<bool
     match filter {
         None => Ok(true),
         Some(raw) => Ok(normalize_doctor_category(raw)? == category),
+    }
+}
+
+#[cfg(test)]
+mod story_762_vendor_binary_tests {
+    use super::*;
+
+    // STORY-762: the codex-only doctor category resolves through the
+    // normalizer with its aliases; which_binary finds a real binary and
+    // returns None for a nonsense name.
+    #[test]
+    fn vendor_binary_category_normalizes_with_aliases() {
+        for raw in ["vendor-binary", "vendor-binaries", "vendor", "VENDORS"] {
+            assert_eq!(normalize_doctor_category(raw).unwrap(), "vendor-binary");
+        }
+    }
+
+    #[test]
+    fn which_binary_finds_sh_and_misses_nonsense() {
+        // `sh` exists on every unix CI runner; a random token does not.
+        #[cfg(unix)]
+        assert!(which_binary("sh").is_some());
+        assert!(which_binary("definitely-not-a-real-binary-xyzzy").is_none());
     }
 }
 
