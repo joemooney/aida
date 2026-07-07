@@ -6,12 +6,12 @@ description: |-
   Found by the codex-only lifecycle validation (2026-07-07, claude-less throwaway project): with the project .aida/agents.toml set to vendor codex, aida queue work --auto-complete --no-human=both still spawned claude -p for the implementer phase and died with failed to spawn claude. Mechanism (verified): headless phases spawn from a pool/agent WORKTREE; .aida/agents.toml is gitignored by the scaffolded deny-by-default block (.aida/* with only config.toml allow-listed), so the fresh worktree has no agents.toml, resolve_headless_vendor finds no knob, and the claude default applies — a SILENT vendor flip, fatal on a claude-less machine. The GLOBAL ~/.aida/agents.toml knob is unaffected (home dir is machine-wide) and the tracked per-surface [orchestrator] headless_vendor in config.toml also works from worktrees.
 
   Fix direction: also accept [agents] vendor in the project .aida/config.toml (tracked, worktree-inherited) as the team-shared project knob; precedence project agents.toml (per-clone personal) > project config.toml (team) > global agents.toml (machine). Do NOT auto-track agents.toml itself — it carries permission-posture keys (bypass/contained) that are deliberately per-clone. Add a wiring test that resolves from a worktree missing agents.toml, and consider a doctor/vendor-binary hint when a project agents.toml sets a vendor that worktrees will not see.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T16:18:38.020833661Z
-modified_at: 2026-07-07T23:06:14.239801746Z
+modified_at: 2026-07-07T23:16:35.573216004Z
 req_type: Bug
 tags:
 - codex-first-class from-self-test severity:major
@@ -28,3 +28,21 @@ comments:
   created_at: 2026-07-07T23:06:14.239801746Z
   modified_at: 2026-07-07T23:06:14.239801746Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3ede-7a14-72a2-b78d-02224fbe6416
+  author: aida-auto-bump
+  timestamp: 2026-07-07T23:16:35.476233155Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3ede-7a75-7fd3-b699-777eb137813b
+  timestamp: 2026-07-07T23:16:35.573206993Z
+  agent: aida
+  commit_sha: 26de99a7092a75853e182a8e756714fa1f9ac3ed
+  summary: Completed via merge 26de99a7
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T23:16:34.394638899Z
+  completion_sha: 26de99a7092a75853e182a8e756714fa1f9ac3ed
