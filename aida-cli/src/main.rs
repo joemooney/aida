@@ -57735,8 +57735,21 @@ fn session_end(
         target.branch
     );
 
-    if !yes {
+    // BUG-706: `--yes` and `--force` both skip the confirmation. On a
+    // non-terminal stdin (a headless drain reclaiming a dead lease) there is
+    // nobody to answer, so the old unconditional prompt read EOF and always
+    // aborted — blocking unattended cleanup. Now: prompt only on a real TTY
+    // without a skip flag; non-TTY without `--yes`/`--force` fails with a
+    // clear, actionable error instead of a silent "Aborted."
+    if !yes && !force {
         use std::io::Write;
+        if !std::io::stdin().is_terminal() {
+            anyhow::bail!(
+                "ending session {} needs confirmation, but stdin is not a terminal — \
+                 re-run with `--yes` (or `--force`) to confirm non-interactively",
+                target.id
+            );
+        }
         eprint!("\nContinue? [y/N] ");
         std::io::stderr().flush()?;
         let mut ans = String::new();
@@ -139590,10 +139603,13 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
                  unattended run,"
                     .dimmed()
             );
+            // BUG-703: keep the SPEC-ID out of this user-facing warning — a
+            // trace marker in stderr is developer noise to a first-user.
+            // trace:TASK-394 | ai:claude
             eprintln!(
                 "   {}",
                 "or `aida no-human acknowledge` once to persist it across runs \
-                 (per machine; --project to scope to this repo). trace:TASK-394"
+                 (per machine; --project to scope to this repo)."
                     .dimmed()
             );
             eprintln!();
