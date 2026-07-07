@@ -3,12 +3,12 @@ spec_id: TASK-1114
 agreed_id: TASK-1114
 title: 'STORY-763 slice 1: aida scaffold codex-prompts — command set as Codex custom prompts'
 description: 'The slash-command parity piece: new aida scaffold codex-prompts writes the AIDA command set (46 of 50) as Codex CLI custom prompts under ~/.codex/prompts (or --dest), generated from the same embedded masters as .claude/commands (single-source verified). Conversion strips the Claude frontmatter and rewrites .claude/skills refs to the .codex/skills copies where those ship. Four commands excluded with stated reasons (solo/burndown = Agent-tool fan-out, insights = hook telemetry, advise = orchestrator-internal). Skip-existing unless --force; idempotent (verified E2E: 46 written, second run 0/46 skipped, user edit survives non-force). Discovery during implementation: .codex/skills (19 skills) + .codex/config.toml MCP registration ALREADY ship at init (TASK-0424) — the story was narrower than filed. REMAINING on STORY-763: auto-run at aida init when the [agents] vendor knob resolves to codex.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T07:23:03.367658970Z
-modified_at: 2026-07-07T07:23:55.201014830Z
+modified_at: 2026-07-07T07:35:33.216871361Z
 req_type: Task
 tags:
 - codex-first-class
@@ -23,3 +23,21 @@ comments:
   created_at: 2026-07-07T07:23:55.201014830Z
   modified_at: 2026-07-07T07:23:55.201014830Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3b80-edff-7902-a8b0-3008f621a003
+  author: aida-auto-bump
+  timestamp: 2026-07-07T07:35:33.119562431Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3b80-ee60-7e30-a0f0-4132c27b46c0
+  timestamp: 2026-07-07T07:35:33.216861719Z
+  agent: aida
+  commit_sha: 573ffc69f337daccb11b471b0e9ad2a23d1767aa
+  summary: Completed via merge 573ffc69
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-07T07:35:32.044073410Z
+  completion_sha: 573ffc69f337daccb11b471b0e9ad2a23d1767aa
