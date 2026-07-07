@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T07:23:03.367658970Z
-modified_at: 2026-07-07T07:23:03.367658970Z
+modified_at: 2026-07-07T07:23:55.201014830Z
 req_type: Task
 tags:
 - codex-first-class
@@ -16,3 +16,10 @@ relationships:
 - rel_type: Child
   target_id: 019f3afe-17da-7300-ae58-337466da1f1b
   created_at: 2026-07-07T07:23:14.331103945Z
+comments:
+- id: 019f3b76-47c1-7f40-b686-6387b29ccaba
+  author: joe
+  content: Commit c0c3cde5b references this requirement
+  created_at: 2026-07-07T07:23:55.201014830Z
+  modified_at: 2026-07-07T07:23:55.201014830Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
