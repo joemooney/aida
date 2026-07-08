@@ -34,12 +34,12 @@ description: |-
   - Revisit trigger recorded if parked: renewed demand for fleet-watching UX, or cmux/WezTerm shipping structured work-unit state (roster tripwire).
 
   Related: marketplace-roster.md cmux row; docs/competitive-analysis/tui-prior-art.md (validation evidence for notification UX); EPIC-26 (aida tui); docs/tui/README.md; docs/architecture/autonomy-and-escalation.md (decision-envelope alignment).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:39:31.269252667Z
-modified_at: 2026-07-08T04:54:22.910696725Z
+modified_at: 2026-07-08T05:05:26.688263956Z
 req_type: Spike
 relationships:
 - rel_type: Parent
