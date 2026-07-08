@@ -144929,16 +144929,61 @@ fn zen_surface_to_advisor(
     }
 }
 
-/// True when `aida lint`'s EARS heuristics flag the spec's description +
-/// acceptance criteria as under-specified (not clean).
-// trace:TASK-1037
+/// True when the spec is GENUINELY under-specified for an autonomous drive —
+/// its description + acceptance carry essentially no specifiable content
+/// (the EARS `EmptyBody` category).
+///
+/// BUG-708: this used to gate on `!lint_text(text).is_clean()` — i.e. ANY EARS
+/// finding, including the *optional* clarity nits (`MissingBehavior`,
+/// `VagueTrigger`, `LowTestability`). `aida lint` presents those as drafts
+/// ("never auto-applied"), so a well-formed trivial doc task with a real
+/// `## Acceptance` section was blocked purely for lacking a "THE SYSTEM SHALL"
+/// response clause — which a doc task never has — and the refusal mislabelled
+/// it "missing acceptance". The drive gate now fires ONLY on the genuine
+/// under-specification signal (empty body / no specifiable content); the
+/// stylistic categories stay advisory-only, surfaced by `aida lint`.
+// trace:BUG-708 (supersedes TASK-1037) | ai:claude
 fn spec_is_under_specified(req: &Requirement) -> bool {
     let mut text = req.description.clone();
     if let Some(acc) = req.custom_fields.get("acceptance_criteria") {
         text.push('\n');
         text.push_str(acc);
     }
-    !aida_core::ears_lint::lint_text(&text).is_clean()
+    aida_core::ears_lint::lint_text(&text).count(aida_core::ears_lint::Category::EmptyBody) > 0
+}
+
+#[cfg(test)]
+mod bug708_under_specified_tests {
+    use super::*;
+
+    #[test]
+    fn trivial_doc_task_with_acceptance_is_not_under_specified() {
+        // BUG-708 regression: a well-formed trivial doc task — real body plus a
+        // `## Acceptance` section, but no EARS "THE SYSTEM SHALL" response
+        // clause — must NOT be gated as under-specified. It trips only the
+        // OPTIONAL missing-behavior clarity nit, which is advisory, not a drive
+        // gate. This is the exact shape of TASK-1115 that got wrongly blocked.
+        let req = Requirement::new(
+            "Flow smoke-test: add a dated marker line".to_string(),
+            "Append a line to docs/flow-smoke.md recording the date this smoke-test ran.\n\n\
+             ## Acceptance\n- docs/flow-smoke.md exists and contains a dated marker line."
+                .to_string(),
+        );
+        assert!(
+            !spec_is_under_specified(&req),
+            "a trivial doc task with a real body + acceptance must not be under-specified"
+        );
+    }
+
+    #[test]
+    fn essentially_empty_spec_is_under_specified() {
+        // The genuine under-spec signal (EmptyBody) still gates the drive.
+        let req = Requirement::new("Stub".to_string(), "fix".to_string());
+        assert!(
+            spec_is_under_specified(&req),
+            "an essentially-empty spec is genuinely under-specified"
+        );
+    }
 }
 
 /// Resolve a spec's scope epic: walk its `parent:<ID>` tag chain (bounded) to
@@ -146759,6 +146804,11 @@ fn empty_phase1_lookup_is_definitive_nopr(origin: &BranchOriginProbe) -> bool {
 enum Phase1PrResolve {
     /// An open PR was found (directly or recovered via the spec-id search).
     Found(OpenPrInfo),
+    /// BUG-709: no OPEN PR, but the branch's PR is already MERGED — the
+    /// implementer ran the full ship itself. The work landed; the drive
+    /// completes cleanly rather than retrying the open-PR verify.
+    // trace:BUG-709 | ai:claude
+    AlreadyMerged(OpenPrInfo),
     /// Definitively no open PR — falls through to the punt / NoPr path.
     NoPr,
     /// A definitive hard failure (gh missing / gh errored / branch not on
@@ -147310,6 +147360,21 @@ impl RealPhaseDriver {
                         let origin = probe_branch_on_origin(&self.project_root, branch);
                         if empty_phase1_lookup_is_definitive_nopr(&origin) {
                             Phase1PrResolve::NoPr
+                        } else if let PrLookup::Found(merged) =
+                            detect_merged_pr_for_branch_via_forge(&self.project_root, branch)
+                        {
+                            // BUG-709: no OPEN PR but the branch IS on origin —
+                            // before assuming eventual-consistency lag and
+                            // retrying, check whether the branch's PR already
+                            // MERGED. A codex (or any) implementer that ran the
+                            // full ship itself (create + CI + merge via `aida pr
+                            // ship`) leaves a MERGED PR and no open one, so the
+                            // open-PR verify would otherwise spin to its retry
+                            // ceiling and false-negative a shipped drive as
+                            // "inconclusive, retry". A merged PR means the work
+                            // landed — resolve AlreadyMerged so the drive
+                            // completes cleanly. trace:BUG-709 | ai:claude
+                            Phase1PrResolve::AlreadyMerged(merged)
                         } else {
                             let reason = match origin {
                                 BranchOriginProbe::Present => format!(
@@ -147670,6 +147735,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let pr = loop {
             match self.detect_phase1_pr(&branch) {
                 Phase1PrResolve::Found(pr) => break Some(pr),
+                // BUG-709: the implementer already merged its own PR — the work
+                // shipped and the spec auto-bumped. Return a terminal
+                // AlreadyMerged outcome so the orchestrator completes cleanly
+                // instead of shepherding a merged PR through CI/review/merge or
+                // spinning the open-PR verify. trace:BUG-709 | ai:claude
+                Phase1PrResolve::AlreadyMerged(pr) => {
+                    self.pr_number = Some(pr.number as u32);
+                    if !self.json {
+                        eprintln!(
+                            "  {} PR-{} already merged (the implementer ran the full ship) — \
+                             no open PR to shepherd; completing the drive",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            pr.number,
+                        );
+                    }
+                    return Ok(auto_complete::ImplementerOutcome::AlreadyMerged {
+                        pr_number: pr.number as u32,
+                    });
+                }
                 Phase1PrResolve::NoPr => break None,
                 Phase1PrResolve::Fail(f) => return Err(f),
                 Phase1PrResolve::Retry(reason) => {

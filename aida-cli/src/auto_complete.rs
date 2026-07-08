@@ -706,6 +706,16 @@ pub(crate) enum ImplementerOutcome {
         reason: Option<String>,
         branch: String,
     },
+    /// BUG-709: the implementer ran the FULL ship itself (create + CI + merge,
+    /// e.g. a codex implementer that drove `aida pr ship` end-to-end), so by
+    /// the time the orchestrator's phase-1 verify runs there is no OPEN PR to
+    /// shepherd — the branch's PR is already MERGED and the spec already
+    /// auto-bumped. The work shipped: the drive completes cleanly (skipping
+    /// CI/review/merge/pull) instead of spinning the open-PR verify to its
+    /// retry ceiling and false-negativing a landed drive as "inconclusive,
+    /// retry". `pr_number` is the merged PR surfaced in the epilogue.
+    // trace:BUG-709 | ai:claude
+    AlreadyMerged { pr_number: u32 },
 }
 
 /// BUG-420: which watchdog tripped on a degenerate headless phase. The
@@ -2383,6 +2393,12 @@ fn resume_after_advisor(
             durations.to_vec(),
         ))),
         Ok(ImplementerOutcome::PrOpened) => PuntFlow::Proceed,
+        // BUG-709: the resumed implementer merged its own PR — terminal
+        // success; the work shipped and the spec auto-bumped, so there is no
+        // pipeline left to run. trace:BUG-709 | ai:claude
+        Ok(ImplementerOutcome::AlreadyMerged { pr_number: _ }) => PuntFlow::Terminal(Box::new(
+            finish_success(spec, spec, json, start, durations.to_vec()),
+        )),
         // A re-punt after a resume is terminal — one advisor round per spec
         // per drain; a new fork is a fresh punt, not a conversation.
         Ok(ImplementerOutcome::Punted { reason }) => PuntFlow::Terminal(Box::new(finish_punted(
@@ -2717,6 +2733,24 @@ pub(crate) fn orchestrate_with_resume(
             Ok(ImplementerOutcome::PrOpened) => {
                 durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
                 emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+            }
+            // BUG-709: the implementer already merged its own PR (it ran the
+            // full ship itself). There is nothing left for phases 2-5 to do —
+            // the spec already auto-bumped on merge — so complete cleanly
+            // instead of shepherding a merged PR through CI/review/merge again.
+            // trace:BUG-709 | ai:claude
+            Ok(ImplementerOutcome::AlreadyMerged { pr_number }) => {
+                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                if !json {
+                    eprintln!(
+                        "  {} PR-{} already merged by the implementer — work shipped; \
+                         completing (skipping CI/review/merge/pull)",
+                        glyph(crate::glyphs::Glyph::Check).green(),
+                        pr_number,
+                    );
+                }
+                emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                return finish_success(spec, spec, json, &start, durations);
             }
             // BUG-257 / BUG-266: the orchestrator could not determine whether a
             // PR was opened — either a transient GH-API blip during the PR

@@ -407,8 +407,9 @@ pub(crate) fn classify_suitability(i: &SuitabilityInput) -> Suitability {
     let mut warnings = Vec::new();
     if i.under_specified {
         warnings.push(
-            "under-specified (aida lint flags vague/missing acceptance) — \
-             clarify it, or re-run with --force",
+            "under-specified: the spec body is essentially empty (no describable \
+             behavior or acceptance) — add a description + acceptance, or re-run \
+             with --force",
         );
     }
     if i.coupled {
