@@ -32039,5 +32039,44 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3015
+- id: 019f400e-dd44-7571-8e97-f30aedd6fc6d
+  target_id: 019f4006-20c5-7531-95cb-3183dcd2a29f
+  author: aida
+  node_id: '1'
+  lamport: 3016
+  timestamp: 2026-07-08T04:49:03.812442898Z
+  kind: !SetDescription
+    description: |-
+      Context: cmux (manaflow-ai, ~24k stars, macOS-only) validated a set of UX signals for hosting parallel coding agents: per-pane notification rings / unread badges driven by terminal escape sequences, a sidebar with per-workspace git/PR/port state, socket-API programmability, and rendering subagents as first-class panes. AIDA deliberately does not compete in the hosting lane (Vibe Kanban post-mortem; TUI = face, not moat), but bounded slices of that validated UX map directly onto surfaces we already ship. See marketplace-roster.md section B (cmux row, verified 2026-07-07).
+
+      DRIVING USE CASE (operator, 2026-07-07): a continuous fleet-watch advisor — one place that monitors every agent session across terminals, detects completion/stall/needs-attention, and recommends what to do next in plain language. Arms 1-2 are the signal plumbing and display; arm 3 is the consumer.
+
+      Investigate ALL THREE arms, timebox each, deliverable = findings + follow-up specs (not implementation):
+
+      Arm 1 — attention badges / notification semantics in `aida tui`:
+      - Map which existing substrate events should surface as a per-session attention badge (needs input, punt filed, phase failed/shelved, CI verdict, unread mail).
+      - How do cmux/WezTerm detect "agent needs attention" (escape sequences, OSC user-vars, output quiescence)? Which of those can the TUI's hosted PTYs observe reliably?
+      - Sketch the minimal UI: badge/ring on the session list + a notification popover analog. NO redesign of the TUI shell.
+
+      Arm 2 — burndown fan-out spawning into WezTerm panes:
+      - Can `aida burndown` / `aida queue work` fan-out target `wezterm cli` (spawn/split-pane/send-text) so each worktree-isolated implementer lands in a visible pane on Linux? (Primitives confirmed present in wezterm 20240203: spawn, split-pane, send-text, get-text, list, kill-pane.)
+      - Graceful degrade when WezTerm is absent (current behavior unchanged; faithful-launcher rule, no hidden opinion).
+      - Is a vendor-neutral pane-host adapter (wezterm / tmux / cmux socket) warranted, or premature? Recommend smallest valuable slice.
+
+      Arm 3 — fleet-watch advisor skill (the consumer):
+      - Design a continuously-runnable skill (/loop or hook-triggered) that each tick: reads SUBSTRATE FIRST (aida ps live/STALE, aida awaiting, queue state, NeedsAttention parks, findings/punts, .aida/events.jsonl), censuses terminals for UNMANAGED sessions via scrape fallback (tmux capture-pane / wezterm cli get-text), diffs against last tick, classifies each session (completed / stalled / needs-you / new / unmanaged), and emits a plain-language digest + one recommended next action per item.
+      - Substrate-first is a design constraint, not a preference: completion detection from scrollback is brittle (agent phrasing varies); structural signals (lease released, spec Done, PR opened, drain exit code) are exact. Scrape earns its place ONLY for (a) unmanaged-session census, (b) output-quiescence wedge detection where pid-alive lies.
+      - Decision envelope: the watcher synthesizes, recommends, and ROUTES (nudge, file finding, escalate to aida awaiting) — it does NOT dispatch new work (that is the drain/orchestrator's job; single-drain-lock lesson: no second decider). Auto-actions beyond routing = explicit opt-in tier, aligned with the autonomy ladder.
+      - Identify what exists vs gaps: pull surfaces (ps/awaiting/status/integrate/TUI overlay) exist; gaps = continuous watching, unmanaged-session census, narrative synthesis, next-action recommendation.
+
+      Out of scope (explicitly): porting cmux to Rust; building a GUI app; embedded browser automation; macOS-specific work; auto-dispatch of new work.
+
+      Acceptance:
+      - A dated findings doc under docs/research/ answering the questions above, with a go/no-go recommendation and effort estimate per arm.
+      - Each go arm decomposed into 1-3 child specs (smallest valuable slice first) filed as drafts; arm 3's slice must specify its signal sources (substrate vs scrape) and its decision envelope explicitly.
+      - The "does this make the TUI's quiet depth stronger when someone digs in?" test applied explicitly to every proposed slice; anything failing it is named and dropped.
+      - Revisit trigger recorded if parked: renewed demand for fleet-watching UX, or cmux/WezTerm shipping structured work-unit state (roster tripwire).
+
+      Related: marketplace-roster.md cmux row; docs/competitive-analysis/tui-prior-art.md (validation evidence for notification UX); EPIC-26 (aida tui); docs/tui/README.md; docs/architecture/autonomy-and-escalation.md (decision-envelope alignment).
+clock: 3016
 node_id: '1'
