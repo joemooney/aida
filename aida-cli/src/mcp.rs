@@ -585,7 +585,9 @@ fn leases_dir(project_root: &Path) -> PathBuf {
 /// `OpenOptions::create_new(true)` enforce single-winner semantics. Distinct
 /// from the `<lease_id>.toml` shape `aida session start` uses, so the two
 /// claim modes don't collide.
-fn mcp_claim_path(dir: &Path, spec_id: &str) -> PathBuf {
+// Made pub(crate) so `aida session end` can reap the sibling mcp-claim for the
+// scope it just released (BUG-694). trace:BUG-694 | ai:claude
+pub(crate) fn mcp_claim_path(dir: &Path, spec_id: &str) -> PathBuf {
     dir.join(format!("mcp-claim.{}.toml", spec_id.to_ascii_lowercase()))
 }
 
@@ -10080,6 +10082,24 @@ mod tests {
             let body = std::fs::read_to_string(&path).unwrap();
             assert!(!body.contains("drian"), "{}", body);
         }
+    }
+
+    #[test]
+    fn mcp_claim_path_is_case_insensitive_for_session_end_reaping() {
+        // BUG-694: `aida session end` reaps the sibling mcp-claim by calling
+        // mcp_claim_path(leases_dir, target.scope). The scope on the session
+        // lease may differ in case from the spec_id claim_task lowercased into
+        // the filename, so the path MUST fold case — else the reap misses and
+        // the orphan lingers (the 24-day TASK-702 leak). Lock the contract.
+        let dir = std::path::Path::new("/tmp/sessions");
+        let lower = mcp_claim_path(dir, "task-702");
+        let upper = mcp_claim_path(dir, "TASK-702");
+        assert_eq!(lower, upper, "scope casing must not change the reaped path");
+        assert_eq!(
+            upper,
+            dir.join("mcp-claim.task-702.toml"),
+            "the reaped filename must match what claim_task writes"
+        );
     }
 
     #[test]
