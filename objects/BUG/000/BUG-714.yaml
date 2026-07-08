@@ -1,0 +1,27 @@
+id: 019f4099-a6fe-7342-8174-7302fa6b7089
+spec_id: BUG-714
+agreed_id: BUG-714
+title: Store mirror fan-out can only PUSH — a gitlab-only commit from another machine causes permanent divergence + recurring aida push failure
+description: |-
+  The STORY-760 [store.sync] mirror_remotes fan-out only PUSHES (fast-forward) the aida-store branch to gitlab. When another machine (e.g. node 7, a work box) runs aida node acquire and pushes its registry commits to GITLAB ONLY (not github origin), origin never learns of them. The mirror-from-origin push is then non-fast-forward (gitlab is ahead) and is rejected on EVERY aida push, forever, until a manual reconcile pulls gitlabs commits back. Observed 2026-07-08: gitlab aida-store 2 commits ahead (node 7 registration + block 3001-4000), origin has the session spec commits; aida push warns "mirror gitlab rejected (diverged)" each time.
+
+  Root gap: the multi-hub design has PUSH fan-out but no PULL-and-union path. aida remote status DETECTS divergence but there is no aida verb to RECONCILE it (fetch every hubs aida-store, CRDT-union-merge the tips, push the union to all). Today it is a manual git dance in .aida-store.
+
+  Acceptance:
+  - An aida verb (e.g. aida remote reconcile / aida db sync --all-hubs) fetches aida-store from every configured hub, CRDT-union-merges the diverged tips (registry blocks.yaml + nodes.toml union; objects/*.yaml union), and pushes the union to all hubs.
+  - Registry block allocations from different nodes union without collision (disjoint ranges preserved).
+  - Guard: it must NOT publish content that is only on one hub without the same scrub the canonical line applies (see the sibling employer-content bug).
+  - aida remote status points at the new reconcile verb in its DIVERGED hint instead of the current generic "reconcile then re-push".
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T07:20:39.422149465Z
+modified_at: 2026-07-08T07:20:39.422149465Z
+req_type: Bug
+tags:
+- coordination
+- from-operator
+- multi-hub
+- severity:major
+- store
