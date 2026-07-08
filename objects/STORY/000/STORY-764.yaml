@@ -1,0 +1,28 @@
+id: 019f3f2c-5899-7833-b383-7d02060de373
+spec_id: STORY-764
+agreed_id: STORY-764
+title: Piped/captured aida output silently switches to TOON — document loudly or add a --format escape hatch
+description: |-
+  Since the token-efficient agent surface landed (SPIKE-73), any `aida` invocation whose stdout is not a TTY — including `$(aida list ...)` command substitution and `aida list | grep ...` pipes in ordinary user shell scripts — emits TOON/CSV instead of the human table. A script author who developed against the interactive table gets a silently different format the moment they capture output.
+
+  Evidence this bites real users: our own bundled first-user demo (scripts/aida-demo.sh) broke this way on 2026-07-07 — its `awk '{print $1}'` spec-id capture returned `STORY-1,"Print`, corrupting trace comments, commit trailers, and the auto-bump chain (BUG-707). Downstream users' scripts will hit the identical failure.
+
+  Design fork (decide, then implement ONE):
+    A. Bless TOON-when-piped as intended behavior (the `ls`-columns precedent) and document it loudly: a prominent section in the README + docs/environment-variables.md cross-ref, and a one-line format banner or stderr hint the first time a session pipes output.
+    B. Add an explicit format pin: `--format human|toon|json` (or `AIDA_OUTPUT_FORMAT`) so scripts can request the stable format they parse; TTY default stays human, non-TTY default stays TOON.
+    C. Both: escape hatch + loud docs (likely the right answer — precedent tools ship both).
+
+  Acceptance:
+  - A recorded decision (ADR or decision comment) picking A/B/C with rationale.
+  - If an escape hatch ships: `aida list --format human | cat` renders the human table; `--format toon` forces TOON at a TTY; the flag (or env var) is honored uniformly by list/search/status and documented in docs/environment-variables.md if env-based.
+  - Docs: the format-switching rule appears where a script author will actually look (README scripting section + `aida list --help`).
+  - scripts/aida-demo.sh and any other in-repo scripts that parse aida output are audited against the chosen mechanism (grep for `$(aida` / `aida .* |`).
+
+  Related: BUG-707 (the demo-script casualty; its fix is format-tolerant parsing, which remains valid regardless of the fork chosen here).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T00:41:38.713330210Z
+modified_at: 2026-07-08T00:41:38.713330210Z
+req_type: Story
