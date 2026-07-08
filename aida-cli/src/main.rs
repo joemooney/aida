@@ -117263,6 +117263,16 @@ mod bug670_agent_status_tests {
     // actionable work.
     #[test]
     fn actionable_matches_queue_list_on_a_padded_fixture() {
+        // BUG-698: this test resolves the queue owner via `current_user_id`
+        // (which reads $AIDA_USER/$USER) to WRITE the fixture, then
+        // `read_queue_depth` re-resolves it to READ — an env-derived read at two
+        // points. Without the ONE unified env lock, a sibling test's env swap
+        // (or the documented `setenv` realloc race) between them makes the read
+        // resolve a different user, so `<user>.yaml` isn't found and
+        // `read_queue_depth` returns None → the rare CI flake. BUG-697 unified
+        // the env WRITERS; this reader was missed. Hold the lock across the
+        // whole window. trace:BUG-698 (follow-up BUG-697) | ai:claude
+        let _env = crate::test_env::env_lock();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let user = current_user_id(None);
