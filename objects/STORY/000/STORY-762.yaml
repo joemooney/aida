@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:24.297134485Z
-modified_at: 2026-07-07T23:25:24.478256212Z
+modified_at: 2026-07-08T01:10:00.755279840Z
 req_type: Story
 tags:
 - codex-first-class migration:claude-to-codex
@@ -69,4 +69,10 @@ comments:
   content: Commit 26de99a70 references this requirement
   created_at: 2026-07-07T23:25:24.478256212Z
   modified_at: 2026-07-07T23:25:24.478256212Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f3f46-5133-79c1-a1ee-385e34684dfa
+  author: joe
+  content: 'Acceptance: codex-only lifecycle validated GREEN in a simulated claude-less environment (PATH-stripped throwaway project, full implement→CI→merge→pull lifecycle with a real codex implementer). The genuine codex-mandated work machine is not reachable from the dev host, so simulation is the acceptance ceiling here. Closing on the simulation + the merged code (TASK-1113 doctor/degrade, BUG-704/705/706 vendor-routing fixes).'
+  created_at: 2026-07-08T01:10:00.755279840Z
+  modified_at: 2026-07-08T01:10:00.755279840Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
