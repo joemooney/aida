@@ -57897,6 +57897,33 @@ fn session_end(
         }
     }
 
+    // BUG-694: reap the sibling MCP work-claim for this scope. An MCP client
+    // that claimed the spec via `claim_task` drops `mcp-claim.<spec>.toml`
+    // alongside the session lease; without this, `session end` released the
+    // session lease but left the mcp-claim behind, so the spec kept surfacing
+    // as stale running work long after the worktree was gone (TASK-702's claim
+    // lingered 24 days). Best-effort + NotFound-quiet, mirroring the lease
+    // unlink above. trace:BUG-694 | ai:claude
+    let mcp_claim = mcp::mcp_claim_path(&leases_dir(&project_root), &target.scope);
+    match std::fs::remove_file(&mcp_claim) {
+        Ok(_) => eprintln!(
+            "{} mcp-claim reaped ({})",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            target.scope
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // No MCP claim for this scope — the common case. Quiet.
+        }
+        Err(e) => {
+            eprintln!(
+                "{} could not reap mcp-claim {}: {} — remove manually",
+                "Warning:".yellow().bold(),
+                mcp_claim.display(),
+                e
+            );
+        }
+    }
+
     // STORY-637: release the cross-clone lease claim on the shared store so a
     // peer clone can take this scope. Best-effort by design — staleness (pid /
     // TTL) reclaims a never-released claim, so a failed release never
