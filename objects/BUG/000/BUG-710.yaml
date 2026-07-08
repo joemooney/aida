@@ -1,0 +1,24 @@
+id: 019f3f7e-5136-7582-93c1-9295a442c175
+spec_id: BUG-710
+agreed_id: BUG-710
+title: Headless implementer can self-merge, bypassing zen's promised independent reviewer
+description: |-
+  Observed 2026-07-08 on the TASK-1115 codex drive, and the reason BUG-709 existed: the codex headless implementer ran the FULL ship itself (create + CI + squash-merge via aida pr ship) INSIDE its own phase-1 session. That means the orchestrator phases 2-5 — including phase 3, the INDEPENDENT reviewer — never ran on it. The PR was already merged by the time the orchestrator looked.
+
+  This contradicts a core zen guarantee. aida zen --help states: "an INDEPENDENT reviewer always runs before the auto-merge" and "the reviewer ALWAYS runs headless as an independent gate". A headless implementer that self-merges bypasses that gate entirely.
+
+  NEEDS VERIFICATION before fixing: confirm (a) that aida pr ship as invoked by the implementer skill really does merge without any independent review, and (b) whether this is codex-implementer-specific (its skill/prompt drove the full ship) or reproducible with a claude headless implementer too. The fix direction, once confirmed: the implementer contract should STOP at "PR opened" (leave CI + independent review + merge to the orchestrator phases), OR the self-merge path must route through the independent reviewer first.
+
+  Filed as draft (keystone governance concern) — triage with the operator/advisor before driving; do NOT autonomous-drain this one.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T02:11:10.774224290Z
+modified_at: 2026-07-08T02:11:10.774224290Z
+req_type: Bug
+tags:
+- aida:zen
+- codex
+- governance
+- needs-triage
