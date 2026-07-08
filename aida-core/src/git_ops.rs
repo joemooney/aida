@@ -1603,6 +1603,76 @@ pub fn register_node(aida_repo: &Path, user_id: u32, hostname: &str) -> Result<S
     register_node_with_email(aida_repo, user_id, hostname, None)
 }
 
+/// BUG-715: opt-in machine-identity redaction. A work machine that must not
+/// leak its corporate email/hostname into the (public-mirrored) store sets
+/// `[node] public_email` / `public_hostname` in `~/.aida/config.toml`. Node
+/// registration and block allocation then persist the public alias instead of
+/// the raw system identity, so the recurring "raw employer content in the
+/// store" leak (see BUG-715) never lands. Returns the `(hostname, email)` to
+/// write — the public values when configured, else the raw ones.
+// trace:BUG-715 | ai:claude
+pub fn redacted_identity(raw_hostname: &str, raw_email: Option<&str>) -> (String, Option<String>) {
+    let (public_hostname, public_email) = read_public_identity();
+    apply_identity_redaction(
+        raw_hostname,
+        raw_email,
+        public_hostname.as_deref(),
+        public_email.as_deref(),
+    )
+}
+
+/// Pure core of [`redacted_identity`]: substitute the configured public values
+/// when present, else pass the raw values through. Kept pure so the
+/// substitution contract is unit-testable without touching `~/.aida`.
+// trace:BUG-715 | ai:claude
+pub fn apply_identity_redaction(
+    raw_hostname: &str,
+    raw_email: Option<&str>,
+    public_hostname: Option<&str>,
+    public_email: Option<&str>,
+) -> (String, Option<String>) {
+    let hostname = public_hostname.unwrap_or(raw_hostname).to_string();
+    let email = public_email
+        .map(str::to_string)
+        .or_else(|| raw_email.map(str::to_string));
+    (hostname, email)
+}
+
+/// Read `[node] public_hostname` / `public_email` from the machine-global
+/// `~/.aida/config.toml` (honoring `AIDA_TEST_HOME` for tests). Returns
+/// `(None, None)` when the file/keys are absent — redaction is strictly
+/// opt-in. `dirs` is an optional dep here, so home is resolved from the
+/// environment to stay feature-gate-free.
+// trace:BUG-715 | ai:claude
+fn read_public_identity() -> (Option<String>, Option<String>) {
+    let home = std::env::var_os("AIDA_TEST_HOME")
+        .or_else(|| std::env::var_os("HOME"))
+        .or_else(|| std::env::var_os("USERPROFILE"));
+    let Some(home) = home else {
+        return (None, None);
+    };
+    let path = std::path::PathBuf::from(home)
+        .join(".aida")
+        .join("config.toml");
+    // TASK-346: read_atomic (not bare fs::read_to_string) on a concurrent config
+    // path — retries the Windows transient-open race. Enforced by the
+    // fs_atomic guard test. trace:BUG-715 | ai:claude
+    let Ok(text) = crate::read_atomic(&path) else {
+        return (None, None);
+    };
+    let Ok(value) = text.parse::<toml::Value>() else {
+        return (None, None);
+    };
+    let node = value.get("node");
+    let get = |key: &str| {
+        node.and_then(|n| n.get(key))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .filter(|s| !s.is_empty())
+    };
+    (get("public_hostname"), get("public_email"))
+}
+
 /// Register a node and capture the user's email at registration time.
 /// trace:EPIC-1-052 | ai:claude
 pub fn register_node_with_email(
@@ -1724,6 +1794,14 @@ pub fn register_node_full_identity(
     identity: NodeIdentity,
 ) -> Result<String> {
     use crate::node::{default_node_name, BlockRegistry, NodeConfig, NodeRegistry};
+
+    // BUG-715: redact the machine identity BEFORE it is written to nodes.toml /
+    // used in the registration commit, so a work machine with `[node]
+    // public_*` set never persists its raw corporate email/hostname into the
+    // (public-mirrored) store. No-op unless the opt-in config is present.
+    // trace:BUG-715 | ai:claude
+    let (hostname_owned, email) = redacted_identity(hostname, email.as_deref());
+    let hostname = hostname_owned.as_str();
 
     let registry_dir = aida_repo.join("registry");
     std::fs::create_dir_all(&registry_dir)?;
@@ -2583,6 +2661,32 @@ pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn identity_redaction_substitutes_only_when_configured() {
+        // BUG-715: with no public config, raw identity passes through unchanged.
+        let (h, e) =
+            apply_identity_redaction("AZSD011Y7HN34D", Some("Joe@corp.example"), None, None);
+        assert_eq!(h, "AZSD011Y7HN34D");
+        assert_eq!(e.as_deref(), Some("Joe@corp.example"));
+
+        // With both knobs set, the raw corporate identity is REPLACED — the
+        // leak (raw email/hostname in the public-mirrored store) can't land.
+        let (h, e) = apply_identity_redaction(
+            "AZSD011Y7HN34D",
+            Some("Joe@corp.example"),
+            Some("spock"),
+            Some("Joe.Mooney@work.example"),
+        );
+        assert_eq!(h, "spock", "corporate hostname must not survive");
+        assert_eq!(e.as_deref(), Some("Joe.Mooney@work.example"));
+
+        // Public hostname alone still redacts the hostname; a None raw email
+        // stays None (no email invented).
+        let (h, e) = apply_identity_redaction("corp-box", None, Some("spock"), None);
+        assert_eq!(h, "spock");
+        assert_eq!(e, None);
+    }
 
     #[test]
     fn test_init_and_is_git_repo() {

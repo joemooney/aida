@@ -31302,10 +31302,12 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 // or retire-legacy-ids migrations.
                 // trace:FR-1-073 | ai:claude
                 let counter_floor = read_agreed_counter(store_path, &type_prefix);
+                // BUG-715: redact the hostname before it lands in blocks.yaml.
+                let (block_host, _) = aida_core::git_ops::redacted_identity(&hostname(), None);
                 let block = registry.claim_block_with_floor(
                     node_id.clone(),
                     std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
-                    hostname(),
+                    block_host,
                     type_prefix.clone(),
                     *size,
                     counter_floor,
@@ -33152,10 +33154,15 @@ fn auto_allocate_block_inner(
         }
 
         let counter_floor = read_agreed_counter(store_path, type_prefix);
+        // BUG-715: redact owner (email) + hostname before they land in blocks.yaml.
+        let raw_owner = owner.to_string();
+        let raw_hn = hn.to_string();
+        let (block_host, block_owner) =
+            aida_core::git_ops::redacted_identity(&raw_hn, Some(raw_owner.as_str()));
         let block = registry.claim_block_with_floor(
             node_id.to_string(),
-            owner.clone(),
-            hn.to_string(),
+            block_owner.unwrap_or(raw_owner),
+            block_host,
             type_prefix.to_string(),
             size,
             counter_floor,
