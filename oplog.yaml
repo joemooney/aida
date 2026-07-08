@@ -31896,5 +31896,26 @@ operations:
 
       ## Acceptance
       - docs/flow-smoke.md contains a second dated marker line.
-clock: 3006
+- id: 019f3f93-f915-7913-aad1-c8173b5d3237
+  target_id: 019f3f93-eb5c-7180-b0de-c85600a175c4
+  author: aida
+  node_id: '1'
+  lamport: 3007
+  timestamp: 2026-07-08T02:34:50.005956628Z
+  kind: !Create
+    title: zen AlreadyMerged/terminal-skip path leaks implementer lease + pool worktree (skips phase-2 session-end)
+    description: |-
+      Follow-up to BUG-709. The BUG-709 fix makes a self-merged drive complete cleanly (AlreadyMerged -> finish_success from phase 1) instead of hanging. But the implementer session teardown — lease release + warm-pool worktree return + reviewer auto-queue — lives in PHASE 2 (finish_ci, auto_complete.rs:1009). Any path that returns success/terminal from phase 1 (AlreadyMerged; also the pre-existing Inconclusive/Held paths) skips it, leaking a live lease + pool worktree that need a manual `aida session end`.
+
+      Observed: after the clean TASK-1118 drive, `aida session leases` still showed an active implementer lease on TASK-1118 in /home/joe/ai/aida-pool-aida-0, and a dead-pid drain.lock (self-healing but untidy). Every codex self-merge drive would leave one.
+
+      Acceptance:
+      - The AlreadyMerged path ends the implementer session (release lease + return the pool worktree to idle) BEFORE finish_success — WITHOUT the CI wait (merge already happened) and WITHOUT auto-queuing a reviewer item (the PR is already merged; no review is pending).
+      - After a self-merge drive completes, `aida session leases` shows no lingering lease and the pool worktree is idle.
+      - Consider the same teardown for the phase-1 Inconclusive/Held terminal paths (they leak too) — at minimum, a dead-pid drain.lock should be cleaned on a clean process exit.
+      - Regression test / manual: drive a trivial spec whose implementer self-merges; assert no lingering lease afterward.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3007
 node_id: '1'
