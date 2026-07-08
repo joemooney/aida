@@ -51,3 +51,13 @@ clone_path = "/home/joe.mooney/ai/aida_joe"
 name = "spock-aida-1-gitlab-joemooney"
 user = "joe"
 registered = "2026-07-01T18:48:26.039609521Z"
+
+[[nodes]]
+id = "7"
+user_id = 1
+hostname = "spock"
+email = "Joe.Mooney@work.example"
+clone_path = "/home/joemooney/ai/aida"
+name = "wsl_1-joemooney-7"
+user = "joemooney"
+registered = "2026-07-07T20:15:09.512961482Z"

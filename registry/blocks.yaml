@@ -423,3 +423,11 @@ blocks:
   range_end: 300
   next: 201
   allocated_at: 2026-07-01T18:49:04.250337Z
+- node_id: '7'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: '*'
+  range_start: 3001
+  range_end: 4000
+  next: 3001
+  allocated_at: 2026-07-07T20:15:10.960661443Z
