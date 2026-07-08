@@ -26,3 +26,7 @@ req_type: Task
 tags:
 - orchestrator
 - parent:SPIKE-77
+relationships:
+- rel_type: Child
+  target_id: 019f4006-20c5-7531-95cb-3183dcd2a29f
+  created_at: 2026-07-08T04:53:41.935524708Z
