@@ -3,12 +3,12 @@ spec_id: BUG-694
 agreed_id: BUG-694
 title: aida session end leaves orphaned mcp-claim.<spec>.toml behind — no reaper
 description: 'When aida session end tears down a session lease, the sibling mcp-claim.<spec>.toml file (the MCP work-claim) is NOT deleted. Observed: TASK-702 (Completed, worktree removed) still had .aida/sessions/mcp-claim.task-702.toml 24 days later, which kept surfacing the spec as stale running work. session end should also remove the mcp-claim file for the same spec/session, and/or a `aida session gc`/`queue gc` pass should reap mcp-claim files whose spec is Completed/archived or whose worktree is gone. Discovered alongside BUG-693.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T04:28:59.914419207Z
-modified_at: 2026-07-08T05:45:02.976613420Z
+modified_at: 2026-07-08T05:53:46.577557804Z
 req_type: Bug
 tags:
 - aida:session
@@ -23,3 +23,21 @@ comments:
   created_at: 2026-07-08T05:45:02.976613420Z
   modified_at: 2026-07-08T05:45:02.976613420Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f404a-1bef-71e1-949e-0ea806a9851c
+  author: aida-auto-bump
+  timestamp: 2026-07-08T05:53:46.479767321Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f404a-1c51-7f00-a757-3d37023b1b1c
+  timestamp: 2026-07-08T05:53:46.577551691Z
+  agent: aida
+  commit_sha: 5418a4159433a6e4da832555e72cffd89571a969
+  summary: Completed via merge 5418a415
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-08T05:53:45.394107970Z
+  completion_sha: 5418a4159433a6e4da832555e72cffd89571a969
