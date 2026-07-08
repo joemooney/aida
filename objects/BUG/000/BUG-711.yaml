@@ -17,10 +17,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T02:34:46.492813247Z
-modified_at: 2026-07-08T02:34:46.492813247Z
+modified_at: 2026-07-08T04:16:47.116164940Z
 req_type: Bug
 tags:
 - aida:zen
 - codex
 - followup:bug-709
 - papercut
+comments:
+- id: 019f3ff1-500c-7933-a87e-730e7bf37e05
+  author: joe
+  content: Commit 52db42cfe references this requirement
+  created_at: 2026-07-08T04:16:47.116164940Z
+  modified_at: 2026-07-08T04:16:47.116164940Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
