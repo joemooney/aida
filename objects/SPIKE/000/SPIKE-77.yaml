@@ -1,0 +1,36 @@
+id: 019f4006-20c5-7531-95cb-3183dcd2a29f
+spec_id: SPIKE-77
+agreed_id: SPIKE-77
+title: 'Adopt cmux''s validated UX signals: attention badges in aida tui + burndown fan-out into WezTerm panes'
+description: |-
+  Context: cmux (manaflow-ai, ~24k stars, macOS-only) validated a set of UX signals for hosting parallel coding agents: per-pane notification rings / unread badges driven by terminal escape sequences, a sidebar with per-workspace git/PR/port state, socket-API programmability, and rendering subagents as first-class panes. AIDA deliberately does not compete in the hosting lane (Vibe Kanban post-mortem; TUI = face, not moat), but two bounded slices of that validated UX map directly onto surfaces we already ship. See marketplace-roster.md section B (cmux row, verified 2026-07-07).
+
+  Investigate BOTH arms, timebox each, deliverable = findings + follow-up specs (not implementation):
+
+  Arm 1 — attention badges / notification semantics in `aida tui`:
+  - What signal do we already have? The TUI hosts child PTY sessions; sessions/leases/NeedsAttention/awaiting state exist in the substrate. Map which existing events should surface as a per-session attention badge (needs input, punt filed, phase failed/shelved, CI verdict, unread mail).
+  - How do cmux/WezTerm detect "agent needs attention" (escape sequences, OSC user-vars, output quiescence)? Which of those can ratatui-hosted PTYs observe reliably?
+  - Sketch the minimal UI: badge/ring on the session list + a notification popover analog. NO redesign of the TUI shell.
+
+  Arm 2 — burndown fan-out spawning into WezTerm panes:
+  - Can `aida burndown` / `aida queue work` fan-out target `wezterm cli` (spawn/split-pane/send-text, mux server) so each worktree-isolated implementer lands in a visible pane instead of a background process — on Linux?
+  - What is the graceful degrade when WezTerm is absent (current behavior unchanged; faithful-launcher rule, no hidden opinion)?
+  - Is there a vendor-neutral seam (generic 'pane host' adapter: wezterm / tmux / cmux socket API) or is that premature abstraction? Recommend smallest valuable slice.
+
+  Out of scope (explicitly): porting cmux to Rust; building a GUI app; embedded browser automation; any macOS-specific work.
+
+  Acceptance:
+  - A dated findings doc under docs/research/ (or docs/plans/) answering the questions above, with a go/no-go recommendation and effort estimate per arm.
+  - Each go arm decomposed into 1-3 child specs (smallest valuable slice first) filed as drafts.
+  - The "does this make the TUI's quiet depth stronger when someone digs in?" test applied explicitly to every proposed slice; anything failing it is named and dropped.
+  - Revisit trigger recorded if parked: renewed demand for fleet-watching UX, or cmux/WezTerm shipping structured work-unit state (roster tripwire).
+
+  Related: marketplace-roster.md cmux row; docs/competitive-analysis/tui-prior-art.md (validation evidence for notification UX); EPIC-26 (aida tui); docs/tui/README.md.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T04:39:31.269252667Z
+modified_at: 2026-07-08T04:39:31.269252667Z
+req_type: Spike
+human_only: true
