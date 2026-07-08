@@ -92824,15 +92824,35 @@ pub(crate) fn classify_sha_match(
     }
     // git merge-base --is-ancestor returns exit 0 when the first commit
     // is an ancestor of the second.
-    let status = std::process::Command::new("git")
+    //
+    // BUG-702: use `.output()` (not `.status()`) so git's stderr is CAPTURED,
+    // not inherited — a `binary_sha` that a history rewrite purged (force-push
+    // + gc) makes git print `fatal: Not a valid object name <sha>`, which would
+    // otherwise leak into `aida pull` output. trace:BUG-702 | ai:claude
+    let output = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
         .args(["merge-base", "--is-ancestor", binary_sha, head_sha])
-        .status();
-    match status {
-        Ok(s) if s.success() => ShaMatch::Ancestor,
-        Ok(_) => ShaMatch::Unrelated,
+        .output();
+    match output {
+        Ok(o) => classify_from_merge_base_exit(o.status.code()),
         Err(_) => ShaMatch::Unknown,
+    }
+}
+
+/// BUG-702: map `git merge-base --is-ancestor` exit code → [`ShaMatch`]. Exit
+/// `0` = ancestor; `1` = a clean "not an ancestor" (both commits resolved);
+/// anything else — notably `128` = bad/missing object from a purged SHA, or git
+/// unavailable — is Unknown: the SHA can't be placed, so no stale-binary nudge
+/// and (with the captured stderr above) no leaked git fatal. A purged SHA is
+/// genuinely Unknown, NOT a misleading Unrelated. Pure so the exit-code
+/// contract is unit-testable.
+// trace:BUG-702 | ai:claude
+fn classify_from_merge_base_exit(code: Option<i32>) -> ShaMatch {
+    match code {
+        Some(0) => ShaMatch::Ancestor,
+        Some(1) => ShaMatch::Unrelated,
+        _ => ShaMatch::Unknown,
     }
 }
 
@@ -111510,6 +111530,19 @@ mod binary_selection_tests {
         // --short prefix length).
         let banner = "aida 0.5.2 (built 2026-05-13, sha abc123)";
         assert!(parse_embedded_sha(banner).is_none());
+    }
+
+    #[test]
+    fn classify_from_merge_base_exit_maps_purged_sha_to_unknown() {
+        // BUG-702: a purged/unresolvable binary_sha makes `git merge-base
+        // --is-ancestor` exit 128 (bad object). It must classify as Unknown —
+        // no stale-binary nudge, and the raw git fatal is suppressed upstream —
+        // NOT a misleading Unrelated (which implies "resolved, different
+        // branch"). Exit 1 stays the clean "not an ancestor".
+        assert_eq!(classify_from_merge_base_exit(Some(0)), ShaMatch::Ancestor);
+        assert_eq!(classify_from_merge_base_exit(Some(1)), ShaMatch::Unrelated);
+        assert_eq!(classify_from_merge_base_exit(Some(128)), ShaMatch::Unknown);
+        assert_eq!(classify_from_merge_base_exit(None), ShaMatch::Unknown);
     }
 
     #[test]
