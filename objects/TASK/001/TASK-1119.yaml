@@ -1,0 +1,19 @@
+id: 019f3ffb-0309-75f3-b736-f2ede8668b5f
+spec_id: TASK-1119
+agreed_id: TASK-1119
+title: 'Flow smoke-test 3: append a third dated marker line to docs/flow-smoke.md'
+description: |-
+  Append a third line to docs/flow-smoke.md with the current date, below the existing markers.
+
+  ## Acceptance
+  - docs/flow-smoke.md contains a third dated marker line.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T04:27:22.761212125Z
+modified_at: 2026-07-08T04:27:22.761212125Z
+req_type: Task
+tags:
+- batch:flowtest
+- lifecycle:trivial
