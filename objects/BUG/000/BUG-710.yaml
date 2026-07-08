@@ -10,12 +10,12 @@ description: |-
   NEEDS VERIFICATION before fixing: confirm (a) that aida pr ship as invoked by the implementer skill really does merge without any independent review, and (b) whether this is codex-implementer-specific (its skill/prompt drove the full ship) or reproducible with a claude headless implementer too. The fix direction, once confirmed: the implementer contract should STOP at "PR opened" (leave CI + independent review + merge to the orchestrator phases), OR the self-merge path must route through the independent reviewer first.
 
   Filed as draft (keystone governance concern) — triage with the operator/advisor before driving; do NOT autonomous-drain this one.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T02:11:10.774224290Z
-modified_at: 2026-07-08T04:59:08.611231960Z
+modified_at: 2026-07-08T05:08:50.625370763Z
 req_type: Bug
 tags:
 - aida:zen
@@ -47,3 +47,21 @@ comments:
   created_at: 2026-07-08T04:59:08.611231960Z
   modified_at: 2026-07-08T04:59:08.611231960Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f4020-f8dd-7fe2-aa3b-6d825fa08d21
+  author: aida-auto-bump
+  timestamp: 2026-07-08T05:08:50.525219649Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f4020-f941-7253-8ee4-e7685a8e0ad8
+  timestamp: 2026-07-08T05:08:50.625358621Z
+  agent: aida
+  commit_sha: ecf12278fb871a8224e982456fd5b8a86201fc81
+  summary: Completed via merge ecf12278
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-08T05:08:49.438177647Z
+  completion_sha: ecf12278fb871a8224e982456fd5b8a86201fc81
