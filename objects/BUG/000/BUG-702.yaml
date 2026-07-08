@@ -8,7 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T03:44:17.405575209Z
-modified_at: 2026-07-07T03:44:17.405575209Z
+modified_at: 2026-07-08T05:51:32.308949368Z
 req_type: Bug
 tags:
 - aida:pull from-self-test papercut history-rewrite severity:cosmetic
+comments:
+- id: 019f4048-0fd4-71c1-a8e7-c591ff33cffe
+  author: joe
+  content: Commit ecf12278f references this requirement
+  created_at: 2026-07-08T05:51:32.308949368Z
+  modified_at: 2026-07-08T05:51:32.308949368Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
