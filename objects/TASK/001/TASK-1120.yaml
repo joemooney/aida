@@ -1,0 +1,28 @@
+id: 019f4013-076d-7d22-aab4-1751eb4b9d86
+spec_id: TASK-1120
+agreed_id: TASK-1120
+title: 'Opt-in --panes wezterm: burndown/queue-work fan-out spawns implementers into visible WezTerm panes'
+description: |-
+  Give the operator a live view of a fanned-out drain: with --panes wezterm (or [burndown] pane_host = "wezterm"), each worktree-isolated implementer is spawned via `wezterm cli spawn` (or split-pane under a dedicated tab) with `set-tab-title <SPEC-ID>`, instead of as an invisible background process. Primitives verified on wezterm 20240203 (spawn/split-pane return pane-id; send-text; get-text; list; kill-pane). See SPIKE-77 findings doc.
+
+  Constraints (from the spike):
+  - OPT-IN ONLY; bare command behavior byte-identical (faithful-launcher rule, STORY-495 — no hidden opinion).
+  - Graceful degrade: wezterm binary absent or `wezterm cli --no-auto-start list` fails -> warn once, fall back to current background spawning; never fail the drain over display.
+  - Record the returned pane-id in the session lease so aida ps / the fleet-watch skill can cross-reference pane <-> spec.
+  - Do NOT wire kill-pane to lifecycle — the drain must never destructively reach into the operator's terminal; panes outlive their sessions and the operator closes them.
+  - No pane-host adapter trait yet: one real backend first. Revisit trigger for the seam: a second backend (tmux) is actually requested, or tmux server usage appears on an operator machine.
+
+  Acceptance:
+  - `aida queue work --batch X --auto-complete --panes wezterm` inside a running WezTerm produces one titled pane per fanned implementer; drain semantics (leases, phases, exit codes) unchanged.
+  - Same command with wezterm absent completes identically to today plus a single warning line.
+  - Lease TOML carries the pane-id when pane-hosted; absent otherwise.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T04:53:36.749471982Z
+modified_at: 2026-07-08T04:53:36.749471982Z
+req_type: Task
+tags:
+- orchestrator
+- parent:SPIKE-77
