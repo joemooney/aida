@@ -147293,6 +147293,43 @@ fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::Calibrat
 }
 
 impl RealPhaseDriver {
+    /// End the implementer session: `aida session end <lease> --yes --skip-ci`.
+    /// Releases the lease, returns the warm-pool worktree to idle, and (only
+    /// when an OPEN PR still exists on the branch) auto-queues the `Review
+    /// PR-N` hand-off. Shared by phase 2 (`finish_ci`) and the BUG-709
+    /// AlreadyMerged completion so a self-merged drive tears its session down
+    /// the same way a normal drive does, instead of leaking the lease + pool
+    /// worktree. A merged PR leaves no open PR, so no spurious reviewer item is
+    /// filed.
+    // trace:BUG-711 | ai:claude
+    fn end_implementer_session(&self) -> Result<(), auto_complete::PhaseFailure> {
+        let lease = self.implementer_lease.clone().ok_or_else(|| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
+                "internal: implementer lease not recorded",
+            )
+        })?;
+        let status = std::process::Command::new(self.aida_exe())
+            .current_dir(&self.project_root)
+            .args(["session", "end", &lease, "--yes", "--skip-ci"])
+            .status()
+            // A spawn failure here is local subprocess plumbing, not red CI —
+            // tag it `Spawn` so the hint says so. trace:BUG-218 | ai:claude
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Spawn,
+                    format!("could not run `aida session end`: {e}"),
+                )
+            })?;
+        if !status.success() {
+            return Err(auto_complete::PhaseFailure::new(
+                "could not end the implementer session — it may have uncommitted \
+                 changes; commit or discard them, then re-run",
+            ));
+        }
+        Ok(())
+    }
+
     /// STORY-492: seed the branch + PR a `--resume-drain` re-entry skipped
     /// phases would have discovered, so the resumed phases (CI / reviewer /
     /// merge / pull) have the context they need. Called once before
@@ -147742,6 +147779,23 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // spinning the open-PR verify. trace:BUG-709 | ai:claude
                 Phase1PrResolve::AlreadyMerged(pr) => {
                     self.pr_number = Some(pr.number as u32);
+                    // BUG-711: the implementer already merged, so phases 2-5
+                    // (which include phase 2's session-end) will be skipped —
+                    // tear the implementer session down HERE so the lease + pool
+                    // worktree don't leak. Best-effort: the work already
+                    // shipped, so a teardown hiccup warns rather than failing an
+                    // otherwise-successful drive. trace:BUG-711 | ai:claude
+                    if let Err(e) = self.end_implementer_session() {
+                        if !self.json {
+                            eprintln!(
+                                "  {} PR-{} shipped, but ending the implementer session failed \
+                                 ({}) — release it manually: `aida session end`",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                                pr.number,
+                                e.reason,
+                            );
+                        }
+                    }
                     if !self.json {
                         eprintln!(
                             "  {} PR-{} already merged (the implementer ran the full ship) — \
@@ -147913,33 +147967,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
 
-        // CI cleared — end the implementer session. This removes the
-        // worktree and auto-queues the `Review PR-N` item for the reviewer.
-        let lease = self.implementer_lease.clone().ok_or_else(|| {
-            auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::Internal,
-                "internal: implementer lease not recorded",
-            )
-        })?;
-        let status = std::process::Command::new(self.aida_exe())
-            .current_dir(&self.project_root)
-            .args(["session", "end", &lease, "--yes", "--skip-ci"])
-            .status()
-            // A spawn failure here is local subprocess plumbing, not red CI —
-            // tag it `Spawn` so the hint says so. trace:BUG-218 | ai:claude
-            .map_err(|e| {
-                auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::Spawn,
-                    format!("could not run `aida session end`: {e}"),
-                )
-            })?;
-        if !status.success() {
-            return Err(auto_complete::PhaseFailure::new(
-                "could not end the implementer session — it may have uncommitted \
-                 changes; commit or discard them, then re-run",
-            ));
-        }
-        Ok(())
+        // CI cleared — end the implementer session (releases the lease,
+        // returns the pool worktree, and — only if an OPEN PR still exists —
+        // auto-queues the `Review PR-N` item for the reviewer).
+        self.end_implementer_session()
     }
 
     fn run_reviewer(
