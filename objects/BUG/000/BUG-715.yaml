@@ -1,0 +1,28 @@
+id: 019f4099-d028-7bc1-bfae-b88fba13f9fb
+spec_id: BUG-715
+agreed_id: BUG-715
+title: aida node acquire commits RAW machine identity (corporate email + hostname) to the store — leaks employer content to mirrors and would leak to the public origin
+description: |-
+  When aida node acquire / node register runs on a WORK machine, it writes the machines real identity into the aida-store registry: registry/nodes.toml gets email + hostname fields, and registry/blocks.yaml gets owner + hostname. Observed 2026-07-08: node 7 committed email = Joe.Mooney@<employer-domain> and hostname = <corporate-asset-tag> to the store and pushed to gitlab. The existing entries were hand-sanitized after the fact (owner -> work.example, hostname -> spock), proving this is a recurring manual scrub burden. If that commit ever reconciles onto github origin (the PUBLIC repo), it publishes employer-identifying content. The raw commits are even AUTHORED with the corporate email.
+
+  Root gap: node identity is written verbatim; there is no source-side redaction of the email/hostname (nor the git author) for a machine that must not leak its employer identity to a public store.
+
+  Acceptance:
+  - An opt-in redaction (e.g. [node] public_email / public_hostname in ~/.aida or a [store.scrub] map) so a work machine writes a sanitized identity into the store from the start — email -> a public alias, hostname -> a neutral label — matching the existing work.example / spock convention.
+  - The git author on store commits from a redacted machine is also the public alias, not the corporate email.
+  - Existing raw entries are detectable (aida doctor --category store-scrub or similar) so a leak that already landed on a mirror is surfaced.
+  - Ideally the redaction is verifiable before the first push (dry-run shows the sanitized identity).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T07:20:49.960372423Z
+modified_at: 2026-07-08T07:20:49.960372423Z
+req_type: Bug
+tags:
+- employer-content
+- from-operator
+- scrub
+- security
+- severity:major
+- store
