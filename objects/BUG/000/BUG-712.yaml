@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:39:46.123338710Z
-modified_at: 2026-07-08T06:13:28.940278623Z
+modified_at: 2026-07-08T06:13:29.499356023Z
 req_type: Bug
 tags:
 - aida:zen
@@ -29,3 +29,6 @@ comments:
   created_at: 2026-07-08T06:13:28.940278623Z
   modified_at: 2026-07-08T06:13:28.940278623Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+deferred: true
+deferred_at: 2026-07-08T06:13:29.499356023Z
+deferred_until: a non-self-healing stale-lock symptom appears (liveness reclaim fails), or the drain lock machinery is refactored
