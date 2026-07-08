@@ -13,11 +13,11 @@ description: |-
   - Existing raw entries are detectable (aida doctor --category store-scrub or similar) so a leak that already landed on a mirror is surfaced.
   - Ideally the redaction is verifiable before the first push (dry-run shows the sanitized identity).
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T07:20:49.960372423Z
-modified_at: 2026-07-08T07:20:49.960372423Z
+modified_at: 2026-07-08T15:28:36.667408996Z
 req_type: Bug
 tags:
 - employer-content

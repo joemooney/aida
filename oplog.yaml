@@ -32327,5 +32327,13 @@ operations:
       - "multi-agent": the CATEGORY/DISCOVERABILITY word, not part of the canonical term. It is redundant with "fleet" (a fleet is by definition multi-agent) and is the label every competitor wears (CrewAI/AutoGen/LangGraph/Claude Flow), so it differentiates nothing — but it IS what outsiders search for and the problem's common name in the wild. Use it in first-contact/on-ramp framing (README opening, search-facing copy: "coordination for multi-agent, multi-vendor development"), then introduce the precise canonical term and use it thereafter. Slash-compounds ("multi-agent/multi-vendor fleet coordination") are rejected as canonical: six words, says agent-plurality twice, reads as indecision.
 
       Origin: operator proposed shortening to "fleet coordination", then floated "multi-agent/multi-vendor fleet coordination", then corrected the exclusivity framing ("not a moat — Gas Town supports cross-vendor") (2026-07-08). Analysis across README/OVERVIEW/positioning/research docs led to: keep the modifier for precision, codify short forms, assign multi-agent the on-ramp role, anchor differentiation on the bundle + incentive.
-clock: 3028
+- id: 019f4258-641b-7331-b61b-bb85f0ae18af
+  target_id: 019f4099-d028-7bc1-bfae-b88fba13f9fb
+  author: aida
+  node_id: '1'
+  lamport: 3029
+  timestamp: 2026-07-08T15:28:36.891325355Z
+  kind: !SetPriority
+    priority: High
+clock: 3029
 node_id: '1'
