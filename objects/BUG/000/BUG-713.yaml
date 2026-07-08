@@ -1,0 +1,24 @@
+id: 019f400b-93e0-7c11-b2f0-59eae841d055
+spec_id: BUG-713
+agreed_id: BUG-713
+title: Codex prompts reference unreadable .claude/skills paths — codex loses the workflow (TASK-1114 conversion gap)
+description: |-
+  Split from BUG-710. The scaffolded codex custom prompts under ~/.codex/prompts/ still say "Follow the workflow in .claude/skills/<name>.md" (e.g. aida-pr.md:15). That is a claude path codex does not read, so the codex agent gets the prompt SHELL but not the actual workflow body — and free-lances (observed: it reached for aida pr ship instead of the open-PR-only /aida-pr flow, causing the BUG-710 self-merge).
+
+  This is the TASK-1114 convert_command_to_codex_prompt path-rewrite not covering the "Follow the workflow in .claude/skills/X" reference line (it was meant to rewrite .claude/skills -> .codex/skills). Broader than aida-pr: affects every converted codex prompt that references its skill file.
+
+  Acceptance:
+  - Codex prompts do not reference unreadable .claude/ paths. Either the conversion rewrites .claude/skills/<name> -> the codex-readable location (and that file exists), OR the essential workflow is inlined into the prompt body.
+  - Verify aida-pr specifically carries the open-PR-only / do-not-merge instruction so codex does not reach for aida pr ship.
+  - Re-scaffold + confirm on a codex drive that the implementer opens a PR and exits (does not self-merge) once the BUG-710 guard is also in.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T04:45:28.416341697Z
+modified_at: 2026-07-08T04:45:28.416341697Z
+req_type: Bug
+tags:
+- codex
+- followup:bug-710
+- scaffolding
