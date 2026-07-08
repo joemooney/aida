@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T02:11:10.774224290Z
-modified_at: 2026-07-08T04:45:27.830963615Z
+modified_at: 2026-07-08T04:59:08.611231960Z
 req_type: Bug
 tags:
 - aida:zen
@@ -40,4 +40,10 @@ comments:
     - Extension (note, not blocking): supervised (interactive) orchestrated implementers arent covered by AIDA_HEADLESS — a dedicated AIDA_ORCHESTRATED_IMPLEMENTER signal on both launch paths would close that too. Deferred: supervised has a human watching.
   created_at: 2026-07-08T04:45:27.830963615Z
   modified_at: 2026-07-08T04:45:27.830963615Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f4018-17c3-7210-8797-281bca463d83
+  author: joe
+  content: Commit 84e5c2443 references this requirement
+  created_at: 2026-07-08T04:59:08.611231960Z
+  modified_at: 2026-07-08T04:59:08.611231960Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
