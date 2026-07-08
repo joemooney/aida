@@ -11,12 +11,13 @@ description: |-
   - Short forms PERMITTED after the full term is established in the same doc: "fleet coordination" or "the fleet" in running mechanical prose where vendor-mix is not the point.
   - Preferred compression when the 4-word phrase is too heavy for a title or spoken use: "cross-vendor coordination" (drop the generic word, keep the differentiating one) — never "fleet coordination" as the standalone canonical form.
   - multi- vs cross- split (codified, both stay): "multi-vendor" describes fleet COMPOSITION (a multi-vendor fleet, multi-vendor agent fleets); "cross-vendor" describes the coordination layer's PROPERTY (coordination that spans vendors). A multi-vendor fleet needs cross-vendor coordination. Do not treat these as interchangeable or "fix" one into the other.
+  - "multi-agent": the CATEGORY/DISCOVERABILITY word, not part of the canonical term. It is redundant with "fleet" (a fleet is by definition multi-agent) and is the label every competitor wears (CrewAI/AutoGen/LangGraph/Claude Flow), so it differentiates nothing — but it IS what outsiders search for and the problem's common name in the wild. Use it in first-contact/on-ramp framing (README opening, search-facing copy: "coordination for multi-agent, multi-vendor development"), then introduce the precise canonical term and use it thereafter. Slash-compounds ("multi-agent/multi-vendor fleet coordination") are rejected as canonical: six words, says agent-plurality twice, reads as indecision.
 
-  Origin: operator proposed shortening to "fleet coordination" (2026-07-08); analysis of actual usage across README/OVERVIEW/positioning/research docs led to keep-the-modifier + codify short forms instead.
+  Origin: operator proposed shortening to "fleet coordination", then floated "multi-agent/multi-vendor fleet coordination" (2026-07-08); analysis of actual usage across README/OVERVIEW/positioning/research docs led to keep-the-modifier + codify short forms + assign multi-agent the on-ramp role.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T07:17:10.451952904Z
-modified_at: 2026-07-08T07:17:10.451952904Z
+modified_at: 2026-07-08T07:17:46.569467247Z
 req_type: Term

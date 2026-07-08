@@ -32245,5 +32245,24 @@ operations:
     req_type: Term
     status: Draft
     priority: Medium
-clock: 3024
+- id: 019f4097-04aa-7683-a5d7-bf8d12848cab
+  target_id: 019f4096-76b3-7c83-97d6-b62689f90bc1
+  author: aida
+  node_id: '1'
+  lamport: 3025
+  timestamp: 2026-07-08T07:17:46.794698039Z
+  kind: !SetDescription
+    description: |-
+      Canonical full term: "cross-vendor fleet coordination" — the L5 apex layer of the coordination stack (docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md; layered-evaluation-framework L5; g1/g2/g4 graphics).
+
+      Usage rules:
+      - The modifier "cross-vendor" is LOAD-BEARING, not decoration. Unqualified "fleet coordination" is the commoditized lane (Gas Town, Claude Flow, Goosetown, Claude Code Agent Teams all claim it) and includes the within-vendor territory AIDA deliberately cedes to native tooling (ride-native-within-vendor / own-cross-vendor-durable). Dropping the modifier in a positioning or claim-making sentence is simultaneously an overclaim (the crowded lane) and an underclaim (loses the incentive-persistent gap that is the actual thesis: no single vendor is incentivized to build the neutral coordination substrate).
+      - Full term REQUIRED: first use in any doc; any sentence making the competitive/differentiation claim; layer names, titles, and diagrams.
+      - Short forms PERMITTED after the full term is established in the same doc: "fleet coordination" or "the fleet" in running mechanical prose where vendor-mix is not the point.
+      - Preferred compression when the 4-word phrase is too heavy for a title or spoken use: "cross-vendor coordination" (drop the generic word, keep the differentiating one) — never "fleet coordination" as the standalone canonical form.
+      - multi- vs cross- split (codified, both stay): "multi-vendor" describes fleet COMPOSITION (a multi-vendor fleet, multi-vendor agent fleets); "cross-vendor" describes the coordination layer's PROPERTY (coordination that spans vendors). A multi-vendor fleet needs cross-vendor coordination. Do not treat these as interchangeable or "fix" one into the other.
+      - "multi-agent": the CATEGORY/DISCOVERABILITY word, not part of the canonical term. It is redundant with "fleet" (a fleet is by definition multi-agent) and is the label every competitor wears (CrewAI/AutoGen/LangGraph/Claude Flow), so it differentiates nothing — but it IS what outsiders search for and the problem's common name in the wild. Use it in first-contact/on-ramp framing (README opening, search-facing copy: "coordination for multi-agent, multi-vendor development"), then introduce the precise canonical term and use it thereafter. Slash-compounds ("multi-agent/multi-vendor fleet coordination") are rejected as canonical: six words, says agent-plurality twice, reads as indecision.
+
+      Origin: operator proposed shortening to "fleet coordination", then floated "multi-agent/multi-vendor fleet coordination" (2026-07-08); analysis of actual usage across README/OVERVIEW/positioning/research docs led to keep-the-modifier + codify short forms + assign multi-agent the on-ramp role.
+clock: 3025
 node_id: '1'
