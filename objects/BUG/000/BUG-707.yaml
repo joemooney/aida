@@ -32,10 +32,8 @@ comments:
   content: 'Fixed in 152cff094 on main: comma-strip in both awk captures (TOON-tolerant), removed both top-level ''local'' declarations (also resolves the set -u claude_exit unbound-variable at the substep-3 fallback check). bash -n green; capture logic verified against both the human table and TOON formats. Spec left at draft per product-seat disposition rules — advisor/operator can bump; note the auto-bump won''t fire on a draft.'
   created_at: 2026-07-07T23:14:12.193528252Z
   modified_at: 2026-07-07T23:14:12.193528252Z
-  session_id: cb18c423-4689-4160-bf43-c7371527f632
 - id: 019f3f2c-8505-73b3-be60-0f632b89c9f2
   author: joe
   content: 'The broader TOON-when-piped product question flagged in this bug''s description is now its own spec: STORY-764 (draft). This bug stays scoped to the demo-script defects only.'
   created_at: 2026-07-08T00:41:50.085761364Z
   modified_at: 2026-07-08T00:41:50.085761364Z
-  session_id: cb18c423-4689-4160-bf43-c7371527f632

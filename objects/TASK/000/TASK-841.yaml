@@ -46,14 +46,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019f1e60-6f5e-74c0-9dad-818301c4c9e8
-  timestamp: 2026-07-01T15:51:04.286744720Z
-  agent: aida
-  commit_sha: cc8844bae41a9842b789459a45a8d7a647e06bd6
-  summary: Completed via merge cc8844ba
-  punted:
-  - 'punted: the reviewer session produced no verdict file — the review did not complete — the reviewer''s headless log (/home/joe/ai/aida/.aida/headless-logs/pr-1297-019f1c48-1723-75b0-befa-e9d256f55a39.jsonl) contains an AskUserQuestion call, which is forbidden under `--no-human` and likely caused the session to bail before writing the verdict file (BUG-280). The `/aida-review` skill must auto-resolve every confirmation under AIDA_HEADLESS=1 instead of calling AskUserQuestion.'
 implementation_info:
   implemented: true
   implemented_at: 2026-07-01T05:55:32.076328796Z

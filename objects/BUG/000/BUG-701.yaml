@@ -23,13 +23,11 @@ comments:
   content: 'DIAGNOSIS (tested, hypothesis refuted twice — held the recency + verify-before-claiming discipline). (1) It is add-SPECIFIC, not the shared write path: aida edit (same targeted read-modify-write) = 1.6s; aida add = 8.5s. So the extra ~7s is what add does that edit does not: SPEC-ID ALLOCATION (main.rs add path ~14969: load_dispenser + GitBackend::with_dispenser + next-free-id). (2) GIT-BLOAT REFUTED: the orphan store is huge (16448 commits, 2764 yaml files) so I hypothesized slow git ops, but aida store compact (544 loose objects to 0, 6 to 2 packs, took 134s) did NOT change edit time (1.63s to 1.59s). So the write commit itself is fine; bloat is not the cause. (3) SUSPECT: dispenser id allocation does multiple git operations (dispenser.rs has 4 git-op sites) to reserve an id distributed-safely — 4x ~1.5s/op ≈ the ~7s delta. Needs a profiler/targeted timing to pin the exact slow op before fixing; likely direction = reduce/localize the git round-trips in id dispensing. SECONDARY: edit at 1.6s is itself not the sub-second BUG-634 advertises — smaller issue. Compaction was good hygiene regardless.'
   created_at: 2026-07-02T17:26:13.718879133Z
   modified_at: 2026-07-02T17:26:13.718879133Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3aa2-02d3-7fe0-aa92-91daafa148b9
   author: joe
   content: Commit b1a4563d1 references this requirement
   created_at: 2026-07-07T03:32:03.923642806Z
   modified_at: 2026-07-07T03:32:03.923642806Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f3aaa-5de0-7cd0-8f34-f8e8ce4a6f98
   author: aida-auto-bump
@@ -38,12 +36,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f3aaa-5e43-70f0-bdf7-1fa0a0bfa92f
-  timestamp: 2026-07-07T03:41:11.619057202Z
-  agent: aida
-  commit_sha: ac9288d385effb15a4abe5da90c61e0ee8ad6646
-  summary: Completed via merge ac9288d3
 implementation_info:
   implemented: false
   completed_at: 2026-07-07T03:41:10.441754898Z

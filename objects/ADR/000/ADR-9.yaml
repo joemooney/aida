@@ -66,7 +66,6 @@ comments:
   content: Commit 87e2fed08 references this requirement
   created_at: 2026-07-02T02:21:26.867444204Z
   modified_at: 2026-07-02T02:21:26.867444204Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f20fc-1eb9-7553-b4ca-20a6e500882b
   author: aida-auto-bump
@@ -75,12 +74,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f20fc-1f26-7183-a4a1-1a06a723f43c
-  timestamp: 2026-07-02T04:00:21.798715289Z
-  agent: aida
-  commit_sha: db15c14650e1d0d53f11ee8b24ecd71f28a9ec1f
-  summary: Completed via merge db15c146
 implementation_info:
   implemented: false
   completed_at: 2026-07-02T04:00:20.632594018Z

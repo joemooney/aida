@@ -27,13 +27,11 @@ comments:
   content: Commit fd5848e06 references this requirement
   created_at: 2026-07-02T08:34:35.509261111Z
   modified_at: 2026-07-02T08:34:35.509261111Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f2209-a520-7521-ab75-c5c51e8f9d53
   author: joe
   content: Commit 548b8a718 references this requirement
   created_at: 2026-07-02T08:54:45.280865514Z
   modified_at: 2026-07-02T08:54:45.280865514Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f2206-89c6-7f10-bd31-c1164e6aabaa
   author: aida-auto-bump
@@ -42,12 +40,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f2206-8a27-75e3-a166-a4ea816e8376
-  timestamp: 2026-07-02T08:51:21.767137623Z
-  agent: aida
-  commit_sha: 548b8a7185756c2b4128e36c5f493c01c625250b
-  summary: Completed via merge 548b8a71
 implementation_info:
   implemented: false
   completed_at: 2026-07-02T08:51:20.616211131Z

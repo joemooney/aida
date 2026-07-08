@@ -34,13 +34,11 @@ comments:
   content: Commit de98d50fc references this requirement
   created_at: 2026-07-07T06:00:05.419544695Z
   modified_at: 2026-07-07T06:00:05.419544695Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3d6e-7ef9-72d0-afa7-3875789ae621
   author: joe
   content: Commit c02c65ceb references this requirement
   created_at: 2026-07-07T16:34:39.481316134Z
   modified_at: 2026-07-07T16:34:39.481316134Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3d6e-ddca-7cc3-aabb-bb5f67a9b6ee
   author: joe
   content: |-
@@ -57,22 +55,18 @@ comments:
     REMAINING for full acceptance: repeat on the real work machine (setup = global ~/.aida/agents.toml [agents] vendor=codex + aida init; awaiting operator's machine-type answer).
   created_at: 2026-07-07T16:35:03.754208685Z
   modified_at: 2026-07-07T16:35:03.754208685Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3ed5-0367-7d32-8510-d4197c1c3100
   author: joe
   content: Commit a6dc16aef references this requirement
   created_at: 2026-07-07T23:06:15.271103206Z
   modified_at: 2026-07-07T23:06:15.271103206Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3ee6-8c7e-7a21-b288-f0589029b6e6
   author: joe
   content: Commit 26de99a70 references this requirement
   created_at: 2026-07-07T23:25:24.478256212Z
   modified_at: 2026-07-07T23:25:24.478256212Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3f46-5133-79c1-a1ee-385e34684dfa
   author: joe
   content: 'Acceptance: codex-only lifecycle validated GREEN in a simulated claude-less environment (PATH-stripped throwaway project, full implement→CI→merge→pull lifecycle with a real codex implementer). The genuine codex-mandated work machine is not reachable from the dev host, so simulation is the acceptance ceiling here. Closing on the simulation + the merged code (TASK-1113 doctor/degrade, BUG-704/705/706 vendor-routing fixes).'
   created_at: 2026-07-08T01:10:00.755279840Z
   modified_at: 2026-07-08T01:10:00.755279840Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a

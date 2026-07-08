@@ -39,16 +39,13 @@ comments:
   content: Commit 7746d1c6f references this requirement
   created_at: 2026-07-02T17:20:59.333830118Z
   modified_at: 2026-07-02T17:20:59.333830118Z
-  session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5
 - id: 019f23db-5587-7af2-9a69-adfa3a32c8d7
   author: joe
   content: Commit 7746d1c6f references this requirement
   created_at: 2026-07-02T17:23:24.679290244Z
   modified_at: 2026-07-02T17:23:24.679290244Z
-  session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5
 - id: 019f23e6-a0aa-78e2-88e6-3dbf4bbd0056
   author: joe
   content: Commit 7746d1c6f references this requirement
   created_at: 2026-07-02T17:35:44.810727514Z
   modified_at: 2026-07-02T17:35:44.810727514Z
-  session_id: 180f2893-7457-48e1-9f0c-fc7c711976a5

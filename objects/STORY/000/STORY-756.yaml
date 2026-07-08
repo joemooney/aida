@@ -30,7 +30,6 @@ comments:
   content: Commit 548b8a718 references this requirement
   created_at: 2026-07-02T08:54:46.044541980Z
   modified_at: 2026-07-02T08:54:46.044541980Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f23a9-8881-71e2-98c1-7139be7bcfb3
   author: aida-auto-bump
@@ -39,12 +38,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f23a9-88e4-7550-84c0-6f0a0a600e31
-  timestamp: 2026-07-02T16:29:01.028730223Z
-  agent: aida
-  commit_sha: 0bb393f67d1f11bc83f3638154ab4422de609ab6
-  summary: Completed via merge 0bb393f6
 implementation_info:
   implemented: false
   completed_at: 2026-07-02T16:28:59.854706775Z

@@ -22,7 +22,6 @@ comments:
   content: Commit de98d50fc references this requirement
   created_at: 2026-07-07T06:00:06.393109159Z
   modified_at: 2026-07-07T06:00:06.393109159Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f3b58-313d-7d50-a322-fcddbea88b88
   author: aida-auto-bump
@@ -31,12 +30,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f3b58-319f-7480-9ac7-ba2f8cb19a0e
-  timestamp: 2026-07-07T06:51:03.455958852Z
-  agent: aida
-  commit_sha: c0c3cde5bf3e0fa5a580347be651072c3872684f
-  summary: Completed via merge c0c3cde5
 implementation_info:
   implemented: false
   completed_at: 2026-07-07T06:51:02.278237630Z

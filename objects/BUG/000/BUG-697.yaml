@@ -23,25 +23,21 @@ comments:
   content: 'REPRODUCED + ROOT-CAUSED locally. Running the FULL aida-cli suite in parallel (the CI condition) reproduces a 1-test failure ~1 in 3 runs; running the single test alone ALWAYS passes. The failing test VARIES across runs (run 2 failed on a different test than bug670) — so this is a SYSTEMIC parallel-test race, not bug670-specific. Mechanism: cargo runs unit tests as parallel THREADS in one process, so std::env set_var/remove_var is process-global. There are 182 set_var/remove_var sites in aida-cli tests (glyphs.rs alone churns AIDA_TEST_HOME dozens of times; advisor.rs, first_run.rs, etc.). The with_env helpers use a PER-MODULE static Mutex, which serializes mutators WITHIN a module but NOT across modules, and env-READING tests (e.g. bug670 reads current_user_id) take no lock at all. When a reader interleaves with another module s mutate/restore window, it sees a transient env and computes the wrong result (bug670: current_user_id resolves a different user -> empty queue -> actionable []). CI shows a co-occurring "untracked working tree files would be overwritten by merge" from some other test doing real git ops, reinforcing test-isolation leakage. FIX OPTIONS (test-infra, ships supervised): (a) one crate-global env Mutex that EVERY env-touching test takes (mutators AND readers) — correct but touches many sites; (b) adopt serial_test and annotate env/cwd tests; (c) run the suite (or an env-sensitive nextest group) with --test-threads=1; (d) make the affected readers not depend on process env (inject user explicitly). Recommend (b) or a shared global lock. Impact: intermittently reds EVERY PR, forces gh run rerun.'
   created_at: 2026-07-02T06:39:39.179947497Z
   modified_at: 2026-07-02T06:39:39.179947497Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f21bd-3915-7732-9202-48d00929304a
   author: joe
   content: Commit 728d33cd5 references this requirement
   created_at: 2026-07-02T07:31:16.885852514Z
   modified_at: 2026-07-02T07:31:16.885852514Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f21bd-a5bd-7132-a2ca-34e4a9b7aafc
   author: joe
   content: Commit df94994de references this requirement
   created_at: 2026-07-02T07:31:44.701083850Z
   modified_at: 2026-07-02T07:31:44.701083850Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f2238-1df8-7bf2-a6bc-6b1eb310bca4
   author: joe
   content: 'REOPENING — the env-lock unification (#1342) helped a LOT but did NOT fully eliminate the flake. Post-fix: 8/8 then 3/3 clean full-suite runs locally, but it flaked ONCE in CI on PR #1346 (an unrelated init --minimal change). The panic CHANGED: now `read_queue_depth(root, Some("implementer")).unwrap()` returns None (main.rs ~116018) instead of the earlier empty-actionable assertion — the queue file for the resolved user was not found, still a user/path-resolution race. The git error "The following untracked working tree files would be overwritten by merge" co-occurs in the same Run tests step (appears twice). Two hypotheses for the residual: (a) a SECOND isolation issue — a test doing git merge/checkout/stash in a shared/real tree that leaves untracked files and corrupts state for a sibling; (b) a residual env/path mutation not routed through test_env::ENV_LOCK (my unification covered the 9 with_env-style locks + guards; a bare std::env::set_var or a set_current_dir somewhere could still race). NOT reproducible locally after the fix, so this needs CI-side instrumentation (or --test-threads scoping for the git-ops group), and ships supervised — not a loop-rush. Frequency is now low enough that a single rerun clears an innocent PR.'
   created_at: 2026-07-02T09:45:30.872644715Z
   modified_at: 2026-07-02T09:45:30.872644715Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f21ca-d480-7fd1-9e54-49d8583b0a97
   author: aida-auto-bump
@@ -50,12 +46,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f21ca-d4e1-7413-9d60-f5aba4f650c5
-  timestamp: 2026-07-02T07:46:08.737725524Z
-  agent: aida
-  commit_sha: 94e8596c8d9b6616ada6b45a4438d90794cc9692
-  summary: Completed via merge 94e8596c
 implementation_info:
   implemented: false
   completed_at: 2026-07-02T07:46:07.579873274Z

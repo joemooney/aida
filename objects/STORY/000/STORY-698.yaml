@@ -49,14 +49,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019f1ea1-3243-7363-b0d7-a607c8070668
-  timestamp: 2026-07-01T17:01:48.483832411Z
-  agent: aida
-  commit_sha: 7c87d9e8e1d752dec69b7669e4c746a70cd83f48
-  summary: Completed via merge 7c87d9e8
-  punted:
-  - 'punted: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting'
 implementation_info:
   implemented: true
   test_coverage_notes: |-

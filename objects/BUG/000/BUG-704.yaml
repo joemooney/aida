@@ -21,13 +21,11 @@ comments:
   content: 'Correction from continued validation: BUG-704 (gitignored project agents.toml invisible to worktrees) is REAL but was NOT the proximate cause of the observed claude spawn — retesting with the tracked [orchestrator] headless_vendor=codex knob present in BOTH the project root and the pool worktree still spawned claude. Code inspection found the true blocker: the no-human phase-1 exec path never consults resolve_headless_vendor at all (filed separately as the unrouted-exec-site bug). BUG-704 remains valid as the second, latent gap for the project-scoped agents.toml knob.'
   created_at: 2026-07-07T16:23:24.110329750Z
   modified_at: 2026-07-07T16:23:24.110329750Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3ed4-ff5f-7a30-b5d1-8f680da48b9c
   author: joe
   content: Commit a6dc16aef references this requirement
   created_at: 2026-07-07T23:06:14.239801746Z
   modified_at: 2026-07-07T23:06:14.239801746Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f3ede-7a14-72a2-b78d-02224fbe6416
   author: aida-auto-bump
@@ -36,12 +34,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f3ede-7a75-7fd3-b699-777eb137813b
-  timestamp: 2026-07-07T23:16:35.573206993Z
-  agent: aida
-  commit_sha: 26de99a7092a75853e182a8e756714fa1f9ac3ed
-  summary: Completed via merge 26de99a7
 implementation_info:
   implemented: false
   completed_at: 2026-07-07T23:16:34.394638899Z
