@@ -37,19 +37,16 @@ comments:
     So the fix must ALSO ensure the success path is recognized (PR merged => phase 1 SUCCESS, not inconclusive) so the drain completes + tears down cleanly, not just make the verify query merged state. A drive whose work fully landed must never exit "inconclusive, retry".
   created_at: 2026-07-08T01:43:59.523451271Z
   modified_at: 2026-07-08T01:43:59.523451271Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3f73-e778-7282-b976-13ff933c2caa
   author: joe
   content: Commit 5e7c88cf8 references this requirement
   created_at: 2026-07-08T01:59:48.344323360Z
   modified_at: 2026-07-08T01:59:48.344323360Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f3f74-df0e-7542-9454-1b6e1c6fad8f
   author: joe
   content: Commit 5e7c88cf8 references this requirement
   created_at: 2026-07-08T02:00:51.726011777Z
   modified_at: 2026-07-08T02:00:51.726011777Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f3f7d-051d-7211-a35f-2d504772217c
   author: aida-auto-bump
@@ -58,12 +55,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f3f7d-057f-7332-8671-5244f27f6b00
-  timestamp: 2026-07-08T02:09:45.855839544Z
-  agent: aida
-  commit_sha: 423038d98f8e90851678e71c83c6a349fdfb784e
-  summary: Completed via merge 423038d9
 implementation_info:
   implemented: false
   completed_at: 2026-07-08T02:09:44.576627876Z

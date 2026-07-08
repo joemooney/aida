@@ -7,13 +7,17 @@ description: |-
 
   ## Acceptance
   - docs/flow-smoke.md contains a second dated marker line.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T02:17:00.087370656Z
-modified_at: 2026-07-08T02:17:55.387854152Z
+modified_at: 2026-07-08T02:30:37.534594841Z
 req_type: Task
 tags:
 - batch:flowtest
 - lifecycle:trivial
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-08T02:30:37.534594841Z
+  completion_sha: b84b655e914d9c65696214f03de430063019ffe3
