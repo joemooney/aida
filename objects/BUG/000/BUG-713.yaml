@@ -16,9 +16,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:45:28.416341697Z
-modified_at: 2026-07-08T04:45:28.416341697Z
+modified_at: 2026-07-08T04:59:10.012180968Z
 req_type: Bug
 tags:
 - codex
 - followup:bug-710
 - scaffolding
+comments:
+- id: 019f4018-1d3c-7003-a865-277640af3829
+  author: joe
+  content: Commit 84e5c2443 references this requirement
+  created_at: 2026-07-08T04:59:10.012180968Z
+  modified_at: 2026-07-08T04:59:10.012180968Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
