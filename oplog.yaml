@@ -31749,5 +31749,29 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 2998
+- id: 019f3f4b-6ee9-7f51-ad77-24e417c60642
+  target_id: 019f3f4b-63dc-7893-81e2-c96547553dc4
+  author: aida
+  node_id: '1'
+  lamport: 2999
+  timestamp: 2026-07-08T01:15:36.041061781Z
+  kind: !Create
+    title: 'Per-invocation vendor override: --agent/--vendor flag on zen (and relevant drive commands)'
+    description: |-
+      Today there is NO per-run way to pick the implementer vendor on the primary drive command. Friction observed 2026-07-07 driving a trivial spec on codex:
+
+      - aida zen has NO vendor/agent flag at all. To drive on codex you must set AIDA_HEADLESS_VENDOR=codex (env), or the [orchestrator] headless_vendor / [agents] vendor knob. Not discoverable.
+      - aida queue work --vendor EXISTS but its help says it only affects the INTERACTIVE launch, NOT the headless --auto-complete implementer. So --vendor codex on an autonomous drain is silently ignored for the thing you care about.
+      - Naming split: operator reaches for --agent codex; the code says --vendor; yet aida agent new codex already uses agent as the noun. Surface is inconsistent.
+
+      Acceptance:
+      1. aida zen accepts a per-invocation vendor override (e.g. --vendor codex) that ACTUALLY routes the headless implementer (resolve_headless_vendor precedence: this flag wins over env/knobs).
+      2. --agent is accepted as an alias for --vendor on these commands (operator-facing noun matches agent new <vendor>).
+      3. queue work --vendor also routes the headless --auto-complete implementer (or its help states clearly that headless routing needs the env/knob and points to it) — no silent no-op.
+      4. Relevant commands covered: zen, queue work, burndown; agent new already takes a positional vendor.
+      5. --help on each names the resolution order so its discoverable without reading source.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 2999
 node_id: '1'
