@@ -32125,5 +32125,33 @@ operations:
     req_type: Task
     status: Draft
     priority: Low
-clock: 3018
+- id: 019f4013-4c09-7c40-9775-26982ce6c154
+  target_id: 019f4013-3ed9-7871-a849-429e20754907
+  author: aida
+  node_id: '1'
+  lamport: 3019
+  timestamp: 2026-07-08T04:53:54.313170075Z
+  kind: !Create
+    title: '/aida-fleet-watch skill: substrate-first fleet monitor with terminal census, digest + per-item recommended action'
+    description: |-
+      The SPIKE-77 driving use case: one continuously-runnable advisor view of every agent session — managed or not — with plain-language state and a recommended next action per item. Skill-only v1 (no new Rust): every input is an existing CLI surface. Suggested first of the three SPIKE-77 children (its lived usage calibrates the other two). See docs/research/2026-07-07-spike-77-cmux-ux-signals-fleet-watch.md.
+
+      Each tick (one-shot or /loop-driven):
+      1. SUBSTRATE SWEEP (authoritative): aida ps (live/STALE/orphaned), aida awaiting --json (operator gates), events.jsonl tail since last tick (completions, shelves, punts, merges — reuse the aida watch classification). Completion detection is STRUCTURAL ONLY (lease released, spec Done, PR merged, drain exit code); never inferred from output text — scrollback phrasing varies run-to-run, structural signals do not.
+      2. TERMINAL CENSUS (fallback, the only legitimate scrape): wezterm cli list (+ tmux list-panes when a server exists); subtract panes matching known leases/pane-ids; get-text the remainder's tail and classify cheaply (agent-shaped / waiting-at-prompt / quiescent >N min). Also provides wedge detection for managed sessions (pid alive + output quiescent) which pid-liveness cannot see.
+      3. DIFF + CLASSIFY each session vs previous tick: completed / progressing / stalled / needs-you / unmanaged / new.
+      4. DIGEST: plain-language fleet state + ONE recommended next action per non-nominal item.
+      5. DECISION ENVELOPE — route, never dispatch: may file findings, ack briefs, escalate into aida awaiting; may NOT start work, take leases, or merge (single-drain-lock lesson: no second decider). Any nudge (send-text into a pane) and any auto-action beyond read+route is an explicit opt-in tier aligned with docs/architecture/autonomy-and-escalation.md.
+
+      Acceptance:
+      - Running the skill once with (a) a live drain, (b) a stalled lease, (c) a hand-started unmanaged claude in another WezTerm pane produces a digest that correctly classifies all three and recommends a sensible action for each.
+      - Zero writes in default mode (read+report); routing verbs only via explicit flags/answers; no new-work dispatch path exists at all.
+      - Tick state (last event offset, last census snapshot) persists under .aida/ runtime state so diffs survive between invocations.
+      - Works with tmux absent (wezterm-only census) and vice versa; with neither, substrate sweep alone still yields the managed-fleet digest.
+      - Skill doc states the substrate-first rule and the decision envelope explicitly (they are design constraints, not implementation details).
+      Revisit trigger for promoting mechanics into an `aida fleet` subcommand: skill used weekly+ or its shell mechanics exceed ~a screen of bash.
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 3019
 node_id: '1'
