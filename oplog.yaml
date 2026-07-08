@@ -31785,5 +31785,29 @@ operations:
 
         ## Acceptance
         - docs/flow-smoke.md exists and contains a dated marker line.
-clock: 3000
+- id: 019f3f51-d03f-78b1-9780-aabb1592c07c
+  target_id: 019f3f51-c6f4-7602-a8ba-28b96ecb8330
+  author: aida
+  node_id: '1'
+  lamport: 3001
+  timestamp: 2026-07-08T01:22:34.175354624Z
+  kind: !Create
+    title: aida zen under-specified gate fires on optional EARS clarity nits + misattributes them as missing acceptance
+    description: |-
+      aida zen refuses well-specified TRIVIAL specs as under-specified. Observed 2026-07-07 driving TASK-1115 (a one-line doc task WITH a ## Acceptance section) on codex.
+
+      Root cause: spec_is_under_specified (aida-cli/src/main.rs:144935) returns !ears_lint::lint_text(text).is_clean() — so ANY EARS finding marks the spec under-specified, including the OPTIONAL clarity categories (missing-behavior, vague-trigger, low-testability). aida lint itself prints EARS as an optional clarity lens whose suggestions are drafts, never auto-applied — yet zen uses it as a drive gate (zen_drive.rs classify_suitability).
+
+      Two distinct failures:
+      1. Over-broad gate: a trivial doc task with a real acceptance section is blocked purely because its prose lacks a THE SYSTEM SHALL response clause (missing-behavior). lifecycle:trivial does not exempt it. Such a task will essentially never carry an EARS response clause.
+      2. Misleading message: the refusal reads under-specified (aida lint flags vague/missing acceptance) even when acceptance IS present and the actual finding is missing-behavior — nothing to do with acceptance. It sent the operator to rewrite the acceptance section twice; that never clears the gate.
+
+      Acceptance:
+      - The zen under-specified gate fires only on GENUINE under-specification (empty-body / no acceptance signal), NOT on the stylistic EARS categories (missing-behavior / vague-trigger / low-testability) alone; OR lifecycle:trivial and trivial doc/task types skip the EARS suitability gate.
+      - The refusal message names the ACTUAL EARS finding category rather than a hard-coded vague/missing acceptance string.
+      - Regression: a trivial doc task carrying a one-line ## Acceptance drives without --force.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3001
 node_id: '1'
