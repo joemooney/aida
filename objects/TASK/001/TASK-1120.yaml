@@ -3,31 +3,31 @@ spec_id: TASK-1120
 agreed_id: TASK-1120
 title: 'Opt-in --panes wezterm: burndown/queue-work fan-out spawns implementers into visible WezTerm panes'
 description: |-
-  Give the operator a live view of a fanned-out drain: with --panes wezterm (or [burndown] pane_host = "wezterm"), each worktree-isolated implementer is spawned via `wezterm cli spawn` (or split-pane under a dedicated tab) with `set-tab-title <SPEC-ID>`, instead of as an invisible background process. Primitives verified on wezterm 20240203 (spawn/split-pane return pane-id; send-text; get-text; list; kill-pane). See SPIKE-77 findings doc.
+  Give the operator a live view of a fanned-out drain: with --panes <host> (or [burndown] pane_host in config), each worktree-isolated implementer is spawned into a visible, titled terminal pane instead of an invisible background process. See SPIKE-77 findings doc (docs/research/2026-07-07-spike-77-cmux-ux-signals-fleet-watch.md).
 
   Constraints (from the spike):
   - OPT-IN ONLY; bare command behavior byte-identical (faithful-launcher rule, STORY-495 — no hidden opinion).
-  - Graceful degrade: wezterm binary absent or `wezterm cli --no-auto-start list` fails -> warn once, fall back to current background spawning; never fail the drain over display.
+  - Graceful degrade: pane-host binary absent or its list probe fails -> warn once, fall back to current background spawning; never fail the drain over display.
   - Record the returned pane-id in the session lease so aida ps / the fleet-watch skill can cross-reference pane <-> spec.
-  - Do NOT wire kill-pane to lifecycle — the drain must never destructively reach into the operator's terminal; panes outlive their sessions and the operator closes them.
-  - Coupling caveat (acknowledge in docs/help): pane-hosting ties implementer lifetime to the GUI — closing the WezTerm window kills pane-hosted implementers. Today's background spawning has the same terminal-lifetime coupling via the orchestrator, so this is not a regression, but it must not be sold as resilience.
+  - Do NOT wire pane-kill to lifecycle — the drain must never destructively reach into the operator's terminal; panes outlive their sessions and the operator closes them.
+  - Coupling caveat (acknowledge in docs/help): wezterm pane-hosting ties implementer lifetime to the GUI — closing the window kills pane-hosted implementers. Today's background spawning has the same terminal-lifetime coupling via the orchestrator, so not a regression, but it must not be sold as resilience. Zellij pane-hosting does NOT have this coupling (sessions detach).
 
-  Backend choice (updated 2026-07-07 — operator raised Zellij; this half-trips the recorded revisit trigger):
-  - Zellij is the identified second candidate, and on the merits it may be the better LONG-TERM backend: (a) detach/reattach means the WHOLE drain survives terminal/GUI death and SSH drops — the only backend option that is a resilience feature rather than a display feature (aligns with the standing dispatch-resilience mandate); (b) declarative KDL layouts allow a checked-in drain-dashboard artifact; (c) its WASM plugin system could host cmux-style badges natively (relevant to STORY-765's lane).
-  - Zellij's known weakness to verify before building on it: external per-pane addressing (CLI actions historically target the focused pane; wezterm's pane-id model is more precise). NOT verified — zellij is not currently installed on the operator machine.
-  - Decision rule: the first backend follows the operator's actual daily driver. Today that is WezTerm (live census confirms). IF the operator adopts Zellij (or wants detach-surviving drains), reorder: implement zellij first (or instead), and re-scope the pane-id lease field to a zellij-compatible address. Do not build the adapter trait speculatively; build it when the second backend is actually implemented.
+  Backend candidates — both CLI surfaces empirically verified 2026-07-07 on the operator machine:
+  - wezterm 20240203: cli spawn/split-pane (return pane-id), send-text/get-text/list (--format json)/kill-pane/set-tab-title, precise --pane-id addressing. Fire-and-forget spawn only (no blocking verb). Mux-server mode self-describes as experimental; panes die with the GUI.
+  - zellij 0.44.3: `run -- cmd` returns terminal_<id>, --cwd/--close-on-exit, and **--block-until-exit[-success|-failure]** (synchronous spawn — maps onto drain-phase semantics without polling); per-pane external addressing via --pane-id on dump-screen/write-chars/focus-pane-id (the pre-0.4x focused-pane-only limitation is OBSOLETE — earlier text here claiming it as a weakness was stale and is corrected); `attach -b` creates a detached background session (drain survives terminal/GUI death and SSH drops — the resilience mandate angle); KDL layout files (checked-in drain-dashboard artifact); WASM plugins + `zellij pipe` (native badge-UI home, relevant to STORY-765). Weaknesses: list output is text not JSON; reactive in-terminal scripting requires a plugin (vs wezterm's ten-lines-of-Lua event hooks).
+  - On pure orchestration merit zellij is now the stronger candidate (blocking spawn + detached sessions + layouts = orchestration surface, not just display). Decision rule unchanged: the FIRST backend follows the operator's actual daily driver. Operator installed zellij 2026-07-07 and is evaluating; decide the backend order when that verdict lands. One real backend first; build the adapter seam only when the second backend is actually implemented.
 
   Acceptance:
-  - `aida queue work --batch X --auto-complete --panes wezterm` inside a running WezTerm produces one titled pane per fanned implementer; drain semantics (leases, phases, exit codes) unchanged.
-  - Same command with wezterm absent completes identically to today plus a single warning line.
+  - `aida queue work --batch X --auto-complete --panes <host>` inside the chosen host produces one titled pane per fanned implementer; drain semantics (leases, phases, exit codes) unchanged.
+  - Same command with the host absent completes identically to today plus a single warning line.
   - Lease TOML carries the pane-id when pane-hosted; absent otherwise.
-  - Docs/help state the GUI-lifetime coupling caveat explicitly.
+  - Docs/help state the lifetime-coupling caveat for the chosen host explicitly.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:36.749471982Z
-modified_at: 2026-07-08T05:08:51.225590683Z
+modified_at: 2026-07-08T05:32:03.735830317Z
 req_type: Task
 tags:
 - orchestrator
