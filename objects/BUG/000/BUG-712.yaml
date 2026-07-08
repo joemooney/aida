@@ -1,0 +1,24 @@
+id: 019f4006-5acb-7f23-bfbf-fb68bdf52d28
+spec_id: BUG-712
+agreed_id: BUG-712
+title: drain.lock left with dead pid on clean drive exit (process::exit skips DrainGuard Drop)
+description: |-
+  Low-priority hygiene follow-up split from BUG-711. After a clean autonomous drive (aida zen / queue work --auto-complete) exits, .aida/drain.lock is left on disk recording the (now dead) drive pid. The DrainGuard RAII is supposed to remove the lock on Drop, but the drive process appears to exit via std::process::exit(), which skips destructors — so Drop never runs.
+
+  Impact is LOW and self-healing: acquire_drain_lock probes pid liveness and reclaims a dead-pid lock on the next drive, so this does not block subsequent drives. It is untidy (a leftover lock file, a misleading aida status/ps if it ever reads the lock without a liveness check) rather than harmful.
+
+  Acceptance:
+  - After a clean drive exit, .aida/drain.lock is removed (release the DrainGuard before any process::exit, or best-effort unlink on the terminal success/inconclusive/held paths).
+  - Regression/manual: run a drive to completion; assert .aida/drain.lock is absent afterward.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T04:39:46.123338710Z
+modified_at: 2026-07-08T04:39:46.123338710Z
+req_type: Bug
+tags:
+- aida:zen
+- followup:bug-711
+- papercut
+- self-healing
