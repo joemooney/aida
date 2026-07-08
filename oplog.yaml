@@ -31809,5 +31809,27 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3001
+- id: 019f3f51-e227-74f3-9c19-7e92b03d63fb
+  target_id: 019f3f51-db2b-7b83-9f30-1902f1ce40f0
+  author: aida
+  node_id: '1'
+  lamport: 3002
+  timestamp: 2026-07-08T01:22:38.759199648Z
+  kind: !Create
+    title: aida edit <spec> with no flags opens $EDITOR on a markdown buffer (git-commit style)
+    description: |-
+      aida edit <spec> with no field flags currently errors: No changes specified. Instead it should open the users editor (git-commit style) on a markdown buffer of the editable fields, and write the parsed result back on save.
+
+      Rationale: composing multi-line description / ## Acceptance on the shell command line is error-prone — shell quoting plus heredoc/paste indentation leaks into the stored body (observed 2026-07-07: a pasted ## Acceptance landed indented in TASK-1115). An editor buffer removes the quoting/indentation hazard entirely and makes multi-line spec authoring pleasant. This is directly on the make-the-flow-easier goal.
+
+      Acceptance:
+      - aida edit <spec> with no field flags opens the editor resolved from AIDA_EDITOR / $VISUAL / $EDITOR (then a sane platform default) on a markdown buffer.
+      - Buffer presents current title + description (including any ## Acceptance) in an editable, clearly-delimited format (commented guidance lines stripped on parse).
+      - On save+close, the parsed changes are written back through the normal single-spec targeted-write path; an unchanged or emptied buffer is a no-op (no spurious commit).
+      - Aborting the editor (nonzero exit) or making no changes leaves the spec untouched.
+      - Existing scripted usage (aida edit --status ... etc.) is unchanged; the editor path engages ONLY when no field flags are given.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3002
 node_id: '1'
