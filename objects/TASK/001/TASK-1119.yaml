@@ -7,12 +7,12 @@ description: |-
 
   ## Acceptance
   - docs/flow-smoke.md contains a third dated marker line.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:27:22.761212125Z
-modified_at: 2026-07-08T04:27:22.761212125Z
+modified_at: 2026-07-08T04:27:33.610617920Z
 req_type: Task
 tags:
 - batch:flowtest
