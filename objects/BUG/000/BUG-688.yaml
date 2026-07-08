@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:35:46.390020492Z
-modified_at: 2026-07-01T12:09:35.516112471Z
+modified_at: 2026-07-08T06:57:53.867068351Z
 req_type: Bug
 tags:
 - blocks:release-xplat-gate
@@ -37,3 +37,12 @@ comments:
     Common thread: these new binary-driving e2e suites assume a Unix env (HOME isolation, CWD, store attachment). The unit/lib tests pass cross-platform (3500+ green on both). Recommend the operator decide make-portable vs gate-to-Linux with this bug kept open on the macOS runtime question.
   created_at: 2026-07-01T12:09:35.516112471Z
   modified_at: 2026-07-01T12:09:35.516112471Z
+- id: 019f4084-d0cb-7cf2-b114-e7e56242b0d6
+  author: joe
+  content: |-
+    Gating landed 2026-07-08 (#1374, commit b88f3638): the five binary-driving e2e suites (agent_error_channel, agent_write_confirm, journey, newcomer_delight, queue_work_dry_run) now carry #![cfg(target_os = "linux")], so the nightly macOS/Windows matrix should go green on them while Linux coverage is unchanged. Deliberately NO completing trailer — this is the operator-chosen SYMPTOM fix (unblock the nightly), not the root-cause resolution.
+
+    STILL OPEN (needs macOS access): determine whether the macOS `aida init` exit-1-with-no-output is a REAL regression or an isolated-tempdir e2e-harness artifact. Concrete next step when macOS is available: run `aida init` in an isolated tempdir + HOME on macOS with the assertion widened to print exit/stdout/stderr (as PR #1314 did), and compare against a real /Users/... path (non-symlinked) to isolate the /var/folders symlink hypothesis. Tags needs:operator + platform:macos remain accurate.
+  created_at: 2026-07-08T06:57:53.867068351Z
+  modified_at: 2026-07-08T06:57:53.867068351Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
