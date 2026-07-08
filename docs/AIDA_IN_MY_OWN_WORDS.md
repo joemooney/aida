@@ -54,5 +54,11 @@ Marketplace of ideas, components and integrate into a common team environment.
 
 Expert Scout in the age of AI (see Wasteland)
 
+Emperor has no clothes. We have been building extremely necessarily complex systems, this is a huge challenge with AI.
 
+Necessary complexity versus slop
+   
+
+
+  I 
 
