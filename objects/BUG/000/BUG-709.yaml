@@ -13,12 +13,12 @@ description: |-
   - The PR-index verify treats an already-MERGED (or closed-as-merged) PR for the branch as SUCCESS, not inconclusive — it queries merged/all state, or short-circuits when the branch commit is already on origin/main.
   - No 300s hang after a successful fast merge; the verify resolves immediately once the PR is found in any state that implies it landed.
   - Regression: a fast create->merge pipeline (codex or claude) does not spin the verify to its backoff ceiling.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T01:40:54.008268166Z
-modified_at: 2026-07-08T02:00:51.726011777Z
+modified_at: 2026-07-08T02:09:45.855845144Z
 req_type: Bug
 tags:
 - aida:zen
@@ -50,3 +50,21 @@ comments:
   created_at: 2026-07-08T02:00:51.726011777Z
   modified_at: 2026-07-08T02:00:51.726011777Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f3f7d-051d-7211-a35f-2d504772217c
+  author: aida-auto-bump
+  timestamp: 2026-07-08T02:09:45.757851368Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f3f7d-057f-7332-8671-5244f27f6b00
+  timestamp: 2026-07-08T02:09:45.855839544Z
+  agent: aida
+  commit_sha: 423038d98f8e90851678e71c83c6a349fdfb784e
+  summary: Completed via merge 423038d9
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-08T02:09:44.576627876Z
+  completion_sha: 423038d98f8e90851678e71c83c6a349fdfb784e
