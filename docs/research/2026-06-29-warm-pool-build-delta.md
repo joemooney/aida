@@ -2,7 +2,7 @@
 
 *Date: 2026-06-29 · Status: finding (single-run pilot) · Specs: STORY-714, TASK-985, BUG-652 · Author: claude (implementer)*
 
-> A research note for the **agent-fleet** line, not just a STORY-714 implementation log. The question it answers — *what does it actually cost to give every fanned-out agent its own worktree, and what does recycling them buy back?* — bears directly on whether wide, parallel agent fan-out is economical. Pairs with [`2026-06-16-coordinating-multi-vendor-agent-fleets.md`](2026-06-16-coordinating-multi-vendor-agent-fleets.md).
+> A research note for the **agent-fleet** line, not just a STORY-714 implementation log. The question it answers — *what does it actually cost to give every fanned-out agent its own worktree, and what does recycling them buy back?* — bears directly on whether wide, parallel agent fan-out is economical. Pairs with [`2026-07-08-coordinating-multi-vendor-agent-fleets.md`](2026-07-08-coordinating-multi-vendor-agent-fleets.md).
 
 ## 1. Question & hypothesis
 
@@ -104,4 +104,4 @@ Unset `CARGO_TARGET_DIR`. Scaffold a Rust crate with the dep set in §2 (`cargo 
 - TASK-985 — flip the acquire-on-start default ON (this note is its decision evidence).
 - BUG-652 — `session end --return` dirty-gate fix (without it, hit-rate collapsed to 0% — reuse is a precondition for any of this payoff).
 - `docs/session-lifecycle.md` — the worktree lifecycle and the warm-pool section.
-- `docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md` — the agent-fleet line this feeds.
+- `docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md` — the agent-fleet line this feeds.

@@ -1,6 +1,6 @@
 # AIDA probe — ablations & controlled experiments
 
-The experimental arm of EPIC-48 (AIDA as a research probe). Each file is a dated, pre-registered experiment with deterministic grading where possible. These are the **evidence** behind the propositions in the theory paper (`../2026-06-16-coordinating-multi-vendor-agent-fleets.md`); read them when the paper cites a finding and you want the raw result.
+The experimental arm of EPIC-48 (AIDA as a research probe). Each file is a dated, pre-registered experiment with deterministic grading where possible. These are the **evidence** behind the propositions in the theory paper (`../2026-07-08-coordinating-multi-vendor-agent-fleets.md`); read them when the paper cites a finding and you want the raw result.
 
 Four programs ran. Read them in order within each.
 

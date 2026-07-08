@@ -8,7 +8,7 @@ This presentation is grounded in the proposal and the newer competitive scans, w
 
 - Swept AIDA research and competitive docs:
   - `docs/research/2026-06-16-research-proposal-multi-vendor-coordination.md`
-  - `docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md`
+  - `docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md`
   - `docs/research/2026-06-16-layered-evaluation-framework.md`
   - `docs/research/2026-06-26-agent-coordination-market-landscape.md`
   - `docs/competitive-analysis/marketplace-roster.md`

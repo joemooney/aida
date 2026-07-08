@@ -2,7 +2,7 @@
 
 ### Design-science findings from building and operating a home-grown coordination substrate as a probe into multi-vendor agent coordination (the system is the instrument, not the subject)
 
-**Status:** Draft basis for a research paper · **Date:** 2026-06-16 · **Genre:** Design-science / autoethnographic systems research · **Spine:** Multi-vendor fleet coordination (apex of a layered coordination stack) · **Frame:** AIDA as research probe — the deliverable is knowledge about the problem plus a roll-your-own cost/benefit, *not* a case for AIDA
+**Status:** Draft basis for a research paper · **Date:** 2026-07-08 (inception 2026-06-16) · **Genre:** Design-science / autoethnographic systems research · **Spine:** Multi-vendor fleet coordination (apex of a layered coordination stack) · **Frame:** AIDA as research probe — the deliverable is knowledge about the problem plus a roll-your-own cost/benefit, *not* a case for AIDA
 
 > This is a working draft meant to be handed to collaborators and revised. Claims are tagged with an **evidence grade** (see §2) so reviewers can see exactly how much weight each carries. Nothing here is asserted as a controlled empirical result; the contribution is the artifact and the design principles extracted from building it.
 

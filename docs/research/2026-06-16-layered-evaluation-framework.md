@@ -2,7 +2,7 @@
 
 ### A layered decision framework — feature requirements, risks/benefits, and lock-in safeguards for allocating money and internal resources
 
-**Status:** Draft · **Date:** 2026-06-16 · **Companion to:** `2026-06-16-coordinating-multi-vendor-agent-fleets.md` (the theory) and `2026-06-16-research-proposal-multi-vendor-coordination.md` (the proposal) · **Audience:** decision-makers allocating budget / internal development to AI tooling · **Frame:** vendor-neutral; AIDA appears only as a worked existence-proof, never as a recommendation
+**Status:** Draft · **Date:** 2026-06-16 · **Companion to:** `2026-07-08-coordinating-multi-vendor-agent-fleets.md` (the theory) and `2026-06-16-research-proposal-multi-vendor-coordination.md` (the proposal) · **Audience:** decision-makers allocating budget / internal development to AI tooling · **Frame:** vendor-neutral; AIDA appears only as a worked existence-proof, never as a recommendation
 
 > The theory paper argues *what is true* about the multi-vendor agent-coordination problem and leaves the roll-your-own verdict **open**. This document is the operational other half: a portable rubric for deciding, per layer, **build vs buy vs ride-native vs wait** — designed to (1) inform resource allocation, (2) safeguard against lock-in, and (3) build deliberately toward the one durable competitive asset (§5). It is a *living* instrument: the ground shifts, so re-score on a cadence (§7).
 

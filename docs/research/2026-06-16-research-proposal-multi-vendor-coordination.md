@@ -1,6 +1,6 @@
 # Research Proposal — Coordinating Multi-Vendor AI Agent Fleets
 
-**Status:** Draft · **Date:** 2026-06-16 · **Author:** Joe Mooney · **Companion to:** the theory paper (`2026-06-16-coordinating-multi-vendor-agent-fleets.md`) and the decision framework (`2026-06-16-layered-evaluation-framework.md`)
+**Status:** Draft · **Date:** 2026-06-16 · **Author:** Joe Mooney · **Companion to:** the theory paper (`2026-07-08-coordinating-multi-vendor-agent-fleets.md`) and the decision framework (`2026-06-16-layered-evaluation-framework.md`)
 
 > A concise, proposal-shaped statement of the research agenda: the problem, why current practice does not serve it, the approach, who it serves, and a checklist of measurable proof points. The long-form argument and evidence grades live in the theory paper; this is the agenda in brief.
 

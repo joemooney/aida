@@ -2,7 +2,7 @@
 
 Five 16:9 (1280x720) standalone SVGs for the multi-vendor agentic-AI research
 presentation. Distilled from the research corpus: the coordination-stack paper
-(`../2026-06-16-coordinating-multi-vendor-agent-fleets.md`), the dated market
+(`../2026-07-08-coordinating-multi-vendor-agent-fleets.md`), the dated market
 landscape (`docs/competitive-analysis/`), and the incentive thesis (P8a). SVG
 inserts directly into PowerPoint / Keynote / Slides.
 
