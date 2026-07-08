@@ -18,10 +18,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T01:40:54.008268166Z
-modified_at: 2026-07-08T01:40:54.008268166Z
+modified_at: 2026-07-08T01:43:59.523451271Z
 req_type: Bug
 tags:
 - aida:zen
 - codex
 - papercut
 - severity:friction
+comments:
+- id: 019f3f65-6d23-7e62-a38c-e455bd01a578
+  author: joe
+  content: |-
+    Full harm observed on the TASK-1115 codex drive (2026-07-08), beyond the hang:
+    1. The verify spun 16m31s then exited with a TERMINAL false-negative: "phase 1 (implementer session) inconclusive ... drain paused, spec left for retry" — even though PR-1365 was already merged and TASK-1115 was already Completed.
+    2. It suggested re-running `aida queue work --auto-complete`, which on an already-Completed spec would attempt a re-implement (only saved by the BUG-379 implementer-session-refused-on-done guard).
+    3. The false-pause path did NOT clean up: it left a stale drain.lock (dead pid), a stale implementer lease, and the pool worktree still leased. Operator had to be manually unblocked (session end + lock rm).
+
+    So the fix must ALSO ensure the success path is recognized (PR merged => phase 1 SUCCESS, not inconclusive) so the drain completes + tears down cleanly, not just make the verify query merged state. A drive whose work fully landed must never exit "inconclusive, retry".
+  created_at: 2026-07-08T01:43:59.523451271Z
+  modified_at: 2026-07-08T01:43:59.523451271Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
