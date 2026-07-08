@@ -1,0 +1,14 @@
+id: 019f4274-9b78-7f20-902d-d6ef28899cc3
+spec_id: TASK-1121
+agreed_id: TASK-1121
+title: 'paper-pdf.sh: repeatable pandoc/xelatex PDF build for research docs'
+description: 'One-command PDF render for the research corpus: scripts/paper-pdf.sh [doc.md] wraps pandoc + xelatex with the DejaVu font set (box-drawing + arrow glyph coverage), TOC, colorlinks, and a rendered-date stamp; defaults to the coordination paper. Filed to record the tooling; possible follow-ups if paper publishing becomes routine: a CI job that rebuilds the PDF on paper changes, and/or attaching milestone PDFs to GitHub Releases.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-08T15:59:26.072796811Z
+modified_at: 2026-07-08T15:59:26.072796811Z
+req_type: Task
+tags:
+- tooling

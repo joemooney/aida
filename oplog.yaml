@@ -32335,5 +32335,17 @@ operations:
   timestamp: 2026-07-08T15:28:36.891325355Z
   kind: !SetPriority
     priority: High
-clock: 3029
+- id: 019f4274-a2f2-73e2-b740-f136ff1267f1
+  target_id: 019f4274-9b78-7f20-902d-d6ef28899cc3
+  author: aida
+  node_id: '1'
+  lamport: 3030
+  timestamp: 2026-07-08T15:59:27.986327533Z
+  kind: !Create
+    title: 'paper-pdf.sh: repeatable pandoc/xelatex PDF build for research docs'
+    description: 'One-command PDF render for the research corpus: scripts/paper-pdf.sh [doc.md] wraps pandoc + xelatex with the DejaVu font set (box-drawing + arrow glyph coverage), TOC, colorlinks, and a rendered-date stamp; defaults to the coordination paper. Filed to record the tooling; possible follow-ups if paper publishing becomes routine: a CI job that rebuilds the PDF on paper changes, and/or attaching milestone PDFs to GitHub Releases.'
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 3030
 node_id: '1'
