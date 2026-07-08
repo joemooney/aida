@@ -30,7 +30,6 @@ comments:
   content: Commit 52db42cfe references this requirement
   created_at: 2026-07-08T04:16:47.116164940Z
   modified_at: 2026-07-08T04:16:47.116164940Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f3ffa-5a69-7cf2-b89f-e2caf21f8684
   author: aida-auto-bump
@@ -39,12 +38,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f3ffa-5aca-78b3-af4f-c5ecff08de3f
-  timestamp: 2026-07-08T04:26:39.690274671Z
-  agent: aida
-  commit_sha: 2f979ff0028a2e4ec6b076a8e562ccab19929579
-  summary: Completed via merge 2f979ff0
 implementation_info:
   implemented: false
   completed_at: 2026-07-08T04:26:38.513136568Z

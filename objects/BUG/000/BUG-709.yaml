@@ -55,7 +55,6 @@ comments:
     HOWEVER the teardown half of this bug is NOT closed by the merged fix: the AlreadyMerged path returns finish_success from PHASE 1, skipping PHASE 2 (finish_ci), which is where the implementer session is ended (lease release + pool-worktree return). So a self-merge drive still leaks a live lease + pool worktree (needs a manual `aida session end`). The drain lock is self-healing (pid-liveness reclaim on next acquire), so only the lease/pool leak. This leak PRE-EXISTED the fix (the old inconclusive path also skipped phase-2 teardown), so it is not a regression — but my commit message overclaimed "leaving stale lock/lease/worktree" as fixed. Tracked as the follow-up BUG below.
   created_at: 2026-07-08T02:34:45.913300986Z
   modified_at: 2026-07-08T02:34:45.913300986Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f3f7d-051d-7211-a35f-2d504772217c
   author: aida-auto-bump
