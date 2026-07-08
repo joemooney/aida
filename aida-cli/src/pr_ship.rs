@@ -275,6 +275,22 @@ pub fn should_delete_branch(
     !branch_in_sibling && stacked_child_count == 0 && open_child_pr_count == 0
 }
 
+/// BUG-710: substrate-as-bouncer decision — should `aida pr ship` REFUSE its
+/// merge step? An implementer running inside an orchestrated HEADLESS drive
+/// (`AIDA_HEADLESS=1`) must not self-merge its own PR: `aida zen` promises an
+/// INDEPENDENT reviewer before the auto-merge, and a phase-1 self-merge
+/// bypasses it (the failure the codex TASK-1115/1119 drives exposed — a
+/// free-lancing headless implementer reached for `aida pr ship` instead of
+/// just opening the PR). The implementer's job is to OPEN the PR; the
+/// orchestrator's CI + reviewer + merge phases finish it. One explicit opt-in
+/// (`AIDA_PR_SHIP_ALLOW_IN_DRIVE=1`) covers a deliberate headless
+/// direct-publish. Pure so the decision is unit-testable without the process
+/// env or a live drive.
+// trace:BUG-710 | ai:claude
+pub fn should_block_ship_merge(headless: bool, override_allow: bool) -> bool {
+    headless && !override_allow
+}
+
 /// Build the `gh pr merge` argv. Kept pure so SPEC-410 can pin the
 /// contract that the wrapper passes `--subject` when it repairs a squash
 /// subject.
@@ -585,6 +601,18 @@ mod tests {
         // force overrides sibling + children → delete (deliberate orphan).
         assert!(should_delete_branch(true, 5, 5, true));
         assert!(should_delete_branch(false, 1, 1, true));
+    }
+
+    #[test]
+    fn should_block_ship_merge_truth_table() {
+        // BUG-710: inside a headless orchestrated drive → REFUSE the self-merge.
+        assert!(should_block_ship_merge(true, false));
+        // Not in a headless drive (human at the keyboard) → allow the merge.
+        assert!(!should_block_ship_merge(false, false));
+        // Headless but the explicit opt-in is set → allow (deliberate publish).
+        assert!(!should_block_ship_merge(true, true));
+        // Override with no headless context is a no-op → still allowed.
+        assert!(!should_block_ship_merge(false, true));
     }
 
     #[test]

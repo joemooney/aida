@@ -15,7 +15,7 @@ Wrap up the current batch of commits and open a pull request with linked specs a
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-pr.md`:
+Follow the workflow in `.claude/skills/aida-pr/SKILL.md`:
 
 1. Walk `git log <base>..HEAD --oneline` and extract `(REQ-ID)` suffixes from each commit subject
 2. Verify every derived REQ-ID is in `Completed` status (pause and ask if any are still open)

@@ -62387,6 +62387,42 @@ fn pr_ship_handler(
         return Ok(());
     }
 
+    // ---- BUG-710: substrate-as-bouncer. An implementer running INSIDE an
+    // orchestrated HEADLESS drive (`AIDA_HEADLESS=1`) must NOT self-merge its
+    // own PR — `aida zen` promises an INDEPENDENT reviewer before the
+    // auto-merge, and a phase-1 self-merge bypasses it (the failure the codex
+    // TASK-1115/1119 drives exposed). Leave the PR OPEN and STOP so the
+    // orchestrator's CI + reviewer + merge phases finish it; the implementer's
+    // job was only to open the PR. Sibling of the STORY-529 gate below. One
+    // explicit opt-in (`AIDA_PR_SHIP_ALLOW_IN_DRIVE=1`) covers a deliberate
+    // headless direct-publish. trace:BUG-710 | ai:claude
+    let in_headless_drive = std::env::var("AIDA_HEADLESS")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    if pr_ship::should_block_ship_merge(in_headless_drive, allow_in_drive) {
+        eprintln!(
+            "{} PR-{} left OPEN — `aida pr ship` will not self-merge inside an \
+             orchestrated drive. The implementer opens the PR and exits; the \
+             orchestrator's independent reviewer gates the merge. (Deliberate \
+             headless direct-publish? set AIDA_PR_SHIP_ALLOW_IN_DRIVE=1.)",
+            "⏸".yellow().bold(),
+            pr_number,
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Skipped(
+                "inside an orchestrated headless drive — the reviewer gates the merge (BUG-710)"
+                    .to_string(),
+            ),
+        );
+        return Ok(());
+    }
+
     // ---- STORY-529: draft-for-review gate. A spec tagged `review:draft-only`
     // must NOT be auto-merged by `aida pr ship` — leave the PR a draft and STOP
     // (before CI-watch + merge) so a human reviews + merges. Opt-in via the tag,
