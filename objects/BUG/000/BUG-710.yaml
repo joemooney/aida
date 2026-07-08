@@ -10,15 +10,16 @@ description: |-
   NEEDS VERIFICATION before fixing: confirm (a) that aida pr ship as invoked by the implementer skill really does merge without any independent review, and (b) whether this is codex-implementer-specific (its skill/prompt drove the full ship) or reproducible with a claude headless implementer too. The fix direction, once confirmed: the implementer contract should STOP at "PR opened" (leave CI + independent review + merge to the orchestrator phases), OR the self-merge path must route through the independent reviewer first.
 
   Filed as draft (keystone governance concern) — triage with the operator/advisor before driving; do NOT autonomous-drain this one.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T02:11:10.774224290Z
-modified_at: 2026-07-08T02:11:10.774224290Z
+modified_at: 2026-07-08T04:45:24.732082414Z
 req_type: Bug
 tags:
 - aida:zen
 - codex
 - governance
-- needs-triage
+- substrate-guard
+- supervised

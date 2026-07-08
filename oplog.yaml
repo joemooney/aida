@@ -31987,5 +31987,37 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 3010
+- id: 019f400b-8657-7bc2-82e4-4dba344b53ae
+  target_id: 019f3f7e-5136-7582-93c1-9295a442c175
+  author: aida
+  node_id: '1'
+  lamport: 3011
+  timestamp: 2026-07-08T04:45:24.951339084Z
+  kind: !SetStatus
+    status: Approved
+- id: 019f400b-887d-7be0-8ac0-9b628d98ee10
+  target_id: 019f3f7e-5136-7582-93c1-9295a442c175
+  author: aida
+  node_id: '1'
+  lamport: 3012
+  timestamp: 2026-07-08T04:45:25.501177382Z
+  kind: !AddTag
+    tag: supervised
+- id: 019f400b-8a9f-7af3-ae36-de52e4bcbfa1
+  target_id: 019f3f7e-5136-7582-93c1-9295a442c175
+  author: aida
+  node_id: '1'
+  lamport: 3013
+  timestamp: 2026-07-08T04:45:26.047999961Z
+  kind: !AddTag
+    tag: substrate-guard
+- id: 019f400b-8cc2-79a1-ad2b-2b817b282225
+  target_id: 019f3f7e-5136-7582-93c1-9295a442c175
+  author: aida
+  node_id: '1'
+  lamport: 3014
+  timestamp: 2026-07-08T04:45:26.594791780Z
+  kind: !RemoveTag
+    tag: needs-triage
+clock: 3014
 node_id: '1'
