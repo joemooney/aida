@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T01:40:54.008268166Z
-modified_at: 2026-07-08T02:09:45.855845144Z
+modified_at: 2026-07-08T02:34:45.913300986Z
 req_type: Bug
 tags:
 - aida:zen
@@ -47,6 +47,15 @@ comments:
   content: Commit 5e7c88cf8 references this requirement
   created_at: 2026-07-08T02:00:51.726011777Z
   modified_at: 2026-07-08T02:00:51.726011777Z
+- id: 019f3f93-e919-7411-abe7-907f9a7e9ada
+  author: joe
+  content: |-
+    Post-merge validation (dogfood drive of TASK-1118, 2026-07-08): the PRIMARY harm is FIXED — the drive completed in 12m58s with a correct "shipped" verdict (both AlreadyMerged messages fired), NO 300s hang, NO false "inconclusive/retry". Compare TASK-1115 pre-fix: 16m31s hang → inconclusive.
+
+    HOWEVER the teardown half of this bug is NOT closed by the merged fix: the AlreadyMerged path returns finish_success from PHASE 1, skipping PHASE 2 (finish_ci), which is where the implementer session is ended (lease release + pool-worktree return). So a self-merge drive still leaks a live lease + pool worktree (needs a manual `aida session end`). The drain lock is self-healing (pid-liveness reclaim on next acquire), so only the lease/pool leak. This leak PRE-EXISTED the fix (the old inconclusive path also skipped phase-2 teardown), so it is not a regression — but my commit message overclaimed "leaving stale lock/lease/worktree" as fixed. Tracked as the follow-up BUG below.
+  created_at: 2026-07-08T02:34:45.913300986Z
+  modified_at: 2026-07-08T02:34:45.913300986Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f3f7d-051d-7211-a35f-2d504772217c
   author: aida-auto-bump
