@@ -32347,5 +32347,24 @@ operations:
     req_type: Task
     status: Draft
     priority: Low
-clock: 3030
+- id: 019f427e-dd24-7bb3-9403-821dcca27622
+  target_id: 019f427e-d350-7be0-953f-fc008383f6a7
+  author: aida
+  node_id: '1'
+  lamport: 3031
+  timestamp: 2026-07-08T16:10:38.244206920Z
+  kind: !Create
+    title: 'BUG-715 follow-ups: redact git author of store commits + doctor detection + dry-run preview'
+    description: |-
+      Follow-ups to BUG-715 (core file-content redaction shipped in #1375). The opt-in [node] public_email/public_hostname now redacts nodes.toml + blocks.yaml. Remaining, deliberately deferred out of the core PR:
+
+      1. Git AUTHOR redaction: store commits from a redacted machine should also be authored with the public email, not the raw corporate one (node-7 commits were authored with the corporate domain). Set the store repo user.email to public_email at the store configure_user sites when the knob is set.
+      2. Detection: aida doctor (--category store-scrub) surfaces raw email/hostname already present in the store on any hub, so a leak that already landed is visible.
+      3. Dry-run preview: show the sanitized identity a machine would write before its first push, so redaction is verifiable up front.
+
+      These are metadata/tooling refinements; the recurring file-content leak (the operator problem) is already closed by BUG-715 core.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3031
 node_id: '1'
