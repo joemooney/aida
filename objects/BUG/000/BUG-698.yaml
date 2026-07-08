@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T09:45:55.499448250Z
-modified_at: 2026-07-07T06:12:52.517264656Z
+modified_at: 2026-07-08T06:09:34.325924025Z
 req_type: Bug
 tags:
 - ci
@@ -24,3 +24,9 @@ comments:
   content: 'Recurrence 2026-07-07 (CI, PR #1359): session::tests::advisor_tier_program_and_args_builds_correct_command_per_vendor flaked — advisor_tier_program_and_args reads AIDA_AGENT_CMD via resolve_agent_program but the test never took AgentCmdEnvGuard, so a guarded writer test flipped the env between its two evaluations. Fixed by acquiring the guard in the test (shipped on the story-762 branch). Pattern to sweep: any test calling env-reading helpers WITHOUT the corresponding guard is a latent flake — same class as the BUG-697 unification.'
   created_at: 2026-07-07T06:12:52.517264656Z
   modified_at: 2026-07-07T06:12:52.517264656Z
+- id: 019f4058-9275-7c51-aa89-d98862bdab33
+  author: joe
+  content: Commit b65296c87 references this requirement
+  created_at: 2026-07-08T06:09:34.325924025Z
+  modified_at: 2026-07-08T06:09:34.325924025Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
