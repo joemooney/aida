@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T01:40:54.008268166Z
-modified_at: 2026-07-08T01:43:59.523451271Z
+modified_at: 2026-07-08T01:59:48.344323360Z
 req_type: Bug
 tags:
 - aida:zen
@@ -37,4 +37,10 @@ comments:
     So the fix must ALSO ensure the success path is recognized (PR merged => phase 1 SUCCESS, not inconclusive) so the drain completes + tears down cleanly, not just make the verify query merged state. A drive whose work fully landed must never exit "inconclusive, retry".
   created_at: 2026-07-08T01:43:59.523451271Z
   modified_at: 2026-07-08T01:43:59.523451271Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f3f73-e778-7282-b976-13ff933c2caa
+  author: joe
+  content: Commit 5e7c88cf8 references this requirement
+  created_at: 2026-07-08T01:59:48.344323360Z
+  modified_at: 2026-07-08T01:59:48.344323360Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
