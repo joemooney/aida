@@ -28,3 +28,12 @@ enabled = false
 # with `aida remote status`.
 [store.sync]
 mirror_remotes = ["gitlab"]
+
+# Default vendor for agent launches (drives, drains, agent new). Set to codex so
+# `aida zen` / `aida burndown` / supervised drives use the Codex CLI without a
+# per-run `AIDA_HEADLESS_VENDOR=codex` prefix. This is the TRACKED config knob
+# (BUG-704) so pool/drain worktrees inherit it — a gitignored `.aida/agents.toml`
+# would NOT reach them. Override per-run with the env var, or (once TASK-1116
+# lands) a `--vendor`/`--agent` flag on the drive command.
+[agents]
+vendor = "codex"
