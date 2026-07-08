@@ -381,7 +381,7 @@ blocks:
   type_prefix: TERM
   range_start: 1
   range_end: 100
-  next: 2
+  next: 3
   allocated_at: 2026-05-09T18:10:03.237103Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
