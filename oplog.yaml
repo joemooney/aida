@@ -31831,5 +31831,27 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3002
+- id: 019f3f62-a28a-7781-98c3-eb3d883f9c41
+  target_id: 019f3f62-9878-7493-b2c1-aeca3bdc3539
+  author: aida
+  node_id: '1'
+  lamport: 3003
+  timestamp: 2026-07-08T01:40:56.586656497Z
+  kind: !Create
+    title: Post-gh-pr-create PR-index verify hangs when the PR already merged (searches only OPEN PRs)
+    description: |-
+      A zen/drive ship step verifies the just-created PR is indexed by GitHub (guards against gh pr create eventual-consistency lag). Observed 2026-07-08 on a codex-implementer drive of TASK-1115: the verify printed GH verify inconclusive (attempt 1/3, 2/3, 3/3) with 30s -> 60s -> 300s backoff and appeared HUNG, even though PR-1365 had already merged and TASK-1115 was already Completed.
+
+      Root cause: the PR-index verify searches only OPEN PRs (by branch/spec, e.g. task-1115). In a fast pipeline (create -> CI -> squash-merge all quick), by the time the eventual-consistency retry fires the PR is already MERGED, so it is no longer in the open-PR index. The search therefore never succeeds and the step waits out its full escalating backoff (300s+) for something that already happened.
+
+      The message even self-diagnoses: no open PR indexed yet ... but the branch is on origin — likely GitHub eventual-consistency lag. It never considers the PR merged.
+
+      Acceptance:
+      - The PR-index verify treats an already-MERGED (or closed-as-merged) PR for the branch as SUCCESS, not inconclusive — it queries merged/all state, or short-circuits when the branch commit is already on origin/main.
+      - No 300s hang after a successful fast merge; the verify resolves immediately once the PR is found in any state that implies it landed.
+      - Regression: a fast create->merge pipeline (codex or claude) does not spin the verify to its backoff ceiling.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3003
 node_id: '1'
