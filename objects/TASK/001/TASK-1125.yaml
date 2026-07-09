@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-09T06:52:34.367470489Z
-modified_at: 2026-07-09T06:52:34.367470489Z
+modified_at: 2026-07-09T07:10:26.553160351Z
 req_type: Task
 tags:
 - followup:bug-716
@@ -25,3 +25,18 @@ tags:
 - research
 - spike-67
 - writeup
+comments:
+- id: 019f45b6-a8f9-7531-a5a9-04a1b246a8e5
+  author: joe
+  content: |-
+    Add to the writeup — a clean articulation of gate trustworthiness that this incident + fix demonstrate, sharper than the current section 4:
+
+    THE THREE-RUNG LADDER OF GATE DESIGNS:
+    1. Self-declared flag (weakest): the gate trusts a signal the guarded party (or its launcher) sets — e.g. BUG-710 keying on AIDA_HEADLESS. Fragile: every new mode/vendor must remember to set it; the supervised path did not, and the gate silently stopped firing (the TASK-1123 incident DEMOTED rung one).
+    2. Structural invariant (where the BUG-716 fix LANDED): the gate keys on a property that is already an invariant of the system for independent reasons — the drain lock, held by every drive because of single-drain enforcement (BUG-538). No per-mode wiring; new modes/vendors are covered for free. Residual: the invariant is code-maintained, so it can regress — closed by guarding the invariant itself (the run_implementer debug_assert, PR #1378).
+    3. Identity/authority (strongest, not taken here): the gate default-denies and requires explicit authorization the guarded party cannot forge — e.g. pr ship never auto-merges without a human-authored token. Maximal robustness, but it costs the human direct-publish UX; judged disproportionate for this threat.
+
+    The worked point: trustworthiness rises as the gate depends LESS on the guarded party declaring its own state and MORE on properties intrinsic to the system. The incident is evidence for climbing the ladder, not just patching the rung.
+  created_at: 2026-07-09T07:10:26.553160351Z
+  modified_at: 2026-07-09T07:10:26.553160351Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
