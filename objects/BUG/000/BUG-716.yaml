@@ -1,0 +1,32 @@
+id: 019f4594-eb9a-7472-ba00-27ea2ddaa547
+spec_id: BUG-716
+agreed_id: BUG-716
+title: aida pr ship self-merge guard (BUG-710) doesn't cover the SUPERVISED/interactive implementer — reviewer bypassed in --supervised drives
+description: |-
+  Confirmed 2026-07-09 during a --supervised walkthrough of TASK-1123. The codex implementer ran aida pr ship end-to-end (implement -> push -> CI -> squash-merge) and self-merged PR-1376 with ZERO independent reviews (gh pr view 1376 reviews = 0). aida zen --supervised PROMISES "the reviewer ALWAYS runs headless as an independent gate before the auto-merge" — that promise was VIOLATED.
+
+  Root cause: the BUG-710 guard refuses aida pr ship`s merge step only when AIDA_HEADLESS=1 (the HEADLESS orchestrated implementer). A --supervised implementer is INTERACTIVE, so AIDA_HEADLESS is unset, the guard stays silent, and the implementer self-merges. BUG-710`s triage DEFERRED supervised coverage on the rationale "supervised has a human watching" — this walkthrough proves that rationale is wrong: the human was approving codex command-permissions, NOT gating the merge, and had no opportunity to review before codex merged.
+
+  Contributing: BUG-713`s codex-prompt fix is in the source template but this machine`s ~/.codex/prompts was not re-scaffolded, so codex still had the broken .claude/skills reference and free-lanced to aida pr ship instead of opening the PR and stopping.
+
+  Fix: the guard must fire whenever the implementer runs INSIDE AN ORCHESTRATED DRIVE (headless OR supervised), not just on AIDA_HEADLESS. The orchestrator should set a dedicated signal (e.g. AIDA_ORCHESTRATED_IMPLEMENTER=1) on BOTH the headless and interactive implementer launches; aida pr ship refuses its merge step on that signal. The implementer opens the PR and stops; the orchestrator`s independent reviewer gates the merge in every mode.
+
+  Acceptance:
+  - In a --supervised drive, the implementer cannot self-merge; aida pr ship leaves the PR open and the orchestrator`s independent reviewer runs before merge.
+  - Regression: gh pr view <pr> reviews > 0 (or a reviewer verdict recorded) before merge on a supervised drive.
+  - The AIDA_HEADLESS-only guard (BUG-710) is generalized to the orchestrated-drive signal.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-09T06:33:35.386392436Z
+modified_at: 2026-07-09T06:33:35.386392436Z
+req_type: Bug
+tags:
+- aida:zen
+- codex
+- from-self-test
+- governance
+- severity:major
+- substrate-guard
+- supervised
