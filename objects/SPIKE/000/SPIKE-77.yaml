@@ -57,7 +57,6 @@ comments:
   content: 'Spike executed 2026-07-07. Findings: docs/research/2026-07-07-spike-77-cmux-ux-signals-fleet-watch.md. Verdicts: arm 1 GO via events.jsonl per-spec aggregation (OSC/escape approach DROPPED — default cockpit runs children with inherited stdio, never sees bytes); arm 2 GO opt-in with faithful degrade (wezterm cli primitives verified live on operator machine); arm 3 GO, highest value/effort, skill-only (aida watch + ps + awaiting cover more than assumed; real gaps = unmanaged-session census + judgment layer). Children filed as drafts: STORY-765 (badges), TASK-1120 (--panes wezterm), STORY-766 (/aida-fleet-watch — suggested first). Spec status still draft: the approval gate correctly refused this non-interactive product seat; operator intends approval.'
   created_at: 2026-07-08T04:54:22.910696725Z
   modified_at: 2026-07-08T04:54:22.910696725Z
-  session_id: cb18c423-4689-4160-bf43-c7371527f632
 history:
 - id: 019f401e-49e9-7b91-8f5c-92c87a8475b2
   author: aida-reconcile
@@ -66,12 +65,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f401e-4a4b-7500-a7cb-7405a6c09a6f
-  timestamp: 2026-07-08T05:05:54.763107439Z
-  agent: aida
-  commit_sha: 84e5c24431e925478190e09c63d066e8371efdb8
-  summary: Completed via merge 84e5c244
 implementation_info:
   implemented: false
   completed_at: 2026-07-08T05:05:53.582383190Z

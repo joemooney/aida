@@ -8,13 +8,17 @@ description: |-
   ## Acceptance
   - docs/flow-smoke.md contains a new dated bullet mentioning the supervised walkthrough.
   - The change is a single, small, self-contained edit.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-09T04:19:39.265047070Z
-modified_at: 2026-07-09T04:25:17.790597173Z
+modified_at: 2026-07-09T04:40:18.268562403Z
 req_type: Task
 tags:
 - batch:flowtest
 - lifecycle:trivial
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-09T04:40:18.268562403Z
+  completion_sha: 0c80a0f8a2f7177b073f0f7f9e83140521c9dae4

@@ -40,13 +40,11 @@ comments:
     - Extension (note, not blocking): supervised (interactive) orchestrated implementers arent covered by AIDA_HEADLESS — a dedicated AIDA_ORCHESTRATED_IMPLEMENTER signal on both launch paths would close that too. Deferred: supervised has a human watching.
   created_at: 2026-07-08T04:45:27.830963615Z
   modified_at: 2026-07-08T04:45:27.830963615Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f4018-17c3-7210-8797-281bca463d83
   author: joe
   content: Commit 84e5c2443 references this requirement
   created_at: 2026-07-08T04:59:08.611231960Z
   modified_at: 2026-07-08T04:59:08.611231960Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f4020-f8dd-7fe2-aa3b-6d825fa08d21
   author: aida-auto-bump
@@ -55,12 +53,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f4020-f941-7253-8ee4-e7685a8e0ad8
-  timestamp: 2026-07-08T05:08:50.625358621Z
-  agent: aida
-  commit_sha: ecf12278fb871a8224e982456fd5b8a86201fc81
-  summary: Completed via merge ecf12278
 implementation_info:
   implemented: false
   completed_at: 2026-07-08T05:08:49.438177647Z

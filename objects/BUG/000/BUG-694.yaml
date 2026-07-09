@@ -22,7 +22,6 @@ comments:
   content: Commit ecf12278f references this requirement
   created_at: 2026-07-08T05:45:02.976613420Z
   modified_at: 2026-07-08T05:45:02.976613420Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f404a-1bef-71e1-949e-0ea806a9851c
   author: aida-auto-bump
@@ -31,12 +30,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f404a-1c51-7f00-a757-3d37023b1b1c
-  timestamp: 2026-07-08T05:53:46.577551691Z
-  agent: aida
-  commit_sha: 5418a4159433a6e4da832555e72cffd89571a969
-  summary: Completed via merge 5418a415
 implementation_info:
   implemented: false
   completed_at: 2026-07-08T05:53:45.394107970Z

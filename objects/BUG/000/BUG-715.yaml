@@ -32,13 +32,11 @@ comments:
   content: 'Core file-content redaction MERGED 2026-07-08 (#1375, commit 954f72e): opt-in [node] public_email/public_hostname in ~/.aida/config.toml now redacts nodes.toml + blocks.yaml at the aida-core write chokepoints. Auto-bump wrongly Completed this on merge (the "(BUG-715 core)" subject) — REOPENED to approved. Residuals still open: (1) redact the git AUTHOR of store commits to the public email; (2) aida doctor detection of raw entries already on a mirror; (3) dry-run preview of the sanitized identity.'
   created_at: 2026-07-08T16:09:38.862203683Z
   modified_at: 2026-07-08T16:09:38.862203683Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f427e-e7cc-7982-8af0-ce32dc96c7b4
   author: joe
   content: 'Correction: BUG-715 stays COMPLETED (the auto-bump was right — the core file-content redaction is the shipped fix; the recurring leak is closed). The earlier "reopened to approved" note did NOT take effect (reopening a Completed spec is refused by design). The three residuals (git author, doctor detection, dry-run) are tracked in the follow-up task filed today, not by reopening this.'
   created_at: 2026-07-08T16:10:40.972463186Z
   modified_at: 2026-07-08T16:10:40.972463186Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f427c-e9d7-75a0-be0a-b3d1aa7a5da5
   author: aida-auto-bump
@@ -47,12 +45,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f427c-ea3a-78d1-b81e-caa6c907c0c7
-  timestamp: 2026-07-08T16:08:30.522305358Z
-  agent: aida
-  commit_sha: 954f72e213902cb7b14dd174b902fc38c93b6d99
-  summary: Completed via merge 954f72e2
 implementation_info:
   implemented: false
   completed_at: 2026-07-08T16:08:29.338776188Z

@@ -45,4 +45,3 @@ comments:
     STILL OPEN (needs macOS access): determine whether the macOS `aida init` exit-1-with-no-output is a REAL regression or an isolated-tempdir e2e-harness artifact. Concrete next step when macOS is available: run `aida init` in an isolated tempdir + HOME on macOS with the assertion widened to print exit/stdout/stderr (as PR #1314 did), and compare against a real /Users/... path (non-symlinked) to isolate the /var/folders symlink hypothesis. Tags needs:operator + platform:macos remain accurate.
   created_at: 2026-07-08T06:57:53.867068351Z
   modified_at: 2026-07-08T06:57:53.867068351Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
