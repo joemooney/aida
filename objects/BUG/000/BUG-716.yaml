@@ -15,12 +15,12 @@ description: |-
   - In a --supervised drive, the implementer cannot self-merge; aida pr ship leaves the PR open and the orchestrator`s independent reviewer runs before merge.
   - Regression: gh pr view <pr> reviews > 0 (or a reviewer verdict recorded) before merge on a supervised drive.
   - The AIDA_HEADLESS-only guard (BUG-710) is generalized to the orchestrated-drive signal.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-09T06:33:35.386392436Z
-modified_at: 2026-07-09T06:48:34.356158419Z
+modified_at: 2026-07-09T06:59:35.623308901Z
 req_type: Bug
 tags:
 - aida:zen
@@ -37,3 +37,21 @@ comments:
   created_at: 2026-07-09T06:48:34.356158419Z
   modified_at: 2026-07-09T06:48:34.356158419Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f45ac-b9e5-7a20-92c9-7044e391e21d
+  author: aida-auto-bump
+  timestamp: 2026-07-09T06:59:35.525143672Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f45ac-ba47-7900-9539-ee17f11c971c
+  timestamp: 2026-07-09T06:59:35.623303573Z
+  agent: aida
+  commit_sha: 51f366e6ec85d7652fa33f7c559f127f4be95162
+  summary: Completed via merge 51f366e6
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-09T06:59:34.440012201Z
+  completion_sha: 51f366e6ec85d7652fa33f7c559f127f4be95162
