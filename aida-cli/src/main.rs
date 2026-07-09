@@ -147606,6 +147606,23 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         &mut self,
     ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Implementer);
+        // BUG-716 invariant guard: every orchestrated implementer passes through
+        // here, and the pr-ship self-merge gate depends on a LIVE drain lock
+        // being held while it runs (that is how it tells a drive from a plain
+        // session). Assert it at this single chokepoint so a future spawn path
+        // that drops the lock trips in dev/CI-debug rather than silently
+        // reopening the reviewer bypass. `debug_assert` keeps release drives
+        // unaffected; the main worktree is resolved explicitly (that is where
+        // `.aida/drain.lock` lives) and a resolution failure is tolerated.
+        // trace:BUG-716 | ai:claude
+        debug_assert!(
+            find_main_worktree_root()
+                .map(|root| drain_lock::drive_lock_invariant_holds(&drain_lock::probe_lock(&root)))
+                .unwrap_or(true),
+            "orchestrated implementer running without a live drain lock — the \
+             pr-ship self-merge guard (BUG-716) keys on it; a drive path dropped \
+             the lock"
+        );
         let session_uuid = uuid::Uuid::now_v7().to_string();
         // STORY-306: remember the minted session id — if phase 1 punts and the
         // advisor tier resolves the fork, `resume_implementer` `--resume`s

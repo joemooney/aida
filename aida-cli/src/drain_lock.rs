@@ -380,6 +380,20 @@ fn classify_lock(existing: Option<DrainLock>, is_alive: impl Fn(u32) -> bool) ->
     }
 }
 
+/// BUG-716 invariant: an orchestrated implementer must run under a LIVE drain
+/// lock. The `aida pr ship` self-merge gate keys on `probe_lock == Running` to
+/// tell a drive from a plain session; if a drive ever spawned an implementer
+/// WITHOUT the lock, that gate would silently stop firing and the reviewer
+/// bypass (BUG-716) would reopen. A `Running` lock satisfies the invariant;
+/// `None` / `Stale` (a crashed drive's leftover, BUG-712) do not. Pure so the
+/// invariant is unit-testable, and asserted at the single orchestrated
+/// implementer chokepoint (`RealPhaseDriver::run_implementer`) so a future
+/// spawn path that drops the lock trips loudly in dev/CI instead of at a user.
+// trace:BUG-716 | ai:claude
+pub(crate) fn drive_lock_invariant_holds(status: &LockStatus) -> bool {
+    matches!(status, LockStatus::Running(_))
+}
+
 /// RAII handle: while held, this process owns the global drain lock. `Drop`
 /// removes the lock file — but ONLY if it still records THIS process's pid, so
 /// a guard that outlives a stale-reclaim by a successor never deletes the
@@ -450,6 +464,24 @@ mod tests {
         DateTime::parse_from_rfc3339("2026-06-14T12:00:00Z")
             .unwrap()
             .with_timezone(&Utc)
+    }
+
+    #[test]
+    fn drive_lock_invariant_holds_only_for_a_running_lock() {
+        // BUG-716: the pr-ship self-merge gate depends on a LIVE (Running) drain
+        // lock being present whenever an orchestrated implementer runs. Only
+        // Running satisfies the invariant — a missing lock (plain session) and a
+        // Stale lock (crashed drive's leftover, BUG-712) must NOT, or the gate
+        // would falsely believe it is outside a drive and allow the self-merge.
+        assert!(drive_lock_invariant_holds(&LockStatus::Running(lock(
+            1234,
+            "2026-06-14T12:00:00Z"
+        ))));
+        assert!(!drive_lock_invariant_holds(&LockStatus::None));
+        assert!(!drive_lock_invariant_holds(&LockStatus::Stale(lock(
+            1234,
+            "2026-06-14T12:00:00Z"
+        ))));
     }
 
     #[test]
