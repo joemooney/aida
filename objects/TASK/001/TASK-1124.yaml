@@ -1,0 +1,26 @@
+id: 019f45a6-3bd4-7031-9b72-f3a262189bad
+spec_id: TASK-1124
+agreed_id: TASK-1124
+title: 'aida doctor: rule-delivery-rot check — hash deployed vendor prompts/scaffolding against source templates, flag drift'
+description: |-
+  Same defect family as BUG-570 (init pollution): home-grown scaffolding drifting silently at the seams. The TASK-1123 supervised reviewer-bypass incident had a contributing cause (a): a STALE ~/.codex/prompts (the BUG-713 fix was in the source template but this machine was never re-scaffolded), so codex lacked the open-PR-only workflow and free-lanced to aida pr ship.
+
+  Turn that invisible failure class into a checkable one: aida doctor (--category rule-delivery / scaffold-drift) hashes the DEPLOYED vendor prompts + skills (~/.codex/prompts, ~/.claude, .codex/skills, .claude/skills) against the binary`s embedded source templates and flags drift, pointing at the re-scaffold command. This is a DETECTION mechanism, not a gate — the right tool for delivery-rot (a gate belongs on the merge, per BUG-716; detection belongs here). Complements aida memories check (STORY-410), which already does this for the memory pack.
+
+  Acceptance:
+  - aida doctor surfaces deployed-vs-source drift for vendor prompts/skills with the fix command.
+  - The stale-~/.codex/prompts case that contributed to the TASK-1123 incident would have been flagged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-09T06:52:30.036882055Z
+modified_at: 2026-07-09T06:52:30.036882055Z
+req_type: Task
+tags:
+- aida:doctor
+- codex
+- detection
+- followup:bug-713
+- followup:bug-716
+- scaffolding
