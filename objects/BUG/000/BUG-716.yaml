@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-09T06:33:35.386392436Z
-modified_at: 2026-07-09T06:33:35.386392436Z
+modified_at: 2026-07-09T06:48:34.356158419Z
 req_type: Bug
 tags:
 - aida:zen
@@ -30,3 +30,10 @@ tags:
 - severity:major
 - substrate-guard
 - supervised
+comments:
+- id: 019f45a2-a334-7fa3-87bd-199d64bf37a1
+  author: joe
+  content: Commit 0c80a0f8a references this requirement
+  created_at: 2026-07-09T06:48:34.356158419Z
+  modified_at: 2026-07-09T06:48:34.356158419Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
