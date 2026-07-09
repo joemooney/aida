@@ -32446,5 +32446,22 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3035
+- id: 019f45bf-4557-7ae1-9104-548a96e4d530
+  target_id: 019f45bf-3b99-7701-b35c-adb32be45b8d
+  author: aida
+  node_id: '1'
+  lamport: 3036
+  timestamp: 2026-07-09T07:19:50.871129271Z
+  kind: !Create
+    title: Add a second workflow-walkthrough note to docs/flow-smoke.md (guard verification)
+    description: |-
+      Append a short dated bullet to docs/flow-smoke.md recording the supervised walkthrough re-run that verifies the BUG-716 self-merge guard.
+
+      ## Acceptance
+      - docs/flow-smoke.md contains a new dated bullet mentioning the guard-verification walkthrough.
+      - Single, small, self-contained edit.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3036
 node_id: '1'
