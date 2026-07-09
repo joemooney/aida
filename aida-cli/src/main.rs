@@ -62430,18 +62430,31 @@ fn pr_ship_handler(
     // job was only to open the PR. Sibling of the STORY-529 gate below. One
     // explicit opt-in (`AIDA_PR_SHIP_ALLOW_IN_DRIVE=1`) covers a deliberate
     // headless direct-publish. trace:BUG-710 | ai:claude
+    //
+    // BUG-716: BUG-710 gated only on AIDA_HEADLESS, so a --supervised
+    // (interactive) implementer — which has no AIDA_HEADLESS — slipped past and
+    // self-merged (codex TASK-1123, 0 reviews). Also treat a LIVE drain lock as
+    // "inside an orchestrated drive": every drive (headless AND supervised)
+    // holds it, a plain `aida queue work <spec>` session does not, and a stale
+    // post-crash lock (BUG-712) is not `Running`. trace:BUG-716 | ai:claude
     let in_headless_drive = std::env::var("AIDA_HEADLESS")
         .map(|v| v == "1")
         .unwrap_or(false);
+    let live_drive = matches!(
+        drain_lock::probe_lock(&main_worktree),
+        drain_lock::LockStatus::Running(_)
+    );
+    let in_orchestrated_drive = in_headless_drive || live_drive;
     let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE")
         .map(|v| v == "1")
         .unwrap_or(false);
-    if pr_ship::should_block_ship_merge(in_headless_drive, allow_in_drive) {
+    if pr_ship::should_block_ship_merge(in_orchestrated_drive, allow_in_drive) {
         eprintln!(
             "{} PR-{} left OPEN — `aida pr ship` will not self-merge inside an \
-             orchestrated drive. The implementer opens the PR and exits; the \
-             orchestrator's independent reviewer gates the merge. (Deliberate \
-             headless direct-publish? set AIDA_PR_SHIP_ALLOW_IN_DRIVE=1.)",
+             orchestrated drive (headless or supervised). The implementer opens \
+             the PR and exits; the orchestrator's independent reviewer gates the \
+             merge. (Deliberate in-drive direct-publish? set \
+             AIDA_PR_SHIP_ALLOW_IN_DRIVE=1.)",
             "⏸".yellow().bold(),
             pr_number,
         );
@@ -62450,7 +62463,7 @@ fn pr_ship_handler(
             Some(pr_number),
             &pr_ship::ShipStep::Merge { delete_branch },
             &pr_ship::StepOutcome::Skipped(
-                "inside an orchestrated headless drive — the reviewer gates the merge (BUG-710)"
+                "inside an orchestrated drive — the reviewer gates the merge (BUG-710/BUG-716)"
                     .to_string(),
             ),
         );
