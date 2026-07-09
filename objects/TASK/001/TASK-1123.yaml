@@ -1,0 +1,20 @@
+id: 019f451a-4c81-7401-a5c6-3027d3a244c4
+spec_id: TASK-1123
+agreed_id: TASK-1123
+title: Add a workflow-walkthrough note to docs/flow-smoke.md
+description: |-
+  Append a short dated bullet to docs/flow-smoke.md recording that a supervised interactive workflow walkthrough was run, so the file has a human-authored trace of the exercise.
+
+  ## Acceptance
+  - docs/flow-smoke.md contains a new dated bullet mentioning the supervised walkthrough.
+  - The change is a single, small, self-contained edit.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-09T04:19:39.265047070Z
+modified_at: 2026-07-09T04:19:39.265047070Z
+req_type: Task
+tags:
+- batch:flowtest
+- lifecycle:trivial
