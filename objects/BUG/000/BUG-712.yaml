@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:39:46.123338710Z
-modified_at: 2026-07-08T06:13:29.499356023Z
+modified_at: 2026-07-09T06:48:33.822737275Z
 req_type: Bug
 tags:
 - aida:zen
@@ -28,3 +28,9 @@ comments:
   content: 'Triaged 2026-07-08 during the stabilization sweep. Investigated: the MAIN drain paths already handle drop-before-process::exit correctly — the burndown / queue-work handler returns Ok(()) on success (guard drops on scope exit) and explicitly drop(_drain_guard) before std::process::exit on the non-zero path (main.rs ~94917); the integrate path likewise drop(_drain_guard) before process::exit(2) (~141496). The residual leak is a subtle edge: a guard held in an OUTER scope while a never-returning handler (e.g. handle_drain_resume, STORY-492) calls std::process::exit, which skips the outer Drop. Impact is near-zero and SELF-HEALING: acquire_drain_lock probes pid-liveness and reclaims a dead-pid lock on the next drive, so nothing is blocked. RECOMMENDATION: leave LOW/deferred — a proper fix threads the guard into the process::exit-ing handlers (or an atexit-style unlink) in the keystone lock machinery, which is disproportionate risk for a cosmetic, self-healing leftover. Revisit if a non-self-healing symptom ever appears (e.g. a stale lock a liveness check fails to reclaim).'
   created_at: 2026-07-08T06:13:28.940278623Z
   modified_at: 2026-07-08T06:13:28.940278623Z
+- id: 019f45a2-a11e-7b53-a25c-99da572d1b6e
+  author: joe
+  content: Commit 0c80a0f8a references this requirement
+  created_at: 2026-07-09T06:48:33.822737275Z
+  modified_at: 2026-07-09T06:48:33.822737275Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
