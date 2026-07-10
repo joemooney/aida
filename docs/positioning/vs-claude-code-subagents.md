@@ -1,6 +1,6 @@
 # AIDA roles vs Claude Code subagents (`/agents`)
 
-*Last updated: 2026-05-20 — Claude Code's `/agents` surface (the catalog of "Software Architect / Code Writer / Code Reviewer" presets, the tool-allowlist + model + prompt schema, the per-project `.claude/agents/` directory) is evolving. Re-verify against the current Claude Code docs before treating capability claims here as authoritative; if the surface drifts in a way that changes the layer story, update this doc.*
+*Last updated: 2026-07-09 — Claude Code's `/agents` surface (the catalog of "Software Architect / Code Writer / Code Reviewer" presets, the tool-allowlist + model + prompt schema, the per-project `.claude/agents/` directory) is evolving. Re-verify against the current Claude Code docs before treating capability claims here as authoritative; if the surface drifts in a way that changes the layer story, update this doc.*
 
 The TL;DR: **Claude Code subagents are a within-conversation primitive — a specialized prompt + tool allowlist + isolated context window that ends with the chat. AIDA's roles are a cross-conversation workflow layer — full `claude` processes in their own git worktrees, holding leases, tied to specs in the requirement graph, with state that survives every conversation ending.** Different layers, not duplication. They compose: an AIDA role can spawn a subagent internally; AIDA is the layer above.
 
@@ -46,7 +46,7 @@ A natural follow-up: *"if subagents are a built-in primitive, why doesn't AIDA j
 - **No graph anchoring.** A subagent doesn't know what a SPEC-ID is. Routing work to "the reviewer for STORY-86" requires a primitive that ties an actor to a graph node — subagents have no such tie.
 - **No cross-session lifecycle.** AIDA's 6-phase orchestrator (commit → PR → CI → review → merge → bump) spans hours-to-days and crosses every session boundary in between. Subagents live and die inside one chat; they cannot be the substrate of a multi-day workflow.
 - **No lease coordination.** Two implementers picking up the same spec from the queue is a race that the lease system prevents. Subagents share their host conversation's context — there is no "between subagents" layer to put a lease in.
-- **No durable artifacts.** A reviewer subagent's verdict is a chat message. An AIDA reviewer's verdict is a file on disk that drives an orchestrator merge phase. Different substrates, different leverage.
+- **No durable artifacts.** A reviewer subagent's verdict is a chat message. An AIDA reviewer's verdict is a file on disk that drives an orchestrator merge phase — and a structural self-merge guard blocks the implementer from merging its own work past that reviewer. Different substrates, different leverage.
 
 AIDA's defensible niche **is** the persistent graph + the cross-session lifecycle. You cannot build it out of stateless task-runners — wrong layer. The queue, the leases, the trace comments, the auto-bump, the MCP exposure — none of these are things a within-conversation primitive can carry.
 

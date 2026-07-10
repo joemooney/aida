@@ -1,6 +1,6 @@
 # Composition recipes — use AIDA *with* these, not instead of
 
-*Last updated: 2026-06-09*
+*Last updated: 2026-07-09*
 
 Most of the "should I use AIDA or X?" questions in this directory have the same
 real answer: **both.** AIDA is the layer *above* — the durable, vendor-neutral,
@@ -146,6 +146,23 @@ maintaining the discipline. AIDA doesn't ask you to throw it away; it adds stabl
 IDs, typed edges, code traces, and an MCP server *on top of* that same habit. The
 markdown is the floor; the graph is what you get for keeping it.
 
+## Recipe 7 — Open protocols carry the handoff; AIDA holds the record
+
+MCP (agent↔tool) and A2A (agent↔agent) are stateless *transports* — A2A by its
+own spec coordinates agents "without sharing internal memory, state, or tools."
+AIDA's posture is to **speak** these standards, not replace them: the
+git-canonical record stays the source of truth, and each protocol is one more way
+work feeds it.
+
+**The recipe:** let your agents use A2A (or MCP, or plain git) to hand each other
+live tasks; land the durable result — what's being worked, by whom, in what
+state, which code traces back — in AIDA. The transport carries the in-flight
+handoff; the record survives it. Full division of labor: [vs-a2a.md](vs-a2a.md).
+
+**The seam, stated honestly:** there is no A2A surface in AIDA today — this is a
+stated posture, not a shipped feature. An A2A message landing as a mailbox item
+or brief pickup is where a bridge *would* fit, gated on real demand.
+
 ---
 
 ## The through-line
@@ -172,3 +189,5 @@ of time; AIDA is the substrate that remembers across all of them.
   neighbor alone is enough.
 - [aida-mcp-install-matrix](../agents/aida-mcp-install-matrix.md) — per-client MCP
   setup for Recipe 3.
+- [vs-a2a.md](vs-a2a.md) — A2A/MCP are transports; AIDA is the record they leave
+  open (Recipe 7).

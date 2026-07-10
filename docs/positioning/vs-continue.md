@@ -1,6 +1,6 @@
 # AIDA vs Continue
 
-*Last updated: 2026-06-09*
+*Last updated: 2026-07-09*
 
 The TL;DR: **different layers that compose.** Continue is an AI coding assistant
 (CLI + VS Code / JetBrains) that, since its 2026 pivot, leans **CI-native** —
@@ -30,7 +30,7 @@ Be precise about its strengths:
   good look like here?" a reviewable artifact, not tribal knowledge.
 - **Editor-native.** It lives where you already write code (VS Code / JetBrains),
   not in a separate surface.
-- **Open source + self-hostable.** No lock-in to a proprietary index.
+- **Open core, commercializing.** Continue moved OSS → commercial in 2026; the editor/checks core remains open, but verify current licensing and hosting before assuming no lock-in.
 
 ## What Continue is *not*
 

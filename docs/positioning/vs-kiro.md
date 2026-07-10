@@ -1,6 +1,6 @@
 # AIDA vs AWS Kiro
 
-*Last updated: 2026-05-30*
+*Last updated: 2026-07-09*
 
 The TL;DR: **Kiro and AIDA both believe specs should be durable, structured artifacts — not throwaway prompts.** Kiro delivers that as a polished, AWS-backed agentic **IDE** with EARS-notation requirements and task→requirement traceability *inside* each feature. AIDA delivers it as a **vendor-neutral, git-canonical graph** that lives across your whole project and is readable by *any* agent via MCP. If you want a beautiful integrated editor that produces well-structured specs for the feature in front of you, Kiro is excellent. If you want the specs to be a cross-cutting graph that outlives any one feature and isn't tied to a single vendor's editor, that's AIDA's bet.
 
@@ -10,7 +10,7 @@ Kiro is, alongside [Spec Kit](vs-spec-kit.md), one of AIDA's two nearest competi
 
 ## What Kiro is
 
-[Kiro](https://kiro.dev) is AWS's agentic IDE (standalone editor, launched 2025) built around **spec-driven development**. Its signature flow: from a prompt, Kiro generates a structured spec set per feature —
+[Kiro](https://kiro.dev) is AWS's agentic IDE (standalone editor; preview 2025, GA May 2026, replaced Amazon Q; closed and usage-metered) built around **spec-driven development**. Its signature flow: from a prompt, Kiro generates a structured spec set per feature —
 
 - `requirements.md` — requirements in **EARS notation** (Easy Approach to Requirements Syntax: *"WHEN \<trigger\>, the system SHALL \<response\>"*), which is genuinely rigorous structured-requirements discipline.
 - `design.md` — the technical design derived from the requirements.
@@ -43,7 +43,7 @@ The cracks share two roots: Kiro's specs are **per-feature artifact sets** (not 
 
 | Symptom as the project / team grows | Kiro | AIDA |
 |---|---|---|
-| *"Query the spec graph from Claude Code / Codex / Cursor"* | Specs are produced and consumed inside the Kiro IDE | MCP server exposes the graph to **any** MCP client; the store is plain git readable by any agent |
+| *"Query the spec graph from Claude Code / Codex / Cursor"* | Specs are produced and consumed inside the Kiro IDE | A token-efficient CLI (primary surface) reads the plain-git store on any agent; an MCP server exposes the graph as typed tools for MCP clients |
 | *"What's blocked across this epic, across features?"* | Traceability is task→requirement *within* a feature set | Typed cross-feature `BlockedBy`/`parent`/`child` graph, walkable across the whole project |
 | *"These three features share a requirement — rename it once"* | Requirements are scoped to a feature's `requirements.md` | Stable global IDs resolve to one UUID; one edit, every reference current |
 | *"Does the code still trace to its spec, enforced at commit?"* | Task↔requirement links are authored in the spec set; no commit-gated code↔spec enforcement loop | `// trace:SPEC-ID` + commit-trailer linkage + lifecycle auto-bump on merge |

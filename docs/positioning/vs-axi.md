@@ -5,6 +5,8 @@
 > agent-native tools. Snapshot: 2026-06-28. Paired note:
 > `docs/competitive-analysis/2026-06-28-axi-ecosystem.md`.
 
+*Last updated: 2026-07-09 (doc reviewed). Landscape snapshot: 2026-06-28.*
+
 ## TL;DR
 
 AXI is the **most serious neighbor we've found on the *interface* layer**, and
@@ -55,12 +57,15 @@ AXI's published benchmarks (Claude Sonnet 4.6, hundreds of runs):
 | `gh` (human CLI) | 86% | $0.054 | 3 |
 | GitHub **MCP** | 87% | $0.148 | 6 |
 
-If this replicates, it's uncomfortable for us: **our own README calls the MCP
-server "the highest-leverage surface,"** and AXI's data puts MCP as the
-*most expensive, lower-success* path. We should not dismiss this — we should
-reproduce it on AIDA's own tools before doubling down on MCP.
+This one landed: AXI's finding replicated. AIDA reproduced the MCP-vs-CLI
+benchmark on its own surfaces (SPIKE-73: MCP ~2.2× the token-efficient CLI at
+equal-or-lower success) and re-weighted accordingly — the CLI (with
+`AIDA_AGENT_OUTPUT`/TOON) is now the *primary* agent surface and MCP the typed
+*option*, not the center. Competitor investment used as validation, then acted
+on rather than dismissed.
 
-Scored against AXI's 10 principles, AIDA's CLI is roughly **4-5/10**:
+Scored against AXI's 10 principles at the 2026-06-28 snapshot, AIDA's CLI was
+roughly **4-5/10** — the #1 output gap has since closed (see below):
 - **Strong:** pre-computed aggregates (the cache; `aida status`, the queue
   footer), ambient context (`SessionStart` hooks, brief-polling), contextual
   next-step suggestions, consistent help.
@@ -70,8 +75,10 @@ Scored against AXI's 10 principles, AIDA's CLI is roughly **4-5/10**:
   structured-errors.
 
 Note: AIDA's human-facing emoji output is a *deliberate* choice (and the
-operator likes it). The gap is specifically the **agent-facing** path — there is
-no token-optimized output mode for when an agent, not a human, is the caller.
+operator likes it). The **agent-facing** gap has since closed: `AIDA_AGENT_OUTPUT`
+forces agent mode and `aida list/show/queue list/status` render as TOON
+(TASK-970/TASK-964) — a token-optimized mode for when an agent, not a human, is
+the caller. The emoji human path is deliberately unchanged.
 
 ### 2. The backlog bet: tasks-axi is the same arena, different substrate
 
@@ -106,7 +113,7 @@ lifecycle without becoming the thing AIDA already is.
 
 | Dimension | AXI ecosystem | AIDA |
 |---|---|---|
-| Agent-facing token cost | **Wins** (first-class constraint, benchmarked) | Behind (human-formatted; no TOON mode) |
+| Agent-facing token cost | Ahead on ergonomics polish (benchmarked) | TOON / `AIDA_AGENT_OUTPUT` shipped (TASK-970/964); emoji human path deliberate |
 | Zero-install / adoption friction | **Wins** (skill / `npx` / hook, no binary) | Behind (a Rust binary to build/install) |
 | Orchestration mechanics (worktrees, long-run, PR pipeline, crew) | Mature, modular | Mature, integrated (`--auto-complete`) |
 | **Durable spec substrate** (IDs, traces, typed graph, lifecycle) | **Absent** | **Wins** — the moat |
@@ -118,14 +125,15 @@ lifecycle without becoming the thing AIDA already is.
 This is not a "beat AXI" situation. The winning position is **AXI ergonomics on
 top of the AIDA graph**:
 
-1. **Adopt AXI's output principles for the agent-facing path** — a token-efficient
-   output mode (TOON or equivalent), minimal default schemas, content-first
-   no-args, structured errors. Keep the emoji human path unchanged.
-2. **Reproduce the MCP-vs-CLI benchmark on AIDA's own surfaces** before further
-   MCP investment. The answer may be "make the token-efficient CLI the primary
-   agent surface; MCP is one option, not the center."
-3. **Keep investing in the substrate** — it's the one thing the whole neighbor
-   cluster (AXI + Beads + Gas Town) lacks, and the hardest to copy.
+1. **Adopt AXI's output principles for the agent-facing path** — ✅ done:
+   `AIDA_AGENT_OUTPUT`/TOON shipped (TASK-970/964) with minimal default schemas,
+   agent-mode gating, and the emoji human path untouched.
+2. **Reproduce the MCP-vs-CLI benchmark on AIDA's own surfaces** — ✅ done
+   (SPIKE-73): MCP ~2.2× the CLI at equal-or-lower success, so the token-efficient
+   CLI is now the primary agent surface and MCP the typed option, not the center.
+3. **Keep investing in the substrate** — the remaining live recommendation: it's
+   the one thing the whole neighbor cluster (AXI + Beads + Gas Town) lacks, and
+   the hardest to copy.
 
 ## Tripwires
 

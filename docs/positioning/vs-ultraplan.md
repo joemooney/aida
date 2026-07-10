@@ -1,6 +1,6 @@
 # `/aida-plan` (+ `docs/plans/`) vs `/ultraplan`
 
-*Last updated: 2026-05-13 — incorporates details from a vendor-published overview of Ultraplan's research-preview workflow (browser review surface, "teleport back to terminal" handoff, GitHub-repo requirement, Remote Control incompatibility). /ultraplan terms (3 free uses, then Max-quota or billed; 90-minute approval window before the cloud session terminates) captured live from the launch prompt 2026-05-13 and may shift while the feature is in research preview. Re-verify against [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web) before relying on the cost line.*
+*Last updated: 2026-07-09 — incorporates details from a vendor-published overview of Ultraplan's research-preview workflow (browser review surface, "teleport back to terminal" handoff, GitHub-repo requirement, Remote Control incompatibility). /ultraplan terms (3 free uses, then Max-quota or billed; 90-minute approval window before the cloud session terminates) captured live from the launch prompt 2026-05-13 and may shift while the feature is in research preview. Re-verify against [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web) before relying on the cost line.*
 
 The TL;DR: **`/ultraplan` drafts and reviews the prose in the browser. AIDA persists, structures, verifies, and executes the result. The clean integration point is `/ultraplan`'s own "teleport back to terminal → save plan to file" option, which lands the plan exactly where AIDA's `docs/plans/` convention wants it.**
 
@@ -18,7 +18,7 @@ This is the sister doc to [vs-ultrareview.md](vs-ultrareview.md). The same thesi
 | **Output shape** | Child requirement decomposition + design-decision comments + optional plan file under `docs/plans/` | Single dense markdown document: approach, file-by-file, risks, verification script, followups |
 | **Review surface** | Edit the file, use git diff, comment on the parent req | Browser: inline comments on passages, emoji reactions (approve/revise), structured outline sidebar, iterative comment-and-revise cycle with Claude |
 | **Status indicators** | `aida list --status planned` + plan file in git | CLI status indicator: Claude researching / needs clarification / `◆ ultraplan ready` |
-| **Anchoring** | Symbol refs preferred (planned via TASK-93 — survives edits); plan stored as a git-tracked file linked in the req graph | Line refs (drift fast — 2 of 8 line refs were already stale on day-of-generation in the STORY-86 case study) |
+| **Anchoring** | Symbol refs preferred (`aida plan verify [--fix]`, TASK-93 shipped — re-anchors stale refs); plan stored as a git-tracked file linked in the req graph | Line refs (drift fast — 2 of 8 line refs were already stale on day-of-generation in the STORY-86 case study) |
 | **Persistence** | First-class file in repo, linked from STORY/EPIC, queueable | Browser session evaporates after 90 min; the "save plan to file" teleport-back option preserves it — but only if you remember to choose that option |
 | **Execution path** | Plan + queue routing + implementer session (local) | Two choices after approval: (1) cloud execution — Claude implements in same web session, opens PR from browser; (2) "teleport back to terminal" — plan returns local |
 | **Integration** | Plans become part of git history, referenced by Related Requirements, surfaced in session manifests (planned TASK-95) | Standalone unless you teleport-back-and-save; the saved file is then an inert artifact unless AIDA picks it up |
@@ -87,10 +87,10 @@ The skeptic's argument starts to crack here. `/ultraplan`'s output, sitting alon
 - **Persistence by default, not by remembering.** `/ultraplan` does offer a "save to file" option in its teleport-back menu — but only if you remember to choose it before the 90-minute approval window closes. Two of the three teleport-back options (inject into session, start new session) discard the plan as soon as the chat ends. AIDA plans live in `docs/plans/YYYY-MM-DD-<slug>.md` from the moment they're saved, git-tracked, referenced by `Related Requirements` — no "remember to click the right option" failure mode.
 - **Graph membership.** AIDA plans are pinned to their target SPEC-ID via `aida comment add`, surfaceable from `aida show STORY-86`, queryable through the MCP server. `/ultraplan` doesn't know what your SPEC IDs are.
 - **Stable identifiers.** AIDA's symbol refs survive edits; `/ultraplan`'s line refs go stale within a day. (STORY-86 plan: 2 of 8 refs drifted within hours. The `DbCommand::Sync` callsite ref was off by ~19,000 lines.)
-- **Verifiability.** `aida plan verify` (TASK-93, planned) re-anchors stale line refs, validates file paths, and lints structural sections — no equivalent in `/ultraplan`'s output.
-- **Queue + session integration.** `aida queue work <SPEC>` will pre-populate session manifests from matching `docs/plans/` files (TASK-95, planned). The fresh implementer session opens with the plan already loaded as context, not as something to grep for.
-- **Followups auto-extraction.** `aida queue done` will parse the plan's Followups section and offer to file each as TASKs under the parent spec (TASK-96, planned). `/ultraplan`'s followups list is inert markdown.
-- **MCP exposure.** AIDA plans are reachable through the MCP server alongside other reqs — agents in *other* sessions can find them. `/ultraplan`'s output isn't visible to anything outside the originating chat.
+- **Verifiability.** `aida plan verify [--fix]` (TASK-93, shipped) re-anchors stale line refs, validates file paths, and lints structural sections — no equivalent in `/ultraplan`'s output.
+- **Queue + session integration.** `aida queue work <SPEC>` rides the matching `docs/plans/` file's Critical-Files/Followups/Verification brief into a fresh implementer session (TASK-95, shipped; `/aida-pickup` leads with it) — the plan is loaded as context, not something to grep for.
+- **Followups auto-extraction.** Reaching Done/Completed parses the plan's `## Followups` section and offers to file each as a child TASK, idempotent via an `[aida:followups]` marker (TASK-96, shipped). `/ultraplan`'s followups list is inert markdown.
+- **Cross-vendor exposure.** AIDA plans live in the git-canonical store — reachable via the token-efficient CLI or the MCP server, and now genuinely multi-vendor-readable (Codex is a first-class vendor alongside Claude), so a saved plan is cross-vendor-durable. `/ultraplan`'s output is a single-chat, Claude-only artifact.
 - **Cost stability.** `/ultraplan`'s terms shifted within months of launch (initially-free → 3 free uses then Max-quota or billed). AIDA's local-first cost stays $0 regardless of vendor pricing changes.
 - **Independence from approval windows.** A 90-minute timeout on a planning artifact is a real workflow constraint; missed it once already on STORY-86. AIDA plans never expire.
 - **Works without internet.** Field-work, transit, flaky connections — `/ultraplan` is unreachable; AIDA plans aren't.
@@ -114,9 +114,9 @@ For **complex/risky work** where the dense brief is worth the cloud round-trip:
 3. **Teleport back, choose "save to file."** Plan lands locally. Move/rename to `docs/plans/YYYY-MM-DD-<slug>.md` (AIDA convention). Commit it.
 4. **`aida comment add <SPEC-ID>`** with a one-liner pointing at the plan file. The plan becomes graph-reachable.
 5. **`aida queue add <SPEC-ID> --for implementer`** routes the work.
-6. **`aida queue work <SPEC-ID>`** (with TASK-95: auto-pre-populates the session manifest from the plan file) launches a fresh implementer session that opens with the plan as context.
+6. **`aida queue work <SPEC-ID>`** launches a fresh implementer session that opens with the plan's brief as context (TASK-95).
 7. **Implementer executes**; `aida plan verify <file>` (TASK-93) re-anchors any stale line refs as the code shifts under the plan.
-8. **`aida queue done`** (with TASK-96) parses the plan's Followups section, files each as a TASK under the parent — no out-of-scope items get forgotten.
+8. **Reaching Done/Completed** parses the plan's Followups section and offers to file each as a child TASK under the parent (TASK-96) — no out-of-scope items get forgotten.
 
 For **routine work** (small feature, well-bounded bug fix):
 
@@ -166,7 +166,7 @@ The assembled prompt includes: the target SPEC's description and extracted `## A
 
 ### Direction B — `/ultraplan` → AIDA: auto-import saved plan
 
-After the user teleports back and saves the plan file, a new skill processes it into AIDA's first-class state in one command:
+After the user teleports back and saves the plan file, the `/aida-import-plan` skill (TASK-114, shipped) processes it into AIDA's first-class state in one command:
 
 1. Detect target SPEC-ID (from filename, frontmatter, or first heading)
 2. Rename + move to `docs/plans/YYYY-MM-DD-<slug>.md` (AIDA convention)

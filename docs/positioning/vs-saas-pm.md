@@ -1,6 +1,6 @@
 # AIDA vs hosted SaaS PM (Linear / Jira / GitHub Projects)
 
-*Last updated: 2026-05-12 — pricing and feature comparisons should be re-verified against [docs/competitive-analysis/](../competitive-analysis/)'s next refresh.*
+*Last updated: 2026-07-09 — pricing and feature comparisons should be re-verified against [docs/competitive-analysis/marketplace-roster.md](../competitive-analysis/marketplace-roster.md) (the current 2026-07-07 roster) before any procurement-facing use.*
 
 The TL;DR: **AIDA is not trying to replace your project-management suite.** Linear, Jira, and GitHub Projects do things AIDA explicitly doesn't try to do — multi-team coordination, customer-facing roadmaps, SLAs, sprint reporting, OKR alignment. AIDA's pitch is the *intent-graph layer that lives in the repo*. You'll often want both, with each owning a different scope of the same work.
 
@@ -12,7 +12,7 @@ The TL;DR: **AIDA is not trying to replace your project-management suite.** Line
 |---|---|---|---|
 | **AIDA** | Requirement graph + code-to-spec traceability + MCP-native context for agents | The repo (orphan-branch YAML + local SQLite cache); no server required for solo use | Free, self-hosted. Optional `aida-server` adds REST + gRPC + dashboard but isn't required |
 | **Linear** | Issue tracking for engineering teams; opinionated workflow + fast UI + agent integrations | Hosted SaaS | Free up to 250 issues; Basic ~$10/user/mo, Business ~$16/user/mo (verify against vendor pricing) |
-| **Jira** | Enterprise issue/project tracking; configurable workflows; Rovo AI features rolling out | Hosted SaaS (Cloud) or self-hosted (Data Center) | Standard / Premium / Enterprise tiers ~$8–16/user/mo and up (verify against vendor pricing) |
+| **Jira** | Enterprise issue/project tracking; configurable workflows; Rovo agents GA May 2026 (Rovo "Max" multistep in Early Access) | Hosted SaaS (Cloud) or self-hosted (Data Center) | Standard / Premium / Enterprise tiers ~$8–16/user/mo and up (verify against vendor pricing) |
 | **GitHub Projects** | Lightweight, GitHub-native boards/tables/roadmaps tied to issues + PRs | Hosted alongside the repo on GitHub | Included with GitHub plans |
 
 These are not the same shape of thing. AIDA is a **database with primitives optimized for AI consumption**; Linear/Jira/GitHub Projects are **workflow products with UIs optimized for human teams.**

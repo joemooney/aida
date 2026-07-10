@@ -1,8 +1,8 @@
 # AIDA vs Karpathy-style structured markdown
 
-*Last updated: 2026-05-12*
+*Last updated: 2026-07-09*
 
-The TL;DR: **structured markdown queryable by Claude is the floor.** It's a real, working baseline for AI-assisted project context — and for many projects it's enough. AIDA's pitch is that **once your project crosses a complexity threshold, you start wanting the things markdown can't give you: stable IDs, a relationship graph, MCP-native exposure, and an enforcement loop.** This page is about where that threshold is.
+The TL;DR: **structured markdown queryable by Claude is the floor.** It's a real, working baseline for AI-assisted project context — and for many projects it's enough. AIDA's pitch is that **once your project crosses a complexity threshold, you start wanting the things markdown can't give you: stable IDs, a relationship graph, records you query instead of grep, and an enforcement loop.** This page is about where that threshold is.
 
 ---
 
@@ -58,10 +58,10 @@ Concretely, the four primitives AIDA adds that pure markdown can't reach:
 
 1. **Stable spec IDs.** `FR-1`, `STORY-104`, `EPIC-24` — these resolve to the same UUID forever, so trace comments in code and references in commit messages don't rot. Markdown headings can be renamed at any time; markdown can't promise stability.
 2. **Typed relationships.** `parent` / `child` / `verifies` / `references` edges between specs render as a graph. The agent walks the graph instead of grepping for nearby paragraphs.
-3. **MCP-native exposure.** `aida mcp-serve` makes the entire graph available to Claude Code as native tools (`list_requirements`, `show_requirement`, `add_requirement`, ...). Markdown is loaded as plain context; AIDA is queried as a database.
+3. **Queryable as records, not text.** A token-efficient CLI is the primary agent surface (`aida list/search/show`, machine output via `AIDA_AGENT_OUTPUT`), with `aida mcp-serve` exposing the same graph as typed MCP tools for MCP-native clients. Either way the graph is queried as a database, where markdown is only ever loaded as plain context.
 4. **Code-to-spec trace comments.** `// trace:FR-1-042 | ai:claude` in code, walked by `aida trace`, completes the round-trip. The graph isn't an aspirational sidecar — it's enforced against the code.
 
-The enforcement loop is the load-bearing piece. AIDA isn't just "markdown with a schema" — it's **markdown with a check that the schema agrees with the code.**
+The enforcement loop is the load-bearing piece. AIDA isn't just "markdown with a schema" — it's **markdown with a check that the schema agrees with the code** — a check that is real, enforced code (e.g. the pre-work authority gate and the pr-ship self-merge guard), not a convention.
 
 ---
 

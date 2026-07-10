@@ -1,6 +1,6 @@
 # AIDA vs GitHub Spec Kit
 
-*Last updated: 2026-05-30*
+*Last updated: 2026-07-09*
 
 The TL;DR: **Spec Kit and AIDA agree on the premise — specs live in git, as files, versioned alongside the code, and agents work from them.** They diverge on what happens *after* a feature is specced. Spec Kit's model is **spec → plan → tasks → implement, then the spec is a frozen artifact of that feature.** AIDA's model is **a living, cross-cutting graph of specs with stable IDs, typed relationships, and code↔spec traces that an orchestrator maintains over the project's whole life.** If you want a great first-feature scaffold, Spec Kit is excellent and far more widely adopted. If you want the specs to stay queryable, related, and enforced as the project grows, that's AIDA's bet.
 
@@ -10,7 +10,7 @@ This is the most important page in this directory: Spec Kit is AIDA's **nearest 
 
 ## What Spec Kit is
 
-[GitHub Spec Kit](https://github.com/github/spec-kit) (`github/spec-kit`, ~90–100k+ stars, GitHub-first-party, MIT) is the leading open-source **spec-driven-development (SDD)** toolkit. The workflow, driven by slash commands inside your coding agent:
+[GitHub Spec Kit](https://github.com/github/spec-kit) (`github/spec-kit`, ~113k stars per the 2026-07-07 roster, GitHub-first-party, MIT) is the leading open-source **spec-driven-development (SDD)** toolkit. The workflow, driven by slash commands inside your coding agent:
 
 - `/speckit.constitution` — project-wide principles the agent must honor.
 - `/speckit.specify` — turn a feature description into a structured spec (a `spec.md` under a numbered feature directory like `specs/001-feature/`).
@@ -52,7 +52,7 @@ The cracks all share one root: **Spec Kit's specs are per-feature artifacts, not
 | *"Show me everything tagged auth, across all features"* | grep over markdown returns text, not records | Cache-backed query (`aida list/search --tags`) returns records in sub-ms |
 | *"What's the status of everything, and what changed?"* | Status isn't a maintained property; no per-spec history | Lifecycle state machine + auto-bump on merge + per-spec history audit array |
 | *"Let an orchestrator drain a queue of specs across agents"* | Not its model — `/implement` runs one feature for one agent | Orchestrated multi-phase drain with spec-grounded escalation + shelving across a vendor-neutral fleet |
-| *"Query the spec graph from any agent, any vendor"* | Markdown the agent reads in-prompt | MCP server exposes the graph as tools/resources to any MCP client |
+| *"Query the spec graph from any agent, any vendor"* | Markdown the agent reads in-prompt | Token-efficient CLI (the primary agent surface) reads the graph on any vendor; an MCP server exposes it as typed tools/resources for MCP clients |
 
 The honest framing: **Spec Kit standardizes how an agent *produces* a feature's specs. AIDA is the graph *underneath* that keeps every feature's specs stable, related, traced, and queryable for the life of the project — and writes the agent-facing context files (AGENTS.md and friends) from that graph.**
 

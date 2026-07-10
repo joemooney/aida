@@ -1,6 +1,6 @@
 # `/aida-review` vs `/ultrareview`
 
-*Last updated: 2026-05-12 — verify Claude Code on Web pricing against [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web) before relying on the cost line; the free-tier wording in this doc was captured live from the launch prompt.*
+*Last updated: 2026-07-09 — verify Claude Code on Web pricing against [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web) before relying on the cost line; the free-tier wording in this doc was captured live from the launch prompt.*
 
 The TL;DR: **`/aida-review` is the cheap, integrated lifecycle layer. `/ultrareview` is the depth layer when stakes warrant. Compose them — they're not substitutes.**
 
@@ -31,7 +31,7 @@ Captured live during PR-15 review (2026-05-12): `/aida-review` approved + merged
 
 `/ultrareview` wins on these because the multi-agent fleet uses **explicitly different framings** — one agent is told "find bugs," another "verify acceptance," etc. The composite findings catch what any single mental model would miss.
 
-**Post-STORY-109 (2026-05-12):** `/aida-review` now includes an explicit adversarial deep-pass between the spec walk and the merge gates. The phase codifies four systematic probes — cross-reference consistency, format-spec edge cases, multiplicity (0/1/N), and "looks safe but isn't" adversarial framing — that historically slip past a single "verify acceptance" walk. The three PR-15 misses (TASK-81, TASK-84, TASK-85) all fall inside the probes' catch radius. `/aida-review (post-augment)` catches edge cases that single-agent reviews historically miss; **`/ultrareview` still wins on multi-perspective depth** — the cloud fleet brings genuinely independent framings that no single agent can fully replicate.
+**Post-STORY-109 (2026-05-12):** `/aida-review` now includes an explicit adversarial deep-pass between the spec walk and the merge gates. The phase codifies four systematic probes — cross-reference consistency, format-spec edge cases, multiplicity (0/1/N), and "looks safe but isn't" adversarial framing — that historically slip past a single "verify acceptance" walk. The three PR-15 misses (TASK-81, TASK-84, TASK-85) all fall inside the probes' catch radius. `/aida-review (post-augment)` catches edge cases that single-agent reviews historically miss; **`/ultrareview` still wins on multi-perspective depth** — the cloud fleet brings genuinely independent framings that no single agent can fully replicate. AIDA's own answer to independent framings is the autonomous drain's separate reviewer phase (a reviewer session that never shares context with the implementer it reviews — now backed by a structural self-merge guard the implementer can't bypass) and `/aida-code-review` for exhaustive quality passes: narrower than the cloud fleet, but the independent-critic principle is internalized rather than absent.
 
 ---
 
