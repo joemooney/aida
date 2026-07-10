@@ -1,0 +1,12 @@
+id: 019f4d92-69cb-7cb2-9145-71a5920a11fe
+spec_id: TASK-1127
+agreed_id: TASK-1127
+title: scripts/publish-positioning-pdfs.sh — batch-render docs/positioning/*.md to PDF into the artifacts repo
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-10T19:47:48.811883845Z
+modified_at: 2026-07-10T19:47:48.811883845Z
+req_type: Task
