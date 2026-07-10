@@ -3,12 +3,12 @@ spec_id: TASK-1128
 agreed_id: TASK-1128
 title: 'positioning-PDF renderer: size table columns by content, not equal-split (narrow label columns)'
 description: ''
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-10T21:13:17.575031684Z
-modified_at: 2026-07-10T21:14:31.171592903Z
+modified_at: 2026-07-10T21:14:34.949779256Z
 req_type: Task
 comments:
 - id: 019f4de1-122a-7713-8da5-b06836852fd1
@@ -16,3 +16,7 @@ comments:
   content: Commit ec7022011 references this requirement
   created_at: 2026-07-10T21:13:43.722577026Z
   modified_at: 2026-07-10T21:13:43.722577026Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-10T21:14:34.949779256Z
+  completion_sha: ec7022011868e85d011a1720162d398051795e06
