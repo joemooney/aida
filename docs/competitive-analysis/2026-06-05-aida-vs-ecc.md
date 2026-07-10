@@ -16,7 +16,7 @@ toc-depth: 2
 
 **ECC and AIDA look adjacent but are different categories.** ECC (Everything Claude Code) is a **cross-harness agent operating pack and distribution platform** — a large prompt/skill catalog, a mature installer, a real hook-enforcement layer, and a newly-added local Rust control plane (`ecc2`). AIDA is a **git-canonical project-truth substrate** — a durable spec graph with stable IDs, typed relationships, code-to-spec traces, a requirement lifecycle, and an MCP server, designed to survive every conversation and every vendor switch.
 
-They contest exactly **one** surface: agent-orchestration runtime (ECC's `ecc2` session daemon vs AIDA's lease/queue/drain). They diverge completely on **durable, ID-stable, traceable, vendor-neutral truth** — which ECC structurally lacks and which is AIDA's entire moat.
+They contest exactly **one** surface: agent-orchestration runtime (ECC's `ecc2` session daemon vs AIDA's lease/queue/drain). They diverge on **durable, ID-stable, traceable, vendor-neutral truth** — which ECC doesn't provide today (its store is local SQLite, not a git-canonical graph) and which is the core of AIDA's differentiation. That gap is a real one *right now*, not a permanent one: as the caveats below note, a thin git-export layer over ECC's SQLite could narrow it — the differentiation holds because of ECC's ship-fast/local grain, not because the gap is uncrossable.
 
 **The one action AIDA should take now:** a CI guard that fails the build when AIDA's own template system drifts (the strongest idea borrowed from ECC's installer). Everything else ECC does well is distribution/polish that AIDA should defer until its stability phase clears.
 
