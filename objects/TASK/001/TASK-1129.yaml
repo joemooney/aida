@@ -3,10 +3,14 @@ spec_id: TASK-1129
 agreed_id: TASK-1129
 title: 'positioning-PDF renderer: break long inline-code tokens so they don''t overflow narrow table cells'
 description: ''
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-10T21:16:50.133446314Z
-modified_at: 2026-07-10T21:18:48.890496424Z
+modified_at: 2026-07-10T21:18:52.827850079Z
 req_type: Task
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-10T21:18:52.827850079Z
+  completion_sha: 41928421908144d6fbca14f78889b3cdd04b6a19
