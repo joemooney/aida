@@ -22,6 +22,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_DIR="$REPO_ROOT/docs/positioning"
+LUA_TABLE_WIDTHS="$REPO_ROOT/scripts/pandoc-table-widths.lua"
 ARTIFACTS_DIR="${ARTIFACTS_DIR:-$HOME/artifacts/positioning}"
 SUBTITLE="AIDA positioning · best-effort comparison — live source: github.com/joemooney/aida"
 
@@ -88,6 +89,7 @@ render_one() {
   pandoc "$body" -o "$out" \
     -f markdown-tex_math_dollars+autolink_bare_uris --pdf-engine=xelatex \
     --shift-heading-level-by=-1 -H "$HEADER" \
+    --lua-filter "$LUA_TABLE_WIDTHS" \
     -V mainfont="DejaVu Serif" -V sansfont="DejaVu Sans" -V monofont="DejaVu Sans Mono" \
     -V fontsize=11pt -V geometry:margin=2.2cm \
     -V colorlinks=true -V linkcolor=Mahogany -V urlcolor=Mahogany
