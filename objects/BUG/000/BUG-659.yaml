@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T05:08:45.804437417Z
-modified_at: 2026-07-11T20:39:40.067758019Z
+modified_at: 2026-07-11T20:39:48.915259740Z
 req_type: Bug
 tags:
 - aida:list
@@ -39,6 +39,11 @@ comments:
   content: 'Filed from operator observation: parent/epic rows in `aida list open --tree` are currently emitted both as parent group headers and again under Unscoped. Treat this as a distinct follow-up to completed TASK-0439, not a change to that shipped record.'
   created_at: 2026-06-30T05:09:08.874079212Z
   modified_at: 2026-06-30T05:09:08.874079212Z
+- id: 019f52e8-61b3-7ec3-a241-557d2cc550ac
+  author: joe
+  content: Commit 8e1656849 references this requirement
+  created_at: 2026-07-11T20:39:48.915259740Z
+  modified_at: 2026-07-11T20:39:48.915259740Z
 implementation_info:
   implemented: false
   completed_at: 2026-07-11T20:39:40.067758019Z
