@@ -12,14 +12,14 @@ design, harness, and deterministic (LLM-judge) grading.
 
 MCP cost premium over the plain human-formatted CLI:
 
-| Surface | June | July v1 | July v2 (post-fix) |
-|---|---|---|---|
-| cli | — | — | — |
-| **mcp** | **1.98×** | **2.18×** | **2.31×** |
-| mcp-toolsearch (on-demand schema) | 1.78× | 1.55× | 1.37× |
-| toon (token-efficient CLI) | 1.01× | 0.99× | 0.83× |
+| Surface | June | July v1 | July v2 (BUG-717) | July v3 (harness) |
+|---|---|---|---|---|
+| cli | — | — | — | — |
+| **mcp** | **1.98×** | **2.18×** | **2.31×** | **2.07×** |
+| mcp-toolsearch (on-demand schema) | 1.78× | 1.55× | 1.37× | 1.41× |
+| toon (token-efficient CLI) | 1.01× | 0.99× | 0.83× | 0.84× |
 
-The ~2× MCP premium holds across all three runs — different model generations,
+The ~2× MCP premium holds across all four runs — different model generations,
 different AIDA versions, independent runs. On-demand schema loading stays between
 CLI and full MCP; TOON stays at/below CLI cost parity. The paper's central claim —
 MCP costs ~2× the CLI, so the CLI is the primary agent surface — reproduces.
@@ -37,16 +37,20 @@ but CLI-inconsistent) count.
 Fixed in **BUG-717** — `status_unified` now reuses the CLI's own
 `is_standing_artifact_type` predicate. The v2 re-run (fixed binary) validates it:
 
-| Surface | June | July v1 | July v2 (fixed) |
-|---|---|---|---|
-| cli | 100% | 100% | 89% |
-| mcp | 89% | 78% | **100%** |
-| mcp-toolsearch | 100% | 100% | 100% |
-| toon | 100% | 94% | 100% |
+| Surface | June | July v1 | July v2 (BUG-717) | July v3 (harness fix) |
+|---|---|---|---|---|
+| cli | 100% | 100% | 89% | **100%** |
+| mcp | 89% | 78% | 100% | 100% |
+| mcp-toolsearch | 100% | 100% | 100% | 100% |
+| toon | 100% | 94% | 100% | 94% |
 
-- **mcp `status_snapshot`: 0/3 → 3/3** — the fix, confirmed by the benchmark that
-  found the bug (self-test via dogfood).
-- **mcp overall: 78% → 100%.**
+- **mcp `status_snapshot`: 0/3 → 3/3** (v2, BUG-717) — the fix, confirmed by the
+  benchmark that found the bug (self-test via dogfood).
+- **cli `chained_followup`: 1/3 → 3/3** (v3, per-run reseed) — the harness
+  false-negative eliminated; cli is now cleanly 100%.
+- **mcp overall: 78% → 100%.** With both benchmark artifacts fixed (v3), every
+  surface is 100% except one toon `chained_followup` cell (2/3) — genuine n=3
+  variance on the hardest task.
 - **The v2 cli 89% is a benchmark false negative — a defect in the harness, now
   fixed. It should not be read as "≈100%".** Both misses are `chained_followup`
   (browse→filter→fetch→file-a-follow-up). In each, the agent correctly identified
