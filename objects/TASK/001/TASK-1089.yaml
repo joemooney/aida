@@ -16,10 +16,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T07:33:09.453575954Z
-modified_at: 2026-07-02T07:33:09.453575954Z
+modified_at: 2026-07-11T21:23:12.621286580Z
 req_type: Task
 tags:
 - aida:doctor
 - completed-without-commit
 - false-positive
 - signal-quality
+comments:
+- id: 019f5310-1c6d-74a1-b194-69813e7e84da
+  author: joe
+  content: |-
+    Progress (2026-07-11, autonomous loop), PARTIAL — leaving Approved.
+
+    SHIPPED (c73a5f41e): the cutoff now compares created_at, not modified_at. The migration bulk-rewrote every modified_at to ~2026-06-11, so the recent-days cutoff hid NOTHING (353 findings, hidden_older 0). created_at is not reset for genuinely-old specs, so it is the reliable age signal → 353 to 215, 138 clearly-legacy pre-window completions now hidden. spike/doc + non-code types were already exempt (TASK-755). Points 1/3/4 of the acceptance are substantially met.
+
+    RESIDUAL (215 still flagged, target was far fewer): a SECOND bulk event on 2026-05-12T05:59 reset created_at for ~177 more specs (STORY-101, FR-256.., SPEC-407..) to that date, so they sit inside the 60-day window. I tried the acceptance-suggested "cutoff from the earliest orphan-store commit" but that resolves to 2026-03-16 — EARLIER than the 2026-05-12 reset — so it made it WORSE (239). The reset event is not the earliest commit.
+
+    FUNDAMENTAL LIMIT: the bug itself found "zero true positives" even among recent hits — i.e. the residual is real-work-that-is-just-untraced, which no date/type cutoff can distinguish from a genuine stranded completion. Getting to far-fewer needs a different signal, e.g. fuzzy corroboration (does the spec area/title appear in ANY commit near its completion?) or exempting the specific 2026-05-12 import cohort by commit. Recommend deciding between those before further work — this is where I go no further without your call.
+  created_at: 2026-07-11T21:23:12.621286580Z
+  modified_at: 2026-07-11T21:23:12.621286580Z
