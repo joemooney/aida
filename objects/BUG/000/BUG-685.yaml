@@ -37,10 +37,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T06:11:33.862000543Z
-modified_at: 2026-07-01T06:11:33.862000543Z
+modified_at: 2026-07-11T20:07:23.787145602Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-3
 - reviewer
+comments:
+- id: 019f52ca-b38b-7213-9d9c-664930db8b7b
+  author: joe
+  content: 'Triage (2026-07-11): resolved-by-BUG-705, closing. This was a real bug at the time. The failure was 2026-07-01 (binary 6c779fade), which predates BUG-705 (a6dc16aef, 2026-07-07) that routed the headless reviewer launch through compose_headless_command. That composition passes --disallowed-tools AskUserQuestion (session.rs:1084, present since BUG-327 2026-05-22, asserted by the test at session.rs:3795), so the headless reviewer can no longer CALL AskUserQuestion — a stray call returns tool-unavailable and it falls back to the default verdict per the /aida-review headless contract, instead of bailing with no verdict. run_reviewer also carries the BUG-280 NoVerdict fallback. The exact bail mechanism no longer exists. Verified against code (not reproduced live: a supervised --zen drive cannot reproduce a --no-human failure, and a live headless drain was judged higher-cost than the conclusive code evidence warranted). Re-drafts automatically if it ever recurs.'
+  created_at: 2026-07-11T20:07:23.787145602Z
+  modified_at: 2026-07-11T20:07:23.787145602Z
