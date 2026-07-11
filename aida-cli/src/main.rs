@@ -16637,6 +16637,33 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         .unwrap_or_else(|| unscoped_key.clone());
                     groups.entry(key).or_default().push(summary);
                 }
+
+                // BUG-659: a requirement used as a real parent-backed group header
+                // (its display id is a group key) must NOT also appear as an
+                // ordinary row under Unscoped — it is already represented at the
+                // parent/group level. Drop such rows from the Unscoped bucket, and
+                // drop the bucket entirely if it empties. trace:BUG-659 | ai:claude
+                {
+                    let header_ids: std::collections::HashSet<String> = groups
+                        .keys()
+                        .filter(|k| k.as_str() != unscoped_key.as_str())
+                        .cloned()
+                        .collect();
+                    if let Some(unscoped) = groups.get_mut(&unscoped_key) {
+                        unscoped.retain(|s| {
+                            let id = s
+                                .agreed_id
+                                .as_deref()
+                                .or(s.spec_id.as_deref())
+                                .unwrap_or("");
+                            !header_ids.contains(id)
+                        });
+                    }
+                    if groups.get(&unscoped_key).is_some_and(|v| v.is_empty()) {
+                        groups.remove(&unscoped_key);
+                    }
+                }
+
                 // Sort groups: real EPICs by count desc then name; unscoped last.
                 let mut ordered: Vec<(String, Vec<&aida_core::RequirementSummary>)> =
                     groups.into_iter().collect();
