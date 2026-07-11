@@ -1,3 +1,6 @@
+<!-- AIDA Generated: v2.0.0 | checksum:fbe2a46e | DO NOT EDIT DIRECTLY -->
+<!-- To customize: copy this file and modify the copy -->
+
 # Codex Brief Pickup
 
 Use this guide when a master/advisor session says a substrate-resident
@@ -30,17 +33,6 @@ Only use the CLI fallback for the brief channel. For spec graph and
 coordination work, MCP remains the preferred Codex interface when it is
 available.
 
-## Dispatch Recovery Discipline
-
-- Make an early local WIP commit as soon as the first coherent edit compiles.
-- Push the branch at the first verified boundary, such as a passing targeted
-  test or build, so a fresh Codex launch can resume from git instead of a dirty
-  local diff.
-- If a previous agent died with only a dirty worktree, salvage that worktree
-  first and commit the recovered diff before rebriefing another vendor.
-- Use `aida agent dispatch-health` for a read-only recovery snapshot; in
-  `AIDA_AGENT_OUTPUT=1` mode it emits TOON for machine parsing.
-
 ## Safety Notes
 
 - Treat brief files as local runtime state under `.aida/agent-briefs/`.
@@ -49,3 +41,24 @@ available.
   section and the current worktree/session discipline.
 - If a brief references architecture-class work without a sketch verdict,
   stop and ask for master sign-off before implementing.
+
+## Resilience: commit early, push early
+
+A vendor agent's session can end abruptly — a dropped connection, a killed
+process, a vendor-side timeout, or a credit/quota stop. Anything only in the
+working tree at that moment is lost, and no other agent (or a resumed session)
+can pick up from it. So checkpoint durably as you go:
+
+- **Commit each coherent step the moment it builds/tests green** — never batch a
+  whole spec into one final commit. A small commit per logical step means a crash
+  costs at most the current uncommitted step, not the session.
+- **Push the branch early and often** — after the first commit, then after each
+  step, not just at the end. A pushed branch survives the local machine and lets
+  a different vendor or a fresh session resume from where the work stopped.
+- **Use the CLI for the durable git steps** (`aida commit`, `git push`) rather
+  than an MCP round-trip — the CLI is the resilient surface when the connection is
+  flaky (SPIKE-76, the multi-vendor resilience thesis).
+- **On resume**, `git fetch` and inspect the pushed branch before re-doing work —
+  the prior session may have already landed the early steps.
+
+Work that is committed and pushed is work no single-vendor failure can erase.
