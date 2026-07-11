@@ -74,9 +74,29 @@ pub fn add_all(repo: &Path, subdir: &str) -> Result<()> {
     Ok(())
 }
 
-/// Commit staged changes.
+/// TASK-1122: the `-c` overrides that AUTHOR a store commit with the public
+/// email when identity redaction is enabled (empty when it is not). Pure so the
+/// override construction is unit-tested. trace:TASK-1122 | ai:claude
+fn commit_redaction_args(public_email: Option<&str>) -> Vec<String> {
+    match public_email {
+        Some(email) => vec!["-c".to_string(), format!("user.email={email}")],
+        None => Vec::new(),
+    }
+}
+
+/// Commit staged changes. TASK-1122 / BUG-715: if the machine opted into
+/// identity redaction (`[node] public_email` in `~/.aida/config.toml`), the
+/// commit is AUTHORED with the public email via a `-c user.email=` override so a
+/// redacted machine does not leak its raw (corporate) email in the git author of
+/// every store commit — the file CONTENT is already redacted by BUG-715 core;
+/// this closes the metadata leak. The `-c` override never rewrites the machine's
+/// global git config. trace:TASK-1122 | ai:claude
 pub fn commit(repo: &Path, message: &str) -> Result<bool> {
-    let result = git(repo, &["commit", "-m", message])?;
+    let (_h, public_email) = read_public_identity();
+    let redact = commit_redaction_args(public_email.as_deref());
+    let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
+    argv.extend_from_slice(&["commit", "-m", message]);
+    let result = git(repo, &argv)?;
     if result.success {
         Ok(true)
     } else if result.stdout.contains("nothing to commit")
@@ -2686,6 +2706,20 @@ mod tests {
         let (h, e) = apply_identity_redaction("corp-box", None, Some("spock"), None);
         assert_eq!(h, "spock");
         assert_eq!(e, None);
+    }
+
+    #[test]
+    fn commit_redaction_args_override_email_only_when_set() {
+        // TASK-1122: with no public email configured, no `-c` override is added;
+        // with one, the commit is authored via `-c user.email=<public>`.
+        assert!(commit_redaction_args(None).is_empty());
+        assert_eq!(
+            commit_redaction_args(Some("public@example.com")),
+            vec![
+                "-c".to_string(),
+                "user.email=public@example.com".to_string()
+            ]
+        );
     }
 
     #[test]
