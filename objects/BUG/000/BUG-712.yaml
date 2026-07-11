@@ -10,12 +10,12 @@ description: |-
   Acceptance:
   - After a clean drive exit, .aida/drain.lock is removed (release the DrainGuard before any process::exit, or best-effort unlink on the terminal success/inconclusive/held paths).
   - Regression/manual: run a drive to completion; assert .aida/drain.lock is absent afterward.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:39:46.123338710Z
-modified_at: 2026-07-11T20:46:58.331440500Z
+modified_at: 2026-07-11T20:47:05.194767596Z
 req_type: Bug
 tags:
 - aida:zen
@@ -33,3 +33,7 @@ comments:
   content: Commit 0c80a0f8a references this requirement
   created_at: 2026-07-09T06:48:33.822737275Z
   modified_at: 2026-07-09T06:48:33.822737275Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-11T20:47:05.194767596Z
+  completion_sha: 26366346f6931afbed930e7b3922a9d83519ec76
