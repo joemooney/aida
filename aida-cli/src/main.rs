@@ -561,7 +561,7 @@ const AGENT_BARE_QUEUE_TOPN: usize = 5;
 /// also makes the human path testable without a real terminal. The human-at-a-
 /// TTY path is left byte-identical; everything gated on this is agent-only.
 // trace:TASK-970
-fn agent_output_mode() -> bool {
+pub(crate) fn agent_output_mode() -> bool {
     agent_output_mode_from(
         std::env::var("AIDA_AGENT_OUTPUT").ok().as_deref(),
         std::io::stdout().is_terminal(),

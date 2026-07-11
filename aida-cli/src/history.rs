@@ -588,6 +588,45 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         return Ok(());
     }
 
+    // Agent mode: token-efficient TOON, mirroring `aida ps` / `aida integrate`
+    // so `aida history` (the default digest) gives agents flat scalars + a
+    // uniform table instead of the human ID/TYPE/STATUS/WHEN column table.
+    // `aida history --events --json` remains the structured event-stream path.
+    // trace:STORY-753 | ai:claude
+    if crate::agent_output_mode() {
+        println!("view: history");
+        println!("count: {}", entries.len());
+        let table: Vec<Vec<String>> = entries
+            .iter()
+            .map(|e| {
+                let change = if e.had_delete {
+                    "del"
+                } else if e.had_add {
+                    "add"
+                } else {
+                    "edit"
+                };
+                vec![
+                    e.spec_id.clone(),
+                    display_type_name(&e.req_type).to_string(),
+                    e.status.clone(),
+                    short_clock(&e.last_ts_iso),
+                    change.to_string(),
+                    e.title.clone(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "history",
+                &["id", "type", "status", "when", "change", "title"],
+                &table
+            )
+        );
+        return Ok(());
+    }
+
     // Width-align spec_id column so the rest reads as a table.
     let id_w = entries.iter().map(|e| e.spec_id.len()).max().unwrap_or(8);
     let status_w = entries.iter().map(|e| e.status.len()).max().unwrap_or(10);

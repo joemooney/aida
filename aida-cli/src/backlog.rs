@@ -549,6 +549,36 @@ fn handle_list(
         return Ok(());
     }
 
+    // Agent mode: token-efficient TOON, mirroring `aida ps` / `aida integrate`
+    // so an agent orienting via `aida backlog list` gets flat scalars + a
+    // uniform table instead of the human SPEC/TYPE/PRI/RISK column table.
+    // `--json` above still wins for structured consumers. trace:STORY-753
+    if crate::agent_output_mode() {
+        println!("view: backlog");
+        println!("count: {}", rows.len());
+        let table: Vec<Vec<String>> = rows
+            .iter()
+            .map(|r| {
+                vec![
+                    r.spec_id.clone(),
+                    r.req_type.clone(),
+                    r.priority.clone(),
+                    r.risk.token().to_string(),
+                    r.title.clone(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "backlog",
+                &["id", "type", "priority", "risk", "title"],
+                &table
+            )
+        );
+        return Ok(());
+    }
+
     render_list_table(&rows);
     Ok(())
 }
