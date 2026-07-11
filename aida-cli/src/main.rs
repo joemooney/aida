@@ -148648,7 +148648,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn pull(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Pull);
-        let status = std::process::Command::new(self.aida_exe())
+        let mut status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .arg("pull")
             .status()
@@ -148659,11 +148659,40 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             })?;
         if !status.success() {
+            // BUG-690: `aida pull`'s code leg is `--ff-only` by design, so it
+            // refuses a divergent main and fails the whole drain — the failure
+            // report's own recovery hint is "run `aida rebase` to classify the
+            // divergence." Do that automatically for the SAFE cases: `aida
+            // rebase --auto` executes only behind-only / diverged-safe (no
+            // file overlap) and REFUSES diverged-risky, so this rescues the
+            // common one-local/one-remote-commit-no-overlap drift without ever
+            // forcing a conflicting rebase, then retries the pull once. A risky
+            // divergence (or a store-leg failure, which `rebase` doesn't touch)
+            // leaves the retry failing and falls through to the park below.
+            // trace:BUG-690 | ai:claude
+            let rebased = std::process::Command::new(self.aida_exe())
+                .current_dir(&self.project_root)
+                .args(["rebase", "--auto"])
+                .status();
+            if matches!(&rebased, Ok(s) if s.success()) {
+                status = std::process::Command::new(self.aida_exe())
+                    .current_dir(&self.project_root)
+                    .arg("pull")
+                    .status()
+                    .map_err(|e| {
+                        auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::Spawn,
+                            format!("could not re-run `aida pull` after safe rebase: {e}"),
+                        )
+                    })?;
+            }
+        }
+        if !status.success() {
             // BUG-254: `aida pull` now exits non-zero when either leg
             // failed; the per-leg detail + recovery hint was printed by
             // the subprocess. Halting here keeps phase 6 from running
             // over a stale tree and masking the real cause.
-            // trace:BUG-254 | ai:claude
+            // trace:BUG-254 BUG-690 | ai:claude
             return Err(auto_complete::PhaseFailure::new(
                 "`aida pull` failed — the code or store leg did not advance \
                  (see the subprocess output above for the recovery hint)",
