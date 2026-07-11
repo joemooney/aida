@@ -3,12 +3,12 @@ spec_id: STORY-753
 agreed_id: STORY-753
 title: 'Agent-surface TOON coverage gap: ps / backlog list / history emit human tables under AIDA_AGENT_OUTPUT'
 description: 'An agent-surface audit (sampling read commands under AIDA_AGENT_OUTPUT) found several read commands that do NOT honor agent-output mode — they emit human tables/decoration instead of token-efficient TOON, unlike aida integrate/status which have agent_output_mode() branches. Confirmed leakers: (1) aida ps — emits "Running work" + a human column table in agent mode (has --json as an escape hatch); (2) aida backlog list — emits a SPEC/TYPE/PRI/RISK/TITLE human table AND has no --json fallback, so agents have no clean structured output at all; (3) aida history — human table, also no --json. Fix pattern (mechanical, per command): add an agent_output_mode() branch emitting `view: <name>` + flat scalars + crate::toon::table_raw tables, mirroring handle_integrate; where a command lacks --json, add that too. First instance already fixed: BUG-695 (aida awaiting). Not-yet-triaged as leaks (emit prose, may be intentional): usage, doctor, findings calibration. Parent EPIC-56 (AXI agent ergonomics). trace:BUG-695'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T05:08:05.445894436Z
-modified_at: 2026-07-11T21:05:26.426639067Z
+modified_at: 2026-07-11T21:05:32.609191011Z
 req_type: Story
 tags:
 - agent-surface
@@ -29,3 +29,7 @@ comments:
   content: 'Progress + correction: (1) aida ps TOON branch implemented (this slice). (2) Correction: `aida backlog list` DOES have --json (I checked the `aida backlog` GROUP help earlier, not the `list` subcommand) — so agents have a structured escape hatch there; lower priority. (3) `aida history` has NO --json and emits a human table in agent mode — the real remaining gap. Remaining scope: aida history agent-mode output (add --json AND/OR a TOON branch).'
   created_at: 2026-07-02T05:55:26.261897509Z
   modified_at: 2026-07-02T05:55:26.261897509Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-11T21:05:32.609191011Z
+  completion_sha: 8229cb94d6c77a8df67859f884a167f9d960f599
