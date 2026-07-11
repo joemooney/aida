@@ -74,6 +74,50 @@ pub(crate) fn drain_lock_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join(DRAIN_LOCK_FILE)
 }
 
+// BUG-712: DrainGuard::drop removes the local lock (pid-checked), but an
+// autonomous drive exits via std::process::exit (30+ sites), which skips Drop —
+// leaving .aida/drain.lock on disk recording the now-dead drive pid. Register a
+// libc atexit hook once, when a guard is acquired, so the lock is best-effort
+// removed on ANY exit path (normal return OR process::exit). Idempotent with
+// Drop: on a normal return Drop removes it first and the hook then no-ops (its
+// pid-checked read finds nothing); on process::exit only the hook runs. The hook
+// touches just the local file — the shared cross-clone claim (STORY-638) is
+// covered by its own staleness, and the heartbeat thread dies with the process.
+// trace:BUG-712 | ai:claude
+static ATEXIT_LOCK_PATH: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+static ATEXIT_REGISTERED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
+extern "C" fn drain_lock_atexit() {
+    if let Ok(slot) = ATEXIT_LOCK_PATH.lock() {
+        if let Some(path) = slot.as_ref() {
+            remove_lock_if_ours(path);
+        }
+    }
+}
+
+/// Best-effort remove the lock file ONLY if it still records our pid — the same
+/// ownership guard `DrainGuard::drop` applies, so we never delete a lock a
+/// different drive reclaimed under a recycled pid. trace:BUG-712 | ai:claude
+fn remove_lock_if_ours(path: &Path) {
+    if read_lock(path).map(|l| l.pid) == Some(std::process::id()) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Arm the process-exit cleanup for the just-acquired drain lock (BUG-712).
+fn register_atexit_cleanup(path: &Path) {
+    if let Ok(mut slot) = ATEXIT_LOCK_PATH.lock() {
+        *slot = Some(path.to_path_buf());
+    }
+    ATEXIT_REGISTERED.get_or_init(|| {
+        // SAFETY: `drain_lock_atexit` is a no-arg extern "C" fn that only locks a
+        // process-global Mutex and does best-effort fs — safe to run at exit.
+        unsafe {
+            libc::atexit(drain_lock_atexit);
+        }
+    });
+}
+
 /// On-disk lock record. Serialized as JSON via [`aida_core::write_atomic`] so a
 /// concurrent reader never sees a torn file.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -321,6 +365,9 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
             } else {
                 (None, None)
             };
+            // BUG-712: arm the process-exit cleanup before `path` is moved into
+            // the guard, so the lock is removed even when the drive process::exits.
+            register_atexit_cleanup(&path);
             Ok(DrainGuard {
                 path,
                 pid: record.pid,
@@ -464,6 +511,39 @@ mod tests {
         DateTime::parse_from_rfc3339("2026-06-14T12:00:00Z")
             .unwrap()
             .with_timezone(&Utc)
+    }
+
+    #[test]
+    fn atexit_removes_our_lock_but_preserves_a_foreign_one() {
+        // BUG-712: the process-exit hook must clean up OUR leftover lock, but
+        // never delete a lock a different (live) drive holds — the same pid guard
+        // Drop applies. This is the safety property the atexit path relies on.
+        let tmp = tempfile::tempdir().unwrap();
+        // Ours (current pid) → removed.
+        let mine = tmp.path().join("mine.lock");
+        std::fs::write(
+            &mine,
+            serde_json::to_string(&lock(std::process::id(), "2026-01-01T00:00:00Z")).unwrap(),
+        )
+        .unwrap();
+        remove_lock_if_ours(&mine);
+        assert!(!mine.exists(), "our own lock should be removed on exit");
+        // Foreign (different pid) → preserved.
+        let theirs = tmp.path().join("theirs.lock");
+        std::fs::write(
+            &theirs,
+            serde_json::to_string(&lock(
+                std::process::id().wrapping_add(1),
+                "2026-01-01T00:00:00Z",
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        remove_lock_if_ours(&theirs);
+        assert!(
+            theirs.exists(),
+            "a foreign drive's lock must NOT be removed"
+        );
     }
 
     #[test]
