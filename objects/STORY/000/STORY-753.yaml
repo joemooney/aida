@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T05:08:05.445894436Z
-modified_at: 2026-07-11T21:05:32.609191011Z
+modified_at: 2026-07-11T21:05:46.544831004Z
 req_type: Story
 tags:
 - agent-surface
@@ -29,6 +29,11 @@ comments:
   content: 'Progress + correction: (1) aida ps TOON branch implemented (this slice). (2) Correction: `aida backlog list` DOES have --json (I checked the `aida backlog` GROUP help earlier, not the `list` subcommand) — so agents have a structured escape hatch there; lower priority. (3) `aida history` has NO --json and emits a human table in agent mode — the real remaining gap. Remaining scope: aida history agent-mode output (add --json AND/OR a TOON branch).'
   created_at: 2026-07-02T05:55:26.261897509Z
   modified_at: 2026-07-02T05:55:26.261897509Z
+- id: 019f5300-2630-7cf2-a53d-2774fed126ad
+  author: joe
+  content: Commit 8229cb94d references this requirement
+  created_at: 2026-07-11T21:05:46.544831004Z
+  modified_at: 2026-07-11T21:05:46.544831004Z
 implementation_info:
   implemented: false
   completed_at: 2026-07-11T21:05:32.609191011Z
