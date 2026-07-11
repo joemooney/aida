@@ -1,0 +1,12 @@
+id: 019f51da-a5f7-7ae1-bdec-899ddead07e8
+spec_id: BUG-717
+agreed_id: BUG-717
+title: MCP status_unified counts META/stateless specs; CLI status/list excludes them (surface parity drift)
+description: 'tool_status_unified (aida-cli/src/mcp.rs:4727) computes Total requirements via store.requirements.len() (line 4735) and by_status over all requirements (line 4730), with NO META/folder exclusion. The CLI surfaces (aida list/status/history) exclude stateless META/folder types by default (liveness.rs:464 rollup exclusion; cli.rs --include-meta opt-in). Result: on a fresh aida-init project the MCP status_unified reports 11 total (5 user + 6 seeded META) while aida list reports 5. Fix: apply the same META/folder exclusion the CLI uses in tool_status_unified (total + by_status). Surfaced by the SPIKE-73 benchmark replication, where MCP status_snapshot cells failed the grader (which expects the CLI count ~5) by correctly reporting the META-inclusive 11.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-11T15:45:11.671417790Z
+modified_at: 2026-07-11T15:45:11.671417790Z
+req_type: Bug
