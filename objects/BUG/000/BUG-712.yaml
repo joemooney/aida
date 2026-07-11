@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:39:46.123338710Z
-modified_at: 2026-07-11T20:47:05.194767596Z
+modified_at: 2026-07-11T20:47:13.698256979Z
 req_type: Bug
 tags:
 - aida:zen
@@ -33,6 +33,11 @@ comments:
   content: Commit 0c80a0f8a references this requirement
   created_at: 2026-07-09T06:48:33.822737275Z
   modified_at: 2026-07-09T06:48:33.822737275Z
+- id: 019f52ef-2b22-7bd2-a0ea-ef8b312ed68d
+  author: joe
+  content: Commit 26366346f references this requirement
+  created_at: 2026-07-11T20:47:13.698256979Z
+  modified_at: 2026-07-11T20:47:13.698256979Z
 implementation_info:
   implemented: false
   completed_at: 2026-07-11T20:47:05.194767596Z
