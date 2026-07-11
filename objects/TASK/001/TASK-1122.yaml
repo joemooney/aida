@@ -15,10 +15,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T16:10:35.728683682Z
-modified_at: 2026-07-08T16:10:35.728683682Z
+modified_at: 2026-07-11T21:41:22.854098395Z
 req_type: Task
 tags:
 - followup:bug-715
 - scrub
 - security
 - store
+comments:
+- id: 019f5320-bf26-72b0-8d06-7218ad299cb6
+  author: joe
+  content: |-
+    Part 1 SHIPPED (57061ef2c): git_ops::commit now authors store commits with [node] public_email via a -c override when redaction is enabled, so a redacted machine no longer leaks its raw corporate email in the git author (the node-7 leak). Pure redaction-args helper unit-tested.
+
+    REMAINING (parts 2/3, staying Approved): (2) aida doctor --category store-scrub to surface raw email/hostname ALREADY present in the store on any hub — this overlaps the TASK-1124 doctor-drift-detection work; recommend building them together. (3) dry-run preview of the sanitized identity before first push. Both are metadata/tooling refinements; the operator-facing file-content leak stays closed by BUG-715 core.
+  created_at: 2026-07-11T21:41:22.854098395Z
+  modified_at: 2026-07-11T21:41:22.854098395Z
