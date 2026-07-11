@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T05:55:26.921783412Z
-modified_at: 2026-07-02T08:04:59.612968224Z
+modified_at: 2026-07-11T21:06:20.365556401Z
 req_type: Task
 tags:
 - agent-surface
@@ -25,6 +25,11 @@ comments:
   content: Commit 728d33cd5 references this requirement
   created_at: 2026-07-02T05:56:07.091275963Z
   modified_at: 2026-07-02T05:56:07.091275963Z
+- id: 019f5300-aa4d-76a2-a0c4-7ab9a6ed7a14
+  author: joe
+  content: 'Resolved under STORY-753: aida ps already carries the agent_output_mode TOON branch (view: ps + running/orphaned tables); STORY-753 (parent) completed the remaining backlog list + history slices in 8229cb94d. No separate commit references this slice-id.'
+  created_at: 2026-07-11T21:06:20.365556401Z
+  modified_at: 2026-07-11T21:06:20.365556401Z
 history:
 - id: 019f21dc-15fb-7032-bda7-b260bc09eaa0
   author: aida-auto-bump
