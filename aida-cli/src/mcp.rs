@@ -4726,14 +4726,20 @@ impl<'a> McpServer<'a> {
     // parts the server can read directly (store counts, leases, queue depth).
     fn tool_status_unified(&self, args: &Value) -> Result<String, String> {
         let store = self.storage.load().map_err(|e| e.to_string())?;
-        let by_status =
-            |s: RequirementStatus| store.requirements.iter().filter(|r| r.status == s).count();
+        // BUG-717: mirror the CLI work-view (`aida status` / `aida list`) —
+        // exclude standing-artifact / stateless types (vision / principle /
+        // term / constraint / folder / meta) so the MCP status count agrees
+        // with the CLI instead of counting the seeded META prompt-templates as
+        // requirements.
+        let work: Vec<_> = store
+            .requirements
+            .iter()
+            .filter(|r| !crate::is_standing_artifact_type(&r.req_type.to_string()))
+            .collect();
+        let by_status = |s: RequirementStatus| work.iter().filter(|r| r.status == s).count();
 
         let mut out = String::from("Project status\n");
-        out.push_str(&format!(
-            "  Total requirements: {}\n",
-            store.requirements.len()
-        ));
+        out.push_str(&format!("  Total requirements: {}\n", work.len()));
         out.push_str("  By status:\n");
         for (label, status) in [
             ("Draft", RequirementStatus::Draft),
@@ -11928,6 +11934,33 @@ mod tests {
         assert!(out.contains("By status:"), "out: {out}");
         assert!(out.contains("Active sessions:"), "out: {out}");
         assert!(out.contains("Queue depth ('su-test')"), "out: {out}");
+    }
+
+    #[test]
+    fn status_unified_excludes_meta_from_count_matching_cli() {
+        // BUG-717: the MCP status count must exclude standing-artifact /
+        // stateless types (meta, folder, ...) exactly as `aida status` / `aida
+        // list` do — otherwise the seeded META prompt-templates inflate the
+        // "Total requirements" the MCP surface reports vs the CLI.
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        seed_req(&server, "A real work spec"); // type=task → counted
+        server
+            .tool_add_requirement(&json!({
+                "title": "A META prompt template",
+                "description": "standing artifact, not work",
+                "type": "meta",
+            }))
+            .expect("seed meta add_requirement failed");
+        let out = server
+            .tool_status_unified(&json!({ "user": "su-test" }))
+            .unwrap();
+        // Only the task counts; the META spec is excluded (the BUG-717 bug was
+        // it reading "Total requirements: 2").
+        assert!(
+            out.contains("Total requirements: 1"),
+            "META must be excluded from the MCP status count: {out}"
+        );
     }
 
     #[test]

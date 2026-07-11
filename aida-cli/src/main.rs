@@ -96229,7 +96229,8 @@ const STANDING_ARTIFACT_TYPES: [&str; 6] = [
     "meta",
 ];
 
-fn is_standing_artifact_type(req_type: &str) -> bool {
+// pub(crate) so the MCP status surface can mirror this exact exclusion (BUG-717).
+pub(crate) fn is_standing_artifact_type(req_type: &str) -> bool {
     STANDING_ARTIFACT_TYPES
         .iter()
         .any(|s| req_type.eq_ignore_ascii_case(s))
