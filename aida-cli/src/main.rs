@@ -38590,8 +38590,16 @@ fn scan_completed_without_commit_with_options(
         if referenced_by_id {
             continue;
         }
+        // TASK-1089: compare CREATED_AT, not modified_at. The git-canonical
+        // migration rewrote every spec's modified_at to a recent bulk timestamp,
+        // so a modified_at cutoff hid nothing (353 pre-migration completions all
+        // read as "recent"). created_at reflects the spec's true age and was NOT
+        // migration-reset, so a completed spec BORN before the recent window is
+        // legacy history — exempt it. A genuinely-recent stranded completion
+        // (created in-window, no corroborating commit) still flags.
+        // trace:TASK-1089 | ai:claude
         if let Some(cut) = cutoff {
-            if !include_older && req.modified_at < cut {
+            if !include_older && req.created_at < cut {
                 hidden_older += 1;
                 continue;
             }
