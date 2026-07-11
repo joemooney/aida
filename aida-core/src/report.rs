@@ -864,8 +864,32 @@ pub fn check_scaffold_status(
 
     let mut status = ScaffoldStatus::new();
 
+    // BUG-917: the AIDA source repo dogfoods its own scaffolding — the .claude/
+    // scaffold files (commands, skills, settings.json) are per-file SYMLINKS into
+    // aida-core/templates/ (the raw masters), which intentionally differ from the
+    // generated artifact (frontmatter + substitution wrapping). Comparing a
+    // symlinked master against the generated preview always reports false drift.
+    // A scaffold target that is a symlink resolving under aida-core/templates/ is
+    // the self-hosting pattern, not drift — count it matching. Downstream projects
+    // have real files here, so this only triggers in the source repo.
+    // trace:BUG-917 | ai:claude
+    let templates_root = fs::canonicalize(project_root.join("aida-core").join("templates")).ok();
+
     for artifact in &preview.artifacts {
         let full_path = project_root.join(&artifact.path);
+
+        if let Some(root) = &templates_root {
+            let symlinked_master = fs::symlink_metadata(&full_path)
+                .map(|m| m.file_type().is_symlink())
+                .unwrap_or(false)
+                && fs::canonicalize(&full_path)
+                    .map(|t| t.starts_with(root))
+                    .unwrap_or(false);
+            if symlinked_master {
+                status.matching.push(artifact.path.clone());
+                continue;
+            }
+        }
 
         if full_path.exists() {
             if let Ok(actual_content) = fs::read_to_string(&full_path) {
@@ -1009,7 +1033,20 @@ fn scan_extra_files(
                     extra.push(rel_path.to_path_buf());
                 }
             } else if path.is_dir() {
-                scan_extra_files(&path, project_root, preview, extra);
+                // BUG-917: only descend into scaffold-MANAGED directories — a dir
+                // that is an ancestor of some scaffold artifact. This stops the
+                // walk counting runtime data (.claude/projects/ session
+                // transcripts, statsig, todos, shell-snapshots, ...) as "extra
+                // scaffold": in the AIDA source repo that was 40k+ false extras.
+                // trace:BUG-917 | ai:claude
+                let rel_dir = path.strip_prefix(project_root).unwrap_or(&path);
+                if preview
+                    .artifacts
+                    .iter()
+                    .any(|a| a.path.starts_with(rel_dir))
+                {
+                    scan_extra_files(&path, project_root, preview, extra);
+                }
             }
         }
     }
