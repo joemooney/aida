@@ -19,12 +19,12 @@ description: |-
   - bash -n passes; a scripted run (--auto-cleanup) completes with 'aida show <id>' resolving and the auto-bump firing.
 
   Broader observation (separate call, not this bug): any user shell script doing $(aida list ...) now gets TOON. Our own demo broke this way; downstream scripts will too. Worth a product decision: document TOON-when-piped loudly, or offer an explicit --format human escape hatch.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T23:13:17.367861419Z
-modified_at: 2026-07-08T00:41:50.085761364Z
+modified_at: 2026-07-11T20:29:48.491399023Z
 req_type: Bug
 comments:
 - id: 019f3edc-4a61-7d12-84ae-4641542ae82a
