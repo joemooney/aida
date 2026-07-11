@@ -35,10 +35,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T16:16:40.038602669Z
-modified_at: 2026-07-01T16:16:40.038602669Z
+modified_at: 2026-07-11T20:07:27.157984678Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-1
 - implementer
+comments:
+- id: 019f52ca-c0b5-7ab3-9b14-9ce69fff21f1
+  author: joe
+  content: 'Triage (2026-07-11): resolved-by-BUG-705, closing. Real bug at the time; the failure was 2026-07-01, predating BUG-705 (a6dc16aef, 2026-07-07) whose title IS the fix — "route no-human phase-1 implementer through the headless vendor." The clean-exit-no-PR came from the pre-BUG-705 phase-1 launch path. On current code the implementer launches through the gated compose_headless_command. Verified against code; a residual "LLM did not run /aida-pr" behavior is possible but would auto-re-draft a fresh failure report if it recurs. Closing rather than running a heavy live --no-human throwaway drain for marginal additional confidence.'
+  created_at: 2026-07-11T20:07:27.157984678Z
+  modified_at: 2026-07-11T20:07:27.157984678Z
