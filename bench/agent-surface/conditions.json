@@ -16,6 +16,14 @@
     "disallowed_tools": ["ToolSearch", "Bash"],
     "preamble": "# Tools\n\nYou are working inside an AIDA project. AIDA tracks requirements/specs and a work queue, exposed through a registered MCP server named `aida`. Use the AIDA MCP tools (e.g. `queue_next`, `show_requirement`, `query_graph`, `status_unified`, `list_findings`, `add_requirement`) for all requirement, queue, graph, status, and findings operations.\n\nIMPORTANT: Do NOT use the `aida` CLI or any shell command. You must use the AIDA MCP tools exclusively.\n\nAnswer the user's question, then stop."
   },
+  "mcp-toolsearch": {
+    "name": "AIDA MCP tools (aida mcp-serve, ToolSearch / on-demand schema loading)",
+    "surface": "mcp-toolsearch",
+    "mcp": true,
+    "allowed_tools": ["mcp__aida", "Read", "ToolSearch"],
+    "disallowed_tools": ["Bash"],
+    "preamble": "# Tools\n\nYou are working inside an AIDA project. AIDA tracks requirements/specs and a work queue, exposed through a registered MCP server named `aida`. The AIDA MCP tools are DEFERRED: their schemas are not all loaded upfront. Use the `ToolSearch` tool to find and load the AIDA MCP tool(s) you need (search by intent, e.g. 'queue next', 'show requirement', 'graph blocked-by', 'project status', 'list findings', 'add requirement'), then call the loaded `mcp__aida__*` tool. This is how a real MCP client loads schemas on demand rather than paying for all of them upfront.\n\nIMPORTANT: Do NOT use the `aida` CLI or any shell command. You must use the AIDA MCP tools (loaded via ToolSearch) exclusively.\n\nAnswer the user's question, then stop."
+  },
   "toon": {
     "name": "AIDA token-efficient CLI / TOON mode (AIDA_AGENT_OUTPUT, TASK-964)",
     "surface": "toon",

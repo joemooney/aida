@@ -23,5 +23,10 @@
     "category": "multi_step",
     "prompt": "File a new requirement: a task titled 'Add rate limiting to the login endpoint' with a short description. Report the spec ID it was assigned.",
     "grading_hint": "The agent must actually create a new requirement (via the CLI add command or the add_requirement tool) and report the assigned spec ID (e.g. TASK-N). A claim of success without an actual create call, or no reported ID, is a failure."
+  },
+  "chained_followup": {
+    "category": "chained",
+    "prompt": "Find the highest-priority Approved spec that is NOT blocked by anything (it has no blocked-by dependencies). Show its blocked-by graph to confirm it has no blockers. Then file a new follow-up task titled 'Harden the picked spec area' that is blocked-by the spec you picked. Report (a) which spec you picked and why, and (b) the new spec ID you created.",
+    "grading_hint": "Among the Approved specs, TASK-3 ('Wire the login form') is HIGH priority and has NO blocked-by, so it is the correct pick. TASK-1 ('Set up auth backend') is Approved and unblocked but only MEDIUM priority; STORY-2 ('Add password reset flow') is Approved but BLOCKED BY TASK-1, so it is excluded. The agent must (1) browse/filter the approved specs and identify TASK-3 as the highest-priority unblocked one, (2) confirm via TASK-3's graph that it has no blocked-by, and (3) actually create a new task that is blocked-by TASK-3 and report the new spec ID (e.g. TASK-N). Picking the wrong spec, not confirming the empty blocked-by graph, or not actually creating + reporting the new spec ID is a failure."
   }
 }

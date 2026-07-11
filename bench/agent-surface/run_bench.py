@@ -398,6 +398,36 @@ def markdown_report(results):
             _mean([r["usage"]["wall_clock_seconds"] for r in rs]),
         ))
 
+    # Single-call vs chained split. The chained_followup task is the browse ->
+    # filter -> fetch -> write multi-round pattern where MCP's typed structure
+    # might pay off; the rest are single-call reads/writes where the upfront
+    # schema tax should dominate. Categorize from tasks.json (chained vs other).
+    try:
+        task_meta = load_json("tasks.json")
+    except (OSError, ValueError):
+        task_meta = {}
+
+    def _bucket(task_id):
+        cat = (task_meta.get(task_id) or {}).get("category", "")
+        return "chained" if cat == "chained" else "single-call"
+
+    lines.append("\n## Single-call vs chained (multi-round) split\n")
+    lines.append("| Condition | Bucket | Runs | Success% | Avg in-tok | Avg cost | Avg turns | Avg tools |")
+    lines.append("|---|---|---|---|---|---|---|---|")
+    for cond, rs in by_cond.items():
+        for bucket in ("single-call", "chained"):
+            brs = [r for r in rs if _bucket(r["task"]) == bucket]
+            if not brs:
+                continue
+            succ = sum(1 for r in brs if r["grade"]["task_success"])
+            lines.append("| %s | %s | %d | %d%% | %d | $%.4f | %.1f | %.1f |" % (
+                cond, bucket, len(brs), round(100 * succ / len(brs)),
+                round(_mean([r["usage"]["input_tokens"] for r in brs])),
+                _mean([r["usage"]["total_cost_usd"] for r in brs]),
+                _mean([r["usage"]["turn_count"] for r in brs]),
+                _mean([r["usage"]["tool_call_count"] for r in brs]),
+            ))
+
     lines.append("\n## Per-task breakdown\n")
     by_task = {}
     for r in results:
@@ -455,6 +485,14 @@ def clear_results(condition_ids):
     RESULTS_JSONL.write_text(("\n".join(kept) + "\n") if kept else "", encoding="utf-8")
 
 
+# Tasks that CREATE a spec and would otherwise see their own prior-run output
+# under per-condition reseeding — reseed the fixture before EACH of their runs so
+# every run measures a clean create (see the loop below). Read-only tasks and
+# non-duplicating writers (file_spec just adds a distinct spec each run) don't
+# need this.
+RESEED_PER_RUN_TASKS = {"chained_followup"}
+
+
 def cmd_matrix(args):
     conditions = load_json("conditions.json")
     tasks = load_json("tasks.json")
@@ -466,9 +504,25 @@ def cmd_matrix(args):
     n = 0
     for cond_id in cond_ids:
         condition = conditions[cond_id]
+        # Clean comparison: re-seed the fixture at the start of each condition so
+        # write-tasks (file_spec / chained_followup) run by a PRIOR condition do
+        # not drift the read-tasks (status_snapshot, next_queue_item) of this one
+        # -- the cross-condition fixture-drift confound the first SPIKE-73 run flagged.
+        if getattr(args, "reseed_per_condition", False):
+            print("\n--- re-seeding fixture for condition '%s' ---" % cond_id)
+            ensure_fixture(force=True)
         for task_id in task_ids:
             task = tasks[task_id]
             for r in range(1, args.repeat + 1):
+                # A spec-CREATING task (chained_followup) leaves its output in the
+                # fixture, so runs 2+ within a per-condition-reseeded fixture find
+                # the PRIOR run's follow-up and (correctly) decline to file a
+                # duplicate -- which the grader scores as a FAILURE. That's a
+                # benchmark false negative, not agent/CLI behavior. Re-seed before
+                # every run of such a task so each run measures a clean create
+                # against a pristine fixture.
+                if task_id in RESEED_PER_RUN_TASKS:
+                    ensure_fixture(force=True)
                 n += 1
                 print("\n[%d/%d] %s x %s (run %d)" % (n, total, cond_id, task_id, r))
                 print_run(run_one(cond_id, condition, task_id, task, r, args.model))
@@ -509,6 +563,8 @@ def main():
     mp.add_argument("--repeat", type=int, default=1)
     mp.add_argument("--model", default=DEFAULT_AGENT_MODEL)
     mp.add_argument("--reseed", action="store_true")
+    mp.add_argument("--reseed-per-condition", action="store_true",
+                    help="re-seed the fixture before each condition (clean cross-condition comparison)")
 
     sub.add_parser("report", help="aggregate results.jsonl into report.md")
 

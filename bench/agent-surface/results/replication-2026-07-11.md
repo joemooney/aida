@@ -47,10 +47,22 @@ Fixed in **BUG-717** — `status_unified` now reuses the CLI's own
 - **mcp `status_snapshot`: 0/3 → 3/3** — the fix, confirmed by the benchmark that
   found the bug (self-test via dogfood).
 - **mcp overall: 78% → 100%.**
-- The v2 cli 89% is run-variance on the single hardest task: both misses are
-  `chained_followup` (a 4-step browse→filter→fetch→file-follow-up), where the
-  agent identified the right spec but didn't complete the write. Not a surface
-  effect — n=3/cell variance on the one multi-round task.
+- **The v2 cli 89% is a benchmark false negative — a defect in the harness, now
+  fixed. It should not be read as "≈100%".** Both misses are `chained_followup`
+  (browse→filter→fetch→file-a-follow-up). In each, the agent correctly identified
+  the target *and then correctly declined to file a duplicate* — because run 1's
+  follow-up spec was still in the fixture (the harness reseeded per-*condition*,
+  not per-*run*). The grader demands a brand-new spec every run, so it scored the
+  correct decline as a failure. Nothing in the agent, the CLI, or AIDA failed;
+  the benchmark manufactured the duplicate and then penalized the right response.
+  Fixed: the harness now reseeds before every `chained_followup` run
+  (`RESEED_PER_RUN_TASKS`) so each run measures a clean create.
+- Corollary: the `chained_followup` **success** numbers in *all three* runs are
+  unreliable pre-fix — June/v1 passed 3/3 only because those models happened to
+  create a duplicate rather than decline it. The metric measured "naive-create vs
+  smart-decline," which is noise; the harness fix makes it measure the actual
+  write capability. (The **cost** numbers are unaffected — tokens are spent the
+  same whether the agent creates or declines.)
 
 ## Takeaway
 
