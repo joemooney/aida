@@ -1,0 +1,12 @@
+id: 019f5286-b4f6-7343-8fee-c7341988a1b2
+spec_id: TASK-1131
+agreed_id: TASK-1131
+title: 'BUG-700 residual housekeeping: re-protect gitlab main + delete local recovery refs after all-clear'
+description: 'Two non-exposure residuals from the BUG-700 employer-content scrub (completed 2026-07-03), both operator actions: (1) re-enable the force-push protection toggle on gitlab main (temporarily unprotected for the scrub force-push); (2) after operator all-clear, delete the local rollback safety net — refs/recovery/bug700/* plus the session-scratchpad copy of unscrubbed history — and git gc so no unscrubbed history remains anywhere locally. See BUG-700 final comment for context.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-11T18:53:07.702142832Z
+modified_at: 2026-07-11T18:53:07.702142832Z
+req_type: Task

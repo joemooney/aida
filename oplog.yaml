@@ -32495,5 +32495,17 @@ operations:
   timestamp: 2026-07-11T18:52:56.917803950Z
   kind: !SetStatus
     status: Completed
-clock: 3040
+- id: 019f5286-e0e7-7f23-ba41-6bda9708ee08
+  target_id: 019f5286-b4f6-7343-8fee-c7341988a1b2
+  author: aida
+  node_id: '1'
+  lamport: 3041
+  timestamp: 2026-07-11T18:53:18.951166756Z
+  kind: !Create
+    title: 'BUG-700 residual housekeeping: re-protect gitlab main + delete local recovery refs after all-clear'
+    description: 'Two non-exposure residuals from the BUG-700 employer-content scrub (completed 2026-07-03), both operator actions: (1) re-enable the force-push protection toggle on gitlab main (temporarily unprotected for the scrub force-push); (2) after operator all-clear, delete the local rollback safety net — refs/recovery/bug700/* plus the session-scratchpad copy of unscrubbed history — and git gc so no unscrubbed history remains anywhere locally. See BUG-700 final comment for context.'
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 3041
 node_id: '1'
