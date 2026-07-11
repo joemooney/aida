@@ -19,12 +19,12 @@ description: |-
   - bash -n passes; a scripted run (--auto-cleanup) completes with 'aida show <id>' resolving and the auto-bump firing.
 
   Broader observation (separate call, not this bug): any user shell script doing $(aida list ...) now gets TOON. Our own demo broke this way; downstream scripts will too. Worth a product decision: document TOON-when-piped loudly, or offer an explicit --format human escape hatch.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T23:13:17.367861419Z
-modified_at: 2026-07-11T20:30:33.443138846Z
+modified_at: 2026-07-11T20:30:38.844206291Z
 req_type: Bug
 comments:
 - id: 019f3edc-4a61-7d12-84ae-4641542ae82a
@@ -42,3 +42,7 @@ comments:
   content: 'Triage (2026-07-11): already fixed by commit 152cff094 ("fix(demo): TOON-tolerant spec-id capture + drop top-level local (BUG-707)"). Verified on current main: both HELLO_SPEC (line 608) and GOODBYE_SPEC (line 813) captures use awk sub(/,.*/,"",$1) so they yield a bare TYPE-SEQ id under both human-table and TOON output; claude_exit is a plain assignment (line 852), no local at top level; bash -n passes. Stayed Draft so the (BUG-707) commit trailer never auto-completed it. Closing.'
   created_at: 2026-07-11T20:30:30.418537417Z
   modified_at: 2026-07-11T20:30:30.418537417Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-11T20:30:38.844206291Z
+  completion_sha: 152cff09431f07d1c0f5a04b96d462ae9ccb5bc8
