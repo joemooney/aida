@@ -8,8 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-11T18:09:49.105353798Z
-modified_at: 2026-07-11T18:10:18.752159180Z
+modified_at: 2026-07-11T18:10:27.098446634Z
 req_type: Task
+comments:
+- id: 019f525f-a29a-7261-8ec8-c89aa96047a0
+  author: joe
+  content: Commit 3109fb8e6 references this requirement
+  created_at: 2026-07-11T18:10:27.098446634Z
+  modified_at: 2026-07-11T18:10:27.098446634Z
 implementation_info:
   implemented: false
   completed_at: 2026-07-11T18:10:18.752159180Z
