@@ -7,3 +7,7 @@ results/*
 !results/report.md
 !results/results.jsonl
 !results/matrix_run.log
+# Dated re-runs / replications are kept too (report-YYYY-MM-DD.md etc.)
+!results/report-*.md
+!results/results-*.jsonl
+!results/replication-*.md
