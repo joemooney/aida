@@ -18,12 +18,12 @@ description: |-
   CONTEXT: discovered 2026-07-02 reconciling node 6 (spock) store commits from gitlab into the local store. That reconcile was pushed to gitlab ONLY and HELD from GitHub precisely to avoid adding more copies pending this scrub; the reconciled+scrubbed store returns to GitHub in one clean pass after the rewrite.
 
   ACCEPTANCE: no employer email domain, no employer corporate-network detail, no employer alias context remains in ANY commit reachable from public GitHub aida-store or main; code builds + tests pass on the rewritten tip; all active clones re-synced; gitlab scrubbed to match.
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:56:17.619777771Z
-modified_at: 2026-07-03T18:19:09.080896107Z
+modified_at: 2026-07-11T18:52:56.855397425Z
 req_type: Bug
 tags:
 - needs-history-rewrite
