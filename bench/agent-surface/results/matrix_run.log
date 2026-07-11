@@ -1,0 +1,330 @@
+Seeded fixture at /home/joe/ai/aida-spike73-bench/bench/agent-surface/fixture-project
+  specs: TASK-1 (approved/med), STORY-2 (approved/high, blocked-by TASK-1),
+         TASK-3 (approved/high, queued), TASK-4 (draft/low)
+  finding: 'Empty-email login bug' linked to TASK-3
+Seeded fixture at /home/joe/ai/aida-spike73-bench/bench/agent-surface/fixture-project
+  specs: TASK-1 (approved/med), STORY-2 (approved/high, blocked-by TASK-1),
+         TASK-3 (approved/high, queued), TASK-4 (draft/low)
+  finding: 'Empty-email login bug' linked to TASK-3
+Seeded fixture at /home/joe/ai/aida-spike73-bench/bench/agent-surface/fixture-project
+  specs: TASK-1 (approved/med), STORY-2 (approved/high, blocked-by TASK-1),
+         TASK-3 (approved/high, queued), TASK-4 (draft/low)
+  finding: 'Empty-email login bug' linked to TASK-3
+Seeded fixture at /home/joe/ai/aida-spike73-bench/bench/agent-surface/fixture-project
+  specs: TASK-1 (approved/med), STORY-2 (approved/high, blocked-by TASK-1),
+         TASK-3 (approved/high, queued), TASK-4 (draft/low)
+  finding: 'Empty-email login bug' linked to TASK-3
+
+--- re-seeding fixture for condition 'cli' ---
+Seeding fixture (this runs `aida init`, ~1 min)...
+
+[1/72] cli x next_queue_item (run 1)
+  PASS | 2 turns | 1 tools | in 44025 tok / out 137 tok | $0.0473 | 9.7s
+
+[2/72] cli x next_queue_item (run 2)
+  PASS | 2 turns | 1 tools | in 44014 tok / out 126 tok | $0.0171 | 4.8s
+
+[3/72] cli x next_queue_item (run 3)
+  PASS | 2 turns | 1 tools | in 44020 tok / out 132 tok | $0.0172 | 9.3s
+
+[4/72] cli x show_spec_blocked_by (run 1)
+  PASS | 3 turns | 2 tools | in 44383 tok / out 296 tok | $0.0518 | 8.9s
+
+[5/72] cli x show_spec_blocked_by (run 2)
+  PASS | 3 turns | 2 tools | in 44376 tok / out 301 tok | $0.0218 | 8.6s
+
+[6/72] cli x show_spec_blocked_by (run 3)
+  PASS | 3 turns | 2 tools | in 44375 tok / out 287 tok | $0.0216 | 9.8s
+
+[7/72] cli x status_snapshot (run 1)
+  PASS | 2 turns | 1 tools | in 44188 tok / out 334 tok | $0.0512 | 10.7s
+
+[8/72] cli x status_snapshot (run 2)
+  PASS | 2 turns | 1 tools | in 44187 tok / out 243 tok | $0.0199 | 11.8s
+
+[9/72] cli x status_snapshot (run 3)
+  PASS | 2 turns | 1 tools | in 44199 tok / out 304 tok | $0.0209 | 10.5s
+
+[10/72] cli x find_finding (run 1)
+  PASS | 2 turns | 1 tools | in 44008 tok / out 166 tok | $0.0476 | 7.5s
+
+[11/72] cli x find_finding (run 2)
+  PASS | 2 turns | 1 tools | in 44020 tok / out 184 tok | $0.0179 | 5.6s
+
+[12/72] cli x find_finding (run 3)
+  PASS | 2 turns | 1 tools | in 44008 tok / out 168 tok | $0.0165 | 6.7s
+
+[13/72] cli x file_spec (run 1)
+  PASS | 2 turns | 1 tools | in 44011 tok / out 173 tok | $0.0477 | 6.5s
+
+[14/72] cli x file_spec (run 2)
+  PASS | 2 turns | 1 tools | in 44011 tok / out 174 tok | $0.0177 | 11.1s
+
+[15/72] cli x file_spec (run 3)
+  PASS | 2 turns | 1 tools | in 44007 tok / out 169 tok | $0.0168 | 6.4s
+
+[16/72] cli x chained_followup (run 1)
+  PASS | 6 turns | 5 tools | in 90602 tok / out 1058 tok | $0.0815 | 32.1s
+
+[17/72] cli x chained_followup (run 2)
+  PASS | 8 turns | 7 tools | in 139277 tok / out 1258 tok | $0.0743 | 35.1s
+
+[18/72] cli x chained_followup (run 3)
+  PASS | 8 turns | 7 tools | in 113650 tok / out 867 tok | $0.0557 | 18.3s
+
+--- re-seeding fixture for condition 'mcp' ---
+Seeding fixture (this runs `aida init`, ~1 min)...
+
+[19/72] mcp x next_queue_item (run 1)
+  PASS | 2 turns | 1 tools | in 96750 tok / out 119 tok | $0.0612 | 8.5s
+
+[20/72] mcp x next_queue_item (run 2)
+  PASS | 2 turns | 1 tools | in 96734 tok / out 91 tok | $0.0319 | 6.6s
+
+[21/72] mcp x next_queue_item (run 3)
+  PASS | 2 turns | 1 tools | in 96750 tok / out 120 tok | $0.0316 | 5.8s
+
+[22/72] mcp x show_spec_blocked_by (run 1)
+  PASS | 3 turns | 2 tools | in 97200 tok / out 337 tok | $0.0672 | 8.1s
+
+[23/72] mcp x show_spec_blocked_by (run 2)
+  PASS | 3 turns | 2 tools | in 97199 tok / out 323 tok | $0.0380 | 10.6s
+
+[24/72] mcp x show_spec_blocked_by (run 3)
+  PASS | 3 turns | 2 tools | in 97202 tok / out 316 tok | $0.0380 | 10.5s
+
+[25/72] mcp x status_snapshot (run 1)
+  PASS | 2 turns | 1 tools | in 96829 tok / out 204 tok | $0.0629 | 8.5s
+
+[26/72] mcp x status_snapshot (run 2)
+  PASS | 2 turns | 1 tools | in 96827 tok / out 197 tok | $0.0340 | 7.8s
+
+[27/72] mcp x status_snapshot (run 3)
+  PASS | 2 turns | 1 tools | in 96823 tok / out 186 tok | $0.0338 | 9.4s
+
+[28/72] mcp x find_finding (run 1)
+  PASS | 4 turns | 4 tools | in 178678 tok / out 525 tok | $0.3128 | 14.3s
+
+[29/72] mcp x find_finding (run 2)
+  FAIL | 2 turns | 1 tools | in 96799 tok / out 204 tok | $0.0627 | 10.2s
+
+[30/72] mcp x find_finding (run 3)
+  FAIL | 2 turns | 1 tools | in 96798 tok / out 183 tok | $0.0335 | 7.4s
+
+[31/72] mcp x file_spec (run 1)
+  PASS | 2 turns | 1 tools | in 96871 tok / out 213 tok | $0.0633 | 7.8s
+
+[32/72] mcp x file_spec (run 2)
+  PASS | 2 turns | 1 tools | in 96869 tok / out 211 tok | $0.0343 | 7.8s
+
+[33/72] mcp x file_spec (run 3)
+  PASS | 2 turns | 1 tools | in 96871 tok / out 213 tok | $0.0344 | 6.8s
+
+[34/72] mcp x chained_followup (run 1)
+  PASS | 7 turns | 6 tools | in 294937 tok / out 865 tok | $0.1394 | 24.6s
+
+[35/72] mcp x chained_followup (run 2)
+  PASS | 6 turns | 5 tools | in 245389 tok / out 820 tok | $0.0942 | 20.1s
+
+[36/72] mcp x chained_followup (run 3)
+  PASS | 7 turns | 6 tools | in 246746 tok / out 1174 tok | $0.1034 | 23.9s
+
+--- re-seeding fixture for condition 'mcp-toolsearch' ---
+Seeding fixture (this runs `aida init`, ~1 min)...
+
+[37/72] mcp-toolsearch x next_queue_item (run 1)
+  PASS | 3 turns | 2 tools | in 60920 tok / out 233 tok | $0.0634 | 10.3s
+
+[38/72] mcp-toolsearch x next_queue_item (run 2)
+  PASS | 3 turns | 2 tools | in 59306 tok / out 256 tok | $0.0251 | 9.4s
+
+[39/72] mcp-toolsearch x next_queue_item (run 3)
+  PASS | 3 turns | 2 tools | in 59956 tok / out 233 tok | $0.0269 | 7.2s
+
+[40/72] mcp-toolsearch x show_spec_blocked_by (run 1)
+  PASS | 4 turns | 3 tools | in 60806 tok / out 523 tok | $0.0686 | 12.1s
+
+[41/72] mcp-toolsearch x show_spec_blocked_by (run 2)
+  PASS | 4 turns | 3 tools | in 60826 tok / out 436 tok | $0.0338 | 11.1s
+
+[42/72] mcp-toolsearch x show_spec_blocked_by (run 3)
+  PASS | 4 turns | 3 tools | in 60808 tok / out 500 tok | $0.0347 | 13.0s
+
+[43/72] mcp-toolsearch x status_snapshot (run 1)
+  PASS | 4 turns | 3 tools | in 62101 tok / out 518 tok | $0.0727 | 15.6s
+
+[44/72] mcp-toolsearch x status_snapshot (run 2)
+  PASS | 4 turns | 3 tools | in 62139 tok / out 557 tok | $0.0399 | 16.0s
+
+[45/72] mcp-toolsearch x status_snapshot (run 3)
+  PASS | 4 turns | 3 tools | in 62097 tok / out 495 tok | $0.0388 | 11.6s
+
+[46/72] mcp-toolsearch x find_finding (run 1)
+  PASS | 7 turns | 6 tools | in 101613 tok / out 710 tok | $0.0860 | 15.7s
+
+[47/72] mcp-toolsearch x find_finding (run 2)
+  PASS | 5 turns | 4 tools | in 101097 tok / out 885 tok | $0.0531 | 24.6s
+
+[48/72] mcp-toolsearch x find_finding (run 3)
+  PASS | 6 turns | 5 tools | in 122066 tok / out 770 tok | $0.0586 | 18.6s
+
+[49/72] mcp-toolsearch x file_spec (run 1)
+  PASS | 3 turns | 2 tools | in 61760 tok / out 394 tok | $0.0688 | 10.0s
+
+[50/72] mcp-toolsearch x file_spec (run 2)
+  PASS | 3 turns | 2 tools | in 60735 tok / out 397 tok | $0.0320 | 9.8s
+
+[51/72] mcp-toolsearch x file_spec (run 3)
+  PASS | 3 turns | 2 tools | in 60687 tok / out 366 tok | $0.0314 | 13.6s
+
+[52/72] mcp-toolsearch x chained_followup (run 1)
+  PASS | 8 turns | 7 tools | in 160342 tok / out 1490 tok | $0.1341 | 31.4s
+
+[53/72] mcp-toolsearch x chained_followup (run 2)
+  PASS | 8 turns | 7 tools | in 161001 tok / out 1543 tok | $0.1016 | 34.4s
+
+[54/72] mcp-toolsearch x chained_followup (run 3)
+  PASS | 10 turns | 9 tools | in 186616 tok / out 1832 tok | $0.1758 | 42.2s
+
+--- re-seeding fixture for condition 'toon' ---
+Seeding fixture (this runs `aida init`, ~1 min)...
+
+[55/72] toon x next_queue_item (run 1)
+  PASS | 2 turns | 1 tools | in 44242 tok / out 132 tok | $0.0480 | 21.8s
+
+[56/72] toon x next_queue_item (run 2)
+  PASS | 2 turns | 1 tools | in 44251 tok / out 141 tok | $0.0176 | 6.5s
+
+[57/72] toon x next_queue_item (run 3)
+  PASS | 2 turns | 1 tools | in 44251 tok / out 141 tok | $0.0163 | 7.8s
+
+[58/72] toon x show_spec_blocked_by (run 1)
+  PASS | 3 turns | 2 tools | in 44458 tok / out 295 tok | $0.0517 | 9.7s
+
+[59/72] toon x show_spec_blocked_by (run 2)
+  PASS | 3 turns | 2 tools | in 44458 tok / out 322 tok | $0.0214 | 10.0s
+
+[60/72] toon x show_spec_blocked_by (run 3)
+  PASS | 3 turns | 2 tools | in 44466 tok / out 317 tok | $0.0214 | 9.5s
+
+[61/72] toon x status_snapshot (run 1)
+  PASS | 2 turns | 1 tools | in 44380 tok / out 282 tok | $0.0510 | 7.1s
+
+[62/72] toon x status_snapshot (run 2)
+  PASS | 2 turns | 1 tools | in 44421 tok / out 311 tok | $0.0211 | 8.6s
+
+[63/72] toon x status_snapshot (run 3)
+  PASS | 2 turns | 1 tools | in 44392 tok / out 224 tok | $0.0197 | 6.4s
+
+[64/72] toon x find_finding (run 1)
+  PASS | 2 turns | 1 tools | in 44237 tok / out 172 tok | $0.0485 | 6.5s
+
+[65/72] toon x find_finding (run 2)
+  PASS | 2 turns | 1 tools | in 44243 tok / out 178 tok | $0.0180 | 5.8s
+
+[66/72] toon x find_finding (run 3)
+  PASS | 2 turns | 1 tools | in 44230 tok / out 165 tok | $0.0177 | 7.1s
+
+[67/72] toon x file_spec (run 1)
+  PASS | 2 turns | 1 tools | in 44287 tok / out 186 tok | $0.0490 | 7.2s
+
+[68/72] toon x file_spec (run 2)
+  PASS | 2 turns | 1 tools | in 44272 tok / out 171 tok | $0.0180 | 6.0s
+
+[69/72] toon x file_spec (run 3)
+  PASS | 2 turns | 1 tools | in 44270 tok / out 169 tok | $0.0180 | 6.9s
+
+[70/72] toon x chained_followup (run 1)
+  PASS | 7 turns | 6 tools | in 138809 tok / out 1134 tok | $0.1043 | 32.1s
+
+[71/72] toon x chained_followup (run 2)
+  PASS | 6 turns | 5 tools | in 113410 tok / out 1059 tok | $0.0582 | 33.6s
+
+[72/72] toon x chained_followup (run 3)
+  PASS | 5 turns | 4 tools | in 90704 tok / out 840 tok | $0.0473 | 18.0s
+
+Matrix complete: 72 runs.
+# AIDA agent-surface benchmark results
+
+Generated: 2026-06-29T04:01:31.090642+00:00
+
+## Per-condition summary
+
+| Condition | Runs | Success% | Avg in-tok | Avg out-tok | Avg cost | Total cost | Avg turns | Avg tools | Avg s |
+|---|---|---|---|---|---|---|---|---|---|
+| cli | 18 | 100% | 55853 | 354 | $0.0358 | $0.6443 | 3.1 | 2.1 | 11.9 |
+| mcp | 18 | 89% | 129015 | 350 | $0.0709 | $1.2766 | 3.1 | 2.1 | 11.0 |
+| mcp-toolsearch | 18 | 100% | 86938 | 674 | $0.0636 | $1.1455 | 4.8 | 3.8 | 17.0 |
+| toon | 18 | 100% | 55988 | 347 | $0.0360 | $0.6472 | 2.8 | 1.8 | 11.7 |
+
+## Single-call vs chained (multi-round) split
+
+| Condition | Bucket | Runs | Success% | Avg in-tok | Avg cost | Avg turns | Avg tools |
+|---|---|---|---|---|---|---|---|
+| cli | single-call | 15 | 100% | 44122 | $0.0288 | 2.2 | 1.2 |
+| cli | chained | 3 | 100% | 114510 | $0.0705 | 7.3 | 6.3 |
+| mcp | single-call | 15 | 87% | 102347 | $0.0626 | 2.3 | 1.4 |
+| mcp | chained | 3 | 100% | 262357 | $0.1123 | 6.7 | 5.7 |
+| mcp-toolsearch | single-call | 15 | 100% | 70461 | $0.0489 | 4.0 | 3.0 |
+| mcp-toolsearch | chained | 3 | 100% | 169320 | $0.1372 | 8.7 | 7.7 |
+| toon | single-call | 15 | 100% | 44324 | $0.0292 | 2.2 | 1.2 |
+| toon | chained | 3 | 100% | 114308 | $0.0699 | 6.0 | 5.0 |
+
+## Per-task breakdown
+
+### next_queue_item
+
+| Condition | Avg in-tok | Avg out-tok | Avg cost | Avg turns | Success |
+|---|---|---|---|---|---|
+| cli | 44020 | 132 | $0.0272 | 2.0 | 3/3 |
+| mcp | 96745 | 110 | $0.0415 | 2.0 | 3/3 |
+| mcp-toolsearch | 60061 | 241 | $0.0385 | 3.0 | 3/3 |
+| toon | 44248 | 138 | $0.0273 | 2.0 | 3/3 |
+
+### show_spec_blocked_by
+
+| Condition | Avg in-tok | Avg out-tok | Avg cost | Avg turns | Success |
+|---|---|---|---|---|---|
+| cli | 44378 | 295 | $0.0317 | 3.0 | 3/3 |
+| mcp | 97200 | 325 | $0.0477 | 3.0 | 3/3 |
+| mcp-toolsearch | 60813 | 486 | $0.0457 | 4.0 | 3/3 |
+| toon | 44461 | 311 | $0.0315 | 3.0 | 3/3 |
+
+### status_snapshot
+
+| Condition | Avg in-tok | Avg out-tok | Avg cost | Avg turns | Success |
+|---|---|---|---|---|---|
+| cli | 44191 | 294 | $0.0306 | 2.0 | 3/3 |
+| mcp | 96826 | 196 | $0.0436 | 2.0 | 3/3 |
+| mcp-toolsearch | 62112 | 523 | $0.0505 | 4.0 | 3/3 |
+| toon | 44398 | 272 | $0.0306 | 2.0 | 3/3 |
+
+### find_finding
+
+| Condition | Avg in-tok | Avg out-tok | Avg cost | Avg turns | Success |
+|---|---|---|---|---|---|
+| cli | 44012 | 173 | $0.0273 | 2.0 | 3/3 |
+| mcp | 124092 | 304 | $0.1363 | 2.7 | 1/3 |
+| mcp-toolsearch | 108259 | 788 | $0.0659 | 6.0 | 3/3 |
+| toon | 44237 | 172 | $0.0281 | 2.0 | 3/3 |
+
+### file_spec
+
+| Condition | Avg in-tok | Avg out-tok | Avg cost | Avg turns | Success |
+|---|---|---|---|---|---|
+| cli | 44010 | 172 | $0.0274 | 2.0 | 3/3 |
+| mcp | 96870 | 212 | $0.0440 | 2.0 | 3/3 |
+| mcp-toolsearch | 61061 | 386 | $0.0441 | 3.0 | 3/3 |
+| toon | 44276 | 175 | $0.0283 | 2.0 | 3/3 |
+
+### chained_followup
+
+| Condition | Avg in-tok | Avg out-tok | Avg cost | Avg turns | Success |
+|---|---|---|---|---|---|
+| cli | 114510 | 1061 | $0.0705 | 7.3 | 3/3 |
+| mcp | 262357 | 953 | $0.1123 | 6.7 | 3/3 |
+| mcp-toolsearch | 169320 | 1622 | $0.1372 | 8.7 | 3/3 |
+| toon | 114308 | 1011 | $0.0699 | 6.0 | 3/3 |
+
+
+Report written to /home/joe/ai/aida-spike73-bench/bench/agent-surface/results/report.md
