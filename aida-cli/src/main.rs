@@ -41953,10 +41953,13 @@ mod story_462_doctor_tests {
             .output()
             .unwrap();
 
+        // TASK-1089: the legacy-exemption cutoff compares created_at, not
+        // modified_at (the git-canonical migration bulk-reset modified_at to a
+        // recent timestamp, defeating a modified_at cutoff). Set created_at.
         let mut legacy = completed_spec("TASK-600");
-        legacy.modified_at = "2020-01-01T00:00:00Z".parse().unwrap();
+        legacy.created_at = "2020-01-01T00:00:00Z".parse().unwrap();
         let mut recent = completed_spec("TASK-601");
-        recent.modified_at = chrono::Utc::now();
+        recent.created_at = chrono::Utc::now();
         let mut store = aida_core::models::RequirementsStore::new();
         store.requirements = vec![legacy, recent];
         storage.save(&store).unwrap();
@@ -42027,10 +42030,12 @@ mod story_462_doctor_tests {
             .output()
             .unwrap();
 
+        // TASK-1089: the historical-tail cutoff compares created_at, not
+        // modified_at (the migration bulk-reset modified_at to a recent value).
         let mut old = completed_spec("TASK-710");
-        old.modified_at = "2020-01-01T00:00:00Z".parse().unwrap();
+        old.created_at = "2020-01-01T00:00:00Z".parse().unwrap();
         let mut recent = completed_spec("TASK-711");
-        recent.modified_at = chrono::Utc::now();
+        recent.created_at = chrono::Utc::now();
         let mut store = aida_core::models::RequirementsStore::new();
         store.requirements = vec![old, recent];
         storage.save(&store).unwrap();
