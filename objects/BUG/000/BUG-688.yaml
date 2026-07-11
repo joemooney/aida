@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:35:46.390020492Z
-modified_at: 2026-07-08T06:57:53.867068351Z
+modified_at: 2026-07-11T20:56:09.393725440Z
 req_type: Bug
 tags:
 - blocks:release-xplat-gate
@@ -45,3 +45,8 @@ comments:
     STILL OPEN (needs macOS access): determine whether the macOS `aida init` exit-1-with-no-output is a REAL regression or an isolated-tempdir e2e-harness artifact. Concrete next step when macOS is available: run `aida init` in an isolated tempdir + HOME on macOS with the assertion widened to print exit/stdout/stderr (as PR #1314 did), and compare against a real /Users/... path (non-symlinked) to isolate the /var/folders symlink hypothesis. Tags needs:operator + platform:macos remain accurate.
   created_at: 2026-07-08T06:57:53.867068351Z
   modified_at: 2026-07-08T06:57:53.867068351Z
+- id: 019f52f7-57b1-7ac0-90ce-fb2997c72f06
+  author: joe
+  content: 'Triage (2026-07-11, autonomous loop): the actionable fix is DONE — the operator-chosen "gate to cfg(linux)" landed in b88f36381 ("gate binary-driving e2e suites to Linux for the BUG-688 nightly gate", PR #1374); all 5 failing files (agent_write_confirm, agent_error_channel, journey, newcomer_delight, queue_work_dry_run) are now cfg(target_os) gated, so the nightly cross-platform matrix no longer runs them red. The ONLY residual is the open question the bug names — whether the macOS aida-init-exit-1-no-output is a real regression or an isolated-tempdir e2e-harness artifact — which is unanswerable without macOS access. Staying open, parked on that hardware need; not autonomously resolvable.'
+  created_at: 2026-07-11T20:56:09.393725440Z
+  modified_at: 2026-07-11T20:56:09.393725440Z
