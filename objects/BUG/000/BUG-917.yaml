@@ -12,10 +12,10 @@ description: |-
   Proposed fix: when a scaffold target resolves through a symlink into aida-core/templates/, treat it as matching (or skip it). Optionally special-case a hand-maintained CLAUDE.md.
 
   Found: v0.14.0 (sha 112a86354), debug build. Filed with GitLab issue on gitlab.joemooney.com (first remote issue).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T19:02:56.150367926Z
-modified_at: 2026-07-01T19:02:56.150367926Z
+modified_at: 2026-07-11T20:19:28.421444265Z
 req_type: Bug
