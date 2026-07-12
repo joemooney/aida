@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-09T06:52:30.036882055Z
-modified_at: 2026-07-11T21:31:23.009040027Z
+modified_at: 2026-07-12T06:16:57.531115034Z
 req_type: Task
 tags:
 - aida:doctor
@@ -49,3 +49,8 @@ comments:
     Status: staying Approved. Ready to implement; deferred from the autonomous loop because a drift-DETECTOR that false-positives is worse than none, and the generated-vs-deployed comparison + per-vendor transforms warrant focused implementation.
   created_at: 2026-07-11T21:31:23.009040027Z
   modified_at: 2026-07-11T21:31:23.009040027Z
+- id: 019f54f8-c5bb-7543-8803-9933130a439b
+  author: joe
+  content: Commit b0615545f references this requirement
+  created_at: 2026-07-12T06:16:57.531115034Z
+  modified_at: 2026-07-12T06:16:57.531115034Z
