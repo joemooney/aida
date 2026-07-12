@@ -1,0 +1,12 @@
+id: 019f57bf-ee0b-77c1-902b-f2d2b1dc6437
+spec_id: TASK-1134
+agreed_id: TASK-1134
+title: '**TASK (cli):** add `--single-branch` + `--sequential` flags to `cli.rs` `Work` with the'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-12T19:13:43.947510785Z
+modified_at: 2026-07-12T19:13:43.947510785Z
+req_type: Task
