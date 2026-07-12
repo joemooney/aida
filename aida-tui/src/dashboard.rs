@@ -126,6 +126,12 @@ pub enum RowKind {
     ReasonIntakeProposal,
     /// Deferred spec — Enter undefers it (`aida undefer <id>`).
     ReasonDeferred,
+    /// Unread-mail row (STORY-701) — `id` is a message id, not a spec id.
+    /// Enter opens the mailbox reader (`aida mailbox inbox`); composing a
+    /// reply/send is a separate registered action
+    /// ([`crate::board::send_mail_argv`]), not an Enter-dispatch here.
+    // trace:STORY-701 | ai:claude
+    ReasonMail,
 }
 
 /// Which of the two panes currently owns the keyboard. Up/Down act on the
@@ -234,6 +240,16 @@ pub struct DashboardModel {
     /// proposals re-merge.
     // trace:TASK-904
     pub intake_filled: bool,
+    /// Unread-mail rows sourced from `unread_inbox` (STORY-701) — cached like
+    /// [`Self::board`] and refreshed on the same lazy-load-once / `g`-refresh
+    /// cadence. The mail Nav section reads its rows from here rather than
+    /// [`crate::board::rows_for`]: a mail row isn't a `ClassifiedItem` (a
+    /// message isn't a spec).
+    pub mail: Vec<ListRow>,
+    /// Whether [`Self::mail`] has been composed at least once this run —
+    /// mirrors [`Self::board_loaded`]'s lazy-load-once cadence.
+    // trace:STORY-701 | ai:claude
+    pub mail_loaded: bool,
 }
 
 impl DashboardModel {
@@ -279,6 +295,19 @@ impl DashboardModel {
         // A fresh board snapshot drops the prior intake-proposal merge; re-arm
         // it so the cached candidates re-merge on the next read. trace:TASK-904
         self.intake_filled = false;
+    }
+
+    /// Read this operator's unread mail and cache it, plus the mail count on
+    /// [`Self::reason_counts`] (drives the Nav `(count) · owner` suffix on the
+    /// mail section like every other reason-group) — the source half of the
+    /// mailbox group. Mirrors [`Self::refresh_board`]'s lazy-load-once
+    /// cadence.
+    // trace:STORY-701 | ai:claude
+    pub fn refresh_mail(&mut self) {
+        self.mail = crate::board::fetch_mail_rows();
+        self.reason_counts
+            .insert(crate::board::Reason::Mail.label(), self.mail.len());
+        self.mail_loaded = true;
     }
 
     /// Merge the async-loaded open PRs into the awaiting-review board group.
@@ -550,7 +579,17 @@ pub fn refetch_rows(
             if reason == crate::board::Reason::NeedsApproval {
                 model.merge_intake();
             }
-            crate::board::rows_for(&model.board, reason)
+            // Mail rows aren't `ClassifiedItem`s (a message isn't a spec) —
+            // read from the model's own mail cache instead of `rows_for`.
+            // trace:STORY-701 | ai:claude
+            if reason == crate::board::Reason::Mail {
+                if !model.mail_loaded {
+                    model.refresh_mail();
+                }
+                model.mail.clone()
+            } else {
+                crate::board::rows_for(&model.board, reason)
+            }
         }
         NavSection::Queue => fetch_queue(model),
         NavSection::Backlog => fetch_status(model, &["approved", "planned"]),
@@ -917,6 +956,12 @@ pub fn ensure_preview(model: &mut DashboardModel) {
             } else {
                 preview_via_show(&row.id)
             }
+        }
+        // A mail row's `id` is a message id, not a spec id — `aida show`
+        // doesn't apply. Preview the row's own fields (subject + sender),
+        // already the full content a `mail_rows` row carries. trace:STORY-701
+        RowKind::ReasonMail => {
+            PreviewBody::Plain(vec![row.title.clone(), String::new(), row.status.clone()])
         }
     };
     model.preview_cache.insert(row.id, body);

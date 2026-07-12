@@ -294,12 +294,15 @@ mod tests {
     }
 
     #[test]
-    fn all_includes_seven_reasons_then_perspectives() {
+    fn all_includes_every_reason_then_perspectives() {
         let all = NavSection::all();
-        // The first seven entries are the reason-groups, in precedence order.
+        // The leading entries are every `Reason` (the precedence-ordered
+        // spec-classification groups, PLUS the mail group — STORY-701), in
+        // `Reason::all()`'s order.
         for (got, want) in all.iter().zip(Reason::all().iter()) {
             assert_eq!(*got, NavSection::Reason(*want));
         }
+        assert!(all.contains(&NavSection::Reason(Reason::Mail)));
         assert!(all.contains(&NavSection::Queue));
         assert!(all.contains(&NavSection::ActionSwitchRole));
     }

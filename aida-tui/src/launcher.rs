@@ -292,6 +292,14 @@ pub fn act_on_row(row: &dashboard::ListRow, role: RoleTab, section: NavSection) 
         RowKind::ReasonInFlight | RowKind::ReasonBlocked => {
             Intent::Launch(format!("aida show {}", row.id))
         }
+        // Mail → open the reader. A row's `id` is a message id (`aida show`
+        // doesn't apply), and composing a reply/send needs free-text body
+        // input the launcher's `Intent::Launch` payload gate can't carry
+        // safely (`is_safe_payload` excludes quotes/punctuation) — that
+        // compose gesture is registered separately as
+        // [`crate::board::send_mail_argv`] for a shell with a text-input
+        // surface to dispatch. trace:STORY-701 | ai:claude
+        RowKind::ReasonMail => Intent::Launch("aida mailbox inbox".into()),
     }
 }
 
@@ -581,6 +589,7 @@ fn event_loop(
                 // awaiting-review group re-fill without blocking the cursor.
                 // trace:STORY-686 trace:BUG-619 | ai:claude
                 model.board_loaded = false;
+                model.mail_loaded = false;
                 model.invalidate_prs();
                 dashboard::refetch_rows(&mut model, launch_scope, dialog_id);
                 dashboard::ensure_preview(&mut model);
@@ -1149,6 +1158,21 @@ mod tests {
     }
 
     #[test]
+    fn enter_on_mail_row_opens_the_inbox() {
+        // STORY-701: a mail row's Enter opens the reader — its `id` is a
+        // message id, not a spec id, so `aida show` doesn't apply, and
+        // composing a reply needs free-text the launcher's Intent payload
+        // gate can't carry (see `act_on_row`'s ReasonMail arm).
+        use crate::board::Reason;
+        let intent = act_on_row(
+            &reason_row("019e2d4f-abcd", RowKind::ReasonMail),
+            RoleTab::Implementer,
+            NavSection::Reason(Reason::Mail),
+        );
+        assert_eq!(intent, Intent::Launch("aida mailbox inbox".into()));
+    }
+
+    #[test]
     fn enter_on_awaiting_review_opens_pr_or_shows_spec() {
         use crate::board::Reason;
         let sect = NavSection::Reason(Reason::AwaitingReview);
@@ -1202,6 +1226,7 @@ mod tests {
                 RowKind::ReasonAwaitingReview,
                 Reason::AwaitingReview,
             ),
+            ("019e2d4f-abcd", RowKind::ReasonMail, Reason::Mail),
         ] {
             let intent = act_on_row(
                 &reason_row(id, kind),

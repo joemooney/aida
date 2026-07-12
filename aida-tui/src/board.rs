@@ -18,6 +18,7 @@
 //! trace:STORY-686 | ai:claude
 
 use crate::dashboard::{parse_list_json, ListRow, RowKind};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -41,12 +42,25 @@ pub enum Reason {
     NeedsApproval,
     /// Parked on the deferred shelf — returns on its revisit trigger.
     Deferred,
+    /// Unread mail in your inbox (STORY-701). Unlike every other variant,
+    /// this is NOT produced by [`classify`] — mail isn't a spec, so it never
+    /// enters the precedence walk over [`BoardInputs`]. It exists in the
+    /// `Reason` taxonomy purely so the mailbox group shares the same
+    /// `label`/`owner`/`row_kind` machinery (and the same Nav-section
+    /// enumeration via [`Reason::all`]) every other cockpit group uses. Its
+    /// rows come from [`mail_rows`], not [`rows_for`].
+    // trace:STORY-701 | ai:claude
+    Mail,
 }
 
 impl Reason {
-    /// Precedence-ordered list, highest priority first. The classifier
-    /// walks this order so each spec lands in exactly one group.
-    pub fn all() -> [Reason; 7] {
+    /// Precedence-ordered list, highest priority first, PLUS the mail group
+    /// last. Only the first seven participate in the spec-classification
+    /// precedence [`classify`] walks — [`Reason::Mail`] rides along so the
+    /// Nav enumerates it too ([`crate::nav::NavSection::all`]), but it is
+    /// never assigned to a spec.
+    // trace:STORY-701 | ai:claude
+    pub fn all() -> [Reason; 8] {
         [
             Reason::InFlight,
             Reason::Blocked,
@@ -55,6 +69,7 @@ impl Reason {
             Reason::NeedsAnswer,
             Reason::NeedsApproval,
             Reason::Deferred,
+            Reason::Mail,
         ]
     }
 
@@ -68,6 +83,7 @@ impl Reason {
             Reason::NeedsAnswer => "needs an answer",
             Reason::NeedsApproval => "needs approval",
             Reason::Deferred => "deferred",
+            Reason::Mail => "mail",
         }
     }
 
@@ -95,6 +111,8 @@ impl Reason {
             Reason::NeedsAnswer => Owner::You,
             Reason::NeedsApproval => Owner::You,
             Reason::Deferred => Owner::Trigger,
+            // Your unread mail is yours to read/reply to. trace:STORY-701
+            Reason::Mail => Owner::You,
         }
     }
 
@@ -109,6 +127,7 @@ impl Reason {
             Reason::NeedsAnswer => RowKind::ReasonNeedsAnswer,
             Reason::NeedsApproval => RowKind::ReasonNeedsApproval,
             Reason::Deferred => RowKind::ReasonDeferred,
+            Reason::Mail => RowKind::ReasonMail,
         }
     }
 }
@@ -435,7 +454,10 @@ pub fn park_reason(
             None => "waiting on a human decision".to_string(),
         }),
         Reason::Blocked => Some("blocked by an incomplete dependency".to_string()),
-        Reason::InFlight | Reason::AwaitingReview => None,
+        // Mail is live communication, not a parked/blocked spec — never
+        // produced by `classify`, so this arm is unreachable in practice, but
+        // kept for exhaustiveness. trace:STORY-701
+        Reason::InFlight | Reason::AwaitingReview | Reason::Mail => None,
     }
 }
 
@@ -905,6 +927,155 @@ pub fn merge_intake_proposals(items: &mut Vec<ClassifiedItem>, candidate_ids: &[
             });
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Mailbox group (STORY-701). The mail SOURCE (`unread_inbox` -> rows) and the
+// SEND action are pure, registerable, unit-testable content — the EPIC-53
+// half of the seam (docs/plans/2026-06-26-epic-53-cockpit-seam.md). The read
+// side is wired into the legacy dashboard's Nav (mirroring `board`'s
+// lazy-load cadence, see `DashboardModel::refresh_mail`); the compose/reply
+// GESTURE (picking a message, typing a body, dispatching the send) is
+// EPIC-54's — `send_mail_argv` is the action_fn a future shell registers.
+// ---------------------------------------------------------------------------
+
+/// Project unread messages into cockpit rows. Pure: no I/O, so it's testable
+/// straight from `Message` fixtures. `id` is the message id (NOT a spec id —
+/// a mail row's Enter dispatch and preview both special-case
+/// `RowKind::ReasonMail` because of this).
+// trace:STORY-701 | ai:claude
+pub fn mail_rows(unread: &[&aida_core::mailbox::Message]) -> Vec<ListRow> {
+    unread
+        .iter()
+        .map(|m| ListRow {
+            id: m.id.clone(),
+            title: mail_subject(&m.body, 60),
+            status: mail_status(m),
+            kind: RowKind::ReasonMail,
+        })
+        .collect()
+}
+
+/// First non-empty line of a message body, trimmed and truncated to `max`
+/// chars (with an ellipsis when cut) — the row's display title. Mirrors
+/// `aida_core::mailbox`'s private notice-subject projection (kept
+/// independent since that one isn't `pub`).
+// trace:STORY-701 | ai:claude
+fn mail_subject(body: &str, max: usize) -> String {
+    let first = body
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    if first.is_empty() {
+        return "(empty message)".to_string();
+    }
+    let mut chars = first.chars();
+    let head: String = chars.by_ref().take(max).collect();
+    if chars.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
+    }
+}
+
+/// The row's status column: sender, plus an urgent/actionable-intent flag —
+/// the same signal `aida mailbox inbox` surfaces on its message lines.
+// trace:STORY-701 | ai:claude
+fn mail_status(m: &aida_core::mailbox::Message) -> String {
+    let mut flags = Vec::new();
+    if m.urgent {
+        flags.push("urgent");
+    }
+    if m.intent.is_actionable() {
+        flags.push(m.intent.as_str());
+    }
+    if flags.is_empty() {
+        format!("from {}", m.from)
+    } else {
+        format!("from {} · {}", m.from, flags.join(", "))
+    }
+}
+
+/// This shell's mail identity: the same precedence the CLI's queue/mailbox
+/// user resolution uses (BUG-89) — `AIDA_USER`, then `USER`, then `USERNAME`
+/// (Windows), then `"default"`.
+// trace:STORY-701 | ai:claude
+fn mail_identity() -> String {
+    std::env::var("AIDA_USER")
+        .or_else(|_| std::env::var("USER"))
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "default".to_string())
+}
+
+/// Resolve the AIDA project root from `cwd`: the nearest ancestor holding
+/// `.git` or `.aida/config.toml`. Mirrors `aida_tui::ensure_project_context`
+/// (kept independent: that one is `run()`'s startup gate and errors when no
+/// project is found; this is a best-effort fetch-time lookup that degrades to
+/// the raw cwd instead, matching the fetch's own "any failure yields an empty
+/// Vec" grace).
+// trace:STORY-701 | ai:claude
+fn resolve_project_root(cwd: &Path) -> PathBuf {
+    let mut dir = Some(cwd);
+    while let Some(d) = dir {
+        if d.join(".git").exists() || d.join(".aida").join("config.toml").is_file() {
+            return d.to_path_buf();
+        }
+        dir = d.parent();
+    }
+    cwd.to_path_buf()
+}
+
+/// Read this operator's unread mail from the LOCAL mailbox layer (the fast,
+/// live-exchange layer — matches the board's own cache-fast philosophy: never
+/// a slow full-store scan on the paint path) and project it into cockpit
+/// rows. Read-only: never advances the watermark, so painting the cockpit
+/// never marks mail seen (mirrors `aida mailbox inbox --peek`). Best effort:
+/// any read failure yields an empty Vec so the board paints.
+// trace:STORY-701 | ai:claude
+pub fn fetch_mail_rows() -> Vec<ListRow> {
+    let Ok(cwd) = std::env::current_dir() else {
+        return Vec::new();
+    };
+    let project_root = resolve_project_root(&cwd);
+    let messages = aida_core::mailbox::read_local_messages(&project_root).unwrap_or_default();
+    let agent = mail_identity();
+    let watermark = aida_core::mailbox::read_local_watermark(&project_root, &agent);
+    let unread = aida_core::mailbox::unread_inbox(&agent, &messages, watermark);
+    mail_rows(&unread)
+}
+
+/// The mailbox "send" ACTION (STORY-701): the row action_fn a future
+/// compose/reply gesture registers. Wraps `aida mailbox send`, returning the
+/// exact argv (NOT a shell string) so a caller spawns it directly via
+/// `Command::new(exe).args(...)` without threading an arbitrary message body
+/// through the launcher's restricted `Intent::Launch` payload gate
+/// (`intent::is_safe_payload` deliberately excludes quotes/punctuation a real
+/// message body needs — see `launcher::act_on_row`'s `RowKind::ReasonMail`
+/// arm). Pure: no I/O, fully unit-testable.
+// trace:STORY-701 | ai:claude
+#[allow(dead_code)] // consumed by the EPIC-54 shell's compose/reply gesture.
+pub fn send_mail_argv(
+    to: &str,
+    body: &str,
+    in_reply_to: Option<&str>,
+    urgent: bool,
+) -> Vec<String> {
+    let mut argv = vec![
+        "mailbox".to_string(),
+        "send".to_string(),
+        "--to".to_string(),
+        to.to_string(),
+    ];
+    if let Some(id) = in_reply_to {
+        argv.push("--in-reply-to".to_string());
+        argv.push(id.to_string());
+    }
+    if urgent {
+        argv.push("--urgent".to_string());
+    }
+    argv.push(body.to_string());
+    argv
 }
 
 #[cfg(test)]
@@ -1500,5 +1671,135 @@ Answered (1)
         assert_eq!(mail_only.total(), 3);
         assert!(mail_only.needs_approval.is_empty());
         assert!(mail_only.needs_answer.is_empty());
+    }
+
+    // --- Mailbox group (STORY-701). ---
+
+    fn mail_msg(
+        id: &str,
+        from: &str,
+        body: &str,
+        urgent: bool,
+        ts: i64,
+    ) -> aida_core::mailbox::Message {
+        aida_core::mailbox::Message {
+            id: id.to_string(),
+            thread_id: id.to_string(),
+            from: from.to_string(),
+            to: aida_core::mailbox::Recipient::Agent("you".to_string()),
+            timestamp: ts,
+            in_reply_to: None,
+            body: body.to_string(),
+            urgent,
+            intent: aida_core::mailbox::Intent::Fyi,
+            retracted: false,
+            deleted: false,
+        }
+    }
+
+    #[test]
+    fn mail_rows_projects_unread_messages() {
+        let m1 = mail_msg("m1", "codex", "PR ready for review\nsecond line", false, 10);
+        let m2 = mail_msg("m2", "agy", "quick heads up", true, 20);
+        let unread: Vec<&aida_core::mailbox::Message> = vec![&m1, &m2];
+        let rows = mail_rows(&unread);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, "m1");
+        assert_eq!(rows[0].title, "PR ready for review");
+        assert_eq!(rows[0].status, "from codex");
+        assert_eq!(rows[0].kind, RowKind::ReasonMail);
+        assert_eq!(rows[1].status, "from agy · urgent");
+    }
+
+    #[test]
+    fn mail_rows_flags_actionable_intent() {
+        let mut m = mail_msg("m1", "codex", "please review", false, 10);
+        m.intent = aida_core::mailbox::Intent::Request;
+        let unread = vec![&m];
+        let rows = mail_rows(&unread);
+        assert_eq!(rows[0].status, "from codex · request");
+    }
+
+    #[test]
+    fn mail_rows_urgent_and_actionable_both_flag() {
+        let mut m = mail_msg("m1", "codex", "drop everything", true, 10);
+        m.intent = aida_core::mailbox::Intent::Handoff;
+        let unread = vec![&m];
+        let rows = mail_rows(&unread);
+        assert_eq!(rows[0].status, "from codex · urgent, handoff");
+    }
+
+    #[test]
+    fn mail_rows_truncates_long_subject_and_handles_empty_body() {
+        let long_body = "x".repeat(80);
+        let m1 = mail_msg("m1", "codex", &long_body, false, 10);
+        let m2 = mail_msg("m2", "codex", "   \n  ", false, 20); // whitespace-only body
+        let unread = vec![&m1, &m2];
+        let rows = mail_rows(&unread);
+        assert!(rows[0].title.ends_with('…'));
+        assert_eq!(rows[0].title.chars().count(), 61); // 60 chars + ellipsis
+        assert_eq!(rows[1].title, "(empty message)");
+    }
+
+    #[test]
+    fn mail_rows_empty_input_is_empty() {
+        assert!(mail_rows(&[]).is_empty());
+    }
+
+    #[test]
+    fn reason_mail_taxonomy() {
+        assert_eq!(Reason::Mail.label(), "mail");
+        assert_eq!(Reason::Mail.owner_class(), Owner::You);
+        assert_eq!(Reason::Mail.owner(), "you");
+        assert_eq!(Reason::Mail.row_kind(), RowKind::ReasonMail);
+        assert!(Reason::all().contains(&Reason::Mail));
+    }
+
+    #[test]
+    fn send_mail_argv_builds_minimal_command() {
+        let argv = send_mail_argv("codex", "hello there", None, false);
+        assert_eq!(
+            argv,
+            vec!["mailbox", "send", "--to", "codex", "hello there"]
+        );
+    }
+
+    #[test]
+    fn send_mail_argv_includes_reply_and_urgent_flags() {
+        let argv = send_mail_argv("codex", "on it", Some("m1"), true);
+        assert_eq!(
+            argv,
+            vec![
+                "mailbox",
+                "send",
+                "--to",
+                "codex",
+                "--in-reply-to",
+                "m1",
+                "--urgent",
+                "on it",
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_project_root_finds_nearest_git_ancestor() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        let nested = root.join("a").join("b");
+        std::fs::create_dir_all(&nested).unwrap();
+        assert_eq!(resolve_project_root(&nested), root);
+    }
+
+    #[test]
+    fn resolve_project_root_finds_aida_config_when_no_git() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".aida").join("config.toml"), "").unwrap();
+        let nested = root.join("x");
+        std::fs::create_dir_all(&nested).unwrap();
+        assert_eq!(resolve_project_root(&nested), root);
     }
 }
