@@ -1693,6 +1693,45 @@ fn read_public_identity() -> (Option<String>, Option<String>) {
     (get("public_hostname"), get("public_email"))
 }
 
+/// Public read of the configured redaction identity — `[node] public_hostname`
+/// / `public_email` from `~/.aida/config.toml`. `(None, None)` when redaction is
+/// not configured (it is strictly opt-in). Lets the `store-scrub` doctor check
+/// and the `store scrub-preview` command see the same alias the write path uses.
+// trace:TASK-1122 | ai:claude
+pub fn public_identity() -> (Option<String>, Option<String>) {
+    read_public_identity()
+}
+
+/// TASK-1122 store-scrub detection core: given the raw system identity, the
+/// configured public alias, and a blob of store text, return the raw values
+/// that LEAKED — i.e. appear verbatim in the store even though a public alias is
+/// configured to replace them (a leak that landed before redaction was turned
+/// on). Pure, so it is unit-testable without touching the store or `~/.aida`. A
+/// raw value with no configured alias, or one equal to its alias, is never a
+/// leak.
+// trace:TASK-1122 | ai:claude
+pub fn detect_identity_leaks(
+    store_text: &str,
+    raw_hostname: Option<&str>,
+    raw_email: Option<&str>,
+    public_hostname: Option<&str>,
+    public_email: Option<&str>,
+) -> Vec<String> {
+    let mut leaks = Vec::new();
+    let mut check = |raw: Option<&str>, public: Option<&str>, label: &str| {
+        if let (Some(raw), Some(public)) = (raw, public) {
+            if !raw.is_empty() && raw != public && store_text.contains(raw) {
+                leaks.push(format!(
+                    "{label} `{raw}` (configured to redact to `{public}`)"
+                ));
+            }
+        }
+    };
+    check(raw_hostname, public_hostname, "hostname");
+    check(raw_email, public_email, "email");
+    leaks
+}
+
 /// Register a node and capture the user's email at registration time.
 /// trace:EPIC-1-052 | ai:claude
 pub fn register_node_with_email(
@@ -2706,6 +2745,45 @@ mod tests {
         let (h, e) = apply_identity_redaction("corp-box", None, Some("spock"), None);
         assert_eq!(h, "spock");
         assert_eq!(e, None);
+    }
+
+    #[test]
+    fn detect_identity_leaks_flags_only_raw_values_with_a_configured_alias() {
+        // TASK-1122: a raw corporate email/hostname that landed in the store
+        // BEFORE redaction was enabled is a leak; the public alias is not.
+        let store = "nodes:\n  email: Joe@corp.example\n  host: AZSD011Y7HN34D\n\
+                     other: Joe.Mooney@work.example\n";
+        let leaks = detect_identity_leaks(
+            store,
+            Some("AZSD011Y7HN34D"),
+            Some("Joe@corp.example"),
+            Some("spock"),
+            Some("Joe.Mooney@work.example"),
+        );
+        assert_eq!(leaks.len(), 2, "both raw host + email leaked: {leaks:?}");
+        assert!(leaks.iter().any(|l| l.contains("Joe@corp.example")));
+        assert!(leaks.iter().any(|l| l.contains("AZSD011Y7HN34D")));
+
+        // No alias configured → nothing is a leak (redaction is opt-in).
+        assert!(detect_identity_leaks(
+            store,
+            Some("AZSD011Y7HN34D"),
+            Some("Joe@corp.example"),
+            None,
+            None
+        )
+        .is_empty());
+
+        // Raw value not present in the store → no leak.
+        let clean = "nodes:\n  email: Joe.Mooney@work.example\n  host: spock\n";
+        assert!(detect_identity_leaks(
+            clean,
+            Some("AZSD011Y7HN34D"),
+            Some("Joe@corp.example"),
+            Some("spock"),
+            Some("Joe.Mooney@work.example")
+        )
+        .is_empty());
     }
 
     #[test]
