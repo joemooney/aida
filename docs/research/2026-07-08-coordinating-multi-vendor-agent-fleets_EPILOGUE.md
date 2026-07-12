@@ -96,13 +96,12 @@ Many people will happily use a small, sharp, honest tool and that is fully intac
 
 ## Author's coda — 2026-07-12
 
-I commissioned this review and I've read every word of it, including the parts that sting. The one recommendation I'm not taking is the headline — *don't build.* I'm going to plough on with AIDA. The reasoning, such as it is:
+I generated this review and overall it stung a lot. But I'm going to plough on with AIDA like an old Don Quixote.
 
-The review's own evidence is why. The competitor I thought had finished my work turns out, by his own account, to have optimized for being *first*, not for being *right* — so the shape of this niche is contested, not settled. The forks the review credits as genuinely mine — code traced back to the decision behind it, a plain-file git store instead of a database engine, authority that lives in the lifecycle — are live design bets, not late copies. And the coincidence that landed hardest, that the substrate under the incumbent is a database I sketched for a professor twenty years ago and only learned existed last month, I've decided to read the way this review reads the whole competitor story: as evidence the instinct was early and right, not that the timing was wrong.
+Steve Yegge was *first*, and there are probably thousands more in pursuit. I will be late to the party though I may have started out quite early. A coincidence: Yegge stumbled upon Dolt for the substrate, it is a database design I sketched as a pitch for a professor twenty years ago and only learned existed last month. My instincts were mostly right, and my timing was pretty close starting in mid 2025, but I spent too many months tossing and turning before a direction became clear and once it did, well I think the boat had already sailed unbeknownst to me. A little dingy for myself is still, hopefully, a fun pasttime.
 
-The rest of the advice I'm taking, because it's correct. Publish the paper — the negative result on rules-versus-gates is something the field is getting expensive-wrong, and the ablation apparatus stands on its own. Let the paper prune the tool: the CLI is the headline surface and MCP the option; any gate that only fires on well-scoped work is a removal candidate; the pitch narrows to the surviving wedge — *requirements that live in git as plain YAML, trace to the code, and any vendor's agent can join in under a minute.* Build the Beads→AIDA on-ramp rather than fight the traction.
-
-What I'm keeping most is the line the review lands on: the knowledge is the artifact a vendor release can't deprecate. Whether AIDA lives or not, the hours bought a map of a minefield nobody else has published, a method I trust, and a clearer head about which parts are worth keeping. So I'll plough on — on my own terms, with the license to follow it wherever it goes — and we'll see where that is.
+So I'll plough on - on my own terms, with the license to follow it wherever it goes.
 
 — Joe
+July 2006
 
