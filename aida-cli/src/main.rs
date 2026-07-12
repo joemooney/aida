@@ -38609,11 +38609,31 @@ mod story_762_vendor_binary_tests {
     }
 }
 
-const COMPLETED_WITHOUT_COMMIT_RECENT_DAYS: i64 = 60;
+/// TASK-1089: the git-canonical storage migration cutoff. Completions BEFORE
+/// this date predate the reliable `(SPEC-ID)` trailer + trace convention, and
+/// the bulk YAML import stamped every pre-migration spec's `created_at` at
+/// import time — so flagging them as "completed without commit" is pure noise
+/// (the observed 353→212 import-cohort false positives). Completions on/after it
+/// are expected to carry git corroboration. A FIXED migration date, not a
+/// rolling window: a window would slide forward and eventually hide genuinely
+/// stranded recent completions. Override per-run with `--since` /
+/// `AIDA_DOCTOR_COMPLETED_SINCE`.
+// trace:TASK-1089 | ai:claude
+const GIT_CANONICAL_MIGRATION_CUTOFF: &str = "2026-06-01";
 
 fn default_completed_without_commit_recent_cutoff() -> Option<String> {
-    let cutoff = chrono::Utc::now() - chrono::Duration::days(COMPLETED_WITHOUT_COMMIT_RECENT_DAYS);
-    Some(cutoff.format("%Y-%m-%d").to_string())
+    Some(GIT_CANONICAL_MIGRATION_CUTOFF.to_string())
+}
+
+/// TASK-1089 (criterion 2): an explicit opt-out. A Completed spec tagged
+/// `doctor:no-code` legitimately produces no code commit — an ops/cleanup task
+/// whose deliverable is an action (e.g. a prune run), or a decision/doc whose
+/// deliverable is not code — so the completed-without-commit scan skips it.
+/// Opt-in by tag (not derivable from type alone: `task` covers both code work
+/// and ops chores).
+// trace:TASK-1089 | ai:claude
+fn completed_without_commit_opted_out(tags: &std::collections::HashSet<String>) -> bool {
+    tags.contains("doctor:no-code")
 }
 
 fn completed_without_commit_expects_code(req_type: &RequirementType) -> bool {
@@ -38750,6 +38770,8 @@ fn scan_completed_without_commit_with_options(
         .iter()
         .filter(|r| matches!(r.status, RequirementStatus::Completed))
         .filter(|r| completed_without_commit_expects_code(&r.req_type))
+        // TASK-1089: explicit `doctor:no-code` opt-out for ops/cleanup work.
+        .filter(|r| !completed_without_commit_opted_out(&r.tags))
         .filter(|r| r.spec_id.is_some() || r.agreed_id.is_some())
         .collect();
     if completed.is_empty() {
@@ -42215,6 +42237,32 @@ mod story_462_doctor_tests {
         storage.save(&store).unwrap();
 
         assert!(scan_completed_without_commit(root, &store, None).is_empty());
+    }
+
+    // trace:TASK-1089 — the default cutoff is the fixed git-canonical migration
+    // date, so pre-migration import-cohort completions are exempt by default.
+    #[test]
+    fn default_cutoff_is_the_fixed_migration_date() {
+        assert_eq!(
+            default_completed_without_commit_recent_cutoff().as_deref(),
+            Some("2026-06-01"),
+            "the default completed-without-commit cutoff must be the migration date"
+        );
+    }
+
+    // trace:TASK-1089 — an ops/cleanup task opts out of the scan via the
+    // explicit `doctor:no-code` tag; other tags / no tags do not.
+    #[test]
+    fn doctor_no_code_tag_opts_a_spec_out_of_the_scan() {
+        use std::collections::HashSet;
+        let with_optout: HashSet<String> = ["orchestrator", "doctor:no-code"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let without: HashSet<String> = ["orchestrator"].iter().map(|s| s.to_string()).collect();
+        assert!(completed_without_commit_opted_out(&with_optout));
+        assert!(!completed_without_commit_opted_out(&without));
+        assert!(!completed_without_commit_opted_out(&HashSet::new()));
     }
 
     #[test]
