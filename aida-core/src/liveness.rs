@@ -425,7 +425,7 @@ pub fn classify_spec_liveness(lease_state: Option<LeaseState>, in_progress: bool
 /// `aida-cli`'s full `SessionLease` reads; serde ignores the other ~20 fields,
 /// so the `LeaseState` this yields is identical to the one `aida ps` computes.
 // trace:BUG-677 | ai:claude
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionLeaseLite {
     /// Raw scope string the user passed to `--owns` (matched against spec ids).
     pub scope: String,
@@ -444,6 +444,16 @@ pub struct SessionLeaseLite {
     /// TASK-957: a claim lease (`aida claim`) is a worktree-less advisory lock.
     #[serde(default)]
     pub claim_verb: bool,
+    /// STORY-711 slice 1: the authorizing advisor's session/agent id, when an
+    /// advisor has locked this worktree via `aida lock acquire`. `None` for
+    /// every lease minted before this field existed (old TOML with no
+    /// `authorized_by` key deserializes to `None` — fully backward-compatible)
+    /// and for any lease an advisor hasn't explicitly authorized. Slice 1 only
+    /// reads/writes this field via the manual `aida lock` CLI; nothing yet
+    /// gates on it (that is slice 2's automatic bouncer).
+    // trace:STORY-711 | ai:claude
+    #[serde(default)]
+    pub authorized_by: Option<String>,
 }
 
 /// One work-item spec projected for the liveness pass — the display id, the two
@@ -812,6 +822,7 @@ mod tests {
             creator_pid: None,
             review_verb: false,
             claim_verb: false,
+            authorized_by: None,
         }
     }
 
@@ -903,5 +914,30 @@ mod tests {
         let dir = std::env::temp_dir().join("aida-bug677-nonexistent-XYZ");
         let _ = std::fs::remove_dir_all(&dir);
         assert!(read_session_leases(&dir).is_empty());
+    }
+
+    // ---- STORY-711 slice 1: `authorized_by` on SessionLeaseLite ------------
+
+    #[test]
+    fn authorized_by_round_trips_through_toml() {
+        let mut l = lease("FR-1", "/tmp/wt");
+        l.authorized_by = Some("advisor-abc".to_string());
+        let toml_str = toml::to_string_pretty(&l).unwrap();
+        let back: SessionLeaseLite = toml::from_str(&toml_str).unwrap();
+        assert_eq!(back, l);
+        assert_eq!(back.authorized_by.as_deref(), Some("advisor-abc"));
+    }
+
+    #[test]
+    fn authorized_by_defaults_to_none_for_old_toml_without_the_field() {
+        // A lease TOML written before STORY-711 has no `authorized_by` key at
+        // all — it must still deserialize, reading `None`.
+        let old_toml = r#"
+scope = "FR-1"
+worktree_path = "/tmp/wt"
+started_at = "2026-01-01T00:00:00Z"
+"#;
+        let l: SessionLeaseLite = toml::from_str(old_toml).unwrap();
+        assert_eq!(l.authorized_by, None);
     }
 }

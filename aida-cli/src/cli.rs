@@ -645,6 +645,65 @@ pub enum TriageCommand {
     },
 }
 
+/// Advisor-directed worktree lock (STORY-711 slice 1, generalizes BUG-637).
+///
+/// Binds a worktree to an authorizing advisor by stamping `authorized_by` on
+/// the session lease that covers it (extends the existing lease registry —
+/// no new lock directory). Slice 1 is a MANUAL bouncer: nothing today refuses
+/// automatically on a mismatched lock — an agent (or a script) opts in by
+/// running `aida lock verify` itself and branching on the exit code. The
+/// automatic pre-work gate is slice 2, a separate change.
+// trace:STORY-711 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum LockCommand {
+    /// Authorize a worktree: stamp `authorized_by = <advisor>` on the session
+    /// lease covering it. Finds the existing lease for the worktree (from
+    /// `aida session start` / `aida worktree enter` / `aida agent new`) and
+    /// patches it in place; if no lease covers the worktree yet, creates a
+    /// minimal lock-only lease entry so `aida lock verify`/`status` have
+    /// something to read. Re-running re-authorizes (overwrites any prior
+    /// `authorized_by`).
+    Acquire {
+        /// Worktree path to lock.
+        #[clap(value_name = "WORKTREE")]
+        worktree: PathBuf,
+
+        /// The authorizing advisor's session/agent id.
+        #[clap(long)]
+        advisor: String,
+    },
+
+    /// Verify a worktree's lock against a token and print the verdict.
+    /// Exits **0** on `Unlocked` or `Authorized`, **non-zero** on `Refused` —
+    /// scriptable as the manual bouncer (`aida lock verify <wt> --as <id> ||
+    /// refuse-to-proceed`).
+    Verify {
+        /// Worktree to check. Defaults to the current directory.
+        #[clap(value_name = "WORKTREE")]
+        worktree: Option<PathBuf>,
+
+        /// The calling agent's authorization token, to compare against the
+        /// worktree's `authorized_by` lock (if any). Omit to check as an
+        /// unauthenticated caller (fails safe: refused under a live lock).
+        #[clap(long)]
+        r#as: Option<String>,
+    },
+
+    /// Clear the `authorized_by` lock on a worktree (no-op if it carries
+    /// none). Leaves the underlying session lease intact; only removes the
+    /// lock-only entry this command itself created when nothing else is on
+    /// it.
+    Release {
+        /// Worktree to unlock.
+        #[clap(value_name = "WORKTREE")]
+        worktree: PathBuf,
+    },
+
+    /// List every worktree in this project that currently carries an
+    /// `authorized_by` lock.
+    Status,
+}
+
 // trace:FR-1-043 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum SessionCommand {
@@ -8435,6 +8494,15 @@ pub enum Command {
     // trace:FR-1-043 | ai:claude
     #[clap(subcommand)]
     Session(SessionCommand),
+
+    /// Advisor-directed worktree lock (STORY-711 slice 1) — a MANUAL bouncer:
+    /// `acquire` stamps `authorized_by` on the session lease covering a
+    /// worktree, `verify` checks a token against it (exit 0/non-zero,
+    /// scriptable), `release` clears it, `status` lists locked worktrees.
+    /// Additive: nothing today calls `verify` automatically.
+    // trace:STORY-711 | ai:claude
+    #[clap(subcommand)]
+    Lock(LockCommand),
 
     /// Acquire / release / inspect a per-scope disposition (triage) lease —
     /// the intake gate's "one disposing advisor per scope" guard. The

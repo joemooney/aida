@@ -145,6 +145,8 @@ mod workflow_hints;
 mod worktree;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
 mod worktree_lease;
+// trace:STORY-711 | ai:claude — advisor-directed worktree lock (`aida lock`), slice 1.
+mod worktree_lock;
 mod zen;
 // trace:STORY-721 | ai:claude — `aida zen <spec>` autonomous implement+ship drive.
 mod zen_drive;
@@ -213,9 +215,9 @@ use crate::cli::{
     BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
     DbCommand, DepsCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
     FindingsCommand, GitHubCommand, GitLabCommand, GlyphCommand, HeadlessCommand, IdentityCommand,
-    JiraCommand, LoadCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand,
-    OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand,
-    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
+    JiraCommand, LoadCommand, LockCommand, MailboxCommand, McpCommand, MemoriesCommand,
+    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand,
+    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand,
     SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
     TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, WorktreeCommand,
@@ -3788,6 +3790,13 @@ fn run() -> Result<()> {
     if let Command::Triage(triage_cmd) = &cli.command {
         return handle_triage_command(triage_cmd);
     }
+    // STORY-711 slice 1: `aida lock` reads/writes only `.aida/sessions/`
+    // lease files (the same registry `aida session leases` uses) — no
+    // requirement-store handle needed, same reasoning as `aida triage`
+    // above. trace:STORY-711 | ai:claude
+    if let Command::Lock(lock_cmd) = &cli.command {
+        return handle_lock_command(lock_cmd);
+    }
     // EPIC-31 agent launchers supervise external CLIs and write process
     // registry state directly; no requirement store handle needed.
     // trace:STORY-432 | ai:codex
@@ -4577,6 +4586,7 @@ fn run() -> Result<()> {
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
+        Command::Lock(_) => unreachable!("lock is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
         Command::Ship { .. } => unreachable!("ship is dispatched before storage init"),
         Command::Orchestrator(_) => {
@@ -15810,6 +15820,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
+        Command::Lock(_) => unreachable!("lock is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
         Command::Ship { .. } => unreachable!("ship is dispatched before storage init"),
         Command::Orchestrator(_) => {
@@ -44851,6 +44862,149 @@ fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
                         l.hostname,
                         l.started_at.format("%Y-%m-%d %H:%M UTC"),
                     );
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Advisor-directed worktree lock (STORY-711 slice 1). Dispatched before
+/// storage init, same reasoning as `handle_triage_command`: every subcommand
+/// reads/writes only `.aida/sessions/*.toml` lease files — no requirement
+/// store handle needed.
+// trace:STORY-711 | ai:claude
+fn handle_lock_command(cmd: &LockCommand) -> Result<()> {
+    let project_root = find_project_root()?;
+    match cmd {
+        LockCommand::Acquire { worktree, advisor } => {
+            let path = worktree_lock::acquire(&project_root, worktree, advisor)?;
+            if agent_output_mode() {
+                println!(
+                    "{}",
+                    toon::table_raw(
+                        "lock",
+                        &["worktree", "authorized_by", "lease"],
+                        &[vec![
+                            worktree.display().to_string(),
+                            advisor.clone(),
+                            path.display().to_string(),
+                        ]],
+                    )
+                );
+            } else {
+                println!(
+                    "{} worktree {} for advisor {} (lease: {}).",
+                    "Locked".green().bold(),
+                    worktree.display().to_string().cyan(),
+                    advisor,
+                    path.display(),
+                );
+            }
+            Ok(())
+        }
+        LockCommand::Verify { worktree, r#as } => {
+            let target = worktree
+                .clone()
+                .unwrap_or(std::env::current_dir().context("could not read current directory")?);
+            let authorized_by = worktree_lock::read_authorized_by(&project_root, &target);
+            let verdict =
+                aida_core::lock::verify_worktree_lock(authorized_by.as_deref(), r#as.as_deref());
+            match verdict {
+                aida_core::lock::LockVerdict::Unlocked => {
+                    if agent_output_mode() {
+                        println!("{}", toon::scalar("verdict", "unlocked"));
+                    } else {
+                        println!(
+                            "{} {} carries no advisor lock.",
+                            "Unlocked:".green().bold(),
+                            target.display()
+                        );
+                    }
+                    Ok(())
+                }
+                aida_core::lock::LockVerdict::Authorized => {
+                    if agent_output_mode() {
+                        println!("{}", toon::scalar("verdict", "authorized"));
+                    } else {
+                        println!(
+                            "{} {} is locked by your advisor ({}).",
+                            "Authorized:".green().bold(),
+                            target.display(),
+                            r#as.as_deref().unwrap_or("")
+                        );
+                    }
+                    Ok(())
+                }
+                aida_core::lock::LockVerdict::Refused { by } => {
+                    // Non-zero exit so a caller (script or agent) can branch
+                    // on it — the manual bouncer's whole point.
+                    // trace:STORY-711 | ai:claude
+                    if agent_output_mode() {
+                        println!(
+                            "{}",
+                            toon::table_raw(
+                                "verdict",
+                                &["state", "by"],
+                                &[vec!["refused".to_string(), by.clone(),]]
+                            )
+                        );
+                        anyhow::bail!(
+                            "worktree {} is locked by a different advisor ({by})",
+                            target.display()
+                        );
+                    }
+                    anyhow::bail!(
+                        "{} {} is locked by advisor `{by}` — your token ({}) does not match. \
+                         Coordinate with {by}, or have them run `aida lock release {}`.",
+                        "Refused:".red().bold(),
+                        target.display(),
+                        r#as.as_deref().unwrap_or("<none>"),
+                        target.display(),
+                    );
+                }
+            }
+        }
+        LockCommand::Release { worktree } => {
+            let released = worktree_lock::release(&project_root, worktree)?;
+            if released {
+                println!(
+                    "{} the advisor lock on {}.",
+                    "Released".green().bold(),
+                    worktree.display()
+                );
+            } else {
+                println!(
+                    "{} {} carries no advisor lock.",
+                    "Note:".yellow().bold(),
+                    worktree.display()
+                );
+            }
+            Ok(())
+        }
+        LockCommand::Status => {
+            let locks = worktree_lock::list_locks(&project_root);
+            if agent_output_mode() {
+                let rows: Vec<Vec<String>> = locks
+                    .iter()
+                    .map(|l| {
+                        vec![
+                            l.worktree_path.clone(),
+                            l.authorized_by.clone(),
+                            l.scope.clone(),
+                        ]
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    toon::table_raw("locks", &["worktree", "authorized_by", "scope"], &rows)
+                );
+            } else if locks.is_empty() {
+                println!("No worktrees are currently locked.");
+            } else {
+                println!("Locked worktrees:");
+                for l in &locks {
+                    println!("  {} — advisor {}", l.worktree_path.cyan(), l.authorized_by);
                 }
             }
             Ok(())
