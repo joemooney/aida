@@ -64,6 +64,26 @@ gh pr view --json state,statusCheckRollup,mergeable,commits,headRefName
 
 After a merge lands, if the spec is still `Done`, run `aida db reconcile-status --since <ref>` to replay the `Done → Completed` auto-bump the pull may have missed.
 
+## Worktree / lease divergence `aida doctor` flags but you hand-fix
+
+`aida doctor` detects orphan and stale leases and worktrees, but two of them still need a manual fix — both are the footprint of an agent that ran in the **main** worktree instead of a sibling (an isolation violation):
+
+- **Main worktree left on a feature branch** — the parent checkout sits on `story-*`/`task-*` instead of `main`, so peers' `git merge --ff-only origin/main` aborts (false-alarm divergence) and commits co-mingle. Recover by returning the main worktree to `main`:
+
+  ```bash
+  git -C <main-worktree> checkout main
+  ```
+
+- **Lease misregistered onto the parent-repo path** — a lease for an active spec records the parent repo as its `worktree_path` instead of the sibling worktree. End it and restart the session from inside the correct worktree:
+
+  ```bash
+  aida session end <id>
+  # then, from the correct sibling worktree:
+  aida session start --owns <scope> --branch <branch> --reuse-branch
+  ```
+
+If either leaves a stale `.aida/sessions/*.toml` behind, `aida doctor --heal` clears it (remove the one file by hand only after `aida session end` fails).
+
 ## JSON Mode
 
 For advisor scripting or automation:
