@@ -215,6 +215,31 @@ use crate::templates::TemplateLoader;
 /// Current scaffolding version - increment when templates change significantly
 pub const SCAFFOLD_VERSION: &str = "2.0.0";
 
+/// BUG-718 guard: never write a scaffold artifact *through* a symlink.
+///
+/// The AIDA dev repo dogfoods its own templates by making `.claude/skills/*`,
+/// `.claude/commands/*`, `.claude/hooks/*`, and `.claude/settings.json`
+/// per-file symlinks into `aida-core/templates/` (the source-of-truth
+/// masters). `fs::write` follows a symlink and writes the *target*, so a
+/// `scaffold apply`/`upgrade` that overwrites a drifted template would
+/// silently corrupt the master it was rendered from. Any downstream project
+/// that intentionally symlinks a scaffold file into another source of truth
+/// has the same exposure.
+///
+/// Returns `Some(link_target)` when `path` is a symlink (the caller must skip
+/// the write and warn), or `None` when `path` is absent or a regular file and
+/// is therefore safe to write. Uses `symlink_metadata` so the check does not
+/// follow the link.
+// trace:BUG-718 | ai:claude
+pub fn symlink_target(path: &Path) -> Option<PathBuf> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => {
+            Some(fs::read_link(path).unwrap_or_else(|_| path.to_path_buf()))
+        }
+        _ => None,
+    }
+}
+
 /// Compute a simple checksum for content (first 8 chars of hex-encoded hash)
 fn compute_checksum(content: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
@@ -2271,6 +2296,14 @@ impl Scaffolder {
             }
 
             let full_path = self.project_root.join(&artifact.path);
+            // BUG-718: never write through a symlink. In the AIDA dev repo (and
+            // any project that symlinks a scaffold file into a source-of-truth
+            // dir) fs::write would follow the link and corrupt the master.
+            // Skip + record instead. trace:BUG-718 | ai:claude
+            if symlink_target(&full_path).is_some() {
+                skipped_files.push(artifact.path.clone());
+                continue;
+            }
             fs::write(&full_path, &artifact.content).map_err(|e| ScaffoldError::IoError {
                 path: full_path.clone(),
                 message: e.to_string(),
@@ -3005,6 +3038,77 @@ mod tests {
         // It's a ManagedMerge file (per-user override; AIDA owns the trust slot,
         // re-init never clobbers a user's own edits).
         assert_eq!(local.category(), FileCategory::ManagedMerge);
+    }
+
+    // trace:BUG-718 — symlink_target only fires for actual symlinks, so a
+    // normal project (regular files) keeps the pre-existing overwrite behavior.
+    #[test]
+    fn symlink_target_detects_only_symlinks() {
+        let temp_dir = TempDir::new().unwrap();
+        let regular = temp_dir.path().join("regular.md");
+        std::fs::write(&regular, "content").unwrap();
+        assert!(
+            symlink_target(&regular).is_none(),
+            "a regular file is safe to write"
+        );
+        assert!(
+            symlink_target(&temp_dir.path().join("missing.md")).is_none(),
+            "an absent path is safe to write (it will be created)"
+        );
+
+        #[cfg(unix)]
+        {
+            let link = temp_dir.path().join("link.md");
+            std::os::unix::fs::symlink(&regular, &link).unwrap();
+            assert_eq!(
+                symlink_target(&link),
+                Some(regular.clone()),
+                "a symlink resolves to its target so the caller can refuse"
+            );
+        }
+    }
+
+    // trace:BUG-718 — a scaffold file that is a symlink into a source-of-truth
+    // master (how the AIDA dev repo dogfoods its templates) must NOT be written
+    // through: fs::write would follow the link and corrupt the master. This
+    // reproduces the 2026-07-11 corruption and proves the guard.
+    #[cfg(unix)]
+    #[test]
+    fn apply_never_writes_through_a_symlinked_scaffold_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path().join("proj");
+        std::fs::create_dir_all(&root).unwrap();
+
+        // A first apply lays down the scaffold as regular files.
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(root.clone(), config.clone());
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).expect("first apply");
+
+        // Pick a Template-category scaffold file and repoint it at an external
+        // "master" carrying sentinel content, exactly like the dogfood symlinks.
+        let scaffold_file = root.join(".claude/commands/aida-commit.md");
+        assert!(scaffold_file.exists(), "aida-commit command must scaffold");
+        let master = temp_dir.path().join("master-source.md");
+        let sentinel = "SENTINEL MASTER — must never be overwritten\n";
+        std::fs::write(&master, sentinel).unwrap();
+        std::fs::remove_file(&scaffold_file).unwrap();
+        std::os::unix::fs::symlink(&master, &scaffold_file).unwrap();
+
+        // A forced re-apply would overwrite the (now drifted) template — but the
+        // guard must skip it and leave the master byte-for-byte intact.
+        let preview2 = scaffolder.preview(&store);
+        let opts = ApplyOptions { force: true };
+        scaffolder
+            .apply_with_options(&preview2, &opts)
+            .expect("second apply");
+
+        assert_eq!(
+            std::fs::read_to_string(&master).unwrap(),
+            sentinel,
+            "the symlinked master must not be written through (BUG-718)"
+        );
     }
 
     // trace:BUG-484 — the pre-approval file lands on disk on apply and reads

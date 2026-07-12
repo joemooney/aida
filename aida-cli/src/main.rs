@@ -128126,6 +128126,22 @@ fn handle_scaffold_command(
 
             for artifact in &preview.artifacts {
                 let full_path = root.join(&artifact.path);
+
+                // BUG-718: never write through a symlink — in the AIDA dev repo
+                // the scaffold files are symlinks into aida-core/templates/ and
+                // std::fs::write would corrupt the source master. Skip + warn.
+                // trace:BUG-718 | ai:claude
+                if let Some(target) = aida_core::scaffolding::symlink_target(&full_path) {
+                    println!(
+                        "  {} {} → {} (skipped — symlink; writing would corrupt the target)",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        artifact.path.display(),
+                        target.display()
+                    );
+                    skipped += 1;
+                    continue;
+                }
+
                 let exists = full_path.exists();
 
                 if exists && !force && !dry_run {
@@ -128658,6 +128674,10 @@ fn run_scaffold_upgrade(
         upgraded: Vec<PathBuf>,
         created: Vec<PathBuf>,
         left_alone: Vec<PathBuf>,
+        // BUG-718: files skipped because they are symlinks — writing would
+        // follow the link and corrupt the source-of-truth master (the dev
+        // repo dogfoods its templates this way). (on-disk path, link target).
+        symlinked: Vec<(PathBuf, PathBuf)>,
         unchanged: usize,
     }
 
@@ -128670,6 +128690,18 @@ fn run_scaffold_upgrade(
         let stats = by_cat.entry(cat_label).or_default();
 
         let on_disk_path = project_root.join(&artifact.path);
+
+        // BUG-718: never write *through* a symlink. In the AIDA dev repo the
+        // scaffold files under .claude/ are per-file symlinks into
+        // aida-core/templates/ (the source-of-truth masters); std::fs::write
+        // follows the link and would corrupt the master. Skip + warn instead,
+        // for every category/action, in dry-run and for real.
+        // trace:BUG-718 | ai:claude
+        if let Some(target) = aida_core::scaffolding::symlink_target(&on_disk_path) {
+            stats.symlinked.push((artifact.path.clone(), target));
+            continue;
+        }
+
         let exists = on_disk_path.exists();
         // Use content-equality directly rather than `artifact.file_status`
         // — there's a pre-existing bug in `check_file_status` where files
@@ -128873,6 +128905,22 @@ fn run_scaffold_upgrade(
                 println!("      · {}", p.display());
             }
         }
+        if !stats.symlinked.is_empty() {
+            // BUG-718: these were skipped to protect a source-of-truth master.
+            println!(
+                "  {} {} skipped — symlink into another tree; writing would corrupt the target (NOT written):",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                stats.symlinked.len()
+            );
+            for (path, target) in &stats.symlinked {
+                println!(
+                    "      {} {} → {}",
+                    "⤳".yellow(),
+                    path.display(),
+                    target.display()
+                );
+            }
+        }
         if stats.unchanged > 0 {
             println!(
                 "  {} {} matching (no action needed)",
@@ -128881,6 +128929,8 @@ fn run_scaffold_upgrade(
             );
         }
     }
+
+    let total_symlinked: usize = by_cat.values().map(|s| s.symlinked.len()).sum();
 
     println!();
     if dry_run {
@@ -128899,6 +128949,13 @@ fn run_scaffold_upgrade(
             "{} {} file(s) changed.",
             crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
             total_changes
+        );
+    }
+    if total_symlinked > 0 {
+        println!(
+            "{} {} symlinked file(s) skipped to protect their targets (this is expected in the AIDA dev repo).",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            total_symlinked
         );
     }
     Ok(())
