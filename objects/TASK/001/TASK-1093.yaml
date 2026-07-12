@@ -2,13 +2,17 @@ id: 019f23b6-c8f7-77c1-b0c5-638c34c63b69
 spec_id: TASK-1093
 agreed_id: TASK-1093
 title: Port selected headless phases to a Codex adapter only after discipline telemetry shows remaining halt risk
-description: ''
+description: |-
+  SPIKE-76 Accept-vs-Engineer decision: do NOT port headless orchestrator phases to a dedicated Codex adapter until field evidence shows the lighter CLI-first dispatch discipline (slice 1) + fallback rebriefing (slice 2) still leave real halts on non-Claude vendors. Building the adapter first would be premature engineering against the SPIKE-76 conclusion. This spec is DEFERRED behind a measurable trigger; when the trigger fires, scope the specific phases worth porting from the telemetry.
+
+  ## Revisit trigger
+  Discipline telemetry (aida usage --auto-complete / auto-complete.jsonl halt rate, plus the field-study violations) shows headless drain STILL halting on codex/gemini AFTER slices 1+2 land — i.e. the lighter pattern proved insufficient. Until then, keep dispatching codex/gemini via CLI brief pickup + resume-by-branch, not a bespoke adapter.
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:43:29.399510347Z
-modified_at: 2026-07-02T16:43:29.399510347Z
+modified_at: 2026-07-12T18:50:25.294755657Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md

@@ -32762,5 +32762,17 @@ operations:
       - WHEN a role's primary vendor is unavailable (binary missing, rate-limited, or paused), THE resolution falls to the next vendor in that role's list.
       - WHEN no vendor in the role's list is available, THE resolution reports exhaustion clearly (caller decides park/defer) and never silently picks an unlisted vendor.
       - Backward-compatible: absent config uses the shipped default; composes with the per-invocation --vendor override (TASK-1116).
-clock: 3064
+- id: 019f57aa-96b8-7112-8b3b-4a541d874661
+  target_id: 019f23b6-c8f7-77c1-b0c5-638c34c63b69
+  author: aida
+  node_id: '1'
+  lamport: 3065
+  timestamp: 2026-07-12T18:50:25.336570136Z
+  kind: !SetDescription
+    description: |-
+      SPIKE-76 Accept-vs-Engineer decision: do NOT port headless orchestrator phases to a dedicated Codex adapter until field evidence shows the lighter CLI-first dispatch discipline (slice 1) + fallback rebriefing (slice 2) still leave real halts on non-Claude vendors. Building the adapter first would be premature engineering against the SPIKE-76 conclusion. This spec is DEFERRED behind a measurable trigger; when the trigger fires, scope the specific phases worth porting from the telemetry.
+
+      ## Revisit trigger
+      Discipline telemetry (aida usage --auto-complete / auto-complete.jsonl halt rate, plus the field-study violations) shows headless drain STILL halting on codex/gemini AFTER slices 1+2 land — i.e. the lighter pattern proved insufficient. Until then, keep dispatching codex/gemini via CLI brief pickup + resume-by-branch, not a bespoke adapter.
+clock: 3065
 node_id: '1'
