@@ -32713,5 +32713,22 @@ operations:
   timestamp: 2026-07-12T18:14:31.493486408Z
   kind: !SetStatus
     status: Rejected
-clock: 3061
+- id: 019f57aa-1507-7211-a240-f6d2b34c0dd1
+  target_id: 019f23b6-5e95-7a50-a32a-08502bdaaa80
+  author: aida
+  node_id: '1'
+  lamport: 3062
+  timestamp: 2026-07-12T18:49:52.135227536Z
+  kind: !SetDescription
+    description: |-
+      SPIKE-76 slice 3 (docs/plans/2026-07-02-spike-76-dispatch-resilience.md). A single READ-ONLY CLI report that composes AIDA's EXISTING dispatch signals — agent registry + PID liveness, session/worktree leases, branch ahead-counts, dirty worktrees, pending briefs, paused/rate-limited agents — and says, per spec/agent, whether work is MOVING, STALLED, or SALVAGEABLE, with the exact next command (resume same vendor, rebrief a fallback vendor, or salvage-commit a dirty worktree). No new daemon, no side effects: the Accept-vs-Engineer decision was to compose existing liveness before building supervision.
+
+      ## Acceptance
+      - The report is read-only (no writes, no side effects) and CLI-first (honors AIDA_AGENT_OUTPUT/TOON for machine consumers).
+      - WHEN an agent is registered but its PID is dead AND its worktree has uncommitted work, THE report names the worktree + branch + last commit + a salvage-commit-then-rebrief next command.
+      - WHEN an agent is alive but idle (no HEAD movement and no dirty-diff growth past a threshold), THE report flags it STALLED with a resume/rebrief hint.
+      - WHEN an agent is committing/pushing (HEAD moving or branch ahead of main), THE report shows it MOVING.
+      - Each row names spec, vendor, state (moving/stalled/salvageable), and the resume/fallback command — no interpretation left to the reader.
+      - Composes only existing signals; adds no new persistent state or daemon.
+clock: 3062
 node_id: '1'
