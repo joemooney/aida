@@ -3,12 +3,12 @@ spec_id: BUG-719
 agreed_id: BUG-719
 title: Stale binary resurrects deliberately-deleted scaffold templates (no tombstone)
 description: 'aida-recover skill was intentionally removed by TASK-584 (consolidated into aida-doctor). The released 0.9.1 binary (built 2026-05-25) still embeds the old aida-recover template, so aida scaffold upgrade/apply from that binary RE-CREATES the deleted skill (.claude/skills/aida-recover.md). There is no tombstone/removal mechanism for embedded templates — any older-than-a-removal binary re-adds deleted scaffold files, and the resurrected aida-recover also carried 4 hardcoded /home/joe/ai/aida paths and referenced two nonexistent commands (aida db set-status, aida queue prune). Consider: a removed-templates manifest the scaffolder honors, or a build-embedded template-set version the upgrade checks against on-disk state.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T03:56:01.151678850Z
-modified_at: 2026-07-12T05:53:06.018978157Z
+modified_at: 2026-07-12T06:02:47.772650277Z
 req_type: Bug
 tags:
 - aida:scaffold
@@ -19,3 +19,7 @@ comments:
   content: Commit ad432cdf0 references this requirement
   created_at: 2026-07-12T05:53:06.018978157Z
   modified_at: 2026-07-12T05:53:06.018978157Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-12T06:02:47.772650277Z
+  completion_sha: b0615545f4f6044c78160d4f3ad21122118fcd29
