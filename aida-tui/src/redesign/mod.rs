@@ -21,6 +21,7 @@
 
 mod list_row;
 mod liveness;
+mod mail;
 mod state;
 mod store;
 
@@ -80,7 +81,7 @@ pub fn enabled() -> bool {
 // trace:STORY-724 | ai:claude
 fn startup_status(store_available: bool) -> String {
     if store_available {
-        "Scopes: Backlog · Open · Test · Queue. ? help · q quits.".to_string()
+        "Scopes: Backlog · Open · Test · Queue · Mail. ? help · q quits.".to_string()
     } else {
         "Store unavailable — no in-process data. ? help · q quits.".to_string()
     }
@@ -646,6 +647,41 @@ fn handle_key(
             }
             KeyCode::Backspace => st.pop_defer_char(),
             KeyCode::Char(c) if !c.is_control() => st.push_defer_char(c),
+            _ => {}
+        }
+        return Ok(false);
+    }
+
+    // The reply-body input modal (Mail scope, STORY-701) captures all typing
+    // until the operator confirms (Enter → send via `aida mailbox send` with
+    // the typed body) or cancels (Esc). An empty/whitespace body cancels
+    // without sending, mirroring the new-spec title input. Printable chars
+    // append; Backspace edits. trace:STORY-701 | ai:claude
+    if st.reply_input_open() {
+        match key.code {
+            KeyCode::Enter => match st.take_reply_input() {
+                Some((to, in_reply_to, body)) => {
+                    apply_outcome(
+                        terminal,
+                        st,
+                        store,
+                        loaded_spec,
+                        pending,
+                        RunOutcome::Reply {
+                            to,
+                            in_reply_to,
+                            body,
+                        },
+                    )?;
+                }
+                None => st.status = Some("reply: cancelled (empty body)".to_string()),
+            },
+            KeyCode::Esc => {
+                st.cancel_reply_input();
+                st.status = Some("reply cancelled".to_string());
+            }
+            KeyCode::Backspace => st.pop_reply_char(),
+            KeyCode::Char(c) if !c.is_control() => st.push_reply_char(c),
             _ => {}
         }
         return Ok(false);
@@ -1366,6 +1402,31 @@ fn apply_outcome(
                 }
             }
         }
+        RunOutcome::OpenReplyInput { to, in_reply_to } => {
+            // `reply` needs the operator-typed body before it can send: open
+            // the single-line input modal addressed to the sender, threaded
+            // onto the focused message. The send itself fires on Enter (the
+            // input-modal confirm path emits RunOutcome::Reply).
+            // trace:STORY-701 | ai:claude
+            st.open_reply_input(to, in_reply_to);
+        }
+        RunOutcome::Reply {
+            to,
+            in_reply_to,
+            body,
+        } => {
+            // Send the reply via `aida mailbox send --to <to> --in-reply-to
+            // <in_reply_to> "<body>"` — run async (BUG-633 pattern).
+            // trace:STORY-701 | ai:claude
+            let label = format!("sending reply to {to}…");
+            start_pending(pending, st, label, move || {
+                let sent = reply_mail(&to, &body, &in_reply_to);
+                VerbResult {
+                    status: reply_status(&to, sent),
+                    invalidate: true,
+                }
+            });
+        }
         RunOutcome::NeedsConfirm(_) => { /* popup already raised by run_verb */ }
         RunOutcome::None => {}
     }
@@ -2013,6 +2074,33 @@ fn defer_status(deferred: &[String], failed: &[String], trigger: &str) -> String
     parts.join(" · ")
 }
 
+/// Send a reply via `aida mailbox send`, built through the pure
+/// [`mail::send_mail_argv`] (never a shell string — `body` is passed as an
+/// OS-level argument, never shell-parsed). Mirrors [`defer_spec`]'s
+/// shell-out shape. Role-agnostic: unlike `queue_for_advisor` / `accept_spec`,
+/// no `AIDA_SESSION_ROLE` override — any role may send mail.
+// trace:STORY-701 | ai:claude
+fn reply_mail(to: &str, body: &str, in_reply_to: &str) -> bool {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(mail::send_mail_argv(to, body, Some(in_reply_to), false));
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    matches!(cmd.output(), Ok(out) if out.status.success())
+}
+
+/// The status-line confirmation for a `reply` run. Pure (no IO) so it is unit
+/// testable.
+// trace:STORY-701 | ai:claude
+fn reply_status(to: &str, sent: bool) -> String {
+    if sent {
+        format!("reply sent to {to}")
+    } else {
+        format!("reply: FAILED to send to {to}")
+    }
+}
+
 /// The argument vector for creating a Draft spec — passed to `Command::args`
 /// so each element (notably the operator-typed `title`) is an OS-level argument
 /// that is NEVER shell-parsed. A title with backticks, quotes, or `$` is inert
@@ -2202,6 +2290,10 @@ fn render(
     // The defer revisit-trigger input overlays everything else. trace:TASK-921
     if let Some(di) = &st.defer_input {
         render_defer_input(f, f.area(), theme, di);
+    }
+    // The reply-body input overlays everything else. trace:STORY-701
+    if let Some(ri) = &st.reply_input {
+        render_reply_input(f, f.area(), theme, ri);
     }
     // The new-spec title input overlays everything else. trace:TASK-931
     if let Some(ni) = &st.new_input {
@@ -2437,11 +2529,12 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
     let idxs = st.bottom_indices();
     if st.items.is_empty() {
         // Scope-appropriate empty state: the Queue scope's "nothing here" means
-        // an empty queue, not an empty backlog. trace:TASK-948
-        let empty_msg = if active_item_scope(st) == Some(Scope::Queue) {
-            "(queue empty — route work with `aida queue add --for <role>`)"
-        } else {
-            "(no backlog items — file some with `aida add --status approved`)"
+        // an empty queue, not an empty backlog; Mail's means a caught-up inbox.
+        // trace:TASK-948 trace:STORY-701
+        let empty_msg = match active_item_scope(st) {
+            Some(Scope::Queue) => "(queue empty — route work with `aida queue add --for <role>`)",
+            Some(Scope::Mail) => "(no unread mail — you're caught up)",
+            _ => "(no backlog items — file some with `aida add --status approved`)",
         };
         f.render_widget(
             Paragraph::new(Span::styled(empty_msg, Style::default().fg(theme.dim))).block(block),
@@ -3307,6 +3400,37 @@ fn render_defer_input(f: &mut Frame, area: Rect, theme: &Theme, di: &state::Defe
     f.render_widget(Paragraph::new(lines).block(block), popup);
 }
 
+/// Render the single-line reply-body input modal for the `reply` verb
+/// (Mail scope): a prompt naming the recipient, the typed buffer with a block
+/// cursor, and the confirm/cancel keys. Mirrors [`render_defer_input`]'s shape.
+// trace:STORY-701 | ai:claude
+fn render_reply_input(f: &mut Frame, area: Rect, theme: &Theme, ri: &state::ReplyInput) {
+    let popup = centered(area, 60, 25);
+    f.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.accent))
+        .title(format!(" reply to {} ", ri.to));
+    let lines = vec![
+        Line::from(Span::styled("Message body", Style::default().fg(theme.dim))),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("> ", Style::default().fg(theme.accent)),
+            Span::styled(
+                ri.buffer.clone(),
+                Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+            ),
+            // A block cursor at the end of the input.
+            Span::styled("█", Style::default().fg(theme.accent)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Enter = send   ·   Esc = cancel",
+            Style::default().fg(theme.dim),
+        )),
+    ];
+    f.render_widget(Paragraph::new(lines).block(block), popup);
+}
+
 /// Render the new-spec TITLE input modal (TASK-931): a single-line prompt with
 /// a block cursor for the title of a fresh Draft spec. Mirrors the defer-input
 /// modal's shape. Enter creates; Esc (or an empty title) cancels.
@@ -3485,6 +3609,7 @@ mod refresh_tests {
         let ok = startup_status(true);
         assert!(ok.contains("Backlog"));
         assert!(ok.contains("Queue"));
+        assert!(ok.contains("Mail"));
     }
 
     #[test]
