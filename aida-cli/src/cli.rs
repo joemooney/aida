@@ -2935,6 +2935,15 @@ pub enum StoreCommand {
         #[clap(long)]
         yes: bool,
     },
+
+    /// Preview the identity this machine will WRITE to the shared store —
+    /// hostname + git email, and how the configured redaction (`[node]
+    /// public_hostname` / `public_email` in `~/.aida/config.toml`) rewrites
+    /// them. Read-only; verify up front, before your first push, that no raw
+    /// corporate identity will land in a public-mirrored store.
+    // trace:TASK-1122 | ai:claude
+    #[clap(alias = "identity")]
+    ScrubPreview,
 }
 
 /// Maintenance + migration ops on the AIDA store.

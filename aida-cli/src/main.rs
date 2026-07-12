@@ -36509,6 +36509,7 @@ fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
         cli::StoreCommand::Status => store_status(),
         cli::StoreCommand::InstallHook { force } => store_install_hook(*force),
         cli::StoreCommand::Compact { squash, yes } => store_compact(*squash, *yes),
+        cli::StoreCommand::ScrubPreview => store_scrub_preview(),
     }
 }
 
@@ -36517,6 +36518,52 @@ fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
 /// DESTRUCTIVE history-rewrite path — gated behind `--yes`, prints the plan
 /// otherwise, and never runs automatically.
 // trace:STORY-733 | ai:claude
+/// TASK-1122 (part 3): print the identity this machine will WRITE to the shared
+/// store and how the configured redaction rewrites it — so a user can verify,
+/// before their first push, that no raw corporate identity will land in a
+/// public-mirrored store. Read-only.
+// trace:TASK-1122 | ai:claude
+fn store_scrub_preview() -> Result<()> {
+    let project_root = find_project_root()?;
+    let raw_host = hostname();
+    let raw_email = git_config_value(&project_root, "user.email");
+    let (pub_host, pub_email) = aida_core::git_ops::public_identity();
+    let (out_host, out_email) =
+        aida_core::git_ops::redacted_identity(&raw_host, raw_email.as_deref());
+
+    println!("Store identity preview — what this machine writes to the shared store:");
+    println!();
+    if pub_host.is_some() || pub_email.is_some() {
+        println!(
+            "  {} redaction ACTIVE  ([node] public_* in ~/.aida/config.toml)",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+    } else {
+        println!(
+            "  {} redaction off — the raw system identity is written verbatim.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        println!(
+            "     Set [node] public_email / public_hostname in ~/.aida/config.toml to redact."
+        );
+    }
+    println!();
+    let arrow = |raw: &str, out: &str| {
+        if raw == out {
+            format!("{raw}  (unchanged)")
+        } else {
+            format!("{raw}  →  {out}")
+        }
+    };
+    println!("  hostname:  {}", arrow(&raw_host, &out_host));
+    match (raw_email.as_deref(), out_email.as_deref()) {
+        (Some(r), Some(o)) => println!("  email:     {}", arrow(r, o)),
+        (Some(r), None) => println!("  email:     {r}  (unchanged)"),
+        (None, _) => println!("  email:     (git user.email unset)"),
+    }
+    Ok(())
+}
+
 fn store_compact(squash: bool, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
@@ -37607,6 +37654,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1122: store-scrub — when identity redaction is configured, has the
+    // raw system identity already leaked into the store (a leak that landed
+    // before redaction was turned on)? Reads store files + commit authors.
+    // trace:TASK-1122 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "store-scrub")? {
+        findings.extend(scan_store_scrub(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     let mut report = DoctorReport::from_findings(findings);
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
@@ -37726,6 +37782,85 @@ fn scan_scaffold_drift(
     }
 
     findings
+}
+
+/// TASK-1122: read a single `git config --get <key>` value in `dir`, or None.
+// trace:TASK-1122 | ai:claude
+fn git_config_value(dir: &std::path::Path, key: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["config", "--get", key])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!v.is_empty()).then_some(v)
+}
+
+/// TASK-1122: store-scrub detection. When identity redaction is configured
+/// (`[node] public_email` / `public_hostname` in `~/.aida/config.toml`), verify
+/// the RAW system identity has not ALREADY leaked into the store — a leak that
+/// landed before redaction was enabled is otherwise invisible on a public
+/// mirror. Reads the identity-bearing store files + recent store commit authors
+/// and flags any raw value present. Detection only, no auto-heal (removing an
+/// already-landed value needs a history rewrite).
+// trace:TASK-1122 | ai:claude
+fn scan_store_scrub(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let (pub_host, pub_email) = aida_core::git_ops::public_identity();
+    // Redaction not configured → nothing is expected to be redacted, nothing to check.
+    if pub_host.is_none() && pub_email.is_none() {
+        return Vec::new();
+    }
+
+    // The raw identity this machine writes.
+    let raw_host = hostname();
+    let raw_host = (!raw_host.is_empty()).then_some(raw_host);
+    let raw_email = git_config_value(project_root, "user.email");
+
+    // Gather the store text that carries identity: the registration + block
+    // files, plus recent store commit authors on the orphan branch.
+    let store_dir = project_root.join(".aida-store");
+    let mut store_text = String::new();
+    for f in ["nodes.toml", "blocks.yaml", "oplog.yaml"] {
+        if let Ok(s) = std::fs::read_to_string(store_dir.join(f)) {
+            store_text.push_str(&s);
+            store_text.push('\n');
+        }
+    }
+    if let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "aida-store", "--format=%ae%n%an", "-n", "1000"])
+        .output()
+    {
+        if out.status.success() {
+            store_text.push_str(&String::from_utf8_lossy(&out.stdout));
+        }
+    }
+
+    let leaks = aida_core::git_ops::detect_identity_leaks(
+        &store_text,
+        raw_host.as_deref(),
+        raw_email.as_deref(),
+        pub_host.as_deref(),
+        pub_email.as_deref(),
+    );
+    leaks
+        .into_iter()
+        .enumerate()
+        .map(|(i, leak)| DoctorFinding {
+            category: "store-scrub".to_string(),
+            id: format!("store-scrub/{i}"),
+            summary: format!("raw machine identity already in the store — {leak}"),
+            action:
+                "landed before redaction was enabled; scrub it from the store history before it propagates (see docs/security/)"
+                    .to_string(),
+            safe_heal: false,
+        })
+        .collect()
 }
 
 /// TASK-752: detect tracked legacy centralized-backend artifacts —
@@ -38424,13 +38559,17 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         "scaffold-drift" | "scaffold" | "rule-delivery" | "rule-delivery-rot" | "delivery-rot" => {
             "scaffold-drift"
         }
+        // TASK-1122: raw machine identity (corporate email/hostname) already in
+        // the store despite configured redaction. trace:TASK-1122 | ai:claude
+        "store-scrub" | "scrub" | "identity-leak" | "store-identity" => "store-scrub",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, stale-remote-branches, merged-agent-worktrees, \
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
-             store-tracked-runtime, remote-drift, vendor-binary, scaffold-drift)",
+             store-tracked-runtime, remote-drift, vendor-binary, scaffold-drift, \
+             store-scrub)",
             other
         ),
     };
