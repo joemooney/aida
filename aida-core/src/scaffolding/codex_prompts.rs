@@ -106,6 +106,38 @@ pub fn convert_command_to_codex_prompt(body: &str) -> String {
     out
 }
 
+/// The expected Codex custom-prompt set as `(name, body)` pairs — the same
+/// portable enumeration `scaffold_codex_prompts` writes, but pure (no I/O).
+/// Lets a drift check (e.g. `aida doctor --category scaffold-drift`, TASK-1124)
+/// compare a deployed `~/.codex/prompts` against the current source templates
+/// without re-deriving the conversion.
+// trace:TASK-1124 | ai:claude
+pub fn expected_codex_prompts() -> Vec<(String, String)> {
+    use crate::templates::EMBEDDED_TEMPLATES;
+
+    let mut keys: Vec<&&str> = EMBEDDED_TEMPLATES
+        .keys()
+        .filter(|k| k.starts_with("commands/") && k.ends_with(".md"))
+        .collect();
+    keys.sort();
+
+    let mut out = Vec::new();
+    for key in keys {
+        let name = key
+            .trim_start_matches("commands/")
+            .trim_end_matches(".md")
+            .to_string();
+        if CODEX_NONPORTABLE_COMMANDS.iter().any(|(n, _)| *n == name) {
+            continue;
+        }
+        let body = EMBEDDED_TEMPLATES
+            .get(*key)
+            .expect("key came from the same map");
+        out.push((name, convert_command_to_codex_prompt(body)));
+    }
+    out
+}
+
 /// Write the Codex custom-prompt set into `dest_dir` (normally
 /// `~/.codex/prompts`). Existing files are skipped unless `force`; the
 /// non-portable set is excluded with reasons. Idempotent.
@@ -176,6 +208,37 @@ mod tests {
             !out.starts_with("---"),
             "frontmatter must be stripped: {out}"
         );
+    }
+
+    // trace:TASK-1124 — the pure enumeration matches what scaffold_codex_prompts
+    // would write: the portable set (nonportable excluded), stripped bodies.
+    #[test]
+    fn expected_codex_prompts_is_the_portable_set_with_converted_bodies() {
+        let expected = expected_codex_prompts();
+        assert!(
+            expected.len() > 30,
+            "expected the bulk of the command set, got {}",
+            expected.len()
+        );
+        // Nonportable commands are excluded.
+        for (name, _) in CODEX_NONPORTABLE_COMMANDS {
+            assert!(
+                !expected.iter().any(|(n, _)| n == name),
+                "nonportable command {name} must be excluded"
+            );
+        }
+        // Bodies are converted (frontmatter stripped).
+        for (name, body) in &expected {
+            assert!(!body.starts_with("---"), "{name} keeps frontmatter");
+        }
+        // It agrees with the writer: writing to a temp dir yields the same set.
+        let tmp = tempfile::tempdir().unwrap();
+        let written = scaffold_codex_prompts(tmp.path(), false).unwrap();
+        let mut want: Vec<&String> = expected.iter().map(|(n, _)| n).collect();
+        want.sort();
+        let mut got: Vec<&String> = written.written.iter().collect();
+        got.sort();
+        assert_eq!(want, got, "expected set must match the written set");
     }
 
     #[test]

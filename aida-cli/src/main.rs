@@ -37595,6 +37595,18 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1124: rule-delivery-rot — hash the DEPLOYED vendor prompts/skills
+    // (project `.claude/`+`.codex/` and the machine-global `~/.codex/prompts`)
+    // against the binary's embedded source templates and flag drift. Turns the
+    // invisible "stale scaffolding at the seams" failure class (a contributing
+    // cause of the TASK-1123 reviewer-bypass incident) into a checkable one.
+    // Detection only — the fix is the re-scaffold command, not a heal.
+    // trace:TASK-1124 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "scaffold-drift")? {
+        findings.extend(scan_scaffold_drift(&project_root, &store));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     let mut report = DoctorReport::from_findings(findings);
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
@@ -37631,6 +37643,89 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         anyhow::bail!("{failed} finding(s) failed to heal — see the report above");
     }
     Ok(())
+}
+
+/// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
+/// have drifted from the current source templates. A prompt that EXISTS but
+/// whose content differs from `expected_codex_prompts()` is rot (a stale
+/// delivery — e.g. a fix that never re-scaffolded); a MISSING prompt is an
+/// opt-out, not rot, so it is never flagged. Pure over `dir`, so unit-testable
+/// without touching $HOME.
+// trace:TASK-1124 | ai:claude
+fn codex_prompts_drift(dir: &std::path::Path) -> Vec<String> {
+    let mut drifted = Vec::new();
+    for (name, expected) in aida_core::scaffolding::codex_prompts::expected_codex_prompts() {
+        let path = dir.join(format!("{name}.md"));
+        if let Ok(actual) = std::fs::read_to_string(&path) {
+            if actual != expected {
+                drifted.push(name);
+            }
+        }
+    }
+    drifted.sort();
+    drifted
+}
+
+/// TASK-1124: rule-delivery-rot detection. Flags deployed vendor prompts/skills
+/// that have drifted from the binary's embedded source templates, in two
+/// places: (1) the project-local `.claude/`+`.codex/` scaffold (via
+/// `check_scaffold_status`, which already ignores the dev-repo symlink layout
+/// per BUG-917), and (2) the machine-global `~/.codex/prompts` (the stale-prompt
+/// case that contributed to the TASK-1123 reviewer-bypass incident). Detection
+/// only — each finding names the re-scaffold command, no auto-heal.
+// trace:TASK-1124 | ai:claude
+fn scan_scaffold_drift(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+
+    // (1) Project-local vendor prompts/skills (Template-category, AIDA-owned).
+    let config = ScaffoldConfig::default();
+    let db_path = project_root.join(".aida/cache.db");
+    let status = check_scaffold_status(store, project_root, &config, &db_path);
+    let drifted: Vec<String> = status
+        .modified
+        .iter()
+        .filter_map(|(p, _)| {
+            let s = p.to_string_lossy();
+            let is_vendor = s.starts_with(".claude/commands/")
+                || s.starts_with(".claude/skills/")
+                || s.starts_with(".codex/skills/");
+            is_vendor.then(|| s.into_owned())
+        })
+        .collect();
+    if !drifted.is_empty() {
+        findings.push(DoctorFinding {
+            category: "scaffold-drift".to_string(),
+            id: "scaffold-drift/project".to_string(),
+            summary: format!(
+                "{} deployed vendor prompt/skill file(s) drifted from the source templates (stale scaffolding)",
+                drifted.len()
+            ),
+            action: "aida scaffold upgrade   (or `aida scaffold diff` to inspect)".to_string(),
+            safe_heal: false,
+        });
+    }
+
+    // (2) Machine-global ~/.codex/prompts — the TASK-1123 incident case.
+    if let Some(dir) = dirs::home_dir().map(|h| h.join(".codex").join("prompts")) {
+        let drifted_prompts = codex_prompts_drift(&dir);
+        if !drifted_prompts.is_empty() {
+            findings.push(DoctorFinding {
+                category: "scaffold-drift".to_string(),
+                id: "scaffold-drift/codex-prompts".to_string(),
+                summary: format!(
+                    "~/.codex/prompts is stale — {} prompt(s) drifted from the current source templates",
+                    drifted_prompts.len()
+                ),
+                action: "aida scaffold codex-prompts --force".to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+
+    findings
 }
 
 /// TASK-752: detect tracked legacy centralized-backend artifacts —
@@ -38323,13 +38418,19 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // headless, or configured TUI) whose CLI binary is missing from PATH.
         // trace:STORY-762 | ai:claude
         "vendor-binary" | "vendor-binaries" | "vendor" | "vendors" => "vendor-binary",
+        // TASK-1124: deployed vendor prompts/skills (project .claude/.codex +
+        // ~/.codex/prompts) drifted from the binary's embedded source templates
+        // — rule-delivery-rot. trace:TASK-1124 | ai:claude
+        "scaffold-drift" | "scaffold" | "rule-delivery" | "rule-delivery-rot" | "delivery-rot" => {
+            "scaffold-drift"
+        }
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, stale-remote-branches, merged-agent-worktrees, \
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
-             store-tracked-runtime, remote-drift, vendor-binary)",
+             store-tracked-runtime, remote-drift, vendor-binary, scaffold-drift)",
             other
         ),
     };
@@ -41626,6 +41727,41 @@ mod story_462_doctor_tests {
         assert!(force);
         assert!(all);
         assert!(!json);
+    }
+
+    // trace:TASK-1124 — codex_prompts_drift flags a stale deployed prompt,
+    // ignores a matching one, and never nags about a prompt not deployed.
+    #[test]
+    fn codex_prompts_drift_flags_only_stale_deployed_prompts() {
+        let dir = tempfile::tempdir().unwrap();
+        let expected = aida_core::scaffolding::codex_prompts::expected_codex_prompts();
+        assert!(expected.len() >= 2, "need a couple of prompts to test");
+        // Deploy the first prompt correctly (matches source).
+        let (fresh_name, fresh_body) = &expected[0];
+        std::fs::write(dir.path().join(format!("{fresh_name}.md")), fresh_body).unwrap();
+        // Deploy the second prompt STALE (content differs).
+        let (stale_name, _) = &expected[1];
+        std::fs::write(
+            dir.path().join(format!("{stale_name}.md")),
+            "stale content\n",
+        )
+        .unwrap();
+        // Every other prompt is never deployed (missing) — must NOT be flagged.
+
+        let drifted = codex_prompts_drift(dir.path());
+        assert!(
+            drifted.contains(stale_name),
+            "stale prompt must be flagged: {drifted:?}"
+        );
+        assert!(
+            !drifted.contains(fresh_name),
+            "a matching prompt must NOT be flagged: {drifted:?}"
+        );
+        assert_eq!(
+            drifted.len(),
+            1,
+            "only the one stale prompt should be flagged (missing = opt-out): {drifted:?}"
+        );
     }
 
     #[test]
