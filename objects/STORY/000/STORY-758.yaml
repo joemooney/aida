@@ -3,12 +3,12 @@ spec_id: STORY-758
 agreed_id: STORY-758
 title: Tiered help leads with the aida why magic — reshape GETTING_STARTED + title + tagline (Strategy B, group help)
 description: 'Operator picked Strategy B + group-help-now (2026-07-02). The tiered help (print_tiered_help, STORY-556 infra) currently leads with init/add/list/show/zen/ship/done/solo and the title "AIDA — AI-native requirements management" — the magic (aida why) is not even on the first screen. Reshape: (1) GETTING_STARTED leads with why + the real core (why/init/show/add/list/search/graph), demoting the autonomy verbs zen/ship/solo to their grouped depth (still in help --all, nothing deleted); (2) title → "AIDA — ask your codebase why" matching the README; (3) tagline points at aida why <file:line> as the entry point. Zero capability lost — pure first-screen emphasis. Child of STORY-754/756.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:32:12.362058088Z
-modified_at: 2026-07-02T16:32:17.006852169Z
+modified_at: 2026-07-12T18:02:48.973448116Z
 req_type: Story
 tags:
 - aida:help

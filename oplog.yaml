@@ -32685,5 +32685,13 @@ operations:
       - Works with wezterm absent (tmux-only census) and with tmux absent (wezterm-only census); with neither, substrate sweep alone still yields the managed-fleet digest.
       - Skill doc states the substrate-first rule and the decision envelope explicitly (they are design constraints, not implementation details).
       Revisit trigger for promoting mechanics into an aida fleet subcommand: skill used weekly+ or its shell mechanics exceed ~a screen of bash.
-clock: 3058
+- id: 019f577f-0138-78e2-85f2-5be0fcdabb89
+  target_id: 019f23ac-744a-75a0-9548-50247cf5b64e
+  author: aida
+  node_id: '1'
+  lamport: 3059
+  timestamp: 2026-07-12T18:02:49.016331504Z
+  kind: !SetStatus
+    status: Completed
+clock: 3059
 node_id: '1'
