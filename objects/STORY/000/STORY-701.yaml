@@ -12,12 +12,12 @@ description: |-
 
   ## Seam
   EPIC-53 owns the mail source + send action. EPIC-54 owns the selection/dispatch gesture (how you pick a message + trigger reply/send). See docs/plans/2026-06-26-epic-53-cockpit-seam.md for the EPIC-53(content) vs EPIC-54(shell) boundary.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:51:46.043502311Z
-modified_at: 2026-07-12T19:41:31.058612511Z
+modified_at: 2026-07-12T19:50:57.501763257Z
 req_type: Story
 tags:
 - zen-ready
@@ -42,3 +42,7 @@ comments:
   content: Commit 14f1d3a01 references this requirement
   created_at: 2026-07-12T19:41:31.058612511Z
   modified_at: 2026-07-12T19:41:31.058612511Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-12T19:50:57.501763257Z
+  completion_sha: 598cf7ed3e288ad0d00ae576302db07d31f525d0
