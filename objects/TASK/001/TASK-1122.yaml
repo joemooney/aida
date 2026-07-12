@@ -10,12 +10,12 @@ description: |-
   3. Dry-run preview: show the sanitized identity a machine would write before its first push, so redaction is verifiable up front.
 
   These are metadata/tooling refinements; the recurring file-content leak (the operator problem) is already closed by BUG-715 core.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T16:10:35.728683682Z
-modified_at: 2026-07-12T06:38:02.530763730Z
+modified_at: 2026-07-12T06:46:48.549674254Z
 req_type: Task
 tags:
 - followup:bug-715
@@ -36,3 +36,7 @@ comments:
   content: Commit 73efe099b references this requirement
   created_at: 2026-07-12T06:38:02.530763730Z
   modified_at: 2026-07-12T06:38:02.530763730Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-12T06:46:48.549674254Z
+  completion_sha: d9bd5c23d4d2d9e7f452b25ade88c435b5ee77a7
