@@ -116,6 +116,15 @@ pub(crate) struct Claim {
     /// carried so the record mirrors the local `SessionLease` shape.
     #[serde(default)]
     pub review_verb: bool,
+    /// STORY-711 slice 1: the authorizing advisor's session/agent id, mirrors
+    /// the same field added to `SessionLeaseLite`. `#[serde(default)]` so an
+    /// older claim TOML with no `authorized_by` key still deserializes
+    /// (`None`). Slice 1's `aida lock` CLI operates on the LOCAL session
+    /// lease, not this cross-clone registry — this field is forward-compat
+    /// groundwork only; nothing writes a non-`None` value here yet.
+    // trace:STORY-711 | ai:claude
+    #[serde(default)]
+    pub authorized_by: Option<String>,
 }
 
 impl Claim {
@@ -354,6 +363,8 @@ fn build_claim(
         // Slice 2's drain/solo claims set this `true`. trace:STORY-637
         process_backed: false,
         review_verb,
+        // trace:STORY-711 | ai:claude — not wired yet; see the field doc.
+        authorized_by: None,
     }
 }
 
@@ -689,6 +700,8 @@ fn build_lock_claim(
         // dead pid on our host is an exact reclaim signal. trace:STORY-638
         process_backed: true,
         review_verb: false,
+        // trace:STORY-711 | ai:claude — not wired yet; see the field doc.
+        authorized_by: None,
     }
 }
 
@@ -960,6 +973,7 @@ mod tests {
             ttl_secs: 1800,
             process_backed: true,
             review_verb: false,
+            authorized_by: None,
         }
     }
 
@@ -985,6 +999,7 @@ mod tests {
             ttl_secs: 1800,
             process_backed: false,
             review_verb: false,
+            authorized_by: None,
         }
     }
 
@@ -1207,6 +1222,46 @@ mod tests {
         assert_eq!(listed[0].node_id, "2");
     }
 
+    // trace:STORY-711 | ai:claude
+    #[test]
+    fn claim_authorized_by_round_trips_through_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = claim_path(dir.path(), "FR-1");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut c = claim("2", "imac", 99, "2026-06-16T12:00:00Z");
+        c.authorized_by = Some("advisor-abc".to_string());
+        std::fs::write(&path, toml::to_string_pretty(&c).unwrap()).unwrap();
+        let back = read_claim(&path).expect("a parseable claim");
+        assert_eq!(back, c);
+        assert_eq!(back.authorized_by.as_deref(), Some("advisor-abc"));
+    }
+
+    // trace:STORY-711 | ai:claude
+    #[test]
+    fn claim_authorized_by_defaults_to_none_for_old_toml_without_the_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = claim_path(dir.path(), "FR-1");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // Old claim shape, no `authorized_by` key at all.
+        std::fs::write(
+            &path,
+            r#"
+scope = "FR-1"
+node_id = "2"
+clone_path = "/home/joe/ai/aida-b"
+host = "imac"
+pid = 99
+agent = "codex-implementer-1"
+started_at = "2026-06-16T12:00:00Z"
+heartbeat_at = "2026-06-16T12:00:00Z"
+ttl_secs = 1800
+"#,
+        )
+        .unwrap();
+        let back = read_claim(&path).expect("a parseable claim");
+        assert_eq!(back.authorized_by, None);
+    }
+
     // ── process-lock (drain/solo) decision table (STORY-638) ──
     //
     // Drain/solo claims ARE process-backed, so `decide_claim` is exercised here
@@ -1227,6 +1282,7 @@ mod tests {
             ttl_secs: 1800,
             process_backed: true,
             review_verb: false,
+            authorized_by: None,
         }
     }
 
