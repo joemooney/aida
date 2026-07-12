@@ -2,13 +2,21 @@ id: 019f16c3-397a-7eb3-a09a-904c8679956d
 spec_id: TASK-1046
 agreed_id: TASK-1046
 title: '`.mcp.json` → codex/gemini MCP config translation for headless drain agents'
-description: ''
+description: |-
+  Headless drain agents on codex/gemini cannot use AIDA's MCP server unless the project's .mcp.json (Claude's MCP registration) is translated into each vendor's own MCP config format. Generate the codex MCP config (mcp_servers table in ~/.codex/config.toml or the project .codex) and the gemini equivalent from .mcp.json, so a codex/gemini drain agent gets the aida MCP tools with no hand-editing. Complements the existing scaffold codex-prompts. Note the SPIKE-73 agent-surface finding: the CLI (AIDA_AGENT_OUTPUT/TOON) is the primary, more token-efficient agent surface and MCP costs ~2x, so this serves agents that specifically want the typed MCP surface, not the default path.
+
+  ## Acceptance
+  - WHEN a project has a .mcp.json registering the aida MCP server, THE command emits the equivalent codex MCP config (mcp_servers entry) and gemini MCP config, preserving the server command + args + env.
+  - Idempotent and skip-existing unless --force (matching scaffold conventions).
+  - Dry-run/preview shows what would be written without writing.
+  - WHEN .mcp.json is absent or has no aida server, THE command reports nothing to translate rather than erroring.
+  - The written config parses as valid TOML/JSON per the target vendor's format.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:22:00.826668483Z
-modified_at: 2026-07-07T16:34:04.190900530Z
+modified_at: 2026-07-12T18:50:07.519983894Z
 req_type: Task
 tags:
 - zen-ready
