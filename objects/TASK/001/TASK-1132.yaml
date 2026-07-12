@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T03:52:37.295924252Z
-modified_at: 2026-07-12T03:52:37.295924252Z
+modified_at: 2026-07-12T03:54:51.814922769Z
 req_type: Task
 tags:
 - aida:skill
 - from-scaffold-corruption-incident
 - parent:TASK-584
+comments:
+- id: 019f5476-ae26-7ab2-87e2-98fea4e644d7
+  author: joe
+  content: Commit 2edce5d29 references this requirement
+  created_at: 2026-07-12T03:54:51.814922769Z
+  modified_at: 2026-07-12T03:54:51.814922769Z
