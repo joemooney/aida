@@ -1,0 +1,26 @@
+id: 019f57dd-116f-74b3-b2c4-a480322d138c
+spec_id: TASK-1140
+agreed_id: TASK-1140
+title: 'STORY-711 slice 2: automatic advisor-lock enforcement gate (substrate-as-bouncer pre-work check)'
+description: |-
+  Slice 2 of STORY-711 (slice 1 = the lock model + aida lock CLI, merged in #1387). Wire the AUTOMATIC bouncer so an implementer agent verifies-or-refuses before it acts — the enforcement that makes the lock real (a rule an agent can ignore is not a bouncer). Per the merged plan docs/plans/2026-07-12-story-711-advisor-lock.md.
+
+  ## Acceptance
+  - The brief gains an authorized_by token (aida brief writes it; list_briefs/read_brief surface it); the role-context snapshot includes it.
+  - A pre-work gate (mirror advisor_code_gate.rs) invoked by the implementer's first action / a PreToolUse hook + a pre-commit check reads my worktree's lock (authorized_by) + my brief token, runs verify_worktree_lock, and under the enforce posture REFUSES on Refused (naming the authorizing advisor).
+  - A [locking] config posture gates behavior: off (default, silent), warn, enforce. AIDA_LOCKING overrides per-run; documented in docs/environment-variables.md.
+  - Backward-compatible: off default means no existing solo/manual flow changes.
+  - Tests: brief carries the token; the gate refuses a mismatched agent under enforce, warns under warn, is silent under off.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-12T19:45:33.551932774Z
+modified_at: 2026-07-12T19:45:33.551932774Z
+req_type: Task
+tags:
+- advisor
+- coordination
+- from-plan
+- locking
+- parent:STORY-711
