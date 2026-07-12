@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T07:33:09.453575954Z
-modified_at: 2026-07-11T21:23:12.621286580Z
+modified_at: 2026-07-12T17:12:21.996076649Z
 req_type: Task
 tags:
 - aida:doctor
@@ -36,3 +36,8 @@ comments:
     FUNDAMENTAL LIMIT: the bug itself found "zero true positives" even among recent hits — i.e. the residual is real-work-that-is-just-untraced, which no date/type cutoff can distinguish from a genuine stranded completion. Getting to far-fewer needs a different signal, e.g. fuzzy corroboration (does the spec area/title appear in ANY commit near its completion?) or exempting the specific 2026-05-12 import cohort by commit. Recommend deciding between those before further work — this is where I go no further without your call.
   created_at: 2026-07-11T21:23:12.621286580Z
   modified_at: 2026-07-11T21:23:12.621286580Z
+- id: 019f5750-d0ec-7131-b8d9-d58b91a5a9e0
+  author: joe
+  content: Commit d9bd5c23d references this requirement
+  created_at: 2026-07-12T17:12:21.996076649Z
+  modified_at: 2026-07-12T17:12:21.996076649Z
