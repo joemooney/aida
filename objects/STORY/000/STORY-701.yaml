@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:51:46.043502311Z
-modified_at: 2026-06-30T16:35:44.055206241Z
+modified_at: 2026-07-12T18:39:01.771579083Z
 req_type: Story
 tags:
 - zen-ready
@@ -26,3 +26,9 @@ relationships:
   target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
   created_at: 2026-06-26T23:51:52.818926261Z
   created_by: joe
+comments:
+- id: 019f57a0-288b-7a31-b74f-a62fbe462876
+  author: joe
+  content: Commit bb43ddad2 references this requirement
+  created_at: 2026-07-12T18:39:01.771579083Z
+  modified_at: 2026-07-12T18:39:01.771579083Z
