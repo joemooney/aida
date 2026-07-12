@@ -3,12 +3,12 @@ spec_id: BUG-718
 agreed_id: BUG-718
 title: aida scaffold upgrade/apply corrupts master templates when run in the AIDA dev repo (writes through .claude symlinks)
 description: 'In the AIDA dev repo, .claude/skills/*, .claude/commands/*, .claude/hooks/* are per-file symlinks into aida-core/templates/ (the dogfood master copies). aida scaffold upgrade (and apply --force) classify those paths as template category = overwrite-on-drift, follow the symlink, and write the embedded template THROUGH the symlink into the source master — silently corrupting aida-core/templates. Observed 2026-07-11: an errant upgrade gutted aida-pre-commit.sh 275->68 lines, deleted 476 lines of docs/agents, regenerated every command/skill master to output-format, and created .claude/AIDA.md + .codex/. Reverted via git checkout. Fix: before overwriting a template-category target, resolve realpath; if it is a symlink pointing into aida-core/templates (or generally outside .claude/), refuse or warn instead of writing. Repro: run aida scaffold upgrade in the dev repo.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T03:55:47.912866658Z
-modified_at: 2026-07-12T04:17:08.430648823Z
+modified_at: 2026-07-12T04:26:58.921157530Z
 req_type: Bug
 tags:
 - aida:scaffold
@@ -25,3 +25,7 @@ comments:
   content: Commit 2edce5d29 references this requirement
   created_at: 2026-07-12T04:17:08.430648823Z
   modified_at: 2026-07-12T04:17:08.430648823Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-12T04:26:58.921157530Z
+  completion_sha: ad432cdf0e36bebdd4bbb030bfdb86d4416876d1
