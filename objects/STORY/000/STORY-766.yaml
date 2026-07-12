@@ -7,24 +7,24 @@ description: |-
 
   Each tick (one-shot or /loop-driven):
   1. SUBSTRATE SWEEP (authoritative): aida ps (live/STALE/orphaned), aida awaiting --json (operator gates), events.jsonl tail since last tick (completions, shelves, punts, merges — reuse the aida watch classification). Completion detection is STRUCTURAL ONLY (lease released, spec Done, PR merged, drain exit code); never inferred from output text — scrollback phrasing varies run-to-run, structural signals do not.
-  2. TERMINAL CENSUS (fallback, the only legitimate scrape): wezterm cli list (+ tmux list-panes when a server exists); subtract panes matching known leases/pane-ids; get-text the remainder's tail and classify cheaply (agent-shaped / waiting-at-prompt / quiescent >N min). Also provides wedge detection for managed sessions (pid alive + output quiescent) which pid-liveness cannot see.
+  2. TERMINAL CENSUS (fallback, the only legitimate scrape): tmux list-panes -a -F <format> leads (tmux is the operator daily driver as of 2026-07-11, and the TASK-1120 pane host), plus wezterm cli list when a GUI instance is present; subtract panes matching known leases/pane-ids; tail the remainder via capture-pane -p (tmux) / get-text (wezterm) and classify cheaply (agent-shaped / waiting-at-prompt / quiescent >N min). Also provides wedge detection for managed sessions (pid alive + output quiescent) which pid-liveness cannot see.
   3. DIFF + CLASSIFY each session vs previous tick: completed / progressing / stalled / needs-you / unmanaged / new.
   4. DIGEST: plain-language fleet state + ONE recommended next action per non-nominal item.
-  5. DECISION ENVELOPE — route, never dispatch: may file findings, ack briefs, escalate into aida awaiting; may NOT start work, take leases, or merge (single-drain-lock lesson: no second decider). Any nudge (send-text into a pane) and any auto-action beyond read+route is an explicit opt-in tier aligned with docs/architecture/autonomy-and-escalation.md.
+  5. DECISION ENVELOPE — route, never dispatch: may file findings, ack briefs, escalate into aida awaiting; may NOT start work, take leases, or merge (single-drain-lock lesson: no second decider). Any nudge (send-keys/send-text into a pane) and any auto-action beyond read+route is an explicit opt-in tier aligned with docs/architecture/autonomy-and-escalation.md.
 
   Acceptance:
-  - Running the skill once with (a) a live drain, (b) a stalled lease, (c) a hand-started unmanaged claude in another WezTerm pane produces a digest that correctly classifies all three and recommends a sensible action for each.
+  - Running the skill once with (a) a live drain, (b) a stalled lease, (c) a hand-started unmanaged claude in another tmux window produces a digest that correctly classifies all three and recommends a sensible action for each.
   - Zero writes in default mode (read+report); routing verbs only via explicit flags/answers; no new-work dispatch path exists at all.
   - Tick state (last event offset, last census snapshot) persists under .aida/ runtime state so diffs survive between invocations.
-  - Works with tmux absent (wezterm-only census) and vice versa; with neither, substrate sweep alone still yields the managed-fleet digest.
+  - Works with wezterm absent (tmux-only census) and with tmux absent (wezterm-only census); with neither, substrate sweep alone still yields the managed-fleet digest.
   - Skill doc states the substrate-first rule and the decision envelope explicitly (they are design constraints, not implementation details).
-  Revisit trigger for promoting mechanics into an `aida fleet` subcommand: skill used weekly+ or its shell mechanics exceed ~a screen of bash.
+  Revisit trigger for promoting mechanics into an aida fleet subcommand: skill used weekly+ or its shell mechanics exceed ~a screen of bash.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:50.937227933Z
-modified_at: 2026-07-08T04:53:50.937227933Z
+modified_at: 2026-07-12T06:12:59.759236352Z
 req_type: Story
 tags:
 - advisor
