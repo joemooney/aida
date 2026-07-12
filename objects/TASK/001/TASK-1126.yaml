@@ -13,8 +13,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-09T07:19:48.377058461Z
-modified_at: 2026-07-09T07:19:48.377058461Z
+modified_at: 2026-07-12T18:10:30.393888596Z
 req_type: Task
 tags:
 - batch:flowtest
 - lifecycle:trivial
+comments:
+- id: 019f5786-0b79-7a22-aea5-f4d849cbf461
+  author: joe
+  content: Commit c940a99d7 references this requirement
+  created_at: 2026-07-12T18:10:30.393888596Z
+  modified_at: 2026-07-12T18:10:30.393888596Z
