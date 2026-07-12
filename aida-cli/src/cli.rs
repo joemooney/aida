@@ -503,6 +503,14 @@ pub enum ScaffoldCommand {
         /// Use sparingly — overwrites your CLAUDE.md / AGENTS.md.
         #[clap(long)]
         force: bool,
+
+        /// Remove obsolete `aida-*` skills/commands/hooks this AIDA
+        /// version no longer ships (e.g. a skill deleted upstream but
+        /// left behind — or resurrected — by an older binary). Without
+        /// this flag they are only reported. Symlinks and non-`aida-`
+        /// files are never touched.
+        #[clap(long)]
+        prune: bool,
     },
 
     /// Show a unified diff between embedded templates and on-disk files

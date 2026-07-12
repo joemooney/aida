@@ -127887,6 +127887,75 @@ fn detect_obe_aida_scaffold_files(root: &std::path::Path) -> Vec<std::path::Path
     obe
 }
 
+/// Shared BUG-298 / BUG-719 handling: surface (and with `prune`, remove)
+/// obsolete `aida-*` skills/commands/hooks this AIDA version no longer ships —
+/// e.g. a skill deleted upstream but left behind, or *resurrected*, by an older
+/// binary whose embedded template set still has it (BUG-719). Symlinks and
+/// non-`aida-` files are never touched. Called by BOTH `scaffold apply` and
+/// `scaffold upgrade` so whichever drift-fixing command the user runs cleans
+/// the stray. `remove_hint` is the command to suggest when not pruning.
+// trace:BUG-719 | ai:claude
+fn report_and_prune_obe_scaffold(
+    root: &std::path::Path,
+    prune: bool,
+    dry_run: bool,
+    remove_hint: &str,
+) {
+    let obe = detect_obe_aida_scaffold_files(root);
+    if obe.is_empty() {
+        return;
+    }
+    println!();
+    if prune && !dry_run {
+        println!(
+            "{} Pruning {} obsolete aida-* file(s):",
+            "🧹".yellow(),
+            obe.len()
+        );
+        for p in &obe {
+            let rel = p.strip_prefix(root).unwrap_or(p);
+            let removed = if p.is_dir() {
+                std::fs::remove_dir_all(p)
+            } else {
+                std::fs::remove_file(p)
+            };
+            match removed {
+                Ok(()) => println!("  {} {}", "-".red(), rel.display()),
+                Err(e) => {
+                    eprintln!(
+                        "  {} {} (failed: {})",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        rel.display(),
+                        e
+                    )
+                }
+            }
+        }
+    } else {
+        println!(
+            "{} {} obsolete aida-* file(s) this AIDA version no longer ships:",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            obe.len()
+        );
+        for p in &obe {
+            println!(
+                "  {} {}",
+                "·".dimmed(),
+                p.strip_prefix(root).unwrap_or(p).display()
+            );
+        }
+        println!(
+            "  Remove with: {}{}",
+            remove_hint.cyan(),
+            if dry_run {
+                " (dry-run: not pruned)".dimmed().to_string()
+            } else {
+                String::new()
+            }
+        );
+    }
+}
+
 #[cfg(test)]
 mod bug_298_prune_tests {
     use super::*;
@@ -127923,6 +127992,51 @@ mod bug_298_prune_tests {
         assert!(
             !names.iter().any(|n| n == "aida-symlinked.md"),
             "a symlink must NOT be flagged: {names:?}"
+        );
+    }
+
+    /// BUG-719: the shared OBE handler removes an obsolete/resurrected `aida-*`
+    /// file (e.g. `aida-recover`, deleted upstream by TASK-584 but re-created by
+    /// an older binary whose embedded set still has it) when `prune` is set, and
+    /// leaves a shipped skill + a user's own file untouched.
+    #[test]
+    fn report_and_prune_obe_scaffold_removes_resurrected_aida_recover() {
+        let dir = tempfile::tempdir().unwrap();
+        let skills = dir.path().join(".claude/skills");
+        std::fs::create_dir_all(&skills).unwrap();
+        let recover = skills.join("aida-recover.md"); // removed upstream → OBE
+        let shipped = skills.join("aida-req.md"); // shipped → keep
+        let user = skills.join("my-skill.md"); // user → keep
+        std::fs::write(&recover, "<!-- AIDA Generated -->\n").unwrap();
+        std::fs::write(&shipped, "x").unwrap();
+        std::fs::write(&user, "x").unwrap();
+
+        // Report-only (prune=false) must not remove anything.
+        report_and_prune_obe_scaffold(dir.path(), false, false, "hint");
+        assert!(recover.exists(), "report-only must not remove the OBE file");
+
+        // Prune removes ONLY the obsolete aida-* file.
+        report_and_prune_obe_scaffold(dir.path(), true, false, "hint");
+        assert!(
+            !recover.exists(),
+            "prune must remove the resurrected aida-recover (BUG-719)"
+        );
+        assert!(shipped.exists(), "a shipped skill must survive prune");
+        assert!(user.exists(), "a user's own file must survive prune");
+    }
+
+    /// BUG-719: `--prune` combined with `--dry-run` reports but removes nothing.
+    #[test]
+    fn report_and_prune_obe_scaffold_dry_run_keeps_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let skills = dir.path().join(".claude/skills");
+        std::fs::create_dir_all(&skills).unwrap();
+        let recover = skills.join("aida-recover.md");
+        std::fs::write(&recover, "x").unwrap();
+        report_and_prune_obe_scaffold(dir.path(), true, true, "hint");
+        assert!(
+            recover.exists(),
+            "dry-run must not remove even with --prune"
         );
     }
 }
@@ -128257,61 +128371,10 @@ fn handle_scaffold_command(
                 }
             }
 
-            // BUG-298: surface (and with --prune, remove) obsolete `aida-*`
-            // skills/commands/hooks this AIDA version no longer ships. Symlinks
-            // and non-`aida-` files are never touched (see the detector).
-            let obe = detect_obe_aida_scaffold_files(&root);
-            if !obe.is_empty() {
-                println!();
-                if *prune && !*dry_run {
-                    println!(
-                        "{} Pruning {} obsolete aida-* file(s):",
-                        "🧹".yellow(),
-                        obe.len()
-                    );
-                    for p in &obe {
-                        let rel = p.strip_prefix(&root).unwrap_or(p);
-                        let removed = if p.is_dir() {
-                            std::fs::remove_dir_all(p)
-                        } else {
-                            std::fs::remove_file(p)
-                        };
-                        match removed {
-                            Ok(()) => println!("  {} {}", "-".red(), rel.display()),
-                            Err(e) => {
-                                eprintln!(
-                                    "  {} {} (failed: {})",
-                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                                    rel.display(),
-                                    e
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    println!(
-                        "{} {} obsolete aida-* file(s) this AIDA version no longer ships:",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        obe.len()
-                    );
-                    for p in &obe {
-                        println!(
-                            "  {} {}",
-                            "·".dimmed(),
-                            p.strip_prefix(&root).unwrap_or(p).display()
-                        );
-                    }
-                    println!(
-                        "  Remove with: {}{}",
-                        "aida scaffold apply --prune".cyan(),
-                        if *dry_run {
-                            " (dry-run: not pruned)".dimmed().to_string()
-                        } else {
-                            String::new()
-                        }
-                    );
-                }
-            }
+            // BUG-298 / BUG-719: surface (and with --prune, remove) obsolete
+            // `aida-*` files this AIDA version no longer ships. Symlinks and
+            // non-`aida-` files are never touched (see the detector).
+            report_and_prune_obe_scaffold(&root, *prune, *dry_run, "aida scaffold apply --prune");
         }
 
         // trace:FR-0269 - Template extraction command | ai:claude:high
@@ -128426,6 +128489,7 @@ fn handle_scaffold_command(
             project_root,
             dry_run,
             force,
+            prune,
         } => {
             // trace:FR-1-028 | ai:claude
             let store = storage.load()?;
@@ -128442,7 +128506,7 @@ fn handle_scaffold_command(
                 db_path.to_path_buf(),
             );
             let preview = scaffolder.preview(&store);
-            run_scaffold_upgrade(&root, &preview, *dry_run, *force)?;
+            run_scaffold_upgrade(&root, &preview, *dry_run, *force, *prune)?;
         }
         ScaffoldCommand::Diff {
             path,
@@ -128665,6 +128729,7 @@ fn run_scaffold_upgrade(
     preview: &aida_core::ScaffoldPreview,
     dry_run: bool,
     force: bool,
+    prune: bool,
 ) -> Result<()> {
     use aida_core::FileCategory;
     use std::path::PathBuf;
@@ -128958,6 +129023,16 @@ fn run_scaffold_upgrade(
             total_symlinked
         );
     }
+
+    // BUG-719: surface (and with --prune, remove) obsolete `aida-*` files a
+    // prior binary may have left behind or resurrected — matches `scaffold
+    // apply`, so upgrade is also a complete drift-fixing path.
+    report_and_prune_obe_scaffold(
+        project_root,
+        prune,
+        dry_run,
+        "aida scaffold upgrade --prune",
+    );
     Ok(())
 }
 
