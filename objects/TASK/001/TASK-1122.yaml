@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T16:10:35.728683682Z
-modified_at: 2026-07-11T21:41:22.854098395Z
+modified_at: 2026-07-12T06:38:02.530763730Z
 req_type: Task
 tags:
 - followup:bug-715
@@ -31,3 +31,8 @@ comments:
     REMAINING (parts 2/3, staying Approved): (2) aida doctor --category store-scrub to surface raw email/hostname ALREADY present in the store on any hub — this overlaps the TASK-1124 doctor-drift-detection work; recommend building them together. (3) dry-run preview of the sanitized identity before first push. Both are metadata/tooling refinements; the operator-facing file-content leak stays closed by BUG-715 core.
   created_at: 2026-07-11T21:41:22.854098395Z
   modified_at: 2026-07-11T21:41:22.854098395Z
+- id: 019f550c-1322-7db0-92f4-0c3ea5010a60
+  author: joe
+  content: Commit 73efe099b references this requirement
+  created_at: 2026-07-12T06:38:02.530763730Z
+  modified_at: 2026-07-12T06:38:02.530763730Z
