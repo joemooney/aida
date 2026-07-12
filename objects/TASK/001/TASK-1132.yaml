@@ -1,0 +1,16 @@
+id: 019f5474-a0af-7ad0-b04e-b6c876ac66ea
+spec_id: TASK-1132
+agreed_id: TASK-1132
+title: Fold two recovery-playbook symptoms into aida-doctor skill (main-on-feature-branch, lease-misregistered-at-parent)
+description: 'The deliberately-removed aida-recover skill (consolidated into aida-doctor by TASK-584) resurfaced via a stale-binary scaffold upgrade. Operator chose to keep the consolidation but port the two genuinely-missing recovery symptoms into the aida-doctor skill: (1) main worktree left checked out on a feature branch (the isolation-violation footprint), recover with git checkout main; (2) a session lease misregistered onto the parent-repo path instead of the sibling worktree. Use correct commands only (the old playbook referenced nonexistent aida db set-status / aida queue prune). Edit the master template aida-core/templates/skills/aida-doctor.md only.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-12T03:52:37.295924252Z
+modified_at: 2026-07-12T03:52:37.295924252Z
+req_type: Task
+tags:
+- aida:skill
+- from-scaffold-corruption-incident
+- parent:TASK-584
