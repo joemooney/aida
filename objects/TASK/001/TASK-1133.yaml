@@ -1,0 +1,17 @@
+id: 019f577f-ad0f-7db3-9282-6e8b0508f4b9
+spec_id: TASK-1133
+agreed_id: TASK-1133
+title: Auto-bump trailer scanner misses a SPEC-ID that is not a clean final paren (e.g. '(Strategy B, STORY-758) (#1348)')
+description: 'STORY-758 stayed Approved for ~10 days despite its work merging in #1348, because the auto-bump/reconcile trailer scanner did not recognize the SPEC-ID: the merge subject was "feat(help): ... (Strategy B, STORY-758) (#1348)" — the id sits inside a non-clean paren ("Strategy B, STORY-758") and GitHub squash appended "(#1348)" as the trailing paren, so neither a clean-final-(SPEC-ID) match nor reconcile-status caught it. Two fixes worth considering: (1) make the scanner match a SPEC-ID token anywhere in the subject/body (word-boundary), resilient to the "(#PR)" suffix GitHub adds and to extra text in the paren; (2) a doctor check for the INVERSE of completed-without-commit — Approved/Done specs that DO have a merged (SPEC-ID) commit on main (stranded completions). Size the impact first: grep origin/main log for (SPEC-ID) subjects whose spec is still Approved/Done. Root cause is partly authoring (non-conforming trailer) but the scanner should be robust to it.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-12T18:03:33.007125883Z
+modified_at: 2026-07-12T18:03:33.007125883Z
+req_type: Task
+tags:
+- aida:pull
+- auto-bump
+- bookkeeping-drift
+- from-story-758
