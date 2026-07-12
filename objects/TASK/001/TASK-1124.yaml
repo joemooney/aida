@@ -10,12 +10,12 @@ description: |-
   Acceptance:
   - aida doctor surfaces deployed-vs-source drift for vendor prompts/skills with the fix command.
   - The stale-~/.codex/prompts case that contributed to the TASK-1123 incident would have been flagged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-09T06:52:30.036882055Z
-modified_at: 2026-07-12T06:16:57.531115034Z
+modified_at: 2026-07-12T06:26:32.694526165Z
 req_type: Task
 tags:
 - aida:doctor
@@ -54,3 +54,7 @@ comments:
   content: Commit b0615545f references this requirement
   created_at: 2026-07-12T06:16:57.531115034Z
   modified_at: 2026-07-12T06:16:57.531115034Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-12T06:26:32.694526165Z
+  completion_sha: 73efe099b9ebdce727b00de7c8156fd1d4116c92
