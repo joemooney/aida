@@ -2,13 +2,21 @@ id: 019f23b6-a688-7980-b034-74813e48557b
 spec_id: TASK-1092
 agreed_id: TASK-1092
 title: Add cross-vendor routing config for role-to-vendor fallback order
-description: ''
+description: |-
+  SPIKE-76 slice 4 (docs/plans/2026-07-02-spike-76-dispatch-resilience.md): a small config section mapping each ROLE to an ordered vendor-preference list + fallback order, so fan-out is mixed-by-batch (not all-Claude) and a role falls to the next allowed vendor when its primary is unavailable. Encodes SPIKE-76's default routing: Claude strongest for headless drain/resume + advisor/review flows; Codex for bounded implementation, independent cross-checks, and fallback from a pushed branch; Antigravity for draft-for-review, cross-validation, and mechanical/bounded work. Pure resolution over the existing launcher adapters.
+
+  ## Acceptance
+  - A config section (e.g. [dispatch.routing] in .aida/config.toml) maps role to an ordered vendor list, with a shipped default encoding the SPIKE-76 routing above.
+  - A PURE, unit-tested resolution function returns the first AVAILABLE vendor in the role's list.
+  - WHEN a role's primary vendor is unavailable (binary missing, rate-limited, or paused), THE resolution falls to the next vendor in that role's list.
+  - WHEN no vendor in the role's list is available, THE resolution reports exhaustion clearly (caller decides park/defer) and never silently picks an unlisted vendor.
+  - Backward-compatible: absent config uses the shipped default; composes with the per-invocation --vendor override (TASK-1116).
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:43:20.584543900Z
-modified_at: 2026-07-02T16:43:20.584543900Z
+modified_at: 2026-07-12T18:50:08.549308495Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md

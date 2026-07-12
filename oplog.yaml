@@ -32746,5 +32746,21 @@ operations:
       - Dry-run/preview shows what would be written without writing.
       - WHEN .mcp.json is absent or has no aida server, THE command reports nothing to translate rather than erroring.
       - The written config parses as valid TOML/JSON per the target vendor's format.
-clock: 3063
+- id: 019f57aa-5550-7140-a1c6-ad9e2cf11c9a
+  target_id: 019f23b6-a688-7980-b034-74813e48557b
+  author: aida
+  node_id: '1'
+  lamport: 3064
+  timestamp: 2026-07-12T18:50:08.592053540Z
+  kind: !SetDescription
+    description: |-
+      SPIKE-76 slice 4 (docs/plans/2026-07-02-spike-76-dispatch-resilience.md): a small config section mapping each ROLE to an ordered vendor-preference list + fallback order, so fan-out is mixed-by-batch (not all-Claude) and a role falls to the next allowed vendor when its primary is unavailable. Encodes SPIKE-76's default routing: Claude strongest for headless drain/resume + advisor/review flows; Codex for bounded implementation, independent cross-checks, and fallback from a pushed branch; Antigravity for draft-for-review, cross-validation, and mechanical/bounded work. Pure resolution over the existing launcher adapters.
+
+      ## Acceptance
+      - A config section (e.g. [dispatch.routing] in .aida/config.toml) maps role to an ordered vendor list, with a shipped default encoding the SPIKE-76 routing above.
+      - A PURE, unit-tested resolution function returns the first AVAILABLE vendor in the role's list.
+      - WHEN a role's primary vendor is unavailable (binary missing, rate-limited, or paused), THE resolution falls to the next vendor in that role's list.
+      - WHEN no vendor in the role's list is available, THE resolution reports exhaustion clearly (caller decides park/defer) and never silently picks an unlisted vendor.
+      - Backward-compatible: absent config uses the shipped default; composes with the per-invocation --vendor override (TASK-1116).
+clock: 3064
 node_id: '1'
