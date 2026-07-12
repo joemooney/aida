@@ -8,8 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T03:56:01.151678850Z
-modified_at: 2026-07-12T03:56:01.151678850Z
+modified_at: 2026-07-12T05:53:06.018978157Z
 req_type: Bug
 tags:
 - aida:scaffold
 - from-scaffold-corruption-incident
+comments:
+- id: 019f54e2-ede2-7783-8f8f-a0ee708bc399
+  author: joe
+  content: Commit ad432cdf0 references this requirement
+  created_at: 2026-07-12T05:53:06.018978157Z
+  modified_at: 2026-07-12T05:53:06.018978157Z
