@@ -8,9 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T03:55:47.912866658Z
-modified_at: 2026-07-12T03:55:47.912866658Z
+modified_at: 2026-07-12T04:16:18.197526619Z
 req_type: Bug
 tags:
 - aida:scaffold
 - dev-repo-footgun
 - from-scaffold-corruption-incident
+comments:
+- id: 019f548a-4f15-7982-bbad-3aaa81cf960d
+  author: joe
+  content: Commit 2edce5d29 references this requirement
+  created_at: 2026-07-12T04:16:18.197526619Z
+  modified_at: 2026-07-12T04:16:18.197526619Z
