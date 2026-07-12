@@ -648,6 +648,53 @@ pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Resul
     crate::write_atomic(&path, json.as_bytes())
 }
 
+/// Read every message in the LOCAL layer (`<project_root>/.aida/mailbox/`).
+/// Files that fail to parse are skipped defensively — a half-written or
+/// hand-mangled file must not sink the whole inbox (mirrors the CLI's
+/// private `mailbox_store::read_local_messages`). Symmetric counterpart to
+/// [`write_local_message`], exposed here so a caller that doesn't want to
+/// shell out to `aida` (the TUI cockpit's mail source, STORY-701) can read
+/// the fast layer directly and compose it with the pure [`unread_inbox`].
+/// Empty (not an error) when the directory doesn't exist yet.
+// trace:STORY-701 | ai:claude
+pub fn read_local_messages(project_root: &Path) -> std::io::Result<Vec<Message>> {
+    let dir = local_mailbox_dir(project_root);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let path = entry?.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        if let Ok(msg) = serde_json::from_slice::<Message>(&bytes) {
+            out.push(msg);
+        }
+    }
+    Ok(out)
+}
+
+/// Read one agent's LOCAL read-watermark (epoch millis of the newest message
+/// it has seen), or `None` if it has never read. Mirrors the path convention
+/// the CLI's private `mailbox_store::read_watermark` uses
+/// (`<project_root>/.aida/mailbox/.read/<sanitized-agent>.txt`); exposed here
+/// so a direct-fs reader (the TUI cockpit, STORY-701) can compute
+/// [`unread_inbox`] without shelling out to `aida`. Read-only — never
+/// advances the watermark.
+// trace:STORY-701 | ai:claude
+pub fn read_local_watermark(project_root: &Path, agent: &str) -> Option<i64> {
+    let path = local_mailbox_dir(project_root)
+        .join(".read")
+        .join(format!("{}.txt", sanitize_id(agent)));
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| s.trim().parse::<i64>().ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1157,5 +1204,80 @@ mod tests {
         assert!(subj.starts_with("PR ready for review"));
         assert!(subj.ends_with('…'), "long subject is truncated: {subj}");
         assert!(!subj.contains('\n'));
+    }
+
+    // ── STORY-701: direct-fs local reads (no `aida` shell-out) ────────────
+
+    #[test]
+    fn read_local_messages_roundtrips_written_messages() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_local_message(
+            root,
+            &msg("m1", "t1", "codex", Recipient::Agent("claude".into()), 10),
+        )
+        .unwrap();
+        write_local_message(root, &msg("m2", "t2", "agy", Recipient::Broadcast, 20)).unwrap();
+        let mut ids: Vec<String> = read_local_messages(root)
+            .unwrap()
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        ids.sort();
+        assert_eq!(ids, vec!["m1".to_string(), "m2".to_string()]);
+    }
+
+    #[test]
+    fn read_local_messages_empty_when_dir_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        // Never written to — the `.aida/mailbox/` dir doesn't exist yet.
+        assert!(read_local_messages(dir.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn read_local_messages_skips_unparseable_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_local_message(
+            root,
+            &msg("good", "t", "codex", Recipient::Agent("claude".into()), 10),
+        )
+        .unwrap();
+        let mailbox_dir = local_mailbox_dir(root);
+        std::fs::write(mailbox_dir.join("garbage.json"), b"not json").unwrap();
+        std::fs::write(mailbox_dir.join("ignored.txt"), b"not even json ext").unwrap();
+        let msgs = read_local_messages(root).unwrap();
+        assert_eq!(
+            msgs.len(),
+            1,
+            "the unparseable + non-.json files are skipped"
+        );
+        assert_eq!(msgs[0].id, "good");
+    }
+
+    #[test]
+    fn read_local_watermark_roundtrips_and_defaults_to_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert_eq!(
+            read_local_watermark(root, "claude"),
+            None,
+            "never read → None"
+        );
+        let marker_dir = local_mailbox_dir(root).join(".read");
+        std::fs::create_dir_all(&marker_dir).unwrap();
+        std::fs::write(marker_dir.join("claude.txt"), b"12345").unwrap();
+        assert_eq!(read_local_watermark(root, "claude"), Some(12345));
+    }
+
+    #[test]
+    fn read_local_watermark_sanitizes_the_agent_id_for_the_filename() {
+        // Mirrors sanitize_id: path separators / odd chars fold to '_'.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let marker_dir = local_mailbox_dir(root).join(".read");
+        std::fs::create_dir_all(&marker_dir).unwrap();
+        std::fs::write(marker_dir.join("weird_agent.txt"), b"99").unwrap();
+        assert_eq!(read_local_watermark(root, "weird/agent"), Some(99));
     }
 }

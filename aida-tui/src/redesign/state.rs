@@ -116,6 +116,12 @@ pub enum Scope {
     /// the active focus, whose `## Test Plan` sections the preview surfaces.
     Test,
     Queue,
+    /// Your unread mail (STORY-701): rows sourced from
+    /// `aida_core::mailbox::unread_inbox` for this shell's identity, owner
+    /// always "you". NOT a spec source — its rows carry a message id in
+    /// `TargetItem::id`, not a spec id, and its only verb is `reply`.
+    // trace:STORY-701 | ai:claude
+    Mail,
     Prs,
     History,
     Findings,
@@ -131,7 +137,13 @@ impl Scope {
     /// the enum (used internally, e.g. as a cache sentinel) but are not offered.
     // trace:STORY-724 | ai:claude
     pub fn all() -> &'static [Scope] {
-        &[Scope::Backlog, Scope::Open, Scope::Test, Scope::Queue]
+        &[
+            Scope::Backlog,
+            Scope::Open,
+            Scope::Test,
+            Scope::Queue,
+            Scope::Mail,
+        ]
     }
 
     pub fn label(self) -> &'static str {
@@ -140,6 +152,7 @@ impl Scope {
             Scope::Open => "Open",
             Scope::Test => "Test",
             Scope::Queue => "Queue",
+            Scope::Mail => "Mail",
             Scope::Prs => "PRs",
             Scope::History => "History",
             Scope::Findings => "Findings",
@@ -155,6 +168,7 @@ impl Scope {
             Scope::Open => "the open backlog (all unfinished specs)",
             Scope::Test => "shipped specs to verify (Done + Completed)",
             Scope::Queue => "routed work (->role badge per spec)",
+            Scope::Mail => "your unread mail",
             Scope::Prs => "open pull requests",
             Scope::History => "completed specs",
             Scope::Findings => "triage items",
@@ -191,6 +205,12 @@ impl Scope {
                  instead of vanishing. The row count is the queue depth. ↵ descends \
                  to the items; → opens the verbs (show)."
             }
+            Scope::Mail => {
+                "Shows your unread mail — rows sourced from the local mailbox's \
+                 unread inbox, owner always you. ↵ descends to the messages; → \
+                 opens the verbs: reply (composes a response addressed to the \
+                 focused message's sender, threaded via --in-reply-to)."
+            }
             // These scopes are not offered in the cockpit yet (hidden from the
             // scope list); the help text is kept for when they are wired.
             Scope::Prs => "Shows the open pull requests. Not yet available.",
@@ -200,15 +220,16 @@ impl Scope {
         }
     }
 
-    /// Is this scope wired for real? Backlog, Open, Test, and Queue all drill.
-    /// Queue surfaces the role-routing the rest of the TUI was blind to — a
-    /// routed Draft used to "vanish" because routing doesn't change spec
-    /// status; the Queue scope is where it now shows up.
-    // trace:TASK-948 | ai:claude
+    /// Is this scope wired for real? Backlog, Open, Test, Queue, and Mail all
+    /// drill. Queue surfaces the role-routing the rest of the TUI was blind
+    /// to — a routed Draft used to "vanish" because routing doesn't change
+    /// spec status; the Queue scope is where it now shows up. Mail surfaces
+    /// unread inbox messages, which never had a cockpit home at all.
+    // trace:TASK-948 trace:STORY-701 | ai:claude
     pub fn is_functional(self) -> bool {
         matches!(
             self,
-            Scope::Backlog | Scope::Open | Scope::Test | Scope::Queue
+            Scope::Backlog | Scope::Open | Scope::Test | Scope::Queue | Scope::Mail
         )
     }
 
@@ -219,7 +240,8 @@ impl Scope {
     /// and can be non-Idle). Open (unfinished specs, incl. In-Progress), Queue
     /// (routed/driven work), and Test (shipped work being verified) all qualify;
     /// Backlog holds only approved + planned specs that are never live-worked, so
-    /// its glyph is always Idle and the probe is pure waste there.
+    /// its glyph is always Idle and the probe is pure waste there. Mail rows
+    /// aren't specs at all, so liveness never applies there either.
     // trace:BUG-676 | ai:claude
     pub fn shows_liveness(self) -> bool {
         matches!(self, Scope::Open | Scope::Queue | Scope::Test)
@@ -243,6 +265,9 @@ impl Scope {
             // a non-Approved / keystone row). Other routing/dequeue stay CLI
             // verbs for now. trace:TASK-948 trace:STORY-728
             Scope::Queue => vec![Verb::Show, Verb::Drive],
+            // Mail scope: `reply` is the only verb — composes a response
+            // addressed to the focused message's sender. trace:STORY-701
+            Scope::Mail => vec![Verb::Reply],
             _ => Vec::new(),
         }
     }
@@ -391,6 +416,13 @@ pub enum Verb {
     /// marquee surface: you no longer drop to the CLI to start a drive.
     // trace:STORY-728 | ai:claude
     Drive,
+    /// Mail scope, item-level: reply to the focused unread message —
+    /// addressed to its sender, threaded via `--in-reply-to`. Wraps
+    /// `aida mailbox send` (the STORY-701 send action). Opens a single-line
+    /// body-input modal (mirrors `defer`'s two-step shape: `run_verb` decides
+    /// WHO to reply to, the parent opens the input, Enter sends).
+    // trace:STORY-701 | ai:claude
+    Reply,
 }
 
 impl Verb {
@@ -408,6 +440,7 @@ impl Verb {
             Verb::Accept => "accept",
             Verb::Defer => "defer",
             Verb::Drive => "drive",
+            Verb::Reply => "reply",
         }
     }
 
@@ -425,6 +458,7 @@ impl Verb {
             Verb::Accept => "reviewer: accept finished work (Done → Completed)",
             Verb::Defer => "park selected specs off the active view with a revisit trigger",
             Verb::Drive => "kick off the autonomous drive on this approved spec (aida zen)",
+            Verb::Reply => "reply to this message (aida mailbox send)",
         }
     }
 
@@ -502,24 +536,35 @@ impl Verb {
                  single focused row. Approved-only, and refused on a keystone / \
                  architecture-class spec, which stays human-supervised."
             }
+            Verb::Reply => {
+                "Reply to the focused unread message — opens a single-line \
+                 body-input modal; Enter sends via aida mailbox send, \
+                 addressed to the sender and threaded with --in-reply-to. \
+                 Single-target: acts on the focused row (Mail scope only)."
+            }
         }
     }
 
     /// Does this verb operate on the single focused item (N=1), rather than
     /// the multi-select target set? `show` / `why` are item-level; they
     /// open a modal on the focused row. `request approval` is set-level.
-    // trace:STORY-690 | ai:claude
+    /// `reply` is ALSO single-target (Mail has no multi-select reply), but it
+    /// is deliberately excluded here — this predicate gates the generic
+    /// "shell a read command, show its stdout" [`RunOutcome::ShowItem`] path,
+    /// and `reply` needs its own two-step outcome (open the body input,
+    /// THEN send), the same shape as [`Verb::Defer`]. See the `Verb::Reply`
+    // branch in [`RedesignState::run_verb`]. trace:STORY-701 | ai:claude
     pub fn is_item_level(self) -> bool {
         matches!(self, Verb::Show | Verb::Why | Verb::Status)
     }
 
     /// READ vs UPDATE classification — STORY-710 part B. READ verbs
     /// (`show` / `why` / `status`) only DISPLAY a spec; UPDATE verbs mutate
-    /// state (status transitions, queue routing, deferral, archival, grooming).
-    /// The SELECTION grey-out axis keys off this: "none = all" is a safe read
-    /// of the focused row, but a dangerous silent mutation for an update — so
-    /// an update verb that targets the explicit selection set greys out when
-    /// nothing is selected. A property of the verb itself.
+    /// state (status transitions, queue routing, deferral, archival, grooming,
+    /// sending mail). The SELECTION grey-out axis keys off this: "none = all"
+    /// is a safe read of the focused row, but a dangerous silent mutation for
+    /// an update — so an update verb that targets the explicit selection set
+    /// greys out when nothing is selected. A property of the verb itself.
     // trace:TASK-954 | ai:claude
     pub fn is_update(self) -> bool {
         !matches!(self, Verb::Show | Verb::Why | Verb::Status)
@@ -535,14 +580,13 @@ impl Verb {
     /// closes. False for the READ verbs (`show` / `why` / `status`, where
     /// none = all is a safe focused-row read) and for `groom`, whose
     /// empty-selection path is an explicit "groom all N?" confirm that already
-    /// guards against an accidental bulk mutation. Also false for `drive`, which
-    /// is a single-target launch on the FOCUSED approved spec (N=1, like a read
-    /// gesture): its tight Approved + non-keystone gates already constrain the
-    /// target, and one autonomous drive per row is the intended unit — a
-    /// multi-select checkbox would be the wrong shape.
-    // trace:TASK-954 trace:STORY-728 | ai:claude
+    /// guards against an accidental bulk mutation. Also false for `drive` and
+    /// `reply`, both single-target launches on the FOCUSED row (N=1, like a
+    /// read gesture): one drive/reply per row is the intended unit — a
+    /// multi-select checkbox would be the wrong shape for either.
+    // trace:TASK-954 trace:STORY-728 trace:STORY-701 | ai:claude
     pub fn requires_selection(self) -> bool {
-        self.is_update() && !matches!(self, Verb::Groom | Verb::Drive)
+        self.is_update() && !matches!(self, Verb::Groom | Verb::Drive | Verb::Reply)
     }
 
     /// Is this verb wired to do real work? Every cockpit verb now executes.
@@ -553,7 +597,7 @@ impl Verb {
     /// fundamental of the four (role, status, selection, wired). It now
     /// disqualifies nothing, but the gate stays as the structural home for any
     /// future not-yet-wired verb. STORY-703 supersedes the STORY-724 stub gating.
-    // trace:STORY-703 trace:STORY-724 trace:TASK-920 trace:TASK-921 trace:TASK-933 trace:TASK-949
+    // trace:STORY-703 trace:STORY-724 trace:TASK-920 trace:TASK-921 trace:TASK-933 trace:TASK-949 trace:STORY-701
     pub fn is_functional(self) -> bool {
         matches!(
             self,
@@ -569,6 +613,7 @@ impl Verb {
                 | Verb::Accept
                 | Verb::Defer
                 | Verb::Drive
+                | Verb::Reply
         )
     }
 
@@ -604,7 +649,14 @@ impl Verb {
             | Verb::Archive
             | Verb::Drive => Some("advisor"),
             Verb::Accept => Some("reviewer"),
-            Verb::Show | Verb::Why | Verb::Status | Verb::RequestApproval | Verb::Defer => None,
+            // `reply` is role-agnostic: any role may send mail, the same as
+            // the reads and `defer`. trace:STORY-701
+            Verb::Show
+            | Verb::Why
+            | Verb::Status
+            | Verb::RequestApproval
+            | Verb::Defer
+            | Verb::Reply => None,
         }
     }
 
@@ -730,6 +782,59 @@ impl DeferInput {
             "revisit later".to_string()
         } else {
             t.to_string()
+        }
+    }
+}
+
+/// A pending single-line text-input modal for the `reply` verb's message
+/// body. Holds the typed-so-far `buffer` plus the reply's fixed target — the
+/// message `to` (its sender) and `in_reply_to` (the focused message's id) —
+/// captured at the moment `reply` was run, mirroring [`DeferInput`]'s
+/// targets-captured-at-open shape. Enter confirms (sends via `aida mailbox
+/// send --to <to> --in-reply-to <in_reply_to> "<buffer>"`); Esc cancels an
+/// empty buffer sends nothing (the parent's confirm path treats it the same
+/// as cancel). Kept pure (push_char / backspace / body) so it is
+// unit-testable without a terminal. trace:STORY-701 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyInput {
+    /// The reply body typed so far.
+    pub buffer: String,
+    /// The recipient — the focused message's sender.
+    pub to: String,
+    /// The message id this reply threads onto.
+    pub in_reply_to: String,
+}
+
+impl ReplyInput {
+    /// Open a fresh input over the given recipient + threaded message id,
+    /// with an empty buffer.
+    pub fn new(to: String, in_reply_to: String) -> Self {
+        ReplyInput {
+            buffer: String::new(),
+            to,
+            in_reply_to,
+        }
+    }
+
+    /// Append a typed char to the reply-body buffer.
+    pub fn push_char(&mut self, c: char) {
+        self.buffer.push(c);
+    }
+
+    /// Backspace the reply-body buffer (no-op when empty).
+    pub fn backspace(&mut self) {
+        self.buffer.pop();
+    }
+
+    /// The trimmed body to send, or `None` when nothing meaningful was
+    /// typed — so the confirm path cancels rather than sending an empty
+    /// message.
+    pub fn body(&self) -> Option<String> {
+        let t = self.buffer.trim();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t.to_string())
         }
     }
 }
@@ -1057,6 +1162,10 @@ pub struct RedesignState {
     /// typed buffer + the target ids captured when `defer` was run.
     // trace:TASK-921 | ai:claude
     pub defer_input: Option<DeferInput>,
+    /// Pending reply-body input for the `reply` verb (Mail scope), if open.
+    /// Holds the typed buffer + the recipient/thread captured when `reply`
+    // was run. trace:STORY-701 | ai:claude
+    pub reply_input: Option<ReplyInput>,
     /// Pending new-spec title input for the `new` action, if open. Holds the
     /// typed title buffer; Enter creates a Draft from it, Esc (or an empty
     // title) cancels. trace:TASK-931 | ai:claude
@@ -1127,6 +1236,7 @@ impl RedesignState {
             gate_hold: None,
             drive_routing: None,
             defer_input: None,
+            reply_input: None,
             new_input: None,
             focus_epic: None,
             focus_summary: None,
@@ -1642,6 +1752,49 @@ impl RedesignState {
             .map(|di| (di.targets.clone(), di.trigger()))
     }
 
+    // --- Reply input modal (Mail scope) -----------------------------------
+
+    /// Open the reply-body input modal over the given recipient + threaded
+    /// message id. The parent calls this when `reply` is run; the buffer
+    // starts empty and the operator types the message body. trace:STORY-701
+    pub fn open_reply_input(&mut self, to: String, in_reply_to: String) {
+        self.reply_input = Some(ReplyInput::new(to, in_reply_to));
+    }
+
+    // Is the reply-body input modal open? trace:STORY-701
+    pub fn reply_input_open(&self) -> bool {
+        self.reply_input.is_some()
+    }
+
+    /// Append a char to the open reply-body buffer (no-op when closed).
+    pub fn push_reply_char(&mut self, c: char) {
+        if let Some(ri) = &mut self.reply_input {
+            ri.push_char(c);
+        }
+    }
+
+    /// Backspace the open reply-body buffer (no-op when closed).
+    pub fn pop_reply_char(&mut self) {
+        if let Some(ri) = &mut self.reply_input {
+            ri.backspace();
+        }
+    }
+
+    /// Cancel the reply input (Esc) — discards the buffer and target.
+    pub fn cancel_reply_input(&mut self) {
+        self.reply_input = None;
+    }
+
+    /// Confirm the reply input (Enter) — take the pending input out and
+    /// return `(to, in_reply_to, body)` for the parent to send, closing the
+    /// modal. `None` when no input is open, OR when the typed body is empty
+    // (an empty reply sends nothing — mirrors `take_new_input`). trace:STORY-701
+    pub fn take_reply_input(&mut self) -> Option<(String, String, String)> {
+        let ri = self.reply_input.take()?;
+        let body = ri.body()?;
+        Some((ri.to, ri.in_reply_to, body))
+    }
+
     // --- New-spec title input modal (TASK-931) ---------------------------
 
     /// Open the new-spec title input modal with an empty buffer. The parent
@@ -1956,6 +2109,26 @@ impl RedesignState {
             };
         }
 
+        // reply: open the reply-body input over the FOCUSED unread message
+        // (Mail scope's only verb). Single-target (N=1), same two-step shape
+        // as `defer`: this only decides WHO to reply to (sender + threaded
+        // message id); the parent opens the input and sends on confirm.
+        // trace:STORY-701 | ai:claude
+        if verb == Verb::Reply {
+            let Some(item) = self.focused_item() else {
+                self.status = Some("no item focused".to_string());
+                return RunOutcome::None;
+            };
+            let Some(to) = super::mail::mail_sender(item) else {
+                self.status = Some("reply: could not determine the sender".to_string());
+                return RunOutcome::None;
+            };
+            return RunOutcome::OpenReplyInput {
+                to: to.to_string(),
+                in_reply_to: item.id.clone(),
+            };
+        }
+
         // Set-level verbs (groom, …) operate on the selection.
         let count = self.selected_count();
         if count == 0 {
@@ -2215,6 +2388,20 @@ pub enum RunOutcome {
     /// operator at `aida drain status`. Single-target (N=1).
     // trace:STORY-728 | ai:claude
     Drive { id: String },
+    /// `reply` on the focused unread message: the parent should OPEN the
+    /// reply-body input modal addressed to `to` (the sender), threaded onto
+    /// `in_reply_to` (the focused message's id). Two-step, mirroring
+    /// [`Self::OpenDeferInput`] — the send itself runs on Enter, via
+    // [`Self::Reply`]. trace:STORY-701 | ai:claude
+    OpenReplyInput { to: String, in_reply_to: String },
+    /// Confirmed `reply`: send `body` to `to`, threaded onto `in_reply_to`,
+    /// via `aida mailbox send --to <to> --in-reply-to <in_reply_to> "<body>"`.
+    // Emitted by the parent's input-modal confirm path. trace:STORY-701
+    Reply {
+        to: String,
+        in_reply_to: String,
+        body: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -3193,6 +3380,19 @@ mod tests {
         assert!(Scope::Queue.help().contains("badge"));
     }
 
+    /// The Mail scope is a wired, drillable surface (STORY-701) sourced from
+    /// the unread inbox rather than a spec list. It exposes exactly the
+    /// `reply` verb, is offered in the cockpit's scope list, and is role-
+    /// agnostic (no keystone gate, no liveness glyph — it holds no specs).
+    #[test]
+    fn mail_scope_is_functional_with_reply_only() {
+        assert!(Scope::Mail.is_functional());
+        assert_eq!(Scope::Mail.verbs(), vec![Verb::Reply]);
+        assert!(Scope::all().contains(&Scope::Mail));
+        assert!(!Scope::Mail.shows_liveness());
+        assert!(Scope::Mail.hint().contains("mail"));
+    }
+
     /// A queue row carries its routed role so the render path can paint the
     /// `->role` badge; a spec list row does not.
     // trace:TASK-948 | ai:claude
@@ -3913,6 +4113,103 @@ mod tests {
                 ids: vec!["TASK-0".to_string()],
             }
         );
+    }
+
+    // --- Mail scope + reply verb (STORY-701) ------------------------------
+
+    /// A single unread-mail row, shaped like [`super::super::mail::mail_item`]'s
+    /// projection: `req_type` "Mail", `status` "from <sender>", `id` the
+    /// message id.
+    fn mail_test_items() -> Vec<TargetItem> {
+        vec![TargetItem {
+            id: "m1".into(),
+            title: "hello".into(),
+            req_type: "Mail".into(),
+            status: "from codex".into(),
+            priority: String::new(),
+            body: "hello".into(),
+            has_test_plan: false,
+            routed_role: None,
+            tags: Vec::new(),
+        }]
+    }
+
+    /// Drill into the Mail scope (it sits last in `Scope::all()`, after
+    // Backlog / Open / Test / Queue). trace:STORY-701 | ai:claude
+    fn drill_mail(s: &mut RedesignState) {
+        for _ in 0..4 {
+            s.move_down();
+        }
+        assert_eq!(s.top_scope(), Some(Scope::Mail));
+        assert!(s.drill());
+        assert_eq!(s.scope, Some(Scope::Mail));
+    }
+
+    #[test]
+    fn run_reply_opens_input_addressed_to_sender() {
+        // Enter on the `reply` verb yields OpenReplyInput addressed to the
+        // focused message's sender + threaded onto its id, NOT an immediate
+        // Reply — the body must be captured first.
+        let mut s = RedesignState::new(mail_test_items(), "advisor");
+        drill_mail(&mut s);
+        s.focus_top();
+        assert_eq!(s.top_verb(), Some(Verb::Reply));
+        assert_eq!(
+            s.run_verb(),
+            RunOutcome::OpenReplyInput {
+                to: "codex".to_string(),
+                in_reply_to: "m1".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn reply_input_push_backspace_take() {
+        let mut s = RedesignState::new(mail_test_items(), "advisor");
+        assert!(!s.reply_input_open());
+        s.open_reply_input("codex".to_string(), "m1".to_string());
+        assert!(s.reply_input_open());
+        for c in "hi there".chars() {
+            s.push_reply_char(c);
+        }
+        s.pop_reply_char();
+        assert_eq!(s.reply_input.as_ref().unwrap().buffer, "hi ther");
+        let taken = s.take_reply_input();
+        assert_eq!(
+            taken,
+            Some(("codex".to_string(), "m1".to_string(), "hi ther".to_string()))
+        );
+        assert!(!s.reply_input_open());
+        assert!(s.take_reply_input().is_none());
+    }
+
+    #[test]
+    fn reply_input_empty_body_take_is_none() {
+        let mut s = RedesignState::new(mail_test_items(), "advisor");
+        s.open_reply_input("codex".to_string(), "m1".to_string());
+        // Confirm with nothing typed — the input closes but nothing sends.
+        assert_eq!(s.take_reply_input(), None);
+        assert!(!s.reply_input_open());
+    }
+
+    #[test]
+    fn reply_input_cancel_discards() {
+        let mut s = RedesignState::new(mail_test_items(), "advisor");
+        s.open_reply_input("codex".to_string(), "m1".to_string());
+        s.push_reply_char('x');
+        s.cancel_reply_input();
+        assert!(!s.reply_input_open());
+        assert!(s.take_reply_input().is_none());
+    }
+
+    #[test]
+    fn reply_is_role_agnostic_and_not_keystone_gated() {
+        assert_eq!(Verb::Reply.required_role(), None);
+        assert!(!Verb::Reply.is_keystone_gated());
+        assert!(!Verb::Reply.requires_selection());
+        assert!(!Verb::Reply.is_item_level());
+        assert!(Verb::Reply.is_update());
+        assert!(Verb::Reply.is_functional());
     }
 
     // --- Drive verb (STORY-728) ------------------------------------------

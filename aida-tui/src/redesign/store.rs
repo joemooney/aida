@@ -272,6 +272,14 @@ impl SpecStore {
             }
             return rows;
         }
+        // The Mail scope isn't a spec source at all — it reads the local
+        // mailbox's unread inbox directly (no `self.backend`/git-cache
+        // involvement, and no EPIC focus lens: mail isn't spec-parented, so
+        // narrowing it to the focused epic's descendants would be a category
+        // error). trace:STORY-701 | ai:claude
+        if scope == Scope::Mail {
+            return super::mail::fetch_mail_items();
+        }
         let filter = ListFilter {
             // Backlog/Open both default to the active view (archived + deferred
             // rows hidden), matching the CLI `list` defaults.
