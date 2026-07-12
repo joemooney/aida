@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T06:45:57.393557976Z
-modified_at: 2026-07-12T19:45:32.158112916Z
+modified_at: 2026-07-12T19:45:49.049581512Z
 req_type: Story
 tags:
 - advisor
@@ -66,6 +66,11 @@ comments:
   content: Commit ce0da0514 references this requirement
   created_at: 2026-07-12T19:33:32.847963925Z
   modified_at: 2026-07-12T19:33:32.847963925Z
+- id: 019f57dd-4df9-7a30-a177-2c04932c4722
+  author: joe
+  content: 'Slice 1 (lock model + pure verify_worktree_lock + aida lock CLI) merged in #1387 — reviewed against the plan (fail-safe verifier correct, additive-only, field-preserving lease patch, trace hygiene clean). Auto-completed by the slice-1 trailer, re-opened: the ENFORCEMENT (the actual refuse-behavior) is slice 2, filed as a child TASK. STORY-711 completes when slice 2 lands.'
+  created_at: 2026-07-12T19:45:49.049581512Z
+  modified_at: 2026-07-12T19:45:49.049581512Z
 implementation_info:
   implemented: false
   completed_at: 2026-07-12T19:13:33.157719404Z
