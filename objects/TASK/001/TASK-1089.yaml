@@ -11,12 +11,12 @@ description: |-
   - WHEN the scan evaluates a completed spec whose completion predates the git-canonical storage migration cutoff, THE scan SHALL exclude it (the cutoff derived from the earliest orphan-store commit, or a configurable date).
   - THE scan SHALL flag a spec ONLY when its completion is uncorroborated by git AND its type is code-producing AND it post-dates the migration cutoff.
   - Regression: running the sharpened scan against the current store SHALL report far fewer than the current 353 (target: only genuinely-stranded recent completions).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T07:33:09.453575954Z
-modified_at: 2026-07-12T17:12:21.996076649Z
+modified_at: 2026-07-12T17:21:46.730907834Z
 req_type: Task
 tags:
 - aida:doctor
@@ -41,3 +41,7 @@ comments:
   content: Commit d9bd5c23d references this requirement
   created_at: 2026-07-12T17:12:21.996076649Z
   modified_at: 2026-07-12T17:12:21.996076649Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-12T17:21:46.730907834Z
+  completion_sha: c940a99d76440e888d7fbd7a3851196b0221f310
