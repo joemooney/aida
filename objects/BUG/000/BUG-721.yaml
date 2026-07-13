@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T02:47:16.205125709Z
-modified_at: 2026-07-13T02:47:16.205125709Z
+modified_at: 2026-07-13T05:32:01.835664531Z
 req_type: Bug
 tags:
 - aida:review
 - from-bug-720
 - non-interactive
 - side-effect
+comments:
+- id: 019f59f5-ffab-7831-a87d-bcf7ac85067f
+  author: joe
+  content: Commit 9eb66468a references this requirement
+  created_at: 2026-07-13T05:32:01.835664531Z
+  modified_at: 2026-07-13T05:32:01.835664531Z
