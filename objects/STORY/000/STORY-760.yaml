@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:09:46.013699292Z
-modified_at: 2026-07-13T01:36:00.070685516Z
+modified_at: 2026-07-13T01:36:02.904525156Z
 req_type: Story
 tags:
 - aida:remote
@@ -52,3 +52,9 @@ comments:
   content: 'Store fork reconciled 2026-07-06 (the BUG-700-decoupled residual): gitlab store lineage (node-6 spock registrations, +16 commits) union-merged into the unified store at c4dfdc77f; both forges now fast-forwarded to it — aida remote status: all remotes agree on every shared branch. blocks.yaml resolved as union-minus-collision: the node-1/node-6 double-reservation of TASK-1115..1214 (both next=1115, 0 consumed) resolved by node-1 (imac, active minting node) keeping the range; node-6 (spock) re-reserves a fresh TASK block via the standard auto-claim on its next allocation. Union verified: 53 registry entries, 0 range overlaps; specs ours(2781) + theirs(2760) -> merged(2782), both sides subset-verified, 0 employer-string reintroduction. Spock clone note: on next sync spock should aida pull; its local store fast-forwards to the unified lineage.'
   created_at: 2026-07-07T04:45:35.713417143Z
   modified_at: 2026-07-07T04:45:35.713417143Z
+- id: 019f591d-f358-70f0-8cfa-ae07babd2de3
+  author: joe
+  content: 'Status reconcile (surfaced via aida human 2026-07-12): this shipped straight from DRAFT so auto-bump never moved it. Slices 1+2 ARE merged to main — slice 1 detection (aida remote status + doctor Remote-drift, #1353/TASK-1095/BUG-700) and slice 2 fan-out push ([store.sync] mirror_remotes, #1354/#1355/#1356). Slice 3 (aida remote reconcile — heal a two-way divergence) and slice 4 (init mirror_remotes stub) are NOT yet shipped; slice 3 IS the BUG-714 gap (''fan-out can only PUSH, cannot reconcile''). Moved draft→in-progress to reflect partial ship. The stale ''remote-drift-prevention'' local branch holds the pre-squash originals (work already on main via #1345-1357). NOT completed — reconcile slice remains (track via BUG-714).'
+  created_at: 2026-07-13T01:36:02.904525156Z
+  modified_at: 2026-07-13T01:36:02.904525156Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
