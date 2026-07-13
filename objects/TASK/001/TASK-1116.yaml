@@ -15,14 +15,32 @@ description: |-
   3. queue work --vendor also routes the headless --auto-complete implementer (or its help states clearly that headless routing needs the env/knob and points to it) — no silent no-op.
   4. Relevant commands covered: zen, queue work, burndown; agent new already takes a positional vendor.
   5. --help on each names the resolution order so its discoverable without reading source.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T01:15:33.212905006Z
-modified_at: 2026-07-08T01:15:33.212905006Z
+modified_at: 2026-07-13T06:08:00.441916486Z
 req_type: Task
 tags:
 - aida:zen
 - codex
 - papercut
+history:
+- id: 019f5a16-efb3-7ed1-92fc-108c3df8c470
+  author: aida-auto-bump
+  timestamp: 2026-07-13T06:08:00.435905468Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f5a16-efb9-7a52-883d-239eade8824a
+  timestamp: 2026-07-13T06:08:00.441915418Z
+  agent: aida
+  commit_sha: 3ed0f5bbba4a2095d5b322f6f223c3faa66aae27
+  summary: Completed via merge 3ed0f5bb
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T06:08:00.243316507Z
+  completion_sha: 3ed0f5bbba4a2095d5b322f6f223c3faa66aae27
