@@ -124,6 +124,8 @@ pub mod rollup;
 pub mod scaffolding;
 #[cfg(feature = "native")]
 pub mod storage;
+// trace:TASK-1141 | ai:claude
+pub mod store_locate;
 // trace:STORY-648 | ai:claude
 pub mod team;
 pub mod telemetry;
