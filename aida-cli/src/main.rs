@@ -148566,7 +148566,11 @@ impl RealPhaseDriver {
         // (no resume). `is_fork` is always false for a non-Claude vendor (the
         // pass was forced to cold-boot above), so the fork JSONL is never read.
         // trace:TASK-894 | ai:claude
-        let seeded = crate::intake::seeded_advise_prompt(&self.project_root);
+        // TASK-1045: for a non-Claude vendor the `/aida-advise` slash token is
+        // inert (Codex/Gemini don't read `.claude/skills/`), so inline the
+        // embedded skill body; Claude keeps the slash form and expands it.
+        let is_claude = matches!(vendor, session::HeadlessVendor::Claude);
+        let seeded = crate::intake::seeded_advise_prompt_for_vendor(&self.project_root, is_claude);
         let (program, advisor_args) =
             session::advisor_tier_program_and_args(vendor, is_fork, &seeded, &advisor_uuid);
         let status = std::process::Command::new(&program)
