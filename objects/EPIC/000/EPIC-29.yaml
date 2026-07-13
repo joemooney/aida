@@ -121,7 +121,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:18:18.917955429Z
-modified_at: 2026-06-26T23:51:07.837250590Z
+modified_at: 2026-07-13T07:05:13.679355459Z
 req_type: Epic
 tags:
 - aida:tui
@@ -185,3 +185,15 @@ comments:
   content: 'Reject (advisor 2026-06-26): operator REJECTED the aida-tui repo split 2026-06-06 (contradicts the shipped "TUI is the product" positioning, EPIC-26). TUI work pivoted in-monorepo to EPIC-54; STORY-266 public-API audit salvaged + Completed; STORY-693 delivers in-process aida-core access WITHOUT extraction. Nothing left to decompose under the split framing.'
   created_at: 2026-06-26T23:51:01.984203464Z
   modified_at: 2026-06-26T23:51:01.984203464Z
+decision_request:
+  question: The 'split aida-tui into a companion repo' epic has 4 of 5 children rejected and is contradicted by EPIC-54 (deepening the TUI in-process). Keep it alive?
+  choices:
+  - label: Formally close/reject EPIC-29
+    consequence: the split is off; the TUI is going deeper in-repo
+    resolution: close
+  - label: Keep parked as a post-alpha option
+    consequence: in case the in-process direction reverses
+    resolution: park
+  recommended: 0
+  rationale: The active redesign moves the opposite way; a contradicted, mostly-rejected epic left in-progress is pure clutter in the rollup.
+  asked_at: 2026-07-13T07:05:13.679355459Z
