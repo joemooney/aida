@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:27.417997980Z
-modified_at: 2026-07-08T04:53:27.417997980Z
+modified_at: 2026-07-13T07:03:29.165911898Z
 req_type: Story
 tags:
 - parent:SPIKE-77
@@ -27,3 +27,18 @@ relationships:
 - rel_type: Child
   target_id: 019f4006-20c5-7531-95cb-3183dcd2a29f
   created_at: 2026-07-08T04:53:32.158936543Z
+decision_request:
+  question: Approve the aida-tui per-row attention badges now, or defer with the rest of SPIKE-77?
+  choices:
+  - label: Approve now
+    consequence: events.jsonl-aggregated badges beside liveness glyph, redesign path, quiet-depth preserved
+    resolution: approve
+  - label: Defer until 766 validates
+    consequence: let fleet-watch confirm which events matter before touching the render path
+    resolution: defer
+  - label: Reject
+    consequence: fleet-watch digest covers the same signal
+    resolution: reject
+  recommended: 1
+  rationale: Cleanly specced but net-new TUI surface mid-stabilization; let fleet-watch confirm the event set first.
+  asked_at: 2026-07-13T07:03:29.165911898Z
