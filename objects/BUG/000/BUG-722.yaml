@@ -1,0 +1,30 @@
+id: 019f5a1f-058b-76c3-b7f3-3de625dd837b
+spec_id: BUG-722
+agreed_id: BUG-722
+title: 'aida human reviews-awaiting is branch-derived, not spec-state-aware: false-positives on the aida-store store branch + deferred/archived specs'
+description: |-
+  Operator-reported 2026-07-12: 'aida human' reviews-awaiting surfaces items that do NOT need the human, and the report can't be made accurate by editing spec state. Root cause: the bucket is derived from 'does this spec have an unmerged git branch' (branch_exists_anywhere / branch->spec mapping in the aida human path), with NO gate on (a) branch TYPE or (b) spec VIEW-STATE.
+
+  Confirmed false-positives:
+  - STORY-760 shows as review-awaiting [branch aida-store]. The aida-store branch is the REQUIREMENTS STORE (orphan branch), categorically never a code-review target. Commits referencing a spec that landed on aida-store during a store reconcile must never register as 'a branch awaiting review'.
+  - TASK-963 shows as review-awaiting [branch forge-slice2-change-metadata]. The spec is status=draft AND was just deferred (aida defer). A deferred/archived spec is by definition NOT awaiting review.
+
+  Empirical proof the state edit doesn't help: deferring BOTH STORY-760 and TASK-963 did NOT drop them from 'aida human' — the branch-based detection ignores the deferred flag entirely.
+
+  Acceptance:
+  1. reviews-awaiting NEVER surfaces the aida-store store branch (exclude it categorically; it is not a code branch). Same for any configured store/mirror ref.
+  2. reviews-awaiting excludes specs whose view-state is deferred or archived (mirror how 'aida list' hides them) — a deferred spec is not a review gate.
+  3. A completed spec is already excluded (BUG-582); keep that.
+  4. Design sub-question (decide + encode, don't leave implicit): a DRAFT spec with only a local WIP branch and no PR — should it show at all? Proposal: show it under a distinct 'wip-branches' label, NOT 'reviews-awaiting' (nothing is awaiting a human until there is a PR or a Done claim). Confirm the label with the operator.
+  5. Add a test per exclusion (store branch; deferred spec; archived spec) so the false-positive classes can't regress.
+
+  This is an opacity/precision failure: when the operator asks 'does this need me?', the report must be TRUE from the graph, not require narration to explain away. Sibling of BUG-582 (completed-spec false-positive) and TASK-878 (stale-agent-branch false-positive) — same bucket, remaining classes.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-13T06:16:50.315981195Z
+modified_at: 2026-07-13T06:16:50.315981195Z
+req_type: Bug
+tags:
+- aida:human aida:awaiting reviews-awaiting false-positive opacity severity:major
