@@ -32822,5 +32822,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 3070
+- id: 019f5946-4409-7020-846a-fa2cc5e259f6
+  target_id: 019f5946-4010-75a2-9a9e-3bdc13f378a7
+  author: aida
+  node_id: '1'
+  lamport: 3071
+  timestamp: 2026-07-13T02:20:05.001004537Z
+  kind: !Create
+    title: Consider surfacing locks in `aida ps` (a locked-by column) once slice 1 exists
+    description: ''
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3071
 node_id: '1'

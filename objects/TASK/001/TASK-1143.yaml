@@ -1,0 +1,14 @@
+id: 019f5946-4010-75a2-9a9e-3bdc13f378a7
+spec_id: TASK-1143
+agreed_id: TASK-1143
+title: Consider surfacing locks in `aida ps` (a locked-by column) once slice 1 exists
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-13T02:20:03.984042172Z
+modified_at: 2026-07-13T02:20:03.984042172Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-07-12-story-711-advisor-lock.md
