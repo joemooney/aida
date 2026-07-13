@@ -34,7 +34,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:36.749471982Z
-modified_at: 2026-07-12T06:13:00.771066169Z
+modified_at: 2026-07-13T07:03:27.592709436Z
 req_type: Task
 tags:
 - orchestrator
@@ -49,3 +49,18 @@ comments:
   content: 'Retargeted to tmux-first 2026-07-11: the recorded decision rule (first backend = operator daily driver) resolved when the operator adopted tmux (fresh ~/.tmux.conf, config validated). wezterm + zellij probe facts retained as deferred backends; adapter seam still deferred until a second backend is implemented.'
   created_at: 2026-07-12T06:13:00.771066169Z
   modified_at: 2026-07-12T06:13:00.771066169Z
+decision_request:
+  question: Approve the tmux --panes drain fan-out now, or defer until STORY-766 proves the pane<->spec cross-ref is worth wiring?
+  choices:
+  - label: Approve now
+    consequence: titled tmux windows per implementer, opt-in; net-new orchestrator surface
+    resolution: approve + queue
+  - label: Defer until 766 in use
+    consequence: let fleet-watch validate demand before adding the spawn path
+    resolution: defer
+  - label: Reject
+    consequence: background-spawn + structural tracking already suffice, panes cosmetic
+    resolution: reject
+  recommended: 1
+  rationale: Backend is settled (tmux) so it can wait; sequencing after 766 avoids building the pane-id lease cross-ref before anything consumes it.
+  asked_at: 2026-07-13T07:03:27.592709436Z
