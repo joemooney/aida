@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-06-06T13:39:13.310942401Z
+modified_at: 2026-07-13T07:05:06.857745937Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -92,3 +92,18 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): CLOSE as substantially delivered — the load-bearing primitive (aida doc add/show + docs-tree projection) shipped and is in use. Re-file any still-wanted projection features (auto-tutorial generation, book-chapter composition, diff-driven doc prompts) as fresh standalone stories when they have a champion.'
   created_at: 2026-06-06T13:39:08.680791150Z
   modified_at: 2026-06-06T13:39:08.680791150Z
+decision_request:
+  question: Living-docs shipped the capture half (aida doc add); the ambitious half (auto-tutorial structure + book-chapter composition) is unbuilt. Is the book-as-living-document vision still in scope?
+  choices:
+  - label: Narrow to capture-only
+    consequence: close with aida doc add as delivered, drop auto-tutorial + book stories
+    resolution: narrow
+  - label: Keep the full vision
+    consequence: queue auto-tutorial + book-chapter work
+    resolution: full
+  - label: Keep light narrative surfaces (/aida-digest, /aida-doc), park heavy book-generation behind a trigger
+    consequence: middle path
+    resolution: light + park
+  recommended: 2
+  rationale: Capture + curated digests already deliver the recover-the-WHY value; full auto-book-generation is high-effort low-proven-demand — park rather than build speculatively.
+  asked_at: 2026-07-13T07:05:06.857745937Z
