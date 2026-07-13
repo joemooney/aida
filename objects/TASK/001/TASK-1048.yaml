@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:49:19.637987576Z
-modified_at: 2026-06-30T16:34:25.120789633Z
+modified_at: 2026-07-13T06:23:12.959346806Z
 req_type: Task
 tags:
 - multi-vendor
@@ -20,3 +20,9 @@ relationships:
 - rel_type: Child
   target_id: 019f16dc-1929-7573-a289-6536dae296fc
   created_at: 2026-06-30T04:49:25.475726472Z
+comments:
+- id: 019f5a24-dc3f-79d3-b575-b69e8b22d45e
+  author: joe
+  content: Commit a59ddfb0c references this requirement
+  created_at: 2026-07-13T06:23:12.959346806Z
+  modified_at: 2026-07-13T06:23:12.959346806Z
