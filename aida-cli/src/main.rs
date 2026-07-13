@@ -613,6 +613,22 @@ fn non_interactive_confirm_from(agent_mode: bool, stdin_is_tty: bool) -> bool {
     agent_mode || !stdin_is_tty
 }
 
+/// BUG-721: gate for the interactive `aida review <spec>` verb's reviewer
+/// launch. The verb spawns a `claude -p` reviewer subprocess against the live
+/// repo and then drives a follow-up menu — it needs a human at the terminal to
+/// watch that reviewer and answer. Returns true (may launch) only when BOTH
+/// stdin and stdout are TTYs. When it returns false the verb must NOT spawn a
+/// reviewer: a non-interactive `aida review` that silently launched a blind
+/// headless reviewer the caller could neither see nor interrupt is exactly the
+/// bug. This gate covers ONLY the interactive verb — the orchestrator's drain
+/// review phase never reaches this code (it shells out to `aida queue work
+/// PR-N` with `AIDA_AUTO_COMPLETE=1` and launches its headless reviewer there
+/// on purpose, `run_reviewer`), so the autonomous drain is untouched.
+// trace:BUG-721
+fn review_may_launch_reviewer(stdin_is_tty: bool, stdout_is_tty: bool) -> bool {
+    stdin_is_tty && stdout_is_tty
+}
+
 /// TASK-972 (AXI #6): split a formatted anyhow error into the one-line summary
 /// the agent error block shows plus an optional suggested next command. The
 /// summary is the first line with any leading human `Error:` prefix stripped
@@ -1383,6 +1399,33 @@ mod task970_agent_output_tests {
         assert!(non_interactive_confirm_from(false, false));
         // Genuine interactive shell: not agent mode AND stdin is a TTY.
         assert!(!non_interactive_confirm_from(false, true));
+    }
+
+    // BUG-721: the interactive `aida review <spec>` verb may launch its `claude
+    // -p` reviewer subprocess ONLY when a human is at the terminal (both stdin
+    // and stdout are TTYs). A non-interactive invocation (piped/redirected/CI/
+    // agent) must NOT silently spawn a blind headless reviewer — the gate below
+    // returns false so the verb refuses instead.
+    #[test]
+    fn review_reviewer_launch_requires_a_human_terminal() {
+        // Human at a real terminal: both TTYs => may launch the reviewer.
+        assert!(review_may_launch_reviewer(true, true));
+
+        // Non-interactive stdin (piped/redirected/CI/agent) => do NOT launch.
+        // This is the BUG-721 fix: `aida review` no longer spawns a headless
+        // reviewer the caller can neither see nor interrupt.
+        assert!(!review_may_launch_reviewer(false, true));
+        // stdout redirected (captured) with a TTY stdin is likewise not the
+        // human-watching-a-reviewer context.
+        assert!(!review_may_launch_reviewer(true, false));
+        // Fully non-interactive (the CI / agent case) => do NOT launch.
+        assert!(!review_may_launch_reviewer(false, false));
+
+        // NOTE: this gate is scoped to the INTERACTIVE verb `handle_review_spec`.
+        // The orchestrator's drain review phase (`run_reviewer`) does not call
+        // this helper — it shells out to `aida queue work PR-N` with
+        // `AIDA_AUTO_COMPLETE=1` and launches its headless reviewer there on
+        // purpose — so gating here leaves the autonomous drain untouched.
     }
 
     // BUG-671: agent mode shows ONLY the first line of an error as the TOON
@@ -128194,12 +128237,32 @@ fn handle_review_spec(
     }
 
     // ---- Run the reviewer over the diff (AC-2 / AC-4: reuse /aida-review) ----
-    let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let interactive = review_may_launch_reviewer(
+        std::io::stdin().is_terminal(),
+        std::io::stdout().is_terminal(),
+    );
     let (pr_number, surface_branch) = match &surface {
         ReviewSurface::OpenChange { branch, number, .. } => (Some(*number), branch.clone()),
         ReviewSurface::BranchNoChange { branch, .. } => (None, branch.clone()),
         _ => unreachable!("shipped/local surfaces returned above"),
     };
+
+    // BUG-721: `aida review <spec>` is the human-driven review verb. When stdin
+    // isn't a terminal (piped/redirected/CI/agent), do NOT silently launch a
+    // blind headless reviewer subprocess the caller can neither see nor
+    // interrupt — the surface report above is already printed, so a
+    // non-interactive caller gets the read-only surface only. Refuse loudly and
+    // exit non-zero. `--no-agent` (the explicit read-only opt-out) still degrades
+    // honestly below. This gate is scoped to THIS verb; the orchestrator's drain
+    // review phase (`run_reviewer`) never reaches here — it launches its headless
+    // reviewer via `aida queue work PR-N` on purpose — so drains are untouched.
+    if !no_agent && !interactive {
+        anyhow::bail!(
+            "aida review needs an interactive terminal to run the reviewer.\n  \
+             In a drain the orchestrator runs the reviewer for you; to see the \
+             read-only surface without launching one, add --no-agent."
+        );
+    }
 
     // BUG-511: hold a session lease scoped to the spec while the review
     // runs — same substrate as `aida queue work`, so the footer / `aida
@@ -128310,21 +128373,18 @@ fn handle_review_spec(
         spec_id.cyan()
     );
 
-    let status: std::process::ExitStatus = if interactive {
-        // Interactive reviewer: let the human watch; native permission posture.
-        let name = format!("review-{}", spec_id.to_ascii_lowercase());
+    // BUG-721: a non-interactive `aida review` was refused above, so a human is
+    // at the terminal here — spawn the INTERACTIVE reviewer only, and let them
+    // watch it under the native permission posture. This verb never launches a
+    // blind headless reviewer; the orchestrator owns that (see `run_reviewer`).
+    debug_assert!(
+        interactive,
+        "BUG-721: non-interactive review must be refused before the reviewer launch"
+    );
+    let name = format!("review-{}", spec_id.to_ascii_lowercase());
+    let status: std::process::ExitStatus =
         session::spawn_claude_session(None, Some(&name), &prompt, &session_id, false)
-            .context("failed to launch the reviewer")?
-    } else {
-        // Non-interactive: headless reviewer, AskUserQuestion structurally denied.
-        let log_path = project_root
-            .join(".aida")
-            .join("headless-logs")
-            .join(format!("review-{}-{}.jsonl", spec_id, session_id));
-        let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-        session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee_opts, false)
-            .context("failed to launch the headless reviewer")?
-    };
+            .context("failed to launch the reviewer")?;
     if !status.success() {
         eprintln!(
             "  {} the reviewer exited non-zero ({})",
