@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:03:35.576452990Z
-modified_at: 2026-07-01T04:04:06.034920910Z
+modified_at: 2026-07-13T07:00:56.823613962Z
 req_type: Task
 tags:
 - aida:tui
@@ -19,3 +19,6 @@ relationships:
 - rel_type: Child
   target_id: 019f02b3-f7b5-7e82-be93-3b025a613c9b
   created_at: 2026-07-01T04:03:43.950542281Z
+deferred: true
+deferred_at: 2026-07-13T07:00:56.823613962Z
+deferred_until: MVP in use + real demand surfaces
