@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:18.737322494Z
-modified_at: 2026-06-27T16:40:28.072813806Z
+modified_at: 2026-07-13T07:05:00.049522391Z
 req_type: Epic
 tags:
 - canonical-hub
@@ -26,3 +26,18 @@ comments:
   content: 'HOLD (operator, 2026-06-16): cutover stays parked — operator still cannot access gitlab.joemooney.com from work. Blocker is operator''s corporate/work network access to the gitlab host, not anything in the codebase. The backlog-cleared half of the trigger is met and gitlab works locally (BUG-559 fix verified against it), so the ONLY remaining gate is operator work-access + explicit go. Do not repoint origin / flip [forge] provider until then.'
   created_at: 2026-06-16T22:24:15.137540327Z
   modified_at: 2026-06-16T22:24:15.137540327Z
+decision_request:
+  question: Making gitlab.joemooney.com the canonical hub (github -> mirror) requires landing STORY-621 forge wiring (~113 gh call sites, forge plumbed-not-wired). Still the direction?
+  choices:
+  - label: Commit to the cutover now
+    consequence: fund glab wiring + .gitlab-ci.yml then flip; big drain-touching lift mid-stabilization
+    resolution: cutover
+  - label: Keep GitLab as a live dual-push mirror, defer the flip until a concrete corporate GitLab first-user
+    consequence: zero dev-loop disruption, reversible
+    resolution: mirror + defer
+  - label: Drop the canonical-hub goal
+    consequence: github stays canonical, GitLab a mirror
+    resolution: drop
+  recommended: 1
+  rationale: Phase 0 mirror already delivers GitLab presence; the forge-wiring lift only pays off when a real GitLab first-user exists, and cutting over the gh-based drain mid-stabilization is high-risk.
+  asked_at: 2026-07-13T07:05:00.049522391Z
