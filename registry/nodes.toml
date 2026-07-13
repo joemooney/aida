@@ -61,3 +61,13 @@ clone_path = "/home/joemooney/ai/aida"
 name = "wsl_1-joemooney-7"
 user = "joemooney"
 registered = "2026-07-07T20:15:09.512961482Z"
+
+[[nodes]]
+id = "8"
+user_id = 1
+hostname = "spock"
+email = "redacted@node.invalid"
+clone_path = "/home/joe.mooney/ai/aida_github"
+name = "work-github-8"
+user = "joe"
+registered = "2026-07-13T20:36:49.237640885Z"
