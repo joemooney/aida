@@ -66961,15 +66961,23 @@ mod story_696_ps_tests {
 
         // TASK-1090: no-op probe stub — this fixture asserts scope/orphan
         // resolution, not dispatch-health, and must stay filesystem-free.
-        let (rows, orphans) = build_running_work(&specs, &leases, &live, now, |_| {
-            dispatch_health_ps::WorktreeGitProbe::default()
-        });
+        // TASK-1143: no-op lock stub — no worktree is locked here.
+        let (rows, orphans) = build_running_work(
+            &specs,
+            &leases,
+            &live,
+            now,
+            |_| dispatch_health_ps::WorktreeGitProbe::default(),
+            |_| None,
+        );
 
         // Row: TASK-1's scope resolved to its display id; live pid attached.
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spec.as_deref(), Some("TASK-1"));
         assert_eq!(rows[0].state, LeaseState::Live);
         assert_eq!(rows[0].pid, Some(4242));
+        // TASK-1143: no lock probe returned a value → the row is unlocked.
+        assert_eq!(rows[0].locked_by, None);
 
         // Orphans: STORY-2 is In-Progress with no lease → flag-only orphan.
         // TASK-1 is live (not orphaned). EPIC-3 is an excluded rollup type.
@@ -66980,6 +66988,105 @@ mod story_696_ps_tests {
             !orphans[0].likely_fanout,
             "no live harness lease → not a fan-out"
         );
+    }
+
+    /// TASK-1143: the pure locked-by cell helper — a present lock owner renders
+    /// as its own value; an absent (or defensively-empty) lock renders blank so
+    /// the column stays quiet on the unlocked common case.
+    // trace:TASK-1143 | ai:claude
+    #[test]
+    fn ps_locked_by_cell_shows_owner_or_blank() {
+        assert_eq!(ps_locked_by_cell(Some("advisor-a")), "advisor-a");
+        assert_eq!(ps_locked_by_cell(None), "");
+        // Defensive: an empty `authorized_by` is treated as unlocked, matching
+        // `verify_worktree_lock`.
+        assert_eq!(ps_locked_by_cell(Some("")), "");
+    }
+
+    /// TASK-1143: end-to-end over the pure `build_running_work` core — a locked
+    /// worktree's row carries the lock owner; an unlocked worktree's row is
+    /// blank. The lock seam is injected (a stub keyed on the worktree path), so
+    /// this proves the per-worktree resolution without a real lease dir.
+    // trace:TASK-1143 | ai:claude
+    #[test]
+    fn build_running_work_surfaces_the_worktree_lock_owner() {
+        let now = chrono::Utc::now();
+        let locked_dir = tempfile::tempdir().unwrap();
+        let unlocked_dir = tempfile::tempdir().unwrap();
+
+        let specs = vec![
+            RunningWorkSpec {
+                disp: "TASK-1".into(),
+                agreed_id: Some("TASK-1".into()),
+                spec_id: Some("TASK-1-001".into()),
+                title: "locked".into(),
+                in_progress: true,
+                orphan_excluded_type: false,
+            },
+            RunningWorkSpec {
+                disp: "TASK-2".into(),
+                agreed_id: Some("TASK-2".into()),
+                spec_id: Some("TASK-2-001".into()),
+                title: "unlocked".into(),
+                in_progress: true,
+                orphan_excluded_type: false,
+            },
+        ];
+
+        // Two live leases: TASK-1 in the locked worktree, TASK-2 in the
+        // unlocked one. Both backed by a live claude so neither is stale.
+        let leases = vec![
+            ps_lease("sess-locked", "TASK-1", locked_dir.path().to_path_buf()),
+            ps_lease("sess-unlocked", "TASK-2", unlocked_dir.path().to_path_buf()),
+        ];
+        let live = vec![
+            process_probe::LiveSession {
+                pid: 4242,
+                cwd: locked_dir.path().to_path_buf(),
+                jsonl: None,
+                stale_cwd: false,
+            },
+            process_probe::LiveSession {
+                pid: 4343,
+                cwd: unlocked_dir.path().to_path_buf(),
+                jsonl: None,
+                stale_cwd: false,
+            },
+        ];
+
+        // Lock seam: only the locked worktree resolves to an advisor.
+        let locked_path = locked_dir.path().to_path_buf();
+        let (rows, _orphans) = build_running_work(
+            &specs,
+            &leases,
+            &live,
+            now,
+            |_| dispatch_health_ps::WorktreeGitProbe::default(),
+            |wt| {
+                if wt == locked_path {
+                    Some("advisor-a".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+
+        let locked_row = rows
+            .iter()
+            .find(|r| r.spec.as_deref() == Some("TASK-1"))
+            .expect("locked row present");
+        let unlocked_row = rows
+            .iter()
+            .find(|r| r.spec.as_deref() == Some("TASK-2"))
+            .expect("unlocked row present");
+
+        assert_eq!(locked_row.locked_by.as_deref(), Some("advisor-a"));
+        assert_eq!(
+            ps_locked_by_cell(locked_row.locked_by.as_deref()),
+            "advisor-a"
+        );
+        assert_eq!(unlocked_row.locked_by, None);
+        assert_eq!(ps_locked_by_cell(unlocked_row.locked_by.as_deref()), "");
     }
 
     /// The `--json` row shape: every session row carries the documented keys,
@@ -67001,6 +67108,8 @@ mod story_696_ps_tests {
             "elapsed_secs": 90u64,
             "liveness": LeaseState::Live.label(),
             "live": true,
+            // TASK-1143: the worktree lock owner — null when unlocked.
+            "locked_by": Option::<String>::None,
         });
         for key in [
             "session_id",
@@ -67014,6 +67123,7 @@ mod story_696_ps_tests {
             "elapsed_secs",
             "liveness",
             "live",
+            "locked_by",
         ] {
             assert!(row.get(key).is_some(), "session row missing key `{key}`");
         }
@@ -102163,6 +102273,14 @@ struct PsRow {
     /// state to classify.
     // trace:TASK-1090 | ai:claude
     dispatch: Option<PsDispatch>,
+    /// TASK-1143: the advisor holding the STORY-711 worktree lock on this row's
+    /// worktree, if any — the `authorized_by` value on the covering session
+    /// lease, read via `worktree_lock::read_authorized_by` (the same source the
+    /// `aida lock` CLI writes and `locking_gate` reads). `None` when the
+    /// worktree carries no lock, which is the common case since `[locking]` is
+    /// opt-in — so the locked-by column stays blank until a lock exists.
+    // trace:TASK-1143 | ai:claude
+    locked_by: Option<String>,
 }
 
 /// The TASK-1090 dispatch-health payload for one [`PsRow`].
@@ -102240,6 +102358,21 @@ fn live_fanout_harness_lease(
 // trace:TASK-1064 | ai:claude
 fn ps_orphan_likely_fanout(stale_lease: bool, fanout_active: bool) -> bool {
     !stale_lease && fanout_active
+}
+
+/// TASK-1143: the `locked-by` cell for one `aida ps` row — the advisor holding
+/// the STORY-711 worktree lock, or an empty string when the worktree carries no
+/// lock. Blank (not `-`) for the unlocked common case so the column stays quiet
+/// until a lock actually exists — `[locking]` is opt-in, so most rows have no
+/// lock. An empty `authorized_by` (defensive: should never be written) is
+/// treated the same as absent, mirroring `verify_worktree_lock`. Pure so the
+/// locked/blank split is unit-testable without a lease dir.
+// trace:TASK-1143 | ai:claude
+fn ps_locked_by_cell(locked_by: Option<&str>) -> String {
+    locked_by
+        .filter(|s| !s.is_empty())
+        .unwrap_or("")
+        .to_string()
 }
 
 // Rollup / stateless requirement types never carry a session of their own, so
@@ -102785,12 +102918,18 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     let specs = running_work_spec_index(project_root);
 
     // trace:TASK-1090 | ai:claude — the real (git-probing) dispatch seam.
+    // trace:TASK-1143 | ai:claude — the real (lease-reading) lock-owner seam:
+    // `worktree_lock::read_authorized_by` reads the `authorized_by` value off the
+    // session lease covering each worktree — the same STORY-711 slice-1 source
+    // `aida lock` writes and the commit gate reads. Injected (not called inline)
+    // so `build_running_work` stays filesystem-free and unit-testable.
     build_running_work(
         &specs,
         &leases,
         &live,
         now,
         dispatch_health_ps::probe_worktree,
+        |wt| worktree_lock::read_authorized_by(project_root, wt),
     )
 }
 
@@ -102807,13 +102946,20 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
 /// (rather than called directly) so this function stays exercisable on pure
 /// fixtures in tests (a no-op stub) while the real caller
 /// ([`gather_running_work`]) wires in [`dispatch_health_ps::probe_worktree`].
-// trace:TASK-1072 trace:STORY-696 trace:TASK-1090 | ai:claude
+///
+/// TASK-1143: `lock_probe` is a second injected seam — given a worktree path it
+/// returns the advisor holding the STORY-711 worktree lock (the lease's
+/// `authorized_by`), or `None`. Injected the same way as `dispatch_probe` so the
+/// lock-owner resolution stays exercisable on pure fixtures; the real caller
+/// wires in `worktree_lock::read_authorized_by`.
+// trace:TASK-1072 trace:STORY-696 trace:TASK-1090 trace:TASK-1143 | ai:claude
 fn build_running_work(
     specs: &[RunningWorkSpec],
     leases: &[SessionLease],
     live: &[process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
     dispatch_probe: impl Fn(&std::path::Path) -> dispatch_health_ps::WorktreeGitProbe,
+    lock_probe: impl Fn(&std::path::Path) -> Option<String>,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -102868,6 +103014,11 @@ fn build_running_work(
                     ahead_of_main: probe.ahead_of_main,
                 })
             };
+            // TASK-1143: the worktree lock owner (if any) for this row, read
+            // from the same lease source the lock CLI writes. A worktree-less
+            // advisory lease (review/claim) has an empty path that matches no
+            // lease → `None`.
+            let locked_by = lock_probe(&l.worktree_path).filter(|s| !s.is_empty());
             PsRow {
                 lease: l.clone(),
                 state,
@@ -102875,6 +103026,7 @@ fn build_running_work(
                 elapsed_secs,
                 spec,
                 dispatch,
+                locked_by,
             }
         })
         .collect();
@@ -102952,6 +103104,10 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "dispatch_hint": row.dispatch.as_ref().and_then(|d| d.hint.clone()),
                     "worktree_dirty": row.dispatch.as_ref().map(|d| d.dirty),
                     "branch_ahead_of_main": row.dispatch.as_ref().map(|d| d.ahead_of_main),
+                    // TASK-1143: the advisor holding the STORY-711 worktree lock
+                    // on this row's worktree — null when unlocked (the common
+                    // case; `[locking]` is opt-in).
+                    "locked_by": row.locked_by,
                 })
             })
             .collect();
@@ -103021,6 +103177,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .unwrap_or_else(|| "-".to_string()),
                     humanize_duration_secs(r.elapsed_secs),
                     r.state.label().to_string(),
+                    // TASK-1143: the worktree lock owner, blank when unlocked.
+                    ps_locked_by_cell(r.locked_by.as_deref()),
                     // TASK-1090: dispatch-health state + the exact next
                     // command, blank for Moving / worktree-less rows.
                     r.dispatch
@@ -103045,6 +103203,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "pid",
                     "elapsed",
                     "live",
+                    "locked_by",
                     "dispatch_state",
                     "dispatch_hint"
                 ],
@@ -103125,8 +103284,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     } else {
         let all_ids: Vec<&str> = rows.iter().map(|r| r.lease.id.as_str()).collect();
         let header = format!(
-            "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {}",
-            "session", "spec", "role", "pid", "started", "elapsed", "live"
+            "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {:<12} {}",
+            "session", "spec", "role", "pid", "started", "elapsed", "locked-by", "live"
         );
         println!("{}", header.dimmed());
         for row in &shown {
@@ -103145,14 +103304,19 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 LeaseState::Dormant => live_label.cyan(),
                 LeaseState::Stale => live_label.yellow(),
             };
+            // TASK-1143: the worktree lock owner, blank when unlocked. Plain
+            // text (paddable), so it slots into the fixed-width table before the
+            // colored `live` column without breaking alignment.
+            let locked_col = ps_locked_by_cell(row.locked_by.as_deref());
             println!(
-                "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {}",
+                "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {:<12} {}",
                 (&l.id[..prefix_len]).yellow(),
                 truncate(&spec_col, 14),
                 truncate(l.role.as_deref().unwrap_or("-"), 10),
                 pid_col,
                 started,
                 humanize_duration_secs(row.elapsed_secs),
+                truncate(&locked_col, 12),
                 live_col,
             );
             // A second dimmed line carries the worktree so the wide path
