@@ -14,12 +14,12 @@ description: |-
   WHY IT MATTERS: keeping two hubs in sync is core to the multi-vendor / multi-machine thesis (agents on different networks, some hubs blocked by corporate filters per EPIC-44). Silent divergence corrupts the shared substrate. This is reliability infrastructure for the store.
 
   ACCEPTANCE (per slice, verified independently): (1) aida doctor / aida remote status reports ahead/behind per remote and exits nonzero / flags on divergence; (2) a store push with mirror_remotes set pushes to all remotes, warning (not failing) on a non-ff mirror leg; (3) aida remote reconcile heals a two-way divergence to a single fast-forwardable state; (4) init scaffolds the config stub and docs describe the posture. Non-integrity: never force-push in any of these paths.
-status: Draft
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:09:46.013699292Z
-modified_at: 2026-07-07T04:45:35.713417143Z
+modified_at: 2026-07-13T01:36:00.070685516Z
 req_type: Story
 tags:
 - aida:remote
