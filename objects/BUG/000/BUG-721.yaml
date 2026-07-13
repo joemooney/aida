@@ -1,0 +1,17 @@
+id: 019f595f-27ed-74a1-83f7-9954b1467c8a
+spec_id: BUG-721
+agreed_id: BUG-721
+title: aida review launches the headless reviewer subprocess even on non-interactive stdin (no TTY gate)
+description: 'Flagged during BUG-720 work (2026-07-12): ''aida review <SPEC>'' proceeds past the surface report and launches an actual headless reviewer subprocess (e.g. codex) against the live repo even when stdin is non-interactive — unlike the ''Open a PR?'' prompt, which does gate on interactivity. An agent or script running ''aida review'' (or a non-TTY caller) thus spawns a real reviewer with side effects it didn''t intend (the BUG-720 repro ran a read-only git diff --stat before interruption; a full reviewer could do more). Fix: gate the reviewer launch behind TTY/interactivity (or an explicit --agent/--yes flag) the same way the PR-open prompt is gated, so non-interactive callers get the read-only surface report only. Relates to feedback: don''t let interactive commands run side-effects on no-TTY.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-13T02:47:16.205125709Z
+modified_at: 2026-07-13T02:47:16.205125709Z
+req_type: Bug
+tags:
+- aida:review
+- from-bug-720
+- non-interactive
+- side-effect
