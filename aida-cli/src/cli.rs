@@ -72,6 +72,15 @@ pub enum InternalCommand {
     /// (`AIDA_FIELD_STUDY=1`); never fails the already-completed commit.
     // trace:TASK-917
     RecordNoVerifyBypass,
+
+    /// Enforce the advisor-lock gate at the commit boundary. Called by the
+    /// scaffolded git pre-commit hook so the gate binds any vendor's commit,
+    /// not just Claude. Exits non-zero (aborting the commit) only under
+    /// `[locking] posture = "enforce"` when this worktree is locked by a
+    /// different advisor than the committing session's token. Silent under
+    /// the default `off` posture.
+    // trace:TASK-1140 | ai:claude
+    LockingGate,
 }
 
 #[derive(Subcommand, Debug)]
@@ -8742,6 +8751,16 @@ pub enum Command {
         /// heartbeat. Omit for FYI-only briefs that shouldn't interrupt.
         #[clap(long)]
         notify: bool,
+
+        /// The advisor id authorizing this brief's target worktree. Recorded
+        /// on the brief and, if the receiving agent is launched with `aida
+        /// agent new ... --spec <SPEC>` after this brief exists, carried into
+        /// that session's role-context snapshot — the token the automatic
+        /// advisor-lock gate reads at commit time under `[locking] posture =
+        /// "warn"`/`"enforce"`.
+        // trace:TASK-1140 | ai:claude
+        #[clap(long = "authorized-by")]
+        authorized_by: Option<String>,
 
         #[clap(subcommand)]
         cmd: Option<BriefCommand>,

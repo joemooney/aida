@@ -55,6 +55,8 @@ mod focus;
 mod forge;
 mod global_queue;
 mod last_drain;
+// trace:TASK-1140 | ai:claude — STORY-711 slice 2 automatic advisor-lock gate.
+mod locking_gate;
 // trace:TASK-974 | ai:claude — AXI #9 lifecycle-aware next-step help block.
 mod help_next;
 mod interview;
@@ -4295,6 +4297,7 @@ fn run() -> Result<()> {
             depends_on,
             as_deep_link,
             notify,
+            authorized_by,
             cmd,
         } => {
             let store = storage.load()?;
@@ -4307,6 +4310,7 @@ fn run() -> Result<()> {
                 depends_on.as_deref(),
                 *as_deep_link,
                 *notify,
+                authorized_by.as_deref(),
                 cmd,
                 &store,
                 &project_root,
@@ -15481,6 +15485,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             depends_on,
             as_deep_link,
             notify,
+            authorized_by,
             cmd,
         } => {
             let store = backend.load()?;
@@ -15494,6 +15499,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 depends_on.as_deref(),
                 *as_deep_link,
                 *notify,
+                authorized_by.as_deref(),
                 cmd,
                 &store,
                 project_root,
@@ -20734,6 +20740,7 @@ fn handle_brief_command(
     depends_on: Option<&str>,
     as_deep_link: bool,
     notify: bool,
+    authorized_by: Option<&str>,
     cmd: &Option<BriefCommand>,
     store: &RequirementsStore,
     project_root: &std::path::Path,
@@ -20767,6 +20774,7 @@ fn handle_brief_command(
                 &effective_spec,
                 note.as_deref(),
                 depends_on,
+                authorized_by,
             )?;
             println!("{}", path.display());
             // TASK-502: --notify marks the brief urgent — write a `.pending`
@@ -20861,6 +20869,7 @@ fn create_agent_brief(
     spec: &str,
     note: Option<&str>,
     depends_on: Option<&str>,
+    authorized_by: Option<&str>,
 ) -> Result<std::path::PathBuf> {
     let agent = validate_brief_agent(agent)?;
     let req = store
@@ -20883,6 +20892,7 @@ fn create_agent_brief(
         &generated_at,
         note,
         depends_on.as_deref(),
+        authorized_by,
     );
     let mut file = std::fs::OpenOptions::new()
         .write(true)
@@ -20961,7 +20971,15 @@ fn file_zen_review_brief(
          (`aida show {}`), then ack this brief.",
         change.id, change.url, spec_id, spec_id
     );
-    let path = create_agent_brief(project_root, &store, &agent, &spec_id, Some(&note), None)?;
+    let path = create_agent_brief(
+        project_root,
+        &store,
+        &agent,
+        &spec_id,
+        Some(&note),
+        None,
+        None,
+    )?;
     // Urgent-path sentinel so the advisor's `aida status` surfaces it
     // without waiting on a mailbox poll (the `--notify` mechanic).
     add_pending_brief(project_root, &agent, &path)?;
@@ -20991,6 +21009,7 @@ fn render_agent_brief(
     generated_at: &str,
     note: Option<&str>,
     depends_on: Option<&str>,
+    authorized_by: Option<&str>,
 ) -> String {
     let generated_by = brief_generated_by();
     let mut out = String::new();
@@ -21005,6 +21024,12 @@ fn render_agent_brief(
     }
     if let Some(depends_on) = depends_on {
         out.push_str(&format!("depends_on: {}\n", yaml_scalar(depends_on)));
+    }
+    // STORY-711 slice 2: the authorizing advisor's id, carried into the
+    // receiving agent's role-context snapshot at launch so the automatic
+    // advisor-lock gate can read it at commit time. trace:TASK-1140 | ai:claude
+    if let Some(authorized_by) = authorized_by.filter(|s| !s.trim().is_empty()) {
+        out.push_str(&format!("authorized_by: {}\n", yaml_scalar(authorized_by)));
     }
     out.push_str("status: pending\n");
     out.push_str("---\n\n");
@@ -21172,6 +21197,10 @@ pub(crate) struct BriefListEntry {
     generated_at: String,
     depends_on: Option<String>,
     acked: bool,
+    /// STORY-711 slice 2: the authorizing advisor's id, when the brief was
+    /// created with `--authorized-by`.
+    // trace:TASK-1140 | ai:claude
+    authorized_by: Option<String>,
 }
 
 fn list_agent_briefs(
@@ -21189,14 +21218,27 @@ fn list_agent_briefs(
     }
     for entry in entries {
         let status = if entry.acked { "acked" } else { "pending" };
-        println!(
-            "{}  {}  {}  {}  {}",
-            entry.generated_at,
-            entry.agent,
-            entry.spec_id,
-            status,
-            entry.path.display()
-        );
+        // STORY-711 slice 2: surface the authorizing advisor when present.
+        // trace:TASK-1140 | ai:claude
+        match entry.authorized_by.as_deref() {
+            Some(by) => println!(
+                "{}  {}  {}  {}  {}  authorized_by={}",
+                entry.generated_at,
+                entry.agent,
+                entry.spec_id,
+                status,
+                entry.path.display(),
+                by
+            ),
+            None => println!(
+                "{}  {}  {}  {}  {}",
+                entry.generated_at,
+                entry.agent,
+                entry.spec_id,
+                status,
+                entry.path.display()
+            ),
+        }
     }
     Ok(())
 }
@@ -21274,6 +21316,8 @@ fn collect_agent_briefs_inner(
                 .unwrap_or_else(|| spec_id_from_brief_filename(&name).unwrap_or_default());
             let generated_at = frontmatter_value(&content, "generated_at").unwrap_or_default();
             let depends_on = frontmatter_value(&content, "depends_on");
+            // trace:TASK-1140 | ai:claude
+            let authorized_by = frontmatter_value(&content, "authorized_by");
             entries.push(BriefListEntry {
                 path,
                 spec_id,
@@ -21281,6 +21325,7 @@ fn collect_agent_briefs_inner(
                 generated_at,
                 depends_on,
                 acked,
+                authorized_by,
             });
         }
     }
@@ -22324,6 +22369,7 @@ mod task_492_brief_tests {
                 depends_on,
                 as_deep_link,
                 notify,
+                authorized_by,
                 cmd,
             } => {
                 assert_eq!(agent.as_deref(), Some("codex"));
@@ -22332,6 +22378,7 @@ mod task_492_brief_tests {
                 assert_eq!(depends_on, None);
                 assert!(!as_deep_link);
                 assert!(!notify);
+                assert_eq!(authorized_by, None);
                 assert!(cmd.is_none());
             }
             other => panic!("unexpected command: {other:?}"),
@@ -22349,6 +22396,36 @@ mod task_492_brief_tests {
         match cli.command {
             Command::Brief { depends_on, .. } => {
                 assert_eq!(depends_on.as_deref(), Some("TASK-492"));
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    /// STORY-711 slice 2: `--authorized-by` parses onto the `Brief` command.
+    // trace:TASK-1140 | ai:claude
+    #[test]
+    fn brief_cli_parses_authorized_by_flag() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "brief",
+            "codex",
+            "TASK-492",
+            "--authorized-by",
+            "advisor-a",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Brief { authorized_by, .. } => {
+                assert_eq!(authorized_by.as_deref(), Some("advisor-a"));
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        // Omitted → None (the overwhelmingly common case).
+        let cli = Cli::try_parse_from(["aida", "brief", "codex", "TASK-492"]).unwrap();
+        match cli.command {
+            Command::Brief { authorized_by, .. } => {
+                assert_eq!(authorized_by, None);
             }
             other => panic!("unexpected command: {other:?}"),
         }
@@ -22401,6 +22478,7 @@ mod task_492_brief_tests {
             "TASK-492",
             Some("why this, why now"),
             None,
+            None,
         )
         .unwrap();
 
@@ -22442,6 +22520,62 @@ mod task_492_brief_tests {
         assert!(body.contains("(TASK-492)"));
     }
 
+    /// STORY-711 slice 2: `--authorized-by` round-trips end to end —
+    /// `create_agent_brief` writes the frontmatter field, `collect_agent_briefs_inner`
+    /// (which backs both `aida brief list` and `launch_authorized_by`) reads it
+    /// back, and a brief with NO `--authorized-by` carries no field at all
+    /// (the overwhelmingly common case must stay silent, not `authorized_by: ""`).
+    // trace:TASK-1140 | ai:claude
+    #[test]
+    fn brief_authorized_by_round_trips_through_frontmatter_and_listing() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path = create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-492",
+            None,
+            None,
+            Some("advisor-a"),
+        )
+        .unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("authorized_by: advisor-a"), "got: {body}");
+
+        let entries = collect_agent_briefs(temp.path(), Some("codex"), false).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].authorized_by.as_deref(), Some("advisor-a"));
+
+        // launch_authorized_by (the fn render_agent_launch_context calls) finds
+        // it by agent + spec.
+        assert_eq!(
+            launch_authorized_by(temp.path(), "codex", "TASK-492").as_deref(),
+            Some("advisor-a")
+        );
+        // A different spec/agent has no authorization.
+        assert_eq!(launch_authorized_by(temp.path(), "codex", "TASK-999"), None);
+        assert_eq!(
+            launch_authorized_by(temp.path(), "antigravity", "TASK-492"),
+            None
+        );
+    }
+
+    /// A brief created with NO `--authorized-by` carries no `authorized_by:`
+    /// frontmatter line at all — the default path stays byte-identical to
+    /// pre-slice-2 briefs.
+    // trace:TASK-1140 | ai:claude
+    #[test]
+    fn brief_without_authorized_by_carries_no_frontmatter_field() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = store_with_related();
+        let path =
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None, None).unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(!body.contains("authorized_by"), "got: {body}");
+        assert_eq!(launch_authorized_by(temp.path(), "codex", "TASK-492"), None);
+    }
+
     // BUG-583: the Setup block must reference the TARGET PROJECT's location
     // (the invocation's project root, here the throwaway temp dir), never the
     // AIDA binary's compiled-in source-repo path. A cold vendor agent following
@@ -22453,7 +22587,7 @@ mod task_492_brief_tests {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
         let path =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None, None).unwrap();
         let body = std::fs::read_to_string(&path).unwrap();
 
         // Isolate the Setup fenced block so later sections can't mask a leak.
@@ -22488,7 +22622,7 @@ mod task_492_brief_tests {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
         let path =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None, None).unwrap();
 
         let pending = collect_agent_briefs(temp.path(), Some("codex"), false).unwrap();
         assert_eq!(pending.len(), 1);
@@ -22608,6 +22742,7 @@ mod task_492_brief_tests {
             "TASK-492",
             Some("Pre-note"),
             None,
+            None,
         )
         .unwrap();
 
@@ -22645,11 +22780,12 @@ mod task_492_brief_tests {
             "TASK-493",
             None,
             Some("TASK-492"),
+            None,
         )
         .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1100));
         let prereq =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None, None).unwrap();
 
         let entries = collect_agent_briefs(temp.path(), Some("codex"), false).unwrap();
         assert_eq!(
@@ -22685,6 +22821,7 @@ mod task_492_brief_tests {
             "TASK-493",
             None,
             Some("TASK-404"),
+            None,
         )
         .expect_err("missing dependency target should fail")
         .to_string();
@@ -22697,6 +22834,7 @@ mod task_492_brief_tests {
             "TASK-493",
             None,
             Some("TASK-492"),
+            None,
         )
         .unwrap();
         let cycle = create_agent_brief(
@@ -22706,6 +22844,7 @@ mod task_492_brief_tests {
             "TASK-492",
             None,
             Some("TASK-493"),
+            None,
         )
         .expect_err("reverse dependency should create a cycle")
         .to_string();
@@ -22750,7 +22889,7 @@ mod task_492_brief_tests {
     fn pending_brief_banner_silent_for_other_agent_type() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+        create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None, None).unwrap();
         // Running shell / unknown caller — banner must NOT fire even though
         // a pending brief exists. Avoids noising up every human queue-done.
         assert!(pending_brief_banner_lines(temp.path(), "other").is_none());
@@ -22761,7 +22900,16 @@ mod task_492_brief_tests {
     fn pending_brief_banner_silent_when_no_briefs_for_running_type() {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
-        create_agent_brief(temp.path(), &store, "antigravity", "TASK-492", None, None).unwrap();
+        create_agent_brief(
+            temp.path(),
+            &store,
+            "antigravity",
+            "TASK-492",
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         // A Codex session must not see Antigravity briefs — cross-type
         // false positives teach agents to ignore the banner.
         assert!(pending_brief_banner_lines(temp.path(), "codex").is_none());
@@ -22779,14 +22927,21 @@ mod task_492_brief_tests {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
         let first =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None, None).unwrap();
         // Second brief — banner must enumerate ALL of them, not just one.
         // (Per the BUG-378 master verdict: a missed brief implies the
         // multi-missed case is plausible too.)
         std::thread::sleep(std::time::Duration::from_millis(1100));
-        let second =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", Some("note"), None)
-                .unwrap();
+        let second = create_agent_brief(
+            temp.path(),
+            &store,
+            "codex",
+            "TASK-492",
+            Some("note"),
+            None,
+            None,
+        )
+        .unwrap();
 
         let lines = pending_brief_banner_lines(temp.path(), "codex")
             .expect("banner should fire for codex with pending briefs");
@@ -22823,7 +22978,7 @@ mod task_492_brief_tests {
         let temp = tempfile::tempdir().unwrap();
         let store = store_with_related();
         let path =
-            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None).unwrap();
+            create_agent_brief(temp.path(), &store, "codex", "TASK-492", None, None, None).unwrap();
         ack_agent_brief(&path).unwrap();
         // An acked brief is no longer pending — banner must stay silent.
         assert!(pending_brief_banner_lines(temp.path(), "codex").is_none());
@@ -47476,6 +47631,18 @@ fn render_agent_launch_context(
         "- Working directory: {}\n",
         plan.launch_cwd.display()
     ));
+    // STORY-711 slice 2: when a pending brief for this spec/agent carries an
+    // `authorized_by` token, carry it into the durable launch-context
+    // snapshot — the automatic advisor-lock gate reads this line at commit
+    // time (`locking_gate::my_lock_token`), never a bare env var (spoofable +
+    // vanishes on respawn). trace:TASK-1140 | ai:claude
+    if let Some(spec) = plan.current_spec.as_deref() {
+        if let Some(authorized_by) =
+            launch_authorized_by(&plan.project_root, config.agent_type, spec)
+        {
+            out.push_str(&format!("- Authorized by: {authorized_by}\n"));
+        }
+    }
     out.push_str(&format!("- Context token: {token}\n\n"));
 
     out.push_str("## Role Guidance\n\n");
@@ -47631,6 +47798,30 @@ you automatically.\n",
     );
 
     out
+}
+
+/// STORY-711 slice 2: the `authorized_by` token recorded on the most recent
+/// pending brief for `agent_type`/`spec_id`, if any. Lets
+/// `render_agent_launch_context` carry an advisor's `aida brief <agent>
+/// <SPEC> --authorized-by <advisor-id>` into the spawned session's durable
+/// launch-context snapshot, which the automatic advisor-lock gate
+/// (`locking_gate::my_lock_token`) later reads at commit time. `None` when no
+/// pending brief for this spec/agent carries a token (the overwhelmingly
+/// common case — most briefs carry no lock authorization at all).
+// trace:TASK-1140 | ai:claude
+fn launch_authorized_by(
+    project_root: &std::path::Path,
+    agent_type: &str,
+    spec_id: &str,
+) -> Option<String> {
+    // BUG-569: bare agent-type snapshot scan — stay silent on type-class
+    // ambiguity, mirroring the other launch-context reads in this function.
+    let briefs = collect_agent_briefs_inner(project_root, Some(agent_type), false, false).ok()?;
+    briefs
+        .iter()
+        .rev()
+        .find(|b| b.spec_id.eq_ignore_ascii_case(spec_id))
+        .and_then(|b| b.authorized_by.clone())
 }
 
 // trace:STORY-436 | ai:codex
@@ -84838,6 +85029,17 @@ fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
             record_no_verify_bypass_for_head();
             Ok(())
         }
+        // Called by the git pre-commit hook: enforce the automatic
+        // advisor-lock gate (STORY-711 slice 2) at the commit boundary for
+        // ANY vendor. Silent no-op under the default `[locking] posture =
+        // "off"`; a `Refused` verdict warns under `warn` and blocks under
+        // `enforce`, naming the authorizing advisor.
+        // trace:TASK-1140 | ai:claude
+        cli::InternalCommand::LockingGate => {
+            let root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            locking_gate::enforce_at_commit(&root)
+        }
     }
 }
 
@@ -92162,6 +92364,7 @@ fn handle_compete_command(
                     vendor,
                     &spec_id,
                     Some(&brief),
+                    None,
                     None,
                 ) {
                     Ok(path) => println!(
@@ -145889,7 +146092,9 @@ fn zen_surface_to_advisor(
          (aida edit {display} --status approved) if it is ready to implement, \
          then re-run aida zen {display}."
     );
-    if let Ok(path) = create_agent_brief(project_root, store, agent, spec_id, Some(&note), None) {
+    if let Ok(path) =
+        create_agent_brief(project_root, store, agent, spec_id, Some(&note), None, None)
+    {
         eprintln!(
             "  {} recorded a pending-approval brief for the advisor: {}",
             crate::glyph(crate::glyphs::Glyph::Check),
