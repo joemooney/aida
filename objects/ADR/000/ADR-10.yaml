@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:40:22.329779763Z
-modified_at: 2026-06-30T17:40:41.069204959Z
+modified_at: 2026-07-13T07:03:41.121022483Z
 req_type: Decision
 tags:
 - adr
@@ -55,3 +55,18 @@ relationships:
   target_id: 019f16e5-8b1a-7d62-9dc9-3f27222d2918
   created_at: 2026-06-30T17:40:41.069199358Z
   created_by: joe
+decision_request:
+  question: Ratify ADR-10 — realize the unified typed AutonomyMode now (bigger PR on the hot zen-dispatch path), or downgrade to a follow-up?
+  choices:
+  - label: Accept as written
+    consequence: implement typed AutonomyMode now, keep AIDA_ZEN only as child transport
+    resolution: accept
+  - label: Downgrade to follow-up TASK
+    consequence: keep the current guardrail PR focused
+    resolution: downgrade
+  - label: Reject
+    consequence: the AIDA_ZEN env side-channel is acceptable
+    resolution: reject
+  recommended: 0
+  rationale: The ADR already records your in-scope-now choice and the --zen/--no-human asymmetry is a real structural gap behind ADR-7.
+  asked_at: 2026-07-13T07:03:41.121022483Z
