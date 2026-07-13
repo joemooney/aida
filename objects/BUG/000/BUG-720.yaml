@@ -3,12 +3,12 @@ spec_id: BUG-720
 agreed_id: BUG-720
 title: aida human review resolves a spec's branch to the orphan aida-store + offers to PR the requirements store
 description: 'Observed 2026-07-12: aida human review STORY-760 resolved the spec''s ''branch'' to the orphan aida-store (8 commits, all store bookkeeping: add/update STORY-760 + a store-lineage merge) and prompted ''Open a PR from aida-store first? (y/N)''. Saying yes would try to PR the entire git-canonical requirements store as a code change. The real code shipped on the remote-drift-prevention branch and is already merged to main (#1353/#1355/#1356). The review branch-resolver must EXCLUDE the orphan aida-store branch exactly like the completed-without-commit scan does (CLAUDE.md: ''never the orphan aida-store branch — whose update SPEC-NNN bookkeeping commits mention the bare id''). Fix: filter aida-store out of candidate branches in the aida human review / review branch resolution; never offer a PR from it.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T01:36:04.548779031Z
-modified_at: 2026-07-13T02:45:12.803740915Z
+modified_at: 2026-07-13T02:54:53.576047193Z
 req_type: Bug
 tags:
 - aida:human
@@ -21,3 +21,7 @@ comments:
   content: Commit 529b98bbf references this requirement
   created_at: 2026-07-13T02:45:12.803740915Z
   modified_at: 2026-07-13T02:45:12.803740915Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T02:54:53.576047193Z
+  completion_sha: 9c6fe9b8ac60bf19af5337e8a0694cf872c58e09
