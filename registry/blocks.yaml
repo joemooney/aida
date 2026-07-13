@@ -431,3 +431,11 @@ blocks:
   range_end: 4000
   next: 3001
   allocated_at: 2026-07-07T20:15:10.960661443Z
+- node_id: '8'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: '*'
+  range_start: 4001
+  range_end: 5000
+  next: 4001
+  allocated_at: 2026-07-13T20:36:51.317409804Z
