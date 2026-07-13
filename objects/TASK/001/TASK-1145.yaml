@@ -1,0 +1,25 @@
+id: 019f5a06-a375-79b1-80c6-8fdf2e6054fe
+spec_id: TASK-1145
+agreed_id: TASK-1145
+title: 'aida worktree gc: prune dead/merged agent worktrees (lifecycle hygiene gap)'
+description: |-
+  Observed 2026-07-12 during an autonomous drain: ~9 stale LOCKED agent worktrees accumulated under .claude/worktrees/ from prior agent sessions (task-1092, task-1141, task-1078, epic54-followups, plus several bare worktree-agent-* dirs pointing at old SHAs). Each was created by an isolation:worktree subagent that has long since died; nothing GCs them on merge or session end.
+
+  Symptoms this causes:
+  - gh pr merge --delete-branch fails the LOCAL branch delete ('used by worktree') for every merged agent PR, needing a manual git worktree remove afterward.
+  - Disk + git-metadata bloat; risk of the TASK-0396 cross-worktree cargo fingerprint gotcha.
+  - Confusing 'aida ps' / 'git worktree list' noise.
+
+  Ask: a native 'aida worktree gc' (and/or auto-GC on merge / session end) that SAFELY prunes agent worktrees whose branch work is already integrated. Safety is the whole design: a squash-merged branch tip is NOT an ancestor of main (feedback_fresh_branch_can_miss_interleaved_squash), so 'merge-base --is-ancestor' under-detects. GC must confirm integration by content (empty 'git diff origin/main...branch') or by the spec being Completed with a referencing commit on main, and must NEVER force-remove a worktree with unmerged/uncommitted work. Supervised, not a blind autonomous drain item.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-13T05:50:12.341160277Z
+modified_at: 2026-07-13T05:50:12.341160277Z
+req_type: Task
+tags:
+- aida:worktree
+- hygiene
+- papercut
+- severity:minor
