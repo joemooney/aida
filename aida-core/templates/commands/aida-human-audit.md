@@ -1,14 +1,14 @@
 ---
-description: "Reconcile every `aida human` item so the report is true from the graph — triage each into needs-you / fix-state / file-tool-bug, act, and hand back a ledger."
+description: "Audit the coordination inbox — reconcile every `aida human` item so the report is true from the graph. Triage each into needs-you / fix-state / file-tool-bug, act, and hand back a ledger."
 ---
-# Review the Coordination Inbox
+# Audit the Coordination Inbox
 
 Reconcile every `aida human` item so the "does this need me?" report is true
-**from the graph**, not narrated away in chat.
+**from the graph**, not narrated away in chat. (Invocable as `aida human audit`.)
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-review-human.md`:
+Follow the workflow in `.claude/skills/aida-human-audit.md`:
 
 1. Run `aida human` + `aida awaiting --json`; enumerate every surfaced item
    (reviews-awaiting, needs-attention, findings, mail, verdicts, escalations).

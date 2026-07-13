@@ -1,1 +1,0 @@
-../../aida-core/templates/commands/aida-review-human.md

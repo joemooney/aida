@@ -1,6 +1,6 @@
 ---
-name: aida-review-human
-description: Reconcile every `aida human` item so the "does this need me?" report is true from the graph. Walk each surfaced item and triage it into needs-you / fix-state / file-tool-bug, act on it, and hand back a ledger — never narrate an item away in chat when the fix is a substrate edit.
+name: aida-human-audit
+description: Audit the coordination inbox — reconcile every `aida human` item so the "does this need me?" report is true from the graph. Walk each surfaced item and triage it into needs-you / fix-state / file-tool-bug, act on it, and hand back a ledger. Never narrate an item away in chat when the fix is a substrate edit. Invocable by `aida human audit`.
 allowed-tools:
   - Bash
   - Read
@@ -8,7 +8,7 @@ allowed-tools:
   - Glob
 ---
 
-# AIDA Review-Human Skill
+# AIDA Human-Audit Skill
 
 ## Purpose
 
@@ -17,6 +17,10 @@ must be **true from the graph** — not require the advisor to explain items awa
 in chat. This pass walks every item the coordination inbox surfaces and either
 confirms it genuinely needs the human, **fixes the spec state** so it
 self-corrects, or **files the reporter bug** when the report itself is wrong.
+
+Pairs with the CLI: `aida human` *shows* the inbox, `aida human review <spec>`
+looks at one item, and **`aida human audit`** runs this whole reconcile pass
+(the CLI verb triggers this skill).
 
 ## The principle it enforces
 
@@ -75,8 +79,8 @@ truth, don't police it in prose.
 
 ## Delineation
 
-- **`/aida-review-human`** reconciles the *coordination inbox*
-  (`aida human` / `aida awaiting`) so its report is true.
+- **`/aida-human-audit`** (`aida human audit`) reconciles the *coordination
+  inbox* (`aida human` / `aida awaiting`) so its report is true.
 - **`/aida-backlog-groom`** reconciles the *backlog* (drafts +
   approved-not-queued) into a drain-ready queue.
 - **`/aida-digest`** narrates *what happened*; this pass fixes *what's surfaced*.
