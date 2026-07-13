@@ -3,12 +3,12 @@ spec_id: TASK-962
 agreed_id: TASK-962
 title: 'STORY-621 Slice 3: route GitLabForge CI reads off broken ''glab ci list -F json'' onto glab api pipelines'
 description: 'Sibling of BUG-639 for the CI read-path: GitLabForge::ci_status and ci_probe_for_branch invoke glab ci list -F json, which glab 1.36.0 does not support (no JSON flag on ci list), so GitLab CI status is non-functional. Fix in Slice 3 via glab api -X GET projects/:id/pipelines?ref=<branch> (and pipelines/<id> for detail), mapping to CiState/CiProbeResult. Deferred from the BUG-639 MR-read fix because CI validation needs a live pipeline (a .gitlab-ci.yml on the throwaway), and CI watch is Slice 3 scope. Found during STORY-621 Slice 1 live validation against gitlab.joemooney.com.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T18:44:31.775074750Z
-modified_at: 2026-06-30T16:35:24.889198344Z
+modified_at: 2026-07-13T02:52:50.537835849Z
 req_type: Task
 tags:
 - depends-on:STORY-621
@@ -18,3 +18,7 @@ relationships:
 - rel_type: Child
   target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
   created_at: 2026-06-27T18:44:35.808545921Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T02:52:50.537835849Z
+  completion_sha: de922f8892ea6c0841d97297e510780b02b58b04
