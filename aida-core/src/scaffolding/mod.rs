@@ -16,6 +16,7 @@ mod codex_md;
 pub mod codex_prompts;
 mod hooks;
 mod managed_merge;
+pub mod mcp_translate;
 mod settings;
 
 pub use aida_md::{aida_md_matches, extract_aida_block};

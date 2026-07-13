@@ -10586,6 +10586,40 @@ pub enum McpCommand {
         force: bool,
     },
 
+    /// Translate this project's `.mcp.json` (Claude Code's MCP server
+    /// registration) into the equivalent Codex CLI (`.codex/config.toml`)
+    /// and Gemini CLI (`.gemini/settings.json`) MCP configs, preserving the
+    /// registered server's command/args/env — so a headless codex/gemini
+    /// drain agent gets AIDA's MCP tools with no hand-editing.
+    ///
+    /// `aida init` already scaffolds `.codex/config.toml` for a fresh
+    /// project (TASK-0424); this command is for the reverse direction —
+    /// deriving both vendor configs from whatever `.mcp.json` actually says
+    /// today (including a hand-edited command/args/env, or a renamed
+    /// server), and it's the only path that also covers Gemini CLI.
+    ///
+    /// Each target file is merged, not clobbered: an existing file without
+    /// an aida-shaped entry gets one added; an existing file whose entry
+    /// already matches is left alone (reported up to date); an existing
+    /// file whose entry differs is skipped unless `--force`. When
+    /// `.mcp.json` is absent, or present with no aida server registered,
+    /// this reports "nothing to translate" rather than erroring.
+    // trace:TASK-1046 | ai:claude
+    Translate {
+        /// Project root directory (defaults to current directory).
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+
+        /// Overwrite a target file's aida entry when it already exists but
+        /// differs from what `.mcp.json` would produce.
+        #[clap(long)]
+        force: bool,
+
+        /// Show what would be written without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Manage and render agent skills
     #[clap(subcommand)]
     Skill(SkillCommand),
