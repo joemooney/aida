@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T17:40:12.806480358Z
-modified_at: 2026-06-30T16:36:02.970655216Z
+modified_at: 2026-07-13T07:04:54.498162331Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,3 +16,18 @@ relationships:
 - rel_type: Child
   target_id: 019efd99-f8b0-7cf3-9407-d184bf0e2d03
   created_at: 2026-06-26T17:40:17.958163300Z
+decision_request:
+  question: Is the live manual E2E verification (real Claude chat + inject + continue) of the EPIC-51 slice-3 PTY-inject path worth doing now?
+  choices:
+  - label: Do the manual real-terminal pass now
+    consequence: PTY stdin injection is fragile, only a live run catches regressions
+    resolution: do it
+  - label: Defer
+    consequence: rely on automated slice-3 tests until a user or regression appears
+    resolution: defer
+  - label: Reject
+    consequence: automated coverage is sufficient
+    resolution: reject
+  recommended: 1
+  rationale: Low-priority high-effort manual QA; automated tests hold the floor, so defer the live pass until a real user or regression.
+  asked_at: 2026-07-13T07:04:54.498162331Z
