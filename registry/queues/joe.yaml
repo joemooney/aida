@@ -465,3 +465,11 @@
   for_role: advisor
   for_scope: harness-worktree
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019f57e3-5730-7380-a840-610b4ffae9fc
+  position: 345000
+  added_by: joe
+  added_at: 2026-07-13T02:21:12.295849123Z
+  for_role: advisor
+  for_scope: harness-worktree
+  added_by_machine: imac
