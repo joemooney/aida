@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T06:45:57.393557976Z
-modified_at: 2026-07-13T02:19:55.275247096Z
+modified_at: 2026-07-13T02:20:35.301411022Z
 req_type: Story
 tags:
 - advisor
@@ -80,6 +80,13 @@ comments:
   content: 'Slice 1 (lock model + pure verify_worktree_lock + aida lock CLI) merged in #1387 — reviewed against the plan (fail-safe verifier correct, additive-only, field-preserving lease patch, trace hygiene clean). Auto-completed by the slice-1 trailer, re-opened: the ENFORCEMENT (the actual refuse-behavior) is slice 2, filed as a child TASK. STORY-711 completes when slice 2 lands.'
   created_at: 2026-07-12T19:45:49.049581512Z
   modified_at: 2026-07-12T19:45:49.049581512Z
+- id: 019f5946-bb23-73b3-ba21-5b53aa4f2ed2
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-07-12-story-711-advisor-lock.md
+    filed 3 task(s): TASK-1142, TASK-1143, TASK-1144
+  created_at: 2026-07-13T02:20:35.491458750Z
+  modified_at: 2026-07-13T02:20:35.491458750Z
 implementation_info:
   implemented: false
   completed_at: 2026-07-12T19:13:33.157719404Z
