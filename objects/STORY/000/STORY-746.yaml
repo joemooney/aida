@@ -11,9 +11,24 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:50:08.536821809Z
-modified_at: 2026-07-01T04:50:33.803656233Z
+modified_at: 2026-07-13T07:03:30.001164228Z
 req_type: Story
 tags:
 - aida:zen
 - concurrency
 - drain-lock
+decision_request:
+  question: Should genuinely-isolated --solo drives run concurrently (revisiting the BUG-538 global drain lock)?
+  choices:
+  - label: Per-worktree/scope lock
+    consequence: isolated --solo drives hold independent locks
+    resolution: make lock per-scope
+  - label: Keep global lock, route parallelism through burndown fan-out
+    consequence: one orchestrator already fans out worktree-isolated subagents
+    resolution: keep global + fan-out
+  - label: Keep global lock, no parallel path
+    consequence: treat 3-solo as out of scope
+    resolution: keep as-is
+  recommended: 1
+  rationale: Concurrent integrators on one main is exactly the hazard BUG-538 closed; fan-out is cheaper than reopening the lock.
+  asked_at: 2026-07-13T07:03:30.001164228Z
