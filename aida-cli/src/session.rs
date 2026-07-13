@@ -937,32 +937,43 @@ pub enum HeadlessVendor {
     Claude,
     /// `codex exec …` — the Codex headless CLI. trace:STORY-683
     Codex,
+    /// `agy -p …` — the Antigravity (AGY) headless CLI. The `agy` runtime's
+    /// non-interactive `-p`/`--print` mode is the AGY analogue of `claude -p` /
+    /// `codex exec` (verified in SPIKE-27's agy-architecture surface note).
+    // trace:TASK-1048 | ai:claude
+    Agy,
 }
 
 impl HeadlessVendor {
-    /// The PATH binary this vendor spawns (`claude` / `codex`).
+    /// The PATH binary this vendor spawns (`claude` / `codex` / `agy`).
     pub fn program(self) -> &'static str {
         match self {
             HeadlessVendor::Claude => "claude",
             HeadlessVendor::Codex => "codex",
+            HeadlessVendor::Agy => "agy",
         }
     }
 
-    /// The canonical lowercase token (`claude` / `codex`).
+    /// The canonical lowercase token (`claude` / `codex` / `agy`).
     pub fn as_str(self) -> &'static str {
         match self {
             HeadlessVendor::Claude => "claude",
             HeadlessVendor::Codex => "codex",
+            HeadlessVendor::Agy => "agy",
         }
     }
 
     /// Parse a vendor token. Case-insensitive, surrounding whitespace tolerated.
     /// `None` for an unrecognized token so the caller can fall through to the
-    /// default rather than launch an unknown binary. trace:STORY-683 | ai:claude
+    /// default rather than launch an unknown binary. `agy` is the canonical
+    /// Antigravity token; `antigravity` is accepted as an alias (matching
+    /// `aida agent new antigravity`).
+    // trace:STORY-683 TASK-1048 | ai:claude
     pub fn parse(raw: &str) -> Option<HeadlessVendor> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "claude" => Some(HeadlessVendor::Claude),
             "codex" => Some(HeadlessVendor::Codex),
+            "agy" | "antigravity" => Some(HeadlessVendor::Agy),
             _ => None,
         }
     }
@@ -973,7 +984,8 @@ impl HeadlessVendor {
 /// command (`aida zen`, `aida queue work`, `aida burndown run`) before the
 /// drain spawns. Wins over `AIDA_HEADLESS_VENDOR` and the config knobs in
 /// [`resolve_headless_vendor`]. Encoding: `0` = unset (an un-flagged run is
-/// byte-identical to the pre-TASK-1116 resolution), `1` = Claude, `2` = Codex.
+/// byte-identical to the pre-TASK-1116 resolution), `1` = Claude, `2` = Codex,
+/// `3` = Agy.
 ///
 /// Process-global rather than a threaded parameter because the flag is parsed
 /// at the top-level dispatch while the in-process spawn paths
@@ -993,6 +1005,7 @@ pub(crate) fn set_headless_vendor_override(vendor: Option<HeadlessVendor>) {
         None => 0,
         Some(HeadlessVendor::Claude) => 1,
         Some(HeadlessVendor::Codex) => 2,
+        Some(HeadlessVendor::Agy) => 3,
     };
     HEADLESS_VENDOR_OVERRIDE.store(code, std::sync::atomic::Ordering::SeqCst);
 }
@@ -1003,13 +1016,14 @@ fn headless_vendor_override() -> Option<HeadlessVendor> {
     match HEADLESS_VENDOR_OVERRIDE.load(std::sync::atomic::Ordering::SeqCst) {
         1 => Some(HeadlessVendor::Claude),
         2 => Some(HeadlessVendor::Codex),
+        3 => Some(HeadlessVendor::Agy),
         _ => None,
     }
 }
 
 /// TASK-1116: install a `--vendor`/`--agent` flag value as the top-precedence
 /// headless-vendor override for this invocation. Recognized tokens
-/// (`claude` / `codex`) set BOTH:
+/// (`claude` / `codex` / `agy` [alias `antigravity`]) set BOTH:
 ///   - the in-process override tier ([`set_headless_vendor_override`]) — so a
 ///     spawn path that resolves in THIS process (`aida queue work <spec>
 ///     --no-human`) routes to it, and
@@ -1067,9 +1081,11 @@ pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
 /// the given vendor. `Claude` reuses the SPIKE-7 mandatory flag set
 /// ([`claude_headless_args_with_posture`]); `Codex` builds the `codex exec`
 /// argv (prior art: `compete.rs::vendor_adapter`), with the prompt as the final
-/// positional. Pure — both arms are unit-tested without spawning. The `contained`
+/// positional. Pure — the arms are unit-tested without spawning. The `contained`
 /// posture only affects the Claude arm today (Codex carries its own sandbox via
-/// `--dangerously-bypass-approvals-and-sandbox`). trace:STORY-683 | ai:claude
+/// `--dangerously-bypass-approvals-and-sandbox`; Agy via
+/// `--dangerously-skip-permissions`).
+// trace:STORY-683 TASK-1048 | ai:claude
 pub fn headless_vendor_args(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -1079,7 +1095,26 @@ pub fn headless_vendor_args(
     match vendor {
         HeadlessVendor::Claude => claude_headless_args_with_posture(prompt, session_id, contained),
         HeadlessVendor::Codex => codex_headless_args(prompt),
+        HeadlessVendor::Agy => agy_headless_args(prompt),
     }
+}
+
+/// TASK-1048: the `agy` argv (after the `agy` program name) for a one-shot
+/// headless run. Mirrors the Codex arm's shape: AGY's non-interactive `-p`/
+/// `--print` mode is the AGY analogue of `claude -p` / `codex exec` — it runs a
+/// single prompt and exits (SPIKE-27's agy-architecture surface note). Approvals
+/// are skipped (`--dangerously-skip-permissions`, the same knob the supervised
+/// `aida agent new antigravity --bypass-sandbox` launch uses) so the run is
+/// unattended. Like Codex, AGY has no caller-minted `--session-id` /
+/// `stream-json` machinery threaded here, so the arm does not carry `session_id`.
+/// The prompt is the final positional. Pure — unit-tested without spawning.
+// trace:TASK-1048 | ai:claude
+pub fn agy_headless_args(prompt: &str) -> Vec<String> {
+    vec![
+        "-p".to_string(),
+        "--dangerously-skip-permissions".to_string(),
+        prompt.to_string(),
+    ]
 }
 
 /// STORY-683: the `codex exec` argv (after the `codex` program name) for a
@@ -1921,6 +1956,16 @@ pub fn advisor_tier_program_and_args(
             (
                 resolve_agent_program(HeadlessVendor::Codex.program()),
                 codex_headless_args(seeded_prompt),
+            )
+        }
+        HeadlessVendor::Agy => {
+            // AGY, like Codex, has no AIDA-addressable resume/session model, so
+            // the advisor tier hosts a fresh `agy -p` per punt against the
+            // seeded prompt; `is_fork` is intentionally ignored.
+            // TASK-1081: same mock resolver as the other arms. trace:TASK-1048
+            (
+                resolve_agent_program(HeadlessVendor::Agy.program()),
+                agy_headless_args(seeded_prompt),
             )
         }
     }
@@ -3660,6 +3705,21 @@ mod tests {
             !codex.contains(&"-p".to_string()),
             "codex arm must not carry claude's -p: {codex:?}"
         );
+
+        // TASK-1048: Agy arm: `agy -p --dangerously-skip-permissions <prompt>`,
+        // with the prompt as the final positional and NO codex `exec`.
+        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false);
+        assert_eq!(agy, agy_headless_args(prompt), "{agy:?}");
+        assert_eq!(agy.first().map(String::as_str), Some("-p"), "{agy:?}");
+        assert!(
+            agy.contains(&"--dangerously-skip-permissions".to_string()),
+            "agy bypass: {agy:?}"
+        );
+        assert_eq!(agy.last().map(String::as_str), Some(prompt), "{agy:?}");
+        assert!(
+            !agy.contains(&"exec".to_string()),
+            "agy arm must not be a codex exec: {agy:?}"
+        );
     }
 
     /// TASK-894: the advisor-tier spawn builds the correct command per vendor.
@@ -3713,6 +3773,20 @@ mod tests {
             assert!(!args.contains(&advisor_uuid.to_string()), "{args:?}");
             assert!(!args.contains(&"-p".to_string()), "{args:?}");
         }
+
+        // TASK-1048: Agy, like Codex, has no resume model — a fresh `agy -p
+        // <seeded>` per punt, `is_fork` ignored, never carrying claude's resume
+        // flags. trace:TASK-1048
+        for is_fork in [false, true] {
+            let (prog, args) =
+                advisor_tier_program_and_args(HeadlessVendor::Agy, is_fork, seeded, advisor_uuid);
+            assert_eq!(prog, "agy", "is_fork={is_fork}");
+            assert_eq!(args, agy_headless_args(seeded), "is_fork={is_fork}");
+            assert_eq!(args.first().map(String::as_str), Some("-p"), "{args:?}");
+            assert_eq!(args.last().map(String::as_str), Some(seeded), "{args:?}");
+            assert!(!args.contains(&"--resume".to_string()), "{args:?}");
+            assert!(!args.contains(&advisor_uuid.to_string()), "{args:?}");
+        }
     }
 
     /// STORY-683: the program a vendor spawns is its own binary.
@@ -3721,6 +3795,8 @@ mod tests {
     fn headless_vendor_program_maps_to_binary() {
         assert_eq!(HeadlessVendor::Claude.program(), "claude");
         assert_eq!(HeadlessVendor::Codex.program(), "codex");
+        // TASK-1048: AGY spawns the `agy` runtime binary.
+        assert_eq!(HeadlessVendor::Agy.program(), "agy");
     }
 
     /// STORY-683: vendor-token parsing is case-insensitive, whitespace-tolerant,
@@ -3737,6 +3813,15 @@ mod tests {
             Some(HeadlessVendor::Codex)
         );
         assert_eq!(HeadlessVendor::parse("CODEX"), Some(HeadlessVendor::Codex));
+        // TASK-1048: `agy` is the canonical Antigravity token; `antigravity` is
+        // an accepted alias; both are case-insensitive + whitespace-tolerant.
+        assert_eq!(HeadlessVendor::parse("agy"), Some(HeadlessVendor::Agy));
+        assert_eq!(HeadlessVendor::parse(" AGY "), Some(HeadlessVendor::Agy));
+        assert_eq!(
+            HeadlessVendor::parse("Antigravity"),
+            Some(HeadlessVendor::Agy)
+        );
+        // Genuine unknowns still reject so the caller falls through to default.
         assert_eq!(HeadlessVendor::parse("gemini"), None);
         assert_eq!(HeadlessVendor::parse(""), None);
     }
@@ -3867,7 +3952,17 @@ mod tests {
         set_headless_vendor_override(Some(HeadlessVendor::Codex));
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
 
+        // TASK-1048: the agy override wins over the codex env + codex knobs too.
+        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        set_headless_vendor_override(Some(HeadlessVendor::Agy));
+        assert_eq!(
+            resolve_headless_vendor(tmp.path()),
+            HeadlessVendor::Agy,
+            "the per-invocation --vendor agy override must beat env + knob"
+        );
+
         // Clearing the override falls back to the env/knob tiers (now claude).
+        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
         set_headless_vendor_override(None);
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
     }
@@ -3904,6 +3999,20 @@ mod tests {
             Some(HeadlessVendor::Claude)
         );
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
+
+        // TASK-1048: the `antigravity` alias installs the Agy override and
+        // exports the canonical `agy` token for a child implementer.
+        assert_eq!(
+            install_headless_vendor_override("antigravity"),
+            Some(HeadlessVendor::Agy)
+        );
+        assert_eq!(headless_vendor_override(), Some(HeadlessVendor::Agy));
+        assert_eq!(
+            std::env::var("AIDA_HEADLESS_VENDOR").ok().as_deref(),
+            Some("agy"),
+            "the alias must export the canonical `agy` token, not `antigravity`"
+        );
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Agy);
 
         // Unrecognized token → nothing installed, caller decides.
         set_headless_vendor_override(None);
