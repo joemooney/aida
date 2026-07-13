@@ -3,12 +3,12 @@ spec_id: TASK-1045
 agreed_id: TASK-1045
 title: Materialize `.claude/skills/*.md` into prompts for non-Claude vendors (the `seed_skill_prompt` hook)
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:21:51.603392092Z
-modified_at: 2026-06-30T16:34:36.808625972Z
+modified_at: 2026-07-13T05:47:26.903532841Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,3 +16,21 @@ relationships:
 - rel_type: Child
   target_id: 019f1048-89ad-7543-aa2a-c82643852675
   created_at: 2026-06-30T04:21:57.140884605Z
+history:
+- id: 019f5a04-1d31-76d2-b316-b775b96916dd
+  author: aida-auto-bump
+  timestamp: 2026-07-13T05:47:26.897400639Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f5a04-1d37-7f52-a81e-bf1b4514bc1e
+  timestamp: 2026-07-13T05:47:26.903531268Z
+  agent: aida
+  commit_sha: 80098faeb7c9cc13266dc93d04b9047374878034
+  summary: Completed via merge 80098fae
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T05:47:26.702795054Z
+  completion_sha: 80098faeb7c9cc13266dc93d04b9047374878034
