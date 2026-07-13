@@ -11,12 +11,12 @@ description: |-
   - A [locking] config posture gates behavior: off (default, silent), warn, enforce. AIDA_LOCKING overrides per-run; documented in docs/environment-variables.md.
   - Backward-compatible: off default means no existing solo/manual flow changes.
   - Tests: brief carries the token; the gate refuses a mismatched agent under enforce, warns under warn, is silent under off.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:45:33.551932774Z
-modified_at: 2026-07-12T19:45:33.551932774Z
+modified_at: 2026-07-13T02:16:52.754035525Z
 req_type: Task
 tags:
 - advisor
@@ -24,3 +24,7 @@ tags:
 - from-plan
 - locking
 - parent:STORY-711
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T02:16:52.754035525Z
+  completion_sha: ffd1326673ced3c9c0dda38184ff046ff7152fc3
