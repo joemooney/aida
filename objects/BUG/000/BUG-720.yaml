@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T01:36:04.548779031Z
-modified_at: 2026-07-13T01:36:04.548779031Z
+modified_at: 2026-07-13T02:45:12.803740915Z
 req_type: Bug
 tags:
 - aida:human
 - aida:review
 - branch-resolution
 - orphan-store
+comments:
+- id: 019f595d-45e3-7611-a21a-ce49b17c9d7e
+  author: joe
+  content: Commit 529b98bbf references this requirement
+  created_at: 2026-07-13T02:45:12.803740915Z
+  modified_at: 2026-07-13T02:45:12.803740915Z
