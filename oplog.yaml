@@ -32985,5 +32985,33 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3083
+- id: 019f5a32-29d1-7a51-b1dd-b6625535d725
+  target_id: 019f5a32-10ff-7731-9372-6962ffa3ef1c
+  author: aida
+  node_id: '1'
+  lamport: 3084
+  timestamp: 2026-07-13T06:37:44.785226877Z
+  kind: !Create
+    title: 'aida human audit: CLI verb to trigger the /aida-human-audit pass (enqueue directive + --inject tmux)'
+    description: |-
+      Operator ask (2026-07-12): a CLI verb to fire the /aida-human-audit reconcile pass at the advisor session, instead of relying on event-gated hooks. Operator chose BOTH mechanisms (durable enqueue + opt-in tmux inject).
+
+      New subcommand: 'aida human audit' (HumanCommand::Audit next to ::Review, cli.rs enum). Two paths:
+
+      1. ENQUEUE (default, durable): posts a directive to the advisor's inbox reusing the existing Directive substrate (worker.rs Directive struct + parse_directives; mirror mcp.rs tool_post_directive from the CLI side). The directive says 'operator requested a human-audit pass -> run /aida-human-audit'. The looping/polling advisor surfaces it (via aida awaiting / its per-turn directive check) and runs the skill. Works headless + cross-vendor. Latency = up to one poll cycle. Reuse the substrate; do NOT invent a new store.
+
+      2. --inject (opt-in, immediate): tmux send-keys the slash command straight into the advisor's registered pane, so it works even when the advisor is idle. Requires: at advisor session start, record the pane (TMUX_PANE env) into the session/registry file; 'aida human audit --inject' reads it and runs 'tmux send-keys -t <pane> \"/aida-human-audit\" Enter'. If not in tmux / no pane registered, print a clear message and fall back to enqueue-only (never hard-fail). Coupled to tmux by nature — that is acceptable and documented.
+
+      Acceptance:
+      - 'aida human audit' posts a directive that the advisor's existing poll surface shows as an actionable 'run /aida-human-audit' request.
+      - '--inject' send-keys the slash command into the registered pane when present; graceful fallback + clear message otherwise.
+      - Pane registration happens at advisor session start (idempotent; no-op when TMUX_PANE unset).
+      - 'aida human audit --help' explains both paths + the tmux requirement for --inject. No SPEC-ID in user-facing text.
+      - Tests: directive is posted with the right verb/target; --inject builds the correct send-keys argv from a registered pane; fallback path when no pane.
+
+      Related: STORY-767 (the skill this triggers), the brief-polling / awaiting discipline (the poll consumer).
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3084
 node_id: '1'
