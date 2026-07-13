@@ -3,12 +3,12 @@ spec_id: TASK-1142
 agreed_id: TASK-1142
 title: Slice 2 (the automatic bouncer) as its own PR once slice 1 lands
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T02:19:57.265464097Z
-modified_at: 2026-07-13T05:12:24.407140874Z
+modified_at: 2026-07-13T05:12:25.335636713Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-12-story-711-advisor-lock.md
