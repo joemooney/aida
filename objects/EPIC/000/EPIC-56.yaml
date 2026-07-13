@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:35.111359647Z
-modified_at: 2026-07-02T05:08:09.721742436Z
+modified_at: 2026-07-13T07:05:02.742446592Z
 req_type: Epic
 tags:
 - axi
@@ -117,3 +117,18 @@ relationships:
 - rel_type: Parent
   target_id: 019f213a-20c5-7dd2-bbca-b6c8d99ba161
   created_at: 2026-07-02T05:08:09.721742436Z
+decision_request:
+  question: The AXI-ergonomics umbrella is ~86% shipped; remainders are the zero-token supervision daemon (STORY-712), single-liaison dispatcher (STORY-713), worktree warm-pool (STORY-714), agent-agnostic drain backend (SPIKE-74). Keep driving all, or trim?
+  choices:
+  - label: Close the umbrella now
+    consequence: shipped ergonomics land, re-file the 4 heavy remainders as standalone specs
+    resolution: close+refile
+  - label: Keep open, drive all 4 as a batch
+    consequence: full push
+    resolution: drive all
+  - label: Keep open but drop daemon + dispatcher, keep warm-pool + agent-agnostic backend
+    consequence: trims the overengineering-risk pair
+    resolution: trim
+  recommended: 2
+  rationale: The zero-token daemon + single-liaison dispatcher smell like 'daemon when bash would do'; warm-pool + agent-agnostic backend are real reliability wins.
+  asked_at: 2026-07-13T07:05:02.742446592Z
