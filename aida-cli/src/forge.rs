@@ -1150,8 +1150,10 @@ impl Forge for GitHubForge {
 /// (STORY-509) fills the open→status→merge→comment→list round-trip via `glab`'s
 /// `--output json` surface, mapped by the pure parsers below. CI status
 /// (`ci_status` / `ci_probe_for_branch` / `watch_ci` / `stream_ci_for_branch`)
-/// lands in slice 4 (STORY-510) via `glab ci list`/`glab ci status`, mapped by
-/// `glab_ci_state_from_status` + `ci_probe_from_glab_pipelines`.
+/// lands in slice 4 (STORY-510) via `glab api -X GET projects/:id/pipelines`
+/// (the TASK-962 fix moved the read off the broken `glab ci list -F json`) /
+/// `glab ci status`, mapped by `glab_ci_state_from_status` +
+/// `ci_probe_from_glab_pipelines`.
 /// trace:STORY-509 trace:STORY-510 | ai:claude
 pub struct GitLabForge {
     project_root: PathBuf,
@@ -1320,21 +1322,24 @@ impl Forge for GitLabForge {
 
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
         // TASK-962 (Slice 3): `glab ci list -F json` shares the mr-list defect
-        // BUG-639 fixed — glab 1.36 has no JSON flag here either, so this and
-        // `ci_probe_for_branch` need the same REST move (`glab api -X GET
-        // projects/:id/pipelines?ref=<branch>`). Left as-is in Slice 1: CI wiring
-        // is Slice 3 and needs a live pipeline to validate. trace:TASK-962 | ai:claude
-        // STORY-510: GitLab CI is pipeline-scoped. `glab ci list -F json -b <ref>`
-        // lists the pipelines for a ref; the newest one's status is the CI state.
-        // A Change target uses its source branch (the orchestrator merges branches,
-        // not commits). The pure mapper degrades a missing CLI / no pipelines to
-        // CiState::None, mirroring GitHubForge::ci_status. trace:STORY-510 | ai:claude
+        // BUG-639 fixed — glab 1.36 has no JSON flag on `ci list`, so this and
+        // `ci_probe_for_branch` route through the same REST move BUG-639 used for
+        // MRs: `glab api -X GET projects/:id/pipelines?ref=<branch>`. The REST
+        // pipeline objects are the same shape `glab ci list -F json` used to
+        // forward verbatim, so the pure mappers below (`ci_status_from_glab_pipelines`
+        // / `ci_probe_from_glab_pipelines`) are unchanged — only the invocation
+        // moves. trace:TASK-962 | ai:claude
+        // STORY-510: GitLab CI is pipeline-scoped. Listing the pipelines for a ref
+        // and taking the newest one's status is the CI state. A Change target uses
+        // its source branch (the orchestrator merges branches, not commits). The
+        // pure mapper degrades a missing CLI / no pipelines to CiState::None,
+        // mirroring GitHubForge::ci_status. trace:STORY-510 | ai:claude
         let r#ref = match target {
             CiTarget::Branch(b) => b,
             CiTarget::Commit(c) => c,
             CiTarget::Change(c) => c.branch,
         };
-        let out = self.glab(&["ci", "list", "-F", "json", "-b", &r#ref]);
+        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", &r#ref)]);
         Ok(ci_status_from_glab_pipelines(out))
     }
 
@@ -1343,9 +1348,12 @@ impl Forge for GitLabForge {
         // Resolve the MR iid (for the `change` number callers display) best-effort
         // — GitLab pipelines are branch-scoped, so the probe is meaningful even
         // when no MR exists yet (change == 0). Then map the newest pipeline's
-        // status to a CiProbeResult. trace:STORY-510 | ai:claude
+        // status to a CiProbeResult. TASK-962: reads via `glab api -X GET
+        // projects/:id/pipelines?ref=<branch>` (glab 1.36 has no `-F json` on
+        // `ci list`), mirroring the BUG-639 MR-read fix. trace:STORY-510
+        // trace:TASK-962 | ai:claude
         let change = self.mr_iid_for_branch(branch);
-        let out = self.glab(&["ci", "list", "-F", "json", "-b", branch]);
+        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", branch)]);
         Ok(ci_probe_from_glab_pipelines(out, change))
     }
 
@@ -1818,14 +1826,17 @@ fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
 
 // ─────────────────────────── GitLab CI mapping (STORY-510) ───────────────────────────
 //
-// GitLab CI is *pipeline*-scoped, not MR-scoped: `glab ci list -F json` (alias
-// `glab pipeline list`) emits the GitLab REST pipeline objects for a ref. We map
-// the newest pipeline's `status` to the forge-neutral CI types, mirroring the
-// GitHub-Actions mapping in GitHubForge::ci_status / probe_ci_state_for_branch.
-// The status token vocabulary is GitLab's pipeline FSM:
+// GitLab CI is *pipeline*-scoped, not MR-scoped: `glab api -X GET
+// projects/:id/pipelines?ref=<branch>` (TASK-962 — glab 1.36 has no `-F json`
+// on `ci list`/`pipeline list`, so the read moved to the same REST surface
+// BUG-639 used for MRs) returns the GitLab REST pipeline objects for a ref. We
+// map the newest pipeline's `status` to the forge-neutral CI types, mirroring
+// the GitHub-Actions mapping in GitHubForge::ci_status /
+// probe_ci_state_for_branch. The status token vocabulary is GitLab's pipeline
+// FSM:
 //   created / waiting_for_resource / preparing / pending / running / scheduled
 //   success / failed / canceled / skipped / manual
-// trace:STORY-510 | ai:claude
+// trace:STORY-510 trace:TASK-962 | ai:claude
 
 /// Map a single GitLab pipeline `status` token to the forge-neutral
 /// [`CiState`]. In-flight states (created/pending/running/…) → `Running`;
@@ -1849,7 +1860,7 @@ fn glab_ci_state_from_status(status: &str) -> CiState {
     }
 }
 
-/// Pick the newest pipeline object from a `glab ci list -F json` array — the one
+/// Pick the newest pipeline object from a `glab api pipelines` REST array — the one
 /// with the highest `id` (GitLab pipeline ids are monotonic; `created_at` is a
 /// tie-breaker only when ids are absent). trace:STORY-510 | ai:claude
 fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value> {
@@ -1864,9 +1875,10 @@ fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value>
     })
 }
 
-/// Map a `glab ci list -F json` invocation to a [`CiStatus`]. A non-success exit
-/// or no pipelines degrades to `CiState::None` (no CI / nothing to wait on),
-/// mirroring GitHubForge::ci_status's treatment of an empty check set.
+/// Map a `glab api -X GET projects/:id/pipelines` invocation (TASK-962) to a
+/// [`CiStatus`]. A non-success exit or no pipelines degrades to
+/// `CiState::None` (no CI / nothing to wait on), mirroring
+/// GitHubForge::ci_status's treatment of an empty check set.
 /// trace:STORY-510 | ai:claude
 fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
@@ -1918,9 +1930,9 @@ fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus 
     }
 }
 
-/// Map a `glab ci list -F json` invocation to a [`CiProbeResult`] — the
-/// branch-keyed probe the orchestrator's CI-wait phase consumes. `change` is the
-/// resolved MR iid (0 when no MR was found; GitLab pipelines are branch-scoped,
+/// Map a `glab api -X GET projects/:id/pipelines` invocation (TASK-962) to a
+/// [`CiProbeResult`] — the branch-keyed probe the orchestrator's CI-wait phase consumes.
+/// `change` is the resolved MR iid (0 when no MR was found; GitLab pipelines are branch-scoped,
 /// so a probe is still meaningful without an MR). Preserves the
 /// transient-vs-definitive split: a `glab` invocation error → `NoSignal` (couldn't
 /// probe), distinct from "no pipelines" (`NoChecks`). trace:STORY-510 | ai:claude
@@ -2787,12 +2799,12 @@ mod tests {
 
     // ───────────────────── STORY-510: glab CI/pipeline mapping ─────────────────────
     //
-    // `glab ci list -F json` emits the GitLab REST pipeline objects verbatim, so
-    // these fixtures faithfully exercise the pure mappers without a live GitLab.
-    // trace:STORY-510 | ai:claude
+    // `glab api -X GET projects/:id/pipelines` (TASK-962) returns the GitLab
+    // REST pipeline objects verbatim, so these fixtures faithfully exercise the
+    // pure mappers without a live GitLab. trace:STORY-510 trace:TASK-962 | ai:claude
 
-    /// A `glab ci list -F json` array fixture with one pipeline of `status` at
-    /// `id`. (`web_url`/`ref`/`sha` are the other load-bearing fields.)
+    /// A `glab api pipelines` REST array fixture with one pipeline of `status`
+    /// at `id`. (`web_url`/`ref`/`sha` are the other load-bearing fields.)
     fn pipeline_fixture(id: u64, status: &str) -> String {
         format!(
             r#"[{{
@@ -2964,5 +2976,63 @@ mod tests {
             ci_probe_from_glab_pipelines(Ok(fake_output(0, r#"{"id":1}"#, "")), 7),
             CiProbeResult::NoSignal(_)
         ));
+    }
+
+    // TASK-962: `ci_status`/`ci_probe_for_branch` now read `glab api -X GET
+    // projects/:id/pipelines?ref=<branch>` instead of the broken `glab ci list
+    // -F json`. The GitLab REST `GET /projects/:id/pipelines` response carries
+    // a few fields `pipeline_fixture` doesn't (`project_id`, `source`,
+    // `updated_at`) alongside the ones the mappers read (`id`/`status`/
+    // `web_url`/`created_at`) — this fixture is the full REST shape verbatim
+    // from the GitLab API docs, proving the pure mappers tolerate the extra
+    // fields and still pick the right pipeline/state/url. trace:TASK-962 | ai:claude
+    fn real_glab_api_pipelines_response(id: u64, status: &str) -> String {
+        format!(
+            r#"[{{
+              "id": {id},
+              "iid": 12,
+              "project_id": 1,
+              "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
+              "ref": "feature/x",
+              "status": "{status}",
+              "source": "push",
+              "created_at": "2026-06-06T11:28:34.085Z",
+              "updated_at": "2026-06-06T11:32:35.169Z",
+              "web_url": "https://gitlab.example.com/joe/aida/-/pipelines/{id}"
+            }}]"#
+        )
+    }
+
+    #[test]
+    fn ci_status_from_real_glab_api_pipelines_response_maps_success() {
+        let status = ci_status_from_glab_pipelines(Ok(fake_output(
+            0,
+            &real_glab_api_pipelines_response(99, "success"),
+            "",
+        )));
+        assert_eq!(status.state, CiState::Success);
+        assert!(status.failing_checks.is_empty());
+        assert_eq!(
+            status.url.as_deref(),
+            Some("https://gitlab.example.com/joe/aida/-/pipelines/99")
+        );
+    }
+
+    #[test]
+    fn ci_probe_from_real_glab_api_pipelines_response_maps_failed() {
+        match ci_probe_from_glab_pipelines(
+            Ok(fake_output(
+                0,
+                &real_glab_api_pipelines_response(100, "failed"),
+                "",
+            )),
+            12,
+        ) {
+            CiProbeResult::Failed { change, summary } => {
+                assert_eq!(change, 12);
+                assert!(summary.contains("failed"), "summary: {summary}");
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
     }
 }
