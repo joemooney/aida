@@ -24,5 +24,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T00:41:38.713330210Z
-modified_at: 2026-07-08T00:41:38.713330210Z
+modified_at: 2026-07-13T07:01:02.371422079Z
 req_type: Story
+decision_request:
+  question: How should aida handle the silent TOON switch when stdout is not a TTY (the BUG-707 demo-script casualty)?
+  choices:
+  - label: Bless TOON-when-piped + document loudly
+    consequence: scripts still break silently until author reads docs
+    resolution: document in README+env-vars+first-pipe stderr hint
+  - label: Add --format human
+    consequence: toon
+    resolution: json pin (or AIDA_OUTPUT_FORMAT)|scripts get a durable explicit format request|TTY stays human, non-TTY stays TOON, flag overrides
+  - label: Both — escape hatch + loud docs
+    consequence: belt and suspenders
+    resolution: ship the flag AND the docs
+  recommended: 2
+  rationale: Precedent tools ship both; a real user script already broke silently, so docs alone won't save an author who never reads them.
+  asked_at: 2026-07-13T07:01:02.371422079Z
