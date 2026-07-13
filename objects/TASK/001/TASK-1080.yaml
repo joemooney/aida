@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T05:52:49.059498927Z
-modified_at: 2026-07-01T05:53:05.400565002Z
+modified_at: 2026-07-13T07:03:38.493726296Z
 req_type: Task
 tags:
 - integrator
@@ -18,3 +18,18 @@ relationships:
 - rel_type: Child
   target_id: 019ecea3-433b-7123-bb15-2253eb818b54
   created_at: 2026-07-01T05:53:05.400565002Z
+decision_request:
+  question: Should integrate --strategy stacked auto force-push-rebase promoted stacked children, or keep the manual /aida-rebase handoff?
+  choices:
+  - label: Auto stack-aware promotion
+    consequence: fully autonomous stacked drains, but integrator force-pushes origin PR branches unattended
+    resolution: auto
+  - label: Keep exit-2 /aida-rebase pointer
+    consequence: human does the rebase
+    resolution: manual
+  - label: Behind --promote-stacked opt-in
+    consequence: default manual, opt-in autonomous with lease guard
+    resolution: opt-in
+  recommended: 2
+  rationale: Unattended force-push of shared PR branches is exactly the hazard class in memory; ship behind an opt-in with the lease guard, keep the safe default.
+  asked_at: 2026-07-13T07:03:38.493726296Z
