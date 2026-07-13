@@ -1,0 +1,14 @@
+id: 019f5946-a34c-7552-abd7-59301c45ce68
+spec_id: TASK-1144
+agreed_id: TASK-1144
+title: Cross-clone lock propagation (only if a real cross-clone collision is observed)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-13T02:20:29.388195286Z
+modified_at: 2026-07-13T02:20:29.388195286Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-07-12-story-711-advisor-lock.md
