@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T01:36:43.223671599Z
-modified_at: 2026-06-29T05:14:55.573759298Z
+modified_at: 2026-07-13T07:05:11.723128711Z
 req_type: Epic
 tags:
 - cli
@@ -68,3 +68,15 @@ comments:
   content: 'Scope: aida focus must propagate to queue add (--scope) and queue work (epic cluster), so focus-queued work is drained only in the epic''s context. The --scope (lease-scope) + ''queue work <epic>'' machinery already exists; focus should wire it automatically. See STORY-706.'
   created_at: 2026-06-27T01:42:55.425355140Z
   modified_at: 2026-06-27T01:42:55.425355140Z
+decision_request:
+  question: The aida focus (context/lens) layer is fully shipped (all children done); the WORKSPACE layer was deliberately deferred. What now?
+  choices:
+  - label: Close EPIC-55 as done, file WORKSPACE as its own future epic with a revisit trigger
+    consequence: keeps the rollup honest
+    resolution: close+refile
+  - label: Keep EPIC-55 open and add the workspace children here
+    consequence: one umbrella
+    resolution: keep open
+  recommended: 0
+  rationale: Focus shipped and is useful standalone; the epic's own text calls workspace a much bigger follow-on to defer — a fresh epic keeps the rollup honest.
+  asked_at: 2026-07-13T07:05:11.723128711Z
