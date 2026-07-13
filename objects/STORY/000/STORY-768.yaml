@@ -24,7 +24,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T06:37:38.431434431Z
-modified_at: 2026-07-13T06:37:38.431434431Z
+modified_at: 2026-07-13T06:51:50.577217367Z
 req_type: Story
 tags:
 - aida:human aida:audit advisor coordination parent:STORY-767
+comments:
+- id: 019f5a3f-11b1-7c90-bc57-ca32b223eac6
+  author: joe
+  content: Commit c90a5f020 references this requirement
+  created_at: 2026-07-13T06:51:50.577217367Z
+  modified_at: 2026-07-13T06:51:50.577217367Z
