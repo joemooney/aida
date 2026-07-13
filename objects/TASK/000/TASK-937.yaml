@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:52:42.091111394Z
-modified_at: 2026-06-30T21:09:45.513080831Z
+modified_at: 2026-07-13T07:03:39.354941226Z
 req_type: Task
 tags:
 - needs-design
@@ -32,3 +32,18 @@ comments:
   content: test ping from audit
   created_at: 2026-06-30T21:09:45.513080831Z
   modified_at: 2026-06-30T21:09:45.513080831Z
+decision_request:
+  question: What should the batch-approve 'approvable set' include, and should it auto-queue in the same call?
+  choices:
+  - label: Drafts + intake proposals, approve+queue in one action
+    consequence: as speced, file-then-queue-same-breath
+    resolution: approve+queue
+  - label: Drafts only, approve without queueing
+    consequence: queue stays a separate step
+    resolution: approve only
+  - label: Drafts + intake + trigger-met deferred
+    consequence: broadest set
+    resolution: approve broad
+  recommended: 0
+  rationale: Matches the EPIC-53 seam and the file-then-queue discipline; a broader set can layer on later without reopening the seam.
+  asked_at: 2026-07-13T07:03:39.354941226Z
