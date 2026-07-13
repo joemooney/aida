@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:09:46.013699292Z
-modified_at: 2026-07-13T01:36:02.904525156Z
+modified_at: 2026-07-13T06:14:28.734113858Z
 req_type: Story
 tags:
 - aida:remote
@@ -57,3 +57,6 @@ comments:
   content: 'Status reconcile (surfaced via aida human 2026-07-12): this shipped straight from DRAFT so auto-bump never moved it. Slices 1+2 ARE merged to main — slice 1 detection (aida remote status + doctor Remote-drift, #1353/TASK-1095/BUG-700) and slice 2 fan-out push ([store.sync] mirror_remotes, #1354/#1355/#1356). Slice 3 (aida remote reconcile — heal a two-way divergence) and slice 4 (init mirror_remotes stub) are NOT yet shipped; slice 3 IS the BUG-714 gap (''fan-out can only PUSH, cannot reconcile''). Moved draft→in-progress to reflect partial ship. The stale ''remote-drift-prevention'' local branch holds the pre-squash originals (work already on main via #1345-1357). NOT completed — reconcile slice remains (track via BUG-714).'
   created_at: 2026-07-13T01:36:02.904525156Z
   modified_at: 2026-07-13T01:36:02.904525156Z
+deferred: true
+deferred_at: 2026-07-13T06:14:28.734113858Z
+deferred_until: BUG-714 resolved (store pull-leg reconcile / slice 3)
