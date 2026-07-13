@@ -16,10 +16,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T05:50:12.341160277Z
-modified_at: 2026-07-13T05:50:12.341160277Z
+modified_at: 2026-07-13T06:16:53.643947438Z
 req_type: Task
 tags:
 - aida:worktree
 - hygiene
 - papercut
 - severity:minor
+comments:
+- id: 019f5a1f-128b-7452-8f0b-27899863bdf6
+  author: joe
+  content: 'TASK-878 (Completed) already ships the safe squash-aware GC as ''aida doctor --category merged-agent-worktrees''. This overlaps most of TASK-1145. Narrowing TASK-1145 to the DELTA only: (a) an ergonomic ''aida worktree gc'' alias for that doctor heal, and (b) auto-running it after a successful aida-managed squash-merge (the branch-delete ''used by worktree'' collision hit ~5x in one drain session because GC is manual/doctor-only, not on-merge). NOTE: TASK-878''s heal is destructive + STORY-666-gated, so on-merge auto-GC must honor that gate. Also note TASK-963''s branch (hand-named, not worktree-agent-*) and the aida-store branch are NOT covered by TASK-878 — those false-positives belong to the new reviews-awaiting state-awareness bug, not here.'
+  created_at: 2026-07-13T06:16:53.643947438Z
+  modified_at: 2026-07-13T06:16:53.643947438Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
