@@ -14,12 +14,12 @@ description: |-
   Principle it enforces: when the operator asks 'does this need me?', the answer must be TRUE from the graph, not require the advisor to explain items away in chat. Ephemeral narration that should have been a substrate edit is an opacity failure.
 
   Deliver as a skill 'aida-review-human' + slash command, authored in the master templates (aida-core/templates/skills/ + commands/), symlinked into .claude/ via make sync-templates, embedded via build.rs. Related: BUG-722 (the tool-precision fixes that shrink how many items need manual reconciliation).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T06:19:07.663375401Z
-modified_at: 2026-07-13T06:36:18.302934630Z
+modified_at: 2026-07-13T06:50:26.956077726Z
 req_type: Story
 tags:
 - aida:human aida:skill advisor coordination
@@ -34,3 +34,21 @@ comments:
   content: Commit 502d040e7 references this requirement
   created_at: 2026-07-13T06:36:18.302934630Z
   modified_at: 2026-07-13T06:36:18.302934630Z
+history:
+- id: 019f5a3d-cb06-7523-84f9-8ff531103546
+  author: aida-auto-bump
+  timestamp: 2026-07-13T06:50:26.950169259Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f5a3d-cb0c-7221-8241-bfdef4eda286
+  timestamp: 2026-07-13T06:50:26.956077168Z
+  agent: aida
+  commit_sha: 492dc4d3554967edd9de4a0f9f3888d24ecca04b
+  summary: Completed via merge 492dc4d3
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T06:50:26.757105591Z
+  completion_sha: 492dc4d3554967edd9de4a0f9f3888d24ecca04b
