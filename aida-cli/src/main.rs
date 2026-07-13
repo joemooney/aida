@@ -81,6 +81,7 @@ mod intent;
 mod mailbox_store;
 mod manual;
 mod mcp;
+mod mcp_translate;
 mod metrics;
 mod network_retry;
 mod not_found;
@@ -147137,6 +147138,16 @@ fn handle_mcp_command(cmd: &McpCommand) -> Result<()> {
         McpCommand::RegisterAgent { name, print, force } => {
             register_mcp_agent(name, *print, *force)
         }
+        McpCommand::Translate {
+            project_root,
+            force,
+            dry_run,
+        } => {
+            let root = project_root
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            run_mcp_translate(&root, *force, *dry_run)
+        }
         McpCommand::Skill(SkillCommand::Render { name }) => {
             let project_root = find_project_root()
                 .or_else(|_| std::env::current_dir())
@@ -147263,6 +147274,58 @@ fn register_mcp_agent(name: &str, print_only: bool, force: bool) -> Result<()> {
         server_url
     );
     println!("MCP-speaking agents (Codex, Cursor, etc.) can now call AIDA's 24 tools — see `aida mcp register-agent --print` for the full surface.");
+    Ok(())
+}
+
+/// `aida mcp translate`: derive `.codex/config.toml` and
+/// `.gemini/settings.json` from this project's `.mcp.json` AIDA server
+/// registration. TASK-1046.
+fn run_mcp_translate(project_root: &std::path::Path, force: bool, dry_run: bool) -> Result<()> {
+    use crate::mcp_translate::{TranslateAction, TranslateReport};
+
+    let report = crate::mcp_translate::translate(project_root, force, dry_run)?;
+
+    let TranslateReport::Translated {
+        server_name,
+        codex,
+        gemini,
+    } = (match report {
+        TranslateReport::NothingToTranslate { mcp_json_path } => {
+            println!(
+                "Nothing to translate: no AIDA MCP server registered in {}",
+                mcp_json_path.display()
+            );
+            if !mcp_json_path.exists() {
+                println!("  (the file itself doesn't exist — `aida mcp register-agent` or `aida init` creates it)");
+            }
+            return Ok(());
+        }
+        other => other,
+    })
+    else {
+        unreachable!("NothingToTranslate handled above");
+    };
+
+    let describe = |label: &str, outcome: &crate::mcp_translate::TargetOutcome| {
+        let verb = match outcome.action {
+            TranslateAction::Created if dry_run => "would create/update",
+            TranslateAction::Created => "wrote",
+            TranslateAction::Updated if dry_run => "would overwrite",
+            TranslateAction::Updated => "overwrote",
+            TranslateAction::UpToDate => "already up to date",
+            TranslateAction::SkippedExisting => "skipped (differs — use --force to overwrite)",
+        };
+        println!("{}: {} — {}", label, outcome.path.display(), verb);
+    };
+
+    println!(
+        "Translating '{}' MCP server registration from .mcp.json{}",
+        server_name,
+        if dry_run { " (dry run)" } else { "" }
+    );
+    describe("Codex", &codex);
+    describe("Gemini", &gemini);
+
     Ok(())
 }
 
