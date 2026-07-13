@@ -98714,6 +98714,98 @@ fn print_groom_handoff_help() {
     println!();
 }
 
+/// The parking tag the interactive sweep clears when the operator captures a
+/// design decision on a spec — see [`tags_to_clear_on_note`].
+// trace:TASK-1086 | ai:claude
+const NEEDS_DESIGN_TAG: &str = "needs-design";
+
+/// TASK-1086: the pure core of the sweep's "add a decision note" action — decide
+/// which tags to clear given the operator's typed note and the spec's current
+/// tags. Capturing a real decision on a `needs-design`-parked spec unparks it, so
+/// `needs-design` (case-insensitive) is cleared and the spec becomes drive-ready
+/// in the same action; a blank/cancelled note changes nothing. Every other tag is
+/// preserved, and a spec that doesn't carry `needs-design` yields an empty list
+/// (idempotent no-op). Pure, so exhaustively unit-testable; the runtime reuses the
+/// `aida edit --remove-tag` write path for the actual clear.
+// trace:TASK-1086 | ai:claude
+fn tags_to_clear_on_note(note: &str, tags: &HashSet<String>) -> Vec<String> {
+    if note.trim().is_empty() {
+        return Vec::new();
+    }
+    tags.iter()
+        .filter(|t| t.trim().eq_ignore_ascii_case(NEEDS_DESIGN_TAG))
+        .cloned()
+        .collect()
+}
+
+/// TASK-1086: best-effort read of a spec's current tag set for the interactive
+/// sweep. Returns an empty set if the store can't be reached — the caller then
+/// clears nothing, which is the safe (leave-parked) default.
+// trace:TASK-1086 | ai:claude
+fn load_spec_tags(id: &str) -> HashSet<String> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let Some(store) = load_store_for_lookup(&project_root) else {
+        return HashSet::new();
+    };
+    store
+        .get_requirement_by_spec_id(id.trim())
+        .map(|r| r.tags.clone())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod task_1086_unblock_clears_needs_design {
+    use super::*;
+
+    fn tagset(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn capturing_a_decision_clears_needs_design_and_keeps_other_tags() {
+        // A `needs-design`-parked spec: capturing a real decision (non-blank note)
+        // clears just `needs-design`; every sibling tag survives.
+        let tags = tagset(&["needs-design", "batch:auth", "parent:EPIC-9"]);
+        let cleared = tags_to_clear_on_note("Use JWT with 15m expiry", &tags);
+        assert_eq!(cleared, vec!["needs-design".to_string()]);
+    }
+
+    #[test]
+    fn cancelled_capture_leaves_the_tag() {
+        // A blank / whitespace-only note = cancel/abort → nothing is cleared, so
+        // the spec stays parked with `needs-design` intact.
+        let tags = tagset(&["needs-design", "batch:auth"]);
+        assert!(tags_to_clear_on_note("", &tags).is_empty());
+        assert!(tags_to_clear_on_note("   ", &tags).is_empty());
+    }
+
+    #[test]
+    fn no_needs_design_tag_is_an_idempotent_no_op() {
+        // Capturing a decision on a spec that never carried `needs-design` clears
+        // nothing — safe and idempotent.
+        let tags = tagset(&["batch:auth", "parent:EPIC-9"]);
+        assert!(tags_to_clear_on_note("Ship the default", &tags).is_empty());
+        // And an empty tag set is likewise a no-op.
+        assert!(tags_to_clear_on_note("decide", &HashSet::new()).is_empty());
+    }
+
+    #[test]
+    fn needs_design_match_is_case_insensitive() {
+        let tags = tagset(&["Needs-Design", "keep"]);
+        let cleared = tags_to_clear_on_note("captured", &tags);
+        assert_eq!(cleared, vec!["Needs-Design".to_string()]);
+    }
+
+    #[test]
+    fn related_needs_design_signoff_tag_is_not_cleared() {
+        // TASK-1086 clears only `needs-design`; the distinct `needs-design-signoff`
+        // parking tag is left for its own resolution path.
+        let tags = tagset(&["needs-design-signoff", "keep"]);
+        assert!(tags_to_clear_on_note("captured", &tags).is_empty());
+    }
+}
+
 /// STORY-750: perform ONE sweep resolution by self-invoking the existing `aida`
 /// verb — so the write path is the SAME one `aida edit` / `aida queue add` use,
 /// never a re-implementation. Returns `true` if it mutated the spec toward
@@ -98765,11 +98857,29 @@ fn apply_sweep_choice(id: &str, choice: burndown::SweepChoice) -> Result<bool> {
                 return Ok(false);
             }
             self_invoke_aida(&["comment", "add", id, note.trim()])?;
-            println!(
-                "    {} note recorded on {id} (left parked).",
-                crate::glyph(crate::glyphs::Glyph::Check).green()
-            );
-            Ok(false)
+            // TASK-1086: capturing a design decision unparks the spec — clear the
+            // `needs-design` tag so it becomes drive-ready in the SAME action,
+            // instead of leaving the operator to strip the tag by hand. Reuses the
+            // `aida edit --remove-tag` write path; idempotent (a spec without the
+            // tag clears nothing). Only fires on a real capture — a blank note
+            // returned above with the tag intact.
+            let to_clear = tags_to_clear_on_note(&note, &load_spec_tags(id));
+            for tag in &to_clear {
+                self_invoke_aida(&["edit", id, "--remove-tag", tag])?;
+            }
+            if to_clear.is_empty() {
+                println!(
+                    "    {} note recorded on {id} (left parked).",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
+                Ok(false)
+            } else {
+                println!(
+                    "    {} decision recorded on {id} — cleared `{NEEDS_DESIGN_TAG}`, now drive-ready.",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
+                Ok(true)
+            }
         }
         SweepChoice::Clarify => {
             println!(
