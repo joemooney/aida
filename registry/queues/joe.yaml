@@ -434,30 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019f591d-f9c4-7d41-a0fc-b1f60519fd36
-  position: 341000
-  added_by: joe
-  added_at: 2026-07-13T02:21:09.624733462Z
-  for_role: advisor
-  for_scope: harness-worktree
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 019f0a65-cd9f-7f01-8dac-4069f5f5a175
-  position: 342000
-  added_by: joe
-  added_at: 2026-07-13T02:21:10.076780073Z
-  for_role: advisor
-  for_scope: harness-worktree
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 019f16c3-397a-7eb3-a09a-904c8679956d
-  position: 343000
-  added_by: joe
-  added_at: 2026-07-13T02:21:10.767761243Z
-  for_role: advisor
-  for_scope: harness-worktree
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 019f23b6-a688-7980-b034-74813e48557b
   position: 344000
   added_by: joe
