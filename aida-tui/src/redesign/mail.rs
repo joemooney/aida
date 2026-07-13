@@ -158,12 +158,25 @@ fn mail_identity() -> String {
         .unwrap_or_else(|_| "default".to_string())
 }
 
-/// Resolve the AIDA project root from `cwd`: the nearest ancestor holding
-/// `.git` or `.aida/config.toml`. Best-effort — degrades to the raw `cwd`
-/// when nothing is found, matching [`fetch_mail_items`]'s own
-/// "any failure yields an empty Vec" grace.
-// trace:STORY-701 | ai:claude
+/// Resolve the AIDA project root from `cwd`.
+///
+/// TASK-1141: this MUST agree with the CLI's `aida mailbox send` (the reply
+/// action shells out to it), or the cockpit can read the inbox from one root
+/// while replies land in another's `.aida/mailbox/`. So this routes through
+/// the exact same canonical resolver as the CLI —
+/// `aida_core::store_locate::resolve_project_root_from`, which finds the
+/// attached distributed store (honoring `AIDA_STORE`, and BUG-331's
+/// main-worktree fallback for a linked/nested git worktree whose own
+/// `.aida-store/` isn't attached) and takes its parent. Only when that
+/// yields nothing (not a distributed AIDA project here — legacy/no store)
+/// do we fall back to the old best-effort `.git`/`.aida/config.toml`
+/// walk-up, matching [`fetch_mail_items`]'s own "any failure yields an
+/// empty Vec" grace.
+// trace:STORY-701 trace:TASK-1141 | ai:claude
 fn resolve_project_root(cwd: &Path) -> PathBuf {
+    if let Some(root) = aida_core::store_locate::resolve_project_root_from(cwd) {
+        return root;
+    }
     let mut dir = Some(cwd);
     while let Some(d) = dir {
         if d.join(".git").exists() || d.join(".aida").join("config.toml").is_file() {
@@ -342,5 +355,80 @@ mod tests {
         let nested = root.join("x");
         std::fs::create_dir_all(&nested).unwrap();
         assert_eq!(resolve_project_root(&nested), root);
+    }
+
+    // TASK-1141: the divergent case. Before this fix, `resolve_project_root`
+    // walked up from cwd for the nearest `.git` (file OR dir) — and a
+    // LINKED git worktree (e.g. under `.claude/worktrees/<name>`, as this
+    // very repo uses) has its OWN `.git` file, so the old walk stopped
+    // there and returned the linked worktree's root. Meanwhile the CLI's
+    // `aida mailbox send` (which the reply action shells out to) resolves
+    // the project root via the orphan-store worktree's parent — and since
+    // `.aida-store/` is only attached in the MAIN worktree, that resolves
+    // to the MAIN worktree's root instead. Read (TUI) and send (CLI) would
+    // silently disagree.
+    //
+    // This test proves the fix: `resolve_project_root` on a linked worktree
+    // now returns the SAME root the CLI's canonical resolver
+    // (`aida_core::store_locate`) does — the MAIN worktree, not the linked
+    // one — by routing through that shared resolver instead of the old
+    // ad-hoc walk.
+    // trace:TASK-1141 | ai:claude
+    #[test]
+    fn resolve_project_root_agrees_with_cli_in_nested_worktree() {
+        fn git(repo: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+                .expect("git on PATH");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path().join("main");
+        std::fs::create_dir_all(&main_root).unwrap();
+        git(&main_root, &["init", "-q", "-b", "main"]);
+        git(&main_root, &["config", "user.email", "t@t.t"]);
+        git(&main_root, &["config", "user.name", "t"]);
+        std::fs::create_dir_all(main_root.join(".aida")).unwrap();
+        std::fs::write(
+            main_root.join(".aida/config.toml"),
+            "[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        git(&main_root, &["add", "."]);
+        git(&main_root, &["commit", "-q", "-m", "init"]);
+        // The attached orphan-store worktree lives ONLY in the main worktree
+        // — exactly the case that used to make the CLI and the TUI disagree.
+        std::fs::create_dir_all(main_root.join(".aida-store")).unwrap();
+
+        // A NESTED linked worktree, mirroring this repo's own
+        // `.claude/worktrees/<agent>` convention.
+        let nested = main_root.join(".claude/worktrees/agent-x");
+        std::fs::create_dir_all(nested.parent().unwrap()).unwrap();
+        git(
+            &main_root,
+            &["worktree", "add", "--detach", nested.to_str().unwrap()],
+        );
+        // Sanity: the nested worktree really does have its own `.git` (a
+        // file, not a dir) — the thing the OLD walk-up would have stopped
+        // at, returning `nested` instead of `main_root`.
+        assert!(nested.join(".git").is_file());
+        assert!(!nested.join(".aida-store").exists());
+
+        let resolved = resolve_project_root(&nested);
+        assert_eq!(
+            resolved.canonicalize().unwrap(),
+            main_root.canonicalize().unwrap(),
+            "TUI mail path must resolve to the MAIN worktree root, matching \
+             `aida mailbox send`, not the nested worktree it was invoked from"
+        );
     }
 }

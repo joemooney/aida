@@ -14160,22 +14160,22 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
 /// orphan-store worktree, resolved through a symlink too. Used to detect
 /// distributed mode from the store's SHAPE when neither `.aida/config.toml` nor
 /// an `aida-store` branch is present, so plain `aida` uses the real store
-/// instead of silently serving legacy data. trace:BUG-433 | ai:claude
+/// instead of silently serving legacy data. Delegates to `aida-core` so this
+/// stays in lockstep with every other caller of the SAME resolver (e.g.
+/// `aida-tui`'s mail scope).
+// trace:BUG-433 trace:TASK-1141 | ai:claude
 fn attached_store_present(project_root: &std::path::Path) -> bool {
-    project_root.join(".aida-store").join("objects").is_dir()
+    aida_core::store_locate::is_store_attached(project_root)
 }
 
 /// Classification of an `AIDA_STORE` value: either it resolves to a usable
 /// store, or it's set-but-unusable with a specific reason. Lets the
 /// resolution core stay pure/unit-testable while the env wrapper decides
-/// whether to print the BUG-567 fall-through notice. trace:BUG-567 | ai:claude
-enum StoreOverride {
-    /// `AIDA_STORE` points at a valid git-canonical store (canonicalized).
-    Usable(std::path::PathBuf),
-    /// `AIDA_STORE` was set but unusable; carries a human-readable reason so
-    /// the wrapper can name WHY it fell through (BUG-567 Finding 1).
-    Unusable { reason: String },
-}
+/// whether to print the BUG-567 fall-through notice. Re-exported from
+/// `aida-core::store_locate`, the canonical resolver both this CLI and
+/// `aida-tui` route through.
+// trace:BUG-567 trace:TASK-1141 | ai:claude
+use aida_core::store_locate::StoreOverride;
 
 /// Resolve the `AIDA_STORE` env override into a usable store path, or `None`
 /// when unset / pointing at something that isn't a git-canonical store. A valid
@@ -14322,35 +14322,12 @@ fn aida_quiet() -> bool {
 /// unit-tested without mutating process env. Returns [`StoreOverride::Usable`]
 /// (canonicalized) when `path` exists and holds an `objects/` directory, else
 /// [`StoreOverride::Unusable`] carrying the specific reason it was rejected.
-/// trace:SPIKE-48 trace:BUG-567 | ai:claude
+/// Delegates to `aida-core::store_locate::classify_store_path` — the
+/// canonical resolver — so this CLI and any other caller (`aida-tui`'s mail
+/// scope) never drift apart.
+// trace:SPIKE-48 trace:BUG-567 trace:TASK-1141 | ai:claude
 fn aida_store_override_from(path: &std::path::Path) -> StoreOverride {
-    if !path.is_dir() {
-        return StoreOverride::Unusable {
-            reason: "not a directory".to_string(),
-        };
-    }
-    if !path.join("objects").is_dir() {
-        return StoreOverride::Unusable {
-            reason: "missing an `objects/` subdirectory".to_string(),
-        };
-    }
-    StoreOverride::Usable(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
-}
-
-#[cfg(test)]
-impl StoreOverride {
-    fn is_some(&self) -> bool {
-        matches!(self, StoreOverride::Usable(_))
-    }
-    fn is_none(&self) -> bool {
-        matches!(self, StoreOverride::Unusable { .. })
-    }
-    fn expect(self, msg: &str) -> std::path::PathBuf {
-        match self {
-            StoreOverride::Usable(p) => p,
-            StoreOverride::Unusable { reason } => panic!("{msg}: unusable ({reason})"),
-        }
-    }
+    aida_core::store_locate::classify_store_path(path)
 }
 
 /// Walk up from `start` and return the project root whose `.aida/config.toml`
@@ -14774,87 +14751,14 @@ mod bug_559_clone_recovery_tests {
 /// Walk-up resolver split out from `detect_distributed_store` so the search
 /// path is testable without changing process cwd. Returns the absolute store
 /// path on the first ancestor whose `.aida/config.toml` declares one.
-/// trace:BUG-57 | ai:claude
+///
+/// Delegates to `aida-core::store_locate::detect_distributed_store_from` —
+/// the canonical resolver (including its BUG-331 main-worktree fallback for
+/// a linked/nested git worktree) — so this CLI and any other caller
+/// (`aida-tui`'s mail scope) resolve to the exact same project root.
+// trace:BUG-57 trace:BUG-331 trace:TASK-1141 | ai:claude
 fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
-    let mut current = start;
-    loop {
-        let config_path = current.join(".aida").join("config.toml");
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            // store_path is relative to the directory containing config.toml,
-            // not to the original cwd — otherwise `aida edit` from a subdir
-            // would resolve the store against the wrong base.
-            for line in content.lines() {
-                let line = line.trim();
-                if let Some(rest) = line.strip_prefix("store_path") {
-                    if let Some(val) = rest.split('=').nth(1) {
-                        let val = val.trim().trim_matches('"').trim_matches('\'');
-                        let store_path = current.join(val);
-                        if store_path.exists() && store_path.is_dir() {
-                            return Some(store_path);
-                        }
-                        // BUG-331: a sibling worktree (`git worktree add`) has the
-                        // tracked `.aida/config.toml` but NOT `.aida-store/` — that
-                        // gitignored orphan-branch worktree only lives in the MAIN
-                        // worktree. Without this, detection fails here and AIDA
-                        // silently falls back to deprecated centralized mode,
-                        // breaking cross-worktree coordination. Resolve the store
-                        // at the main worktree via git-common-dir before giving up.
-                        // trace:BUG-331 | ai:claude
-                        if let Some(main_store) = main_worktree_store(current, val) {
-                            return Some(main_store);
-                        }
-                    }
-                }
-            }
-        }
-        match current.parent() {
-            Some(p) => current = p,
-            None => return None,
-        }
-    }
-}
-
-/// BUG-331: resolve `<main-worktree>/<rel_store>` from inside a git worktree.
-///
-/// `git rev-parse --git-common-dir` yields the SHARED `.git` directory (e.g.
-/// `/main/.git`) regardless of which worktree we're in; its parent is the main
-/// worktree. The `.aida-store/` orphan-branch worktree is created (and
-/// gitignored) only there, so a sibling worktree must look here instead of
-/// falling back to centralized mode. The common-dir may be printed relative to
-/// `current` (e.g. `.git`) or absolute — handle both, then canonicalize.
-///
-/// Returns None when not in a git repo, git is unavailable/old, or the store is
-/// genuinely absent — callers then fall through to their existing resolution.
-/// trace:BUG-331 | ai:claude
-fn main_worktree_store(current: &std::path::Path, rel_store: &str) -> Option<std::path::PathBuf> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(current)
-        .args(["rev-parse", "--git-common-dir"])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let raw = String::from_utf8(out.stdout).ok()?;
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return None;
-    }
-    let common_dir = std::path::Path::new(raw);
-    let common_dir = if common_dir.is_absolute() {
-        common_dir.to_path_buf()
-    } else {
-        current.join(common_dir)
-    };
-    let common_dir = common_dir.canonicalize().ok()?;
-    let main_worktree = common_dir.parent()?;
-    let store = main_worktree.join(rel_store);
-    if store.exists() && store.is_dir() {
-        Some(store)
-    } else {
-        None
-    }
+    aida_core::store_locate::detect_distributed_store_from(start)
 }
 
 /// Read the `[id_format] policy` from `.aida/config.toml`. Honors the legacy
