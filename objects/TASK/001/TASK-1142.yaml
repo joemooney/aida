@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T02:19:57.265464097Z
-modified_at: 2026-07-13T02:19:57.265464097Z
+modified_at: 2026-07-13T05:12:24.407140874Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-12-story-711-advisor-lock.md
@@ -16,3 +16,10 @@ relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-13T02:20:00.183827047Z
+comments:
+- id: 019f59e4-0857-74f0-abbc-e581efa3606f
+  author: joe
+  content: 'OBE: this auto-followup (''STORY-711 slice 2 as its own PR'') is already done — slice 2 (the enforcement gate) shipped as TASK-1140 (#1390) and STORY-711 is Completed. Closing.'
+  created_at: 2026-07-13T05:12:24.407140874Z
+  modified_at: 2026-07-13T05:12:24.407140874Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
