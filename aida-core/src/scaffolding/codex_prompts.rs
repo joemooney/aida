@@ -84,7 +84,11 @@ pub struct CodexPromptsOutcome {
 }
 
 /// Strip a leading YAML frontmatter block (`---\n…\n---\n`) if present.
-fn strip_frontmatter(body: &str) -> &str {
+///
+/// Shared with the non-Claude skill-invocation materializer (TASK-1045), which
+/// inlines an embedded skill body into a headless prompt for a vendor that
+/// can't expand `/aida-<skill>`; the Claude Code frontmatter is noise there.
+pub fn strip_frontmatter(body: &str) -> &str {
     let Some(rest) = body.strip_prefix("---\n") else {
         return body;
     };

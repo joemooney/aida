@@ -501,12 +501,65 @@ pub fn seed_skill_prompt(project_root: &std::path::Path, bare: &str) -> String {
     )
 }
 
-/// The cold-boot `/aida-advise` prompt, seeded like the assess prompt. The
-/// burndown advisor tier launches this on a punt cold-boot; the fork branch
-/// gets live context via `--resume`, so only the cold-boot needs the seed.
-/// trace:STORY-626 | ai:claude
-pub fn seeded_advise_prompt(project_root: &std::path::Path) -> String {
-    seed_skill_prompt(project_root, "/aida-advise")
+/// Vendor-aware cold-boot `/aida-advise` prompt, seeded like the assess prompt.
+/// The burndown advisor tier launches this on a punt cold-boot; the Claude fork
+/// branch gets live context via `--resume`, so only the cold-boot needs the
+/// seed.
+///
+/// Claude Code expands `/aida-advise` from `.claude/skills/aida-advise.md` on
+/// demand, so for Claude the bare slash invocation is kept (cheap — the body
+/// loads lazily). A non-Claude vendor (Codex, Gemini) never reads
+/// `.claude/skills/`, so the slash token is inert noise to it; for those we
+/// inline the embedded skill body so the launched `codex exec` (etc.) actually
+/// receives the advisor prompt. This is the `seed_skill_prompt` hook that makes
+/// AIDA's skill guidance reachable by a non-Claude drain agent.
+// trace:STORY-626 trace:TASK-1045 | ai:claude
+pub fn seeded_advise_prompt_for_vendor(project_root: &std::path::Path, is_claude: bool) -> String {
+    seed_skill_prompt(
+        project_root,
+        &materialize_skill_invocation("/aida-advise", is_claude),
+    )
+}
+
+/// Materialize a bare `/aida-<skill>` slash invocation into a form the target
+/// vendor can actually consume.
+///
+/// `.claude/skills/*.md` are Claude-Code-native prompts: Claude expands the
+/// `/aida-<skill>` slash command from that directory. A non-Claude vendor never
+/// reads `.claude/skills/`, so the slash token is invisible to it. For a
+/// non-Claude vendor we therefore inline the embedded skill body (YAML
+/// frontmatter — a Claude Code convention — stripped) so the prompt is
+/// self-contained. Trailing invocation arguments (`/aida-assess --apply`) are
+/// appended as an explicit note. Claude keeps the slash form. Unknown skills
+/// and non-slash input pass through unchanged.
+// trace:TASK-1045 | ai:claude
+pub fn materialize_skill_invocation(bare: &str, is_claude: bool) -> String {
+    if is_claude {
+        return bare.to_string();
+    }
+    let trimmed = bare.trim();
+    let Some(rest) = trimmed.strip_prefix('/') else {
+        return bare.to_string();
+    };
+    let mut parts = rest.splitn(2, char::is_whitespace);
+    let name = parts.next().unwrap_or("");
+    let args = parts.next().map(str::trim).unwrap_or("");
+    let key = format!("skills/{name}.md");
+    let Some(body) = aida_core::templates::EMBEDDED_TEMPLATES
+        .get(key.as_str())
+        .map(|s| s.to_string())
+    else {
+        // Unknown skill — pass the slash form through rather than swallow it.
+        return bare.to_string();
+    };
+    let body = aida_core::scaffolding::codex_prompts::strip_frontmatter(&body)
+        .trim()
+        .to_string();
+    if args.is_empty() {
+        body
+    } else {
+        format!("{body}\n\n(Invocation arguments: {args})")
+    }
 }
 
 #[cfg(test)]
@@ -795,18 +848,105 @@ workflow_hints = true
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".aida")).unwrap();
 
-        // No seed file → bare.
-        assert_eq!(seeded_advise_prompt(&dir), "/aida-advise");
+        // No seed file → bare (Claude form).
+        assert_eq!(seeded_advise_prompt_for_vendor(&dir, true), "/aida-advise");
 
         // Seed present → prepended, ends with the bare /aida-advise.
         let body = "Phase: clear open items. Lane: advisor = merge gate.";
         std::fs::write(dir.join(ADVISOR_CONTEXT_SEED_REL), body).unwrap();
-        let out = seeded_advise_prompt(&dir);
+        let out = seeded_advise_prompt_for_vendor(&dir, true);
         assert!(out.starts_with(
             "## Live advisor context (seed — current ground-truth from the live advisor)"
         ));
         assert!(out.contains(body));
         assert!(out.ends_with("/aida-advise"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// TASK-1045: Claude keeps the bare slash form (expanded on demand); a
+    /// non-Claude vendor gets the embedded skill body inlined so the prompt is
+    /// self-contained.
+    #[test]
+    fn materialize_skill_invocation_inlines_body_only_for_non_claude() {
+        // Claude → unchanged slash form.
+        assert_eq!(
+            materialize_skill_invocation("/aida-advise", true),
+            "/aida-advise"
+        );
+
+        // Non-Claude → the actual embedded skill body, not the slash token.
+        let inlined = materialize_skill_invocation("/aida-advise", false);
+        assert_ne!(inlined, "/aida-advise");
+        assert!(
+            !inlined.starts_with('/'),
+            "should be a body, not a slash invocation: {inlined}"
+        );
+        // Frontmatter (a Claude Code convention) is stripped.
+        assert!(
+            !inlined.starts_with("---"),
+            "YAML frontmatter must be stripped: {inlined}"
+        );
+        // The body carries the advisor skill's actual guidance — a durable
+        // phrase from `skills/aida-advise.md`, keyed off the embedded master.
+        let master = aida_core::templates::EMBEDDED_TEMPLATES
+            .get("skills/aida-advise.md")
+            .map(|s| s.to_string())
+            .expect("aida-advise skill is embedded");
+        let master_body = aida_core::scaffolding::codex_prompts::strip_frontmatter(&master).trim();
+        assert!(!master_body.is_empty());
+        assert_eq!(inlined, master_body);
+    }
+
+    /// TASK-1045: trailing arguments survive as an explicit note, and unknown /
+    /// non-slash input passes through unchanged.
+    #[test]
+    fn materialize_skill_invocation_handles_args_and_passthrough() {
+        // Trailing args are preserved for a non-Claude vendor.
+        let with_args = materialize_skill_invocation("/aida-assess --apply", false);
+        assert!(
+            with_args.contains("(Invocation arguments: --apply)"),
+            "{with_args}"
+        );
+
+        // Unknown skill → slash form passes through (never swallowed).
+        assert_eq!(
+            materialize_skill_invocation("/aida-nonexistent-skill", false),
+            "/aida-nonexistent-skill"
+        );
+        // Non-slash input passes through.
+        assert_eq!(
+            materialize_skill_invocation("plain prompt text", false),
+            "plain prompt text"
+        );
+    }
+
+    /// TASK-1045: the vendor-aware advise prompt keeps Claude on the slash form
+    /// and inlines the skill body for a non-Claude vendor, in both cases still
+    /// carrying the STORY-626 advisor-context seed when present.
+    #[test]
+    fn seeded_advise_prompt_for_vendor_materializes_for_non_claude() {
+        let dir =
+            std::env::temp_dir().join(format!("aida-seed-advise-vendor-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".aida")).unwrap();
+
+        // No seed file: Claude → bare slash; non-Claude → inlined body.
+        assert_eq!(seeded_advise_prompt_for_vendor(&dir, true), "/aida-advise");
+        let non_claude = seeded_advise_prompt_for_vendor(&dir, false);
+        assert_ne!(non_claude, "/aida-advise");
+        assert!(!non_claude.ends_with("/aida-advise"));
+
+        // Seed present: prepended for both; the non-Claude tail is the body, not
+        // the inert slash token.
+        let body = "Phase: clear open items. Lane: advisor = merge gate.";
+        std::fs::write(dir.join(ADVISOR_CONTEXT_SEED_REL), body).unwrap();
+        let seeded_non_claude = seeded_advise_prompt_for_vendor(&dir, false);
+        assert!(seeded_non_claude.starts_with(
+            "## Live advisor context (seed — current ground-truth from the live advisor)"
+        ));
+        assert!(seeded_non_claude.contains(body));
+        assert!(!seeded_non_claude.ends_with("/aida-advise"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
