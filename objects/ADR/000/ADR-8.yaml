@@ -8,10 +8,25 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T06:46:08.486248056Z
-modified_at: 2026-06-30T06:46:08.486248056Z
+modified_at: 2026-07-13T07:04:56.380267918Z
 req_type: Decision
 tags:
 - direction
 - from-ux-loop
 - needs-operator
 - tui
+decision_request:
+  question: The TUI default is now the EPIC-54 read+dispose cockpit (no PTY session hosting/tabs/crash-recovery); session-shell users opt out via AIDA_TUI_REDESIGN=0. Confirm the direction.
+  choices:
+  - label: Keep cockpit-as-default, session-shell stays the =0 opt-out
+    consequence: ships the intended direction, shell users carry a flag
+    resolution: confirm
+  - label: Preserve/merge session-shell into cockpit before it stays default
+    consequence: no capability regression but delays redesign
+    resolution: merge first
+  - label: Revert default until cockpit reaches parity
+    consequence: restores session-shell for everyone, undoes TASK-1051
+    resolution: revert
+  recommended: 0
+  rationale: Cockpit is the deliberate EPIC-54 direction already shipped as default; for a solo+agents user base the opt-out flag covers the shell case without stalling the redesign.
+  asked_at: 2026-07-13T07:04:56.380267918Z
