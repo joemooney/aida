@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:52:24.624660857Z
-modified_at: 2026-07-12T19:52:24.624660857Z
+modified_at: 2026-07-13T03:21:37.703227014Z
 req_type: Task
 tags:
 - aida:tui
 - edge-case
 - from-story-701
 - mailbox
+comments:
+- id: 019f597e-9ca7-7b40-82c5-b277f1b9c358
+  author: joe
+  content: Commit 3754fd609 references this requirement
+  created_at: 2026-07-13T03:21:37.703227014Z
+  modified_at: 2026-07-13T03:21:37.703227014Z
