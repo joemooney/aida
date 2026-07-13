@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:35:46.390020492Z
-modified_at: 2026-07-11T20:56:09.393725440Z
+modified_at: 2026-07-13T07:03:34.864438473Z
 req_type: Bug
 tags:
 - blocks:release-xplat-gate
@@ -50,3 +50,15 @@ comments:
   content: 'Triage (2026-07-11, autonomous loop): the actionable fix is DONE — the operator-chosen "gate to cfg(linux)" landed in b88f36381 ("gate binary-driving e2e suites to Linux for the BUG-688 nightly gate", PR #1374); all 5 failing files (agent_write_confirm, agent_error_channel, journey, newcomer_delight, queue_work_dry_run) are now cfg(target_os) gated, so the nightly cross-platform matrix no longer runs them red. The ONLY residual is the open question the bug names — whether the macOS aida-init-exit-1-no-output is a real regression or an isolated-tempdir e2e-harness artifact — which is unanswerable without macOS access. Staying open, parked on that hardware need; not autonomously resolvable.'
   created_at: 2026-07-11T20:56:09.393725440Z
   modified_at: 2026-07-11T20:56:09.393725440Z
+decision_request:
+  question: The e2e suites fail on the nightly cross-platform matrix (macOS init exit-1, Windows empty stderr) and can't be verified from Linux. How to resolve?
+  choices:
+  - label: Gate e2e to linux-only
+    consequence: unblocks the xplat release gate now, keep BUG-688 open to investigate; reduces coverage
+    resolution: cfg gate
+  - label: Make suites portable
+    consequence: restores coverage but needs macOS/Windows access + time, blocks release gate
+    resolution: invest
+  recommended: 0
+  rationale: Matches the standing Linux-only-until-non-Linux-users stance, unblocks releases, keeps the real-vs-env question open.
+  asked_at: 2026-07-13T07:03:34.864438473Z
