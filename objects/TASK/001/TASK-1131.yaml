@@ -8,5 +8,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-11T18:53:07.702142832Z
-modified_at: 2026-07-11T18:53:07.702142832Z
+modified_at: 2026-07-13T07:03:28.435179770Z
 req_type: Task
+decision_request:
+  question: Give all-clear to finish BUG-700 housekeeping (re-protect gitlab main + permanently delete local recovery refs + gc)?
+  choices:
+  - label: All-clear now
+    consequence: re-protect AND delete rollback net; irreversible
+    resolution: do both
+  - label: Re-protect main only
+    consequence: keep recovery refs as insurance a while longer
+    resolution: re-protect, keep refs
+  - label: Hold both
+    consequence: scrub not confidently settled across all hubs yet
+    resolution: hold
+  recommended: 1
+  rationale: Re-protecting main is pure upside; deleting the recovery net is irreversible, so keep it until you personally confirm no hub needs a rollback.
+  asked_at: 2026-07-13T07:03:28.435179770Z
