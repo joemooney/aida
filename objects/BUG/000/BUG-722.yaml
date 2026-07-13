@@ -19,12 +19,12 @@ description: |-
   5. Add a test per exclusion (store branch; deferred spec; archived spec) so the false-positive classes can't regress.
 
   This is an opacity/precision failure: when the operator asks 'does this need me?', the report must be TRUE from the graph, not require narration to explain away. Sibling of BUG-582 (completed-spec false-positive) and TASK-878 (stale-agent-branch false-positive) — same bucket, remaining classes.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T06:16:50.315981195Z
-modified_at: 2026-07-13T06:43:29.955008551Z
+modified_at: 2026-07-13T06:54:59.927489535Z
 req_type: Bug
 tags:
 - aida:human aida:awaiting reviews-awaiting false-positive opacity severity:major
@@ -39,3 +39,21 @@ comments:
   content: Commit 7223c0848 references this requirement
   created_at: 2026-07-13T06:43:29.955008551Z
   modified_at: 2026-07-13T06:43:29.955008551Z
+history:
+- id: 019f5a41-f551-73d2-ae23-fb01143e85d5
+  author: aida-auto-bump
+  timestamp: 2026-07-13T06:54:59.921585821Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f5a41-f557-7631-a6d8-4a8fed069b22
+  timestamp: 2026-07-13T06:54:59.927488767Z
+  agent: aida
+  commit_sha: 803fdc04ece9dfae74d32556de86b504e9f7f695
+  summary: Completed via merge 803fdc04
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T06:54:59.729517459Z
+  completion_sha: 803fdc04ece9dfae74d32556de86b504e9f7f695
