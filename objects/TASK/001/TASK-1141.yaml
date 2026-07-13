@@ -3,12 +3,12 @@ spec_id: TASK-1141
 agreed_id: TASK-1141
 title: 'aida tui mail: unify project-root resolution with aida mailbox send (nested-worktree divergence)'
 description: 'Noted during STORY-701 review (#1388). redesign/mail.rs resolve_project_root() walks up from cwd for .git/.aida/config.toml, while the CLI aida mailbox send (which the reply action shells out to) resolves project root via the orphan-store worktree''s parent. In normal single-worktree AIDA usage these agree. They only diverge in nested-git-worktree setups (e.g. .claude/worktrees/), where the TUI could read the inbox from one root and send from another. Low priority (edge case, not normal usage). Fix: have the TUI mail path reuse the same project-root resolver the CLI uses, so read + send always agree.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:52:24.624660857Z
-modified_at: 2026-07-13T03:21:49.948842257Z
+modified_at: 2026-07-13T03:31:32.824488744Z
 req_type: Task
 tags:
 - aida:tui
@@ -26,3 +26,7 @@ comments:
   content: Commit 6ff9bd043 references this requirement
   created_at: 2026-07-13T03:21:49.948842257Z
   modified_at: 2026-07-13T03:21:49.948842257Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T03:31:32.824488744Z
+  completion_sha: aece9f699b00c0ae5c7ac7ebb00947b859c143b8
