@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:30:02.426947902Z
-modified_at: 2026-06-27T16:40:27.273722551Z
+modified_at: 2026-07-13T07:05:01.010220692Z
 req_type: Epic
 comments:
 - id: 019e9c13-3527-75f0-9c25-58091616adc1
@@ -32,3 +32,18 @@ comments:
   content: 'Reject (advisor 2026-06-26): operator REJECTED release-as-queueable-composite + documenter-role as over-engineered for solo/small-team (2026-06-06). The one valuable slice (release-time doc-coverage gate, TASK-680) already shipped as aida doc coverage. scripts/release.sh + aida changelog deliver the practical value.'
   created_at: 2026-06-26T23:51:12.063457402Z
   modified_at: 2026-06-26T23:51:12.063457402Z
+decision_request:
+  question: Recast release as a first-class queueable composite (auto-decomposed subtasks + documenter/release-master roles + /aida-document), replacing scripts/release.sh. Worth building?
+  choices:
+  - label: Approve+decompose into 8 child stories
+    consequence: routed doc-gated release lifecycle, but heavy machinery for solo cadence
+    resolution: approve
+  - label: Reject/defer
+    consequence: scripts/release.sh already works
+    resolution: reject
+  - label: Cherry-pick the doc-gating idea only
+    consequence: docs gate at RELEASE not PR, without the composite/role machinery
+    resolution: cherry-pick
+  recommended: 2
+  rationale: The load-bearing idea (docs gate at release so PRs ship fast) is worth keeping; the composite-spec + new-roles apparatus is over-engineered for a solo release flow.
+  asked_at: 2026-07-13T07:05:01.010220692Z
