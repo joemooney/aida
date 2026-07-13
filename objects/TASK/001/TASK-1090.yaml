@@ -12,12 +12,12 @@ description: |-
   - WHEN an agent is committing/pushing (HEAD moving or branch ahead of main), THE report shows it MOVING.
   - Each row names spec, vendor, state (moving/stalled/salvageable), and the resume/fallback command — no interpretation left to the reader.
   - Composes only existing signals; adds no new persistent state or daemon.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:43:02.165404217Z
-modified_at: 2026-07-12T18:52:02.974877675Z
+modified_at: 2026-07-13T01:53:49.118173030Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md
@@ -31,3 +31,7 @@ comments:
   content: 'Grooming refinement after overlap check: aida ps ALREADY surfaces running/stalled/orphaned agents with PID liveness (live/STALE), and drive_robustness.rs already holds resume/salvage logic. So do NOT build a parallel ''aida dispatch-health'' report (would duplicate aida ps). The genuine new value is the ACTIONABLE per-row hint: for a STALLED/crashed row, emit the next command (salvage-commit the dirty worktree, resume same vendor, or rebrief a fallback vendor). Implement as an EXTENSION of aida ps (a hint column / --hints flag, or a salvageable section) reusing drive_robustness.rs''s existing resume/salvage helpers — a small delta, not a new surface. Keeps the interface from sprawling (one running-work surface, now actionable).'
   created_at: 2026-07-12T18:52:02.974877675Z
   modified_at: 2026-07-12T18:52:02.974877675Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T01:53:49.118173030Z
+  completion_sha: 21dcb2671fe9c5428a0c01547e8e153f1cad17c1
