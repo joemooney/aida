@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T20:01:42.458630605Z
-modified_at: 2026-06-30T16:34:30.396061652Z
+modified_at: 2026-07-13T05:33:18.470662124Z
 req_type: Story
 tags:
 - parent:EPIC-35
@@ -42,3 +42,9 @@ comments:
   content: 'Priority bump to HIGH (advisor, 2026-06-14): the operator is making gitlab.joemooney.com the CANONICAL hub (github → private mirror). That flips the forge-wiring timing question decisively — this is no longer a behind-stabilization feature, it is the critical path: AIDA cannot run its own dev loop (pr ship, queue work drain, CI watch, merge) on a canonical GitLab until the gh-to-forge call-site migration lands. Slice 0 (resolve_glab_binary) + Slice 1 (MR create/merge) are the unblockers. Note: glab MR create is already PROVEN token-free against gitlab.joemooney.com (docs/plans/2026-06-04-forge-provider.md). Pairs with a new .gitlab-ci.yml (MR CI parity) and the canonical-cutover epic.'
   created_at: 2026-06-14T21:57:58.540237345Z
   modified_at: 2026-06-14T21:57:58.540237345Z
+- id: 019f59f7-2b06-70e1-b69e-6c1f25aba25e
+  author: joe
+  content: 'Pulled from the autonomous queue: this is the ~113-site gh→forge migration (EPIC-35), a supervised keyboard-lane effort, not a bounded drain item. Keep for a focused supervised session.'
+  created_at: 2026-07-13T05:33:18.470662124Z
+  modified_at: 2026-07-13T05:33:18.470662124Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
