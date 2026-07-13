@@ -32962,5 +32962,28 @@ operations:
   timestamp: 2026-07-13T06:16:54.899738178Z
   kind: !RemoveTag
     tag: severity:minor
-clock: 3082
+- id: 019f5a21-22a0-77b0-8f78-b0da2a749fc9
+  target_id: 019f5a21-1e0f-7b40-b50e-48bef87b618e
+  author: aida
+  node_id: '1'
+  lamport: 3083
+  timestamp: 2026-07-13T06:19:08.832353132Z
+  kind: !Create
+    title: '/aida-review-human skill: reconcile every aida human item so the report is true from the graph'
+    description: |-
+      Operator ask (2026-07-12): 'it would be nice if I could ask you to review aida human and you update all the items so the information reported is up-to-date.'
+
+      A repeatable advisor pass. For each item 'aida human' surfaces, triage into exactly one of three and ACT:
+      1. Genuinely needs the human -> keep it, state the decision crisply.
+      2. Stale spec state -> fix the spec (status / defer --until / archive / relationship) so it self-corrects or surfaces with the right reason.
+      3. Tool false-positive (state is right, the report is wrong) -> file or link the tool bug (e.g. BUG-722), do NOT just narrate it away.
+      Then emit a ledger: item -> verdict -> action taken -> resulting aida human delta.
+
+      Principle it enforces: when the operator asks 'does this need me?', the answer must be TRUE from the graph, not require the advisor to explain items away in chat. Ephemeral narration that should have been a substrate edit is an opacity failure.
+
+      Deliver as a skill 'aida-review-human' + slash command, authored in the master templates (aida-core/templates/skills/ + commands/), symlinked into .claude/ via make sync-templates, embedded via build.rs. Related: BUG-722 (the tool-precision fixes that shrink how many items need manual reconciliation).
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3083
 node_id: '1'
