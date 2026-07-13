@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:22:00.826668483Z
-modified_at: 2026-07-12T18:50:07.519983894Z
+modified_at: 2026-07-13T02:47:45.695714001Z
 req_type: Task
 tags:
 - zen-ready
@@ -35,3 +35,8 @@ comments:
   content: 'Live probe result (2026-07-07, codex-cli 0.142.3, claude-less validation project): codex exec in a project carrying the scaffolded .codex/config.toml (mcp_servers stanza registering aida mcp-serve) reported MCP-MISSING — the project-local config was NOT merged; the aida MCP tools were not discoverable. The TASK-0424 assumption that codex merges a project .codex/config.toml over the user config does not hold for this codex version (mechanism candidates: project-config support removed/changed, or gated on interactive project-trust that a headless exec never grants). Residual work re-scoped UP: verify current codex config-merge semantics against its docs, and either (a) translate the registration into the USER ~/.codex/config.toml via an explicit opt-in command (never silently mutate user config), or (b) document codex mcp add aida ... as the setup step. Note the mitigation: the token-efficient CLI is the primary agent surface (the codex implementer completed the full lifecycle via CLI alone in this same validation), so MCP absence degrades typed access, not capability.'
   created_at: 2026-07-07T16:34:03.155086387Z
   modified_at: 2026-07-07T16:34:03.155086387Z
+- id: 019f595f-9b1f-7240-ad69-3c1266f64d1c
+  author: joe
+  content: Commit 3d1a0d2dc references this requirement
+  created_at: 2026-07-13T02:47:45.695714001Z
+  modified_at: 2026-07-13T02:47:45.695714001Z
