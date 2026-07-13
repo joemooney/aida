@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:47:42.338439443Z
-modified_at: 2026-06-28T22:44:41.808343903Z
+modified_at: 2026-07-13T07:05:10.623391110Z
 req_type: Epic
 tags:
 - cockpit
@@ -58,3 +58,15 @@ comments:
   content: 'Prep pass done (advisor 2026-06-26): seam defined in docs/plans/2026-06-26-epic-53-cockpit-seam.md; each child has sharpened acceptance + a content-vs-shell seam. Build order: STORY-703 (most content) -> STORY-701 -> STORY-702/TASK-937 (gestures, coordinate with EPIC-54 so they are not built twice). IMPLEMENT AFTER the EPIC-54 redesign shell stabilizes (PR #1145+). Advisor (this seat) to oversee implementation then.'
   created_at: 2026-06-27T02:01:41.284720331Z
   modified_at: 2026-06-27T02:01:41.284720331Z
+decision_request:
+  question: The flow-cockpit vision (blocked/waiting board as TUI home) overlaps the EPIC-54 redesign that became the default TUI. One effort or two?
+  choices:
+  - label: Fold the remaining cockpit children into EPIC-54 as scopes/verbs, close EPIC-53
+    consequence: one coherent surface
+    resolution: fold
+  - label: Keep EPIC-53 distinct
+    consequence: home-view concern orthogonal to the palette redesign
+    resolution: keep separate
+  recommended: 0
+  rationale: Two open TUI epics competing for the same default surface risks divergent models; the blocked-board belongs as a scope inside the redesign shell.
+  asked_at: 2026-07-13T07:05:10.623391110Z
