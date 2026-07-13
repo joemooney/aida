@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:20.129434778Z
-modified_at: 2026-06-27T16:40:29.630192569Z
+modified_at: 2026-07-13T07:04:59.270459306Z
 req_type: Epic
 tags:
 - from-operator
@@ -45,3 +45,18 @@ comments:
   content: 'Completed: Tier 1 (assignment, team awareness, history-merge, multi-host), Tier 2 (auto mailbox sync, notifications, comments/relationships auto-merge), Tier 3 (RBAC slices 1+2, team dashboard A/B/C). Remaining items are separate deferred specs: TASK-845 (cross-machine person unification), TASK-841 (integrate stacked-branch). — advisor'
   created_at: 2026-06-18T04:36:28.623791826Z
   modified_at: 2026-06-18T04:36:28.623791826Z
+decision_request:
+  question: Team-of-users support (roster, assignment, identity guard, RBAC, dashboard) is high-priority + operator-originated, but the project is solo+agents today. How much near-term?
+  choices:
+  - label: Build Tier 1 now
+    consequence: assignment + my-work + identity/BUG-89 guard + history union-merge; readies multi-user with no second user yet
+    resolution: tier 1
+  - label: Ship only the distinct-user identity guard slice
+    consequence: minimal safety net, defer the workflow layer
+    resolution: guard only
+  - label: Defer the whole EPIC
+    consequence: no team surface now
+    resolution: defer
+  recommended: 1
+  rationale: The identity guard has real single-machine value (prevents queue/lease mixups); the roster/RBAC layer is speculative until a concrete second user exists.
+  asked_at: 2026-07-13T07:04:59.270459306Z
