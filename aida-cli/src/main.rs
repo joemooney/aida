@@ -28,6 +28,8 @@ mod config_edit;
 mod coordination;
 mod deep_link;
 mod digest;
+// trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
+mod dispatch_health_ps;
 mod docs;
 mod drain_caps;
 mod drain_lock;
@@ -66859,7 +66861,11 @@ mod story_696_ps_tests {
             stale_cwd: false,
         }];
 
-        let (rows, orphans) = build_running_work(&specs, &leases, &live, now);
+        // TASK-1090: no-op probe stub — this fixture asserts scope/orphan
+        // resolution, not dispatch-health, and must stay filesystem-free.
+        let (rows, orphans) = build_running_work(&specs, &leases, &live, now, |_| {
+            dispatch_health_ps::WorktreeGitProbe::default()
+        });
 
         // Row: TASK-1's scope resolved to its display id; live pid attached.
         assert_eq!(rows.len(), 1);
@@ -101835,6 +101841,23 @@ struct PsRow {
     /// "scope unknown" rather than guessed.
     // trace:STORY-696
     spec: Option<String>,
+    /// TASK-1090: the dispatch-health classification for this row (MOVING /
+    /// STALLED / SALVAGEABLE) plus the exact next command to unstick it.
+    /// `None` for worktree-less advisory leases (`aida review` / `aida claim`
+    /// locks) or a lease whose worktree no longer exists — there is no git
+    /// state to classify.
+    // trace:TASK-1090 | ai:claude
+    dispatch: Option<PsDispatch>,
+}
+
+/// The TASK-1090 dispatch-health payload for one [`PsRow`].
+// trace:TASK-1090 | ai:claude
+struct PsDispatch {
+    state: dispatch_health_ps::DispatchState,
+    /// `None` only for `Moving` — nothing to unstick.
+    hint: Option<String>,
+    dirty: bool,
+    ahead_of_main: u32,
 }
 
 /// An In-Progress spec with NO live spec-scoped session backing it — the
@@ -102446,7 +102469,14 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     // trace:TASK-1072 | ai:claude
     let specs = running_work_spec_index(project_root);
 
-    build_running_work(&specs, &leases, &live, now)
+    // trace:TASK-1090 | ai:claude — the real (git-probing) dispatch seam.
+    build_running_work(
+        &specs,
+        &leases,
+        &live,
+        now,
+        dispatch_health_ps::probe_worktree,
+    )
 }
 
 /// TASK-1072: the pure core of [`gather_running_work`] — given the resolved spec
@@ -102457,12 +102487,18 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
 /// filesystem or `/proc`. Takes `live` by reference — the single-probe
 /// discipline (`aida ps` probes `/proc` once, not once per lease) is a caller
 /// invariant this signature enforces.
-// trace:TASK-1072 trace:STORY-696 | ai:claude
+///
+/// TASK-1090: `dispatch_probe` is the ONE seam that touches git — injected
+/// (rather than called directly) so this function stays exercisable on pure
+/// fixtures in tests (a no-op stub) while the real caller
+/// ([`gather_running_work`]) wires in [`dispatch_health_ps::probe_worktree`].
+// trace:TASK-1072 trace:STORY-696 trace:TASK-1090 | ai:claude
 fn build_running_work(
     specs: &[RunningWorkSpec],
     leases: &[SessionLease],
     live: &[process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
+    dispatch_probe: impl Fn(&std::path::Path) -> dispatch_health_ps::WorktreeGitProbe,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -102486,12 +102522,44 @@ fn build_running_work(
                         .any(|id| l.scope.eq_ignore_ascii_case(id))
                 })
                 .map(|s| s.disp.clone());
+            // TASK-1090: worktree-less advisory leases (review/claim locks)
+            // have no git state to classify — dispatch stays None for them.
+            // A dead-worktree lease (removed dir) also has nothing to probe;
+            // `dispatch_health_ps::probe_worktree` degrades to the zero
+            // default in that case rather than erroring.
+            let dispatch = if l.review_verb || l.claim_verb {
+                None
+            } else {
+                let probe = dispatch_probe(&l.worktree_path);
+                let pid_alive = matches!(state, LeaseState::Live);
+                let ds = dispatch_health_ps::dispatch_state(
+                    pid_alive,
+                    probe.dirty,
+                    probe.ahead_of_main,
+                    elapsed_secs,
+                    dispatch_health_ps::DEFAULT_STALLED_THRESHOLD_SECS,
+                );
+                let hint = dispatch_health_ps::next_command_hint(
+                    ds,
+                    &l.worktree_path,
+                    &l.branch,
+                    probe.last_commit_subject.as_deref(),
+                    spec.as_deref(),
+                );
+                Some(PsDispatch {
+                    state: ds,
+                    hint,
+                    dirty: probe.dirty,
+                    ahead_of_main: probe.ahead_of_main,
+                })
+            };
             PsRow {
                 lease: l.clone(),
                 state,
                 pid,
                 elapsed_secs,
                 spec,
+                dispatch,
             }
         })
         .collect();
@@ -102563,6 +102631,12 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "elapsed_secs": row.elapsed_secs,
                     "liveness": row.state.label(),
                     "live": matches!(row.state, LeaseState::Live),
+                    // TASK-1090: dispatch-health — null for worktree-less
+                    // advisory leases (no git state to classify).
+                    "dispatch_state": row.dispatch.as_ref().map(|d| d.state.label()),
+                    "dispatch_hint": row.dispatch.as_ref().and_then(|d| d.hint.clone()),
+                    "worktree_dirty": row.dispatch.as_ref().map(|d| d.dirty),
+                    "branch_ahead_of_main": row.dispatch.as_ref().map(|d| d.ahead_of_main),
                 })
             })
             .collect();
@@ -102602,6 +102676,20 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             rows.iter()
                 .partition(|r| !matches!(r.state, LeaseState::Stale))
         };
+        // TASK-1090: dead-and-dirty rows are the single highest-value signal
+        // this report adds — never let them hide behind the stale-hidden
+        // footer just because `--all` wasn't passed. Computed from the FULL
+        // row set (not `shown`) so a machine consumer sees them regardless.
+        let salvageable_hidden: Vec<&PsRow> = hidden_stale
+            .iter()
+            .filter(|r| {
+                r.dispatch
+                    .as_ref()
+                    .is_some_and(|d| d.state == dispatch_health_ps::DispatchState::Salvageable)
+            })
+            .copied()
+            .collect();
+
         println!("view: ps");
         println!("running: {}", shown.len());
         println!("stale_hidden: {}", hidden_stale.len());
@@ -102618,6 +102706,16 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .unwrap_or_else(|| "-".to_string()),
                     humanize_duration_secs(r.elapsed_secs),
                     r.state.label().to_string(),
+                    // TASK-1090: dispatch-health state + the exact next
+                    // command, blank for Moving / worktree-less rows.
+                    r.dispatch
+                        .as_ref()
+                        .map(|d| d.state.label().to_string())
+                        .unwrap_or_default(),
+                    r.dispatch
+                        .as_ref()
+                        .and_then(|d| d.hint.clone())
+                        .unwrap_or_default(),
                 ]
             })
             .collect();
@@ -102625,7 +102723,16 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             "{}",
             crate::toon::table_raw(
                 "running",
-                &["session", "spec", "role", "pid", "elapsed", "live"],
+                &[
+                    "session",
+                    "spec",
+                    "role",
+                    "pid",
+                    "elapsed",
+                    "live",
+                    "dispatch_state",
+                    "dispatch_hint"
+                ],
                 &run
             )
         );
@@ -102650,6 +102757,30 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 "orphaned",
                 &["spec", "title", "liveness", "likely_fanout"],
                 &orph
+            )
+        );
+        // TASK-1090: always-shown (not gated by --all) — dead process +
+        // uncommitted work hidden behind the stale-session footer.
+        let salv: Vec<Vec<String>> = salvageable_hidden
+            .iter()
+            .map(|r| {
+                vec![
+                    r.lease.id.clone(),
+                    r.spec.clone().unwrap_or_else(|| "-".to_string()),
+                    r.lease.worktree_path.display().to_string(),
+                    r.dispatch
+                        .as_ref()
+                        .and_then(|d| d.hint.clone())
+                        .unwrap_or_default(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "salvageable",
+                &["session", "spec", "worktree", "hint"],
+                &salv
             )
         );
         return Ok(());
@@ -102712,6 +102843,32 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // A second dimmed line carries the worktree so the wide path
             // doesn't blow out the table's column alignment.
             println!("{}{}", " ".repeat(11), l.worktree_path.display());
+            // TASK-1090: a third line names the dispatch-health hint —
+            // nothing printed for Moving (it's fine, per the acceptance).
+            if let Some(d) = &row.dispatch {
+                if let Some(hint) = &d.hint {
+                    let (glyph, colored_label) = match d.state {
+                        dispatch_health_ps::DispatchState::Salvageable => (
+                            crate::glyph(crate::glyphs::Glyph::Warning),
+                            d.state.label().red().bold(),
+                        ),
+                        dispatch_health_ps::DispatchState::Stalled => (
+                            crate::glyph(crate::glyphs::Glyph::Warning),
+                            d.state.label().yellow().bold(),
+                        ),
+                        dispatch_health_ps::DispatchState::Moving => unreachable!(
+                            "hint is None for Moving — see dispatch_health_ps::next_command_hint"
+                        ),
+                    };
+                    println!(
+                        "{}{} {}: {}",
+                        " ".repeat(11),
+                        glyph,
+                        colored_label,
+                        hint.dimmed()
+                    );
+                }
+            }
         }
         if !hidden_stale.is_empty() {
             println!();
@@ -102724,6 +102881,42 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 )
                 .dimmed()
             );
+        }
+    }
+
+    // TASK-1090: dead process + uncommitted work is the single highest-value
+    // signal this report adds — never let it hide silently behind the
+    // stale-session footer just because `--all` wasn't passed. Always shown
+    // (naturally empty once `--all` folds `hidden_stale` into the main
+    // table, where its hint line already printed above).
+    let salvageable_hidden: Vec<&PsRow> = hidden_stale
+        .iter()
+        .filter(|r| {
+            r.dispatch
+                .as_ref()
+                .is_some_and(|d| d.state == dispatch_health_ps::DispatchState::Salvageable)
+        })
+        .copied()
+        .collect();
+    if !salvageable_hidden.is_empty() {
+        let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+        println!();
+        println!(
+            "{}",
+            "Salvageable (dead process, uncommitted work — hidden behind the stale-session count above)"
+                .bold()
+                .red()
+        );
+        for row in &salvageable_hidden {
+            let spec_col = row.spec.clone().unwrap_or_else(|| row.lease.scope.clone());
+            println!("  {} {}", warn.red(), spec_col.red().bold());
+            println!(
+                "      {}",
+                row.lease.worktree_path.display().to_string().dimmed()
+            );
+            if let Some(hint) = row.dispatch.as_ref().and_then(|d| d.hint.as_deref()) {
+                println!("      {}", hint.dimmed());
+            }
         }
     }
 
