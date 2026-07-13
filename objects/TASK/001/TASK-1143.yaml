@@ -3,12 +3,12 @@ spec_id: TASK-1143
 agreed_id: TASK-1143
 title: Consider surfacing locks in `aida ps` (a locked-by column) once slice 1 exists
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T02:20:03.984042172Z
-modified_at: 2026-07-13T02:20:03.984042172Z
+modified_at: 2026-07-13T06:01:27.830091152Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-12-story-711-advisor-lock.md
@@ -16,3 +16,21 @@ relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-13T02:20:05.619929582Z
+history:
+- id: 019f5a10-f210-72c1-9150-e5bbd2e28255
+  author: aida-auto-bump
+  timestamp: 2026-07-13T06:01:27.824186018Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f5a10-f216-7f00-8e15-cbaa43208f31
+  timestamp: 2026-07-13T06:01:27.830090538Z
+  agent: aida
+  commit_sha: 23ca917f91688fae02fcbebfba926a3ef3351ea0
+  summary: Completed via merge 23ca917f
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-13T06:01:27.633024426Z
+  completion_sha: 23ca917f91688fae02fcbebfba926a3ef3351ea0
