@@ -30,6 +30,8 @@ mod deep_link;
 mod digest;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
 mod dispatch_health_ps;
+// trace:TASK-1092 | ai:claude — [dispatch.routing] config loader (additive, not yet wired in).
+mod dispatch_routing_config;
 mod docs;
 mod drain_caps;
 mod drain_lock;

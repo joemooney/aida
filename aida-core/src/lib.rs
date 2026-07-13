@@ -76,6 +76,7 @@ pub mod conflict;
 pub mod daemon;
 pub mod db;
 pub mod deps_sweep;
+pub mod dispatch_routing;
 pub mod dispenser;
 pub mod docs_review;
 // trace:TASK-0417 | ai:claude
