@@ -33013,5 +33013,20 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3084
+- id: 019f5a41-708b-7d71-8bde-5bd8d29c50e0
+  target_id: 019f5a41-68d8-7e10-8163-b68aaa4813e4
+  author: aida
+  node_id: '1'
+  lamport: 3085
+  timestamp: 2026-07-13T06:54:25.931534321Z
+  kind: !Create
+    title: Fold worker directives into aida awaiting so aida human audit's enqueue surfaces in the unified inbox
+    description: |-
+      STORY-768 (aida human audit) enqueues a directive to .aida/worker.cmd. Today it only surfaces via 'aida worker directives' (worker render_human), NOT via 'aida awaiting' — the unified coordination inbox the advisor polls each turn (and that the UserPromptSubmit --notice hook reads). So an enqueued 'aida human audit' request won't appear in the advisor's normal awaiting poll; the advisor would have to separately check 'aida worker directives'.
+
+      Fold pending worker directives into aida awaiting (awaiting_you.rs) as one more channel, so 'aida human audit' (the enqueue path) surfaces where the advisor already looks. Small, additive. Related: STORY-768, STORY-741 (the awaiting inbox).
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3085
 node_id: '1'
