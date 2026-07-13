@@ -62,6 +62,85 @@ pub fn verify_worktree_lock(authorized_by: Option<&str>, my_token: Option<&str>)
     }
 }
 
+/// `[locking]` posture in `.aida/config.toml` (STORY-711 slice 2). Gates
+/// whether [`locking_gate`] ever turns a `Refused` verdict into anything
+/// visible. Fail-safe-by-DEFAULT-OFF, per the plan's "Fail-safe default is
+/// opt-in per posture" decision — requiring a lock everywhere would break
+/// every current solo/manual flow, so adoption is a deliberate per-project
+/// opt-in, not a silent behavior change.
+// trace:STORY-711 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LockingPosture {
+    /// No gating at all — a `Refused` verdict is silently treated as `Allow`.
+    /// The default: a project that has never configured `[locking]` sees
+    /// zero behavior change.
+    #[default]
+    Off,
+    /// A `Refused` verdict is downgraded to a warning: the commit proceeds,
+    /// but the caller is told a lock mismatch was observed.
+    Warn,
+    /// A `Refused` verdict blocks the action.
+    Enforce,
+}
+
+impl LockingPosture {
+    /// Parse a config/env value into a posture. Case-insensitive; unknown
+    /// values return `None` so callers can fall back to the default rather
+    /// than silently mis-parsing a typo into `Off`.
+    // trace:STORY-711 | ai:claude
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "off" => Some(LockingPosture::Off),
+            "warn" => Some(LockingPosture::Warn),
+            "enforce" => Some(LockingPosture::Enforce),
+            _ => None,
+        }
+    }
+}
+
+/// The action a caller (the commit-boundary bouncer, in slice 2) should take,
+/// after composing [`verify_worktree_lock`]'s verdict with the `[locking]`
+/// posture.
+// trace:STORY-711 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GateAction {
+    /// Proceed silently.
+    Allow,
+    /// Proceed, but tell the caller a lock mismatch was observed (names the
+    /// authorizing advisor).
+    Warn { by: String },
+    /// Refuse to proceed (names the authorizing advisor so the caller knows
+    /// who to coordinate with).
+    Refuse { by: String },
+}
+
+/// Compose [`verify_worktree_lock`] with the `[locking]` posture into the
+/// action a caller should take. Pure and total — no IO — so the whole truth
+/// table is exhaustively unit-testable without a live agent, filesystem, or
+/// config file.
+///
+/// `Unlocked` and `Authorized` verdicts are ALWAYS `Allow`, regardless of
+/// posture — posture only matters for a `Refused` verdict:
+/// - `Off` → `Allow` (a mismatch is silently waved through — the default, so
+///   an unconfigured project sees zero behavior change).
+/// - `Warn` → `Warn { by }` (proceed, but surface the mismatch).
+/// - `Enforce` → `Refuse { by }` (block).
+// trace:STORY-711 | ai:claude
+pub fn locking_gate(
+    worktree_lock: Option<&str>,
+    my_token: Option<&str>,
+    posture: LockingPosture,
+) -> GateAction {
+    match verify_worktree_lock(worktree_lock, my_token) {
+        LockVerdict::Unlocked | LockVerdict::Authorized => GateAction::Allow,
+        LockVerdict::Refused { by } => match posture {
+            LockingPosture::Off => GateAction::Allow,
+            LockingPosture::Warn => GateAction::Warn { by },
+            LockingPosture::Enforce => GateAction::Refuse { by },
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +203,100 @@ mod tests {
                 by: "advisor-a".to_string()
             }
         );
+    }
+
+    // ── locking_gate (STORY-711 slice 2): every (verdict, posture) combination ──
+
+    #[test]
+    fn unlocked_is_always_allow_regardless_of_posture() {
+        for posture in [
+            LockingPosture::Off,
+            LockingPosture::Warn,
+            LockingPosture::Enforce,
+        ] {
+            assert_eq!(locking_gate(None, None, posture), GateAction::Allow);
+            assert_eq!(
+                locking_gate(None, Some("advisor-a"), posture),
+                GateAction::Allow
+            );
+        }
+    }
+
+    #[test]
+    fn authorized_is_always_allow_regardless_of_posture() {
+        for posture in [
+            LockingPosture::Off,
+            LockingPosture::Warn,
+            LockingPosture::Enforce,
+        ] {
+            assert_eq!(
+                locking_gate(Some("advisor-a"), Some("advisor-a"), posture),
+                GateAction::Allow
+            );
+        }
+    }
+
+    #[test]
+    fn refused_under_off_posture_is_allow() {
+        // The load-bearing no-op: a project with no [locking] config (posture
+        // defaults Off) never turns a lock mismatch into anything visible.
+        assert_eq!(
+            locking_gate(Some("advisor-a"), Some("advisor-b"), LockingPosture::Off),
+            GateAction::Allow
+        );
+        // Even a caller with NO token at all — the fail-safe Refused case —
+        // is waved through under Off.
+        assert_eq!(
+            locking_gate(Some("advisor-a"), None, LockingPosture::Off),
+            GateAction::Allow
+        );
+    }
+
+    #[test]
+    fn refused_under_warn_posture_warns_naming_the_holder() {
+        assert_eq!(
+            locking_gate(Some("advisor-a"), Some("advisor-b"), LockingPosture::Warn),
+            GateAction::Warn {
+                by: "advisor-a".to_string()
+            }
+        );
+        assert_eq!(
+            locking_gate(Some("advisor-a"), None, LockingPosture::Warn),
+            GateAction::Warn {
+                by: "advisor-a".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn refused_under_enforce_posture_refuses_naming_the_holder() {
+        assert_eq!(
+            locking_gate(
+                Some("advisor-a"),
+                Some("advisor-b"),
+                LockingPosture::Enforce
+            ),
+            GateAction::Refuse {
+                by: "advisor-a".to_string()
+            }
+        );
+        assert_eq!(
+            locking_gate(Some("advisor-a"), None, LockingPosture::Enforce),
+            GateAction::Refuse {
+                by: "advisor-a".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn posture_parse_is_case_insensitive_and_rejects_unknown() {
+        assert_eq!(LockingPosture::parse("off"), Some(LockingPosture::Off));
+        assert_eq!(LockingPosture::parse("OFF"), Some(LockingPosture::Off));
+        assert_eq!(LockingPosture::parse("Warn"), Some(LockingPosture::Warn));
+        assert_eq!(
+            LockingPosture::parse(" enforce "),
+            Some(LockingPosture::Enforce)
+        );
+        assert_eq!(LockingPosture::parse("bogus"), None);
     }
 }

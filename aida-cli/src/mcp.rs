@@ -3206,6 +3206,11 @@ impl<'a> McpServer<'a> {
                 "\n- path={} agent={} spec_id={} generated_at={} status={}",
                 entry.path, entry.agent, entry.spec_id, entry.generated_at, entry.status
             ));
+            // STORY-711 slice 2: surface the authorizing advisor when present.
+            // trace:TASK-1140 | ai:claude
+            if let Some(by) = entry.authorized_by.as_deref() {
+                out.push_str(&format!(" authorized_by={by}"));
+            }
         }
         Ok(out)
     }
@@ -7641,6 +7646,10 @@ struct BriefRef {
     spec_id: String,
     generated_at: String,
     status: String,
+    /// STORY-711 slice 2: the authorizing advisor's id, when the brief was
+    /// created with `--authorized-by`.
+    // trace:TASK-1140 | ai:claude
+    authorized_by: Option<String>,
 }
 
 fn brief_root(project_root: &Path) -> PathBuf {
@@ -7725,12 +7734,15 @@ fn collect_brief_refs(
                 .unwrap_or_else(|| spec_id_from_brief_filename(&name).unwrap_or_default());
             let generated_at = frontmatter_value(&content, "generated_at")
                 .unwrap_or_else(|| timestamp_from_brief_filename(&name).unwrap_or_default());
+            // trace:TASK-1140 | ai:claude
+            let authorized_by = frontmatter_value(&content, "authorized_by");
             entries.push(BriefRef {
                 path: brief_display_path(project_root, &path),
                 agent: agent.clone(),
                 spec_id,
                 generated_at,
                 status: status.to_string(),
+                authorized_by,
             });
         }
     }

@@ -68,11 +68,15 @@ fi
 # block). trace:BUG-651
 __aida_repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 
-# Probe whether a binary supports the gate subcommand WITHOUT side effects:
-# `... --help` exits 0 when the subcommand exists, non-zero (clap error) on a
-# stale binary that never had it. Echoes the first supporting binary, preferring
-# the freshest in-repo build, then the PATH `aida`. trace:BUG-651
+# Probe whether a binary supports a given `internal <subcommand>` WITHOUT side
+# effects: `... --help` exits 0 when the subcommand exists, non-zero (clap
+# error) on a stale binary that never had it. Echoes the first supporting
+# binary, preferring the freshest in-repo build, then the PATH `aida`.
+# Generalized (TASK-1140) from the advisor-code-gate-only original so the
+# locking gate below can reuse the same robust resolution instead of a second
+# copy. trace:BUG-651 trace:TASK-1140
 __aida_resolve_gate_bin() {
+    _gate_subcommand="$1"
     _dbg="$__aida_repo_root/target/debug/aida"
     _rel="$__aida_repo_root/target/release/aida"
     _path=$(command -v aida 2>/dev/null)
@@ -92,7 +96,7 @@ __aida_resolve_gate_bin() {
     [ -n "$_path" ] && _candidates="$_candidates $_path"
 
     for _bin in $_candidates; do
-        if "$_bin" internal advisor-code-gate --help >/dev/null 2>&1; then
+        if "$_bin" internal "$_gate_subcommand" --help >/dev/null 2>&1; then
             printf '%s\n' "$_bin"
             return 0
         fi
@@ -100,7 +104,7 @@ __aida_resolve_gate_bin() {
     return 1
 }
 
-__aida_gate_bin=$(__aida_resolve_gate_bin)
+__aida_gate_bin=$(__aida_resolve_gate_bin advisor-code-gate)
 if [ -n "$__aida_gate_bin" ]; then
     if ! "$__aida_gate_bin" internal advisor-code-gate; then
         exit 1
@@ -111,6 +115,24 @@ elif command -v aida >/dev/null 2>&1; then
     # blocking a commit because the GATE BINARY is old just forces --no-verify,
     # which defeats this gate AND every check below it. trace:BUG-651
     printf 'pre-commit: advisor-code-gate skipped — no aida on PATH or in target/ supports it (stale/old build); not blocking the commit.\n' >&2
+fi
+
+# 2c. Automatic advisor-lock gate (STORY-711 slice 2). Same vendor-agnostic
+# commit-boundary pattern as 2b, applied to the worktree lock: this worktree
+# may carry an `authorized_by` lock (`aida lock acquire`); if the committing
+# session's launch-context snapshot carries a DIFFERENT (or no) authorization
+# token, `[locking] posture = "enforce"` refuses the commit (`"warn"` prints
+# and proceeds; the default `"off"` is silent). Delegates to the binary
+# (`aida internal locking-gate`) so the decision lives in ONE place shared
+# with the `aida commit` CLI path. Same BUG-651 robust-resolution + fail-open
+# behavior as the advisor-code-gate above. trace:TASK-1140
+__aida_lock_gate_bin=$(__aida_resolve_gate_bin locking-gate)
+if [ -n "$__aida_lock_gate_bin" ]; then
+    if ! "$__aida_lock_gate_bin" internal locking-gate; then
+        exit 1
+    fi
+elif command -v aida >/dev/null 2>&1; then
+    printf 'pre-commit: locking-gate skipped — no aida on PATH or in target/ supports it (stale/old build); not blocking the commit.\n' >&2
 fi
 
 # 3. Auto-fmt staged Rust files before commit so cargo fmt --check (in CI)

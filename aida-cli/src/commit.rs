@@ -135,6 +135,13 @@ pub(crate) fn handle_commit_command(args: &CommitArgs) -> Result<()> {
     // trace:STORY-684
     crate::advisor_code_gate::enforce_at_commit(&root, args.all)?;
 
+    // STORY-711 slice 2: automatic advisor-lock gate. Same two-enforcement-
+    // point pattern as the advisor-code gate above (the scaffolded git
+    // pre-commit hook is the other). Silent no-op under the default
+    // `[locking] posture = "off"`.
+    // trace:TASK-1140 | ai:claude
+    crate::locking_gate::enforce_at_commit(&root)?;
+
     run_git_commit(&root, &message, args.all)?;
     println!(
         "{} committed: {}",
