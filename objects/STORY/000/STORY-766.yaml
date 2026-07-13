@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:50.937227933Z
-modified_at: 2026-07-12T06:13:01.623175846Z
+modified_at: 2026-07-13T07:03:26.756360187Z
 req_type: Story
 tags:
 - advisor
@@ -40,3 +40,18 @@ comments:
   content: 'Census reordered 2026-07-11: tmux leads (operator daily driver + TASK-1120 pane host), wezterm cli demoted to when-present fallback. Substrate-first rule and decision envelope unchanged.'
   created_at: 2026-07-12T06:13:01.623175846Z
   modified_at: 2026-07-12T06:13:01.623175846Z
+decision_request:
+  question: Build the /aida-fleet-watch skill now (skill-only, zero Rust, read+route), or defer with the rest of SPIKE-77 until stabilization clears?
+  choices:
+  - label: Approve now
+    consequence: real fleet monitor, low-risk skill-only, calibrates the other SPIKE-77 children through use
+    resolution: approve + queue
+  - label: Defer
+    consequence: no new surface mid-stabilization
+    resolution: defer behind bugs-first phase
+  - label: Approve substrate-sweep only
+    consequence: smaller first cut, drop the terminal-census leg
+    resolution: approve narrowed
+  recommended: 0
+  rationale: Skill-only zero-Rust read-only envelope is low-risk even mid-stabilization, and its use calibrates STORY-765/TASK-1120.
+  asked_at: 2026-07-13T07:03:26.756360187Z
