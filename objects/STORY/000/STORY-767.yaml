@@ -19,7 +19,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T06:19:07.663375401Z
-modified_at: 2026-07-13T06:19:07.663375401Z
+modified_at: 2026-07-13T06:21:57.388439894Z
 req_type: Story
 tags:
 - aida:human aida:skill advisor coordination
+comments:
+- id: 019f5a23-b50c-7c02-9afe-042fb2415b09
+  author: joe
+  content: Commit 131f22643 references this requirement
+  created_at: 2026-07-13T06:21:57.388439894Z
+  modified_at: 2026-07-13T06:21:57.388439894Z
