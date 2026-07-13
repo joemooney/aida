@@ -3,12 +3,12 @@ spec_id: STORY-711
 agreed_id: STORY-711
 title: 'Advisor-directed branch/worktree lock: an agent verifies it works at the behest of an advisor on a branch/worktree that advisor authorized'
 description: 'Operator idea, generalizing BUG-637 (spec-scoped claim). Multi-agent coordination keeps failing this session: two agents worked the same spec (BUG-634/#1156 vs #1157); I rejected an actively-worked EPIC-54 because no spec-scoped lease showed the other agent; two agents share one working tree and collide on the index. The fix the operator proposes: a LOCK that binds a branch/worktree to a specific ADVISOR, and an implementer agent VERIFIES before it acts that (a) it is working at the behest of an advisor, and (b) the branch/worktree it is on is authorized/locked by that advisor. An agent that cannot verify an authorizing advisor-lock refuses to implement (fail-safe). DESIGN QUESTIONS for the operator (morning): where the lock lives (a lock file under .aida/locks/<branch> with advisor id + worktree + ttl? the orphan-store? extend the session-lease registry?); how an agent proves it is acting for advisor X (env AIDA_ADVISOR_LOCK? a token in the brief? the role-context snapshot?); enforcement point (a pre-commit/pre-work gate that checks the lock, substrate-as-bouncer style — like STORY-684); interaction with the existing session leases + worktree isolation; and whether this also solves the two-agents-one-tree problem (lock the WORKTREE so a second agent refuses to act in a tree another advisor locked). This is foundational + design-heavy -> DO NOT implement unattended; bring the design forks to the operator.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T06:45:57.393557976Z
-modified_at: 2026-07-12T19:45:49.049581512Z
+modified_at: 2026-07-13T02:19:55.275247096Z
 req_type: Story
 tags:
 - advisor
