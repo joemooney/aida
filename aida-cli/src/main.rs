@@ -74,6 +74,7 @@ mod watch;
 mod health;
 mod health_metrics;
 mod history;
+mod human_audit;
 mod intake;
 mod integrate;
 // trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
@@ -35306,6 +35307,14 @@ fn handle_role_enter(project_root: &std::path::Path, name: Option<&str>, cd: boo
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
+    // STORY-768: entering the advisor seat under tmux registers this pane so
+    // `aida human audit --inject` can send-keys the reconcile pass here even
+    // when the advisor is idle. Idempotent; a no-op (and never an error) when
+    // TMUX_PANE is unset, so a non-tmux `role enter advisor` is unaffected.
+    // trace:STORY-768 | ai:claude
+    if canonical_role_name(&resolved) == "advisor" {
+        let _ = human_audit::register_pane_from_env(project_root);
+    }
     emit_role_enter_eval(project_root, &state, cd, /* was_existing */ true);
     Ok(())
 }
@@ -98317,6 +98326,14 @@ fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
             interactive,
             then_drain,
         } => handle_human_unblock(*copy, *stdout, *json, *interactive, *then_drain),
+        // STORY-768: fire the /aida-human-audit pass at the advisor — enqueue a
+        // durable directive (default) and optionally tmux-inject it now.
+        // trace:STORY-768 | ai:claude
+        cli::HumanCommand::Audit { inject } => {
+            let project_root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            handle_human_audit(&project_root, *inject)
+        }
         // STORY-611: the action aliases need a storage handle, so they are
         // dispatched in the main `run()` body (where `backend`/`store_path`
         // are in scope), not here. This arm is unreachable from the early
@@ -98328,6 +98345,71 @@ fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
             unreachable!("STORY-611 action aliases are dispatched after store init")
         }
     }
+}
+
+/// STORY-768: `aida human audit` — fire the `/aida-human-audit` reconcile pass
+/// at the advisor session. Default is a durable enqueue onto the worker-
+/// directive channel that the polling advisor picks up; `--inject` additionally
+/// `tmux send-keys` the slash command into the advisor's registered pane for an
+/// immediate run, falling back to enqueue-only when no pane is registered.
+// trace:STORY-768 | ai:claude
+fn handle_human_audit(project_root: &std::path::Path, inject: bool) -> Result<()> {
+    // Always enqueue the durable directive first — it is the reliable,
+    // headless/cross-vendor path. The optional inject is a best-effort nudge on
+    // top of it, so an idle advisor runs the pass without waiting a poll cycle.
+    human_audit::post_directive_line_enqueue(project_root)?;
+    println!(
+        "{} Enqueued a human-audit request for the advisor.",
+        glyph(crate::glyphs::Glyph::Check).green()
+    );
+    println!(
+        "  {}",
+        "The polling advisor picks it up next cycle (aida worker directives) and runs the pass."
+            .dimmed()
+    );
+
+    if !inject {
+        return Ok(());
+    }
+
+    // --inject: try to send the slash command straight into the advisor's
+    // registered tmux pane. Never hard-fail — fall back to the enqueue already
+    // done above and explain why.
+    match human_audit::plan_inject(human_audit::read_pane(project_root)) {
+        human_audit::InjectPlan::Inject(argv) => {
+            let (program, rest) = argv.split_first().expect("send-keys argv is non-empty");
+            match std::process::Command::new(program).args(rest).status() {
+                Ok(status) if status.success() => {
+                    println!(
+                        "{} Injected the audit command into the advisor's tmux pane.",
+                        glyph(crate::glyphs::Glyph::Check).green()
+                    );
+                }
+                Ok(status) => {
+                    println!(
+                        "{} tmux send-keys exited with {} — the enqueued request still stands.",
+                        glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        status
+                    );
+                }
+                Err(e) => {
+                    println!(
+                        "{} Could not run tmux ({}) — the enqueued request still stands.",
+                        glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        e
+                    );
+                }
+            }
+        }
+        human_audit::InjectPlan::Fallback => {
+            println!(
+                "{} No advisor tmux pane is registered (not in tmux, or the advisor session did \
+                 not start under tmux) — kept the enqueued request only.",
+                glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+        }
+    }
+    Ok(())
 }
 
 /// STORY-611: which `aida human <sub>` verbs run WITHOUT a storage handle. The
@@ -98343,6 +98425,7 @@ fn human_subcommand_needs_no_storage(cmd: &cli::HumanCommand) -> bool {
             | cli::HumanCommand::Presence
             | cli::HumanCommand::Status
             | cli::HumanCommand::Unblock { .. }
+            | cli::HumanCommand::Audit { .. }
     )
 }
 

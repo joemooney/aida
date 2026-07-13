@@ -83,6 +83,26 @@ impl Directive {
     }
 }
 
+/// Append one directive `line` to `.aida/worker.cmd`, creating the `.aida`
+/// directory if needed. The CLI-side directive posters (e.g. `aida human
+/// audit`) share this writer so they land the same append-a-line format the
+/// MCP `tool_post_directive` writes and the worker/`render_human` poll surface
+/// reads.
+// trace:STORY-768 | ai:claude
+pub(crate) fn post_directive_line(project_root: &Path, line: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let path = worker_cmd_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)?;
+    writeln!(f, "{line}")?;
+    Ok(())
+}
+
 /// Parse `.aida/worker.cmd` into a list of directives in file order.
 /// Blank lines and `#`-prefixed comments are skipped. An absent file (or any
 /// read error) is treated as no directives — fails safe to "queue empty".
