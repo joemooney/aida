@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:04:03.758412394Z
-modified_at: 2026-07-01T06:45:07.634758718Z
+modified_at: 2026-07-13T07:03:37.571866234Z
 req_type: Task
 tags:
 - zen-ready
@@ -22,3 +22,18 @@ comments:
   content: 'Advisor note (overnight groom): keystone — STORY-711 commit-side authorization gate, same autonomy substrate. Supervised only; not a headless zen target.'
   created_at: 2026-07-01T06:45:07.634758718Z
   modified_at: 2026-07-01T06:45:07.634758718Z
+decision_request:
+  question: Should the STORY-711 commit-side authorization gate hard-block an unauthorized commit, or warn?
+  choices:
+  - label: Hard-refuse
+    consequence: strongest duplicate-dispatch guarantee, but risks false-blocks on solo/manual commits
+    resolution: hard block
+  - label: Warn + override flag
+    consequence: softer, leans on discipline
+    resolution: warn
+  - label: Context-aware
+    consequence: hard-refuse only under active fan-out/drain, warn otherwise
+    resolution: context-gated
+  recommended: 2
+  rationale: Duplicate-dispatch harm only arises during concurrent fan-out; a hard block on solo manual commits would be a daily papercut.
+  asked_at: 2026-07-13T07:03:37.571866234Z
