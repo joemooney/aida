@@ -82806,6 +82806,66 @@ mod in_flight_linkage_integration_tests {
         assert_eq!(l.branch.as_deref(), Some("feature/y"));
     }
 
+    /// BUG-720: a spec whose ONLY referencing commit lives on the orphan
+    /// `aida-store` requirements-store branch — a cross-node store-lineage
+    /// merge commit that names the spec in a trailing paren group, exactly
+    /// the shape `aida db sync` produces (`merge: reconcile gitlab store
+    /// lineage (node-6 spock registrations) into unified store (SPEC-ID)`)
+    /// — must resolve to NO review branch, and specifically never to
+    /// `aida-store` itself (bare or remote-qualified, e.g. `gitlab/aida-store`
+    /// on a multi-hub project like STORY-760). Falling back to it made `aida
+    /// review` / `aida human review` offer to open a PR from the
+    /// requirements store as if it were a code change.
+    #[test]
+    fn linkage_for_spec_referenced_only_by_orphan_store_branch_has_no_branch() {
+        let (_tmp, root) = init_repo();
+        git(&root, &["checkout", "-q", "--orphan", "aida-store"]);
+        std::fs::write(root.join("objects.yaml"), "id: TASK-808\n").unwrap();
+        git(&root, &["add", "."]);
+        git(
+            &root,
+            &[
+                "commit",
+                "-q",
+                "-m",
+                "merge: reconcile gitlab store lineage (node-6 spock registrations) \
+                 into unified store (TASK-808)",
+            ],
+        );
+        // A multi-hub project mirrors the orphan branch under more than one
+        // remote (STORY-760); a synthetic remote-tracking ref reproduces the
+        // exact candidate `git branch --all --contains` reported in the
+        // observed bug: `gitlab/aida-store`, not just the bare local name.
+        let sha = git(&root, &["rev-parse", "aida-store"]);
+        git(
+            &root,
+            &["update-ref", "refs/remotes/gitlab/aida-store", &sha],
+        );
+        git(&root, &["checkout", "-q", "main"]);
+
+        let l = collect_git_linkage(&root, &["TASK-808".to_string()]);
+        assert_eq!(l.commits.len(), 1, "the store-lineage commit is found");
+        assert!(!l.shipped, "the orphan branch is not an ancestor of main");
+        assert_eq!(
+            l.branch, None,
+            "must never resolve to the orphan aida-store branch (bare or remote-qualified)"
+        );
+    }
+
+    /// BUG-720: the guard predicate itself, isolated from git — a bare
+    /// `aida-store` and every remote-qualified short ref for it must match;
+    /// a real code branch that merely contains the substring must not.
+    #[test]
+    fn is_orphan_store_branch_matches_bare_and_remote_qualified_refs() {
+        assert!(is_orphan_store_branch("aida-store"));
+        assert!(is_orphan_store_branch("origin/aida-store"));
+        assert!(is_orphan_store_branch("gitlab/aida-store"));
+        assert!(is_orphan_store_branch("AIDA-STORE"), "case-insensitive");
+        assert!(!is_orphan_store_branch("aida-store-backup"));
+        assert!(!is_orphan_store_branch("feature/aida-store-migration"));
+        assert!(!is_orphan_store_branch("main"));
+    }
+
     /// BUG-550: `collect_git_linkage_opts(.., false)` — the path the widened
     /// `aida human` reviews bucket uses — must still resolve the commit/branch/
     /// shipped state (the only fields the review-surface classifier reads) while
@@ -90364,6 +90424,28 @@ pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]
     collect_git_linkage_opts(project_root, ids, true)
 }
 
+/// The orphan git-canonical requirements-store branch name (see CLAUDE.md
+/// "Storage model"). Its `update SPEC-NNN` / `add SPEC-NNN` bookkeeping
+/// commits — and cross-node store-lineage merges — mention a bare spec id in
+/// the subject, which is indistinguishable at the grep layer from a real
+/// code commit. Any scan that resolves a spec id to a CODE branch/commit
+/// range must exclude this branch, or it mistakes the requirements store
+/// itself for the spec's feature branch (`aida review` / `aida human review`
+/// offered to open a PR from `aida-store`). `scan_completed_without_commit`
+/// avoids the same trap structurally, by only ever walking the resolved
+/// default CODE branch.
+///
+/// Accepts either a bare branch name (`aida-store`) or a remote-qualified
+/// short ref (`origin/aida-store`, `gitlab/aida-store`, …) — a multi-hub
+/// project (STORY-760) can have the orphan branch mirrored under several
+/// remote prefixes, and `git branch --all --contains` reports it under
+/// each, so matching only the bare literal would miss every remote but one.
+// trace:BUG-720 | ai:claude
+pub(crate) fn is_orphan_store_branch(branch: &str) -> bool {
+    let name = branch.rsplit('/').next().unwrap_or(branch);
+    name.eq_ignore_ascii_case("aida-store")
+}
+
 /// BUG-550: variant of [`collect_git_linkage`] with the full source-tree walk
 /// (`scan_trace_graph`, which populates `GitLinkage::files`) gated behind
 /// `scan_trace`. Surfaces that classify a spec's *review state* — the `aida
@@ -90520,10 +90602,23 @@ pub(crate) fn collect_git_linkage_opts(
             // the spec ids being resolved (the spec's OWN branch, `TASK-806` →
             // `task-806`); fall back to the first only when none matches.
             // trace:BUG-553 | ai:claude
+            //
+            // BUG-720: also exclude the orphan `aida-store` branch. A commit
+            // can be reachable ONLY from `aida-store` (its own bookkeeping
+            // commit, or a cross-node store-lineage merge that names the spec
+            // in parens) — never offer it as the spec's review branch, or
+            // `aida review`/`aida human review` prompts to PR the entire
+            // requirements store as a code change.
             let candidates: Vec<String> = contains
                 .lines()
                 .map(|b| b.trim().trim_start_matches("origin/"))
-                .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
+                .filter(|b| {
+                    !b.is_empty()
+                        && *b != "HEAD"
+                        && *b != "main"
+                        && *b != "master"
+                        && !is_orphan_store_branch(b)
+                })
                 .map(|b| b.to_string())
                 .collect();
             let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
