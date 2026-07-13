@@ -82795,6 +82795,112 @@ mod in_flight_linkage_integration_tests {
         ));
     }
 
+    // BUG-722 class (a): a spec whose only branch is the `aida-store` orphan
+    // requirements-store branch is NEVER reviews-awaiting — that branch is not a
+    // code-review target (the STORY-760 false positive). Even Done, even with a
+    // pushed branch that classifies as an open review surface. Pure — same
+    // GitLinkage seam the surface tests use, no repo/forge. trace:BUG-722
+    #[test]
+    fn store_branch_spec_is_not_review_awaiting() {
+        let l = linkage(false, None, Some("aida-store"), 2);
+        let surface = classify_review_surface(&l, None);
+        assert!(
+            matches!(surface, ReviewSurface::BranchNoChange { .. }),
+            "precondition: the store branch classifies as an open branch surface"
+        );
+        assert_eq!(
+            classify_human_review_bucket(
+                aida_core::RequirementStatus::Done,
+                false,
+                false,
+                &surface,
+            ),
+            HumanReviewBucket::Excluded,
+            "the aida-store store branch must never be reviews-awaiting"
+        );
+    }
+
+    // BUG-722 class (b): a deferred spec with a live branch is NOT reviews-
+    // awaiting — a deferred spec is hidden from the human's seat exactly as
+    // `aida list` hides it (the TASK-963 false positive). trace:BUG-722
+    #[test]
+    fn deferred_spec_with_branch_is_not_review_awaiting() {
+        let l = linkage(false, None, Some("forge-slice2-change-metadata"), 2);
+        let surface = classify_review_surface(&l, None);
+        assert_eq!(
+            classify_human_review_bucket(
+                aida_core::RequirementStatus::Draft,
+                false, // not archived
+                true,  // deferred
+                &surface,
+            ),
+            HumanReviewBucket::Excluded,
+            "a deferred spec is not a review gate even with a live branch"
+        );
+    }
+
+    // BUG-722 class (c): an archived spec with a live branch is NOT reviews-
+    // awaiting — same view-state hide as `aida list`. trace:BUG-722
+    #[test]
+    fn archived_spec_with_branch_is_not_review_awaiting() {
+        let l = linkage(false, None, Some("story-archived"), 2);
+        let surface = classify_review_surface(&l, None);
+        assert_eq!(
+            classify_human_review_bucket(
+                aida_core::RequirementStatus::InProgress,
+                true,  // archived
+                false, // not deferred
+                &surface,
+            ),
+            HumanReviewBucket::Excluded,
+            "an archived spec is not a review gate even with a live branch"
+        );
+    }
+
+    // BUG-722 class (d): a draft spec with only a pushed WIP branch and no PR
+    // lands under `wip-branches`, NOT `reviews-awaiting` (operator decision
+    // 2026-07-12: nothing awaits a human until there's a PR or a Done claim).
+    // The same draft WITH an open PR is still a genuine review. trace:BUG-722
+    #[test]
+    fn draft_wip_branch_no_pr_is_wip_not_review_awaiting() {
+        let l = linkage(false, None, Some("wip-draft"), 3);
+        let surface = classify_review_surface(&l, None);
+        assert!(
+            matches!(surface, ReviewSurface::BranchNoChange { .. }),
+            "precondition: a pushed branch with no PR is BranchNoChange"
+        );
+        assert_eq!(
+            classify_human_review_bucket(
+                aida_core::RequirementStatus::Draft,
+                false,
+                false,
+                &surface,
+            ),
+            HumanReviewBucket::WipBranch,
+            "a draft with only a WIP branch and no PR is loose WIP, not a review gate"
+        );
+        // ...but the same draft WITH an open PR is a genuine review.
+        let found = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 55,
+            url: "https://example/pr/55".to_string(),
+            branch: "wip-draft".to_string(),
+            base: "main".to_string(),
+            title: None,
+        });
+        let l2 = linkage(false, None, Some("wip-draft"), 3);
+        let pr_surface = classify_review_surface(&l2, Some(found));
+        assert_eq!(
+            classify_human_review_bucket(
+                aida_core::RequirementStatus::Draft,
+                false,
+                false,
+                &pr_surface,
+            ),
+            HumanReviewBucket::ReviewsAwaiting,
+            "a draft with an OPEN PR is a genuine review, not loose WIP"
+        );
+    }
+
     // BUG-539: `aida review <SPEC>` must short-circuit on a terminal/merged
     // spec rather than re-running a full review + Approve/Request-changes menu.
     #[test]
@@ -97366,6 +97472,12 @@ struct ReviewAwaiting {
     /// True when an Approved reviewer verdict already exists for the PR — the
     /// spec is in the awaiting-MERGE micro-state, NOT awaiting review.
     reviewed: bool,
+    /// BUG-722: true when this is a loose draft WIP branch (a `Draft` spec on a
+    /// pushed branch with commits but no open PR). Rendered under `wip-branches`
+    /// but NOT a review gate — nothing awaits a human until there's a PR or a
+    /// Done claim.
+    // trace:BUG-722 | ai:claude
+    wip: bool,
 }
 
 /// STORY-611: classify whether an open PR already carries an Approved reviewer
@@ -97516,9 +97628,22 @@ fn reviews_awaiting_human(
         // this re-checks the live status so a stale cache row left over from a
         // lingering Agent-tool worktree branch can't slip a finished spec back
         // onto the operator's seat. trace:BUG-582 | ai:claude
-        if !spec_eligible_for_review_awaiting(req.status.clone(), &surface) {
+        // BUG-722: the single classification gate. Layers view-state (deferred/
+        // archived hidden exactly as `aida list` hides them), branch-type (the
+        // `aida-store` orphan store branch is never a code-review target), and
+        // the draft-WIP split on top of the BUG-582 status/surface invariant.
+        // Pure ⇒ the false-positive classes are unit-tested without a repo.
+        // trace:BUG-722 | ai:claude
+        let bucket = classify_human_review_bucket(
+            req.status.clone(),
+            req.archived,
+            requirement_is_deferred(req),
+            &surface,
+        );
+        if bucket == HumanReviewBucket::Excluded {
             continue;
         }
+        let wip = bucket == HumanReviewBucket::WipBranch;
         match surface {
             ReviewSurface::OpenChange { number, .. } => {
                 let forge = crate::forge::resolve_forge_kind(project_root);
@@ -97527,6 +97652,7 @@ fn reviews_awaiting_human(
                     spec_id,
                     surface: format!("{}-{}", forge.change_noun(), number),
                     reviewed,
+                    wip,
                 });
             }
             ReviewSurface::BranchNoChange { branch, .. } => {
@@ -97535,11 +97661,12 @@ fn reviews_awaiting_human(
                     surface: format!("branch {branch}"),
                     // No PR ⇒ no verdict file ⇒ never the awaiting-merge state.
                     reviewed: false,
+                    wip,
                 });
             }
             // Already merged or never pushed — nothing for the human to review.
-            // (Unreachable: `spec_eligible_for_review_awaiting` already dropped
-            // these above; kept exhaustive for the match.)
+            // (Unreachable: `classify_human_review_bucket` already dropped these
+            // above; kept exhaustive for the match.)
             ReviewSurface::Shipped { .. } | ReviewSurface::Local => {}
         }
     }
@@ -97668,10 +97795,17 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
         .map(|(pending, _)| pending)
         .unwrap_or_default();
     let reviews_all = reviews_awaiting_human(&project_root, backend);
+    // BUG-722: loose draft WIP branches (a `Draft` spec on a pushed branch with
+    // no PR) are visible but NOT a review gate — split them out first so they
+    // never masquerade as reviews-awaiting. trace:BUG-722
+    let wip_branches: Vec<&ReviewAwaiting> = reviews_all.iter().filter(|r| r.wip).collect();
     // Split case 1 (code-review-needed) from case 3 of the REFINEMENT comment
     // (already reviewed → awaiting MERGE, a distinct micro-state, NOT a review).
     let (awaiting_merge, awaiting_review): (Vec<&ReviewAwaiting>, Vec<&ReviewAwaiting>) =
-        reviews_all.iter().partition(|r| r.reviewed);
+        reviews_all
+            .iter()
+            .filter(|r| !r.wip)
+            .partition(|r| r.reviewed);
     // Findings stay a pointer + live count (cheap, no recompute): open findings
     // targeting an open spec. STORY-620: triage is a configurable seat; it only
     // counts toward (and renders on) the operator's list when the policy
@@ -97709,6 +97843,7 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
         && pending_decisions.is_empty()
         && awaiting_review.is_empty()
         && awaiting_merge.is_empty()
+        && wip_branches.is_empty()
         && open_findings == 0;
     if nothing {
         println!(
@@ -97724,12 +97859,18 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
         + pending_decisions.len()
         + awaiting_review.len()
         + open_findings;
-    println!(
-        "  {} {} open {} need a decision, review, or triage from you",
-        "→".green(),
-        total,
-        if total == 1 { "item" } else { "items" },
-    );
+    // BUG-722: the header counts true gates (decision/review/triage). When the
+    // only open items are informational (awaiting-merge or loose wip-branches),
+    // skip the "0 items need …" line and let those sections speak for
+    // themselves. trace:BUG-722
+    if total > 0 {
+        println!(
+            "  {} {} open {} need a decision, review, or triage from you",
+            "→".green(),
+            total,
+            if total == 1 { "item" } else { "items" },
+        );
+    }
 
     // STORY-611 — bucket 1: Decisions awaiting you. Upgrade from the old
     // one-line pointer to a real list of the pending DecisionRequests; each
@@ -97798,6 +97939,29 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
             "reviewed + approved — just needs merging".dimmed()
         );
         for r in &awaiting_merge {
+            let title = spec_title_cell(&titles, &r.spec_id);
+            println!(
+                "    {}{} {}",
+                r.spec_id.cyan(),
+                title,
+                format!("[{}]", r.surface).dimmed()
+            );
+        }
+    }
+
+    // BUG-722 — loose work-in-progress: a draft spec sitting on a pushed WIP
+    // branch with no PR. Surfaced so it isn't invisible, but explicitly NOT a
+    // review gate — nothing awaits the human until there's a PR or a Done claim
+    // (operator decision 2026-07-12). A hollow marker distinguishes it from the
+    // solid gate buckets above. trace:BUG-722
+    if !wip_branches.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "○".dimmed(),
+            "wip-branches".bold(),
+            "loose draft work-in-progress — not awaiting review".dimmed()
+        );
+        for r in &wip_branches {
             let title = spec_title_cell(&titles, &r.spec_id);
             println!(
                 "    {}{} {}",
@@ -128104,6 +128268,103 @@ fn spec_eligible_for_review_awaiting(
         surface,
         ReviewSurface::OpenChange { .. } | ReviewSurface::BranchNoChange { .. }
     )
+}
+
+/// BUG-722: the requirements-store orphan branch is never a code-review target.
+/// Commits that reference a spec but landed on `aida-store` during a store
+/// reconcile must not register as "a branch awaiting review" — the STORY-760
+/// false positive (`[branch aida-store]`). The store branch name is the
+/// project-wide constant the rest of the CLI hard-codes (see the
+/// `branch_exists_anywhere(.., "aida-store")` probe). Any configured store/
+/// mirror ref would also belong here, but a mirror is a REMOTE, not a branch —
+/// the branch name is uniformly `aida-store`.
+// trace:BUG-722 | ai:claude
+fn is_store_branch(branch: &str) -> bool {
+    branch == "aida-store"
+}
+
+/// BUG-722: the branch a review surface sits on, when it has one. `Shipped`
+/// (merged) and `Local` (never pushed) carry no live branch. Lets the
+/// classifier apply the store-branch exclusion without re-plumbing git.
+// trace:BUG-722 | ai:claude
+fn review_surface_branch(surface: &ReviewSurface) -> Option<&str> {
+    match surface {
+        ReviewSurface::OpenChange { branch, .. } | ReviewSurface::BranchNoChange { branch, .. } => {
+            Some(branch.as_str())
+        }
+        ReviewSurface::Shipped { .. } | ReviewSurface::Local => None,
+    }
+}
+
+/// BUG-722: which `aida human` bucket a candidate spec lands in once its
+/// status, view-state, and review surface are known. See
+/// [`classify_human_review_bucket`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HumanReviewBucket {
+    /// A genuine code-review gate — an open PR, or a pushed branch on active/
+    /// Done work — the same surface `aida review <SPEC>` locates.
+    ReviewsAwaiting,
+    /// Loose work-in-progress: a `Draft` spec on a pushed branch with commits
+    /// but no open PR. Visible under `wip-branches`, but NOT a review gate.
+    WipBranch,
+    /// Not the human's review work at all (finished/abandoned/deferred/archived
+    /// spec, the store branch, or a merged/never-pushed surface).
+    Excluded,
+}
+
+/// BUG-722: classify what `aida human` bucket a candidate spec belongs to.
+/// Pure ⇒ every false-positive class is unit-testable without a repo/forge.
+/// Layers three gates on top of the BUG-582 status/surface invariant, in
+/// precedence order:
+///  1. **view-state** — a deferred or archived spec is hidden from the human's
+///     review seat exactly as `aida list` hides it from the default view
+///     (STORY-441 archived, STORY-584 deferred);
+///  2. **status/surface** — the BUG-582 invariant: a Completed/Rejected spec or
+///     a merged (`Shipped`) / never-pushed (`Local`) surface is never review
+///     work, even with a lingering local branch;
+///  3. **branch-type** — the `aida-store` requirements-store orphan branch is
+///     never a code-review target (the STORY-760 false positive);
+/// then splits the survivors: a `Draft` spec whose only surface is a pushed
+/// branch with no PR is loose WIP (`wip-branches`), not a review gate — nothing
+/// awaits a human until there's a PR or a Done claim (operator decision,
+/// 2026-07-12). Everything else is a genuine review.
+// trace:BUG-722 | ai:claude
+fn classify_human_review_bucket(
+    status: aida_core::RequirementStatus,
+    archived: bool,
+    deferred: bool,
+    surface: &ReviewSurface,
+) -> HumanReviewBucket {
+    // Gate 1 — view-state: a filed-away or primed-conditional spec is not the
+    // human's review work, even with a live branch (mirrors `aida list`).
+    if archived || deferred {
+        return HumanReviewBucket::Excluded;
+    }
+    // Gate 2 — the BUG-582 status/surface invariant.
+    if !spec_eligible_for_review_awaiting(status.clone(), surface) {
+        return HumanReviewBucket::Excluded;
+    }
+    // Gate 3 — branch-type: the requirements-store orphan branch is never a
+    // code-review target.
+    if review_surface_branch(surface).is_some_and(is_store_branch) {
+        return HumanReviewBucket::Excluded;
+    }
+    // Draft + pushed branch + no open PR ⇒ loose WIP, not a review gate.
+    if matches!(status, aida_core::RequirementStatus::Draft)
+        && matches!(surface, ReviewSurface::BranchNoChange { .. })
+    {
+        return HumanReviewBucket::WipBranch;
+    }
+    HumanReviewBucket::ReviewsAwaiting
+}
+
+/// BUG-722: mirror the deferred view-state predicate `aida list` applies — the
+/// `deferred` flag OR any legacy `deferred:*` parking tag (STORY-584's
+/// honor-both rule). Keeps the `aida human` review seat hidden for exactly the
+/// specs the default list hides.
+// trace:BUG-722 | ai:claude
+fn requirement_is_deferred(req: &aida_core::Requirement) -> bool {
+    req.deferred || req.tags.iter().any(|t| t.starts_with("deferred:"))
 }
 
 /// BUG-511: RAII release for the review-verb lease — removing the lease
