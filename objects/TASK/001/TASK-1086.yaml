@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T02:02:13.811843942Z
-modified_at: 2026-07-02T02:02:13.811843942Z
+modified_at: 2026-07-13T03:17:10.173912233Z
 req_type: Task
 tags:
 - aida:human
 - followup:STORY-750
 - human-role
 - ux
+comments:
+- id: 019f597a-879d-7791-a0bc-8e00818b3263
+  author: joe
+  content: Commit 18976c70e references this requirement
+  created_at: 2026-07-13T03:17:10.173912233Z
+  modified_at: 2026-07-13T03:17:10.173912233Z
