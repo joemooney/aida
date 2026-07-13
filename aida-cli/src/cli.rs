@@ -1748,6 +1748,18 @@ pub enum BurndownCommand {
         /// gate is a guardrail, not security — the bypass is recorded in history.
         #[clap(long)]
         force: bool,
+        /// Which vendor CLI backs this drain: `claude` or `codex` (alias:
+        /// `--agent`). NOTE: `burndown run`'s implementer fan-out is the Claude
+        /// harness's native worktree-isolated subagent primitive, so the
+        /// fan-out itself is Claude-only; this flag exports `AIDA_HEADLESS_VENDOR`
+        /// for the drain so any vendor-agnostic per-spec orchestration inherits
+        /// it. For a fully non-Claude drain, run `aida queue work <SPEC>
+        /// --auto-complete --vendor <v>` per spec instead. Resolution order:
+        /// this flag > the `AIDA_HEADLESS_VENDOR` env > the `[orchestrator]
+        /// headless_vendor` / `[agents] vendor` config knob > `claude`.
+        // trace:TASK-1116 | ai:claude
+        #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
+        vendor: Option<String>,
     },
     /// Is a drain running, and what is it doing? The read-side companion to
     /// `burndown run`. Reads the global drain lock — pid, start time, the
@@ -4694,15 +4706,19 @@ pub enum QueueCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "UUID", conflicts_with = "resume")]
         session_id: Option<String>,
-        /// Which vendor CLI hosts the interactive session: `claude` or
-        /// `codex`. The AIDA TUI passes `--vendor codex` to host a Codex
-        /// tab. Codex has no caller-minted session id, so `--vendor codex`
-        /// hosts a fresh interactive session and ignores `--session-id` /
-        /// `--resume`. Only affects the interactive (non-headless) launch.
-        /// Unset: the `[agents] vendor` knob in agents.toml (project over
-        /// global), else `claude`.
-        // trace:TASK-895 STORY-761 | ai:claude
-        #[clap(long, value_name = "VENDOR")]
+        /// Which vendor CLI runs this work: `claude` or `codex` (alias:
+        /// `--agent`, matching `aida agent new <vendor>`). Governs BOTH the
+        /// interactive host (the AIDA TUI passes `--vendor codex` to host a
+        /// Codex tab; Codex has no caller-minted session id, so it hosts a
+        /// fresh session and ignores `--session-id` / `--resume`) AND, on an
+        /// autonomous `--auto-complete` drain, the headless implementer (and
+        /// any headless orchestrator phase) — so `--vendor codex --auto-complete
+        /// --no-human=both` really drains on Codex instead of being silently
+        /// ignored. Headless-vendor resolution order: this flag > the
+        /// `AIDA_HEADLESS_VENDOR` env > the `[orchestrator] headless_vendor` /
+        /// `[agents] vendor` config knob > `claude` (default).
+        // trace:TASK-895 STORY-761 TASK-1116 | ai:claude
+        #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
         vendor: Option<String>,
         /// Drive the full implementer → CI → reviewer → merge → pull →
         /// build lifecycle for one SPEC in a single command, instead of
@@ -8678,6 +8694,17 @@ pub enum Command {
         // trace:STORY-744 | ai:claude
         #[clap(long)]
         json: bool,
+
+        /// Which vendor CLI runs the headless implementer for this drive:
+        /// `claude` or `codex` (alias: `--agent`, matching `aida agent new
+        /// <vendor>`). A per-invocation override — no need to export
+        /// `AIDA_HEADLESS_VENDOR` just to drive one spec on Codex. Resolution
+        /// order: this flag > the `AIDA_HEADLESS_VENDOR` env > the
+        /// `[orchestrator] headless_vendor` / `[agents] vendor` config knob >
+        /// `claude` (default).
+        // trace:TASK-1116 | ai:claude
+        #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
+        vendor: Option<String>,
 
         /// Inspect the corroborated zen context — whether `AIDA_ZEN=1` is backed
         /// by a verifiable provenance or is a stale / leaked value. A skill

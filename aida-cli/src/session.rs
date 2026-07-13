@@ -968,8 +968,71 @@ impl HeadlessVendor {
     }
 }
 
+/// TASK-1116: per-invocation top-precedence override for the headless
+/// implementer vendor, set from the `--vendor`/`--agent` flag on a drive
+/// command (`aida zen`, `aida queue work`, `aida burndown run`) before the
+/// drain spawns. Wins over `AIDA_HEADLESS_VENDOR` and the config knobs in
+/// [`resolve_headless_vendor`]. Encoding: `0` = unset (an un-flagged run is
+/// byte-identical to the pre-TASK-1116 resolution), `1` = Claude, `2` = Codex.
+///
+/// Process-global rather than a threaded parameter because the flag is parsed
+/// at the top-level dispatch while the in-process spawn paths
+/// ([`spawn_claude_headless`] / [`exec_claude_headless`]) resolve deep in the
+/// call graph; a child-*subprocess* implementer (the orchestrator spawns
+/// `aida queue work <spec> --no-human`) inherits the same choice via the
+/// `AIDA_HEADLESS_VENDOR` env that [`install_headless_vendor_override`] also
+/// exports.
+// trace:TASK-1116 | ai:claude
+static HEADLESS_VENDOR_OVERRIDE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// TASK-1116: set (or clear, with `None`) the per-invocation headless-vendor
+/// override tier consulted first by [`resolve_headless_vendor`].
+// trace:TASK-1116 | ai:claude
+pub(crate) fn set_headless_vendor_override(vendor: Option<HeadlessVendor>) {
+    let code = match vendor {
+        None => 0,
+        Some(HeadlessVendor::Claude) => 1,
+        Some(HeadlessVendor::Codex) => 2,
+    };
+    HEADLESS_VENDOR_OVERRIDE.store(code, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// TASK-1116: read the per-invocation override tier.
+// trace:TASK-1116 | ai:claude
+fn headless_vendor_override() -> Option<HeadlessVendor> {
+    match HEADLESS_VENDOR_OVERRIDE.load(std::sync::atomic::Ordering::SeqCst) {
+        1 => Some(HeadlessVendor::Claude),
+        2 => Some(HeadlessVendor::Codex),
+        _ => None,
+    }
+}
+
+/// TASK-1116: install a `--vendor`/`--agent` flag value as the top-precedence
+/// headless-vendor override for this invocation. Recognized tokens
+/// (`claude` / `codex`) set BOTH:
+///   - the in-process override tier ([`set_headless_vendor_override`]) — so a
+///     spawn path that resolves in THIS process (`aida queue work <spec>
+///     --no-human`) routes to it, and
+///   - the `AIDA_HEADLESS_VENDOR` env — so a child-subprocess drain (the
+///     `--auto-complete` orchestrator's implementer child, or `aida zen`'s
+///     self-invoked `aida queue work --auto-complete`) inherits it.
+/// Returns the parsed vendor, or `None` for an unrecognized token so the caller
+/// can choose to error (the new `zen` / `burndown` flags) or fall through (the
+/// pre-existing `queue work --vendor`, whose interactive host path tolerates
+/// other values).
+// trace:TASK-1116 | ai:claude
+pub(crate) fn install_headless_vendor_override(raw: &str) -> Option<HeadlessVendor> {
+    let vendor = HeadlessVendor::parse(raw)?;
+    set_headless_vendor_override(Some(vendor));
+    std::env::set_var("AIDA_HEADLESS_VENDOR", vendor.as_str());
+    Some(vendor)
+}
+
 /// STORY-683: resolve the vendor a headless drain spawn should use. Resolution
 /// order, highest precedence first:
+///   0. TASK-1116 per-invocation `--vendor`/`--agent` flag override (in-process
+///      tier) — wins over everything below so a drive command can pick the
+///      implementer vendor for one run.
 ///   1. `AIDA_HEADLESS_VENDOR` env (per-host / per-invocation override) — mirrors
 ///      the `AIDA_OS_WRAP` precedence convention; an unrecognized value is ignored.
 ///   2. `[orchestrator] headless_vendor` in the project config.
@@ -977,8 +1040,12 @@ impl HeadlessVendor {
 ///      set-once default-vendor knob for codex-first machines.
 ///   4. `Claude` (default) — so an un-configured drain is unchanged.
 /// `worktree_root` roots the config read.
-// trace:STORY-683 STORY-761 | ai:claude
+// trace:STORY-683 STORY-761 TASK-1116 | ai:claude
 pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
+    // TASK-1116: the per-invocation flag override wins over env + knobs.
+    if let Some(v) = headless_vendor_override() {
+        return v;
+    }
     if let Some(raw) = std::env::var("AIDA_HEADLESS_VENDOR").ok() {
         if let Some(v) = HeadlessVendor::parse(&raw) {
             return v;
@@ -3535,6 +3602,10 @@ mod tests {
             let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
             let saved = std::env::var_os("AIDA_HEADLESS_VENDOR");
             std::env::remove_var("AIDA_HEADLESS_VENDOR");
+            // TASK-1116: the flag-override tier is a process-global too — clear
+            // it under the same lock so a prior override-setting test can never
+            // leak into an env/knob/default assertion.
+            set_headless_vendor_override(None);
             Self { _lock: lock, saved }
         }
     }
@@ -3545,6 +3616,8 @@ mod tests {
                 Some(v) => std::env::set_var("AIDA_HEADLESS_VENDOR", v),
                 None => std::env::remove_var("AIDA_HEADLESS_VENDOR"),
             }
+            // TASK-1116: reset the override tier so it does not survive the test.
+            set_headless_vendor_override(None);
         }
     }
 
@@ -3752,6 +3825,90 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
+    }
+
+    /// TASK-1116: the per-invocation `--vendor`/`--agent` flag override is the
+    /// TOP tier — it wins over BOTH the `AIDA_HEADLESS_VENDOR` env AND the
+    /// config knobs. With no override installed, resolution is byte-identical
+    /// to before (the env/knob/default tiers still apply).
+    // trace:TASK-1116 | ai:claude
+    #[test]
+    fn resolve_headless_vendor_flag_override_wins_over_env_and_knob() {
+        let _env = HeadlessVendorEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+
+        // Set up the LOSING tiers: env says codex, the config knob says codex.
+        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[orchestrator]\nheadless_vendor = \"codex\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/agents.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+        // Sanity: without the flag, the env (top of the pre-TASK-1116 order)
+        // decides → codex.
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
+
+        // The flag override wins over env + knob → claude.
+        set_headless_vendor_override(Some(HeadlessVendor::Claude));
+        assert_eq!(
+            resolve_headless_vendor(tmp.path()),
+            HeadlessVendor::Claude,
+            "the per-invocation --vendor/--agent override must beat env + knob"
+        );
+
+        // Flipped: override codex still wins regardless of the lower tiers.
+        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        set_headless_vendor_override(Some(HeadlessVendor::Codex));
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
+
+        // Clearing the override falls back to the env/knob tiers (now claude).
+        set_headless_vendor_override(None);
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
+    }
+
+    /// TASK-1116: [`install_headless_vendor_override`] is the flag→override
+    /// bridge the drive commands call. A recognized token sets the in-process
+    /// tier (so an in-process spawn routes to it) AND exports
+    /// `AIDA_HEADLESS_VENDOR` (so a child-subprocess implementer inherits it);
+    /// an unrecognized token installs nothing and returns `None` so the caller
+    /// can error or fall through — never a silent misroute.
+    // trace:TASK-1116 | ai:claude
+    #[test]
+    fn install_headless_vendor_override_sets_tier_and_env() {
+        let _env = HeadlessVendorEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Recognized token → override installed + env exported for children.
+        assert_eq!(
+            install_headless_vendor_override("codex"),
+            Some(HeadlessVendor::Codex)
+        );
+        assert_eq!(headless_vendor_override(), Some(HeadlessVendor::Codex));
+        assert_eq!(
+            std::env::var("AIDA_HEADLESS_VENDOR").ok().as_deref(),
+            Some("codex"),
+            "the flag must export AIDA_HEADLESS_VENDOR so a child implementer inherits it"
+        );
+        // The headless implementer resolves to the flag value.
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
+
+        // Case-insensitive alias-value parse (mirrors `HeadlessVendor::parse`).
+        assert_eq!(
+            install_headless_vendor_override(" Claude "),
+            Some(HeadlessVendor::Claude)
+        );
+        assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
+
+        // Unrecognized token → nothing installed, caller decides.
+        set_headless_vendor_override(None);
+        assert_eq!(install_headless_vendor_override("gemini"), None);
+        assert_eq!(headless_vendor_override(), None);
     }
 
     /// `--bare` strips OAuth/keychain auth and breaks login (spike Q1) — the

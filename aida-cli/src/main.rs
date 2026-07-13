@@ -4615,6 +4615,7 @@ fn run() -> Result<()> {
             into_epic,
             dry_run,
             json,
+            vendor,
             command: _,
         } => {
             // STORY-744: the machine-readable gate probe short-circuits the
@@ -4622,6 +4623,9 @@ fn run() -> Result<()> {
             if *json {
                 run_zen_gate_json(&storage, spec.as_deref())?;
             } else {
+                // TASK-1116: a per-invocation `--vendor`/`--agent` picks the
+                // headless implementer for this drive (top precedence).
+                apply_drive_vendor_override(vendor.as_deref())?;
                 let user_id = current_user_id(None);
                 run_zen_drive(
                     &storage,
@@ -15756,6 +15760,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             into_epic,
             dry_run,
             json,
+            vendor,
             command: _,
         } => {
             let storage = Storage::new(store_path.to_path_buf());
@@ -15766,6 +15771,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if *json {
                 return run_zen_gate_json(&storage, spec.as_deref());
             }
+            // TASK-1116: a per-invocation `--vendor`/`--agent` picks the headless
+            // implementer for this drive (top precedence). Installed before the
+            // self-invoked `aida queue work --auto-complete` child spawns so it
+            // inherits the choice via `AIDA_HEADLESS_VENDOR`.
+            apply_drive_vendor_override(vendor.as_deref())?;
             let user_id = current_user_id(None);
             return run_zen_drive(
                 &storage,
@@ -95141,6 +95151,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             dry_run,
             verbose,
             force,
+            vendor,
         } => handle_burndown_run(
             status,
             tag.as_deref(),
@@ -95151,6 +95162,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             *dry_run,
             *verbose,
             *force,
+            vendor.as_deref(),
         ),
         crate::cli::BurndownCommand::Status { json } => handle_burndown_status(*json),
     }
@@ -95468,6 +95480,12 @@ fn handle_burndown_run(
     verbose: bool,
     // STORY-647: bypass the team RBAC drain-start guardrail.
     force: bool,
+    // TASK-1116: per-invocation `--vendor`/`--agent`. burndown's implementer
+    // fan-out is the Claude harness's native subagent primitive (Claude-only),
+    // so this exports `AIDA_HEADLESS_VENDOR` for the drain — any vendor-agnostic
+    // per-spec orchestration inherits it — but does NOT reroute the native
+    // fan-out. trace:TASK-1116 | ai:claude
+    vendor: Option<&str>,
 ) -> Result<()> {
     // STORY-647: team RBAC guardrail — starting an autonomous drain is an
     // advisor-gated op by default (tunable via `[team.permissions] drain_start`).
@@ -95475,6 +95493,29 @@ fn handle_burndown_run(
     // gate-probe path the harness uses) is refused for a non-advisor. `--force` /
     // advisor authority (TTY / live drain / advisor role) bypass. trace:STORY-647
     enforce_team_gate(permissions::GatedOp::DrainStart, force)?;
+
+    // TASK-1116: install the per-invocation headless-vendor override (top
+    // precedence) and export `AIDA_HEADLESS_VENDOR` so the drain inherits it.
+    // burndown's fan-out is Claude-harness-only, so a non-Claude vendor is
+    // called out loudly and pointed at the vendor-agnostic per-spec path — no
+    // silent misroute. An unrecognized token is a hard error. trace:TASK-1116
+    if let Some(raw) = vendor {
+        let resolved = session::install_headless_vendor_override(raw).ok_or_else(|| {
+            anyhow::anyhow!("unknown --vendor/--agent value `{raw}` (expected: claude, codex)")
+        })?;
+        if resolved != session::HeadlessVendor::Claude {
+            eprintln!(
+                "  {} burndown's implementer fan-out is Claude-harness-only; `--vendor {}` \
+                 sets AIDA_HEADLESS_VENDOR for the drain but the native subagent fan-out stays \
+                 on Claude. For a fully {}-driven drain run `aida queue work <SPEC> \
+                 --auto-complete --vendor {}` per spec.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                resolved.as_str(),
+                resolved.as_str(),
+                resolved.as_str(),
+            );
+        }
+    }
 
     // BUG-530: sync the orphan store before computing the blessed set. The
     // preflight reads the local `.aida-store/` worktree (via
@@ -135397,6 +135438,18 @@ fn handle_queue_command(
             strict,
         } => {
             let user_id = get_user(user);
+            // TASK-1116: an explicit `--vendor`/`--agent` ALSO routes the
+            // headless `--auto-complete` implementer (and any headless
+            // orchestrator phase), not just the interactive host — so it is no
+            // longer a silent no-op on an autonomous drain. Installed as the
+            // top-precedence override BEFORE the orchestrator spawns the
+            // `aida queue work <spec> --no-human` implementer child, which
+            // inherits the choice via `AIDA_HEADLESS_VENDOR`. A recognized
+            // token (claude/codex) installs; an unrecognized value is left to
+            // the interactive host path's existing handling below. trace:TASK-1116
+            if let Some(raw) = vendor.as_deref() {
+                let _ = session::install_headless_vendor_override(raw);
+            }
             // STORY-761: resolve the interactive host vendor — explicit
             // `--vendor` flag > the uniform `[agents] vendor` knob
             // (agents.toml, project over global) > `claude`. Shadowed so
@@ -145832,6 +145885,23 @@ fn run_zen_gate_json(storage: &Storage, spec: Option<&str>) -> Result<()> {
         }
     }
     println!("{}", serde_json::to_string(&verdict)?);
+    Ok(())
+}
+
+/// TASK-1116: apply a drive command's `--vendor`/`--agent` value as the
+/// top-precedence headless-vendor override for this invocation (both the
+/// in-process tier and the `AIDA_HEADLESS_VENDOR` env a child-subprocess drain
+/// inherits — see [`session::install_headless_vendor_override`]). An
+/// unrecognized token is a hard error (no silent misroute); the recognized set
+/// is `claude` / `codex`. A `None` flag is a no-op, so an un-flagged drive
+/// resolves exactly as before TASK-1116.
+// trace:TASK-1116 | ai:claude
+fn apply_drive_vendor_override(vendor: Option<&str>) -> Result<()> {
+    if let Some(raw) = vendor {
+        if session::install_headless_vendor_override(raw).is_none() {
+            anyhow::bail!("unknown --vendor/--agent value `{raw}` (expected: claude, codex)");
+        }
+    }
     Ok(())
 }
 
