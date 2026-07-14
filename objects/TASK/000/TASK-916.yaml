@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:07.259989719Z
-modified_at: 2026-07-14T02:32:01.106122045Z
+modified_at: 2026-07-14T04:54:44.272924834Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,6 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 019edd85-f965-76e0-90bf-ce458f1de256
   created_at: 2026-06-26T18:22:12.637184637Z
+deferred: true
+deferred_at: 2026-07-14T04:54:44.272924834Z
+deferred_until: violations accrue naturally past a threshold
 decision_request:
   question: Commit to the multi-week field-study harvest, given SPIKE-67 already terminated at 100% rule-only with every conjecture falsified?
   choices:
