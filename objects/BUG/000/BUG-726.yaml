@@ -7,11 +7,11 @@ description: |-
 
   Fix the wording so an intentional non-verb resolution reads as a neutral success ('decision recorded' / 'recorded as guidance for the implementer') rather than 'unrecognized ... recorded only', which reads as a malformed input. Reserve 'unrecognized' for genuinely malformed verbs (e.g. status:bogus). Optionally: when the advisor files a design-fork question, allow marking choices as 'directive' so no verb is expected. Related: the /aida-questions filing convention; consider documenting the resolution verb vocabulary in aida questions ask --help.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:38:53.508768738Z
-modified_at: 2026-07-14T04:38:53.508768738Z
+modified_at: 2026-07-14T04:50:50.988186569Z
 req_type: Bug
 tags:
 - aida:questions papercut ux severity:cosmetic from-operator-confusion
