@@ -432,7 +432,7 @@ blocks:
   next: 3001
   allocated_at: 2026-07-07T20:15:10.960661443Z
 - node_id: '8'
-  owner: redacted@node.invalid
+  owner: Joe.Mooney@work.example
   hostname: spock
   type_prefix: '*'
   range_start: 4001
