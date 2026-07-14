@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T15:07:53.430982522Z
-modified_at: 2026-07-14T02:31:59.045923066Z
+modified_at: 2026-07-14T04:54:45.569390566Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,6 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
   created_at: 2026-06-14T15:07:56.598725195Z
+deferred: true
+deferred_at: 2026-07-14T04:54:45.569390566Z
+deferred_until: real demand for a strong-isolation sandbox surfaces
 decision_request:
   question: TASK-810 is approved + zen-ready, but parent STORY-616 says PARKED per SPIKE-61 (wait for demand). Defer to match, or build the Firecracker/gVisor sandbox now?
   choices:
