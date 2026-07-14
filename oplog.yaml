@@ -33074,5 +33074,20 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 3088
+- id: 019f5eeb-b885-7721-920f-517aadea5296
+  target_id: 019f5eeb-b544-7820-a920-5bd57d47ba9d
+  author: aida
+  node_id: '1'
+  lamport: 3089
+  timestamp: 2026-07-14T04:38:54.341471610Z
+  kind: !Create
+    title: 'aida questions answer: a freeform (non-verb) resolution reads as an error (''unrecognized resolution X — recorded only'') when it''s a valid recorded directive'
+    description: |-
+      2026-07-13: operator answered a design-fork question (TASK-958, hard-block vs warn vs context-aware) and saw 'unrecognized resolution context-gated — recorded only', which reads like a failure. It is not — the decision was recorded correctly and the spec un-parked. The resolution field only AUTO-EXECUTES a small verb set (reject / keep-parked / status:X / tag:+X/-X / queue|approve); anything else is captured as free-text guidance. For a DESIGN question there is often no executable verb (there is no verb for 'implement it context-aware'), so recorded-only is the CORRECT outcome, not an error.
+
+      Fix the wording so an intentional non-verb resolution reads as a neutral success ('decision recorded' / 'recorded as guidance for the implementer') rather than 'unrecognized ... recorded only', which reads as a malformed input. Reserve 'unrecognized' for genuinely malformed verbs (e.g. status:bogus). Optionally: when the advisor files a design-fork question, allow marking choices as 'directive' so no verb is expected. Related: the /aida-questions filing convention; consider documenting the resolution verb vocabulary in aida questions ask --help.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3089
 node_id: '1'
