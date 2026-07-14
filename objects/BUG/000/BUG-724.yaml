@@ -11,7 +11,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:16:17.851504346Z
-modified_at: 2026-07-14T04:16:17.851504346Z
+modified_at: 2026-07-14T04:35:34.096043850Z
 req_type: Bug
 tags:
 - aida:store privacy public-repo severity:major security followup:BUG-715
+comments:
+- id: 019f5ee8-aa50-7771-9f12-dda0e9c5ab49
+  author: joe
+  content: Commit 6a1428691 references this requirement
+  created_at: 2026-07-14T04:35:34.096043850Z
+  modified_at: 2026-07-14T04:35:34.096043850Z
