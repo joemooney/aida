@@ -1629,8 +1629,10 @@ pub fn register_node(aida_repo: &Path, user_id: u32, hostname: &str) -> Result<S
 /// registration and block allocation then persist the public alias instead of
 /// the raw system identity, so the recurring "raw employer content in the
 /// store" leak (see BUG-715) never lands. Returns the `(hostname, email)` to
-/// write — the public values when configured, else the raw ones.
-// trace:BUG-715 | ai:claude
+/// write — the public values when configured; the hostname falls back to raw,
+/// but the email falls back to a non-identifying placeholder (never the raw
+/// system email) so it is safe-by-default without an explicit opt-in (BUG-724).
+// trace:BUG-715 trace:BUG-724 | ai:claude
 pub fn redacted_identity(raw_hostname: &str, raw_email: Option<&str>) -> (String, Option<String>) {
     let (public_hostname, public_email) = read_public_identity();
     apply_identity_redaction(
@@ -1652,11 +1654,25 @@ pub fn apply_identity_redaction(
     public_email: Option<&str>,
 ) -> (String, Option<String>) {
     let hostname = public_hostname.unwrap_or(raw_hostname).to_string();
-    let email = public_email
-        .map(str::to_string)
-        .or_else(|| raw_email.map(str::to_string));
+    // BUG-724: safe-by-default. The raw git email is written ONLY when the
+    // operator explicitly opts in to publishing it via `[node] public_email`.
+    // When a raw email exists but no public alias is set, write a non-identifying
+    // placeholder — never the raw system email — so a work box cannot leak a
+    // corporate address into a (public) store just because redaction was never
+    // turned on. No email stays no email (nothing invented).
+    let email = match (public_email, raw_email) {
+        (Some(public), _) => Some(public.to_string()),
+        (None, Some(_raw)) => Some(REDACTED_EMAIL_PLACEHOLDER.to_string()),
+        (None, None) => None,
+    };
     (hostname, email)
 }
+
+/// The non-identifying email written when `[node] public_email` is not set —
+/// the safe-by-default value so raw system emails never reach the store unless
+/// the operator explicitly opts in.
+// trace:BUG-724 | ai:claude
+pub const REDACTED_EMAIL_PLACEHOLDER: &str = "redacted@node.invalid";
 
 /// Read `[node] public_hostname` / `public_email` from the machine-global
 /// `~/.aida/config.toml` (honoring `AIDA_TEST_HOME` for tests). Returns
@@ -2723,11 +2739,13 @@ mod tests {
 
     #[test]
     fn identity_redaction_substitutes_only_when_configured() {
-        // BUG-715: with no public config, raw identity passes through unchanged.
+        // BUG-724: safe-by-default. With no public config, the hostname passes
+        // through but a raw email is REPLACED with the placeholder — the raw
+        // corporate email can never reach the store without an explicit opt-in.
         let (h, e) =
             apply_identity_redaction("AZSD011Y7HN34D", Some("Joe@corp.example"), None, None);
         assert_eq!(h, "AZSD011Y7HN34D");
-        assert_eq!(e.as_deref(), Some("Joe@corp.example"));
+        assert_eq!(e.as_deref(), Some(REDACTED_EMAIL_PLACEHOLDER));
 
         // With both knobs set, the raw corporate identity is REPLACED — the
         // leak (raw email/hostname in the public-mirrored store) can't land.
