@@ -10,12 +10,12 @@ description: |-
   - A follow-up prompt requests the concrete problem, intent, or scope from the developer who wrote the thought
 
   _Drafted by `aida zen` from the thought: "just a thought"._
-status: Approved
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-01T04:56:15.281851891Z
-modified_at: 2026-07-14T04:49:35.318923403Z
+modified_at: 2026-07-14T04:54:46.334022705Z
 req_type: Task
 tags:
 - aida:zen
