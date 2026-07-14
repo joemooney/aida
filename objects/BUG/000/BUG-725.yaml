@@ -1,0 +1,21 @@
+id: 019f5ed7-14c8-7e22-a92c-636ed0acedf6
+spec_id: BUG-725
+agreed_id: BUG-725
+title: Queue registry is per-USER and non-mergeable, so the same user on two machines causes aida pull failures
+description: |-
+  2026-07-13: aida pull failed with 'conflict in non-mergeable path registry/queues/joe.yaml' because the same user (joe) worked from two nodes (imac + spock/work) concurrently. The queue registry is one file per QUEUE-USER-ID (registry/queues/<user>.yaml), so concurrent queue writes from different machines for the same user collide, and because the file is declared non-mergeable the store pull-rebase aborts to manual resolution. This is a recurring hazard whenever the operator drives from more than one machine.
+
+  Two candidate fixes:
+  A) Per-node queue files — registry/queues/<user>@<node>.yaml (or a per-node subdir), unioned + deduped on read. Clean isolation, no cross-node collision; needs a read-path union + a layout migration.
+  B) Make the queue registry CRDT-mergeable like the oplog — conflict.rs already unions the append-only oplog on merge; give registry/queues/*.yaml the same union-merge (entries keyed by requirement_id, dedup on merge, last-writer-wins on position) + a git merge driver so a pull-rebase auto-merges instead of failing. Smaller change, reuses existing CRDT machinery, no layout migration.
+
+  Recommend B (reuse the existing conflict-free merge machinery; the queue is conceptually one user's work queue, so per-node split + re-union in A is more moving parts). Either way the acceptance is: two machines, same user, concurrent queue writes -> aida pull auto-merges, never a non-mergeable failure.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-14T04:16:21.704959337Z
+modified_at: 2026-07-14T04:16:21.704959337Z
+req_type: Bug
+tags:
+- aida:store aida:queue distributed reliability severity:major
