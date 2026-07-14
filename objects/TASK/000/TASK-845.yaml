@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T14:29:52.537672722Z
-modified_at: 2026-06-27T16:21:18.606985806Z
+modified_at: 2026-07-14T04:35:56.034411514Z
 req_type: Task
 tags:
 - node-identity
@@ -25,6 +25,12 @@ comments:
   content: 'DECISION (operator 2026-06-27): build B — a SHARED person registry on the orphan store. aida identity link <a> <b> writes a person<->aliases record on the aida-store branch (extend the existing node/team roster from STORY-640, or a new person registry there); the high-value surfaces (queue current_user_id, team roster, block-list owner, --mine/--assigned) resolve an owner string -> canonical person via the alias map, composed with the TASK-951 case-fold. Smallest slice: the link command + the record + resolution at queue/team/block-list. The AIDA_USER-consistency floor is the zero-code fallback for new work; the registry handles the existing multi-host divergence. PR-for-operator-review (identity-foundational).'
   created_at: 2026-06-27T15:28:48.708574214Z
   modified_at: 2026-06-27T15:28:48.708574214Z
+- id: 019f5ee9-0002-7563-ba5f-8f13005b9671
+  author: joe
+  content: 'SECURITY/PRIVACY (2026-07-13): the local task-845-identity-link branch bakes the operator''s REAL work + personal emails into the alias EXAMPLES in doc-comments (aida-core/src/alias.rs module doc + aida-cli/src/cli.rs:2454 which is a /// clap doc = --help). Before this branch is ever merged, replace those with generic placeholders (e.g. user@corp.example / user@personal.example). It is local-only + unmerged now (not public), but would land the employer domain on public main + in --help if merged as-is. Related: BUG-724 (safe-by-default redaction).'
+  created_at: 2026-07-14T04:35:56.034411514Z
+  modified_at: 2026-07-14T04:35:56.034411514Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f09e2-ae2d-7370-b119-73072f7e1c74
   author: aida-auto-bump
