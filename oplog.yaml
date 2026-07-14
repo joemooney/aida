@@ -33040,5 +33040,20 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3086
+- id: 019f5ed7-08ef-7da2-a2e9-95341e11546f
+  target_id: 019f5ed7-05bb-70b1-a184-5f76a1370389
+  author: aida
+  node_id: '1'
+  lamport: 3087
+  timestamp: 2026-07-14T04:16:18.671915104Z
+  kind: !Create
+    title: Machine-identity redaction is opt-in, so a work clone pushed a raw corporate email into the PUBLIC store (BUG-715 follow-up)
+    description: |-
+      2026-07-13: node 8 (a work clone, work-github-8) registered into the store and wrote its raw corporate machine email into registry/nodes.toml AND registry/blocks.yaml owner field. Every other node from the same machine used the redacted @work.example placeholder, so BUG-715 redaction works but is OPT-IN and was not enabled on that clone. joemooney/aida (and its aida-store branch on origin + the gitlab mirror) is PUBLIC, so the raw employer email landed publicly. HEAD has been scrubbed on both hubs; the raw value remains in two history commits (node-8 register + block alloc).
+
+      Fix: make machine-identity redaction the DEFAULT (not opt-in), or at minimum enforce it on any push whose remote is a known-public host — a work box must not be able to leak raw corporate email/hostname into a public store even when the operator forgets to enable redaction. Consider a pre-push guard that refuses/redacts corporate-looking identity on a public remote. Related: BUG-715, BUG-700 (prior public-repo scrub + history rewrite).
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3087
 node_id: '1'
