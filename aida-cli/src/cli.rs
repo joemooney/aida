@@ -10191,6 +10191,30 @@ pub enum HumanCommand {
         #[clap(long)]
         allow_stale_base: bool,
     },
+
+    /// Trigger the human-audit reconcile pass at the advisor session.
+    ///
+    /// By default this ENQUEUES a durable request: it posts a directive onto
+    /// the worker-directive channel (`.aida/worker.cmd`) that the polling
+    /// advisor picks up on its next cycle (via `aida worker directives` / its
+    /// per-turn check) and runs the `/aida-human-audit` skill. Works headless
+    /// and across vendors; the only cost is up to one poll-cycle of latency.
+    ///
+    /// Pass `--inject` for an immediate nudge: it `tmux send-keys` the slash
+    /// command straight into the advisor's registered pane, so it fires even
+    /// when the advisor is idle between turns. `--inject` requires tmux — the
+    /// advisor's pane is recorded at session start. When you are not in tmux or
+    /// no pane is registered, `--inject` prints a note and falls back to the
+    /// enqueue path (it never fails).
+    // trace:STORY-768 | ai:claude
+    Audit {
+        /// Also inject the slash command straight into the advisor's tmux pane
+        /// for an immediate run (requires tmux; falls back to enqueue when no
+        /// pane is registered).
+        // trace:STORY-768 | ai:claude
+        #[clap(long)]
+        inject: bool,
+    },
 }
 
 /// Opt-in statusline bootstrap actions. AIDA's bootstrap goal is to make
@@ -11252,6 +11276,8 @@ mod tests {
                         HumanCommand::Answer { .. } => "answer",
                         HumanCommand::Decide { .. } => "decide",
                         HumanCommand::Review { .. } => "review",
+                        // trace:STORY-768 | ai:claude — audit-pass trigger.
+                        HumanCommand::Audit { .. } => "audit",
                     };
                     assert_eq!(got, want);
                 }
