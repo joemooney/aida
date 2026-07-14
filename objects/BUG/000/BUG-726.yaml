@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:38:53.508768738Z
-modified_at: 2026-07-14T04:50:52.259160719Z
+modified_at: 2026-07-14T05:04:24.376097100Z
 req_type: Bug
 tags:
 - aida:questions papercut ux severity:cosmetic from-operator-confusion
@@ -21,4 +21,8 @@ comments:
   content: 'UPGRADE (2026-07-13): this is NOT just wording. When the answer is a DISPOSITION (Defer/Reject/Close) but the resolution isn''t a recognized verb, answering un-parks the spec and QUEUES it — the OPPOSITE of the operator''s intent. Observed live: operator chose ''Defer'' on TASK-911 and it became burndown-ready. Two fixes: (1) ''defer'' must be a recognized resolution verb that sets the deferred flag (and reject/close must set Rejected) so the pick auto-applies; (2) the default un-park-on-answer must NOT queue a spec whose chosen resolution is defer/reject/keep-parked. Until fixed, the advisor must sweep answered questions and reconcile every defer/reject that got mis-queued. Priority bumped to HIGH.'
   created_at: 2026-07-14T04:50:52.259160719Z
   modified_at: 2026-07-14T04:50:52.259160719Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f5f03-1138-7a00-bef1-62cf60019a26
+  author: joe
+  content: Commit adc062b73 references this requirement
+  created_at: 2026-07-14T05:04:24.376097100Z
+  modified_at: 2026-07-14T05:04:24.376097100Z
