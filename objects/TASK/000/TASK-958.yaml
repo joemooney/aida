@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:04:03.758412394Z
-modified_at: 2026-07-14T02:10:47.217860166Z
+modified_at: 2026-07-14T02:32:00.400036216Z
 req_type: Task
 tags:
 - zen-ready
@@ -36,6 +36,4 @@ decision_request:
     resolution: context-gated
   recommended: 2
   rationale: Duplicate-dispatch harm only arises during concurrent fan-out; a hard block on solo manual commits would be a daily papercut.
-  answered: 2
-  asked_at: 2026-07-13T07:03:37.571866234Z
-  answered_at: 2026-07-14T02:10:47.217852890Z
+  asked_at: 2026-07-14T02:32:00.400036216Z
