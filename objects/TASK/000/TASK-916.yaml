@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:07.259989719Z
-modified_at: 2026-07-13T07:04:55.365225827Z
+modified_at: 2026-07-14T02:08:31.194653900Z
 req_type: Task
 tags:
 - zen-ready
@@ -30,4 +30,6 @@ decision_request:
     resolution: passive
   recommended: 2
   rationale: The sensor is built and cheap; weeks of dedicated drains carry high cost and low expected surprise — let data accrue passively.
+  answered: 2
   asked_at: 2026-07-13T07:04:55.365225827Z
+  answered_at: 2026-07-14T02:08:31.194612885Z
