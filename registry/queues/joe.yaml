@@ -441,3 +441,9 @@
   for_role: advisor
   for_scope: harness-worktree
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019f052b-7b81-7f41-83c4-87d6ffd50507
+  position: 343000
+  added_by: joe
+  note: unparked by `aida questions answer`
+  added_at: 2026-07-14T04:48:21.759886923Z
