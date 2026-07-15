@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:14:43.589196772Z
-modified_at: 2026-07-13T07:05:05.801390644Z
+modified_at: 2026-07-15T02:04:10.343397790Z
 req_type: Epic
 tags:
 - collaboration-layer
@@ -101,4 +101,6 @@ decision_request:
     resolution: defer
   recommended: 1
   rationale: The pure-git provider makes the vendor-neutral claim partly true with low blast radius now; the full MR-drain SPIKE only pays off once you're actually driving on GitLab.
+  answered: 0
   asked_at: 2026-07-13T07:05:05.801390644Z
+  answered_at: 2026-07-15T02:04:10.343352567Z
