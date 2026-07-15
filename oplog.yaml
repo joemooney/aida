@@ -33221,5 +33221,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3104
+- id: 019f63b7-efba-7a31-a903-2fa13ffaa0c8
+  target_id: 019f63b7-ec14-7861-939a-77ae61e1952a
+  author: aida
+  node_id: '1'
+  lamport: 3105
+  timestamp: 2026-07-15T03:00:26.682865448Z
+  kind: !Create
+    title: Distinct-user identity guard slice (prevent queue/lease identity mixups); defer roster/RBAC
+    description: 'EPIC-47 decision: ship ONLY the distinct-user identity guard; defer roster/assignment/RBAC/dashboard until a real second user exists. Identity-sensitive (relates to TASK-845) — supervised.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3105
 node_id: '1'
