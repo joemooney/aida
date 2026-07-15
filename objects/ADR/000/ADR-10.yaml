@@ -37,12 +37,12 @@ description: |
   Bigger PR touching the hot zen-dispatch path in main.rs. AIDA_ZEN survives as
   the child-process transport but is no longer the in-process source of truth.
   Future autonomy modes extend one typed enum, parameterizing pauses uniformly.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:40:22.329779763Z
-modified_at: 2026-07-15T04:28:08.845294335Z
+modified_at: 2026-07-15T05:22:37.444907032Z
 req_type: Decision
 tags:
 - adr
@@ -62,6 +62,24 @@ comments:
   created_at: 2026-07-15T04:28:07.496963146Z
   modified_at: 2026-07-15T04:28:07.496963146Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f643a-1afe-7751-8256-9f30c2fc77f6
+  author: aida-auto-bump
+  timestamp: 2026-07-15T05:22:37.438816779Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f643a-1b04-7373-8e1d-f8ce0fe13688
+  timestamp: 2026-07-15T05:22:37.444906005Z
+  agent: aida
+  commit_sha: e3116c46cb36c37aacc127ecbc8dc16a7e252893
+  summary: Completed via merge e3116c46
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-15T05:22:37.244347032Z
+  completion_sha: e3116c46cb36c37aacc127ecbc8dc16a7e252893
 decision_request:
   question: Ratify ADR-10 — realize the unified typed AutonomyMode now (bigger PR on the hot zen-dispatch path), or downgrade to a follow-up?
   choices:
