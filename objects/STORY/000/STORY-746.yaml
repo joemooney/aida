@@ -6,12 +6,12 @@ description: |-
   drain_lock.rs (BUG-538) says the global lock is intentional and "Revisit if real demand for concurrent non-overlapping drains appears." Demand appeared 2026-06-30: the operator wanted to fire three aida zen --solo drives on independent specs (different subsystems) in parallel and was refused. A --solo drive has its OWN worktree + branch + PR, so it does not share the integ hazard the global lock guards (shared main integration, shared target/, shared worktrees) in the same way a host-checkout drive does.
 
   FORK to decide before building: (A) make the drain lock per-worktree/per-scope so isolated --solo drives can hold independent locks; vs (B) keep the global lock and route all parallel intent through the burndown fan-out (cheaper; one orchestrator already fans out worktree-isolated subagents). Prefer (B) unless the fan-out demonstrably cannot serve the parallel-independent-spec case, because concurrent integrators on one main is the exact hazard BUG-538 closed.
-status: Draft
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:50:08.536821809Z
-modified_at: 2026-07-15T02:06:08.483493837Z
+modified_at: 2026-07-15T02:11:48.704495895Z
 req_type: Story
 tags:
 - aida:zen
