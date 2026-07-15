@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-07-13T07:05:06.857745937Z
+modified_at: 2026-07-15T02:03:35.486741618Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -106,4 +106,6 @@ decision_request:
     resolution: light + park
   recommended: 2
   rationale: Capture + curated digests already deliver the recover-the-WHY value; full auto-book-generation is high-effort low-proven-demand — park rather than build speculatively.
+  answered: 2
   asked_at: 2026-07-13T07:05:06.857745937Z
+  answered_at: 2026-07-15T02:03:35.486713208Z
