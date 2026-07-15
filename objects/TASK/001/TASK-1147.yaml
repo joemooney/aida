@@ -12,3 +12,7 @@ modified_at: 2026-07-15T02:59:31.009680526Z
 req_type: Task
 tags:
 - aida:autopilot from-decision:EPIC-0428 supervised keystone
+relationships:
+- rel_type: Child
+  target_id: 019ef7a1-d5ea-7532-9d52-98978bb34fb5
+  created_at: 2026-07-15T02:59:32.871316940Z
