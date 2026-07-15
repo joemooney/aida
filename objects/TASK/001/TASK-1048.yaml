@@ -3,12 +3,12 @@ spec_id: TASK-1048
 agreed_id: TASK-1048
 title: aida zen --agent {claude|codex|agy} — vendor selector (foundation for the bake-off)
 description: 'aida zen SPEC --agent VENDOR chooses which agent implements. Forward the flag to the orchestrators existing HeadlessVendor selection (STORY-683/TASK-894/895 already have Claude+Codex — mostly wiring). AGY needs ADDING to the vendor enum: a HeadlessVendor::Agy variant + its launch path. Verify the exact HeadlessVendor seam in auto_complete.rs / the headless drive before wiring. Foundation slice — the bake-off needs per-vendor invocation. Parent EPIC-57.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:49:19.637987576Z
-modified_at: 2026-07-13T06:23:12.959346806Z
+modified_at: 2026-07-15T02:07:40.470995206Z
 req_type: Task
 tags:
 - multi-vendor
@@ -26,3 +26,21 @@ comments:
   content: Commit a59ddfb0c references this requirement
   created_at: 2026-07-13T06:23:12.959346806Z
   modified_at: 2026-07-13T06:23:12.959346806Z
+history:
+- id: 019f6387-9fb1-7551-aeb8-9bfc879545d0
+  author: aida-auto-bump
+  timestamp: 2026-07-15T02:07:40.465067101Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f6387-9fb6-7ce0-acec-0d36bc66ae46
+  timestamp: 2026-07-15T02:07:40.470994407Z
+  agent: aida
+  commit_sha: 5b038689fa5dadd31aac1b2db5384e624531183c
+  summary: Completed via merge 5b038689
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-15T02:07:40.273703491Z
+  completion_sha: 5b038689fa5dadd31aac1b2db5384e624531183c
