@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:35.111359647Z
-modified_at: 2026-07-13T07:05:02.742446592Z
+modified_at: 2026-07-15T02:05:48.347170697Z
 req_type: Epic
 tags:
 - axi
@@ -131,4 +131,6 @@ decision_request:
     resolution: trim
   recommended: 2
   rationale: The zero-token daemon + single-liaison dispatcher smell like 'daemon when bash would do'; warm-pool + agent-agnostic backend are real reliability wins.
+  answered: 2
   asked_at: 2026-07-13T07:05:02.742446592Z
+  answered_at: 2026-07-15T02:05:48.347143994Z
