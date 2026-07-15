@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:20.129434778Z
-modified_at: 2026-07-13T07:04:59.270459306Z
+modified_at: 2026-07-15T02:04:22.251055126Z
 req_type: Epic
 tags:
 - from-operator
@@ -59,4 +59,6 @@ decision_request:
     resolution: defer
   recommended: 1
   rationale: The identity guard has real single-machine value (prevents queue/lease mixups); the roster/RBAC layer is speculative until a concrete second user exists.
+  answered: 1
   asked_at: 2026-07-13T07:04:59.270459306Z
+  answered_at: 2026-07-15T02:04:22.251028414Z
