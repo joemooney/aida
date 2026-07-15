@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:35:46.390020492Z
-modified_at: 2026-07-13T07:03:34.864438473Z
+modified_at: 2026-07-15T02:02:42.475708463Z
 req_type: Bug
 tags:
 - blocks:release-xplat-gate
@@ -61,4 +61,6 @@ decision_request:
     resolution: invest
   recommended: 0
   rationale: Matches the standing Linux-only-until-non-Linux-users stance, unblocks releases, keeps the real-vs-env question open.
+  answered: 0
   asked_at: 2026-07-13T07:03:34.864438473Z
+  answered_at: 2026-07-15T02:02:42.475696982Z
