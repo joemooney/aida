@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:45.785458081Z
-modified_at: 2026-07-13T07:03:41.919086054Z
+modified_at: 2026-07-15T02:06:40.916637374Z
 req_type: Spike
 tags:
 - ablation
@@ -22,6 +22,7 @@ relationships:
 - rel_type: Child
   target_id: 019eddc4-96f5-7ad3-bda0-345e1218dd73
   created_at: 2026-06-30T16:36:05.847598576Z
+deferred: true
 human_only: true
 decision_request:
   question: Run the P3 cold-boot substrate-richness ablation, given the spec-difficulty confound?
@@ -37,4 +38,6 @@ decision_request:
     resolution: reject
   recommended: 1
   rationale: It's judge-dependent; running before the judge exists risks measuring problem difficulty instead of substrate richness.
+  answered: 1
   asked_at: 2026-07-13T07:03:41.919086054Z
+  answered_at: 2026-07-15T02:06:40.916615561Z
