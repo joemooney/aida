@@ -1384,6 +1384,14 @@ mod tests {
         // `Joe.yaml` is created (BUG-89: we fold the lookup, not the storage).
         let entry2 = sample_queue_entry("Joe", 2000);
         backend.queue_add(entry2.clone()).unwrap();
+        // BUG-688: this negative-existence check assumes a CASE-SENSITIVE
+        // filesystem. On macOS/Windows (case-insensitive by default) `Joe.yaml`
+        // resolves to the already-present `joe.yaml`, so `.exists()` is true —
+        // a filesystem artifact of the test env, not a product bug. The case-fold
+        // LOOKUP assertions above and the "both land in one queue" check below
+        // are filesystem-independent and still run on every platform.
+        // trace:BUG-688 | ai:claude
+        #[cfg(target_os = "linux")]
         assert!(
             !root.join("registry/queues/Joe.yaml").exists(),
             "no duplicate case-variant queue file"
