@@ -1,0 +1,14 @@
+id: 019f63b7-1641-7053-8eba-24a60c984368
+spec_id: TASK-1147
+agreed_id: TASK-1147
+title: Autopilot auditability + reversal surface (inspect/undo/challenge decisions); defer real auto-approval authority
+description: 'EPIC-0428 decision: drive ONLY the auditability + reversal surface now (inspect/undo/challenge autopilot decisions — safe substrate); defer granting real approve/reject/queue authority (keystone-autonomy, not shipped unsupervised during bugs-before-marketing).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-15T02:59:31.009680526Z
+modified_at: 2026-07-15T02:59:31.009680526Z
+req_type: Task
+tags:
+- aida:autopilot from-decision:EPIC-0428 supervised keystone

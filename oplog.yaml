@@ -33185,5 +33185,17 @@ operations:
   timestamp: 2026-07-15T02:57:39.455529743Z
   kind: !SetStatus
     status: Completed
-clock: 3101
+- id: 019f63b7-1ab7-7852-b740-53ab04270c17
+  target_id: 019f63b7-1641-7053-8eba-24a60c984368
+  author: aida
+  node_id: '1'
+  lamport: 3102
+  timestamp: 2026-07-15T02:59:32.151242374Z
+  kind: !Create
+    title: Autopilot auditability + reversal surface (inspect/undo/challenge decisions); defer real auto-approval authority
+    description: 'EPIC-0428 decision: drive ONLY the auditability + reversal surface now (inspect/undo/challenge autopilot decisions — safe substrate); defer granting real approve/reject/queue authority (keystone-autonomy, not shipped unsupervised during bugs-before-marketing).'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3102
 node_id: '1'
