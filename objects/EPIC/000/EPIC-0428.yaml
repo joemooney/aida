@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:18.954962222Z
-modified_at: 2026-07-13T07:05:04.603792551Z
+modified_at: 2026-07-15T02:02:56.510990569Z
 req_type: Epic
 tags:
 - advisor-autopilot
@@ -90,4 +90,6 @@ decision_request:
     resolution: full
   recommended: 1
   rationale: Auditability/reversal is safe substrate that pays off regardless; granting real disposition authority is a keystone-autonomy call that shouldn't ship unsupervised during bugs-before-marketing.
+  answered: 1
   asked_at: 2026-07-13T07:05:04.603792551Z
+  answered_at: 2026-07-15T02:02:56.510979265Z
