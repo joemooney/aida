@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:00:22.987621183Z
-modified_at: 2026-07-15T02:03:47.242168222Z
+modified_at: 2026-07-15T02:12:30.603615271Z
 req_type: Epic
 tags:
 - aida:tui
@@ -54,6 +54,8 @@ comments:
   content: 'Now the single umbrella for the TUI redesign (operator decision 2026-06-26). Absorbed EPIC-54 (action->target command-palette model) and EPIC-52 (clean Claude-Code-like fuzzy-command front door that replaces the dashboard wall) — both folded in here and rejected as duplicates. The redesign is pursued INCREMENTALLY via EPIC-51 slices: the shipped Ctrl-D -> palette -> act -> resume work (STORY-679/680, TASK-908/909) is the foundation; the redesign work items (STORY-690 action->target loop on Backlog, TASK-913 markdown body, TASK-914 columnar list, SPIKE-70 drain-mode finding) continue the path. No separate big-bang rewrite.'
   created_at: 2026-06-26T18:54:08.692485902Z
   modified_at: 2026-06-26T18:54:08.692485902Z
+archived: true
+archived_at: 2026-07-15T02:12:30.603615271Z
 decision_request:
   question: The Ctrl-D immediate-response layer has its core shipped (PTY suspend/resume + inject); only a live e2e verification (TASK-911) and an inject-picker nicety (TASK-912) remain. Close it?
   choices:
