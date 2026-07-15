@@ -3511,6 +3511,23 @@ fn run() -> Result<()> {
         return handle_status_spec(spec, *idle_minutes, *json);
     }
 
+    // STORY-769: the `aida awaiting --notice` per-turn hook ALWAYS leads with a
+    // "Current date/time + Timing" line — a deliberate contract change from the
+    // old silent-when-empty behaviour. Emit it EARLY, before store init, so the
+    // hook still gets its time context even if the store/backend can't be
+    // resolved (offline, cache-locked, unattached), and so the last-human-input
+    // presence oracle is stamped every turn. The compact "Awaiting you" line
+    // still prints later from `handle_awaiting_command`; this only prepends the
+    // always-on time line. trace:STORY-769 | ai:claude
+    if let Command::Awaiting {
+        notice: true,
+        json: false,
+        ..
+    } = &cli.command
+    {
+        emit_notice_time_line();
+    }
+
     // STORY-696: `aida ps` is the GLOBAL running-work table — the project-wide
     // companion to `aida status <spec>`. Like that command it reads the local
     // session leases + probes pid liveness and self-loads the store read-only
@@ -69718,6 +69735,23 @@ fn handle_presence_command() -> Result<()> {
             );
         }
     }
+
+    // STORY-769: fold in the last-human-input ORACLE — a passive observation
+    // (distinct from the explicit home/away intent above) of when the operator
+    // last typed a prompt, per the per-turn `aida awaiting --notice` stamp. This
+    // is what the escalation cascade branches on: operator active → an
+    // interactive ask is answerable; stale → park / go headless.
+    // trace:STORY-769 | ai:claude
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let thresholds = presence::read_presence_thresholds(&config_path_for_project(&project_root));
+    match presence::last_seen_line(now, thresholds) {
+        Some(line) => println!("{}", line.dimmed()),
+        None => println!(
+            "{}",
+            "operator last seen — unknown (no prompt stamped yet)".dimmed()
+        ),
+    }
     Ok(())
 }
 
@@ -103758,7 +103792,24 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
 
     let (rows, orphans) = gather_running_work(&project_root);
 
+    // STORY-769: the last-human-input presence oracle — "operator last seen Nm
+    // ago" + an active/idle/stale verdict, from the per-turn `aida awaiting
+    // --notice` stamp. A fan-out overseer reading `aida ps` sees at a glance
+    // whether the operator is around to answer an interactive ask.
+    // trace:STORY-769 | ai:claude
+    let now = chrono::Utc::now();
+    let thresholds = presence::read_presence_thresholds(&config_path_for_project(&project_root));
+    let operator_last_seen = presence::latest_human_input();
+
     if json {
+        let operator = match operator_last_seen {
+            Some(last) => serde_json::json!({
+                "last_seen": last.to_rfc3339(),
+                "ago": presence::since_label(last, now),
+                "verdict": presence::human_presence(now, last, thresholds).word(),
+            }),
+            None => serde_json::Value::Null,
+        };
         let sessions: Vec<serde_json::Value> = rows
             .iter()
             .map(|row| {
@@ -103806,6 +103857,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             serde_json::to_string_pretty(&serde_json::json!({
                 "sessions": sessions,
                 "orphaned": orphaned,
+                // STORY-769: last-human-input oracle, null when never stamped.
+                "operator": operator,
             }))?
         );
         return Ok(());
@@ -103841,6 +103894,20 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         println!("running: {}", shown.len());
         println!("stale_hidden: {}", hidden_stale.len());
         println!("orphaned: {}", orphans.len());
+        // STORY-769: last-human-input oracle as flat scalars for agent consumers.
+        match operator_last_seen {
+            Some(last) => {
+                println!("operator_last_seen: {}", presence::since_label(last, now));
+                println!(
+                    "operator_presence: {}",
+                    presence::human_presence(now, last, thresholds).word()
+                );
+            }
+            None => {
+                println!("operator_last_seen: unknown");
+                println!("operator_presence: unknown");
+            }
+        }
         let run: Vec<Vec<String>> = shown
             .iter()
             .map(|r| {
@@ -103953,6 +104020,12 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     }
 
     println!("{}", "Running work".bold());
+    // STORY-769: last-human-input oracle line — "operator last seen Nm ago —
+    // active/idle/stale". Quiet ("unknown") until the per-turn notice stamps.
+    match presence::last_seen_line(now, thresholds) {
+        Some(line) => println!("{}", line.dimmed()),
+        None => println!("{}", "operator last seen — unknown".dimmed()),
+    }
     println!();
 
     if shown.is_empty() && hidden_stale.is_empty() {
@@ -117073,6 +117146,42 @@ fn collect_awaiting_report(
 ///   - default: the full multi-channel report (text / `--json`), including the
 ///     gh-backed PR channel unless `--no-ci`. Mirrors `aida status --awaiting`.
 // trace:STORY-741 | ai:claude
+/// STORY-769: emit the always-on "Current date/time + Timing" leading line for
+/// `aida awaiting --notice`, and stamp the per-session last-human-input oracle.
+/// Called EARLY in dispatch (before store init) so the line survives even when
+/// the store/backend can't be resolved — the per-turn hook always gets its time
+/// context and the escalation cascade always gets a fresh presence stamp.
+///
+/// The UserPromptSubmit / SessionStart hook feeds its JSON payload on stdin
+/// (`session_id`, `hook_event_name`), which this inherits from the wrapping
+/// hook process. It reads that stdin ONLY when stdin is not a TTY, so a manual
+/// `aida awaiting --notice` in a terminal never blocks — it just renders the
+/// time line with no session key. Fail-open throughout.
+fn emit_notice_time_line() {
+    use std::io::IsTerminal;
+    let (session_id, is_session_start) = if std::io::stdin().is_terminal() {
+        (None, false)
+    } else {
+        let payload = std::io::read_to_string(std::io::stdin()).unwrap_or_default();
+        presence::parse_hook_payload(&payload)
+    };
+    let now = chrono::Local::now();
+    let label = presence::stamp_turn_clock(
+        session_id.as_deref(),
+        is_session_start,
+        now.with_timezone(&chrono::Utc),
+    );
+    // Local time, matching the trial hook's `%A %Y-%m-%d %H:%M %Z` shape.
+    let when = now.format("%A %Y-%m-%d %H:%M %Z").to_string();
+    println!("{}", format_notice_time_line(&when, &label));
+}
+
+/// PURE: the notice's always-on leading line. Separated so the exact contract
+/// shape is unit-testable without a clock or stdin.
+fn format_notice_time_line(when: &str, label: &str) -> String {
+    format!("Current date/time: {when}. Timing: {label}.")
+}
+
 fn handle_awaiting_command(
     notice: bool,
     json: bool,
@@ -117373,6 +117482,36 @@ mod story_465_awaiting_report_tests {
         let report = collect_awaiting_report(dir.path(), &backend, &ctx_rev, true);
         assert_eq!(report.reviewer_queue_items.len(), 1);
         assert_eq!(report.reviewer_queue_items[0].spec_id, "PR-42");
+    }
+
+    // STORY-769: the `--notice` command ALWAYS leads with a time+timing line,
+    // even when nothing awaits (the deliberate silent-when-empty → one-line-
+    // every-turn contract change). The awaiting-channels half stays empty; the
+    // time line is unconditional. `format_notice_time_line` is the pure shape,
+    // and `stamp_turn_clock` always returns a non-empty label — so the emitted
+    // line is never blank regardless of the awaiting report. trace:STORY-769
+    #[test]
+    fn notice_time_line_is_always_emitted_and_well_formed() {
+        // The awaiting report is empty (nothing awaits) — the old contract would
+        // have printed nothing at all.
+        let report = crate::awaiting_you::AwaitingReport::default();
+        assert!(report.compact_line().is_none(), "nothing awaits");
+
+        // The time line is emitted regardless, with the exact contract shape.
+        let label = "first prompt of this session";
+        let line = format_notice_time_line("Tuesday 2026-07-14 20:52 PDT", label);
+        assert_eq!(
+            line,
+            "Current date/time: Tuesday 2026-07-14 20:52 PDT. Timing: first prompt of this session."
+        );
+        assert!(line.starts_with("Current date/time: "));
+        assert!(line.contains(". Timing: "));
+
+        // The label source is never empty for any event/prior combination — so
+        // the emitted line can never degrade to a blank "Timing: .".
+        let now = chrono::Utc::now();
+        assert!(!presence::stamp_turn_clock(None, true, now).is_empty());
+        assert!(!presence::stamp_turn_clock(None, false, now).is_empty());
     }
 }
 

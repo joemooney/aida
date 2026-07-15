@@ -9,11 +9,21 @@
 # gate — unacked briefs, findings awaiting triage, reviewer verdicts,
 # NeedsAttention escalations, AND unread mail — e.g.
 #   `Awaiting you: 2 briefs - 1 finding - 3 mail (1 urgent) - 1 escalation`
-# or NOTHING when nothing awaits. Plain stdout is added to the agent's context,
-# so we just pass the verb's output through. (STORY-741 folded mail into the
-# unified "Awaiting you" report so this hook covers every channel; before, mail
-# interrupted per-turn while briefs/findings/escalations/verdicts stayed
-# invisible mid-session until a manual `aida status`.)
+# or nothing on the awaiting half when nothing awaits. Plain stdout is added to
+# the agent's context, so we just pass the verb's output through. (STORY-741
+# folded mail into the unified "Awaiting you" report so this hook covers every
+# channel; before, mail interrupted per-turn while briefs/findings/escalations/
+# verdicts stayed invisible mid-session until a manual `aida status`.)
+#
+# STORY-769: `--notice` now ALSO leads with an always-on line —
+#   `Current date/time: <local tz>. Timing: first prompt of this session | continuation (Xm since last prompt).`
+# — so the agent gets fresh time + cadence context every turn even when nothing
+# awaits (this replaced the trial `~/.claude/hooks/inject-time.sh`). The verb
+# reads the hook's JSON payload (session_id + event) from the stdin this relay
+# inherits, and stamps a per-session last-human-input timestamp under
+# `~/.aida/turn-clock/` that doubles as the human-presence oracle (`aida ps` /
+# `aida human presence`). No re-scaffold needed — existing projects inherit it on
+# the next binary upgrade because this relay is unchanged.
 #
 # CHEAP by construction: `--notice` is cache/local-backed and makes NO network
 # call — PRs (the one gh-backed channel) are omitted from the per-turn line and
