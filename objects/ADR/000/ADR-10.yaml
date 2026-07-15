@@ -37,12 +37,12 @@ description: |
   Bigger PR touching the hot zen-dispatch path in main.rs. AIDA_ZEN survives as
   the child-process transport but is no longer the in-process source of truth.
   Future autonomy modes extend one typed enum, parameterizing pauses uniformly.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:40:22.329779763Z
-modified_at: 2026-07-15T04:28:07.496963146Z
+modified_at: 2026-07-15T04:28:08.845294335Z
 req_type: Decision
 tags:
 - adr
