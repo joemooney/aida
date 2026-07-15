@@ -53,6 +53,14 @@ Reuse existing machinery — do **not** invent a parallel locking system:
   posture (`off` default; `warn`; `enforce`) so adoption is deliberate — matches
   the STORY-495 native-default discipline. Slice 1 ships `off`+manual; slice 2
   wires `warn`/`enforce`.
+  - **Superseded by TASK-958 (2026-07-14):** the default flipped from `off` to a
+    new `context-aware` posture. It is safe default-on because it only ever
+    *warns* on a solo/manual commit (never a hard block) and hard-blocks a
+    `Refused` commit only when `AIDA_AUTO_COMPLETE` is set (a committing child
+    under an active drain/fan-out — the BUG-637 duplicate-dispatch hazard). The
+    explicit `off`/`warn`/`enforce` postures still override. This keeps the
+    zero-hard-block stance for solo flows while giving drains protection out of
+    the box.
 
 ## Files (build order)
 
