@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:45.785458081Z
-modified_at: 2026-07-15T02:06:40.916637374Z
+modified_at: 2026-07-15T02:11:46.548018150Z
 req_type: Spike
 tags:
 - ablation
@@ -23,6 +23,8 @@ relationships:
   target_id: 019eddc4-96f5-7ad3-bda0-345e1218dd73
   created_at: 2026-06-30T16:36:05.847598576Z
 deferred: true
+deferred_at: 2026-07-15T02:11:46.548018150Z
+deferred_until: the EPIC-50 judge harness is ready to pair
 human_only: true
 decision_request:
   question: Run the P3 cold-boot substrate-richness ablation, given the spec-difficulty confound?
