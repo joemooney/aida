@@ -397,6 +397,21 @@ Two Claude sessions get spawned (phase 1 + phase 3), each in its own worktree; t
 - **Distributed by default** — offline-capable, multi-node, conflict-detecting via HLC timestamps + git
 - **Optional integrations** — GitHub / GitLab / Jira sync, PostgreSQL backend (compile with the corresponding feature flags)
 
+### Scripting AIDA output — the format switches when you pipe
+
+Heads-up for shell scripts: `aida` picks its output format from whether **stdout is a terminal**. At an interactive TTY you get the human table; the moment output is **piped or captured** — `aida list | grep …`, `$(aida list …)`, a redirect to a file — it switches to the token-efficient **TOON** format (a compact `name[N]{fields}:` table). A script written against the interactive table will silently parse a different shape.
+
+Pin the format so your script is stable regardless of TTY:
+
+```bash
+aida list --format human | awk '{print $1}'   # force the human table
+aida list --format toon                        # force TOON even at a TTY
+aida list --format json | jq '.[].spec_id'     # force JSON (list/search/status)
+export AIDA_OUTPUT_FORMAT=human                 # or pin it for the whole script
+```
+
+Precedence: `--format` > `AIDA_OUTPUT_FORMAT` > `AIDA_AGENT_OUTPUT` > the TTY default. The first time a session auto-switches to TOON without a pin, `aida` prints a one-line reminder to **stderr** (so it never corrupts piped stdout). Full details: [`docs/environment-variables.md`](docs/environment-variables.md) (`AIDA_OUTPUT_FORMAT`).
+
 ## With Claude Code
 
 After `aida init`, the most-used skills:

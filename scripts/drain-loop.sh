@@ -63,7 +63,11 @@ while true; do
   aida doctor heal stale-leases --yes >/dev/null 2>&1 || true
 
   # 3. anything pickable for this role? if not, idle (don't spin).
-  if ! aida queue list 2>/dev/null | grep -qE '^[A-Z]+-[0-9]+'; then
+  #    Pin the format (STORY-764) so the emptiness check is deterministic:
+  #    piped output otherwise auto-switches to TOON, whose data rows are
+  #    indented (`  TASK-1,…`) and never matched a start-of-line id — a
+  #    non-empty queue read as empty. Match an (optionally indented) spec id.
+  if ! aida queue list --format toon 2>/dev/null | grep -qE '^[[:space:]]*[A-Z]+-[0-9]+,'; then
     log "queue dry — idling ${IDLE}s"
     sleep "$IDLE"
     continue

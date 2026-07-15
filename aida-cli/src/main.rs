@@ -224,12 +224,12 @@ use crate::cli::{
     DbCommand, DepsCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
     FindingsCommand, GitHubCommand, GitLabCommand, GlyphCommand, HeadlessCommand, IdentityCommand,
     JiraCommand, LoadCommand, LockCommand, MailboxCommand, McpCommand, MemoriesCommand,
-    NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand,
-    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
-    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand,
-    SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
-    TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, WorktreeCommand,
-    WorktreePoolCommand, ZenCommand,
+    NodeCommand, OrchestratorCommand, OutputFormat, PlanCommand, PrCommand, PuntsCommand,
+    QuestionsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
+    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
+    ScheduleCommand, ServerCommand, SessionCommand, SessionManifestCommand, SkillCommand,
+    SoloAction, SpecCommand, StackCommand, TeamCommand, TraceCommand, TriageCommand, TypeCommand,
+    WorkerCommand, WorktreeCommand, WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -572,10 +572,128 @@ const AGENT_BARE_QUEUE_TOPN: usize = 5;
 /// TTY path is left byte-identical; everything gated on this is agent-only.
 // trace:TASK-970
 pub(crate) fn agent_output_mode() -> bool {
-    agent_output_mode_from(
-        std::env::var("AIDA_AGENT_OUTPUT").ok().as_deref(),
-        std::io::stdout().is_terminal(),
-    )
+    // STORY-764: an explicit `--format` / `AIDA_OUTPUT_FORMAT` pin wins over the
+    // `AIDA_AGENT_OUTPUT` env + TTY default. `human` selects the human path;
+    // `toon` / `json` both select the agent (machine) path. This is the durable
+    // escape hatch scripts use so piped/captured output no longer silently
+    // switches format out from under them (BUG-707). trace:STORY-764 | ai:claude
+    let pin = output_format_override();
+    let env = std::env::var("AIDA_AGENT_OUTPUT").ok();
+    let stdout_is_tty = std::io::stdout().is_terminal();
+    let agent = resolve_agent_mode(pin, env.as_deref(), stdout_is_tty);
+    // STORY-764: loud-but-once. When we auto-switched to the compact agent format
+    // purely because stdout is not a terminal — no explicit pin, no explicit
+    // `AIDA_AGENT_OUTPUT` — nudge the caller (on STDERR, so piped STDOUT stays
+    // clean) toward `--format` the first time. trace:STORY-764 | ai:claude
+    if agent && pin.is_none() && env.is_none() && !stdout_is_tty {
+        maybe_emit_toon_switch_hint();
+    }
+    agent
+}
+
+/// STORY-764: pure core of the agent-mode decision with the explicit `--format`
+/// pin layered on top of the historical `AIDA_AGENT_OUTPUT`/TTY logic. An
+/// explicit pin wins outright (`human` → human path, `toon`/`json` → agent
+/// path); with no pin the behavior is byte-identical to [`agent_output_mode_from`].
+/// Testable without touching the real env or a real terminal.
+// trace:STORY-764 | ai:claude
+fn resolve_agent_mode(
+    pin: Option<OutputFormat>,
+    agent_env: Option<&str>,
+    stdout_is_tty: bool,
+) -> bool {
+    if let Some(fmt) = pin {
+        return !matches!(fmt, OutputFormat::Human);
+    }
+    agent_output_mode_from(agent_env, stdout_is_tty)
+}
+
+/// STORY-764: process-global explicit output-format override, installed exactly
+/// once from the global `--format` flag (or `AIDA_OUTPUT_FORMAT`) right after
+/// argv parsing. Everything that renders consults [`agent_output_mode`] /
+/// [`output_format_is_json`], which read this first — so the pin is honored
+/// uniformly without threading a format param through every handler.
+// trace:STORY-764 | ai:claude
+static OUTPUT_FORMAT_OVERRIDE: std::sync::OnceLock<Option<OutputFormat>> =
+    std::sync::OnceLock::new();
+
+/// Resolve + install the [`OUTPUT_FORMAT_OVERRIDE`] once. Precedence: the
+/// `--format` flag wins; else `AIDA_OUTPUT_FORMAT` (human|toon|json,
+/// case-insensitive); else `None` (fall back to the TTY-based default).
+/// Idempotent — a later call is a no-op (the first install sticks).
+// trace:STORY-764 | ai:claude
+pub(crate) fn set_output_format_override(flag: Option<OutputFormat>) {
+    let resolved = flag.or_else(output_format_from_env);
+    let _ = OUTPUT_FORMAT_OVERRIDE.set(resolved);
+}
+
+/// Parse `AIDA_OUTPUT_FORMAT` into an [`OutputFormat`]. Unset or unrecognized
+/// values yield `None` (defer to the TTY-based default rather than erroring, so
+/// a stray value never breaks a command).
+// trace:STORY-764 | ai:claude
+fn output_format_from_env() -> Option<OutputFormat> {
+    parse_output_format(std::env::var("AIDA_OUTPUT_FORMAT").ok().as_deref())
+}
+
+/// Pure parse of an `AIDA_OUTPUT_FORMAT` value into an [`OutputFormat`]. Unset
+/// (`None`) or an unrecognized value yields `None` (defer to the TTY-based
+/// default rather than erroring). Case-insensitive; `table`/`agent` are
+/// accepted spellings of `human`/`toon`.
+// trace:STORY-764 | ai:claude
+fn parse_output_format(raw: Option<&str>) -> Option<OutputFormat> {
+    match raw?.trim().to_ascii_lowercase().as_str() {
+        "human" | "table" => Some(OutputFormat::Human),
+        "toon" | "agent" => Some(OutputFormat::Toon),
+        "json" => Some(OutputFormat::Json),
+        _ => None,
+    }
+}
+
+/// The installed explicit override, if any. `None` until
+/// [`set_output_format_override`] runs (or if no pin was given).
+// trace:STORY-764 | ai:claude
+pub(crate) fn output_format_override() -> Option<OutputFormat> {
+    OUTPUT_FORMAT_OVERRIDE.get().copied().flatten()
+}
+
+/// True when the explicit pin selects JSON. Commands that carry a `--json`
+/// flag OR this in, so `--format json` / `AIDA_OUTPUT_FORMAT=json` reaches them
+/// uniformly.
+// trace:STORY-764 | ai:claude
+pub(crate) fn output_format_is_json() -> bool {
+    matches!(output_format_override(), Some(OutputFormat::Json))
+}
+
+/// STORY-764: emit the first-pipe format hint at most once. Guarded first by a
+/// process-once `OnceLock`, then by a per-project marker file under `.aida/` so
+/// the nudge shows once and then gets out of the way (the durable reference is
+/// the README + `docs/environment-variables.md`). All best-effort: a missing
+/// project root or an unwritable marker just falls back to once-per-process.
+// trace:STORY-764 | ai:claude
+fn maybe_emit_toon_switch_hint() {
+    static PROCESS_ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    if PROCESS_ONCE.set(()).is_err() {
+        return; // already fired in this process
+    }
+    // Per-session/project suppression: skip if we've shown it here before.
+    let marker = find_project_root()
+        .ok()
+        .map(|root| root.join(".aida").join(".format-hint-shown"));
+    if let Some(path) = &marker {
+        if path.exists() {
+            return;
+        }
+    }
+    eprintln!(
+        "note: stdout is not a terminal — aida switched to compact TOON output. \
+         Pin a format with `--format human|toon|json` or AIDA_OUTPUT_FORMAT to keep scripts stable."
+    );
+    if let Some(path) = &marker {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, b"");
+    }
 }
 
 /// Pure core of [`agent_output_mode`] (testable without touching the real env
@@ -1386,6 +1504,61 @@ mod task970_agent_output_tests {
         // Unset: piped (no TTY) => agent mode; a real TTY => human path.
         assert!(agent_output_mode_from(None, false));
         assert!(!agent_output_mode_from(None, true));
+    }
+
+    // STORY-764: an explicit `--format` / AIDA_OUTPUT_FORMAT pin overrides the
+    // TTY-based default so piped scripts get a stable format (BUG-707).
+    #[test]
+    fn format_pin_human_forces_human_even_when_piped() {
+        // stdout not a TTY (piped) AND AIDA_AGENT_OUTPUT truthy would BOTH
+        // otherwise select agent mode — the `human` pin still wins.
+        assert!(!resolve_agent_mode(Some(OutputFormat::Human), None, false));
+        assert!(!resolve_agent_mode(
+            Some(OutputFormat::Human),
+            Some("1"),
+            false
+        ));
+    }
+
+    #[test]
+    fn format_pin_toon_and_json_force_agent_even_at_a_tty() {
+        // A real TTY (and even an explicit falsey AIDA_AGENT_OUTPUT) would
+        // otherwise select the human path — `toon`/`json` still force agent mode.
+        assert!(resolve_agent_mode(Some(OutputFormat::Toon), None, true));
+        assert!(resolve_agent_mode(Some(OutputFormat::Json), None, true));
+        assert!(resolve_agent_mode(
+            Some(OutputFormat::Toon),
+            Some("0"),
+            true
+        ));
+    }
+
+    #[test]
+    fn format_pin_none_preserves_tty_based_behavior() {
+        // No pin => byte-identical to the historical env/TTY resolution.
+        assert!(resolve_agent_mode(None, None, false)); // piped => agent
+        assert!(!resolve_agent_mode(None, None, true)); // TTY => human
+        assert!(resolve_agent_mode(None, Some("1"), true)); // explicit env truthy
+        assert!(!resolve_agent_mode(None, Some("0"), false)); // explicit env falsey
+    }
+
+    #[test]
+    fn output_format_env_parses_case_insensitively_with_aliases() {
+        assert_eq!(
+            parse_output_format(Some("human")),
+            Some(OutputFormat::Human)
+        );
+        assert_eq!(
+            parse_output_format(Some(" TABLE ")),
+            Some(OutputFormat::Human)
+        );
+        assert_eq!(parse_output_format(Some("TOON")), Some(OutputFormat::Toon));
+        assert_eq!(parse_output_format(Some("agent")), Some(OutputFormat::Toon));
+        assert_eq!(parse_output_format(Some("Json")), Some(OutputFormat::Json));
+        // Unset or unrecognized => None (defer to the TTY default, never error).
+        assert_eq!(parse_output_format(None), None);
+        assert_eq!(parse_output_format(Some("xml")), None);
+        assert_eq!(parse_output_format(Some("")), None);
     }
 
     // BUG-671: a `Type 'y'` prompt is "non-interactive" — auto-confirm-or-fail,
@@ -2956,6 +3129,11 @@ fn run() -> Result<()> {
         ))),
     );
     let mut cli = Cli::parse_from(after_alias_rewrites);
+
+    // STORY-764: install the explicit output-format pin before any handler
+    // renders. `--format` wins; else `AIDA_OUTPUT_FORMAT`; else the TTY-based
+    // default stands. trace:STORY-764 | ai:claude
+    set_output_format_override(cli.format);
 
     // STORY-708: one-line, non-blocking deprecation hint. Printed to stderr (so
     // it never pollutes machine-readable stdout) only when the operator reached
@@ -15549,12 +15727,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             full,
             no_focus,
         } => {
+            // STORY-764: honor the global `--format json` pin the same as the
+            // command's own `--json`. trace:STORY-764 | ai:claude
+            let effective_json = *json || output_format_is_json();
             // STORY-706: surface the active focus loudly at the top of the
             // orientation snapshot, so a focused worktree never reads `aida
             // status` as the whole-project picture. Text modes only (JSON
             // consumers parse structured sections); `--no-focus` suppresses it.
             //
-            if !*json && !*no_focus {
+            if !effective_json && !*no_focus {
                 if let Some(focus_ref) = find_project_root()
                     .ok()
                     .and_then(|r| crate::focus::resolve_focus(&r))
@@ -15582,7 +15763,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             return handle_status_command_distributed(
                 *no_dev_context,
                 *short,
-                *json,
+                effective_json,
                 *queue,
                 *ci,
                 *no_ci,
@@ -15938,6 +16119,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             fields,
             ..
         } => {
+            // STORY-764: the global `--format json` pin reaches list the same way
+            // its own `--json` flag does. `--format human` / `toon` are handled
+            // upstream by `agent_output_mode()`, so only the json axis needs to be
+            // OR'd in here. trace:STORY-764 | ai:claude
+            let effective_json = *json || output_format_is_json();
             // STORY-562: `aida list human` (positional alias) and `aida list
             // --human` both resolve to the "what needs me?" view — every open
             // spec the `burndown explain` classifier flags as needing a human
@@ -16324,8 +16510,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // untouched. An explicit `--limit`/`--all` always overrides.
             // trace:TASK-970
             let total_after_filters = reqs.len();
-            let agent_default_cap =
-                agent_list_default_cap(*limit, *all, *short, *json, *tree, agent_output_mode());
+            let agent_default_cap = agent_list_default_cap(
+                *limit,
+                *all,
+                *short,
+                effective_json,
+                *tree,
+                agent_output_mode(),
+            );
             if let Some(n) = limit.or(agent_default_cap) {
                 reqs.truncate(n);
             }
@@ -16361,7 +16553,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // `--no-flow`) hide the COLUMN but must not blank the machine
             // fields, so compute the cheap probes whenever we render glyphs OR
             // emit JSON. trace:TASK-670 | ai:claude
-            let need_routing = show_flow || *json;
+            let need_routing = show_flow || effective_json;
             // project root = the parent of the `.aida-store` worktree.
             let routing_root = store_path.parent().map(|p| p.to_path_buf());
             let queued_ids: HashSet<Uuid> = if need_routing {
@@ -16518,7 +16710,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // `[{spec_id,title,req_type,status,tags}]` without the
             // human chrome (banner / footer count / colours).
             // trace:STORY-244 | ai:claude
-            if *json {
+            if effective_json {
                 // TASK-670: carry the work-routing axis as machine fields
                 // (glyphs are display-only). `blocked` reflects the graph walk
                 // only when --blocked was passed; otherwise it's always false.
@@ -19411,6 +19603,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             fields,
             ..
         } => {
+            // STORY-764: the global `--format json` pin reaches search the same
+            // way its own `--json` does. trace:STORY-764 | ai:claude
+            let effective_json = *json || output_format_is_json();
             // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
             if *sync {
                 maybe_sync_pull(store_path)?;
@@ -19472,7 +19667,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // BUG-531: `--json` emits the row set as a JSON array without the
             // human chrome (header / count footer / colour), mirroring
             // `aida list --json`. trace:BUG-531 | ai:claude
-            if *json {
+            if effective_json {
                 #[derive(serde::Serialize)]
                 struct SearchJsonRow<'a> {
                     spec_id: &'a str,
@@ -117412,6 +117607,11 @@ fn maybe_team_identity_guard(store_path: &std::path::Path, command: &Command) ->
         return Ok(());
     }
     if let Command::Status { json: true, .. } = command {
+        return Ok(());
+    }
+    // STORY-764: `--format json` pins the same machine surface; keep it clean too.
+    // trace:STORY-764 | ai:claude
+    if matches!(command, Command::Status { .. }) && output_format_is_json() {
         return Ok(());
     }
 
