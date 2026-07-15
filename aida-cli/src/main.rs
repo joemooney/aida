@@ -94,6 +94,8 @@ mod not_found;
 #[cfg(test)]
 mod orchestration_routing;
 mod orchestrator;
+// trace:TASK-1120 | ai:claude — opt-in `--panes` tmux hosting for fanned implementers.
+mod pane_host;
 // trace:STORY-647 | ai:claude — team RBAC slice 2: gated-op permission map +
 // protected specs + strict mode (guardrail, not security).
 mod permissions;
@@ -95681,6 +95683,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             verbose,
             force,
             vendor,
+            panes,
         } => handle_burndown_run(
             status,
             tag.as_deref(),
@@ -95692,6 +95695,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             *verbose,
             *force,
             vendor.as_deref(),
+            panes.as_deref(),
         ),
         crate::cli::BurndownCommand::Status { json } => handle_burndown_status(*json),
     }
@@ -96015,7 +96019,17 @@ fn handle_burndown_run(
     // per-spec orchestration inherits it — but does NOT reroute the native
     // fan-out. trace:TASK-1116 | ai:claude
     vendor: Option<&str>,
+    // TASK-1120: opt-in pane hosting exported to the drain — any
+    // `aida queue work --auto-complete` it spawns then hosts its implementer in
+    // a titled tmux window. Faithful-launcher: `None` leaves the env untouched.
+    panes: Option<&str>,
 ) -> Result<()> {
+    // TASK-1120: export the requested pane host so the headless drain (and any
+    // per-spec auto-complete orchestration under it) inherits it. Absent → env
+    // untouched → byte-identical background spawn.
+    if let Some(host) = panes {
+        std::env::set_var(pane_host::HOST_ENV, host);
+    }
     // STORY-647: team RBAC guardrail — starting an autonomous drain is an
     // advisor-gated op by default (tunable via `[team.permissions] drain_start`).
     // Checked FIRST, before any sync/preflight, so even `--dry-run` (the safe
@@ -136269,9 +136283,17 @@ fn handle_queue_command(
             complexity,
             assist_est,
             effort,
+            panes,
             strict,
         } => {
             let user_id = get_user(user);
+            // TASK-1120: opt-in pane hosting. Export the requested host so every
+            // implementer this drain spawns (single / --batch / nextN) reads it
+            // at its run_implementer spawn point. Faithful-launcher: an absent
+            // flag leaves the env untouched → byte-identical background spawn.
+            if let Some(host) = panes.as_deref() {
+                std::env::set_var(pane_host::HOST_ENV, host);
+            }
             // TASK-1116: an explicit `--vendor`/`--agent` ALSO routes the
             // headless `--auto-complete` implementer (and any headless
             // orchestrator phase), not just the interactive host — so it is no
@@ -149863,19 +149885,67 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // sweeps the whole group on every exit path. An interactive implementer
         // keeps the tree-walk-only path so its REPL stays interactive.
         // trace:TASK-298 | ai:claude
-        let outcome = exit_signal::spawn_and_wait_watched(
-            cmd,
-            &sentinel,
-            &self.exit_cfg,
-            wd_dyn,
-            headless_impl,
-        )
-        .map_err(|e| {
-            auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::Spawn,
-                format!("could not launch the implementer session: {e}"),
+        // TASK-1120: opt-in pane hosting. The ONLY thing that changes here is
+        // WHERE the implementer process is hosted — a titled tmux window vs the
+        // background subprocess. The lease / phase / merge flow, the sentinel
+        // handshake, and the exit-status classification below are all unchanged
+        // (the tmux path recovers the implementer's real exit status and returns
+        // the same `ExitOutcome::Natural`). Resolve the mode from the exported
+        // `--panes` host + whether we're inside a tmux server. trace:TASK-1120
+        let pane_mode = pane_host::spawn_mode(pane_host::requested_host(), pane_host::in_tmux());
+        let tmux_outcome: Option<exit_signal::ExitOutcome> = match pane_mode {
+            #[cfg(unix)]
+            pane_host::SpawnMode::TmuxWindow => {
+                eprintln!(
+                    "  {} hosting the {} implementer in a titled tmux window under session `{}`",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    self.spec,
+                    pane_host::DRAIN_SESSION,
+                );
+                match pane_host::host_implementer_in_tmux(&cmd, &self.spec) {
+                    Ok(o) => Some(o),
+                    Err(e) => {
+                        // Graceful degrade: a display preference never fails a
+                        // drain — fall back to the background spawn.
+                        eprintln!(
+                            "  {} tmux pane hosting unavailable ({e}); falling back to a \
+                             background implementer",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        );
+                        None
+                    }
+                }
+            }
+            #[cfg(not(unix))]
+            pane_host::SpawnMode::TmuxWindow => None,
+            pane_host::SpawnMode::Background => {
+                // Requested-but-not-in-tmux is the graceful-degrade notice.
+                if pane_host::requested_host().is_some() {
+                    eprintln!(
+                        "  {} --panes requested but not inside a tmux server; using a \
+                         background implementer",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    );
+                }
+                None
+            }
+        };
+        let outcome = match tmux_outcome {
+            Some(o) => o,
+            None => exit_signal::spawn_and_wait_watched(
+                cmd,
+                &sentinel,
+                &self.exit_cfg,
+                wd_dyn,
+                headless_impl,
             )
-        })?;
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Spawn,
+                    format!("could not launch the implementer session: {e}"),
+                )
+            })?,
+        };
         // BUG-420: the watchdog killed a degenerate headless session — surface
         // it as a shelvable phase-1 failure so a batch drain parks the spec and
         // advances. trace:BUG-420 | ai:claude
