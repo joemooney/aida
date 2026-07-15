@@ -434,14 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019f16dc-3b15-7562-83ed-20f8b3a7b802
-  position: 342000
-  added_by: joe
-  added_at: 2026-07-13T05:08:58.038800546Z
-  for_role: advisor
-  for_scope: harness-worktree
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 019f052b-7b81-7f41-83c4-87d6ffd50507
   position: 343000
   added_by: joe
@@ -453,12 +445,6 @@
   added_by: joe
   note: unparked by `aida questions answer`
   added_at: 2026-07-14T04:48:39.320209042Z
-- user_id: joe
-  requirement_id: 019f1c08-eeb1-75f0-a921-0518e2f5bf53
-  position: 345000
-  added_by: joe
-  note: unparked by `aida questions answer`
-  added_at: 2026-07-14T04:49:40.812124930Z
 - user_id: joe
   requirement_id: 019f165b-1672-7d32-81cd-a8e23130c1a4
   position: 346000
