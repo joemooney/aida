@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T17:40:22.329779763Z
-modified_at: 2026-07-15T02:06:30.984621774Z
+modified_at: 2026-07-15T04:28:07.496963146Z
 req_type: Decision
 tags:
 - adr
@@ -55,6 +55,13 @@ relationships:
   target_id: 019f16e5-8b1a-7d62-9dc9-3f27222d2918
   created_at: 2026-06-30T17:40:41.069199358Z
   created_by: joe
+comments:
+- id: 019f6408-35c8-7472-b0e9-73a0f66973aa
+  author: joe
+  content: 'IMPLEMENTATION DECISION (operator, guided session 2026-07-14): scope = EVERYTHING IN ONE PR — add the autonomy_mode field to RealPhaseDriver (resolved once at dispatch), migrate ALL in-process zen reads to the typed field, AND add a regression guard (a test that fails if a new bare in-process AIDA_ZEN read appears outside the sanctioned zen.rs child-transport path). zen.rs::detect() stays as the child-process/skill transport. Fully closes ADR-10.'
+  created_at: 2026-07-15T04:28:07.496963146Z
+  modified_at: 2026-07-15T04:28:07.496963146Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 decision_request:
   question: Ratify ADR-10 — realize the unified typed AutonomyMode now (bigger PR on the hot zen-dispatch path), or downgrade to a follow-up?
   choices:
