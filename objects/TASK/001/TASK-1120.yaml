@@ -29,12 +29,12 @@ description: |-
   - Lease TOML carries the pane-id when pane-hosted; absent otherwise.
   - Implementer windows survive closing the terminal emulator that launched the drain (tmux server persistence) — verified by detach/reattach.
   - Docs/help state the persistence behavior and that the operator owns pane cleanup (no pane-kill wiring).
-status: Draft
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:36.749471982Z
-modified_at: 2026-07-15T03:21:46.818809848Z
+modified_at: 2026-07-15T03:34:49.216435292Z
 req_type: Task
 tags:
 - orchestrator
