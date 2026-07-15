@@ -65159,6 +65159,7 @@ mod story_429_auto_rebase_tests {
             None,
             true,
             no_human,
+            AutonomyMode::Default,
             "test-run".to_string(),
             false,
             false,
@@ -112296,6 +112297,47 @@ mod queue_work_tests {
         assert!(!m.is_zen());
     }
 
+    /// ADR-10: the phase driver CARRIES the resolved-once typed autonomy mode
+    /// as a field (symmetric with `no_human`), and the engine's zen predicate
+    /// (`is_zen_run`) reads that carried field — NOT a bare `AIDA_ZEN` env
+    /// read. This is the drain-state zen-stamping source in `run_auto_complete`.
+    /// The three modes round-trip through construction unchanged, so the
+    /// autonomy behavior is byte-identical to the pre-ADR-10 env-derived read.
+    // trace:ADR-10 | ai:claude
+    #[test]
+    fn phase_driver_carries_autonomy_mode_and_is_zen_run_reads_the_field() {
+        fn build(mode: AutonomyMode) -> RealPhaseDriver {
+            RealPhaseDriver::new(
+                std::env::temp_dir().join(format!("aida-adr10-{}", uuid::Uuid::now_v7())),
+                "ADR-10".to_string(),
+                None,
+                false,
+                // `no_human` is independent of the carried autonomy mode here —
+                // the field is the SOLE source `is_zen_run` consults.
+                None,
+                mode,
+                "test-run".to_string(),
+                false,
+                false,
+                false,
+                false,
+                auto_complete::LifecycleSkip::none(),
+            )
+        }
+        // The field is stored verbatim, and `is_zen_run()` reads it.
+        assert_eq!(build(AutonomyMode::Zen).autonomy_mode, AutonomyMode::Zen);
+        assert!(build(AutonomyMode::Zen).is_zen_run());
+        assert!(!build(AutonomyMode::Default).is_zen_run());
+        assert!(!build(AutonomyMode::NoHuman).is_zen_run());
+        // Guard against a future refactor that silently re-reads the env: the
+        // field wins regardless of what `AIDA_ZEN` is set to in the process.
+        // (No env mutation here — asserting the field is self-contained.)
+        assert_eq!(
+            build(AutonomyMode::Default).autonomy_mode,
+            AutonomyMode::Default
+        );
+    }
+
     // --- resolve_drain_alias (TASK-578) -----------------------------------
 
     /// `--drain` off is a pure identity map — the operator's flags pass through
@@ -144017,8 +144059,27 @@ fn run_auto_complete(
     // stays as the cross-process transport to phase children / skill templates.
     // trace:ADR-7 trace:ADR-10 trace:BUG-237 | ai:claude
     let autonomy = AutonomyMode::for_auto_complete_run(no_human);
-    let run_zen = autonomy.is_zen();
     let run_token = uuid::Uuid::now_v7().to_string();
+
+    // ADR-10: build the driver FIRST, carrying the resolved-once typed
+    // `autonomy` alongside `no_human`, so the drain-state stamping below reads
+    // the carried field (`driver.is_zen_run()`) rather than re-deriving zen-ness
+    // from a bare `AIDA_ZEN` env read. The env var stays as the cross-process
+    // transport to phase children / skill templates. trace:ADR-10 | ai:claude
+    let mut driver = RealPhaseDriver::new(
+        project_root.clone(),
+        spec.to_string(),
+        permission_mode.map(|s| s.to_string()),
+        json,
+        no_human,
+        autonomy,
+        run_token.clone(),
+        steal,
+        force_claim,
+        allow_stale_base,
+        no_auto_rebase,
+        lifecycle_skip,
+    );
 
     // STORY-301: surface the drain so a user inside the spawned Claude session
     // can see what command launched it, how far it has got, and what happens
@@ -144029,26 +144090,14 @@ fn run_auto_complete(
     // Best-effort: a write failure leaves the drain running, just unobservable
     // — and crucially, phase children correctly fall back to treating
     // themselves as interactive when the corroboration check finds no live
-    // drain-state. trace:STORY-301 trace:TASK-336 | ai:claude
+    // drain-state. The zen flag is the carried typed field, not a bare env
+    // re-read (ADR-10). trace:STORY-301 trace:TASK-336 trace:ADR-10 | ai:claude
+    let run_zen = driver.is_zen_run();
     if owns_drain_state {
         let _ = drain_state::DrainState::new_single(spec, &run_token, run_zen).write(&project_root);
     } else {
         drain_state::set_run(&project_root, spec, &run_token, run_zen);
     }
-
-    let mut driver = RealPhaseDriver::new(
-        project_root.clone(),
-        spec.to_string(),
-        permission_mode.map(|s| s.to_string()),
-        json,
-        no_human,
-        run_token,
-        steal,
-        force_claim,
-        allow_stale_base,
-        no_auto_rebase,
-        lifecycle_skip,
-    );
     // STORY-492: a resume re-entry seeds the driver with the branch + PR the
     // skipped phases would otherwise have discovered, so the resumed phases
     // (CI / reviewer / merge / …) have the context they need.
@@ -147872,6 +147921,7 @@ mod real_phase_driver_wiring_tests {
             None,
             false,
             None,
+            crate::AutonomyMode::Default,
             "run-token".to_string(),
             false,
             false,
@@ -149099,6 +149149,16 @@ struct RealPhaseDriver {
     /// headless (`claude -p`); the implementer phase stays interactive in
     /// this cut (STORY-276 wires it). `None` → fully interactive.
     no_human: Option<auto_complete::NoHumanMode>,
+    /// ADR-10: the run's typed autonomy mode, resolved ONCE at dispatch (via
+    /// [`AutonomyMode::for_auto_complete_run`]) and carried here alongside
+    /// `no_human` so the engine's in-process zen branches consult this typed
+    /// field instead of re-reading the bare `AIDA_ZEN` env var. `AIDA_ZEN`
+    /// survives strictly as the cross-process TRANSPORT to spawned phase
+    /// children / skill templates; this field is the in-process SOURCE OF
+    /// TRUTH. Symmetric with `no_human`, closing the `--zen`/`--no-human`
+    /// asymmetry ADR-7 named.
+    // trace:ADR-10 | ai:claude
+    autonomy_mode: AutonomyMode,
     /// TASK-329: poll cadence + SIGTERM→SIGKILL grace for the graceful-exit
     /// signal. Resolved once from `AIDA_EXIT_POLL_MS` / `AIDA_EXIT_GRACE_MS`.
     exit_cfg: exit_signal::ExitSignalConfig,
@@ -149210,6 +149270,9 @@ impl RealPhaseDriver {
         permission_mode: Option<String>,
         json: bool,
         no_human: Option<auto_complete::NoHumanMode>,
+        // ADR-10: the run's typed autonomy mode, resolved ONCE at dispatch and
+        // carried alongside `no_human`. trace:ADR-10 | ai:claude
+        autonomy_mode: AutonomyMode,
         run_token: String,
         steal: bool,
         force_claim: bool,
@@ -149229,6 +149292,7 @@ impl RealPhaseDriver {
             ci_run_id: None,
             aida_exe: resolve_aida_exe(),
             no_human,
+            autonomy_mode,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),
             run_token,
             implementer_session: None,
@@ -149245,6 +149309,14 @@ impl RealPhaseDriver {
 
     fn sessions_dir(&self) -> std::path::PathBuf {
         self.project_root.join(".aida").join("sessions")
+    }
+
+    /// ADR-10: whether this run is a supervised `--zen` drive, read from the
+    /// carried typed `autonomy_mode` field — the in-process source of truth —
+    /// NOT from a bare `AIDA_ZEN` env re-read.
+    // trace:ADR-10 | ai:claude
+    fn is_zen_run(&self) -> bool {
+        self.autonomy_mode.is_zen()
     }
 
     fn aida_exe(&self) -> std::path::PathBuf {
@@ -151720,8 +151792,9 @@ impl AutonomyMode {
     /// var remains the cross-process TRANSPORT to spawned phase children / skill
     /// templates; this typed value is the in-process SOURCE OF TRUTH, so the
     /// engine path no longer re-derives zen-ness from scattered bare env reads.
-    /// (The engine carries no `zen` field the way it carries `no_human`, because
-    /// zen's pauses fire in the child sessions, not the parent engine.)
+    /// ADR-10 carries this resolved value onto the phase driver as the
+    /// `autonomy_mode` field (symmetric with `no_human`); in-process zen
+    /// branches read `RealPhaseDriver::is_zen_run()`, not a bare env re-read.
     // trace:ADR-7 trace:ADR-10 | ai:claude
     fn for_auto_complete_run(no_human: Option<auto_complete::NoHumanMode>) -> Self {
         Self::resolve_run(no_human, std::env::var(zen::ZEN_TOKEN_ENV).is_ok())
