@@ -8,12 +8,12 @@ description: |-
   Full design, gesture grammar, role-relocation, locked decisions, open forks, and the prototype-first slice plan: docs/plans/2026-06-25-tui-action-target-redesign.md.
 
   Slices (only Slice 1 filed; 2-5 gated on the prototype validating the protocol): 1 prototype the loop on the Backlog scope; 2 generalize scopes+verbs; 3 role as ambient context (remove role tabs); 4 item modal = STORY-689 markdown/field-colored preview; 5 fuzzy palette polish.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T06:52:56.629549430Z
-modified_at: 2026-07-13T07:05:08.225575464Z
+modified_at: 2026-07-15T02:05:14.889911499Z
 req_type: Epic
 tags:
 - product
@@ -193,4 +193,6 @@ decision_request:
     resolution: keep open
   recommended: 0
   rationale: The core protocol shipped and is the default surface; leaving the epic open just tracks ordinary polish that doesn't need an umbrella.
+  answered: 0
   asked_at: 2026-07-13T07:05:08.225575464Z
+  answered_at: 2026-07-15T02:05:14.889887039Z
