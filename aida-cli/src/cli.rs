@@ -1748,8 +1748,8 @@ pub enum BurndownCommand {
         /// gate is a guardrail, not security — the bypass is recorded in history.
         #[clap(long)]
         force: bool,
-        /// Which vendor CLI backs this drain: `claude` or `codex` (alias:
-        /// `--agent`). NOTE: `burndown run`'s implementer fan-out is the Claude
+        /// Which vendor CLI backs this drain: `claude`, `codex`, or `agy`
+        /// (alias: `--agent`). NOTE: `burndown run`'s implementer fan-out is the Claude
         /// harness's native worktree-isolated subagent primitive, so the
         /// fan-out itself is Claude-only; this flag exports `AIDA_HEADLESS_VENDOR`
         /// for the drain so any vendor-agnostic per-spec orchestration inherits
@@ -4706,7 +4706,7 @@ pub enum QueueCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "UUID", conflicts_with = "resume")]
         session_id: Option<String>,
-        /// Which vendor CLI runs this work: `claude` or `codex` (alias:
+        /// Which vendor CLI runs this work: `claude`, `codex`, or `agy` (alias:
         /// `--agent`, matching `aida agent new <vendor>`). Governs BOTH the
         /// interactive host (the AIDA TUI passes `--vendor codex` to host a
         /// Codex tab; Codex has no caller-minted session id, so it hosts a
@@ -8696,8 +8696,8 @@ pub enum Command {
         json: bool,
 
         /// Which vendor CLI runs the headless implementer for this drive:
-        /// `claude` or `codex` (alias: `--agent`, matching `aida agent new
-        /// <vendor>`). A per-invocation override — no need to export
+        /// `claude`, `codex`, or `agy` (alias: `--agent`, matching `aida agent
+        /// new <vendor>`). A per-invocation override — no need to export
         /// `AIDA_HEADLESS_VENDOR` just to drive one spec on Codex. Resolution
         /// order: this flag > the `AIDA_HEADLESS_VENDOR` env > the
         /// `[orchestrator] headless_vendor` / `[agents] vendor` config knob >

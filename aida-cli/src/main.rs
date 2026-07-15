@@ -95835,7 +95835,7 @@ fn handle_burndown_run(
     // silent misroute. An unrecognized token is a hard error. trace:TASK-1116
     if let Some(raw) = vendor {
         let resolved = session::install_headless_vendor_override(raw).ok_or_else(|| {
-            anyhow::anyhow!("unknown --vendor/--agent value `{raw}` (expected: claude, codex)")
+            anyhow::anyhow!("unknown --vendor/--agent value `{raw}` (expected: claude, codex, agy)")
         })?;
         if resolved != session::HeadlessVendor::Claude {
             eprintln!(
@@ -140347,6 +140347,8 @@ fn handle_queue_work(
                         claude_posture_display(permission_mode.as_deref(), contained)
                     ),
                     crate::session::HeadlessVendor::Codex => "codex exec".to_string(),
+                    // trace:TASK-1048 | ai:claude
+                    crate::session::HeadlessVendor::Agy => "agy -p".to_string(),
                 };
                 eprintln!(
                     "{} {}",
@@ -146527,13 +146529,13 @@ fn run_zen_gate_json(storage: &Storage, spec: Option<&str>) -> Result<()> {
 /// in-process tier and the `AIDA_HEADLESS_VENDOR` env a child-subprocess drain
 /// inherits — see [`session::install_headless_vendor_override`]). An
 /// unrecognized token is a hard error (no silent misroute); the recognized set
-/// is `claude` / `codex`. A `None` flag is a no-op, so an un-flagged drive
-/// resolves exactly as before TASK-1116.
-// trace:TASK-1116 | ai:claude
+/// is `claude` / `codex` / `agy`. A `None` flag is a no-op, so an un-flagged
+/// drive resolves exactly as before TASK-1116.
+// trace:TASK-1116 TASK-1048 | ai:claude
 fn apply_drive_vendor_override(vendor: Option<&str>) -> Result<()> {
     if let Some(raw) = vendor {
         if session::install_headless_vendor_override(raw).is_none() {
-            anyhow::bail!("unknown --vendor/--agent value `{raw}` (expected: claude, codex)");
+            anyhow::bail!("unknown --vendor/--agent value `{raw}` (expected: claude, codex, agy)");
         }
     }
     Ok(())
