@@ -261,7 +261,7 @@ show_cmd "demo" env -u AIDA_SESSION_ROLE aida add --type task --status draft \
     --title "Authority-gate demo spec" \
     --description "Filed by a non-advisor to demonstrate the Draft->Approved authority gate." < /dev/null
 
-SPEC=$(aida list --all < /dev/null 2>/dev/null | awk '/Authority-gate demo/ {print $1; exit}')
+SPEC=$(aida list --all --format human < /dev/null 2>/dev/null | awk '/Authority-gate demo/ {print $1; exit}')
 [ -z "$SPEC" ] && SPEC="TASK-1-001"
 echo
 ok "Filed as $SPEC (status: Draft)"
@@ -295,7 +295,7 @@ else
     fail "The demo's premise (advisor-only Draft->Approved) may have changed - investigate before trusting this script."
 fi
 echo
-STATUS_AFTER=$(aida show "$SPEC" --no-git < /dev/null 2>/dev/null | awk -F'  *' '/^Status/{print $0; exit}')
+STATUS_AFTER=$(aida show "$SPEC" --no-git --format human < /dev/null 2>/dev/null | awk -F'  *' '/^Status/{print $0; exit}')
 note "Status unchanged: $STATUS_AFTER"
 
 # -----------------------------------------------------------------------------
@@ -310,7 +310,7 @@ note_box --title "Same command, advisor authority" \
 echo
 show_cmd "demo" env AIDA_SESSION_ROLE=advisor aida edit "$SPEC" --status approved < /dev/null
 echo
-APPROVED_STATUS=$(aida show "$SPEC" --no-git < /dev/null 2>/dev/null | awk '/^Status/{print; exit}')
+APPROVED_STATUS=$(aida show "$SPEC" --no-git --format human < /dev/null 2>/dev/null | awk '/^Status/{print; exit}')
 ok "Approved by the advisor. $APPROVED_STATUS"
 
 # -----------------------------------------------------------------------------
@@ -332,7 +332,7 @@ show_cmd "demo" env AIDA_SESSION_ROLE=advisor aida queue add "$SPEC" --for imple
 echo
 show_cmd "demo" aida queue done "$SPEC" -y --force < /dev/null 2>&1 | grep -iE "marked done|done and removed" | head -1
 echo
-DONE_STATUS=$(aida show "$SPEC" --no-git < /dev/null 2>/dev/null | awk '/^Status/{print; exit}')
+DONE_STATUS=$(aida show "$SPEC" --no-git --format human < /dev/null 2>/dev/null | awk '/^Status/{print; exit}')
 ok "Implementer marked it Done. $DONE_STATUS"
 echo
 note_box --title "Why we stop at Done in this script" \

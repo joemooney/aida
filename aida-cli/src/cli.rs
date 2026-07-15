@@ -14,6 +14,22 @@ pub enum SoloAction {
     Status,
 }
 
+/// Explicit output-format pin. Overrides the default, which is chosen from
+/// whether stdout is a terminal: the human table at a TTY, token-efficient
+/// TOON when the output is piped or captured. That silent switch broke real
+/// user scripts that parsed the table, so `--format` (or `AIDA_OUTPUT_FORMAT`)
+/// lets a script pin the format it expects regardless of the TTY.
+// trace:STORY-764 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputFormat {
+    /// Human-readable tables / emoji (the interactive default at a TTY).
+    Human,
+    /// Token-efficient TOON — the compact agent default when piped/captured.
+    Toon,
+    /// Machine JSON, for commands that support a JSON projection.
+    Json,
+}
+
 #[derive(Parser, Debug)]
 #[clap(
     author,
@@ -47,6 +63,13 @@ pub struct Cli {
     /// Title for --asciinema recordings
     #[clap(long, value_name = "TITLE", requires = "asciinema")]
     pub cast_title: Option<String>,
+
+    /// Pin the output format regardless of whether stdout is a terminal:
+    /// human = tables, toon = compact agent output, json = machine JSON.
+    /// Default (unset) is human at a TTY, toon when piped/captured. Also
+    /// settable via AIDA_OUTPUT_FORMAT (the flag wins).
+    #[clap(long, global = true, value_enum, value_name = "FORMAT")]
+    pub format: Option<OutputFormat>,
 
     #[clap(subcommand)]
     pub command: Command,
