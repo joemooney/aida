@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T06:52:56.629549430Z
-modified_at: 2026-07-15T02:05:14.889911499Z
+modified_at: 2026-07-15T02:11:49.712171811Z
 req_type: Epic
 tags:
 - product
@@ -182,6 +182,8 @@ comments:
   content: 'Correction: EPIC-54 is actively being worked — restored from my erroneous reject (I should have checked for active work first). EPIC-54 SURVIVES as the redesign workstream, now nested under EPIC-51 (the fold). EPIC-52 deduped into EPIC-54. Children restored here.'
   created_at: 2026-06-26T18:56:03.080161066Z
   modified_at: 2026-06-26T18:56:03.080161066Z
+archived: true
+archived_at: 2026-07-15T02:11:49.712171811Z
 decision_request:
   question: The action->target TUI redesign is the default surface with 42 children shipped, only polish left (TASK-1074/1075/1076/1078, STORY-744). Is the redesign done?
   choices:
