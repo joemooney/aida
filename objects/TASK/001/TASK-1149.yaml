@@ -1,0 +1,14 @@
+id: 019f63b7-dc21-7893-86b0-df4442563756
+spec_id: TASK-1149
+agreed_id: TASK-1149
+title: 'Doc-gating: gate documentation at RELEASE (not PR) — cherry-pick from EPIC-25'
+description: 'EPIC-25 decision: cherry-pick ONLY the load-bearing idea (docs gate at RELEASE so PRs ship fast); drop the composite-spec + documenter/release-master roles. Touches scripts/release.sh — supervised.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-15T03:00:21.665093957Z
+modified_at: 2026-07-15T03:00:21.665093957Z
+req_type: Task
+tags:
+- aida:release from-decision:EPIC-25 supervised

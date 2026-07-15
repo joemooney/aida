@@ -33209,5 +33209,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3103
+- id: 019f63b7-e23b-7ff0-8f3b-1f2152a4735f
+  target_id: 019f63b7-dc21-7893-86b0-df4442563756
+  author: aida
+  node_id: '1'
+  lamport: 3104
+  timestamp: 2026-07-15T03:00:23.227235141Z
+  kind: !Create
+    title: 'Doc-gating: gate documentation at RELEASE (not PR) — cherry-pick from EPIC-25'
+    description: 'EPIC-25 decision: cherry-pick ONLY the load-bearing idea (docs gate at RELEASE so PRs ship fast); drop the composite-spec + documenter/release-master roles. Touches scripts/release.sh — supervised.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3104
 node_id: '1'
