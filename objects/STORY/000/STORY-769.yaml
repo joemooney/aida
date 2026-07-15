@@ -1,0 +1,23 @@
+id: 019f63fd-fbf0-7c52-85ae-6db78e8c6c46
+spec_id: STORY-769
+agreed_id: STORY-769
+title: Fold time + last-human-input gap injection into the awaiting-notice hook; expose the timestamp as a human-presence oracle
+description: |-
+  Trialing globally as ~/.claude/hooks/inject-time.sh (UserPromptSubmit: injects current date/time + gap-since-last-prompt, state keyed by session_id under XDG_RUNTIME_DIR/claude-turn-clock). If the trial holds, integrate natively:
+
+  1. Fold into the existing scaffolded UserPromptSubmit hook command (aida awaiting --notice): stamp last-prompt timestamp, prepend a 'Current date/time + timing' line. One process spawn per turn, cross-platform, existing projects inherit on binary upgrade with no re-scaffold. Note: changes the notice contract from silent-when-empty to one line every turn.
+
+  2. Substrate level: persist the last-human-input timestamp AIDA-natively (~/.aida/, per session) so the escalation cascade can use it as a human-presence oracle - operator active minutes ago means an interactive ask is answerable; hours-stale means park NeedsAttention / headless advisor directly. Also surfaces in aida ps ('operator last seen Nh ago') and drain finish-checkpoints. See docs/architecture/autonomy-and-escalation.md.
+
+  Revisit trigger: a week of the global hook feeling useful.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-15T04:16:57.328215441Z
+modified_at: 2026-07-15T04:16:57.328215441Z
+req_type: Story
+tags:
+- hooks
+- orchestrator
+- substrate
