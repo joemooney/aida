@@ -6,12 +6,12 @@ description: |-
   2026-07-13: operator answered a design-fork question (TASK-958, hard-block vs warn vs context-aware) and saw 'unrecognized resolution context-gated — recorded only', which reads like a failure. It is not — the decision was recorded correctly and the spec un-parked. The resolution field only AUTO-EXECUTES a small verb set (reject / keep-parked / status:X / tag:+X/-X / queue|approve); anything else is captured as free-text guidance. For a DESIGN question there is often no executable verb (there is no verb for 'implement it context-aware'), so recorded-only is the CORRECT outcome, not an error.
 
   Fix the wording so an intentional non-verb resolution reads as a neutral success ('decision recorded' / 'recorded as guidance for the implementer') rather than 'unrecognized ... recorded only', which reads as a malformed input. Reserve 'unrecognized' for genuinely malformed verbs (e.g. status:bogus). Optionally: when the advisor files a design-fork question, allow marking choices as 'directive' so no verb is expected. Related: the /aida-questions filing convention; consider documenting the resolution verb vocabulary in aida questions ask --help.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:38:53.508768738Z
-modified_at: 2026-07-14T05:04:24.376097100Z
+modified_at: 2026-07-15T02:00:46.416929973Z
 req_type: Bug
 tags:
 - aida:questions papercut ux severity:cosmetic from-operator-confusion
@@ -26,3 +26,21 @@ comments:
   content: Commit adc062b73 references this requirement
   created_at: 2026-07-14T05:04:24.376097100Z
   modified_at: 2026-07-14T05:04:24.376097100Z
+history:
+- id: 019f6381-4e2e-7842-ac32-9d199f04312a
+  author: aida-auto-bump
+  timestamp: 2026-07-15T02:00:46.382186156Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f6381-4e50-7383-a062-8305ba4b54ef
+  timestamp: 2026-07-15T02:00:46.416928511Z
+  agent: aida
+  commit_sha: 41af2d5021d92024d92eddd76f213abf0435e5ed
+  summary: Completed via merge 41af2d50
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-15T02:00:46.191392381Z
+  completion_sha: 41af2d5021d92024d92eddd76f213abf0435e5ed
