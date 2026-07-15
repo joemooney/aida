@@ -85,8 +85,14 @@ pub(crate) fn drain_lock_path(project_root: &Path) -> PathBuf {
 // covered by its own staleness, and the heartbeat thread dies with the process.
 // trace:BUG-712 | ai:claude
 static ATEXIT_LOCK_PATH: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+// BUG-688: `libc` is a cfg(unix)-only dependency, so the atexit hook (registered
+// below via `libc::atexit`) and the state it drives are Unix-only. On Windows
+// the `#[cfg(unix)]` gate makes these compile out, so the crate builds there.
+// trace:BUG-688 | ai:claude
+#[cfg(unix)]
 static ATEXIT_REGISTERED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 
+#[cfg(unix)]
 extern "C" fn drain_lock_atexit() {
     if let Ok(slot) = ATEXIT_LOCK_PATH.lock() {
         if let Some(path) = slot.as_ref() {
@@ -98,6 +104,10 @@ extern "C" fn drain_lock_atexit() {
 /// Best-effort remove the lock file ONLY if it still records our pid — the same
 /// ownership guard `DrainGuard::drop` applies, so we never delete a lock a
 /// different drive reclaimed under a recycled pid. trace:BUG-712 | ai:claude
+// BUG-688: on non-Unix the sole non-test caller (`drain_lock_atexit`) is
+// cfg(unix)-gated out, so a Windows release build sees this as unused; the
+// tests still exercise it on every platform. trace:BUG-688 | ai:claude
+#[cfg_attr(not(unix), allow(dead_code))]
 fn remove_lock_if_ours(path: &Path) {
     if read_lock(path).map(|l| l.pid) == Some(std::process::id()) {
         let _ = std::fs::remove_file(path);
@@ -109,6 +119,13 @@ fn register_atexit_cleanup(path: &Path) {
     if let Ok(mut slot) = ATEXIT_LOCK_PATH.lock() {
         *slot = Some(path.to_path_buf());
     }
+    // BUG-688: the `libc::atexit` cleanup hook is Unix-only (`libc` is a
+    // cfg(unix)-only dep). On Windows the RAII `DrainGuard::drop` still removes
+    // the lock on a normal return, and the shared claim's staleness backstop
+    // (STORY-638) covers a `process::exit` that skips Drop — so gating this out
+    // for Windows loses only the best-effort process::exit cleanup, and keeps
+    // the crate compiling cross-platform. trace:BUG-688 | ai:claude
+    #[cfg(unix)]
     ATEXIT_REGISTERED.get_or_init(|| {
         // SAFETY: `drain_lock_atexit` is a no-arg extern "C" fn that only locks a
         // process-global Mutex and does best-effort fs — safe to run at exit.
