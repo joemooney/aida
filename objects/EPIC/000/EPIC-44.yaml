@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:18.737322494Z
-modified_at: 2026-07-13T07:05:00.049522391Z
+modified_at: 2026-07-15T02:04:43.619661541Z
 req_type: Epic
 tags:
 - canonical-hub
@@ -40,4 +40,6 @@ decision_request:
     resolution: drop
   recommended: 1
   rationale: Phase 0 mirror already delivers GitLab presence; the forge-wiring lift only pays off when a real GitLab first-user exists, and cutting over the gh-based drain mid-stabilization is high-risk.
+  answered: 0
   asked_at: 2026-07-13T07:05:00.049522391Z
+  answered_at: 2026-07-15T02:04:43.619634692Z
