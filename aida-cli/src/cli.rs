@@ -1783,6 +1783,16 @@ pub enum BurndownCommand {
         // trace:TASK-1116 | ai:claude
         #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
         vendor: Option<String>,
+        /// Host each fanned-out implementer in its own titled terminal window
+        /// instead of a background process. Currently supports tmux: pass
+        /// `--panes` (defaults to tmux) or `--panes tmux`. Exported to the drain
+        /// so any `aida queue work --auto-complete` it spawns hosts its
+        /// implementer in a titled window under a dedicated `aida-drain` tmux
+        /// session. Degrades gracefully: outside tmux the drain falls back to the
+        /// background spawn with a one-line notice, never failing.
+        // trace:TASK-1120 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "HOST", num_args = 0..=1, default_missing_value = "tmux")]
+        panes: Option<String>,
     },
     /// Is a drain running, and what is it doing? The read-side companion to
     /// `burndown run`. Reads the global drain lock — pid, start time, the
@@ -5055,6 +5065,19 @@ pub enum QueueCommand {
         // trace:STORY-451 | ai:codex
         #[clap(long, value_enum, value_name = "BUCKET")]
         effort: Option<crate::effort_calibration::EffortBucket>,
+        /// Host each fanned-out implementer in its own titled terminal window
+        /// instead of an invisible background process. Currently supports tmux:
+        /// pass `--panes` (defaults to tmux) or `--panes tmux`. Each implementer
+        /// runs in a window named by its spec under a dedicated `aida-drain` tmux
+        /// session, so the fan-out is visible and the windows survive the
+        /// launching terminal closing (tmux server persistence) — you own pane
+        /// cleanup. Degrades gracefully: outside tmux (or if tmux is unavailable)
+        /// the drain falls back to the background spawn with a one-line notice,
+        /// never failing. Drain semantics (leases, phases, exit codes) are
+        /// unchanged.
+        // trace:TASK-1120 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "HOST", num_args = 0..=1, default_missing_value = "tmux")]
+        panes: Option<String>,
         /// Refuse auto-queuing Approved-but-not-queued specs. Under --strict,
         /// aida queue work refuses with the status-aware recovery hint.
         // trace:TASK-547 | ai:antigravity
