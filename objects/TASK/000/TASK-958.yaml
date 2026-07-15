@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:04:03.758412394Z
-modified_at: 2026-07-15T06:44:54.056152710Z
+modified_at: 2026-07-15T07:10:17.760104807Z
 req_type: Task
 tags:
 - zen-ready
@@ -27,21 +27,8 @@ comments:
   content: 'IMPLEMENTATION DECISION (operator, guided session 2026-07-14): make the STORY-711 commit gate CONTEXT-AWARE and the DEFAULT (replacing Off). On a Refused lock verdict: under an active drain (AIDA_AUTO_COMPLETE set) -> HARD block; solo -> warn. Unlocked/Authorized -> silent no-op. Explicit [locking] off/warn/enforce still override. Rationale: only fires on a real lock conflict, so default-on is safe (solo gets a warn, never a hard block), and drains get BUG-637 duplicate-dispatch protection out of the box.'
   created_at: 2026-07-15T06:44:53.107332569Z
   modified_at: 2026-07-15T06:44:53.107332569Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
-decision_request:
-  question: Should the STORY-711 commit-side authorization gate hard-block an unauthorized commit, or warn?
-  choices:
-  - label: Hard-refuse
-    consequence: strongest duplicate-dispatch guarantee, but risks false-blocks on solo/manual commits
-    resolution: hard block
-  - label: Warn + override flag
-    consequence: softer, leans on discipline
-    resolution: warn
-  - label: Context-aware
-    consequence: hard-refuse only under active fan-out/drain, warn otherwise
-    resolution: context-gated
-  recommended: 2
-  rationale: Duplicate-dispatch harm only arises during concurrent fan-out; a hard block on solo manual commits would be a daily papercut.
-  answered: 2
-  asked_at: 2026-07-14T02:32:00.400036216Z
-  answered_at: 2026-07-15T02:01:26.074995359Z
+- id: 019f649c-aea0-7a83-8590-783af63bf62d
+  author: joe
+  content: Commit 08e9d2872 references this requirement
+  created_at: 2026-07-15T07:10:17.760104807Z
+  modified_at: 2026-07-15T07:10:17.760104807Z
