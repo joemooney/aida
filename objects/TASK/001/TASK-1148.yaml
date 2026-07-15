@@ -1,0 +1,14 @@
+id: 019f63b7-ce21-7850-8e1d-95dbf38e27e4
+spec_id: TASK-1148
+agreed_id: TASK-1148
+title: Add risk_notes + test_coverage_notes + implementation_summary to the git-canonical Requirement model (narrowed ImplementationInfo)
+description: 'EPIC-7 decision (operator): rebuild ImplementationInfo NARROWED to the genuinely-new fields only. Add ONLY risk_notes, test_coverage_notes, implementation_summary as OPTIONAL fields on the Requirement model (serde default so existing YAML loads unchanged), surfaced in ''aida show''. Drop everything already derivable elsewhere (source_tool via commit prefix, implemented via status, confidence via trace, last_agent_run via git log) and the stale YAML/SQLite-backend parts. Additive, backward-compatible.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-15T03:00:18.081927990Z
+modified_at: 2026-07-15T03:00:18.081927990Z
+req_type: Task
+tags:
+- aida:model from-decision:EPIC-7
