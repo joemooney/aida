@@ -4570,6 +4570,11 @@ fn run() -> Result<()> {
             // trace:STORY-333 | ai:claude
             human_only: _,
             no_human_only: _,
+            // TASK-1148: the narrative fields are git-canonical only; the legacy
+            // centralized backend does not persist them. trace:TASK-1148 | ai:claude
+            implementation_summary: _,
+            risk_notes: _,
+            test_coverage_notes: _,
         } => {
             // If any flags provided, use non-interactive mode; otherwise interactive
             // trace:TASK-351 | ai:claude — --add-tag / --remove-tag count too
@@ -18373,6 +18378,23 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             }
                         };
                         lines.push(crate::toon::scalar("description", &desc));
+                        // TASK-1148: the three optional narrative fields, emitted
+                        // as scalars only when set. trace:TASK-1148 | ai:claude
+                        if let Some(v) = req.implementation_summary.as_deref() {
+                            if !v.trim().is_empty() {
+                                lines.push(crate::toon::scalar("implementation_summary", v));
+                            }
+                        }
+                        if let Some(v) = req.risk_notes.as_deref() {
+                            if !v.trim().is_empty() {
+                                lines.push(crate::toon::scalar("risk_notes", v));
+                            }
+                        }
+                        if let Some(v) = req.test_coverage_notes.as_deref() {
+                            if !v.trim().is_empty() {
+                                lines.push(crate::toon::scalar("test_coverage_notes", v));
+                            }
+                        }
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -18765,6 +18787,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
                     }
+                    // TASK-1148: the three optional narrative fields — the
+                    // genuinely-new metadata not derivable from git/status/trace.
+                    // Each renders its own labelled block only when set; absent
+                    // fields print nothing. trace:TASK-1148 | ai:claude
+                    {
+                        let narrative_blocks: [(&str, &Option<String>); 3] = [
+                            ("Implementation summary", &req.implementation_summary),
+                            ("Risk notes", &req.risk_notes),
+                            ("Test coverage notes", &req.test_coverage_notes),
+                        ];
+                        for (label, value) in narrative_blocks {
+                            if let Some(text) = value {
+                                let text = text.trim();
+                                if !text.is_empty() {
+                                    println!("\n{}:", label.bold());
+                                    for line in text.lines() {
+                                        println!("  {line}");
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if *comments && !req.comments.is_empty() {
                         println!("\n{}:", "Comments".green().bold());
                         for c in &req.comments {
@@ -18868,6 +18912,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             force,
             human_only,
             no_human_only,
+            // trace:TASK-1148 | ai:claude
+            implementation_summary,
+            risk_notes,
+            test_coverage_notes,
             ..
         } => {
             // trace:TASK-518 | ai:antigravity
@@ -19003,6 +19051,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 req.description = d.clone();
                 changed = true;
             }
+            // TASK-1148: the three optional narrative fields. An empty string
+            // clears the field (stores None so it drops out of the YAML); any
+            // other value sets it. trace:TASK-1148 | ai:claude
+            let set_narrative = |slot: &mut Option<String>, arg: &Option<String>| -> bool {
+                match arg {
+                    Some(text) if text.is_empty() => {
+                        if slot.is_some() {
+                            *slot = None;
+                            return true;
+                        }
+                        false
+                    }
+                    Some(text) => {
+                        *slot = Some(text.clone());
+                        true
+                    }
+                    None => false,
+                }
+            };
+            changed |= set_narrative(&mut req.implementation_summary, implementation_summary);
+            changed |= set_narrative(&mut req.risk_notes, risk_notes);
+            changed |= set_narrative(&mut req.test_coverage_notes, test_coverage_notes);
             let mut new_status_for_manifest: Option<String> = None;
             // STORY-738: did this edit transition the spec INTO Completed?
             // Captured against the prior status before the set below so the
@@ -125685,6 +125755,31 @@ fn render_spec_card(
             println!("    {}", line);
         }
         println!();
+    }
+
+    // TASK-1148: the three optional narrative fields — the genuinely-new
+    // metadata not derivable from git/status/trace. Each renders its own
+    // labelled block only when set; absent fields print nothing.
+    // trace:TASK-1148 | ai:claude
+    let narrative_blocks: [(&str, &Option<String>); 3] = [
+        ("Implementation summary", &req.implementation_summary),
+        ("Risk notes", &req.risk_notes),
+        ("Test coverage notes", &req.test_coverage_notes),
+    ];
+    for (label, value) in narrative_blocks {
+        if let Some(text) = value {
+            let text = text.trim();
+            if !text.is_empty() {
+                println!(
+                    "  {}",
+                    format!("{} {label}:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold()
+                );
+                for line in text.lines() {
+                    println!("    {}", line);
+                }
+                println!();
+            }
+        }
     }
 
     // Acceptance criteria as their own block (the --full description
