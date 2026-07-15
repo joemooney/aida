@@ -3845,6 +3845,27 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deferred_until: Option<String>,
 
+    // trace:TASK-1148 | ai:claude
+    /// Narrative risk notes — the residual risk / blast-radius call an
+    /// implementer recorded that is NOT derivable from git, status, or trace
+    /// (the narrowed remnant of the retired `ImplementationInfo`). Optional and
+    /// serde-default so pre-existing YAML deserializes unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk_notes: Option<String>,
+
+    // trace:TASK-1148 | ai:claude
+    /// Narrative test-coverage notes — what was (and was not) covered, and why,
+    /// beyond what CI status alone conveys. Optional, serde-default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_coverage_notes: Option<String>,
+
+    // trace:TASK-1148 | ai:claude
+    /// Narrative implementation summary — the human-readable "what shipped and
+    /// why it was done this way" that a commit prefix / diff does not capture.
+    /// Optional, serde-default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation_summary: Option<String>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4098,6 +4119,10 @@ impl Requirement {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            // trace:TASK-1148 | ai:claude
+            risk_notes: None,
+            test_coverage_notes: None,
+            implementation_summary: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
@@ -7059,6 +7084,57 @@ mod tests {
         assert!(!yaml.contains("interface_changes"));
         let back: Requirement = serde_yaml::from_str(&yaml).unwrap();
         assert!(back.interface_changes.is_none());
+    }
+
+    /// TASK-1148: the three narrative fields (`risk_notes`,
+    /// `test_coverage_notes`, `implementation_summary`) are additive and
+    /// serde-default. A pre-existing YAML written before these fields existed
+    /// (i.e. WITHOUT the three keys) must deserialize cleanly with all three
+    /// `None` — the backward-compat invariant. And a fresh req omits the keys
+    /// when unset, round-tripping them once set.
+    // trace:TASK-1148 | ai:claude
+    #[test]
+    fn requirement_narrative_fields_are_backward_compatible() {
+        // A hand-authored legacy YAML with none of the three keys present.
+        let legacy_yaml = "\
+id: 018f0000-0000-7000-8000-000000000000
+title: legacy spec
+description: filed before the narrative fields existed
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-01-01T00:00:00Z
+modified_at: 2026-01-01T00:00:00Z
+req_type: Task
+";
+        let back: Requirement = serde_yaml::from_str(legacy_yaml).unwrap();
+        assert!(back.risk_notes.is_none());
+        assert!(back.test_coverage_notes.is_none());
+        assert!(back.implementation_summary.is_none());
+
+        // Unset fields do NOT serialize (skip_serializing_if = Option::is_none).
+        let mut r = Requirement::new("t".into(), "d".into());
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(!yaml.contains("risk_notes"));
+        assert!(!yaml.contains("test_coverage_notes"));
+        assert!(!yaml.contains("implementation_summary"));
+
+        // Once set, they round-trip through YAML unchanged.
+        r.risk_notes = Some("touches the write path".into());
+        r.test_coverage_notes = Some("unit + one round-trip; no e2e".into());
+        r.implementation_summary = Some("narrowed ImplementationInfo".into());
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        let back: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back.risk_notes.as_deref(), Some("touches the write path"));
+        assert_eq!(
+            back.test_coverage_notes.as_deref(),
+            Some("unit + one round-trip; no e2e")
+        );
+        assert_eq!(
+            back.implementation_summary.as_deref(),
+            Some("narrowed ImplementationInfo")
+        );
     }
 
     /// BUG-251: forward-compat — an unknown `RelationshipType` variant (a newer

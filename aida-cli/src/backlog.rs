@@ -1279,6 +1279,10 @@ mod tests {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            // trace:TASK-1148 | ai:claude
+            risk_notes: None,
+            test_coverage_notes: None,
+            implementation_summary: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: Default::default(),

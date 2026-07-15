@@ -7246,6 +7246,25 @@ pub enum Command {
         #[clap(long = "remove-ref", value_name = "PROVIDER:ID")]
         remove_ref: Vec<String>,
 
+        // trace:TASK-1148 | ai:claude
+        /// Set the narrative implementation summary — the "what shipped and why
+        /// it was done this way" that a commit prefix / diff does not capture.
+        /// Pass an empty string to clear.
+        #[clap(long = "implementation-summary", value_name = "TEXT")]
+        implementation_summary: Option<String>,
+
+        // trace:TASK-1148 | ai:claude
+        /// Set the narrative risk notes — residual risk / blast-radius call not
+        /// derivable from git, status, or trace. Pass an empty string to clear.
+        #[clap(long = "risk-notes", value_name = "TEXT")]
+        risk_notes: Option<String>,
+
+        // trace:TASK-1148 | ai:claude
+        /// Set the narrative test-coverage notes — what was (and was not)
+        /// covered, and why. Pass an empty string to clear.
+        #[clap(long = "test-coverage-notes", value_name = "TEXT")]
+        test_coverage_notes: Option<String>,
+
         /// Use interactive mode (launches editor)
         #[clap(long, short = 'i')]
         interactive: bool,

@@ -655,6 +655,31 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
         description: "The free-text revisit trigger — the one thing distinguishing deferred \
              (prospective) from archived (retrospective). Set via `aida defer --until`.",
     },
+    // trace:TASK-1148 | ai:claude
+    FieldDoc {
+        name: "risk_notes",
+        example: "touches the single-spec write path; low blast radius",
+        provenance: Provenance::User,
+        description: "Narrative residual-risk / blast-radius note not derivable from git, status, \
+             or trace. Optional; set via `aida edit --risk-notes`.",
+    },
+    // trace:TASK-1148 | ai:claude
+    FieldDoc {
+        name: "test_coverage_notes",
+        example: "unit + one YAML round-trip; no end-to-end drain",
+        provenance: Provenance::User,
+        description: "Narrative note on what was (and was not) covered, and why, beyond what CI \
+             status conveys. Optional; set via `aida edit --test-coverage-notes`.",
+    },
+    // trace:TASK-1148 | ai:claude
+    FieldDoc {
+        name: "implementation_summary",
+        example: "narrowed ImplementationInfo to three narrative fields",
+        provenance: Provenance::User,
+        description:
+            "Narrative 'what shipped and why it was done this way' a commit prefix / diff \
+             does not capture. Optional; set via `aida edit --implementation-summary`.",
+    },
     FieldDoc {
         name: "custom_status",
         example: "in-review",
