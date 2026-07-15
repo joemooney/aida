@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:35:46.390020492Z
-modified_at: 2026-07-15T02:49:45.742789863Z
+modified_at: 2026-07-15T02:49:46.754840483Z
 req_type: Bug
 tags:
 - blocks:release-xplat-gate
@@ -55,6 +55,12 @@ comments:
   content: Commit 121253ac9 references this requirement
   created_at: 2026-07-15T02:32:14.451097156Z
   modified_at: 2026-07-15T02:32:14.451097156Z
+- id: 019f63ae-2c02-7fa0-965b-02c3fcd9fcf8
+  author: joe
+  content: 'The cross-platform CI-unblock (linux-gate e2e + Windows atexit cfg + macOS test-assertion gate) shipped in #1408. Keeping OPEN per the decision: the macOS ''aida init'' exit-1 root cause is still unresolved and needs macOS hardware to investigate.'
+  created_at: 2026-07-15T02:49:46.754840483Z
+  modified_at: 2026-07-15T02:49:46.754840483Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f63ab-290d-7ab1-89a8-c50212e6ca15
   author: aida-auto-bump
