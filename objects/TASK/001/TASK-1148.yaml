@@ -8,7 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-15T03:00:18.081927990Z
-modified_at: 2026-07-15T03:00:18.081927990Z
+modified_at: 2026-07-15T03:24:34.693308702Z
 req_type: Task
 tags:
 - aida:model from-decision:EPIC-7
+risk_notes: additive fields; touches single-spec write path; low blast radius
+test_coverage_notes: aida-core serde round-trip + backward-compat unit test; no e2e drain
+implementation_summary: Added three optional narrative fields to Requirement; narrowed ImplementationInfo per EPIC-7 decision
