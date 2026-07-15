@@ -6216,6 +6216,33 @@ fn apply_resolution_token(
 ) -> ResolutionApplied {
     let t = token.trim();
 
+    // BUG-726: accept BARE disposition verbs + common synonyms. Advisors and
+    // operators naturally write `defer` / `reject` / `queue`, not the internal
+    // `disposition:...` form. Before this, a bare verb fell through to the
+    // auto-queue at the bottom — the exact OPPOSITE of a `defer`/`reject` intent
+    // — and `defer` had no verb at all.
+    let lower = t.to_ascii_lowercase();
+    if matches!(
+        lower.as_str(),
+        "defer" | "park" | "hold" | "passive" | "passive-only" | "shelve"
+    ) {
+        req.deferred = true;
+        return ResolutionApplied {
+            effects: vec!["deferred — parked out of the queue".to_string()],
+            is_disposition: true,
+            keeps_parked: true,
+            binds_acceptance: false,
+        };
+    }
+    let t = match lower.as_str() {
+        "reject" | "archive" | "close" | "drop" | "reject/archive" => "disposition:reject",
+        "approve" | "queue" | "ready" | "approve-to-ready" | "approve+queue" => {
+            "disposition:approve-to-ready"
+        }
+        "keep-parked" | "keep" | "leave-parked" | "keep-open" => "disposition:keep-parked",
+        _ => t,
+    };
+
     // R2: synthesized-disposition tokens — a yes/no/keep disposition on a
     // tag-parked spec, NOT a design refinement.
     if let Some(rest) = t.strip_prefix("disposition:") {
@@ -6363,10 +6390,16 @@ fn apply_resolution_token(
         };
     }
 
+    // BUG-726: a freeform resolution (a design DIRECTIVE with no executable verb,
+    // e.g. "context-gated") is recorded as guidance and the spec is LEFT PARKED —
+    // never silently queued. Auto-queuing here was the bug that made a `defer`/
+    // `reject` answer land the spec in the burndown, the opposite of intent.
     ResolutionApplied {
-        effects: vec![format!("unrecognized resolution `{t}` — recorded only")],
+        effects: vec![format!(
+            "recorded as directive `{t}` — left parked for advisor disposition"
+        )],
         is_disposition: false,
-        keeps_parked: false,
+        keeps_parked: true,
         binds_acceptance: false,
     }
 }
@@ -8327,7 +8360,40 @@ mod questions_tests {
         let applied = apply_resolution_token(&mut req, "garbage-token", "x", "y");
         assert_eq!(req.status, RequirementStatus::Approved, "no mutation");
         assert!(req.tags.is_empty());
-        assert!(applied.effects[0].contains("unrecognized"));
+        // BUG-726: a freeform directive is recorded and LEFT PARKED — never
+        // silently auto-queued (that was the bug that mis-queued disposition answers).
+        assert!(applied.effects[0].contains("directive"));
+        assert!(
+            applied.keeps_parked,
+            "an unrecognized directive must not queue the spec"
+        );
+    }
+
+    #[test]
+    fn apply_token_bare_defer_parks_out_of_queue() {
+        // BUG-726: a bare `defer` answer defers the spec (parked), not queues it.
+        let mut req = sample_requirement("STORY-N", "body");
+        req.status = RequirementStatus::Approved;
+        assert!(!req.deferred);
+        let applied = apply_resolution_token(&mut req, "defer", "Defer", "wait for demand");
+        assert!(req.deferred, "bare `defer` must set the deferred flag");
+        assert!(applied.keeps_parked, "a deferred spec is not queue-worthy");
+    }
+
+    #[test]
+    fn apply_token_bare_disposition_verbs_work_without_prefix() {
+        // BUG-726: bare disposition verbs resolve without the `disposition:` prefix.
+        let mut req = sample_requirement("STORY-N", "body");
+        req.status = RequirementStatus::Approved;
+        let applied = apply_resolution_token(&mut req, "reject", "Reject", "stale");
+        assert_eq!(req.status, RequirementStatus::Rejected);
+        assert!(applied.keeps_parked, "a rejected spec is not queue-worthy");
+
+        let mut req2 = sample_requirement("STORY-M", "body");
+        req2.tags.insert("needs-design".to_string());
+        let applied2 = apply_resolution_token(&mut req2, "queue", "Approve+queue", "go");
+        assert!(applied2.is_disposition);
+        assert!(!applied2.keeps_parked, "an approved spec is queue-worthy");
     }
 
     #[test]
