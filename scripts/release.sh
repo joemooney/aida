@@ -42,13 +42,19 @@ auto_yes=${AIDA_RELEASE_YES:-0}
 # AIDA_SKIP_XPLAT_CHECK=1 bypasses the gate (not recommended for a published
 # release). trace:TASK-257 | ai:claude
 skip_xplat=${AIDA_SKIP_XPLAT_CHECK:-0}
+# TASK-1149: gate documentation currency at RELEASE time (not per-PR).
+# Verifies the regenerated CHANGELOG is current + deterministic before the
+# tag. --skip-docs-check / AIDA_SKIP_DOCS_CHECK=1 bypasses (mirrors the
+# cross-platform gate's opt-out). trace:TASK-1149 | ai:claude
+skip_docs=${AIDA_SKIP_DOCS_CHECK:-0}
 bump=
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) auto_yes=1 ;;
         --skip-xplat-check) skip_xplat=1 ;;
+        --skip-docs-check) skip_docs=1 ;;
         -h|--help)
-            echo "usage: $0 [--yes] [--skip-xplat-check] {major|minor|patch|<explicit-version>}"
+            echo "usage: $0 [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}"
             exit 0
             ;;
         -*)
@@ -66,7 +72,7 @@ for arg in "$@"; do
 done
 
 if [ -z "$bump" ]; then
-    echo "usage: $0 [--yes] [--skip-xplat-check] {major|minor|patch|<explicit-version>}" >&2
+    echo "usage: $0 [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}" >&2
     exit 1
 fi
 
@@ -283,6 +289,32 @@ if cargo run -q -p aida-cli -- changelog refresh --released-as "v$new"; then
     echo "  ok — CHANGELOG.md regenerated for v$new"
 else
     echo "  warning: 'aida changelog' unavailable (pre-feature binary) — skipping" >&2
+fi
+
+# TASK-1149: documentation gate — the cherry-picked EPIC-25 idea (gate docs
+# at RELEASE, not per-PR). Verify the just-regenerated CHANGELOG is current
+# and deterministic (blocking), and surface any drifted plan refs touched
+# since the previous tag (advisory). Runs before the diff/confirmation
+# preview so the releaser sees the verdict before deciding. Opt out with
+# --skip-docs-check / AIDA_SKIP_DOCS_CHECK=1. trace:TASK-1149 | ai:claude
+if [ "$skip_docs" = "1" ]; then
+    echo
+    echo "skipping documentation gate (--skip-docs-check / AIDA_SKIP_DOCS_CHECK=1)."
+else
+    echo
+    if ! "$(dirname "$0")/docs-gate.sh" "$new"; then
+        cat <<EOM >&2
+
+error: documentation gate failed — refusing to tag v$new.
+
+The version bump (and regenerated CHANGELOG.md) is in your working tree but
+not committed. Fix the reported doc issue and re-run, or bypass the gate
+(not recommended for a published release) with --skip-docs-check. Discard
+the bump with:
+  git restore ${manifest_paths[*]}
+EOM
+        exit 1
+    fi
 fi
 
 # Generate tag notes from `git log <prev_tag>..HEAD`. Saved to a temp file
