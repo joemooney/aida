@@ -12,12 +12,12 @@ description: |-
   - Registry block allocations from different nodes union without collision (disjoint ranges preserved).
   - Guard: it must NOT publish content that is only on one hub without the same scrub the canonical line applies (see the sibling employer-content bug).
   - aida remote status points at the new reconcile verb in its DIVERGED hint instead of the current generic "reconcile then re-push".
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T07:20:39.422149465Z
-modified_at: 2026-07-16T05:38:03.100861321Z
+modified_at: 2026-07-16T06:11:14.134027566Z
 req_type: Bug
 tags:
 - coordination
@@ -52,6 +52,24 @@ comments:
   created_at: 2026-07-16T04:26:10.872491788Z
   modified_at: 2026-07-16T04:26:10.872491788Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+history:
+- id: 019f698c-f850-7f93-858a-9478af2c881d
+  author: aida-auto-bump
+  timestamp: 2026-07-16T06:11:14.128158442Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f698c-f856-7843-b4cc-8eb33ef9893b
+  timestamp: 2026-07-16T06:11:14.134026969Z
+  agent: implementer
+  commit_sha: 37625515573e3b6f61f76b5cc8f07246b13c1a2f
+  summary: Completed via merge 37625515
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-16T06:11:13.924294004Z
+  completion_sha: 37625515573e3b6f61f76b5cc8f07246b13c1a2f
 decision_request:
   question: STORY-760 mirror fan-out only PUSHES, so a gitlab-only commit leaves gitlab permanently ahead and rejects every aida push. How much to invest in the reconcile fix?
   choices:
