@@ -95751,9 +95751,28 @@ fn handle_autopilot_inspect(
     let risk_of: std::collections::HashMap<&str, backlog::RiskLevel> =
         specs.iter().map(|s| (s.id.as_str(), s.risk)).collect();
 
-    // The envelope. The default table is the conservative one — approve/reject
-    // hold, reversible actions auto. No auto-execution is wired regardless.
-    let env = autopilot::AutopilotEnvelope::default();
+    // The envelope: the conservative default table, widened only by an explicit
+    // `[autopilot]` config posture, then TIGHTENED (demote-only) by the runtime
+    // context — a headless run cannot pause-and-ask so its propose tier
+    // escalates; an active solo posture inherits the drain's safe/keystone
+    // partition. `effective_envelope` is the ratified TASK-0432 precedence
+    // contract, so this dry-run grades under exactly the envelope a real groom
+    // in this context would. No auto-execution is wired regardless.
+    // trace:TASK-1020 | ai:claude
+    let config_text =
+        std::fs::read_to_string(project_root.join(".aida").join("config.toml")).unwrap_or_default();
+    let overrides = autopilot::parse_authority_overrides(&config_text);
+    let headless = std::env::var("AIDA_HEADLESS").as_deref() == Ok("1");
+    let solo_active = presence::current_solo(chrono::Utc::now());
+    // The candidates graded below are post-fence: gate 1 already excluded
+    // keystone via the same `is_keystone_class` classifier, so an active solo
+    // resolves to its safe partition here.
+    let posture = presence::resolve_solo_posture(solo_active, false);
+    let env = autopilot::effective_envelope(
+        autopilot::AutopilotEnvelope::default().with_overrides(overrides),
+        headless,
+        posture,
+    );
 
     // Build one Decision per eligible spec. Grounding is the advisor's runtime
     // judgment (it needs the live corpus read); the dry-run assumes the
@@ -95798,6 +95817,9 @@ fn handle_autopilot_inspect(
             "risk_ceiling": max_risk.token(),
             "grounding_assumed": "type-a (best case; advisor grounds at run time)",
             "auto_execution": false,
+            // TASK-1020: the runtime context the effective envelope was
+            // composed under (demote-only tightening; autonomy doc §8).
+            "context": { "headless": headless, "solo": solo_active },
             "eligible": eligible_json,
             "fenced": fenced_json,
         });
@@ -95816,11 +95838,33 @@ fn handle_autopilot_inspect(
     println!(
         "  {}",
         format!(
-            "envelope: risk≤{} · grounding=required (assumed groundable) · approve=propose reject=propose",
-            max_risk.token()
+            "envelope: risk≤{} · grounding=required (assumed groundable) · approve={} reject={}",
+            max_risk.token(),
+            env.authority_for(autopilot::ActionClass::Approve).token(),
+            env.authority_for(autopilot::ActionClass::Reject).token(),
         )
         .dimmed()
     );
+    // TASK-1020: name the composition context whenever it tightened (or could
+    // tighten) the envelope, so a headless/solo dry-run is legibly different
+    // from the keyboard one.
+    if headless || solo_active {
+        let mut parts: Vec<&str> = Vec::new();
+        if headless {
+            parts.push("headless — propose-tier escalates (cannot pause-and-ask)");
+        }
+        if solo_active {
+            parts.push("solo — safe partition (keystone already fenced at gate 1)");
+        }
+        println!(
+            "  {}",
+            format!(
+                "context: {} · tightening is demote-only (autonomy doc §8)",
+                parts.join(" · ")
+            )
+            .dimmed()
+        );
+    }
 
     if rows.is_empty() {
         println!(

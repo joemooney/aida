@@ -819,10 +819,18 @@ The only real composition question is `groom --autopilot --then-drain` — groom
 under the envelope, then a drain under whatever ladder mode the drain flags
 specify — and the answer is "each stage uses its own setting," which the existing
 `--then-drain` plumbing already expresses. A headless context (`AIDA_HEADLESS`)
-*tightens* autopilot's defaults: it cannot pause-and-ask, so an uncertain auto
-demotes to escalate. The tightening is **demote-only** (never widens), so the
+*tightens* autopilot's defaults: it cannot pause-and-ask, so a `propose`
+(pause-and-ask) authority demotes to escalate — the would-be hold becomes a
+recorded escalation that enters the §2 cascade instead of a report line nobody
+is watching. The tightening is **demote-only** (never widens), so the
 worst-case precedence bug is over-conservatism (a held action), not an un-gated
 execute.
+
+This precedence contract is enforced in code by `autopilot::effective_envelope`
+(pure, unit-tested over the full headless × solo-posture × base-authority
+cross-product) and is observable read-only via `aida autopilot inspect`, whose
+dry-run grades under the composed effective envelope and names the context
+(`headless` / `solo`) whenever it tightened the verdicts.
 
 ### Back-compat and the supervised-proof rule
 
