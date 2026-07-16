@@ -10,14 +10,32 @@ description: |-
   2. Substrate level: persist the last-human-input timestamp AIDA-natively (~/.aida/, per session) so the escalation cascade can use it as a human-presence oracle - operator active minutes ago means an interactive ask is answerable; hours-stale means park NeedsAttention / headless advisor directly. Also surfaces in aida ps ('operator last seen Nh ago') and drain finish-checkpoints. See docs/architecture/autonomy-and-escalation.md.
 
   Revisit trigger: a week of the global hook feeling useful.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-15T04:16:57.328215441Z
-modified_at: 2026-07-15T04:19:23.402409335Z
+modified_at: 2026-07-16T06:49:38.834605607Z
 req_type: Story
 tags:
 - hooks
 - orchestrator
 - substrate
+history:
+- id: 019f69b0-230c-7201-968f-3c15fabf9634
+  author: aida-auto-bump
+  timestamp: 2026-07-16T06:49:38.828372826Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f69b0-2312-7c40-b240-1edf83ed959f
+  timestamp: 2026-07-16T06:49:38.834604831Z
+  agent: aida
+  commit_sha: 7722d39e63620cd03e51c9cdddc621eecee8c125
+  summary: Completed via merge 7722d39e
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-16T06:49:38.637161648Z
+  completion_sha: 7722d39e63620cd03e51c9cdddc621eecee8c125
