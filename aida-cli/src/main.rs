@@ -112,6 +112,7 @@ mod permissions;
 mod pr_rebase;
 mod pr_ship;
 mod presence;
+mod presence_cmd;
 mod process_probe;
 // BUG-677: the /proc probe + lease/spec liveness classifiers moved to
 // aida-core so aida-tui can compute liveness in-process. Re-export the shared
@@ -3940,17 +3941,19 @@ fn run() -> Result<()> {
     // these only touch the machine-global `~/.aida/presence.toml` file; no
     // requirement-store handle needed. trace:TASK-756 | ai:claude
     match &cli.command {
-        Command::Away => return handle_away_command(),
-        Command::Home => return handle_home_command(),
+        Command::Away => return presence_cmd::handle_away_command(),
+        Command::Home => return presence_cmd::handle_home_command(),
         // TASK-851: `aida presence [away|home|status]` is the canonical surface;
         // bare `aida presence` shows status (back-compat). The top-level
         // `aida away` / `aida home` stay as hidden aliases above.
         // trace:TASK-851 | ai:claude
         Command::Presence { action } => {
             return match action {
-                Some(cli::PresenceCommand::Away) => handle_away_command(),
-                Some(cli::PresenceCommand::Home) => handle_home_command(),
-                Some(cli::PresenceCommand::Status) | None => handle_presence_command(),
+                Some(cli::PresenceCommand::Away) => presence_cmd::handle_away_command(),
+                Some(cli::PresenceCommand::Home) => presence_cmd::handle_home_command(),
+                Some(cli::PresenceCommand::Status) | None => {
+                    presence_cmd::handle_presence_command()
+                }
             };
         }
         // STORY-624: solo-mode flag — machine-global ~/.aida/solo.toml, no
@@ -68524,102 +68527,6 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
         .spawn();
 }
 
-/// Worker entry point — runs `git fetch origin <branch> --prune` against
-/// the orphan store at `store_path`, then stamps `last-fetch.toml` with
-/// the outcome and removes the lockfile. Never panics; every error
-/// path is silent. Called from `aida _bg-fetch <store-path>`, which
-/// statusline spawns detached. Shares its fetch + cache-stamp logic
-/// with `aida fetch --store-only --quiet` (TASK-107); the only thing
-/// it adds is the lockfile lifecycle. trace:STORY-79 TASK-107 | ai:claude
-/// Resolve the away TTL for the current project: `[presence] away_ttl` from
-/// `.aida/config.toml` when present, else the 8h default. trace:TASK-756
-fn resolve_away_ttl_secs() -> u64 {
-    let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    presence::away_ttl_secs(&config_path_for_project(&project_root))
-}
-
-/// `aida away` — mark the operator away with the configured TTL.
-/// trace:TASK-756 | ai:claude
-fn handle_away_command() -> Result<()> {
-    let ttl = resolve_away_ttl_secs();
-    presence::set_away(ttl)?;
-    let now = chrono::Utc::now();
-    let set_at = now; // just set
-    println!(
-        "{} away — effective for {} (auto-flips home on any interactive command)",
-        crate::glyph(crate::glyphs::Glyph::Away).to_string(),
-        presence::ttl_remaining_label(set_at, ttl, now)
-    );
-    Ok(())
-}
-
-/// `aida home` — mark the operator back at the keyboard.
-/// trace:TASK-756 | ai:claude
-fn handle_home_command() -> Result<()> {
-    let ttl = resolve_away_ttl_secs();
-    presence::set_home(ttl)?;
-    println!(
-        "{} home",
-        crate::glyph(crate::glyphs::Glyph::Home).to_string()
-    );
-    Ok(())
-}
-
-/// `aida presence` — print current effective presence.
-/// trace:TASK-756 | ai:claude
-fn handle_presence_command() -> Result<()> {
-    let now = chrono::Utc::now();
-    let file = presence::read_presence_file();
-    let effective = presence::current_presence(now);
-
-    match file {
-        Some(f) => {
-            let set_at = chrono::DateTime::parse_from_rfc3339(&f.set_at)
-                .map(|dt| dt.with_timezone(&chrono::Utc))
-                .unwrap_or(now);
-            print!(
-                "{} {} (set {}",
-                effective.glyph(),
-                effective.word().bold(),
-                presence::since_label(set_at, now)
-            );
-            if matches!(effective, presence::Presence::Away) {
-                print!(
-                    ", {}",
-                    presence::ttl_remaining_label(set_at, f.ttl_secs, now)
-                );
-            }
-            println!(")");
-        }
-        None => {
-            // No file written yet — default posture is home.
-            println!(
-                "{} {} (default — never set)",
-                effective.glyph(),
-                effective.word().bold()
-            );
-        }
-    }
-
-    // STORY-769: fold in the last-human-input ORACLE — a passive observation
-    // (distinct from the explicit home/away intent above) of when the operator
-    // last typed a prompt, per the per-turn `aida awaiting --notice` stamp. This
-    // is what the escalation cascade branches on: operator active → an
-    // interactive ask is answerable; stale → park / go headless.
-    // trace:STORY-769 | ai:claude
-    let project_root =
-        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
-    let thresholds = presence::read_presence_thresholds(&config_path_for_project(&project_root));
-    match presence::last_seen_line(now, thresholds) {
-        Some(line) => println!("{}", line.dimmed()),
-        None => println!(
-            "{}",
-            "operator last seen — unknown (no prompt stamped yet)".dimmed()
-        ),
-    }
-    Ok(())
-}
-
 /// STORY-625: one cycle of the solo loop — the safe-backlog pipeline, composed
 /// from the existing (individually-safe) commands by shelling out to this same
 /// binary. Order: garden (hygiene) → assess+queue (advisor sign-off, keystone
@@ -95326,9 +95233,11 @@ fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
     match cmd {
         // TASK-770: namespaced aliases over the existing top-level presence
         // verbs; no duplicate state path or output shape.
-        cli::HumanCommand::Away => handle_away_command(),
-        cli::HumanCommand::Home => handle_home_command(),
-        cli::HumanCommand::Presence | cli::HumanCommand::Status => handle_presence_command(),
+        cli::HumanCommand::Away => presence_cmd::handle_away_command(),
+        cli::HumanCommand::Home => presence_cmd::handle_home_command(),
+        cli::HumanCommand::Presence | cli::HumanCommand::Status => {
+            presence_cmd::handle_presence_command()
+        }
         cli::HumanCommand::Unblock {
             copy,
             stdout,
