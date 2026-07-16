@@ -223,6 +223,32 @@ recorded-principle forks resolved by tier 2, and only the genuinely
 human-shaped questions surface. The point is to spend the human's attention
 on the questions that need it.
 
+### Human-presence oracle (STORY-769)
+
+The cascade's escalate-vs-resolve choice is currently keyed on the autonomy
+mode (present / `--zen` / no-human), explicit flags, and — when solo is
+active — the keystone classifier. STORY-769 adds a **passive presence
+signal** the cascade *can* branch on: a last-human-input timestamp, stamped
+every turn by the `aida awaiting --notice` hook into
+`~/.aida/turn-clock/<session-id>.toml`, and read back as an Active / Idle /
+Stale verdict.
+
+The intent: *operator active in the last few minutes* means an interactive
+ask is genuinely answerable (prefer surfacing the fork now); *hours-stale*
+means nobody is watching, so park `NeedsAttention` or route to the headless
+advisor tier directly rather than blocking on an ask nobody will see. The
+oracle is deliberately **distinct from the explicit `home`/`away` intent** —
+`away` is a declared posture with a TTL; the oracle is an observation of real
+input, so it stays truthful even when the operator forgets to flip presence.
+
+Shipped in STORY-769: the persisted timestamp, the pure
+`presence::human_presence(now, last_seen, thresholds)` verdict helper
+(configurable via `[presence] active_within` / `stale_after`), and the
+read surfaces (`aida human presence`, `aida ps` → `operator last seen …`).
+Wiring a specific cascade tier to branch on the verdict is a follow-up — the
+oracle is exposed so that change is a small, localized edit rather than new
+plumbing.
+
 ### Reconcile-against-reality (BUG-241)
 
 A tier that ends *without* its expected artifact is not the same as a tier

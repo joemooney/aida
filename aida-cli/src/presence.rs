@@ -804,6 +804,331 @@ pub(crate) fn auto_flip_if_interactive() {
     let _ = set_home(file.ttl_secs);
 }
 
+// ---------------------------------------------------------------------------
+// Last-human-input oracle (STORY-769).
+//
+// The per-turn `aida awaiting --notice` hook stamps a per-session
+// last-human-input timestamp under `~/.aida/turn-clock/<session>.toml`. That one
+// stamp is the SINGLE source of truth for two coupled surfaces:
+//   1. the notice's "Timing:" clause (first-prompt vs continuation-with-gap), and
+//   2. a human-presence ORACLE — "operator last seen Nm ago", Active/Idle/Stale
+//      — that `aida human presence`, `aida ps`, and the escalation cascade read
+//      to decide whether an interactive ask is answerable (operator active) or
+//      the punt should park / go headless (operator stale).
+//
+// No daemon: the hook process writes the stamp; every reader scans the
+// per-session files and takes the most-recent one. Fail-open by construction —
+// a missing / garbled / unparseable stamp is "unknown", never an error. This is
+// DISTINCT from the `home`/`away` primitive above (an explicit operator intent
+// with a TTL); the oracle is a passive observation of the last real input.
+// trace:STORY-769 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// Subdirectory under `~/.aida/` holding the per-session turn-clock files.
+const TURN_CLOCK_DIRNAME: &str = "turn-clock";
+
+/// Active/Idle/Stale verdict for the operator, derived from the last-human-input
+/// gap. Advisory: it colors an escalation/ask decision, never a hard gate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HumanPresence {
+    /// Input within the active window — an interactive ask is answerable.
+    Active,
+    /// Between the active and stale marks — probably around, maybe slow.
+    Idle,
+    /// No input past the stale mark — treat as away (park / go headless).
+    Stale,
+}
+
+impl HumanPresence {
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            HumanPresence::Active => "active",
+            HumanPresence::Idle => "idle",
+            HumanPresence::Stale => "stale",
+        }
+    }
+}
+
+/// Thresholds for the Active/Idle/Stale bands (seconds). Active strictly below
+/// the low mark; Stale at-or-above the high mark; Idle in between.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PresenceThresholds {
+    pub active_below_secs: u64,
+    pub stale_above_secs: u64,
+}
+
+impl Default for PresenceThresholds {
+    fn default() -> Self {
+        // Active < 15m, Stale >= 2h (Idle between) — the spec's sensible default.
+        PresenceThresholds {
+            active_below_secs: 15 * 60,
+            stale_above_secs: 2 * 60 * 60,
+        }
+    }
+}
+
+/// PURE: classify operator presence from the last-human-input gap. `elapsed =
+/// now - last_seen`, clamped at 0 for clock skew.
+pub(crate) fn human_presence(
+    now: DateTime<Utc>,
+    last_seen: DateTime<Utc>,
+    thresholds: PresenceThresholds,
+) -> HumanPresence {
+    let elapsed = (now - last_seen).num_seconds().max(0) as u64;
+    if elapsed < thresholds.active_below_secs {
+        HumanPresence::Active
+    } else if elapsed >= thresholds.stale_above_secs {
+        HumanPresence::Stale
+    } else {
+        HumanPresence::Idle
+    }
+}
+
+/// Per-session turn-clock record. `last_seen` is the last-human-input timestamp;
+/// `prompt_count` counts observed USER prompts (SessionStart does not bump it, so
+/// the first real prompt still reads "first prompt of this session"). Serde-TOML
+/// under `~/.aida/turn-clock/<session>.toml`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(crate) struct TurnClock {
+    pub last_seen: String,
+    #[serde(default)]
+    pub prompt_count: u64,
+}
+
+impl TurnClock {
+    fn last_seen_utc(&self) -> Option<DateTime<Utc>> {
+        DateTime::parse_from_rfc3339(&self.last_seen)
+            .ok()
+            .map(|dt| dt.with_timezone(&Utc))
+    }
+}
+
+/// `~/.aida/turn-clock/`, honoring `AIDA_HOME` like every other global-dir
+/// lookup. Falls back to `$XDG_RUNTIME_DIR/aida-turn-clock/` when no home dir
+/// resolves (headless/CI) — the same XDG fallback the trial hook used. Reader
+/// and writer share this resolution, so they never diverge.
+pub(crate) fn turn_clock_dir() -> Option<PathBuf> {
+    let home = match std::env::var("AIDA_HOME") {
+        Ok(p) if !p.is_empty() => Some(PathBuf::from(p)),
+        _ => dirs::home_dir(),
+    };
+    if let Some(home) = home {
+        return Some(home.join(".aida").join(TURN_CLOCK_DIRNAME));
+    }
+    std::env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .filter(|p| !p.is_empty())
+        .map(|p| PathBuf::from(p).join("aida-turn-clock"))
+}
+
+/// Filesystem-safe session key: keep `[A-Za-z0-9._-]`, map everything else to
+/// `_`, and never let it resolve to empty / `..`. Guards a session id with
+/// slashes or spaces from escaping the turn-clock dir.
+fn sanitize_session_id(session_id: &str) -> String {
+    let s: String = session_id
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let trimmed = s.trim_matches('.');
+    if trimmed.is_empty() {
+        "unknown".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn turn_clock_path_in(dir: &Path, session_id: &str) -> PathBuf {
+    dir.join(format!("{}.toml", sanitize_session_id(session_id)))
+}
+
+fn read_turn_clock_in(dir: &Path, session_id: &str) -> Option<TurnClock> {
+    let path = turn_clock_path_in(dir, session_id);
+    toml::from_str(&std::fs::read_to_string(&path).ok()?).ok()
+}
+
+fn write_turn_clock_in(dir: &Path, session_id: &str, clock: &TurnClock) -> Option<()> {
+    std::fs::create_dir_all(dir).ok()?;
+    let path = turn_clock_path_in(dir, session_id);
+    std::fs::write(&path, toml::to_string_pretty(clock).ok()?).ok()
+}
+
+/// PURE: the notice's "Timing:" clause, from the prior turn-clock record.
+///   - session-start event → `"session start"`
+///   - no prior record / `prompt_count == 0` → `"first prompt of this session"`
+///   - otherwise → `"continuation (<gap> since last prompt)"`
+// trace:STORY-769 | ai:claude
+pub(crate) fn timing_label(
+    prev: Option<&TurnClock>,
+    is_session_start: bool,
+    now: DateTime<Utc>,
+) -> String {
+    if is_session_start {
+        return "session start".to_string();
+    }
+    match prev {
+        Some(c) if c.prompt_count > 0 => match c.last_seen_utc() {
+            Some(last) => {
+                let gap = (now - last).num_seconds().max(0);
+                format!("continuation ({} since last prompt)", humanize_secs(gap))
+            }
+            None => "first prompt of this session".to_string(),
+        },
+        _ => "first prompt of this session".to_string(),
+    }
+}
+
+/// Stamp the per-session last-human-input timestamp and return the notice's
+/// "Timing:" clause. A SessionStart event updates `last_seen` (the human just
+/// launched/resumed — a real presence signal) WITHOUT bumping `prompt_count`, so
+/// the first typed prompt still reads "first prompt of this session"; a prompt
+/// event bumps the count. Fail-open: with no session key (manual run /
+/// unparseable payload) it persists nothing but still returns a truthful label,
+/// and any IO error is swallowed.
+pub(crate) fn stamp_turn_clock(
+    session_id: Option<&str>,
+    is_session_start: bool,
+    now: DateTime<Utc>,
+) -> String {
+    let Some(dir) = turn_clock_dir() else {
+        return timing_label(None, is_session_start, now);
+    };
+    stamp_turn_clock_in(&dir, session_id, is_session_start, now)
+}
+
+/// Dir-parameterized core of [`stamp_turn_clock`] — testable without env vars.
+fn stamp_turn_clock_in(
+    dir: &Path,
+    session_id: Option<&str>,
+    is_session_start: bool,
+    now: DateTime<Utc>,
+) -> String {
+    let Some(session_id) = session_id else {
+        // No session key (manual run / unparseable payload) → persist nothing,
+        // but still return a truthful label.
+        return timing_label(None, is_session_start, now);
+    };
+    let prev = read_turn_clock_in(dir, session_id);
+    let label = timing_label(prev.as_ref(), is_session_start, now);
+    let prompt_count =
+        prev.as_ref().map(|c| c.prompt_count).unwrap_or(0) + u64::from(!is_session_start);
+    let _ = write_turn_clock_in(
+        dir,
+        session_id,
+        &TurnClock {
+            last_seen: now.to_rfc3339(),
+            prompt_count,
+        },
+    );
+    label
+}
+
+/// The most-recent last-human-input timestamp across ALL per-session turn-clock
+/// files — the machine-wide "operator last seen" oracle. `None` when nothing has
+/// stamped yet (fresh machine / hook never ran).
+pub(crate) fn latest_human_input() -> Option<DateTime<Utc>> {
+    latest_human_input_in(&turn_clock_dir()?)
+}
+
+/// Dir-parameterized core of [`latest_human_input`] — testable without env vars.
+fn latest_human_input_in(dir: &Path) -> Option<DateTime<Utc>> {
+    let mut latest: Option<DateTime<Utc>> = None;
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(clock) = toml::from_str::<TurnClock>(&body) else {
+            continue;
+        };
+        if let Some(ts) = clock.last_seen_utc() {
+            if latest.is_none_or(|cur| ts > cur) {
+                latest = Some(ts);
+            }
+        }
+    }
+    latest
+}
+
+/// PURE: extract `(session_id, is_session_start)` from a UserPromptSubmit /
+/// SessionStart hook JSON payload. Missing / garbled / non-JSON → `(None,
+/// false)`.
+pub(crate) fn parse_hook_payload(stdin: &str) -> (Option<String>, bool) {
+    let trimmed = stdin.trim();
+    if trimmed.is_empty() {
+        return (None, false);
+    }
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+        return (None, false);
+    };
+    let session_id = v
+        .get("session_id")
+        .and_then(|s| s.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string());
+    let is_session_start = v
+        .get("hook_event_name")
+        .and_then(|s| s.as_str())
+        .map(|s| s.eq_ignore_ascii_case("SessionStart"))
+        .unwrap_or(false);
+    (session_id, is_session_start)
+}
+
+/// Read `[presence] active_within` / `stale_after` from a project's config,
+/// falling back to the defaults (Active < 15m, Stale >= 2h). Values accept the
+/// same forms as `away_ttl` — integer seconds or a humantime-ish string
+/// (`"15m"`, `"2h"`).
+pub(crate) fn read_presence_thresholds(config_path: &Path) -> PresenceThresholds {
+    let mut th = PresenceThresholds::default();
+    let Ok(body) = std::fs::read_to_string(config_path) else {
+        return th;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return th;
+    };
+    let Some(table) = value.get("presence") else {
+        return th;
+    };
+    if let Some(secs) = table.get("active_within").and_then(duration_value_secs) {
+        th.active_below_secs = secs;
+    }
+    if let Some(secs) = table.get("stale_after").and_then(duration_value_secs) {
+        th.stale_above_secs = secs;
+    }
+    th
+}
+
+fn duration_value_secs(v: &toml::Value) -> Option<u64> {
+    if let Some(i) = v.as_integer() {
+        return u64::try_from(i).ok();
+    }
+    if let Some(s) = v.as_str() {
+        return parse_duration_secs(s);
+    }
+    None
+}
+
+/// Compact "operator last seen Nm ago — active" line for `aida ps` /
+/// `aida human presence`, or `None` when the oracle has no stamp yet.
+// trace:STORY-769 | ai:claude
+pub(crate) fn last_seen_line(now: DateTime<Utc>, thresholds: PresenceThresholds) -> Option<String> {
+    let last = latest_human_input()?;
+    let verdict = human_presence(now, last, thresholds);
+    Some(format!(
+        "operator last seen {} — {}",
+        since_label(last, now),
+        verdict.word()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1304,5 +1629,236 @@ mod tests {
         let r = resolve_drain_mode(None, false, false, Presence::Away, &off);
         assert_eq!(r.no_human, None);
         assert!(!r.presence_applied);
+    }
+
+    // --- STORY-769: last-human-input oracle ---------------------------------
+
+    /// The pure Active/Idle/Stale verdict lands correctly on each side of both
+    /// threshold boundaries (Active strictly below the low mark; Stale
+    /// at-or-above the high mark; Idle strictly between).
+    #[test]
+    fn human_presence_bands_at_each_threshold_boundary() {
+        let now = t0();
+        let th = PresenceThresholds::default(); // active < 15m, stale >= 2h
+        let seen = |mins: i64| now - Duration::minutes(mins);
+
+        // Just now → active.
+        assert_eq!(human_presence(now, now, th), HumanPresence::Active);
+        // 14m59s ago → still active (strictly below 15m).
+        assert_eq!(
+            human_presence(now, now - Duration::seconds(14 * 60 + 59), th),
+            HumanPresence::Active
+        );
+        // Exactly 15m ago → no longer active (boundary is exclusive) → idle.
+        assert_eq!(human_presence(now, seen(15), th), HumanPresence::Idle);
+        // 1h ago → idle (between the marks).
+        assert_eq!(human_presence(now, seen(60), th), HumanPresence::Idle);
+        // 1h59m59s ago → still idle (strictly below 2h).
+        assert_eq!(
+            human_presence(now, now - Duration::seconds(2 * 3600 - 1), th),
+            HumanPresence::Idle
+        );
+        // Exactly 2h ago → stale (boundary is inclusive).
+        assert_eq!(human_presence(now, seen(120), th), HumanPresence::Stale);
+        // 5h ago → stale.
+        assert_eq!(human_presence(now, seen(300), th), HumanPresence::Stale);
+        // Clock skew: last_seen in the future → elapsed clamps to 0 → active.
+        assert_eq!(
+            human_presence(now, now + Duration::minutes(5), th),
+            HumanPresence::Active
+        );
+    }
+
+    /// Configurable thresholds move the bands.
+    #[test]
+    fn human_presence_honors_custom_thresholds() {
+        let now = t0();
+        let th = PresenceThresholds {
+            active_below_secs: 60,    // 1m
+            stale_above_secs: 5 * 60, // 5m
+        };
+        assert_eq!(
+            human_presence(now, now - Duration::seconds(30), th),
+            HumanPresence::Active
+        );
+        assert_eq!(
+            human_presence(now, now - Duration::minutes(3), th),
+            HumanPresence::Idle
+        );
+        assert_eq!(
+            human_presence(now, now - Duration::minutes(6), th),
+            HumanPresence::Stale
+        );
+    }
+
+    /// `timing_label`: session-start, first-prompt (no prior / zero count), and
+    /// continuation-with-gap.
+    #[test]
+    fn timing_label_first_prompt_vs_continuation() {
+        let now = t0();
+        // SessionStart event → "session start" regardless of prior.
+        assert_eq!(timing_label(None, true, now), "session start");
+        // No prior record → first prompt.
+        assert_eq!(
+            timing_label(None, false, now),
+            "first prompt of this session"
+        );
+        // Prior record with prompt_count == 0 (only SessionStart seen) → still
+        // first prompt.
+        let seeded = TurnClock {
+            last_seen: (now - Duration::minutes(1)).to_rfc3339(),
+            prompt_count: 0,
+        };
+        assert_eq!(
+            timing_label(Some(&seeded), false, now),
+            "first prompt of this session"
+        );
+        // Prior prompt 3m ago → continuation with the gap.
+        let prev = TurnClock {
+            last_seen: (now - Duration::minutes(3)).to_rfc3339(),
+            prompt_count: 2,
+        };
+        assert_eq!(
+            timing_label(Some(&prev), false, now),
+            "continuation (3m since last prompt)"
+        );
+        // A 2h gap humanizes to hours.
+        let prev = TurnClock {
+            last_seen: (now - Duration::hours(2)).to_rfc3339(),
+            prompt_count: 5,
+        };
+        assert_eq!(
+            timing_label(Some(&prev), false, now),
+            "continuation (2h since last prompt)"
+        );
+    }
+
+    /// Round-trip: SessionStart stamps `last_seen` but leaves the first typed
+    /// prompt reading "first prompt"; subsequent prompts read continuation with
+    /// the true gap; and the oracle scan returns the latest stamp.
+    #[test]
+    fn stamp_turn_clock_round_trip_and_oracle_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path();
+        let t = t0();
+        let sid = "sess-abc";
+
+        // SessionStart: stamps last_seen, prompt_count stays 0 → label is the
+        // session-start wording, not "continuation".
+        assert_eq!(
+            stamp_turn_clock_in(base, Some(sid), true, t),
+            "session start"
+        );
+        let after_start = read_turn_clock_in(base, sid).unwrap();
+        assert_eq!(after_start.prompt_count, 0);
+        assert!(after_start.last_seen_utc().is_some());
+
+        // First real prompt 2m later → "first prompt" despite the SessionStart
+        // stamp (prompt_count was still 0), and now the count bumps to 1.
+        let t1 = t + Duration::minutes(2);
+        assert_eq!(
+            stamp_turn_clock_in(base, Some(sid), false, t1),
+            "first prompt of this session"
+        );
+        assert_eq!(read_turn_clock_in(base, sid).unwrap().prompt_count, 1);
+
+        // Second prompt 5m after the first → continuation with a 5m gap.
+        let t2 = t1 + Duration::minutes(5);
+        assert_eq!(
+            stamp_turn_clock_in(base, Some(sid), false, t2),
+            "continuation (5m since last prompt)"
+        );
+
+        // The oracle scan returns the most-recent stamp across sessions. Add an
+        // older second session; the latest is still session `sid` at t2.
+        stamp_turn_clock_in(base, Some("sess-old"), false, t - Duration::hours(3));
+        let latest = latest_human_input_in(base).unwrap();
+        assert_eq!(latest, t2);
+
+        // No session key → persists nothing, still returns a truthful label.
+        assert_eq!(
+            stamp_turn_clock_in(base, None, false, t2),
+            "first prompt of this session"
+        );
+    }
+
+    /// The oracle scan is `None` on an empty / missing dir (fresh machine). And
+    /// `human_presence` off the scanned stamp verdicts correctly.
+    #[test]
+    fn latest_human_input_none_when_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        // Empty dir → None.
+        assert_eq!(latest_human_input_in(dir.path()), None);
+        // Missing dir → None (no panic).
+        assert_eq!(
+            latest_human_input_in(&dir.path().join("does-not-exist")),
+            None
+        );
+    }
+
+    /// Session-id sanitization keeps safe chars and neutralizes traversal.
+    // trace:STORY-769 | ai:claude
+    #[test]
+    fn sanitize_session_id_is_path_safe() {
+        assert_eq!(sanitize_session_id("abc-123_XY.z"), "abc-123_XY.z");
+        assert_eq!(sanitize_session_id("a/b/c"), "a_b_c");
+        // Slashes become `_` and leading/trailing dots are trimmed, so the key
+        // can never traverse out of the turn-clock dir.
+        assert_eq!(sanitize_session_id("../../etc/passwd"), "_.._etc_passwd");
+        assert!(!sanitize_session_id("../../etc/passwd").contains('/'));
+        assert_eq!(sanitize_session_id(""), "unknown");
+        assert_eq!(sanitize_session_id("..."), "unknown");
+    }
+
+    /// Hook-payload parsing pulls session_id + the SessionStart flag; garbage is
+    /// `(None, false)`.
+    #[test]
+    fn parse_hook_payload_extracts_session_and_event() {
+        let (sid, start) =
+            parse_hook_payload(r#"{"session_id":"s1","hook_event_name":"UserPromptSubmit"}"#);
+        assert_eq!(sid.as_deref(), Some("s1"));
+        assert!(!start);
+
+        let (sid, start) =
+            parse_hook_payload(r#"{"session_id":"s2","hook_event_name":"SessionStart"}"#);
+        assert_eq!(sid.as_deref(), Some("s2"));
+        assert!(start);
+
+        // Missing fields / empty session_id / non-JSON → (None, false).
+        assert_eq!(parse_hook_payload("{}"), (None, false));
+        assert_eq!(parse_hook_payload(r#"{"session_id":""}"#), (None, false));
+        assert_eq!(parse_hook_payload("not json"), (None, false));
+        assert_eq!(parse_hook_payload(""), (None, false));
+    }
+
+    /// Configurable thresholds parse from `[presence]`, defaulting when absent.
+    // trace:STORY-769 | ai:claude
+    #[test]
+    fn read_presence_thresholds_parses_and_defaults() {
+        // Absent file → defaults.
+        let th = read_presence_thresholds(Path::new("/nonexistent/config.toml"));
+        assert_eq!(th, PresenceThresholds::default());
+
+        // No [presence] block → defaults.
+        let f = write_config("[other]\nk = 1\n");
+        assert_eq!(
+            read_presence_thresholds(f.path()),
+            PresenceThresholds::default()
+        );
+
+        // Both knobs, humantime + integer.
+        let f = write_config("[presence]\nactive_within = \"5m\"\nstale_after = 3600\n");
+        let th = read_presence_thresholds(f.path());
+        assert_eq!(th.active_below_secs, 300);
+        assert_eq!(th.stale_above_secs, 3600);
+
+        // Garbage on one knob falls back to that knob's default, keeps the other.
+        let f = write_config("[presence]\nactive_within = \"nonsense\"\nstale_after = \"30m\"\n");
+        let th = read_presence_thresholds(f.path());
+        assert_eq!(
+            th.active_below_secs,
+            PresenceThresholds::default().active_below_secs
+        );
+        assert_eq!(th.stale_above_secs, 30 * 60);
     }
 }

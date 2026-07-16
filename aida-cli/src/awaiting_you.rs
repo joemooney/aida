@@ -586,13 +586,21 @@ mod tests {
     }
 
     // STORY-741: the compact per-turn line spans EVERY populated channel and is
-    // `None` when nothing awaits — the silent-when-empty contract the hook
-    // relies on. trace:STORY-741
+    // `None` when nothing awaits.
+    //
+    // STORY-769 note: the *command* `aida awaiting --notice` is no longer silent
+    // when nothing awaits — it ALWAYS leads with a "Current date/time + Timing"
+    // line (emitted separately by `emit_notice_time_line`, before this report is
+    // even built). This `compact_line()` is the AWAITING-CHANNELS half of that
+    // output and legitimately stays `None` when those channels are empty; the
+    // time line carries the always-on signal. So the two halves compose: time
+    // line every turn, awaiting line only when something awaits. trace:STORY-769
     #[test]
     fn compact_line_spans_all_channels_and_is_empty_when_nothing_awaits() {
         assert!(
             AwaitingReport::default().compact_line().is_none(),
-            "an empty report must produce no per-turn line (hook stays silent)"
+            "an empty report must produce no awaiting-channels line (the time line \
+             is emitted separately and is always present — STORY-769)"
         );
 
         let r = AwaitingReport {

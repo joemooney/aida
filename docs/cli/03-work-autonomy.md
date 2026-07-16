@@ -150,9 +150,13 @@ consumers  = "on"              # master switch (default on) | "off"
 away_drain = "headless-both"   # default | "headless-escalate-defaults" | "headless-park"
 escalation = "park"            # punt handling, its OWN knob — "defaults" ships the defensible default, "park" shelves NeedsAttention. UNSET = derive from away_drain (headless-park → park, else defaults).
 home_offer = "surface"         # home-side (default surface) | "dont-block"
+active_within = "15m"          # last-human-input oracle: gap below this reads "active" (STORY-769)
+stale_after   = "2h"           # gap at/above this reads "stale"; "idle" between. Accepts "15m"/"2h" or integer seconds.
 ```
 
 `escalation` is decoupled from `away_drain`: you can run a max-throughput `headless-both` drain but still `park` punts for triage (or the reverse) — previously the punt-handling default rode the `away_drain` rung and could not be picked independently. Leaving `escalation` unset reproduces the historical coupled behavior exactly. (`aida human away/home/presence` are the same verbs under the `human` role vector — same state, different front door.)
+
+**Last-human-input oracle (STORY-769).** Separate from the explicit `home`/`away` intent above, AIDA passively observes when the operator last typed a prompt. The per-turn `aida awaiting --notice` hook (wired on `UserPromptSubmit`) stamps a per-session last-prompt timestamp under `~/.aida/turn-clock/<session-id>.toml`, and prepends a line to every turn — `Current date/time: … . Timing: first prompt of this session | continuation (Xm since last prompt).` — so the agent always has fresh time + cadence context (this replaced the trial `~/.claude/hooks/inject-time.sh`). The most-recent stamp across sessions is the machine-wide oracle: `aida human presence` and `aida ps` report `operator last seen <Nm/Nh> ago — active/idle/stale`, with the Active/Idle/Stale bands tuned by `active_within` / `stale_after`. This gives the escalation cascade a signal for whether an interactive ask is answerable (operator active) or should park / go headless (stale).
 
 **Chains with** — `away` → `queue work --auto-complete` (now defaults headless) → `home` → `aida status` surfaces what's waiting for you.
 
