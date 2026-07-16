@@ -8,9 +8,10 @@
 //! ## Pieces
 //!
 //!   - [`LockingConfig`] — the `[locking]` posture in `.aida/config.toml`
-//!     (`off` default / `warn` / `enforce`), overridable per-run by the
-//!     `AIDA_LOCKING` env var. Mirrors `advisor::AdvisorConfig`'s hand-rolled
-//!     section-scanner pattern exactly (no serde-toml dependency for one scalar).
+//!     (`context-aware` default / `off` / `warn` / `enforce`), overridable
+//!     per-run by the `AIDA_LOCKING` env var. Mirrors `advisor::AdvisorConfig`'s
+//!     hand-rolled section-scanner pattern exactly (no serde-toml dependency
+//!     for one scalar).
 //!   - [`my_lock_token`] — the committing session's authorization token, read
 //!     from the **role-context snapshot** the launcher wrote (`aida-cli::
 //!     render_agent_launch_context`), NOT a bare env var. Per the signed-off
@@ -26,15 +27,22 @@
 //!     `aida internal locking-gate`), so the decision is identical no matter
 //!     which vendor drove the commit — mirrors `advisor_code_gate::enforce_at_commit`.
 //!
-//! ## Default posture is a proven no-op
+//! ## Default posture is context-aware, never a solo hard-block (TASK-958)
 //!
-//! `LockingConfig::default()` is `Off`, and [`enforce_at_commit`] short-circuits
-//! to `Ok(())` before touching the filesystem when the resolved posture is
-//! `Off` — so a project with no `[locking]` config and no `AIDA_LOCKING` env
-//! sees ZERO behavior change: no lease scan, no snapshot read, no output.
-//! `locking_gate_off_default_never_touches_disk` below proves it.
+//! `LockingConfig::default()` is `ContextAware` (TASK-958, replacing the old
+//! `Off` default). On a `Refused` verdict it hard-blocks the commit ONLY under
+//! a corroborated live drain (`orchestrator::detect(root).is_orchestrated()` —
+//! a committing child under a genuinely-live drain/fan-out, the BUG-637
+//! duplicate-dispatch hazard); a solo/manual commit — or one carrying a
+//! stale/leaked `AIDA_AUTO_COMPLETE` — is downgraded to a warning and always
+//! proceeds. `Unlocked`/`Authorized`
+//! verdicts stay a silent no-op, so the gate only ever evaluates the fast
+//! lock-state read and only acts on a real conflict. The explicit `off` posture
+//! still short-circuits [`enforce_at_commit`] to `Ok(())` before any I/O for a
+//! project that wants the pre-TASK-958 zero-gating stance.
 //!
 //! trace:TASK-1140 | ai:claude
+//! trace:TASK-958 | ai:claude
 
 use std::path::Path;
 
@@ -45,8 +53,10 @@ use aida_core::lock::LockingPosture;
 
 /// `[locking]` section in `.aida/config.toml`. Mirrors `advisor::AdvisorConfig`'s
 /// load pattern: missing file / section / key all fall through to the default
-/// (`Off`), so a config error never blocks a commit.
+/// (`ContextAware`, TASK-958), so a config error never hard-blocks a solo
+/// commit.
 // trace:TASK-1140 | ai:claude
+// trace:TASK-958 | ai:claude
 #[derive(Debug, Clone, Copy)]
 pub struct LockingConfig {
     pub posture: LockingPosture,
@@ -55,7 +65,9 @@ pub struct LockingConfig {
 impl Default for LockingConfig {
     fn default() -> Self {
         Self {
-            posture: LockingPosture::Off,
+            // TASK-958: the context-aware posture is the default — a Refused
+            // commit hard-blocks only under an active drain, warns when solo.
+            posture: LockingPosture::ContextAware,
         }
     }
 }
@@ -109,6 +121,22 @@ fn resolve_env_override(base: LockingPosture, env: Option<&str>) -> LockingPostu
         Some(p) => p,
         None => base,
     }
+}
+
+/// PURE: does this orchestrator verdict count as an active drain for the
+/// context-aware lock gate? Only a **corroborated** live orchestrator run
+/// (`Orchestrated` — `AIDA_AUTO_COMPLETE` set AND its `AIDA_AUTO_COMPLETE_TOKEN`
+/// names a live drain-state PID) counts. A bare/uncorroborated
+/// `AIDA_AUTO_COMPLETE` (`Uncorroborated` — no token, or a token no live
+/// orchestrator owns) does NOT, and neither does an ordinary session
+/// (`Interactive`). So a stale/leaked `AIDA_AUTO_COMPLETE` env var never
+/// hard-blocks a legit commit — only a genuinely-live fan-out does. This is the
+/// one bit the `ContextAware` posture consults: a `Refused` commit hard-blocks
+/// under a live drain, warns when solo. Factored out so the corroboration→gate
+/// mapping is unit-testable without mutating the real process environment.
+// trace:TASK-958 | ai:claude
+fn under_live_drain(ctx: crate::orchestrator::OrchestratorContext) -> bool {
+    ctx.is_orchestrated()
 }
 
 /// Extract `key = value` pairs from `[locking]`. Section-aware; stops at the
@@ -198,10 +226,19 @@ pub(crate) fn my_lock_token(project_root: &Path) -> Option<String> {
 /// `aida internal locking-gate`) both funnel through here, so the decision is
 /// identical no matter which vendor drove the commit.
 ///
-/// Under the default `Off` posture this returns `Ok(())` WITHOUT reading the
-/// lease directory or the launch-context snapshot — the fast, provably-no-op
-/// path for every project that hasn't opted into `[locking]`.
+/// The default posture is `ContextAware` (TASK-958): on a `Refused` verdict it
+/// hard-blocks only under a **corroborated live drain**
+/// (`orchestrator::detect(root).is_orchestrated()` — `AIDA_AUTO_COMPLETE` set
+/// AND its token names a live orchestrator run) and warns otherwise, so a
+/// solo/manual commit (or one carrying a stale/leaked `AIDA_AUTO_COMPLETE`) is
+/// never hard-blocked by the default.
+/// The explicit `Off` posture still short-circuits to `Ok(())` WITHOUT reading
+/// the lease directory or the launch-context snapshot — the fast, provably-no-op
+/// path for a project that has opted out of `[locking]`. Under every other
+/// posture the gate does a fast lock-state read and acts ONLY on a `Refused`
+/// verdict (`Unlocked`/`Authorized` stay a silent `Allow`).
 // trace:TASK-1140 | ai:claude
+// trace:TASK-958 | ai:claude
 pub(crate) fn enforce_at_commit(root: &Path) -> Result<()> {
     let posture = LockingConfig::load(root).posture;
     if posture == LockingPosture::Off {
@@ -209,12 +246,23 @@ pub(crate) fn enforce_at_commit(root: &Path) -> Result<()> {
     }
     let worktree_lock = crate::worktree_lock::read_authorized_by(root, root);
     let my_token = my_lock_token(root);
-    match aida_core::lock::locking_gate(worktree_lock.as_deref(), my_token.as_deref(), posture) {
+    // Corroborated live-drain signal (TASK-958): only a genuinely-live
+    // orchestrator run hard-blocks — a bare/stale/leaked `AIDA_AUTO_COMPLETE`
+    // is treated as solo (warn, never block). `detect` reads the env +
+    // drain-state file; `is_orchestrated()` is true only when the token names a
+    // live orchestrator PID.
+    let under_drain = under_live_drain(crate::orchestrator::detect(root));
+    match aida_core::lock::locking_gate(
+        worktree_lock.as_deref(),
+        my_token.as_deref(),
+        posture,
+        under_drain,
+    ) {
         aida_core::lock::GateAction::Allow => Ok(()),
         aida_core::lock::GateAction::Warn { by } => {
             eprintln!(
                 "{} this worktree is locked by advisor `{by}` and you carry no matching \
-                 authorization token. Proceeding — [locking] posture = warn.",
+                 authorization token. Proceeding (warn-only — not under an active drain).",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
             Ok(())
@@ -222,7 +270,8 @@ pub(crate) fn enforce_at_commit(root: &Path) -> Result<()> {
         aida_core::lock::GateAction::Refuse { by } => {
             anyhow::bail!(
                 "Refusing commit: this worktree is locked by advisor `{by}` and you carry no \
-                 matching authorization token.\n\
+                 matching authorization token, and this commit is landing under an active \
+                 drain/fan-out.\n\
                  Coordinate with {by} — they can `aida lock release <worktree>`, or re-brief you \
                  with `aida brief <agent> <SPEC> --authorized-by {by}`.\n\
                  To downgrade this gate: set `[locking] posture = \"warn\"` or `\"off\"` in \
@@ -237,15 +286,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_config_posture_is_off() {
-        assert_eq!(LockingConfig::default().posture, LockingPosture::Off);
+    fn default_config_posture_is_context_aware() {
+        // TASK-958: the default flipped from Off to ContextAware.
+        assert_eq!(
+            LockingConfig::default().posture,
+            LockingPosture::ContextAware
+        );
     }
 
     #[test]
     fn load_falls_back_to_default_when_config_file_is_absent() {
         let tmp = tempfile::tempdir().unwrap();
         let cfg = LockingConfig::load(tmp.path());
-        assert_eq!(cfg.posture, LockingPosture::Off);
+        assert_eq!(cfg.posture, LockingPosture::ContextAware);
     }
 
     #[test]
@@ -258,19 +311,47 @@ mod tests {
             LockingConfig::from_toml_str("[locking]\nposture = \"warn\"\n").posture,
             LockingPosture::Warn
         );
-        // Missing key / section / unknown value → default.
+        // Explicit `off` opt-out still parses.
+        assert_eq!(
+            LockingConfig::from_toml_str("[locking]\nposture = \"off\"\n").posture,
+            LockingPosture::Off
+        );
+        // Explicit `context-aware` parses (round-trips the default).
+        assert_eq!(
+            LockingConfig::from_toml_str("[locking]\nposture = \"context-aware\"\n").posture,
+            LockingPosture::ContextAware
+        );
+        // Missing key / section / unknown value → default (TASK-958: ContextAware).
         assert_eq!(
             LockingConfig::from_toml_str("").posture,
-            LockingPosture::Off
+            LockingPosture::ContextAware
         );
         assert_eq!(
             LockingConfig::from_toml_str("[advisor]\nfork_mode = \"auto\"\n").posture,
-            LockingPosture::Off
+            LockingPosture::ContextAware
         );
         assert_eq!(
             LockingConfig::from_toml_str("[locking]\nposture = \"bogus\"\n").posture,
-            LockingPosture::Off
+            LockingPosture::ContextAware
         );
+    }
+
+    #[test]
+    fn under_live_drain_only_for_a_corroborated_orchestrator() {
+        use crate::orchestrator::{OrchestratorContext, UncorroboratedReason};
+        // A corroborated live drain (token names a live orchestrator PID) is
+        // the ONLY verdict that hard-blocks.
+        assert!(under_live_drain(OrchestratorContext::Orchestrated));
+        // A bare/uncorroborated AIDA_AUTO_COMPLETE → NOT a drain (warn, no hard
+        // block): no token, or a token no live orchestrator owns.
+        assert!(!under_live_drain(OrchestratorContext::Uncorroborated(
+            UncorroboratedReason::NoToken
+        )));
+        assert!(!under_live_drain(OrchestratorContext::Uncorroborated(
+            UncorroboratedReason::DeadOrchestrator
+        )));
+        // An ordinary interactive session is never a drain.
+        assert!(!under_live_drain(OrchestratorContext::Interactive));
     }
 
     #[test]
@@ -326,38 +407,66 @@ mod tests {
         assert_eq!(context_snapshot_authorized_by(body), None);
     }
 
-    /// The hard requirement: a repo with no `[locking]` config and no
-    /// `AIDA_LOCKING` env must be byte-for-byte unaffected. Proves
-    /// `enforce_at_commit` never bails and never even reaches the lease/
-    /// snapshot filesystem reads — it short-circuits on the default `Off`
-    /// posture before doing any I/O beyond the (absent) config file.
-    // trace:TASK-1140 | ai:claude
+    /// The context-aware default (TASK-958) on a repo with no lock present:
+    /// the verdict is `Unlocked`, so the gate is a silent no-op regardless of
+    /// drain state. A repo with no `[locking]` config and no `AIDA_LOCKING`
+    /// env is byte-for-byte unaffected when nothing is locked.
+    // trace:TASK-958 | ai:claude
     #[test]
-    fn off_default_posture_is_a_proven_no_op() {
+    fn context_aware_default_with_no_lock_is_a_no_op() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        // No .aida/ dir at all — not even a sessions dir a real lease could
-        // live in. If enforce_at_commit's Off short-circuit didn't work, any
-        // lease read would simply find nothing (also Ok), so additionally
-        // assert no [locking] config existed and AIDA_LOCKING is unset.
+        // No [locking] config → the ContextAware default; no lease → Unlocked.
         assert!(std::env::var("AIDA_LOCKING").is_err());
         assert!(!root.join(".aida").join("config.toml").exists());
         let result = enforce_at_commit(root);
         assert!(result.is_ok(), "expected Ok(()), got {:?}", result);
     }
 
-    /// Even when a lock EXISTS and would mismatch, Off still allows — the
-    /// no-op claim holds under adversarial state, not just an empty repo.
+    /// The load-bearing safety property (TASK-958): under the context-aware
+    /// DEFAULT, a solo/manual commit against a mismatched lock WARNS and
+    /// proceeds — it is never hard-blocked. `my_token` is None here (fail-safe
+    /// Refused), which under a corroborated live drain would hard-block — but
+    /// with no live orchestrator it only warns.
+    // trace:TASK-958 | ai:claude
+    #[test]
+    fn context_aware_default_solo_mismatched_lock_warns_not_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root).unwrap();
+        // No [locking] config → ContextAware default. AIDA_AUTO_COMPLETE unset
+        // in the test runner → `orchestrator::detect` returns Interactive →
+        // not a live drain → warn, not block.
+        assert!(std::env::var("AIDA_LOCKING").is_err());
+        assert!(std::env::var("AIDA_AUTO_COMPLETE").is_err());
+        crate::worktree_lock::acquire(root, root, "advisor-a").unwrap();
+        let result = enforce_at_commit(root);
+        assert!(
+            result.is_ok(),
+            "a solo commit must never be hard-blocked by the default: {:?}",
+            result
+        );
+    }
+
+    /// The explicit `off` opt-out short-circuits before any I/O even when a
+    /// lock EXISTS and would mismatch — the pre-TASK-958 zero-gating stance.
     // trace:TASK-1140 | ai:claude
+    // trace:TASK-958 | ai:claude
     #[test]
     fn off_posture_allows_even_a_mismatched_lock() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         std::fs::create_dir_all(root).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida").join("config.toml"),
+            "[locking]\nposture = \"off\"\n",
+        )
+        .unwrap();
         // Acquire a lock for "advisor-a" on this worktree.
         crate::worktree_lock::acquire(root, root, "advisor-a").unwrap();
         // No AIDA_AGENT_REGISTRY_TOKEN / matching snapshot → my_token is None,
-        // which would normally be Refused fail-safe — but posture is Off.
+        // which would normally be Refused fail-safe — but explicit posture Off.
         let result = enforce_at_commit(root);
         assert!(result.is_ok(), "expected Ok(()), got {:?}", result);
     }
