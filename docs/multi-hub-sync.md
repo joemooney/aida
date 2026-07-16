@@ -11,12 +11,12 @@ AIDA's store sync (`aida db sync`, and the auto-push paths) historically pushed 
 to a **single** remote named `origin`. A clone whose canonical hub is a *different* remote
 (e.g. a work machine that pushes the store to gitlab, not github) drifts silently: each hub
 accumulates commits the other never sees, with no fan-out and no warning. Reconciling after
-the fact means a careful CRDT union-merge of the diverged tips (see `docs/git-verb-surface.md`).
+the fact is `aida remote reconcile` (leg 4 below) — a CRDT union-merge of the diverged tips.
 
 The same happens to **code** whenever a push targets one hub only (`git push origin main`
 without also pushing gitlab).
 
-## The three legs of prevention
+## The four legs: detect, fan out, reconcile
 
 ### 1. Detect — `aida remote status`
 
@@ -79,13 +79,45 @@ aida remote status
 Once every hub's `aida-store` is reconciled (no BUG-700-style held divergence), add the
 native multi-pushurl (leg 3) so the *code* leg fans out automatically too.
 
+### 4. Reconcile — `aida remote reconcile`
+
+The pull-and-union counterpart of the fan-out (BUG-714). The fan-out can only PUSH, so a
+commit that lands on one hub only (e.g. a work box registering a node on the gitlab mirror)
+leaves that hub permanently ahead and every subsequent mirror push rejected. `reconcile`
+heals it:
+
+```
+aida remote reconcile            # dry-run: per-hub standing + the plan; exits 2 when hubs disagree
+aida remote reconcile --execute  # union-merge the diverged tips, verify, push to every hub
+aida remote reconcile --json     # machine-readable
+```
+
+What `--execute` does, in order:
+
+1. **Fetch** the store branch tip from every configured remote.
+2. **Union-merge** the diverged frontier in the `.aida-store/` worktree — a *merge commit*
+   with both tips as parents, so every hub fast-forwards to it (a rebase would rewrite one
+   hub's published history; a force-push would destroy it). Conflicts resolve structurally:
+   spec objects via the `conflict.rs` three-way CRDT union, `oplog.yaml` via operation-id
+   union, `registry/blocks.yaml` via disjoint-range union (same block dispensed on both
+   hubs → furthest `next`), `registry/nodes.toml` via three-way roster union. Anything the
+   structural union cannot resolve (a genuine block-range or node-id collision, a
+   non-mergeable path) aborts the merge and parks — never guess-merged.
+3. **Verify** the union: no spec file present on any tip may be lost, and the unioned block
+   registry must stay collision-free.
+4. **Scrub-guard** it: the same identity-redaction contract as the canonical store write
+   path. This machine's raw hostname/email (when a public alias is configured) must not
+   appear in anything newly published; email-bearing registry lines currently on one hub
+   only require explicit `--yes` consent before they reach every hub.
+5. **Push** the union to every hub — each is a fast-forward by construction.
+
 ## When drift has already happened
 
 Don't force-push a shared branch to "fix" it — that destroys the other hub's commits.
-Reconcile the divergent tips into a superset (a merge commit lets **both** hubs fast-forward
-to it) and push that to every hub. For the store, the CRDT union in `conflict.rs` field-merges
-concurrent spec edits; for a hub carrying unique node data (ID-range reservations, new specs),
-merge it in rather than overwrite. See `docs/git-verb-surface.md` for the verb-surface rules.
+For the **store**, run `aida remote reconcile` (leg 4 above). For **code** branches, do the
+same shape by hand: merge the divergent tips into a superset (a merge commit lets **both**
+hubs fast-forward to it) and push that to every hub. See `docs/git-verb-surface.md` for the
+verb-surface rules.
 
 ## Related
 

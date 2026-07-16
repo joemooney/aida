@@ -3702,6 +3702,9 @@ fn run() -> Result<()> {
             crate::cli::RemoteCommand::Status { json, no_fetch } => {
                 remote_create::handle_remote_status(&project_root, *json, *no_fetch)
             }
+            crate::cli::RemoteCommand::Reconcile { execute, json, yes } => {
+                remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
+            }
         };
     }
 
@@ -39546,10 +39549,15 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
                 category: "remote-drift".to_string(),
                 id: format!("remote-drift-{branch}"),
                 summary: format!("branch `{branch}` differs across remotes: {detail}"),
-                action:
+                action: if branch == "aida-store" {
+                    "run `aida remote reconcile` (dry-run; --execute to union-merge and push every hub); \
+                     never force-push a shared branch to resolve"
+                        .to_string()
+                } else {
                     "reconcile the divergent tips and push to every remote (see `aida remote status`); \
                      never force-push a shared branch to resolve"
-                        .to_string(),
+                        .to_string()
+                },
                 safe_heal: false,
             });
         }
@@ -108671,7 +108679,7 @@ fn fan_out_mirror_push(repo: &std::path::Path, branch: &str, project_root: &std:
         match aida_core::git_ops::push(repo, mirror, branch) {
             Ok(true) => println!("  Mirror push complete."),
             Ok(false) => eprintln!(
-                "  {warn} mirror `{mirror}` rejected (diverged) — reconcile then re-push (see `aida remote status`)"
+                "  {warn} mirror `{mirror}` rejected (diverged) — run `aida remote reconcile` to union-merge and re-sync every hub"
             ),
             Err(e) => eprintln!("  {warn} mirror `{mirror}` push failed: {e} — skipped"),
         }

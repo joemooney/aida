@@ -418,6 +418,175 @@ fn git_show_stage(repo: &Path, stage: u8, path: &str) -> Result<Option<String>> 
     }
 }
 
+/// True when `path` is the shared block registry (`registry/blocks.yaml`).
+fn is_registry_blocks_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    p == "registry/blocks.yaml" || p.ends_with("/registry/blocks.yaml")
+}
+
+/// True when `path` is the shared node roster (`registry/nodes.toml`).
+fn is_registry_nodes_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    p == "registry/nodes.toml" || p.ends_with("/registry/nodes.toml")
+}
+
+/// True when a merge is currently in progress in `repo` (MERGE_HEAD exists).
+#[cfg(feature = "native")]
+fn merge_in_progress(repo: &Path) -> bool {
+    git(repo, &["rev-parse", "-q", "--verify", "MERGE_HEAD"])
+        .map(|r| r.success)
+        .unwrap_or(false)
+}
+
+/// Union-MERGE `ref_` into the orphan store's HEAD, auto-reconciling
+/// conflicting store artifacts — the merge-commit counterpart of
+/// [`pull_rebase_auto_merge`], built for `aida remote reconcile` (BUG-714).
+///
+/// Why a merge and not a rebase: multi-hub divergence means BOTH tips are
+/// already *published* (each hub holds one). A rebase rewrites one side's
+/// published commits, so that hub could never fast-forward to the result. A
+/// merge commit has both tips as parents — every hub fast-forwards to the
+/// union and the divergence heals without force-pushing a shared branch.
+///
+/// Conflict handling mirrors the store pull leg, extended with the registry
+/// files the rebase path deliberately bails on:
+/// - `objects/**/*.yaml` → [`crate::conflict::merge_spec_three_way`]
+/// - `oplog.yaml` → operation-log union by op id
+/// - `registry/blocks.yaml` → [`crate::node::union_block_registries`]
+///   (disjoint-range union, max-`next`; range collisions abort)
+/// - `registry/nodes.toml` → [`crate::node::union_node_registries`]
+///   (3-way by node id; same-id-two-machines collisions abort)
+///
+/// SAFETY: any conflict outside those paths, or any structured merge failure,
+/// aborts the merge (`git merge --abort`) and returns Err — the caller parks
+/// and surfaces; we never force-resolve unknown files.
+// trace:BUG-714 | ai:claude
+#[cfg(feature = "native")]
+pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullOutcome> {
+    let result = git(repo, &["merge", "--no-ff", "-m", message, ref_])?;
+    if result.success {
+        return Ok(StorePullOutcome::Clean);
+    }
+
+    // The merge may have paused on conflicts. If we're not actually
+    // mid-merge, this was some other failure — surface it.
+    if !merge_in_progress(repo) {
+        anyhow::bail!("git merge failed: {}", result.stderr);
+    }
+
+    let conflicted = unmerged_paths(repo)?;
+    for path in &conflicted {
+        if !is_spec_object_path(path)
+            && !is_oplog_path(path)
+            && !is_registry_blocks_path(path)
+            && !is_registry_nodes_path(path)
+        {
+            let _ = git(repo, &["merge", "--abort"]);
+            anyhow::bail!(
+                "conflict in non-mergeable path `{path}` — cannot auto-union; resolve it manually in the store worktree"
+            );
+        }
+    }
+
+    let mut notes: Vec<String> = Vec::new();
+    for path in &conflicted {
+        let resolved = if is_oplog_path(path) {
+            resolve_oplog_conflict(repo, path)
+        } else if is_registry_blocks_path(path) {
+            resolve_blocks_conflict(repo, path)
+        } else if is_registry_nodes_path(path) {
+            resolve_nodes_conflict(repo, path)
+        } else {
+            resolve_spec_conflict(repo, path)
+        };
+        match resolved {
+            Ok(note) => {
+                add(repo, &[path]).with_context(|| format!("git add {path} after auto-union"))?;
+                notes.push(note);
+            }
+            Err(e) => {
+                let _ = git(repo, &["merge", "--abort"]);
+                anyhow::bail!("structured union of `{path}` failed: {e}");
+            }
+        }
+    }
+
+    let commit = git(repo, &["-c", "core.editor=true", "commit", "--no-edit"])?;
+    if !commit.success {
+        let _ = git(repo, &["merge", "--abort"]);
+        anyhow::bail!("committing the union merge failed: {}", commit.stderr);
+    }
+    Ok(StorePullOutcome::AutoMerged { notes })
+}
+
+/// Resolve a conflicted `registry/blocks.yaml` by unioning the two sides'
+/// block allocations (disjoint ranges preserved, same-block `next` = max).
+/// A range collision is a hard error — the caller aborts the merge.
+// trace:BUG-714 | ai:claude
+#[cfg(feature = "native")]
+fn resolve_blocks_conflict(repo: &Path, path: &str) -> Result<String> {
+    use crate::node::{union_block_registries, BlockRegistry};
+
+    let parse = |label: &str, yaml: Option<String>| -> Result<BlockRegistry> {
+        match yaml {
+            Some(y) => {
+                serde_yaml::from_str(&y).with_context(|| format!("parse {label} stage of {path}"))
+            }
+            None => Ok(BlockRegistry::default()),
+        }
+    };
+    let ours = parse("ours", git_show_stage(repo, 2, path)?)?;
+    let theirs = parse("theirs", git_show_stage(repo, 3, path)?)?;
+
+    let merged = union_block_registries(&ours, &theirs).map_err(|e| anyhow::anyhow!(e))?;
+
+    let yaml = serde_yaml::to_string(&merged)
+        .with_context(|| format!("serialize unioned block registry for {path}"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, yaml.as_bytes()).with_context(|| format!("write merged {path}"))?;
+    Ok(format!(
+        "auto-unioned block registry: {} block(s), ranges disjoint",
+        merged.blocks.len()
+    ))
+}
+
+/// Resolve a conflicted `registry/nodes.toml` by 3-way union of the node
+/// rosters (hub-only registrations survive; one-sided edits win; a same-id
+/// two-machine collision is a hard error).
+// trace:BUG-714 | ai:claude
+#[cfg(feature = "native")]
+fn resolve_nodes_conflict(repo: &Path, path: &str) -> Result<String> {
+    use crate::node::{union_node_registries, NodeRegistry};
+
+    let parse = |label: &str, text: Option<String>| -> Result<NodeRegistry> {
+        match text {
+            Some(t) => toml::from_str(&t).with_context(|| format!("parse {label} stage of {path}")),
+            None => Ok(NodeRegistry::default()),
+        }
+    };
+    let base = parse("base", git_show_stage(repo, 1, path)?)?;
+    let ours = parse("ours", git_show_stage(repo, 2, path)?)?;
+    let theirs = parse("theirs", git_show_stage(repo, 3, path)?)?;
+
+    let merged = union_node_registries(&base, &ours, &theirs).map_err(|e| anyhow::anyhow!(e))?;
+
+    let toml_text = toml::to_string_pretty(&merged)
+        .with_context(|| format!("serialize unioned node roster for {path}"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, toml_text.as_bytes())
+        .with_context(|| format!("write merged {path}"))?;
+    Ok(format!(
+        "auto-unioned node roster: {} node(s)",
+        merged.nodes.len()
+    ))
+}
+
 /// Pull (merge) from remote.
 ///
 /// **Prefer `pull_rebase` for the orphan-store flow.** Bare `git pull`
@@ -4173,6 +4342,198 @@ mod tests {
         assert_eq!(
             head_before, head_after,
             "no history may be rewritten when the backup cannot be created"
+        );
+    }
+
+    // ---- BUG-714: multi-hub union merge fixture ----
+
+    /// The multi-hub divergence fixture from the BUG-714 acceptance: two
+    /// diverged store tips — one carrying a gitlab-only registry commit (node
+    /// 7 registration + block 3001-4000), the other a canonical-hub spec
+    /// commit — union-merge into one commit both tips fast-forward to, with
+    /// the registry blocks unioned (disjoint ranges preserved) and neither
+    /// side's files lost.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn merge_union_auto_unions_diverged_registry_and_spec_tips() {
+        use crate::node::{AgreedIdBlock, BlockRegistry, NodeRegistry, NodeRegistryEntry};
+        use chrono::Utc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+
+        let write_blocks = |reg: &BlockRegistry| {
+            std::fs::create_dir_all(repo.join("registry")).unwrap();
+            std::fs::write(
+                repo.join("registry/blocks.yaml"),
+                serde_yaml::to_string(reg).unwrap(),
+            )
+            .unwrap();
+        };
+        let write_nodes = |reg: &NodeRegistry| {
+            std::fs::create_dir_all(repo.join("registry")).unwrap();
+            std::fs::write(
+                repo.join("registry/nodes.toml"),
+                toml::to_string_pretty(reg).unwrap(),
+            )
+            .unwrap();
+        };
+        let mk_block = |node: &str, start: u32, end: u32| AgreedIdBlock {
+            node_id: node.to_string(),
+            owner: format!("owner-{node}"),
+            hostname: format!("host-{node}"),
+            type_prefix: "*".to_string(),
+            range_start: start,
+            range_end: end,
+            next: start,
+            allocated_at: Utc::now(),
+        };
+        let mk_node = |id: &str, host: &str| NodeRegistryEntry {
+            id: id.to_string(),
+            user_id: 1,
+            hostname: host.to_string(),
+            email: None,
+            clone_path: None,
+            name: None,
+            user: None,
+            registered: Utc::now(),
+        };
+
+        // Base: node 1 registered, block 1-3000.
+        write_blocks(&BlockRegistry {
+            blocks: vec![mk_block("1", 1, 3000)],
+        });
+        write_nodes(&NodeRegistry {
+            nodes: vec![mk_node("1", "imac")],
+        });
+        add(&repo, &["registry/blocks.yaml", "registry/nodes.toml"]).unwrap();
+        commit(&repo, "base").unwrap();
+
+        // "gitlab" tip: node 7 registers + claims block 3001-4000.
+        git(&repo, &["checkout", "-b", "gitlab-tip"]).unwrap();
+        write_blocks(&BlockRegistry {
+            blocks: vec![mk_block("1", 1, 3000), mk_block("7", 3001, 4000)],
+        });
+        write_nodes(&NodeRegistry {
+            nodes: vec![mk_node("1", "imac"), mk_node("7", "workbox")],
+        });
+        add(&repo, &["registry/blocks.yaml", "registry/nodes.toml"]).unwrap();
+        commit(&repo, "register node 7 + block 3001-4000").unwrap();
+
+        // "origin" tip (diverged): a spec lands and node 1 dispenses ids.
+        git(&repo, &["checkout", "-"]).unwrap();
+        let mut origin_blocks = BlockRegistry {
+            blocks: vec![mk_block("1", 1, 3000)],
+        };
+        origin_blocks.blocks[0].next = 42;
+        write_blocks(&origin_blocks);
+        std::fs::create_dir_all(repo.join("objects/TASK/000")).unwrap();
+        std::fs::write(repo.join("objects/TASK/000/TASK-1.yaml"), "id: TASK-1\n").unwrap();
+        add(
+            &repo,
+            &["registry/blocks.yaml", "objects/TASK/000/TASK-1.yaml"],
+        )
+        .unwrap();
+        commit(&repo, "session spec commit").unwrap();
+
+        let origin_tip = head_sha(&repo).unwrap();
+        let gitlab_tip = git(&repo, &["rev-parse", "gitlab-tip"]).unwrap().stdout;
+        let gitlab_tip = gitlab_tip.trim();
+
+        let outcome = merge_union_auto(&repo, "gitlab-tip", "reconcile multi-hub store").unwrap();
+        match outcome {
+            StorePullOutcome::AutoMerged { notes } => {
+                assert!(
+                    notes.iter().any(|n| n.contains("block registry")),
+                    "blocks.yaml union should be noted: {notes:?}"
+                );
+            }
+            StorePullOutcome::Clean => panic!("diverged registries must conflict then auto-union"),
+        }
+
+        // Both tips are ancestors of the union — every hub can fast-forward.
+        let union = head_sha(&repo).unwrap();
+        assert!(is_ancestor(&repo, &origin_tip, &union).unwrap());
+        assert!(is_ancestor(&repo, gitlab_tip, &union).unwrap());
+
+        // The union preserves both hubs' allocations, disjoint, with node 1's
+        // dispense progress intact — and the spec file survived.
+        let blocks = BlockRegistry::load(&repo.join("registry/blocks.yaml")).unwrap();
+        assert_eq!(blocks.blocks.len(), 2);
+        assert!(blocks.overlapping_ranges().is_empty());
+        assert_eq!(
+            blocks
+                .blocks
+                .iter()
+                .find(|b| b.node_id == "1")
+                .unwrap()
+                .next,
+            42
+        );
+        let nodes = NodeRegistry::load(&repo.join("registry/nodes.toml")).unwrap();
+        assert_eq!(nodes.nodes.len(), 2);
+        assert!(repo.join("objects/TASK/000/TASK-1.yaml").exists());
+    }
+
+    /// A colliding union (two hubs dispensed overlapping ranges) must abort
+    /// the merge and leave HEAD untouched — park-and-surface, never guess.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn merge_union_auto_aborts_on_block_range_collision() {
+        use crate::node::{AgreedIdBlock, BlockRegistry};
+        use chrono::Utc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+
+        let mk_block = |node: &str, start: u32, end: u32| AgreedIdBlock {
+            node_id: node.to_string(),
+            owner: format!("owner-{node}"),
+            hostname: format!("host-{node}"),
+            type_prefix: "*".to_string(),
+            range_start: start,
+            range_end: end,
+            next: start,
+            allocated_at: Utc::now(),
+        };
+        let write_blocks = |blocks: Vec<AgreedIdBlock>| {
+            std::fs::create_dir_all(repo.join("registry")).unwrap();
+            std::fs::write(
+                repo.join("registry/blocks.yaml"),
+                serde_yaml::to_string(&BlockRegistry { blocks }).unwrap(),
+            )
+            .unwrap();
+        };
+
+        write_blocks(vec![mk_block("1", 1, 100)]);
+        add(&repo, &["registry/blocks.yaml"]).unwrap();
+        commit(&repo, "base").unwrap();
+
+        git(&repo, &["checkout", "-b", "other-tip"]).unwrap();
+        write_blocks(vec![mk_block("1", 1, 100), mk_block("7", 50, 149)]);
+        add(&repo, &["registry/blocks.yaml"]).unwrap();
+        commit(&repo, "node 7 overlapping claim").unwrap();
+
+        git(&repo, &["checkout", "-"]).unwrap();
+        write_blocks(vec![mk_block("1", 1, 100), mk_block("2", 101, 200)]);
+        add(&repo, &["registry/blocks.yaml"]).unwrap();
+        commit(&repo, "node 2 disjoint claim").unwrap();
+
+        let head_before = head_sha(&repo).unwrap();
+        let err = merge_union_auto(&repo, "other-tip", "reconcile");
+        assert!(err.is_err(), "range collision must refuse to union");
+        assert_eq!(
+            head_sha(&repo).unwrap(),
+            head_before,
+            "merge must be aborted"
+        );
+        assert!(
+            !merge_in_progress(&repo),
+            "no merge may be left in progress"
         );
     }
 }
