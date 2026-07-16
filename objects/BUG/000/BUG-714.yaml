@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T07:20:39.422149465Z
-modified_at: 2026-07-15T02:02:50.279615060Z
+modified_at: 2026-07-16T04:26:10.872491788Z
 req_type: Bug
 tags:
 - coordination
@@ -46,6 +46,12 @@ comments:
     Status: staying Approved (designed, not implemented). Ready to implement on your call re decision 1-3.
   created_at: 2026-07-11T20:54:54.330924312Z
   modified_at: 2026-07-11T20:54:54.330924312Z
+- id: 019f692c-ca38-78d2-b511-4f449f25faa1
+  author: joe
+  content: 'IMPLEMENTATION DIRECTIVE (guided decision): build the FULL `aida remote reconcile` verb. Fetch every hub''s aida-store (origin + configured mirrors), CRDT-union-merge the diverged tips — both the registry blocks and the objects — reusing the existing union logic in conflict.rs (the same oplog/union machinery aida already uses on merge), then push the union to ALL hubs. Gate the whole thing behind the employer-content scrub (the same guard as the store push). This fixes the recurring multi-hub divergence where a gitlab-only commit from another machine leaves gitlab permanently ahead and rejects every aida push. Seams: conflict.rs (union), git_ops two-leg fetch/push, the store-scrub guard, the multi-hub sync doc (docs/multi-hub-sync.md). Touches store integrity — advisor-review at PR. Gate + PR, do NOT merge (keystone).'
+  created_at: 2026-07-16T04:26:10.872491788Z
+  modified_at: 2026-07-16T04:26:10.872491788Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 decision_request:
   question: STORY-760 mirror fan-out only PUSHES, so a gitlab-only commit leaves gitlab permanently ahead and rejects every aida push. How much to invest in the reconcile fix?
   choices:
