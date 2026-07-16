@@ -10,12 +10,12 @@
 //! four-gate `evaluate` that decides, for one proposed disposition, whether it
 //! may auto-execute, must only be proposed (held), or must be escalated.
 //!
-//! This module is WIRED TO NOTHING in this slice — there is no `--autopilot`
-//! flag, no config plumbing, and no `groom` integration yet (those are
-//! TASK-0430/0431/0432). It lands the governing contract and its exhaustive
-//! unit-test suite as a reviewable, low-risk artifact the later slices build
-//! against. Everything is `#![allow(dead_code)]` because nothing in the rest
-//! of the crate calls it yet.
+//! What is wired: the read-only inspect/audit/challenge surface (TASK-1147),
+//! the `aida zen` draft approve-gate (TASK-1037), and the mode-composition
+//! precedence contract [`effective_envelope`] (TASK-1020, the TASK-0432
+//! ratification). What is deliberately NOT wired: a `groom --autopilot`
+//! execution path — granting real approve/reject/queue authority is
+//! keystone-autonomy the EPIC-0428 TASK-1147 decision defers.
 //!
 //! Design + the conservative default authority table:
 //! `docs/plans/2026-06-29-epic-0428-policy-envelope.md`.
@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::backlog::RiskLevel;
 use crate::intake::IntakeConfig;
+use crate::presence::SoloPosture;
 
 /// The canonical taxonomy of what advisor autopilot can do to a spec. Each
 /// action class has a wildly different blast radius (tagging is reversible and
@@ -375,6 +376,81 @@ fn strip_inline_comment(s: &str) -> &str {
         }
     }
     s
+}
+
+// ---------------------------------------------------------------------------
+// TASK-1020 — mode-composition precedence (the TASK-0432 contract, ratified in
+// code).
+//
+// Autopilot is a GROOMING-stage posture; the three-mode ladder (`--zen` /
+// `--no-human`) is a DRAINING-stage axis. They never decide the same prompt,
+// so there is no "which wins" between them — the only real composition is
+// CONTEXT TIGHTENING of the envelope, and it is DEMOTE-ONLY: a headless
+// context or an active solo posture can only make the envelope stricter,
+// never wider. The worst-case composition bug is therefore over-conservatism
+// (a held action), never an un-gated execute.
+// (`docs/architecture/autonomy-and-escalation.md` §8, the composition matrix.)
+// trace:TASK-1020 trace:TASK-0432 | ai:claude
+// ---------------------------------------------------------------------------
+
+impl Authority {
+    /// Strictness rank for the demote-only composition:
+    /// `Auto` (widest) < `Propose` < `Never` (strictest).
+    fn strictness(self) -> u8 {
+        match self {
+            Authority::Auto => 0,
+            Authority::Propose => 1,
+            Authority::Never => 2,
+        }
+    }
+}
+
+/// PURE: compose the base envelope (defaults + `[autopilot]` overrides) with
+/// the runtime context — headlessness and the solo posture — into the
+/// EFFECTIVE envelope the four-gate [`evaluate`] runs under. The precedence
+/// contract (autonomy doc §8):
+///
+/// - **default context** (interactive, solo off): the base envelope, untouched.
+/// - **headless** (`AIDA_HEADLESS`): a headless run cannot pause-and-ask, so
+///   every `propose` (pause-and-ask) authority demotes to `never` — the
+///   would-be hold becomes a RECORDED escalation that enters the §2 cascade
+///   instead of a report line nobody is watching. `auto` actions are untouched
+///   (in-fence, grounded, under-ceiling autos are exactly what a headless
+///   groom is for), and `grounding_required` is forced on — headless can never
+///   relax gate 3.
+/// - **solo [`SoloPosture::ParkForHuman`]** (solo active + keystone context):
+///   every action demotes to `never` — the same "park keystone for the human"
+///   verdict the drain-side posture ships. Belt-and-braces: gate 1 already
+///   fences keystone specs via the SAME `is_keystone_class` detector, so this
+///   branch firing means the fence and the posture AGREE, not that one rescued
+///   the other.
+/// - **solo [`SoloPosture::ProceedOnDefault`] / [`SoloPosture::Inactive`]**:
+///   the base envelope — solo never WIDENS autopilot authority (solo is
+///   drain-side discretion, not a grooming-stage grant).
+///
+/// Demote-only invariant: for every action class, the effective authority is
+/// at least as strict as the base. Unit-tested over the full
+/// (headless × posture × base-authority) cross-product.
+pub(crate) fn effective_envelope(
+    base: AutopilotEnvelope,
+    headless: bool,
+    solo: SoloPosture,
+) -> AutopilotEnvelope {
+    let mut env = base;
+    if headless {
+        env.grounding_required = true;
+        for authority in env.authorities.values_mut() {
+            if *authority == Authority::Propose {
+                *authority = Authority::Never;
+            }
+        }
+    }
+    if matches!(solo, SoloPosture::ParkForHuman) {
+        for authority in env.authorities.values_mut() {
+            *authority = Authority::Never;
+        }
+    }
+    env
 }
 
 // ---------------------------------------------------------------------------
@@ -997,5 +1073,164 @@ mod tests {
         assert_eq!(resolve_challenge_target(&entries, "TASK-9"), None);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- TASK-1020: mode-composition precedence (effective_envelope) ----
+
+    /// Every action class, for the cross-product tests.
+    const ALL_ACTIONS: [ActionClass; 9] = [
+        ActionClass::Approve,
+        ActionClass::Reject,
+        ActionClass::Dedupe,
+        ActionClass::Tag,
+        ActionClass::Queue,
+        ActionClass::Park,
+        ActionClass::Route,
+        ActionClass::Comment,
+        ActionClass::Ask,
+    ];
+
+    #[test]
+    fn effective_envelope_default_context_is_base_envelope() {
+        // Interactive + solo off: composition is the identity.
+        let base = AutopilotEnvelope::default();
+        let eff = effective_envelope(base.clone(), false, SoloPosture::Inactive);
+        for action in ALL_ACTIONS {
+            assert_eq!(eff.authority_for(action), base.authority_for(action));
+        }
+        assert_eq!(eff.grounding_required, base.grounding_required);
+    }
+
+    #[test]
+    fn effective_envelope_headless_demotes_propose_to_escalate() {
+        // approve/reject default to propose (pause-and-ask); a headless run
+        // cannot pause-and-ask, so they demote to never — and evaluate turns
+        // the would-be Hold into a RECORDED escalation.
+        let eff = effective_envelope(AutopilotEnvelope::default(), true, SoloPosture::Inactive);
+        assert_eq!(eff.authority_for(ActionClass::Approve), Authority::Never);
+        assert_eq!(eff.authority_for(ActionClass::Reject), Authority::Never);
+
+        let fence = fence_of(["TASK-1"]);
+        let d = decision(
+            "TASK-1",
+            ActionClass::Approve,
+            Grounding::TypeA,
+            RiskLevel::Low,
+        );
+        assert_eq!(
+            evaluate(&eff, &fence, &d),
+            Outcome::Escalate(EscalateReason::NeverAuthority)
+        );
+    }
+
+    #[test]
+    fn effective_envelope_headless_keeps_grounded_autos() {
+        // Headless tightening never touches the auto tier — in-fence, grounded,
+        // under-ceiling reversible actions are exactly what a headless groom is
+        // for (still strictly more conservative than binary `--apply`).
+        let eff = effective_envelope(AutopilotEnvelope::default(), true, SoloPosture::Inactive);
+        assert_eq!(eff.authority_for(ActionClass::Tag), Authority::Auto);
+
+        let fence = fence_of(["TASK-1"]);
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeA, RiskLevel::Low);
+        assert_eq!(evaluate(&eff, &fence, &d), Outcome::Execute);
+    }
+
+    #[test]
+    fn effective_envelope_headless_forces_grounding_required() {
+        // Headless can never relax gate 3, even if a base envelope somehow
+        // arrived with grounding disabled.
+        let base = AutopilotEnvelope {
+            grounding_required: false,
+            ..AutopilotEnvelope::default()
+        };
+        let eff = effective_envelope(base, true, SoloPosture::Inactive);
+        assert!(eff.grounding_required);
+    }
+
+    #[test]
+    fn effective_envelope_solo_keystone_parks() {
+        // Solo active + keystone context: everything parks for the human —
+        // the drain-side ParkForHuman verdict, mirrored at the grooming stage.
+        let eff = effective_envelope(
+            AutopilotEnvelope::default(),
+            false,
+            SoloPosture::ParkForHuman,
+        );
+        for action in ALL_ACTIONS {
+            assert_eq!(eff.authority_for(action), Authority::Never);
+        }
+    }
+
+    #[test]
+    fn effective_envelope_solo_safe_partition_is_base() {
+        // Solo active + safe work: solo never WIDENS the grooming envelope —
+        // ProceedOnDefault is drain-side discretion, not a grooming grant.
+        let base = AutopilotEnvelope::default();
+        let eff = effective_envelope(base.clone(), false, SoloPosture::ProceedOnDefault);
+        for action in ALL_ACTIONS {
+            assert_eq!(eff.authority_for(action), base.authority_for(action));
+        }
+    }
+
+    #[test]
+    fn effective_envelope_never_widens() {
+        // The demote-only invariant over the FULL (headless × posture ×
+        // base-authority × action) cross-product: composition may hold or
+        // raise strictness, never lower it.
+        for headless in [false, true] {
+            for solo in [
+                SoloPosture::Inactive,
+                SoloPosture::ProceedOnDefault,
+                SoloPosture::ParkForHuman,
+            ] {
+                for base_authority in [Authority::Auto, Authority::Propose, Authority::Never] {
+                    for action in ALL_ACTIONS {
+                        let mut base = AutopilotEnvelope::default();
+                        base.authorities.insert(action, base_authority);
+                        let eff = effective_envelope(base, headless, solo);
+                        assert!(
+                            eff.authority_for(action).strictness() >= base_authority.strictness(),
+                            "widened: {action:?} {base_authority:?} \
+                             headless={headless} solo={solo:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn keystone_fence_and_solo_posture_agree() {
+        // The one-classifier invariant (§8): a keystone fixture must be
+        // (a) fenced out of the groom candidate set at gate 1 and (b) parked
+        // by the drain-side solo posture — both via presence::is_keystone_class,
+        // so no stage can disagree on "keystone".
+        let tags = vec!["architecture".to_string()];
+        let keystone = is_keystone_class("task", tags.iter().map(|s| s.as_str()));
+        assert!(keystone);
+        assert_eq!(
+            crate::presence::resolve_solo_posture(true, keystone),
+            SoloPosture::ParkForHuman
+        );
+
+        let spec = crate::intake::IntakeSpec {
+            id: "TASK-KEY".to_string(),
+            req_type: "task".to_string(),
+            tags,
+            deferred: false,
+            risk: RiskLevel::Low,
+            risk_reason: String::new(),
+        };
+        let (eligible, fenced) = crate::intake::select_intake_candidates(
+            &[spec],
+            &IntakeConfig::default(),
+            &crate::intake::IntakeFilters::default(),
+        );
+        assert!(eligible.is_empty());
+        assert!(matches!(
+            fenced.as_slice(),
+            [(_, crate::intake::FenceReason::Keystone(_))]
+        ));
     }
 }
