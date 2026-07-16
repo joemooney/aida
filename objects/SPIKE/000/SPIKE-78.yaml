@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T16:54:46.966585219Z
+modified_at: 2026-07-16T17:06:02.028938029Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -286,19 +286,21 @@ comments:
   content: 'Step 29 DONE: role cluster → role_cmd.rs (~854 lines) merged (#1450), main.rs 137270→136433 (-837). 17 role-exclusive fns; shared role-file/picker/session machinery kept in main.rs. Combined-main green. Next: report #1451 (green, rebasing), goal #1452 (-226).'
   created_at: 2026-07-16T16:26:02.950516269Z
   modified_at: 2026-07-16T16:26:02.950516269Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f6bcc-f958-78b2-8539-c667d05242fe
   author: joe
   content: 'Step 30 DONE: report cluster → report_cmd.rs merged (#1451), main.rs 136433→136367 (-66). Combined-main green. Next: goal #1452 (-226, green, rebasing), focus #1453 (-203).'
   created_at: 2026-07-16T16:40:23.128528735Z
   modified_at: 2026-07-16T16:40:23.128528735Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f6bda-27b6-7e30-9460-2c4b51f1fe97
   author: joe
   content: 'Step 31 DONE: goal cluster → goal_cmd.rs merged (#1452), main.rs 136367→136141 (-226). mcp.rs 2 call sites repointed. Combined-main green. Next: focus #1453 (green, rebasing), comment #1454 (-229).'
   created_at: 2026-07-16T16:54:46.966585219Z
   modified_at: 2026-07-16T16:54:46.966585219Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f6be4-74ac-7013-84b5-84ba2ea55a4c
+  author: joe
+  content: Commit 485c49c29 references this requirement
+  created_at: 2026-07-16T17:06:02.028938029Z
+  modified_at: 2026-07-16T17:06:02.028938029Z
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
   author: aida-auto-bump
