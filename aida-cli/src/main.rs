@@ -74,6 +74,7 @@ mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;
 mod lint_cmd;
+mod load_cmd;
 // trace:TASK-1140 | ai:claude — STORY-711 slice 2 automatic advisor-lock gate.
 mod locking_gate;
 // trace:TASK-974 | ai:claude — AXI #9 lifecycle-aware next-step help block.
@@ -5025,12 +5026,12 @@ fn run() -> Result<()> {
             handle_queue_command(queue_cmd, &storage, &requirements_path)?;
         }
         Command::Load(load_cmd) => {
-            handle_load_command(load_cmd, &storage)?;
+            load_cmd::handle_load_command(load_cmd, &storage)?;
         }
         // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
         // `load` alias for quantitative effort summaries.
         Command::Backlog(backlog_cmd) => match backlog_cmd {
-            BacklogCommand::Load => handle_load_command(&LoadCommand::Backlog, &storage)?,
+            BacklogCommand::Load => load_cmd::handle_load_command(&LoadCommand::Backlog, &storage)?,
             _ => backlog::handle_backlog_command(backlog_cmd, &storage)?,
         },
         // TASK-218: top-level alias in the legacy SQLite dispatch path —
@@ -18386,7 +18387,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Load(load_cmd) => {
             let storage = Storage::new(store_path);
-            handle_load_command(load_cmd, &storage)?;
+            load_cmd::handle_load_command(load_cmd, &storage)?;
         }
         // FR-267: trace commands must resolve spec ids against the resolved
         // git store — including a SIBLING store in an `aida init --sibling`
@@ -18411,7 +18412,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Backlog(backlog_cmd) => {
             let storage = Storage::new(store_path);
             match backlog_cmd {
-                BacklogCommand::Load => handle_load_command(&LoadCommand::Backlog, &storage)?,
+                BacklogCommand::Load => {
+                    load_cmd::handle_load_command(&LoadCommand::Backlog, &storage)?
+                }
                 _ => backlog::handle_backlog_command(backlog_cmd, &storage)?,
             }
         }
@@ -107221,134 +107224,6 @@ fn queued_requirement_ids(storage: &Storage, user_id: &str) -> Result<HashSet<Uu
         .into_iter()
         .map(|e| e.requirement_id)
         .collect())
-}
-
-fn is_backlog_status(status: &RequirementStatus) -> bool {
-    matches!(
-        status,
-        RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::Planned
-    )
-}
-
-fn handle_load_command(cmd: &LoadCommand, storage: &Storage) -> Result<()> {
-    let store = storage.load()?;
-    let project_root = find_project_root()
-        .map(|p| main_worktree_root_from(&p))
-        .unwrap_or_else(|_| {
-            storage
-                .path()
-                .parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-        });
-    let user_id = current_user_id(None);
-    let queued = queued_requirement_ids(storage, &user_id).unwrap_or_default();
-    match cmd {
-        LoadCommand::Queue => {
-            print_effort_load_for_requirements(
-                &project_root,
-                "Queue load",
-                store.requirements.iter().filter(|r| queued.contains(&r.id)),
-            );
-        }
-        LoadCommand::Backlog => {
-            print_effort_load_for_requirements(
-                &project_root,
-                "Backlog load",
-                store
-                    .requirements
-                    .iter()
-                    .filter(|r| is_backlog_status(&r.status) && !queued.contains(&r.id)),
-            );
-        }
-        LoadCommand::Report => {
-            print_effort_load_for_requirements(
-                &project_root,
-                "Queue load",
-                store.requirements.iter().filter(|r| queued.contains(&r.id)),
-            );
-            print_effort_load_for_requirements(
-                &project_root,
-                "Backlog load",
-                store
-                    .requirements
-                    .iter()
-                    .filter(|r| is_backlog_status(&r.status) && !queued.contains(&r.id)),
-            );
-            print_effort_load_for_requirements(
-                &project_root,
-                "In-flight load",
-                store.requirements.iter().filter(|r| {
-                    matches!(
-                        r.status,
-                        RequirementStatus::InProgress | RequirementStatus::Done
-                    )
-                }),
-            );
-        }
-        LoadCommand::Calibration {
-            since,
-            by_type,
-            json,
-        } => {
-            let since_dur = match since {
-                Some(s) => Some(calibration::parse_since(s).map_err(|e| anyhow::anyhow!(e))?),
-                None => None,
-            };
-            let records = effort_calibration::read_all_captures(&project_root);
-            let rows = effort_calibration::calibration_deltas(&records, since_dur);
-            if *json {
-                println!("{}", serde_json::to_string_pretty(&rows)?);
-                return Ok(());
-            }
-            if rows.is_empty() {
-                println!("No effort calibration deltas found.");
-                return Ok(());
-            }
-            if *by_type {
-                let by_spec_type: std::collections::HashMap<String, String> = store
-                    .requirements
-                    .iter()
-                    .map(|r| (effort_display_id(r).to_string(), r.req_type.to_string()))
-                    .collect();
-                let mut groups: std::collections::BTreeMap<String, (usize, i32)> =
-                    std::collections::BTreeMap::new();
-                for row in &rows {
-                    let typ = by_spec_type
-                        .get(&row.spec)
-                        .cloned()
-                        .unwrap_or_else(|| "unknown".to_string());
-                    let entry = groups.entry(typ).or_insert((0, 0));
-                    entry.0 += 1;
-                    entry.1 += row.delta_minutes;
-                }
-                println!("{}", "Effort calibration by type".bold());
-                for (typ, (count, delta)) in groups {
-                    println!(
-                        "  {:<16} {:>3} rows  net delta {}",
-                        typ,
-                        count,
-                        effort_calibration::format_minutes(delta.unsigned_abs())
-                    );
-                }
-            } else {
-                println!("{}", "Effort calibration deltas".bold());
-                for row in rows.iter().take(50) {
-                    let sign = if row.delta_minutes >= 0 { "+" } else { "-" };
-                    println!(
-                        "  {:<12} {:<6} est {:<3} actual {:<3} delta {}{}",
-                        row.spec,
-                        row.touchpoint.as_str(),
-                        row.estimate,
-                        row.actual,
-                        sign,
-                        effort_calibration::format_minutes(row.delta_minutes.unsigned_abs())
-                    );
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 /// STORY-566: `aida queue advance` — a ROUTER over the queue. Walks each queued
