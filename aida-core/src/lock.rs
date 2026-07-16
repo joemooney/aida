@@ -64,17 +64,28 @@ pub fn verify_worktree_lock(authorized_by: Option<&str>, my_token: Option<&str>)
 
 /// `[locking]` posture in `.aida/config.toml` (STORY-711 slice 2). Gates
 /// whether [`locking_gate`] ever turns a `Refused` verdict into anything
-/// visible. Fail-safe-by-DEFAULT-OFF, per the plan's "Fail-safe default is
-/// opt-in per posture" decision — requiring a lock everywhere would break
-/// every current solo/manual flow, so adoption is a deliberate per-project
-/// opt-in, not a silent behavior change.
+/// visible. The DEFAULT is [`ContextAware`](LockingPosture::ContextAware)
+/// (TASK-958) — safe to leave on because it only ever *warns* on a solo commit
+/// and only hard-blocks a `Refused` commit that lands under an active drain,
+/// so a project keeps its zero-hard-block stance for every solo/manual flow
+/// while a fan-out gets BUG-637 duplicate-dispatch protection out of the box.
+/// The explicit `off`/`warn`/`enforce` postures still override this default.
 // trace:STORY-711 | ai:claude
+// trace:TASK-958 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LockingPosture {
-    /// No gating at all — a `Refused` verdict is silently treated as `Allow`.
-    /// The default: a project that has never configured `[locking]` sees
-    /// zero behavior change.
+    /// Context-aware — the DEFAULT (TASK-958), the value used when no
+    /// `[locking]` posture is configured. A `Refused` verdict resolves to a
+    /// hard block *only* when the commit is landing under an active
+    /// drain/fan-out (`AIDA_AUTO_COMPLETE` set in the env); a solo/manual
+    /// commit is downgraded to a warning instead. `Unlocked`/`Authorized`
+    /// verdicts stay silent `Allow`s. So a solo commit is never hard-blocked
+    /// by the default, while a drain gets the duplicate-dispatch guard.
     #[default]
+    ContextAware,
+    /// No gating at all — a `Refused` verdict is silently treated as `Allow`.
+    /// An explicit opt-out that restores the pre-TASK-958 zero-behavior-change
+    /// stance: a project that sets `posture = "off"` sees no lock gating at all.
     Off,
     /// A `Refused` verdict is downgraded to a warning: the commit proceeds,
     /// but the caller is told a lock mismatch was observed.
@@ -86,10 +97,12 @@ pub enum LockingPosture {
 impl LockingPosture {
     /// Parse a config/env value into a posture. Case-insensitive; unknown
     /// values return `None` so callers can fall back to the default rather
-    /// than silently mis-parsing a typo into `Off`.
+    /// than silently mis-parsing a typo into the wrong posture.
     // trace:STORY-711 | ai:claude
+    // trace:TASK-958 | ai:claude
     pub fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
+            "context-aware" | "context" => Some(LockingPosture::ContextAware),
             "off" => Some(LockingPosture::Off),
             "warn" => Some(LockingPosture::Warn),
             "enforce" => Some(LockingPosture::Enforce),
@@ -121,19 +134,37 @@ pub enum GateAction {
 ///
 /// `Unlocked` and `Authorized` verdicts are ALWAYS `Allow`, regardless of
 /// posture — posture only matters for a `Refused` verdict:
-/// - `Off` → `Allow` (a mismatch is silently waved through — the default, so
-///   an unconfigured project sees zero behavior change).
+/// - `ContextAware` (the DEFAULT) → `Refuse { by }` when `under_drain` (a
+///   `Refused` commit landing under an active fan-out is a duplicate-dispatch
+///   hazard), else `Warn { by }` (a solo/manual commit is never hard-blocked).
+/// - `Off` → `Allow` (a mismatch is silently waved through — the explicit
+///   opt-out).
 /// - `Warn` → `Warn { by }` (proceed, but surface the mismatch).
 /// - `Enforce` → `Refuse { by }` (block).
+///
+/// `under_drain` is the caller's "is this commit landing under an active
+/// drain/fan-out?" signal (the `AIDA_AUTO_COMPLETE` env read, factored out to
+/// the impure CLI edge). It is consulted ONLY by `ContextAware` — the explicit
+/// `off`/`warn`/`enforce` postures ignore it entirely, so an explicit posture
+/// overrides the context-aware default regardless of drain state.
 // trace:STORY-711 | ai:claude
+// trace:TASK-958 | ai:claude
 pub fn locking_gate(
     worktree_lock: Option<&str>,
     my_token: Option<&str>,
     posture: LockingPosture,
+    under_drain: bool,
 ) -> GateAction {
     match verify_worktree_lock(worktree_lock, my_token) {
         LockVerdict::Unlocked | LockVerdict::Authorized => GateAction::Allow,
         LockVerdict::Refused { by } => match posture {
+            LockingPosture::ContextAware => {
+                if under_drain {
+                    GateAction::Refuse { by }
+                } else {
+                    GateAction::Warn { by }
+                }
+            }
             LockingPosture::Off => GateAction::Allow,
             LockingPosture::Warn => GateAction::Warn { by },
             LockingPosture::Enforce => GateAction::Refuse { by },
@@ -205,86 +236,213 @@ mod tests {
         );
     }
 
-    // ── locking_gate (STORY-711 slice 2): every (verdict, posture) combination ──
+    // ── locking_gate (STORY-711 slice 2 + TASK-958): every (verdict, posture,
+    //    drain) combination. `under_drain` is only consulted by ContextAware. ──
+
+    const ALL_POSTURES: [LockingPosture; 4] = [
+        LockingPosture::ContextAware,
+        LockingPosture::Off,
+        LockingPosture::Warn,
+        LockingPosture::Enforce,
+    ];
 
     #[test]
-    fn unlocked_is_always_allow_regardless_of_posture() {
-        for posture in [
-            LockingPosture::Off,
-            LockingPosture::Warn,
-            LockingPosture::Enforce,
-        ] {
-            assert_eq!(locking_gate(None, None, posture), GateAction::Allow);
+    fn unlocked_is_always_allow_regardless_of_posture_or_drain() {
+        for posture in ALL_POSTURES {
+            for under_drain in [false, true] {
+                assert_eq!(
+                    locking_gate(None, None, posture, under_drain),
+                    GateAction::Allow
+                );
+                assert_eq!(
+                    locking_gate(None, Some("advisor-a"), posture, under_drain),
+                    GateAction::Allow
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn authorized_is_always_allow_regardless_of_posture_or_drain() {
+        for posture in ALL_POSTURES {
+            for under_drain in [false, true] {
+                assert_eq!(
+                    locking_gate(Some("advisor-a"), Some("advisor-a"), posture, under_drain),
+                    GateAction::Allow
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn refused_under_off_posture_is_allow_regardless_of_drain() {
+        // The explicit opt-out: `posture = "off"` never turns a lock mismatch
+        // into anything visible, drain or not.
+        for under_drain in [false, true] {
             assert_eq!(
-                locking_gate(None, Some("advisor-a"), posture),
+                locking_gate(
+                    Some("advisor-a"),
+                    Some("advisor-b"),
+                    LockingPosture::Off,
+                    under_drain
+                ),
+                GateAction::Allow
+            );
+            // Even a caller with NO token at all — the fail-safe Refused case —
+            // is waved through under Off.
+            assert_eq!(
+                locking_gate(Some("advisor-a"), None, LockingPosture::Off, under_drain),
                 GateAction::Allow
             );
         }
     }
 
     #[test]
-    fn authorized_is_always_allow_regardless_of_posture() {
-        for posture in [
-            LockingPosture::Off,
-            LockingPosture::Warn,
-            LockingPosture::Enforce,
-        ] {
+    fn refused_under_warn_posture_warns_regardless_of_drain() {
+        for under_drain in [false, true] {
             assert_eq!(
-                locking_gate(Some("advisor-a"), Some("advisor-a"), posture),
-                GateAction::Allow
+                locking_gate(
+                    Some("advisor-a"),
+                    Some("advisor-b"),
+                    LockingPosture::Warn,
+                    under_drain
+                ),
+                GateAction::Warn {
+                    by: "advisor-a".to_string()
+                }
+            );
+            assert_eq!(
+                locking_gate(Some("advisor-a"), None, LockingPosture::Warn, under_drain),
+                GateAction::Warn {
+                    by: "advisor-a".to_string()
+                }
             );
         }
     }
 
     #[test]
-    fn refused_under_off_posture_is_allow() {
-        // The load-bearing no-op: a project with no [locking] config (posture
-        // defaults Off) never turns a lock mismatch into anything visible.
-        assert_eq!(
-            locking_gate(Some("advisor-a"), Some("advisor-b"), LockingPosture::Off),
-            GateAction::Allow
-        );
-        // Even a caller with NO token at all — the fail-safe Refused case —
-        // is waved through under Off.
-        assert_eq!(
-            locking_gate(Some("advisor-a"), None, LockingPosture::Off),
-            GateAction::Allow
-        );
+    fn refused_under_enforce_posture_refuses_regardless_of_drain() {
+        for under_drain in [false, true] {
+            assert_eq!(
+                locking_gate(
+                    Some("advisor-a"),
+                    Some("advisor-b"),
+                    LockingPosture::Enforce,
+                    under_drain
+                ),
+                GateAction::Refuse {
+                    by: "advisor-a".to_string()
+                }
+            );
+            assert_eq!(
+                locking_gate(
+                    Some("advisor-a"),
+                    None,
+                    LockingPosture::Enforce,
+                    under_drain
+                ),
+                GateAction::Refuse {
+                    by: "advisor-a".to_string()
+                }
+            );
+        }
     }
 
-    #[test]
-    fn refused_under_warn_posture_warns_naming_the_holder() {
-        assert_eq!(
-            locking_gate(Some("advisor-a"), Some("advisor-b"), LockingPosture::Warn),
-            GateAction::Warn {
-                by: "advisor-a".to_string()
-            }
-        );
-        assert_eq!(
-            locking_gate(Some("advisor-a"), None, LockingPosture::Warn),
-            GateAction::Warn {
-                by: "advisor-a".to_string()
-            }
-        );
-    }
+    // ── ContextAware (TASK-958): the new default — hard-block a Refused commit
+    //    under a drain, warn when solo. ──
 
     #[test]
-    fn refused_under_enforce_posture_refuses_naming_the_holder() {
+    fn context_aware_refused_under_drain_hard_blocks() {
+        // A committing agent landing work someone else holds the lease for,
+        // under an active fan-out → the duplicate-dispatch hazard → hard block.
         assert_eq!(
             locking_gate(
                 Some("advisor-a"),
                 Some("advisor-b"),
-                LockingPosture::Enforce
+                LockingPosture::ContextAware,
+                true,
             ),
             GateAction::Refuse {
                 by: "advisor-a".to_string()
             }
         );
+        // Fail-safe: a caller carrying no token at all under a drain is refused
+        // too.
         assert_eq!(
-            locking_gate(Some("advisor-a"), None, LockingPosture::Enforce),
+            locking_gate(Some("advisor-a"), None, LockingPosture::ContextAware, true),
             GateAction::Refuse {
                 by: "advisor-a".to_string()
             }
+        );
+    }
+
+    #[test]
+    fn context_aware_refused_solo_warns_never_hard_blocks() {
+        // The load-bearing safety property: a solo/manual commit (no active
+        // drain) is NEVER hard-blocked by the context-aware default — it warns.
+        assert_eq!(
+            locking_gate(
+                Some("advisor-a"),
+                Some("advisor-b"),
+                LockingPosture::ContextAware,
+                false,
+            ),
+            GateAction::Warn {
+                by: "advisor-a".to_string()
+            }
+        );
+        assert_eq!(
+            locking_gate(Some("advisor-a"), None, LockingPosture::ContextAware, false),
+            GateAction::Warn {
+                by: "advisor-a".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn context_aware_unlocked_and_authorized_stay_silent_no_op() {
+        // Unlocked / Authorized are always Allow under ContextAware, drain or
+        // not — the gate only ever acts on a Refused verdict.
+        for under_drain in [false, true] {
+            assert_eq!(
+                locking_gate(
+                    None,
+                    Some("advisor-a"),
+                    LockingPosture::ContextAware,
+                    under_drain
+                ),
+                GateAction::Allow
+            );
+            assert_eq!(
+                locking_gate(
+                    Some("advisor-a"),
+                    Some("advisor-a"),
+                    LockingPosture::ContextAware,
+                    under_drain,
+                ),
+                GateAction::Allow
+            );
+        }
+    }
+
+    #[test]
+    fn context_aware_is_the_default_posture() {
+        assert_eq!(LockingPosture::default(), LockingPosture::ContextAware);
+    }
+
+    #[test]
+    fn context_aware_parse_round_trips() {
+        assert_eq!(
+            LockingPosture::parse("context-aware"),
+            Some(LockingPosture::ContextAware)
+        );
+        assert_eq!(
+            LockingPosture::parse("context"),
+            Some(LockingPosture::ContextAware)
+        );
+        assert_eq!(
+            LockingPosture::parse("  Context-Aware  "),
+            Some(LockingPosture::ContextAware)
         );
     }
 

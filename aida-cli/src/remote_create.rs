@@ -671,10 +671,12 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
         println!();
         if any_diverged {
             println!(
-                "{} remotes disagree on a shared branch. Heal it (reconcile the divergent tips,",
+                "{} remotes disagree on a shared branch. For `aida-store`, run `aida remote reconcile`",
                 crate::glyph(crate::glyphs::Glyph::Cross)
             );
-            println!("  then push to every remote) — never force-push a shared branch to resolve.");
+            println!("  (dry-run plan; add --execute to union-merge and push every hub). For code");
+            println!("  branches, merge the divergent tips and push to every remote — never");
+            println!("  force-push a shared branch to resolve.");
         } else {
             println!(
                 "{} all remotes agree on every shared branch.",
@@ -686,6 +688,481 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
     if any_diverged {
         // Non-zero so a pre-push hook / CI step can gate on this.
         std::process::exit(2);
+    }
+    Ok(())
+}
+
+// ───────────────────────── multi-hub store reconcile ─────────────────────
+
+/// The orphan store branch every hub must agree on.
+const STORE_BRANCH: &str = "aida-store";
+
+/// Run git in `repo`, returning stdout on success, None otherwise.
+fn git_out(repo: &Path, args: &[&str]) -> Option<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .ok()?;
+    if out.status.success() {
+        Some(String::from_utf8_lossy(&out.stdout).to_string())
+    } else {
+        None
+    }
+}
+
+/// One hub's standing for the store branch during a reconcile.
+struct HubStanding {
+    remote: String,
+    /// The hub's `aida-store` tip (ls-remote), None when absent/unreachable.
+    sha: Option<String>,
+    /// Human classification relative to the local store tip.
+    state: &'static str,
+}
+
+/// Extract email-shaped tokens from a text blob. Pure — used to surface
+/// identity-bearing registry content a reconcile would newly publish, so the
+/// operator consents explicitly (--yes) instead of a hub-only email silently
+/// reaching every hub.
+// trace:BUG-714 | ai:claude
+pub fn emails_in(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in text.split(|c: char| c.is_whitespace() || "\"'`,;()<>[]{}".contains(c)) {
+        let token = raw.trim_matches('.');
+        let Some(at) = token.find('@') else { continue };
+        let (local, rest) = token.split_at(at);
+        let domain = &rest[1..];
+        let domain_ok = domain.contains('.')
+            && domain
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+        if !local.is_empty() && domain_ok {
+            out.push(token.to_string());
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// `aida remote reconcile` — heal a multi-hub diverged `aida-store` (the
+/// pull-and-union counterpart of the mirror push fan-out). Fetches every
+/// hub's store tip, union-merges the diverged frontier in the store worktree
+/// (a merge commit both tips parent, so every hub fast-forwards — never a
+/// rebase of published history, never a force-push), verifies the union
+/// (registry ranges disjoint, no spec lost), gates it behind the identity
+/// scrub, and pushes it to every hub. Dry-run by default: prints the plan and
+/// exits 2 when the hubs disagree; `--execute` performs it.
+// trace:BUG-714 | ai:claude
+pub fn handle_remote_reconcile(
+    project_root: &Path,
+    execute: bool,
+    json: bool,
+    yes: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    let store_dir = project_root.join(".aida-store");
+    if !git_ops::is_git_repo(&store_dir) {
+        anyhow::bail!(
+            "no store worktree at {} — run a store-reading command (e.g. `aida list`) to attach it, then retry",
+            store_dir.display()
+        );
+    }
+
+    let remotes: Vec<String> = git_ops::list_remotes(project_root)
+        .into_iter()
+        .filter(|r| r != "all")
+        .collect();
+    if remotes.is_empty() {
+        anyhow::bail!("no git remotes configured — nothing to reconcile");
+    }
+
+    // Fetch every hub's store tip (refs via ls-remote for truth, objects via
+    // fetch so ancestry checks and the merge can see them). A hub that is
+    // unreachable or lacks the branch reports sha=None.
+    let local = git_ops::head_sha(&store_dir)?;
+    let mut hubs: Vec<HubStanding> = Vec::new();
+    for r in &remotes {
+        let sha = git_ops::remote_branch_head_sha(project_root, r, STORE_BRANCH);
+        if sha.is_some() {
+            let _ = Command::new("git")
+                .arg("-C")
+                .arg(&store_dir)
+                .args(["fetch", "--quiet", r, &format!("refs/heads/{STORE_BRANCH}")])
+                .status();
+        }
+        let state = match &sha {
+            None => "absent",
+            Some(s) if *s == local => "in sync with local",
+            Some(s) if git_ops::is_ancestor(&store_dir, s, &local).unwrap_or(false) => {
+                "behind local"
+            }
+            Some(s) if git_ops::is_ancestor(&store_dir, &local, s).unwrap_or(false) => {
+                "ahead of local"
+            }
+            Some(_) => "diverged from local",
+        };
+        hubs.push(HubStanding {
+            remote: r.clone(),
+            sha,
+            state,
+        });
+    }
+
+    // The frontier: tips not contained in any other tip. One frontier tip →
+    // no merge needed (only fast-forwards / pushes); more → union merge.
+    let mut tips: Vec<String> = vec![local.clone()];
+    for h in &hubs {
+        if let Some(s) = &h.sha {
+            if !tips.contains(s) {
+                tips.push(s.clone());
+            }
+        }
+    }
+    let frontier: Vec<String> = tips
+        .iter()
+        .filter(|t| {
+            !tips.iter().any(|other| {
+                *t != other && git_ops::is_ancestor(&store_dir, t, other).unwrap_or(false)
+            })
+        })
+        .cloned()
+        .collect();
+
+    let needs_merge = frontier.len() > 1;
+    let union_candidate = if needs_merge {
+        None
+    } else {
+        frontier.first().cloned()
+    };
+    let hubs_needing_push: Vec<&HubStanding> = hubs
+        .iter()
+        .filter(|h| match (&h.sha, &union_candidate) {
+            (Some(s), Some(u)) => s != u,
+            // Diverged frontier: every hub gets the (future) union.
+            (Some(_), None) => true,
+            // Absent branch on the hub: push creates it.
+            (None, _) => true,
+        })
+        .collect();
+    let local_needs_ff = union_candidate.as_ref().is_some_and(|u| *u != local);
+    let needs_action = needs_merge || !hubs_needing_push.is_empty() || local_needs_ff;
+
+    let short = |s: &str| s.chars().take(12).collect::<String>();
+
+    if !execute {
+        if json {
+            let hub_rows: Vec<serde_json::Value> = hubs
+                .iter()
+                .map(|h| {
+                    serde_json::json!({
+                        "remote": h.remote,
+                        "sha": h.sha,
+                        "state": h.state,
+                    })
+                })
+                .collect();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "branch": STORE_BRANCH,
+                    "local": local,
+                    "hubs": hub_rows,
+                    "diverged": needs_merge,
+                    "needs_action": needs_action,
+                    "plan": {
+                        "union_merge": needs_merge,
+                        "push_to": hubs_needing_push.iter().map(|h| h.remote.clone()).collect::<Vec<_>>(),
+                        "fast_forward_local": local_needs_ff,
+                    },
+                    "executed": false,
+                })
+            );
+        } else {
+            println!("Store reconcile plan  ({STORE_BRANCH})");
+            println!();
+            println!("  local        {}", short(&local));
+            for h in &hubs {
+                let sha = h
+                    .sha
+                    .as_deref()
+                    .map(short)
+                    .unwrap_or_else(|| "absent".into());
+                println!("  {:<12} {:<14} {}", h.remote, sha, h.state);
+            }
+            println!();
+            if !needs_action {
+                println!(
+                    "{} every hub already agrees on {STORE_BRANCH} — nothing to reconcile.",
+                    crate::glyph(crate::glyphs::Glyph::Check)
+                );
+                return Ok(());
+            }
+            if needs_merge {
+                println!(
+                    "  1. union-merge {} diverged tip(s) in the store worktree",
+                    frontier.len()
+                );
+                println!(
+                    "     (spec objects, oplog, and id-block/node registries merge structurally)"
+                );
+            } else if local_needs_ff {
+                println!(
+                    "  1. fast-forward the local store to {}",
+                    short(union_candidate.as_deref().unwrap_or(""))
+                );
+            }
+            if !hubs_needing_push.is_empty() {
+                println!(
+                    "  {}. push the result to: {}",
+                    if needs_merge || local_needs_ff { 2 } else { 1 },
+                    hubs_needing_push
+                        .iter()
+                        .map(|h| h.remote.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+            println!();
+            println!("Dry run — nothing changed. Re-run with --execute to perform it.");
+        }
+        if needs_action {
+            // Non-zero so scripts (and the mirror-push warning path) can gate.
+            std::process::exit(2);
+        }
+        return Ok(());
+    }
+
+    // ── execute ──
+    if !needs_action {
+        println!(
+            "{} every hub already agrees on {STORE_BRANCH} — nothing to reconcile.",
+            crate::glyph(crate::glyphs::Glyph::Check)
+        );
+        return Ok(());
+    }
+    if git_ops::worktree_is_dirty(&store_dir) {
+        anyhow::bail!(
+            "the store worktree at {} has uncommitted changes — commit or clean them first",
+            store_dir.display()
+        );
+    }
+
+    let pre = local.clone();
+    let reset_to_pre = || {
+        let _ = Command::new("git")
+            .arg("-C")
+            .arg(&store_dir)
+            .args(["reset", "--hard", &pre])
+            .status();
+    };
+
+    // Merge every frontier tip not already contained in HEAD. Fast-forward
+    // when possible; otherwise the structural union merge.
+    let mut merge_notes: Vec<String> = Vec::new();
+    for tip in &frontier {
+        let head = git_ops::head_sha(&store_dir)?;
+        if *tip == head || git_ops::is_ancestor(&store_dir, tip, &head).unwrap_or(false) {
+            continue;
+        }
+        if git_ops::is_ancestor(&store_dir, &head, tip).unwrap_or(false) {
+            if git_out(&store_dir, &["merge", "--ff-only", tip]).is_none() {
+                reset_to_pre();
+                anyhow::bail!("fast-forward to {} failed", short(tip));
+            }
+            continue;
+        }
+        match git_ops::merge_union_auto(
+            &store_dir,
+            tip,
+            "reconcile multi-hub aida-store (union merge)",
+        ) {
+            Ok(aida_core::git_ops::StorePullOutcome::Clean) => {}
+            Ok(aida_core::git_ops::StorePullOutcome::AutoMerged { notes }) => {
+                merge_notes.extend(notes)
+            }
+            Err(e) => {
+                reset_to_pre();
+                return Err(e.context(format!(
+                    "union merge of {} failed — nothing was pushed; the local store is unchanged",
+                    short(tip)
+                )));
+            }
+        }
+    }
+    let union = git_ops::head_sha(&store_dir)?;
+
+    // Verify: no spec present on any tip may be lost by the union.
+    let ls_objects = |rev: &str| -> std::collections::BTreeSet<String> {
+        git_out(
+            &store_dir,
+            &["ls-tree", "-r", "--name-only", rev, "--", "objects/"],
+        )
+        .map(|out| out.lines().map(str::to_string).collect())
+        .unwrap_or_default()
+    };
+    let union_objects = ls_objects(&union);
+    for tip in &tips {
+        let lost: Vec<String> = ls_objects(tip)
+            .difference(&union_objects)
+            .cloned()
+            .collect();
+        if !lost.is_empty() {
+            reset_to_pre();
+            anyhow::bail!(
+                "union would lose {} spec file(s) present on {} (e.g. {}) — refusing; reconcile manually",
+                lost.len(),
+                short(tip),
+                lost[0]
+            );
+        }
+    }
+
+    // Verify: the unioned block registry must stay collision-free even when
+    // the merge itself was textually clean.
+    let blocks_path = store_dir.join("registry").join("blocks.yaml");
+    if blocks_path.exists() {
+        let registry = aida_core::node::BlockRegistry::load(&blocks_path)?;
+        let collisions = registry.overlapping_ranges();
+        if !collisions.is_empty() {
+            reset_to_pre();
+            anyhow::bail!(
+                "unioned block registry has range collision(s): {} — refusing to publish; resolve the allocation conflict first",
+                collisions.join("; ")
+            );
+        }
+    }
+
+    // Scrub guard (same contract as the canonical store write path): never
+    // publish hub-only content that the identity redaction would have caught.
+    // (1) this machine's raw identity must not appear in anything newly
+    // published; (2) email-bearing registry lines new to some hub need
+    // explicit consent (--yes).
+    let mut newly_published = String::new();
+    let mut newly_published_registry = String::new();
+    for h in &hubs {
+        match &h.sha {
+            Some(s) if *s == union => {}
+            Some(s) => {
+                if let Some(diff) = git_out(&store_dir, &["diff", &format!("{s}..{union}")]) {
+                    for line in diff.lines() {
+                        if line.starts_with('+') && !line.starts_with("+++") {
+                            newly_published.push_str(line);
+                            newly_published.push('\n');
+                        }
+                    }
+                }
+                if let Some(diff) = git_out(
+                    &store_dir,
+                    &["diff", &format!("{s}..{union}"), "--", "registry/"],
+                ) {
+                    for line in diff.lines() {
+                        if line.starts_with('+') && !line.starts_with("+++") {
+                            newly_published_registry.push_str(line);
+                            newly_published_registry.push('\n');
+                        }
+                    }
+                }
+            }
+            None => {
+                // A hub without the branch receives everything — treat the
+                // identity-bearing registry files as newly published.
+                for f in ["registry/nodes.toml", "registry/blocks.yaml", "oplog.yaml"] {
+                    if let Ok(text) = std::fs::read_to_string(store_dir.join(f)) {
+                        newly_published.push_str(&text);
+                        newly_published_registry.push_str(&text);
+                    }
+                }
+            }
+        }
+    }
+    let (pub_host, pub_email) = git_ops::public_identity();
+    let raw_host = crate::hostname();
+    let raw_email = crate::git_config_value(project_root, "user.email");
+    let leaks = git_ops::detect_identity_leaks(
+        &newly_published,
+        (!raw_host.is_empty()).then_some(raw_host.as_str()),
+        raw_email.as_deref(),
+        pub_host.as_deref(),
+        pub_email.as_deref(),
+    );
+    if !leaks.is_empty() {
+        reset_to_pre();
+        anyhow::bail!(
+            "reconcile would publish this machine's raw identity to another hub — {} — scrub it first (`aida store scrub-preview`, docs/security/); nothing was pushed",
+            leaks.join("; ")
+        );
+    }
+    let suspicious: Vec<String> = emails_in(&newly_published_registry)
+        .into_iter()
+        .filter(|e| e != aida_core::git_ops::REDACTED_EMAIL_PLACEHOLDER)
+        .filter(|e| pub_email.as_deref() != Some(e.as_str()))
+        .collect();
+    if !suspicious.is_empty() && !yes {
+        reset_to_pre();
+        anyhow::bail!(
+            "reconcile would publish registry content carrying email(s) currently on one hub only: {} — re-run with --yes to consent, or scrub first (docs/security/); nothing was pushed",
+            suspicious.join(", ")
+        );
+    }
+
+    // Push the union everywhere. Every hub's old tip is an ancestor of the
+    // union, so each push fast-forwards — no force needed, ever.
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    let mut push_failures: Vec<String> = Vec::new();
+    let mut pushed: Vec<String> = Vec::new();
+    for h in &hubs {
+        if h.sha.as_deref() == Some(union.as_str()) {
+            continue;
+        }
+        match git_ops::push(&store_dir, &h.remote, STORE_BRANCH) {
+            Ok(true) => pushed.push(h.remote.clone()),
+            Ok(false) => {
+                push_failures.push(format!(
+                    "{}: rejected (raced by a concurrent push — re-run reconcile)",
+                    h.remote
+                ));
+            }
+            Err(e) => push_failures.push(format!("{}: {e}", h.remote)),
+        }
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "branch": STORE_BRANCH,
+                "union": union,
+                "merged_tips": frontier,
+                "merge_notes": merge_notes,
+                "pushed": pushed,
+                "push_failures": push_failures,
+                "executed": true,
+            })
+        );
+    } else {
+        println!(
+            "{} reconciled {STORE_BRANCH}: union {}",
+            crate::glyph(crate::glyphs::Glyph::Check),
+            short(&union)
+        );
+        for note in &merge_notes {
+            println!("    {note}");
+        }
+        for r in &pushed {
+            println!("  pushed → {r}");
+        }
+        for f in &push_failures {
+            eprintln!("  {warn} {f}");
+        }
+    }
+    if !push_failures.is_empty() {
+        anyhow::bail!(
+            "the union is committed locally but {} hub(s) did not receive it — re-run `aida remote reconcile --execute` once they are reachable",
+            push_failures.len()
+        );
     }
     Ok(())
 }
@@ -831,5 +1308,26 @@ host = \"should.not.count\"
     fn parse_known_hosts_empty_body_is_empty() {
         assert!(parse_known_hosts("").is_empty());
         assert!(parse_known_hosts("# just a comment\n").is_empty());
+    }
+
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn emails_in_finds_registry_style_emails() {
+        let text = "+email = \"jane.doe@corp.example.com\"\n+owner = \"joe\"\n";
+        assert_eq!(emails_in(text), vec!["jane.doe@corp.example.com"]);
+    }
+
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn emails_in_dedupes_and_ignores_non_emails() {
+        let text = "a@b.example a@b.example not-an-email @nodomain host@ trailing.dot@x.y.";
+        assert_eq!(emails_in(text), vec!["a@b.example", "trailing.dot@x.y"]);
+    }
+
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn emails_in_empty_text_is_empty() {
+        assert!(emails_in("").is_empty());
+        assert!(emails_in("registry:\n  blocks: []\n").is_empty());
     }
 }

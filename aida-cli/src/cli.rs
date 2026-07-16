@@ -1376,6 +1376,17 @@ pub enum PrCommand {
         /// declared base. Useful for PRs against non-main branches.
         #[clap(long, value_name = "REF")]
         base: Option<String>,
+
+        /// Stack-aware rebase: replay only the commits AFTER this SHA
+        /// (the recorded fork-point of the branch this PR was stacked
+        /// on), via `git rebase --onto <base> <SHA>`. Use when the
+        /// stacked parent was squash-merged and its branch deleted — a
+        /// plain rebase would re-apply the parent's pre-squash commits.
+        /// Refused when SHA is not an ancestor of the PR head (a stale
+        /// stack record).
+        // trace:TASK-1080 | ai:claude
+        #[clap(long, value_name = "SHA", conflicts_with = "check")]
+        onto_parent: Option<String>,
     },
 
     /// Ship a PR: create-if-needed → watch CI → squash-merge → pull →
@@ -2390,6 +2401,32 @@ pub enum RemoteCommand {
         /// remote-tracking refs only (offline-friendly, may be stale).
         #[clap(long)]
         no_fetch: bool,
+    },
+
+    /// Reconcile a diverged spec store across every configured hub: fetch each
+    /// hub's store branch, union-merge the diverged tips (spec objects, the
+    /// operation log, and the id-block/node registries all merge
+    /// structurally), then push the union so every hub fast-forwards to it.
+    /// Dry-run by default — prints the plan and exits 2 when the hubs
+    /// disagree; add --execute to perform the merge and the pushes. Never
+    /// force-pushes; a conflict the structural union cannot resolve stops the
+    /// reconcile with the manual path.
+    // trace:BUG-714 | ai:claude
+    Reconcile {
+        /// Perform the union merge and push it to every hub (without this,
+        /// print the dry-run plan and change nothing).
+        #[clap(long)]
+        execute: bool,
+
+        /// Emit machine-readable JSON instead of the report.
+        #[clap(long)]
+        json: bool,
+
+        /// Consent to publishing identity-bearing registry content (email
+        /// addresses currently on one hub only) to every hub; without it the
+        /// reconcile stops and lists what would be published.
+        #[clap(long)]
+        yes: bool,
     },
 }
 
@@ -3943,6 +3980,63 @@ pub enum BacklogCommand {
     /// that are not currently queued.
     // trace:STORY-451 | ai:codex
     Load,
+}
+
+/// Advisor-autopilot auditability + reversal surface.
+///
+/// The read-only + audit + reversal half of the bounded-authority envelope:
+/// see what autopilot WOULD decide, review the recorded verdicts, and reverse
+/// any of them. Autopilot cannot approve/reject/queue on its own — that
+/// authority is deliberately withheld.
+// trace:TASK-1147 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum AutopilotCommand {
+    /// Dry-run the policy envelope over the current groom candidates and show,
+    /// per spec, the four-gate verdict (auto-execute vs gated, and which gate
+    /// stopped it). Writes NOTHING to any spec. Pass --record to append the
+    /// projected verdicts to the local audit log for later review.
+    Inspect {
+        /// Only weigh specs riskier than this level out (low / medium / high /
+        /// unknown). Mirrors `aida groom --risk`. Default: medium.
+        #[clap(long, value_name = "MAX", default_value = "medium")]
+        risk: String,
+        /// Only consider specs carrying this tag.
+        #[clap(long, value_name = "TAG")]
+        only_tag: Option<String>,
+        /// Never consider specs carrying this tag.
+        #[clap(long, value_name = "TAG")]
+        exclude_tag: Option<String>,
+        /// Append the projected verdicts to the local audit log.
+        #[clap(long)]
+        record: bool,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+    },
+    /// List the recorded autopilot decisions (and any reversals) from the local
+    /// audit log, newest last.
+    Audit {
+        /// Cap the number of rows shown (0 = all).
+        #[clap(long, default_value = "50")]
+        limit: usize,
+        /// Only show decisions that have NOT been challenged.
+        #[clap(long)]
+        open: bool,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Mark a recorded autopilot decision as challenged / reversed. TARGET is a
+    /// decision id (from `aida autopilot audit`) or a SPEC-ID (reverses that
+    /// spec's most recent un-challenged decision).
+    Challenge {
+        /// Decision id or SPEC-ID to reverse.
+        #[clap(value_name = "TARGET")]
+        target: String,
+        /// Why the decision is being reversed.
+        #[clap(long)]
+        note: Option<String>,
+    },
 }
 
 /// Fasttrack-lane introspection subcommands.
@@ -9583,6 +9677,18 @@ pub enum Command {
     // trace:STORY-444 | ai:claude
     #[clap(subcommand)]
     Backlog(BacklogCommand),
+
+    /// Inspect, audit, and reverse advisor-autopilot disposition decisions.
+    ///
+    /// A read-only lens over the bounded-authority policy envelope: `inspect`
+    /// dry-runs the four-gate evaluation over the current groom candidates and
+    /// shows, per spec, what it WOULD decide (and which gate stopped it) without
+    /// touching a single spec; `audit` lists the recorded verdicts; `challenge`
+    /// marks a recorded verdict as reversed. Autopilot has NO authority to
+    /// approve/reject/queue autonomously — that is intentionally not wired.
+    // trace:TASK-1147 | ai:claude
+    #[clap(subcommand)]
+    Autopilot(AutopilotCommand),
 
     /// Top-level alias for `aida queue rework SPEC` — single verb for the
     /// recurring implementer → reviewer → fixup recovery sequence

@@ -281,7 +281,7 @@ impl NodeConfig {
 
 /// A node registration entry in the shared registry (committed to git).
 /// trace:STORY-41 | ai:claude
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeRegistryEntry {
     /// The assigned node ID. Strings as of EPIC-9; numeric ids from older
     /// stores deserialize as their decimal string ("1", "2", ...).
@@ -697,7 +697,7 @@ impl UserRegistry {
 /// When `next > range_end` the block is exhausted; the node must claim a new
 /// block (requires network to push). When `next >= range_end - LOW_THRESHOLD`
 /// a warning is printed on `aida add`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgreedIdBlock {
     /// Node that owns this block. Strings as of EPIC-9; numeric ids from
     /// older stores deserialize as decimal strings. trace:STORY-41 | ai:claude
@@ -1041,6 +1041,187 @@ impl AgreedCounters {
     pub fn format_agreed_id(type_prefix: &str, seq: u32) -> String {
         format!("{}-{}", type_prefix.to_uppercase(), seq)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-hub registry union (BUG-714)
+// ---------------------------------------------------------------------------
+
+/// CRDT-style union of two diverged block registries — the registry half of
+/// `aida remote reconcile`. Blocks are append-only allocations keyed by
+/// `(node_id, type_prefix, range_start, range_end)`: a block present on either
+/// side survives; the SAME block dispensed on both sides unions to the
+/// furthest `next` (a monotonic counter, so max is the safe superset). The
+/// union is then checked for range collisions — two DIFFERENT blocks of the
+/// same type prefix with overlapping ranges means both hubs dispensed from the
+/// same id space and the union cannot be trusted; that is a genuine conflict
+/// the caller must park and surface, never guess-merge.
+///
+/// Pure over its inputs → unit-testable without git. Output order is
+/// deterministic (type prefix, range start, node id) so both clones of a
+/// reconcile converge to byte-identical YAML.
+// trace:BUG-714 | ai:claude
+pub fn union_block_registries(
+    ours: &BlockRegistry,
+    theirs: &BlockRegistry,
+) -> Result<BlockRegistry, String> {
+    type Key = (String, String, u32, u32);
+    let key = |b: &AgreedIdBlock| -> Key {
+        (
+            b.node_id.clone(),
+            b.type_prefix.to_uppercase(),
+            b.range_start,
+            b.range_end,
+        )
+    };
+
+    let mut merged: Vec<AgreedIdBlock> = Vec::new();
+    let mut index: std::collections::HashMap<Key, usize> = std::collections::HashMap::new();
+    for b in ours.blocks.iter().chain(theirs.blocks.iter()) {
+        match index.get(&key(b)) {
+            Some(&i) => {
+                // Same allocation seen from both hubs: `next` is monotonic
+                // (only ever advances by dispensing), so the union takes the
+                // furthest point. Earliest allocated_at wins for stability.
+                let existing = &mut merged[i];
+                existing.next = existing.next.max(b.next);
+                if b.allocated_at < existing.allocated_at {
+                    existing.allocated_at = b.allocated_at;
+                }
+            }
+            None => {
+                index.insert(key(b), merged.len());
+                merged.push(b.clone());
+            }
+        }
+    }
+
+    merged.sort_by(|a, b| {
+        (
+            a.type_prefix.to_uppercase(),
+            a.range_start,
+            a.node_id.clone(),
+        )
+            .cmp(&(
+                b.type_prefix.to_uppercase(),
+                b.range_start,
+                b.node_id.clone(),
+            ))
+    });
+
+    let union = BlockRegistry { blocks: merged };
+    let collisions = union.overlapping_ranges();
+    if !collisions.is_empty() {
+        return Err(format!(
+            "block range collision(s) in the union — the hubs dispensed overlapping id ranges: {}",
+            collisions.join("; ")
+        ));
+    }
+    Ok(union)
+}
+
+impl BlockRegistry {
+    /// List every pair of DISTINCT blocks whose id ranges overlap for the same
+    /// type prefix (case-insensitive). Overlap means two allocations can
+    /// dispense the same stable id — the collision `aida remote reconcile`
+    /// must refuse to publish. Empty = disjoint = safe.
+    // trace:BUG-714 | ai:claude
+    pub fn overlapping_ranges(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for (i, a) in self.blocks.iter().enumerate() {
+            for b in self.blocks.iter().skip(i + 1) {
+                if a.type_prefix.to_uppercase() != b.type_prefix.to_uppercase() {
+                    continue;
+                }
+                let same_allocation = a.node_id == b.node_id
+                    && a.range_start == b.range_start
+                    && a.range_end == b.range_end;
+                if same_allocation {
+                    continue;
+                }
+                if a.range_start <= b.range_end && b.range_start <= a.range_end {
+                    out.push(format!(
+                        "{} {}-{} (node {}) overlaps {}-{} (node {})",
+                        a.type_prefix.to_uppercase(),
+                        a.range_start,
+                        a.range_end,
+                        a.node_id,
+                        b.range_start,
+                        b.range_end,
+                        b.node_id,
+                    ));
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Three-way union of two diverged node registries — the roster half of
+/// `aida remote reconcile`. Entries are keyed by node id:
+///
+/// - present on one side only → survives (a hub-only registration is exactly
+///   the BUG-714 scenario being reconciled);
+/// - identical on both sides → deduplicated;
+/// - differing, where one side still matches `base` → the edited side wins
+///   (a rename / identity-field update on one hub);
+/// - differing on BOTH sides relative to base → a genuine node-id collision
+///   (two machines claimed the same id on different hubs); returned as an
+///   error for the caller to park and surface — never guess-merged.
+///
+/// Pure; deterministic output order (by id, numeric-aware then lexical).
+// trace:BUG-714 | ai:claude
+pub fn union_node_registries(
+    base: &NodeRegistry,
+    ours: &NodeRegistry,
+    theirs: &NodeRegistry,
+) -> Result<NodeRegistry, String> {
+    let by_id = |reg: &NodeRegistry| -> std::collections::HashMap<String, NodeRegistryEntry> {
+        reg.nodes
+            .iter()
+            .map(|n| (n.id.clone(), n.clone()))
+            .collect()
+    };
+    let base_map = by_id(base);
+    let ours_map = by_id(ours);
+    let theirs_map = by_id(theirs);
+
+    let mut ids: Vec<String> = ours_map.keys().chain(theirs_map.keys()).cloned().collect();
+    ids.sort_by(|a, b| match (a.parse::<u32>(), b.parse::<u32>()) {
+        (Ok(x), Ok(y)) => x.cmp(&y),
+        (Ok(_), Err(_)) => std::cmp::Ordering::Less,
+        (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
+        (Err(_), Err(_)) => a.cmp(b),
+    });
+    ids.dedup();
+
+    let mut nodes = Vec::new();
+    for id in ids {
+        let entry = match (ours_map.get(&id), theirs_map.get(&id)) {
+            (Some(o), None) => o.clone(),
+            (None, Some(t)) => t.clone(),
+            (Some(o), Some(t)) if o == t => o.clone(),
+            (Some(o), Some(t)) => {
+                // Same id, different content: the side that changed relative
+                // to base wins; both changed → genuine collision.
+                match base_map.get(&id) {
+                    Some(b) if o == b => t.clone(),
+                    Some(b) if t == b => o.clone(),
+                    _ => {
+                        return Err(format!(
+                            "node id `{id}` registered differently on each hub \
+                             (hosts `{}` vs `{}`) — resolve the collision manually \
+                             (one machine must re-acquire under a different id)",
+                            o.hostname, t.hostname,
+                        ));
+                    }
+                }
+            }
+            (None, None) => unreachable!("id came from one of the maps"),
+        };
+        nodes.push(entry);
+    }
+    Ok(NodeRegistry { nodes })
 }
 
 // ---------------------------------------------------------------------------
@@ -1790,5 +1971,187 @@ registered = "2026-01-01T00:00:00Z"
         let mut reopened = BlockRegistry::load(&path).unwrap();
         assert!(reopened.blocks[0].is_exhausted());
         assert!(reopened.dispense("1", "FR").is_none());
+    }
+
+    // ---- BUG-714: multi-hub registry union ----
+
+    fn block(node: &str, prefix: &str, start: u32, end: u32, next: u32) -> AgreedIdBlock {
+        AgreedIdBlock {
+            node_id: node.to_string(),
+            owner: format!("owner-{node}"),
+            hostname: format!("host-{node}"),
+            type_prefix: prefix.to_string(),
+            range_start: start,
+            range_end: end,
+            next,
+            allocated_at: Utc::now(),
+        }
+    }
+
+    /// The BUG-714 scenario: node 7 allocated block 3001-4000 on gitlab only,
+    /// while the canonical hub carries node 1's block. The union preserves
+    /// both disjoint allocations without collision.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_blocks_preserves_disjoint_allocations_from_both_hubs() {
+        let ours = BlockRegistry {
+            blocks: vec![block("1", "*", 1, 3000, 1200)],
+        };
+        let theirs = BlockRegistry {
+            blocks: vec![
+                block("1", "*", 1, 3000, 1200),
+                block("7", "*", 3001, 4000, 3001),
+            ],
+        };
+        let union = union_block_registries(&ours, &theirs).unwrap();
+        assert_eq!(union.blocks.len(), 2);
+        assert!(union
+            .blocks
+            .iter()
+            .any(|b| b.node_id == "7" && b.range_start == 3001));
+        assert!(union.overlapping_ranges().is_empty());
+    }
+
+    /// The SAME block dispensed on both hubs unions to the furthest `next` —
+    /// the monotonic-counter superset, never a rollback.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_blocks_same_allocation_takes_max_next() {
+        let ours = BlockRegistry {
+            blocks: vec![block("1", "FR", 1, 100, 40)],
+        };
+        let theirs = BlockRegistry {
+            blocks: vec![block("1", "FR", 1, 100, 55)],
+        };
+        let union = union_block_registries(&ours, &theirs).unwrap();
+        assert_eq!(union.blocks.len(), 1);
+        assert_eq!(union.blocks[0].next, 55);
+    }
+
+    /// Two DIFFERENT blocks with overlapping ranges for the same type is a
+    /// genuine collision — the union must refuse, not guess.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_blocks_overlapping_ranges_is_an_error() {
+        let ours = BlockRegistry {
+            blocks: vec![block("1", "BUG", 100, 199, 150)],
+        };
+        let theirs = BlockRegistry {
+            blocks: vec![block("7", "BUG", 150, 249, 150)],
+        };
+        let err = union_block_registries(&ours, &theirs).unwrap_err();
+        assert!(
+            err.contains("collision"),
+            "error should name the collision: {err}"
+        );
+    }
+
+    /// Different type prefixes may share numeric ranges — that is not overlap.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_blocks_different_prefixes_never_collide() {
+        let ours = BlockRegistry {
+            blocks: vec![block("1", "FR", 1, 100, 10)],
+        };
+        let theirs = BlockRegistry {
+            blocks: vec![block("7", "BUG", 1, 100, 10)],
+        };
+        let union = union_block_registries(&ours, &theirs).unwrap();
+        assert_eq!(union.blocks.len(), 2);
+    }
+
+    fn node_entry(id: &str, hostname: &str) -> NodeRegistryEntry {
+        NodeRegistryEntry {
+            id: id.to_string(),
+            user_id: 1,
+            hostname: hostname.to_string(),
+            email: None,
+            clone_path: None,
+            name: None,
+            user: None,
+            registered: Utc::now(),
+        }
+    }
+
+    /// A node registered on ONE hub only (the gitlab-only node 7 registration
+    /// from BUG-714) survives the union.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_nodes_keeps_hub_only_registration() {
+        let base = NodeRegistry {
+            nodes: vec![node_entry("1", "imac")],
+        };
+        let ours = base.clone();
+        let theirs = NodeRegistry {
+            nodes: vec![node_entry("1", "imac"), node_entry("7", "workbox")],
+        };
+        let union = union_node_registries(&base, &ours, &theirs).unwrap();
+        assert_eq!(union.nodes.len(), 2);
+        assert!(union.nodes.iter().any(|n| n.id == "7"));
+    }
+
+    /// An identity-field edit on one hub (other side still equal to base)
+    /// resolves to the edited side, not a conflict.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_nodes_one_sided_edit_wins() {
+        let base = NodeRegistry {
+            nodes: vec![node_entry("1", "imac")],
+        };
+        let mut renamed = node_entry("1", "imac");
+        renamed.name = Some("imac-joe-1".to_string());
+        renamed.registered = base.nodes[0].registered;
+        let ours = NodeRegistry {
+            nodes: vec![renamed.clone()],
+        };
+        let mut theirs_entry = node_entry("1", "imac");
+        theirs_entry.registered = base.nodes[0].registered;
+        let theirs = NodeRegistry {
+            nodes: vec![theirs_entry],
+        };
+        let union = union_node_registries(&base, &ours, &theirs).unwrap();
+        assert_eq!(union.nodes.len(), 1);
+        assert_eq!(union.nodes[0].name.as_deref(), Some("imac-joe-1"));
+    }
+
+    /// The same node id claimed by two different machines on two hubs is a
+    /// genuine collision — refused, never guess-merged.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_nodes_same_id_two_machines_is_an_error() {
+        let base = NodeRegistry::default();
+        let ours = NodeRegistry {
+            nodes: vec![node_entry("7", "workbox-a")],
+        };
+        let theirs = NodeRegistry {
+            nodes: vec![node_entry("7", "workbox-b")],
+        };
+        let err = union_node_registries(&base, &ours, &theirs).unwrap_err();
+        assert!(err.contains("`7`"), "error should name the id: {err}");
+    }
+
+    /// Union output order is deterministic regardless of input order, so both
+    /// clones of a reconcile converge to identical bytes.
+    // trace:BUG-714 | ai:claude
+    #[test]
+    fn union_blocks_order_is_deterministic() {
+        let a = BlockRegistry {
+            blocks: vec![
+                block("7", "*", 3001, 4000, 3001),
+                block("1", "*", 1, 3000, 10),
+            ],
+        };
+        let b = BlockRegistry {
+            blocks: vec![
+                block("1", "*", 1, 3000, 10),
+                block("7", "*", 3001, 4000, 3001),
+            ],
+        };
+        let u1 = union_block_registries(&a, &b).unwrap();
+        let u2 = union_block_registries(&b, &a).unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&u1).unwrap(),
+            serde_yaml::to_string(&u2).unwrap()
+        );
     }
 }

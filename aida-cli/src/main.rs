@@ -75,6 +75,8 @@ mod health;
 mod health_metrics;
 mod history;
 mod human_audit;
+// trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
+mod identity_guard;
 mod intake;
 mod integrate;
 // trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
@@ -3489,6 +3491,15 @@ fn run() -> Result<()> {
         );
     }
 
+    // TASK-1147: `aida autopilot` (inspect / audit / challenge) is the read-only
+    // auditability + reversal surface over the policy envelope. Like `aida
+    // groom` it self-loads the store to compute its candidate fence and writes
+    // nothing to any spec — dispatch early, no shared storage handle needed.
+    // trace:TASK-1147 | ai:claude
+    if let Command::Autopilot(cmd) = &cli.command {
+        return handle_autopilot_command(cmd);
+    }
+
     // STORY-547: `aida why <ID>` reads the requirement graph like burndown —
     // dispatch early, no shared storage handle needed. trace:STORY-547
     if let Command::Why { id, json } = &cli.command {
@@ -3707,6 +3718,9 @@ fn run() -> Result<()> {
             }
             crate::cli::RemoteCommand::Status { json, no_fetch } => {
                 remote_create::handle_remote_status(&project_root, *json, *no_fetch)
+            }
+            crate::cli::RemoteCommand::Reconcile { execute, json, yes } => {
+                remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
             }
         };
     }
@@ -4794,6 +4808,10 @@ fn run() -> Result<()> {
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
         Command::Groom { .. } => {
             unreachable!("groom (assess/intake) is dispatched before storage init")
+        }
+        // trace:TASK-1147
+        Command::Autopilot(_) => {
+            unreachable!("autopilot is dispatched before storage init")
         }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
@@ -16007,6 +16025,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
         Command::Groom { .. } => {
             unreachable!("groom (assess/intake) is dispatched before storage init")
+        }
+        // trace:TASK-1147
+        Command::Autopilot(_) => {
+            unreachable!("autopilot is dispatched before storage init")
         }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
@@ -39544,10 +39566,15 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
                 category: "remote-drift".to_string(),
                 id: format!("remote-drift-{branch}"),
                 summary: format!("branch `{branch}` differs across remotes: {detail}"),
-                action:
+                action: if branch == "aida-store" {
+                    "run `aida remote reconcile` (dry-run; --execute to union-merge and push every hub); \
+                     never force-push a shared branch to resolve"
+                        .to_string()
+                } else {
                     "reconcile the divergent tips and push to every remote (see `aida remote status`); \
                      never force-push a shared branch to resolve"
-                        .to_string(),
+                        .to_string()
+                },
                 safe_heal: false,
             });
         }
@@ -45223,6 +45250,11 @@ fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
         TriageCommand::Acquire { scope, user } => {
             let slug = triage_lease::scope_slug(scope.as_deref());
             let owner = current_user_id(user.as_deref());
+            // TASK-1150: distinct-user identity guard — minting a lease owned by
+            // a genuinely-different user id than this shell's identity (e.g.
+            // `--user user-b` from a `user-a` shell) silently crosses
+            // identities. trace:TASK-1150 | ai:claude
+            identity_guard::enforce(&current_user_id(None), &owner, "lease acquire")?;
             // Reap dead holders first so a crashed advisor's lease doesn't
             // wrongly block a fresh acquire. trace:TASK-661 | ai:claude
             let live =
@@ -45286,6 +45318,19 @@ fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
         TriageCommand::Release { scope, user } => {
             let slug = triage_lease::scope_slug(scope.as_deref());
             let owner = current_user_id(user.as_deref());
+            // TASK-1150: distinct-user identity guard. If a lease for this scope
+            // is on disk owned by a genuinely-different identity than the one
+            // we're releasing as (e.g. the shell drifted from `user-a` to
+            // `user-b`), `release` would silently no-op ("no lease held by you")
+            // while the real holder's lease sits untouched. Surface the
+            // mismatch against the actual stored owner before that happens.
+            // trace:TASK-1150 | ai:claude
+            if let Some(held) = triage_lease::list_all(&project_root)
+                .into_iter()
+                .find(|l| l.scope == slug)
+            {
+                identity_guard::enforce(&owner, &held.owner, "lease release")?;
+            }
             if triage_lease::release(&project_root, &slug, &owner)? {
                 println!(
                     "{} disposition lease for scope {}.",
@@ -62310,7 +62355,15 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             interactive,
             no_smoke,
             base,
-        } => pr_rebase_handler(*n, *check, *interactive, *no_smoke, base.as_deref()),
+            onto_parent,
+        } => pr_rebase_handler(
+            *n,
+            *check,
+            *interactive,
+            *no_smoke,
+            base.as_deref(),
+            onto_parent.as_deref(),
+        ),
         PrCommand::Ship {
             n,
             no_pull,
@@ -62435,6 +62488,10 @@ fn pr_rebase_handler(
     interactive: bool,
     no_smoke: bool,
     base_override: Option<&str>,
+    // TASK-1080: stack-aware form. When set, step 6 runs the 3-arg
+    // `git rebase --onto origin/<base> <onto_parent>` so the stacked parent's
+    // (now squash-merged) commits are skipped, guarded by an ancestor check.
+    onto_parent: Option<&str>,
 ) -> Result<()> {
     use pr_rebase::{
         cross_fork_refusal, default_smoke_check, manual_recipe, parse_pr_info,
@@ -62581,12 +62638,45 @@ fn pr_rebase_handler(
         let _ = std::fs::remove_dir_all(&wt_path);
     };
 
+    // ---- Step 5b (TASK-1080): stale-stack-record guard for --onto-parent. ----
+    // The 3-arg rebase only makes sense when the recorded fork-point SHA is an
+    // ancestor of the PR head; if it isn't, the branch was already rebased (the
+    // STORY-248 cascade, a manual /aida-rebase, a sibling promotion) and
+    // replaying `<sha>..HEAD` would pick the wrong commit range. Fail closed
+    // with a pointer at the plain rebase rather than rewrite history off a
+    // stale record. trace:TASK-1080 | ai:claude
+    if let Some(parent_sha) = onto_parent {
+        let is_ancestor = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&wt_path)
+            .args(["merge-base", "--is-ancestor", parent_sha, "HEAD"])
+            .status();
+        if !matches!(is_ancestor, Ok(s) if s.success()) {
+            cleanup_worktree();
+            anyhow::bail!(
+                "--onto-parent {} is not an ancestor of the PR head — the stack record is \
+                 stale (branch already rebased?). Re-check with `aida stack show`, or use a \
+                 plain `aida pr rebase {}` if the branch no longer carries the parent's commits.",
+                parent_sha,
+                n
+            );
+        }
+    }
+
     // ---- Step 6: rebase. ----
-    let rebase = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&wt_path)
-        .args(["rebase", &origin_base])
-        .status();
+    // Plain form rebases everything onto origin/<base>; the --onto-parent form
+    // uses `git rebase --onto origin/<base> <fork-sha>` so a stacked child
+    // replays only its OWN commits (the parent's pre-squash commits, already on
+    // main via the squash merge, are skipped). trace:TASK-1080 | ai:claude
+    let rebase = {
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C").arg(&wt_path);
+        match onto_parent {
+            Some(parent_sha) => cmd.args(["rebase", "--onto", &origin_base, parent_sha]),
+            None => cmd.args(["rebase", &origin_base]),
+        };
+        cmd.status()
+    };
     let rebase_ok = matches!(rebase, Ok(s) if s.success());
 
     if !rebase_ok {
@@ -65176,6 +65266,7 @@ mod story_429_auto_rebase_tests {
             None,
             true,
             no_human,
+            AutonomyMode::Default,
             "test-run".to_string(),
             false,
             false,
@@ -95545,6 +95636,391 @@ fn preview_next_version(current: &str, bump: &str) -> Option<String> {
 /// advisor-side analog of `handle_burndown_run`: load the `[intake]` policy +
 /// flag overrides, self-load the store, compute the BOUNDED candidate fence
 /// (the do-not-approve classes + `needs-human`/`strategic` specs are excluded
+/// TASK-1147: the advisor-autopilot auditability + reversal surface.
+///
+/// This is the read-only + audit + reversal HALF of EPIC-0428. `inspect`
+/// dry-runs the four-gate policy envelope over the live groom candidates and
+/// shows, per spec, what it WOULD decide — without touching a single spec.
+/// `audit` lists recorded verdicts; `challenge` reverses one. Autopilot has NO
+/// authority to approve/reject/queue here — the envelope is never wired to
+/// execute a disposition. That keystone-autonomy slice is deferred.
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_command(cmd: &crate::cli::AutopilotCommand) -> Result<()> {
+    use crate::cli::AutopilotCommand;
+    match cmd {
+        AutopilotCommand::Inspect {
+            risk,
+            only_tag,
+            exclude_tag,
+            record,
+            json,
+        } => handle_autopilot_inspect(
+            risk,
+            only_tag.as_deref(),
+            exclude_tag.as_deref(),
+            *record,
+            *json,
+        ),
+        AutopilotCommand::Audit { limit, open, json } => {
+            handle_autopilot_audit(*limit, *open, *json)
+        }
+        AutopilotCommand::Challenge { target, note } => {
+            handle_autopilot_challenge(target, note.as_deref())
+        }
+    }
+}
+
+/// `aida autopilot inspect` — dry-run the envelope over the current groom
+/// candidates. Reuses the SAME candidate fence as `aida groom`
+/// (`select_intake_candidates`) so the projection can never disagree with the
+/// disposition path about what is touchable.
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_inspect(
+    risk: &str,
+    only_tag: Option<&str>,
+    exclude_tag: Option<&str>,
+    record: bool,
+    json: bool,
+) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let cfg = intake::IntakeConfig::load(&project_root);
+    let max_risk = backlog::RiskLevel::parse(risk)?;
+    let filters = intake::IntakeFilters {
+        only_tag: only_tag.map(|s| s.to_string()),
+        exclude_tag: exclude_tag.map(|s| s.to_string()),
+        max_risk,
+    };
+
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+    let queued_ids = all_queued_requirement_ids(&project_root);
+
+    // Build the same candidate facts `aida groom` builds — plus the proposed
+    // ACTION per spec (Draft -> approve, Approved-but-unqueued -> queue), which
+    // the envelope grades. trace:TASK-1147
+    let mut specs: Vec<intake::IntakeSpec> = Vec::new();
+    let mut proposed: std::collections::HashMap<String, autopilot::ActionClass> =
+        std::collections::HashMap::new();
+    for req in &store.requirements {
+        if req.archived {
+            continue;
+        }
+        if is_standing_artifact_type(&format!("{:?}", req.req_type)) {
+            continue;
+        }
+        let is_draft = matches!(req.status, aida_core::RequirementStatus::Draft);
+        let is_approved_unqueued = matches!(req.status, aida_core::RequirementStatus::Approved)
+            && !queued_ids.contains(&req.id);
+        if !(is_draft || is_approved_unqueued) {
+            continue;
+        }
+        let disp = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        let has_plan = !find_plan_files_for_spec(&project_root, &disp).is_empty();
+        let (risk, risk_reason) = backlog::classify_risk_with_reason(req, has_plan);
+        let tags: Vec<String> = req.tags.iter().cloned().collect();
+        let deferred = intake::is_deferred(req.deferred, &tags);
+        let action = if is_draft {
+            autopilot::ActionClass::Approve
+        } else {
+            autopilot::ActionClass::Queue
+        };
+        proposed.insert(disp.clone(), action);
+        specs.push(intake::IntakeSpec {
+            id: disp,
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+            tags,
+            deferred,
+            risk,
+            risk_reason,
+        });
+    }
+    specs.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let (eligible, fenced) = intake::select_intake_candidates(&specs, &cfg, &filters);
+    let fenced_ids: std::collections::HashSet<String> = eligible.iter().cloned().collect();
+    let risk_of: std::collections::HashMap<&str, backlog::RiskLevel> =
+        specs.iter().map(|s| (s.id.as_str(), s.risk)).collect();
+
+    // The envelope. The default table is the conservative one — approve/reject
+    // hold, reversible actions auto. No auto-execution is wired regardless.
+    let env = autopilot::AutopilotEnvelope::default();
+
+    // Build one Decision per eligible spec. Grounding is the advisor's runtime
+    // judgment (it needs the live corpus read); the dry-run assumes the
+    // best case — a groundable Type-A — so the projection reflects what the
+    // OTHER gates would do. The verdict is therefore an UPPER BOUND on autonomy.
+    let decisions: Vec<autopilot::Decision> = eligible
+        .iter()
+        .map(|id| {
+            let action = proposed
+                .get(id)
+                .copied()
+                .unwrap_or(autopilot::ActionClass::Approve);
+            autopilot::Decision {
+                spec_id: id.clone(),
+                action,
+                grounding: autopilot::Grounding::TypeA,
+                risk: risk_of.get(id.as_str()).copied().unwrap_or(max_risk),
+                reason: String::new(),
+                evidence: vec![],
+            }
+        })
+        .collect();
+    let rows = autopilot::project_decisions(&env, &fenced_ids, &decisions);
+
+    if json {
+        let eligible_json: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "spec_id": r.spec_id,
+                    "action": r.action.token(),
+                    "verdict": r.outcome.verdict_token(),
+                    "gate": r.outcome.gate_label(),
+                })
+            })
+            .collect();
+        let fenced_json: Vec<_> = fenced
+            .iter()
+            .map(|(id, reason)| serde_json::json!({ "spec_id": id, "fenced": reason.describe() }))
+            .collect();
+        let out = serde_json::json!({
+            "risk_ceiling": max_risk.token(),
+            "grounding_assumed": "type-a (best case; advisor grounds at run time)",
+            "auto_execution": false,
+            "eligible": eligible_json,
+            "fenced": fenced_json,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        // Recording still honored under --json.
+        if record {
+            record_inspect_rows(&project_root, &rows)?;
+        }
+        return Ok(());
+    }
+
+    println!(
+        "{} autopilot inspect — dry-run (nothing is written to any spec)",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
+    println!(
+        "  {}",
+        format!(
+            "envelope: risk≤{} · grounding=required (assumed groundable) · approve=propose reject=propose",
+            max_risk.token()
+        )
+        .dimmed()
+    );
+
+    if rows.is_empty() {
+        println!(
+            "  {} 0 specs in the fence ({} fenced out). Nothing for the envelope to weigh.",
+            "→".green(),
+            fenced.len()
+        );
+    } else {
+        println!(
+            "\n  {} envelope verdict per eligible candidate:",
+            "→".green()
+        );
+        for r in &rows {
+            let (glyph, label) = match r.outcome {
+                autopilot::Outcome::Execute => (
+                    crate::glyph(crate::glyphs::Glyph::Check)
+                        .green()
+                        .to_string(),
+                    "EXECUTE".green().bold(),
+                ),
+                autopilot::Outcome::Hold => ("⏸".yellow().to_string(), "HOLD".yellow().bold()),
+                autopilot::Outcome::Escalate(_) => (
+                    crate::glyph(crate::glyphs::Glyph::Warning)
+                        .red()
+                        .to_string(),
+                    "ESCALATE".red().bold(),
+                ),
+            };
+            println!(
+                "    {} {:<12} {:<8} {}  {}",
+                glyph,
+                r.spec_id,
+                r.action.token(),
+                label,
+                r.outcome.gate_label().dimmed()
+            );
+        }
+    }
+
+    if !fenced.is_empty() {
+        println!(
+            "\n  {} {} fenced out at gate 1 (never touchable — the authority map cannot widen this):",
+            "·".dimmed(),
+            fenced.len()
+        );
+        for (id, reason) in &fenced {
+            println!(
+                "    {} {} — {}",
+                "✕".dimmed(),
+                id,
+                reason.describe().dimmed()
+            );
+        }
+    }
+
+    if record {
+        let n = record_inspect_rows(&project_root, &rows)?;
+        println!(
+            "\n  {} recorded {} verdict(s) to {}",
+            "→".green(),
+            n,
+            autopilot::audit_log_path(&project_root).display()
+        );
+    }
+
+    println!(
+        "\n  {} projection only — autopilot has NO authority to approve/reject/queue here; \n     that keystone-autonomy is deliberately not wired. Review with `aida autopilot audit`,\n     reverse with `aida autopilot challenge <id>`.",
+        "note:".dimmed()
+    );
+    Ok(())
+}
+
+/// Append the inspected verdicts to the local audit log; returns the count.
+fn record_inspect_rows(
+    project_root: &std::path::Path,
+    rows: &[autopilot::InspectRow],
+) -> Result<usize> {
+    let ts = chrono::Utc::now().to_rfc3339();
+    let entries: Vec<autopilot::AuditEntry> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            autopilot::decision_entry(
+                &ts, i, &r.spec_id, r.action, r.outcome, &r.reason, "inspect",
+            )
+        })
+        .collect();
+    autopilot::append_audit_entries(project_root, &entries)?;
+    Ok(entries.len())
+}
+
+/// `aida autopilot audit` — list recorded decisions (and their reversals).
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_audit(limit: usize, open_only: bool, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let entries = autopilot::read_audit_entries(&project_root)?;
+
+    // Fold challenges onto the decisions they target.
+    let mut decisions: Vec<&autopilot::AuditEntry> =
+        entries.iter().filter(|e| e.kind == "decision").collect();
+    if open_only {
+        decisions.retain(|d| !autopilot::is_challenged(&entries, &d.id));
+    }
+    if limit > 0 && decisions.len() > limit {
+        decisions = decisions.split_off(decisions.len() - limit);
+    }
+
+    if json {
+        let rows: Vec<_> = decisions
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "id": d.id,
+                    "ts": d.ts,
+                    "spec_id": d.spec_id,
+                    "action": d.action,
+                    "verdict": d.verdict,
+                    "gate": d.gate,
+                    "source": d.source,
+                    "challenged": autopilot::is_challenged(&entries, &d.id),
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!(rows))?
+        );
+        return Ok(());
+    }
+
+    if decisions.is_empty() {
+        println!(
+            "{} no recorded autopilot decisions yet. Run `aida autopilot inspect --record` to log a dry-run.",
+            "·".dimmed()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} autopilot audit — {} recorded decision(s)",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        decisions.len()
+    );
+    for d in &decisions {
+        let challenged = autopilot::is_challenged(&entries, &d.id);
+        let mark = if challenged {
+            "⨯ CHALLENGED".red().to_string()
+        } else {
+            "· open".dimmed().to_string()
+        };
+        println!(
+            "  {} {}  {:<12} {:<8} {:<9} {}  {}",
+            d.id.cyan(),
+            d.ts.dimmed(),
+            d.spec_id.as_deref().unwrap_or("-"),
+            d.action.as_deref().unwrap_or("-"),
+            d.verdict.as_deref().unwrap_or("-"),
+            d.gate.as_deref().unwrap_or("-").dimmed(),
+            mark
+        );
+    }
+    Ok(())
+}
+
+/// `aida autopilot challenge <target>` — record a reversal of a decision.
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_challenge(target: &str, note: Option<&str>) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let entries = autopilot::read_audit_entries(&project_root)?;
+
+    let Some(decision_id) = autopilot::resolve_challenge_target(&entries, target) else {
+        anyhow::bail!(
+            "no matching autopilot decision for `{target}` — pass a decision id from \
+             `aida autopilot audit`, or a SPEC-ID with an un-challenged recorded decision."
+        );
+    };
+    if autopilot::is_challenged(&entries, &decision_id) {
+        println!(
+            "{} decision {} is already challenged — nothing to do.",
+            "·".dimmed(),
+            decision_id.cyan()
+        );
+        return Ok(());
+    }
+    let ts = chrono::Utc::now().to_rfc3339();
+    let entry = autopilot::challenge_entry(&ts, &decision_id, note);
+    autopilot::append_audit_entries(&project_root, &[entry])?;
+    println!(
+        "{} challenged autopilot decision {}{}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        decision_id.cyan(),
+        note.map(|n| format!(" — {n}")).unwrap_or_default()
+    );
+    Ok(())
+}
+
+/// STORY-560: `aida groom` self-loads the store, computes its candidate fence
+/// (P1/P2/P3 policy + always-on tag exclusions + keystone/deferred fences applied
 /// HERE, programmatically — the agent never sees them as actionable), then
 /// launch a headless `claude -p "/aida-assess [--apply]"` that reads the fenced
 /// set, proposes dispositions, and (under `--apply`) approves within the fence
@@ -108276,7 +108752,7 @@ fn fan_out_mirror_push(repo: &std::path::Path, branch: &str, project_root: &std:
         match aida_core::git_ops::push(repo, mirror, branch) {
             Ok(true) => println!("  Mirror push complete."),
             Ok(false) => eprintln!(
-                "  {warn} mirror `{mirror}` rejected (diverged) — reconcile then re-push (see `aida remote status`)"
+                "  {warn} mirror `{mirror}` rejected (diverged) — run `aida remote reconcile` to union-merge and re-sync every hub"
             ),
             Err(e) => eprintln!("  {warn} mirror `{mirror}` push failed: {e} — skipped"),
         }
@@ -112367,6 +112843,47 @@ mod queue_work_tests {
     fn resolve_run_no_token_is_not_zen() {
         let m = AutonomyMode::resolve_run(None, false);
         assert!(!m.is_zen());
+    }
+
+    /// ADR-10: the phase driver CARRIES the resolved-once typed autonomy mode
+    /// as a field (symmetric with `no_human`), and the engine's zen predicate
+    /// (`is_zen_run`) reads that carried field — NOT a bare `AIDA_ZEN` env
+    /// read. This is the drain-state zen-stamping source in `run_auto_complete`.
+    /// The three modes round-trip through construction unchanged, so the
+    /// autonomy behavior is byte-identical to the pre-ADR-10 env-derived read.
+    // trace:ADR-10 | ai:claude
+    #[test]
+    fn phase_driver_carries_autonomy_mode_and_is_zen_run_reads_the_field() {
+        fn build(mode: AutonomyMode) -> RealPhaseDriver {
+            RealPhaseDriver::new(
+                std::env::temp_dir().join(format!("aida-adr10-{}", uuid::Uuid::now_v7())),
+                "ADR-10".to_string(),
+                None,
+                false,
+                // `no_human` is independent of the carried autonomy mode here —
+                // the field is the SOLE source `is_zen_run` consults.
+                None,
+                mode,
+                "test-run".to_string(),
+                false,
+                false,
+                false,
+                false,
+                auto_complete::LifecycleSkip::none(),
+            )
+        }
+        // The field is stored verbatim, and `is_zen_run()` reads it.
+        assert_eq!(build(AutonomyMode::Zen).autonomy_mode, AutonomyMode::Zen);
+        assert!(build(AutonomyMode::Zen).is_zen_run());
+        assert!(!build(AutonomyMode::Default).is_zen_run());
+        assert!(!build(AutonomyMode::NoHuman).is_zen_run());
+        // Guard against a future refactor that silently re-reads the env: the
+        // field wins regardless of what `AIDA_ZEN` is set to in the process.
+        // (No env mutation here — asserting the field is self-contained.)
+        assert_eq!(
+            build(AutonomyMode::Default).autonomy_mode,
+            AutonomyMode::Default
+        );
     }
 
     // --- resolve_drain_alias (TASK-578) -----------------------------------
@@ -129380,7 +129897,7 @@ fn handle_review_spec(
                             .prompt()
                             .unwrap_or(false);
                     if rebase_now {
-                        if let Err(e) = pr_rebase_handler(n, false, false, false, None) {
+                        if let Err(e) = pr_rebase_handler(n, false, false, false, None, None) {
                             eprintln!(
                                 "  {} rebase did not complete ({e}); the review \
                                  will run against the stale base",
@@ -134774,6 +135291,14 @@ fn handle_queue_command(
             maybe_hint_advisor_seat();
             let user_id = get_user(user);
 
+            // TASK-1150: distinct-user identity guard. Adding to a queue keyed
+            // by a genuinely-different user id than this shell's identity (e.g.
+            // `--user user-b` from a `user-a` shell — not just a case variant)
+            // silently crosses identities. Surface it (warn by default, refuse
+            // when the operator opts in). No-op on the common same-identity add.
+            // trace:TASK-1150 | ai:claude
+            identity_guard::enforce(&current_user_id(None), &user_id, "queue add")?;
+
             // BUG-634: avoid a full-store scan (`storage.load()` parses every
             // YAML) on the queue write path. For the distributed (directory)
             // store, open a cache-backed backend for targeted single-spec
@@ -135054,6 +135579,11 @@ fn handle_queue_command(
             r#for,
         } => {
             let user_id = get_user(user);
+
+            // TASK-1150: distinct-user identity guard — mutating a queue owned
+            // by a genuinely-different user id than this shell's identity
+            // silently crosses identities. trace:TASK-1150 | ai:claude
+            identity_guard::enforce(&current_user_id(None), &user_id, "queue remove")?;
 
             // --global removes from ~/.aida/queue/<role>.yaml. Role from
             // --for or AIDA_SESSION_ROLE. trace:FR-1-012 | ai:claude
@@ -143271,7 +143801,7 @@ fn handle_queue_integrate(
         // below. Empty when gh is missing/failing — the gate then degrades to
         // the optimistic "Merge" verdict, and the --from-pr drive re-gates the
         // irreversible step. trace:TASK-836 | ai:claude
-        let pr_snapshot = if dry_run || !ready.is_empty() {
+        let mut pr_snapshot = if dry_run || !ready.is_empty() {
             collect_open_prs(&project_root)
         } else {
             OpenPrSnapshot::default()
@@ -143341,37 +143871,199 @@ fn handle_queue_integrate(
         // rebases the next layer's worktree (STORY-248); a later `--watch` pass
         // (or re-run) picks it up. trace:TASK-841 | ai:claude
         if matches!(strategy, integrate::IntegrateStrategy::Stacked) && !ready_ids.is_empty() {
-            let graph = stacks::load(&project_root);
+            let mut graph = stacks::load(&project_root);
             let default_short = detect_default_branch_ref(&project_root)
                 .as_deref()
                 .map(|s| s.strip_prefix("origin/").unwrap_or(s).to_string())
                 .unwrap_or_else(|| "main".to_string());
             let plan =
                 integrate::plan_stacked_integration(&ready_ids, &branches, &graph, &default_short);
+            // TASK-1080: stack-aware promotion. A deferred member whose parent
+            // branch is GONE on origin (squash-merged + deleted) is promoted in
+            // place: its ORIGIN PR branch is rebased with the 3-arg
+            // `git rebase --onto <default> <recorded fork SHA>` + force-pushed
+            // with lease — composing the one `pr rebase` machinery (temp
+            // worktree, BUG-640 patch-id guard, lease-anchored push) via
+            // `--onto-parent` — then merged by the normal drive THIS pass. The
+            // STORY-248 cascade only rebases the child's local worktree; this
+            // closes the origin-PR half so a 2-deep stack drains without a
+            // manual `/aida-rebase`. The decision per member is the pure
+            // `integrate::classify_stacked_promotion`. trace:TASK-1080 | ai:claude
+            let mut promoted: Vec<String> = Vec::new();
+            let mut still_deferred = 0usize;
             for d in &plan.deferred {
-                match &d.blocked_on_spec {
-                    Some(parent_spec) => println!(
+                if let Some(parent_spec) = &d.blocked_on_spec {
+                    // Parent is in THIS pass's ready set — it merges below; the
+                    // next pass (or --watch wake) promotes this child.
+                    println!(
                         "  {} {} — stacked behind {} (branch `{}`); deferring until it lands",
                         "⏸".yellow(),
                         d.id,
                         parent_spec,
                         d.blocked_on_branch
-                    ),
-                    None => println!(
-                        "  {} {} — stacked behind `{}` (parent not yet integrated / needs a stack-aware rebase); deferring. Run `/aida-rebase` in its worktree, then re-run.",
-                        "⏸".yellow(),
-                        d.id,
-                        d.blocked_on_branch
-                    ),
+                    );
+                    still_deferred += 1;
+                    continue;
+                }
+                let child_branch = branches.get(&d.id).and_then(|b| b.clone());
+                let recorded_sha = child_branch
+                    .as_deref()
+                    .and_then(|b| graph.get(b))
+                    .map(|e| e.parent_branch_sha.clone());
+                let parent_gone = remote_branch_gone(&project_root, &d.blocked_on_branch);
+                let pr_num = pr_numbers.get(&d.id).and_then(|p| *p);
+                match integrate::classify_stacked_promotion(
+                    recorded_sha.as_deref(),
+                    parent_gone,
+                    pr_num.is_some(),
+                ) {
+                    integrate::StackedPromotion::Promote { parent_sha } => {
+                        let pr = pr_num.expect("Promote implies a resolved PR number");
+                        if dry_run {
+                            println!(
+                                "  {} {} — parent `{}` merged+deleted; [dry-run] would rebase PR #{} onto {} (stack-aware) and force-push-with-lease",
+                                "↻".cyan(),
+                                d.id,
+                                d.blocked_on_branch,
+                                pr,
+                                default_short
+                            );
+                            promoted.push(d.id.clone());
+                            continue;
+                        }
+                        println!(
+                            "  {} {} — parent `{}` merged+deleted; promoting: stack-aware rebase of PR #{} onto {}…",
+                            "↻".cyan(),
+                            d.id,
+                            d.blocked_on_branch,
+                            pr,
+                            default_short
+                        );
+                        let status = std::process::Command::new(&aida)
+                            .current_dir(drive_cwd)
+                            .args(integrate::promotion_rebase_args(pr, &parent_sha))
+                            .status();
+                        match status {
+                            Ok(s) if s.success() => {
+                                // The child now forks straight from the default
+                                // branch — drop its stack entry so no later pass
+                                // or cascade replays the consumed fork record.
+                                // Dependents (grandchildren) keep their own
+                                // records: their recorded fork SHA is still an
+                                // ancestor of THEIR untouched PR head, so their
+                                // eventual promotion stays correct.
+                                if let Some(b) = child_branch.as_deref() {
+                                    stacks::remove(&mut graph, b);
+                                    if let Err(e) = stacks::save(&project_root, &graph) {
+                                        eprintln!(
+                                            "  {} could not update .aida/stacks.json: {e}",
+                                            "Note:".dimmed()
+                                        );
+                                    }
+                                }
+                                println!(
+                                    "  {} {} promoted — PR #{} rebased + force-pushed; merging this pass",
+                                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                                    d.id,
+                                    pr
+                                );
+                                promoted.push(d.id.clone());
+                            }
+                            Ok(_) => {
+                                // Shelvable failure — park + continue (resilient-
+                                // drain contract). Never corrupts: `pr rebase`
+                                // aborts a conflicted rebase and cleans its temp
+                                // worktree; nothing was pushed.
+                                println!(
+                                    "  {} {} — stack-aware rebase failed (conflict?); parking and continuing",
+                                    "⏸".yellow(),
+                                    d.id
+                                );
+                                if let Err(e) = shelve_spec_on_failure(
+                                    &project_root,
+                                    &d.id,
+                                    "integrate",
+                                    0,
+                                    "stacked-rebase",
+                                    &format!(
+                                        "stack-aware rebase of PR #{pr} onto {default_short} failed (likely a conflict replaying the stacked commits)"
+                                    ),
+                                    &format!(
+                                        "resolve with `aida pr rebase {pr} --onto-parent {parent_sha}` (or add `--interactive`), then re-run `aida queue integrate --strategy stacked`"
+                                    ),
+                                ) {
+                                    eprintln!(
+                                        "  {} could not park {}: {e}",
+                                        "Note:".dimmed(),
+                                        d.id
+                                    );
+                                }
+                                any_parked_or_waited = true; // trace:TASK-836
+                            }
+                            Err(e) => {
+                                println!(
+                                    "  {} {} — could not launch the stack-aware rebase ({e}); deferring",
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                                    d.id
+                                );
+                                still_deferred += 1;
+                            }
+                        }
+                    }
+                    integrate::StackedPromotion::ParentStillOpen => {
+                        println!(
+                            "  {} {} — stacked behind `{}` (parent not merged yet); deferring until it lands",
+                            "⏸".yellow(),
+                            d.id,
+                            d.blocked_on_branch
+                        );
+                        still_deferred += 1;
+                    }
+                    integrate::StackedPromotion::ProbeInconclusive => {
+                        println!(
+                            "  {} {} — stacked behind `{}`; couldn't verify the parent branch on origin (offline?); deferring, not guessing",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            d.id,
+                            d.blocked_on_branch
+                        );
+                        still_deferred += 1;
+                    }
+                    integrate::StackedPromotion::ChurnedNoEntry => {
+                        // Churn guard: the cascade removed the stack entry after
+                        // this pass's plan was computed — defer and let the next
+                        // re-plan classify it (it will read as mergeable).
+                        println!(
+                            "  {} {} — its stack record vanished mid-pass; deferring (next pass re-plans)",
+                            "·".dimmed(),
+                            d.id
+                        );
+                        still_deferred += 1;
+                    }
+                    integrate::StackedPromotion::NoPrNumber => {
+                        println!(
+                            "  {} {} — parent `{}` merged but no PR number resolved; run `/aida-rebase` in its worktree, then re-run",
+                            "⏸".yellow(),
+                            d.id,
+                            d.blocked_on_branch
+                        );
+                        still_deferred += 1;
+                    }
                 }
             }
-            if !plan.deferred.is_empty() {
+            if still_deferred > 0 {
                 // Mirror the resilient-drain contract: something was held back, so
                 // the run exits 2 and a wrapping loop (or `--watch`) re-checks
                 // after the bottom layer merges. trace:TASK-836 | ai:claude
                 any_parked_or_waited = true;
             }
             ready_ids = plan.mergeable;
+            ready_ids.extend(promoted.iter().cloned());
+            // A promoted child's snapshot row predates the force-push — refresh
+            // so the TASK-836 pre-merge gate judges the NEW head, not the stale
+            // stacked one. trace:TASK-1080 | ai:claude
+            if !promoted.is_empty() && !dry_run {
+                pr_snapshot = collect_open_prs(&project_root);
+            }
         }
 
         // STORY-335: dry-run rebase-conflict forecast. Each ready member's PR
@@ -144156,8 +144848,27 @@ fn run_auto_complete(
     // stays as the cross-process transport to phase children / skill templates.
     // trace:ADR-7 trace:ADR-10 trace:BUG-237 | ai:claude
     let autonomy = AutonomyMode::for_auto_complete_run(no_human);
-    let run_zen = autonomy.is_zen();
     let run_token = uuid::Uuid::now_v7().to_string();
+
+    // ADR-10: build the driver FIRST, carrying the resolved-once typed
+    // `autonomy` alongside `no_human`, so the drain-state stamping below reads
+    // the carried field (`driver.is_zen_run()`) rather than re-deriving zen-ness
+    // from a bare `AIDA_ZEN` env read. The env var stays as the cross-process
+    // transport to phase children / skill templates. trace:ADR-10 | ai:claude
+    let mut driver = RealPhaseDriver::new(
+        project_root.clone(),
+        spec.to_string(),
+        permission_mode.map(|s| s.to_string()),
+        json,
+        no_human,
+        autonomy,
+        run_token.clone(),
+        steal,
+        force_claim,
+        allow_stale_base,
+        no_auto_rebase,
+        lifecycle_skip,
+    );
 
     // STORY-301: surface the drain so a user inside the spawned Claude session
     // can see what command launched it, how far it has got, and what happens
@@ -144168,26 +144879,14 @@ fn run_auto_complete(
     // Best-effort: a write failure leaves the drain running, just unobservable
     // — and crucially, phase children correctly fall back to treating
     // themselves as interactive when the corroboration check finds no live
-    // drain-state. trace:STORY-301 trace:TASK-336 | ai:claude
+    // drain-state. The zen flag is the carried typed field, not a bare env
+    // re-read (ADR-10). trace:STORY-301 trace:TASK-336 trace:ADR-10 | ai:claude
+    let run_zen = driver.is_zen_run();
     if owns_drain_state {
         let _ = drain_state::DrainState::new_single(spec, &run_token, run_zen).write(&project_root);
     } else {
         drain_state::set_run(&project_root, spec, &run_token, run_zen);
     }
-
-    let mut driver = RealPhaseDriver::new(
-        project_root.clone(),
-        spec.to_string(),
-        permission_mode.map(|s| s.to_string()),
-        json,
-        no_human,
-        run_token,
-        steal,
-        force_claim,
-        allow_stale_base,
-        no_auto_rebase,
-        lifecycle_skip,
-    );
     // STORY-492: a resume re-entry seeds the driver with the branch + PR the
     // skipped phases would otherwise have discovered, so the resumed phases
     // (CI / reviewer / merge / …) have the context they need.
@@ -148011,6 +148710,7 @@ mod real_phase_driver_wiring_tests {
             None,
             false,
             None,
+            crate::AutonomyMode::Default,
             "run-token".to_string(),
             false,
             false,
@@ -148845,6 +149545,33 @@ fn build_integrate_rebase_args(pr_number: u32) -> Vec<String> {
     ]
 }
 
+/// TASK-1080: live three-state probe — is `branch` GONE on origin?
+/// `git ls-remote --exit-code origin refs/heads/<branch>` distinguishes
+/// "ref absent" (exit 2 → `Some(true)`, the merged+deleted signature) from
+/// "ref present" (exit 0 → `Some(false)`) from "couldn't tell" (spawn error /
+/// offline / auth → `None`). The three states matter: the stacked-promotion
+/// path must never read an offline probe as "parent merged" — a false
+/// promotion would rewrite a PR branch that still depends on an open parent.
+// trace:TASK-1080 | ai:claude
+fn remote_branch_gone(project_root: &std::path::Path, branch: &str) -> Option<bool> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "ls-remote",
+            "--exit-code",
+            "origin",
+            &format!("refs/heads/{branch}"),
+        ])
+        .output()
+        .ok()?;
+    match out.status.code() {
+        Some(0) => Some(false),
+        Some(2) => Some(true),
+        _ => None,
+    }
+}
+
 /// TASK-262: the argv `RealPhaseDriver::auto_punt_text_question` hands to the
 /// `aida` subprocess to record a headless implementer's design-fork punt.
 /// Factored out of the inline `Command` builder so the subprocess wiring (the
@@ -149238,6 +149965,16 @@ struct RealPhaseDriver {
     /// headless (`claude -p`); the implementer phase stays interactive in
     /// this cut (STORY-276 wires it). `None` → fully interactive.
     no_human: Option<auto_complete::NoHumanMode>,
+    /// ADR-10: the run's typed autonomy mode, resolved ONCE at dispatch (via
+    /// [`AutonomyMode::for_auto_complete_run`]) and carried here alongside
+    /// `no_human` so the engine's in-process zen branches consult this typed
+    /// field instead of re-reading the bare `AIDA_ZEN` env var. `AIDA_ZEN`
+    /// survives strictly as the cross-process TRANSPORT to spawned phase
+    /// children / skill templates; this field is the in-process SOURCE OF
+    /// TRUTH. Symmetric with `no_human`, closing the `--zen`/`--no-human`
+    /// asymmetry ADR-7 named.
+    // trace:ADR-10 | ai:claude
+    autonomy_mode: AutonomyMode,
     /// TASK-329: poll cadence + SIGTERM→SIGKILL grace for the graceful-exit
     /// signal. Resolved once from `AIDA_EXIT_POLL_MS` / `AIDA_EXIT_GRACE_MS`.
     exit_cfg: exit_signal::ExitSignalConfig,
@@ -149349,6 +150086,9 @@ impl RealPhaseDriver {
         permission_mode: Option<String>,
         json: bool,
         no_human: Option<auto_complete::NoHumanMode>,
+        // ADR-10: the run's typed autonomy mode, resolved ONCE at dispatch and
+        // carried alongside `no_human`. trace:ADR-10 | ai:claude
+        autonomy_mode: AutonomyMode,
         run_token: String,
         steal: bool,
         force_claim: bool,
@@ -149368,6 +150108,7 @@ impl RealPhaseDriver {
             ci_run_id: None,
             aida_exe: resolve_aida_exe(),
             no_human,
+            autonomy_mode,
             exit_cfg: exit_signal::ExitSignalConfig::from_env(),
             run_token,
             implementer_session: None,
@@ -149384,6 +150125,14 @@ impl RealPhaseDriver {
 
     fn sessions_dir(&self) -> std::path::PathBuf {
         self.project_root.join(".aida").join("sessions")
+    }
+
+    /// ADR-10: whether this run is a supervised `--zen` drive, read from the
+    /// carried typed `autonomy_mode` field — the in-process source of truth —
+    /// NOT from a bare `AIDA_ZEN` env re-read.
+    // trace:ADR-10 | ai:claude
+    fn is_zen_run(&self) -> bool {
+        self.autonomy_mode.is_zen()
     }
 
     fn aida_exe(&self) -> std::path::PathBuf {
@@ -151859,8 +152608,9 @@ impl AutonomyMode {
     /// var remains the cross-process TRANSPORT to spawned phase children / skill
     /// templates; this typed value is the in-process SOURCE OF TRUTH, so the
     /// engine path no longer re-derives zen-ness from scattered bare env reads.
-    /// (The engine carries no `zen` field the way it carries `no_human`, because
-    /// zen's pauses fire in the child sessions, not the parent engine.)
+    /// ADR-10 carries this resolved value onto the phase driver as the
+    /// `autonomy_mode` field (symmetric with `no_human`); in-process zen
+    /// branches read `RealPhaseDriver::is_zen_run()`, not a bare env re-read.
     // trace:ADR-7 trace:ADR-10 | ai:claude
     fn for_auto_complete_run(no_human: Option<auto_complete::NoHumanMode>) -> Self {
         Self::resolve_run(no_human, std::env::var(zen::ZEN_TOKEN_ENV).is_ok())
