@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T16:51:59.295933889Z
+modified_at: 2026-07-16T16:54:46.966585219Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -292,6 +292,12 @@ comments:
   content: 'Step 30 DONE: report cluster → report_cmd.rs merged (#1451), main.rs 136433→136367 (-66). Combined-main green. Next: goal #1452 (-226, green, rebasing), focus #1453 (-203).'
   created_at: 2026-07-16T16:40:23.128528735Z
   modified_at: 2026-07-16T16:40:23.128528735Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f6bda-27b6-7e30-9460-2c4b51f1fe97
+  author: joe
+  content: 'Step 31 DONE: goal cluster → goal_cmd.rs merged (#1452), main.rs 136367→136141 (-226). mcp.rs 2 call sites repointed. Combined-main green. Next: focus #1453 (green, rebasing), comment #1454 (-229).'
+  created_at: 2026-07-16T16:54:46.966585219Z
+  modified_at: 2026-07-16T16:54:46.966585219Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
