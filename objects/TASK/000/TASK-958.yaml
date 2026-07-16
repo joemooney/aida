@@ -3,12 +3,12 @@ spec_id: TASK-958
 agreed_id: TASK-958
 title: STORY-711 commit-side authorization gate (a commit refusing to land work for a spec
 description: ''
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T16:04:03.758412394Z
-modified_at: 2026-07-15T07:10:17.760104807Z
+modified_at: 2026-07-16T04:53:10.361244855Z
 req_type: Task
 tags:
 - zen-ready
@@ -32,3 +32,21 @@ comments:
   content: Commit 08e9d2872 references this requirement
   created_at: 2026-07-15T07:10:17.760104807Z
   modified_at: 2026-07-15T07:10:17.760104807Z
+history:
+- id: 019f6945-8052-7e52-b39a-7e7a1d67d77d
+  author: aida-auto-bump
+  timestamp: 2026-07-16T04:53:10.354273342Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f6945-8059-7823-abc8-0ab41752e3f0
+  timestamp: 2026-07-16T04:53:10.361243664Z
+  agent: aida
+  commit_sha: 3cd7558b9ea3ef3ffc2912fb07a865ca564e7d51
+  summary: Completed via merge 3cd7558b
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-16T04:53:10.086485902Z
+  completion_sha: 3cd7558b9ea3ef3ffc2912fb07a865ca564e7d51
