@@ -2402,6 +2402,32 @@ pub enum RemoteCommand {
         #[clap(long)]
         no_fetch: bool,
     },
+
+    /// Reconcile a diverged spec store across every configured hub: fetch each
+    /// hub's store branch, union-merge the diverged tips (spec objects, the
+    /// operation log, and the id-block/node registries all merge
+    /// structurally), then push the union so every hub fast-forwards to it.
+    /// Dry-run by default — prints the plan and exits 2 when the hubs
+    /// disagree; add --execute to perform the merge and the pushes. Never
+    /// force-pushes; a conflict the structural union cannot resolve stops the
+    /// reconcile with the manual path.
+    // trace:BUG-714 | ai:claude
+    Reconcile {
+        /// Perform the union merge and push it to every hub (without this,
+        /// print the dry-run plan and change nothing).
+        #[clap(long)]
+        execute: bool,
+
+        /// Emit machine-readable JSON instead of the report.
+        #[clap(long)]
+        json: bool,
+
+        /// Consent to publishing identity-bearing registry content (email
+        /// addresses currently on one hub only) to every hub; without it the
+        /// reconcile stops and lists what would be published.
+        #[clap(long)]
+        yes: bool,
+    },
 }
 
 /// Claude Code path-gated rules sync.
