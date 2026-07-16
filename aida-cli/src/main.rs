@@ -28,6 +28,7 @@ mod complexity_calibration;
 mod config_edit;
 mod coordination;
 mod deep_link;
+mod defer_cmd;
 mod digest;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
 mod dispatch_health_ps;
@@ -10004,96 +10005,6 @@ fn handle_punt_command(
     Ok(())
 }
 
-/// `aida defer <SPEC> [--until "<condition>"]` — park a spec as primed /
-/// conditional work, hidden from the default open-work view. Mirrors
-/// `archive_single` but sets the parallel defer view-flag and records the
-/// free-text revisit trigger that distinguishes deferred (prospective) from
-/// archived (filed). Defer does NOT touch the lifecycle state machine and
-/// deliberately carries no terminal-status guard — the whole point is to shelf
-/// live, open backlog. trace:STORY-584 | ai:claude
-fn defer_single(
-    id: &str,
-    until: Option<&str>,
-    backend: &aida_core::CachedGitBackend,
-    store_path: &std::path::Path,
-) -> Result<()> {
-    let mut req = backend
-        .get_requirement_by_spec_id(id)?
-        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
-    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
-
-    // Re-deferring an already-deferred spec is allowed — it lets the operator
-    // update the revisit trigger via `--until` without an undefer round-trip.
-    let already = req.deferred;
-    let now = chrono::Utc::now();
-    req.deferred = true;
-    if already {
-        // Preserve the original defer timestamp on a trigger update.
-        if req.deferred_at.is_none() {
-            req.deferred_at = Some(now);
-        }
-    } else {
-        req.deferred_at = Some(now);
-    }
-    // Only overwrite the trigger when one is supplied, so a bare re-defer
-    // keeps the existing condition.
-    if let Some(cond) = until {
-        req.deferred_until = Some(cond.to_string());
-    }
-    req.modified_at = now;
-    backend.update_requirement(&req)?;
-    record_role_activity(&display_id, "defer");
-
-    let verb = if already { "Re-deferred:" } else { "Deferred:" };
-    println!("{} {display_id}", verb.cyan().bold());
-    match req.deferred_until.as_deref() {
-        Some(cond) => println!("  {} {cond}", "Revisit when:".dimmed()),
-        None => println!(
-            "  {} no revisit trigger recorded — add one with `aida defer {display_id} --until \"<condition>\"`",
-            "Note:".dimmed()
-        ),
-    }
-    Ok(())
-}
-
-/// Inverse of `aida defer` — clears the deferred flag + revisit trigger so the
-/// spec reappears in the default views. Mirrors `handle_unarchive_command`.
-/// trace:STORY-584 | ai:claude
-fn handle_undefer_command(
-    id: &str,
-    backend: &aida_core::CachedGitBackend,
-    store_path: &std::path::Path,
-) -> Result<()> {
-    let mut req = backend
-        .get_requirement_by_spec_id(id)?
-        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
-    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
-    // Honor-both migration: a spec deferred only via a legacy `deferred:*` tag
-    // has no flag to clear — name that so the operator knows to edit the tag.
-    let tag_deferred = req.tags.iter().any(|t| t.starts_with("deferred:"));
-    if !req.deferred {
-        if tag_deferred {
-            anyhow::bail!(
-                "{display_id} is hidden via a legacy `deferred:*` tag, not the deferred flag. \
-                 Remove the tag with `aida edit {display_id} --remove-tag <tag>` to restore it."
-            );
-        }
-        anyhow::bail!(
-            "{display_id} is not deferred — nothing to undefer. \
-             Use `aida defer {display_id}` if you meant to defer it."
-        );
-    }
-    let now = chrono::Utc::now();
-    req.deferred = false;
-    req.deferred_at = None;
-    req.deferred_until = None;
-    req.modified_at = now;
-    backend.update_requirement(&req)?;
-    record_role_activity(&display_id, "undefer");
-    println!("{} {display_id}", "Undeferred:".cyan().bold());
-    Ok(())
-}
-
 /// Send a best-effort notification message into `recipient`'s mailbox (the
 /// fast local layer; STORY-643 auto-sync propagates it to other clones on the
 /// next pull/push). Reuses the existing message-send path — no new notification
@@ -18875,11 +18786,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Defer { id, until } => {
             // STORY-584: park a spec on the primed/conditional shelf, hidden
             // from the default open-work view. trace:STORY-584 | ai:claude
-            defer_single(id, until.as_deref(), &backend, store_path)?;
+            defer_cmd::defer_single(id, until.as_deref(), &backend, store_path)?;
         }
         Command::Undefer { id } => {
             // STORY-584: inverse of `aida defer`. trace:STORY-584 | ai:claude
-            handle_undefer_command(id, &backend, store_path)?;
+            defer_cmd::handle_undefer_command(id, &backend, store_path)?;
         }
         Command::Assign { id, to } => {
             // STORY-639: set the durable assignee + route into the target
