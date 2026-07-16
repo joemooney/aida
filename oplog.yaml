@@ -33322,5 +33322,22 @@ operations:
     req_type: Spike
     status: Approved
     priority: Medium
-clock: 3113
+- id: 019f69a7-887e-75b1-846a-b9f3e5151143
+  target_id: 019f69a7-8536-7831-b7af-aa1da50f03fc
+  author: aida
+  node_id: '1'
+  lamport: 3114
+  timestamp: 2026-07-16T06:40:14.974886549Z
+  kind: !Create
+    title: Keystone 'do not merge, advisor-review' directive is text-only — pr ship auto-merged two keystones past it; needs a substrate marker pr ship honors
+    description: |-
+      2026-07-15: TASK-1080 and BUG-714 both carried the implementation directive 'Gate + PR, do NOT merge (keystone, advisor-review at PR)'. Both were launched as `aida agent new` sessions whose standard `aida pr ship` cadence gated on CI green and then AUTO-MERGED the PR — bypassing the pre-merge advisor review the directive asked for. Both turned out sound (post-merge advisor review found no remediation), but the directive was a RULE IN SPEC TEXT that the ship path never consulted.
+
+      This is a substrate-as-bouncer gap: a keystone/supervised spec must be UNMERGEABLE-by-automation, not merely asked-nicely. Fix: a first-class marker (e.g. a `supervised` / `no-auto-merge` tag, or a spec field) that `aida pr ship` (and any auto-merge path) CHECKS and REFUSES to auto-merge on — holding the PR for explicit human/advisor merge instead, with a clear message ('SPEC-ID is marked supervised; auto-merge refused — merge requires advisor review'). The advisor's post-merge review is the fallback, not the design.
+
+      Related: the keyboard-lane / keystone discipline (reliability + autonomy machinery ships supervised); STORY-666 (destructive ops gated by consequence). Acceptance: a spec tagged supervised, dispatched to a pr-ship session, PARKS at 'mergeable, awaiting advisor' instead of auto-merging.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3114
 node_id: '1'
