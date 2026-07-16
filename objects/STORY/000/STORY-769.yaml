@@ -15,12 +15,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-15T04:16:57.328215441Z
-modified_at: 2026-07-16T06:49:38.834605607Z
+modified_at: 2026-07-16T07:12:24.604546330Z
 req_type: Story
 tags:
 - hooks
 - orchestrator
 - substrate
+comments:
+- id: 019f69c4-fa1c-7e10-9827-7e7e401dcbb8
+  author: joe
+  content: Commit 7722d39e6 references this requirement
+  created_at: 2026-07-16T07:12:24.604546330Z
+  modified_at: 2026-07-16T07:12:24.604546330Z
 history:
 - id: 019f69b0-230c-7201-968f-3c15fabf9634
   author: aida-auto-bump
@@ -29,12 +35,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
-processing_record:
-- id: 019f69b0-2312-7c40-b240-1edf83ed959f
-  timestamp: 2026-07-16T06:49:38.834604831Z
-  agent: aida
-  commit_sha: 7722d39e63620cd03e51c9cdddc621eecee8c125
-  summary: Completed via merge 7722d39e
 implementation_info:
   implemented: false
   completed_at: 2026-07-16T06:49:38.637161648Z
