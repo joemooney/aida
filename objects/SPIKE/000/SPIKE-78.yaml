@@ -13,12 +13,12 @@ description: |-
   5. Deliver an INCREMENTAL plan: extract one crate/test-file at a time, verify green each step, never a single mega-refactor.
 
   TIMING: sequence AFTER the current keystone/slice cluster merges (ADR-10/TASK-958 done; TASK-1150, TASK-1147, TASK-1080, BUG-714, TASK-1020 all touch main.rs) — a big main.rs refactor mid-fleet is merge-conflict hell. Tech-debt / dev-ergonomics, not bugs-before-marketing, but the compile tax is real and continuous.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T08:15:29.249073325Z
+modified_at: 2026-07-16T08:26:53.090891284Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -73,6 +73,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 019f6a09-291c-7760-94d5-ae82aa867948
+  author: aida-auto-bump
+  timestamp: 2026-07-16T08:26:53.084979538Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 019f69ec-da76-7a61-a531-1ed823226188
   timestamp: 2026-07-16T07:55:57.942393044Z
@@ -84,6 +91,11 @@ processing_record:
   agent: aida
   commit_sha: 48d8241e780ffe7db046de4ca9a64287f4fb917e
   summary: Completed via merge 48d8241e
+- id: 019f6a09-2922-7e30-9645-2b1d751dc7e8
+  timestamp: 2026-07-16T08:26:53.090890767Z
+  agent: aida
+  commit_sha: cc68bbfd8d6cf9f051d82efa18f60eab86a74bbd
+  summary: Completed via merge cc68bbfd
 implementation_info:
   implemented: false
   completed_at: 2026-07-16T07:55:57.747214765Z
