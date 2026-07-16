@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T07:20:39.422149465Z
-modified_at: 2026-07-16T06:11:39.376854533Z
+modified_at: 2026-07-16T06:39:27.837841048Z
 req_type: Bug
 tags:
 - coordination
@@ -58,6 +58,12 @@ comments:
   created_at: 2026-07-16T06:11:39.376854533Z
   modified_at: 2026-07-16T06:11:39.376854533Z
   session_id: 6d9119d1-46aa-45c4-8184-20c41948a09d
+- id: 019f69a6-d05d-7af1-8ded-3654f8e88d65
+  author: joe
+  content: 'POST-MERGE ADVISOR REVIEW (2026-07-15): reviewed PR-1419 against the diff after the pr-ship auto-merge. VERDICT: sound — fail-closed. Collisions re-checked post-union via overlapping_ranges() and bail (refuse to publish); union is a merge commit (both tips parent → every hub fast-forwards, NO force-push, NO rebase of published history); scrub guard reuses detect_identity_leaks and hard-blocks + pushes nothing on a raw-identity leak. 13 tests + two-diverged-tips fixture + live smoke reproducing the node-7/block-3001 failure. No remediation needed. NOTE the process gap: the keystone directive said ''do not merge, advisor-review at PR'' but the session''s pr-ship cadence auto-merged on CI green — the launch instructions overrode the spec''s hold.'
+  created_at: 2026-07-16T06:39:27.837841048Z
+  modified_at: 2026-07-16T06:39:27.837841048Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f698c-f850-7f93-858a-9478af2c881d
   author: aida-auto-bump
