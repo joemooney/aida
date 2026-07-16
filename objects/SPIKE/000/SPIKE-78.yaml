@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T22:22:30.260443266Z
+modified_at: 2026-07-16T22:25:10.421234959Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -446,6 +446,12 @@ comments:
   content: 'Step 50 DONE: triage → triage_cmd.rs merged (#1471), main.rs→128228 (-145). Combined-main green.'
   created_at: 2026-07-16T22:11:05.612401467Z
   modified_at: 2026-07-16T22:11:05.612401467Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f6d08-a315-7162-a788-0c5c24d4362f
+  author: joe
+  content: 'Step 51 DONE: rules → rules_cmd.rs merged (#1472), main.rs 128228→128128 (-100). Combined-main green. Next: node #1473 (-459, green, rebasing w/ import-block union), autonomy #1474 (-169).'
+  created_at: 2026-07-16T22:25:10.421234959Z
+  modified_at: 2026-07-16T22:25:10.421234959Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
