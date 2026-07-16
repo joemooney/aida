@@ -16,6 +16,7 @@ mod autopilot;
 mod awaiting_you;
 mod backlog;
 mod burndown;
+mod cache_cmd;
 mod calibration;
 mod changelog;
 mod changelog_cmd;
@@ -13196,7 +13197,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
 
     match command {
         Command::Cache(cache_cmd) => {
-            return handle_cache_command(cache_cmd, &backend);
+            return cache_cmd::handle_cache_command(cache_cmd, &backend);
         }
         Command::Record(record_cmd) => {
             // STORY-582: inspect / prune the durable processing-record trail.
@@ -26770,64 +26771,6 @@ mod format_tags_inline_tests {
     fn zero_cap_renders_empty() {
         assert_eq!(format_tags_inline(&s(&["a", "b"]), 0), "");
     }
-}
-
-fn handle_cache_command(cmd: &CacheCommand, backend: &aida_core::CachedGitBackend) -> Result<()> {
-    use aida_core::DatabaseBackend;
-
-    match cmd {
-        CacheCommand::Rebuild => {
-            let n = backend.rebuild_cache()?;
-            println!(
-                "{}: Cache rebuilt. {} requirement(s) projected from git store at {}.",
-                "OK".green(),
-                n,
-                backend.cache().path().display()
-            );
-        }
-        CacheCommand::Status => {
-            let cache = backend.cache();
-            let recorded_sha = cache.source_head_sha()?.unwrap_or_default();
-            let actual_sha = aida_core::git_ops::head_sha(backend.path()).unwrap_or_default();
-            let count = cache.requirement_count()?;
-            let built_at = cache.built_at()?.unwrap_or_else(|| "(never)".into());
-            // BUG-664: count object files without parsing them — a full
-            // `list_requirements(true)` YAML-parses every object (~1s) just to
-            // print a count; the directory walk is O(files) with no parse.
-            let store_count = backend.inner().object_count()?;
-
-            println!("Cache path:       {}", cache.path().display());
-            println!("Cached requirements: {}", count);
-            println!("Store requirements:  {}", store_count);
-            println!("Last built:       {}", built_at);
-            println!(
-                "Cache HEAD SHA:   {}",
-                if recorded_sha.is_empty() {
-                    "(none)".to_string()
-                } else {
-                    recorded_sha.clone()
-                }
-            );
-            println!(
-                "Store HEAD SHA:   {}",
-                if actual_sha.is_empty() {
-                    "(no git head — non-git store?)".to_string()
-                } else {
-                    actual_sha.clone()
-                }
-            );
-            let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
-            if stale && !actual_sha.is_empty() {
-                println!(
-                    "Status:           {} — run `aida cache rebuild`",
-                    "STALE".yellow()
-                );
-            } else {
-                println!("Status:           {}", "FRESH".green());
-            }
-        }
-    }
-    Ok(())
 }
 
 // ----------------------------------------------------------------------------
