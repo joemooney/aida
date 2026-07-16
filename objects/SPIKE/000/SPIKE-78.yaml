@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T13:25:05.751608442Z
+modified_at: 2026-07-16T13:28:22.340357952Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -186,6 +186,12 @@ comments:
   content: Commit 0866c2939 references this requirement
   created_at: 2026-07-16T13:23:58.847775045Z
   modified_at: 2026-07-16T13:23:58.847775045Z
+- id: 019f6b1d-2e44-7260-be81-9da744707160
+  author: joe
+  content: 'Step 18 DONE: config cluster → config_cmd.rs (~2200 lines) merged (#1439), main.rs 146237→144063 (-2192). cfg-gated config_menu pair kept intact (both tui arms). Combined-main green. Next: init #1440 (-2744, green, rebasing), upgrade #1441 (-630).'
+  created_at: 2026-07-16T13:28:22.340357952Z
+  modified_at: 2026-07-16T13:28:22.340357952Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
   author: aida-auto-bump
