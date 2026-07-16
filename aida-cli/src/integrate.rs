@@ -425,8 +425,9 @@ pub(crate) fn strategy_unsupported_message(strategy: IntegrateStrategy) -> Optio
 // then cascade-rebases the next layer's worktree; STORY-248). Force-pushing a
 // promoted child's PR branch with the stack-aware `git rebase --onto
 // origin/main <parent_sha>` — so the second layer becomes mergeable
-// automatically instead of waiting on a manual `/aida-rebase` — is the tracked
-// follow-up (TASK-1080). trace:TASK-841 | ai:claude
+// automatically instead of waiting on a manual `/aida-rebase` — is the
+// TASK-1080 promotion path below (`classify_stacked_promotion`).
+// trace:TASK-841 | ai:claude
 
 /// A ready stacked member held back this pass because its stack-parent hasn't
 /// landed on the default branch yet.
@@ -508,6 +509,109 @@ pub(crate) fn plan_stacked_integration(
         }
     }
     plan
+}
+
+// ── TASK-1080: stack-aware promotion of a deferred child ─────────────────────
+//
+// TASK-841's planner defers a member stacked behind another still-open branch,
+// and only merges the bottom layer per pass. Once the parent lands (squash-
+// merged + branch deleted on origin), the child's ORIGIN PR branch still
+// carries the parent's pre-squash commits — the STORY-248 cascade rebases the
+// child's WORKTREE locally on `aida pull` but never force-pushes the PR branch,
+// so the child stayed deferred behind a manual `/aida-rebase`. This is the
+// promotion decision that closes the loop: when the deferred child's parent
+// branch is GONE on origin (the merged+deleted signature of `gh pr merge
+// --squash --delete-branch`), the integrator rebases the PR branch with the
+// stack-aware `git rebase --onto <default> <recorded parent fork SHA>` +
+// force-push-with-lease (composing `aida pr rebase --onto-parent`), then lets
+// the normal drive merge it — no manual step.
+//
+// PURE, like every other integrate decision: the caller probes (stack entry,
+// live ls-remote, PR number) and acts (subprocess); this only decides. The
+// churn guard is two-layered: an entry the cascade already removed never
+// reaches here as deferred (the planner classifies it mergeable), and a stale
+// recorded SHA (branch already rebased by someone else) is refused fail-closed
+// by the ancestor guard inside `aida pr rebase --onto-parent` itself.
+// trace:TASK-1080
+
+/// What to do with ONE deferred stacked member whose parent is not in this
+/// pass's ready set.
+// trace:TASK-1080 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StackedPromotion {
+    /// Parent branch is gone on origin (merged + deleted) and both the stack
+    /// record and the PR number are in hand — run the stack-aware rebase and
+    /// force-push, then merge this pass. `parent_sha` is the recorded
+    /// fork-point SHA (the second argument of the 3-arg `git rebase --onto`
+    /// form).
+    Promote { parent_sha: String },
+    /// The parent branch still exists on origin — it hasn't merged yet; keep
+    /// deferring (a later pass promotes once it lands).
+    ParentStillOpen,
+    /// The ls-remote probe was inconclusive (offline / auth) — never rebase
+    /// blind on "couldn't tell"; keep deferring and re-probe next pass.
+    ProbeInconclusive,
+    /// Churn guard (defensive): no stack entry recorded for the child branch —
+    /// the cascade already un-stacked it. The planner classifies such a member
+    /// mergeable, so a deferred member without an entry means the graph changed
+    /// under us; keep deferring this pass and let the next re-plan decide.
+    ChurnedNoEntry,
+    /// Parent merged, but no PR number resolved for the child — nothing to
+    /// force-push against; keep deferring with a manual pointer.
+    NoPrNumber,
+}
+
+/// The pure promotion decision for one deferred stacked member. Inputs are
+/// already-probed facts:
+///   * `recorded_parent_sha` — the stack entry's `parent_branch_sha` for the
+///     child's PR branch, `None` when the entry is gone (churn);
+///   * `parent_gone_on_origin` — live ls-remote verdict for the parent branch:
+///     `Some(true)` = ref absent (merged+deleted), `Some(false)` = still there,
+///     `None` = probe failed (offline/auth) — surfaced, never guessed;
+///   * `has_pr_number` — whether the child's open-PR number resolved.
+///
+/// Order encodes the safety priority: trust the graph first (no entry → the
+/// plan is stale), then the probe quality, then the parent's state, then the
+/// push preconditions.
+// trace:TASK-1080 | ai:claude
+pub(crate) fn classify_stacked_promotion(
+    recorded_parent_sha: Option<&str>,
+    parent_gone_on_origin: Option<bool>,
+    has_pr_number: bool,
+) -> StackedPromotion {
+    let Some(parent_sha) = recorded_parent_sha else {
+        return StackedPromotion::ChurnedNoEntry;
+    };
+    match parent_gone_on_origin {
+        None => StackedPromotion::ProbeInconclusive,
+        Some(false) => StackedPromotion::ParentStillOpen,
+        Some(true) => {
+            if !has_pr_number {
+                return StackedPromotion::NoPrNumber;
+            }
+            StackedPromotion::Promote {
+                parent_sha: parent_sha.to_string(),
+            }
+        }
+    }
+}
+
+/// Assemble the `aida pr rebase <N> --no-smoke --onto-parent <SHA>` argv the
+/// integrator self-invokes to promote a deferred stacked child. Pure, mirroring
+/// `drive_args`: the stack-aware rebase + force-push-with-lease live in the ONE
+/// `pr rebase` machinery (temp worktree, BUG-640 patch-id guard, lease-anchored
+/// push), never inlined here. `--no-smoke` because the `--from-pr` drive that
+/// follows runs CI.
+// trace:TASK-1080 | ai:claude
+pub(crate) fn promotion_rebase_args(pr_number: u32, parent_sha: &str) -> Vec<String> {
+    vec![
+        "pr".to_string(),
+        "rebase".to_string(),
+        pr_number.to_string(),
+        "--no-smoke".to_string(),
+        "--onto-parent".to_string(),
+        parent_sha.to_string(),
+    ]
 }
 
 /// Parse a strategy from its CLI/config string form (`per-item`, `one-branch`,
@@ -1171,7 +1275,7 @@ mod tests {
     fn plan_stacked_defers_child_whose_parent_is_not_ready() {
         // The child's parent branch merged already (or isn't in the ready set),
         // so blocked_on_spec is None — but the child is still deferred until the
-        // stack-aware rebase promotes it (the tracked follow-up).
+        // TASK-1080 stack-aware promotion rebases + force-pushes its PR branch.
         let ready = vec!["B".to_string()];
         let branches = branch_map(&[("B", Some("b"))]);
         let mut graph = crate::stacks::StackGraph::default();
@@ -1192,6 +1296,83 @@ mod tests {
         let plan = plan_stacked_integration(&ready, &branches, &graph, "main");
         assert_eq!(plan.mergeable, vec!["A".to_string()]);
         assert!(plan.deferred.is_empty());
+    }
+
+    // ── TASK-1080 stack-aware promotion of a deferred child ─────────────────
+
+    #[test]
+    fn promotion_fires_when_parent_gone_with_record_and_pr() {
+        // The whole point: parent merged+deleted on origin, stack record + PR
+        // number in hand → promote via the stack-aware rebase.
+        assert_eq!(
+            classify_stacked_promotion(Some("abc123"), Some(true), true),
+            StackedPromotion::Promote {
+                parent_sha: "abc123".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn promotion_waits_while_parent_branch_still_on_origin() {
+        // Parent hasn't merged yet — promoting now would DROP the parent's
+        // commits from the child branch. Keep deferring.
+        assert_eq!(
+            classify_stacked_promotion(Some("abc123"), Some(false), true),
+            StackedPromotion::ParentStillOpen
+        );
+    }
+
+    #[test]
+    fn promotion_never_rebases_blind_on_inconclusive_probe() {
+        // Offline / auth failure: "couldn't tell" is surfaced, never treated
+        // as "gone" — a false promotion would rewrite a PR branch wrongly.
+        assert_eq!(
+            classify_stacked_promotion(Some("abc123"), None, true),
+            StackedPromotion::ProbeInconclusive
+        );
+    }
+
+    #[test]
+    fn promotion_churn_guard_when_cascade_removed_the_entry() {
+        // The cascade already un-stacked the child (entry gone) — the plan is
+        // stale; defer and re-plan rather than rebase off a missing record.
+        // The entry check runs FIRST, regardless of the other facts.
+        assert_eq!(
+            classify_stacked_promotion(None, Some(true), true),
+            StackedPromotion::ChurnedNoEntry
+        );
+        assert_eq!(
+            classify_stacked_promotion(None, None, false),
+            StackedPromotion::ChurnedNoEntry
+        );
+    }
+
+    #[test]
+    fn promotion_requires_a_pr_number_to_force_push() {
+        // Parent gone but no open-PR number resolved — nothing to
+        // force-push-with-lease against; defer with a manual pointer.
+        assert_eq!(
+            classify_stacked_promotion(Some("abc123"), Some(true), false),
+            StackedPromotion::NoPrNumber
+        );
+    }
+
+    #[test]
+    fn promotion_rebase_args_compose_pr_rebase_onto_parent() {
+        // The promotion routes through the ONE pr-rebase machinery (temp
+        // worktree + BUG-640 guard + force-with-lease), with the 3-arg --onto
+        // form and no local smoke (the --from-pr drive runs CI).
+        assert_eq!(
+            promotion_rebase_args(57, "deadbeef"),
+            vec![
+                "pr".to_string(),
+                "rebase".to_string(),
+                "57".to_string(),
+                "--no-smoke".to_string(),
+                "--onto-parent".to_string(),
+                "deadbeef".to_string(),
+            ]
+        );
     }
 
     #[test]

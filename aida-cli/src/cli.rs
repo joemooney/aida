@@ -1376,6 +1376,17 @@ pub enum PrCommand {
         /// declared base. Useful for PRs against non-main branches.
         #[clap(long, value_name = "REF")]
         base: Option<String>,
+
+        /// Stack-aware rebase: replay only the commits AFTER this SHA
+        /// (the recorded fork-point of the branch this PR was stacked
+        /// on), via `git rebase --onto <base> <SHA>`. Use when the
+        /// stacked parent was squash-merged and its branch deleted — a
+        /// plain rebase would re-apply the parent's pre-squash commits.
+        /// Refused when SHA is not an ancestor of the PR head (a stale
+        /// stack record).
+        // trace:TASK-1080 | ai:claude
+        #[clap(long, value_name = "SHA", conflicts_with = "check")]
+        onto_parent: Option<String>,
     },
 
     /// Ship a PR: create-if-needed → watch CI → squash-merge → pull →
