@@ -75,6 +75,8 @@ mod health;
 mod health_metrics;
 mod history;
 mod human_audit;
+// trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
+mod identity_guard;
 mod intake;
 mod integrate;
 // trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
@@ -45206,6 +45208,11 @@ fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
         TriageCommand::Acquire { scope, user } => {
             let slug = triage_lease::scope_slug(scope.as_deref());
             let owner = current_user_id(user.as_deref());
+            // TASK-1150: distinct-user identity guard — minting a lease owned by
+            // a genuinely-different user id than this shell's identity (e.g.
+            // `--user user-b` from a `user-a` shell) silently crosses
+            // identities. trace:TASK-1150 | ai:claude
+            identity_guard::enforce(&current_user_id(None), &owner, "lease acquire")?;
             // Reap dead holders first so a crashed advisor's lease doesn't
             // wrongly block a fresh acquire. trace:TASK-661 | ai:claude
             let live =
@@ -45269,6 +45276,19 @@ fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
         TriageCommand::Release { scope, user } => {
             let slug = triage_lease::scope_slug(scope.as_deref());
             let owner = current_user_id(user.as_deref());
+            // TASK-1150: distinct-user identity guard. If a lease for this scope
+            // is on disk owned by a genuinely-different identity than the one
+            // we're releasing as (e.g. the shell drifted from `user-a` to
+            // `user-b`), `release` would silently no-op ("no lease held by you")
+            // while the real holder's lease sits untouched. Surface the
+            // mismatch against the actual stored owner before that happens.
+            // trace:TASK-1150 | ai:claude
+            if let Some(held) = triage_lease::list_all(&project_root)
+                .into_iter()
+                .find(|l| l.scope == slug)
+            {
+                identity_guard::enforce(&owner, &held.owner, "lease release")?;
+            }
             if triage_lease::release(&project_root, &slug, &owner)? {
                 println!(
                     "{} disposition lease for scope {}.",
@@ -134677,6 +134697,14 @@ fn handle_queue_command(
             maybe_hint_advisor_seat();
             let user_id = get_user(user);
 
+            // TASK-1150: distinct-user identity guard. Adding to a queue keyed
+            // by a genuinely-different user id than this shell's identity (e.g.
+            // `--user user-b` from a `user-a` shell — not just a case variant)
+            // silently crosses identities. Surface it (warn by default, refuse
+            // when the operator opts in). No-op on the common same-identity add.
+            // trace:TASK-1150 | ai:claude
+            identity_guard::enforce(&current_user_id(None), &user_id, "queue add")?;
+
             // BUG-634: avoid a full-store scan (`storage.load()` parses every
             // YAML) on the queue write path. For the distributed (directory)
             // store, open a cache-backed backend for targeted single-spec
@@ -134957,6 +134985,11 @@ fn handle_queue_command(
             r#for,
         } => {
             let user_id = get_user(user);
+
+            // TASK-1150: distinct-user identity guard — mutating a queue owned
+            // by a genuinely-different user id than this shell's identity
+            // silently crosses identities. trace:TASK-1150 | ai:claude
+            identity_guard::enforce(&current_user_id(None), &user_id, "queue remove")?;
 
             // --global removes from ~/.aida/queue/<role>.yaml. Role from
             // --for or AIDA_SESSION_ROLE. trace:FR-1-012 | ai:claude
