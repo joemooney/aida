@@ -3491,6 +3491,15 @@ fn run() -> Result<()> {
         );
     }
 
+    // TASK-1147: `aida autopilot` (inspect / audit / challenge) is the read-only
+    // auditability + reversal surface over the policy envelope. Like `aida
+    // groom` it self-loads the store to compute its candidate fence and writes
+    // nothing to any spec — dispatch early, no shared storage handle needed.
+    // trace:TASK-1147 | ai:claude
+    if let Command::Autopilot(cmd) = &cli.command {
+        return handle_autopilot_command(cmd);
+    }
+
     // STORY-547: `aida why <ID>` reads the requirement graph like burndown —
     // dispatch early, no shared storage handle needed. trace:STORY-547
     if let Command::Why { id, json } = &cli.command {
@@ -4779,6 +4788,10 @@ fn run() -> Result<()> {
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
         Command::Groom { .. } => {
             unreachable!("groom (assess/intake) is dispatched before storage init")
+        }
+        // trace:TASK-1147
+        Command::Autopilot(_) => {
+            unreachable!("autopilot is dispatched before storage init")
         }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
@@ -15992,6 +16005,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
         Command::Groom { .. } => {
             unreachable!("groom (assess/intake) is dispatched before storage init")
+        }
+        // trace:TASK-1147
+        Command::Autopilot(_) => {
+            unreachable!("autopilot is dispatched before storage init")
         }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
@@ -95577,6 +95594,391 @@ fn preview_next_version(current: &str, bump: &str) -> Option<String> {
 /// advisor-side analog of `handle_burndown_run`: load the `[intake]` policy +
 /// flag overrides, self-load the store, compute the BOUNDED candidate fence
 /// (the do-not-approve classes + `needs-human`/`strategic` specs are excluded
+/// TASK-1147: the advisor-autopilot auditability + reversal surface.
+///
+/// This is the read-only + audit + reversal HALF of EPIC-0428. `inspect`
+/// dry-runs the four-gate policy envelope over the live groom candidates and
+/// shows, per spec, what it WOULD decide — without touching a single spec.
+/// `audit` lists recorded verdicts; `challenge` reverses one. Autopilot has NO
+/// authority to approve/reject/queue here — the envelope is never wired to
+/// execute a disposition. That keystone-autonomy slice is deferred.
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_command(cmd: &crate::cli::AutopilotCommand) -> Result<()> {
+    use crate::cli::AutopilotCommand;
+    match cmd {
+        AutopilotCommand::Inspect {
+            risk,
+            only_tag,
+            exclude_tag,
+            record,
+            json,
+        } => handle_autopilot_inspect(
+            risk,
+            only_tag.as_deref(),
+            exclude_tag.as_deref(),
+            *record,
+            *json,
+        ),
+        AutopilotCommand::Audit { limit, open, json } => {
+            handle_autopilot_audit(*limit, *open, *json)
+        }
+        AutopilotCommand::Challenge { target, note } => {
+            handle_autopilot_challenge(target, note.as_deref())
+        }
+    }
+}
+
+/// `aida autopilot inspect` — dry-run the envelope over the current groom
+/// candidates. Reuses the SAME candidate fence as `aida groom`
+/// (`select_intake_candidates`) so the projection can never disagree with the
+/// disposition path about what is touchable.
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_inspect(
+    risk: &str,
+    only_tag: Option<&str>,
+    exclude_tag: Option<&str>,
+    record: bool,
+    json: bool,
+) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let cfg = intake::IntakeConfig::load(&project_root);
+    let max_risk = backlog::RiskLevel::parse(risk)?;
+    let filters = intake::IntakeFilters {
+        only_tag: only_tag.map(|s| s.to_string()),
+        exclude_tag: exclude_tag.map(|s| s.to_string()),
+        max_risk,
+    };
+
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+    let queued_ids = all_queued_requirement_ids(&project_root);
+
+    // Build the same candidate facts `aida groom` builds — plus the proposed
+    // ACTION per spec (Draft -> approve, Approved-but-unqueued -> queue), which
+    // the envelope grades. trace:TASK-1147
+    let mut specs: Vec<intake::IntakeSpec> = Vec::new();
+    let mut proposed: std::collections::HashMap<String, autopilot::ActionClass> =
+        std::collections::HashMap::new();
+    for req in &store.requirements {
+        if req.archived {
+            continue;
+        }
+        if is_standing_artifact_type(&format!("{:?}", req.req_type)) {
+            continue;
+        }
+        let is_draft = matches!(req.status, aida_core::RequirementStatus::Draft);
+        let is_approved_unqueued = matches!(req.status, aida_core::RequirementStatus::Approved)
+            && !queued_ids.contains(&req.id);
+        if !(is_draft || is_approved_unqueued) {
+            continue;
+        }
+        let disp = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        let has_plan = !find_plan_files_for_spec(&project_root, &disp).is_empty();
+        let (risk, risk_reason) = backlog::classify_risk_with_reason(req, has_plan);
+        let tags: Vec<String> = req.tags.iter().cloned().collect();
+        let deferred = intake::is_deferred(req.deferred, &tags);
+        let action = if is_draft {
+            autopilot::ActionClass::Approve
+        } else {
+            autopilot::ActionClass::Queue
+        };
+        proposed.insert(disp.clone(), action);
+        specs.push(intake::IntakeSpec {
+            id: disp,
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+            tags,
+            deferred,
+            risk,
+            risk_reason,
+        });
+    }
+    specs.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let (eligible, fenced) = intake::select_intake_candidates(&specs, &cfg, &filters);
+    let fenced_ids: std::collections::HashSet<String> = eligible.iter().cloned().collect();
+    let risk_of: std::collections::HashMap<&str, backlog::RiskLevel> =
+        specs.iter().map(|s| (s.id.as_str(), s.risk)).collect();
+
+    // The envelope. The default table is the conservative one — approve/reject
+    // hold, reversible actions auto. No auto-execution is wired regardless.
+    let env = autopilot::AutopilotEnvelope::default();
+
+    // Build one Decision per eligible spec. Grounding is the advisor's runtime
+    // judgment (it needs the live corpus read); the dry-run assumes the
+    // best case — a groundable Type-A — so the projection reflects what the
+    // OTHER gates would do. The verdict is therefore an UPPER BOUND on autonomy.
+    let decisions: Vec<autopilot::Decision> = eligible
+        .iter()
+        .map(|id| {
+            let action = proposed
+                .get(id)
+                .copied()
+                .unwrap_or(autopilot::ActionClass::Approve);
+            autopilot::Decision {
+                spec_id: id.clone(),
+                action,
+                grounding: autopilot::Grounding::TypeA,
+                risk: risk_of.get(id.as_str()).copied().unwrap_or(max_risk),
+                reason: String::new(),
+                evidence: vec![],
+            }
+        })
+        .collect();
+    let rows = autopilot::project_decisions(&env, &fenced_ids, &decisions);
+
+    if json {
+        let eligible_json: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "spec_id": r.spec_id,
+                    "action": r.action.token(),
+                    "verdict": r.outcome.verdict_token(),
+                    "gate": r.outcome.gate_label(),
+                })
+            })
+            .collect();
+        let fenced_json: Vec<_> = fenced
+            .iter()
+            .map(|(id, reason)| serde_json::json!({ "spec_id": id, "fenced": reason.describe() }))
+            .collect();
+        let out = serde_json::json!({
+            "risk_ceiling": max_risk.token(),
+            "grounding_assumed": "type-a (best case; advisor grounds at run time)",
+            "auto_execution": false,
+            "eligible": eligible_json,
+            "fenced": fenced_json,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        // Recording still honored under --json.
+        if record {
+            record_inspect_rows(&project_root, &rows)?;
+        }
+        return Ok(());
+    }
+
+    println!(
+        "{} autopilot inspect — dry-run (nothing is written to any spec)",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
+    println!(
+        "  {}",
+        format!(
+            "envelope: risk≤{} · grounding=required (assumed groundable) · approve=propose reject=propose",
+            max_risk.token()
+        )
+        .dimmed()
+    );
+
+    if rows.is_empty() {
+        println!(
+            "  {} 0 specs in the fence ({} fenced out). Nothing for the envelope to weigh.",
+            "→".green(),
+            fenced.len()
+        );
+    } else {
+        println!(
+            "\n  {} envelope verdict per eligible candidate:",
+            "→".green()
+        );
+        for r in &rows {
+            let (glyph, label) = match r.outcome {
+                autopilot::Outcome::Execute => (
+                    crate::glyph(crate::glyphs::Glyph::Check)
+                        .green()
+                        .to_string(),
+                    "EXECUTE".green().bold(),
+                ),
+                autopilot::Outcome::Hold => ("⏸".yellow().to_string(), "HOLD".yellow().bold()),
+                autopilot::Outcome::Escalate(_) => (
+                    crate::glyph(crate::glyphs::Glyph::Warning)
+                        .red()
+                        .to_string(),
+                    "ESCALATE".red().bold(),
+                ),
+            };
+            println!(
+                "    {} {:<12} {:<8} {}  {}",
+                glyph,
+                r.spec_id,
+                r.action.token(),
+                label,
+                r.outcome.gate_label().dimmed()
+            );
+        }
+    }
+
+    if !fenced.is_empty() {
+        println!(
+            "\n  {} {} fenced out at gate 1 (never touchable — the authority map cannot widen this):",
+            "·".dimmed(),
+            fenced.len()
+        );
+        for (id, reason) in &fenced {
+            println!(
+                "    {} {} — {}",
+                "✕".dimmed(),
+                id,
+                reason.describe().dimmed()
+            );
+        }
+    }
+
+    if record {
+        let n = record_inspect_rows(&project_root, &rows)?;
+        println!(
+            "\n  {} recorded {} verdict(s) to {}",
+            "→".green(),
+            n,
+            autopilot::audit_log_path(&project_root).display()
+        );
+    }
+
+    println!(
+        "\n  {} projection only — autopilot has NO authority to approve/reject/queue here; \n     that keystone-autonomy is deliberately not wired. Review with `aida autopilot audit`,\n     reverse with `aida autopilot challenge <id>`.",
+        "note:".dimmed()
+    );
+    Ok(())
+}
+
+/// Append the inspected verdicts to the local audit log; returns the count.
+fn record_inspect_rows(
+    project_root: &std::path::Path,
+    rows: &[autopilot::InspectRow],
+) -> Result<usize> {
+    let ts = chrono::Utc::now().to_rfc3339();
+    let entries: Vec<autopilot::AuditEntry> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            autopilot::decision_entry(
+                &ts, i, &r.spec_id, r.action, r.outcome, &r.reason, "inspect",
+            )
+        })
+        .collect();
+    autopilot::append_audit_entries(project_root, &entries)?;
+    Ok(entries.len())
+}
+
+/// `aida autopilot audit` — list recorded decisions (and their reversals).
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_audit(limit: usize, open_only: bool, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let entries = autopilot::read_audit_entries(&project_root)?;
+
+    // Fold challenges onto the decisions they target.
+    let mut decisions: Vec<&autopilot::AuditEntry> =
+        entries.iter().filter(|e| e.kind == "decision").collect();
+    if open_only {
+        decisions.retain(|d| !autopilot::is_challenged(&entries, &d.id));
+    }
+    if limit > 0 && decisions.len() > limit {
+        decisions = decisions.split_off(decisions.len() - limit);
+    }
+
+    if json {
+        let rows: Vec<_> = decisions
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "id": d.id,
+                    "ts": d.ts,
+                    "spec_id": d.spec_id,
+                    "action": d.action,
+                    "verdict": d.verdict,
+                    "gate": d.gate,
+                    "source": d.source,
+                    "challenged": autopilot::is_challenged(&entries, &d.id),
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!(rows))?
+        );
+        return Ok(());
+    }
+
+    if decisions.is_empty() {
+        println!(
+            "{} no recorded autopilot decisions yet. Run `aida autopilot inspect --record` to log a dry-run.",
+            "·".dimmed()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} autopilot audit — {} recorded decision(s)",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        decisions.len()
+    );
+    for d in &decisions {
+        let challenged = autopilot::is_challenged(&entries, &d.id);
+        let mark = if challenged {
+            "⨯ CHALLENGED".red().to_string()
+        } else {
+            "· open".dimmed().to_string()
+        };
+        println!(
+            "  {} {}  {:<12} {:<8} {:<9} {}  {}",
+            d.id.cyan(),
+            d.ts.dimmed(),
+            d.spec_id.as_deref().unwrap_or("-"),
+            d.action.as_deref().unwrap_or("-"),
+            d.verdict.as_deref().unwrap_or("-"),
+            d.gate.as_deref().unwrap_or("-").dimmed(),
+            mark
+        );
+    }
+    Ok(())
+}
+
+/// `aida autopilot challenge <target>` — record a reversal of a decision.
+// trace:TASK-1147 | ai:claude
+fn handle_autopilot_challenge(target: &str, note: Option<&str>) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let entries = autopilot::read_audit_entries(&project_root)?;
+
+    let Some(decision_id) = autopilot::resolve_challenge_target(&entries, target) else {
+        anyhow::bail!(
+            "no matching autopilot decision for `{target}` — pass a decision id from \
+             `aida autopilot audit`, or a SPEC-ID with an un-challenged recorded decision."
+        );
+    };
+    if autopilot::is_challenged(&entries, &decision_id) {
+        println!(
+            "{} decision {} is already challenged — nothing to do.",
+            "·".dimmed(),
+            decision_id.cyan()
+        );
+        return Ok(());
+    }
+    let ts = chrono::Utc::now().to_rfc3339();
+    let entry = autopilot::challenge_entry(&ts, &decision_id, note);
+    autopilot::append_audit_entries(&project_root, &[entry])?;
+    println!(
+        "{} challenged autopilot decision {}{}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        decision_id.cyan(),
+        note.map(|n| format!(" — {n}")).unwrap_or_default()
+    );
+    Ok(())
+}
+
+/// STORY-560: `aida groom` self-loads the store, computes its candidate fence
+/// (P1/P2/P3 policy + always-on tag exclusions + keystone/deferred fences applied
 /// HERE, programmatically — the agent never sees them as actionable), then
 /// launch a headless `claude -p "/aida-assess [--apply]"` that reads the fenced
 /// set, proposes dispositions, and (under `--apply`) approves within the fence
