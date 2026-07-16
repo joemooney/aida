@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T15:14:21.105624467Z
+modified_at: 2026-07-16T15:17:07.942970168Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -241,6 +241,12 @@ comments:
   content: 'Step 24 DONE: store cluster → store_cmd.rs merged (#1445), main.rs 140027→139567 (-462). Combined-main green. Next: metrics #1446 (green, rebasing), scaffold #1447 (-1603, big).'
   created_at: 2026-07-16T15:02:54.613884431Z
   modified_at: 2026-07-16T15:02:54.613884431Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
+- id: 019f6b80-c0e6-71e1-b9b2-6a5f9de36799
+  author: joe
+  content: 'Step 25 DONE: metrics cluster → metrics_cmd.rs merged (#1446), main.rs 139567→139386 (-181). Combined-main green. Next: scaffold #1447 (-1603, green, rebasing), feature #1448 (-213).'
+  created_at: 2026-07-16T15:17:07.942970168Z
+  modified_at: 2026-07-16T15:17:07.942970168Z
   session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
