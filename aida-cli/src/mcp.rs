@@ -4715,9 +4715,9 @@ impl<'a> McpServer<'a> {
         let spec = args.get("spec").and_then(|v| v.as_str());
         let pr = args.get("pr").and_then(|v| v.as_u64());
         let queue_empty = args.get("queue_empty").and_then(|v| v.as_str());
-        let clauses = crate::build_goal_clauses(batch, epic, spec, pr, queue_empty)
+        let clauses = crate::goal_cmd::build_goal_clauses(batch, epic, spec, pr, queue_empty)
             .map_err(|e| e.to_string())?;
-        let condition = crate::assemble_goal_condition(&clauses);
+        let condition = crate::goal_cmd::assemble_goal_condition(&clauses);
         let mut out = format!("/goal {}\n\nverify each clause:", condition);
         for c in &clauses {
             out.push_str(&format!("\n  · {}", c.verify));
