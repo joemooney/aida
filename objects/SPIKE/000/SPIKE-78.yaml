@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T12:42:48.739415550Z
+modified_at: 2026-07-16T12:42:52.142149358Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -166,6 +166,12 @@ comments:
   content: Commit dee2ae9ff references this requirement
   created_at: 2026-07-16T12:42:48.739415550Z
   modified_at: 2026-07-16T12:42:48.739415550Z
+- id: 019f6af3-856e-7773-afde-25ecc791d7df
+  author: joe
+  content: 'Step 16 DONE: DOCTOR cluster → doctor_cmd.rs (~5600 lines) merged (#1437), main.rs 152524→146926 (-5598, BIGGEST cut of the series). 62 doctor-exclusive items moved; all STORY-707 status-shared diagnostics kept in main.rs via crate::. Combined-main green (3747). main.rs now under 147k (was 158055 at series start, -11129 / 7%). Next: trace #1438 (-688, rebasing), config extracting.'
+  created_at: 2026-07-16T12:42:52.142149358Z
+  modified_at: 2026-07-16T12:42:52.142149358Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
   author: aida-auto-bump
