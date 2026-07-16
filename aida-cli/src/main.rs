@@ -17,6 +17,7 @@ mod backlog;
 mod burndown;
 mod calibration;
 mod changelog;
+mod changelog_cmd;
 mod ci_idle_timeout;
 mod claude_agents;
 mod cli;
@@ -3768,7 +3769,7 @@ fn run() -> Result<()> {
     // `aida changelog` is self-contained: git + read-only store, no shared
     // storage handle. Dispatch alongside Plan/Ultraplan. trace:TASK-299 | ai:claude
     if let Command::Changelog(cl_cmd) = &cli.command {
-        return handle_changelog_command(cl_cmd);
+        return changelog_cmd::handle_changelog_command(cl_cmd);
     }
 
     // `aida manual <cmd>` only reads the markdown chapters under docs/cli/ —
@@ -87389,44 +87390,6 @@ fn plan_fan_out(
         std::process::exit(2);
     }
     Ok(())
-}
-
-/// Dispatch `aida changelog <generate|refresh|preview>`. The whole engine
-/// lives in `crate::changelog`; this just maps the subcommand variant to a
-/// `ChangelogOptions` and calls `changelog::run`. trace:TASK-299 | ai:claude
-fn handle_changelog_command(cmd: &cli::ChangelogCommand) -> Result<()> {
-    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let opts = match cmd {
-        cli::ChangelogCommand::Generate { since, until, out } => changelog::ChangelogOptions {
-            window: if since.is_some() || until.is_some() {
-                changelog::Window::Range {
-                    since: since.clone(),
-                    until: until.clone(),
-                }
-            } else {
-                changelog::Window::All
-            },
-            sink: match out {
-                Some(p) => changelog::Sink::File(p.clone()),
-                None => changelog::Sink::Stdout,
-            },
-            released_as: None,
-        },
-        cli::ChangelogCommand::Refresh { released_as, out } => changelog::ChangelogOptions {
-            window: changelog::Window::All,
-            sink: match out {
-                Some(p) => changelog::Sink::File(p.clone()),
-                None => changelog::Sink::File(project_root.join("CHANGELOG.md")),
-            },
-            released_as: released_as.clone(),
-        },
-        cli::ChangelogCommand::Preview => changelog::ChangelogOptions {
-            window: changelog::Window::Unreleased,
-            sink: changelog::Sink::Stdout,
-            released_as: None,
-        },
-    };
-    changelog::run(opts, &project_root)
 }
 
 /// Walk up from the plan file to the enclosing git repo root. Paths inside
