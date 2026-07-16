@@ -142,6 +142,7 @@ mod rebase_cmd;
 mod remote_activity;
 // trace:STORY-537 | ai:claude — guided origin bootstrap for `aida remote create`/`attach`.
 mod remote_create;
+mod report_cmd;
 // trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
 mod research;
 mod reviewer_summary;
@@ -238,8 +239,6 @@ use aida_core::{
     NumberingStrategy,
     RelationshipDefinition,
     RelationshipType,
-    ReportFormat,
-    ReportGenerator,
     Requirement,
     RequirementPriority,
     RequirementStatus,
@@ -4951,7 +4950,7 @@ fn run() -> Result<()> {
         }
         Command::Report(report_cmd) => {
             let db_path_str = requirements_path.display().to_string();
-            handle_report_command(report_cmd, &storage, &db_path_str)?;
+            report_cmd::handle_report_command(report_cmd, &storage, &db_path_str)?;
         }
         Command::Scaffold(scaffold_cmd) => {
             scaffold_cmd::handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
@@ -110743,71 +110742,6 @@ fn git_log_messages(project_root: &std::path::Path, base: &str, head: &str) -> R
 }
 
 // trace:FR-0259 | ai:claude:high
-fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &str) -> Result<()> {
-    match cmd {
-        ReportCommand::AiIntegration {
-            format,
-            output,
-            project_root,
-            include_scaffold,
-        } => {
-            let store = storage.load()?;
-
-            // Parse format
-            let report_format = match format.to_lowercase().as_str() {
-                "markdown" | "md" => ReportFormat::Markdown,
-                "html" | "htm" => ReportFormat::Html,
-                _ => {
-                    return Err(anyhow::anyhow!(
-                        "Unknown format '{}'. Use 'markdown' or 'html'.",
-                        format
-                    ))
-                }
-            };
-
-            // Create report generator
-            let mut generator = ReportGenerator::new(store, storage_path.to_string());
-
-            // Set project root if provided or use current directory for scaffold status
-            let root = if let Some(ref root) = project_root {
-                root.clone()
-            } else if *include_scaffold {
-                std::env::current_dir()?
-            } else {
-                // No root needed if not checking scaffold
-                std::path::PathBuf::new()
-            };
-
-            if (*include_scaffold || project_root.is_some()) && root.exists() {
-                generator = generator.with_project_root(root.clone());
-            }
-
-            // Generate report
-            let report = generator.generate();
-
-            // Render based on format
-            let content = match report_format {
-                ReportFormat::Markdown => generator.render_markdown(&report),
-                ReportFormat::Html => generator.render_html(&report),
-            };
-
-            // Output
-            if let Some(ref output_path) = output {
-                std::fs::write(output_path, &content)?;
-                println!(
-                    "{} Report generated: {}",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    output_path.display()
-                );
-            } else {
-                println!("{}", content);
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// BUG-298: find `aida-*` entries under `.claude/{skills,commands,hooks}` that
 /// no longer correspond to a template the current binary ships — left behind
 /// when a template was renamed/consolidated/retired. Compared by base name, so
