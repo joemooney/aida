@@ -30,10 +30,12 @@
 //! ## Default posture is context-aware, never a solo hard-block (TASK-958)
 //!
 //! `LockingConfig::default()` is `ContextAware` (TASK-958, replacing the old
-//! `Off` default). On a `Refused` verdict it hard-blocks the commit ONLY when
-//! `AIDA_AUTO_COMPLETE` is set (a committing child under an active drain/
-//! fan-out — the BUG-637 duplicate-dispatch hazard); a solo/manual commit is
-//! downgraded to a warning and always proceeds. `Unlocked`/`Authorized`
+//! `Off` default). On a `Refused` verdict it hard-blocks the commit ONLY under
+//! a corroborated live drain (`orchestrator::detect(root).is_orchestrated()` —
+//! a committing child under a genuinely-live drain/fan-out, the BUG-637
+//! duplicate-dispatch hazard); a solo/manual commit — or one carrying a
+//! stale/leaked `AIDA_AUTO_COMPLETE` — is downgraded to a warning and always
+//! proceeds. `Unlocked`/`Authorized`
 //! verdicts stay a silent no-op, so the gate only ever evaluates the fast
 //! lock-state read and only acts on a real conflict. The explicit `off` posture
 //! still short-circuits [`enforce_at_commit`] to `Ok(())` before any I/O for a
@@ -121,16 +123,20 @@ fn resolve_env_override(base: LockingPosture, env: Option<&str>) -> LockingPostu
     }
 }
 
-/// PURE: is this commit landing under an active drain/fan-out? True iff the
-/// `AIDA_AUTO_COMPLETE` env value is present and non-empty — the same "set and
-/// non-empty" idiom `orchestrator::classify` uses for the drain signal (a bare
-/// exported-but-empty `AIDA_AUTO_COMPLETE=` is NOT a drain). This is the one
-/// bit the `ContextAware` posture consults: a `Refused` commit hard-blocks
-/// under a drain, warns when solo. Factored out so the boundary is unit-testable
-/// without mutating the real process environment.
+/// PURE: does this orchestrator verdict count as an active drain for the
+/// context-aware lock gate? Only a **corroborated** live orchestrator run
+/// (`Orchestrated` — `AIDA_AUTO_COMPLETE` set AND its `AIDA_AUTO_COMPLETE_TOKEN`
+/// names a live drain-state PID) counts. A bare/uncorroborated
+/// `AIDA_AUTO_COMPLETE` (`Uncorroborated` — no token, or a token no live
+/// orchestrator owns) does NOT, and neither does an ordinary session
+/// (`Interactive`). So a stale/leaked `AIDA_AUTO_COMPLETE` env var never
+/// hard-blocks a legit commit — only a genuinely-live fan-out does. This is the
+/// one bit the `ContextAware` posture consults: a `Refused` commit hard-blocks
+/// under a live drain, warns when solo. Factored out so the corroboration→gate
+/// mapping is unit-testable without mutating the real process environment.
 // trace:TASK-958 | ai:claude
-fn drain_active(auto_complete_env: Option<&str>) -> bool {
-    auto_complete_env.map(|v| !v.is_empty()).unwrap_or(false)
+fn under_live_drain(ctx: crate::orchestrator::OrchestratorContext) -> bool {
+    ctx.is_orchestrated()
 }
 
 /// Extract `key = value` pairs from `[locking]`. Section-aware; stops at the
@@ -221,8 +227,11 @@ pub(crate) fn my_lock_token(project_root: &Path) -> Option<String> {
 /// identical no matter which vendor drove the commit.
 ///
 /// The default posture is `ContextAware` (TASK-958): on a `Refused` verdict it
-/// hard-blocks only under an active drain (`AIDA_AUTO_COMPLETE` set) and warns
-/// otherwise, so a solo/manual commit is never hard-blocked by the default.
+/// hard-blocks only under a **corroborated live drain**
+/// (`orchestrator::detect(root).is_orchestrated()` — `AIDA_AUTO_COMPLETE` set
+/// AND its token names a live orchestrator run) and warns otherwise, so a
+/// solo/manual commit (or one carrying a stale/leaked `AIDA_AUTO_COMPLETE`) is
+/// never hard-blocked by the default.
 /// The explicit `Off` posture still short-circuits to `Ok(())` WITHOUT reading
 /// the lease directory or the launch-context snapshot — the fast, provably-no-op
 /// path for a project that has opted out of `[locking]`. Under every other
@@ -237,7 +246,12 @@ pub(crate) fn enforce_at_commit(root: &Path) -> Result<()> {
     }
     let worktree_lock = crate::worktree_lock::read_authorized_by(root, root);
     let my_token = my_lock_token(root);
-    let under_drain = drain_active(std::env::var("AIDA_AUTO_COMPLETE").ok().as_deref());
+    // Corroborated live-drain signal (TASK-958): only a genuinely-live
+    // orchestrator run hard-blocks — a bare/stale/leaked `AIDA_AUTO_COMPLETE`
+    // is treated as solo (warn, never block). `detect` reads the env +
+    // drain-state file; `is_orchestrated()` is true only when the token names a
+    // live orchestrator PID.
+    let under_drain = under_live_drain(crate::orchestrator::detect(root));
     match aida_core::lock::locking_gate(
         worktree_lock.as_deref(),
         my_token.as_deref(),
@@ -323,13 +337,21 @@ mod tests {
     }
 
     #[test]
-    fn drain_active_at_the_auto_complete_boundary() {
-        // Present + non-empty → under a drain.
-        assert!(drain_active(Some("1")));
-        assert!(drain_active(Some("anything")));
-        // Unset or exported-but-empty → NOT a drain (the solo/manual path).
-        assert!(!drain_active(None));
-        assert!(!drain_active(Some("")));
+    fn under_live_drain_only_for_a_corroborated_orchestrator() {
+        use crate::orchestrator::{OrchestratorContext, UncorroboratedReason};
+        // A corroborated live drain (token names a live orchestrator PID) is
+        // the ONLY verdict that hard-blocks.
+        assert!(under_live_drain(OrchestratorContext::Orchestrated));
+        // A bare/uncorroborated AIDA_AUTO_COMPLETE → NOT a drain (warn, no hard
+        // block): no token, or a token no live orchestrator owns.
+        assert!(!under_live_drain(OrchestratorContext::Uncorroborated(
+            UncorroboratedReason::NoToken
+        )));
+        assert!(!under_live_drain(OrchestratorContext::Uncorroborated(
+            UncorroboratedReason::DeadOrchestrator
+        )));
+        // An ordinary interactive session is never a drain.
+        assert!(!under_live_drain(OrchestratorContext::Interactive));
     }
 
     #[test]
@@ -402,10 +424,10 @@ mod tests {
     }
 
     /// The load-bearing safety property (TASK-958): under the context-aware
-    /// DEFAULT, a solo/manual commit (no `AIDA_AUTO_COMPLETE`) against a
-    /// mismatched lock WARNS and proceeds — it is never hard-blocked. `my_token`
-    /// is None here (fail-safe Refused), which under a drain would hard-block —
-    /// but solo it only warns.
+    /// DEFAULT, a solo/manual commit against a mismatched lock WARNS and
+    /// proceeds — it is never hard-blocked. `my_token` is None here (fail-safe
+    /// Refused), which under a corroborated live drain would hard-block — but
+    /// with no live orchestrator it only warns.
     // trace:TASK-958 | ai:claude
     #[test]
     fn context_aware_default_solo_mismatched_lock_warns_not_blocks() {
@@ -413,7 +435,8 @@ mod tests {
         let root = tmp.path();
         std::fs::create_dir_all(root).unwrap();
         // No [locking] config → ContextAware default. AIDA_AUTO_COMPLETE unset
-        // in the test runner → solo → warn, not block.
+        // in the test runner → `orchestrator::detect` returns Interactive →
+        // not a live drain → warn, not block.
         assert!(std::env::var("AIDA_LOCKING").is_err());
         assert!(std::env::var("AIDA_AUTO_COMPLETE").is_err());
         crate::worktree_lock::acquire(root, root, "advisor-a").unwrap();
