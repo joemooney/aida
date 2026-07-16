@@ -3,12 +3,30 @@ spec_id: TASK-1150
 agreed_id: TASK-1150
 title: Distinct-user identity guard slice (prevent queue/lease identity mixups); defer roster/RBAC
 description: 'EPIC-47 decision: ship ONLY the distinct-user identity guard; defer roster/assignment/RBAC/dashboard until a real second user exists. Identity-sensitive (relates to TASK-845) — supervised.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-15T03:00:25.748453077Z
-modified_at: 2026-07-15T03:00:25.748453077Z
+modified_at: 2026-07-16T05:18:46.865787173Z
 req_type: Task
 tags:
 - aida:identity from-decision:EPIC-47 supervised
+history:
+- id: 019f695c-f24b-7e52-b2a5-ec1feb0adceb
+  author: aida-auto-bump
+  timestamp: 2026-07-16T05:18:46.859759323Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f695c-f251-7a90-a718-98401f129c7b
+  timestamp: 2026-07-16T05:18:46.865785540Z
+  agent: aida
+  commit_sha: dba5a463e64a13f26d5856e86cda14a5ee987a89
+  summary: Completed via merge dba5a463
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-16T05:18:46.659105660Z
+  completion_sha: dba5a463e64a13f26d5856e86cda14a5ee987a89
