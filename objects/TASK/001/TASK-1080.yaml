@@ -3,12 +3,12 @@ spec_id: TASK-1080
 agreed_id: TASK-1080
 title: 'integrate --strategy stacked: auto-promote deferred children via stack-aware force-push rebase'
 description: 'Follow-up of TASK-841. The stacked integration planner defers any member stacked behind another still-open branch and only merges the bottom layer per pass. A promoted child (its parent just merged) still needs its ORIGIN PR branch rebased with the stack-aware git rebase --onto origin/main <parent_branch_sha> <branch> + force-push-with-lease before it is mergeable — the STORY-248 cascade rebases the child worktree LOCALLY on aida pull but does not force-push the PR branch, so today TASK-841 defers these with an /aida-rebase pointer (exit 2, re-run). Implement an integrate-path stack-aware promotion: when a deferred childs parent branch is gone (merged+deleted), rebase --onto origin/main <recorded parent_branch_sha> in a temp worktree and force-push-with-lease, then let the normal drive merge it. Compose pr_rebase machinery (temp worktree + force-with-lease) but with the 3-arg --onto form pr rebase does not currently expose. Acceptance: a 2-deep stack (A<-B, both Done+PR) drains fully in one aida queue integrate --strategy stacked --watch run without manual rebase; force-push always uses --force-with-lease; a rebase conflict parks B (NeedsAttention) and continues, never corrupts. Guard against the churn case where the cascade already removed the childs stacks.json entry.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T05:52:49.059498927Z
-modified_at: 2026-07-16T04:26:09.460727992Z
+modified_at: 2026-07-16T04:45:51.360544733Z
 req_type: Task
 tags:
 - integrator
