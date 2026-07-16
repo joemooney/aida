@@ -14,8 +14,8 @@ use colored::Colorize;
 use aida_core::RequirementsStore;
 
 use crate::{
-    auto_complete, auto_complete_telemetry, bug_status, find_project_root, handle_health_command,
-    health_metrics, humanize_relative, parse_days_arg, usage,
+    auto_complete, auto_complete_telemetry, bug_status, find_project_root, health_metrics,
+    humanize_relative, parse_days_arg, usage,
 };
 
 // ----------------------------------------------------------------------------
@@ -453,7 +453,12 @@ pub(crate) fn handle_usage_command(
     // its own sources, so it gets its own handler.
     if health {
         let project_root = find_project_root().ok();
-        return handle_health_command(since_raw, json_out, store, project_root.as_deref());
+        return crate::health_cmd::handle_health_command(
+            since_raw,
+            json_out,
+            store,
+            project_root.as_deref(),
+        );
     }
 
     // TASK-266: `--auto-complete` switches to the orchestrator telemetry
