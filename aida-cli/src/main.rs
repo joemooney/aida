@@ -189,6 +189,7 @@ mod tracker_cmd;
 mod triage_lease;
 // trace:TASK-969 | ai:claude — trust boundary for code-executing project config.
 mod trusted_config;
+mod type_cmd;
 mod ultraplan_cmd;
 mod upgrade_cmd;
 mod usage;
@@ -4907,7 +4908,7 @@ fn run() -> Result<()> {
             config_cmd::handle_config_command(config_cmd, &storage)?;
         }
         Command::Type(type_cmd) => {
-            handle_type_command(type_cmd, &storage)?;
+            type_cmd::handle_type_command(type_cmd, &storage)?;
         }
         Command::Export { format, output, id } => {
             import_export_cmd::handle_export_command(
@@ -25385,76 +25386,6 @@ pub(crate) fn config_lookup<'a>(
 }
 
 /// Handle requirement type commands
-fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
-    let mut store = storage.load()?;
-
-    match cmd {
-        TypeCommand::List => {
-            println!("{}", "Requirement Types:".blue().bold());
-            println!("{:<20} | {:<10} | Description", "Name", "Prefix");
-            println!("{}", "-".repeat(60));
-
-            for type_def in &store.id_config.requirement_types {
-                println!(
-                    "{:<20} | {:<10} | {}",
-                    type_def.name, type_def.prefix, type_def.description
-                );
-            }
-        }
-        TypeCommand::Add {
-            name,
-            prefix,
-            description,
-        } => {
-            let desc = description.clone().unwrap_or_default();
-            store.add_requirement_type(name, prefix, &desc)?;
-            storage.save(&store)?;
-            println!(
-                "{} Requirement type '{}' added with prefix '{}'.",
-                crate::glyph(crate::glyphs::Glyph::Check).green(),
-                name,
-                prefix.to_uppercase()
-            );
-        }
-        TypeCommand::Remove { name, yes } => {
-            // Find the type
-            let idx = store.id_config.requirement_types.iter().position(|t| {
-                t.name.to_lowercase() == name.to_lowercase() || t.prefix == name.to_uppercase()
-            });
-
-            if let Some(idx) = idx {
-                let type_def = &store.id_config.requirement_types[idx];
-
-                if !*yes {
-                    println!(
-                        "About to remove type '{}' (prefix: {})",
-                        type_def.name, type_def.prefix
-                    );
-                    let confirm = inquire::Confirm::new("Are you sure?")
-                        .with_default(false)
-                        .prompt()?;
-                    if !confirm {
-                        println!("Removal cancelled.");
-                        return Ok(());
-                    }
-                }
-
-                let removed = store.id_config.requirement_types.remove(idx);
-                storage.save(&store)?;
-                println!(
-                    "{} Requirement type '{}' removed.",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    removed.name
-                );
-            } else {
-                println!("{} Type '{}' not found.", "!".yellow(), name);
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// Handle `aida cache {rebuild,status}` against a CachedGitBackend.
 /// trace:EPIC-1-001 | ai:claude
 /// Handle `aida db block <subcommand>` — pre-allocated agreed ID blocks.
