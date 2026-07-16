@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T09:16:57.465159107Z
+modified_at: 2026-07-16T09:19:33.180029673Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -76,6 +76,12 @@ comments:
   content: Commit 40a576b05 references this requirement
   created_at: 2026-07-16T09:16:05.322482314Z
   modified_at: 2026-07-16T09:16:05.322482314Z
+- id: 019f6a39-613c-71f3-90da-2288053652b5
+  author: joe
+  content: 'Step 5 DONE: usage cluster → usage_cmd.rs merged (#1426), main.rs 157039→155811 (-1228, biggest cut; correctly kept aggregate_events/UsageRow shared with mcp.rs). Combined-main green (3747). Next: graph #1427 (green, rebasing), changelog #1428.'
+  created_at: 2026-07-16T09:19:33.180029673Z
+  modified_at: 2026-07-16T09:19:33.180029673Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
   author: aida-auto-bump
