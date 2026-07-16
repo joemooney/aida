@@ -3,12 +3,12 @@ spec_id: TASK-1020
 agreed_id: TASK-1020
 title: TASK-0432 — precedence when autopilot composes with `--zen` / `--no-human` / solo / `intake --apply`; ratify the surface (flag vs posture vs mode)
 description: ''
-status: InProgress
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:28:16.114450654Z
-modified_at: 2026-07-16T02:34:28.582559674Z
+modified_at: 2026-07-16T06:43:57.600769794Z
 req_type: Task
 tags:
 - zen-ready
