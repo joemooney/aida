@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T05:52:49.059498927Z
-modified_at: 2026-07-14T04:51:14.380983581Z
+modified_at: 2026-07-16T04:26:09.460727992Z
 req_type: Task
 tags:
 - integrator
@@ -18,6 +18,13 @@ relationships:
 - rel_type: Child
   target_id: 019ecea3-433b-7123-bb15-2253eb818b54
   created_at: 2026-07-01T05:53:05.400565002Z
+comments:
+- id: 019f692c-c4b4-7600-9988-34feccb96a08
+  author: joe
+  content: 'IMPLEMENTATION DIRECTIVE (guided decision): implement `integrate --strategy stacked` auto-promotion of deferred stacked children BEHIND an explicit `--promote-stacked` opt-in flag. Default stays the current exit-2 `/aida-rebase` manual pointer (no behavior change unless opted in). When --promote-stacked: rebase --onto + force-push-with-lease the promoted child branches in a temp worktree, gated by a LEASE GUARD — never force-push a PR branch whose lease you don''t hold. Seams: the integrator/`integrate` strategy dispatch in main.rs; the existing exit-2 /aida-rebase pointer; git_ops force-with-lease. Keep the safe default; the opt-in carries the unattended-force-push risk behind the lease guard. Gate + PR, do NOT merge (keystone).'
+  created_at: 2026-07-16T04:26:09.460727992Z
+  modified_at: 2026-07-16T04:26:09.460727992Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 decision_request:
   question: Should integrate --strategy stacked auto force-push-rebase promoted stacked children, or keep the manual /aida-rebase handoff?
   choices:
