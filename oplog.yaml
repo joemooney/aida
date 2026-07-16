@@ -33300,5 +33300,27 @@ operations:
   timestamp: 2026-07-16T02:34:28.623907444Z
   kind: !SetStatus
     status: In Progress
-clock: 3112
+- id: 019f695c-82e4-7573-9688-0d74cace72de
+  target_id: 019f695c-7f0a-7c30-b382-cae1d648d36a
+  author: aida
+  node_id: '1'
+  lamport: 3113
+  timestamp: 2026-07-16T05:18:18.340791490Z
+  kind: !Create
+    title: 'Shrink aida-cli''s 157k-line main.rs: measure build cost, then extract tests + handler crates incrementally'
+    description: |-
+      2026-07-15: aida-cli/src/main.rs is 157,195 lines (58% of the 269k-line crate) with 1,842 inline #[test]/#[cfg(test)] attributes. This makes clean + TEST builds very slow (a background agent stalled compiling the test binary) and taxes every drain/agent session + CI.
+
+      Investigate + plan (do NOT big-bang; this is a SPIKE for measurement + an incremental plan):
+      1. MEASURE: `cargo build --timings` (+ `--tests`) to get the real per-crate/per-codegen-unit breakdown; confirm where the time actually goes.
+      2. Highest-leverage, lowest-risk first move: move the ~1,842 INLINE tests out of main.rs into `tests/*.rs` integration files (each is its own compile unit / separate test binary) — should cut the giant-test-binary pain immediately.
+      3. Compile-time win is CRATE-splitting (parallel + cached per-crate), NOT just module-splitting (same crate = one compile unit). Propose extraction boundaries: cohesive handler groups (drain/orchestrator, mailbox/coordination, forge, mcp — mcp.rs is 12k lines and a natural separate crate/binary) → their own crates. Module-splitting within the crate still helps navigability.
+      4. Consider a second binary for `aida mcp-serve` (distinct mode) to shrink the main CLI's compile scope.
+      5. Deliver an INCREMENTAL plan: extract one crate/test-file at a time, verify green each step, never a single mega-refactor.
+
+      TIMING: sequence AFTER the current keystone/slice cluster merges (ADR-10/TASK-958 done; TASK-1150, TASK-1147, TASK-1080, BUG-714, TASK-1020 all touch main.rs) — a big main.rs refactor mid-fleet is merge-conflict hell. Tech-debt / dev-ergonomics, not bugs-before-marketing, but the compile tax is real and continuous.
+    req_type: Spike
+    status: Approved
+    priority: Medium
+clock: 3113
 node_id: '1'
