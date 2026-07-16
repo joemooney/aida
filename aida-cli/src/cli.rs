@@ -3945,6 +3945,63 @@ pub enum BacklogCommand {
     Load,
 }
 
+/// Advisor-autopilot auditability + reversal surface.
+///
+/// The read-only + audit + reversal half of the bounded-authority envelope:
+/// see what autopilot WOULD decide, review the recorded verdicts, and reverse
+/// any of them. Autopilot cannot approve/reject/queue on its own — that
+/// authority is deliberately withheld.
+// trace:TASK-1147 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum AutopilotCommand {
+    /// Dry-run the policy envelope over the current groom candidates and show,
+    /// per spec, the four-gate verdict (auto-execute vs gated, and which gate
+    /// stopped it). Writes NOTHING to any spec. Pass --record to append the
+    /// projected verdicts to the local audit log for later review.
+    Inspect {
+        /// Only weigh specs riskier than this level out (low / medium / high /
+        /// unknown). Mirrors `aida groom --risk`. Default: medium.
+        #[clap(long, value_name = "MAX", default_value = "medium")]
+        risk: String,
+        /// Only consider specs carrying this tag.
+        #[clap(long, value_name = "TAG")]
+        only_tag: Option<String>,
+        /// Never consider specs carrying this tag.
+        #[clap(long, value_name = "TAG")]
+        exclude_tag: Option<String>,
+        /// Append the projected verdicts to the local audit log.
+        #[clap(long)]
+        record: bool,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+    },
+    /// List the recorded autopilot decisions (and any reversals) from the local
+    /// audit log, newest last.
+    Audit {
+        /// Cap the number of rows shown (0 = all).
+        #[clap(long, default_value = "50")]
+        limit: usize,
+        /// Only show decisions that have NOT been challenged.
+        #[clap(long)]
+        open: bool,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Mark a recorded autopilot decision as challenged / reversed. TARGET is a
+    /// decision id (from `aida autopilot audit`) or a SPEC-ID (reverses that
+    /// spec's most recent un-challenged decision).
+    Challenge {
+        /// Decision id or SPEC-ID to reverse.
+        #[clap(value_name = "TARGET")]
+        target: String,
+        /// Why the decision is being reversed.
+        #[clap(long)]
+        note: Option<String>,
+    },
+}
+
 /// Fasttrack-lane introspection subcommands.
 ///
 /// The bare `aida fasttrack <title>` filing form lives on the parent
@@ -9583,6 +9640,18 @@ pub enum Command {
     // trace:STORY-444 | ai:claude
     #[clap(subcommand)]
     Backlog(BacklogCommand),
+
+    /// Inspect, audit, and reverse advisor-autopilot disposition decisions.
+    ///
+    /// A read-only lens over the bounded-authority policy envelope: `inspect`
+    /// dry-runs the four-gate evaluation over the current groom candidates and
+    /// shows, per spec, what it WOULD decide (and which gate stopped it) without
+    /// touching a single spec; `audit` lists the recorded verdicts; `challenge`
+    /// marks a recorded verdict as reversed. Autopilot has NO authority to
+    /// approve/reject/queue autonomously — that is intentionally not wired.
+    // trace:TASK-1147 | ai:claude
+    #[clap(subcommand)]
+    Autopilot(AutopilotCommand),
 
     /// Top-level alias for `aida queue rework SPEC` — single verb for the
     /// recurring implementer → reviewer → fixup recovery sequence

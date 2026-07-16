@@ -23,6 +23,10 @@
 #![allow(dead_code)]
 
 use std::collections::{BTreeMap, HashSet};
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
 
 use crate::backlog::RiskLevel;
 use crate::intake::IntakeConfig;
@@ -373,6 +377,255 @@ fn strip_inline_comment(s: &str) -> &str {
     s
 }
 
+// ---------------------------------------------------------------------------
+// TASK-1147 — the auditability + reversal SURFACE (read-only half of EPIC-0428).
+//
+// This is deliberately the SAFE substrate: it INSPECTS what the envelope WOULD
+// decide (a side-effect-free dry-run over the live groom/intake candidates) and
+// records those projected verdicts to a lightweight local append log so they
+// can be reviewed and CHALLENGED (reversed) after the fact. It does NOT grant
+// real approve/reject/queue authority — the envelope is never wired to execute
+// a disposition here. That keystone-autonomy slice is deferred.
+// trace:TASK-1147 | ai:claude
+// ---------------------------------------------------------------------------
+
+impl Outcome {
+    /// Short, stable verdict token for display + the audit log.
+    pub(crate) fn verdict_token(self) -> &'static str {
+        match self {
+            Outcome::Execute => "execute",
+            Outcome::Hold => "hold",
+            Outcome::Escalate(_) => "escalate",
+        }
+    }
+
+    /// Which gate produced this verdict — the "why" column of the inspect view
+    /// and the audit trail. `inspect` only ever runs [`evaluate`] over in-fence
+    /// (eligible) specs, so a `Hold` here is always the gate-2 propose authority
+    /// (the gate-1 fence drop is surfaced separately with its richer reason).
+    pub(crate) fn gate_label(self) -> &'static str {
+        match self {
+            Outcome::Execute => "all-gates-pass",
+            Outcome::Hold => "gate2:authority(propose)",
+            Outcome::Escalate(EscalateReason::NeverAuthority) => "gate2:authority(never)",
+            Outcome::Escalate(EscalateReason::GroundingGap) => "gate3:grounding",
+            Outcome::Escalate(EscalateReason::RiskCeiling) => "gate4:risk-ceiling",
+        }
+    }
+}
+
+/// One row of the `aida autopilot inspect` dry-run: the envelope's verdict for
+/// one proposed action on one candidate spec. Pure projection — carries no
+/// side effect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct InspectRow {
+    pub spec_id: String,
+    pub action: ActionClass,
+    pub outcome: Outcome,
+    /// The one-line rationale carried on the source [`Decision`].
+    pub reason: String,
+}
+
+/// The PURE inspect projection: run the envelope over each proposed decision
+/// and collect the per-spec verdict WITHOUT mutating anything. This is the
+/// read-only heart of `aida autopilot inspect`; exhaustively unit-testable like
+/// [`evaluate`] itself.
+// trace:TASK-1147 | ai:claude
+pub(crate) fn project_decisions(
+    env: &AutopilotEnvelope,
+    fenced_ids: &HashSet<String>,
+    decisions: &[Decision],
+) -> Vec<InspectRow> {
+    decisions
+        .iter()
+        .map(|d| InspectRow {
+            spec_id: d.spec_id.clone(),
+            action: d.action,
+            outcome: evaluate(env, fenced_ids, d),
+            reason: d.reason.clone(),
+        })
+        .collect()
+}
+
+/// One line of the local autopilot audit log (`.aida/autopilot-audit.jsonl`).
+///
+/// TASK-0430's durable audit does not exist yet, so TASK-1147 ships this
+/// lightweight append-only log; when the durable store lands, the same reader
+/// can surface it instead. Two entry kinds share one shape:
+///   - `decision`  — a projected envelope verdict for one spec + action.
+///   - `challenge` — a reversal marker targeting a prior `decision` entry's id.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct AuditEntry {
+    /// Stable short id (`d########` for decisions, `c########` for challenges).
+    pub id: String,
+    /// RFC-3339 UTC timestamp.
+    pub ts: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// (challenge only) the `decision` entry id this challenge reverses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    /// (challenge only) the operator's reversal note.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// FNV-1a → 8 hex chars, prefixed to keep decision / challenge ids distinct.
+fn short_id(prefix: char, seed: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in seed.bytes() {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{prefix}{:08x}", (hash & 0xffff_ffff) as u32)
+}
+
+/// The local audit-log path. Lives under `.aida/` — runtime per-clone state by
+/// the deny-by-default `.gitignore` convention, never committed.
+pub(crate) fn audit_log_path(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("autopilot-audit.jsonl")
+}
+
+/// Build a `decision` audit entry from an inspected verdict. `seq` disambiguates
+/// entries written in the same millisecond so ids stay unique within a batch.
+pub(crate) fn decision_entry(
+    ts: &str,
+    seq: usize,
+    spec_id: &str,
+    action: ActionClass,
+    outcome: Outcome,
+    reason: &str,
+    source: &str,
+) -> AuditEntry {
+    let seed = format!(
+        "{ts}|{seq}|{spec_id}|{}|{}",
+        action.token(),
+        outcome.verdict_token()
+    );
+    AuditEntry {
+        id: short_id('d', &seed),
+        ts: ts.to_string(),
+        kind: "decision".to_string(),
+        spec_id: Some(spec_id.to_string()),
+        action: Some(action.token().to_string()),
+        verdict: Some(outcome.verdict_token().to_string()),
+        gate: Some(outcome.gate_label().to_string()),
+        reason: (!reason.trim().is_empty()).then(|| reason.to_string()),
+        source: Some(source.to_string()),
+        target: None,
+        note: None,
+    }
+}
+
+/// Build a `challenge` audit entry reversing the decision entry `target_id`.
+pub(crate) fn challenge_entry(ts: &str, target_id: &str, note: Option<&str>) -> AuditEntry {
+    AuditEntry {
+        id: short_id('c', &format!("{ts}|{target_id}|challenge")),
+        ts: ts.to_string(),
+        kind: "challenge".to_string(),
+        spec_id: None,
+        action: None,
+        verdict: None,
+        gate: None,
+        reason: None,
+        source: None,
+        target: Some(target_id.to_string()),
+        note: note.map(|s| s.to_string()),
+    }
+}
+
+/// Append entries to the local audit log, creating `.aida/` if needed.
+pub(crate) fn append_audit_entries(
+    project_root: &Path,
+    entries: &[AuditEntry],
+) -> std::io::Result<()> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    let path = audit_log_path(project_root);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)?;
+    for e in entries {
+        let line = serde_json::to_string(e)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        writeln!(file, "{line}")?;
+    }
+    Ok(())
+}
+
+/// Read the audit log. A missing file is an empty log (not an error); malformed
+/// lines are skipped so one bad row never blinds the whole trail.
+pub(crate) fn read_audit_entries(project_root: &Path) -> std::io::Result<Vec<AuditEntry>> {
+    let path = audit_log_path(project_root);
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
+    Ok(content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<AuditEntry>(l).ok())
+        .collect())
+}
+
+/// True iff a `challenge` entry already targets this decision id.
+pub(crate) fn is_challenged(entries: &[AuditEntry], decision_id: &str) -> bool {
+    entries
+        .iter()
+        .any(|e| e.kind == "challenge" && e.target.as_deref() == Some(decision_id))
+}
+
+/// Resolve which decision entry a `challenge <target>` refers to. `target`
+/// matches either a decision entry id EXACTLY, or (fallback) the most recent
+/// still-UNCHALLENGED decision entry for that spec id (case-insensitive).
+/// Returns the resolved decision id, or `None` if nothing matches. Pure +
+/// exhaustively testable.
+// trace:TASK-1147 | ai:claude
+pub(crate) fn resolve_challenge_target(entries: &[AuditEntry], target: &str) -> Option<String> {
+    // Exact id match against a decision entry wins.
+    if let Some(e) = entries
+        .iter()
+        .find(|e| e.kind == "decision" && e.id == target)
+    {
+        return Some(e.id.clone());
+    }
+    // Else the latest un-challenged decision for that spec id.
+    let challenged: HashSet<&str> = entries
+        .iter()
+        .filter(|e| e.kind == "challenge")
+        .filter_map(|e| e.target.as_deref())
+        .collect();
+    entries
+        .iter()
+        .rev()
+        .find(|e| {
+            e.kind == "decision"
+                && e.spec_id
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(target))
+                && !challenged.contains(e.id.as_str())
+        })
+        .map(|e| e.id.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,5 +873,129 @@ mod tests {
             RiskLevel::Low,
         );
         assert_eq!(evaluate(&env, &fence, &safe), Outcome::Execute);
+    }
+
+    // ---- TASK-1147: inspect projection + audit/reversal ----
+
+    #[test]
+    fn project_decisions_yields_envelope_verdict_per_candidate() {
+        // The dry-run projection is exactly `evaluate` per candidate, with NO
+        // mutation. Default envelope: queue=auto (executes when grounded/low),
+        // approve=propose (holds), and a high-risk queue escalates on gate 4.
+        let env = AutopilotEnvelope::default();
+        let fence = fence_of(["TASK-1", "TASK-2", "TASK-3"]);
+        let decisions = vec![
+            decision(
+                "TASK-1",
+                ActionClass::Queue,
+                Grounding::TypeA,
+                RiskLevel::Low,
+            ),
+            decision(
+                "TASK-2",
+                ActionClass::Approve,
+                Grounding::TypeA,
+                RiskLevel::Low,
+            ),
+            decision(
+                "TASK-3",
+                ActionClass::Queue,
+                Grounding::TypeA,
+                RiskLevel::High,
+            ),
+        ];
+        let rows = project_decisions(&env, &fence, &decisions);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].outcome, Outcome::Execute);
+        assert_eq!(rows[1].outcome, Outcome::Hold);
+        assert_eq!(
+            rows[2].outcome,
+            Outcome::Escalate(EscalateReason::RiskCeiling)
+        );
+        // Verdict/gate labels are stable tokens for the audit trail.
+        assert_eq!(rows[0].outcome.verdict_token(), "execute");
+        assert_eq!(rows[1].outcome.gate_label(), "gate2:authority(propose)");
+        assert_eq!(rows[2].outcome.gate_label(), "gate4:risk-ceiling");
+    }
+
+    #[test]
+    fn audit_append_and_read_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("aida-ap-audit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Empty log reads as no entries.
+        assert!(read_audit_entries(&dir).unwrap().is_empty());
+
+        let e1 = decision_entry(
+            "2026-07-15T00:00:00Z",
+            0,
+            "TASK-1",
+            ActionClass::Queue,
+            Outcome::Execute,
+            "grounded + low risk",
+            "inspect",
+        );
+        let e2 = decision_entry(
+            "2026-07-15T00:00:00Z",
+            1,
+            "TASK-2",
+            ActionClass::Approve,
+            Outcome::Hold,
+            "approve is propose-only",
+            "inspect",
+        );
+        append_audit_entries(&dir, &[e1.clone(), e2.clone()]).unwrap();
+
+        let read = read_audit_entries(&dir).unwrap();
+        assert_eq!(read, vec![e1.clone(), e2.clone()]);
+        // Distinct ids even in the same millisecond (seq disambiguates).
+        assert_ne!(e1.id, e2.id);
+        assert!(e1.id.starts_with('d'));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn challenge_resolves_and_records_reversal() {
+        let dir = std::env::temp_dir().join(format!("aida-ap-chal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let d = decision_entry(
+            "2026-07-15T00:00:00Z",
+            0,
+            "TASK-9",
+            ActionClass::Queue,
+            Outcome::Execute,
+            "r",
+            "inspect",
+        );
+        append_audit_entries(&dir, &[d.clone()]).unwrap();
+        let entries = read_audit_entries(&dir).unwrap();
+
+        // Not yet challenged.
+        assert!(!is_challenged(&entries, &d.id));
+        // Resolve by exact id AND by spec id (fallback to latest).
+        assert_eq!(
+            resolve_challenge_target(&entries, &d.id),
+            Some(d.id.clone())
+        );
+        assert_eq!(
+            resolve_challenge_target(&entries, "task-9"),
+            Some(d.id.clone())
+        );
+        // Unknown target resolves to nothing.
+        assert_eq!(resolve_challenge_target(&entries, "TASK-404"), None);
+
+        // Record a challenge, then confirm it reads back as challenged and the
+        // same decision no longer resolves via the spec-id fallback.
+        let c = challenge_entry("2026-07-15T00:01:00Z", &d.id, Some("wrong call"));
+        append_audit_entries(&dir, &[c]).unwrap();
+        let entries = read_audit_entries(&dir).unwrap();
+        assert!(is_challenged(&entries, &d.id));
+        assert_eq!(resolve_challenge_target(&entries, "TASK-9"), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
