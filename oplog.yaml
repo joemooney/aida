@@ -33347,5 +33347,17 @@ operations:
   timestamp: 2026-07-16T06:43:57.643024358Z
   kind: !SetStatus
     status: Approved
-clock: 3115
+- id: 019f69c3-7252-7682-a854-2584477c4b23
+  target_id: 019f69c3-6eee-7d93-86a2-7efd1f292ce7
+  author: aida
+  node_id: '1'
+  lamport: 3116
+  timestamp: 2026-07-16T07:10:44.306240581Z
+  kind: !Create
+    title: 'CLI-manual spec-id leak: STORY-769 in docs/cli/03-work-autonomy.md fails the drift-guard; merged to main over red CI (PR #1412)'
+    description: 'The CLI-manual drift-guard (verify-manual.py spec-id-leak check) fails on main since PR #1412 landed: 03-work-autonomy.md lines 153/159 cite STORY-769 literally in the user-facing manual. Per docs/user-facing-text-conventions.md, SPEC-IDs stay in developer artifacts; the manual must use placeholders or omit provenance. Blocks every open PR (merge-result CI). Fix: scrub the two parentheticals. Process note: #1412 merged with its CI run red.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3116
 node_id: '1'
