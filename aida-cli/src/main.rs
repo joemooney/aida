@@ -168,6 +168,7 @@ mod schedule;
 mod schedule_cmd;
 mod schema;
 mod seats;
+mod server_cmd;
 mod session;
 mod session_manifest;
 mod session_misc_cmd;
@@ -276,10 +277,9 @@ use crate::cli::{
     LockCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand,
     OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand,
     RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
-    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand, TeamCommand,
-    TraceCommand, TriageCommand, TypeCommand, WorkerCommand, WorktreeCommand, WorktreePoolCommand,
-    ZenCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand,
+    SkillCommand, SoloAction, SpecCommand, StackCommand, TeamCommand, TraceCommand, TriageCommand,
+    TypeCommand, WorkerCommand, WorktreeCommand, WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4937,7 +4937,7 @@ fn run() -> Result<()> {
             open_user_guide(*dark)?;
         }
         Command::Server(server_cmd) => {
-            handle_server_command(server_cmd, cli.server.as_deref())?;
+            server_cmd::handle_server_command(server_cmd, cli.server.as_deref())?;
         }
         Command::Trace(trace_cmd) => {
             crate::trace_cmd::handle_trace_command(trace_cmd, &storage)?;
@@ -23357,55 +23357,6 @@ fn _git_config_get_global(key: &str) -> Result<String> {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
         anyhow::bail!("git config {} not set", key)
-    }
-}
-
-fn handle_server_command(cmd: &ServerCommand, server_addr: Option<&str>) -> Result<()> {
-    let server_addr = server_addr.ok_or_else(|| {
-        anyhow::anyhow!(
-            "Server address required. Use --server flag or set AIDA_SERVER environment variable."
-        )
-    })?;
-
-    #[cfg(feature = "remote")]
-    {
-        // Create a tokio runtime for async operations
-        let rt = tokio::runtime::Runtime::new()?;
-
-        match cmd {
-            ServerCommand::Status => {
-                rt.block_on(client::get_server_status(server_addr))?;
-            }
-            ServerCommand::List {
-                status,
-                feature,
-                limit,
-            } => {
-                rt.block_on(client::list_requirements(
-                    server_addr,
-                    status.as_deref(),
-                    feature.as_deref(),
-                    *limit,
-                ))?;
-            }
-            ServerCommand::Get { id } => {
-                rt.block_on(client::get_requirement(server_addr, id))?;
-            }
-            ServerCommand::Ping => {
-                rt.block_on(client::ping_server(server_addr))?;
-            }
-        }
-        Ok(())
-    }
-
-    #[cfg(not(feature = "remote"))]
-    {
-        let _ = cmd; // suppress unused warning
-        let _ = server_addr;
-        anyhow::bail!(
-            "Remote server support is not enabled. \
-            Build with: cargo build -p aida-cli --features remote"
-        )
     }
 }
 
