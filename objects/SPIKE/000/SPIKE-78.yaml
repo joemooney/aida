@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-16T16:23:18.394992579Z
+modified_at: 2026-07-16T16:26:02.950516269Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -281,6 +281,12 @@ comments:
   content: Commit 0f0bd6126 references this requirement
   created_at: 2026-07-16T16:22:08.658830862Z
   modified_at: 2026-07-16T16:22:08.658830862Z
+- id: 019f6bbf-d946-7731-9eb6-2f74905b4cd8
+  author: joe
+  content: 'Step 29 DONE: role cluster → role_cmd.rs (~854 lines) merged (#1450), main.rs 137270→136433 (-837). 17 role-exclusive fns; shared role-file/picker/session machinery kept in main.rs. Combined-main green. Next: report #1451 (green, rebasing), goal #1452 (-226).'
+  created_at: 2026-07-16T16:26:02.950516269Z
+  modified_at: 2026-07-16T16:26:02.950516269Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
   author: aida-auto-bump
