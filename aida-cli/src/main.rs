@@ -33,6 +33,7 @@ mod deep_link;
 mod defer_cmd;
 mod dev_cmd;
 mod digest;
+mod digest_cmd;
 mod graph_cmd;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
 mod dispatch_health_ps;
@@ -13594,7 +13595,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             reset,
         } => {
             let store = backend.load()?;
-            return handle_digest_command(
+            return digest_cmd::handle_digest_command(
                 since.as_deref(),
                 *audience,
                 *format,
@@ -91285,89 +91286,6 @@ fn render_agent_lift_markdown(lift: &metrics::AgentLift, since_raw: &str) {
          coverage are not yet captured in the telemetry substrate and are \
          therefore omitted rather than approximated."
     );
-}
-
-// ----------------------------------------------------------------------------
-// `aida digest` — narrative work digest (STORY-252).
-// ----------------------------------------------------------------------------
-
-#[allow(clippy::too_many_arguments)]
-fn handle_digest_command(
-    since_raw: Option<&str>,
-    audience: digest::DigestAudience,
-    format: digest::DigestFormat,
-    include_next: Option<bool>,
-    include_process: Option<bool>,
-    out: Option<std::path::PathBuf>,
-    copy: bool,
-    reset: bool,
-    store: &RequirementsStore,
-) -> Result<()> {
-    let project_root = find_project_root()?;
-    let until = chrono::Utc::now();
-    let since = digest::parse_digest_since(since_raw, &project_root)?;
-    if since > until {
-        anyhow::bail!(
-            "--since resolves to {} which is after now; nothing to digest",
-            since.to_rfc3339()
-        );
-    }
-    let include_next = include_next.unwrap_or(true);
-    // operator is a CLI-surface lens (not a work narrative), so process/memory
-    // artifacts are off by default just like customer. trace:STORY-541
-    let include_process = include_process.unwrap_or(!matches!(
-        audience,
-        digest::DigestAudience::Customer | digest::DigestAudience::Operator
-    ));
-    let opts = digest::DigestOptions {
-        since,
-        until,
-        audience,
-        format,
-        include_next,
-        include_process,
-        out,
-    };
-    // TASK-381: when --copy is set, render to a string and try the
-    // system clipboard; fall through to stdout if no clipboard tool
-    // is found. --copy is a no-op on --reset (which clears the marker
-    // without rendering anything). Composes with --out: writes the
-    // file AND copies. trace:TASK-381 | ai:claude
-    if copy {
-        if reset {
-            digest::run(opts, &project_root, store, reset)?;
-            println!(
-                "{} --copy was a no-op (--reset cleared the cadence marker; nothing rendered)",
-                crate::glyph(crate::glyphs::Glyph::InfoAlt).yellow()
-            );
-            return Ok(());
-        }
-        let rendered = digest::render_string(&opts, &project_root, store)?;
-        // Also honor --out if supplied — write file before copying.
-        if let Some(path) = &opts.out {
-            aida_core::write_atomic(path, &rendered)
-                .with_context(|| format!("Failed to write {}", path.display()))?;
-            eprintln!("Wrote digest to {}", path.display());
-        }
-        if copy_to_clipboard(&rendered) {
-            println!(
-                "{} copied digest to clipboard ({} chars)",
-                crate::glyph(crate::glyphs::Glyph::Check).green(),
-                rendered.chars().count(),
-            );
-        } else {
-            println!(
-                "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
-                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-            );
-            print!("{rendered}");
-            if !rendered.ends_with('\n') {
-                println!();
-            }
-        }
-        return Ok(());
-    }
-    digest::run(opts, &project_root, store, reset)
 }
 
 // ----------------------------------------------------------------------------
