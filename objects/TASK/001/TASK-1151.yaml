@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T15:52:53.000604369Z
-modified_at: 2026-07-17T15:53:04.057381276Z
+modified_at: 2026-07-17T15:58:20.310083138Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -19,3 +19,9 @@ relationships:
 - rel_type: Child
   target_id: 019f6e6e-2f7e-71e3-ac41-710f63d3cf5d
   created_at: 2026-07-17T15:52:56.360346765Z
+comments:
+- id: 019f70cc-d696-7e53-945a-e41177e37626
+  author: joe
+  content: Commit fc899803e references this requirement
+  created_at: 2026-07-17T15:58:20.310083138Z
+  modified_at: 2026-07-17T15:58:20.310083138Z
