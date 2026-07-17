@@ -33463,5 +33463,13 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3127
+- id: 019f7209-51c0-79f3-9418-fddefac3ef18
+  target_id: 019f6e6e-430c-7e61-983d-3d7a78c44c79
+  author: aida
+  node_id: '1'
+  lamport: 3128
+  timestamp: 2026-07-17T21:44:01.216568573Z
+  kind: !SetDescription
+    description: 'Split aida-cli into a thin 3-line binary + an aida-cli-lib library crate (run/dispatch + all handlers + all 164 test modules move into the lib; tests stay INSIDE the lib since a standalone test crate would need ~660 pub(crate) fns promoted to pub). VALUE IS TESTABILITY + a clean entry-point boundary + a precondition for a future multi-crate lib split — NOT build time: scoping (docs/plans/2026-07-17-story-772-crate-split-scoping.md) found a bin+one-lib split delivers only ~0-5% clean-build improvement and nothing for incremental rebuilds (the lib stays one ~274K-line crate; codegen-units+incremental already capture that). 2-PR sequence, green at every step; one gotcha: include_str!("../main.rs") in a test needs retargeting. Only one symbol becomes pub. See the scoping doc for the full topology/sequence/risks.'
+clock: 3128
 node_id: '1'

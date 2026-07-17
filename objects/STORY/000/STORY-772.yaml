@@ -2,13 +2,13 @@ id: 019f6e6e-430c-7e61-983d-3d7a78c44c79
 spec_id: STORY-772
 agreed_id: STORY-772
 title: 'SPIKE-78 follow-up: split aida-cli into a thin binary + handler lib crate + test crate'
-description: Structural endgame of SPIKE-78. Split aida-cli (~thin main.rs + *_cmd.rs handler modules + relocated tests) into a thin bin crate + a handler lib crate + a test crate. This is where the actual CI/compile-time win materializes — an independent incremental cache lets the test crate build in parallel. Depends on the inline-test relocation landing first (the enabling precondition). The *_cmd.rs handler split done in phase 1 is the other precondition.
+description: 'Split aida-cli into a thin 3-line binary + an aida-cli-lib library crate (run/dispatch + all handlers + all 164 test modules move into the lib; tests stay INSIDE the lib since a standalone test crate would need ~660 pub(crate) fns promoted to pub). VALUE IS TESTABILITY + a clean entry-point boundary + a precondition for a future multi-crate lib split — NOT build time: scoping (docs/plans/2026-07-17-story-772-crate-split-scoping.md) found a bin+one-lib split delivers only ~0-5% clean-build improvement and nothing for incremental rebuilds (the lib stays one ~274K-line crate; codegen-units+incremental already capture that). 2-PR sequence, green at every step; one gotcha: include_str!("../main.rs") in a test needs retargeting. Only one symbol becomes pub. See the scoping doc for the full topology/sequence/risks.'
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:47.724859121Z
-modified_at: 2026-07-17T15:59:53.640968565Z
+modified_at: 2026-07-17T21:44:01.174464697Z
 req_type: Story
 tags:
 - parent:SPIKE-78
