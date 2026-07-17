@@ -60,7 +60,16 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap
+          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap mold
+
+      # TASK-1152: link with mold on Linux. Default BFD `ld` links the 43MB aida
+      # binary single-threadedly (~47s locally); mold does it in ~1-2s (~32% cut
+      # on a full aida-cli release rebuild). Scoped to the Linux job via
+      # GITHUB_ENV so a future macOS/Windows matrix re-add is unaffected (mold is
+      # Linux-only). trace:TASK-1152 | ai:claude
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
