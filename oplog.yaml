@@ -33399,5 +33399,17 @@ operations:
   timestamp: 2026-07-16T08:54:23.815192904Z
   kind: !SetStatus
     status: In Progress
-clock: 3121
+- id: 019f6e6e-1fab-7020-8f0c-6f771cbd2580
+  target_id: 019f6e6e-10df-7d22-ba63-10d67e163751
+  author: aida
+  node_id: '1'
+  lamport: 3122
+  timestamp: 2026-07-17T04:55:38.667373332Z
+  kind: !Create
+    title: 'SPIKE-78 follow-up: relocate the 1,524 inline tests out of aida-cli/src/main.rs'
+    description: 'Biggest remaining lever from SPIKE-78. main.rs is 126K lines but 86% (109,673 lines) is inline tests — 1,524 test fns in 17 cfg(test) blocks; only 13% (~16.5K) is live code. Relocating the tests drops main.rs to ~16K. Supervised because test-module boundaries are subtler than handler boundaries: shared fixtures, super::* imports, cfg(test) visibility. Payoff is primarily maintainability + rust-analyzer responsiveness + unblocking the crate split.'
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 3122
 node_id: '1'
