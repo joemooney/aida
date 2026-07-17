@@ -45,10 +45,18 @@ import_plan, decide, lock, assign, brief.
 
 ## Deliberately deferred (supervised follow-up)
 
-- **Inline test relocation** — the real CI-speed win. `main.rs` is still large
-  mostly because of ~1,842 inline `#[cfg(test)]` tests; moving them out of the
-  crate root is the payoff, and it wants a supervised pass (test-module boundaries
-  are subtler than handler boundaries).
+- **Inline test relocation** — the biggest remaining lever. `main.rs` is still
+  large almost entirely because of tests: **86% of the file (109,673 lines) is
+  1,524 inline `#[cfg(test)]` tests**; only 13% (~16.5K lines) is live code
+  (dispatch + keystone handlers + `main()` glue). Moving the tests out drops
+  `main.rs` to ~16K. It wants a supervised pass (test-module boundaries are
+  subtler than handler boundaries: shared fixtures, `super::*` imports,
+  `#[cfg(test)]` visibility). Note the payoff is primarily maintainability +
+  rust-analyzer responsiveness + **unblocking the crate split** — the actual
+  CI/compile-time win lands only once the split gives the tests their own crate
+  with an independent incremental cache; within one crate, `cfg(test)` code
+  already costs nothing on a plain `cargo build` and compiles regardless of which
+  file it lives in.
 - **Keystone handlers left in place**: `pr`, `mcp`, and the
   orchestrator/drain/queue/status/solo cluster — high-churn, high-blast-radius
   surfaces that should move under supervision, not in an unattended sweep.
