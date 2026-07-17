@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:34.879720706Z
-modified_at: 2026-07-17T06:03:47.251216222Z
+modified_at: 2026-07-17T06:17:26.218213857Z
 req_type: Story
 tags:
 - parent:SPIKE-78
@@ -19,3 +19,9 @@ relationships:
 - rel_type: Child
   target_id: 019f695c-7f0a-7c30-b382-cae1d648d36a
   created_at: 2026-07-17T04:55:39.397321813Z
+comments:
+- id: 019f6eb9-01ca-7ee1-bb6f-762fa14aaf57
+  author: joe
+  content: Commit 9b82b56d7 references this requirement
+  created_at: 2026-07-17T06:17:26.218213857Z
+  modified_at: 2026-07-17T06:17:26.218213857Z
