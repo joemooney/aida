@@ -33451,5 +33451,17 @@ operations:
   timestamp: 2026-07-17T06:03:47.294270493Z
   kind: !SetDescription
     description: 'Relocate the inline tests out of aida-cli/src/main.rs. CORRECTED measurement (a string/char/comment-aware scan; the earlier naive brace-counter was fooled by a literal and over-counted): main.rs is 27% tests / 72% live code — 166 cfg(test) modules totaling 34,780 lines (already subject-organized, largest 5,229 lines; there is NO single monster module) and 91,408 lines of live code. Relocating all 166 modules via #[path] sibling files under src/tests/ drops main.rs to ~91K (not ~16K), pure movement with zero import rewrites (the mod decl stays at the crate root so use super::* still resolves). Payoff: maintainability + rust-analyzer responsiveness + unblocking the crate split (STORY-772). Note: because main.rs is 72% live code, the bigger size lever is keystone-handler extraction (STORY-771), not this.'
-clock: 3126
+- id: 019f70c7-e255-7e41-b1c4-243af50fc343
+  target_id: 019f70c7-d808-7533-9abe-fdbab8c37e76
+  author: aida
+  node_id: '1'
+  lamport: 3127
+  timestamp: 2026-07-17T15:52:55.637790369Z
+  kind: !Create
+    title: Extract handle_git_backend_command (5.4K lines) out of main.rs into git_backend_cmd.rs
+    description: 'The single biggest function still inline in main.rs (~5,401 lines) — a storage/git-backend command handler the SPIKE-78 sweep did not reach. Not a keystone; extracts mechanically like the 61 already done: move handle_git_backend_command + its private helpers into aida-cli/src/git_backend_cmd.rs behind a pub(crate) entry point, keep the dispatch call in main.rs, union-of-removals on imports, cargo fmt in place, env -u AIDA_SESSION_ROLE test, combined-main green. Pure movement, one PR. Biggest single navigability dent left in main.rs.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3127
 node_id: '1'
