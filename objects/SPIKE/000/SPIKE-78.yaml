@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-17T04:56:39.592021691Z
+modified_at: 2026-07-17T06:04:05.181767059Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -536,6 +536,11 @@ comments:
   content: Commit 1186aa1f4 references this requirement
   created_at: 2026-07-17T04:56:39.592021691Z
   modified_at: 2026-07-17T04:56:39.592021691Z
+- id: 019f6eac-c8bd-7380-b08a-e6ba70c8ac6a
+  author: joe
+  content: Commit 9b82b56d7 references this requirement
+  created_at: 2026-07-17T06:04:05.181767059Z
+  modified_at: 2026-07-17T06:04:05.181767059Z
 history:
 - id: 019f69ec-da70-7b21-b64b-82ab77836b25
   author: aida-auto-bump
