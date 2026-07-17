@@ -33471,5 +33471,17 @@ operations:
   timestamp: 2026-07-17T21:44:01.216568573Z
   kind: !SetDescription
     description: 'Split aida-cli into a thin 3-line binary + an aida-cli-lib library crate (run/dispatch + all handlers + all 164 test modules move into the lib; tests stay INSIDE the lib since a standalone test crate would need ~660 pub(crate) fns promoted to pub). VALUE IS TESTABILITY + a clean entry-point boundary + a precondition for a future multi-crate lib split — NOT build time: scoping (docs/plans/2026-07-17-story-772-crate-split-scoping.md) found a bin+one-lib split delivers only ~0-5% clean-build improvement and nothing for incremental rebuilds (the lib stays one ~274K-line crate; codegen-units+incremental already capture that). 2-PR sequence, green at every step; one gotcha: include_str!("../main.rs") in a test needs retargeting. Only one symbol becomes pub. See the scoping doc for the full topology/sequence/risks.'
-clock: 3128
+- id: 019f7209-882e-7ed1-9430-8d77225e6a23
+  target_id: 019f7209-5866-71f1-9aae-f41125a0ba61
+  author: aida
+  node_id: '1'
+  lamport: 3129
+  timestamp: 2026-07-17T21:44:15.150300865Z
+  kind: !Create
+    title: Split aida-cli-lib into multiple crates to actually cut build time (the pub(crate)-web-gated lever)
+    description: The ACTUAL build-time lever the crate-split scoping identified. A bin+one-lib split (STORY-772) does NOT cut compile time (~0-5%); real parallelism/cache-isolation needs the LIB carved into multiple independent crates (e.g. handler groups depending on aida-core) so rustc front-ends run in parallel across crates. Blocked today by the pub(crate) shared-helper web (crate::glyphs 500+ refs, crate::cli/session/forge) — every lib-internal crate boundary multiplies the visibility-widening cost. Depends on STORY-772 (needs aida-cli-lib to exist first). Much harder than STORY-772. Only worth it if aida-cli build/CI time becomes felt pain.
+    req_type: Story
+    status: Draft
+    priority: Low
+clock: 3129
 node_id: '1'

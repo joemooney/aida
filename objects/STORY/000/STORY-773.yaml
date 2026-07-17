@@ -1,0 +1,17 @@
+id: 019f7209-5866-71f1-9aae-f41125a0ba61
+spec_id: STORY-773
+agreed_id: STORY-773
+title: Split aida-cli-lib into multiple crates to actually cut build time (the pub(crate)-web-gated lever)
+description: The ACTUAL build-time lever the crate-split scoping identified. A bin+one-lib split (STORY-772) does NOT cut compile time (~0-5%); real parallelism/cache-isolation needs the LIB carved into multiple independent crates (e.g. handler groups depending on aida-core) so rustc front-ends run in parallel across crates. Blocked today by the pub(crate) shared-helper web (crate::glyphs 500+ refs, crate::cli/session/forge) — every lib-internal crate boundary multiplies the visibility-widening cost. Depends on STORY-772 (needs aida-cli-lib to exist first). Much harder than STORY-772. Only worth it if aida-cli build/CI time becomes felt pain.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-17T21:44:02.918279256Z
+modified_at: 2026-07-17T21:44:02.918279256Z
+req_type: Story
+tags:
+- build-time
+- parent:SPIKE-78
+- refactor
+- tech-debt
