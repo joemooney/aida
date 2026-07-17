@@ -33423,5 +33423,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 3123
+- id: 019f6e6e-47c0-7832-9875-534638f51830
+  target_id: 019f6e6e-430c-7e61-983d-3d7a78c44c79
+  author: aida
+  node_id: '1'
+  lamport: 3124
+  timestamp: 2026-07-17T04:55:48.928440019Z
+  kind: !Create
+    title: 'SPIKE-78 follow-up: split aida-cli into a thin binary + handler lib crate + test crate'
+    description: Structural endgame of SPIKE-78. Split aida-cli (~thin main.rs + *_cmd.rs handler modules + relocated tests) into a thin bin crate + a handler lib crate + a test crate. This is where the actual CI/compile-time win materializes — an independent incremental cache lets the test crate build in parallel. Depends on the inline-test relocation landing first (the enabling precondition). The *_cmd.rs handler split done in phase 1 is the other precondition.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 3124
 node_id: '1'
