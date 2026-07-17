@@ -15,3 +15,7 @@ tags:
 - refactor
 - supervised
 - tech-debt
+relationships:
+- rel_type: Child
+  target_id: 019f695c-7f0a-7c30-b382-cae1d648d36a
+  created_at: 2026-07-17T04:55:39.397321813Z
