@@ -13,12 +13,12 @@ description: |-
   5. Deliver an INCREMENTAL plan: extract one crate/test-file at a time, verify green each step, never a single mega-refactor.
 
   TIMING: sequence AFTER the current keystone/slice cluster merges (ADR-10/TASK-958 done; TASK-1150, TASK-1147, TASK-1080, BUG-714, TASK-1020 all touch main.rs) — a big main.rs refactor mid-fleet is merge-conflict hell. Tech-debt / dev-ergonomics, not bugs-before-marketing, but the compile tax is real and continuous.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T05:18:17.354340778Z
-modified_at: 2026-07-17T04:07:25.124463937Z
+modified_at: 2026-07-17T04:49:36.108009384Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
@@ -550,6 +550,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 019f6e68-96c7-7161-a797-7a694bd1eaed
+  author: aida-auto-bump
+  timestamp: 2026-07-17T04:49:35.943058993Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f6e68-976c-7763-8bcf-63f1d0011c75
+  timestamp: 2026-07-17T04:49:36.108008097Z
+  agent: aida
+  commit_sha: 03ccfc7be8204e5a6c84b4732cf2504b28335cad
+  summary: Completed via merge 03ccfc7b
 implementation_info:
   implemented: false
   completed_at: 2026-07-16T07:55:57.747214765Z
