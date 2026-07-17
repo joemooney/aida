@@ -3,12 +3,12 @@ spec_id: TASK-1151
 agreed_id: TASK-1151
 title: Extract handle_git_backend_command (5.4K lines) out of main.rs into git_backend_cmd.rs
 description: 'The single biggest function still inline in main.rs (~5,401 lines) — a storage/git-backend command handler the SPIKE-78 sweep did not reach. Not a keystone; extracts mechanically like the 61 already done: move handle_git_backend_command + its private helpers into aida-cli/src/git_backend_cmd.rs behind a pub(crate) entry point, keep the dispatch call in main.rs, union-of-removals on imports, cargo fmt in place, env -u AIDA_SESSION_ROLE test, combined-main green. Pure movement, one PR. Biggest single navigability dent left in main.rs.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T15:52:53.000604369Z
-modified_at: 2026-07-17T15:58:20.310083138Z
+modified_at: 2026-07-17T21:43:33.482501872Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -25,3 +25,21 @@ comments:
   content: Commit fc899803e references this requirement
   created_at: 2026-07-17T15:58:20.310083138Z
   modified_at: 2026-07-17T15:58:20.310083138Z
+history:
+- id: 019f7208-e564-7653-a254-4de2c020ce54
+  author: aida-auto-bump
+  timestamp: 2026-07-17T21:43:33.476397538Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f7208-e56a-7be3-abf9-165de4a5f94b
+  timestamp: 2026-07-17T21:43:33.482500568Z
+  agent: implementer
+  commit_sha: 98a73b23827b62f3248c797881b118ad58c84cee
+  summary: Completed via merge 98a73b23
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-17T21:43:33.282012342Z
+  completion_sha: 98a73b23827b62f3248c797881b118ad58c84cee
