@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:47.724859121Z
-modified_at: 2026-07-17T21:44:01.174464697Z
+modified_at: 2026-07-17T21:44:02.092655637Z
 req_type: Story
 tags:
 - parent:SPIKE-78
@@ -34,3 +34,6 @@ comments:
   content: Commit 49ba72de7 references this requirement
   created_at: 2026-07-17T15:59:53.640968565Z
   modified_at: 2026-07-17T15:59:53.640968565Z
+deferred: true
+deferred_at: 2026-07-17T21:44:02.092655637Z
+deferred_until: testability of handlers / a clean lib boundary becomes a felt need, OR the lib-internal multi-crate build-lever split is greenlit and needs bin+lib as its precondition
