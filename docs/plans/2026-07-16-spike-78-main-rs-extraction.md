@@ -45,18 +45,22 @@ import_plan, decide, lock, assign, brief.
 
 ## Deliberately deferred (supervised follow-up)
 
-- **Inline test relocation** — the biggest remaining lever. `main.rs` is still
-  large almost entirely because of tests: **86% of the file (109,673 lines) is
-  1,524 inline `#[cfg(test)]` tests**; only 13% (~16.5K lines) is live code
-  (dispatch + keystone handlers + `main()` glue). Moving the tests out drops
-  `main.rs` to ~16K. It wants a supervised pass (test-module boundaries are
-  subtler than handler boundaries: shared fixtures, `super::*` imports,
-  `#[cfg(test)]` visibility). Note the payoff is primarily maintainability +
+- **Inline test relocation** — a real but smaller lever than first measured.
+  A string/char/comment-aware scan (an earlier naive brace-counter was fooled by
+  a `{`/`}` inside a literal and wildly over-counted) puts the actual split at
+  **27% tests / 72% live code**: `main.rs` holds **166 `#[cfg(test)]` modules
+  totaling 34,780 lines** (already subject-organized, largest 5,229 lines — there
+  is no single "monster" module), and **91,408 lines of live code** (dispatch +
+  keystone handlers + helpers + `main()` glue). Relocating all 166 test modules
+  via `#[path]` sibling files under `src/tests/` drops `main.rs` to **~91K**
+  (not ~16K), pure movement with zero import rewrites (the `mod` decl stays at the
+  crate root so `use super::*` still resolves). The payoff is maintainability +
   rust-analyzer responsiveness + **unblocking the crate split** — the actual
   CI/compile-time win lands only once the split gives the tests their own crate
   with an independent incremental cache; within one crate, `cfg(test)` code
   already costs nothing on a plain `cargo build` and compiles regardless of which
-  file it lives in.
+  file it lives in. **Because main.rs is 72% live code, the bigger size lever is
+  the keystone-handler extraction below, not test relocation.**
 - **Keystone handlers left in place**: `pr`, `mcp`, and the
   orchestrator/drain/queue/status/solo cluster — high-churn, high-blast-radius
   surfaces that should move under supervision, not in an unattended sweep.
