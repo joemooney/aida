@@ -1,0 +1,16 @@
+id: 019f727e-8c95-7a83-aab7-d40f8c5f5d7f
+spec_id: TASK-1152
+agreed_id: TASK-1152
+title: Wire the mold linker into Linux CI to cut the ~8-min build step
+description: 'Measured 2026-07-17: the default BFD ld spent ~47s single-threadedly linking the 43MB aida binary; mold does it in ~1-2s (~32% cut on a full aida-cli release rebuild, 148.75s -> 101.25s). Add mold to the ci.yml Linux apt install + set RUSTFLAGS=-C link-arg=-fuse-ld=mold scoped to the Linux job via GITHUB_ENV (matrix-safe: does not leak to a future macOS/Windows re-add). Local dev already gets this via user-global ~/.cargo/config.toml. profile opt-2/cgu-256 was NOT worth it (only ~4s, degrades the shipped binary).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-17T23:52:03.989385173Z
+modified_at: 2026-07-17T23:52:03.989385173Z
+req_type: Task
+tags:
+- build-time
+- ci
+- perf
