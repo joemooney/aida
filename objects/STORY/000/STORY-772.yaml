@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:47.724859121Z
-modified_at: 2026-07-17T04:55:47.724859121Z
+modified_at: 2026-07-17T04:56:18.073063872Z
 req_type: Story
 tags:
 - parent:SPIKE-78
@@ -19,3 +19,7 @@ relationships:
 - rel_type: Child
   target_id: 019f695c-7f0a-7c30-b382-cae1d648d36a
   created_at: 2026-07-17T04:55:49.756946155Z
+- rel_type: BlockedBy
+  target_id: 019f6e6e-10df-7d22-ba63-10d67e163751
+  created_at: 2026-07-17T04:56:18.073058766Z
+  created_by: joe
