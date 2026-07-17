@@ -22,6 +22,10 @@ modified_at: 2026-07-17T04:49:36.108009384Z
 req_type: Spike
 tags:
 - aida:build tech-debt dev-ergonomics refactor
+relationships:
+- rel_type: Parent
+  target_id: 019f6e6e-10df-7d22-ba63-10d67e163751
+  created_at: 2026-07-17T04:55:39.397321813Z
 comments:
 - id: 019f69b4-03fe-7c03-9a2d-c9298355f7c8
   author: joe
