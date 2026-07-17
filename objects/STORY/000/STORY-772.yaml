@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:47.724859121Z
-modified_at: 2026-07-17T04:56:18.073063872Z
+modified_at: 2026-07-17T15:59:45.002019547Z
 req_type: Story
 tags:
 - parent:SPIKE-78
@@ -23,3 +23,10 @@ relationships:
   target_id: 019f6e6e-10df-7d22-ba63-10d67e163751
   created_at: 2026-07-17T04:56:18.073058766Z
   created_by: joe
+comments:
+- id: 019f70ce-216a-72d3-8cd6-1dcd8a4594ac
+  author: joe
+  content: 'Scoping complete (docs/plans/2026-07-17-story-772-crate-split-scoping.md). Key finding: a bin+one-lib split delivers only ~0-5% clean-build improvement and nothing for incremental rebuilds — the lib stays one ~274K-line crate and codegen-units+incremental already capture that. Build-time is NOT the payoff; testability + clean entry boundary + enabling a future multi-crate lib split are. Recommended topology: thin 3-line bin, everything (incl. run/dispatch + all 164 test modules) into aida-cli-lib, tests stay inside the lib (a standalone test crate would require promoting ~660 pub(crate) fns to pub — rejected). 2-PR sequence (lib.rs within one package, then git mv the package). Recommend re-scoping acceptance away from build-time + filing a follow-up for the lib-internal multi-crate split (the real build lever, pub(crate)-web-gated).'
+  created_at: 2026-07-17T15:59:45.002019547Z
+  modified_at: 2026-07-17T15:59:45.002019547Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
