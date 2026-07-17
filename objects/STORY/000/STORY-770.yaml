@@ -3,12 +3,12 @@ spec_id: STORY-770
 agreed_id: STORY-770
 title: 'SPIKE-78 follow-up: relocate the 1,524 inline tests out of aida-cli/src/main.rs'
 description: 'Biggest remaining lever from SPIKE-78. main.rs is 126K lines but 86% (109,673 lines) is inline tests — 1,524 test fns in 17 cfg(test) blocks; only 13% (~16.5K) is live code. Relocating the tests drops main.rs to ~16K. Supervised because test-module boundaries are subtler than handler boundaries: shared fixtures, super::* imports, cfg(test) visibility. Payoff is primarily maintainability + rust-analyzer responsiveness + unblocking the crate split.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:34.879720706Z
-modified_at: 2026-07-17T05:00:57.404420285Z
+modified_at: 2026-07-17T05:05:05.351716741Z
 req_type: Story
 tags:
 - parent:SPIKE-78
