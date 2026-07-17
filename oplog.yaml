@@ -33443,5 +33443,13 @@ operations:
   timestamp: 2026-07-17T05:00:57.447217918Z
   kind: !SetStatus
     status: Approved
-clock: 3125
+- id: 019f6eac-82de-7d82-9ccb-a7ed84505585
+  target_id: 019f6e6e-10df-7d22-ba63-10d67e163751
+  author: aida
+  node_id: '1'
+  lamport: 3126
+  timestamp: 2026-07-17T06:03:47.294270493Z
+  kind: !SetDescription
+    description: 'Relocate the inline tests out of aida-cli/src/main.rs. CORRECTED measurement (a string/char/comment-aware scan; the earlier naive brace-counter was fooled by a literal and over-counted): main.rs is 27% tests / 72% live code — 166 cfg(test) modules totaling 34,780 lines (already subject-organized, largest 5,229 lines; there is NO single monster module) and 91,408 lines of live code. Relocating all 166 modules via #[path] sibling files under src/tests/ drops main.rs to ~91K (not ~16K), pure movement with zero import rewrites (the mod decl stays at the crate root so use super::* still resolves). Payoff: maintainability + rust-analyzer responsiveness + unblocking the crate split (STORY-772). Note: because main.rs is 72% live code, the bigger size lever is keystone-handler extraction (STORY-771), not this.'
+clock: 3126
 node_id: '1'
