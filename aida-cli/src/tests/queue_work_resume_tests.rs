@@ -173,6 +173,7 @@ fn find_orchestrated_lease_pins_session_by_claude_id() {
             "019e9999-cccc".to_string(),
             "task-259".to_string(),
             std::path::PathBuf::from("/tmp/019e9999-cccc"),
+            None,
         )),
     );
     // An unknown claude id resolves to nothing — the caller turns that

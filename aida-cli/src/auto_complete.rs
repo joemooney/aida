@@ -742,7 +742,22 @@ pub(crate) fn watchdog_verdict(
     no_progress_limit: std::time::Duration,
     ceiling: std::time::Duration,
 ) -> Option<WatchdogTrip> {
-    if !no_progress_limit.is_zero() && since_progress >= no_progress_limit {
+    watchdog_verdict_with_ci_wait(since_progress, total, no_progress_limit, ceiling, false)
+}
+
+/// BUG-749: an implementer blocked inside `aida pr ship` while CI is pending is
+/// live progress even when the worktree and headless log are quiet. CI-wait
+/// suppresses only the no-progress trip; the wall-clock ceiling remains the
+/// hard stop for a truly overlong phase.
+// trace:BUG-749 | ai:codex
+pub(crate) fn watchdog_verdict_with_ci_wait(
+    since_progress: std::time::Duration,
+    total: std::time::Duration,
+    no_progress_limit: std::time::Duration,
+    ceiling: std::time::Duration,
+    ci_waiting: bool,
+) -> Option<WatchdogTrip> {
+    if !ci_waiting && !no_progress_limit.is_zero() && since_progress >= no_progress_limit {
         return Some(WatchdogTrip::NoProgress);
     }
     if !ceiling.is_zero() && total >= ceiling {
@@ -4148,6 +4163,49 @@ mod tests {
                 Duration::ZERO
             ),
             None
+        );
+    }
+
+    /// BUG-749: CI-waiting is progress for the no-progress watchdog, but the
+    /// wall-clock ceiling remains a hard cap.
+    // trace:BUG-749 | ai:codex
+    #[test]
+    fn watchdog_verdict_ci_wait_suppresses_no_progress_only() {
+        use std::time::Duration;
+        let (np, ceil) = (Duration::from_secs(600), Duration::from_secs(2700));
+
+        assert_eq!(
+            watchdog_verdict_with_ci_wait(
+                Duration::from_secs(600),
+                Duration::from_secs(1200),
+                np,
+                ceil,
+                true,
+            ),
+            None,
+            "a live pr-ship CI wait must not trip the no-progress watchdog",
+        );
+        assert_eq!(
+            watchdog_verdict_with_ci_wait(
+                Duration::from_secs(600),
+                Duration::from_secs(2700),
+                np,
+                ceil,
+                true,
+            ),
+            Some(WatchdogTrip::Ceiling),
+            "CI wait does not disable the phase ceiling",
+        );
+        assert_eq!(
+            watchdog_verdict_with_ci_wait(
+                Duration::from_secs(600),
+                Duration::from_secs(1200),
+                np,
+                ceil,
+                false,
+            ),
+            Some(WatchdogTrip::NoProgress),
+            "a genuinely idle session still trips no-progress",
         );
     }
 

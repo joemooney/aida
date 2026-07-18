@@ -125,3 +125,27 @@ fn progress_signature_changes_when_a_file_is_edited_then_committed() {
     let sig3 = PhaseWatchdog::progress_signature(wt).unwrap();
     assert_ne!(sig2, sig3, "a new commit is progress");
 }
+
+#[test]
+fn command_line_runs_aida_pr_ship_recognizes_direct_and_wrapped_forms() {
+    // BUG-749: the phase watchdog uses this local command matcher to treat a
+    // live `aida pr ship` CI-wait as progress without calling the forge.
+    // trace:BUG-749 | ai:codex
+    assert!(command_line_runs_aida_pr_ship(&[
+        "/repo/target/debug/aida".into(),
+        "pr".into(),
+        "ship".into(),
+        "1498".into(),
+    ]));
+    assert!(command_line_runs_aida_pr_ship(&[
+        "bash".into(),
+        "-lc".into(),
+        "aida pr ship 1498".into(),
+    ]));
+    assert!(!command_line_runs_aida_pr_ship(&[
+        "aida".into(),
+        "pr".into(),
+        "view".into(),
+        "1498".into(),
+    ]));
+}
