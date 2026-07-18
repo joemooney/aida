@@ -6,12 +6,12 @@ description: |-
   Observed 2026-07-18 shipping PR-1489 (head task-1155-work, base main): step 1 printed "keeping branch `main` after merge — open child PR(s): #1489 stacked on it — retarget them to main first (gh pr edit 1489 --base main), then delete `main`". Every part is wrong for this ordinary PR: the branch being merged/deleted is task-1155-work not main; #1489 is the PR being shipped, not a stacked child; and the suggested fix retargets the PR to the base it already has, followed by advice to delete main. The stacked-child detection appears to swap head/base (treating the PR's base as the to-be-deleted branch and the PR itself as its child).
 
   Acceptance: shipping a plain single PR based on main emits no stacked-PR warning; a genuinely stacked child (another open PR whose base IS the branch being deleted) still warns, naming the correct branch and child. Unit test both cases.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:16:16.429295950Z
-modified_at: 2026-07-18T20:49:13.555641800Z
+modified_at: 2026-07-18T22:50:42.642450912Z
 req_type: Bug
 tags:
 - aida:pr severity:cosmetic from-dogfood
@@ -27,10 +27,23 @@ comments:
   content: 'Codex implemented and committed `[AI:codex] fix(pr-ship): resolve explicit PR head for stacked guard (BUG-733)` at `28e5852cd`. Targeted verification passed: `cargo fmt --all -- --check` and `cargo test -p aida-cli pr_ship::tests`. `cargo run -p aida-cli -- pr ship` created PR-1495 and left it open because the orchestrated-drive self-merge gate refused direct merge.'
   created_at: 2026-07-18T20:37:02.318844958Z
   modified_at: 2026-07-18T20:37:02.318844958Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: no-verdict
-  detail: the reviewer session produced no verdict file — the review did not complete
-  recovery_hint: 'The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-1495 --steal`'
-  shelved_at: 2026-07-18T20:49:13.555641800Z
+history:
+- id: 019f776c-bc4c-7a72-96f8-856743e89845
+  author: aida-auto-bump
+  timestamp: 2026-07-18T22:50:42.636707162Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 019f776c-bc52-7c60-af29-e7fa7035fdca
+  timestamp: 2026-07-18T22:50:42.642450300Z
+  agent: aida
+  commit_sha: 7124f3af3195c6161e297bc71919eab89f4855a0
+  summary: Completed via merge 7124f3af
+  punted:
+  - 'punted: the reviewer session produced no verdict file — the review did not complete'
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T22:50:42.432209940Z
+  completion_sha: 7124f3af3195c6161e297bc71919eab89f4855a0
