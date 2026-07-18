@@ -8,9 +8,10 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-16T07:17:14.807141877Z
-modified_at: 2026-07-18T18:16:19.838146620Z
+modified_at: 2026-07-18T19:58:28.500216311Z
 req_type: Task
 tags:
+- batch:papercuts-0718
 - from-advisor:general
 - kind:observation
 - severity:minor
