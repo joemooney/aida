@@ -154,6 +154,7 @@ fn discover_lease_one_match_resolves_branch_and_worktree() {
             "019e9999-cccc".to_string(),
             "task-262-branch".to_string(),
             std::path::PathBuf::from("/tmp/019e9999-cccc"),
+            None,
         )),
     );
     let d = driver(root, "TASK-262");

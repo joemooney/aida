@@ -75619,6 +75619,11 @@ fn run_standalone_reviewer(
 struct LeasePeek {
     id: String,
     branch: String,
+    /// Optional for older leases and minimal test fixtures. Used only by the
+    /// phase watchdog's local descendant scan.
+    // trace:BUG-749 | ai:codex
+    #[serde(default)]
+    creator_pid: Option<u32>,
     /// Worktree path — re-read by the BUG-223 branch-swap reconciliation to
     /// recover the live branch when `/aida-pr` swapped it mid-phase.
     /// `#[serde(default)]` so a lease (or hand-written test fixture) without
@@ -82586,14 +82591,14 @@ fn lease_ids_in(sessions_dir: &std::path::Path) -> Vec<String> {
 fn find_orchestrated_lease(
     project_root: &std::path::Path,
     claude_session_id: &str,
-) -> Option<(String, String, std::path::PathBuf)> {
+) -> Option<(String, String, std::path::PathBuf, Option<u32>)> {
     let manifest = session_manifest::list_all(project_root)
         .into_iter()
         .find(|m| m.claude_session_id.as_deref() == Some(claude_session_id))?;
     let lease_path = leases_dir(project_root).join(format!("{}.toml", manifest.session_id));
     let body = std::fs::read_to_string(&lease_path).ok()?;
     let peek: LeasePeek = toml::from_str(&body).ok()?;
-    Some((peek.id, peek.branch, peek.worktree_path))
+    Some((peek.id, peek.branch, peek.worktree_path, peek.creator_pid))
 }
 
 /// Decide whether the worktree's live branch represents a mid-phase swap
@@ -83151,6 +83156,7 @@ fn phase_heartbeat_line(
 struct PhaseWatchdog {
     project_root: std::path::PathBuf,
     session_id: String,
+    root_pid: Option<u32>,
     phase_start: std::time::Instant,
     last_progress: std::time::Instant,
     last_sig: Option<String>,
@@ -83159,6 +83165,7 @@ struct PhaseWatchdog {
     no_progress: std::time::Duration,
     ceiling: std::time::Duration,
     worktree: Option<std::path::PathBuf>,
+    pr_ship_wait_seen: bool,
     /// STORY-726: when `Some((actor, spec))`, the watchdog also emits a
     /// liveness heartbeat to stderr on each poll tick where it does NOT trip —
     /// reassurance that an otherwise-silent headless phase is alive. Set only
@@ -83184,6 +83191,7 @@ impl PhaseWatchdog {
         Self {
             project_root,
             session_id,
+            root_pid: None,
             phase_start: now,
             last_progress: now,
             last_sig: None,
@@ -83192,6 +83200,7 @@ impl PhaseWatchdog {
             no_progress,
             ceiling,
             worktree: None,
+            pr_ship_wait_seen: false,
             heartbeat: None,
         }
     }
@@ -83277,8 +83286,12 @@ impl PhaseWatchdog {
         // (the child is still starting up), keep resetting last_progress so a
         // slow launch can't trip the no-progress check.
         if self.worktree.is_none() {
-            self.worktree =
-                find_orchestrated_lease(&self.project_root, &self.session_id).map(|(_, _, wt)| wt);
+            if let Some((_, _, wt, creator_pid)) =
+                find_orchestrated_lease(&self.project_root, &self.session_id)
+            {
+                self.worktree = Some(wt);
+                self.root_pid = creator_pid;
+            }
             if self.worktree.is_none() {
                 self.last_progress = now;
                 // Ceiling still applies even before the worktree resolves.
@@ -83314,6 +83327,16 @@ impl PhaseWatchdog {
                 self.last_progress = now;
             }
         }
+        // BUG-749: once the implementer has opened a PR and is blocked inside
+        // `aida pr ship` watching CI, worktree/log movement can legitimately
+        // stop. A live pr-ship descendant is therefore progress for the
+        // no-progress watchdog; the phase ceiling still applies.
+        // trace:BUG-749 | ai:codex
+        let pr_ship_waiting = self.root_pid.is_some_and(live_aida_pr_ship_descendant);
+        if pr_ship_waiting {
+            self.pr_ship_wait_seen = true;
+            self.last_progress = now;
+        }
 
         // TASK-298: a `--no-human` headless run that hit a permission gate (or
         // reported an `is_error` envelope) is silently stuck — `claude -p`
@@ -83331,8 +83354,13 @@ impl PhaseWatchdog {
 
         let since_progress = now.duration_since(self.last_progress);
         let total = now.duration_since(self.phase_start);
-        let verdict =
-            auto_complete::watchdog_verdict(since_progress, total, self.no_progress, self.ceiling);
+        let verdict = auto_complete::watchdog_verdict_with_ci_wait(
+            since_progress,
+            total,
+            self.no_progress,
+            self.ceiling,
+            pr_ship_waiting,
+        );
         // STORY-726: not tripping → the phase is alive; emit the reassurance
         // heartbeat (when armed) using the very signal the watchdog would
         // otherwise only weaponize to kill.
@@ -83348,12 +83376,71 @@ impl PhaseWatchdog {
                 "no commit or file-change for {}m — likely a degenerate session",
                 self.no_progress.as_secs() / 60
             ),
-            auto_complete::WatchdogTrip::Ceiling => format!(
-                "phase exceeded the {}m wall-clock ceiling",
+            auto_complete::WatchdogTrip::Ceiling if self.pr_ship_wait_seen => format!(
+                "phase exceeded the {}m wall-clock ceiling while `aida pr ship` was waiting on CI",
                 self.ceiling.as_secs() / 60
             ),
+            auto_complete::WatchdogTrip::Ceiling => {
+                format!(
+                    "phase exceeded the {}m wall-clock ceiling",
+                    self.ceiling.as_secs() / 60
+                )
+            }
         }
     }
+}
+
+/// BUG-749: recognize commands equivalent to `aida pr ship`, including
+/// explicit binary paths (`target/debug/aida pr ship`) and shell wrappers
+/// (`bash -lc 'aida pr ship 123'`). Kept pure so the watchdog regression does
+/// not need to spawn or block real processes.
+// trace:BUG-749 | ai:codex
+fn command_line_runs_aida_pr_ship(parts: &[String]) -> bool {
+    if parts.len() < 3 {
+        return false;
+    }
+    let mut words = Vec::new();
+    for part in parts {
+        words.extend(part.split_whitespace().map(str::to_string));
+    }
+    words.windows(3).any(|w| {
+        std::path::Path::new(&w[0])
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n == "aida")
+            && w[1] == "pr"
+            && w[2] == "ship"
+    })
+}
+
+/// Best-effort local process-table probe for a live `aida pr ship` descendant
+/// under the orchestrated implementer session. Failure to inspect the table is
+/// conservative: no CI-wait signal, so the existing watchdog behavior remains.
+// trace:BUG-749 | ai:codex
+fn live_aida_pr_ship_descendant(root_pid: u32) -> bool {
+    use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
+
+    let root = Pid::from_u32(root_pid);
+    let mut sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+
+    let mut tree = vec![root];
+    let mut idx = 0;
+    while idx < tree.len() {
+        let parent = tree[idx];
+        idx += 1;
+        for (pid, proc_) in sys.processes() {
+            if proc_.parent() == Some(parent) && !tree.contains(pid) {
+                tree.push(*pid);
+                let parts: Vec<String> = proc_.cmd().iter().map(|p| p.to_string()).collect();
+                if command_line_runs_aida_pr_ship(&parts) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
@@ -83750,31 +83837,33 @@ impl RealPhaseDriver {
         &self,
         claude_session_id: &str,
     ) -> Result<(String, String, std::path::PathBuf), auto_complete::PhaseFailure> {
-        find_orchestrated_lease(&self.project_root, claude_session_id).ok_or_else(|| {
-            let candidates = lease_ids_in(&self.sessions_dir());
-            if candidates.is_empty() {
-                auto_complete::PhaseFailure::new(
-                    "no session lease appeared — `aida queue work` did not start a session",
-                )
-            } else {
-                // TASK-271: suggest BARE `--resume` (continues the most recent
-                // recorded claude session for the scope) — never paste a listed
-                // id into `--resume`, because these are LEASE ids and `--resume`
-                // resolves against claude SESSION ids, so a pasted lease id hits
-                // a second clean error. The lease list is diagnostic-only.
-                // trace:TASK-271 trace:BUG-114 | ai:claude
-                auto_complete::PhaseFailure::new(format!(
-                    "could not match the orchestrated session (claude id {}) to a \
+        find_orchestrated_lease(&self.project_root, claude_session_id)
+            .map(|(id, branch, worktree, _)| (id, branch, worktree))
+            .ok_or_else(|| {
+                let candidates = lease_ids_in(&self.sessions_dir());
+                if candidates.is_empty() {
+                    auto_complete::PhaseFailure::new(
+                        "no session lease appeared — `aida queue work` did not start a session",
+                    )
+                } else {
+                    // TASK-271: suggest BARE `--resume` (continues the most recent
+                    // recorded claude session for the scope) — never paste a listed
+                    // id into `--resume`, because these are LEASE ids and `--resume`
+                    // resolves against claude SESSION ids, so a pasted lease id hits
+                    // a second clean error. The lease list is diagnostic-only.
+                    // trace:TASK-271 trace:BUG-114 | ai:claude
+                    auto_complete::PhaseFailure::new(format!(
+                        "could not match the orchestrated session (claude id {}) to a \
                      session lease. Resume the most recent recorded session with \
                      `aida queue work {} --resume` (bare — no id needed). \
                      Active lease id(s), for diagnosis only (NOT `--resume` \
                      arguments — these are lease ids, not claude session ids): {}.",
-                    &claude_session_id[..claude_session_id.len().min(8)],
-                    self.spec,
-                    candidates.join(", "),
-                ))
-            }
-        })
+                        &claude_session_id[..claude_session_id.len().min(8)],
+                        self.spec,
+                        candidates.join(", "),
+                    ))
+                }
+            })
     }
 
     /// Ground-truth check for the BUG-241 reconcile: find a *merged* PR that
