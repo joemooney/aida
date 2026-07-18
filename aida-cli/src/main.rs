@@ -25348,20 +25348,25 @@ fn session_start(
         );
     }
 
-    eprintln!();
-    eprintln!("Next:");
-    eprintln!("  {}", format!("cd {}", worktree_path.display()).cyan());
-    if cargo_target_dir.is_some() {
+    if std::env::var_os("AIDA_SUPPRESS_SESSION_NEXT").is_none() {
+        eprintln!();
+        eprintln!("Next:");
         eprintln!(
-            "  {}    {}",
-            "source .aida/session-env.sh".cyan(),
-            "# share parent's cargo target/".dimmed()
+            "  {}",
+            format!("claude    # then /aida-implement {}", owns).cyan()
         );
+        eprintln!("  {}", format!("cd {}", worktree_path.display()).cyan());
+        if cargo_target_dir.is_some() {
+            eprintln!(
+                "  {}    {}",
+                "source .aida/session-env.sh".cyan(),
+                "# warm build cache".dimmed()
+            );
+        }
+        eprintln!();
+        eprintln!("When finished:");
+        eprintln!("  {}", format!("aida session end {}", &id[..8]).dimmed());
     }
-    eprintln!(
-        "  {}",
-        format!("aida session end {}    # when done", &id[..8]).dimmed()
-    );
 
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         // Wrapped in eval — emit the env modification.
@@ -48240,6 +48245,31 @@ struct WorktreeOutcome {
     branch: String,
     focus: String,
     created: bool,
+    lease_id: Option<String>,
+    has_session_env: bool,
+}
+
+// trace:TASK-1156 | ai:codex
+struct ScopedEnvVar {
+    key: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl ScopedEnvVar {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(key);
+        std::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+impl Drop for ScopedEnvVar {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var(self.key, value),
+            None => std::env::remove_var(self.key),
+        }
+    }
 }
 
 /// Resolve the path + branch for an epic worktree (honoring `--path`/`--branch`
@@ -48299,6 +48329,8 @@ fn ensure_epic_worktree_core(
             branch,
             focus: focus_label,
             created: false,
+            lease_id: None,
+            has_session_env: false,
         });
     }
 
@@ -48363,6 +48395,8 @@ fn ensure_epic_worktree_core(
         branch,
         focus: focus_label,
         created: true,
+        lease_id: None,
+        has_session_env: false,
     })
 }
 
@@ -48435,7 +48469,7 @@ fn ensure_spec_worktree_core(
     focus_label: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
-    existing: Option<(std::path::PathBuf, String)>,
+    existing: Option<(std::path::PathBuf, String, String, bool)>,
     registered: bool,
     mint: impl FnOnce(&std::path::Path, &str) -> Result<(std::path::PathBuf, String)>,
 ) -> Result<WorktreeOutcome> {
@@ -48449,13 +48483,15 @@ fn ensure_spec_worktree_core(
 
     // Idempotent re-entry: a lease already covers this spec — re-affirm focus at
     // that worktree and report it, don't mint a second one.
-    if let Some((worktree_path, lease_branch)) = existing {
+    if let Some((worktree_path, lease_branch, lease_id, has_session_env)) = existing {
         crate::focus::write_focus_marker(&worktree_path, focus_label)?;
         return Ok(WorktreeOutcome {
             path: worktree_path,
             branch: lease_branch,
             focus: focus_label.to_string(),
             created: false,
+            lease_id: Some(lease_id),
+            has_session_env,
         });
     }
 
@@ -48468,6 +48504,8 @@ fn ensure_spec_worktree_core(
             branch,
             focus: focus_label.to_string(),
             created: false,
+            lease_id: None,
+            has_session_env: false,
         });
     }
 
@@ -48479,6 +48517,8 @@ fn ensure_spec_worktree_core(
         branch: minted_branch,
         focus: focus_label.to_string(),
         created: true,
+        lease_id: None,
+        has_session_env: false,
     })
 }
 
@@ -48494,6 +48534,7 @@ fn ensure_spec_worktree(
     focus_label: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
+    worktree_context: &str,
 ) -> Result<WorktreeOutcome> {
     let main_root = find_main_worktree_root()?;
     let home =
@@ -48504,7 +48545,18 @@ fn ensure_spec_worktree(
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
         .max_by_key(|l| l.started_at)
-        .map(|l| (l.worktree_path.clone(), l.branch.clone()));
+        .map(|l| {
+            (
+                l.worktree_path.clone(),
+                l.branch.clone(),
+                l.id.clone(),
+                l.cargo_target_dir.is_some()
+                    || l.worktree_path
+                        .join(".aida")
+                        .join("session-env.sh")
+                        .is_file(),
+            )
+        });
 
     // Is the default path already a registered (lease-less) git worktree?
     let default_path = match path_override {
@@ -48535,6 +48587,8 @@ fn ensure_spec_worktree(
             // mints the worktree + lease + Approved→InProgress bump off
             // origin/main. use_pool=Some(false) keeps the deterministic
             // per-spec path (no warm-pool tree); launch=false = no agent.
+            let _context = ScopedEnvVar::set("AIDA_WORKTREE_CONTEXT", worktree_context);
+            let _suppress_next = ScopedEnvVar::set("AIDA_SUPPRESS_SESSION_NEXT", "1");
             session_start(
                 spec_display,
                 Some(branch),
@@ -48566,6 +48620,25 @@ fn ensure_spec_worktree(
             Ok((lease.worktree_path.clone(), lease.branch.clone()))
         },
     )
+    .and_then(|mut out| {
+        if out.lease_id.is_some() && out.has_session_env {
+            return Ok(out);
+        }
+        if let Some(lease) = list_leases(&main_root)
+            .into_iter()
+            .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
+            .max_by_key(|l| l.started_at)
+        {
+            out.lease_id = Some(lease.id.clone());
+            out.has_session_env = lease.cargo_target_dir.is_some()
+                || lease
+                    .worktree_path
+                    .join(".aida")
+                    .join("session-env.sh")
+                    .is_file();
+        }
+        Ok(out)
+    })
 }
 
 /// Dispatch `aida worktree <subcommand>` (STORY-716, EPIC-55 workspace layer).
@@ -48956,7 +49029,7 @@ fn handle_worktree_add(
     let out = match classify_worktree_arg(arg) {
         WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
         WorktreeTarget::Spec { display, focus } => {
-            ensure_spec_worktree(&display, &focus, path_override, branch_override)?
+            ensure_spec_worktree(&display, &focus, path_override, branch_override, "add")?
         }
     };
     let verb = if out.created {
@@ -48972,17 +49045,7 @@ fn handle_worktree_add(
         out.path.display().to_string().cyan(),
     );
     println!("  branch: {}  ·  focus: {}", out.branch, out.focus);
-    if out.created {
-        println!(
-            "  cd into it with `aida worktree enter {}` (auto-cd via the shell wrapper).",
-            arg
-        );
-    } else {
-        println!(
-            "  focus re-affirmed; `aida worktree enter {}` to cd in.",
-            arg
-        );
-    }
+    print_worktree_next("add", arg, &out, false);
     Ok(())
 }
 
@@ -49000,7 +49063,7 @@ fn handle_worktree_enter(
     let out = match classify_worktree_arg(arg) {
         WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
         WorktreeTarget::Spec { display, focus } => {
-            ensure_spec_worktree(&display, &focus, path_override, branch_override)?
+            ensure_spec_worktree(&display, &focus, path_override, branch_override, "enter")?
         }
     };
     let verb = if out.created {
@@ -49029,9 +49092,79 @@ fn handle_worktree_enter(
             arg,
         );
     }
-    // The one shell-modifying line the wrapper evals.
-    println!("{}", enter_cd_line(&out.path));
+    let shell_payload_evaled = wrapper_can_eval_worktree_enter();
+    print_worktree_next("enter", arg, &out, shell_payload_evaled);
+    print!("{}", enter_shell_payload(&out.path));
     Ok(())
+}
+
+// trace:TASK-1156 | ai:codex
+fn print_worktree_next(
+    command: &str,
+    arg: &str,
+    out: &WorktreeOutcome,
+    shell_payload_evaled: bool,
+) {
+    eprintln!();
+    eprintln!("Next:");
+    match (command, out.lease_id.as_deref(), shell_payload_evaled) {
+        ("enter", Some(_), true) => {
+            eprintln!(
+                "  {}",
+                format!("claude    # then /aida-implement {}", out.focus).cyan()
+            );
+        }
+        ("enter", Some(_), false) => {
+            eprintln!(
+                "  {}",
+                format!("eval \"$(aida worktree enter {})\"    # cd in", arg).cyan()
+            );
+            eprintln!(
+                "  {}",
+                format!("claude    # then /aida-implement {}", out.focus).cyan()
+            );
+        }
+        ("add", Some(_), _) => {
+            eprintln!(
+                "  {}",
+                format!(
+                    "aida worktree enter {}    # cd in, then /aida-implement {}",
+                    arg, out.focus
+                )
+                .cyan()
+            );
+        }
+        ("enter", None, true) => {
+            eprintln!("  {}", "work in this shell; the cd already happened".cyan());
+        }
+        ("enter", None, false) => {
+            eprintln!(
+                "  {}",
+                format!("eval \"$(aida worktree enter {})\"    # cd in", arg).cyan()
+            );
+        }
+        _ => {
+            eprintln!(
+                "  {}",
+                format!("aida worktree enter {}    # cd in", arg).cyan()
+            );
+        }
+    }
+    if command == "enter" && out.has_session_env && !shell_payload_evaled {
+        eprintln!(
+            "  {}    {}",
+            "source .aida/session-env.sh".cyan(),
+            "# warm build cache".dimmed()
+        );
+    }
+    if let Some(id) = out.lease_id.as_deref() {
+        eprintln!();
+        eprintln!("When finished:");
+        eprintln!(
+            "  {}",
+            format!("aida session end {}", &id[..id.len().min(8)]).dimmed()
+        );
+    }
 }
 
 /// BUG-654: does the installed `aida()` shell wrapper auto-eval `worktree
@@ -49068,6 +49201,22 @@ fn wrapper_marker_has_worktree_cap(marker: Option<&str>) -> bool {
 // trace:STORY-716 | ai:claude
 fn enter_cd_line(path: &std::path::Path) -> String {
     format!("cd '{}'", sh_single_quote(&path.display().to_string()))
+}
+
+/// TASK-1156: the wrapper-evaled worktree-enter payload carries both shell
+/// mutations: cd into the worktree and source the generated session env exports
+/// so CARGO_TARGET_DIR is live with no extra manual step.
+// trace:TASK-1156 | ai:codex
+fn enter_shell_payload(path: &std::path::Path) -> String {
+    let mut payload = format!("{}\n", enter_cd_line(path));
+    let env_path = path.join(".aida").join("session-env.sh");
+    if let Ok(body) = std::fs::read_to_string(env_path) {
+        payload.push_str(&body);
+        if !payload.ends_with('\n') {
+            payload.push('\n');
+        }
+    }
+    payload
 }
 
 /// `aida worktree list` — every registered git worktree annotated with its
