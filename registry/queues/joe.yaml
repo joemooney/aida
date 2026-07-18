@@ -434,20 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019f7689-be9b-7b60-9c5f-ede53c9b1ebd
-  position: 357000
-  added_by: joe
-  added_at: 2026-07-18T19:08:17.771783539Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 019f7699-e454-7e10-b06b-618c785823b4
-  position: 358000
-  added_by: joe
-  added_at: 2026-07-18T19:28:58.642986492Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 019f76c0-ca43-74a2-9707-26b43186c10f
   position: 359000
   added_by: joe
