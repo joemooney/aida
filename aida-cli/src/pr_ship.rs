@@ -275,6 +275,34 @@ pub fn should_delete_branch(
     !branch_in_sibling && stacked_child_count == 0 && open_child_pr_count == 0
 }
 
+/// BUG-733: for an explicit `aida pr ship <N>`, the current checkout branch may
+/// be the PR base (`main`) rather than the source branch being merged. Use the
+/// resolved PR head when available, and never count the target PR itself as a
+/// stacked child. Kept pure so the head/base swap regression stays pinned.
+// trace:BUG-733 | ai:codex
+pub fn ship_branch_context(
+    current_branch: &str,
+    target_change: Option<&crate::forge::ChangeRef>,
+    open_prs_based_on_delete_branch: &[u64],
+) -> (String, String, Vec<u64>) {
+    let branch_to_delete = target_change
+        .and_then(|c| (!c.branch.is_empty()).then_some(c.branch.as_str()))
+        .unwrap_or(current_branch)
+        .to_string();
+    let retarget_base = target_change
+        .and_then(|c| (!c.base.is_empty()).then_some(c.base.as_str()))
+        .unwrap_or("main")
+        .to_string();
+    let target_id = target_change.map(|c| c.id);
+    let child_prs = open_prs_based_on_delete_branch
+        .iter()
+        .copied()
+        .filter(|n| Some(*n) != target_id)
+        .collect();
+
+    (branch_to_delete, retarget_base, child_prs)
+}
+
 /// BUG-710/BUG-716: substrate-as-bouncer decision — should `aida pr ship`
 /// REFUSE its merge step? An implementer running inside an orchestrated drive
 /// must not self-merge its own PR: `aida zen` promises an INDEPENDENT reviewer
@@ -614,6 +642,44 @@ mod tests {
         // force overrides sibling + children → delete (deliberate orphan).
         assert!(should_delete_branch(true, 5, 5, true));
         assert!(should_delete_branch(false, 1, 1, true));
+    }
+
+    #[test]
+    fn explicit_plain_pr_based_on_main_does_not_count_itself_as_child() {
+        let target = crate::forge::ChangeRef {
+            id: 1489,
+            url: String::new(),
+            branch: "task-1155-work".to_string(),
+            base: "main".to_string(),
+            title: None,
+        };
+
+        let (branch, retarget_base, child_prs) =
+            ship_branch_context("main", Some(&target), &[1489]);
+
+        assert_eq!(branch, "task-1155-work");
+        assert_eq!(retarget_base, "main");
+        assert!(child_prs.is_empty());
+        assert!(should_delete_branch(false, 0, child_prs.len(), false));
+    }
+
+    #[test]
+    fn explicit_stacked_child_pr_still_protects_source_branch() {
+        let target = crate::forge::ChangeRef {
+            id: 12,
+            url: String::new(),
+            branch: "parent-work".to_string(),
+            base: "main".to_string(),
+            title: None,
+        };
+
+        let (branch, retarget_base, child_prs) =
+            ship_branch_context("main", Some(&target), &[12, 13]);
+
+        assert_eq!(branch, "parent-work");
+        assert_eq!(retarget_base, "main");
+        assert_eq!(child_prs, vec![13]);
+        assert!(!should_delete_branch(false, 0, child_prs.len(), false));
     }
 
     #[test]

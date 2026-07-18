@@ -32842,10 +32842,12 @@ fn pr_ship_handler(
     // already-merged, we skip CI-watch + merge and fall through to the idempotent
     // pull + cleanup steps, exiting 0. trace:BUG-574 | ai:claude
     let mut already_merged = false;
+    let mut target_change: Option<crate::forge::ChangeRef> = None;
 
     let pr_number = match opts.pr_number {
         Some(explicit) => {
             eprintln!("  step 1: using explicit PR-{}", explicit);
+            target_change = open_change_by_number(&project_root, explicit);
             // BUG-574: an explicit PR-N that is already merged is "already
             // shipped" — not a failure. Detect now so the merge step is skipped.
             if !dry_run {
@@ -32874,22 +32876,28 @@ fn pr_ship_handler(
             // change / CLI missing / failed / unreachable) falls through to the
             // create path, exactly as the old raw lookup's failure-to-None did.
             // trace:TASK-961 trace:STORY-621 | ai:claude
-            let existing: Option<u64> = match change_lookup_for_branch(&project_root, &branch) {
-                crate::forge::ChangeLookup::Found(c) => Some(c.id),
-                _ => None,
-            };
+            let existing_change: Option<crate::forge::ChangeRef> =
+                match change_lookup_for_branch(&project_root, &branch) {
+                    crate::forge::ChangeLookup::Found(c) => Some(c),
+                    _ => None,
+                };
 
-            if let Some(existing) = existing {
-                eprintln!("  step 1: found open PR-{} for branch {}", existing, branch);
+            if let Some(existing) = existing_change {
+                let existing_id = existing.id;
+                target_change = Some(existing);
+                eprintln!(
+                    "  step 1: found open PR-{} for branch {}",
+                    existing_id, branch
+                );
                 log_ship_activity(
                     &main_worktree,
-                    Some(existing),
+                    Some(existing_id),
                     &ShipStep::ResolvePr {
                         create_if_needed: false,
                     },
                     &StepOutcome::Ok,
                 );
-                existing
+                existing_id
             } else if dry_run {
                 eprintln!(
                     "  step 1: would create new PR for branch {} (dry-run)",
@@ -32939,12 +32947,31 @@ fn pr_ship_handler(
         }
     };
 
+    // BUG-733: an explicit `aida pr ship <N>` may be run from the PR base
+    // branch. Resolve the target PR's head branch before deciding whether to
+    // delete it or whether open PRs are stacked on it.
+    // trace:BUG-733 | ai:codex
+    let branch_for_child_lookup = target_change
+        .as_ref()
+        .and_then(|c| (!c.branch.is_empty()).then_some(c.branch.as_str()))
+        .unwrap_or(&branch);
+    let raw_open_child_prs = open_child_prs(&project_root, branch_for_child_lookup);
+    let (ship_branch, retarget_base, open_child_prs) =
+        pr_ship::ship_branch_context(&branch, target_change.as_ref(), &raw_open_child_prs);
+
+    if ship_branch != branch {
+        eprintln!(
+            "  step 1: PR-{} head branch is {} (current checkout: {})",
+            pr_number, ship_branch, branch
+        );
+    }
+
     // ---- Detect: is the branch checked out in a sibling worktree? ----
     // If so, `gh pr merge --delete-branch` will fail the local-cleanup
     // step with "branch X is already used by worktree at Y". We skip
     // `--delete-branch` in that case and let `aida session end` handle
     // the local cleanup (which knows how to remove the worktree first).
-    let branch_in_sibling = branch_in_sibling_worktree(&main_worktree, &branch, &project_root);
+    let branch_in_sibling = branch_in_sibling_worktree(&main_worktree, &ship_branch, &project_root);
 
     // ---- BUG-434: detect branches/PRs stacked ON this branch. ----
     // Deleting the merged branch orphans local children and GitHub
@@ -32953,11 +32980,10 @@ fn pr_ship_handler(
     // (b) `gh pr list --base <branch> --state open`. Either populated ⇒
     // keep the branch unless `--force-delete-branch`. trace:BUG-434
     let stack_graph = stacks::load(&project_root);
-    let stacked_children: Vec<String> = stacks::children_of(&stack_graph, &branch)
+    let stacked_children: Vec<String> = stacks::children_of(&stack_graph, &ship_branch)
         .into_iter()
         .map(|s| s.to_string())
         .collect();
-    let open_child_prs = open_child_prs(&project_root, &branch);
     let delete_branch = pr_ship::should_delete_branch(
         branch_in_sibling,
         stacked_children.len(),
@@ -32974,7 +33000,7 @@ fn pr_ship_handler(
         eprintln!(
             "  {} keeping branch `{}` after merge — {} stacked on it",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-            branch,
+            ship_branch,
             if child_prs.is_empty() {
                 format!(
                     "{} child branch(es): {}",
@@ -32987,18 +33013,19 @@ fn pr_ship_handler(
         );
         if !child_prs.is_empty() {
             eprintln!(
-                "    retarget them to main first ({}), then delete `{}` — or re-run with --force-delete-branch to orphan them.",
+                "    retarget them to {} first ({}), then delete `{}` — or re-run with --force-delete-branch to orphan them.",
+                retarget_base,
                 open_child_prs
                     .iter()
-                    .map(|n| format!("gh pr edit {n} --base main"))
+                    .map(|n| format!("gh pr edit {n} --base {retarget_base}"))
                     .collect::<Vec<_>>()
                     .join("; "),
-                branch
+                ship_branch
             );
         } else {
             eprintln!(
                 "    re-target those branches off `{}` before deleting it — or re-run with --force-delete-branch to orphan them.",
-                branch
+                ship_branch
             );
         }
     }
@@ -33156,7 +33183,7 @@ fn pr_ship_handler(
         let watch_change = crate::forge::ChangeRef {
             id: pr_number,
             url: String::new(),
-            branch: branch.clone(),
+            branch: ship_branch.clone(),
             base: String::new(),
             title: None,
         };
@@ -33205,7 +33232,7 @@ fn pr_ship_handler(
             eprintln!(
                 "  step 3: branch {} is checked out in a sibling worktree — \
                  skipping `--delete-branch`; `aida session end` will clean it up",
-                branch
+                ship_branch
             );
         }
         eprintln!(
@@ -33214,7 +33241,7 @@ fn pr_ship_handler(
             if delete_branch { ", delete-branch" } else { "" }
         );
         let explicit_squash_subject =
-            derive_pr_ship_squash_subject(&project_root, pr_number, &branch)?;
+            derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch)?;
         if let Some(subject) = &explicit_squash_subject {
             eprintln!(
                 "  step 3: preserving spec ID in squash subject: {}",
@@ -33237,8 +33264,8 @@ fn pr_ship_handler(
         let change_ref = crate::forge::ChangeRef {
             id: pr_number,
             url: String::new(),
-            branch: branch.clone(),
-            base: String::new(),
+            branch: ship_branch.clone(),
+            base: retarget_base.clone(),
             title: None,
         };
         let mut merge_sink = crate::network_retry::StderrSink;
@@ -34079,6 +34106,27 @@ fn open_child_prs(project_root: &std::path::Path, branch: &str) -> Vec<u64> {
         .into_iter()
         .map(|c| c.id)
         .collect()
+}
+
+/// BUG-733: best-effort metadata lookup for an explicit ship target. `aida pr
+/// ship <N>` can be invoked from `main`; the branch deletion guard still needs
+/// PR-N's head branch, not the current checkout branch. The existing forge list
+/// call returns head/base for open changes on GitHub and GitLab; failures and
+/// already-merged changes degrade to the pre-fix current-branch behavior.
+// trace:BUG-733 | ai:codex
+fn open_change_by_number(
+    project_root: &std::path::Path,
+    number: u64,
+) -> Option<crate::forge::ChangeRef> {
+    let filter = crate::forge::ChangeFilter {
+        base: None,
+        open_only: true,
+    };
+    crate::forge::forge_for(project_root)
+        .list_changes(filter)
+        .ok()?
+        .into_iter()
+        .find(|c| c.id == number)
 }
 
 fn branch_in_sibling_worktree(
