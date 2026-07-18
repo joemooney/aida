@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T00:52:57.992852320Z
-modified_at: 2026-07-18T00:52:57.992852320Z
+modified_at: 2026-07-18T00:53:41.529339316Z
 req_type: Task
 tags:
 - build-time
 - dx
 - tooling
+comments:
+- id: 019f72b6-f819-7913-ab8b-a00b8d69c4fb
+  author: joe
+  content: Commit 98a73b238 references this requirement
+  created_at: 2026-07-18T00:53:41.529339316Z
+  modified_at: 2026-07-18T00:53:41.529339316Z
