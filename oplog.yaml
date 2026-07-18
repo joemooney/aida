@@ -33707,5 +33707,27 @@ operations:
   timestamp: 2026-07-18T05:38:07.619145564Z
   kind: !SetStatus
     status: Approved
-clock: 3150
+- id: 019f73bb-f2ca-7753-be35-c4a14bba206b
+  target_id: 019f73bb-c822-7fd3-b165-139cdc619178
+  author: aida
+  node_id: '1'
+  lamport: 3151
+  timestamp: 2026-07-18T05:38:45.066645928Z
+  kind: !Create
+    title: 'questions answer: a defer resolution still auto-queues the spec — evaluate_unpark ignores the deferred flag'
+    description: |-
+      Observed 2026-07-17: TASK-919 and TASK-911 both carried recorded human answers of Defer (answered 2026-07-14, deferred:true with deferred_until triggers set), yet both appeared in the operator's ready queue annotated 'unparked by aida questions answer' as Approved. The operator reasonably ran `aida queue work TASK-919`; the implementer read the spec (empty description, truncated title, defer-condition unmet) and spent an interactive session heading toward a punt on a fork the human had already decided three days earlier. A machine-wide crash then shelved it NeedsAttention (see rejected BUG-729).
+
+      Mechanism (aida-cli/src/main.rs, answer apply path near maybe_autoqueue): after recording an answer the code calls evaluate_unpark and auto-queues on Pickability::Ready unless applied.keeps_parked. For a defer resolution either keeps_parked is not being set, or evaluate_unpark does not classify deferred:true as Parked — a deferred spec with its revisit trigger unmet evaluated Ready and was enqueued.
+
+      Expected: a defer resolution parks the spec on the deferred shelf (STORY-584 semantics) and never auto-queues; evaluate_unpark should classify deferred:true as Parked("deferred: <trigger>").
+
+      Acceptance:
+      - Answering a decision_request with a defer resolution leaves the spec off every queue and on the deferred shelf with its trigger.
+      - evaluate_unpark returns Parked for deferred:true specs (unless undeferred first).
+      - Regression test: answer=defer then assert not queued + Pickability::Parked.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3151
 node_id: '1'
