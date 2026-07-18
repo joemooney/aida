@@ -1,6 +1,6 @@
 use super::{
     build_auto_punt_args, build_integrate_rebase_args, build_phase3_auto_rebase_args,
-    find_orchestrated_lease, RealPhaseDriver,
+    find_orchestrated_lease, orchestrator_phase_child_env, RealPhaseDriver,
 };
 
 /// Mint a session lease + its manifest under `<root>/.aida/sessions/`,
@@ -49,6 +49,7 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
         false,
         false,
         crate::auto_complete::LifecycleSkip::default(),
+        crate::auto_complete::AutoCompleteVariant::Full,
     )
 }
 
@@ -97,6 +98,27 @@ fn auto_punt_argv_carries_design_fork_reason_and_lean() {
     // joined), so spaces in them can never split into extra args.
     let i = args.iter().position(|a| a == "--reason").unwrap();
     assert_eq!(args[i + 1], "two viable schemas");
+}
+
+#[test]
+fn phase_child_env_carries_auto_complete_variant() {
+    let env = orchestrator_phase_child_env(
+        "run-token",
+        crate::auto_complete::Phase::Implementer,
+        crate::auto_complete::AutoCompleteVariant::ThroughCi,
+    );
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == crate::orchestrator::AUTO_COMPLETE_ENV && v == "1"));
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == crate::orchestrator::TOKEN_ENV && v == "run-token"));
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == crate::orchestrator::VARIANT_ENV && v == "through-ci"));
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == crate::orchestrator::PHASE_ENV && v == "1"));
 }
 
 #[test]

@@ -603,6 +603,7 @@ fn phase_driver_carries_autonomy_mode_and_is_zen_run_reads_the_field() {
             false,
             false,
             auto_complete::LifecycleSkip::none(),
+            auto_complete::AutoCompleteVariant::Full,
         )
     }
     // The field is stored verbatim, and `is_zen_run()` reads it.

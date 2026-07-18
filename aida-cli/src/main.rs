@@ -20468,6 +20468,26 @@ fn agent_initial_prompt_args(
 }
 
 fn render_agent_initial_prompt(agent_type: &str, spec: &str) -> String {
+    let ship_instruction = orchestrated_implementer_ship_instruction(
+        std::env::var(orchestrator::VARIANT_ENV).ok().as_deref(),
+    );
+    render_agent_initial_prompt_with_ship_instruction(agent_type, spec, ship_instruction)
+}
+
+fn orchestrated_implementer_ship_instruction(variant: Option<&str>) -> &'static str {
+    match variant.map(str::trim).filter(|v| !v.is_empty()) {
+        Some("full" | "through-ci" | "through-merge" | "skip-build") => {
+            "then use `aida pr ship --no-merge` (or plain `aida pr ship`, which will refuse the merge leg inside the drive) and exit after the PR-open checkpoint."
+        }
+        _ => "then use `aida pr ship` and exit after the IMPLEMENTER COMPLETE banner.",
+    }
+}
+
+fn render_agent_initial_prompt_with_ship_instruction(
+    agent_type: &str,
+    spec: &str,
+    ship_instruction: &str,
+) -> String {
     format!(
         "Read your AIDA launch context first:\n\
          cat \"$AIDA_AGENT_CONTEXT_FILE\"\n\
@@ -20475,9 +20495,36 @@ fn render_agent_initial_prompt(agent_type: &str, spec: &str) -> String {
          aida brief list --for-agent {agent_type}\n\n\
          Implement {spec} per its acceptance criteria. Stay in single-spec scope for {spec}. \
          Standard cadence: inspect context, make bounded changes, run relevant tests, run \
-         cargo fmt --all --check, commit with trailer ({spec}) and trace:{spec}, then use \
-         aida pr ship and exit after the IMPLEMENTER COMPLETE banner."
+         cargo fmt --all --check, commit with trailer ({spec}) and trace:{spec}, {ship_instruction}"
     )
+}
+
+#[cfg(test)]
+mod bug742_pickup_contract_tests {
+    use super::{
+        orchestrated_implementer_ship_instruction,
+        render_agent_initial_prompt_with_ship_instruction,
+    };
+
+    #[test]
+    fn through_ci_pickup_guidance_opens_pr_without_merge() {
+        let instruction = orchestrated_implementer_ship_instruction(Some("through-ci"));
+        assert!(instruction.contains("aida pr ship --no-merge"));
+        assert!(instruction.contains("PR-open checkpoint"));
+
+        let prompt =
+            render_agent_initial_prompt_with_ship_instruction("codex", "BUG-742", instruction);
+        assert!(prompt.contains("aida pr ship --no-merge"));
+        assert!(!prompt.contains("IMPLEMENTER COMPLETE banner"));
+    }
+
+    #[test]
+    fn plain_pickup_guidance_keeps_direct_ship_cadence() {
+        let instruction = orchestrated_implementer_ship_instruction(None);
+        assert!(instruction.contains("aida pr ship"));
+        assert!(instruction.contains("IMPLEMENTER COMPLETE banner"));
+        assert!(!instruction.contains("--no-merge"));
+    }
 }
 
 fn prepare_agent_launch(
@@ -20724,6 +20771,9 @@ fn render_agent_launch_context(
 
     out.push_str("## Active Session\n\n");
     if let Some(spec) = &plan.current_spec {
+        let ship_instruction = orchestrated_implementer_ship_instruction(
+            std::env::var(orchestrator::VARIANT_ENV).ok().as_deref(),
+        );
         out.push_str(&format!(
             "- **Spec: {spec} (your scope for this session)**\n"
         ));
@@ -20744,9 +20794,9 @@ fn render_agent_launch_context(
         }
         out.push_str(&format!(
             "\n**SCOPE BINDING**: This session was launched with `--spec {spec}`. \
-You are scoped to {spec}. Drive it to completion, then exit after `aida pr ship` \
-and the IMPLEMENTER COMPLETE banner. Do not pick up other specs from this \
-session; if you need the next pickup, start a fresh `aida agent new ... --spec NEXT-ID` session.\n"
+You are scoped to {spec}. Drive it to completion, {ship_instruction} Do not \
+pick up other specs from this session; if you need the next pickup, start a \
+fresh `aida agent new ... --spec NEXT-ID` session.\n"
         ));
     } else {
         out.push_str("- No spec was provided at launch; start from the relevant queue head or pending brief.\n");
@@ -20811,7 +20861,11 @@ session; if you need the next pickup, start a fresh `aida agent new ... --spec N
             "- Inspect the assigned spec with `aida show {spec}`.\n"
         ));
     }
-    out.push_str("- Ship with a trailing-parens spec trailer in the commit subject, then use `aida pr ship`.\n");
+    out.push_str("- Ship with a trailing-parens spec trailer in the commit subject, ");
+    out.push_str(orchestrated_implementer_ship_instruction(
+        std::env::var(orchestrator::VARIANT_ENV).ok().as_deref(),
+    ));
+    out.push('\n');
     Ok(out)
 }
 
@@ -78712,6 +78766,7 @@ fn run_auto_complete(
         allow_stale_base,
         no_auto_rebase,
         lifecycle_skip,
+        variant,
     );
 
     // STORY-301: surface the drain so a user inside the spawned Claude session
@@ -83270,6 +83325,13 @@ struct RealPhaseDriver {
     /// phases. Phase 2 owns CI waiting; phases 3/6 are sequenced in
     /// `auto_complete.rs`.
     lifecycle_skip: auto_complete::LifecycleSkip,
+    /// BUG-742: the auto-complete stop mode this drive was launched with.
+    /// Phase children receive it via `AIDA_AUTO_COMPLETE_VARIANT` so their
+    /// pickup prompt says "open the PR and stop" instead of the direct-ship
+    /// cadence. The merge bouncer does not trust this value; it only informs
+    /// child-session guidance.
+    // trace:BUG-742 | ai:codex
+    variant: auto_complete::AutoCompleteVariant,
     /// TASK-136 / BUG-420: GH-verify retry budget + watchdog thresholds,
     /// resolved once from `[drain]` config + env/flag overrides.
     drain_tuning: DrainTuning,
@@ -83343,6 +83405,7 @@ impl RealPhaseDriver {
         allow_stale_base: bool,
         no_auto_rebase: bool,
         lifecycle_skip: auto_complete::LifecycleSkip,
+        variant: auto_complete::AutoCompleteVariant,
     ) -> Self {
         let drain_tuning = DrainTuning::resolve(&project_root);
         Self {
@@ -83367,6 +83430,7 @@ impl RealPhaseDriver {
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
             lifecycle_skip,
+            variant,
             drain_tuning,
         }
     }
@@ -83986,6 +84050,19 @@ impl RealPhaseDriver {
     }
 }
 
+fn orchestrator_phase_child_env(
+    run_token: &str,
+    phase: auto_complete::Phase,
+    variant: auto_complete::AutoCompleteVariant,
+) -> Vec<(&'static str, String)> {
+    vec![
+        (orchestrator::AUTO_COMPLETE_ENV, "1".to_string()),
+        (orchestrator::TOKEN_ENV, run_token.to_string()),
+        (orchestrator::VARIANT_ENV, variant.slug().to_string()),
+        (orchestrator::PHASE_ENV, phase.index().to_string()),
+    ]
+}
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn run_implementer(
         &mut self,
@@ -84027,20 +84104,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             self.permission_mode.as_deref(),
         );
         let mut cmd = std::process::Command::new(self.aida_exe());
-        cmd.current_dir(&self.project_root)
-            .args(&args)
-            .env(orchestrator::AUTO_COMPLETE_ENV, "1")
-            // BUG-233: the corroboration token, so the child can verify this
-            // orchestrator run is live rather than guessing from the bare var.
-            .env(orchestrator::TOKEN_ENV, &self.run_token);
-        // TASK-306: tell the child's statusline this is phase 1 of 6 (and the
-        // `--no-human` scope) so the interactive implementer session shows it
-        // is an orchestrator phase the user is expected to act in.
-        // trace:TASK-306 | ai:claude
-        cmd.env(
-            orchestrator::PHASE_ENV,
-            auto_complete::Phase::Implementer.index().to_string(),
-        );
+        cmd.current_dir(&self.project_root).args(&args);
+        // BUG-233: the corroboration token proves the bare auto-complete env
+        // belongs to this live run. TASK-306 names the phase for statusline
+        // context. BUG-742 carries the run variant so pickup prompts preserve
+        // the stop-before-merge contract. trace:BUG-742 | ai:codex
+        for (key, value) in orchestrator_phase_child_env(
+            &self.run_token,
+            auto_complete::Phase::Implementer,
+            self.variant,
+        ) {
+            cmd.env(key, value);
+        }
         if let Some(mode) = self.no_human {
             cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
         }
