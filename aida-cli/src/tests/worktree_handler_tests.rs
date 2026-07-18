@@ -226,7 +226,12 @@ fn spec_worktree_core_mints_fresh_then_reenters_via_lease() {
         "STORY-742",
         None,
         None,
-        Some((lease_path.clone(), "story-742-work".to_string())),
+        Some((
+            lease_path.clone(),
+            "story-742-work".to_string(),
+            "019f768atest".to_string(),
+            true,
+        )),
         false,
         |_p, _b| panic!("mint must NOT run when a lease already exists"),
     )
@@ -234,6 +239,24 @@ fn spec_worktree_core_mints_fresh_then_reenters_via_lease() {
     assert!(!again.created, "re-enter reports not-created");
     assert_eq!(again.path, lease_path);
     assert_eq!(again.branch, "story-742-work");
+    assert_eq!(again.lease_id.as_deref(), Some("019f768atest"));
+    assert!(again.has_session_env);
+}
+
+#[test]
+fn enter_shell_payload_cd_then_sources_session_env() {
+    let tree = tempfile::tempdir().unwrap();
+    let aida_dir = tree.path().join(".aida");
+    std::fs::create_dir_all(&aida_dir).unwrap();
+    std::fs::write(
+        aida_dir.join("session-env.sh"),
+        "export CARGO_TARGET_DIR='/tmp/aida/target'\n",
+    )
+    .unwrap();
+
+    let payload = enter_shell_payload(tree.path());
+    assert!(payload.starts_with(&format!("{}\n", enter_cd_line(tree.path()))));
+    assert!(payload.contains("export CARGO_TARGET_DIR='/tmp/aida/target'\n"));
 }
 
 // A worktree already registered (git) at the default path but carrying no
