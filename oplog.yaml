@@ -33793,5 +33793,27 @@ operations:
   timestamp: 2026-07-18T15:40:27.906883342Z
   kind: !SetStatus
     status: Done
-clock: 3155
+- id: 019f7671-6fd8-7101-a8eb-9288426b39c8
+  target_id: 019f7671-69a2-7323-a010-8bcc774d937b
+  author: aida
+  node_id: '1'
+  lamport: 3156
+  timestamp: 2026-07-18T18:16:13.528824850Z
+  kind: !Create
+    title: 'pr ship: merge step reports failure and abandons the lifecycle when the remote squash-merge SUCCEEDED but local branch delete failed (branch held by a worktree)'
+    description: |-
+      Observed 2026-07-18, PR-1489 (TASK-1155): `aida pr ship 1489` ran from the main checkout while the PR branch task-1155-work was checked out in worktree /home/joe/ai/aida-task1155 — the normal state for any worktree-entered spec. Step 3 ran `gh pr merge --squash --delete-branch`; the REMOTE squash-merge succeeded (PR state MERGED, commit 42975f5), but gh then failed deleting the local branch ("cannot delete branch used by worktree") and pr ship reported "merge failed", exited non-zero, and never ran the pull/auto-bump leg. The operator was told to re-run `gh pr merge` — which would fail with "already merged". Manual recovery needed: verify PR state, aida pull, session end, branch -D.
+
+      Fixes:
+      1. Before merging, detect that the PR branch is checked out in a worktree and drop --delete-branch for that run (report "branch left for the worktree session to clean up") — the session-end path already handles branch cleanup.
+      2. On a gh merge error, re-check the PR state before classifying: if MERGED, treat the step as succeeded-with-warning and continue to pull/auto-bump instead of aborting.
+
+      Acceptance:
+      - pr ship on a branch held by a live worktree completes the full lifecycle (merge, pull, auto-bump) without error, leaving the branch for session end.
+      - A gh-side post-merge cleanup failure is not reported as a merge failure when the PR is actually merged.
+      - Regression test covering the branch-in-worktree merge path.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3156
 node_id: '1'
