@@ -3675,6 +3675,9 @@ fn run() -> Result<()> {
         Command::Queue(queue_cmd) => {
             handle_queue_command(queue_cmd, &storage, &requirements_path)?;
         }
+        Command::Do { spec } => {
+            run_do_drive(&storage, spec)?;
+        }
         Command::Load(load_cmd) => {
             load_cmd::handle_load_command(load_cmd, &storage)?;
         }
@@ -58734,7 +58737,8 @@ mod bug415_status_count_tests;
 fn is_write_command(command: &Command) -> bool {
     matches!(
         command,
-        Command::Add { .. }
+        Command::Do { .. }
+            | Command::Add { .. }
             | Command::Edit { .. }
             | Command::Comment(_)
             | Command::Queue(_)
@@ -81174,6 +81178,41 @@ mod task_266_tests;
 
 fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
     vec!["queue", "add", spec, "--for", "implementer", "--no-scope"]
+}
+
+// trace:TASK-1155 trace:ADR-11 | ai:codex
+fn run_do_drive(storage: &Storage, spec: &str) -> Result<()> {
+    let spec = spec.trim();
+    if spec.is_empty() {
+        anyhow::bail!("aida do needs a spec to drive. Usage: aida do <SPEC>.");
+    }
+    let store = storage.load()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, spec))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
+    let display = req.display_id();
+    let args = vec![
+        "queue".to_string(),
+        "work".to_string(),
+        display.clone(),
+        "--auto-complete=through-ci".to_string(),
+    ];
+    eprintln!(
+        "  {} doing {} — aida {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        display,
+        args.join(" ").dimmed()
+    );
+    let status = std::process::Command::new(resolve_aida_exe())
+        .args(&args)
+        .status()
+        .context("failed to launch `aida queue work --auto-complete=through-ci`")?;
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
 }
 
 /// STORY-721: `aida zen <spec>` — the one-shot AUTONOMOUS implement+ship drive.
