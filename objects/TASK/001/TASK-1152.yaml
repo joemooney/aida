@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T23:52:03.989385173Z
-modified_at: 2026-07-18T00:33:01.965898066Z
+modified_at: 2026-07-18T00:33:02.968051066Z
 req_type: Task
 tags:
 - build-time
@@ -20,3 +20,9 @@ comments:
   content: Commit 98a73b238 references this requirement
   created_at: 2026-07-17T23:53:04.849573122Z
   modified_at: 2026-07-17T23:53:04.849573122Z
+- id: 019f72a4-11f8-7c90-a0ce-7244c159b1f7
+  author: joe
+  content: 'Rejected: clean back-to-back A/B proved mold saves ~1s on make build-release (97.94s mold vs 98.98s BFD). cargo check (front-end) is only 6.5s — the ~91s is codegen, not link. Wrong lever. PR #1485 closed, ~/.cargo/config.toml mold entry removed.'
+  created_at: 2026-07-18T00:33:02.968051066Z
+  modified_at: 2026-07-18T00:33:02.968051066Z
+  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
