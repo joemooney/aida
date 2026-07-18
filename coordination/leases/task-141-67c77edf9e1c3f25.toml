@@ -1,0 +1,11 @@
+scope = "TASK-141"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 2415577
+agent = "implementer"
+started_at = "2026-07-18T20:49:42.063790110+00:00"
+heartbeat_at = "2026-07-18T20:49:42.063790110+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
