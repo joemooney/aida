@@ -715,6 +715,47 @@ fn no_human_scope_line_differs_by_mode() {
     assert!(reviewer.contains("interactive"), "{reviewer}");
 }
 
+// trace:BUG-740 | ai:codex
+#[test]
+fn non_tty_interactive_implementer_refuses_before_side_effects() {
+    let err = non_tty_interactive_implementer_preflight(None, false, true, false).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("aida do needs a terminal"), "{msg}");
+    assert!(msg.contains("--no-human=both"), "{msg}");
+
+    let err = non_tty_interactive_implementer_preflight(
+        Some(auto_complete::NoHumanMode::ReviewerOnly),
+        true,
+        false,
+        false,
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("interactive implementer"), "{err}");
+}
+
+// trace:BUG-740 | ai:codex
+#[test]
+fn non_tty_preflight_allows_headless_implementer_or_headless_env() {
+    assert_eq!(
+        non_tty_interactive_implementer_preflight(
+            Some(auto_complete::NoHumanMode::Both),
+            false,
+            false,
+            false,
+        )
+        .unwrap(),
+        Some(auto_complete::NoHumanMode::Both)
+    );
+    assert_eq!(
+        non_tty_interactive_implementer_preflight(None, false, false, true).unwrap(),
+        Some(auto_complete::NoHumanMode::Both)
+    );
+    assert_eq!(
+        non_tty_interactive_implementer_preflight(None, true, true, false).unwrap(),
+        None
+    );
+}
+
 // --- TASK-306: orchestrator-context statusline badge ------------------
 
 /// A corroborated phase-1 session shows the phase index, its name, and
