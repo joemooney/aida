@@ -1,0 +1,24 @@
+id: 019f75bd-a84f-7241-b93b-3a11c5f47471
+spec_id: BUG-731
+agreed_id: BUG-731
+title: 'codex prompt pack: 34 of 46 prompts drop the spec-id argument (no $ARGUMENTS placeholder) and leak Claude-native tool references'
+description: |-
+  Observed 2026-07-18: operator ran `/aida-guided-implement TASK-1155` inside Codex in a spec worktree and it did not work. The prompt file ~/.codex/prompts/aida-guided-implement.md exists (the pack scaffolds 46 aida prompts), but:
+
+  1. Only 12 of the 46 prompts contain a $1/$ARGUMENTS placeholder. The other 34 — including aida-guided-implement — never reference the typed argument, so Codex has nowhere to substitute the spec id and the invocation loses `TASK-1155`. Every prompt whose Claude skill takes an argument must carry the matching $ARGUMENTS/$1 placeholder in its Codex rendering.
+
+  2. Vendor leakage: the Codex rendering of aida-guided-implement instructs the agent to use `AskUserQuestion` (a Claude Code tool Codex does not have) and to open the PR with `/aida-pr` (a Claude slash command). The Codex pack should render vendor-appropriate equivalents (plain-text numbered questions; `aida pr ship` / the CLI verb) — the per-vendor render seam exists, this content just wasn't adapted.
+
+  Acceptance:
+  - Every scaffolded Codex prompt whose skill accepts arguments substitutes them ($ARGUMENTS or positional), verified by a template-lint test that fails when a skill's usage line advertises an argument the Codex rendering never references.
+  - Codex renderings contain no Claude-only tool/skill references (AskUserQuestion, /aida-pr, /aida-*) — a deny-list check in the same lint.
+  - `/aida-guided-implement TASK-XXXX` in Codex receives the spec id and runs the dialog with plain-text questions.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-18T14:59:51.503302349Z
+modified_at: 2026-07-18T14:59:51.503302349Z
+req_type: Bug
+tags:
+- codex cross-vendor parity aida:init from-dogfood
