@@ -34504,5 +34504,44 @@ operations:
   timestamp: 2026-07-18T21:41:16.910766668Z
   kind: !SetStatus
     status: Needs Attention
-clock: 3201
+- id: 019f772d-39b3-77e1-8652-95d27dcd6c9a
+  target_id: 019f772d-30ca-7eb2-9581-84575668759f
+  author: aida
+  node_id: '1'
+  lamport: 3202
+  timestamp: 2026-07-18T21:41:20.435461798Z
+  kind: !Create
+    title: 'auto-complete failure: phase 1 (implementer) on BUG-740'
+    description: |
+      Auto-drafted by `aida queue work BUG-740 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
+
+      Failure kind: `no-progress-watchdog`
+
+      ## Recovery hint shown to the user
+
+      The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework BUG-740 --work`.
+
+      ## Phase durations
+
+        - phase 1 (implementer): 962492 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-740","started_at":"2026-07-18T21:25:14.119310070+00:00","completed_at":"2026-07-18T21:41:17.975570593+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"no-progress-watchdog","failure_message":"the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":962492}],"total_ms":962494,"binary_sha":"ddab634dd"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3202
 node_id: '1'
