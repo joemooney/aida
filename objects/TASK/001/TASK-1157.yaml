@@ -18,12 +18,14 @@ description: |-
   - No regression to the no-double-eval convention or the BUG-60 PS1 splice hygiene.
 
   Additional acceptance (operator, 2026-07-18): the PS1 staleness hook ships as part of initial setup, not hand-edited .bashrc — `aida dev shell-init --install` installs (or offers) the prompt wiring inside its managed >>> aida shell helpers <<< block, so a fresh clone + shell-init gets the marker with zero manual profile editing. Migrate/replace the interim hand-added `aida-staleness-marker` block if present.
+
+  Refinement (operator, 2026-07-18 16:26): the probe must distinguish the two stale remedies, motivated by a real incident (operator shell activated on a stale debug build while a HEAD-exact release existed; the first batch drain ran the old binary): token for "a HEAD-matching build exists in the OTHER profile - run aida dev activate to flip" (suggested ⇄) vs "no built binary matches HEAD - rebuild" (suggested ↻). Empty output remains "active binary matches HEAD". The interim shell implementation of exactly this now lives in the operator's .bashrc marker block for reference.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:54:23.971139475Z
-modified_at: 2026-07-18T19:58:40.502087346Z
+modified_at: 2026-07-18T23:27:21.273932534Z
 req_type: Task
 tags:
 - batch:papercuts-0718

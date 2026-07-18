@@ -34597,5 +34597,30 @@ operations:
   timestamp: 2026-07-18T22:42:16.345005986Z
   kind: !AddTag
     tag: batch:papercuts-0718
-clock: 3207
+- id: 019f778e-48e6-7633-9dc3-393746722b12
+  target_id: 019f7694-62e3-7e50-a8d5-0ac5fa1dfe41
+  author: aida
+  node_id: '1'
+  lamport: 3208
+  timestamp: 2026-07-18T23:27:21.318447606Z
+  kind: !SetDescription
+    description: |-
+      Operator ask 2026-07-18: "in my PS1 prompt I would like to see if there are local git changes that I need to pick up and rebuild". The pieces exist — the binary embeds sha+build-time+dirty (aida --version), dev status computes the ShaMatch verdict (exact/ancestor/diverged), and dev activate already splices a (aida-release) prefix into PS1 (whose current `*` marker means other-profile-newer, a different axis). Missing: a probe cheap enough for every prompt.
+
+      Design (recommended slice): `aida dev ps1` prints a compact status token and exits, budget <20ms:
+      - `` (empty) — active binary sha == HEAD (exact): nothing to do
+      - `↻` — HEAD moved past the binary sha (ancestor/diverged): rebuild to pick up changes
+      - optionally `±` appended when the working tree has uncommitted changes newer than the binary mtime (second axis; can be a later slice — git status cost may bust the budget)
+      Implementation notes: the embedded sha is a compile-time constant (no subprocess); resolve HEAD by reading .git/HEAD + the ref file directly instead of spawning git to stay in budget. Cache-by-binary-mtime unnecessary if the direct read is fast. Wire into the dev-activate PS1 splice so `(aida-release↻)` appears automatically, keeping the existing `*` (other-profile-newer) semantics distinct — or replace `*` with the richer token set if that reads better.
+
+      Acceptance:
+      - `aida dev ps1` exits <20ms warm and prints the correct token for exact / behind-HEAD states.
+      - The dev-activate PS1 prefix incorporates it so the prompt shows staleness without user wiring.
+      - `aida dev status` documents the token meanings.
+      - No regression to the no-double-eval convention or the BUG-60 PS1 splice hygiene.
+
+      Additional acceptance (operator, 2026-07-18): the PS1 staleness hook ships as part of initial setup, not hand-edited .bashrc — `aida dev shell-init --install` installs (or offers) the prompt wiring inside its managed >>> aida shell helpers <<< block, so a fresh clone + shell-init gets the marker with zero manual profile editing. Migrate/replace the interim hand-added `aida-staleness-marker` block if present.
+
+      Refinement (operator, 2026-07-18 16:26): the probe must distinguish the two stale remedies, motivated by a real incident (operator shell activated on a stale debug build while a HEAD-exact release existed; the first batch drain ran the old binary): token for "a HEAD-matching build exists in the OTHER profile - run aida dev activate to flip" (suggested ⇄) vs "no built binary matches HEAD - rebuild" (suggested ↻). Empty output remains "active binary matches HEAD". The interim shell implementation of exactly this now lives in the operator's .bashrc marker block for reference.
+clock: 3208
 node_id: '1'
