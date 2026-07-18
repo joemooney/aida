@@ -33858,5 +33858,18 @@ operations:
     req_type: Bug
     status: Draft
     priority: Low
-clock: 3160
+- id: 019f767b-3996-7d62-b8eb-554cadbd74a1
+  target_id: 019f75b6-5cc7-72e0-bf07-ba6d6873962e
+  author: aida
+  node_id: '1'
+  lamport: 3161
+  timestamp: 2026-07-18T18:26:54.998538644Z
+  kind: !SetDescription
+    description: |2-
+
+
+      Additional acceptance (operator, 2026-07-18):
+      - With the aida() wrapper active, `aida worktree enter <SPEC>` leaves the shell cd'd in AND with CARGO_TARGET_DIR exported — no manual source step. Implement by extending the same emitted-and-auto-evaled shell payload that carries the cd (the whole of session-env.sh is one export line). Keep the no-double-eval convention (TASK-667).
+      - The printed `source .aida/session-env.sh` instruction appears only for wrapper-less invocations where the emitted shell was not evaled.
+clock: 3161
 node_id: '1'
