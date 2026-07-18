@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T00:16:58.702437009Z
-modified_at: 2026-07-18T00:16:58.702437009Z
+modified_at: 2026-07-18T00:47:44.884704617Z
 req_type: Task
 tags:
 - batch:fasttrack
 - lifecycle:no-review
 - refactor
 - tech-debt
+comments:
+- id: 019f72b1-86f4-7971-9c7e-7681df850467
+  author: joe
+  content: Commit 98a73b238 references this requirement
+  created_at: 2026-07-18T00:47:44.884704617Z
+  modified_at: 2026-07-18T00:47:44.884704617Z
