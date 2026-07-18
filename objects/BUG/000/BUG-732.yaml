@@ -13,12 +13,12 @@ description: |-
   - pr ship on a branch held by a live worktree completes the full lifecycle (merge, pull, auto-bump) without error, leaving the branch for session end.
   - A gh-side post-merge cleanup failure is not reported as a merge failure when the PR is actually merged.
   - Regression test covering the branch-in-worktree merge path.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:16:11.938829541Z
-modified_at: 2026-07-18T19:58:23.702035070Z
+modified_at: 2026-07-18T20:15:39.164768584Z
 req_type: Bug
 tags:
 - aida:pr papercut from-dogfood
