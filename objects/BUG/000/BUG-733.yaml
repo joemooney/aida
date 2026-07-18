@@ -11,8 +11,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:16:16.429295950Z
-modified_at: 2026-07-18T20:30:49.133165023Z
+modified_at: 2026-07-18T20:37:02.318867077Z
 req_type: Bug
 tags:
 - aida:pr severity:cosmetic from-dogfood
 - batch:papercuts-0718
+comments:
+- id: 019f76f2-5aee-7083-9ceb-2bd59d10192e
+  author: mcp
+  content: 'Codex implemented and committed `[AI:codex] fix(pr-ship): resolve explicit PR head for stacked guard (BUG-733)` at `28e5852cd`. Targeted verification passed: `cargo fmt --all -- --check` and `cargo test -p aida-cli pr_ship::tests`. `cargo run -p aida-cli -- pr ship` created PR-1495 and left it open because the orchestrated-drive self-merge gate refused direct merge.'
+  created_at: 2026-07-18T20:37:02.318844958Z
+  modified_at: 2026-07-18T20:37:02.318844958Z
