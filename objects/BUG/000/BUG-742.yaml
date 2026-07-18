@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T19:00:24.788960176Z
-modified_at: 2026-07-18T19:27:14.395580203Z
+modified_at: 2026-07-18T19:28:02.571139523Z
 req_type: Bug
 tags:
 - aida:queue auto-complete from-dogfood
@@ -20,4 +20,10 @@ comments:
     help: aida burndown (through-ci) ended with PR-1491 squash-merged by the implementer itself — 'PR-1491 CI passed and was squash-merged' in its own completion report. Two-for-two today: both through-ci drives (headless TASK-1156, interactive BUG-739) delivered auto-merges instead of stopping at the PR. The stop-at-PR contract is currently fictional — /aida-pickup's pr-ship cadence overrides it in every vendor/mode combination tried.
   created_at: 2026-07-18T19:27:14.395580203Z
   modified_at: 2026-07-18T19:27:14.395580203Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f76b3-300b-7e61-8e92-2c99d6cb9be6
+  author: joe
+  content: 'Correction of the previous comment (its text was garbled by shell command-substitution — the backticked command executed and spliced a drain-lock refusal into the stored text; disregard that comment). Clean record: Second occurrence, 2026-07-18 12:26 — the operator''s interactive ''aida do BUG-739'' (through-ci) ended with PR-1491 squash-merged by the implementer itself, per its own completion report. Two-for-two today: both through-ci drives (headless TASK-1156, interactive BUG-739) delivered auto-merges instead of stopping at the PR. The stop-at-PR contract is currently fictional — /aida-pickup''s pr-ship cadence overrides it in every vendor/mode combination tried so far.'
+  created_at: 2026-07-18T19:28:02.571139523Z
+  modified_at: 2026-07-18T19:28:02.571139523Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
