@@ -12,12 +12,12 @@ description: |-
   Open question (do NOT gate-and-forget): determine whether the macOS init exit-1-no-output reflects a REAL aida init regression on macOS (from an overnight batch change) or a CI-environment artifact of the isolated-tempdir e2e harness. Real macOS users init under /Users/... (not a symlinked temp path), so a test-env artifact is more likely, but this is unverified.
 
   Recommended resolution (operator call, needs macOS/Windows access): either (a) make the binary-driving e2e suites portable, or (b) gate them to cfg(target_os=linux) consistent with the project stance that PR CI is Linux-only until there are non-Linux users, with this bug kept open to investigate the real-vs-env question. Reduces cross-platform coverage, so it is a priority/policy call, not an autonomous one.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T11:35:46.390020492Z
-modified_at: 2026-07-15T02:49:46.754840483Z
+modified_at: 2026-07-18T21:06:31.382470729Z
 req_type: Bug
 tags:
 - blocks:release-xplat-gate

@@ -14,12 +14,12 @@ description: |-
   WHY IT MATTERS: keeping two hubs in sync is core to the multi-vendor / multi-machine thesis (agents on different networks, some hubs blocked by corporate filters per EPIC-44). Silent divergence corrupts the shared substrate. This is reliability infrastructure for the store.
 
   ACCEPTANCE (per slice, verified independently): (1) aida doctor / aida remote status reports ahead/behind per remote and exits nonzero / flags on divergence; (2) a store push with mirror_remotes set pushes to all remotes, warning (not failing) on a non-ff mirror leg; (3) aida remote reconcile heals a two-way divergence to a single fast-forwardable state; (4) init scaffolds the config stub and docs describe the posture. Non-integrity: never force-push in any of these paths.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:09:46.013699292Z
-modified_at: 2026-07-13T06:14:28.734113858Z
+modified_at: 2026-07-18T21:06:31.382470729Z
 req_type: Story
 tags:
 - aida:remote
@@ -57,3 +57,7 @@ comments:
   content: 'Status reconcile (surfaced via aida human 2026-07-12): this shipped straight from DRAFT so auto-bump never moved it. Slices 1+2 ARE merged to main — slice 1 detection (aida remote status + doctor Remote-drift, #1353/TASK-1095/BUG-700) and slice 2 fan-out push ([store.sync] mirror_remotes, #1354/#1355/#1356). Slice 3 (aida remote reconcile — heal a two-way divergence) and slice 4 (init mirror_remotes stub) are NOT yet shipped; slice 3 IS the BUG-714 gap (''fan-out can only PUSH, cannot reconcile''). Moved draft→in-progress to reflect partial ship. The stale ''remote-drift-prevention'' local branch holds the pre-squash originals (work already on main via #1345-1357). NOT completed — reconcile slice remains (track via BUG-714).'
   created_at: 2026-07-13T01:36:02.904525156Z
   modified_at: 2026-07-13T01:36:02.904525156Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T21:06:31.382470729Z
+  completion_sha: b1a4563d15516b2433e89219e93716f9e6850d55
