@@ -33495,5 +33495,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3130
+- id: 019f7295-6173-7fa3-aa54-70cdf87dd0e6
+  target_id: 019f7295-5b4e-7de3-b67d-d9fd3273fd76
+  author: aida
+  node_id: '1'
+  lamport: 3131
+  timestamp: 2026-07-18T00:17:00.275273192Z
+  kind: !Create
+    title: Remove 13 dead cli/aida-core imports from main.rs left by SPIKE-78 extractions
+    description: 'SPIKE-78 extraction debt: when the 61 handler clusters moved to *_cmd.rs, the use cli::{} / use aida_core::{} blocks in main.rs kept imports whose only users left with them. Verified dead (0 non-import uses in main.rs; each now imported directly in its *_cmd.rs via use crate::cli::). Warnings not errors, so they accumulated. Delete: export, ArtifactType, Cardinality, RelationshipDefinition, TraceLink (aida_core block) + AutonomyCommand, CalibrationSubcommand, LockCommand, MailboxCommand, RelDefCommand, ReportCommand, TriageCommand, TypeCommand (cli block). Makes the release build warning-clean (except the separate EPIC-54 aida-tui Scope dead-code, left for that owner).'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3131
 node_id: '1'
