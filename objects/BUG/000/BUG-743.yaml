@@ -11,13 +11,17 @@ description: |-
   - With [agents] bypass=true, an interactive vendor-codex drive (aida do / queue work with codex implementer) runs without per-command approval prompts.
   - With bypass=false, no permission flag is injected for any vendor (native posture preserved).
   - The flag mapping is covered by a unit test on the codex launch argv for both postures, interactive and exec paths.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T19:42:54.019981075Z
-modified_at: 2026-07-18T20:01:29.708695494Z
+modified_at: 2026-07-18T20:15:09.904451777Z
 req_type: Bug
 tags:
 - batch:papercuts-0718
 - codex aida:agent launcher from-dogfood
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T20:15:09.904451777Z
+  completion_sha: cd97e6c726beb76e278f63efb1b1996996d9f968

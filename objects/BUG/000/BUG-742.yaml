@@ -20,13 +20,11 @@ comments:
     help: aida burndown (through-ci) ended with PR-1491 squash-merged by the implementer itself — 'PR-1491 CI passed and was squash-merged' in its own completion report. Two-for-two today: both through-ci drives (headless TASK-1156, interactive BUG-739) delivered auto-merges instead of stopping at the PR. The stop-at-PR contract is currently fictional — /aida-pickup's pr-ship cadence overrides it in every vendor/mode combination tried.
   created_at: 2026-07-18T19:27:14.395580203Z
   modified_at: 2026-07-18T19:27:14.395580203Z
-  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 - id: 019f76b3-300b-7e61-8e92-2c99d6cb9be6
   author: joe
   content: 'Correction of the previous comment (its text was garbled by shell command-substitution — the backticked command executed and spliced a drain-lock refusal into the stored text; disregard that comment). Clean record: Second occurrence, 2026-07-18 12:26 — the operator''s interactive ''aida do BUG-739'' (through-ci) ended with PR-1491 squash-merged by the implementer itself, per its own completion report. Two-for-two today: both through-ci drives (headless TASK-1156, interactive BUG-739) delivered auto-merges instead of stopping at the PR. The stop-at-PR contract is currently fictional — /aida-pickup''s pr-ship cadence overrides it in every vendor/mode combination tried so far.'
   created_at: 2026-07-18T19:28:02.571139523Z
   modified_at: 2026-07-18T19:28:02.571139523Z
-  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 history:
 - id: 019f76ca-f2f0-7441-ac9a-3af0bcf0787b
   author: aida-auto-bump
@@ -35,12 +33,6 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
-processing_record:
-- id: 019f76ca-f2f6-73c0-ae7c-3ff81fc446ad
-  timestamp: 2026-07-18T19:53:59.798902139Z
-  agent: implementer
-  commit_sha: 0cd4a7417c822b0a4443c329d5898e01ddc13bf6
-  summary: Completed via merge 0cd4a741
 implementation_info:
   implemented: false
   completed_at: 2026-07-18T19:53:59.584492718Z
