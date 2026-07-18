@@ -1,11 +1,4 @@
 - user_id: claude-advisor-1
-  requirement_id: 019f69cf-af36-7fa1-9e39-37ca642662e4
-  position: 5000
-  added_by: claude-advisor-1
-  note: Promoted from finding TASK-1-118 via `aida findings promote`
-  added_at: 2026-07-18T18:16:22.748315363Z
-  for_role: implementer
-- user_id: claude-advisor-1
   requirement_id: 019f75b6-5cc7-72e0-bf07-ba6d6873962e
   position: 9000
   added_by: claude-advisor-1
