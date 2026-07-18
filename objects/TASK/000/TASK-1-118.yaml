@@ -3,12 +3,12 @@ spec_id: TASK-1-118
 agreed_id: TASK-142
 title: pr ship squash subject derives from branch HEAD commit — a merge commit yields an uninformative main-history subject
 description: 'PR #1420: after a sibling merged main into the feature branch, ''aida pr ship 1420'' squash-merged with subject ''Merge main into task-1020 (bring current + pick up the CLI-manual drift-guard fix) (TASK-1020)'' — the repair layer preserved the spec ID (auto-bump worked) but the base subject came from the branch''s HEAD commit (the merge commit) rather than the PR title, so main history lost the descriptive feat(autopilot) subject. Suggest: prefer the PR title (or first non-merge commit subject) as the squash-subject base.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-16T07:24:06.326262920Z
-modified_at: 2026-07-18T19:58:30.941131081Z
+modified_at: 2026-07-18T21:07:34.033686876Z
 req_type: Task
 tags:
 - batch:papercuts-0718
