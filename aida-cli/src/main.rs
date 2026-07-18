@@ -69548,17 +69548,12 @@ fn handle_queue_command(
                         .unwrap_or_else(|| std::path::PathBuf::from("."));
                     active_lease_for_cwd(&project_root, &cwd)
                 });
-            let for_scope_routing: Option<String> = if *no_scope {
-                None
-            } else if let Some(s) = scope.as_deref() {
-                Some(s.to_string())
-            } else if for_session.is_some() {
-                // --for-session is the more specific axis; don't also
-                // auto-add a scope filter unless the user asked for it.
-                None
-            } else {
-                active_lease_for_routing.as_ref().map(|l| l.scope.clone())
-            };
+            let for_scope_routing: Option<String> = queue_add_for_scope_routing(
+                *no_scope,
+                scope.as_deref(),
+                for_session.as_deref(),
+                active_lease_for_routing.as_ref(),
+            );
             let for_session_routing: Option<String> = for_session.clone();
 
             // Resolve requirement ID + the blocker-warning graph subset. The
@@ -73646,9 +73641,21 @@ fn derive_scope_from_entry(
         }
     }
     if let Some(s) = &entry.for_scope {
+        // BUG-739: `harness-worktree` is a generic Claude harness lease, not a
+        // work scope. Older queue entries may have been auto-stamped with it;
+        // ignore that legacy value so `queue work` falls back to the spec id
+        // instead of trying to start inside the shared harness checkout.
+        // trace:BUG-739 | ai:codex
+        if s.eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE) {
+            return derive_scope_from_req_id(req);
+        }
         let target = parse_review_scope(s);
         return (s.to_uppercase(), target);
     }
+    derive_scope_from_req_id(req)
+}
+
+fn derive_scope_from_req_id(req: &aida_core::Requirement) -> (String, Option<(ReviewForge, u64)>) {
     // BUG-431 #1: a child story's session scopes to the STORY'S OWN id, not
     // its parent epic. Previously this fell back to `derive_parent_epic_label`,
     // so every same-epic story under one drain (`aida queue work next N`) tried
@@ -73670,6 +73677,35 @@ fn derive_scope_from_entry(
         .unwrap_or_else(|| "scope".to_string());
     let target = parse_review_scope(&fallback);
     (fallback, target)
+}
+
+fn queue_add_for_scope_routing(
+    no_scope: bool,
+    explicit_scope: Option<&str>,
+    for_session: Option<&str>,
+    active_lease: Option<&SessionLease>,
+) -> Option<String> {
+    if no_scope {
+        None
+    } else if let Some(s) = explicit_scope {
+        Some(s.to_string())
+    } else if for_session.is_some() {
+        // --for-session is the more specific axis; don't also auto-add a scope
+        // filter unless the user asked for it.
+        None
+    } else {
+        // BUG-739: the generic harness-worktree lease only means "this shell is
+        // in a shared Claude harness checkout"; it must not become queue
+        // routing state. Explicit `--scope harness-worktree` remains honored by
+        // the explicit_scope branch above.
+        // trace:BUG-739 | ai:codex
+        active_lease
+            .filter(|l| {
+                !l.scope
+                    .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
+            })
+            .map(|l| l.scope.clone())
+    }
 }
 
 /// STORY-42: pick the role for a resolved queue-work plan.
