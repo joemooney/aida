@@ -33918,5 +33918,17 @@ operations:
       Additional acceptance (operator, 2026-07-18):
       - With the aida() shell wrapper active, `aida worktree enter <SPEC>` leaves the shell cd'd in AND with CARGO_TARGET_DIR exported - no manual source step. Implement by extending the same emitted-and-auto-evaled shell payload that already carries the cd (session-env.sh is a single export line). Keep the no-double-eval convention (TASK-667).
       - The printed `source .aida/session-env.sh` instruction appears only for wrapper-less invocations where the emitted shell was not evaled.
-clock: 3164
+- id: 019f7680-8a32-72f3-b3aa-19ad8829a171
+  target_id: 019f7680-8417-70e2-8b09-619feceb9609
+  author: aida
+  node_id: '1'
+  lamport: 3165
+  timestamp: 2026-07-18T18:32:43.314359318Z
+  kind: !Create
+    title: aida do <spec> refuses on the git-canonical backend — 'Command not yet supported for git backend' (wired only into legacy dispatch)
+    description: 'Observed 2026-07-18, first real-world invocation of the TASK-1155 verb: aida do TASK-1156 in this repo (git-canonical storage) exits 1 with ''Command not yet supported for git backend''. TASK-1155 wired Command::Do only into the legacy centralized dispatch (main.rs); handle_git_backend_command has no arm for it, so it falls into the catch-all refusal. Fix: mirror the Zen arm in git_backend_cmd.rs — construct Storage from store_path and delegate to run_do_drive. Acceptance: aida do <SPEC> on a git-canonical project launches the through-ci drive; regression coverage in the git-backend dispatch.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3165
 node_id: '1'
