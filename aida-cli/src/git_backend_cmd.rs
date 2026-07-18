@@ -557,6 +557,14 @@ pub(crate) fn handle_git_backend_command(
                 *dry_run,
             );
         }
+        // BUG-735: TASK-1155 wired `aida do` only into the legacy dispatch, so
+        // the git-canonical path fell through to the catch-all refusal. Mirror
+        // the Zen arm: same storage, same thin delegate.
+        // trace:BUG-735 | ai:claude
+        Command::Do { spec } => {
+            let storage = Storage::new(store_path.to_path_buf());
+            return run_do_drive(&storage, spec);
+        }
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
