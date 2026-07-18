@@ -22,7 +22,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T14:51:53.415231403Z
-modified_at: 2026-07-18T14:51:53.415231403Z
+modified_at: 2026-07-18T18:26:43.848764056Z
 req_type: Task
 tags:
 - papercut dx aida:worktree from-dogfood
+comments:
+- id: 019f767b-0e08-7ab1-b55a-2a61ef9c4bba
+  author: joe
+  content: 'Operator follow-up 2026-07-18 (binding — treat as an additional acceptance criterion): the aida() wrapper should make the source step unnecessary, not just better-explained. The enter path already emits cd ''<path>'' for the wrapper to auto-eval; extend the SAME emitted payload with the session env export (CARGO_TARGET_DIR — the entire content of session-env.sh). Acceptance: after a wrapper-evaled aida worktree enter <SPEC>, the shell is cd''d in AND has CARGO_TARGET_DIR set with NO manual source step; the printed source instruction appears ONLY when the emitted shell is not being evaled (wrapper-less invocation). Keep the no-double-eval convention (TASK-667).'
+  created_at: 2026-07-18T18:26:43.848764056Z
+  modified_at: 2026-07-18T18:26:43.848764056Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
