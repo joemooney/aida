@@ -451,3 +451,11 @@
   added_by: joe
   note: unparked by `aida questions answer`
   added_at: 2026-07-15T02:01:06.761168861Z
+- user_id: joe
+  requirement_id: 019f5a06-a375-79b1-80c6-8fdf2e6054fe
+  position: 349000
+  added_by: joe
+  added_at: 2026-07-18T01:13:39.825509406Z
+  for_role: advisor
+  for_scope: harness-worktree
+  added_by_machine: imac
