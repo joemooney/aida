@@ -6,12 +6,12 @@ description: |-
   Observed 2026-07-18 shipping PR-1489 (head task-1155-work, base main): step 1 printed "keeping branch `main` after merge — open child PR(s): #1489 stacked on it — retarget them to main first (gh pr edit 1489 --base main), then delete `main`". Every part is wrong for this ordinary PR: the branch being merged/deleted is task-1155-work not main; #1489 is the PR being shipped, not a stacked child; and the suggested fix retargets the PR to the base it already has, followed by advice to delete main. The stacked-child detection appears to swap head/base (treating the PR's base as the to-be-deleted branch and the PR itself as its child).
 
   Acceptance: shipping a plain single PR based on main emits no stacked-PR warning; a genuinely stacked child (another open PR whose base IS the branch being deleted) still warns, naming the correct branch and child. Unit test both cases.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:16:16.429295950Z
-modified_at: 2026-07-18T19:58:26.001342910Z
+modified_at: 2026-07-18T20:30:49.133165023Z
 req_type: Bug
 tags:
 - aida:pr severity:cosmetic from-dogfood
