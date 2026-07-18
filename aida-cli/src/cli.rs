@@ -6662,6 +6662,12 @@ pub enum AgentNewCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Do one spec: implement it, wait for CI, then stop at the PR checkpoint.
+    Do {
+        /// Requirement ID (UUID or SPEC-ID) to implement.
+        spec: String,
+    },
+
     /// Add a new requirement
     Add {
         /// Title, positional — the newcomer-friendly form: `aida add "Add a task
@@ -10986,6 +10992,17 @@ mod tests {
                 assert_eq!(slower_than, Some(500));
             }
             other => panic!("expected Usage command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1155 trace:ADR-11 | ai:codex
+    #[test]
+    fn do_command_parses_spec_positional() {
+        let cli = Cli::try_parse_from(["aida", "do", "TASK-1155"])
+            .expect("`aida do <spec>` should parse");
+        match cli.command {
+            Command::Do { spec } => assert_eq!(spec, "TASK-1155"),
+            other => panic!("expected Do command, got {other:?}"),
         }
     }
 

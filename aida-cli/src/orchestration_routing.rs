@@ -88,6 +88,12 @@ pub(crate) fn routing_table() -> Vec<PerSpecDriver> {
                         come for free from the engine (TASK-1049).",
         },
         PerSpecDriver {
+            name: "aida do",
+            routing: EngineRouting::SubprocessAutoComplete,
+            rationale: "Self-invokes `queue work --auto-complete=through-ci` (phases 1-2); \
+                        stops at the ready-PR checkpoint by design (TASK-1155 / ADR-11).",
+        },
+        PerSpecDriver {
             name: "aida queue integrate",
             routing: EngineRouting::SubprocessAutoComplete,
             rationale: "Self-invokes `queue work --auto-complete --from-pr`, re-entering the \
@@ -113,6 +119,7 @@ mod tests {
     const KNOWN_DRIVERS: &[&str] = &[
         "aida queue work --auto-complete",
         "aida zen",
+        "aida do",
         "aida queue integrate",
         "aida burndown",
     ];

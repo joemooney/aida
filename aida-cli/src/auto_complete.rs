@@ -1566,6 +1566,91 @@ fn finish_success(
     }
 }
 
+// trace:TASK-1155 trace:ADR-11 | ai:codex
+fn render_through_ci_checkpoint(spec: &str, pr_number: Option<u32>) -> String {
+    let pr = pr_number
+        .map(|n| format!("PR-{n}"))
+        .unwrap_or_else(|| "PR-N".to_string());
+    let review_cmd = if let Some(n) = pr_number {
+        format!("aida queue work PR-{n} --for reviewer")
+    } else {
+        "aida queue work PR-N --for reviewer".to_string()
+    };
+    let merge_cmd = if let Some(n) = pr_number {
+        format!("gh pr merge {n} --squash --delete-branch && aida pull")
+    } else {
+        "gh pr merge <N> --squash --delete-branch && aida pull".to_string()
+    };
+    format!(
+        "{spec} PR checkpoint\n\
+         PR: {pr}\n\
+         CI: green\n\
+         Review: routed to reviewer queue\n\
+         Next: {review_cmd}\n\
+         After review: {merge_cmd}"
+    )
+}
+
+/// The `through-ci` variant is a ready-PR checkpoint, not a full ship. Keep
+/// the full-pipeline success epilogue unchanged while giving `aida do` and
+/// `--auto-complete=through-ci` the next-step report the user needs.
+// trace:TASK-1155 trace:ADR-11 | ai:codex
+fn finish_through_ci_success(
+    dispatched: &str,
+    credited: &str,
+    json: bool,
+    start: &Instant,
+    durations: Vec<(Phase, u128)>,
+    ctx: &HintContext,
+) -> OrchestrationResult {
+    let elapsed = start.elapsed().as_millis();
+    let shipped_spec_id = (credited != dispatched).then(|| credited.to_string());
+    if json {
+        let mut extra: Vec<(&str, String)> = Vec::new();
+        if let Some(id) = shipped_spec_id.as_deref() {
+            extra.push(("shipped", id.to_string()));
+        }
+        extra.push(("variant", "through-ci".to_string()));
+        if let Some(pr) = ctx.pr_number {
+            extra.push(("pr", format!("PR-{pr}")));
+        }
+        let borrowed: Vec<(&str, &str)> = extra.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        println!(
+            "{}",
+            phase_event(
+                "auto-complete",
+                "success",
+                dispatched,
+                elapsed,
+                Some(0),
+                &borrowed
+            )
+        );
+    } else {
+        eprintln!();
+        eprintln!(
+            "{} {} ready for review ({})",
+            glyph(crate::glyphs::Glyph::Check).green().bold(),
+            credited.bold(),
+            fmt_duration(elapsed)
+        );
+        eprintln!("{}", render_through_ci_checkpoint(credited, ctx.pr_number));
+    }
+    OrchestrationResult {
+        exit_code: 0,
+        failed_phase: None,
+        failure: None,
+        phase_durations: durations,
+        total_ms: elapsed,
+        punt_reason: None,
+        shipped_spec_id,
+        escalation: None,
+        inconclusive_reason: None,
+        shelved_reason: None,
+        held_reason: None,
+    }
+}
+
 /// Print the punt epilogue and build a *non-failure* terminal
 /// [`OrchestrationResult`] (STORY-276). A headless implementer that hits a
 /// design-fork it cannot safely resolve invokes `/aida-punt`, parking the
@@ -2836,7 +2921,8 @@ pub(crate) fn orchestrate_with_resume(
         emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     }
     if variant.last_phase() <= 2 {
-        return finish_success(spec, &credited, json, &start, durations);
+        let ctx = driver.hint_context();
+        return finish_through_ci_success(spec, &credited, json, &start, durations, &ctx);
     }
 
     // Phase 3 — reviewer session. lifecycle:no-review skips only this model
@@ -6434,6 +6520,19 @@ mod tests {
         );
         let phases: Vec<Phase> = result.phase_durations.iter().map(|(p, _)| *p).collect();
         assert_eq!(phases, vec![Phase::Implementer, Phase::Ci]);
+    }
+
+    // trace:TASK-1155 trace:ADR-11 | ai:codex
+    #[test]
+    fn through_ci_checkpoint_names_pr_ci_review_and_merge_next_steps() {
+        let rendered = render_through_ci_checkpoint("TASK-1155", Some(123));
+        assert!(rendered.contains("TASK-1155 PR checkpoint"));
+        assert!(rendered.contains("PR: PR-123"));
+        assert!(rendered.contains("CI: green"));
+        assert!(rendered.contains("Review: routed to reviewer queue"));
+        assert!(rendered.contains("Next: aida queue work PR-123 --for reviewer"));
+        assert!(rendered
+            .contains("After review: gh pr merge 123 --squash --delete-branch && aida pull"));
     }
 
     #[test]
