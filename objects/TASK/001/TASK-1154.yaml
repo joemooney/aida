@@ -3,12 +3,12 @@ spec_id: TASK-1154
 agreed_id: TASK-1154
 title: Add make build-fast (CARGO_INCREMENTAL=1) for ~43% faster iteration rebuilds
 description: 'Measured 2026-07-17: an incremental release rebuild after a one-function edit is 55.7s vs ~98s non-incremental (-43%). The build is codegen-bound (cargo check front-end is only 6.5s; mold link -1s; crate-split ~0). Add a build-fast target that sets CARGO_INCREMENTAL=1 for local iteration. Kept SEPARATE from build-release so the shipped-release path stays pristine (incremental slightly reduces cross-CGU optimization); actual releases build fresh via CI release.yml anyway.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T00:52:57.992852320Z
-modified_at: 2026-07-18T00:53:41.529339316Z
+modified_at: 2026-07-18T01:12:17.969970352Z
 req_type: Task
 tags:
 - build-time
@@ -20,3 +20,21 @@ comments:
   content: Commit 98a73b238 references this requirement
   created_at: 2026-07-18T00:53:41.529339316Z
   modified_at: 2026-07-18T00:53:41.529339316Z
+history:
+- id: 019f72c8-012c-78f3-9fd1-3376e0012289
+  author: aida-auto-bump
+  timestamp: 2026-07-18T01:12:17.964086887Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f72c8-0131-79a0-b0d2-b9f3622aee12
+  timestamp: 2026-07-18T01:12:17.969969648Z
+  agent: aida
+  commit_sha: af434087a235e0802abbb6a96e817719b2ae626a
+  summary: Completed via merge af434087
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T01:12:17.765675357Z
+  completion_sha: af434087a235e0802abbb6a96e817719b2ae626a
