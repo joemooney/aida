@@ -34111,5 +34111,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3175
+- id: 019f768d-d369-7630-ac65-00c572c4e1e3
+  target_id: 019f768d-d04f-72b2-80d9-1fa77aa1bff5
+  author: aida
+  node_id: '1'
+  lamport: 3176
+  timestamp: 2026-07-18T18:47:14.025014087Z
+  kind: !Create
+    title: headless codex implementer sessions always read STALE/dead — lease liveness never sees the codex exec child process
+    description: 'Two verified false-negatives on 2026-07-18: (1) ~07:40, BUG-730 drive 1m44s in — aida ps reported ''dormant / dead process, uncommitted work in aida-pool-aida-2, salvage-commit then rebrief'' while the codex implementer was actively working (it went on to ship PR-1488); (2) ~11:46, TASK-1156 drive — aida status TASK-1156 reported ''STALE — no live process, In-Progress flag orphaned'' at the same moment codex exec (pids 2297601/2297608) was running cargo test in aida-pool-aida-0 with the drive log updating to the second. Hypothesis: the session lease records no pid (aida ps shows pid ''-'' for these sessions) or records the orchestrator pid rather than the spawned codex exec child, so the liveness probe finds nothing alive. Claude-implementer sessions don''t show this signature. Impact: operators are told to salvage/end sessions that are mid-flight — following the hint would kill live work. Acceptance: a running headless codex implementer reads ● live in aida ps / aida status <spec>, with pid+elapsed populated; a genuinely dead one still reads STALE; regression covers the vendor-codex spawn path recording the child pid on the lease.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3176
 node_id: '1'
