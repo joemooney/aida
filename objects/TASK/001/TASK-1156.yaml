@@ -2,18 +2,13 @@ id: 019f75b6-5cc7-72e0-bf07-ba6d6873962e
 spec_id: TASK-1156
 agreed_id: TASK-1156
 title: 'worktree enter: Next-block is misleading — stale cd, unexplained source, premature session-end, and no actual next action'
-description: |2-
-
-
-  Additional acceptance (operator, 2026-07-18):
-  - With the aida() wrapper active, `aida worktree enter <SPEC>` leaves the shell cd'd in AND with CARGO_TARGET_DIR exported — no manual source step. Implement by extending the same emitted-and-auto-evaled shell payload that carries the cd (the whole of session-env.sh is one export line). Keep the no-double-eval convention (TASK-667).
-  - The printed `source .aida/session-env.sh` instruction appears only for wrapper-less invocations where the emitted shell was not evaled.
+description: ''
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T14:51:53.415231403Z
-modified_at: 2026-07-18T18:26:54.953694669Z
+modified_at: 2026-07-18T18:27:07.079508928Z
 req_type: Task
 tags:
 - papercut dx aida:worktree from-dogfood
