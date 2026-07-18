@@ -33200,7 +33200,6 @@ fn pr_ship_handler(
     // BUG-574: skipped entirely when the PR is already merged — the activity
     // log for the merge step was already recorded as Skipped above, and the
     // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
-    let delete_branch = !branch_in_sibling;
     if !already_merged {
         if branch_in_sibling {
             eprintln!(
@@ -33249,32 +33248,53 @@ fn pr_ship_handler(
             &mut merge_sink,
         ) {
             let stderr_text = format!("{e:#}");
+            let mut probe_sink = crate::network_retry::StderrSink;
+            if pr_ship::merge_error_landed_despite_failure(pr_is_merged_with_sink(
+                &project_root,
+                pr_number as u32,
+                &mut probe_sink,
+            )) {
+                eprintln!(
+                    "  {} merge command reported an error after PR-{} landed; continuing with post-merge sync",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    pr_number
+                );
+                eprintln!("    {}", stderr_text);
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Merge { delete_branch },
+                    &StepOutcome::Ok,
+                );
+            } else {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Merge { delete_branch },
+                    &StepOutcome::Failed(stderr_text.clone()),
+                );
+                let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
+                eprintln!(
+                    "{} merge failed: {}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    stderr_text
+                );
+                eprintln!("  {}", hint);
+                return Err(e.context("`gh pr merge` failed"));
+            }
+        } else {
+            eprintln!(
+                "  {} merged PR-{}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                pr_number
+            );
             log_ship_activity(
                 &main_worktree,
                 Some(pr_number),
                 &ShipStep::Merge { delete_branch },
-                &StepOutcome::Failed(stderr_text.clone()),
+                &StepOutcome::Ok,
             );
-            let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
-            eprintln!(
-                "{} merge failed: {}",
-                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                stderr_text
-            );
-            eprintln!("  {}", hint);
-            return Err(e.context("`gh pr merge` failed"));
         }
-        eprintln!(
-            "  {} merged PR-{}",
-            crate::glyph(crate::glyphs::Glyph::Check).green(),
-            pr_number
-        );
-        log_ship_activity(
-            &main_worktree,
-            Some(pr_number),
-            &ShipStep::Merge { delete_branch },
-            &StepOutcome::Ok,
-        );
     }
 
     // STORY-439: ship-side calibration capture. Resolve every spec the PR
@@ -34654,6 +34674,37 @@ mod pr_ship_environment_tests {
             .to_string();
         assert!(err.contains("uncommitted changes"), "{err}");
         assert_eq!(current_git_branch(tmp.path()).unwrap(), "stale-feature");
+    }
+
+    #[test]
+    fn branch_held_by_sibling_worktree_disables_merge_delete_branch() {
+        // BUG-732: this is the normal `aida session start` shape. Passing
+        // `--delete-branch` to `gh pr merge` makes the remote squash merge land
+        // and then fail local branch cleanup because the branch is checked out
+        // by the sibling worktree.
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        let sibling = tmp.path().join("feature-worktree");
+        git(
+            tmp.path(),
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                "-b",
+                "feature-branch",
+                sibling.to_str().unwrap(),
+            ],
+        );
+
+        let branch_in_sibling =
+            branch_in_sibling_worktree(tmp.path(), "feature-branch", tmp.path());
+        assert!(branch_in_sibling);
+
+        let delete_branch = pr_ship::should_delete_branch(branch_in_sibling, 0, 0, false);
+        assert!(!delete_branch);
+        let merge_args = pr_ship::merge_args(732, delete_branch, None);
+        assert!(!merge_args.iter().any(|arg| arg == "--delete-branch"));
     }
 }
 

@@ -296,6 +296,14 @@ pub fn should_block_ship_merge(in_orchestrated_drive: bool, override_allow: bool
     in_orchestrated_drive && !override_allow
 }
 
+/// BUG-732: after a forge merge command returns non-zero, decide whether the
+/// caller should keep going because a fresh forge-state probe shows the squash
+/// merge actually landed and only post-merge cleanup failed.
+// trace:BUG-732 | ai:codex
+pub fn merge_error_landed_despite_failure(pr_is_merged_after_error: Option<bool>) -> bool {
+    matches!(pr_is_merged_after_error, Some(true))
+}
+
 /// Build the `gh pr merge` argv. Kept pure so SPEC-410 can pin the
 /// contract that the wrapper passes `--subject` when it repairs a squash
 /// subject.
@@ -621,6 +629,16 @@ mod tests {
         assert!(!should_block_ship_merge(true, true));
         // Override with no drive context is a no-op → still allowed.
         assert!(!should_block_ship_merge(false, true));
+    }
+
+    #[test]
+    fn merge_error_landed_despite_failure_only_when_reprobe_confirms_merged() {
+        // BUG-732: a non-zero `gh pr merge` can mean the remote squash merge
+        // landed but a post-merge cleanup step failed. Only continue when a
+        // fresh PR-state probe confirms MERGED; unknown remains a real failure.
+        assert!(merge_error_landed_despite_failure(Some(true)));
+        assert!(!merge_error_landed_despite_failure(Some(false)));
+        assert!(!merge_error_landed_despite_failure(None));
     }
 
     #[test]
