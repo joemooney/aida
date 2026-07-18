@@ -13,12 +13,12 @@ description: |-
   - Answering a decision_request with a defer resolution leaves the spec off every queue and on the deferred shelf with its trigger.
   - evaluate_unpark returns Parked for deferred:true specs (unless undeferred first).
   - Regression test: answer=defer then assert not queued + Pickability::Parked.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T05:38:34.146439147Z
-modified_at: 2026-07-18T05:38:34.146439147Z
+modified_at: 2026-07-18T14:38:57.651527048Z
 req_type: Bug
 tags:
 - aida:questions substrate-gap from-dogfood
