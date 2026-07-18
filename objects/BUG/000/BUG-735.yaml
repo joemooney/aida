@@ -3,12 +3,30 @@ spec_id: BUG-735
 agreed_id: BUG-735
 title: aida do <spec> refuses on the git-canonical backend — 'Command not yet supported for git backend' (wired only into legacy dispatch)
 description: 'Observed 2026-07-18, first real-world invocation of the TASK-1155 verb: aida do TASK-1156 in this repo (git-canonical storage) exits 1 with ''Command not yet supported for git backend''. TASK-1155 wired Command::Do only into the legacy centralized dispatch (main.rs); handle_git_backend_command has no arm for it, so it falls into the catch-all refusal. Fix: mirror the Zen arm in git_backend_cmd.rs — construct Storage from store_path and delegate to run_do_drive. Acceptance: aida do <SPEC> on a git-canonical project launches the through-ci drive; regression coverage in the git-backend dispatch.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:32:41.751944325Z
-modified_at: 2026-07-18T18:32:41.751944325Z
+modified_at: 2026-07-18T18:36:45.758801744Z
 req_type: Bug
 tags:
 - aida:do papercut from-dogfood lifecycle:trivial
+history:
+- id: 019f7684-3d38-71d0-a996-7a23178c8bb8
+  author: aida-auto-bump
+  timestamp: 2026-07-18T18:36:45.752857615Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f7684-3d3e-7802-a337-8b5516bbc068
+  timestamp: 2026-07-18T18:36:45.758800669Z
+  agent: aida
+  commit_sha: 63a8d3d3e993f65e6c8e3a20e17f8ba424743304
+  summary: Completed via merge 63a8d3d3
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T18:36:45.548486143Z
+  completion_sha: 63a8d3d3e993f65e6c8e3a20e17f8ba424743304
