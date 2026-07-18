@@ -1,0 +1,8 @@
+- user_id: claude-advisor-1
+  requirement_id: 019f73bb-c822-7fd3-b165-139cdc619178
+  position: 1000
+  added_by: claude-advisor-1
+  added_at: 2026-07-18T05:38:47.660305476Z
+  for_role: implementer
+  for_scope: harness-worktree
+  added_by_machine: imac
