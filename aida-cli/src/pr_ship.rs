@@ -471,6 +471,46 @@ pub enum StepOutcome {
     Failed(String),
 }
 
+/// Decision for no-arg `aida pr ship` after probing the current branch's
+/// open PR. Only a definitive "no change" may fall through to create; lookup
+/// failures are inconclusive because the branch may already have an open PR.
+// trace:TASK-141 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BranchPrResolution {
+    Found(u64),
+    Create,
+    LookupFailed(String),
+}
+
+/// Preserve the forge lookup's transient-vs-definitive distinction for
+/// `aida pr ship` resume. The old Option collapse treated auth/network/parse
+/// failures the same as "no PR", then tried `gh pr create` and produced the
+/// misleading already-exists failure this task fixes.
+// trace:TASK-141 | ai:codex
+pub fn branch_pr_resolution_from_lookup(lookup: &crate::forge::ChangeLookup) -> BranchPrResolution {
+    match lookup {
+        crate::forge::ChangeLookup::Found(c) => BranchPrResolution::Found(c.id),
+        crate::forge::ChangeLookup::NoChange => BranchPrResolution::Create,
+        crate::forge::ChangeLookup::CliMissing => BranchPrResolution::LookupFailed(
+            "could not resolve an open PR for this branch because the forge CLI is missing; \
+             install/authenticate it or re-run `aida pr ship <N>` with the PR number"
+                .to_string(),
+        ),
+        crate::forge::ChangeLookup::CliFailed(reason) => BranchPrResolution::LookupFailed(format!(
+            "could not resolve an open PR for this branch; lookup failed: {}. \
+             Re-run `aida pr ship <N>` with the existing PR number, or fix the forge CLI lookup.",
+            reason.trim()
+        )),
+        crate::forge::ChangeLookup::Unreachable(reason) => {
+            BranchPrResolution::LookupFailed(format!(
+                "could not resolve an open PR for this branch because the forge API was unreachable: {}. \
+                 Re-run `aida pr ship <N>` with the existing PR number, or retry once the API is reachable.",
+                reason.trim()
+            ))
+        }
+    }
+}
+
 /// Build a single JSONL activity-log entry (STORY-405 composes here).
 /// `now_iso` is injected so tests can pin the timestamp; production
 /// callers pass `chrono::Utc::now().to_rfc3339()`.
@@ -1105,6 +1145,50 @@ mod tests {
         assert_eq!(v["status"], "skipped");
         assert_eq!(v["detail"], "--no-pull");
         assert!(v.get("pr").is_none());
+    }
+
+    #[test]
+    fn branch_pr_resolution_uses_existing_open_pr() {
+        // TASK-141: no-arg `pr ship` resumes the branch PR when lookup finds it.
+        let lookup = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 1420,
+            url: "https://github.com/joemooney/aida/pull/1420".to_string(),
+            branch: "task-1020".to_string(),
+            base: "main".to_string(),
+            title: Some("fix".to_string()),
+        });
+        assert_eq!(
+            branch_pr_resolution_from_lookup(&lookup),
+            BranchPrResolution::Found(1420)
+        );
+    }
+
+    #[test]
+    fn branch_pr_resolution_creates_only_after_definitive_no_change() {
+        // TASK-141: only a clean empty lookup means it is safe to create.
+        assert_eq!(
+            branch_pr_resolution_from_lookup(&crate::forge::ChangeLookup::NoChange),
+            BranchPrResolution::Create
+        );
+    }
+
+    #[test]
+    fn branch_pr_resolution_does_not_create_after_lookup_failure() {
+        // TASK-141: auth/network/parser failures are inconclusive; falling
+        // through to create hides the real resume problem behind gh's
+        // "a pull request already exists" error.
+        for lookup in [
+            crate::forge::ChangeLookup::CliMissing,
+            crate::forge::ChangeLookup::CliFailed("auth required".to_string()),
+            crate::forge::ChangeLookup::Unreachable("connection refused".to_string()),
+        ] {
+            match branch_pr_resolution_from_lookup(&lookup) {
+                BranchPrResolution::LookupFailed(msg) => {
+                    assert!(msg.contains("aida pr ship <N>"), "{msg}");
+                }
+                other => panic!("expected LookupFailed, got {other:?}"),
+            }
+        }
     }
 
     #[test]
