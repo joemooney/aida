@@ -1,0 +1,14 @@
+id: 019f7677-c0d5-7a11-9a08-c166c0535ce6
+spec_id: BUG-734
+agreed_id: BUG-734
+title: session end on a worktree-less lease scans an EMPTY worktree path for live processes — refused ending stale STORY-760 reviewer lease citing '2 live claude processes inside worktree ' (blank)
+description: 'Observed 2026-07-18: lease 019f594f (STORY-760, reviewer, branch gitlab/aida-store) shows worktree=<empty> in aida session leases. aida session end 019f594f --yes refused: ''2 live claude processes inside worktree  — would leak with (deleted) cwd'' — note the blank worktree name in the message. Suspect the live-process guard evaluates the empty/unset worktree path (resolving to the main checkout or CWD), so any live claude session anywhere blocks ending a worktree-less lease. Expected: a lease with no worktree needs no process-leak check (nothing to remove) — just delete the lease record. Unconfirmed; needs a look at the session-end guard path.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-18T18:23:07.477949662Z
+modified_at: 2026-07-18T18:23:07.477949662Z
+req_type: Bug
+tags:
+- aida:session kind:observation from-dogfood
