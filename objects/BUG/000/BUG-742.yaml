@@ -3,12 +3,12 @@ spec_id: BUG-742
 agreed_id: BUG-742
 title: 'through-ci drive: the headless implementer merges the PR itself — /aida-pickup''s ''aida pr ship'' instruction overrides the stop-at-PR contract'
 description: 'Observed 2026-07-18 driving TASK-1156 with queue work --auto-complete=through-ci --no-human=both: the codex implementer, briefed via /aida-pickup, followed the skill''s standard cadence (''use aida pr ship and exit after the IMPLEMENTER COMPLETE banner'') and ran the merge-capable pr ship — watched CI and squash-merged PR-1490 itself. The orchestrator then found ''PR-1490 already merged by the implementer'' and completed, skipping its CI/review/merge phases. Net effect: through-ci (whose whole point is stop-before-merge so a human reviews) delivered an unreviewed auto-merge — the operator''s review step silently vanished. The mode contract must reach the implementer brief: under through-ci (and through-merge variants short of full), the pickup instructions must say open the PR and STOP (aida pr open / pr ship --no-merge), and/or pr ship should refuse the merge leg when the ambient drive mode is a stop-early variant (env-visible to the implementer session). Contrast: the interactive guided-implement run for TASK-1155 explicitly did not merge, because that skill says keystone merge stays human. Acceptance: a through-ci drive ends with an OPEN PR and a checkpoint report; an implementer attempting pr ship inside such a drive gets the merge leg refused with the reason; regression test on the mode-to-brief plumbing.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T19:00:24.788960176Z
-modified_at: 2026-07-18T19:29:00.116604107Z
+modified_at: 2026-07-18T19:53:59.798902943Z
 req_type: Bug
 tags:
 - aida:queue auto-complete from-dogfood
@@ -27,3 +27,21 @@ comments:
   created_at: 2026-07-18T19:28:02.571139523Z
   modified_at: 2026-07-18T19:28:02.571139523Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+history:
+- id: 019f76ca-f2f0-7441-ac9a-3af0bcf0787b
+  author: aida-auto-bump
+  timestamp: 2026-07-18T19:53:59.792883804Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f76ca-f2f6-73c0-ae7c-3ff81fc446ad
+  timestamp: 2026-07-18T19:53:59.798902139Z
+  agent: implementer
+  commit_sha: 0cd4a7417c822b0a4443c329d5898e01ddc13bf6
+  summary: Completed via merge 0cd4a741
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T19:53:59.584492718Z
+  completion_sha: 0cd4a7417c822b0a4443c329d5898e01ddc13bf6
