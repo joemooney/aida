@@ -434,12 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019f0659-956b-71f0-becc-56d497525329
-  position: 348000
-  added_by: joe
-  note: unparked by `aida questions answer`
-  added_at: 2026-07-15T02:01:06.761168861Z
-- user_id: joe
   requirement_id: 019f5a06-a375-79b1-80c6-8fdf2e6054fe
   position: 352000
   added_by: joe
