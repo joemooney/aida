@@ -34099,5 +34099,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 3174
+- id: 019f7689-cf24-75b1-bb28-48379e259f5f
+  target_id: 019f7689-cc14-7370-a276-a5e6bceba87d
+  author: aida
+  node_id: '1'
+  lamport: 3175
+  timestamp: 2026-07-18T18:42:50.788900851Z
+  kind: !Create
+    title: aida do / queue work --auto-complete launches the interactive implementer without a TTY — late confusing 'stdin is not a terminal' failure instead of an upfront gate
+    description: 'Observed 2026-07-18: aida do TASK-1156 invoked from a non-TTY shell (an agent''s background Bash) proceeded through store pull, lease, worktree, and vendor launch before dying with codex''s ''Error: stdin is not a terminal'' — then parked the spec NeedsAttention. The interactive-implementer requirement is knowable at startup: if stdin/stdout is not a TTY and the implementer phase is interactive (not --no-human=both), fail fast BEFORE taking a lease/worktree, with guidance: ''aida do needs a terminal for the interactive implementer — run it from your shell, or add --no-human for a headless implementer''. Optionally auto-fall-back to headless under AIDA_HEADLESS=1. Acceptance: non-TTY invocation of an interactive drive exits with the actionable message before any lease/worktree is created; a headless flag or env opts into proceeding; regression test.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3175
 node_id: '1'
