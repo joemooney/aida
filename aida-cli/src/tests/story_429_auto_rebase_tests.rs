@@ -18,6 +18,7 @@ fn driver(
         allow_stale_base,
         no_auto_rebase,
         auto_complete::LifecycleSkip::none(),
+        auto_complete::AutoCompleteVariant::Full,
     )
 }
 

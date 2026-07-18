@@ -71,6 +71,13 @@ pub(crate) const TOKEN_ENV: &str = "AIDA_AUTO_COMPLETE_TOKEN";
 /// act in. Unset for a standalone session. trace:TASK-306 | ai:claude
 pub(crate) const PHASE_ENV: &str = "AIDA_AUTO_COMPLETE_PHASE";
 
+/// The `--auto-complete` variant slug (`full` | `through-ci` |
+/// `through-merge` | `skip-build`) in effect for the run, propagated to phase
+/// children so pickup prompts can name the correct stop contract. It is
+/// guidance only; merge authority is enforced by the corroborated orchestrator
+/// context and drain lock.
+pub(crate) const VARIANT_ENV: &str = "AIDA_AUTO_COMPLETE_VARIANT";
+
 /// The `--no-human` mode slug (`reviewer-only` | `both`) in effect for an
 /// `--auto-complete` run, propagated to phase children so the statusline can
 /// show the headless scope alongside the phase. Absent for a fully
