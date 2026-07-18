@@ -60,6 +60,11 @@ const DRAIN_LOCK_FILE: &str = "drain.lock";
 /// Env override: any non-empty / truthy value bypasses the concurrency check.
 const FORCE_ENV: &str = "AIDA_DRAIN_FORCE";
 
+/// Internal env override: a subprocess delegated by a live drain should observe
+/// the parent's lock, not overwrite and release it. User-facing force remains
+/// [`FORCE_ENV`]; this is only for child drives launched by AIDA itself.
+const BORROW_ENV: &str = "AIDA_DRAIN_BORROW";
+
 /// Env override: age (seconds) past which a still-claimed lock is treated as
 /// stale even if its pid happens to be alive (pid-recycle backstop).
 const STALE_SECS_ENV: &str = "AIDA_DRAIN_LOCK_STALE_SECS";
@@ -226,6 +231,13 @@ fn force_requested() -> bool {
         .unwrap_or(false)
 }
 
+/// Is this process an internal child drive borrowing its parent's drain lock?
+fn borrow_requested() -> bool {
+    std::env::var(BORROW_ENV)
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 /// Acquire the global drain lock for `project_root`, launched as `command`.
 ///
 /// On success returns a [`DrainGuard`] that removes the lock on `Drop`. On a
@@ -238,6 +250,31 @@ fn force_requested() -> bool {
 pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<DrainGuard> {
     let path = drain_lock_path(project_root);
     let existing = read_lock(&path);
+
+    // BUG-748: internal delegate drives (notably `queue integrate` shelling out
+    // to `queue work --auto-complete --from-pr`) run while a parent drain still
+    // owns `.aida/drain.lock`. Before this borrow path, those children used
+    // AIDA_DRAIN_FORCE=1, overwrote the parent lock with their own pid, and then
+    // their atexit cleanup removed it. The parent batch kept running without a
+    // live lock, tripping BUG-716's implementer invariant on the next member.
+    // A borrowed guard neither writes nor releases the lock; if no live parent
+    // lock exists, fall through to the normal acquire/refuse path.
+    // trace:BUG-748 | ai:codex
+    if borrow_requested() {
+        if let LockStatus::Running(lock) =
+            classify_lock(existing.clone(), process_probe::pid_is_alive)
+        {
+            return Ok(DrainGuard {
+                path,
+                pid: lock.pid,
+                store_root: None,
+                project_root: project_root.to_path_buf(),
+                heartbeat: None,
+                borrowed: true,
+            });
+        }
+    }
+
     let forced = force_requested();
 
     // STORY-638: BEFORE the local lock, consult the SHARED drain claim on the
@@ -391,6 +428,7 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
                 store_root: store_for_guard,
                 project_root: project_root.to_path_buf(),
                 heartbeat,
+                borrowed: false,
             })
         }
     }
@@ -483,10 +521,16 @@ pub(crate) struct DrainGuard {
     /// Background thread refreshing the shared claim's heartbeat. `None` when
     /// local-only. trace:STORY-638 | ai:claude
     heartbeat: Option<Heartbeat>,
+    /// BUG-748: internal child drives can borrow a parent drain lock. Borrowed
+    /// guards are read-only handles and must never release local/shared state.
+    borrowed: bool,
 }
 
 impl Drop for DrainGuard {
     fn drop(&mut self) {
+        if self.borrowed {
+            return;
+        }
         // Stop the heartbeat thread before releasing, so it can't re-write the
         // claim after we delete it. trace:STORY-638 | ai:claude
         if let Some(hb) = self.heartbeat.take() {
@@ -712,6 +756,52 @@ mod tests {
         // The successor's lock survives our Drop.
         let on_disk = read_lock(&path).expect("successor lock should remain");
         assert_eq!(on_disk.command, "successor");
+    }
+
+    #[test]
+    fn borrow_guard_preserves_parent_lock_on_drop() {
+        // BUG-748: a nested internal drive must be able to run under a parent
+        // drain without overwriting the parent's lock or releasing it when the
+        // child exits. This is the batch/integrator failure mode that left the
+        // next orchestrated implementer without a live lock.
+        let _env = crate::test_env::EnvVarsGuard::set(&[(BORROW_ENV, "1"), (FORCE_ENV, "1")]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = drain_lock_path(root);
+        let parent = acquire_drain_lock(root, "parent batch drain").unwrap();
+        let parent_lock = read_lock(&path).expect("parent lock exists");
+
+        let borrowed = acquire_drain_lock(root, "internal child drive").unwrap();
+        assert_eq!(
+            read_lock(&path).expect("borrowed child must not rewrite lock"),
+            parent_lock
+        );
+        drop(borrowed);
+        assert_eq!(
+            read_lock(&path).expect("borrowed child must not release lock"),
+            parent_lock
+        );
+
+        drop(parent);
+        assert!(
+            !path.exists(),
+            "owning parent guard still releases the lock"
+        );
+    }
+
+    #[test]
+    fn borrow_without_live_parent_falls_back_to_normal_acquire() {
+        // A leaked AIDA_DRAIN_BORROW must not bypass the lock if there is no
+        // live parent to borrow; the command becomes the owner as usual.
+        let _env = crate::test_env::EnvVarGuard::set(BORROW_ENV, "1");
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = drain_lock_path(root);
+        let guard = acquire_drain_lock(root, "standalone drain").unwrap();
+        let on_disk = read_lock(&path).expect("standalone borrow fallback owns lock");
+        assert_eq!(on_disk.command, "standalone drain");
+        drop(guard);
+        assert!(!path.exists(), "fallback owner releases normally");
     }
 
     // ── probe_lock / classify_lock (read-side, TASK-806) ──

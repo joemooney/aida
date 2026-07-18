@@ -78484,6 +78484,11 @@ fn handle_queue_integrate(
             let status = std::process::Command::new(&aida)
                 .current_dir(drive_cwd)
                 .env("AIDA_DRAIN_FORCE", "1")
+                // BUG-748: this is an internal child drive launched under the
+                // integrator's existing drain lock. Borrow that parent lock so
+                // the child does not overwrite and release `.aida/drain.lock`
+                // before the parent loop finishes. trace:BUG-748 | ai:codex
+                .env("AIDA_DRAIN_BORROW", "1")
                 .args(integrate::drive_args(id))
                 .status();
             match status {
