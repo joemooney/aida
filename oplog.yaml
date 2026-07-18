@@ -34183,5 +34183,25 @@ operations:
       - No regression to the no-double-eval convention or the BUG-60 PS1 splice hygiene.
 
       Additional acceptance (operator, 2026-07-18): the PS1 staleness hook ships as part of initial setup, not hand-edited .bashrc — `aida dev shell-init --install` installs (or offers) the prompt wiring inside its managed >>> aida shell helpers <<< block, so a fresh clone + shell-init gets the marker with zero manual profile editing. Migrate/replace the interim hand-added `aida-staleness-marker` block if present.
-clock: 3179
+- id: 019f76c0-cda1-7fb2-9941-688a6cb8bf86
+  target_id: 019f76c0-ca43-74a2-9707-26b43186c10f
+  author: aida
+  node_id: '1'
+  lamport: 3180
+  timestamp: 2026-07-18T19:42:54.881175306Z
+  kind: !Create
+    title: interactive codex launches ignore [agents] bypass=true — operator gets per-command approval prompts despite the recorded bypass posture
+    description: |-
+      Observed 2026-07-18 during the operator's interactive 'aida do BUG-742': codex prompted for approval on every command (e.g. env -u AIDA_AUTO_COMPLETE ... cargo test), despite ~/.aida/agents.toml [agents] bypass = true — the explicit STORY-495 opt-in whose contract is that every supervised launch (aida agent new, session new/start --launch, queue work) runs permission-bypassed. Evidence of the inconsistency on the same day, same machine, same config: headless codex spawns ran 'codex exec --dangerously-bypass-approvals-and-sandbox ...' (bypass honored), while the interactive spawn was bare 'codex /aida-pickup BUG-742' (native prompt-per-command posture). The bypass knob's vendor mapping exists for Claude (--permission-mode=bypassPermissions) and for the headless codex path, but the interactive vendor-codex launch never translates it.
+
+      Fix: map bypass=true to codex's bypass flag (--dangerously-bypass-approvals-and-sandbox, or the least-dangerous equivalent that still covers workspace-write + command approval, e.g. --full-auto if sufficient) on the interactive launch path too; keep the faithful-launcher rule for bypass=false (no flag injected, native posture).
+
+      Acceptance:
+      - With [agents] bypass=true, an interactive vendor-codex drive (aida do / queue work with codex implementer) runs without per-command approval prompts.
+      - With bypass=false, no permission flag is injected for any vendor (native posture preserved).
+      - The flag mapping is covered by a unit test on the codex launch argv for both postures, interactive and exec paths.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3180
 node_id: '1'
