@@ -1,0 +1,23 @@
+id: 019f72d0-ae9e-7981-9c2d-edd0023ae48f
+spec_id: TASK-1155
+agreed_id: TASK-1155
+title: 'aida do <spec>: one discoverable verb — implement in a worktree, stop at the PR, print a next-steps checkpoint'
+description: |-
+  Observed 2026-07-17 during operator dogfood: facing 6 queued items, the operator asked "what command am I supposed to run?" and reached for a guessed verb "aida do <spec>". The current surface is fragmented across aida zen (opaque name, drives fully to a gated merge), aida queue work (interactive worktree setup), aida queue work --auto-complete=through-ci (autonomous, stops at PR — the actual match), aida ship (human-implementer finish), and aida burndown run (drain all). A first/dogfood user cannot tell which to run.
+
+  Add aida do <spec> as the discoverable front door: drive the spec autonomously in an isolated worktree through implement + CI, STOP at the PR (no auto-merge), and print a finish-checkpoint — the PR link, CI/review status, and the exact next command (aida ship / routed-to-reviewer / how to merge). Effectively a friendly, well-named wrapper over the through-ci path with a clear next-steps report. Aligns with the Trojan-horse principle (simple surface, deep machinery underneath). Likely a thin alias + checkpoint renderer over existing orchestrator phases, not new machinery.
+
+  Acceptance:
+  - aida do <approved-spec> drives it autonomously in a fresh worktree through implement + CI, stops before merge.
+  - On stop, prints: PR link, CI status, review routing, and the literal next command to run.
+  - Discoverable in aida --help top-level and aida do --help; zen stays as the power-user/full-auto verb.
+  - No auto-merge (that distinguishes it from zen).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-18T01:21:46.654403362Z
+modified_at: 2026-07-18T01:21:46.654403362Z
+req_type: Task
+tags:
+- dx papercut aida:cli from-dogfood batch:dogfood-0717
