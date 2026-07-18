@@ -22,3 +22,10 @@
   for_role: implementer
   for_scope: harness-worktree
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 019f69c9-67b7-7ed2-ac31-1c87e50d8be2
+  position: 4000
+  added_by: claude-advisor-1
+  note: Promoted from finding TASK-1-117 via `aida findings promote`
+  added_at: 2026-07-18T18:16:19.501803616Z
+  for_role: implementer
