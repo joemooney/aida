@@ -5,10 +5,3 @@
   added_at: 2026-07-18T18:41:03.365930455Z
   for_role: implementer
   added_by_machine: imac
-- user_id: claude-advisor-1
-  requirement_id: 019f5a06-a375-79b1-80c6-8fdf2e6054fe
-  position: 13000
-  added_by: claude-advisor-1
-  added_at: 2026-07-18T18:41:43.148966677Z
-  for_role: implementer
-  added_by_machine: imac
