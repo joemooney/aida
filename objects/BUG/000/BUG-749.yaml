@@ -3,12 +3,12 @@ spec_id: BUG-749
 agreed_id: BUG-749
 title: implementer phase watchdog kills a session that is attached to 'aida pr ship' watching CI — CI-wait counts as no-progress 'degenerate spin'
 description: 'Observed 2026-07-18 on BUG-740 during the papercuts-0718 batch drain: the implementer had committed (750493c51), opened PR-1498, and was attached to aida pr ship watching pending CI — its own transcript says ''The run has been pending long enough that I''m checking the active step again while leaving aida pr ship attached.'' The phase watchdog then killed it: ''no commit or file-change for 10m — likely a degenerate session'', shelving BUG-740 NeedsAttention even though the work was complete with a PR open (CI later went green). CI-watching is legitimately commit-free and file-change-free; the watchdog''s progress signal must include it. Fix options: treat an open PR for the session branch (or a live pr-ship child process) as progress; or stop the watchdog clock once the PR-open checkpoint is reached. Acceptance: a session attached to pr ship awaiting CI is not killed by the inactivity watchdog; a genuinely idle session (no commits, no PR, no pr-ship child) still is; the shelve message distinguishes the two. Regression test on the watchdog progress predicate.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T22:36:52.102150359Z
-modified_at: 2026-07-18T22:42:16.299842318Z
+modified_at: 2026-07-18T23:40:32.968944208Z
 req_type: Bug
 tags:
 - aida:queue auto-complete watchdog from-dogfood batch:papercuts-0718
