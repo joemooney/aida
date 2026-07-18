@@ -13,14 +13,6 @@
   added_at: 2026-07-18T18:16:22.748315363Z
   for_role: implementer
 - user_id: claude-advisor-1
-  requirement_id: 019f7671-7b2d-77e1-8831-9e6dcf0c2aa8
-  position: 7000
-  added_by: claude-advisor-1
-  added_at: 2026-07-18T18:16:30.734970147Z
-  for_role: implementer
-  for_scope: harness-worktree
-  added_by_machine: imac
-- user_id: claude-advisor-1
   requirement_id: 019f5a06-a375-79b1-80c6-8fdf2e6054fe
   position: 8000
   added_by: claude-advisor-1
