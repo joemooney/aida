@@ -33515,5 +33515,17 @@ operations:
   timestamp: 2026-07-18T00:33:02.009547850Z
   kind: !SetStatus
     status: Rejected
-clock: 3132
+- id: 019f72b6-537f-79c3-94fd-fb5f44ca16c0
+  target_id: 019f72b6-4e08-7ef2-bbff-16fea3dee3fa
+  author: aida
+  node_id: '1'
+  lamport: 3133
+  timestamp: 2026-07-18T00:52:59.391304926Z
+  kind: !Create
+    title: Add make build-fast (CARGO_INCREMENTAL=1) for ~43% faster iteration rebuilds
+    description: 'Measured 2026-07-17: an incremental release rebuild after a one-function edit is 55.7s vs ~98s non-incremental (-43%). The build is codegen-bound (cargo check front-end is only 6.5s; mold link -1s; crate-split ~0). Add a build-fast target that sets CARGO_INCREMENTAL=1 for local iteration. Kept SEPARATE from build-release so the shipped-release path stays pristine (incremental slightly reduces cross-CGU optimization); actual releases build fresh via CI release.yml anyway.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3133
 node_id: '1'
