@@ -71724,6 +71724,26 @@ fn handle_queue_command(
                     }
                     None => None,
                 };
+                let aida_headless_env = std::env::var("AIDA_HEADLESS")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                let requested_no_human_mode = no_human_mode;
+                let no_human_mode = non_tty_interactive_implementer_preflight(
+                    no_human_mode,
+                    std::io::IsTerminal::is_terminal(&std::io::stdin()),
+                    std::io::IsTerminal::is_terminal(&std::io::stdout()),
+                    aida_headless_env,
+                )?;
+                if no_human_mode == Some(auto_complete::NoHumanMode::Both)
+                    && requested_no_human_mode != Some(auto_complete::NoHumanMode::Both)
+                    && aida_headless_env
+                {
+                    std::env::set_var("AIDA_NO_HUMAN_ACKNOWLEDGED", "1");
+                    eprintln!(
+                        "  {} AIDA_HEADLESS=1 detected — running the implementer headless",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+                    );
+                }
                 // TASK-306 / STORY-276: pre-launch gate. Both modes print the
                 // loud scope banner (wording per mode) and require a one-time
                 // acknowledgement. This dispatch arm runs exactly once per
@@ -76360,6 +76380,35 @@ fn no_human_scope_line(mode: auto_complete::NoHumanMode) -> &'static str {
         "--no-human: the reviewer phase runs headless; the implementer phase \
          stays interactive and will pause for you."
     }
+}
+
+/// BUG-740: fail fast when an auto-complete drive would launch an interactive
+/// implementer from a non-TTY context. The failure used to happen much later,
+/// after queue/store/lease/worktree setup, when the child vendor CLI finally
+/// reported "stdin is not a terminal". `--no-human=both` is the explicit
+/// headless implementer mode; `AIDA_HEADLESS=1` is accepted as the environment
+/// opt-in used by agent shells.
+// trace:BUG-740 | ai:codex
+fn non_tty_interactive_implementer_preflight(
+    no_human: Option<auto_complete::NoHumanMode>,
+    stdin_is_tty: bool,
+    stdout_is_tty: bool,
+    aida_headless: bool,
+) -> Result<Option<auto_complete::NoHumanMode>> {
+    let implementer_is_headless = no_human
+        .map(auto_complete::NoHumanMode::wants_headless_implementer)
+        .unwrap_or(false);
+    if implementer_is_headless || (stdin_is_tty && stdout_is_tty) {
+        return Ok(no_human);
+    }
+    if aida_headless {
+        return Ok(Some(auto_complete::NoHumanMode::Both));
+    }
+    anyhow::bail!(
+        "aida do needs a terminal for the interactive implementer — run it from \
+         your shell, or add --no-human=both for a headless implementer. \
+         (`aida queue work --auto-complete` has the same requirement.)"
+    );
 }
 
 /// TASK-306: the pre-launch gate for `aida queue work --auto-complete
