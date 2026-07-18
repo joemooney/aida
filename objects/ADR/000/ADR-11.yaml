@@ -1,0 +1,32 @@
+id: 019f75d7-27e6-7941-890b-60df4807480e
+spec_id: ADR-11
+agreed_id: ADR-11
+title: 'TASK-1155: aida do wraps the through-ci orchestrator'
+description: |
+  ## Context
+  TASK-1155 adds `aida do <spec>` as a discoverable beginner-facing front door for autonomous implementation. The load-bearing decision is whether this new verb creates a new lifecycle, aliases the existing full-auto/supervised lifecycle, or stops at the existing through-CI boundary. ADR-7 already requires one per-spec orchestration engine, so `aida do` must route through the shared auto-complete engine rather than inventing phase logic.
+
+  ## Options considered
+  - Thin wrapper over `aida queue work <spec> --auto-complete=through-ci` — reuses the one orchestrator engine, implements in an isolated worktree, opens/routes the PR, waits for CI, and stops before review/merge.
+  - Full supervised `aida zen`-style lifecycle paused before merge — includes reviewer work before stopping, but overlaps with zen semantics and adds more lifecycle coupling than the task requires.
+  - Manual helper that creates the worktree/session only — safer and interactive, but fails the acceptance criterion that `aida do` drives autonomous implementation through CI.
+
+  ## Decision
+  Use option 1: `aida do <spec>` is a thin, discoverable wrapper over `aida queue work <spec> --auto-complete=through-ci`.
+
+  ## Rationale
+  This matches the task's distinguishing contract: implement autonomously, open the PR, wait for CI, then stop before review/merge. It also preserves ADR-7's one-engine invariant by routing through the existing auto-complete engine instead of creating another lifecycle surface.
+
+  ## Consequences
+  `aida do` gets beginner-facing help text and checkpoint wording, but not its own orchestration phases. The command's behavior is defined by the through-CI variant of the shared engine. Review and merge remain explicit next steps after the PR checkpoint.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-18T15:27:42.566565751Z
+modified_at: 2026-07-18T15:27:42.566565751Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:TASK-1155
+- keystone
