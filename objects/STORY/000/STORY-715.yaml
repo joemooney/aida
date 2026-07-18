@@ -8,15 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:44:37.596692409Z
-modified_at: 2026-06-30T16:35:18.805947445Z
+modified_at: 2026-07-18T01:13:42.726801877Z
 req_type: Story
 tags:
-- ambient-meter
-- from:axi-review
-- gnhf
-- parent:EPIC-53
-- tmux
-- zen-ready
+- batch:dogfood-0717
 relationships:
 - rel_type: Child
   target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
