@@ -36,3 +36,11 @@
   note: Promoted from finding TASK-1-118 via `aida findings promote`
   added_at: 2026-07-18T18:16:22.748315363Z
   for_role: implementer
+- user_id: claude-advisor-1
+  requirement_id: 019f7671-69a2-7323-a010-8bcc774d937b
+  position: 6000
+  added_by: claude-advisor-1
+  added_at: 2026-07-18T18:16:29.926976823Z
+  for_role: implementer
+  for_scope: harness-worktree
+  added_by_machine: imac
