@@ -249,14 +249,11 @@ use aida_core::{
     check_migration_status,
     check_scaffold_status,
     determine_requirements_path,
-    export,
     forbidden_attention_transition,
     seed_meta_requirements,
     // trace:TASK-331 — shared atomic-write util, promoted from BUG-228's local copy
     write_atomic,
-    ArtifactType,
     AttentionReason,
-    Cardinality,
     Comment,
     DatabaseBackend,
     FieldChange,
@@ -269,7 +266,6 @@ use aida_core::{
     IssueState,
     MigrationCheck,
     NumberingStrategy,
-    RelationshipDefinition,
     RelationshipType,
     Requirement,
     RequirementPriority,
@@ -279,20 +275,18 @@ use aida_core::{
     ScaffoldConfig,
     Scaffolder,
     Storage,
-    TraceLink,
 };
 
 use crate::cli::{
-    AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
-    BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
-    DbCommand, DepsCommand, DevCommand, DrainCommand, FindingsCommand, GitHubCommand,
-    GitLabCommand, GlyphCommand, HeadlessCommand, IdentityCommand, JiraCommand, LoadCommand,
-    LockCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand,
-    OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand,
-    RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
-    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand,
-    SkillCommand, SoloAction, SpecCommand, StackCommand, TeamCommand, TraceCommand, TriageCommand,
-    TypeCommand, WorkerCommand, WorktreeCommand, WorktreePoolCommand, ZenCommand,
+    AdvisorCommand, AgentCommand, AgentNewCommand, BacklogCommand, BlockCommand, BriefCommand,
+    CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DepsCommand, DevCommand,
+    DrainCommand, FindingsCommand, GitHubCommand, GitLabCommand, GlyphCommand, HeadlessCommand,
+    IdentityCommand, JiraCommand, LoadCommand, McpCommand, MemoriesCommand, NodeCommand,
+    OrchestratorCommand, OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand,
+    QueueCommand, RelationshipCommand, ReviewCommand, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand, SkillCommand,
+    SoloAction, SpecCommand, StackCommand, TeamCommand, TraceCommand, WorkerCommand,
+    WorktreeCommand, WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
