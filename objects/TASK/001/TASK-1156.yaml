@@ -21,12 +21,12 @@ description: |-
   Additional acceptance (operator, 2026-07-18):
   - With the aida() shell wrapper active, `aida worktree enter <SPEC>` leaves the shell cd'd in AND with CARGO_TARGET_DIR exported - no manual source step. Implement by extending the same emitted-and-auto-evaled shell payload that already carries the cd (session-env.sh is a single export line). Keep the no-double-eval convention (TASK-667).
   - The printed `source .aida/session-env.sh` instruction appears only for wrapper-less invocations where the emitted shell was not evaled.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T14:51:53.415231403Z
-modified_at: 2026-07-18T18:37:00.345156612Z
+modified_at: 2026-07-18T18:39:41.437630751Z
 req_type: Task
 tags:
 - papercut dx aida:worktree from-dogfood
