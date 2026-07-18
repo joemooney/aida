@@ -34400,5 +34400,46 @@ operations:
   timestamp: 2026-07-18T21:24:56.925970112Z
   kind: !SetStatus
     status: Needs Attention
-clock: 3196
+- id: 019f771e-4c1a-7312-9ba5-d747748747b6
+  target_id: 019f771e-42a9-79b0-8e2b-29ff5c12e850
+  author: aida
+  node_id: '1'
+  lamport: 3197
+  timestamp: 2026-07-18T21:25:02.106616109Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on TASK-142'
+    description: |
+      Auto-drafted by `aida queue work TASK-142 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the reviewer session produced no verdict file — the review did not complete
+
+      Failure kind: `no-verdict`
+
+      ## Recovery hint shown to the user
+
+      The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-1497 --steal`
+
+      ## Phase durations
+
+        - phase 1 (implementer): 429762 ms
+        - phase 2 (ci): 431860 ms
+        - phase 3 (reviewer): 170965 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-142","started_at":"2026-07-18T21:07:38.194584151+00:00","completed_at":"2026-07-18T21:24:59.468566462+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"no-verdict","failure_message":"the reviewer session produced no verdict file — the review did not complete","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":429762},{"phase":2,"slug":"ci","elapsed_ms":431860},{"phase":3,"slug":"reviewer","elapsed_ms":170965}],"total_ms":1034151,"binary_sha":"ddab634dd"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3197
 node_id: '1'
