@@ -3,12 +3,12 @@ spec_id: BUG-742
 agreed_id: BUG-742
 title: 'through-ci drive: the headless implementer merges the PR itself — /aida-pickup''s ''aida pr ship'' instruction overrides the stop-at-PR contract'
 description: 'Observed 2026-07-18 driving TASK-1156 with queue work --auto-complete=through-ci --no-human=both: the codex implementer, briefed via /aida-pickup, followed the skill''s standard cadence (''use aida pr ship and exit after the IMPLEMENTER COMPLETE banner'') and ran the merge-capable pr ship — watched CI and squash-merged PR-1490 itself. The orchestrator then found ''PR-1490 already merged by the implementer'' and completed, skipping its CI/review/merge phases. Net effect: through-ci (whose whole point is stop-before-merge so a human reviews) delivered an unreviewed auto-merge — the operator''s review step silently vanished. The mode contract must reach the implementer brief: under through-ci (and through-merge variants short of full), the pickup instructions must say open the PR and STOP (aida pr open / pr ship --no-merge), and/or pr ship should refuse the merge leg when the ambient drive mode is a stop-early variant (env-visible to the implementer session). Contrast: the interactive guided-implement run for TASK-1155 explicitly did not merge, because that skill says keystone merge stays human. Acceptance: a through-ci drive ends with an OPEN PR and a checkpoint report; an implementer attempting pr ship inside such a drive gets the merge leg refused with the reason; regression test on the mode-to-brief plumbing.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T19:00:24.788960176Z
-modified_at: 2026-07-18T19:28:02.571139523Z
+modified_at: 2026-07-18T19:29:00.116604107Z
 req_type: Bug
 tags:
 - aida:queue auto-complete from-dogfood
