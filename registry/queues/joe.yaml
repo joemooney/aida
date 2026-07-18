@@ -511,3 +511,11 @@
   added_at: 2026-07-18T20:46:32.627934805Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019f771b-6b1c-7241-9949-35734c579ca0
+  position: 370000
+  added_by: joe
+  note: auto-queued by `session end` (019f770e); covers 1 spec
+  added_at: 2026-07-18T21:22:00.220892794Z
+  for_role: reviewer
+  added_by_machine: imac
