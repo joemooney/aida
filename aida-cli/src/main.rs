@@ -75136,19 +75136,27 @@ fn handle_queue_work(
     // launch and leaves the entire Claude `match launch` below byte-identical.
     // trace:TASK-895 | ai:claude
     if vendor.eq_ignore_ascii_case("codex") && !no_human {
+        // BUG-743: queue/do's interactive Codex path used to ignore the
+        // STORY-495 `[agents] bypass` resolver and launch bare `codex
+        // /aida-pickup`, leaving operators in prompt-per-command posture even
+        // after opting the supervised fleet into bypass. Map the resolved
+        // uniform bypass posture to Codex's actual flag here; `None` and every
+        // non-bypass Claude permission mode keep Codex native.
+        let codex_bypass = permission_mode.as_deref() == Some("bypassPermissions");
         eprintln!(
             "{} {}",
             crate::glyph(crate::glyphs::Glyph::FlowActive)
                 .green()
                 .bold(),
             format!(
-                "launching codex in {} (prompt `{}`)",
+                "launching codex in {} ({}, prompt `{}`)",
                 lease.worktree_path.display(),
+                if codex_bypass { "bypass" } else { "native" },
                 prompt
             )
             .cyan()
         );
-        return session::exec_codex_session(&prompt);
+        return session::exec_codex_session(&prompt, codex_bypass);
     }
     match launch {
         QueueWorkLaunch::Resume(id) => {
