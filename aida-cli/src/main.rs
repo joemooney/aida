@@ -32792,8 +32792,8 @@ fn pr_ship_handler(
     no_trailer_check: bool,
 ) -> Result<()> {
     use pr_ship::{
-        format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
-        recovery_hint, PrShipOptions, ShipStep, StepOutcome,
+        branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
+        recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
 
     let opts = PrShipOptions {
@@ -32871,78 +32871,90 @@ fn pr_ship_handler(
         None => {
             // Look up an open change for the current branch through the forge
             // (GitHub: `gh pr list --head`; GitLab: `glab mr list --source-branch`).
-            // Collapse the 5-state ChangeLookup to the prior Option<u64>: only a
-            // definitively-Found change yields a number; every other state (no
-            // change / CLI missing / failed / unreachable) falls through to the
-            // create path, exactly as the old raw lookup's failure-to-None did.
-            // trace:TASK-961 trace:STORY-621 | ai:claude
-            let existing_change: Option<crate::forge::ChangeRef> =
-                match change_lookup_for_branch(&project_root, &branch) {
-                    crate::forge::ChangeLookup::Found(c) => Some(c),
-                    _ => None,
-                };
-
-            if let Some(existing) = existing_change {
-                let existing_id = existing.id;
-                target_change = Some(existing);
-                eprintln!(
-                    "  step 1: found open PR-{} for branch {}",
-                    existing_id, branch
-                );
-                log_ship_activity(
-                    &main_worktree,
-                    Some(existing_id),
-                    &ShipStep::ResolvePr {
-                        create_if_needed: false,
-                    },
-                    &StepOutcome::Ok,
-                );
-                existing_id
-            } else if dry_run {
-                eprintln!(
-                    "  step 1: would create new PR for branch {} (dry-run)",
-                    branch
-                );
-                // Use a placeholder so the rest of the dry-run plan
-                // still has a coherent N to print.
-                0
-            } else if let Some(merged_n) = latest_merged_pr_for_branch(&project_root, &branch) {
-                // BUG-574: no OPEN PR for the branch, but a merged one exists —
-                // the branch already shipped. `pr_ship_create_pr` would fail with
-                // "no commits between" (a benign already-shipped state reported as
-                // a hard error). Treat it as already-merged and exit 0 after the
-                // idempotent pull/cleanup steps. trace:BUG-574 | ai:claude
-                eprintln!(
-                    "  step 1: no open PR for branch {} — PR-{} already merged",
-                    branch, merged_n
-                );
-                already_merged = true;
-                log_ship_activity(
-                    &main_worktree,
-                    Some(merged_n),
-                    &ShipStep::ResolvePr {
-                        create_if_needed: false,
-                    },
-                    &StepOutcome::Skipped("PR already merged for this branch".into()),
-                );
-                merged_n
-            } else {
-                let new_n = pr_ship_create_pr(&project_root, &branch)?;
-                eprintln!(
-                    "  {} created PR-{}",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    new_n
-                );
-                log_ship_activity(
-                    &main_worktree,
-                    Some(new_n),
-                    &ShipStep::ResolvePr {
-                        create_if_needed: true,
-                    },
-                    &StepOutcome::Ok,
-                );
-                let _ = parse_pr_number_from_create_output; // import keep
-                new_n
+            // TASK-141: only a definitive "no change" may fall through to
+            // create. CLI/auth/network/parse failures are inconclusive; creating
+            // after those failures masks the resume problem behind gh's "PR
+            // already exists for this branch" error.
+            // trace:TASK-961 trace:STORY-621 trace:TASK-141 | ai:codex
+            let lookup = change_lookup_for_branch(&project_root, &branch);
+            match branch_pr_resolution_from_lookup(&lookup) {
+                BranchPrResolution::Found(existing) => {
+                    // BUG-733: keep the found ChangeRef so the stacked-guard
+                    // below resolves the PR's real head branch.
+                    if let crate::forge::ChangeLookup::Found(c) = lookup {
+                        target_change = Some(c);
+                    }
+                    eprintln!("  step 1: found open PR-{} for branch {}", existing, branch);
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(existing),
+                        &ShipStep::ResolvePr {
+                            create_if_needed: false,
+                        },
+                        &StepOutcome::Ok,
+                    );
+                    existing
+                }
+                BranchPrResolution::LookupFailed(reason) => {
+                    log_ship_activity(
+                        &main_worktree,
+                        None,
+                        &ShipStep::ResolvePr {
+                            create_if_needed: false,
+                        },
+                        &StepOutcome::Failed(reason.clone()),
+                    );
+                    anyhow::bail!(reason);
+                }
+                BranchPrResolution::Create => {
+                    if dry_run {
+                        eprintln!(
+                            "  step 1: would create new PR for branch {} (dry-run)",
+                            branch
+                        );
+                        // Use a placeholder so the rest of the dry-run plan
+                        // still has a coherent N to print.
+                        0
+                    } else if let Some(merged_n) =
+                        latest_merged_pr_for_branch(&project_root, &branch)
+                    {
+                        // BUG-574: no OPEN PR for the branch, but a merged one exists —
+                        // the branch already shipped. `pr_ship_create_pr` would fail with
+                        // "no commits between" (a benign already-shipped state reported as
+                        // a hard error). Treat it as already-merged and exit 0 after the
+                        // idempotent pull/cleanup steps. trace:BUG-574 | ai:claude
+                        eprintln!(
+                            "  step 1: no open PR for branch {} — PR-{} already merged",
+                            branch, merged_n
+                        );
+                        already_merged = true;
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(merged_n),
+                            &ShipStep::ResolvePr {
+                                create_if_needed: false,
+                            },
+                            &StepOutcome::Skipped("PR already merged for this branch".into()),
+                        );
+                        merged_n
+                    } else {
+                        let new_n = pr_ship_create_pr(&project_root, &branch)?;
+                        eprintln!(
+                            "  {} created PR-{}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            new_n
+                        );
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(new_n),
+                            &ShipStep::ResolvePr {
+                                create_if_needed: true,
+                            },
+                            &StepOutcome::Ok,
+                        );
+                        new_n
+                    }
+                }
             }
         }
     };
@@ -33788,21 +33800,20 @@ fn branch_head_commit_message(project_root: &std::path::Path, branch: &str) -> O
     None
 }
 
-/// Return an explicit `gh pr merge --subject` value only when the default
-/// squash subject would drop spec IDs that are recoverable from PR metadata.
-// trace:SPEC-410 | ai:codex
+/// Return an explicit `gh pr merge --subject` value when GitHub's default
+/// branch-head squash subject would drop spec IDs or a better PR title.
+// trace:SPEC-410 TASK-142 | ai:codex
 fn derive_pr_ship_squash_subject(
     project_root: &std::path::Path,
     pr_number: u64,
     branch: &str,
 ) -> Result<Option<String>> {
-    // TASK-140: read the subject from the PR BRANCH's head commit, NOT the local
-    // cwd HEAD. `aida pr ship` frequently runs from the main worktree (an
-    // orchestrated ship, or shipping a pre-existing PR), where HEAD is main's
-    // tip — an UNRELATED commit. Deriving the squash subject from cwd HEAD then
-    // produced a wrong subject (main's-tip subject with only a `(SPEC-ID)`
-    // appended) — the PR-347 / 778f0293 incident. The branch ref is the
-    // authoritative source for what's being squashed. trace:TASK-140 | ai:claude
+    // TASK-140: compare against the PR BRANCH's head commit, NOT the local cwd
+    // HEAD. `aida pr ship` frequently runs from the main worktree, where HEAD is
+    // main's tip. TASK-142: prefer the PR title as the explicit squash subject
+    // base because the branch head may itself be a merge commit.
+    // trace:TASK-140 TASK-142 | ai:codex
+    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
     let commit_msg = branch_head_commit_message(project_root, branch).ok_or_else(|| {
         anyhow::anyhow!(
             "could not read the head commit of branch `{branch}` (tried local and origin/) \
@@ -33810,22 +33821,17 @@ fn derive_pr_ship_squash_subject(
         )
     })?;
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
-    if current_subject.is_empty() {
+    let normalized = pr_ship::derive_squash_subject(&pr.title, branch, &pr.body, &commit_msg)
+        .unwrap_or_default();
+    if normalized.is_empty() {
         return Ok(None);
     }
-    if !pr_ship::extract_trailing_spec_ids_from_subject(&current_subject).is_empty() {
-        return Ok(None);
-    }
-
-    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
-    let ids = pr_ship::derive_squash_subject_spec_ids(&pr.title, branch, &pr.body);
-    if ids.is_empty() {
+    if pr_ship::extract_trailing_spec_ids_from_subject(&normalized).is_empty() {
         anyhow::bail!(
-            "final squash subject would lack a trailing `(SPEC-ID)` and no spec ID could be derived from PR title, branch name, or PR body: `{}`",
-            current_subject
+            "final squash subject would lack a trailing `(SPEC-ID)` and no spec ID could be derived from PR title, branch name, PR body, or branch head: `{}`",
+            normalized
         );
     }
-    let normalized = pr_ship::squash_subject_with_spec_ids(&current_subject, &ids);
     if normalized == current_subject {
         Ok(None)
     } else {
@@ -71765,6 +71771,26 @@ fn handle_queue_command(
                     }
                     None => None,
                 };
+                let aida_headless_env = std::env::var("AIDA_HEADLESS")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                let requested_no_human_mode = no_human_mode;
+                let no_human_mode = non_tty_interactive_implementer_preflight(
+                    no_human_mode,
+                    std::io::IsTerminal::is_terminal(&std::io::stdin()),
+                    std::io::IsTerminal::is_terminal(&std::io::stdout()),
+                    aida_headless_env,
+                )?;
+                if no_human_mode == Some(auto_complete::NoHumanMode::Both)
+                    && requested_no_human_mode != Some(auto_complete::NoHumanMode::Both)
+                    && aida_headless_env
+                {
+                    std::env::set_var("AIDA_NO_HUMAN_ACKNOWLEDGED", "1");
+                    eprintln!(
+                        "  {} AIDA_HEADLESS=1 detected — running the implementer headless",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+                    );
+                }
                 // TASK-306 / STORY-276: pre-launch gate. Both modes print the
                 // loud scope banner (wording per mode) and require a one-time
                 // acknowledgement. This dispatch arm runs exactly once per
@@ -76401,6 +76427,35 @@ fn no_human_scope_line(mode: auto_complete::NoHumanMode) -> &'static str {
         "--no-human: the reviewer phase runs headless; the implementer phase \
          stays interactive and will pause for you."
     }
+}
+
+/// BUG-740: fail fast when an auto-complete drive would launch an interactive
+/// implementer from a non-TTY context. The failure used to happen much later,
+/// after queue/store/lease/worktree setup, when the child vendor CLI finally
+/// reported "stdin is not a terminal". `--no-human=both` is the explicit
+/// headless implementer mode; `AIDA_HEADLESS=1` is accepted as the environment
+/// opt-in used by agent shells.
+// trace:BUG-740 | ai:codex
+fn non_tty_interactive_implementer_preflight(
+    no_human: Option<auto_complete::NoHumanMode>,
+    stdin_is_tty: bool,
+    stdout_is_tty: bool,
+    aida_headless: bool,
+) -> Result<Option<auto_complete::NoHumanMode>> {
+    let implementer_is_headless = no_human
+        .map(auto_complete::NoHumanMode::wants_headless_implementer)
+        .unwrap_or(false);
+    if implementer_is_headless || (stdin_is_tty && stdout_is_tty) {
+        return Ok(no_human);
+    }
+    if aida_headless {
+        return Ok(Some(auto_complete::NoHumanMode::Both));
+    }
+    anyhow::bail!(
+        "aida do needs a terminal for the interactive implementer — run it from \
+         your shell, or add --no-human=both for a headless implementer. \
+         (`aida queue work --auto-complete` has the same requirement.)"
+    );
 }
 
 /// TASK-306: the pre-launch gate for `aida queue work --auto-complete
