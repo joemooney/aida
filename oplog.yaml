@@ -33660,5 +33660,44 @@ operations:
   timestamp: 2026-07-18T04:52:29.557863038Z
   kind: !SetStatus
     status: Needs Attention
-clock: 3148
+- id: 019f7391-a6e0-7932-b7de-19e026a3c933
+  target_id: 019f7391-a025-7380-b737-cca4b91766cc
+  author: aida
+  node_id: '1'
+  lamport: 3149
+  timestamp: 2026-07-18T04:52:33.120011904Z
+  kind: !Create
+    title: 'auto-complete failure: phase 1 (implementer) on TASK-919'
+    description: |
+      Auto-drafted by `aida queue work TASK-919 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting
+
+      Failure kind: `no-pr`
+
+      ## Recovery hint shown to the user
+
+      The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work TASK-919 --resume 019f72d196cb`
+
+      ## Phase durations
+
+        - phase 1 (implementer): 12589581 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-919","started_at":"2026-07-18T01:22:39.395785046+00:00","completed_at":"2026-07-18T04:52:30.693312034+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"no-pr","failure_message":"the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":12589581}],"total_ms":12590042,"binary_sha":"98a73b238"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3149
 node_id: '1'
