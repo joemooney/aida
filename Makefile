@@ -1,7 +1,7 @@
 # AIDA - AI Design Assistant
 # Makefile for building, testing, and running the application
 
-.PHONY: help build build-release build-all restart-mcp-servers cli gui server \
+.PHONY: help build build-release build-fast build-all restart-mcp-servers cli gui server \
         cli-remote gui-remote run-cli run-gui run-server run-server-force \
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
@@ -100,6 +100,17 @@ build: ## Build all packages (debug mode)
 
 build-release: ## Build all packages (release mode, optimized)
 	cargo build --workspace --release
+	@$(MAKE) --no-print-directory restart-mcp-servers
+
+# trace:TASK-1154 | ai:claude
+# Iteration build: release profile + incremental compilation. Measured ~43%
+# faster on an edit-rebuild (55.7s vs ~98s) because the build is codegen-bound
+# and incremental skips re-codegen for untouched units. Kept SEPARATE from
+# build-release: CARGO_INCREMENTAL slightly reduces cross-codegen-unit
+# optimization, so this is for LOCAL iteration, not shipping. Shipped releases
+# build fresh (non-incremental) via CI (.github/workflows/release.yml).
+build-fast: ## Build all packages (release + incremental — for iteration, NOT shipping)
+	CARGO_INCREMENTAL=1 cargo build --workspace --release
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-all: build cli-remote ## Build everything including remote features
