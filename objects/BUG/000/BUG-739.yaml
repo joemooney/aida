@@ -1,0 +1,14 @@
+id: 019f7689-be9b-7b60-9c5f-ede53c9b1ebd
+spec_id: BUG-739
+agreed_id: BUG-739
+title: queue add auto-stamps the generic harness-worktree lease scope onto entries — later drives route into the shared main checkout and refuse on the live lease
+description: 'Observed 2026-07-18: every aida queue add run from the main checkout (cwd covered by the long-lived generic harness-worktree lease that any Claude Code harness session holds) stamps for_scope=harness-worktree on the entry via STORY-57 default scope routing (main.rs, for_scope_routing: falls back to active_lease_for_cwd().scope). aida queue work then derives the session scope from entry.for_scope (derive_scope_from_entry), tries to place the implementer in scope HARNESS-WORKTREE — the shared main checkout — and refuses: ''scope harness-worktree is owned by lease <harness>''. Deterministic phase-1 failure for any drive over such an entry; hit 3x driving TASK-1156. The codebase already treats harness-worktree as ''not a real scope'' in ship.rs and integrate_checkout.rs; the STORY-57 stamping path lacks that exclusion. Fix: never auto-stamp the generic harness-worktree scope (explicit --scope harness-worktree may stay honored); consider migrating/ignoring existing stamped entries at queue-work time (derive_scope_from_entry could skip a harness-worktree for_scope and fall through to the spec-id scope). Acceptance: queue add from a harness-leased cwd leaves for_scope empty; queue work over a legacy harness-worktree-stamped entry scopes to the spec id instead of refusing; regression tests for both.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-18T18:42:46.555589003Z
+modified_at: 2026-07-18T18:42:46.555589003Z
+req_type: Bug
+tags:
+- aida:queue scope-routing from-dogfood
