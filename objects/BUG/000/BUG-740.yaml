@@ -3,13 +3,21 @@ spec_id: BUG-740
 agreed_id: BUG-740
 title: aida do / queue work --auto-complete launches the interactive implementer without a TTY — late confusing 'stdin is not a terminal' failure instead of an upfront gate
 description: 'Observed 2026-07-18: aida do TASK-1156 invoked from a non-TTY shell (an agent''s background Bash) proceeded through store pull, lease, worktree, and vendor launch before dying with codex''s ''Error: stdin is not a terminal'' — then parked the spec NeedsAttention. The interactive-implementer requirement is knowable at startup: if stdin/stdout is not a TTY and the implementer phase is interactive (not --no-human=both), fail fast BEFORE taking a lease/worktree, with guidance: ''aida do needs a terminal for the interactive implementer — run it from your shell, or add --no-human for a headless implementer''. Optionally auto-fall-back to headless under AIDA_HEADLESS=1. Acceptance: non-TTY invocation of an interactive drive exits with the actionable message before any lease/worktree is created; a headless flag or env opts into proceeding; regression test.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:42:50.004865775Z
-modified_at: 2026-07-18T21:25:09.870233608Z
+modified_at: 2026-07-18T21:29:42.525552211Z
 req_type: Bug
 tags:
 - aida:do aida:queue papercut from-dogfood
 - batch:papercuts-0718
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: failed
+  detail: the implementer session exited 1 — it was aborted or errored
+  recovery_hint: 'Continue the implementer session: `aida queue work BUG-740 --resume`'
+  shelved_by: implementer
+  shelved_at: 2026-07-18T21:29:42.525552211Z
