@@ -1,0 +1,26 @@
+id: 019f76fa-f663-7643-afe7-e1db1e37b910
+spec_id: STORY-774
+agreed_id: STORY-774
+title: 'Review PR-1495: [AI:codex] fix(pr-ship): resolve explicit PR head for stacked guard (BUG-733)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019f76ed`) for branch `bug-733`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1495>
+  - Branch: `bug-733` → `main`
+
+  ## Covers
+
+  - BUG-733
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1495` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-18T20:46:26.403012455Z
+modified_at: 2026-07-18T20:46:26.403012455Z
+req_type: Story
