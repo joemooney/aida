@@ -1,0 +1,20 @@
+id: 019f7760-01dc-7113-87df-4a3fb6e6a846
+spec_id: BUG-748
+agreed_id: BUG-748
+title: 'batch drain panics mid-run: ''orchestrated implementer running without a live drain lock'' — a shelve/skip path drops drain.lock, killing the rest of the batch'
+description: |-
+  Observed 2026-07-18 ~15:30 during the 10-member batch drain (queue work --batch papercuts-0718 --auto-complete --no-human=both): after three members shelved (BUG-733/TASK-142 failure:reviewer, BUG-740 failure:implementer-watchdog), the drain advanced to BUG-741 phase 1 and panicked:
+
+    thread 'main' panicked at aida-cli/src/main.rs:84080:
+    orchestrated implementer running without a live drain lock — the pr-ship self-merge guard (BUG-716) keys on it; a drive path dropped the lock
+
+  The assert is correct to fire (the BUG-716 guard depends on the lock), but some path in the preceding shelve/skip/cleanup sequence released or deleted drain.lock while the batch was still running — .aida/drain.lock was absent after the crash. Consequences: the batch died with 4 members unprocessed (BUG-741 left stuck In Progress with no session; BUG-731/TASK-1157/TASK-1145 untouched), turning a resilient-drain design (EPIC-28 shelve-and-continue) into a hard stop. Repro context: three shelves occurred before the panic, at least one from the watchdog kill path and two from reviewer failures; suspect one of those cleanup paths (or a pr ship subprocess of a shelved member) releases the parent drain lock. Acceptance: batch drain holds the drain lock for its full lifetime across member shelves/skips; a member-level failure path can never release the parent lock; the assert stays but a regression test drives a batch with a forced mid-batch shelve and asserts the lock survives to the last member; BUG-741-style stranded In Progress state is restored on panic-free shelve.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-18T22:36:48.476861460Z
+modified_at: 2026-07-18T22:36:48.476861460Z
+req_type: Bug
+tags:
+- aida:queue auto-complete drain-lock from-dogfood batch:papercuts-0718
