@@ -9,13 +9,17 @@ description: |-
     orchestrated implementer running without a live drain lock — the pr-ship self-merge guard (BUG-716) keys on it; a drive path dropped the lock
 
   The assert is correct to fire (the BUG-716 guard depends on the lock), but some path in the preceding shelve/skip/cleanup sequence released or deleted drain.lock while the batch was still running — .aida/drain.lock was absent after the crash. Consequences: the batch died with 4 members unprocessed (BUG-741 left stuck In Progress with no session; BUG-731/TASK-1157/TASK-1145 untouched), turning a resilient-drain design (EPIC-28 shelve-and-continue) into a hard stop. Repro context: three shelves occurred before the panic, at least one from the watchdog kill path and two from reviewer failures; suspect one of those cleanup paths (or a pr ship subprocess of a shelved member) releases the parent drain lock. Acceptance: batch drain holds the drain lock for its full lifetime across member shelves/skips; a member-level failure path can never release the parent lock; the assert stays but a regression test drives a batch with a forced mid-batch shelve and asserts the lock survives to the last member; BUG-741-style stranded In Progress state is restored on panic-free shelve.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T22:36:48.476861460Z
-modified_at: 2026-07-18T23:25:37.830670206Z
+modified_at: 2026-07-18T23:39:58.547198218Z
 req_type: Bug
 tags:
 - aida:queue auto-complete drain-lock from-dogfood batch:papercuts-0718
 - batch:papercuts-0718
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T23:39:58.547198218Z
+  completion_sha: cc97a76cb85d9f87e5518af1140a40219feac23f

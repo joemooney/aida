@@ -35,14 +35,6 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
-processing_record:
-- id: 019f776c-bc52-7c60-af29-e7fa7035fdca
-  timestamp: 2026-07-18T22:50:42.642450300Z
-  agent: aida
-  commit_sha: 7124f3af3195c6161e297bc71919eab89f4855a0
-  summary: Completed via merge 7124f3af
-  punted:
-  - 'punted: the reviewer session produced no verdict file — the review did not complete'
 implementation_info:
   implemented: false
   completed_at: 2026-07-18T22:50:42.432209940Z
