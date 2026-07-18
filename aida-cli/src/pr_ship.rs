@@ -183,6 +183,37 @@ pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
     append_spec_ids_before_pr_suffix(subject, &joined)
 }
 
+/// Choose the explicit squash-merge subject `aida pr ship` should pass.
+///
+/// GitHub's default squash subject can be the branch HEAD commit. If a feature
+/// branch's HEAD is a merge commit, that default is mechanically correct but
+/// loses the PR's descriptive title in main history. Prefer the PR title as the
+/// subject base, then fall back to the branch-head commit subject when the PR
+/// title is empty.
+// trace:TASK-142 | ai:codex
+pub fn derive_squash_subject(
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+    branch_head_commit_message: &str,
+) -> Option<String> {
+    let pr_title_subject = derive_pr_title_from_commit(pr_title);
+    let branch_subject = derive_pr_title_from_commit(branch_head_commit_message);
+    let mut ids = derive_squash_subject_spec_ids(pr_title, branch, pr_body);
+    if ids.is_empty() {
+        ids = extract_spec_ids_from_text(&branch_subject);
+    }
+    let base = if pr_title_subject.is_empty() {
+        branch_subject
+    } else {
+        pr_title_subject
+    };
+    if base.is_empty() {
+        return None;
+    }
+    Some(squash_subject_with_spec_ids(&base, &ids))
+}
+
 /// Extract the exact shape the auto-bump scanner recognizes: a trailing
 /// `(SPEC-ID[, SPEC-ID...])` group, optionally followed by GitHub's `(#N)`.
 // trace:BUG-339 | ai:codex
@@ -839,6 +870,40 @@ mod tests {
         assert_eq!(
             squash_subject_with_spec_ids(subject, &["STORY-284".to_string()]),
             "[AI:codex] feat(store): add configurable auto-push cadence (STORY-284) (#201)"
+        );
+    }
+
+    #[test]
+    fn squash_subject_prefers_pr_title_over_branch_head_merge_commit() {
+        let pr_title = "[AI:codex] feat(autopilot): add drift guard (TASK-1020)";
+        let branch_head =
+            "Merge main into task-1020 (bring current + pick up drift-guard fix) (TASK-1020)";
+        assert_eq!(
+            derive_squash_subject(pr_title, "task-1020", "", branch_head),
+            Some(pr_title.to_string())
+        );
+    }
+
+    #[test]
+    fn squash_subject_falls_back_to_branch_head_when_pr_title_empty() {
+        let branch_head = "[AI:codex] fix(pr-ship): preserve branch subject";
+        assert_eq!(
+            derive_squash_subject("", "task-142", "", branch_head),
+            Some("[AI:codex] fix(pr-ship): preserve branch subject (TASK-142)".to_string())
+        );
+    }
+
+    #[test]
+    fn squash_subject_can_recover_spec_id_from_branch_head() {
+        let branch_head = "[AI:codex] fix(pr-ship): preserve subject (TASK-140)";
+        assert_eq!(
+            derive_squash_subject(
+                "[AI:codex] fix(pr-ship): preserve subject",
+                "feature/pr-ship-subject",
+                "",
+                branch_head,
+            ),
+            Some("[AI:codex] fix(pr-ship): preserve subject (TASK-140)".to_string())
         );
     }
 

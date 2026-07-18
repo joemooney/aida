@@ -33774,21 +33774,20 @@ fn branch_head_commit_message(project_root: &std::path::Path, branch: &str) -> O
     None
 }
 
-/// Return an explicit `gh pr merge --subject` value only when the default
-/// squash subject would drop spec IDs that are recoverable from PR metadata.
-// trace:SPEC-410 | ai:codex
+/// Return an explicit `gh pr merge --subject` value when GitHub's default
+/// branch-head squash subject would drop spec IDs or a better PR title.
+// trace:SPEC-410 TASK-142 | ai:codex
 fn derive_pr_ship_squash_subject(
     project_root: &std::path::Path,
     pr_number: u64,
     branch: &str,
 ) -> Result<Option<String>> {
-    // TASK-140: read the subject from the PR BRANCH's head commit, NOT the local
-    // cwd HEAD. `aida pr ship` frequently runs from the main worktree (an
-    // orchestrated ship, or shipping a pre-existing PR), where HEAD is main's
-    // tip — an UNRELATED commit. Deriving the squash subject from cwd HEAD then
-    // produced a wrong subject (main's-tip subject with only a `(SPEC-ID)`
-    // appended) — the PR-347 / 778f0293 incident. The branch ref is the
-    // authoritative source for what's being squashed. trace:TASK-140 | ai:claude
+    // TASK-140: compare against the PR BRANCH's head commit, NOT the local cwd
+    // HEAD. `aida pr ship` frequently runs from the main worktree, where HEAD is
+    // main's tip. TASK-142: prefer the PR title as the explicit squash subject
+    // base because the branch head may itself be a merge commit.
+    // trace:TASK-140 TASK-142 | ai:codex
+    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
     let commit_msg = branch_head_commit_message(project_root, branch).ok_or_else(|| {
         anyhow::anyhow!(
             "could not read the head commit of branch `{branch}` (tried local and origin/) \
@@ -33796,22 +33795,17 @@ fn derive_pr_ship_squash_subject(
         )
     })?;
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
-    if current_subject.is_empty() {
+    let normalized = pr_ship::derive_squash_subject(&pr.title, branch, &pr.body, &commit_msg)
+        .unwrap_or_default();
+    if normalized.is_empty() {
         return Ok(None);
     }
-    if !pr_ship::extract_trailing_spec_ids_from_subject(&current_subject).is_empty() {
-        return Ok(None);
-    }
-
-    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
-    let ids = pr_ship::derive_squash_subject_spec_ids(&pr.title, branch, &pr.body);
-    if ids.is_empty() {
+    if pr_ship::extract_trailing_spec_ids_from_subject(&normalized).is_empty() {
         anyhow::bail!(
-            "final squash subject would lack a trailing `(SPEC-ID)` and no spec ID could be derived from PR title, branch name, or PR body: `{}`",
-            current_subject
+            "final squash subject would lack a trailing `(SPEC-ID)` and no spec ID could be derived from PR title, branch name, PR body, or branch head: `{}`",
+            normalized
         );
     }
-    let normalized = pr_ship::squash_subject_with_spec_ids(&current_subject, &ids);
     if normalized == current_subject {
         Ok(None)
     } else {
