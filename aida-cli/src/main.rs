@@ -5080,7 +5080,15 @@ fn apply_resolution_token(
         lower.as_str(),
         "defer" | "park" | "hold" | "passive" | "passive-only" | "shelve"
     ) {
+        // trace:BUG-730 | ai:codex
         req.deferred = true;
+        if req.deferred_at.is_none() {
+            req.deferred_at = Some(chrono::Utc::now());
+        }
+        let trigger = consequence.trim();
+        if !trigger.is_empty() {
+            req.deferred_until = Some(trigger.to_string());
+        }
         return ResolutionApplied {
             effects: vec!["deferred — parked out of the queue".to_string()],
             is_disposition: true,
@@ -5339,6 +5347,18 @@ fn append_resolved_to_acceptance(description: &str, line: &str) -> String {
 /// still holds it?" check (#2 round-trip + #4 honest partial-unpark). Pure over
 /// the passed store snapshot. trace:STORY-555 | ai:claude
 fn evaluate_unpark(req: &Requirement, all: &[Requirement]) -> burndown::Pickability {
+    if req.deferred {
+        // A structural defer is a view-state shelf, not a tag-only burndown
+        // gate; it must stay parked until `aida undefer` clears it. trace:BUG-730
+        let trigger = req
+            .deferred_until
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("no trigger recorded");
+        return burndown::Pickability::Parked(format!("deferred: {trigger}"));
+    }
+
     let status_by_id: std::collections::HashMap<uuid::Uuid, RequirementStatus> =
         all.iter().map(|r| (r.id, r.status.clone())).collect();
     let has_unsatisfied_blocker = req.relationships.iter().any(|rel| {

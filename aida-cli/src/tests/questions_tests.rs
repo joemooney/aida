@@ -480,6 +480,11 @@ fn apply_token_bare_defer_parks_out_of_queue() {
     assert!(!req.deferred);
     let applied = apply_resolution_token(&mut req, "defer", "Defer", "wait for demand");
     assert!(req.deferred, "bare `defer` must set the deferred flag");
+    assert!(
+        req.deferred_at.is_some(),
+        "defer stamps the shelf timestamp"
+    );
+    assert_eq!(req.deferred_until.as_deref(), Some("wait for demand"));
     assert!(applied.keeps_parked, "a deferred spec is not queue-worthy");
 }
 
@@ -568,6 +573,22 @@ fn unpark_reports_remaining_parking_tag() {
     let all = vec![req.clone()];
     match evaluate_unpark(&req, &all) {
         burndown::Pickability::Parked(reason) => assert!(reason.contains("deferred")),
+        other => panic!("expected Parked, got {other:?}"),
+    }
+}
+
+#[test]
+fn unpark_reports_structural_deferred_flag() {
+    // BUG-730: a defer answer sets the structural shelf fields, not necessarily
+    // a legacy `deferred:*` tag. evaluate_unpark must still park it.
+    let mut req = sample_requirement("STORY-N", "body");
+    req.deferred = true;
+    req.deferred_until = Some("after the stability milestone".to_string());
+    let all = vec![req.clone()];
+    match evaluate_unpark(&req, &all) {
+        burndown::Pickability::Parked(reason) => {
+            assert_eq!(reason, "deferred: after the stability milestone")
+        }
         other => panic!("expected Parked, got {other:?}"),
     }
 }
