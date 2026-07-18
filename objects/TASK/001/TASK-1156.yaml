@@ -36,7 +36,6 @@ comments:
   content: 'Operator follow-up 2026-07-18 (binding — treat as an additional acceptance criterion): the aida() wrapper should make the source step unnecessary, not just better-explained. The enter path already emits cd ''<path>'' for the wrapper to auto-eval; extend the SAME emitted payload with the session env export (CARGO_TARGET_DIR — the entire content of session-env.sh). Acceptance: after a wrapper-evaled aida worktree enter <SPEC>, the shell is cd''d in AND has CARGO_TARGET_DIR set with NO manual source step; the printed source instruction appears ONLY when the emitted shell is not being evaled (wrapper-less invocation). Keep the no-double-eval convention (TASK-667).'
   created_at: 2026-07-18T18:26:43.848764056Z
   modified_at: 2026-07-18T18:26:43.848764056Z
-  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 history:
 - id: 019f7699-4569-7e83-b247-6fc1a02be63c
   author: aida-auto-bump
@@ -45,16 +44,6 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
-processing_record:
-- id: 019f7699-456e-7f90-9bd2-803d095625cb
-  timestamp: 2026-07-18T18:59:44.110963397Z
-  agent: aida
-  commit_sha: ed1143a80e6735ca264cbe67df121122dcf4216a
-  summary: Completed via merge ed1143a8
-  punted:
-  - 'punted: the implementer session exited 1 — it was aborted or errored'
-  - 'punted: the implementer session exited 1 — it was aborted or errored'
-  - 'punted: the implementer session exited 1 — it was aborted or errored'
 implementation_info:
   implemented: false
   completed_at: 2026-07-18T18:59:43.901969228Z
