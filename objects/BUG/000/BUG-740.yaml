@@ -3,20 +3,34 @@ spec_id: BUG-740
 agreed_id: BUG-740
 title: aida do / queue work --auto-complete launches the interactive implementer without a TTY — late confusing 'stdin is not a terminal' failure instead of an upfront gate
 description: 'Observed 2026-07-18: aida do TASK-1156 invoked from a non-TTY shell (an agent''s background Bash) proceeded through store pull, lease, worktree, and vendor launch before dying with codex''s ''Error: stdin is not a terminal'' — then parked the spec NeedsAttention. The interactive-implementer requirement is knowable at startup: if stdin/stdout is not a TTY and the implementer phase is interactive (not --no-human=both), fail fast BEFORE taking a lease/worktree, with guidance: ''aida do needs a terminal for the interactive implementer — run it from your shell, or add --no-human for a headless implementer''. Optionally auto-fall-back to headless under AIDA_HEADLESS=1. Acceptance: non-TTY invocation of an interactive drive exits with the actionable message before any lease/worktree is created; a headless flag or env opts into proceeding; regression test.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:42:50.004865775Z
-modified_at: 2026-07-18T21:41:16.680945403Z
+modified_at: 2026-07-18T22:37:41.750641482Z
 req_type: Bug
 tags:
 - aida:do aida:queue papercut from-dogfood
 - batch:papercuts-0718
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: no-progress-watchdog
-  detail: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
-  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework BUG-740 --work`.'
-  shelved_at: 2026-07-18T21:41:16.680945403Z
+history:
+- id: 019f7760-d1f0-7c93-a46c-0c6f2463c0f4
+  author: aida-auto-bump
+  timestamp: 2026-07-18T22:37:41.744299421Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 019f7760-d1f6-7d20-b425-542c1d5c8567
+  timestamp: 2026-07-18T22:37:41.750640231Z
+  agent: implementer
+  commit_sha: 7b35e7103bd90b25b71d033b2e7d1d54ad2878e5
+  summary: Completed via merge 7b35e710
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  - 'punted: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session'
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-18T22:37:41.540184182Z
+  completion_sha: 7b35e7103bd90b25b71d033b2e7d1d54ad2878e5
