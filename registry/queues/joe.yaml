@@ -434,14 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019f5a06-a375-79b1-80c6-8fdf2e6054fe
-  position: 352000
-  added_by: joe
-  added_at: 2026-07-18T01:14:25.845686811Z
-  for_role: implementer
-  for_scope: harness-worktree
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 019f3f51-db2b-7b83-9f30-1902f1ce40f0
   position: 353000
   added_by: joe
