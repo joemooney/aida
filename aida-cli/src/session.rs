@@ -888,14 +888,20 @@ pub fn spawn_claude_resume(
 /// Codex session hosted in an `aida tui` tab. Codex's interactive CLI takes the
 /// initial prompt as a trailing positional (`codex [PROMPT]`) — the analogue of
 /// claude's positional first message. Unlike claude there is no caller-minted
-/// `--session-id` and no AIDA-addressable `--resume`, so the argv carries only
-/// the prompt; AIDA hosts a fresh Codex session per tab (resume-parity is a
-/// follow-up). Faithful-launcher posture: no forced approval/sandbox bypass —
-/// Codex prompts natively, matching the STORY-495 native default. Pure — the
-/// flag set is unit-tested without spawning codex.
+/// `--session-id` and no AIDA-addressable `--resume`, so AIDA hosts a fresh
+/// Codex session per tab (resume-parity is a follow-up). Faithful-launcher
+/// posture: native launches carry no approval/sandbox bypass flag; the uniform
+/// `[agents] bypass = true` posture maps to Codex's explicit bypass flag.
+/// Pure — the flag set is unit-tested without spawning codex.
 // trace:TASK-895 | ai:claude
-pub fn codex_session_args(initial_prompt: &str) -> Vec<String> {
-    vec![initial_prompt.to_string()]
+// trace:BUG-743 | ai:codex
+pub fn codex_session_args(initial_prompt: &str, bypass: bool) -> Vec<String> {
+    let mut args = Vec::new();
+    if bypass {
+        args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
+    }
+    args.push(initial_prompt.to_string());
+    args
 }
 
 /// TASK-895: replace this process with an interactive `codex <prompt>` session —
@@ -904,10 +910,10 @@ pub fn codex_session_args(initial_prompt: &str) -> Vec<String> {
 /// all lease / worktree / manifest setup has already run by the time this is
 /// reached.
 // trace:TASK-895 | ai:claude
-pub fn exec_codex_session(initial_prompt: &str) -> Result<()> {
+pub fn exec_codex_session(initial_prompt: &str, bypass: bool) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("codex");
-    cmd.args(codex_session_args(initial_prompt));
+    cmd.args(codex_session_args(initial_prompt, bypass));
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -3560,13 +3566,14 @@ mod tests {
         );
     }
 
-    // TASK-895: the interactive Codex argv is just the prompt positional —
-    // Codex has no caller-minted `--session-id` / TUI-addressable `--resume`,
-    // and the faithful-launcher default forces no approval/sandbox bypass.
+    // TASK-895: the native interactive Codex argv is just the prompt
+    // positional — Codex has no caller-minted `--session-id` /
+    // TUI-addressable `--resume`, and the faithful-launcher default injects no
+    // approval/sandbox bypass.
     // trace:TASK-895 | ai:claude
     #[test]
-    fn codex_session_args_is_just_the_prompt_positional() {
-        let args = codex_session_args("/aida-pickup");
+    fn codex_session_args_native_is_just_the_prompt_positional() {
+        let args = codex_session_args("/aida-pickup", false);
         assert_eq!(args, vec!["/aida-pickup".to_string()]);
         assert!(!args.iter().any(|a| a == "--session-id"), "{args:?}");
         assert!(!args.iter().any(|a| a == "--resume"), "{args:?}");
@@ -3576,6 +3583,24 @@ mod tests {
                 .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"),
             "interactive codex must not force the bypass: {args:?}"
         );
+    }
+
+    // BUG-743: when the queue/do resolver reports the uniform
+    // `[agents] bypass` posture, interactive Codex must get Codex's actual
+    // bypass flag too, not only headless `codex exec`.
+    // trace:BUG-743 | ai:codex
+    #[test]
+    fn codex_session_args_bypass_maps_to_codex_bypass_flag() {
+        let args = codex_session_args("/aida-pickup BUG-743", true);
+        assert_eq!(
+            args,
+            vec![
+                "--dangerously-bypass-approvals-and-sandbox".to_string(),
+                "/aida-pickup BUG-743".to_string()
+            ]
+        );
+        assert!(!args.iter().any(|a| a == "--session-id"), "{args:?}");
+        assert!(!args.iter().any(|a| a == "--resume"), "{args:?}");
     }
 
     /// STORY-495 safety invariant: the headless argv ALWAYS forces
@@ -3599,6 +3624,23 @@ mod tests {
             headless.get(pos + 1).map(String::as_str),
             Some("bypassPermissions"),
             "headless must force bypassPermissions: {headless:?}"
+        );
+    }
+
+    // BUG-743 acceptance: the Codex exec path stays bypassed independently of
+    // the interactive builder, so both postures are covered.
+    // trace:BUG-743 | ai:codex
+    #[test]
+    fn codex_headless_args_force_bypass() {
+        let args = codex_headless_args("/aida-pickup BUG-743");
+        assert_eq!(args.first().map(String::as_str), Some("exec"));
+        assert!(
+            args.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()),
+            "headless codex must force bypass: {args:?}"
+        );
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("/aida-pickup BUG-743")
         );
     }
 
