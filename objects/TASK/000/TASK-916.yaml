@@ -16,23 +16,3 @@ relationships:
 - rel_type: Child
   target_id: 019edd85-f965-76e0-90bf-ce458f1de256
   created_at: 2026-06-26T18:22:12.637184637Z
-deferred: true
-deferred_at: 2026-07-14T04:54:44.272924834Z
-deferred_until: violations accrue naturally past a threshold
-decision_request:
-  question: Commit to the multi-week field-study harvest, given SPIKE-67 already terminated at 100% rule-only with every conjecture falsified?
-  choices:
-  - label: Run the dedicated harvest
-    consequence: the field data is the only remaining gate-vs-rule evidence path
-    resolution: run
-  - label: Reject/archive
-    consequence: SPIKE-67 falsified every conjecture; harvest unlikely to move the verdict
-    resolution: reject
-  - label: Passive-only
-    consequence: leave the sensor on, dedicate no weeks, revisit if violations accrue naturally
-    resolution: passive
-  recommended: 2
-  rationale: The sensor is built and cheap; weeks of dedicated drains carry high cost and low expected surprise.
-  answered: 2
-  asked_at: 2026-07-14T02:32:01.106122045Z
-  answered_at: 2026-07-15T02:00:37.015419130Z

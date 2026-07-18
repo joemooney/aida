@@ -23,6 +23,3 @@ relationships:
   target_id: 019f6e6e-430c-7e61-983d-3d7a78c44c79
   created_at: 2026-07-17T21:44:19.377359681Z
   created_by: joe
-deferred: true
-deferred_at: 2026-07-17T21:44:20.798450970Z
-deferred_until: aida-cli build or CI compile time becomes felt pain (the ~0-5% bin+lib win proved insufficient)

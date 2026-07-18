@@ -51,19 +51,16 @@ comments:
   content: 'IMPLEMENTATION DIRECTIVE (guided decision): build the FULL `aida remote reconcile` verb. Fetch every hub''s aida-store (origin + configured mirrors), CRDT-union-merge the diverged tips — both the registry blocks and the objects — reusing the existing union logic in conflict.rs (the same oplog/union machinery aida already uses on merge), then push the union to ALL hubs. Gate the whole thing behind the employer-content scrub (the same guard as the store push). This fixes the recurring multi-hub divergence where a gitlab-only commit from another machine leaves gitlab permanently ahead and rejects every aida push. Seams: conflict.rs (union), git_ops two-leg fetch/push, the store-scrub guard, the multi-hub sync doc (docs/multi-hub-sync.md). Touches store integrity — advisor-review at PR. Gate + PR, do NOT merge (keystone).'
   created_at: 2026-07-16T04:26:10.872491788Z
   modified_at: 2026-07-16T04:26:10.872491788Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f698d-5af0-71b2-a6dd-ad63f52585b1
   author: joe
   content: 'Shipped as PR-1419 (commit 2ff6fadee). NOTE for advisor: the 2026-07-15 implementation directive said ''Gate + PR, do NOT merge (keystone; advisor-review at PR)'', but the session launch cadence specified ''aida pr ship'', whose standard lifecycle gated on CI green and then MERGED the PR (auto-bump flipped BUG-714 to Completed). The merge is done; a post-merge advisor review of PR-1419 is the remaining safeguard. Scope: new ''aida remote reconcile'' verb (dry-run default, --execute, --yes consent gate), merge_union_auto in git_ops, pure registry unions in node.rs, scrub guard via detect_identity_leaks, hint updates (remote status / mirror push / doctor), docs/multi-hub-sync.md leg 4. Verified end-to-end on a two-bare-hub divergence fixture reproducing the observed gitlab-only node-7 scenario.'
   created_at: 2026-07-16T06:11:39.376854533Z
   modified_at: 2026-07-16T06:11:39.376854533Z
-  session_id: 6d9119d1-46aa-45c4-8184-20c41948a09d
 - id: 019f69a6-d05d-7af1-8ded-3654f8e88d65
   author: joe
   content: 'POST-MERGE ADVISOR REVIEW (2026-07-15): reviewed PR-1419 against the diff after the pr-ship auto-merge. VERDICT: sound — fail-closed. Collisions re-checked post-union via overlapping_ranges() and bail (refuse to publish); union is a merge commit (both tips parent → every hub fast-forwards, NO force-push, NO rebase of published history); scrub guard reuses detect_identity_leaks and hard-blocks + pushes nothing on a raw-identity leak. 13 tests + two-diverged-tips fixture + live smoke reproducing the node-7/block-3001 failure. No remediation needed. NOTE the process gap: the keystone directive said ''do not merge, advisor-review at PR'' but the session''s pr-ship cadence auto-merged on CI green — the launch instructions overrode the spec''s hold.'
   created_at: 2026-07-16T06:39:27.837841048Z
   modified_at: 2026-07-16T06:39:27.837841048Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f698c-f850-7f93-858a-9478af2c881d
   author: aida-auto-bump
@@ -72,27 +69,7 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
-processing_record:
-- id: 019f698c-f856-7843-b4cc-8eb33ef9893b
-  timestamp: 2026-07-16T06:11:14.134026969Z
-  agent: implementer
-  commit_sha: 37625515573e3b6f61f76b5cc8f07246b13c1a2f
-  summary: Completed via merge 37625515
 implementation_info:
   implemented: false
   completed_at: 2026-07-16T06:11:13.924294004Z
   completion_sha: 37625515573e3b6f61f76b5cc8f07246b13c1a2f
-decision_request:
-  question: STORY-760 mirror fan-out only PUSHES, so a gitlab-only commit leaves gitlab permanently ahead and rejects every aida push. How much to invest in the reconcile fix?
-  choices:
-  - label: Full aida remote reconcile verb
-    consequence: fetch every hub, CRDT-union-merge diverged tips, push union to all, scrub-gated; touches store-integrity merge
-    resolution: build full verb (advisor-review at PR)
-  - label: Lighter MVP
-    consequence: fetch all hubs + print/execute a guided git union recipe; semi-manual
-    resolution: build MVP
-  recommended: 0
-  rationale: Recurring integrity divergence on the canonical store; union logic already lives in conflict.rs so the real verb is low marginal cost over the manual dance.
-  answered: 0
-  asked_at: 2026-07-13T07:03:35.767416597Z
-  answered_at: 2026-07-15T02:02:50.279605372Z

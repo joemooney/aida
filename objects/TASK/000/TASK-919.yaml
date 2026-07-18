@@ -22,23 +22,3 @@ comments:
   content: 'Advisor note (overnight groom): NOT headless-implementable — promoting a recurring rule to a gate is an advisor/operator judgment triggered by threshold data, not a standalone code task. Leave parked until the violations log crosses the threshold.'
   created_at: 2026-07-01T06:45:14.673440507Z
   modified_at: 2026-07-01T06:45:14.673440507Z
-deferred: true
-deferred_at: 2026-07-14T04:54:44.870822421Z
-deferred_until: TASK-916 harvest surfaces a rule recurring past threshold
-decision_request:
-  question: Build the auto rule->gate promotion pipeline (threshold-triggered), or hold it?
-  choices:
-  - label: Build now
-    consequence: speculative; no recurring-violation data exists to promote yet
-    resolution: build
-  - label: Defer with trigger
-    consequence: implement only once TASK-916 harvest surfaces >=1 rule recurring past threshold
-    resolution: defer
-  - label: Reject
-    consequence: SPIKE-67 terminated at 100% rule-only, no gate warranted
-    resolution: reject
-  recommended: 1
-  rationale: The promoter has zero input until the field harvest runs; wire it to that trigger rather than build speculatively.
-  answered: 1
-  asked_at: 2026-07-13T07:03:36.728239905Z
-  answered_at: 2026-07-14T04:48:19.788936905Z

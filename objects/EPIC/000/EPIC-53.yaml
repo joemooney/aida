@@ -60,17 +60,3 @@ comments:
   modified_at: 2026-06-27T02:01:41.284720331Z
 archived: true
 archived_at: 2026-07-15T02:12:31.903283754Z
-decision_request:
-  question: The flow-cockpit vision (blocked/waiting board as TUI home) overlaps the EPIC-54 redesign that became the default TUI. One effort or two?
-  choices:
-  - label: Fold the remaining cockpit children into EPIC-54 as scopes/verbs, close EPIC-53
-    consequence: one coherent surface
-    resolution: fold
-  - label: Keep EPIC-53 distinct
-    consequence: home-view concern orthogonal to the palette redesign
-    resolution: keep separate
-  recommended: 0
-  rationale: Two open TUI epics competing for the same default surface risks divergent models; the blocked-board belongs as a scope inside the redesign shell.
-  answered: 0
-  asked_at: 2026-07-13T07:05:10.623391110Z
-  answered_at: 2026-07-15T02:04:26.619150064Z

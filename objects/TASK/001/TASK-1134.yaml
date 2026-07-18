@@ -14,23 +14,3 @@ relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-12T19:13:57.909431486Z
-deferred: true
-deferred_at: 2026-07-15T02:11:42.418557860Z
-deferred_until: a real coupled spec-set needs single-branch drain
-decision_request:
-  question: STORY-711 (advisor lock) is done; this cluster (TASK-1134-1139) is the coupled single-branch sequential-drain follow-on. Build now or defer?
-  choices:
-  - label: Build the cluster now
-    consequence: 6 small tasks add a supported single-branch drain path for coupled specs
-    resolution: approve cluster
-  - label: Defer behind a trigger
-    consequence: no work until a real coupled set needs single-branch drain
-    resolution: defer cluster
-  - label: Reject
-    consequence: STORY-711 lock already covers the collision case
-    resolution: reject cluster
-  recommended: 1
-  rationale: Low priority, no current coupled set demanding it, empty descriptions — defer behind first real need rather than build speculative machinery.
-  answered: 1
-  asked_at: 2026-07-13T07:03:32.461723294Z
-  answered_at: 2026-07-15T02:02:32.714906549Z

@@ -48,4 +48,3 @@ comments:
   content: 'Advisor triage 2026-07-17: rejecting — the phase-1 failure was environmental, not an orchestrator bug. A machine-wide crash at ~21:52 took down every open Claude session simultaneously (transcripts across three unrelated projects all end 21:52-21:54); the implementer exited with no PR because the machine died under it, not because the orchestrator misbehaved. The real defect this episode surfaced — TASK-919 was queued at all despite a recorded Defer answer — is filed as BUG-730.'
   created_at: 2026-07-18T05:38:53.838029891Z
   modified_at: 2026-07-18T05:38:53.838029891Z
-  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b

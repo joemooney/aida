@@ -30,7 +30,6 @@ comments:
   content: 'SECURITY/PRIVACY (2026-07-13): the local task-845-identity-link branch bakes the operator''s REAL work + personal emails into the alias EXAMPLES in doc-comments (aida-core/src/alias.rs module doc + aida-cli/src/cli.rs:2454 which is a /// clap doc = --help). Before this branch is ever merged, replace those with generic placeholders (e.g. user@corp.example / user@personal.example). It is local-only + unmerged now (not public), but would land the employer domain on public main + in --help if merged as-is. Related: BUG-724 (safe-by-default redaction).'
   created_at: 2026-07-14T04:35:56.034411514Z
   modified_at: 2026-07-14T04:35:56.034411514Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f09e2-ae2d-7370-b119-73072f7e1c74
   author: aida-auto-bump

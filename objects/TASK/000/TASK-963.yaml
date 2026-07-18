@@ -18,6 +18,3 @@ relationships:
 - rel_type: Child
   target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
   created_at: 2026-06-27T19:18:02.263353645Z
-deferred: true
-deferred_at: 2026-07-13T06:14:29.657013290Z
-deferred_until: STORY-621 supervised forge-migration session picks up slice 2

@@ -24,7 +24,6 @@ comments:
   content: 'IMPLEMENTATION DIRECTIVE (guided decision): implement `integrate --strategy stacked` auto-promotion of deferred stacked children BEHIND an explicit `--promote-stacked` opt-in flag. Default stays the current exit-2 `/aida-rebase` manual pointer (no behavior change unless opted in). When --promote-stacked: rebase --onto + force-push-with-lease the promoted child branches in a temp worktree, gated by a LEASE GUARD — never force-push a PR branch whose lease you don''t hold. Seams: the integrator/`integrate` strategy dispatch in main.rs; the existing exit-2 /aida-rebase pointer; git_ops force-with-lease. Keep the safe default; the opt-in carries the unattended-force-push risk behind the lease guard. Gate + PR, do NOT merge (keystone).'
   created_at: 2026-07-16T04:26:09.460727992Z
   modified_at: 2026-07-16T04:26:09.460727992Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f6966-2e4f-7371-9e65-cb9ceb42f93b
   author: aida-auto-bump
@@ -33,30 +32,7 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
-processing_record:
-- id: 019f6966-2ebf-71d3-ab4a-4cbfa0823f98
-  timestamp: 2026-07-16T05:28:52.159009496Z
-  agent: implementer
-  commit_sha: d157d234fcb36611226404ae735dd132de7c21e4
-  summary: Completed via merge d157d234
 implementation_info:
   implemented: false
   completed_at: 2026-07-16T05:28:50.935005999Z
   completion_sha: d157d234fcb36611226404ae735dd132de7c21e4
-decision_request:
-  question: Should integrate --strategy stacked auto force-push-rebase promoted stacked children, or keep the manual /aida-rebase handoff?
-  choices:
-  - label: Auto stack-aware promotion
-    consequence: fully autonomous stacked drains, but integrator force-pushes origin PR branches unattended
-    resolution: auto
-  - label: Keep exit-2 /aida-rebase pointer
-    consequence: human does the rebase
-    resolution: manual
-  - label: Behind --promote-stacked opt-in
-    consequence: default manual, opt-in autonomous with lease guard
-    resolution: opt-in
-  recommended: 2
-  rationale: Unattended force-push of shared PR branches is exactly the hazard class in memory; ship behind an opt-in with the lease guard, keep the safe default.
-  answered: 2
-  asked_at: 2026-07-13T07:03:38.493726296Z
-  answered_at: 2026-07-14T04:51:14.380961403Z

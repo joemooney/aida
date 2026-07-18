@@ -61,7 +61,6 @@ comments:
   content: 'IMPLEMENTATION DECISION (operator, guided session 2026-07-14): scope = EVERYTHING IN ONE PR — add the autonomy_mode field to RealPhaseDriver (resolved once at dispatch), migrate ALL in-process zen reads to the typed field, AND add a regression guard (a test that fails if a new bare in-process AIDA_ZEN read appears outside the sanctioned zen.rs child-transport path). zen.rs::detect() stays as the child-process/skill transport. Fully closes ADR-10.'
   created_at: 2026-07-15T04:28:07.496963146Z
   modified_at: 2026-07-15T04:28:07.496963146Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f643a-1afe-7751-8256-9f30c2fc77f6
   author: aida-auto-bump
@@ -70,30 +69,7 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
-processing_record:
-- id: 019f643a-1b04-7373-8e1d-f8ce0fe13688
-  timestamp: 2026-07-15T05:22:37.444906005Z
-  agent: aida
-  commit_sha: e3116c46cb36c37aacc127ecbc8dc16a7e252893
-  summary: Completed via merge e3116c46
 implementation_info:
   implemented: false
   completed_at: 2026-07-15T05:22:37.244347032Z
   completion_sha: e3116c46cb36c37aacc127ecbc8dc16a7e252893
-decision_request:
-  question: Ratify ADR-10 — realize the unified typed AutonomyMode now (bigger PR on the hot zen-dispatch path), or downgrade to a follow-up?
-  choices:
-  - label: Accept as written
-    consequence: implement typed AutonomyMode now, keep AIDA_ZEN only as child transport
-    resolution: accept
-  - label: Downgrade to follow-up TASK
-    consequence: keep the current guardrail PR focused
-    resolution: downgrade
-  - label: Reject
-    consequence: the AIDA_ZEN env side-channel is acceptable
-    resolution: reject
-  recommended: 0
-  rationale: The ADR already records your in-scope-now choice and the --zen/--no-human asymmetry is a real structural gap behind ADR-7.
-  answered: 0
-  asked_at: 2026-07-13T07:03:41.121022483Z
-  answered_at: 2026-07-15T02:06:30.984594028Z

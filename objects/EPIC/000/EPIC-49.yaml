@@ -54,17 +54,3 @@ implementation_info:
   implemented: false
   completed_at: 2026-06-27T16:29:32.053746620Z
   completion_sha: c2533e5c5d59e1c6c8c43f2ecfb0e354532c6c4d
-decision_request:
-  question: The streamline/niche 'product spine' epic is dormant (one unqueued child TASK-935). A tomorrow focus, or a standing background posture?
-  choices:
-  - label: Treat as a standing posture, close the epic
-    consequence: file streamlining passes ad hoc as usage data surfaces them
-    resolution: close
-  - label: Re-activate as a near-term driver
-    consequence: queue the second usage-grounded streamlining pass now
-    resolution: reactivate
-  recommended: 0
-  rationale: Subtraction-as-progress is a continuous posture, not a bounded deliverable; an always-open near-empty epic adds rollup noise without focusing effort.
-  answered: 0
-  asked_at: 2026-07-13T07:05:12.683798234Z
-  answered_at: 2026-07-15T02:05:24.818406329Z

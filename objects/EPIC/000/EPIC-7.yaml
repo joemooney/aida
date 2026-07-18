@@ -42,20 +42,3 @@ trace_links:
   notes: 'AI tool: claude'
   created_at: 2025-12-11T00:58:30.967491448Z
   created_by: scan
-decision_request:
-  question: ImplementationInfo (implemented, summary, last_agent_run, risk_notes, test_coverage_notes, source_tool, confidence) was specced against the pre-git-canonical YAML+SQLite storage that no longer exists; several fields are now captured elsewhere. Still build it?
-  choices:
-  - label: Reject as OBE
-    consequence: git log + trace comments + status already carry most of this
-    resolution: reject
-  - label: Rebuild modernized, narrowed to genuinely-new fields
-    consequence: risk_notes + test_coverage_notes + summary against the git-canonical model
-    resolution: rebuild narrow
-  - label: Approve as-written
-    consequence: but the SQLite write path is gone, needs rework anyway
-    resolution: approve
-  recommended: 1
-  rationale: Most fields are derivable from git/trace/status, but risk + test-coverage + summary notes aren't captured anywhere; salvage those, drop the redundant/stale-backend parts.
-  answered: 1
-  asked_at: 2026-07-13T07:05:01.774605953Z
-  answered_at: 2026-07-15T02:03:21.651314278Z

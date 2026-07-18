@@ -26,13 +26,11 @@ comments:
   content: 'IMPLEMENTATION DECISION (operator, guided session 2026-07-15): autopilot composes as a HIGHER TIER — a 4th AutonomyMode variant (extending the ADR-10 typed enum, per ''future modes extend one enum''), NOT a separate posture. autonomy = Default | Zen | NoHuman | Autopilot; the Autopilot tier BOTH auto-disposes (via the existing four-gate AutopilotEnvelope in autopilot.rs) AND suppresses pauses. This refines the earlier ''config posture'' answer: the precedence choice settles it as a unified mode/axis, not an orthogonal posture.'
   created_at: 2026-07-16T02:34:27.660823632Z
   modified_at: 2026-07-16T02:34:27.660823632Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 - id: 019f69b9-4684-7a51-bc17-231e631f2801
   author: joe
   content: 'Implemented as the TASK-0432 ratification slice, honoring the TASK-1147 decision (no real groom execution authority): (1) autopilot::effective_envelope — the pure demote-only precedence contract (headless demotes propose→never + forces grounding; solo ParkForHuman parks all; solo never widens), unit-tested over the full headless × posture × authority cross-product incl. the one-keystone-classifier fence/posture agreement test; (2) aida autopilot inspect now grades under the composed effective envelope ([autopilot] config overrides + AIDA_HEADLESS + presence::current_solo) and names the context in banner + JSON; (3) autonomy doc §8 points at the enforcing code. The groom --autopilot execution flag stays deferred per TASK-1147.'
   created_at: 2026-07-16T06:59:37.732621234Z
   modified_at: 2026-07-16T06:59:37.732621234Z
-  session_id: eb11e8a1-7b5f-4701-b33d-fe144bcbb146
 - id: 019f69bc-fff8-7c71-8834-8c65abb1e3a6
   author: joe
   content: |-
@@ -42,7 +40,6 @@ comments:
     ADVISOR ASSESSMENT: the orthogonal implementation is SOUNDER than the recorded decision. Autopilot is a grooming-stage concern; pauses are drive-stage — coupling them (the higher-tier option) is operationally incoherent and re-opens the mode-vs-posture question ADR-10 separated. This is the orthogonal option originally recommended. Well-built + tested. Let it stand; RECONCILE the record: the effective decision is ORTHOGONAL POSTURE, not higher-tier. Operator: confirm in the morning.
   created_at: 2026-07-16T07:03:41.816689754Z
   modified_at: 2026-07-16T07:03:41.816689754Z
-  session_id: 94b6f5ab-ed29-42a8-9329-8a64394e506a
 history:
 - id: 019f69cf-39c9-77c2-9548-d8921b9aeeb5
   author: aida-auto-bump
@@ -51,30 +48,7 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
-processing_record:
-- id: 019f69cf-39cf-7fb2-97ec-ad323b9f4893
-  timestamp: 2026-07-16T07:23:36.271193923Z
-  agent: implementer
-  commit_sha: 398c82449a5eca7934d1b02ff31d334130e4fdd9
-  summary: Completed via merge 398c8244
 implementation_info:
   implemented: false
   completed_at: 2026-07-16T07:23:36.072853615Z
   completion_sha: 398c82449a5eca7934d1b02ff31d334130e4fdd9
-decision_request:
-  question: How should advisor 'autopilot' be surfaced and composed with --zen/--no-human/solo/intake --apply?
-  choices:
-  - label: Config posture [advisor] autopilot
-    consequence: persistent authority-envelope above the autonomy modes
-    resolution: posture
-  - label: Per-invocation --autopilot flag
-    consequence: ephemeral, explicit each run
-    resolution: flag
-  - label: First-class autonomy mode
-    consequence: one unified enum alongside Default/Zen/NoHuman
-    resolution: mode
-  recommended: 0
-  rationale: Autopilot is a standing authority-envelope policy, not a pause-behavior; keep AutonomyMode about pauses, not authority.
-  answered: 0
-  asked_at: 2026-07-13T07:03:40.229425721Z
-  answered_at: 2026-07-14T04:50:05.513615949Z

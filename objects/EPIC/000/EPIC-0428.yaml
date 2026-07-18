@@ -79,20 +79,3 @@ comments:
   content: Commit 9ad727eb8 references this requirement
   created_at: 2026-06-30T18:55:52.168918361Z
   modified_at: 2026-06-30T18:55:52.168918361Z
-decision_request:
-  question: Advisor autopilot (partially-autonomous disposition) has 20 approved-unqueued children and only the envelope contract stubbed. How far, how soon?
-  choices:
-  - label: Park behind stabilization
-    consequence: keep the advisor fully human-driven for now
-    resolution: park
-  - label: Drive only the auditability + reversal surface now
-    consequence: inspect/undo/challenge autopilot decisions; defer real auto-approval authority
-    resolution: audit-only
-  - label: Full build now
-    consequence: wire the four-gate envelope to real approve/reject/queue authority
-    resolution: full
-  recommended: 1
-  rationale: Auditability/reversal is safe substrate that pays off regardless; granting real disposition authority is a keystone-autonomy call that shouldn't ship unsupervised during bugs-before-marketing.
-  answered: 1
-  asked_at: 2026-07-13T07:05:04.603792551Z
-  answered_at: 2026-07-15T02:02:56.510979265Z

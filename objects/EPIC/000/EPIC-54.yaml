@@ -184,17 +184,3 @@ comments:
   modified_at: 2026-06-26T18:56:03.080161066Z
 archived: true
 archived_at: 2026-07-15T02:11:49.712171811Z
-decision_request:
-  question: The action->target TUI redesign is the default surface with 42 children shipped, only polish left (TASK-1074/1075/1076/1078, STORY-744). Is the redesign done?
-  choices:
-  - label: Declare it shipped and close the epic
-    consequence: remaining polish stands alone in the backlog
-    resolution: close
-  - label: Keep open until the drive/auto-remedy loop + zen-gate polish land, then close
-    consequence: umbrella tracks the last polish
-    resolution: keep open
-  recommended: 0
-  rationale: The core protocol shipped and is the default surface; leaving the epic open just tracks ordinary polish that doesn't need an umbrella.
-  answered: 0
-  asked_at: 2026-07-13T07:05:08.225575464Z
-  answered_at: 2026-07-15T02:05:14.889887039Z

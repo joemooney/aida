@@ -56,17 +56,3 @@ comments:
   modified_at: 2026-06-26T18:54:08.692485902Z
 archived: true
 archived_at: 2026-07-15T02:12:30.603615271Z
-decision_request:
-  question: The Ctrl-D immediate-response layer has its core shipped (PTY suspend/resume + inject); only a live e2e verification (TASK-911) and an inject-picker nicety (TASK-912) remain. Close it?
-  choices:
-  - label: Run TASK-911 live verification then close as shipped
-    consequence: TASK-912 becomes optional standalone polish
-    resolution: verify+close
-  - label: Keep open and build the per-action inject-picker before closing
-    consequence: fuller feature
-    resolution: keep open
-  recommended: 0
-  rationale: The architecturally-risky pieces are merged; one live verification is the honest close gate, the inject-picker is a nice-to-have.
-  answered: 0
-  asked_at: 2026-07-13T07:05:14.669167218Z
-  answered_at: 2026-07-15T02:03:47.242159020Z

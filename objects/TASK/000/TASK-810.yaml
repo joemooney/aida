@@ -16,20 +16,3 @@ relationships:
 - rel_type: Child
   target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
   created_at: 2026-06-14T15:07:56.598725195Z
-deferred: true
-deferred_at: 2026-07-14T04:54:45.569390566Z
-deferred_until: real demand for a strong-isolation sandbox surfaces
-decision_request:
-  question: TASK-810 is approved + zen-ready, but parent STORY-616 says PARKED per SPIKE-61 (wait for demand). Defer to match, or build the Firecracker/gVisor sandbox now?
-  choices:
-  - label: Defer/park + strip stale zen-ready tag
-    consequence: align with parent, no work now
-    resolution: defer
-  - label: Build now
-    consequence: true KVM boundary for unattended drains, but rootfs-build + ops cost, no demand
-    resolution: build
-  recommended: 0
-  rationale: Research explicitly says park until demand; the zen-ready tag is stale and would pull a heavy build forward prematurely.
-  answered: 0
-  asked_at: 2026-07-14T02:31:59.045923066Z
-  answered_at: 2026-07-15T02:01:43.410435401Z

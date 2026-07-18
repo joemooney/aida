@@ -29,20 +29,3 @@ comments:
   content: 'From gnhf analysis (2026-06-29): gnhf supports 7 executors (claude/codex/copilot/pi/rovodev/opencode + any ACP target) vs AIDAs Claude-first drain. The --agent selector (TASK-1048) should consider the ACP (Agent Client Protocol) abstraction so a drain phase runs Codex/Gemini/etc without bespoke per-vendor plumbing — keeping the cross-vendor mailbox as the moat.'
   created_at: 2026-06-30T06:16:44.149282639Z
   modified_at: 2026-06-30T06:16:44.149282639Z
-decision_request:
-  question: The multi-vendor bake-off (aida zen --compete, N agents same spec, judge picks winner) is a premium N-times-cost flagship; STORY-722 scopes a 2-agent version. How much do we commit now?
-  choices:
-  - label: Approve+queue the full N-agent EPIC now
-    consequence: flagship demo, but large build and Nx run cost mid-stabilization
-    resolution: full
-  - label: Ship the 2-agent STORY-722 slice first
-    consequence: smaller lift, learn-then-scale, yields routing data
-    resolution: slice first
-  - label: Defer the whole EPIC
-    consequence: no new surface now
-    resolution: defer
-  recommended: 1
-  rationale: The 2-agent slice is the smallest-valuable version that still demonstrates the cross-vendor thesis and yields dispatch-policy data; scale to N only once it pays off.
-  answered: 1
-  asked_at: 2026-07-13T07:04:57.320533389Z
-  answered_at: 2026-07-15T02:03:06.313056254Z

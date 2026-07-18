@@ -187,17 +187,3 @@ comments:
   modified_at: 2026-06-26T23:51:01.984203464Z
 archived: true
 archived_at: 2026-07-15T02:12:57.917239504Z
-decision_request:
-  question: The 'split aida-tui into a companion repo' epic has 4 of 5 children rejected and is contradicted by EPIC-54 (deepening the TUI in-process). Keep it alive?
-  choices:
-  - label: Formally close/reject EPIC-29
-    consequence: the split is off; the TUI is going deeper in-repo
-    resolution: close
-  - label: Keep parked as a post-alpha option
-    consequence: in case the in-process direction reverses
-    resolution: park
-  recommended: 0
-  rationale: The active redesign moves the opposite way; a contradicted, mostly-rejected epic left in-progress is pure clutter in the rollup.
-  answered: 0
-  asked_at: 2026-07-13T07:05:13.679355459Z
-  answered_at: 2026-07-15T02:03:40.620176712Z

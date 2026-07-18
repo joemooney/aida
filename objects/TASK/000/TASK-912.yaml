@@ -16,6 +16,3 @@ relationships:
 - rel_type: Child
   target_id: 019efd99-f8b0-7cf3-9407-d184bf0e2d03
   created_at: 2026-06-26T17:40:26.014342639Z
-deferred: true
-deferred_at: 2026-07-13T07:01:01.551831251Z
-deferred_until: users ask for per-action inject selection
