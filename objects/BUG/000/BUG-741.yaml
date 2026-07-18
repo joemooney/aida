@@ -8,10 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:47:13.231442409Z
-modified_at: 2026-07-18T19:19:07.066118241Z
+modified_at: 2026-07-18T19:58:35.976539824Z
 req_type: Bug
 tags:
 - aida:session liveness codex from-dogfood
+- batch:papercuts-0718
 comments:
 - id: 019f76ab-043a-7b71-ad18-40bbb1994fcc
   author: joe
