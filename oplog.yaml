@@ -34366,5 +34366,31 @@ operations:
   timestamp: 2026-07-18T21:06:46.000837791Z
   kind: !SetStatus
     status: Completed
-clock: 3194
+- id: 019f771b-7252-7560-a6d5-a37d1e58650e
+  target_id: 019f771b-6b1c-7241-9949-35734c579ca0
+  author: aida
+  node_id: '1'
+  lamport: 3195
+  timestamp: 2026-07-18T21:21:55.282937571Z
+  kind: !Create
+    title: 'Review PR-1497: [AI:codex] fix(pr-ship): prefer PR title for squash subject (TASK-142)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `019f770e`) for branch `task-142`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1497>
+      - Branch: `task-142` → `main`
+
+      ## Covers
+
+      - TASK-142
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1497` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3195
 node_id: '1'
