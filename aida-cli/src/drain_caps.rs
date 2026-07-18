@@ -248,6 +248,7 @@ fn usage_tokens(v: &serde_json::Value) -> Option<u64> {
 /// return its cumulative token total, or `None` if the line is not JSON / has
 /// no usage.
 // trace:TASK-966 | ai:claude
+#[allow(dead_code)] // per-line seam over usage_tokens; exercised by tests, production sums via tokens_from_log
 pub(crate) fn parse_usage_tokens(line: &str) -> Option<u64> {
     let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
     usage_tokens(&v)

@@ -94,6 +94,7 @@ impl SleepInhibitor {
     }
 
     /// True while a sleep-prevention assertion is live.
+    #[allow(dead_code)] // invoked-then-released contract is asserted in tests; production reads tool() for the notice
     pub(crate) fn is_active(&self) -> bool {
         self.child.is_some()
     }

@@ -122,8 +122,14 @@ pub enum Scope {
     /// `TargetItem::id`, not a spec id, and its only verb is `reply`.
     // trace:STORY-701 | ai:claude
     Mail,
+    // Placeholder scopes below (STORY-724): not offered in the cockpit and
+    // constructed only by tests until each surface is wired. Sessions doubles
+    // as the loaded-scope cache sentinel, so it escapes the dead-code lint.
+    #[allow(dead_code)]
     Prs,
+    #[allow(dead_code)]
     History,
+    #[allow(dead_code)]
     Findings,
     Sessions,
 }

@@ -3153,6 +3153,7 @@ pub(crate) trait BatchDriver {
 ///
 /// Pure sequencing; the I/O lives in the [`BatchDriver`].
 /// trace:TASK-285 EPIC-28 | ai:claude
+#[allow(dead_code)] // uncapped entry: production callers moved to drain_batch_with_caps; kept as the test/doc anchor
 pub(crate) fn drain_batch(
     driver: &mut dyn BatchDriver,
     max: Option<usize>,
@@ -3635,6 +3636,7 @@ pub(crate) fn drain_batch_single_branch(
 /// carries the remaining allowance into each subsequent batch.
 /// `max_failures` is **per-batch** (not per-chain) — a chain `A,B,C` keeps an
 /// independent failure budget for each batch. trace:TASK-310 EPIC-28
+#[allow(dead_code)] // uncapped entry: production callers moved to drain_batch_chain_with_caps; kept as the test/doc anchor
 pub(crate) fn drain_batch_chain<'a, F>(
     batch_names: &[String],
     max: Option<usize>,

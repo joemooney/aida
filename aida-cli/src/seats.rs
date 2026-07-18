@@ -83,6 +83,7 @@ impl SeatPolicy {
     }
 
     /// True when this key's seat was set by config (vs. the built-in default).
+    #[allow(dead_code)] // config-vs-default probe for a future "why this seat" surface; asserted in tests
     pub fn is_overridden(&self, key: &str) -> bool {
         self.overrides.contains_key(key)
     }
