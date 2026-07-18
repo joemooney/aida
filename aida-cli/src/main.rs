@@ -32792,8 +32792,8 @@ fn pr_ship_handler(
     no_trailer_check: bool,
 ) -> Result<()> {
     use pr_ship::{
-        format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
-        recovery_hint, PrShipOptions, ShipStep, StepOutcome,
+        branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
+        recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
 
     let opts = PrShipOptions {
@@ -32869,72 +32869,85 @@ fn pr_ship_handler(
         None => {
             // Look up an open change for the current branch through the forge
             // (GitHub: `gh pr list --head`; GitLab: `glab mr list --source-branch`).
-            // Collapse the 5-state ChangeLookup to the prior Option<u64>: only a
-            // definitively-Found change yields a number; every other state (no
-            // change / CLI missing / failed / unreachable) falls through to the
-            // create path, exactly as the old raw lookup's failure-to-None did.
-            // trace:TASK-961 trace:STORY-621 | ai:claude
-            let existing: Option<u64> = match change_lookup_for_branch(&project_root, &branch) {
-                crate::forge::ChangeLookup::Found(c) => Some(c.id),
-                _ => None,
-            };
-
-            if let Some(existing) = existing {
-                eprintln!("  step 1: found open PR-{} for branch {}", existing, branch);
-                log_ship_activity(
-                    &main_worktree,
-                    Some(existing),
-                    &ShipStep::ResolvePr {
-                        create_if_needed: false,
-                    },
-                    &StepOutcome::Ok,
-                );
-                existing
-            } else if dry_run {
-                eprintln!(
-                    "  step 1: would create new PR for branch {} (dry-run)",
-                    branch
-                );
-                // Use a placeholder so the rest of the dry-run plan
-                // still has a coherent N to print.
-                0
-            } else if let Some(merged_n) = latest_merged_pr_for_branch(&project_root, &branch) {
-                // BUG-574: no OPEN PR for the branch, but a merged one exists —
-                // the branch already shipped. `pr_ship_create_pr` would fail with
-                // "no commits between" (a benign already-shipped state reported as
-                // a hard error). Treat it as already-merged and exit 0 after the
-                // idempotent pull/cleanup steps. trace:BUG-574 | ai:claude
-                eprintln!(
-                    "  step 1: no open PR for branch {} — PR-{} already merged",
-                    branch, merged_n
-                );
-                already_merged = true;
-                log_ship_activity(
-                    &main_worktree,
-                    Some(merged_n),
-                    &ShipStep::ResolvePr {
-                        create_if_needed: false,
-                    },
-                    &StepOutcome::Skipped("PR already merged for this branch".into()),
-                );
-                merged_n
-            } else {
-                let new_n = pr_ship_create_pr(&project_root, &branch)?;
-                eprintln!(
-                    "  {} created PR-{}",
-                    crate::glyph(crate::glyphs::Glyph::Check).green(),
-                    new_n
-                );
-                log_ship_activity(
-                    &main_worktree,
-                    Some(new_n),
-                    &ShipStep::ResolvePr {
-                        create_if_needed: true,
-                    },
-                    &StepOutcome::Ok,
-                );
-                let _ = parse_pr_number_from_create_output; // import keep
-                new_n
+            // TASK-141: only a definitive "no change" may fall through to
+            // create. CLI/auth/network/parse failures are inconclusive; creating
+            // after those failures masks the resume problem behind gh's "PR
+            // already exists for this branch" error.
+            // trace:TASK-961 trace:STORY-621 trace:TASK-141 | ai:codex
+            let lookup = change_lookup_for_branch(&project_root, &branch);
+            match branch_pr_resolution_from_lookup(&lookup) {
+                BranchPrResolution::Found(existing) => {
+                    eprintln!("  step 1: found open PR-{} for branch {}", existing, branch);
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(existing),
+                        &ShipStep::ResolvePr {
+                            create_if_needed: false,
+                        },
+                        &StepOutcome::Ok,
+                    );
+                    existing
+                }
+                BranchPrResolution::LookupFailed(reason) => {
+                    log_ship_activity(
+                        &main_worktree,
+                        None,
+                        &ShipStep::ResolvePr {
+                            create_if_needed: false,
+                        },
+                        &StepOutcome::Failed(reason.clone()),
+                    );
+                    anyhow::bail!(reason);
+                }
+                BranchPrResolution::Create => {
+                    if dry_run {
+                        eprintln!(
+                            "  step 1: would create new PR for branch {} (dry-run)",
+                            branch
+                        );
+                        // Use a placeholder so the rest of the dry-run plan
+                        // still has a coherent N to print.
+                        0
+                    } else if let Some(merged_n) =
+                        latest_merged_pr_for_branch(&project_root, &branch)
+                    {
+                        // BUG-574: no OPEN PR for the branch, but a merged one exists —
+                        // the branch already shipped. `pr_ship_create_pr` would fail with
+                        // "no commits between" (a benign already-shipped state reported as
+                        // a hard error). Treat it as already-merged and exit 0 after the
+                        // idempotent pull/cleanup steps. trace:BUG-574 | ai:claude
+                        eprintln!(
+                            "  step 1: no open PR for branch {} — PR-{} already merged",
+                            branch, merged_n
+                        );
+                        already_merged = true;
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(merged_n),
+                            &ShipStep::ResolvePr {
+                                create_if_needed: false,
+                            },
+                            &StepOutcome::Skipped("PR already merged for this branch".into()),
+                        );
+                        merged_n
+                    } else {
+                        let new_n = pr_ship_create_pr(&project_root, &branch)?;
+                        eprintln!(
+                            "  {} created PR-{}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            new_n
+                        );
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(new_n),
+                            &ShipStep::ResolvePr {
+                                create_if_needed: true,
+                            },
+                            &StepOutcome::Ok,
+                        );
+                        new_n
+                    }
+                }
             }
         }
     };

@@ -849,17 +849,10 @@ impl Forge for GitHubForge {
             .unwrap_or("")
             .trim()
             .to_string();
-        let id = url
-            .rsplit("/pull/")
-            .next()
-            .and_then(|s| {
-                s.chars()
-                    .take_while(|c| c.is_ascii_digit())
-                    .collect::<String>()
-                    .parse()
-                    .ok()
-            })
-            .unwrap_or(0);
+        let id = crate::pr_ship::parse_pr_number_from_create_output(&String::from_utf8_lossy(
+            &out.stdout,
+        ))
+        .unwrap_or(0);
         Ok(ChangeRef {
             id,
             url,
