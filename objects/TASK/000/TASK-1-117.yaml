@@ -3,12 +3,12 @@ spec_id: TASK-1-117
 agreed_id: TASK-141
 title: aida pr ship (no-arg) fails to resume an existing open PR
 description: 'Repro tonight on task-1020 / PR #1420: the first ''aida pr ship'' created the PR, then exited on red CI with ''fix, push, and re-run aida pr ship''. After fixing and pushing, the no-arg re-run printed ''could not invoke gh pr create'' and exited 1 — the documented resume behavior (no-arg resolves the current branch''s open PR) did not find #1420 and fell through to gh pr create, which gh refuses when a PR already exists for the head branch. Workaround: pass the number explicitly (aida pr ship 1420). The failure-message advice and the resolve-if-exists behavior disagree; likely the head-branch PR lookup failed or was skipped right after branch tracking was freshly set up.'
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-16T07:17:14.807141877Z
-modified_at: 2026-07-16T07:17:14.807141877Z
+modified_at: 2026-07-18T18:16:19.838146620Z
 req_type: Task
 tags:
 - from-advisor:general
