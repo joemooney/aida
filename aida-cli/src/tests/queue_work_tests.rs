@@ -264,6 +264,21 @@ fn scope_for_scope_beats_parent_epic() {
     assert_eq!(scope, "EPIC-21");
 }
 
+/// BUG-739: legacy rows auto-stamped with the generic Claude harness lease
+/// must not route queue-work into the shared harness checkout.
+#[test]
+fn scope_ignores_legacy_harness_worktree_for_scope() {
+    let bug = req("BUG-739", None, RequirementType::Bug);
+    let qe = entry(
+        bug.id,
+        Some("implementer"),
+        Some(worktree_lease::HARNESS_WORKTREE_SCOPE),
+    );
+    let (scope, target) = derive_scope_from_entry(&qe, &bug);
+    assert_eq!(scope, "BUG-739");
+    assert!(target.is_none());
+}
+
 /// BUG-431 #1: no for_scope → a child story scopes to its OWN id, NOT the
 /// parent epic. Previously this fell back to the parent EPIC, so every
 /// same-epic story in a drain contended for one epic scope (worktree +
@@ -296,6 +311,36 @@ fn scope_falls_back_to_own_id() {
     let qe = entry(bug.id, Some("implementer"), None);
     let (scope, _) = derive_scope_from_entry(&qe, &bug);
     assert_eq!(scope, "BUG-1");
+}
+
+/// BUG-739: queue-add's implicit cwd lease routing must skip the generic
+/// harness scope while keeping explicit `--scope harness-worktree` meaningful.
+#[test]
+fn queue_add_scope_routing_skips_implicit_harness_scope() {
+    let lease = lease_for("harness", worktree_lease::HARNESS_WORKTREE_SCOPE, 1);
+    assert_eq!(
+        queue_add_for_scope_routing(false, None, None, Some(&lease)),
+        None
+    );
+    assert_eq!(
+        queue_add_for_scope_routing(
+            false,
+            Some(worktree_lease::HARNESS_WORKTREE_SCOPE),
+            None,
+            Some(&lease),
+        )
+        .as_deref(),
+        Some(worktree_lease::HARNESS_WORKTREE_SCOPE)
+    );
+}
+
+#[test]
+fn queue_add_scope_routing_keeps_real_implicit_scope() {
+    let lease = lease_for("task", "TASK-1156", 1);
+    assert_eq!(
+        queue_add_for_scope_routing(false, None, None, Some(&lease)).as_deref(),
+        Some("TASK-1156")
+    );
 }
 
 /// spec_matches walks uuid, spec_id (case-insensitive), and
