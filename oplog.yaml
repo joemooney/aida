@@ -35077,5 +35077,17 @@ operations:
   timestamp: 2026-07-19T02:21:50.470770825Z
   kind: !AddTag
     tag: batch:overnight-0718
-clock: 3254
+- id: 019f782e-ca13-7731-a4fb-5682aa4d0db7
+  target_id: 019f782e-b86e-7553-9ca9-b1251b48fd56
+  author: aida
+  node_id: '1'
+  lamport: 3255
+  timestamp: 2026-07-19T02:22:40.147905306Z
+  kind: !Create
+    title: 'deferred flag silently lost: TASK-919 + TASK-911 deferred with triggers on 07-17, found Approved/undeferred on 07-18 — twice — mechanism unknown'
+    description: 'Both specs were explicitly deferred (aida defer with --until triggers) late 2026-07-17 and verified on the deferred shelf (aida list --deferred showed both). By 2026-07-18 18:16 the morning groom''s fence classified them ''coupled'' rather than ''deferred'', and at 19:20 aida list --status approved showed both with no deferred flag — the shelf count for them was 0. Re-deferred 19:20. This is the SECOND loss for this pair (first: the answers recorded 07-14 never applied — that was BUG-730, fixed; this is a distinct post-fix loss of an APPLIED flag). Candidate mechanisms to investigate: aida edit --status transitions clearing the flag; queue remove; the 07-18 15:35 drain crash''s state restoration (''status restored to Approved''); conflict.rs union on store sync dropping the field. Needs a git-log walk of the two YAMLs (aida history --events --id TASK-919) to find the commit where deferred: true vanished and its subject line. Promote to approved once the mechanism is identified.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3255
 node_id: '1'
