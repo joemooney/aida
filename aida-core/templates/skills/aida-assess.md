@@ -19,7 +19,7 @@ every open spec the launcher fenced in, applies the worth-doing judgment, and
 **proposes** a disposition per spec — approve / reject / park-for-human / queue
 — each with one line of reasoning.
 
-You are launched by `aida intake` (headless `claude -p`, advisor role). The CLI
+You are launched by `aida groom` (headless `claude -p`, advisor role). The CLI
 launcher has already done the deterministic work: it computed the **candidate
 fence** (the bounded set you may act on) and resolved the policy. You do the
 judgment — the part a CLI cannot.
@@ -197,8 +197,9 @@ A headless `claude -p` run exits on its own. Make the report your last action.
 
 ## Related skills / commands
 
-- `aida intake` — the launcher that spawns this skill (propose-by-default;
-  `--apply` executes; `[intake]` config tunes the policy).
+- `aida groom` — the launcher that spawns this skill (propose-by-default;
+  `--apply` executes; `[intake]` config tunes the policy; `aida assess` /
+  `aida intake` are deprecated aliases).
 - `/aida-backlog-groom` — the HUMAN-guided sibling (STORY-558): same surface,
   but the operator makes the approve call instead of a cold-boot agent.
 - `/aida-burndown` — the implementer fan-out this pass feeds (the natural next
