@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T02:11:34.735160762Z
-modified_at: 2026-07-19T04:37:11.775073362Z
+modified_at: 2026-07-19T06:22:43.522800583Z
 req_type: Bug
 tags:
 - aida:burndown auto-complete orchestration from-dogfood
@@ -24,4 +24,10 @@ comments:
   content: 'ROOT CAUSE CONFIRMED 2026-07-18 21:36, from the --verbose stream: ''Background tasks still running after 600s; terminating. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.'' Headless claude -p enforces a 600s background-task wait ceiling at turn end — the drain''s CI watches (9-10min CI) exceed it, get terminated, and the session exits with wave PRs unmerged. Reproduced on the 21:16 drain: session ended (result event, $6.28) leaving PR-1509/1510/1511/1512 green-and-unmerged and 6 specs unstarted. FIX: burndown run (and any headless drive that parents CI watches) must spawn claude -p with CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 in the child env; additionally the skill should prefer blocking waits (gh pr checks --watch in foreground) over backgrounded watches at final-turn time. Interim operator workaround: CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 aida burndown run --verbose.'
   created_at: 2026-07-19T04:37:11.775073362Z
   modified_at: 2026-07-19T04:37:11.775073362Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f790a-9142-7100-bf86-e5eb705a4aab
+  author: joe
+  content: 'v3 evidence (2026-07-18 23:0x): CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 on the spawn is NOT sufficient. The drain again ended cleanly (''end_turn'', result: three PRs awaiting CI verdicts each with its own watcher — $50.29 total cost) leaving PR-1513/1514/1515 green-and-unmerged: the CI watchers were spawned inside the per-spec SUBAGENT contexts, which terminate with their agents, so the top-level session''s final turn had no live background tasks to wait on regardless of the ceiling. The fix must be in the /aida-burndown skill''s integration loop: the TOP session blocks on gh pr checks --watch in the FOREGROUND (or polls) until every wave PR is merged before its final report — never delegate terminal-phase watching to subagents or background tasks.'
+  created_at: 2026-07-19T06:22:43.522800583Z
+  modified_at: 2026-07-19T06:22:43.522800583Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
