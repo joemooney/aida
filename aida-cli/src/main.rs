@@ -194,6 +194,8 @@ mod stacks;
 mod state_snapshot;
 mod status_cleanup;
 mod status_display;
+// trace:STORY-715 | ai:claude
+mod statusbar_cmd;
 mod statusline_cmd;
 mod store_cmd;
 // trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
@@ -2182,6 +2184,21 @@ fn run() -> Result<()> {
         return handle_ps(*json, *all);
     }
 
+    // `aida statusbar` — the ambient, read-only terminal-title meter. Like
+    // `aida ps` / `aida integrate` it self-resolves everything it needs
+    // (queue YAML, session leases, cache-backed awaiting channels) and
+    // degrades gracefully offline, so it needs no shared storage handle —
+    // dispatch early. trace:STORY-715 | ai:claude
+    if let Command::Statusbar {
+        interval,
+        once,
+        plain,
+        restore_title,
+    } = &cli.command
+    {
+        return statusbar_cmd::handle_statusbar_command(*interval, *once, *plain, *restore_title);
+    }
+
     // `aida watch` is a read-only consumer of the slice-1 `.aida/events.jsonl`
     // stream (STORY-712): it tails the file, classifies each event in cheap
     // code, and wakes only on actionable verbs. It touches no store/backend, so
@@ -3486,6 +3503,7 @@ fn run() -> Result<()> {
         Command::Internal { .. } => unreachable!("internal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
+        Command::Statusbar { .. } => unreachable!("statusbar is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Away | Command::Home | Command::Presence { .. } | Command::Solo { .. } => {
