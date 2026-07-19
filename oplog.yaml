@@ -35536,5 +35536,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 3289
+- id: 019f7b89-0973-70c2-8cae-6f546611f4f4
+  target_id: 019f7b89-0632-7fd2-a487-99230a88f9c6
+  author: aida
+  node_id: '1'
+  lamport: 3290
+  timestamp: 2026-07-19T18:00:06.259536486Z
+  kind: !Create
+    title: First-class numeric weight/score field on specs (beyond high/med/low priority)
+    description: 'Mirrored from quizdom TASK-2 (VIS-2 dogfood finding, 2026-05-31). quizdom needs continuous per-node weights for question selection; AIDA priority is only high/med/low, so quizdom encodes weights as ''weight:N'' tags and computes selection in-app (quizdom ADR-22). Candidate improvement: an optional numeric/score field on specs — settable via add/edit, sortable and filterable — so downstream apps using AIDA as a data substrate don''t have to tunnel numbers through tags.'
+    req_type: Functional
+    status: Draft
+    priority: Medium
+clock: 3290
 node_id: '1'
