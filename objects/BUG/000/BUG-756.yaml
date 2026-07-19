@@ -8,7 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T02:22:35.630711223Z
-modified_at: 2026-07-19T02:22:35.630711223Z
+modified_at: 2026-07-19T02:24:25.174284840Z
 req_type: Bug
 tags:
 - aida:defer lifecycle kind:observation from-dogfood
+comments:
+- id: 019f7830-6456-7720-aed3-241a857951b8
+  author: joe
+  content: 'Mechanism identified (investigation 2026-07-18 19:30): store commit 90d6b6f90 ''chore: update 70 requirements'' (07:51:29 MST, 71 files, 767 deletions / 7 insertions) stripped deferred:*, decision_request:*, and sibling rich fields dating back to 07-13/07-14 across 70 specs. The commit subject comes from the full-store bulk save in aida-core/src/db/git_backend.rs:652-660. Usage telemetry (~/.aida/usage.jsonl) brackets the moment: ''aida pull'' spans 14:51:20-14:51:39 UTC, covering the 14:51:29 commit — the pull''s store leg (sync/rebase/auto-bump path) performed a whole-store save from an image missing weeks of field history, i.e. conflict.rs union-merge or the reconcile path resolved to stale versions and persisted them. This is silent data loss on pull, not just a defer-flag nit. Recovery for this instance: the pre-clobber values live in the orphan-branch history (git show 90d6b6f90^:objects/...) — the two defer flags were re-applied by hand 19:20.'
+  created_at: 2026-07-19T02:24:25.174284840Z
+  modified_at: 2026-07-19T02:24:25.174284840Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
