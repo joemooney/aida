@@ -1,0 +1,14 @@
+id: 019f7824-a2cf-76d1-93d8-6f850ed9a6fc
+spec_id: BUG-755
+agreed_id: BUG-755
+title: burndown headless drain exits after wave 1 with unmerged PRs 'awaiting CI' and unstarted blessed specs — the promised background merge watches die with the session
+description: 'Observed 2026-07-18 19:10: aida burndown run blessed 8 specs, implemented wave 1 (4 specs: TASK-1121 merged; BUG-723/BUG-734/TASK-1117 as PR-1506/1507/1508), then printed ''awaiting CI, each with a background watch. I''ll merge them as their checks go terminal.'' — and EXITED. The operator''s shell prompt returned; drain status: ''No drain in progress''; the three PRs sat OPEN unwatched, and the other 4 blessed specs (TASK-1098, TASK-1146, TASK-1158, TASK-937) were never started. Root shape: the /aida-burndown session ended its final turn while integration work was pending — a headless claude -p terminates at turn end, so ''background watch'' promises cannot outlive it. The skill/orchestration must either (a) block the final turn on CI going terminal + merge before reporting (the loop-until-drained contract), or (b) if it must exit, park the wave''s specs Done-awaiting-merge with an explicit handoff (aida integrate) instead of claiming watches exist. The drain also stopped after wave 1 instead of looping to wave 2. Acceptance: a burndown run''s process does not exit while blessed specs are unstarted or wave PRs are unmerged (absent a shelve/cap stop); any early exit leaves an accurate handoff, never a claim of live watches; regression: drive a 2-wave plan and assert the drain merges wave-1 PRs and starts wave 2 before exiting.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T02:11:34.735160762Z
+modified_at: 2026-07-19T02:11:34.735160762Z
+req_type: Bug
+tags:
+- aida:burndown auto-complete orchestration from-dogfood
