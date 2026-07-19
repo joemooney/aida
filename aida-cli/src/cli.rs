@@ -1825,19 +1825,22 @@ pub enum BurndownCommand {
 #[derive(Subcommand, Debug)]
 pub enum DevCommand {
     /// Emit shell code that prepends the in-repo build dir to PATH.
-    /// Use as: `eval "$(aida dev activate)"`. By default the freshest of
-    /// `target/release/aida` vs `target/debug/aida` wins — pass `debug` /
-    /// `release` (or `--debug` / `--release`) to PIN to a specific profile
-    /// across subsequent re-activations. `--auto` clears the pin and
-    /// returns to freshest-wins.
+    /// Use as: `eval "$(aida dev activate)"`. By default the release build
+    /// (`target/release/aida`) is activated — pass `debug` / `release`
+    /// (or `--debug` / `--release`) to PIN a specific profile across
+    /// subsequent re-activations, or `auto` (`--auto`) to pin
+    /// freshest-wins selection (newest SHA-matched of debug vs release,
+    /// re-picked on every activate).
+    // trace:TASK-1158 | ai:claude
     Activate {
         /// Override the AIDA repo path (defaults to current directory if it
         /// looks like the aida repo, or $AIDA_DEV_REPO if set).
         #[clap(long)]
         repo: Option<String>,
 
-        /// Profile shortcut: `debug` or `release` (positional). Equivalent
-        /// to `--debug` or `--release`. Pins for subsequent re-activations.
+        /// Profile shortcut: `debug`, `release`, or `auto` (positional).
+        /// Equivalent to `--debug` / `--release` / `--auto`. Pins for
+        /// subsequent re-activations.
         #[clap(value_parser = ["debug", "release", "auto"])]
         profile: Option<String>,
 
@@ -1848,12 +1851,16 @@ pub enum DevCommand {
         #[clap(long, conflicts_with_all = ["release", "auto"])]
         debug: bool,
 
-        /// Pin to the release build (target/release). Sticky.
-        // trace:FR-1-068 | ai:claude
+        /// Pin to the release build (target/release). Sticky. Also the
+        /// default when nothing is pinned.
+        // trace:FR-1-068 trace:TASK-1158 | ai:claude
         #[clap(long, conflicts_with_all = ["debug", "auto"])]
         release: bool,
 
-        /// Clear any sticky profile pin and return to freshest-wins.
+        /// Pin freshest-wins selection: the newest SHA-matched of
+        /// debug/release is re-picked on every activate. Sticky until you
+        /// pin debug or release.
+        // trace:TASK-1158 | ai:claude
         #[clap(long, conflicts_with_all = ["debug", "release"])]
         auto: bool,
     },

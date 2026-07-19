@@ -180,7 +180,7 @@ aida dev shell-init --install
 
 # Per-shell: activate the in-repo build (pyenv-style)
 aida dev activate                      # the `aida()` wrapper auto-evals this — no `eval $(...)` needed
-# now `aida` resolves to ./target/{release|debug}/aida (whichever is freshest)
+# now `aida` resolves to ./target/release/aida (release is the default pin)
 
 aida dev status                        # confirms activation, shows binary mtime
 aida dev serve                         # foreground supervisor for aida-server (8080) + vite (5173)
@@ -190,9 +190,9 @@ aida dev deactivate                    # the wrapper auto-evals this too
 # back to the released aida on PATH
 ```
 
-`aida dev activate` prepends `target/{release,debug}/` to PATH — prefers the binary whose embedded git SHA matches (or is an ancestor of) the current branch HEAD (TASK-221), so switching branches between builds doesn't silently leave you on a binary built from the other branch's source. Falls back to most-recently-built with a `Warning:` when neither binary matches the current HEAD. `aida dev status` shows the active binary's SHA, current HEAD, and the match verdict (`exact match` / `ancestor of HEAD` / `DIVERGED from HEAD`). Prefixes the shell prompt with `(aida-debug)` or `(aida-release)` so the active build is visible at a glance. `aida dev deactivate` undoes both.
+`aida dev activate` prepends the chosen `target/{release,debug}/` to PATH. Bare `aida dev activate` pins the **release** profile by default (TASK-1158); `aida dev activate debug` pins debug, and `aida dev activate auto` (or `--auto`) is the explicit, sticky opt-in to the old freshest-wins selection — the newest binary whose embedded git SHA matches (or is an ancestor of) the current branch HEAD wins (TASK-221), falling back to most-recently-built with a `Warning:` when neither binary matches the current HEAD. `aida dev status` shows the active binary's SHA, current HEAD, and the match verdict (`exact match` / `ancestor of HEAD` / `DIVERGED from HEAD`). Prefixes the shell prompt with `(aida-debug)` or `(aida-release)` so the active build is visible at a glance. `aida dev deactivate` undoes both.
 
-**Profile rule: release is the daily driver — pin it (`aida dev activate release`); rebuild with `make build-fast`.** The dev binary is dogfooded on hot paths (statusline, hooks, MCP server, drains) where debug is several times slower, and `build-fast` makes incremental release rebuilds ~2 min, so debug's compile-speed edge no longer justifies it as a default. Debug is for *sessions*, not a lifestyle: attach-a-debugger work or a tight `cargo build -p` loop on one crate — flip in, flip back to release on the way out. Leaving a shell on the auto pin ("freshest of either profile wins") is how a stale debug binary ends up driving a drain (2026-07-18 incident). `cargo test` builds its own artifacts and never requires activating debug.
+**Profile rule: release is the daily driver — and the default pin (bare `aida dev activate` now picks it); rebuild with `make build-fast`.** The dev binary is dogfooded on hot paths (statusline, hooks, MCP server, drains) where debug is several times slower, and `build-fast` makes incremental release rebuilds ~2 min, so debug's compile-speed edge no longer justifies it as a default. Debug is for *sessions*, not a lifestyle: attach-a-debugger work or a tight `cargo build -p` loop on one crate — flip in, flip back to release on the way out. Leaving a shell on the auto pin ("freshest of either profile wins") is how a stale debug binary ends up driving a drain (2026-07-18 incident). `cargo test` builds its own artifacts and never requires activating debug.
 
 For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the workspace version, regenerates `CHANGELOG.md` via `aida changelog refresh --released-as v<new>` so the changelog commits *with* the version bump (TASK-299), generates tag notes from `git log <prev>..HEAD`, commits, tags, and pushes (which triggers `.github/workflows/release.yml` to build and publish binary tarballs).
 
