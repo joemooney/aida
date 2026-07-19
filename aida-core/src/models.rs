@@ -566,7 +566,9 @@ pub enum RequirementType {
     /// Stateful (active / lifted).
     Constraint,
     /// Architecture Decision Record (ADR) — a recorded decision + its
-    /// rationale. Stateful (proposed / accepted / superseded / deprecated).
+    /// rationale. Stateful (proposed / accepted / superseded / deprecated);
+    /// mapped onto AIDA statuses as Draft = proposed and Approved = accepted.
+    // trace:BUG-751 | ai:claude
     Decision,
     /// Glossary term — domain language entry, ubiquitous-language anchor.
     /// Stateless.

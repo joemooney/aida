@@ -39017,15 +39017,46 @@ fn manual_epic_status_edit_forbidden(req_type: &RequirementType, force: bool) ->
 
 fn approval_forbidden_for_type(req_type: &RequirementType) -> bool {
     // trace:TASK-761 | ai:codex
+    //
+    // BUG-751: `Decision` is deliberately NOT in this set. A decision spec
+    // (ADR) is stateful — its documented lifecycle is proposed / accepted /
+    // superseded / deprecated — and `Approved` is the sanctioned "accepted"
+    // state (Draft == proposed). Gating it left an ADR with no way out of
+    // Draft, while existing ADRs already sat at Approved by convention.
+    // trace:BUG-751 | ai:claude
     matches!(
         req_type,
         RequirementType::Vision
             | RequirementType::Epic
             | RequirementType::Principle
             | RequirementType::Constraint
-            | RequirementType::Decision
             | RequirementType::Term
     )
+}
+
+// BUG-751: type-aware wrapper over `validate_status_input`. The ADR lifecycle
+// verb `accepted` is not a status in the enum; for decision-class specs it is
+// an input alias for `Approved` (approved == accepted for ADRs), so a recorded
+// acceptance can be applied with either verb. For every other type — and every
+// other input — this delegates to the canonical validator, except that a
+// non-decision given `accepted` gets a refusal naming the correct verb.
+// trace:BUG-751 | ai:claude
+pub(crate) fn validate_status_input_for_type(
+    raw: &str,
+    req_type: &RequirementType,
+) -> Result<&'static str, String> {
+    if raw.trim().eq_ignore_ascii_case("accepted") {
+        if *req_type == RequirementType::Decision {
+            return Ok("Approved");
+        }
+        return Err(format!(
+            "invalid status `{}` — `accepted` applies to decision specs (where it \
+             records as `approved`); expected one of: draft, approved, planned, \
+             in-progress, done, completed, rejected, needs-attention",
+            raw
+        ));
+    }
+    validate_status_input(raw)
 }
 
 /// TASK-130: resolve the `human_only` marker for a freshly-added spec from its

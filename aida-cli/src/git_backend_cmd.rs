@@ -3434,8 +3434,11 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-47 | ai:claude
             if let Some(new_status) = status {
                 if is_terminal_status(&req.status) && !*force {
-                    let canonical =
-                        validate_status_input(new_status).map_err(|e| anyhow::anyhow!(e))?;
+                    // BUG-751: same type-aware alias as the main status path
+                    // below, so a terminal decision spec probed with
+                    // `accepted` resolves consistently. trace:BUG-751 | ai:claude
+                    let canonical = validate_status_input_for_type(new_status, &req.req_type)
+                        .map_err(|e| anyhow::anyhow!(e))?;
                     let mut probe = req.clone();
                     probe.set_status_from_str(canonical);
                     if !is_terminal_status(&probe.status) {
@@ -3630,7 +3633,11 @@ pub(crate) fn handle_git_backend_command(
             // after the backend save below. trace:TASK-358 | ai:claude
             let mut left_needs_attention = false;
             if let Some(s) = status {
-                let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
+                // BUG-751: type-aware — a decision spec (ADR) may be moved to
+                // its accepted state with the ADR-native verb `accepted`,
+                // which records as `Approved`. trace:BUG-751 | ai:claude
+                let canonical = validate_status_input_for_type(s, &req.req_type)
+                    .map_err(|e| anyhow::anyhow!(e))?;
                 // BUG-626: an EPIC's status is a read-only ROLLUP of its
                 // children, not a manually-set field. Reject ALL manual epic
                 // status edits (substrate-as-bouncer — this is exactly the
