@@ -58761,7 +58761,8 @@ fn collect_cleanup_report(
 
 /// Gather every "human-gate" item — mergeable PRs the operator still
 /// needs to merge, briefs filed for the running agent, findings awaiting
-/// triage, reviewer-queue verdicts, and `NeedsAttention` escalations —
+/// triage, reviewer-queue verdicts, `NeedsAttention` escalations, unread
+/// mail, and pending worker directives —
 /// into the structured report rendered as the "Awaiting you" section.
 /// Empty (and so hidden) on a quiet day; that absence is the signal.
 /// trace:STORY-465 | ai:claude
@@ -58882,6 +58883,20 @@ fn collect_awaiting_report(
         }
     };
 
+    // Pending worker directives — the enqueue channel (`aida human audit`,
+    // MCP directive posters, hand-written overnight plans) lands in the local
+    // directive file, and until now only surfaced via the worker poll view.
+    // Folding it in makes the unified inbox the one place the advisor looks.
+    // A single local file read (absent file → empty), never a network call,
+    // so it rides the per-turn notice path too. trace:TASK-1146 | ai:claude
+    let worker_directives = {
+        let directives = worker::parse_directives(&worker::worker_cmd_path(project_root));
+        awaiting_you::DirectivesChannel {
+            pending: directives.len(),
+            next: directives.first().map(|d| d.summary()),
+        }
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         pending_briefs,
@@ -58889,6 +58904,7 @@ fn collect_awaiting_report(
         reviewer_queue_items,
         escalations,
         mail,
+        worker_directives,
     }
 }
 
@@ -58950,7 +58966,8 @@ fn handle_awaiting_command(
 
     if notice {
         // CHEAP per-turn path: NO full-store load, NO gh/network. Mail, briefs,
-        // findings and escalations are all cache/local reads; PRs (gh) and the
+        // findings, worker directives and escalations are all cache/local
+        // reads; PRs (gh) and the
         // reviewer-verdict channel (which needs the queue snapshot off the
         // loaded store) are deliberately omitted here — run bare `aida awaiting`
         // for those. The lightweight context carries only the role (from env),
@@ -58993,6 +59010,12 @@ fn handle_awaiting_command(
         println!("findings: {}", report.findings_total);
         println!("mail_unread: {}", report.mail.unread);
         println!("mail_urgent: {}", report.mail.urgent);
+        // trace:TASK-1146 | ai:claude
+        println!("directives_pending: {}", report.worker_directives.pending);
+        println!(
+            "directives_next: {}",
+            report.worker_directives.next.as_deref().unwrap_or("-")
+        );
         let prs: Vec<Vec<String>> = report
             .mergeable_prs
             .iter()
