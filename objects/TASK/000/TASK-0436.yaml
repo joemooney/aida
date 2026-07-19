@@ -10,12 +10,12 @@ description: |-
   - Keep universal memories/docs always available while reducing cross-subsystem noise.
   - Define CLI/TUI/status indicators for active subsystem focus.
   - Specify how agents request or infer focus from spec, queue item, worktree, or session scope.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:52.124259780Z
-modified_at: 2026-07-19T06:17:39.502955700Z
+modified_at: 2026-07-19T21:54:51.458616325Z
 req_type: Task
 tags:
 - batch:strategy-0719

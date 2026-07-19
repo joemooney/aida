@@ -10,12 +10,12 @@ description: |-
   - Define keystone/security/architecture/autonomy machinery defaults as master-advisor or human-gated unless explicitly delegated.
   - Clarify how advisor autopilot authority envelopes narrow under subsystem scope.
   - Include examples: MCP contract touching CLI output, TUI workflow changing queue semantics, security change affecting all agents.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:52.568667667Z
-modified_at: 2026-07-19T06:17:41.539266974Z
+modified_at: 2026-07-19T21:54:51.466896707Z
 req_type: Task
 tags:
 - advisor-autopilot
