@@ -13,13 +13,20 @@ description: |-
   - Every scaffolded Codex prompt whose skill accepts arguments substitutes them ($ARGUMENTS or positional), verified by a template-lint test that fails when a skill's usage line advertises an argument the Codex rendering never references.
   - Codex renderings contain no Claude-only tool/skill references (AskUserQuestion, /aida-pr, /aida-*) — a deny-list check in the same lint.
   - `/aida-guided-implement TASK-XXXX` in Codex receives the spec id and runs the dialog with plain-text questions.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T14:59:51.503302349Z
-modified_at: 2026-07-19T00:17:57.937326475Z
+modified_at: 2026-07-19T00:35:03.735863853Z
 req_type: Bug
 tags:
 - batch:papercuts-0718
 - codex cross-vendor parity aida:init from-dogfood
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: no-progress-watchdog
+  detail: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
+  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework BUG-731 --work`.'
+  shelved_at: 2026-07-19T00:35:03.735863853Z

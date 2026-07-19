@@ -34622,5 +34622,13 @@ operations:
       Additional acceptance (operator, 2026-07-18): the PS1 staleness hook ships as part of initial setup, not hand-edited .bashrc — `aida dev shell-init --install` installs (or offers) the prompt wiring inside its managed >>> aida shell helpers <<< block, so a fresh clone + shell-init gets the marker with zero manual profile editing. Migrate/replace the interim hand-added `aida-staleness-marker` block if present.
 
       Refinement (operator, 2026-07-18 16:26): the probe must distinguish the two stale remedies, motivated by a real incident (operator shell activated on a stale debug build while a HEAD-exact release existed; the first batch drain ran the old binary): token for "a HEAD-matching build exists in the OTHER profile - run aida dev activate to flip" (suggested ⇄) vs "no built binary matches HEAD - rebuild" (suggested ↻). Empty output remains "active binary matches HEAD". The interim shell implementation of exactly this now lives in the operator's .bashrc marker block for reference.
-clock: 3208
+- id: 019f77cc-460c-72c1-be79-8258255af3c4
+  target_id: 019f75bd-a84f-7241-b93b-3a11c5f47471
+  author: aida
+  node_id: '1'
+  lamport: 3209
+  timestamp: 2026-07-19T00:35:03.820974514Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 3209
 node_id: '1'
