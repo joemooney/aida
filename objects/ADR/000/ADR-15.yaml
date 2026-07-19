@@ -19,12 +19,12 @@ description: |-
 
   ## Consequences
   The classify_gate-seeded proposer needs a reasons output, not just a verdict. The persist path reuses the advisor-authority write (not a raw field poke). STORY-776 acceptance criteria amended to match.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:43:04.498483724Z
-modified_at: 2026-07-19T15:43:04.498483724Z
+modified_at: 2026-07-19T15:43:26.642850339Z
 req_type: Decision
 tags:
 - adr
