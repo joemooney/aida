@@ -445,10 +445,3 @@
   added_by: joe
   added_at: 2026-07-19T01:58:01.808138766Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 019f7824-a2cf-76d1-93d8-6f850ed9a6fc
-  position: 355000
-  added_by: joe
-  added_at: 2026-07-19T06:14:47.862969687Z
-  for_role: implementer
-  for_scope: harness-worktree
