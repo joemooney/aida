@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T02:11:34.735160762Z
-modified_at: 2026-07-19T04:25:13.235507818Z
+modified_at: 2026-07-19T04:37:11.775073362Z
 req_type: Bug
 tags:
 - aida:burndown auto-complete orchestration from-dogfood
@@ -18,4 +18,10 @@ comments:
   content: 'Related symptom 2026-07-18 21:24: with the --verbose drain''s claude -p child alive and streaming (pid 2818172, tee 20260719T041604Z-019f7896.jsonl, four wave PRs open), ''aida drain status'' reports ''No drain in progress'' — the drain lock does not span the child''s actual lifetime (parent exited or lock released early). Same lifecycle seam: whatever owns the lock is not whatever does the work. The fix should make lock lifetime == the claude -p child''s lifetime, which also gives drain status an honest answer.'
   created_at: 2026-07-19T04:25:13.235507818Z
   modified_at: 2026-07-19T04:25:13.235507818Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f78a9-f3df-74e0-a46f-02e3d816eba8
+  author: joe
+  content: 'ROOT CAUSE CONFIRMED 2026-07-18 21:36, from the --verbose stream: ''Background tasks still running after 600s; terminating. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.'' Headless claude -p enforces a 600s background-task wait ceiling at turn end — the drain''s CI watches (9-10min CI) exceed it, get terminated, and the session exits with wave PRs unmerged. Reproduced on the 21:16 drain: session ended (result event, $6.28) leaving PR-1509/1510/1511/1512 green-and-unmerged and 6 specs unstarted. FIX: burndown run (and any headless drive that parents CI watches) must spawn claude -p with CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 in the child env; additionally the skill should prefer blocking waits (gh pr checks --watch in foreground) over backgrounded watches at final-turn time. Interim operator workaround: CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 aida burndown run --verbose.'
+  created_at: 2026-07-19T04:37:11.775073362Z
+  modified_at: 2026-07-19T04:37:11.775073362Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
