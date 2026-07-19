@@ -10,12 +10,12 @@ description: |-
   - Define how subsystem membership is computed for specs and files.
   - Define migration from current tags/features/subsystem-scoped memories.
   - Include examples for likely AIDA subsystems: autonomy, orchestrator, mcp-server, cli, tui, docs, product, security.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:50.718128858Z
-modified_at: 2026-07-19T06:17:35.371643301Z
+modified_at: 2026-07-19T21:54:51.466186793Z
 req_type: Task
 tags:
 - batch:strategy-0719
