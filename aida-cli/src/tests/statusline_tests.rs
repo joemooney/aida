@@ -1032,19 +1032,15 @@ fn status_advance_authority_gate_covers_draft_and_needs_attention_sources() {
 }
 
 // trace:TASK-761 | ai:codex
+// BUG-751: Decision moved to the approvable set — an ADR's `Approved` is its
+// sanctioned "accepted" state, so the class-gate must not strand it in Draft.
+// trace:BUG-751 | ai:claude
 #[test]
 fn approval_type_gate_blocks_non_execution_classes() {
     use super::approval_forbidden_for_type as blocked;
     use aida_core::models::RequirementType as T;
 
-    for req_type in [
-        T::Vision,
-        T::Epic,
-        T::Principle,
-        T::Constraint,
-        T::Decision,
-        T::Term,
-    ] {
+    for req_type in [T::Vision, T::Epic, T::Principle, T::Constraint, T::Term] {
         assert!(blocked(&req_type), "{req_type} should not be approvable");
     }
 
@@ -1061,10 +1057,48 @@ fn approval_type_gate_blocks_non_execution_classes() {
         T::Sprint,
         T::Folder,
         T::Meta,
+        T::Decision,
         T::Doc,
     ] {
         assert!(!blocked(&req_type), "{req_type} should remain approvable");
     }
+}
+
+// BUG-751: the decision-class acceptance path. A decision spec (ADR) is moved
+// to its accepted state via `approved`, and the ADR-native verb `accepted` is
+// an input alias for it; other types refuse `accepted` with a message naming
+// the correct verb, and every other input delegates to the canonical
+// validator unchanged. trace:BUG-751 | ai:claude
+#[test]
+fn decision_specs_accept_the_accepted_status_alias() {
+    use super::validate_status_input_for_type as validate;
+    use aida_core::models::RequirementType as T;
+
+    // The ADR-native verb records as Approved, case-insensitively.
+    assert_eq!(validate("accepted", &T::Decision), Ok("Approved"));
+    assert_eq!(validate("Accepted", &T::Decision), Ok("Approved"));
+    assert_eq!(validate(" ACCEPTED ", &T::Decision), Ok("Approved"));
+
+    // The plain verb works too — approved == accepted for ADRs.
+    assert_eq!(validate("approved", &T::Decision), Ok("Approved"));
+
+    // Non-decision types refuse `accepted`, and the refusal names the
+    // correct class and verb.
+    let err = validate("accepted", &T::Task).unwrap_err();
+    assert!(
+        err.contains("decision"),
+        "refusal should name the class: {err}"
+    );
+    assert!(
+        err.contains("approved"),
+        "refusal should name the verb: {err}"
+    );
+
+    // Every other input delegates to the canonical validator.
+    assert_eq!(validate("draft", &T::Decision), Ok("Draft"));
+    assert_eq!(validate("rejected", &T::Decision), Ok("Rejected"));
+    assert_eq!(validate("in-progress", &T::Task), Ok("InProgress"));
+    assert!(validate("acceptedxxx", &T::Decision).is_err());
 }
 
 // A manual epic status edit is rejected (status is a read-only rollup), but
