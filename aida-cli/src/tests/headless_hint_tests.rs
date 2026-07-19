@@ -132,7 +132,8 @@ fn headless_env_launches_route_through_shared_argv_builders() {
     }
 
     assert_env_setter_has_builder_context("session.rs", include_str!("../session.rs"));
-    assert_env_setter_has_builder_context("main.rs", include_str!("../main.rs"));
+    // STORY-772: the CLI body lives in lib.rs; main.rs is a 3-line stub.
+    assert_env_setter_has_builder_context("lib.rs", include_str!("../lib.rs"));
 }
 
 /// BUG-342 regression for the actual bypass: `QueueWorkLaunch::Resume`
@@ -142,7 +143,7 @@ fn headless_env_launches_route_through_shared_argv_builders() {
 // trace:BUG-342 | ai:codex
 #[test]
 fn no_human_resume_paths_use_headless_resume_launcher() {
-    let src = include_str!("../main.rs").replace("\r\n", "\n");
+    let src = include_str!("../lib.rs").replace("\r\n", "\n");
     let count = src
         .matches("session::spawn_claude_headless_resume(")
         .count();

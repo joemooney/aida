@@ -12,7 +12,7 @@
 //!   1. `src/zen.rs::detect()` — the ONE corroboration READER of `AIDA_ZEN`.
 //!      Skills call it through `aida zen status`; it re-checks the run marker +
 //!      lease every call so it cannot go stale (see the zen.rs module docs).
-//!   2. The `main.rs` dispatch SET-site — `set_var`/`remove_var(ZEN_ENV)` set
+//!   2. The `lib.rs` dispatch SET-site — `set_var`/`remove_var(ZEN_ENV)` set
 //!      the transport ONCE from the resolved typed value for children.
 //!
 //! This test fails if a NEW bare in-process `AIDA_ZEN` READ (`env::var` /
