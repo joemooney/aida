@@ -31,14 +31,6 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Completed
-processing_record:
-- id: 019f77e5-10a9-7b82-8f7f-5a5fa968f6c4
-  timestamp: 2026-07-19T01:02:08.553242398Z
-  agent: implementer
-  commit_sha: 5ac24c717c57a113c2ea7767e5b6a158328eb9a5
-  summary: Completed via merge 5ac24c71
-  punted:
-  - 'punted: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session'
 implementation_info:
   implemented: false
   completed_at: 2026-07-19T01:02:08.351796049Z

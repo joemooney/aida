@@ -11,12 +11,12 @@ description: |-
   - Confusing 'aida ps' / 'git worktree list' noise.
 
   Ask: a native 'aida worktree gc' (and/or auto-GC on merge / session end) that SAFELY prunes agent worktrees whose branch work is already integrated. Safety is the whole design: a squash-merged branch tip is NOT an ancestor of main (feedback_fresh_branch_can_miss_interleaved_squash), so 'merge-base --is-ancestor' under-detects. GC must confirm integration by content (empty 'git diff origin/main...branch') or by the spec being Completed with a referencing commit on main, and must NEVER force-remove a worktree with unmerged/uncommitted work. Supervised, not a blind autonomous drain item.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T05:50:12.341160277Z
-modified_at: 2026-07-19T00:51:52.160887145Z
+modified_at: 2026-07-19T01:07:03.248018794Z
 req_type: Task
 tags:
 - batch:dogfood-0717
@@ -27,3 +27,7 @@ comments:
   content: 'TASK-878 (Completed) already ships the safe squash-aware GC as ''aida doctor --category merged-agent-worktrees''. This overlaps most of TASK-1145. Narrowing TASK-1145 to the DELTA only: (a) an ergonomic ''aida worktree gc'' alias for that doctor heal, and (b) auto-running it after a successful aida-managed squash-merge (the branch-delete ''used by worktree'' collision hit ~5x in one drain session because GC is manual/doctor-only, not on-merge). NOTE: TASK-878''s heal is destructive + STORY-666-gated, so on-merge auto-GC must honor that gate. Also note TASK-963''s branch (hand-named, not worktree-agent-*) and the aida-store branch are NOT covered by TASK-878 — those false-positives belong to the new reviews-awaiting state-awareness bug, not here.'
   created_at: 2026-07-13T06:16:53.643947438Z
   modified_at: 2026-07-13T06:16:53.643947438Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-19T01:07:03.248018794Z
+  completion_sha: 879ac855a76b81c8ba5b70e36e85a535bba2b01c
