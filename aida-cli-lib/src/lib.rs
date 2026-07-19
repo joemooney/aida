@@ -44158,7 +44158,13 @@ fn handle_burndown_run(
         burndown::selector_summary(status, tag, batch)
     );
     let project_root = find_main_worktree_root()?;
-    let _drain_guard = drain_lock::acquire_drain_lock(&project_root, &drain_lock_command)?;
+    // BUG-759: record the blessed spec set in the lock so `aida drain status`
+    // can name what this launcher-held drain is working (pid + started +
+    // specs) for its entire wall-clock — the launcher writes no per-phase
+    // drain-state file. The guard is held across the whole resume loop below,
+    // so lock lifetime == `claude -p` child lifetime. trace:BUG-759 | ai:claude
+    let _drain_guard =
+        drain_lock::acquire_drain_lock_with_specs(&project_root, &drain_lock_command, &ready)?;
 
     // BUG-660: keep the host awake for the unattended headless drain. Best-effort
     // + pid-scoped (auto-releases when this process exits). trace:BUG-660
@@ -76901,6 +76907,11 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
 /// orchestrator PID against a liveness probe, and prints the human summary —
 /// or `No drain in progress.` (exit 0) when no drain is running. `--clear`
 /// removes a stale file left by a crashed orchestrator. trace:STORY-301
+// BUG-759: launcher-held drains (`aida burndown run`, `aida queue integrate`)
+// hold `.aida/drain.lock` for their entire wall-clock but write no drain-state
+// file, so the state-file read alone said "No drain in progress" mid-burndown.
+// When the state file is absent (or a stale tombstone) and the lock's pid is
+// LIVE, report the drain from the lock instead. trace:BUG-759 | ai:claude
 fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
     match cmd {
         DrainCommand::Status { json, clear } => {
@@ -76914,6 +76925,35 @@ fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             let status = drain_state::probe(&project_root);
             if *clear {
                 return drain_clear(&project_root, &status, *json);
+            }
+            // BUG-759: corroborate the launcher-held drain lock alongside the
+            // orchestrator drain-state file. A live lock is authoritative when
+            // the state file can't speak for the drain (absent, or a dead-pid
+            // tombstone a killed orchestrator left behind).
+            let live_lock = match drain_lock::probe_lock(&project_root) {
+                drain_lock::LockStatus::Running(lock) => Some(lock),
+                _ => None,
+            };
+            if let (
+                drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_),
+                Some(lock),
+            ) = (&status, &live_lock)
+            {
+                let stale_state = matches!(status, drain_state::DrainStatus::Stale(_));
+                if *json {
+                    println!("{}", drain_state::render_lock_json(lock, stale_state));
+                } else {
+                    print!("{}", drain_state::render_lock_human(lock, stale_state));
+                    // TASK-294 parity with the state-backed report: surface any
+                    // pending worker directives alongside the drain summary.
+                    let directives =
+                        worker::parse_directives(&worker::worker_cmd_path(&project_root));
+                    if let Some(line) = worker::status_line(&directives) {
+                        println!();
+                        println!("  {line}");
+                    }
+                }
+                return Ok(());
             }
             if *json {
                 println!("{}", drain_state::render_json(&status));
