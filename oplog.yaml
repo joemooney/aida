@@ -34917,5 +34917,17 @@ operations:
       - Legacy (AIDA_TUI_REDESIGN=0) path unchanged.
 
       Binding acceptance addition (groom 2026-07-18): the badges MUST target the EPIC-54 redesign cockpit (the current default TUI surface) - verify the default entry dispatch before building. Do NOT build against the legacy board.rs surface (the STORY-701 mistake this note exists to prevent).
-clock: 3239
+- id: 019f7802-2a72-7ac3-87d5-ebff5e9bab8d
+  target_id: 019f7802-22b3-7622-9087-24acfc9b1f55
+  author: aida
+  node_id: '1'
+  lamport: 3240
+  timestamp: 2026-07-19T01:33:55.698184859Z
+  kind: !Create
+    title: 'decision-class specs cannot be marked accepted: --status approved refused (even --force), ''accepted'' not in the status enum — yet ADR-6/ADR-10/ADR-11 already sit at approved/completed'
+    description: 'Observed 2026-07-18 applying the operator''s recorded ADR-8 answer: aida edit ADR-8 --status approved → ''Decision specs cannot be promoted to Approved. Leave this class outside the approved execution pipeline'' (also with --force); aida edit ADR-8 --status accepted → ''invalid status accepted — expected one of: draft, approved, planned, ...''. So a decision-type spec has NO way to leave draft: the documented ADR lifecycle (proposed/accepted/superseded/deprecated per CLAUDE.md) is not implemented as statuses, and the generic approved is now gated for the class — while existing ADRs (ADR-6 approved, ADR-11 approved, ADR-10 completed) prove the transition used to work and is the de-facto convention. Either implement the decision-class lifecycle statuses (accepted et al., with aida show/list rendering them), or exempt decision from the new approved-gate and document approved==accepted for ADRs. A recorded operator answer currently cannot be applied to the spec it decides (ADR-8 is stuck draft with the acceptance recorded only as a comment). Acceptance: an ADR can be moved to its accepted state by the advisor; existing approved ADRs remain valid or are migrated; the refusal message names the correct verb; regression test on the decision-class transition.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3240
 node_id: '1'
