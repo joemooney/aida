@@ -15,7 +15,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:16:21.704959337Z
-modified_at: 2026-07-14T04:16:21.704959337Z
+modified_at: 2026-07-19T06:17:11.922897215Z
 req_type: Bug
 tags:
 - aida:store aida:queue distributed reliability severity:major
+- batch:keystone-0719
