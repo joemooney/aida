@@ -254,9 +254,36 @@ fn enter_shell_payload_cd_then_sources_session_env() {
     )
     .unwrap();
 
-    let payload = enter_shell_payload(tree.path());
+    let payload = enter_shell_payload(tree.path(), "STORY-742");
     assert!(payload.starts_with(&format!("{}\n", enter_cd_line(tree.path()))));
     assert!(payload.contains("export CARGO_TARGET_DIR='/tmp/aida/target'\n"));
+    // TASK-1160: the payload also splices the ambient worktree PS1 segment.
+    assert!(payload.contains("export AIDA_WT_PS1_PREFIX='(wt:STORY-742) '\n"));
+    assert!(payload.contains("export PS1=\"$AIDA_WT_PS1_PREFIX$PS1\"\n"));
+}
+
+// TASK-1160: the enter payload splices the PS1 indicator even for a worktree
+// with no session-env shim (epic-scoped trees), and the exit payload is the
+// exact inverse contract: cd back + unset the session exports + strip PS1.
+// trace:TASK-1160 | ai:claude
+#[test]
+fn enter_payload_without_session_env_still_splices_ps1() {
+    let tree = tempfile::tempdir().unwrap();
+    let payload = enter_shell_payload(tree.path(), "EPIC-54");
+    assert!(payload.starts_with(&format!("{}\n", enter_cd_line(tree.path()))));
+    assert!(payload.contains("export AIDA_WT_PS1_PREFIX='(wt:EPIC-54) '\n"));
+}
+
+// trace:TASK-1160 | ai:claude
+#[test]
+fn exit_payload_is_the_inverse_of_enter() {
+    let main_root = std::path::Path::new("/home/joe/ai/aida");
+    let payload = crate::worktree::exit_shell_payload(main_root, &["AIDA_AGENT_TYPE".to_string()]);
+    assert!(payload.starts_with("cd '/home/joe/ai/aida'\n"));
+    assert!(payload.contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_AGENT_TYPE\n"));
+    assert!(payload.contains("unset AIDA_WT_PS1_PREFIX\n"));
+    // Never re-exports anything: exit only removes state.
+    assert!(!payload.contains("export "));
 }
 
 // A worktree already registered (git) at the default path but carrying no

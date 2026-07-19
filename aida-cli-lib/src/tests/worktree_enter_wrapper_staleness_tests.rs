@@ -2,13 +2,17 @@
 //! wrapper advertises the `worktree` capability via `AIDA_SHELL_WRAPPER`.
 //! A pre-STORY-716 wrapper's marker lacks it (or is unset for "no wrapper"),
 //! and we must warn so the silent no-op cd is explained.
-use super::wrapper_marker_has_worktree_cap;
+//!
+//! TASK-1160 adds the symmetric `worktree exit` verb behind its own
+//! `worktree-exit` capability token: a wrapper that evals `enter` but was
+//! installed before the exit verb existed must NOT be assumed to eval `exit`.
+use super::{wrapper_marker_has_cap, wrapper_marker_has_worktree_cap};
 
 #[test]
 fn current_wrapper_marker_advertises_worktree() {
-    // The shape exported by SHELL_HELPERS today (STORY-716+).
+    // The shape exported by SHELL_HELPERS today (TASK-1160+).
     assert!(wrapper_marker_has_worktree_cap(Some(
-        "role,session,dev,worktree"
+        "role,session,dev,worktree,worktree-exit"
     )));
     // Order / extra whitespace don't matter.
     assert!(wrapper_marker_has_worktree_cap(Some(
@@ -26,4 +30,32 @@ fn stale_or_missing_wrapper_does_not_advertise_worktree() {
     assert!(!wrapper_marker_has_worktree_cap(Some("")));
     // A substring of another token must not count as the capability.
     assert!(!wrapper_marker_has_worktree_cap(Some("worktrees,role")));
+}
+
+// trace:TASK-1160 | ai:claude
+#[test]
+fn current_wrapper_marker_advertises_worktree_exit() {
+    assert!(wrapper_marker_has_cap(
+        Some("role,session,dev,worktree,worktree-exit"),
+        "worktree-exit"
+    ));
+    assert!(wrapper_marker_has_cap(
+        Some(" worktree-exit , role"),
+        "worktree-exit"
+    ));
+}
+
+// trace:TASK-1160 | ai:claude
+#[test]
+fn enter_only_wrapper_does_not_advertise_worktree_exit() {
+    // A wrapper from before the exit verb existed: evals `enter`, not `exit`.
+    assert!(!wrapper_marker_has_cap(
+        Some("role,session,dev,worktree"),
+        "worktree-exit"
+    ));
+    assert!(!wrapper_marker_has_cap(None, "worktree-exit"));
+    assert!(!wrapper_marker_has_cap(Some(""), "worktree-exit"));
+    // `worktree` must not count as a prefix-match for `worktree-exit` and
+    // vice versa (whole-token compare both directions).
+    assert!(!wrapper_marker_has_cap(Some("worktree-exit"), "worktree"));
 }
