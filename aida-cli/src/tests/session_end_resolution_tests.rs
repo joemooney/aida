@@ -12,6 +12,7 @@ fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionL
         hostname: "h".into(),
         role: None,
         creator_pid,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

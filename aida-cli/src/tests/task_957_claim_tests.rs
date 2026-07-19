@@ -14,6 +14,7 @@ fn claim(id: &str, scope: &str, pid: Option<u32>) -> SessionLease {
         hostname: "h".into(),
         role: Some("advisor".into()),
         creator_pid: pid,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

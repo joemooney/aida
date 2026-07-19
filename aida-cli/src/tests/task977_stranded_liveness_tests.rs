@@ -15,6 +15,7 @@ fn session_lease_at(worktree: &std::path::Path) -> SessionLease {
         hostname: "h".into(),
         role: Some("implementer".into()),
         creator_pid: None,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

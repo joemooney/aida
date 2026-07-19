@@ -12,6 +12,7 @@ fn lease(scope: &str, worktree: &std::path::Path) -> SessionLease {
         hostname: "host".to_string(),
         role: Some("implementer".to_string()),
         creator_pid: None,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

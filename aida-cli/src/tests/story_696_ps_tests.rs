@@ -12,6 +12,7 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         hostname: "h".into(),
         role: Some("implementer".into()),
         creator_pid: None,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -61,6 +62,35 @@ fn ps_dead_pid_lease_classifies_stale() {
         LeaseState::Stale,
         "a lease with no live process + missing worktree is STALE"
     );
+}
+
+#[test]
+fn ps_process_backed_lease_uses_active_pid() {
+    let mut l = ps_lease("l-codex", "BUG-741", std::path::PathBuf::from("."));
+    l.active_pid = Some(std::process::id());
+
+    let specs = vec![RunningWorkSpec {
+        disp: "BUG-741".into(),
+        agreed_id: Some("BUG-741".into()),
+        spec_id: Some("BUG-741".into()),
+        title: "codex liveness".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+
+    let (rows, orphans) = build_running_work(
+        &specs,
+        &[l],
+        &[],
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, LeaseState::Live);
+    assert_eq!(rows[0].pid, Some(std::process::id()));
+    assert!(orphans.is_empty());
 }
 
 /// An In-Progress spec with NO spec-scoped lease is orphaned (flag-only):

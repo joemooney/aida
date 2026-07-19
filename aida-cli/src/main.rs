@@ -21589,6 +21589,12 @@ pub(crate) struct SessionLease {
     /// the worktree). Optional for back-compat. trace:STORY-73 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     creator_pid: Option<u32>,
+    /// BUG-741: PID of the currently hosted agent child for process-backed
+    /// launches such as headless `codex exec`. Unlike `creator_pid`, this is
+    /// the worker process itself: alive => Live, dead => Stale.
+    // trace:BUG-741 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    active_pid: Option<u32>,
     /// Parent project's `target/` dir, captured so the session shell can
     /// share its cargo build cache with the parent worktree (avoids a full
     /// rebuild on first `cargo build` inside the session). `None` when the
@@ -21756,6 +21762,7 @@ fn session_harness_worktree_register(
         hostname: hostname(),
         role: spec.agent_type.clone(),
         creator_pid: None,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root
@@ -22325,6 +22332,13 @@ fn lease_state_for(
             .map(process_probe::pid_is_alive)
             .unwrap_or(false);
         return if alive {
+            LeaseState::Live
+        } else {
+            LeaseState::Stale
+        };
+    }
+    if let Some(pid) = l.active_pid {
+        return if process_probe::pid_is_alive(pid) {
             LeaseState::Live
         } else {
             LeaseState::Stale
@@ -25129,6 +25143,7 @@ fn session_start(
         hostname: hostname(),
         role: inherited_role.clone(),
         creator_pid,
+        active_pid: None,
         cargo_target_dir: cargo_target_dir.clone(),
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
@@ -35087,11 +35102,15 @@ fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()> {
             });
             // BUG-511: review-verb leases classify by creator PID, not worktree.
             let state = lease_state_for(l, &live, now);
-            let pid = live_in_worktree.map(|s| s.pid).or(if l.review_verb {
-                l.creator_pid
-            } else {
-                None
-            });
+            let pid = l
+                .active_pid
+                .filter(|p| process_probe::pid_is_alive(*p))
+                .or_else(|| live_in_worktree.map(|s| s.pid))
+                .or(if l.review_verb || l.claim_verb {
+                    l.creator_pid
+                } else {
+                    None
+                });
             (l.clone(), state, pid)
         })
         .collect();
@@ -48293,6 +48312,7 @@ fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         hostname: hostname(),
         role: std::env::var("AIDA_SESSION_ROLE").ok(),
         creator_pid: my_pid,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root
@@ -50451,11 +50471,15 @@ fn build_running_work(
             let live_in_worktree = live.iter().find(|s| {
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });
-            let pid = live_in_worktree.map(|s| s.pid).or(if l.review_verb {
-                l.creator_pid
-            } else {
-                None
-            });
+            let pid = l
+                .active_pid
+                .filter(|p| process_probe::pid_is_alive(*p))
+                .or_else(|| live_in_worktree.map(|s| s.pid))
+                .or(if l.review_verb || l.claim_verb {
+                    l.creator_pid
+                } else {
+                    None
+                });
             let elapsed_secs = now.signed_duration_since(l.started_at).num_seconds().max(0) as u64;
             let spec = specs
                 .iter()
@@ -65826,6 +65850,7 @@ fn acquire_review_lease(
         hostname: hostname(),
         role: Some("reviewer".to_string()),
         creator_pid: Some(std::process::id()),
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -75394,7 +75419,12 @@ fn handle_queue_work(
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label(&lease.branch);
                 return session::exec_claude_headless(
-                    &prompt, &id, &log_path, &tee_opts, contained,
+                    &prompt,
+                    &id,
+                    &log_path,
+                    &tee_opts,
+                    contained,
+                    Some(&lease.id),
                 );
             }
             eprintln!(
