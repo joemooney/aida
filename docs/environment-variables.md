@@ -330,6 +330,7 @@ with `aida dev shell-init --install`; the rest is automatic.
 | `AIDA_DEV_BIN` | Directory of the active dev `aida` binary. | set by activate. | launch-path | process env |
 | `AIDA_DEV_PROFILE` | Active cargo profile (`debug`/`release`). | set by activate. | launch-path | process env |
 | `AIDA_DEV_PROFILE_PIN` | Sticky profile override across re-activations (`debug`/`release`/`auto`; `auto` = freshest-wins opt-in). | unset = release default. | launch-path (`--debug`/`--release`/`--auto`) | shell session |
+| `AIDA_DEV_ACTIVATE_REEXEC` | Internal re-exec guard: when the first `aida dev activate` of a fresh shell runs the installed binary (PATH not yet prepended), it delegates to the repo's own freshest built binary so activation semantics are always the in-repo binary's; this var marks the delegated child so it never delegates again. | unset. | `aida dev activate` (on the delegated child only) | child process env |
 | `AIDA_DEV_PREV_PATH` | Saved `PATH` for restore on deactivate. | set by activate. | launch-path (shell code) | process env |
 | `AIDA_DEV_PS1_PREFIX` | The PS1 prefix activate splices in (stripped exactly on deactivate). | set by activate. | launch-path (shell code) | process env |
 | `AIDA_WT_PS1_PREFIX` | The ambient `(wt:<FOCUS>) ` PS1 segment `aida worktree enter` splices in so a shell inside a scoped worktree is always visibly marked (stripped + unset by `aida worktree exit`). | set by worktree enter. | launch-path (shell code emitted by `worktree enter`/`exit`) | process env |

@@ -46,7 +46,16 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
     } else if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
         (std::path::PathBuf::from(p), "$AIDA_DEV_REPO")
     } else {
-        (std::env::current_dir()?, "PWD")
+        // Walk up from cwd to the enclosing checkout so activation works
+        // from a subdirectory too (no $AIDA_DEV_REPO needed). Falls back to
+        // cwd itself so the not-a-checkout error message stays specific.
+        // trace:BUG-760 | ai:claude
+        let cwd = std::env::current_dir()?;
+        let found = cwd
+            .ancestors()
+            .find(|p| is_aida_repo(p))
+            .map(|p| p.to_path_buf());
+        (found.unwrap_or(cwd), "PWD")
     };
 
     let canonical = candidate.canonicalize().with_context(|| {
@@ -107,6 +116,80 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
         anyhow::bail!("{}", msg);
     }
     Ok(canonical)
+}
+
+/// Re-exec decision for `aida dev activate` — the pure core.
+///
+/// The first `dev activate` of a fresh shell runs whatever `aida` the
+/// ORIGINAL PATH finds — usually the system-installed binary, possibly months
+/// old — because the dev target dir is only prepended BY that activation. An
+/// old binary applies its old pin semantics (e.g. auto/freshest-wins picking
+/// a stale debug build) and prints its old message format, which a second
+/// activate (now the dev binary) silently "corrects". To make a single
+/// activate sufficient, the running binary delegates to the repo's own
+/// freshest built binary, whose activate semantics are by definition current
+/// for the source on disk.
+///
+/// Inputs are pre-probed by the caller: the canonicalized `<repo>/target`
+/// dir, the canonicalized current executable, whether the re-exec guard env
+/// is set, and each profile binary's `(path, mtime)` when built. Returns
+/// `Some(binary)` when activation should be re-executed via that in-repo
+/// binary, `None` to proceed in-process.
+// trace:BUG-760 | ai:claude
+pub(crate) fn activate_reexec_target(
+    repo_target_dir: &std::path::Path,
+    current_exe: Option<&std::path::Path>,
+    guard_set: bool,
+    release: Option<(std::path::PathBuf, std::time::SystemTime)>,
+    debug: Option<(std::path::PathBuf, std::time::SystemTime)>,
+) -> Option<std::path::PathBuf> {
+    if guard_set {
+        // A parent activate already delegated to us — never chain.
+        return None;
+    }
+    // Which exe is running? If we can't tell, we can't prove we aren't the
+    // in-repo binary already — stay conservative and don't re-exec (worst
+    // case is the pre-fix behavior, not a loop).
+    let exe = current_exe?;
+    if exe.starts_with(repo_target_dir) {
+        // Already an in-repo build (either profile): its semantics ARE the
+        // repo's. Also covers exe == the chosen target.
+        return None;
+    }
+    // Freshest built binary wins — mtime is the best proxy for "embodies the
+    // current activate semantics" without spawning git. An exact tie falls to
+    // release, the conventional default. The delegate then applies its own
+    // pin/profile selection; this choice only decides WHOSE selector runs.
+    match (release, debug) {
+        (Some((rp, rm)), Some((dp, dm))) => Some(if dm > rm { dp } else { rp }),
+        (Some((rp, _)), None) => Some(rp),
+        (None, Some((dp, _))) => Some(dp),
+        // Nothing built: let the normal path produce its helpful error.
+        (None, None) => None,
+    }
+}
+
+/// Filesystem/environment probe feeding [`activate_reexec_target`]:
+/// resolves the guard env var, the canonicalized current executable, and
+/// both profile binaries' mtimes under `<repo>/target/`.
+// trace:BUG-760 | ai:claude
+fn resolve_activate_reexec(repo: &std::path::Path) -> Option<std::path::PathBuf> {
+    let guard_set = std::env::var_os("AIDA_DEV_ACTIVATE_REEXEC").is_some();
+    let current_exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.canonicalize().ok());
+    let probe = |profile: &str| {
+        let p = repo.join("target").join(profile).join("aida");
+        let mtime = std::fs::metadata(&p).and_then(|m| m.modified()).ok()?;
+        Some((p, mtime))
+    };
+    activate_reexec_target(
+        &repo.join("target"),
+        current_exe.as_deref(),
+        guard_set,
+        probe("release"),
+        probe("debug"),
+    )
 }
 
 /// TASK-221: how the binary was picked, for the activate-time banner.
@@ -486,6 +569,37 @@ fn handle_dev_activate(
     auto_flag: bool,
 ) -> Result<()> {
     let repo = resolve_aida_repo(repo_arg)?;
+
+    // The first activate of a fresh shell executes the INSTALLED aida (PATH
+    // is only prepended by the activation itself), so an old binary's pin
+    // semantics could drive it. Delegate to the repo's own freshest built
+    // binary so a single activate always yields the in-repo semantics and
+    // message — no second activate needed. The child carries a guard env so
+    // delegation never chains. trace:BUG-760 | ai:claude
+    if let Some(dev_bin) = resolve_activate_reexec(&repo) {
+        // stderr: visible to the user, invisible to the eval'd stdout.
+        eprintln!(
+            "# dev activate: delegating to the in-repo build at {}",
+            dev_bin.display()
+        );
+        match std::process::Command::new(&dev_bin)
+            .args(std::env::args_os().skip(1))
+            .env("AIDA_DEV_ACTIVATE_REEXEC", "1")
+            .status()
+        {
+            Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+            Err(e) => {
+                // A half-built or unrunnable target binary must not brick
+                // activation — fall through to this binary's own selector.
+                eprintln!(
+                    "{} could not run {}: {}; activating with the current binary instead.",
+                    "Warning:".yellow().bold(),
+                    dev_bin.display(),
+                    e
+                );
+            }
+        }
+    }
 
     // Resolve the explicit-profile request from any of: positional `profile`,
     // --debug / --release / --auto flags, or an existing AIDA_DEV_PROFILE_PIN.

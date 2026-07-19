@@ -6,7 +6,8 @@
 use super::*;
 // The pure auto-select binary picker moved to `dev_cmd` (SPIKE-78).
 use crate::dev_cmd::{
-    auto_select_dev_profile, BinarySelectionReason, DevBuildCandidate, DevProfile,
+    activate_reexec_target, auto_select_dev_profile, BinarySelectionReason, DevBuildCandidate,
+    DevProfile,
 };
 
 #[test]
@@ -388,5 +389,154 @@ fn direct_head_reader_resolves_linked_worktree_gitfile() {
     assert_eq!(
         crate::dev_cmd::current_branch_head_sha_direct(&repo).as_deref(),
         Some("866b050aabbccddeeff1122334455667788990011")
+    );
+}
+
+// ── BUG-760: re-exec resolution for `dev activate` ──────────────────────
+// The first activate of a fresh shell runs the INSTALLED aida (PATH not
+// yet prepended); the fix delegates to the repo's own freshest built
+// binary. These pin the pure decision core. trace:BUG-760 | ai:claude
+
+fn reexec_time(secs: u64) -> std::time::SystemTime {
+    std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs)
+}
+
+#[test]
+fn reexec_targets_freshest_repo_binary_for_foreign_exe() {
+    let target = std::path::Path::new("/repo/target");
+    let release = Some((
+        std::path::PathBuf::from("/repo/target/release/aida"),
+        reexec_time(100),
+    ));
+    let debug = Some((
+        std::path::PathBuf::from("/repo/target/debug/aida"),
+        reexec_time(200),
+    ));
+    // Installed binary elsewhere on PATH; debug build is fresher → its
+    // activate semantics drive.
+    let got = activate_reexec_target(
+        target,
+        Some(std::path::Path::new("/usr/local/bin/aida")),
+        false,
+        release,
+        debug,
+    );
+    assert_eq!(
+        got.as_deref(),
+        Some(std::path::Path::new("/repo/target/debug/aida"))
+    );
+}
+
+#[test]
+fn reexec_mtime_tie_falls_to_release() {
+    let target = std::path::Path::new("/repo/target");
+    let release = Some((
+        std::path::PathBuf::from("/repo/target/release/aida"),
+        reexec_time(100),
+    ));
+    let debug = Some((
+        std::path::PathBuf::from("/repo/target/debug/aida"),
+        reexec_time(100),
+    ));
+    let got = activate_reexec_target(
+        target,
+        Some(std::path::Path::new("/usr/local/bin/aida")),
+        false,
+        release,
+        debug,
+    );
+    assert_eq!(
+        got.as_deref(),
+        Some(std::path::Path::new("/repo/target/release/aida"))
+    );
+}
+
+#[test]
+fn reexec_skips_when_exe_already_in_repo_target() {
+    // Running binary IS an in-repo build (either profile) — its semantics
+    // are the repo's; no delegation, no extra process.
+    let target = std::path::Path::new("/repo/target");
+    let release = Some((
+        std::path::PathBuf::from("/repo/target/release/aida"),
+        reexec_time(100),
+    ));
+    let debug = Some((
+        std::path::PathBuf::from("/repo/target/debug/aida"),
+        reexec_time(200),
+    ));
+    let got = activate_reexec_target(
+        target,
+        Some(std::path::Path::new("/repo/target/release/aida")),
+        false,
+        release,
+        debug,
+    );
+    assert_eq!(got, None);
+}
+
+#[test]
+fn reexec_skips_under_guard() {
+    // The delegated child carries the guard env — it must never chain.
+    let target = std::path::Path::new("/repo/target");
+    let release = Some((
+        std::path::PathBuf::from("/repo/target/release/aida"),
+        reexec_time(100),
+    ));
+    let got = activate_reexec_target(
+        target,
+        Some(std::path::Path::new("/usr/local/bin/aida")),
+        true,
+        release,
+        None,
+    );
+    assert_eq!(got, None);
+}
+
+#[test]
+fn reexec_skips_when_no_build_exists() {
+    // Nothing built → fall through so the normal path errors helpfully.
+    let target = std::path::Path::new("/repo/target");
+    let got = activate_reexec_target(
+        target,
+        Some(std::path::Path::new("/usr/local/bin/aida")),
+        false,
+        None,
+        None,
+    );
+    assert_eq!(got, None);
+}
+
+#[test]
+fn reexec_skips_when_current_exe_unknown() {
+    // Can't prove we're not the in-repo binary → conservative no-op
+    // (worst case is the pre-fix behavior, never a loop).
+    let target = std::path::Path::new("/repo/target");
+    let release = Some((
+        std::path::PathBuf::from("/repo/target/release/aida"),
+        reexec_time(100),
+    ));
+    let got = activate_reexec_target(target, None, false, release, None);
+    assert_eq!(got, None);
+}
+
+#[test]
+fn reexec_single_profile_builds_delegate_to_that_profile() {
+    let target = std::path::Path::new("/repo/target");
+    let exe = std::path::Path::new("/usr/local/bin/aida");
+    let release = Some((
+        std::path::PathBuf::from("/repo/target/release/aida"),
+        reexec_time(100),
+    ));
+    let debug = Some((
+        std::path::PathBuf::from("/repo/target/debug/aida"),
+        reexec_time(50),
+    ));
+    assert_eq!(
+        activate_reexec_target(target, Some(exe), false, release, None).as_deref(),
+        Some(std::path::Path::new("/repo/target/release/aida"))
+    );
+    assert_eq!(
+        activate_reexec_target(target, Some(exe), false, None, debug).as_deref(),
+        Some(std::path::Path::new("/repo/target/debug/aida"))
     );
 }
