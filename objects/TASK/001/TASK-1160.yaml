@@ -14,17 +14,33 @@ description: |-
   - PS1 shows (wt:<SPEC>) inside an entered worktree and not after exit; composes with the (aida-release) prefix without duplication.
   - exit from a non-worktree cwd is a friendly no-op naming the main root.
   - Unit tests on the emitted exit payload and the PS1 splice/strip round-trip.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:10:04.999226502Z
-modified_at: 2026-07-19T18:58:08.497221726Z
+modified_at: 2026-07-19T19:08:01.894336529Z
 req_type: Task
 tags:
 - dx aida:worktree papercut from-dogfood
+history:
+- id: 019f7bc7-39e0-7ae2-9a3d-71f97b9adadc
+  author: aida-auto-bump
+  timestamp: 2026-07-19T19:08:01.888414600Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7bc7-39e6-7570-86fa-b094c034f762
+  timestamp: 2026-07-19T19:08:01.894335852Z
+  agent: aida
+  commit_sha: 3d0572519c4fcf61a58bb1cd4c1408b9cf64e0b9
+  summary: Completed via merge 3d057251
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T18:58:08.497221726Z
   implemented_by: joe
+  completed_at: 2026-07-19T19:08:01.692848967Z
+  completion_sha: 3d0572519c4fcf61a58bb1cd4c1408b9cf64e0b9
