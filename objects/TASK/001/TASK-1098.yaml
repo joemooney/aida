@@ -6,12 +6,12 @@ description: |-
   A comprehensive list of every command and subcommand, one line each
   Every command that could show up in `aida usage` would be listed here with a short description.
   The goal is a large catalog that makes it easier to find a forgotten command.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-03T18:18:19.442317965Z
-modified_at: 2026-07-19T02:28:08.015832559Z
+modified_at: 2026-07-19T02:28:24.581549351Z
 req_type: Task
 comments:
 - id: 019f7833-cacf-7c10-8d5d-a6a8be62ce19
@@ -20,3 +20,7 @@ comments:
   created_at: 2026-07-19T02:28:08.015832559Z
   modified_at: 2026-07-19T02:28:08.015832559Z
   session_id: 947cf4f0-5a5e-4395-a6a1-49c3b40f16b8
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-19T02:28:24.581549351Z
+  implemented_by: joe
