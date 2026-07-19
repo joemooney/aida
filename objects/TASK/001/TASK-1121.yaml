@@ -3,16 +3,32 @@ spec_id: TASK-1121
 agreed_id: TASK-1121
 title: 'paper-pdf.sh: repeatable pandoc/xelatex PDF build for research docs'
 description: 'One-command PDF render for the research corpus: scripts/paper-pdf.sh [doc.md] wraps pandoc + xelatex with the DejaVu font set (box-drawing + arrow glyph coverage), TOC, colorlinks, and a rendered-date stamp; defaults to the coordination paper. Filed to record the tooling; possible follow-ups if paper publishing becomes routine: a CI job that rebuilds the PDF on paper changes, and/or attaching milestone PDFs to GitHub Releases.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T15:59:26.072796811Z
-modified_at: 2026-07-19T01:33:53.144739651Z
+modified_at: 2026-07-19T01:42:49.147950484Z
 req_type: Task
 tags:
 - tooling
+history:
+- id: 019f780a-4e27-7fb2-a6d1-72dd4fe63fbf
+  author: aida-auto-bump
+  timestamp: 2026-07-19T01:42:49.127867535Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f780a-4e3b-70e2-9a8d-76caf635f5bb
+  timestamp: 2026-07-19T01:42:49.147948669Z
+  agent: aida
+  commit_sha: d24fe7e78989070cdc59c064a0ed00fee42c7a5e
+  summary: Completed via merge d24fe7e7
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T01:33:53.144739651Z
   implemented_by: joe
+  completed_at: 2026-07-19T01:42:48.798447468Z
+  completion_sha: d24fe7e78989070cdc59c064a0ed00fee42c7a5e
