@@ -35648,5 +35648,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3301
+- id: 019f7bfa-b9a7-7632-be5c-41d5cb14f422
+  target_id: 019f7bfa-b1c6-7b70-a0da-e82e4ab5ec89
+  author: aida
+  node_id: '1'
+  lamport: 3302
+  timestamp: 2026-07-19T20:04:16.935287515Z
+  kind: !Create
+    title: first 'aida dev activate' in a fresh shell executes the INSTALLED aida (PATH not yet prepended) — old pin semantics can select debug; needs repo-binary self-resolution
+    description: 'Observed 2026-07-19 in the operator''s .bashrc: with the shell-init aida() wrapper sourced, the first ''aida dev activate'' of a fresh shell resolves ''aida'' from the ORIGINAL PATH — the system-installed binary (possibly months old) — because the dev target dir is only prepended BY that activation. Consequences seen live: the old binary''s activate ran old auto/freshest-wins pin semantics (could pick a stale debug), printed the old message format, and a second activate (now the dev binary) silently corrected to release-default — making duplicated activate lines look load-bearing and producing a transient truthful-but-confusing ⇄ staleness marker. Fix: dev activate (or the shell-init wrapper for the activate verb) should locate the repo''s own freshest dev binary (walk up from cwd for target/{release,debug}/aida, or honor a recorded repo path in ~/.aida) and re-exec ITS activate so the semantics are always the in-repo binary''s, regardless of which binary the first PATH hit found. Acceptance: in a shell whose PATH has only the installed aida, a single ''aida dev activate'' inside the repo yields the dev binary''s pin semantics and message; no second activate needed; test on the re-exec resolution. Mode: drive.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3302
 node_id: '1'
