@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:42:48.132401681Z
-modified_at: 2026-07-19T15:43:25.553625959Z
+modified_at: 2026-07-19T17:15:20.612517854Z
 req_type: Decision
 tags:
 - adr
