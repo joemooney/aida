@@ -9092,6 +9092,47 @@ pub enum Command {
         json: bool,
     },
 
+    /// Ambient terminal-title meter — a read-only project pulse riding the
+    /// terminal title bar (any OSC-capable terminal; tmux shows it as the
+    /// window title). On an interval, emits the set-window-title escape with
+    /// a compact meter: queue depth, live/STALE session counts, and how many
+    /// items await you (briefs · findings · mail · punts). Purely an ambient
+    /// signal — it dispatches nothing, launches nothing, writes nothing; all
+    /// sources are cache/local-fast (no network, PRs omitted).
+    ///
+    /// Examples:
+    ///   aida statusbar                 # refresh the title every 15s (Ctrl+C exits)
+    ///   aida statusbar --restore-title # same, restoring the previous title on exit
+    ///   aida statusbar --once          # single title update (shell prompt hooks)
+    ///   aida statusbar --plain         # print the meter as plain text and exit
+    ///
+    /// tmux status-right recipe (plain text, no escapes needed):
+    ///   set -g status-right '#(aida statusbar --plain) '
+    ///   set -g status-interval 15
+    // trace:STORY-715 | ai:claude
+    #[clap(verbatim_doc_comment)]
+    Statusbar {
+        /// Seconds between title refreshes in loop mode (minimum 2).
+        #[clap(long, default_value_t = 15)]
+        interval: u64,
+
+        /// Emit ONE title update and exit — for wiring into a shell
+        /// PROMPT_COMMAND / precmd hook instead of running the loop.
+        #[clap(long)]
+        once: bool,
+
+        /// Print the meter as a plain text line (no escape sequence) and
+        /// exit — the building block for tmux's status-right interpolation.
+        #[clap(long, conflicts_with = "once")]
+        plain: bool,
+
+        /// Save the current terminal title on start and restore it when the
+        /// loop exits (XTerm title-stack escapes). Opt-in: not every
+        /// terminal implements the title stack.
+        #[clap(long)]
+        restore_title: bool,
+    },
+
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.
     /// Sub-50ms (reads the cache + the orphan-store queue YAML). Format:
