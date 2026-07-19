@@ -1,0 +1,14 @@
+id: 019f77e4-1d77-7a80-a87b-9d3acadb7087
+spec_id: TASK-1158
+agreed_id: TASK-1158
+title: 'aida dev activate: default pin becomes release (auto ''freshest wins'' demoted to explicit opt-in)'
+description: 'Follow-up to the 2026-07-18 stale-debug-drain incident and the new CLAUDE.md profile rule (release is the daily driver; debug is session-scoped). Bare ''aida dev activate'' currently pins auto — freshest SHA-matched of either profile — which is exactly the mode that left the operator''s shell on a stale debug while a HEAD-exact release existed. Change the bare default to pin release (SHA-verdict logic unchanged within the profile); ''aida dev activate auto'' (or debug) stays as the explicit opt-in, per the configurable-policy convention. dev status wording updates to name the pin. Acceptance: bare activate on a repo with both profiles built resolves to target/release even when debug is fresher; explicit ''activate debug''/''activate auto'' still work; the (aida-debug) prompt prefix only ever appears after an explicit debug pin; docs (CLAUDE.md workflow section) match.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T01:01:06.295622268Z
+modified_at: 2026-07-19T01:01:06.295622268Z
+req_type: Task
+tags:
+- dx aida:dev from-dogfood

@@ -34669,5 +34669,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3210
+- id: 019f77e4-2130-7953-b38d-57e5733aedbc
+  target_id: 019f77e4-1d77-7a80-a87b-9d3acadb7087
+  author: aida
+  node_id: '1'
+  lamport: 3211
+  timestamp: 2026-07-19T01:01:07.248499223Z
+  kind: !Create
+    title: 'aida dev activate: default pin becomes release (auto ''freshest wins'' demoted to explicit opt-in)'
+    description: 'Follow-up to the 2026-07-18 stale-debug-drain incident and the new CLAUDE.md profile rule (release is the daily driver; debug is session-scoped). Bare ''aida dev activate'' currently pins auto — freshest SHA-matched of either profile — which is exactly the mode that left the operator''s shell on a stale debug while a HEAD-exact release existed. Change the bare default to pin release (SHA-verdict logic unchanged within the profile); ''aida dev activate auto'' (or debug) stays as the explicit opt-in, per the configurable-policy convention. dev status wording updates to name the pin. Acceptance: bare activate on a repo with both profiles built resolves to target/release even when debug is fresher; explicit ''activate debug''/''activate auto'' still work; the (aida-debug) prompt prefix only ever appears after an explicit debug pin; docs (CLAUDE.md workflow section) match.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3211
 node_id: '1'
