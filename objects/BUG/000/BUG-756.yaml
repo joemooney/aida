@@ -3,12 +3,12 @@ spec_id: BUG-756
 agreed_id: BUG-756
 title: 'deferred flag silently lost: TASK-919 + TASK-911 deferred with triggers on 07-17, found Approved/undeferred on 07-18 — twice — mechanism unknown'
 description: 'Both specs were explicitly deferred (aida defer with --until triggers) late 2026-07-17 and verified on the deferred shelf (aida list --deferred showed both). By 2026-07-18 18:16 the morning groom''s fence classified them ''coupled'' rather than ''deferred'', and at 19:20 aida list --status approved showed both with no deferred flag — the shelf count for them was 0. Re-deferred 19:20. This is the SECOND loss for this pair (first: the answers recorded 07-14 never applied — that was BUG-730, fixed; this is a distinct post-fix loss of an APPLIED flag). Candidate mechanisms to investigate: aida edit --status transitions clearing the flag; queue remove; the 07-18 15:35 drain crash''s state restoration (''status restored to Approved''); conflict.rs union on store sync dropping the field. Needs a git-log walk of the two YAMLs (aida history --events --id TASK-919) to find the commit where deferred: true vanished and its subject line. Promote to approved once the mechanism is identified.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T02:22:35.630711223Z
-modified_at: 2026-07-19T15:30:08.317480544Z
+modified_at: 2026-07-19T19:27:02.088708067Z
 req_type: Bug
 tags:
 - aida:defer lifecycle kind:observation from-dogfood
@@ -29,3 +29,21 @@ comments:
   content: 'Root cause confirmed by store history: aida-store commit ba8b65fc8 (2026-07-19 08:06:05 -0700, subject ''chore: update 37 requirements'') removed deferred/deferred_at/deferred_until from TASK-919, TASK-911, and other deferred shelf entries during a full-store save. The diff shape matches the aida pull auto-bump path: one spec completed while unrelated objects lost fields not represented by an older/projection writer (processing_record, comment session_id, deferred metadata). Fix is in GitBackend::save(): full-store saves now merge/preserve git-canonical fields from the existing object before writing; targeted update_requirement remains able to intentionally clear via undefer.'
   created_at: 2026-07-19T15:19:02.257470218Z
   modified_at: 2026-07-19T15:19:02.257470218Z
+history:
+- id: 019f7bd8-9fc2-79e1-a7c7-34dceb8b8a77
+  author: aida-auto-bump
+  timestamp: 2026-07-19T19:27:02.082751563Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f7bd8-9fc8-7b93-99bd-1814918ec48e
+  timestamp: 2026-07-19T19:27:02.088707123Z
+  agent: aida
+  commit_sha: e6b1692bea1e917c01f51335ee56e18f0176d673
+  summary: Completed via merge e6b1692b
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-19T19:27:01.887545009Z
+  completion_sha: e6b1692bea1e917c01f51335ee56e18f0176d673
