@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T02:22:35.630711223Z
-modified_at: 2026-07-19T15:12:01.120359225Z
+modified_at: 2026-07-19T15:19:02.257470218Z
 req_type: Bug
 tags:
 - aida:defer lifecycle kind:observation from-dogfood
@@ -19,3 +19,8 @@ comments:
   content: 'Mechanism identified (investigation 2026-07-18 19:30): store commit 90d6b6f90 ''chore: update 70 requirements'' (07:51:29 MST, 71 files, 767 deletions / 7 insertions) stripped deferred:*, decision_request:*, and sibling rich fields dating back to 07-13/07-14 across 70 specs. The commit subject comes from the full-store bulk save in aida-core/src/db/git_backend.rs:652-660. Usage telemetry (~/.aida/usage.jsonl) brackets the moment: ''aida pull'' spans 14:51:20-14:51:39 UTC, covering the 14:51:29 commit — the pull''s store leg (sync/rebase/auto-bump path) performed a whole-store save from an image missing weeks of field history, i.e. conflict.rs union-merge or the reconcile path resolved to stale versions and persisted them. This is silent data loss on pull, not just a defer-flag nit. Recovery for this instance: the pre-clobber values live in the orphan-branch history (git show 90d6b6f90^:objects/...) — the two defer flags were re-applied by hand 19:20.'
   created_at: 2026-07-19T02:24:25.174284840Z
   modified_at: 2026-07-19T02:24:25.174284840Z
+- id: 019f7af5-9371-7601-a5e4-63476ea2306a
+  author: joe
+  content: 'Root cause confirmed by store history: aida-store commit ba8b65fc8 (2026-07-19 08:06:05 -0700, subject ''chore: update 37 requirements'') removed deferred/deferred_at/deferred_until from TASK-919, TASK-911, and other deferred shelf entries during a full-store save. The diff shape matches the aida pull auto-bump path: one spec completed while unrelated objects lost fields not represented by an older/projection writer (processing_record, comment session_id, deferred metadata). Fix is in GitBackend::save(): full-store saves now merge/preserve git-canonical fields from the existing object before writing; targeted update_requirement remains able to intentionally clear via undefer.'
+  created_at: 2026-07-19T15:19:02.257470218Z
+  modified_at: 2026-07-19T15:19:02.257470218Z
