@@ -15,9 +15,10 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:50.718128858Z
-modified_at: 2026-06-27T16:40:38.252452653Z
+modified_at: 2026-07-19T06:17:35.371643301Z
 req_type: Task
 tags:
+- batch:strategy-0719
 - role:advisor
 - schema
 - subsystem
