@@ -10,9 +10,9 @@ The advisor-side analog of `/aida-burndown` (which fires implementers).
 ## Usage
 
 ```
-aida intake                 Propose dispositions for every open spec — writes NOTHING.
-aida intake --apply         Execute the proposed approvals + groom the queue.
-aida intake --dry-run       Show the candidate fence + the claude -p command, launch nothing.
+aida groom                  Propose dispositions for every open spec — writes NOTHING.
+aida groom --apply          Execute the proposed approvals + groom the queue.
+aida groom --dry-run        Show the candidate fence + the claude -p command, launch nothing.
 ```
 
 Guardrails (compose with the `[intake]` config; flags override config for a run):
@@ -26,13 +26,13 @@ Guardrails (compose with the `[intake]` config; flags override config for a run)
 --permission-mode MODE     Claude permission mode (default: bypassPermissions).
 ```
 
-This command launches `claude -p "/aida-intake"` headless. It is not the skill
-itself — the skill (`.claude/skills/aida-intake.md`) is the judgment the spawned
+This command launches `claude -p "/aida-assess"` headless. It is not the skill
+itself — the skill (`.claude/skills/aida-assess.md`) is the judgment the spawned
 advisor follows.
 
 ## Instructions (for the spawned advisor)
 
-Follow the workflow in `.claude/skills/aida-intake.md`:
+Follow the workflow in `.claude/skills/aida-assess.md`:
 
 1. Read your fence — the specs in `$AIDA_INTAKE_CANDIDATES` (the launcher
    already excluded the do-not-approve classes + `needs-human`/`strategic`).
