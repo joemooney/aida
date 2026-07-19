@@ -102,6 +102,8 @@ fn sample_lock(pid: u32) -> crate::drain_lock::DrainLock {
         started_at_utc: "2026-06-13T21:53:00Z".to_string(),
         command: "burndown run --status approved".to_string(),
         host: "devbox".to_string(),
+        // trace:BUG-759 | ai:claude
+        specs: Vec::new(),
     }
 }
 

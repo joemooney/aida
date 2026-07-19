@@ -631,6 +631,65 @@ pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
     out
 }
 
+// BUG-759: a `burndown run` launcher holds `.aida/drain.lock` for its entire
+// wall-clock (pid, started, command, blessed spec set) but writes NO per-phase
+// drain-state file — its fan-out lives inside the headless `claude -p` child,
+// not an orchestrator. `aida drain status` used to read only the drain-state
+// file, so mid-burndown it printed "No drain in progress" while implementers
+// were demonstrably working. These renderers give the command a truthful
+// lock-backed report for that case. Pure — the command handler does the I/O.
+// trace:BUG-759 | ai:claude
+pub(crate) fn render_lock_human(lock: &crate::drain_lock::DrainLock, stale_state: bool) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("Active drain: {}\n", lock.command));
+    let host = if lock.host.is_empty() {
+        String::new()
+    } else {
+        format!(" · host {}", lock.host)
+    };
+    out.push_str(&format!(
+        "  launcher pid {} · started {}{}\n",
+        lock.pid,
+        fmt_local(&lock.started_at_utc),
+        host
+    ));
+    if !lock.specs.is_empty() {
+        out.push_str(&format!("  specs: {}\n", lock.specs.join(", ")));
+    }
+    out.push('\n');
+    out.push_str(
+        "  This drain is launcher-held (e.g. `aida burndown run` / `aida queue integrate`):\n  \
+         its work fans out inside the launched session, so there is no per-phase progress\n  \
+         file to report. A second drain launched now would be refused until it exits.\n",
+    );
+    if stale_state {
+        out.push_str(&format!(
+            "\n  {} a stale drain-state file from an earlier drain also exists — \
+             `aida drain status --clear` removes it.\n",
+            glyph(crate::glyphs::Glyph::Warning)
+        ));
+    }
+    out
+}
+
+/// The `--json` payload when the live drain is known only from the launcher's
+/// drain lock (no drain-state file). `source` disambiguates the shape from the
+/// richer drain-state payload.
+// trace:BUG-759 | ai:claude
+pub(crate) fn render_lock_json(lock: &crate::drain_lock::DrainLock, stale_state: bool) -> String {
+    let value = serde_json::json!({
+        "status": "active",
+        "source": "drain-lock",
+        "pid": lock.pid,
+        "started_at": lock.started_at_utc,
+        "command": lock.command,
+        "host": lock.host,
+        "specs": lock.specs,
+        "stale_drain_state": stale_state,
+    });
+    serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string())
+}
+
 /// Render the `--json` payload for `aida drain status`.
 pub(crate) fn render_json(status: &DrainStatus) -> String {
     let value = match status {
@@ -937,6 +996,65 @@ mod tests {
         assert!(active.contains("STORY-301"));
         let stale = render_json(&DrainStatus::Stale(single_state()));
         assert!(stale.contains("\"status\": \"stale\""));
+    }
+
+    // ── BUG-759: lock-backed report when the launcher holds the drain ──
+
+    fn burndown_lock() -> crate::drain_lock::DrainLock {
+        crate::drain_lock::DrainLock {
+            pid: 3_822_683,
+            started_at_utc: "2026-07-19T11:30:00+00:00".to_string(),
+            command: "burndown run (status=approved)".to_string(),
+            host: "devbox".to_string(),
+            specs: vec!["BUG-101".to_string(), "TASK-202".to_string()],
+        }
+    }
+
+    // BUG-759: with no drain-state file but a live launcher-held lock, the
+    // human report names the drain — pid, started, command, spec set — instead
+    // of "No drain in progress".
+    #[test]
+    fn render_lock_human_names_pid_started_command_and_specs() {
+        let out = render_lock_human(&burndown_lock(), false);
+        assert!(out.contains("Active drain: burndown run (status=approved)"));
+        assert!(out.contains("launcher pid 3822683"));
+        assert!(out.contains("host devbox"));
+        assert!(out.contains("specs: BUG-101, TASK-202"));
+        assert!(out.contains("refused"));
+        assert!(!out.contains("stale drain-state"));
+    }
+
+    // BUG-759: a leftover stale drain-state tombstone alongside the live lock
+    // is called out with the --clear hint, without hiding the live drain.
+    #[test]
+    fn render_lock_human_notes_a_stale_drain_state_tombstone() {
+        let out = render_lock_human(&burndown_lock(), true);
+        assert!(out.contains("Active drain: burndown run (status=approved)"));
+        assert!(out.contains("stale drain-state file"));
+        assert!(out.contains("aida drain status --clear"));
+    }
+
+    // BUG-759: an empty spec set (a lock written by an older binary, or a
+    // launcher that recorded none) omits the specs line rather than printing
+    // an empty one.
+    #[test]
+    fn render_lock_human_omits_empty_spec_set() {
+        let mut lock = burndown_lock();
+        lock.specs.clear();
+        let out = render_lock_human(&lock, false);
+        assert!(!out.contains("specs:"));
+    }
+
+    // BUG-759: the JSON payload is active + source-tagged so machine consumers
+    // can tell a lock-backed report from the richer drain-state payload.
+    #[test]
+    fn render_lock_json_is_active_and_source_tagged() {
+        let out = render_lock_json(&burndown_lock(), false);
+        assert!(out.contains("\"status\": \"active\""));
+        assert!(out.contains("\"source\": \"drain-lock\""));
+        assert!(out.contains("\"pid\": 3822683"));
+        assert!(out.contains("BUG-101"));
+        assert!(out.contains("\"stale_drain_state\": false"));
     }
 
     // AC6: on_drain_complete predicts which queue items will / won't be

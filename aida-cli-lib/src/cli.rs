@@ -6339,11 +6339,15 @@ pub enum HeadlessCommand {
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DrainCommand {
-    /// Show the active `--auto-complete` drain: the launching command, the
-    /// members and their lifecycle state, the current phase, and a prediction
-    /// of what happens on session exit. Prints `No drain in progress.` (exit
-    /// 0) when none is running. A drain-state file whose orchestrator process
-    /// is no longer alive is reported as stale — `--clear` removes it.
+    /// Show the active drain: the launching command, the members and their
+    /// lifecycle state, the current phase, and a prediction of what happens on
+    /// session exit. Launcher-held drains (`aida burndown run`, `aida queue
+    /// integrate`) are reported from the live drain lock — pid, start time,
+    /// and spec set — even though they write no per-phase progress file.
+    /// Prints `No drain in progress.` (exit 0) when none is running. A
+    /// drain-state file whose orchestrator process is no longer alive is
+    /// reported as stale — `--clear` removes it.
+    // trace:BUG-759 | ai:claude
     Status {
         /// Emit the drain state as JSON instead of the human summary.
         #[clap(long)]

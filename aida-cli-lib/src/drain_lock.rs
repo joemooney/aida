@@ -152,6 +152,13 @@ pub(crate) struct DrainLock {
     pub(crate) command: String,
     /// Host the drain runs on — informational, for cross-machine shared clones.
     pub(crate) host: String,
+    // BUG-759: the spec set the drain set out to work (the burndown-blessed
+    // ready set). Read-side tooling (`aida drain status`) names it when the
+    // launcher holds the lock but writes no per-phase drain-state file. Serde
+    // default so a pre-existing lock written by an older binary still parses.
+    // trace:BUG-759 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) specs: Vec<String>,
 }
 
 impl DrainLock {
@@ -248,6 +255,21 @@ fn borrow_requested() -> bool {
 /// --auto-complete`) call this at the top so they are mutually exclusive
 /// against each other — see the module docs. trace:BUG-538 | ai:claude
 pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<DrainGuard> {
+    // trace:BUG-759 | ai:claude — thin wrapper; the specs-aware acquire is the
+    // one implementation so the lock-lifetime rules can't fork.
+    acquire_drain_lock_with_specs(project_root, command, &[])
+}
+
+/// Like [`acquire_drain_lock`], additionally recording the drain's spec set in
+/// the lock so `aida drain status` can name what a launcher-held drain (which
+/// writes no per-phase drain-state file) is working — pid, started, command
+/// AND specs stay probe-visible for the launcher's entire wall-clock.
+// trace:BUG-759 | ai:claude
+pub(crate) fn acquire_drain_lock_with_specs(
+    project_root: &Path,
+    command: &str,
+    specs: &[String],
+) -> Result<DrainGuard> {
     let path = drain_lock_path(project_root);
     let existing = read_lock(&path);
 
@@ -382,6 +404,8 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
                 started_at_utc: Utc::now().to_rfc3339(),
                 command: command.to_string(),
                 host: hostname(),
+                // trace:BUG-759 | ai:claude
+                specs: specs.to_vec(),
             };
             let json = serde_json::to_string_pretty(&record).unwrap_or_else(|_| "{}".to_string());
             aida_core::write_atomic(&path, json).map_err(|e| {
@@ -565,6 +589,7 @@ mod tests {
             started_at_utc: started_at_utc.to_string(),
             command: "queue work --auto-complete".to_string(),
             host: "testhost".to_string(),
+            specs: Vec::new(),
         }
     }
 
@@ -729,6 +754,7 @@ mod tests {
             started_at_utc: Utc::now().to_rfc3339(),
             command: "crashed drain".to_string(),
             host: "ghost".to_string(),
+            specs: Vec::new(),
         };
         std::fs::write(&path, serde_json::to_string(&dead).unwrap()).unwrap();
         // Reclaim succeeds and rewrites the file with OUR pid.
@@ -750,6 +776,7 @@ mod tests {
             started_at_utc: Utc::now().to_rfc3339(),
             command: "successor".to_string(),
             host: "h".to_string(),
+            specs: Vec::new(),
         };
         std::fs::write(&path, serde_json::to_string(&successor).unwrap()).unwrap();
         drop(guard);
@@ -848,5 +875,55 @@ mod tests {
     fn probe_lock_none_on_empty_root() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(probe_lock(dir.path()), LockStatus::None);
+    }
+
+    // ── BUG-759: lock lifetime == launcher lifetime, probe-visible spec set ──
+
+    // Regression (BUG-759): the launcher-held lock must be probe-visible as a
+    // live drain — pid, started, command, spec set — for the ENTIRE time the
+    // guard is held, and gone the moment it drops. This is the read-side
+    // contract `aida drain status` relies on to never print "No drain in
+    // progress" while a `burndown run` launcher is alive.
+    #[test]
+    fn lock_with_specs_is_probe_visible_for_the_guards_whole_lifetime() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let specs = vec!["BUG-101".to_string(), "TASK-202".to_string()];
+        {
+            let _guard =
+                acquire_drain_lock_with_specs(root, "burndown run (status=approved)", &specs)
+                    .unwrap();
+            match probe_lock(root) {
+                LockStatus::Running(l) => {
+                    assert_eq!(l.pid, std::process::id());
+                    assert_eq!(l.command, "burndown run (status=approved)");
+                    assert_eq!(l.specs, specs, "the blessed spec set must be probe-visible");
+                }
+                other => panic!("expected Running while the guard is held, got {other:?}"),
+            }
+            // A second drain launched during the window is refused (the lock is
+            // coextensive with the launcher, so this holds for its whole run).
+            let err = acquire_drain_lock(root, "second burndown run")
+                .expect_err("a live launcher-held lock must refuse a second drain");
+            assert!(err.to_string().contains("a drain is already running"));
+        }
+        // Guard dropped (launcher exited) → the lock is gone, probe reads None.
+        assert_eq!(probe_lock(root), LockStatus::None);
+    }
+
+    // BUG-759: a lock written by an older binary (no `specs` field) still
+    // parses — the field defaults to empty so a mid-upgrade drain stays
+    // observable and reclaimable.
+    #[test]
+    fn pre_specs_lock_json_parses_with_empty_spec_set() {
+        let body = r#"{
+          "pid": 4242,
+          "started_at_utc": "2026-06-14T11:59:00Z",
+          "command": "burndown run (status=approved)",
+          "host": "h"
+        }"#;
+        let parsed: DrainLock = serde_json::from_str(body).unwrap();
+        assert!(parsed.specs.is_empty());
+        assert_eq!(parsed.pid, 4242);
     }
 }
