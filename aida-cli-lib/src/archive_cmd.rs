@@ -38,16 +38,26 @@ enum ArchiveGuard {
 // trace:BUG-492 | ai:claude
 // TASK-741: the legality of an archive — the `archived ⇒ terminal ∧ ¬queued`
 // cross-axis invariant — is single-sourced in the lifecycle model
-// (`lifecycle::archive_invariant_block`, declared as the `BUG-492` row of
-// `lifecycle::INVARIANTS`). This function maps the model's verdict onto the
-// CLI's `--force` override and user-facing warning wording (both CLI concerns
-// that stay at the call site). trace:TASK-741 | ai:claude
-fn archive_guard_decision(status: &RequirementStatus, queued: bool, force: bool) -> ArchiveGuard {
-    use aida_core::lifecycle::{archive_invariant_block, ArchiveBlock, State};
+// (`lifecycle::archive_invariant_block_for_type`, declared as the `BUG-492`
+// row of `lifecycle::INVARIANTS`). This function maps the model's verdict onto
+// the CLI's `--force` override and user-facing warning wording (both CLI
+// concerns that stay at the call site). trace:TASK-741 | ai:claude
+// BUG-761: the gate is class-aware — for the decision class (ADRs), Approved
+// IS the terminal "accepted" state (BUG-751 convention: draft = proposed,
+// approved = accepted), so an accepted ADR archives bare instead of sitting
+// in the open lens forever. Work-spec refusal is unchanged.
+// trace:BUG-761 | ai:claude
+fn archive_guard_decision(
+    req_type: &aida_core::RequirementType,
+    status: &RequirementStatus,
+    queued: bool,
+    force: bool,
+) -> ArchiveGuard {
+    use aida_core::lifecycle::{archive_invariant_block_for_type, ArchiveBlock, State};
     if force {
         return ArchiveGuard::Allow;
     }
-    match archive_invariant_block(State::from_status(status), queued) {
+    match archive_invariant_block_for_type(req_type, State::from_status(status), queued) {
         None => ArchiveGuard::Allow,
         Some(ArchiveBlock::Queued) => ArchiveGuard::Confirm {
             reason: format!(
@@ -130,8 +140,9 @@ fn archive_single(
     // BUG-492: guard the active-work case. A non-terminal or queued spec
     // needs --force (or an interactive y/N confirm). Archive's job is the
     // closed long-tail; sweeping live work is almost always a mistake.
-    // trace:BUG-492 | ai:claude
-    match archive_guard_decision(&req.status, queued, force) {
+    // BUG-761: class-aware — an accepted (Approved) decision spec is closed
+    // and archives bare. trace:BUG-492 trace:BUG-761 | ai:claude
+    match archive_guard_decision(&req.req_type, &req.status, queued, force) {
         ArchiveGuard::Allow => {}
         ArchiveGuard::Confirm { reason } => {
             eprintln!("{} {display_id} {reason}", "Warning:".yellow().bold());
@@ -375,13 +386,16 @@ mod tests {
     use aida_core::RequirementStatus;
 
     // TASK-741: exhaustive parity — `archive_guard_decision` (now delegating
-    // to `lifecycle::archive_invariant_block`) yields the same verdict as the
-    // pre-migration predicate over every `(status, queued, force)` triple. The
-    // `--force` override and the two reason wordings (queued-louder vs
-    // non-terminal) must be byte-identical. trace:TASK-741
+    // to `lifecycle::archive_invariant_block_for_type`) yields the same
+    // verdict as the pre-migration predicate over every
+    // `(status, queued, force)` triple for a WORK-class spec (the decision
+    // class deliberately diverges — BUG-761). The `--force` override and the
+    // two reason wordings (queued-louder vs non-terminal) must be
+    // byte-identical. trace:TASK-741 trace:BUG-761
     #[test]
     fn archive_guard_decision_parity_with_oracle() {
         use aida_core::models::RequirementStatus as S;
+        use aida_core::RequirementType;
         // The pre-migration body, verbatim.
         fn oracle(status: &S, queued: bool, force: bool) -> ArchiveGuard {
             let non_terminal = !is_terminal_status(status);
@@ -415,13 +429,60 @@ mod tests {
             for queued in [false, true] {
                 for force in [false, true] {
                     assert_eq!(
-                        archive_guard_decision(s, queued, force),
+                        archive_guard_decision(&RequirementType::Task, s, queued, force),
                         oracle(s, queued, force),
                         "parity mismatch at status={s} queued={queued} force={force}"
                     );
                 }
             }
         }
+    }
+
+    // BUG-761: the gate is class-aware — for the decision class (ADRs),
+    // `approved` IS the terminal "accepted" state (BUG-751: draft = proposed,
+    // approved = accepted), so `aida archive ADR-N` on an accepted decision
+    // succeeds bare. Work-spec refusal is unchanged (covered by the parity
+    // test above); the queue axis still blocks first even for a decision.
+    // trace:BUG-761 | ai:claude
+    #[test]
+    fn archive_guard_allows_accepted_decision_bare() {
+        use aida_core::RequirementType as T;
+
+        // Accepted (Approved) decision, unqueued, no --force → archives
+        // silently. This is the bug: it used to demand --force forever.
+        assert_eq!(
+            archive_guard_decision(&T::Decision, &RequirementStatus::Approved, false, false),
+            ArchiveGuard::Allow,
+            "an accepted ADR is closed — it must archive bare"
+        );
+
+        // A proposed (Draft) decision is still open — refusal unchanged.
+        assert!(
+            matches!(
+                archive_guard_decision(&T::Decision, &RequirementStatus::Draft, false, false),
+                ArchiveGuard::Confirm { .. }
+            ),
+            "a proposed (Draft) decision is still open and must confirm"
+        );
+
+        // Queued precedence unchanged: even an accepted decision in the
+        // queue is contradictory state and must confirm, naming the queue.
+        match archive_guard_decision(&T::Decision, &RequirementStatus::Approved, true, false) {
+            ArchiveGuard::Confirm { reason } => assert!(
+                reason.contains("queue"),
+                "queued accepted decision must name the queue: {reason}"
+            ),
+            ArchiveGuard::Allow => panic!("a queued decision must still require confirmation"),
+        }
+
+        // Work-spec refusal unchanged: an Approved non-decision still blocks.
+        assert!(
+            matches!(
+                archive_guard_decision(&T::Task, &RequirementStatus::Approved, false, false),
+                ArchiveGuard::Confirm { .. }
+            ),
+            "Approved work specs must still require confirmation"
+        );
     }
 
     // BUG-492: `aida archive <ID>` must not silently sweep live work. The
@@ -434,18 +495,33 @@ mod tests {
     fn archive_guard_blocks_non_terminal_and_queued() {
         // Terminal, not queued → archive silently.
         assert_eq!(
-            archive_guard_decision(&RequirementStatus::Completed, false, false),
+            archive_guard_decision(
+                &aida_core::RequirementType::Task,
+                &RequirementStatus::Completed,
+                false,
+                false
+            ),
             ArchiveGuard::Allow,
             "closed long-tail archives without a prompt"
         );
         assert_eq!(
-            archive_guard_decision(&RequirementStatus::Rejected, false, false),
+            archive_guard_decision(
+                &aida_core::RequirementType::Task,
+                &RequirementStatus::Rejected,
+                false,
+                false
+            ),
             ArchiveGuard::Allow
         );
 
         // Non-terminal, not queued → must confirm (the bug: this used to
         // archive silently).
-        let g = archive_guard_decision(&RequirementStatus::Approved, false, false);
+        let g = archive_guard_decision(
+            &aida_core::RequirementType::Task,
+            &RequirementStatus::Approved,
+            false,
+            false,
+        );
         match &g {
             ArchiveGuard::Confirm { reason } => {
                 assert!(
@@ -464,7 +540,12 @@ mod tests {
 
         // Non-terminal AND queued → confirm with the louder, queue-naming
         // reason (the unambiguously-wrong case from the bug).
-        let g = archive_guard_decision(&RequirementStatus::Approved, true, false);
+        let g = archive_guard_decision(
+            &aida_core::RequirementType::Task,
+            &RequirementStatus::Approved,
+            true,
+            false,
+        );
         match &g {
             ArchiveGuard::Confirm { reason } => assert!(
                 reason.contains("queue"),
@@ -477,7 +558,12 @@ mod tests {
         // the contradiction gets reconciled.
         assert!(
             matches!(
-                archive_guard_decision(&RequirementStatus::Completed, true, false),
+                archive_guard_decision(
+                    &aida_core::RequirementType::Task,
+                    &RequirementStatus::Completed,
+                    true,
+                    false
+                ),
                 ArchiveGuard::Confirm { .. }
             ),
             "a queued terminal spec is still contradictory state and must confirm"
@@ -485,12 +571,22 @@ mod tests {
 
         // --force always passes through, regardless of status / queue.
         assert_eq!(
-            archive_guard_decision(&RequirementStatus::Approved, true, true),
+            archive_guard_decision(
+                &aida_core::RequirementType::Task,
+                &RequirementStatus::Approved,
+                true,
+                true
+            ),
             ArchiveGuard::Allow,
             "--force opts past the guard"
         );
         assert_eq!(
-            archive_guard_decision(&RequirementStatus::InProgress, false, true),
+            archive_guard_decision(
+                &aida_core::RequirementType::Task,
+                &RequirementStatus::InProgress,
+                false,
+                true
+            ),
             ArchiveGuard::Allow
         );
     }

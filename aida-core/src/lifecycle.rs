@@ -319,6 +319,39 @@ pub fn archive_invariant_block(status: State, queued: bool) -> Option<ArchiveBlo
     None
 }
 
+/// Class-aware "closed for archive purposes" predicate. For work specs the
+/// closed set is the terminal statuses (Completed/Rejected). For the
+/// decision class (ADRs) `Approved` IS the terminal state — the documented
+/// ADR lifecycle records acceptance as `Approved` (draft = proposed,
+/// approved = accepted), so an accepted decision is closed and belongs in
+/// the archivable long-tail, not the open lens forever. Other
+/// knowledge-class types (principle, term) cannot reach `Approved` at all
+/// (approval is forbidden for them), so they keep the work-spec rule.
+// trace:BUG-761 | ai:claude
+pub fn status_is_closed_for_type(req_type: &crate::models::RequirementType, status: State) -> bool {
+    status.is_terminal()
+        || (*req_type == crate::models::RequirementType::Decision && status == State::Approved)
+}
+
+/// Type-aware form of [`archive_invariant_block`]: identical queued-axis
+/// precedence, but the status axis consults [`status_is_closed_for_type`]
+/// so an accepted (`Approved`) decision spec archives without a block while
+/// every other type keeps the Completed/Rejected-only rule.
+// trace:BUG-761 | ai:claude
+pub fn archive_invariant_block_for_type(
+    req_type: &crate::models::RequirementType,
+    status: State,
+    queued: bool,
+) -> Option<ArchiveBlock> {
+    if queued {
+        return Some(ArchiveBlock::Queued);
+    }
+    if !status_is_closed_for_type(req_type, status) {
+        return Some(ArchiveBlock::NonTerminal);
+    }
+    None
+}
+
 /// Evaluate the BUG-493 held-for-review invariant: a `review:draft-only` hold
 /// CLAIMS an open draft PR exists for human review. Given whether the forge
 /// confirms an open PR, return whether the claim HOLDS. The reconcile path
@@ -847,6 +880,75 @@ mod tests {
                 Some(ArchiveBlock::NonTerminal),
                 "{s:?} unqueued must block as NonTerminal"
             );
+        }
+    }
+
+    // An accepted ADR (Decision @ Approved) is closed for archive purposes;
+    // every other type keeps the Completed/Rejected-only rule, and the
+    // queued axis still blocks first even for a decision.
+    // trace:BUG-761 | ai:claude
+    #[test]
+    fn archive_invariant_block_for_type_treats_accepted_decision_as_closed() {
+        use crate::models::RequirementType as T;
+        use State::*;
+        // Accepted decision → archive is invariant-legal bare.
+        assert_eq!(
+            archive_invariant_block_for_type(&T::Decision, Approved, false),
+            None
+        );
+        // Terminal statuses stay legal for every class.
+        assert_eq!(
+            archive_invariant_block_for_type(&T::Decision, Completed, false),
+            None
+        );
+        assert_eq!(
+            archive_invariant_block_for_type(&T::Task, Completed, false),
+            None
+        );
+        // A proposed (Draft) decision is still open.
+        assert_eq!(
+            archive_invariant_block_for_type(&T::Decision, Draft, false),
+            Some(ArchiveBlock::NonTerminal)
+        );
+        // Queued precedence is unchanged — even an accepted decision blocks
+        // on the queue axis.
+        assert_eq!(
+            archive_invariant_block_for_type(&T::Decision, Approved, true),
+            Some(ArchiveBlock::Queued)
+        );
+        // Work-spec refusal unchanged: Approved non-decision types block.
+        for t in [
+            T::Task,
+            T::Story,
+            T::Bug,
+            T::Functional,
+            T::Principle,
+            T::Term,
+        ] {
+            assert_eq!(
+                archive_invariant_block_for_type(&t, Approved, false),
+                Some(ArchiveBlock::NonTerminal),
+                "{t:?} @ Approved must still block as NonTerminal"
+            );
+        }
+        // Parity with the untyped form for a work type across all states.
+        for s in [
+            Draft,
+            Approved,
+            Planned,
+            InProgress,
+            Done,
+            Completed,
+            Rejected,
+            NeedsAttention,
+        ] {
+            for queued in [false, true] {
+                assert_eq!(
+                    archive_invariant_block_for_type(&T::Task, s, queued),
+                    archive_invariant_block(s, queued),
+                    "typed gate must match untyped gate for work specs at {s:?} queued={queued}"
+                );
+            }
         }
     }
 
