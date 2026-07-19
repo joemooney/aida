@@ -1,0 +1,32 @@
+id: 019f7b0b-9532-7690-ba5a-4aae364a78f9
+spec_id: ADR-15
+agreed_id: ADR-15
+title: 'STORY-776: ungroomed dispatch — TTY propose+confirm micro-groom with visible reasoning; headless refuses'
+description: |-
+  ## Context
+  What does `aida do` do when a spec has no execution_mode? The spec's original design said hard-refuse everywhere ("ungroomed — run aida groom"). Ratified amendment (operator, 2026-07-19).
+
+  ## Options considered
+  - Hard refuse everywhere (as originally spec'd)
+  - TTY propose+confirm, headless refuse
+  - Warn + default to drive (today's behavior)
+
+  ## Decision
+  At a TTY, `aida do` proposes a mode seeded from the classify_gate heuristic + tags, and the proposal MUST print its reasoning line — e.g. "proposing guided: carries keystone tag" / "proposing drive: bounded bug, no coupling, no supervised markers" — so the confirm is informed rather than a reflex, and a wrong proposal is visibly a finding to file rather than a silent near-miss. It shows the mode's human contract, asks one confirm, and on accept persists the mode. The micro-groom is TTY-only and writes through the normal advisor-authority path, so the audit trail shows who classified it and when — same provenance as a full groom pass. Headless / non-TTY contexts hard-refuse with the groom pointer.
+
+  ## Rationale
+  Removes a mandatory extra round-trip per fresh spec without guesswork — the operator's core ask. The confirm-with-reasoning IS a groom act, so substrate authority and provenance are preserved; headless refusal keeps unattended paths from bypassing advisor judgment.
+
+  ## Consequences
+  The classify_gate-seeded proposer needs a reasons output, not just a verdict. The persist path reuses the advisor-authority write (not a raw field poke). STORY-776 acceptance criteria amended to match.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T15:43:04.498483724Z
+modified_at: 2026-07-19T15:43:04.498483724Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:STORY-776
+- keystone
