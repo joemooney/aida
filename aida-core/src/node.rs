@@ -1016,8 +1016,16 @@ impl BlockRegistry {
 pub struct AgreedCounters {
     /// Maps type prefix to the last assigned agreed sequence number.
     /// e.g., {"FR": 422, "FEAT": 89}
+    ///
+    /// BTreeMap, NOT HashMap: `registry/agreed_counters.toml` is a tracked
+    /// file in the orphan store, and HashMap's per-process randomized
+    /// iteration order made every re-serialization shuffle the key order —
+    /// a spurious no-op diff that left the store worktree perpetually dirty
+    /// ("uncommitted changes; skipping pull" at every drain launch). Sorted
+    /// keys make serialization byte-stable for unchanged counters.
+    // trace:BUG-762 | ai:claude
     #[serde(flatten)]
-    pub counters: std::collections::HashMap<String, u32>,
+    pub counters: std::collections::BTreeMap<String, u32>,
 }
 
 impl AgreedCounters {
@@ -1430,6 +1438,29 @@ registered = "2026-05-09T00:00:00Z"
         assert_eq!(counters.peek("FR"), 3);
 
         assert_eq!(AgreedCounters::format_agreed_id("FR", 423), "FR-423");
+    }
+
+    /// BUG-762: re-serializing unchanged counters must be byte-stable
+    /// regardless of insertion order — the tracked
+    /// `registry/agreed_counters.toml` shuffled keys on every rewrite when
+    /// the map was a HashMap, dirtying the orphan-store worktree.
+    // trace:BUG-762 | ai:claude
+    #[test]
+    fn test_agreed_counters_serialization_is_order_stable() {
+        let mut a = AgreedCounters::default();
+        for p in &["FR", "TASK", "BUG", "STORY", "EPIC", "DOC", "CR"] {
+            a.next(p);
+        }
+        let mut b = AgreedCounters::default();
+        for p in &["CR", "DOC", "EPIC", "STORY", "BUG", "TASK", "FR"] {
+            b.next(p);
+        }
+        let ser_a = toml::to_string_pretty(&a).unwrap();
+        let ser_b = toml::to_string_pretty(&b).unwrap();
+        assert_eq!(ser_a, ser_b, "same counters must serialize identically");
+        // Round-trip is also byte-stable.
+        let round: AgreedCounters = toml::from_str(&ser_a).unwrap();
+        assert_eq!(toml::to_string_pretty(&round).unwrap(), ser_a);
     }
 
     #[test]

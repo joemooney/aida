@@ -2853,14 +2853,23 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
         assignments.push((spec_id, agreed));
     }
 
-    // Save updated counters
-    let content = toml::to_string_pretty(&counters)?;
-    // Atomic write: concurrent `aida add` from parallel sessions tears the
-    // counter file; a torn counter double-allocates IDs. trace:TASK-331 | ai:claude
-    crate::write_atomic(&counters_path, content)?;
-
-    // Stage and commit
+    // Save updated counters, stage, and commit — but ONLY when this run
+    // actually assigned something. Counters advance solely inside the
+    // assignment loop, so an empty run means the counters are unchanged;
+    // the pre-fix unconditional rewrite (with no commit on the empty
+    // path) left `registry/agreed_counters.toml` dirty after every
+    // no-op auto-gate ride on `aida pull`, tripping the drain preflight's
+    // "orphan store has uncommitted changes; skipping pull" warning.
+    // Every counters write is now committed in the same breath
+    // (commit-through, like requirement writes).
+    // trace:BUG-762 | ai:claude
     if !assignments.is_empty() {
+        let content = toml::to_string_pretty(&counters)?;
+        // Atomic write: concurrent `aida add` from parallel sessions tears the
+        // counter file; a torn counter double-allocates IDs. trace:TASK-331 | ai:claude
+        crate::write_atomic(&counters_path, content)?;
+
+        // Stage and commit
         add_all(store_path, "objects")?;
         add(store_path, &["registry/agreed_counters.toml"])?;
         let msg = format!(
@@ -3523,6 +3532,85 @@ mod tests {
         }
         // Distinct → no within-run double-allocation.
         assert_ne!(agreed[0], agreed[1]);
+    }
+
+    /// BUG-762: the counter write path must commit-through. A gating run
+    /// that writes `registry/agreed_counters.toml` commits it in the same
+    /// breath (targeted commit, store left clean), and a no-op run must not
+    /// touch the counter file at all — the pre-fix unconditional HashMap
+    /// re-serialization shuffled key order on every run, leaving the store
+    /// worktree perpetually dirty and tripping the drain preflight's
+    /// "uncommitted changes; skipping pull" warning.
+    // trace:BUG-762 | ai:claude
+    #[test]
+    fn merge_gate_counter_writes_commit_through_and_noop_runs_stay_clean() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+
+        // Several pending node-aware reqs across types so the counters
+        // file carries multiple keys (the order-shuffle surface).
+        for (s, t) in &[
+            ("TASK-2-001", RequirementType::Task),
+            ("BUG-2-001", RequirementType::Bug),
+            ("FR-2-001", RequirementType::Functional),
+            ("STORY-2-001", RequirementType::Story),
+        ] {
+            let mut r = Requirement::new(s.to_string(), String::new());
+            r.spec_id = Some(s.to_string());
+            r.req_type = t.clone();
+            object_store::write_object(&objects, &r).unwrap();
+        }
+
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        // First run: assigns agreed ids, writes the counters file, and
+        // MUST leave the store clean — the counter write is committed
+        // through, not left as uncommitted churn.
+        let assignments = merge_gate(&store).unwrap();
+        assert_eq!(assignments.len(), 4);
+        let counters_path = store.join("registry").join("agreed_counters.toml");
+        assert!(
+            counters_path.exists(),
+            "gating run writes the counters file"
+        );
+        assert!(
+            !has_changes(&store).unwrap(),
+            "counter write must be committed in the same run (store clean)"
+        );
+        // The counters file's history shows a targeted commit.
+        let log = git(
+            &store,
+            &["log", "--oneline", "--", "registry/agreed_counters.toml"],
+        )
+        .unwrap();
+        assert!(
+            !log.stdout.trim().is_empty(),
+            "agreed_counters.toml must have commit history"
+        );
+
+        // Second run: nothing to gate → no rewrite, no new commit, store
+        // still clean. (Repeat a few times: the pre-fix bug was
+        // probabilistic via HashMap iteration order.)
+        let head_before = head_sha(&store).unwrap();
+        for _ in 0..5 {
+            let second = merge_gate(&store).unwrap();
+            assert!(second.is_empty(), "no-op run assigns nothing");
+            assert!(
+                !has_changes(&store).unwrap(),
+                "no-op merge-gate run must not dirty the store worktree"
+            );
+        }
+        assert_eq!(
+            head_sha(&store).unwrap(),
+            head_before,
+            "no-op runs must not create churn commits either"
+        );
     }
 
     /// STORY-654: `set_node_identity_field(Owner)` backfills the owner on an
