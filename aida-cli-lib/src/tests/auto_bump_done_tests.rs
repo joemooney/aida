@@ -1779,3 +1779,115 @@ fn reconcile_status_refuses_non_default_branch() {
     let r = handle_db_reconcile_status(&store_path, None, None, false);
     assert!(r.is_err(), "expected error on feature branch, got Ok");
 }
+
+// ────────────────────────────────────────────────────────────────────
+// TASK-1161: on a git-canonical store, the auto-bump writes each
+// bumped spec as its OWN targeted commit (subject `update SPEC-ID`)
+// via the BUG-634 targeted path — no bulk "chore: update N
+// requirements" full-store commit.
+// ────────────────────────────────────────────────────────────────────
+
+/// Build a temp project whose store is a git-canonical DIRECTORY
+/// (its own git repo), mirroring the distributed `.aida-store/`
+/// layout, instead of the YAML file the other tests use.
+/// Returns `(temp_dir_guard, project_root, store_dir)`.
+// trace:TASK-1161 | ai:claude
+fn init_git_canonical_test_project() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf)
+{
+    let tmp = tempfile::TempDir::new().unwrap();
+    let project_root = tmp.path().to_path_buf();
+
+    // Code repo init + identity + an initial commit so HEAD resolves.
+    run_git(&project_root, &["init", "--initial-branch=main", "--quiet"]);
+    run_git(&project_root, &["config", "user.email", "test@example.com"]);
+    run_git(&project_root, &["config", "user.name", "Test"]);
+    std::fs::write(project_root.join("README.md"), "init\n").unwrap();
+    run_git(&project_root, &["add", "README.md"]);
+    run_git(&project_root, &["commit", "-m", "chore: init"]);
+
+    // Store dir as its own git repo (the orphan-branch worktree shape).
+    let store_dir = project_root.join(".aida-store");
+    std::fs::create_dir_all(&store_dir).unwrap();
+    run_git(
+        &store_dir,
+        &["init", "--initial-branch=aida-store", "--quiet"],
+    );
+    run_git(&store_dir, &["config", "user.email", "test@example.com"]);
+    run_git(&store_dir, &["config", "user.name", "Test"]);
+
+    (tmp, project_root, store_dir)
+}
+
+// TASK-1161: two Done specs land via commits on the default branch; the
+// auto-bump against a git-canonical store must produce one `update SPEC-ID`
+// commit per bumped spec in the store repo and NO bulk
+// "chore: update N requirements" commit. trace:TASK-1161 | ai:claude
+#[test]
+fn auto_bump_git_canonical_store_writes_targeted_commits_per_spec() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+
+    // Seed two Done specs straight into the git-canonical store.
+    let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+    let mut store = aida_core::RequirementsStore::default();
+    for spec_id in ["STORY-9701", "STORY-9702"] {
+        let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
+        req.spec_id = Some(spec_id.to_string());
+        req.set_status_from_str("Done");
+        store.requirements.push(req);
+    }
+    backend.save(&store).unwrap();
+    let seed_head = run_git(&store_dir, &["rev-parse", "HEAD"]);
+
+    // Land one code commit per spec on the default branch.
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    for (file, spec_id) in [("a.txt", "STORY-9701"), ("b.txt", "STORY-9702")] {
+        std::fs::write(project_root.join(file), "land\n").unwrap();
+        run_git(&project_root, &["add", file]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("feat: land ({})", spec_id)],
+        );
+    }
+
+    let storage = Storage::new(store_dir.clone());
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_dir, Some(&pre_sha), &storage).unwrap();
+    assert_eq!(flips.len(), 2, "both specs should flip: {:?}", flips);
+
+    // Both flipped to Completed on disk.
+    let after = storage.load().unwrap();
+    for spec_id in ["STORY-9701", "STORY-9702"] {
+        let req = after.get_requirement_by_spec_id(spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "{} should be Completed, was {:?}",
+            spec_id,
+            req.status
+        );
+    }
+
+    // The store repo gained one targeted commit PER bumped spec — subject
+    // `update SPEC-ID` — and no bulk chore commit.
+    let new_subjects = run_git(
+        &store_dir,
+        &["log", "--format=%s", &format!("{}..HEAD", seed_head)],
+    );
+    let subjects: Vec<&str> = new_subjects.lines().collect();
+    assert!(
+        subjects.contains(&"update STORY-9701"),
+        "expected `update STORY-9701` commit, got: {:?}",
+        subjects
+    );
+    assert!(
+        subjects.contains(&"update STORY-9702"),
+        "expected `update STORY-9702` commit, got: {:?}",
+        subjects
+    );
+    assert!(
+        !subjects.iter().any(|s| s.starts_with("chore: update")),
+        "no bulk chore commit expected, got: {:?}",
+        subjects
+    );
+}
