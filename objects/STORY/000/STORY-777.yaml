@@ -22,10 +22,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:30:03.283742379Z
-modified_at: 2026-07-19T18:36:32.787452133Z
+modified_at: 2026-07-19T18:39:32.010754885Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 019f782e-b86e-7553-9ca9-b1251b48fd56
   created_at: 2026-07-19T15:30:07.688903884Z
   created_by: joe
+comments:
+- id: 019f7bad-22aa-7ec1-b2d0-e2449352d6d1
+  author: joe
+  content: 'REQUEST_CHANGES on PR-1520 (recorded as PR comment https://github.com/joemooney/aida/pull/1520#issuecomment-5016925321 — GitHub blocks a request-changes review from the author''s own account). The deferred-field preservation is sound and well-tested, but including failure_reason in preserve_full_save_only_fields regresses BUG-405: auto_bump_done_to_completed and handle_db_reconcile_status both clear failure_reason inside storage.update_atomically (full GitBackend::save), and the new helper resurrects the stale disk value on flip-to-Completed. Secondary: CachedGitBackend::save rebuilds the cache from the degraded incoming store, so preserved deferred flags stay invisible to cache-backed views until an unrelated rebuild. Fix: drop failure_reason from the preserve list (+ regression test) and rebuild the cache from the actually-written state. STORY-777 left In Progress.'
+  created_at: 2026-07-19T18:39:32.010754885Z
+  modified_at: 2026-07-19T18:39:32.010754885Z
+  session_id: 170773fa-14d4-44b3-a59c-69fc4d7eed77
