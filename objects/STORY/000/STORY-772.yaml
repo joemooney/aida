@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:47.724859121Z
-modified_at: 2026-07-19T18:00:11.074312884Z
+modified_at: 2026-07-19T18:00:35.495004726Z
 req_type: Story
 tags:
 - batch:guided-0719
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-07-19T17:41:51.497185003Z
   modified_at: 2026-07-19T17:41:51.497185003Z
   session_id: 019f7b628fbb
+- id: 019f7b89-7ba7-7fd3-b6b6-e36911c9e9a5
+  author: joe
+  content: 'Status corrected Completed → In Progress 2026-07-19 10:59: PR-1523 (PR-1 of the 2-PR sequence) carried the (STORY-772) trailer, so aida pull auto-bumped prematurely — the spec finishes at PR-2 (the package carve), per the recorded sequencing decision. Convention going forward for multi-PR specs: intermediate PRs should use a ''part-of:STORY-772'' body reference, keeping the bare (SPEC-ID) trailer for the FINISHING PR only (house trailer rule).'
+  created_at: 2026-07-19T18:00:35.495004726Z
+  modified_at: 2026-07-19T18:00:35.495004726Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 history:
 - id: 019f7ada-4ca4-7763-b4d1-134bb9976dd3
   author: aida-auto-bump
