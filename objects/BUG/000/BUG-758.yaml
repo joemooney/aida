@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:13.638204296Z
-modified_at: 2026-07-19T18:59:15.083126596Z
+modified_at: 2026-07-19T19:16:10.947986377Z
 req_type: Bug
 tags:
 - papercut aida:skills from-dogfood
+comments:
+- id: 019f7bce-b043-7201-8432-e8a2fffd7e3c
+  author: joe
+  content: Commit 378818ea9 references this requirement
+  created_at: 2026-07-19T19:16:10.947986377Z
+  modified_at: 2026-07-19T19:16:10.947986377Z
+  session_id: 170773fa-14d4-44b3-a59c-69fc4d7eed77
 execution_mode: drive
