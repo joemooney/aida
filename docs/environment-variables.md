@@ -329,7 +329,7 @@ with `aida dev shell-init --install`; the rest is automatic.
 | `AIDA_DEV_ACTIVE` | Marker that dev activation is live. | `1` when active. | launch-path (`aida dev activate`) | process env |
 | `AIDA_DEV_BIN` | Directory of the active dev `aida` binary. | set by activate. | launch-path | process env |
 | `AIDA_DEV_PROFILE` | Active cargo profile (`debug`/`release`). | set by activate. | launch-path | process env |
-| `AIDA_DEV_PROFILE_PIN` | Sticky profile override across re-activations. | unset = no pin. | launch-path (`--debug`/`--release`) | shell session |
+| `AIDA_DEV_PROFILE_PIN` | Sticky profile override across re-activations (`debug`/`release`/`auto`; `auto` = freshest-wins opt-in). | unset = release default. | launch-path (`--debug`/`--release`/`--auto`) | shell session |
 | `AIDA_DEV_PREV_PATH` | Saved `PATH` for restore on deactivate. | set by activate. | launch-path (shell code) | process env |
 | `AIDA_DEV_PS1_PREFIX` | The PS1 prefix activate splices in (stripped exactly on deactivate). | set by activate. | launch-path (shell code) | process env |
 | `AIDA_SHELL_WRAPPER` | Signals the `aida dev` shell wrapper is active — gates bare vs `eval`-wrapped auto-eval hints. | unset = no wrapper. | launch-path (shell wrapper) | process env |

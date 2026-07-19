@@ -253,6 +253,60 @@ fn auto_no_build_present_is_none() {
     assert!(auto_select_dev_profile(None, None).is_none());
 }
 
+// ---- TASK-1158: bare-activate default is the release profile ----
+//
+// `resolve_activation_request` maps {CLI request, env pin} to the request
+// `pick_dev_binary_dir` sees (`None` = auto freshest-wins). The bare form
+// (no request, no pin) must default to release — auto is the explicit,
+// sticky opt-in. trace:TASK-1158 | ai:claude
+
+use crate::dev_cmd::resolve_activation_request;
+
+#[test]
+fn bare_activate_defaults_to_release_not_auto() {
+    // No CLI request, no env pin → release, flagged as the applied default.
+    assert_eq!(
+        resolve_activation_request(None, None),
+        (Some("release"), true)
+    );
+}
+
+#[test]
+fn explicit_auto_opts_into_freshest_wins() {
+    // `aida dev activate auto` / `--auto` → auto-select (None), not default.
+    assert_eq!(
+        resolve_activation_request(Some("auto"), None),
+        (None, false)
+    );
+    // Sticky: an `auto` env pin from a previous activation keeps
+    // freshest-wins on subsequent bare activates.
+    assert_eq!(
+        resolve_activation_request(None, Some("auto")),
+        (None, false)
+    );
+}
+
+#[test]
+fn explicit_profile_requests_and_pins_still_win() {
+    assert_eq!(
+        resolve_activation_request(Some("debug"), None),
+        (Some("debug"), false)
+    );
+    assert_eq!(
+        resolve_activation_request(None, Some("debug")),
+        (Some("debug"), false)
+    );
+    // An explicit CLI request beats the env pin.
+    assert_eq!(
+        resolve_activation_request(Some("release"), Some("debug")),
+        (Some("release"), false)
+    );
+    assert_eq!(
+        resolve_activation_request(Some("auto"), Some("debug")),
+        (None, false)
+    );
+}
+
 // ---- TASK-1157: prompt staleness token ----
 
 #[test]

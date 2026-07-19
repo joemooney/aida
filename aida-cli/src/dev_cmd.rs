@@ -160,7 +160,8 @@ fn pick_dev_binary_dir(
             "release" => {
                 if release_mtime.is_none() {
                     anyhow::bail!(
-                        "No release build at {}.\nRun `cargo build --release` first.",
+                        "No release build at {}.\nRun `cargo build --release` first, \
+                         or `aida dev activate debug` to use the debug build.",
                         release.display()
                     );
                 }
@@ -338,7 +339,26 @@ fn dev_build_candidates(
     )
 }
 
-/// What `aida dev activate` (auto / unpinned) would select for `repo` right
+/// Resolve the effective activation request from the CLI request and the
+/// sticky env pin. Bare activation (no CLI request, no pin) defaults to the
+/// release profile — the daily-driver build — rather than auto freshest-wins;
+/// `auto` (positional or --auto) is the explicit, sticky opt-in to
+/// freshest-SHA-matched-wins selection. Returns the request to feed
+/// `pick_dev_binary_dir` (`None` = auto-select) plus whether the release
+/// default was applied (no explicit request anywhere).
+// trace:TASK-1158 | ai:claude
+pub(crate) fn resolve_activation_request<'a>(
+    cli_request: Option<&'a str>,
+    env_pin: Option<&'a str>,
+) -> (Option<&'a str>, bool) {
+    match cli_request.or(env_pin) {
+        Some("auto") => (None, false),
+        Some(p) => (Some(p), false),
+        None => (Some("release"), true),
+    }
+}
+
+/// What `aida dev activate auto` (the freshest-wins pin) would select for `repo` right
 /// now — used by `aida dev status` to give accurate flip advice instead of
 /// promising a re-run will flip when it would not. Returns the profile name
 /// ("debug"/"release"), or None if no build exists.
@@ -469,25 +489,22 @@ fn handle_dev_activate(
 
     // Resolve the explicit-profile request from any of: positional `profile`,
     // --debug / --release / --auto flags, or an existing AIDA_DEV_PROFILE_PIN.
-    // Precedence: explicit CLI request beats the env-var pin; --auto clears.
-    // trace:FR-1-068 | ai:claude
+    // Precedence: explicit CLI request beats the env-var pin. `auto` is
+    // itself a sticky pin value (the freshest-wins opt-in); with no request
+    // and no pin, the release profile is the default.
+    // trace:FR-1-068 trace:TASK-1158 | ai:claude
     let cli_request: Option<&str> = match (profile_pos, debug_flag, release_flag, auto_flag) {
         (Some("debug"), _, _, _) => Some("debug"),
         (Some("release"), _, _, _) => Some("release"),
-        (Some("auto"), _, _, _) => None, // positional 'auto' also clears
+        (Some("auto"), _, _, _) => Some("auto"),
         (_, true, _, _) => Some("debug"),
         (_, _, true, _) => Some("release"),
+        (_, _, _, true) => Some("auto"),
         _ => None,
     };
-    let clear_pin = auto_flag || profile_pos == Some("auto");
     let env_pin = std::env::var("AIDA_DEV_PROFILE_PIN").ok();
-    let effective_request: Option<&str> = if clear_pin {
-        None
-    } else if cli_request.is_some() {
-        cli_request
-    } else {
-        env_pin.as_deref().filter(|s| !s.is_empty())
-    };
+    let (effective_request, defaulted) =
+        resolve_activation_request(cli_request, env_pin.as_deref().filter(|s| !s.is_empty()));
 
     let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, effective_request)?;
     let stale = alternate_build_is_newer(&repo, profile);
@@ -514,6 +531,9 @@ fn handle_dev_activate(
     // Quote-safety: paths shouldn't contain double-quotes in practice;
     // single-quote everything we emit so shell evaluation is safe.
     let reason_chip = match reason {
+        // trace:TASK-1158 | ai:claude — bare activate lands here via the
+        // release default; label it as such, not as an explicit request.
+        BinarySelectionReason::Explicit if defaulted => " (default profile)",
         BinarySelectionReason::Explicit => " (explicit)",
         BinarySelectionReason::ShaExactMatch => " (SHA matches HEAD)",
         BinarySelectionReason::ShaAncestorMatch => " (SHA is HEAD ancestor)",
@@ -536,14 +556,14 @@ fn handle_dev_activate(
     println!("export AIDA_DEV_PROFILE='{}'", profile);
     println!("export AIDA_DEV_ACTIVE=1");
 
-    // Persist the pin across re-activations. Three cases:
-    //   - explicit CLI request → set the pin to that profile
-    //   - --auto / 'auto' positional → clear the pin
-    //   - neither → leave the existing pin alone (sticky)
+    // Persist the pin across re-activations. Two cases:
+    //   - explicit CLI request (debug / release / auto) → set the pin to
+    //     that value; `auto` is stored as a pin so the freshest-wins
+    //     opt-in survives re-activation
+    //   - no CLI request → leave the existing pin alone (sticky)
+    // trace:TASK-1158 | ai:claude
     if let Some(pin) = cli_request {
         println!("export AIDA_DEV_PROFILE_PIN='{}'", pin);
-    } else if clear_pin {
-        println!("unset AIDA_DEV_PROFILE_PIN");
     }
 
     println!("if [ -z \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
@@ -578,9 +598,11 @@ fn handle_dev_activate(
     println!("    export PS1=\"$AIDA_DEV_PS1_PREFIX$PS1\"");
     println!("fi");
 
+    // trace:TASK-1158 | ai:claude
     let pin_note = match cli_request {
+        Some("auto") => ", pinned to auto (freshest-wins)".to_string(),
         Some(p) => format!(", pinned to {}", p),
-        None if clear_pin => ", pin cleared".to_string(),
+        None if defaulted => ", default profile".to_string(),
         None => String::new(),
     };
     let stale_note = if stale {
@@ -700,14 +722,21 @@ fn handle_dev_status() -> Result<()> {
                 }
             }
         }
+        // trace:TASK-1158 | ai:claude — no pin now means the release
+        // default, not freshest-wins; `auto` is a real pin value.
         match std::env::var("AIDA_DEV_PROFILE_PIN") {
+            Ok(pin) if pin == "auto" => {
+                println!(
+                    "Pin:          auto (freshest of debug/release wins on `aida dev activate`)"
+                );
+            }
             Ok(pin) if !pin.is_empty() => {
                 println!("Pin:          {} (sticky across re-activations)", pin);
             }
             _ => {
                 println!(
-                    "Pin:          {} (freshest of debug/release wins on `aida dev activate`)",
-                    "auto".dimmed()
+                    "Pin:          {} (default — bare `aida dev activate` picks the release build; `aida dev activate auto` opts into freshest-wins)",
+                    "release".dimmed()
                 );
             }
         }
@@ -735,42 +764,57 @@ fn handle_dev_status() -> Result<()> {
                     other.bold(),
                     profile.bold()
                 );
-                let pinned = std::env::var("AIDA_DEV_PROFILE_PIN")
-                    .map(|p| !p.is_empty())
-                    .unwrap_or(false);
-                if pinned {
-                    println!(
-                        "      Pin keeps you on {}. Run `aida dev activate --auto` to clear",
-                        profile
-                    );
-                    println!(
-                        "      and pick the freshest, or `aida dev activate {}` to switch.",
-                        other
-                    );
-                } else {
-                    // BUG-643: only promise a plain re-run flips when auto-select
-                    // ACTUALLY would. A newer-by-mtime alternate that is a weaker
-                    // SHA match (e.g. ancestor vs the active exact match) is NOT
-                    // auto-picked, so the old "Re-run to flip" advice was false —
-                    // point at the explicit override in that case instead.
-                    match auto_pick_profile_name(&repo_path) {
-                        Some(pick) if pick != profile => {
-                            println!(
-                                "      Re-run `aida dev activate` to flip to {}, or pin with",
-                                pick
-                            );
-                            println!(
-                                "      `aida dev activate {}` to keep working on {}.",
-                                profile, profile
-                            );
+                // trace:TASK-1158 | ai:claude — three pin states: an
+                // explicit profile pin, the sticky `auto` pin (freshest-
+                // wins opt-in), or no pin (the release default).
+                let pin = std::env::var("AIDA_DEV_PROFILE_PIN")
+                    .ok()
+                    .filter(|p| !p.is_empty());
+                match pin.as_deref() {
+                    Some("auto") => {
+                        // BUG-643: only promise a plain re-run flips when auto-select
+                        // ACTUALLY would. A newer-by-mtime alternate that is a weaker
+                        // SHA match (e.g. ancestor vs the active exact match) is NOT
+                        // auto-picked, so the old "Re-run to flip" advice was false —
+                        // point at the explicit override in that case instead.
+                        match auto_pick_profile_name(&repo_path) {
+                            Some(pick) if pick != profile => {
+                                println!(
+                                    "      Re-run `aida dev activate` to flip to {}, or pin with",
+                                    pick
+                                );
+                                println!(
+                                    "      `aida dev activate {}` to keep working on {}.",
+                                    profile, profile
+                                );
+                            }
+                            _ => {
+                                println!(
+                                    "      Auto-select keeps {} (it matches HEAD more closely).",
+                                    profile
+                                );
+                                println!(
+                                    "      To switch anyway, run `aida dev activate {}`.",
+                                    other
+                                );
+                            }
                         }
-                        _ => {
-                            println!(
-                                "      Auto-select keeps {} (it matches HEAD more closely).",
-                                profile
-                            );
-                            println!("      To switch anyway, run `aida dev activate {}`.", other);
-                        }
+                    }
+                    Some(_) => {
+                        println!(
+                            "      Pin keeps you on {}. Run `aida dev activate {}` to switch,",
+                            profile, other
+                        );
+                        println!("      or `aida dev activate auto` for freshest-wins.");
+                    }
+                    None => {
+                        println!(
+                            "      Bare `aida dev activate` picks the release build (the default)."
+                        );
+                        println!(
+                            "      Run `aida dev activate {}` to switch, or `aida dev activate auto` for freshest-wins.",
+                            other
+                        );
                     }
                 }
             }
