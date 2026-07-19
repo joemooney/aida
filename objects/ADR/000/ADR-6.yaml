@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:17:43.901558899Z
-modified_at: 2026-06-30T16:34:51.412145635Z
+modified_at: 2026-07-19T20:27:06.859718616Z
 req_type: Decision
 tags:
 - from-operator
@@ -17,3 +17,5 @@ tags:
 - scope
 - worktree
 - zen-ready
+archived: true
+archived_at: 2026-07-19T20:27:06.859718616Z
