@@ -5,7 +5,7 @@
 //! `aida zen` and `aida integrate` reach it by self-invoking
 //! `aida queue work --auto-complete` (a subprocess that re-enters the engine);
 //! the only in-process production call site is the `queue work` handler in
-//! `main.rs`. `aida burndown` is the SINGLE sanctioned FLEET-layer exception —
+//! `lib.rs`. `aida burndown` is the SINGLE sanctioned FLEET-layer exception —
 //! it fans out native subagents one level above the per-spec lifecycle and
 //! deliberately does NOT route through the engine.
 //!
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 // trace:ADR-9 | ai:claude
 const ENGINE_CALLER_ALLOWLIST: &[&str] = &[
     "src/auto_complete.rs", // the engine module itself (the orchestrate wrapper)
-    "src/main.rs",          // the `aida queue work --auto-complete` handler
+    "src/lib.rs", // the `aida queue work --auto-complete` handler (STORY-772: was main.rs)
 ];
 
 /// The engine entry point every per-spec driver must route through.
@@ -96,16 +96,16 @@ fn only_allowlisted_files_call_the_one_engine_in_production() {
     );
 }
 
-/// The positive side of the invariant: the allow-listed `main.rs` handler must
+/// The positive side of the invariant: the allow-listed `lib.rs` handler must
 /// still actually route through the engine, so the allow-list can't rot into a
 /// dead entry that quietly permits a bypass.
 #[test]
 fn the_queue_work_handler_still_routes_through_the_engine() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let main_rs = fs::read_to_string(root.join("src/main.rs")).unwrap();
+    let lib_rs = fs::read_to_string(root.join("src/lib.rs")).unwrap();
     assert!(
-        production_engine_calls(&main_rs) >= 1,
-        "ADR-9: `main.rs` no longer calls `orchestrate_with_resume` — the \
+        production_engine_calls(&lib_rs) >= 1,
+        "ADR-9: `lib.rs` no longer calls `orchestrate_with_resume` — the \
          `queue work --auto-complete` handler must route through the one engine."
     );
 }

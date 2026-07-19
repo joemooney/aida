@@ -449,7 +449,12 @@ fn history_should_exclude_meta(include_meta: bool, type_filter: Option<&str>) ->
 #[path = "tests/story_737_delight_tests.rs"]
 mod story_737_delight_tests;
 
-fn main() {
+/// The whole CLI: sigpipe setup, telemetry wrapping, error rendering,
+/// dispatch. The `aida` binary is a stub that calls this — keeping the
+/// entry point in the lib means only this one symbol is `pub` and every
+/// `pub(crate)` item stays crate-private.
+// trace:STORY-772 trace:ADR-16 | ai:claude
+pub fn main_entry() {
     install_sigpipe_handler();
     // STORY-122: per-invocation telemetry. Wraps run() so every CLI
     // entry point gets recorded with cmd shape + duration + exit code.
