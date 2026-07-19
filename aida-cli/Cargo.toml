@@ -14,71 +14,22 @@ categories = ["development-tools", "command-line-utilities"]
 name = "aida"
 path = "src/main.rs"
 
+# Thin binary stub — the whole CLI lives in aida-cli-lib (one pub symbol,
+# main_entry). Features below are pure pass-through so
+# `cargo build -p aida-cli --features remote` keeps working unchanged.
+# trace:STORY-772 trace:ADR-16 | ai:claude
 [dependencies]
-aida-core = { version = "0.14", path = "../aida-core", features = ["postgres", "gitlab", "github", "jira"] }
-# `aida schema` derives the Requirement field/enum detail from the same
-# ts-rs-forge type reflection that backs aida-generate-types — the TS::decl()
-# output is the substrate-grounded source, not a hand-kept duplicate.
-# trace:STORY-538 | ai:claude
-ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
-
-# CLI-specific dependencies
-serde = { workspace = true }
-serde_json = { workspace = true }
-clap = { workspace = true }
-inquire = { workspace = true }
-colored = { workspace = true }
-signal-hook = "0.3"
-# Pure-Rust unified-diff producer for `aida scaffold diff` (FR-1-027).
-# Lightweight, no hard dep on /usr/bin/diff — works on Windows too.
-similar = "2"
-serde_yaml = { workspace = true }
-anyhow = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
-regex = { workspace = true }
-dirs = { workspace = true }
-tokio = { workspace = true }
-hostname = "0.4"
-toml = { workspace = true }
-toml_edit = { workspace = true }
-rusqlite = { workspace = true }
-# Cross-platform process inspection for session liveness probe (STORY-69):
-# enumerate live `claude` PIDs + their cwd so AIDA can mark live sessions in
-# `aida session list`, refuse to delete jsonls of live projects in
-# `aida session prune`, and detect leaked claude processes whose worktree
-# was removed out from under them (BUG-61).
-sysinfo = "0.30"
-
-# gRPC client dependencies (optional)
-tonic = { workspace = true, optional = true }
-prost = { workspace = true, optional = true }
-
-# TUI shell (EPIC-26) — optional, behind the `tui` feature. Default-off
-# through development so partial work never ships in a release binary;
-# STORY-6 flips this to `default = ["tui"]`.
-aida-tui = { version = "0.14", path = "../aida-tui", optional = true }
-
-# Unix-only — restore default SIGPIPE handling so `aida ... | head -N` exits
-# cleanly instead of triggering Rust's "failed printing to stdout" panic.
-# trace:BUG-99 | ai:claude
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
+aida-cli-lib = { version = "0.14", path = "../aida-cli-lib", default-features = false }
 
 [features]
 default = ["tui"]
-remote = ["tonic", "prost", "tonic-build", "protox"]
-# EPIC-26 TUI shell. Default-on as of STORY-137 — the first vertical
-# (PTY host + overlay + multi-tab + crash recovery) is complete, so
-# `aida tui` ships in release binaries. trace:STORY-137 | ai:claude
-tui = ["aida-tui"]
+remote = ["aida-cli-lib/remote"]
+tui = ["aida-cli-lib/tui"]
 
 [dev-dependencies]
+# Black-box integration tests under tests/ spawn the built binary
+# (CARGO_BIN_EXE_aida) in throwaway project dirs.
 tempfile = "3.8"
-
-[build-dependencies]
-tonic-build = { workspace = true, optional = true }
-protox = { workspace = true, optional = true }
 
 [package.metadata.features]
 # Note: The "remote" feature enables gRPC client functionality

@@ -41,18 +41,19 @@ Framing: "AIDA looks like a CLI. Underneath it's a git-canonical graph database,
 
 ---
 
-## Workspace: six crates
+## Workspace: seven crates
 
 ```
 aida-core/            engine — models, storage, cache, dispenser, HLC, conflict
-aida-cli/             the `aida` binary + the MCP stdio server + orchestrator
+aida-cli/             thin `aida` binary stub over aida-cli-lib
+aida-cli-lib/         the CLI implementation + MCP stdio server + orchestrator
 aida-server/          REST + gRPC (port 8080), optional PostgreSQL backend
 aida-tui/             `aida tui` — terminal shell hosting Claude Code (EPIC-26)
 aida-crate/           published `aida` crate metadata
 aida-generate-types/  Rust → TypeScript codegen for the React dashboard
 ```
 
-- `aida-core` holds **no orchestrator concepts** — phase identities live in `aida-cli`.
+- `aida-core` holds **no orchestrator concepts** — phase identities live in `aida-cli-lib`.
 - Opt-in features: `postgres`, `github` / `gitlab` / `jira` integrations.
 
 <!--

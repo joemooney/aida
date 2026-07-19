@@ -83,7 +83,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --lib \
+          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib \
             bwrap_write_confinement_live_or_fail_closed -- --nocapture
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
