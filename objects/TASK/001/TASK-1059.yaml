@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T16:58:24.316766298Z
-modified_at: 2026-07-19T15:18:09.619768833Z
+modified_at: 2026-07-19T20:15:38.935493645Z
 req_type: Task
 tags:
 - aida:presence
@@ -48,3 +48,6 @@ relationships:
   target_id: 019f19c1-15cc-7831-8279-ba9292828c05
   created_at: 2026-06-30T18:18:50.290632283Z
   created_by: joe
+deferred: true
+deferred_at: 2026-07-19T20:15:38.935493645Z
+deferred_until: the [presence] substrate slices (a/b) are verified shipped
