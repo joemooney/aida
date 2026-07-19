@@ -12,6 +12,7 @@ fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease
         hostname: "h".into(),
         role: Some("reviewer".into()),
         creator_pid,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

@@ -438,6 +438,11 @@ pub struct SessionLeaseLite {
     /// worktree-less review/claim leases).
     #[serde(default)]
     pub creator_pid: Option<u32>,
+    /// BUG-741: PID of a process-backed agent child (for example headless
+    /// `codex exec`). When present it is the lease's primary liveness signal.
+    // trace:BUG-741 | ai:codex
+    #[serde(default)]
+    pub active_pid: Option<u32>,
     /// BUG-511: a review lease (`aida review`) is a worktree-less advisory lock.
     #[serde(default)]
     pub review_verb: bool,
@@ -523,6 +528,13 @@ pub fn lease_state_for(
     if l.review_verb || l.claim_verb {
         let alive = l.creator_pid.map(pid_is_alive).unwrap_or(false);
         return if alive {
+            LeaseState::Live
+        } else {
+            LeaseState::Stale
+        };
+    }
+    if let Some(pid) = l.active_pid {
+        return if pid_is_alive(pid) {
             LeaseState::Live
         } else {
             LeaseState::Stale
@@ -820,10 +832,31 @@ mod tests {
             worktree_path: PathBuf::from(worktree),
             started_at: chrono::Utc::now(),
             creator_pid: None,
+            active_pid: None,
             review_verb: false,
             claim_verb: false,
             authorized_by: None,
         }
+    }
+
+    #[test]
+    fn active_pid_backs_process_lease_liveness() {
+        let mut l = lease("TASK-741", ".");
+        l.active_pid = Some(std::process::id());
+        assert_eq!(
+            lease_state_for(&l, &[], chrono::Utc::now()),
+            LeaseState::Live
+        );
+    }
+
+    #[test]
+    fn dead_active_pid_makes_process_lease_stale() {
+        let mut l = lease("TASK-741", ".");
+        l.active_pid = Some(0);
+        assert_eq!(
+            lease_state_for(&l, &[], chrono::Utc::now()),
+            LeaseState::Stale
+        );
     }
 
     #[test]

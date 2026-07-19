@@ -89,6 +89,7 @@ fn file_zen_review_brief_short_circuits() {
         hostname: "h".into(),
         role: Some("implementer".into()),
         creator_pid: None,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

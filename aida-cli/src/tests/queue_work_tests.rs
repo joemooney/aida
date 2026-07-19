@@ -380,6 +380,7 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         hostname: "h".into(),
         role: Some("implementer".into()),
         creator_pid: None,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

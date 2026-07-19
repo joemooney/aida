@@ -1830,6 +1830,7 @@ pub fn exec_claude_headless(
     log_path: &Path,
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
+    lease_id: Option<&str>,
 ) -> Result<()> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -1853,14 +1854,56 @@ pub fn exec_claude_headless(
         );
     }
     let (program, args) = compose_headless_command(vendor, prompt, session_id, contained)?;
-    let status = Command::new(program)
+    let mut child = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
-        .status()
+        .spawn()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
+    if vendor != HeadlessVendor::Claude {
+        if let Some(id) = lease_id {
+            if let Err(e) = stamp_lease_active_pid(id, child.id()) {
+                eprintln!(
+                    "{} could not stamp active agent pid on lease {}: {e}",
+                    "Warning:".yellow().bold(),
+                    id
+                );
+            }
+        }
+    }
+    let status = child
+        .wait()
+        .with_context(|| format!("failed to wait for {}", vendor.program()))?;
     tee.stop();
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// BUG-741: `codex exec` is not discoverable by the Claude-specific worktree
+/// probe, so record the actual spawned child PID on the existing session lease.
+/// `creator_pid` remains the session-start shell/host PID for end-resolution.
+// trace:BUG-741 | ai:codex
+fn stamp_lease_active_pid(lease_id: &str, pid: u32) -> Result<()> {
+    let project_root = crate::find_project_root()?;
+    stamp_lease_active_pid_at(&project_root, lease_id, pid)
+}
+
+// trace:BUG-741 | ai:codex
+fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> Result<()> {
+    use toml_edit::{value, DocumentMut};
+
+    let path = project_root
+        .join(".aida")
+        .join("sessions")
+        .join(format!("{lease_id}.toml"));
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading lease {}", path.display()))?;
+    let mut doc = body
+        .parse::<DocumentMut>()
+        .with_context(|| format!("parsing lease {}", path.display()))?;
+    doc["active_pid"] = value(i64::from(pid));
+    std::fs::write(&path, doc.to_string())
+        .with_context(|| format!("writing lease {}", path.display()))?;
+    Ok(())
 }
 
 /// STORY-306: build the argv (after the `claude` program name) for a headless
@@ -2764,6 +2807,28 @@ mod tests {
                 None => std::env::remove_var("AIDA_OS_WRAP"),
             }
         }
+    }
+
+    #[test]
+    fn stamp_lease_active_pid_records_spawned_child_pid() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sessions = tmp.path().join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let lease = sessions.join("lease741.toml");
+        std::fs::write(
+            &lease,
+            "id = \"lease741\"\nscope = \"BUG-741\"\ncreator_pid = 111\n",
+        )
+        .unwrap();
+
+        stamp_lease_active_pid_at(tmp.path(), "lease741", 4242).unwrap();
+
+        let doc = std::fs::read_to_string(lease)
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        assert_eq!(doc["creator_pid"].as_integer(), Some(111));
+        assert_eq!(doc["active_pid"].as_integer(), Some(4242));
     }
 
     /// RAII guard for the `AIDA_AGENT_CMD` resolver tests. It shares the

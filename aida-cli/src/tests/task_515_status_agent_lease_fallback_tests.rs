@@ -13,6 +13,7 @@ fn lease_for_status(scope: &str, worktree_path: std::path::PathBuf) -> SessionLe
         hostname: "host".to_string(),
         role: Some("implementer".to_string()),
         creator_pid: Some(4242),
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

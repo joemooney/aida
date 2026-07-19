@@ -13,6 +13,7 @@ fn lease_with_worktree(path: PathBuf) -> SessionLease {
         hostname: "imac".into(),
         role: Some("implementer".into()),
         creator_pid: None,
+        active_pid: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
