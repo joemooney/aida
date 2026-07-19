@@ -13,16 +13,32 @@ description: |-
   - On save+close, the parsed changes are written back through the normal single-spec targeted-write path; an unchanged or emptied buffer is a no-op (no spurious commit).
   - Aborting the editor (nonzero exit) or making no changes leaves the spec untouched.
   - Existing scripted usage (aida edit --status ... etc.) is unchanged; the editor path engages ONLY when no field flags are given.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T01:22:36.971502249Z
-modified_at: 2026-07-19T01:57:41.734144883Z
+modified_at: 2026-07-19T02:11:50.577576940Z
 req_type: Task
 tags:
 - batch:dogfood-0717
+history:
+- id: 019f7824-e0ab-78a1-b5b5-9d97ed11b456
+  author: aida-auto-bump
+  timestamp: 2026-07-19T02:11:50.571797794Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7824-e0b1-74d0-80e7-155449f5fed9
+  timestamp: 2026-07-19T02:11:50.577576262Z
+  agent: aida
+  commit_sha: ea5e36361358be2a00ffbd18775aa62ca3d84aa0
+  summary: Completed via merge ea5e3636
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T01:57:41.734144883Z
   implemented_by: joe
+  completed_at: 2026-07-19T02:11:50.366317400Z
+  completion_sha: ea5e36361358be2a00ffbd18775aa62ca3d84aa0

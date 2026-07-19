@@ -3,16 +3,32 @@ spec_id: BUG-723
 agreed_id: BUG-723
 title: 'worker.cmd directive queue has no GC: stale drain orders for completed/rejected specs accumulate (latent headless-drain landmine)'
 description: 'Surfaced 2026-07-13 live-testing STORY-768 (aida human audit). .aida/worker.cmd contained a hand-staged ''Overnight cleanup batch'' of 10 ''drain TASK-XXX --auto-complete --no-human=both'' orders + ''exit'', never executed. All 10 target specs are now completed/rejected. No live worker consumed it so it sat inert, but it is a latent landmine: run ''aida worker'' and it fires 10 unattended auto-merge drains against done specs. Two gaps: (1) NO GC — a directive whose target spec is completed/rejected/archived should be pruned (sibling of ''aida queue gc''); (2) design smell — the lightweight human-audit skill-directive shares the same consumed file as executable drain/exit work-orders, so a human-audit request lands BEHIND a stale drain batch. Consider separating skill-directives from executable worker work-orders. Related: TASK-1146, STORY-768.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T02:32:01.919044510Z
-modified_at: 2026-07-19T01:53:40.699202834Z
+modified_at: 2026-07-19T02:11:50.565966343Z
 req_type: Bug
 tags:
 - aida:worker aida:directives hygiene severity:major from-test:STORY-768
+history:
+- id: 019f7824-e0a0-79b1-a625-0e9fac5d0ba4
+  author: aida-auto-bump
+  timestamp: 2026-07-19T02:11:50.560091928Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7824-e0a5-79c3-8b78-e03cb38c1780
+  timestamp: 2026-07-19T02:11:50.565965631Z
+  agent: aida
+  commit_sha: 4b8db693907ee7bef75f0e0e5aa273e28e17f32a
+  summary: Completed via merge 4b8db693
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T01:53:40.699202834Z
   implemented_by: joe
+  completed_at: 2026-07-19T02:11:50.366317400Z
+  completion_sha: 4b8db693907ee7bef75f0e0e5aa273e28e17f32a
