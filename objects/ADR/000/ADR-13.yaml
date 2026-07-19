@@ -24,12 +24,12 @@ description: |-
 
   ## Consequences
   5 concepts to document (one table in README/CLAUDE.md replaces the zen/queue-work/burndown decision prose). The mode enum is a typed engine parameter on Requirement (ADR-7 alignment), mirrored onto MCP update_requirement (STORY-82 parity).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:42:24.679587774Z
-modified_at: 2026-07-19T15:42:24.679587774Z
+modified_at: 2026-07-19T15:43:22.857172181Z
 req_type: Decision
 tags:
 - adr
