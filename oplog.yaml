@@ -35320,5 +35320,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3277
+- id: 019f7b01-0368-7d21-9a5e-5115d791afd6
+  target_id: 019f7b00-f9cf-7bf3-a11f-fa8aa4da7045
+  author: aida
+  node_id: '1'
+  lamport: 3278
+  timestamp: 2026-07-19T15:31:31.816799505Z
+  kind: !Create
+    title: 'full-store save: modified_at stale-write guard for core fields + convert auto-bump to targeted writes (BUG-756 follow-up)'
+    description: 'PR-1520 (BUG-756) makes full-store saves non-destructive for git-canonical-only fields the stale caller never loaded (deferred, decision_request, ...). Two residuals: (1) a stale full-save can still silently REVERT recent core-field edits (tags/status/priority/title) it loaded an old copy of — add a per-spec guard in GitBackend::save comparing incoming vs on-disk modified_at: when disk is newer, skip that spec (or merge field-wise) and warn, never overwrite; (2) the auto-bump path still performs bulk full-store saves (''chore: update 37 requirements'' per pull — commit noise + the residual risk in (1)) — convert it to targeted per-spec writes like BUG-634 did for edit. Acceptance: a full save carrying a spec older than disk cannot change that spec silently (skip+warn covered by test); aida pull auto-bump produces one targeted commit per bumped spec, no bulk chore commits; regression test on concurrent-edit-then-stale-save.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3278
 node_id: '1'
