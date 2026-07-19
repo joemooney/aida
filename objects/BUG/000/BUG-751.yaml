@@ -3,12 +3,12 @@ spec_id: BUG-751
 agreed_id: BUG-751
 title: 'decision-class specs cannot be marked accepted: --status approved refused (even --force), ''accepted'' not in the status enum — yet ADR-6/ADR-10/ADR-11 already sit at approved/completed'
 description: 'Observed 2026-07-18 applying the operator''s recorded ADR-8 answer: aida edit ADR-8 --status approved → ''Decision specs cannot be promoted to Approved. Leave this class outside the approved execution pipeline'' (also with --force); aida edit ADR-8 --status accepted → ''invalid status accepted — expected one of: draft, approved, planned, ...''. So a decision-type spec has NO way to leave draft: the documented ADR lifecycle (proposed/accepted/superseded/deprecated per CLAUDE.md) is not implemented as statuses, and the generic approved is now gated for the class — while existing ADRs (ADR-6 approved, ADR-11 approved, ADR-10 completed) prove the transition used to work and is the de-facto convention. Either implement the decision-class lifecycle statuses (accepted et al., with aida show/list rendering them), or exempt decision from the new approved-gate and document approved==accepted for ADRs. A recorded operator answer currently cannot be applied to the spec it decides (ADR-8 is stuck draft with the acceptance recorded only as a comment). Acceptance: an ADR can be moved to its accepted state by the advisor; existing approved ADRs remain valid or are migrated; the refusal message names the correct verb; regression test on the decision-class transition.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T01:33:53.715542581Z
-modified_at: 2026-07-19T02:21:47.003397210Z
+modified_at: 2026-07-19T04:41:27.303096144Z
 req_type: Bug
 tags:
 - aida:edit adr lifecycle from-dogfood
