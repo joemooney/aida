@@ -1,0 +1,14 @@
+id: 019f7be7-3d66-7db3-af73-414c333a8f1e
+spec_id: BUG-759
+agreed_id: BUG-759
+title: aida drain status reports 'No drain in progress' while a live burndown run parent + heartbeated lock should exist — residual of BUG-755's lock-lifetime symptom
+description: 'Observed 2026-07-19 12:42 on the post-#1517 binary (92dabfe layout, rebuilt 11:27): ''aida burndown run --verbose'' parent alive (pid 3822683, systemd-inhibit child attached, implementers working, six PRs already merged this run) while ''aida drain status'' printed ''No drain in progress''. BUG-755''s fix addressed the launcher exiting early with residual work; this residual is the observability half recorded in its comments: whatever owns/heartbeats drain.lock is not coextensive with the running drain, so drain status (and the queue-list drain banner, and the concurrent-drain refusal) can all read absent-lock mid-drain. Fix: the burndown run parent takes the lock before spawning and holds+heartbeats it until the claude -p child exits (the BUG-748 lifetime rule applied one level up); drain status reads it truthfully. Acceptance: drain status names the live drain (pid, started, spec set) for the entire wall-clock of a burndown run; a second burndown run during that window is refused; regression test on lock lifetime == child lifetime. Mode: drive. NOT queued while the current drain runs — queue it after.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T19:42:59.942852233Z
+modified_at: 2026-07-19T19:42:59.942852233Z
+req_type: Bug
+tags:
+- aida:burndown drain-lock from-dogfood followup:BUG-755
