@@ -1,0 +1,15 @@
+{
+  "id": "a4c5fd1d-8165-47e2-aef3-2cd235f56391",
+  "thread_id": "a4c5fd1d-8165-47e2-aef3-2cd235f56391",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1784491133012,
+  "body": "Burn-down complete (--status approved).\n\nCompleted: BUG-758 (PR #1529 https://github.com/joemooney/aida/pull/1529), BUG-756 (PR #1520 https://github.com/joemooney/aida/pull/1520, codex-authored — reviewed+merged by drain integrator, verdict on STORY-777), STORY-777 (review auto-completed), TASK-1161 (PR #1530 https://github.com/joemooney/aida/pull/1530).\nCaveats / verifications worth noting: PR-1520 review was done by the drain integrator (Claude cross-vendor review of Codex), not a separate reviewer session. Integrated-main verify = full make build-fast (green, 2m18s). TASK-1161 lands the modified_at stale-write guard + targeted auto-bump writes on top of PR-1520.\nLeft for manual merge: none.\nParked (with reason): TASK-735/751 deferred:on-demand; TASK-749 deferred:future-rbac; TASK-892 deferred:until-projects-toml-consumed; EPIC-44/EPIC-56 decompose first; STORY-687/688 deferred:cockpit-phase2; SPIKE-60 deferred:design; SPIKE-69/75 research-lane (aida research).\nWorktrees not pruned: ~15 pre-existing .claude/worktrees/agent-* from earlier drains (not this wave's — left untouched per prune guards; worth a supervised sweep).\nAlso pending: 1 operator directive (human-audit → /aida-human-audit) and 53 awaiting_signoff specs the advisor hasn't blessed.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
