@@ -52,6 +52,15 @@ pub(crate) enum DispatchState {
     /// urgent case: that diff is one `worktree reset`/cleanup away from
     /// being lost. Always the highest-priority state to surface.
     Salvageable,
+    /// Process liveness could not be determined — no pid was recorded on the
+    /// lease AND the cwd-based worktree probe cannot see the worker (an
+    /// Agent-tool / harness subagent runs inside the parent claude process,
+    /// whose cwd is the parent project root, never the isolation worktree).
+    /// Absence of evidence is NOT death here: the dangerous salvage-commit
+    /// hint must never fire for this state — mid-drain it would commit
+    /// half-done work out from under a live agent and double-dispatch.
+    // trace:BUG-752 | ai:claude
+    Unknown,
 }
 
 impl DispatchState {
@@ -61,6 +70,8 @@ impl DispatchState {
             DispatchState::Moving => "moving",
             DispatchState::Stalled => "stalled",
             DispatchState::Salvageable => "salvageable",
+            // trace:BUG-752 | ai:claude
+            DispatchState::Unknown => "unknown",
         }
     }
 }
@@ -86,15 +97,24 @@ impl DispatchState {
 pub(crate) const DEFAULT_STALLED_THRESHOLD_SECS: u64 = 30 * 60;
 
 /// Pure classifier: given the four signals `aida ps` already has (or can
-/// cheaply probe) per row, decide MOVING / STALLED / SALVAGEABLE. No I/O, no
-/// mutable state — every input is a plain value so the full decision matrix
-/// is exercisable from unit-test fixtures.
+/// cheaply probe) per row, decide MOVING / STALLED / SALVAGEABLE / UNKNOWN.
+/// No I/O, no mutable state — every input is a plain value so the full
+/// decision matrix is exercisable from unit-test fixtures.
+///
+/// `pid_alive` is a tri-state: `Some(true)` = a live process demonstrably
+/// backs the lease, `Some(false)` = liveness was checked and the process is
+/// dead, `None` = liveness is UNDETERMINABLE (a harness/Agent-tool lease that
+/// recorded no pid — the worker runs inside the parent claude process, out of
+/// reach of the cwd-based worktree probe). `None` classifies Unknown, never
+/// Salvageable: the salvage hint fires only on a genuinely determined death.
+/// (It was a plain `bool` before the third false-negative variant.)
 ///
 /// Decision matrix (documented so a future reader doesn't have to reverse it
 /// out of the `if` chain):
 ///
 /// | pid alive | branch ahead | worktree dirty | elapsed        | state       |
 /// |-----------|--------------|-----------------|----------------|-------------|
+/// | unknown   | —            | —               | —              | Unknown     |
 /// | no        | —            | yes             | —              | Salvageable |
 /// | no        | —            | no              | —              | Stalled     |
 /// | yes       | >0           | —               | —              | Moving      |
@@ -102,7 +122,7 @@ pub(crate) const DEFAULT_STALLED_THRESHOLD_SECS: u64 = 30 * 60;
 /// | yes       | 0            | no              | < threshold    | Moving      |
 /// | yes       | 0            | no              | >= threshold   | Stalled     |
 ///
-/// Rationale for the two judgment calls:
+/// Rationale for the judgment calls:
 /// - **Dead + clean → Stalled, not Moving**: nothing is being produced right
 ///   now (the driving process is gone), but nothing uncommitted is at risk
 ///   either, so it doesn't carry Salvageable's urgency.
@@ -111,14 +131,23 @@ pub(crate) const DEFAULT_STALLED_THRESHOLD_SECS: u64 = 30 * 60;
 ///   doubt to "still working" whenever there's *any* uncommitted diff. Only
 ///   a genuinely clean, unmoved worktree — no diff to point to at all — ages
 ///   into Stalled.
+/// - **Unknown pid → Unknown, regardless of git state**: with no liveness
+///   evidence either way, claiming Moving would overstate and claiming
+///   Salvageable would invite a mid-drain salvage-commit of a live agent's
+///   half-done work. Surface the uncertainty honestly instead.
 // trace:TASK-1090 | ai:claude
+// trace:BUG-752 | ai:claude
 pub(crate) fn dispatch_state(
-    pid_alive: bool,
+    pid_alive: Option<bool>,
     worktree_dirty: bool,
     branch_ahead_of_main: u32,
     elapsed_secs: u64,
     stalled_threshold_secs: u64,
 ) -> DispatchState {
+    let Some(pid_alive) = pid_alive else {
+        // trace:BUG-752 | ai:claude
+        return DispatchState::Unknown;
+    };
     if !pid_alive {
         return if worktree_dirty {
             DispatchState::Salvageable
@@ -219,6 +248,15 @@ pub(crate) fn next_command_hint(
         DispatchState::Stalled => Some(format!(
             "no branch/dirty movement in {wt} (branch {branch}, last commit \"{last_commit}\") — resume/rebrief: {rebrief}"
         )),
+        // BUG-752: no pid was recorded and the worktree probe can't see a
+        // harness-hosted worker — liveness is unknown, NOT dead. Never emit
+        // the salvage-commit command here: an agent may still be writing this
+        // worktree, and salvage-committing under it would capture half-done
+        // work and double-dispatch. trace:BUG-752 | ai:claude
+        DispatchState::Unknown => Some(format!(
+            "liveness unknown — no pid recorded for {wt} (branch {branch}, last commit \"{last_commit}\"); \
+             an agent may still be working here — verify before any cleanup"
+        )),
     }
 }
 
@@ -231,13 +269,13 @@ mod tests {
     #[test]
     fn dead_pid_dirty_worktree_is_salvageable() {
         assert_eq!(
-            dispatch_state(false, true, 0, 999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(false), true, 0, 999, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Salvageable
         );
         // Dirty + ahead: still Salvageable — a dead process always wins on
         // the salvage-urgency axis regardless of what's already pushed.
         assert_eq!(
-            dispatch_state(false, true, 3, 10, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(false), true, 3, 10, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Salvageable
         );
     }
@@ -245,14 +283,14 @@ mod tests {
     #[test]
     fn dead_pid_clean_worktree_is_stalled_not_moving() {
         assert_eq!(
-            dispatch_state(false, false, 0, 5, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(false), false, 0, 5, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Stalled
         );
         // Nothing to lose even if commits already landed — a dead process
         // still needs a resume decision, so this stays Stalled rather than
         // Moving.
         assert_eq!(
-            dispatch_state(false, false, 4, 5, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(false), false, 4, 5, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Stalled
         );
     }
@@ -260,12 +298,12 @@ mod tests {
     #[test]
     fn alive_branch_ahead_of_main_is_moving() {
         assert_eq!(
-            dispatch_state(true, false, 1, 99_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(true), false, 1, 99_999, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Moving
         );
         // Dirty on top of ahead — still Moving.
         assert_eq!(
-            dispatch_state(true, true, 2, 99_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(true), true, 2, 99_999, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Moving
         );
     }
@@ -276,11 +314,11 @@ mod tests {
         // of the doubt goes to Moving whenever there IS a diff, no matter how
         // long the session has been running.
         assert_eq!(
-            dispatch_state(true, true, 0, 0, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(true), true, 0, 0, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Moving
         );
         assert_eq!(
-            dispatch_state(true, true, 0, 999_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(true), true, 0, 999_999, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Moving
         );
     }
@@ -290,7 +328,7 @@ mod tests {
         // Fresh session, nothing produced yet, but still within the grace
         // window — too early to call it stalled.
         assert_eq!(
-            dispatch_state(true, false, 0, 60, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(Some(true), false, 0, 60, DEFAULT_STALLED_THRESHOLD_SECS),
             DispatchState::Moving
         );
     }
@@ -299,7 +337,7 @@ mod tests {
     fn alive_clean_no_commits_past_threshold_is_stalled() {
         assert_eq!(
             dispatch_state(
-                true,
+                Some(true),
                 false,
                 0,
                 DEFAULT_STALLED_THRESHOLD_SECS,
@@ -309,7 +347,7 @@ mod tests {
         );
         assert_eq!(
             dispatch_state(
-                true,
+                Some(true),
                 false,
                 0,
                 DEFAULT_STALLED_THRESHOLD_SECS + 1,
@@ -324,6 +362,53 @@ mod tests {
         assert_eq!(DispatchState::Moving.label(), "moving");
         assert_eq!(DispatchState::Stalled.label(), "stalled");
         assert_eq!(DispatchState::Salvageable.label(), "salvageable");
+        // trace:BUG-752 | ai:claude
+        assert_eq!(DispatchState::Unknown.label(), "unknown");
+    }
+
+    // BUG-752: undeterminable pid liveness (a harness lease with no recorded
+    // pid) must classify Unknown — never Salvageable, even with a dirty
+    // worktree. Absence of evidence is not death; the salvage hint fires only
+    // on a genuinely determined dead process. trace:BUG-752 | ai:claude
+    #[test]
+    fn unknown_pid_liveness_is_never_salvageable() {
+        // Dirty worktree — the exact shape the false negative misread as
+        // "dead process, salvage-commit then rebrief" mid-drain.
+        assert_eq!(
+            dispatch_state(None, true, 0, 999_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            DispatchState::Unknown
+        );
+        // Clean, ahead, fresh, aged — Unknown regardless of git state.
+        assert_eq!(
+            dispatch_state(None, false, 3, 10, DEFAULT_STALLED_THRESHOLD_SECS),
+            DispatchState::Unknown
+        );
+        assert_eq!(
+            dispatch_state(None, false, 0, 999_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            DispatchState::Unknown
+        );
+    }
+
+    // trace:BUG-752 | ai:claude
+    #[test]
+    fn unknown_hint_never_contains_the_salvage_commit_command() {
+        let hint = next_command_hint(
+            DispatchState::Unknown,
+            Path::new("/tmp/wt-harness"),
+            "worktree-agent-abc",
+            None,
+            None,
+        )
+        .expect("Unknown must surface an explanatory hint");
+        assert!(hint.contains("liveness unknown"), "{hint}");
+        assert!(hint.contains("no pid recorded"), "{hint}");
+        assert!(hint.contains("/tmp/wt-harness"), "{hint}");
+        // The dangerous parts must be absent: no salvage-commit, no rebrief
+        // command that would double-dispatch a possibly-live agent.
+        assert!(!hint.contains("add -A"), "{hint}");
+        assert!(!hint.contains("salvage-commit"), "{hint}");
+        assert!(!hint.contains("aida queue work"), "{hint}");
+        assert!(!hint.contains("aida agent new"), "{hint}");
     }
 
     // ── probe_worktree: read-only, tolerant of a missing worktree ─────────
