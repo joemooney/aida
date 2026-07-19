@@ -6708,10 +6708,26 @@ pub enum AgentNewCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Do one spec: implement it, wait for CI, then stop at the PR checkpoint.
+    /// Do one spec: dispatch it to the right harness based on its groomed
+    /// execution mode (drain, drive, guided, operator, or decide), printing
+    /// what will be asked of you before anything starts.
     Do {
-        /// Requirement ID (UUID or SPEC-ID) to implement.
+        /// Requirement ID (UUID or SPEC-ID) to dispatch.
         spec: String,
+
+        // trace:STORY-776 | ai:claude
+        /// One-shot execution-mode override (drain, drive, guided, operator,
+        /// decide). Overriding toward MORE human involvement always wins;
+        /// toward LESS additionally needs --force. Never persisted — use
+        /// `aida edit <spec> --mode` to change the groomed mode durably.
+        #[clap(long, value_name = "MODE")]
+        mode: Option<String>,
+
+        // trace:STORY-776 | ai:claude
+        /// Allow a --mode override that LOOSENS the human contract (e.g.
+        /// guided → drain). A groomed `decide` mode can never be overridden.
+        #[clap(long)]
+        force: bool,
     },
 
     /// Add a new requirement
@@ -7410,6 +7426,15 @@ pub enum Command {
         /// covered, and why. Pass an empty string to clear.
         #[clap(long = "test-coverage-notes", value_name = "TEXT")]
         test_coverage_notes: Option<String>,
+
+        // trace:STORY-776 | ai:claude
+        /// Set the execution mode — HOW this spec runs when dispatched by
+        /// `aida do`: drain (full auto through merge), drive (auto through CI,
+        /// you merge), guided (interactive keystone dialog), operator (you do
+        /// the work), or decide (a pending decision blocks). Advisor-authority
+        /// write. Pass an empty string to clear (back to ungroomed).
+        #[clap(long = "mode", value_name = "MODE")]
+        mode: Option<String>,
 
         /// Use interactive mode (launches editor)
         #[clap(long, short = 'i')]
@@ -11091,7 +11116,26 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "do", "TASK-1155"])
             .expect("`aida do <spec>` should parse");
         match cli.command {
-            Command::Do { spec } => assert_eq!(spec, "TASK-1155"),
+            Command::Do { spec, mode, force } => {
+                assert_eq!(spec, "TASK-1155");
+                assert!(mode.is_none());
+                assert!(!force);
+            }
+            other => panic!("expected Do command, got {other:?}"),
+        }
+    }
+
+    // trace:STORY-776 | ai:claude
+    #[test]
+    fn do_command_parses_mode_override_and_force() {
+        let cli = Cli::try_parse_from(["aida", "do", "TASK-1155", "--mode", "guided", "--force"])
+            .expect("`aida do <spec> --mode <m> --force` should parse");
+        match cli.command {
+            Command::Do { spec, mode, force } => {
+                assert_eq!(spec, "TASK-1155");
+                assert_eq!(mode.as_deref(), Some("guided"));
+                assert!(force);
+            }
             other => panic!("expected Do command, got {other:?}"),
         }
     }

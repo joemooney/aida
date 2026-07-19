@@ -680,6 +680,17 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
             "Narrative 'what shipped and why it was done this way' a commit prefix / diff \
              does not capture. Optional; set via `aida edit --implementation-summary`.",
     },
+    // trace:STORY-776 | ai:claude
+    FieldDoc {
+        name: "execution_mode",
+        example: "guided",
+        provenance: Provenance::User,
+        description:
+            "The advisor's bless-time classification of HOW this spec runs when dispatched \
+             by `aida do`: drain | drive | guided | operator | decide. None = ungroomed. \
+             Advisor-authority write (`aida groom`, `aida edit --mode`, or the TTY \
+             micro-groom confirm).",
+    },
     FieldDoc {
         name: "custom_status",
         example: "in-review",

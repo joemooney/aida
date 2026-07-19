@@ -369,6 +369,7 @@ fn ps_summary(
         blocked: false,
         // trace:TASK-1065 | ai:claude
         has_pending_decision: false,
+        execution_mode: None,
         yaml_path: String::new(),
     }
 }

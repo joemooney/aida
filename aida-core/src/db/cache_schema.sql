@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- `decision_request.is_pending()`; authoritative after any single-row upsert
     -- (unlike the graph-derived `blocked`). NEVER stored in canonical YAML.
     has_pending_decision INTEGER NOT NULL DEFAULT 0,
+    -- STORY-776: the advisor's bless-time execution-mode classification
+    -- (drain|drive|guided|operator|decide), projected from the canonical YAML
+    -- `execution_mode` field so `aida list --fields ...,mode` reads the cache.
+    -- NULL = ungroomed.
+    execution_mode TEXT,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 

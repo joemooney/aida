@@ -561,9 +561,9 @@ pub(crate) fn handle_git_backend_command(
         // the git-canonical path fell through to the catch-all refusal. Mirror
         // the Zen arm: same storage, same thin delegate.
         // trace:BUG-735 | ai:claude
-        Command::Do { spec } => {
+        Command::Do { spec, mode, force } => {
             let storage = Storage::new(store_path.to_path_buf());
-            return run_do_drive(&storage, spec);
+            return run_do_drive(&storage, spec, mode.as_deref(), *force);
         }
         Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
         Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
@@ -2873,6 +2873,11 @@ pub(crate) fn handle_git_backend_command(
                                 lines.push(crate::toon::scalar("test_coverage_notes", v));
                             }
                         }
+                        // STORY-776: the advisor's dispatch classification,
+                        // emitted only when groomed. trace:STORY-776 | ai:claude
+                        if let Some(m) = req.execution_mode {
+                            lines.push(crate::toon::scalar("execution_mode", &m.to_string()));
+                        }
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -3262,6 +3267,18 @@ pub(crate) fn handle_git_backend_command(
                         }
                         println!("  {}", "Answer with `aida questions answer`.".dimmed());
                     }
+                    // STORY-776: the advisor's dispatch classification — how
+                    // `aida do` will route this spec. Rendered only when
+                    // groomed, with the human contract so the routing is
+                    // explicit at a glance. trace:STORY-776 | ai:claude
+                    if let Some(m) = req.execution_mode {
+                        println!(
+                            "\n{} {} — {}",
+                            "Execution mode:".bold(),
+                            m.to_string().cyan(),
+                            crate::do_dispatch::human_contract(m).dimmed()
+                        );
+                    }
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
                     }
@@ -3394,6 +3411,8 @@ pub(crate) fn handle_git_backend_command(
             implementation_summary,
             risk_notes,
             test_coverage_notes,
+            // trace:STORY-776 | ai:claude
+            mode,
             // trace:TASK-1117 | ai:claude
             interactive,
             ..
@@ -3553,7 +3572,8 @@ pub(crate) fn handle_git_backend_command(
                 && !*no_human_only
                 && implementation_summary.is_none()
                 && risk_notes.is_none()
-                && test_coverage_notes.is_none();
+                && test_coverage_notes.is_none()
+                && mode.is_none();
             let mut editor_title: Option<String> = None;
             let mut editor_description: Option<String> = None;
             if (no_field_flags || *interactive)
@@ -3623,6 +3643,34 @@ pub(crate) fn handle_git_backend_command(
             changed |= set_narrative(&mut req.implementation_summary, implementation_summary);
             changed |= set_narrative(&mut req.risk_notes, risk_notes);
             changed |= set_narrative(&mut req.test_coverage_notes, test_coverage_notes);
+            // STORY-776: execution_mode is the advisor's bless-time routing
+            // judgment — writing (or clearing) it is an advisor-authority act,
+            // same gate as a status promotion, so the audit trail (the store
+            // commit) records who classified it and when. An empty string
+            // clears back to ungroomed. trace:STORY-776 | ai:claude
+            if let Some(m) = mode {
+                if !has_advisor_authority() {
+                    anyhow::bail!(
+                        "--mode sets the advisor's routing classification and needs advisor \
+                         authority (advisor role or an interactive session). Leave it for \
+                         advisor grooming, or run as the advisor.{}",
+                        team_role_refusal_clause()
+                    );
+                }
+                if m.trim().is_empty() {
+                    if req.execution_mode.is_some() {
+                        req.execution_mode = None;
+                        changed = true;
+                    }
+                } else {
+                    let parsed: aida_core::ExecutionMode =
+                        m.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+                    if req.execution_mode != Some(parsed) {
+                        req.execution_mode = Some(parsed);
+                        changed = true;
+                    }
+                }
+            }
             let mut new_status_for_manifest: Option<String> = None;
             // STORY-738: did this edit transition the spec INTO Completed?
             // Captured against the prior status before the set below so the

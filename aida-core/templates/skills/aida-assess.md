@@ -102,10 +102,20 @@ Honor the caps: never propose more than `AIDA_INTAKE_MAX_APPROVALS` approvals
 (approve the highest-value ones first). Respect the risk ceiling — a spec
 heavier than `AIDA_INTAKE_RISK` should be parked, not approved.
 
+**Also classify HOW each approve/queue spec runs** (STORY-776 / ADR-13): pick
+an execution mode — `drain` (full auto through merge), `drive` (auto through
+CI, human merges), `guided` (interactive keystone dialog), `operator` (human
+does the work), `decide` (a pending decision blocks). Keystone / architecture /
+security / supervised tags force `guided` or `operator`; `human-only` forces
+`operator`; a spec you'd park for a missing decision is `decide`. When unsure
+between `drain` and `drive`, pick `drive` — the human keeps the merge. Carry a
+short reason per mode call ("guided: carries keystone tag") so a wrong
+classification is visible in review.
+
 ### 3. Output the proposal (always — this is the reviewable artifact)
 
-Render a compact table, one row per spec: `SPEC-ID · disposition · one-line
-reasoning`. Group by disposition. End with a count summary
+Render a compact table, one row per spec: `SPEC-ID · disposition · mode ·
+one-line reasoning`. Group by disposition. End with a count summary
 (`N approve, M reject, K park, J queue`). This is the operator's review
 surface — make the reasoning crisp enough to skim.
 
@@ -120,11 +130,15 @@ Only when `AIDA_INTAKE_APPLY=1`:
 
 1. **Approvals** — for each draft you proposed approve:
    ```bash
-   aida edit <DRAFT-ID> --status approved
+   aida edit <DRAFT-ID> --status approved --mode <MODE>
    ```
-   Never approve a spec you flagged park-for-human. **NEVER** approve a
-   do-not-approve class or a `needs-human`/`strategic` spec (they are not in
-   your fence; do not reach outside it).
+   The `--mode` is the execution-mode classification from step 2 (STORY-776) —
+   writing it at bless time is what makes `aida do <spec>` dispatch with zero
+   flags. Also write it for every **queue**-disposed spec that lacks one
+   (`aida edit <ID> --mode <MODE>`). Never approve a spec you flagged
+   park-for-human. **NEVER** approve a do-not-approve class or a
+   `needs-human`/`strategic` spec (they are not in your fence; do not reach
+   outside it).
 
 2. **Rejections** — for each spec you proposed reject:
    ```bash

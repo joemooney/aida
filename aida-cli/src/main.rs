@@ -48,6 +48,8 @@ mod graph_cmd;
 mod dispatch_health_ps;
 // trace:TASK-1092 | ai:claude — [dispatch.routing] config loader (additive, not yet wired in).
 mod dispatch_routing_config;
+// trace:STORY-776 | ai:claude — pure decision logic for `aida do` mode dispatch.
+mod do_dispatch;
 mod doc_cmd;
 mod docs;
 mod doctor_cmd;
@@ -890,6 +892,8 @@ const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "queued",
     "in_flight",
     "blocked",
+    // trace:STORY-776 | ai:claude — the advisor's dispatch classification.
+    "mode",
 ];
 
 /// Resolve the requested `--fields` selection for agent-mode `aida list` into a
@@ -962,6 +966,8 @@ fn toon_list_cell(
         "queued" => queued.to_string(),
         "in_flight" => in_flight.to_string(),
         "blocked" => blocked.to_string(),
+        // trace:STORY-776 | ai:claude — empty cell = ungroomed.
+        "mode" => r.execution_mode.clone().unwrap_or_default(),
         _ => String::new(),
     }
 }
@@ -3261,6 +3267,8 @@ fn run() -> Result<()> {
             implementation_summary: _,
             risk_notes: _,
             test_coverage_notes: _,
+            // STORY-776: execution_mode is git-canonical only, same rule.
+            mode: _,
         } => {
             // If any flags provided, use non-interactive mode; otherwise interactive
             // trace:TASK-351 | ai:claude — --add-tag / --remove-tag count too
@@ -3705,8 +3713,8 @@ fn run() -> Result<()> {
         Command::Queue(queue_cmd) => {
             handle_queue_command(queue_cmd, &storage, &requirements_path)?;
         }
-        Command::Do { spec } => {
-            run_do_drive(&storage, spec)?;
+        Command::Do { spec, mode, force } => {
+            run_do_drive(&storage, spec, mode.as_deref(), *force)?;
         }
         Command::Load(load_cmd) => {
             load_cmd::handle_load_command(load_cmd, &storage)?;
@@ -82214,10 +82222,19 @@ fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
 }
 
 // trace:TASK-1155 trace:ADR-11 | ai:codex
-fn run_do_drive(storage: &Storage, spec: &str) -> Result<()> {
+/// STORY-776: `aida do <spec>` — the universal dispatcher. Reads the advisor's
+/// bless-time `execution_mode` and routes to the right harness, printing the
+/// human contract BEFORE anything starts. ADR-13 fixes the taxonomy (drain |
+/// drive | guided | operator | decide), ADR-14 the asymmetric one-shot
+/// `--mode` override, ADR-15 the ungroomed path (TTY micro-groom with a
+/// visible reasoning line; headless refusal). The pure policy lives in
+/// `do_dispatch.rs`; this handler does the IO.
+// trace:STORY-776 | ai:claude
+fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: bool) -> Result<()> {
+    use aida_core::ExecutionMode;
     let spec = spec.trim();
     if spec.is_empty() {
-        anyhow::bail!("aida do needs a spec to drive. Usage: aida do <SPEC>.");
+        anyhow::bail!("aida do needs a spec to dispatch. Usage: aida do <SPEC> [--mode MODE].");
     }
     let store = storage.load()?;
     let req = store
@@ -82226,26 +82243,235 @@ fn run_do_drive(storage: &Storage, spec: &str) -> Result<()> {
         .find(|r| spec_matches(r, spec))
         .ok_or_else(|| anyhow::anyhow!("no requirement matches `{spec}`"))?;
     let display = req.display_id();
-    let args = vec![
-        "queue".to_string(),
-        "work".to_string(),
-        display.clone(),
-        "--auto-complete=through-ci".to_string(),
-    ];
-    eprintln!(
-        "  {} doing {} — aida {}",
-        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
-        display,
-        args.join(" ").dimmed()
-    );
-    let status = std::process::Command::new(resolve_aida_exe())
-        .args(&args)
-        .status()
-        .context("failed to launch `aida queue work --auto-complete=through-ci`")?;
-    if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+
+    // An epic is never a unit of dispatch — same rule as the zen gate.
+    if req.req_type == aida_core::RequirementType::Epic {
+        anyhow::bail!(
+            "{display} is an epic — a read-only rollup of its children, not a unit of work. \
+             Dispatch one of its bounded children instead (aida graph {display} --tree)."
+        );
     }
-    Ok(())
+
+    let requested: Option<ExecutionMode> = match mode_flag {
+        Some(raw) => Some(raw.parse().map_err(|e: String| anyhow::anyhow!(e))?),
+        None => None,
+    };
+
+    // Resolve the EFFECTIVE mode: groomed field + ADR-14 override ladder, or
+    // the ADR-15 ungroomed path.
+    let effective: ExecutionMode = match (req.execution_mode, requested) {
+        (Some(groomed), Some(req_mode)) => {
+            match do_dispatch::classify_mode_override(groomed, req_mode, force) {
+                do_dispatch::OverrideVerdict::Noop => groomed,
+                do_dispatch::OverrideVerdict::Allowed { banner } => {
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        banner
+                    );
+                    req_mode
+                }
+                do_dispatch::OverrideVerdict::NeedsForce { refusal }
+                | do_dispatch::OverrideVerdict::Refused { refusal } => {
+                    anyhow::bail!("{refusal}");
+                }
+            }
+        }
+        (Some(groomed), None) => groomed,
+        (None, Some(req_mode)) => {
+            // Explicit flag on an ungroomed spec: honor it one-shot — the
+            // refusal exists for flag-less guesswork, not explicit intent.
+            eprintln!(
+                "  {} {display} is ungroomed — using --mode {req_mode} one-shot \
+                 (not persisted; `aida groom` or `aida edit {display} --mode {req_mode}` \
+                 makes it durable)",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            req_mode
+        }
+        (None, None) => do_micro_groom_mode(req, &display)?,
+    };
+
+    // The human-contract banner — ALWAYS printed before any harness acts.
+    eprintln!(
+        "  {} {} · {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        display.bold(),
+        do_dispatch::human_contract(effective)
+    );
+
+    // Route. drain/drive stay thin wrappers over the ONE per-spec engine
+    // (ADR-7/ADR-11) via self-invocation; guided/operator/decide are
+    // human-seat surfaces.
+    let self_invoke = |args: &[&str], context: &str| -> Result<()> {
+        eprintln!(
+            "  {} aida {}",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+            args.join(" ").dimmed()
+        );
+        let status = std::process::Command::new(resolve_aida_exe())
+            .args(args)
+            .status()
+            .with_context(|| format!("failed to launch `aida {context}`"))?;
+        if !status.success() {
+            std::process::exit(status.code().unwrap_or(1));
+        }
+        Ok(())
+    };
+    match effective {
+        ExecutionMode::Drain => {
+            // `aida zen` = the one-shot autonomous implement+ship drive: its
+            // own preflight gates (eligibility, suitability, scope routing),
+            // then the shared engine with review + merge phases.
+            self_invoke(&["zen", &display], "zen")
+        }
+        ExecutionMode::Drive => self_invoke(
+            &["queue", "work", &display, "--auto-complete=through-ci"],
+            "queue work --auto-complete=through-ci",
+        ),
+        ExecutionMode::Guided => {
+            // A ready worktree + the guided session, prompt pre-filled. The
+            // worktree primitive takes the implementer lease (Approved → In
+            // Progress) exactly like `aida worktree enter <spec>`.
+            let focus = match classify_worktree_arg(&display) {
+                WorktreeTarget::Spec { focus, .. } => focus,
+                WorktreeTarget::Epic => unreachable!("epics are refused above"),
+            };
+            let out = ensure_spec_worktree(&display, &focus, None, None, "do-guided")?;
+            let prompt = format!("/aida-guided-implement {display}");
+            eprintln!(
+                "  {} worktree {} · launching guided session — claude {}",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+                out.path.display().to_string().cyan(),
+                format!("{prompt:?}").dimmed()
+            );
+            let status = std::process::Command::new("claude")
+                .arg(&prompt)
+                .current_dir(&out.path)
+                .env("AIDA_SESSION_ROLE", "implementer")
+                .status()
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "failed to launch `claude` ({e}) — guided mode drives a Claude Code \
+                         skill and needs the Claude Code CLI on PATH.\n\
+                         The worktree is ready at {} — open your agent there and run the \
+                         guided-implement skill by hand.",
+                        out.path.display()
+                    )
+                })?;
+            if !status.success() {
+                std::process::exit(status.code().unwrap_or(1));
+            }
+            Ok(())
+        }
+        ExecutionMode::Operator => {
+            // The explicit operator checklist — print and STOP. No agent runs.
+            println!("\n{} — {}", display.bold(), req.title);
+            if !req.description.trim().is_empty() {
+                println!();
+                for line in req.description.trim().lines() {
+                    println!("  {line}");
+                }
+            }
+            println!("\n{}", "Operator checklist:".bold());
+            println!("  1. Do the work above yourself — no agent will be launched.");
+            println!(
+                "  2. Need an isolated workspace? aida worktree enter {display} (takes the \
+                 implementer lease)."
+            );
+            println!(
+                "  3. Commit with the ({display}) trailer so the merge auto-completes the spec."
+            );
+            println!("  4. Finished on a branch? aida queue done {display} · then open the PR.");
+            Ok(())
+        }
+        ExecutionMode::Decide => {
+            // Surface the pending decision — no harness runs until answered.
+            println!("\n{} — {}", display.bold(), req.title);
+            match req.decision_request.as_ref().filter(|d| d.is_pending()) {
+                Some(dr) => {
+                    println!("\n{}", "Pending decision:".bold());
+                    println!("  {}", dr.question);
+                    println!("\n  Answer it: aida questions answer");
+                }
+                None => {
+                    println!(
+                        "\n  Groomed `decide` but no pending decision request is recorded — \
+                         the spec likely needs acceptance criteria."
+                    );
+                    println!("  Author them interactively: aida clarify {display}");
+                    println!(
+                        "  Then re-groom: aida groom (or aida edit {display} --mode <m> as \
+                         the advisor)."
+                    );
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// ADR-15: the TTY micro-groom for an ungroomed `aida do <spec>`. Proposes a
+/// mode seeded from the classify heuristic WITH its reasoning line (so the
+/// confirm is informed, and a wrong proposal is visibly a finding to file),
+/// shows the mode's human contract, asks one confirm, and persists the
+/// accepted mode through the normal advisor-authority path (`aida edit
+/// --mode` in a child process) — the store commit records who classified it
+/// and when, same provenance as a full groom pass. TTY-only: headless callers
+/// are refused with the groom pointer.
+// trace:STORY-776 | ai:claude
+fn do_micro_groom_mode(req: &Requirement, display: &str) -> Result<aida_core::ExecutionMode> {
+    use std::io::IsTerminal;
+    if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+        anyhow::bail!(
+            "{display} is ungroomed — no execution mode set, and classifying one is an \
+             advisor act the headless path must not guess. Either run `aida groom` \
+             (advisor disposition pass), set it directly (`aida edit {display} --mode <m>` \
+             as the advisor), or dispatch explicitly with `aida do {display} --mode <m>`."
+        );
+    }
+    let req_type = req.req_type.to_string().to_lowercase();
+    let tags: Vec<String> = req.tags.iter().cloned().collect();
+    let input = do_dispatch::ModeProposalInput {
+        req_type: &req_type,
+        tags: &tags,
+        human_only: req.human_only,
+        has_pending_decision: req
+            .decision_request
+            .as_ref()
+            .is_some_and(|d| d.is_pending()),
+        under_specified: spec_is_under_specified(req),
+    };
+    let proposal = do_dispatch::propose_execution_mode(&input);
+    println!("{} is ungroomed — no execution mode set.", display.bold());
+    println!(
+        "  proposing {}: {}",
+        proposal.mode.to_string().cyan().bold(),
+        proposal.reason
+    );
+    println!(
+        "  contract: {}",
+        do_dispatch::human_contract(proposal.mode).dimmed()
+    );
+    if !prompt_yes_no("  Accept and record this mode? [Y/n] ", true)? {
+        anyhow::bail!(
+            "declined — dispatch explicitly with `aida do {display} --mode <m>`, or run \
+             `aida groom` for a full advisor pass. (A wrong proposal is worth filing: \
+             aida add --type bug)"
+        );
+    }
+    let mode_str = proposal.mode.to_string();
+    let status = std::process::Command::new(resolve_aida_exe())
+        .args(["edit", display, "--mode", &mode_str])
+        .status()
+        .context("failed to record the confirmed mode via `aida edit --mode`")?;
+    if !status.success() {
+        anyhow::bail!(
+            "recording the confirmed mode failed (`aida edit {display} --mode {mode_str}`) — \
+             not dispatching on an unrecorded classification."
+        );
+    }
+    Ok(proposal.mode)
 }
 
 /// STORY-721: `aida zen <spec>` — the one-shot AUTONOMOUS implement+ship drive.

@@ -328,6 +328,16 @@ pub fn merge_spec_three_way(
         &theirs.human_only,
         ours_is_winner,
     );
+    // STORY-776: the advisor's execution-mode classification survives a
+    // divergent sync — a mode set (or cleared) on only one side wins over the
+    // other side's unchanged value, instead of being clobbered by the
+    // object-level winner snapshot.
+    merged.execution_mode = *merge_scalar(
+        &base.execution_mode,
+        &ours.execution_mode,
+        &theirs.execution_mode,
+        ours_is_winner,
+    );
 
     // History: union by entry id, deterministic order. base contributes
     // nothing new (append-only ⇒ ours+theirs ⊇ base) but we fold it in too so
@@ -1753,6 +1763,34 @@ mod tests {
             let merged = merge_spec_three_way(&base, x, y);
             assert!(merged.archived, "archived flag lost");
             assert!(merged.deferred, "deferred flag lost");
+            assert_eq!(merged.owner, "bob");
+        }
+    }
+
+    // STORY-776 — the advisor's execution_mode set on only one side of a
+    // divergent sync survives the merge regardless of which side wins the
+    // object-level tie-break; a later concurrent unrelated edit does not
+    // clobber it back to None. trace:STORY-776 | ai:claude
+    #[test]
+    fn test_merge_execution_mode_survives_one_sided_set() {
+        let mut base = make_req("Base", "Draft");
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.execution_mode = Some(crate::ExecutionMode::Guided);
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert_eq!(
+                merged.execution_mode,
+                Some(crate::ExecutionMode::Guided),
+                "advisor-set execution_mode lost in sync merge"
+            );
             assert_eq!(merged.owner, "bob");
         }
     }
