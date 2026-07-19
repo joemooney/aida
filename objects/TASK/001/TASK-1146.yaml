@@ -6,12 +6,16 @@ description: |-
   STORY-768 (aida human audit) enqueues a directive to .aida/worker.cmd. Today it only surfaces via 'aida worker directives' (worker render_human), NOT via 'aida awaiting' — the unified coordination inbox the advisor polls each turn (and that the UserPromptSubmit --notice hook reads). So an enqueued 'aida human audit' request won't appear in the advisor's normal awaiting poll; the advisor would have to separately check 'aida worker directives'.
 
   Fold pending worker directives into aida awaiting (awaiting_you.rs) as one more channel, so 'aida human audit' (the enqueue path) surfaces where the advisor already looks. Small, additive. Related: STORY-768, STORY-741 (the awaiting inbox).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T06:54:23.960783413Z
-modified_at: 2026-07-19T05:04:09.410799121Z
+modified_at: 2026-07-19T05:25:55.564682868Z
 req_type: Task
 tags:
 - aida:awaiting aida:human followup:STORY-768 coordination
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-19T05:25:55.564682868Z
+  implemented_by: joe
