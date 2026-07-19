@@ -1,0 +1,25 @@
+id: 019f7aed-60c7-77c0-b40f-4fe5aa2e3b12
+spec_id: TASK-1160
+agreed_id: TASK-1160
+title: 'aida worktree exit + ambient worktree PS1 indicator: symmetric step-out verb and always-visible where-am-I'
+description: |-
+  Operator ask 2026-07-19: "should there be an aida worktree exit - how do I know I am still in a worktree?"
+
+  Two gaps, one seam:
+  1. No symmetric exit. worktree enter cd's you in and exports session env (AIDA_SESSION_ID, CARGO_TARGET_DIR since TASK-1156). Leaving today is either bare cd (session env leaks into main-repo work — real 2026-07-17 incident: shell left standing in a deleted worktree with stale exports) or aida session end (wrong intent — that FINISHES the work). Add `aida worktree exit`: emits, via the same auto-evaled wrapper payload (no-double-eval, TASK-667), cd '<main worktree root>' + unset AIDA_SESSION_ID CARGO_TARGET_DIR (+ any future session exports, derived from the same list session-env.sh writes). Lease and spec status are UNTOUCHED — the session stays live for re-enter (idempotent re-enter already exists). Print a one-liner naming the still-held lease: "stepped out — session <id> (SPEC) still holds the worktree; re-enter with aida worktree enter SPEC, finish with aida session end <id>".
+  2. No ambient indicator. Splice a worktree segment into PS1 on enter and strip it on exit, reusing the existing role-enter/dev-activate splice machinery (BUG-60 hygiene, AIDA_DEV_PS1_PREFIX pattern): e.g. (wt:BUG-756). Wrapper-less shells get the printed hint only.
+
+  Acceptance:
+  - After wrapper-evaled worktree exit: cwd is the main repo root, AIDA_SESSION_ID and CARGO_TARGET_DIR are unset, the lease survives, and re-enter works.
+  - PS1 shows (wt:<SPEC>) inside an entered worktree and not after exit; composes with the (aida-release) prefix without duplication.
+  - exit from a non-worktree cwd is a friendly no-op naming the main root.
+  - Unit tests on the emitted exit payload and the PS1 splice/strip round-trip.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T15:10:04.999226502Z
+modified_at: 2026-07-19T15:10:04.999226502Z
+req_type: Task
+tags:
+- dx aida:worktree papercut from-dogfood
