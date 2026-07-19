@@ -35241,5 +35241,35 @@ operations:
   timestamp: 2026-07-19T06:33:39.874342538Z
   kind: !SetStatus
     status: In Progress
-clock: 3274
+- id: 019f7ae6-5706-7b70-9b84-2fec51310ee2
+  target_id: 019f7ae6-532e-7482-8a47-a012ce5df478
+  author: aida
+  node_id: '1'
+  lamport: 3275
+  timestamp: 2026-07-19T15:02:23.750693702Z
+  kind: !Create
+    title: 'Execution-mode dimension + aida do universal dispatch: the advisor classifies HOW each spec runs at bless-time; one verb routes to the right harness with an explicit human contract'
+    description: |-
+      Operator design ask (2026-07-19, verbatim core): "categorize the approach needed ahead of time and then run aida do <spec> and it will call the appropriate skill and that skill will be extremely explicit in terms of what it expects from the human user. Take all the back and forth guesswork out."
+
+      Problem: the routing judgment (drain vs through-ci drive vs guided keystone vs operator-action vs decide-first) is ALREADY made by the advisor at groom time, but persists only as batch tags and report prose — so the human must relearn per spec which verb/skill/harness applies (evidenced 2026-07-18/19: zen vs queue work vs --auto-complete variants; worktree enter alone not doing the work for BUG-756).
+
+      Design:
+      1. First-class execution_mode field on Requirement (enum: drain | drive | guided | operator | decide), set by the advisor at bless time (groom writes it; aida edit --mode for manual). The zen gate classifier (zen_drive::classify_gate) is the seed heuristic for proposals; keystone/supervised/security tags force guided/operator.
+      2. aida do <spec> becomes the universal dispatcher: reads execution_mode and routes — drain→auto-complete full; drive→through-ci (current behavior); guided→create/enter worktree AND launch the agent session with /aida-guided-implement <spec> pre-filled; operator→print the explicit operator checklist derived from the spec (and do NOT proceed); decide→surface the pending decision_request / route to clarify. No mode set → refuse with 'ungroomed — run aida groom' (grooming becomes load-bearing).
+      3. Human-contract banner: every dispatch prints, BEFORE starting, what will be asked of the human and when (e.g. guided: 'you will answer 2-4 recorded forks up front, then review one PR; never auto-merges').
+      4. ADR-7 alignment: mode is a typed engine parameter, not an env side-channel; MCP update_requirement mirrors the field (STORY-82 parity rule); aida list/show render it.
+
+      Guided-session forks to ratify with the operator (this spec is batch:guided-0719): the exact mode taxonomy (5 proposed), whether mode can override at invocation (aida do --mode X wins vs refuse), and migration (backfill modes for the current approved set via one groom pass).
+
+      Acceptance:
+      - Advisor-set execution_mode persists on the spec YAML and survives sync (field-level, protected by the BUG-756 guard).
+      - aida do <spec> with each mode dispatches to the right harness with zero additional flags; ungroomed specs are refused with the groom pointer.
+      - Each harness prints its human contract before acting.
+      - The groom pass proposes/writes modes for every spec it blesses.
+      - Docs: one table in README/CLAUDE.md replaces the zen/queue-work/burndown decision prose for daily use.
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 3275
 node_id: '1'
