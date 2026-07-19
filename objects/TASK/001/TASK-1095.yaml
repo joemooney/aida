@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:10:21.512037382Z
-modified_at: 2026-07-02T17:35:44.810727514Z
+modified_at: 2026-07-19T01:26:14.530952924Z
 req_type: Task
 tags:
 - aida:remote:status
@@ -49,3 +49,9 @@ comments:
   content: Commit 7746d1c6f references this requirement
   created_at: 2026-07-02T17:35:44.810727514Z
   modified_at: 2026-07-02T17:35:44.810727514Z
+- id: 019f77fb-2102-7af3-9dfd-2fe41a4a5894
+  author: joe
+  content: 'Rejected at groom 2026-07-18: shipped — aida remote status exists (landed under STORY-760).'
+  created_at: 2026-07-19T01:26:14.530952924Z
+  modified_at: 2026-07-19T01:26:14.530952924Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
