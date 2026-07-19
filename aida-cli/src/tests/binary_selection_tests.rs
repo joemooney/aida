@@ -252,3 +252,87 @@ fn auto_only_one_build_present() {
 fn auto_no_build_present_is_none() {
     assert!(auto_select_dev_profile(None, None).is_none());
 }
+
+// ---- TASK-1157: prompt staleness token ----
+
+#[test]
+fn ps1_token_empty_when_active_matches_head() {
+    assert_eq!(
+        crate::dev_cmd::ps1_staleness_token(
+            "866b050",
+            Some("866b050aabbccddeeff1122334455667788990011"),
+            Some("deadbee"),
+        ),
+        ""
+    );
+}
+
+#[test]
+fn ps1_token_flip_when_other_build_matches_head() {
+    assert_eq!(
+        crate::dev_cmd::ps1_staleness_token(
+            "deadbee",
+            Some("866b050aabbccddeeff1122334455667788990011"),
+            Some("866b050"),
+        ),
+        "⇄"
+    );
+}
+
+#[test]
+fn ps1_token_rebuild_when_no_build_matches_head() {
+    assert_eq!(
+        crate::dev_cmd::ps1_staleness_token(
+            "deadbee",
+            Some("866b050aabbccddeeff1122334455667788990011"),
+            Some("cafebabe"),
+        ),
+        "↻"
+    );
+}
+
+#[test]
+fn direct_head_reader_resolves_loose_ref_without_git() {
+    let tmp = tempfile::tempdir().unwrap();
+    let git = tmp.path().join(".git");
+    std::fs::create_dir_all(git.join("refs/heads")).unwrap();
+    std::fs::write(git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(
+        git.join("refs/heads/main"),
+        "866b050aabbccddeeff1122334455667788990011\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        crate::dev_cmd::current_branch_head_sha_direct(tmp.path()).as_deref(),
+        Some("866b050aabbccddeeff1122334455667788990011")
+    );
+}
+
+#[test]
+fn direct_head_reader_resolves_linked_worktree_gitfile() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("worktree");
+    let git = tmp.path().join("main.git");
+    let worktree_git = git.join("worktrees/wt");
+    std::fs::create_dir_all(git.join("refs/heads")).unwrap();
+    std::fs::create_dir_all(&worktree_git).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(
+        repo.join(".git"),
+        format!("gitdir: {}\n", worktree_git.display()),
+    )
+    .unwrap();
+    std::fs::write(worktree_git.join("commondir"), "../..\n").unwrap();
+    std::fs::write(worktree_git.join("HEAD"), "ref: refs/heads/task-1157\n").unwrap();
+    std::fs::write(
+        git.join("refs/heads/task-1157"),
+        "866b050aabbccddeeff1122334455667788990011\n",
+    )
+    .unwrap();
+
+    assert_eq!(
+        crate::dev_cmd::current_branch_head_sha_direct(&repo).as_deref(),
+        Some("866b050aabbccddeeff1122334455667788990011")
+    );
+}

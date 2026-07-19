@@ -23,6 +23,7 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
         } => handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto),
         DevCommand::Deactivate => handle_dev_deactivate(),
         DevCommand::Status => handle_dev_status(),
+        DevCommand::Ps1 => handle_dev_ps1(),
         DevCommand::ShellInit { install } => handle_dev_shell_init(*install),
         DevCommand::Serve {
             rest_port,
@@ -347,6 +348,116 @@ fn auto_pick_profile_name(repo: &std::path::Path) -> Option<&'static str> {
     auto_select_dev_profile(release_cand, debug_cand).map(|(p, _)| p.as_str())
 }
 
+fn sha_prefix_match(a: &str, b: &str) -> bool {
+    if a == "unknown" || b == "unknown" || a.is_empty() || b.is_empty() {
+        return false;
+    }
+    let a = a.to_ascii_lowercase();
+    let b = b.to_ascii_lowercase();
+    a.starts_with(&b) || b.starts_with(&a)
+}
+
+/// Cheap HEAD resolver for prompt-time use. Avoids spawning `git` by reading
+/// `.git/HEAD` and the referenced loose ref directly. Linked worktree gitfiles
+/// are supported; packed refs intentionally fall back to `None` so the prompt
+/// goes quiet rather than doing expensive work.
+// trace:TASK-1157 | ai:codex
+pub(crate) fn current_branch_head_sha_direct(repo: &std::path::Path) -> Option<String> {
+    let git_dot = repo.join(".git");
+    let git_dir = if git_dot.is_dir() {
+        git_dot
+    } else {
+        let gitfile = std::fs::read_to_string(&git_dot).ok()?;
+        let raw = gitfile.trim().strip_prefix("gitdir:")?.trim();
+        let path = std::path::PathBuf::from(raw);
+        if path.is_absolute() {
+            path
+        } else {
+            repo.join(path)
+        }
+    };
+    let common_dir = std::fs::read_to_string(git_dir.join("commondir"))
+        .ok()
+        .map(|s| {
+            let path = std::path::PathBuf::from(s.trim());
+            if path.is_absolute() {
+                path
+            } else {
+                git_dir.join(path)
+            }
+        })
+        .unwrap_or_else(|| git_dir.clone());
+    let head = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    let head = head.trim();
+    if let Some(reference) = head.strip_prefix("ref: ") {
+        let reference = reference.trim();
+        if !reference
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | '.'))
+        {
+            return None;
+        }
+        return std::fs::read_to_string(git_dir.join(reference))
+            .or_else(|_| std::fs::read_to_string(common_dir.join(reference)))
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+    }
+    Some(head.to_string()).filter(|s| !s.is_empty())
+}
+
+/// Compact prompt token:
+/// - empty: active binary matches HEAD
+/// - ⇄: another built profile matches HEAD, so `aida dev activate` can flip
+/// - ↻: no known build matches HEAD, so rebuild
+// trace:TASK-1157 | ai:codex
+pub(crate) fn ps1_staleness_token(
+    active_sha: &str,
+    head_sha: Option<&str>,
+    other_sha: Option<&str>,
+) -> &'static str {
+    let Some(head_sha) = head_sha else {
+        return "";
+    };
+    if sha_prefix_match(active_sha, head_sha) {
+        ""
+    } else if other_sha
+        .map(|s| sha_prefix_match(s, head_sha))
+        .unwrap_or(false)
+    {
+        "⇄"
+    } else {
+        "↻"
+    }
+}
+
+fn handle_dev_ps1() -> Result<()> {
+    let repo = match std::env::var("AIDA_DEV_REPO") {
+        Ok(p) => std::path::PathBuf::from(p),
+        Err(_) => return Ok(()),
+    };
+    let active_profile = std::env::var("AIDA_DEV_PROFILE").unwrap_or_default();
+    let other_profile = match active_profile.as_str() {
+        "debug" => Some("release"),
+        "release" => Some("debug"),
+        _ => None,
+    };
+    let head = current_branch_head_sha_direct(&repo);
+    if ps1_staleness_token(build_git_sha(), head.as_deref(), None).is_empty() {
+        return Ok(());
+    }
+    let other_sha = other_profile
+        .map(|p| repo.join(format!("target/{}/aida", p)))
+        .filter(|p| p.exists())
+        .and_then(|p| binary_embedded_sha(&p));
+
+    print!(
+        "{}",
+        ps1_staleness_token(build_git_sha(), head.as_deref(), other_sha.as_deref())
+    );
+    Ok(())
+}
+
 fn handle_dev_activate(
     repo_arg: Option<&str>,
     profile_pos: Option<&str>,
@@ -665,6 +776,12 @@ fn handle_dev_status() -> Result<()> {
             }
         }
     }
+    println!(
+        "PS1 marker:   {} current, {} activate matching other build, {} rebuild",
+        "empty".dimmed(),
+        "⇄".cyan(),
+        "↻".yellow()
+    );
 
     // Also report which `aida` actually wins on PATH right now.
     if let Ok(out) = std::process::Command::new("which").arg("aida").output() {
@@ -729,6 +846,46 @@ aida() {
             ;;
     esac
 }
+
+_aida_dev_prompt_marker() {
+    [ -n "${PS1+x}" ] || return 0
+    [ -n "${AIDA_DEV_ACTIVE+x}" ] || return 0
+    [ -n "${AIDA_DEV_PROFILE:-}" ] || return 0
+
+    local _aida_marker
+    _aida_marker="$(command aida dev ps1 2>/dev/null || true)"
+
+    while case "$PS1" in *'(aida-'*') '*) true;; *) false;; esac; do
+        _aida_old_ps1="$PS1"
+        _aida_after="${PS1#*'(aida-'}"
+        _aida_tag="${_aida_after%%') '*}"
+        PS1="${PS1//'(aida-'$_aida_tag') '/}"
+        [ "$PS1" = "$_aida_old_ps1" ] && break
+    done
+    unset _aida_old_ps1 _aida_after _aida_tag
+
+    export AIDA_DEV_PS1_PREFIX="(aida-${AIDA_DEV_PROFILE}${_aida_marker}) "
+    export PS1="$AIDA_DEV_PS1_PREFIX$PS1"
+}
+
+if [ -n "${ZSH_VERSION:-}" ]; then
+    if ! command -v add-zsh-hook >/dev/null 2>&1; then
+        autoload -Uz add-zsh-hook 2>/dev/null || true
+    fi
+    if command -v add-zsh-hook >/dev/null 2>&1; then
+        add-zsh-hook precmd _aida_dev_prompt_marker 2>/dev/null || true
+    else
+        case " ${precmd_functions[*]-} " in
+            *" _aida_dev_prompt_marker "*) ;;
+            *) precmd_functions+=(_aida_dev_prompt_marker) ;;
+        esac
+    fi
+else
+    case ";${PROMPT_COMMAND:-};" in
+        *";_aida_dev_prompt_marker;"*) ;;
+        *) PROMPT_COMMAND="_aida_dev_prompt_marker${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
+    esac
+fi
 
 # STORY-244 launcher wrapper. LEGACY / power-user hook: as of STORY-681
 # bare `aida tui` dispatches IN-PROCESS and re-enters on its own, so this
@@ -987,6 +1144,8 @@ const HELPERS_END_MARKER: &str = "# <<< aida shell helpers <<<";
 /// file. Detected during --install so we can migrate the user's rc cleanly.
 const LEGACY_BEGIN_MARKER: &str = "# >>> aida dev workflow helpers >>>";
 const LEGACY_END_MARKER: &str = "# <<< aida dev workflow helpers <<<";
+const INTERIM_STALENESS_BEGIN_MARKER: &str = "# >>> aida-staleness-marker >>>";
+const INTERIM_STALENESS_END_MARKER: &str = "# <<< aida-staleness-marker <<<";
 
 fn handle_dev_shell_init(install: bool) -> Result<()> {
     // If we're inside the aida repo, capture its absolute path so we can
@@ -1057,7 +1216,7 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
     let existing = std::fs::read_to_string(&rc_path).unwrap_or_default();
     let mut migration_note: Option<String> = None;
 
-    let new_content = if let Some(start) = existing.find(HELPERS_BEGIN_MARKER) {
+    let mut new_content = if let Some(start) = existing.find(HELPERS_BEGIN_MARKER) {
         // (a) Replace existing stub.
         let end_after = existing[start..]
             .find(HELPERS_END_MARKER)
@@ -1144,6 +1303,31 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
         s.push_str(&new_block);
         s
     };
+
+    if let Some(start) = new_content.find(INTERIM_STALENESS_BEGIN_MARKER) {
+        let end_after = new_content[start..]
+            .find(INTERIM_STALENESS_END_MARKER)
+            .map(|e| start + e + INTERIM_STALENESS_END_MARKER.len())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "found interim staleness begin marker but no end marker in {} — please clean up manually",
+                    rc_path.display()
+                )
+            })?;
+        let end_after = if new_content.as_bytes().get(end_after) == Some(&b'\n') {
+            end_after + 1
+        } else {
+            end_after
+        };
+        let removed_lines = new_content[start..end_after].lines().count();
+        let mut s = new_content[..start].to_string();
+        s.push_str(&new_content[end_after..]);
+        new_content = s;
+        migration_note = Some(format!(
+            "  (migrated: removed {} lines of interim aida-staleness-marker hook)",
+            removed_lines
+        ));
+    }
 
     std::fs::write(&rc_path, new_content)
         .with_context(|| format!("Failed to write {}", rc_path.display()))?;
