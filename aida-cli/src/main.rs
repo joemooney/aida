@@ -89,6 +89,8 @@ mod lock_cmd;
 mod locking_gate;
 // trace:TASK-974 | ai:claude — AXI #9 lifecycle-aware next-step help block.
 mod help_next;
+// trace:TASK-1098 | ai:claude — clap-derived `aida help commands` catalog.
+mod help_catalog;
 mod import_export_cmd;
 mod import_plan_cmd;
 mod interview;
@@ -1700,6 +1702,14 @@ fn run() -> Result<()> {
                 None
             };
         if let Some(topic) = help_topic {
+            // `aida help commands` — the flat clap-derived catalog of every
+            // command and subcommand, one line each. Intercepted before the
+            // group-topic resolver so it can't be shadowed by a group name.
+            // trace:TASK-1098 | ai:claude
+            if topic.eq_ignore_ascii_case("commands") {
+                help_catalog::print_command_catalog();
+                return Ok(());
+            }
             return print_help_topic(topic);
         }
         // TASK-970: content-first bare `aida` in AGENT MODE. A human at a TTY
@@ -42740,6 +42750,8 @@ fn print_help_all() {
         "Tip:".bold()
     );
     println!("  - `aida help <topic>` expands a single group (e.g. `aida help queue`)");
+    // trace:TASK-1098 | ai:claude
+    println!("  - `aida help commands` lists EVERY command and subcommand, one line each");
     println!("  - `aida <topic> --help` works for any command, even hidden ones");
     println!("  - `aida status` is the best entry point for \"what's going on here?\"");
     println!("  - `aida dev shell-init --install` to wire up the `aida` shell wrapper");
@@ -42803,9 +42815,11 @@ fn print_help_topic(topic: &str) -> Result<()> {
                 eprintln!("  {}", name.green());
             }
             eprintln!();
+            // trace:TASK-1098 | ai:claude
             eprintln!(
-                "Or `aida help` for the curated view, {} for everything.",
-                "`aida help --all`".bold()
+                "Or `aida help` for the curated view, {} for everything, {} for the flat catalog.",
+                "`aida help --all`".bold(),
+                "`aida help commands`".bold()
             );
             anyhow::bail!("unknown help topic: {topic}");
         }

@@ -8719,12 +8719,13 @@ pub enum Command {
     #[clap(subcommand)]
     Session(SessionCommand),
 
-    /// Advisor-directed worktree lock (STORY-711 slice 1) — a MANUAL bouncer:
+    /// Advisor-directed worktree lock — a MANUAL bouncer:
     /// `acquire` stamps `authorized_by` on the session lease covering a
     /// worktree, `verify` checks a token against it (exit 0/non-zero,
     /// scriptable), `release` clears it, `status` lists locked worktrees.
     /// Additive: nothing today calls `verify` automatically.
-    // trace:STORY-711 | ai:claude
+    // trace:STORY-711 | ai:claude — spec id kept out of the user-facing about
+    // text (slice 1, generalizes BUG-637).
     #[clap(subcommand)]
     Lock(LockCommand),
 
