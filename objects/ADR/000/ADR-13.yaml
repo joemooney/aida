@@ -1,0 +1,37 @@
+id: 019f7b0a-f9a7-7de3-a1f0-9b8d2233ae8f
+spec_id: ADR-13
+agreed_id: ADR-13
+title: 'STORY-776: execution_mode taxonomy is 5 modes — drain | drive | guided | operator | decide'
+description: |-
+  ## Context
+  STORY-776 introduces a first-class execution_mode field the advisor sets at bless-time, and makes aida do dispatch on it. The load-bearing choice is the mode taxonomy itself: too few modes and the human contract blurs; too many and grooming becomes a chore.
+
+  ## Options considered
+  - 5 modes: drain / drive / guided / operator / decide (as proposed in the spec)
+  - 4 modes: fold decide into operator (both mean "human acts first")
+  - 3 modes: auto (stop-point via config) / guided / operator
+
+  ## Decision
+  5 modes, each mapping to an existing harness:
+  - drain -> queue work --auto-complete (full lifecycle through merge)
+  - drive -> queue work --auto-complete=through-ci (human reviews + merges; current aida do behavior, ADR-11)
+  - guided -> worktree + /aida-guided-implement session (interactive keystone dialog, no auto-merge)
+  - operator -> print the explicit operator checklist derived from the spec and STOP (aida never proceeds)
+  - decide -> surface the pending decision_request / route to clarify
+
+  ## Rationale
+  Each mode is a genuinely different harness that already exists, so dispatch is a clean 5-way match with no new orchestration (ADR-7 holds: drain/drive reuse the one engine). The drain-vs-drive split is exactly the "will this merge without me?" human-contract distinction the story exists to make explicit; decide-as-its-own-mode lets aida do route straight to the decision surface instead of prose.
+
+  ## Consequences
+  5 concepts to document (one table in README/CLAUDE.md replaces the zen/queue-work/burndown decision prose). The mode enum is a typed engine parameter on Requirement (ADR-7 alignment), mirrored onto MCP update_requirement (STORY-82 parity).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T15:42:24.679587774Z
+modified_at: 2026-07-19T15:42:24.679587774Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:STORY-776
+- keystone

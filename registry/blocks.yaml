@@ -29,7 +29,7 @@ blocks:
   type_prefix: ADR
   range_start: 1
   range_end: 100
-  next: 13
+  next: 14
   allocated_at: 2026-05-09T18:10:00.750673Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
