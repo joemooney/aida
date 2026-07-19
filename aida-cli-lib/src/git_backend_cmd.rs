@@ -594,6 +594,9 @@ pub(crate) fn handle_git_backend_command(
             short,
             human,
             sort,
+            // trace:FR-283 | ai:claude
+            min_weight,
+            max_weight,
             mine,
             assigned,
             user,
@@ -809,10 +812,12 @@ pub(crate) fn handle_git_backend_command(
             // erroring the listing. trace:STORY-632 | ai:claude
             let sort_order = match sort.to_ascii_lowercase().as_str() {
                 "heft" | "centrality" => aida_core::SortOrder::HeftDesc,
+                // trace:FR-283 | ai:claude — heaviest user-set weight first.
+                "weight" => aida_core::SortOrder::WeightDesc,
                 "modified" | "" => aida_core::SortOrder::ModifiedDesc,
                 other => {
                     eprintln!(
-                        "warning: unknown --sort '{other}' (expected 'modified' or 'heft'); using 'modified'"
+                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', or 'weight'); using 'modified'"
                     );
                     aida_core::SortOrder::ModifiedDesc
                 }
@@ -857,6 +862,9 @@ pub(crate) fn handle_git_backend_command(
                 assignee_aliases,
                 // trace:STORY-662 | ai:claude — `--user` / `me` / `user:<name>`.
                 owner_or_assignee: user_filter.clone(),
+                // trace:FR-283 | ai:claude — numeric weight bounds.
+                min_weight: *min_weight,
+                max_weight: *max_weight,
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
@@ -1744,6 +1752,8 @@ pub(crate) fn handle_git_backend_command(
                 // BUG-528: route to the implementer queue by default (the
                 // common target for filed work). trace:BUG-528 | ai:claude
                 r#for: None,
+                // trace:FR-283 | ai:claude
+                weight: None,
             };
             return handle_git_backend_command(store_path, &add);
         }
@@ -1769,6 +1779,8 @@ pub(crate) fn handle_git_backend_command(
             queue,
             batch,
             r#for,
+            // trace:FR-283 | ai:claude
+            weight,
             ..
         } => {
             // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
@@ -2004,6 +2016,15 @@ pub(crate) fn handle_git_backend_command(
                     effort_calibration::EffortTouchpoint::Open,
                     *effort,
                 );
+            }
+            // FR-283: the optional first-class numeric weight/score — a
+            // continuous ranking signal beyond the priority enum.
+            // trace:FR-283 | ai:claude
+            if let Some(w) = weight {
+                if !w.is_finite() {
+                    anyhow::bail!("--weight must be a finite number (got {w})");
+                }
+                req.weight = Some(*w);
             }
             if let Some(p) = prefix {
                 req.prefix_override = Some(p.to_uppercase());
@@ -2777,6 +2798,9 @@ pub(crate) fn handle_git_backend_command(
                             owner: &'a str,
                             feature: &'a str,
                             tags: Vec<&'a str>,
+                            // trace:FR-283 | ai:claude — omitted when unset.
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            weight: Option<f32>,
                             in_degree: u32,
                             out_degree: u32,
                             heft: u32,
@@ -2794,6 +2818,8 @@ pub(crate) fn handle_git_backend_command(
                             owner: &req.owner,
                             feature: &req.feature,
                             tags: req.tags.iter().map(|s| s.as_str()).collect(),
+                            // trace:FR-283 | ai:claude
+                            weight: req.weight,
                             in_degree: degrees.in_degree,
                             out_degree: degrees.out_degree,
                             heft: degrees.heft,
@@ -2836,6 +2862,14 @@ pub(crate) fn handle_git_backend_command(
                             lines.push(crate::toon::scalar("feature", &req.feature));
                         }
                         lines.push(crate::toon::scalar("heft", &degrees.heft.to_string()));
+                        // FR-283: the numeric weight/score, emitted only when
+                        // set. trace:FR-283 | ai:claude
+                        if let Some(w) = req.weight {
+                            lines.push(crate::toon::scalar(
+                                "weight",
+                                &crate::format_weight(w as f64),
+                            ));
+                        }
                         if !req.tags.is_empty() {
                             let mut tags: Vec<&str> = req.tags.iter().map(String::as_str).collect();
                             tags.sort_unstable();
@@ -2983,6 +3017,11 @@ pub(crate) fn handle_git_backend_command(
                         status_display::status_badge(&status)
                     );
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
+                    // FR-283: the numeric weight/score, shown only when set.
+                    // trace:FR-283 | ai:claude
+                    if let Some(w) = req.weight {
+                        println!("{}: {}", "Weight".bold(), crate::format_weight(w as f64));
+                    }
                     // BUG-524: surface when the spec was opened / last touched so
                     // `aida show` reveals its age. Stored UTC, rendered in local
                     // time (feedback_local_time) reusing history.rs's format.
@@ -3413,6 +3452,8 @@ pub(crate) fn handle_git_backend_command(
             test_coverage_notes,
             // trace:STORY-776 | ai:claude
             mode,
+            // trace:FR-283 | ai:claude
+            weight,
             // trace:TASK-1117 | ai:claude
             interactive,
             ..
@@ -3573,7 +3614,9 @@ pub(crate) fn handle_git_backend_command(
                 && implementation_summary.is_none()
                 && risk_notes.is_none()
                 && test_coverage_notes.is_none()
-                && mode.is_none();
+                && mode.is_none()
+                // trace:FR-283 | ai:claude
+                && weight.is_none();
             let mut editor_title: Option<String> = None;
             let mut editor_description: Option<String> = None;
             if (no_field_flags || *interactive)
@@ -3643,6 +3686,31 @@ pub(crate) fn handle_git_backend_command(
             changed |= set_narrative(&mut req.implementation_summary, implementation_summary);
             changed |= set_narrative(&mut req.risk_notes, risk_notes);
             changed |= set_narrative(&mut req.test_coverage_notes, test_coverage_notes);
+            // FR-283: the numeric weight/score. An empty string clears it
+            // (drops out of the YAML); any other value must parse as a finite
+            // number. trace:FR-283 | ai:claude
+            if let Some(w) = weight {
+                if w.trim().is_empty() {
+                    if req.weight.is_some() {
+                        req.weight = None;
+                        changed = true;
+                    }
+                } else {
+                    let parsed: f32 = w.trim().parse().map_err(|_| {
+                        anyhow::anyhow!(
+                            "--weight expects a number (e.g. 0.75 or 42), got `{w}`; \
+                             pass an empty string to clear"
+                        )
+                    })?;
+                    if !parsed.is_finite() {
+                        anyhow::bail!("--weight must be a finite number (got {w})");
+                    }
+                    if req.weight != Some(parsed) {
+                        req.weight = Some(parsed);
+                        changed = true;
+                    }
+                }
+            }
             // STORY-776: execution_mode is the advisor's bless-time routing
             // judgment — writing (or clearing) it is an advisor-authority act,
             // same gate as a status promotion, so the audit trail (the store

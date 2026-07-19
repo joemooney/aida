@@ -6852,6 +6852,14 @@ pub enum Command {
         #[clap(long, value_enum, value_name = "BUCKET")]
         effort: Option<crate::effort_calibration::EffortBucket>,
 
+        /// Optional numeric weight/score for this spec (any finite number,
+        /// e.g. 0.75 or 42) — a continuous ranking signal beyond the
+        /// high/medium/low priority enum. Sortable (`aida list --sort weight`)
+        /// and filterable (`--min-weight` / `--max-weight`).
+        // trace:FR-283 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "N", allow_hyphen_values = true)]
+        weight: Option<f32>,
+
         /// File, approve, AND enqueue in one shot — places the new spec on the
         /// queue right after creating it, equivalent to a follow-up `aida
         /// backlog groom`. Only an Approved spec is enqueueable: pass with
@@ -7150,10 +7158,24 @@ pub enum Command {
 
         /// Order the results. `modified` (default) = freshest first; `heft` =
         /// most graph-connected first (the deterministic in+out-degree weight),
-        /// so load-bearing specs surface at the top.
+        /// so load-bearing specs surface at the top; `weight` = heaviest
+        /// user-set numeric weight/score first (unweighted specs sort last).
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // trace:FR-283 | ai:claude — adds the `weight` order.
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
+
+        /// Only specs whose numeric weight/score is >= N. Specs with no
+        /// weight set are excluded. Composes with every other filter.
+        // trace:FR-283 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "N", allow_hyphen_values = true)]
+        min_weight: Option<f64>,
+
+        /// Only specs whose numeric weight/score is <= N. Specs with no
+        /// weight set are excluded. Composes with every other filter.
+        // trace:FR-283 | ai:claude
+        #[clap(long, value_name = "N", allow_hyphen_values = true)]
+        max_weight: Option<f64>,
 
         /// Cap the output at the first N rows, applied AFTER sorting — so
         /// `--limit N` returns the N most-recent (with the default
@@ -7198,8 +7220,8 @@ pub enum Command {
         /// `--fields id,title,status,priority,tags`. Renders exactly those
         /// columns in that order — on the human table AND the token-efficient
         /// agent output (a real token win for agents). Valid fields: id, title,
-        /// status, type, priority, feature, owner, assignee, tags, heft, queued,
-        /// in_flight, blocked. Default (no `--fields`) keeps the standard
+        /// status, type, priority, feature, owner, assignee, tags, heft, weight,
+        /// queued, in_flight, blocked. Default (no `--fields`) keeps the standard
         /// columns; agent mode defaults to the minimal id,title,status,type set.
         // trace:TASK-964 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:STORY-734 | ai:claude — now drives the human table too.
@@ -7451,6 +7473,13 @@ pub enum Command {
         /// write. Pass an empty string to clear (back to ungroomed).
         #[clap(long = "mode", value_name = "MODE")]
         mode: Option<String>,
+
+        /// Set the numeric weight/score (any finite number, e.g. 0.75 or 42)
+        /// — a continuous ranking signal beyond the high/medium/low priority
+        /// enum. Pass an empty string to clear.
+        // trace:FR-283 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "N", allow_hyphen_values = true)]
+        weight: Option<String>,
 
         /// Use interactive mode (launches editor)
         #[clap(long, short = 'i')]

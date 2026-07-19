@@ -894,6 +894,8 @@ const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "assignee",
     "tags",
     "heft",
+    // trace:FR-283 | ai:claude — the optional numeric weight/score.
+    "weight",
     "queued",
     "in_flight",
     "blocked",
@@ -943,6 +945,18 @@ fn toon_list_fields(csv: Option<&str>) -> Result<Vec<String>> {
     Ok(out)
 }
 
+/// Render a numeric weight/score for display: integral values drop the
+/// fractional part (`42`, not `42.0`); everything else uses the shortest
+/// round-trip float formatting (`0.75`).
+// trace:FR-283 | ai:claude
+pub(crate) fn format_weight(w: f64) -> String {
+    if w.fract() == 0.0 && w.abs() < 1e15 {
+        format!("{}", w as i64)
+    } else {
+        format!("{}", w)
+    }
+}
+
 /// Project one requirement summary + its routing triple `(in_flight, blocked,
 /// queued)` onto a single named list field, as the cell string for a TOON row.
 // trace:TASK-964
@@ -968,6 +982,8 @@ fn toon_list_cell(
         "assignee" => r.assignee.clone().unwrap_or_default(),
         "tags" => r.tags.join(" "),
         "heft" => r.heft.to_string(),
+        // trace:FR-283 | ai:claude — empty cell = no weight set.
+        "weight" => r.weight.map(format_weight).unwrap_or_default(),
         "queued" => queued.to_string(),
         "in_flight" => in_flight.to_string(),
         "blocked" => blocked.to_string(),
@@ -1006,6 +1022,8 @@ fn list_field_header(field: &str) -> String {
         "assignee" => "Assignee",
         "tags" => "Tags",
         "heft" => "Heft",
+        // trace:FR-283 | ai:claude
+        "weight" => "Weight",
         "queued" => "Queued",
         "in_flight" => "In-Flight",
         "blocked" => "Blocked",
@@ -3112,6 +3130,9 @@ fn run() -> Result<()> {
             queue: _,
             batch: _,
             r#for: _,
+            // FR-283: the numeric weight is git-canonical only; the deprecated
+            // centralized backend ignores it. trace:FR-283 | ai:claude
+            weight: _,
         } => {
             // TASK-725: positional title (`aida add "do X"`) — --title wins.
             let title = title.clone().or_else(|| title_positional.clone());
@@ -3274,6 +3295,8 @@ fn run() -> Result<()> {
             test_coverage_notes: _,
             // STORY-776: execution_mode is git-canonical only, same rule.
             mode: _,
+            // FR-283: the numeric weight is git-canonical only, same rule.
+            weight: _,
         } => {
             // If any flags provided, use non-interactive mode; otherwise interactive
             // trace:TASK-351 | ai:claude — --add-tag / --remove-tag count too

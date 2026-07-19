@@ -1298,6 +1298,11 @@ impl<'a> McpServer<'a> {
         // STORY-662: owner-or-assignee filter — exact match on EITHER, mirroring
         // `aida list --user <name>`. trace:STORY-662 | ai:claude
         let user_filter = args.get("user").and_then(|v| v.as_str());
+        // FR-283: numeric weight bounds, mirroring `aida list --min-weight` /
+        // `--max-weight`. Specs with no weight set fail a bounded query.
+        // trace:FR-283 | ai:claude
+        let min_weight = args.get("min_weight").and_then(|v| v.as_f64());
+        let max_weight = args.get("max_weight").and_then(|v| v.as_f64());
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
 
         // STORY-82: tags filter — CSV, AND-match (a row must carry ALL of them),
@@ -1425,6 +1430,21 @@ impl<'a> McpServer<'a> {
                         return false;
                     }
                 }
+                // FR-283: inclusive numeric weight bounds; an unset weight
+                // fails any bound (mirrors the CLI cache pushdown).
+                // trace:FR-283 | ai:claude
+                if let Some(min) = min_weight {
+                    match r.weight {
+                        Some(w) if f64::from(w) >= min => {}
+                        _ => return false,
+                    }
+                }
+                if let Some(max) = max_weight {
+                    match r.weight {
+                        Some(w) if f64::from(w) <= max => {}
+                        _ => return false,
+                    }
+                }
                 // AND-match every requested tag (case-sensitive, matching the CLI).
                 for want in &tag_filters {
                     if !r.tags.contains(want) {
@@ -1534,6 +1554,13 @@ impl<'a> McpServer<'a> {
         // STORY-776: the advisor's dispatch classification, when groomed.
         if let Some(mode) = req.execution_mode {
             output.push_str(&format!("**Execution mode:** {}\n", mode));
+        }
+        // FR-283: the numeric weight/score, when set — mirrors `aida show`.
+        if let Some(w) = req.weight {
+            output.push_str(&format!(
+                "**Weight:** {}\n",
+                crate::format_weight(f64::from(w))
+            ));
         }
         if !req.tags.is_empty() {
             let tags: Vec<&String> = req.tags.iter().collect();
@@ -1695,6 +1722,17 @@ impl<'a> McpServer<'a> {
         }
         if let Some(owner) = args.get("owner").and_then(|v| v.as_str()) {
             req.owner = owner.to_string();
+        }
+        // FR-283: optional numeric weight/score (mirrors `aida add --weight`).
+        // trace:FR-283 | ai:claude
+        if let Some(v) = args.get("weight") {
+            if !v.is_null() {
+                let w = v
+                    .as_f64()
+                    .filter(|w| w.is_finite())
+                    .ok_or_else(|| format!("weight must be a finite number, got {v}"))?;
+                req.weight = Some(w as f32);
+            }
         }
 
         // Optional tags
@@ -1905,6 +1943,34 @@ impl<'a> McpServer<'a> {
                     new_assignee.as_deref().unwrap_or("(none)")
                 ));
                 req.assignee = new_assignee;
+            }
+        }
+
+        // FR-283: weight — the numeric score. A number sets it; an explicit
+        // JSON null clears it (mirrors the CLI `aida edit --weight ""` clear).
+        // trace:FR-283 | ai:claude
+        if let Some(v) = args.get("weight") {
+            if v.is_null() {
+                if req.weight.is_some() {
+                    changes.push("weight cleared".to_string());
+                    req.weight = None;
+                }
+            } else {
+                let w = v
+                    .as_f64()
+                    .filter(|w| w.is_finite())
+                    .ok_or_else(|| format!("weight must be a finite number or null, got {v}"))?
+                    as f32;
+                if req.weight != Some(w) {
+                    changes.push(format!(
+                        "weight: {} → {}",
+                        req.weight
+                            .map(|old| crate::format_weight(f64::from(old)))
+                            .unwrap_or_else(|| "(unset)".to_string()),
+                        crate::format_weight(f64::from(w))
+                    ));
+                    req.weight = Some(w);
+                }
             }
         }
 
@@ -5695,6 +5761,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 has_pending_decision: r.decision_request.as_ref().is_some_and(|d| d.is_pending()),
                 // trace:STORY-776 | ai:claude
                 execution_mode: r.execution_mode.map(|m| m.to_string()),
+                // trace:FR-283 | ai:claude
+                weight: r.weight.map(|w| w as f64),
                 yaml_path: String::new(),
             }
         })
@@ -6113,7 +6181,7 @@ pub fn tool_descriptors() -> Value {
         {
             "name": "list_requirements",
             // trace:STORY-82 | ai:claude
-            "description": "List requirements from the AIDA database, optionally filtered by status, type, feature category, priority, tags, batch, parent, owner role, or in-flight state. Mirrors the current `aida list` filter surface — including the archive/deferred view tiers: by DEFAULT archived (STORY-441) and deferred (STORY-584) specs are hidden, exactly like `aida list`. Use `archived` / `deferred` / `all` to surface those tiers. Returns a summarized list of matching requirements.",
+            "description": "List requirements from the AIDA database, optionally filtered by status, type, feature category, priority, tags, batch, parent, owner role, in-flight state, or numeric weight bounds (min_weight/max_weight). Mirrors the current `aida list` filter surface — including the archive/deferred view tiers: by DEFAULT archived (STORY-441) and deferred (STORY-584) specs are hidden, exactly like `aida list`. Use `archived` / `deferred` / `all` to surface those tiers. Returns a summarized list of matching requirements.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -6180,6 +6248,16 @@ pub fn tool_descriptors() -> Value {
                         "type": "boolean",
                         "description": "When true, restrict to requirements with a live session/claim lease (work currently in flight). When false or omitted (default), no in-flight filter is applied.",
                         "example": true
+                    },
+                    "min_weight": {
+                        "type": "number",
+                        "description": "Only specs whose numeric weight/score is >= this value; specs with no weight set are excluded. Mirrors `aida list --min-weight`.",
+                        "example": 0.5
+                    },
+                    "max_weight": {
+                        "type": "number",
+                        "description": "Only specs whose numeric weight/score is <= this value; specs with no weight set are excluded. Mirrors `aida list --max-weight`.",
+                        "example": 10
                     },
                     "archived": {
                         "type": "boolean",
@@ -6294,6 +6372,11 @@ pub fn tool_descriptors() -> Value {
                         "items": { "type": "string" },
                         "description": "Optional list of tags to categorize this requirement. Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` surface tags; flat behavior/severity/batch tags like `papercut`, `batch:NAME`).",
                         "example": ["auth", "security"]
+                    },
+                    "weight": {
+                        "type": "number",
+                        "description": "Optional numeric weight/score — a continuous ranking signal beyond the high/medium/low priority enum. Mirrors `aida add --weight`.",
+                        "example": 0.75
                     }
                 },
                 "required": ["title", "description", "type"]
@@ -6305,7 +6388,7 @@ pub fn tool_descriptors() -> Value {
         {
             "name": "update_requirement",
             // trace:STORY-82 | ai:claude — assignee mirror: STORY-639.
-            "description": "Update fields of an existing requirement (title, type, status, priority, description, tags, parent, assignee). Fields omitted from parameters remain unchanged. Note: advisor-authority transitions (approved/planned) and the merge-driven `completed` status are gated and cannot be set via MCP. Setting `assignee` edits the field only — it does NOT route the spec into the assignee's queue (use queue_add for that); the CLI `aida assign` does both.",
+            "description": "Update fields of an existing requirement (title, type, status, priority, description, tags, parent, assignee, weight). Fields omitted from parameters remain unchanged. Note: advisor-authority transitions (approved/planned) and the merge-driven `completed` status are gated and cannot be set via MCP. Setting `assignee` edits the field only — it does NOT route the spec into the assignee's queue (use queue_add for that); the CLI `aida assign` does both.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -6365,6 +6448,11 @@ pub fn tool_descriptors() -> Value {
                         "description": "The advisor's bless-time classification of HOW this spec runs when dispatched by `aida do` (STORY-776). ADVISOR-AUTHORITY WRITE: refused unless this MCP server was launched from an advisor seat (AIDA_SESSION_ROLE=advisor) — same gate as the CLI `aida edit --mode`. An empty string clears back to ungroomed.",
                         "enum": ["drain", "drive", "guided", "operator", "decide", ""],
                         "example": "drive"
+                    },
+                    "weight": {
+                        "type": ["number", "null"],
+                        "description": "New numeric weight/score — a continuous ranking signal beyond the priority enum. An explicit null clears it. Mirrors `aida edit --weight` (empty string clears on the CLI).",
+                        "example": 0.75
                     }
                 },
                 "required": ["id"]

@@ -68,6 +68,7 @@ fn fields_summary(
         // trace:TASK-1065 | ai:claude
         has_pending_decision: false,
         execution_mode: None,
+        weight: None,
         yaml_path: String::new(),
     }
 }
