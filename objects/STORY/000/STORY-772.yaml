@@ -11,9 +11,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:47.724859121Z
-modified_at: 2026-07-19T01:44:07.335242739Z
+modified_at: 2026-07-19T06:17:18.311420813Z
 req_type: Story
 tags:
+- batch:guided-0719
 - parent:SPIKE-78
 - refactor
 - supervised
