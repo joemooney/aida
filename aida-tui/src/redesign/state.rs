@@ -316,6 +316,11 @@ pub fn verb_list_for(scope: Scope) -> Vec<Verb> {
         // (STORY-728). Last so it doesn't disturb the historical draft-verb
         // index navigation.
         verbs.push(Verb::Drive);
+        // `approve all` (the batch approve + queue over the derived approvable
+        // set) -> any focused status (the set is derived, not selection- or
+        // focus-conditional). Appended after `drive` so the historical verb
+        // index navigation stays undisturbed. trace:TASK-937
+        verbs.push(Verb::ApproveAll);
     }
     verbs
 }
@@ -365,6 +370,60 @@ pub fn status_permits_verb(focused_status: Option<&str>, required: Option<&str>)
     }
 }
 
+/// The APPROVABLE SET — every spec id the batch-approve gesture may act on:
+/// the Draft rows of `items` (in item order) plus any `intake_proposals`
+/// (the ids a headless intake fence proposed for approval) not already in
+/// the set. Pure (no IO) so it is unit-testable without a terminal; the
+/// EPIC-53 content-layer half of the batch-approve seam — the EPIC-54 shell
+/// only supplies the gesture that fires it. Deduped, order-stable: drafts
+/// first (item order), then novel intake proposals (proposal order).
+// trace:TASK-937 | ai:claude
+pub fn approvable_set(items: &[TargetItem], intake_proposals: &[String]) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    for item in items {
+        if item.is_draft() && !ids.iter().any(|i| i == &item.id) {
+            ids.push(item.id.clone());
+        }
+    }
+    for id in intake_proposals {
+        if !id.trim().is_empty() && !ids.iter().any(|i| i == id) {
+            ids.push(id.clone());
+        }
+    }
+    ids
+}
+
+/// The result of a [`batch_approve`] run: which ids were approved + queued,
+// and which failed either half. trace:TASK-937 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BatchApproveOutcome {
+    /// Ids successfully approved AND routed to the implementer queue.
+    pub approved: Vec<String>,
+    /// Ids where the approve or the queue half failed.
+    pub failed: Vec<String>,
+}
+
+/// The BATCH-APPROVE action: approve + queue N specs in one call. The
+/// per-spec operation (`approve_and_queue` — approve the spec, then route it
+/// to the implementer queue; `true` = both halves succeeded) is injected so
+/// this driver is pure and unit-testable without spawning anything; the
+/// parent module supplies the real shell-out. Every id is attempted — one
+// failure never aborts the rest of the batch. trace:TASK-937 | ai:claude
+pub fn batch_approve<F: FnMut(&str) -> bool>(
+    ids: &[String],
+    mut approve_and_queue: F,
+) -> BatchApproveOutcome {
+    let mut outcome = BatchApproveOutcome::default();
+    for id in ids {
+        if approve_and_queue(id) {
+            outcome.approved.push(id.clone());
+        } else {
+            outcome.failed.push(id.clone());
+        }
+    }
+    outcome
+}
+
 /// A verb (leaf action) applied to the current target selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verb {
@@ -375,6 +434,15 @@ pub enum Verb {
     /// The do-it-yourself counterpart to [`Verb::RequestApproval`].
     // trace:TASK-920
     Approve,
+    /// Open scope: the advisor's BATCH-approve over the whole needs-approval
+    /// group — approve + queue every spec in the [`approvable_set`] (all
+    /// Drafts plus any intake proposals) in one gesture. Unlike
+    /// [`Verb::Approve`] it does NOT read the selection: the set is derived,
+    /// and a confirm popup gates the bulk mutation instead of the selection
+    /// axis. EPIC-53 ships the set + the batch action; the multi-select
+    /// gesture stays with the EPIC-54 shell ([`Verb::Approve`]).
+    // trace:TASK-937 | ai:claude
+    ApproveAll,
     /// Open scope, Draft-only: the advisor's DIRECT reject — run the
     /// `aida edit <id> --status rejected` transition (advisor-gated, so the
     /// spawned command carries advisor authority) on the selected drafts. The
@@ -436,6 +504,7 @@ impl Verb {
         match self {
             Verb::Groom => "groom",
             Verb::Approve => "approve",
+            Verb::ApproveAll => "approve all",
             Verb::Reject => "reject",
             Verb::Archive => "archive",
             Verb::Show => "show",
@@ -454,6 +523,7 @@ impl Verb {
         match self {
             Verb::Groom => "cross-spec grooming + disposition",
             Verb::Approve => "advisor-only: draft → approved",
+            Verb::ApproveAll => "advisor-only: approve + queue every approvable spec",
             Verb::Reject => "advisor-only: draft → rejected",
             Verb::Archive => "mark non-core specs archived",
             Verb::Show => "show this spec (aida show --no-git)",
@@ -485,6 +555,13 @@ impl Verb {
                 "Advisor's direct draft → approved transition. Draft-only: \
                  set-level over the selected drafts (non-drafts are skipped), or \
                  the focused draft when nothing is selected."
+            }
+            Verb::ApproveAll => {
+                "Advisor's batch-approve over the whole needs-approval group: \
+                 approve + queue every approvable spec (all drafts plus any \
+                 intake proposals) in one gesture. Ignores the selection — the \
+                 set is derived, and a confirm popup shows the count before \
+                 anything runs."
             }
             Verb::Reject => {
                 "Advisor's direct draft → rejected transition — the sibling of \
@@ -591,8 +668,16 @@ impl Verb {
     /// read gesture): one drive/reply per row is the intended unit — a
     /// multi-select checkbox would be the wrong shape for either.
     // trace:TASK-954 trace:STORY-728 trace:STORY-701 | ai:claude
+    // `approve all` is ALSO exempt (trace:TASK-937): it never reads the
+    // selection — it acts on the derived approvable set, and its bulk
+    // mutation is guarded by the "approve + queue all N?" confirm popup,
+    // the same shape as `groom`'s empty-selection confirm.
     pub fn requires_selection(self) -> bool {
-        self.is_update() && !matches!(self, Verb::Groom | Verb::Drive | Verb::Reply)
+        self.is_update()
+            && !matches!(
+                self,
+                Verb::Groom | Verb::Drive | Verb::Reply | Verb::ApproveAll
+            )
     }
 
     /// Is this verb wired to do real work? Every cockpit verb now executes.
@@ -609,6 +694,7 @@ impl Verb {
             self,
             Verb::Groom
                 | Verb::Approve
+                | Verb::ApproveAll
                 | Verb::Reject
                 | Verb::Archive
                 | Verb::Show
@@ -648,8 +734,11 @@ impl Verb {
             // `drive` commits the team to autonomously execute the spec (the
             // same authority bar as `queue`, which routes it onto the
             // implementer queue), so it is advisor-gated. trace:STORY-728
+            // `approve all` composes approve + queue, both advisor acts, so it
+            // is advisor-gated like each of its halves. trace:TASK-937
             Verb::Groom
             | Verb::Approve
+            | Verb::ApproveAll
             | Verb::Reject
             | Verb::Queue
             | Verb::Archive
@@ -1134,6 +1223,13 @@ pub struct RedesignState {
     pub bottom_idx: usize,
     /// The target items (backlog rows). Loaded once by the parent module.
     pub items: Vec<TargetItem>,
+    /// Live intake-proposal spec ids — candidates a headless intake fence
+    /// (`aida intake --dry-run`) proposed for approval. Merged into the
+    /// [`approvable_set`] the `approve all` batch gesture acts on. Empty until
+    /// the redesign grows a live intake source (the legacy dashboard's
+    /// TASK-904 background fetch is the model); the set function and the
+    // batch action already consume it. trace:TASK-937 | ai:claude
+    pub intake_proposals: Vec<String>,
     /// Selected item indices (multi-select). A `BTreeSet`-free `Vec<bool>`
     /// parallel to `items` keeps toggle/clear trivial and order-stable.
     pub selected: Vec<bool>,
@@ -1233,6 +1329,7 @@ impl RedesignState {
             top_idx: 0,
             bottom_idx: 0,
             items,
+            intake_proposals: Vec::new(),
             selected,
             filter: String::new(),
             modal: None,
@@ -2066,6 +2163,27 @@ impl RedesignState {
             return RunOutcome::Approve { drafts, skipped };
         }
 
+        // approve all: the batch-approve gesture over the DERIVED approvable
+        // set (drafts + intake proposals) — never the selection. A confirm
+        // popup gates the bulk mutation (the same shape as groom's
+        // empty-selection confirm); resolve_confirm turns the accepted
+        // confirm into the BatchApprove outcome. trace:TASK-937
+        if verb == Verb::ApproveAll {
+            let ids = approvable_set(&self.items, &self.intake_proposals);
+            if ids.is_empty() {
+                self.status = Some(
+                    "approve all: nothing approvable (no drafts or intake proposals)".to_string(),
+                );
+                return RunOutcome::None;
+            }
+            let confirm = ConfirmAll {
+                verb,
+                count: ids.len(),
+            };
+            self.confirm = Some(confirm);
+            return RunOutcome::NeedsConfirm(confirm);
+        }
+
         // reject: directly reject the marked drafts (or focused draft),
         // skipping non-drafts. The sibling of `approve` — same Draft selection
         // and advisor gate, but runs the rejected-status transition rather than
@@ -2157,6 +2275,14 @@ impl RedesignState {
         };
         if !accept {
             return RunOutcome::None;
+        }
+        // `approve all` confirms over the DERIVED approvable set, not the
+        // whole item list — re-derive it here so the batch acts on exactly
+        // what the popup counted. trace:TASK-937
+        if c.verb == Verb::ApproveAll {
+            return RunOutcome::BatchApprove {
+                ids: approvable_set(&self.items, &self.intake_proposals),
+            };
         }
         RunOutcome::Execute {
             verb: c.verb,
@@ -2355,6 +2481,12 @@ pub enum RunOutcome {
         drafts: Vec<String>,
         skipped: Vec<String>,
     },
+    /// `approve all` confirmed: the BATCH-approve over the derived
+    /// [`approvable_set`] — approve + queue every id in `ids` in one call
+    /// (the parent runs [`batch_approve`] with the real approve-then-queue
+    /// operation on a background thread). Emitted by
+    // [`RedesignState::resolve_confirm`], not by `run_verb`. trace:TASK-937
+    BatchApprove { ids: Vec<String> },
     /// `reject` on the Draft selection: directly reject `drafts` (the
     /// advisor-gated `aida edit <id> --status rejected` transition), report
     /// `skipped` non-drafts. The sibling of [`Self::Approve`].
@@ -3446,6 +3578,9 @@ mod tests {
             // `drive` is appended last (STORY-728) so the historical draft-verb
             // index navigation is undisturbed.
             Verb::Drive,
+            // `approve all` (the derived-set batch approve + queue) follows the
+            // same append-only rule. trace:TASK-937
+            Verb::ApproveAll,
         ]
     }
 
@@ -3952,9 +4087,10 @@ mod tests {
         assert!(!status_permits_verb(Some("Approved"), req));
         assert!(!status_permits_verb(None, req));
         assert!(!verb_list_for(Scope::Backlog).contains(&Verb::Accept));
-        // `drive` is the last verb in the full list (STORY-728); `defer` is the
-        // second-to-last, so the status-conditional indices stay undisturbed.
-        assert_eq!(verb_list_for(Scope::Open).last(), Some(&Verb::Drive));
+        // `approve all` is the last verb in the full list (TASK-937, after
+        // STORY-728's `drive`) — appended, so the status-conditional indices
+        // stay undisturbed.
+        assert_eq!(verb_list_for(Scope::Open).last(), Some(&Verb::ApproveAll));
     }
 
     #[test]
@@ -4058,12 +4194,13 @@ mod tests {
         assert!(status_permits_verb(Some("Approved"), None));
         assert!(status_permits_verb(None, None));
         // It comes after the status-conditional verbs, so the existing
-        // draft/approved indices are undisturbed. `drive` is appended after it
-        // (STORY-728), so `defer` is now the second-to-last verb and `drive`
-        // the last.
+        // draft/approved indices are undisturbed. `drive` (STORY-728) and then
+        // `approve all` (TASK-937) are appended after it, so `defer` sits
+        // third-from-last.
         let open = verb_list_for(Scope::Open);
-        assert_eq!(open.last(), Some(&Verb::Drive));
-        assert_eq!(open[open.len() - 2], Verb::Defer);
+        assert_eq!(open.last(), Some(&Verb::ApproveAll));
+        assert_eq!(open[open.len() - 2], Verb::Drive);
+        assert_eq!(open[open.len() - 3], Verb::Defer);
         // Other scopes do not expose defer.
         assert!(!verb_list_for(Scope::Backlog).contains(&Verb::Defer));
     }
@@ -4958,5 +5095,187 @@ mod tests {
         // Top of the stack: Left (pop) is a no-op that returns false.
         assert!(!s.pop());
         assert_eq!(s.level, Level::Scopes);
+    }
+
+    // --- TASK-937: approvable set + batch approve ---------------------------
+
+    /// Drill into the Open scope and walk the verb palette down to
+    // `approve all` (appended last in the Open verb list). trace:TASK-937
+    fn drill_to_approve_all(s: &mut RedesignState) {
+        drill_open(s);
+        for _ in 0..verb_list_for(Scope::Open).len() {
+            if s.top_verb() == Some(Verb::ApproveAll) {
+                return;
+            }
+            s.move_down();
+        }
+        panic!("approve all not reachable in the Open verb list");
+    }
+
+    /// The approvable set is the Draft rows, in item order — non-drafts
+    // (Approved rows) never qualify. trace:TASK-937
+    #[test]
+    fn approvable_set_collects_drafts_in_item_order() {
+        // open_items(): index 0 + 2 are Draft, 1 + 3 are Approved.
+        let set = approvable_set(&open_items(), &[]);
+        assert_eq!(set, vec!["TASK-0".to_string(), "TASK-2".to_string()]);
+    }
+
+    /// Intake proposals merge into the set after the drafts, deduped against
+    // them; blank proposal ids are dropped. trace:TASK-937
+    #[test]
+    fn approvable_set_merges_intake_proposals_deduped() {
+        let proposals = vec![
+            "TASK-2".to_string(),  // already a draft → not duplicated
+            "SPIKE-9".to_string(), // novel intake proposal → appended
+            "  ".to_string(),      // blank → dropped
+            "SPIKE-9".to_string(), // repeat → not duplicated
+        ];
+        let set = approvable_set(&open_items(), &proposals);
+        assert_eq!(
+            set,
+            vec![
+                "TASK-0".to_string(),
+                "TASK-2".to_string(),
+                "SPIKE-9".to_string()
+            ]
+        );
+    }
+
+    /// No drafts and no proposals → an empty approvable set.
+    // trace:TASK-937
+    #[test]
+    fn approvable_set_empty_when_nothing_approvable() {
+        // items(): every row is Approved (no drafts).
+        assert!(approvable_set(&items(3), &[]).is_empty());
+        assert!(approvable_set(&[], &[]).is_empty());
+    }
+
+    /// The batch action partitions ids by the injected approve+queue
+    // operation's per-spec result. trace:TASK-937
+    #[test]
+    fn batch_approve_partitions_by_operation_result() {
+        let ids = vec![
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+            "TASK-3".to_string(),
+        ];
+        let out = batch_approve(&ids, |id| id != "TASK-2");
+        assert_eq!(
+            out.approved,
+            vec!["TASK-1".to_string(), "TASK-3".to_string()]
+        );
+        assert_eq!(out.failed, vec!["TASK-2".to_string()]);
+    }
+
+    /// One failed spec never aborts the batch — every id is attempted, in
+    // order, in the one call. trace:TASK-937
+    #[test]
+    fn batch_approve_attempts_every_id_after_a_failure() {
+        let ids = vec![
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+            "TASK-3".to_string(),
+        ];
+        let mut attempted = Vec::new();
+        let out = batch_approve(&ids, |id| {
+            attempted.push(id.to_string());
+            false // the first failure must not stop the rest
+        });
+        assert_eq!(attempted, ids);
+        assert!(out.approved.is_empty());
+        assert_eq!(out.failed, ids);
+    }
+
+    /// Running `approve all` raises the confirm popup counting the DERIVED
+    /// approvable set (drafts + intake proposals) — not the selection, not
+    // the whole item list. trace:TASK-937
+    #[test]
+    fn run_approve_all_confirms_over_the_derived_set() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        s.intake_proposals = vec!["SPIKE-9".to_string()];
+        drill_to_approve_all(&mut s);
+        let out = s.run_verb();
+        // 2 drafts + 1 intake proposal = 3 (of 4 items).
+        assert_eq!(
+            out,
+            RunOutcome::NeedsConfirm(ConfirmAll {
+                verb: Verb::ApproveAll,
+                count: 3,
+            })
+        );
+        assert!(s.confirm.is_some());
+    }
+
+    /// Accepting the confirm yields the BatchApprove outcome over exactly the
+    // counted set. trace:TASK-937
+    #[test]
+    fn approve_all_confirm_accept_yields_batch_approve() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        s.intake_proposals = vec!["SPIKE-9".to_string()];
+        drill_to_approve_all(&mut s);
+        s.run_verb();
+        let out = s.resolve_confirm(true);
+        assert_eq!(
+            out,
+            RunOutcome::BatchApprove {
+                ids: vec![
+                    "TASK-0".to_string(),
+                    "TASK-2".to_string(),
+                    "SPIKE-9".to_string()
+                ],
+            }
+        );
+        assert!(s.confirm.is_none(), "confirm clears on resolve");
+    }
+
+    /// Declining the confirm runs nothing.
+    // trace:TASK-937
+    #[test]
+    fn approve_all_confirm_decline_is_a_no_op() {
+        let mut s = RedesignState::new(open_items(), "advisor");
+        drill_to_approve_all(&mut s);
+        s.run_verb();
+        assert_eq!(s.resolve_confirm(false), RunOutcome::None);
+        assert!(s.confirm.is_none());
+    }
+
+    /// Nothing approvable → no confirm, a helpful status instead.
+    // trace:TASK-937
+    #[test]
+    fn run_approve_all_refuses_when_nothing_approvable() {
+        // items(): all Approved, no intake proposals.
+        let mut s = RedesignState::new(items(3), "advisor");
+        drill_to_approve_all(&mut s);
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        assert!(s.confirm.is_none());
+        let status = s.status.expect("status set");
+        assert!(status.contains("nothing approvable"), "{status}");
+    }
+
+    /// `approve all` composes two advisor acts, so the role gate refuses a
+    // non-advisor before anything is derived. trace:TASK-937
+    #[test]
+    fn run_approve_all_is_advisor_gated() {
+        let mut s = RedesignState::new(open_items(), "implementer");
+        drill_to_approve_all(&mut s);
+        assert_eq!(s.run_verb(), RunOutcome::None);
+        assert_eq!(
+            s.status.as_deref(),
+            Some("approve all requires the advisor role")
+        );
+    }
+
+    /// `approve all` is selection-exempt (the set is derived): it runs with
+    // an empty selection without tripping the TASK-954 selection gate. trace:TASK-937
+    #[test]
+    fn approve_all_is_selection_exempt() {
+        assert!(!Verb::ApproveAll.requires_selection());
+        assert!(Verb::ApproveAll.is_update());
+        // And it sits in the Open scope's verb vocabulary.
+        assert!(verb_list_for(Scope::Open).contains(&Verb::ApproveAll));
+        // With no status condition: it acts on the derived set, not the
+        // focused row.
+        assert_eq!(verb_required_status(Scope::Open, Verb::ApproveAll), None);
     }
 }
