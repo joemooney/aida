@@ -246,7 +246,7 @@ test-integration: ## Run integration tests only
 	cargo test --workspace --test '*'
 
 test-cli: ## Run CLI tests
-	cargo test -p aida-cli
+	cargo test -p aida-cli -p aida-cli-lib
 
 test-core: ## Run core library tests
 	cargo test -p aida-core

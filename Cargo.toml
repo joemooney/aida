@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "aida-core",
     "aida-cli",
+    "aida-cli-lib",
     "aida-crate",
     "aida-server",
     "aida-generate-types",

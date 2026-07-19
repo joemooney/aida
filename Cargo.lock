@@ -34,6 +34,14 @@ dependencies = [
 name = "aida-cli"
 version = "0.14.0"
 dependencies = [
+ "aida-cli-lib",
+ "tempfile",
+]
+
+[[package]]
+name = "aida-cli-lib"
+version = "0.14.0"
+dependencies = [
  "aida-core",
  "aida-tui",
  "anyhow",
