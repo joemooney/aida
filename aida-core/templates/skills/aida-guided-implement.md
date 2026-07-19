@@ -286,12 +286,15 @@ operator tries it, so do **not** auto-merge.
    3. **The merge command** — show it literally:
 
       ```bash
-      gh pr merge <N> --squash --delete-branch && aida pull
+      gh pr merge <N> --squash; aida pull
       ```
 
    Keystone merge stays yours: review the PR + the ADRs, then run that command
    when satisfied. (`aida pull`, not raw `git pull`, so the `Done → Completed`
-   auto-bump fires.)
+   auto-bump fires. `;` not `&&`, and no `--delete-branch`: the session's
+   worktree still holds the branch, so a branch delete would be refused — and
+   an `&&` chain would then silently drop the `aida pull` leg. Branch cleanup
+   belongs to worktree cleanup, e.g. `aida session end`.)
 
 ---
 

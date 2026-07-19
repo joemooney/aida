@@ -14,7 +14,7 @@ Follow the workflow in `.claude/skills/aida-solo.md`:
 2. LOOP until the safe backlog is drained:
    - GROOM (judgment): cross-spec advisor pass — worth-doing, dedup, dispose; bless + queue the pickable approved set. Mechanism: `aida intake --apply` (or the guided `/aida-backlog-groom`). Route human-decision drafts to `aida questions`; never auto-approve.
    - IMPLEMENT: enumerate the fan-out-able set with `aida burndown plan --status approved --json`, then fan ONE worktree-isolated implementer subagent per `ready` spec → PR. PARK keystone/`supervised` (security/architecture/autonomy machinery) for the human — never ship unattended. See `/aida-burndown` for the fan-out discipline.
-   - INTEGRATE (serial merge authority): wait CI terminal → merge `--squash --delete-branch` → `aida pull` (the auto-bump rides `aida pull`). HOLD `review:draft-only`/`supervised` PRs. Rebuild/test combined main between batches (`cargo build -p aida-cli`); HALT on red. Punt-and-continue: a blocker parks ONE spec (NeedsAttention), never halts the loop.
+   - INTEGRATE (serial merge authority): wait CI terminal → merge `--squash` (no `--delete-branch` — the implementer worktree still holds the branch; deletion happens at worktree pruning) → `aida pull` as its own step (the auto-bump rides `aida pull`; never `&&`-chain it behind the merge). HOLD `review:draft-only`/`supervised` PRs. Rebuild/test combined main between batches (`cargo build -p aida-cli`); HALT on red. Punt-and-continue: a blocker parks ONE spec (NeedsAttention), never halts the loop.
    - Loop.
 3. REPORT (PushNotification + advisor mailbox handoff), then `aida solo stop`.
 

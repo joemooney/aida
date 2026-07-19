@@ -114,10 +114,12 @@ phase).
 
 One merge driver at a time. For each returned PR: **wait for CI to reach a
 TERMINAL state** (`gh pr checks <n>` until conclusive — never treat PENDING as
-skip, BUG-541), then if green + mergeable + clean, merge (`--squash
---delete-branch`) and **`aida pull`** (the Done→Completed auto-bump rides
-`aida pull`, not raw `git pull`). HOLD any `review:draft-only` / `supervised`
-PR as a draft for the operator.
+skip, BUG-541), then if green + mergeable + clean, merge (`--squash` only — NO
+`--delete-branch`: the implementer worktree still holds the branch, so the
+local delete is refused and an `&&` chain silently drops the pull leg) and run
+**`aida pull`** as its own step (the Done→Completed auto-bump rides
+`aida pull`, not raw `git pull`; branch deletion happens at worktree pruning).
+HOLD any `review:draft-only` / `supervised` PR as a draft for the operator.
 
 Between waves, **rebuild/test the combined main** — each PR's CI ran against the
 old base, so two greens can break `main` together (BUG-496):

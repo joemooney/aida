@@ -525,8 +525,12 @@ fn session_end_pr_hint_lines(
 ) -> Vec<String> {
     // STORY-508: forge-aware merge command. pure-git has no forge CLI, so fall
     // back to a forge-neutral phrasing that names no wrong binary.
+    // No --delete-branch: the just-ended session's worktree may still hold the
+    // branch, so the delete's local-cleanup step would fail — and in an `&&`
+    // chain that silently drops the `aida pull` auto-bump. Branch deletion is
+    // deferred to worktree cleanup. trace:BUG-758 | ai:claude
     let merge_cmd = kind
-        .change_cmd_hint("merge", &format!("{} --squash --delete-branch", pr_number))
+        .change_cmd_hint("merge", &format!("{} --squash", pr_number))
         .unwrap_or_else(|| "merge it to your default branch".to_string());
     let bump_phrase = match covered_specs {
         [] => "auto-bumps the merged spec → Completed".to_string(),
@@ -535,9 +539,11 @@ fn session_end_pr_hint_lines(
     };
     if !tty {
         // Piped output: collapse the whole chain onto one scannable line.
+        // `;` not `&&`: the pull auto-bump must run even if a merge-side
+        // cleanup step is refused. trace:BUG-758 | ai:claude
         return vec![format!(
             "PR #{} next: `aida queue work PR-{}` → `{}` → `aida pull` \
-             (or self-merge: `{} && aida pull`).",
+             (or self-merge: `{}; aida pull`).",
             pr_number, pr_number, merge_cmd, merge_cmd
         )];
     }
@@ -553,7 +559,8 @@ fn session_end_pr_hint_lines(
         format!("  3. ↓ {:<14}   aida pull   ({})", "Then pull", bump_phrase),
         String::new(),
         "  Or self-merge (solo dev — skip review):".to_string(),
-        format!("     {} && aida pull", merge_cmd),
+        // `;` not `&&` so the pull auto-bump runs regardless. trace:BUG-758 | ai:claude
+        format!("     {}; aida pull", merge_cmd),
     ]
 }
 
@@ -734,13 +741,17 @@ mod tests {
         assert!(lines[1].contains(&format!("1. {active}")));
         assert!(lines[1].contains("aida queue work PR-47"));
         assert!(lines[2].contains("2. ↓"));
-        assert!(lines[2].contains("gh pr merge 47 --squash --delete-branch"));
+        // trace:BUG-758 | ai:claude — no --delete-branch (the ended session's
+        // worktree may hold the branch); ';' so aida pull cannot be dropped.
+        assert!(lines[2].contains("gh pr merge 47 --squash"));
+        assert!(!lines[2].contains("--delete-branch"));
         assert!(lines[3].contains("3. ↓"));
         assert!(lines[3].contains("aida pull"));
         assert!(lines[3].contains("auto-bumps TASK-259 → Completed"));
         assert!(lines[4].is_empty());
         assert!(lines[5].contains("self-merge"));
-        assert!(lines[6].contains("gh pr merge 47 --squash --delete-branch && aida pull"));
+        assert!(lines[6].contains("gh pr merge 47 --squash; aida pull"));
+        assert!(!lines[6].contains("--delete-branch"));
     }
 
     #[test]
@@ -749,7 +760,9 @@ mod tests {
         let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &specs, false);
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("aida queue work PR-47"));
-        assert!(lines[0].contains("gh pr merge 47 --squash --delete-branch"));
+        // trace:BUG-758 | ai:claude
+        assert!(lines[0].contains("gh pr merge 47 --squash"));
+        assert!(!lines[0].contains("--delete-branch"));
         assert!(lines[0].contains("aida pull"));
         assert!(lines[0].contains("self-merge"));
     }

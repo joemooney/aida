@@ -359,7 +359,7 @@ stateDiagram-v2
 
     state "code leg (your branches → main)" as Code {
         [*] --> c_pr: PR open (spec is Done)
-        c_pr --> c_merged: gh pr merge --squash --delete-branch
+        c_pr --> c_merged: gh pr merge --squash
         c_merged --> c_main: merge commit references (SPEC-ID) on main
     }
 
@@ -561,11 +561,15 @@ the developer-facing "out the door." The spec **should auto-bump to
 Completed**: the next `aida pull` detects the merge commit and promotes the
 status.
 
-- Command: `gh pr merge N --squash --delete-branch`, followed by `aida pull`
-  to promote the status. The `--auto-complete` orchestrator does both for you.
-  When merging by hand from inside a worktree, `--delete-branch` can trip on a
-  cosmetic "branch in use by worktree" error — see the worktree-aware recovery
-  recipes in `docs/autonomous-drain.md`. trace:TASK-406
+- Command: `gh pr merge N --squash; aida pull` — the `aida pull` promotes the
+  status, and the `;` (not `&&`) guarantees it runs even if a merge-side
+  cleanup step is refused. The `--auto-complete` orchestrator does both for
+  you. Skip `--delete-branch` when a worktree may still hold the branch: the
+  local delete is refused ("used by worktree at ...") and an `&&` chain then
+  silently drops the pull leg, stranding the spec at Done. Branch deletion
+  belongs to worktree cleanup (`aida session end` / the drain's prune step) —
+  see the worktree-aware recovery recipes in `docs/autonomous-drain.md`.
+  trace:TASK-406 trace:BUG-758
 
 ### Released
 

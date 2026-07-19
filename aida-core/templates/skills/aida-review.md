@@ -736,7 +736,7 @@ orchestrator-headless reviewer's verdict is read by phase 4. trace:BUG-280
   ✓ Reviewer session is done — nothing left for this Claude to do.
 
   ▶ Press Ctrl+D to exit. The --auto-complete orchestrator then runs:
-    - Phase 4/6  Merge PR-<N>      (gh pr merge <N> --squash --delete-branch)
+    - Phase 4/6  Merge PR-<N>      (gh pr merge <N> --squash; branch cleanup deferred)
     - Phase 5/6  Pull + auto-bump  (<SPEC-IDS> Done → Completed)
     - Phase 6/6  Build verify      (cargo build --release)
   ```

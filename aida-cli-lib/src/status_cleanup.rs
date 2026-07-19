@@ -735,16 +735,17 @@ fn render_open_prs(
     }
     print_overflow(items.len(), cap, w)?;
     // STORY-508/TASK-651: the watch→merge→pull hint, in each forge's command
-    // shape (gh checks/--delete-branch vs glab ci status/--remove-source-branch;
-    // pure-git names no forge CLI).
+    // shape (gh pr checks vs glab ci status; pure-git names no forge CLI).
+    // No branch-delete flag — a live worktree may still hold the branch, so
+    // the local delete would be refused — and `; aida pull` (not `&&`) so the
+    // auto-bump leg cannot be dropped by a refused cleanup step. Branch
+    // deletion is deferred to worktree cleanup. trace:BUG-758 | ai:claude
     let chain = match kind {
         crate::forge::ForgeKind::GitHub => {
-            "`gh pr checks <N> --watch && gh pr merge <N> --squash --delete-branch && aida pull`"
-                .to_string()
+            "`gh pr checks <N> --watch && gh pr merge <N> --squash; aida pull`".to_string()
         }
         crate::forge::ForgeKind::GitLab => {
-            "`glab ci status && glab mr merge <N> --squash --remove-source-branch && aida pull`"
-                .to_string()
+            "`glab ci status && glab mr merge <N> --squash; aida pull`".to_string()
         }
         crate::forge::ForgeKind::None => {
             "merge each change to your default branch, then `aida pull`".to_string()
