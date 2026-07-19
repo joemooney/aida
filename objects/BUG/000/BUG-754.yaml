@@ -3,12 +3,12 @@ spec_id: BUG-754
 agreed_id: BUG-754
 title: burndown harness-fanout implementer takes the lease but never flips the spec to In Progress — queue list shows Approved and in-flight for the same spec
 description: 'Observed 2026-07-18 18:56 mid-drain: TASK-1117 simultaneously appeared as queue row ''[▸ Approved]'', drain-banner ''in-flight'', and ''Active leases: TASK-1117 task-1117-edit-editor''. The /aida-burndown Agent-tool fanout implementers create a session lease without the Approved→In Progress status flip that queue work / worktree enter perform (worktree enter: ''spec → In Progress''), so one report contradicts itself about the same spec and aida list/status views under-report work in flight. Acceptance: a harness-fanout implementer''s pickup flips its spec to In Progress at lease-take (same seam as queue work phase-1 claim); drain completion/shelve restores appropriately; queue list shows a consistent status for a leased in-flight spec; regression test on the fanout pickup path.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T01:57:57.463301513Z
-modified_at: 2026-07-19T04:57:58.792425933Z
+modified_at: 2026-07-19T06:30:33.733804443Z
 req_type: Bug
 tags:
 - aida:queue burndown lifecycle from-dogfood
