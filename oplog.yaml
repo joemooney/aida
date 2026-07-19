@@ -34984,5 +34984,17 @@ operations:
   timestamp: 2026-07-19T01:46:08.295924680Z
   kind: !SetTitle
     title: aida edit <spec> with no flags opens $EDITOR on a markdown buffer (git-commit style)
-clock: 3246
+- id: 019f7810-4298-72f1-a541-e54215d0de57
+  target_id: 019f7810-3f37-7513-9e72-f573f98a4d4f
+  author: aida
+  node_id: '1'
+  lamport: 3247
+  timestamp: 2026-07-19T01:49:19.384341353Z
+  kind: !Create
+    title: Agent-tool (claude harness) subagent sessions read 'dead process, salvageable' in aida ps while alive — third liveness false-negative variant
+    description: 'Observed 2026-07-18 18:48 during a live burndown: aida ps showed the three harness-spawned implementer agents (.claude/worktrees/agent-*) as ''dormant / dead process, uncommitted work / salvage-commit then rebrief'' with pid ''-'', while all three were actively working (worktrees created progressively 15m/6m/2m earlier, one already on branch task-1117-edit-editor). Same failure family as BUG-741 (fixed today for codex exec children) but a different spawn path: Claude-harness Agent-tool subagents never register a pid on their lease either. The printed salvage hint is dangerous mid-drain (running it would commit half-done work and double-dispatch). Acceptance: harness-agent sessions report live (or at minimum ''unknown — no pid recorded'' WITHOUT the salvage hint) while their worktree is being actively written; the salvage hint only appears when liveness is genuinely determined dead. Extends BUG-741''s shared-probe fix to the agent-tool spawn path.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3247
 node_id: '1'
