@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T07:40:44.779244297Z
-modified_at: 2026-06-27T16:36:32.526125948Z
+modified_at: 2026-07-19T01:27:04.862007003Z
 req_type: Story
 tags:
 - aida:workspace
@@ -17,3 +17,6 @@ tags:
 - multi-repo
 - parent:SPIKE-62
 - schema
+deferred: true
+deferred_at: 2026-07-19T01:27:04.862007003Z
+deferred_until: SPIKE-62 D1-D5 operator sign-off
