@@ -8,7 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T02:11:34.735160762Z
-modified_at: 2026-07-19T02:11:34.735160762Z
+modified_at: 2026-07-19T04:25:13.235507818Z
 req_type: Bug
 tags:
 - aida:burndown auto-complete orchestration from-dogfood
+comments:
+- id: 019f789e-fd13-74a3-94fe-cc33209dec6c
+  author: joe
+  content: 'Related symptom 2026-07-18 21:24: with the --verbose drain''s claude -p child alive and streaming (pid 2818172, tee 20260719T041604Z-019f7896.jsonl, four wave PRs open), ''aida drain status'' reports ''No drain in progress'' — the drain lock does not span the child''s actual lifetime (parent exited or lock released early). Same lifecycle seam: whatever owns the lock is not whatever does the work. The fix should make lock lifetime == the claude -p child''s lifetime, which also gives drain status an honest answer.'
+  created_at: 2026-07-19T04:25:13.235507818Z
+  modified_at: 2026-07-19T04:25:13.235507818Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
