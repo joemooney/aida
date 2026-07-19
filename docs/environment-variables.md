@@ -332,7 +332,8 @@ with `aida dev shell-init --install`; the rest is automatic.
 | `AIDA_DEV_PROFILE_PIN` | Sticky profile override across re-activations (`debug`/`release`/`auto`; `auto` = freshest-wins opt-in). | unset = release default. | launch-path (`--debug`/`--release`/`--auto`) | shell session |
 | `AIDA_DEV_PREV_PATH` | Saved `PATH` for restore on deactivate. | set by activate. | launch-path (shell code) | process env |
 | `AIDA_DEV_PS1_PREFIX` | The PS1 prefix activate splices in (stripped exactly on deactivate). | set by activate. | launch-path (shell code) | process env |
-| `AIDA_SHELL_WRAPPER` | Signals the `aida dev` shell wrapper is active — gates bare vs `eval`-wrapped auto-eval hints. | unset = no wrapper. | launch-path (shell wrapper) | process env |
+| `AIDA_WT_PS1_PREFIX` | The ambient `(wt:<FOCUS>) ` PS1 segment `aida worktree enter` splices in so a shell inside a scoped worktree is always visibly marked (stripped + unset by `aida worktree exit`). | set by worktree enter. | launch-path (shell code emitted by `worktree enter`/`exit`) | process env |
+| `AIDA_SHELL_WRAPPER` | Signals the `aida dev` shell wrapper is active — gates bare vs `eval`-wrapped auto-eval hints. Comma-separated list of the auto-evaled verb groups (`role,session,dev,worktree,worktree-exit`); the binary probes it per-capability to warn when an older installed wrapper can't eval a newer verb. | unset = no wrapper. | launch-path (shell wrapper) | process env |
 
 > `AIDA_DEV_PREV_PS1` is a legacy prompt-restore variable, superseded by the
 > `AIDA_DEV_PS1_PREFIX` splice semantics; it now only appears in deactivate

@@ -49268,6 +49268,7 @@ fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             path,
             branch,
         } => handle_worktree_enter(target, path.as_deref(), branch.as_deref()),
+        WorktreeCommand::Exit => handle_worktree_exit(),
         WorktreeCommand::List { json } => handle_worktree_list(*json),
         WorktreeCommand::Gc { yes, force, json } => {
             doctor_cmd::run_merged_agent_worktree_gc(*yes, *force, *json)
@@ -49710,7 +49711,111 @@ fn handle_worktree_enter(
     }
     let shell_payload_evaled = wrapper_can_eval_worktree_enter();
     print_worktree_next("enter", arg, &out, shell_payload_evaled);
-    print!("{}", enter_shell_payload(&out.path));
+    // trace:TASK-1160 | ai:claude
+    print!("{}", enter_shell_payload(&out.path, &out.focus));
+    Ok(())
+}
+
+/// `aida worktree exit` — the symmetric step-out: emit `cd '<main root>'`,
+/// unset the session env exports `enter` applied, and strip the `(wt:...)`
+/// PS1 segment, all via the same auto-evaled stdout payload. The session
+/// lease and the spec's status are untouched — the worktree stays live for
+/// re-enter; `aida session end` is the verb that finishes the work. From a
+/// non-worktree cwd this is a friendly no-op naming the main checkout.
+// trace:TASK-1160 | ai:claude
+fn handle_worktree_exit() -> Result<()> {
+    let main_root = find_main_worktree_root()?;
+    let main_canon = crate::worktree::canonical_or_self(&main_root);
+
+    // Where is the shell standing? The toplevel of the checkout containing
+    // cwd, or None when cwd isn't inside any git checkout.
+    let toplevel = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(["rev-parse", "--show-toplevel"])
+                .output()
+                .ok()
+        })
+        .filter(|o| o.status.success())
+        .map(|o| std::path::PathBuf::from(String::from_utf8_lossy(&o.stdout).trim().to_string()));
+
+    let Some(toplevel) = toplevel.filter(|t| crate::worktree::canonical_or_self(t) != main_canon)
+    else {
+        // Friendly no-op: nothing to step out of.
+        eprintln!(
+            "{} Not inside a scoped worktree — the main checkout is {}. Nothing to step out of.",
+            crate::glyph(crate::glyphs::Glyph::Check),
+            main_root.display().to_string().cyan(),
+        );
+        return Ok(());
+    };
+
+    // Session env exports to clear: always the well-known pair, plus whatever
+    // else this worktree's session-env.sh exports (future-proof — the unset
+    // list is derived from the same file enter sources).
+    let extra_unsets: Vec<String> =
+        std::fs::read_to_string(toplevel.join(".aida").join("session-env.sh"))
+            .map(|body| {
+                parse_session_env(&body)
+                    .into_iter()
+                    .map(|(n, _)| n)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+    // The lease (if any) survives the step-out — say so, with the way back.
+    let toplevel_canon = crate::worktree::canonical_or_self(&toplevel);
+    let lease = list_leases(&main_root)
+        .into_iter()
+        .filter(|l| crate::worktree::canonical_or_self(&l.worktree_path) == toplevel_canon)
+        .max_by_key(|l| l.started_at);
+
+    // Human-facing status to STDERR — the eval-wrapper captures stdout only.
+    eprintln!(
+        "{} Stepping out of {} back to {}",
+        crate::glyph(crate::glyphs::Glyph::Check),
+        toplevel.display().to_string().cyan(),
+        main_root.display().to_string().cyan(),
+    );
+    match &lease {
+        Some(l) => {
+            let short = &l.id[..l.id.len().min(8)];
+            eprintln!(
+                "  stepped out — session {} ({}) still holds the worktree; re-enter with \
+                 `aida worktree enter {}`, finish with `aida session end {}`",
+                short.cyan(),
+                l.scope.cyan().bold(),
+                l.scope,
+                short,
+            );
+        }
+        None => {
+            if let Some(focus) = crate::focus::read_focus_marker(&toplevel) {
+                eprintln!(
+                    "  the worktree stays put — re-enter with `aida worktree enter {}`",
+                    focus
+                );
+            }
+        }
+    }
+    // Warn (STDERR) when the installed wrapper predates the exit verb — its
+    // case statement won't auto-eval this payload, so the cd would silently
+    // no-op (same staleness UX as enter).
+    if !wrapper_can_eval_worktree_exit() {
+        eprintln!(
+            "  {} shell wrapper looks stale or missing — the `cd` below won't auto-apply. \
+             Run `aida dev shell-init --install` to refresh it, or \
+             `eval \"$(aida worktree exit)\"`.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        );
+    }
+    print!(
+        "{}",
+        crate::worktree::exit_shell_payload(&main_root, &extra_unsets)
+    );
     Ok(())
 }
 
@@ -49776,6 +49881,13 @@ fn print_worktree_next(
     if let Some(id) = out.lease_id.as_deref() {
         eprintln!();
         eprintln!("When finished:");
+        // trace:TASK-1160 | ai:claude
+        if command == "enter" {
+            eprintln!(
+                "  {}",
+                "aida worktree exit    # step back out (session stays live)".dimmed()
+            );
+        }
         eprintln!(
             "  {}",
             format!("aida session end {}", &id[..id.len().min(8)]).dimmed()
@@ -49797,17 +49909,35 @@ fn wrapper_can_eval_worktree_enter() -> bool {
     wrapper_marker_has_worktree_cap(std::env::var("AIDA_SHELL_WRAPPER").ok().as_deref())
 }
 
+/// Does the installed wrapper auto-eval `worktree exit`? A wrapper installed
+/// before the exit verb existed advertises `worktree` (it evals `enter`) but
+/// not `worktree-exit` — its case statement matches `"worktree enter"` only,
+/// so the exit payload would print without being eval'd. Same staleness logic
+/// as [`wrapper_can_eval_worktree_enter`], keyed on the newer capability.
+// trace:TASK-1160 | ai:claude
+fn wrapper_can_eval_worktree_exit() -> bool {
+    wrapper_marker_has_cap(
+        std::env::var("AIDA_SHELL_WRAPPER").ok().as_deref(),
+        "worktree-exit",
+    )
+}
+
 /// BUG-654: pure decision half of [`wrapper_can_eval_worktree_enter`] — given
 /// the `AIDA_SHELL_WRAPPER` marker value (`None` when unset), is the `worktree`
 /// capability advertised? Pure so the parsing is unit-testable without mutating
 /// the process-global env var.
 // trace:BUG-654 | ai:claude
 fn wrapper_marker_has_worktree_cap(marker: Option<&str>) -> bool {
+    wrapper_marker_has_cap(marker, "worktree")
+}
+
+/// Generalized capability probe over the comma-separated `AIDA_SHELL_WRAPPER`
+/// marker: is `cap` advertised as an auto-evaled verb group? Whole-token,
+/// case-insensitive compare — a substring of another token never counts.
+// trace:BUG-654 trace:TASK-1160 | ai:claude
+fn wrapper_marker_has_cap(marker: Option<&str>, cap: &str) -> bool {
     marker
-        .map(|caps| {
-            caps.split(',')
-                .any(|c| c.trim().eq_ignore_ascii_case("worktree"))
-        })
+        .map(|caps| caps.split(',').any(|c| c.trim().eq_ignore_ascii_case(cap)))
         .unwrap_or(false)
 }
 
@@ -49819,11 +49949,14 @@ fn enter_cd_line(path: &std::path::Path) -> String {
     format!("cd '{}'", sh_single_quote(&path.display().to_string()))
 }
 
-/// TASK-1156: the wrapper-evaled worktree-enter payload carries both shell
+/// TASK-1156: the wrapper-evaled worktree-enter payload carries the shell
 /// mutations: cd into the worktree and source the generated session env exports
-/// so CARGO_TARGET_DIR is live with no extra manual step.
+/// so CARGO_TARGET_DIR is live with no extra manual step. It also splices the
+/// ambient `(wt:<focus>) ` segment into PS1 (recorded in `AIDA_WT_PS1_PREFIX`)
+/// so the shell always shows where it is standing; `worktree exit` strips it.
 // trace:TASK-1156 | ai:codex
-fn enter_shell_payload(path: &std::path::Path) -> String {
+// trace:TASK-1160 | ai:claude
+fn enter_shell_payload(path: &std::path::Path, focus: &str) -> String {
     let mut payload = format!("{}\n", enter_cd_line(path));
     let env_path = path.join(".aida").join("session-env.sh");
     if let Ok(body) = std::fs::read_to_string(env_path) {
@@ -49832,6 +49965,7 @@ fn enter_shell_payload(path: &std::path::Path) -> String {
             payload.push('\n');
         }
     }
+    payload.push_str(&crate::worktree::ps1_wt_splice_block(focus));
     payload
 }
 

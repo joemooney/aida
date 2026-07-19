@@ -88,8 +88,99 @@ pub fn is_registered(porcelain: &str, target: &Path) -> bool {
 
 /// Canonicalize a path, falling back to the path itself when it does not yet
 /// exist (so comparisons work for not-yet-created targets too).
-fn canonical_or_self(p: &Path) -> PathBuf {
+pub(crate) fn canonical_or_self(p: &Path) -> PathBuf {
     std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
+// --- ambient worktree PS1 indicator + symmetric exit payload -----------------
+//
+// `worktree enter` splices an always-visible `(wt:<FOCUS>) ` segment into PS1
+// so a shell standing inside a scoped worktree can't be mistaken for the main
+// checkout; `worktree exit` strips it again and clears the session env exports
+// enter applied. All pure string builders so the emitted-shell contract is
+// unit-testable without git or a live shell.
+// trace:TASK-1160 | ai:claude
+
+/// Escape a string for interpolation inside a single-quoted shell word
+/// (`'` -> `'\''`). Local twin of the crate-root helper — kept here so the
+/// pure module stays dependency-free.
+// trace:TASK-1160 | ai:claude
+fn wt_single_quote(s: &str) -> String {
+    s.replace('\'', "'\\''")
+}
+
+/// The literal PS1 segment spliced in for a worktree scoped to `focus`:
+/// `(wt:EPIC-54) `. Recorded verbatim in `AIDA_WT_PS1_PREFIX` so exit can
+/// strip exactly what enter added (the splice-in pattern shared with
+/// `AIDA_DEV_PS1_PREFIX`).
+// trace:TASK-1160 | ai:claude
+pub fn wt_ps1_prefix(focus: &str) -> String {
+    format!("(wt:{}) ", focus.trim())
+}
+
+/// Shell block that strips EVERY `(wt:...) ` token from PS1 — the same
+/// walk-and-strip loop the role/dev prompt hygiene uses, so repeated enters
+/// (or an enter after a bare `cd` out) never stack duplicate segments.
+// trace:TASK-1160 | ai:claude
+fn ps1_wt_strip_loop() -> String {
+    concat!(
+        "if [ -n \"${PS1+x}\" ]; then\n",
+        "    while case \"$PS1\" in *'(wt:'*') '*) true;; *) false;; esac; do\n",
+        "        _aida_old_ps1=\"$PS1\"\n",
+        "        _aida_after=\"${PS1#*'(wt:'}\"\n",
+        "        _aida_tag=\"${_aida_after%%') '*}\"\n",
+        "        PS1=\"${PS1//'(wt:'$_aida_tag') '/}\"\n",
+        "        [ \"$PS1\" = \"$_aida_old_ps1\" ] && break\n",
+        "    done\n",
+        "    unset _aida_old_ps1 _aida_after _aida_tag\n",
+        "fi\n"
+    )
+    .to_string()
+}
+
+/// Shell block `worktree enter` appends to its eval'd payload: strip any
+/// stale `(wt:...) ` segments, then splice `(wt:<focus>) ` onto the front of
+/// PS1 and record it in `AIDA_WT_PS1_PREFIX`. Idempotent — re-entering never
+/// duplicates the segment.
+// trace:TASK-1160 | ai:claude
+pub fn ps1_wt_splice_block(focus: &str) -> String {
+    format!(
+        "{strip}if [ -n \"${{PS1+x}}\" ]; then\n\
+        \x20   export AIDA_WT_PS1_PREFIX='{prefix}'\n\
+        \x20   export PS1=\"$AIDA_WT_PS1_PREFIX$PS1\"\n\
+        fi\n",
+        strip = ps1_wt_strip_loop(),
+        prefix = wt_single_quote(&wt_ps1_prefix(focus)),
+    )
+}
+
+/// Shell block `worktree exit` emits to remove the indicator: strip every
+/// `(wt:...) ` segment from PS1 and drop the recorded prefix marker.
+// trace:TASK-1160 | ai:claude
+pub fn ps1_wt_strip_block() -> String {
+    format!("{}unset AIDA_WT_PS1_PREFIX\n", ps1_wt_strip_loop())
+}
+
+/// The full stdout payload for `aida worktree exit`, auto-evaled by the
+/// `aida()` wrapper: cd back to the main checkout, unset the session env
+/// exports `enter` applied (always `AIDA_SESSION_ID` + `CARGO_TARGET_DIR`,
+/// plus any extra names derived from the worktree's `session-env.sh`), and
+/// strip the PS1 worktree segment. The session lease itself is untouched.
+// trace:TASK-1160 | ai:claude
+pub fn exit_shell_payload(main_root: &Path, extra_unsets: &[String]) -> String {
+    let mut names: Vec<&str> = vec!["AIDA_SESSION_ID", "CARGO_TARGET_DIR"];
+    for n in extra_unsets {
+        let n = n.trim();
+        if !n.is_empty() && !names.contains(&n) {
+            names.push(n);
+        }
+    }
+    format!(
+        "cd '{}'\nunset {}\n{}",
+        wt_single_quote(&main_root.display().to_string()),
+        names.join(" "),
+        ps1_wt_strip_block(),
+    )
 }
 
 #[cfg(test)]
@@ -148,6 +239,83 @@ branch refs/heads/epic-54-work
                 PathBuf::from("/home/joe/ai/aida"),
                 PathBuf::from("/home/joe/ai/aida-epic54"),
             ]
+        );
+    }
+
+    // trace:TASK-1160 | ai:claude
+    #[test]
+    fn exit_payload_cds_to_main_root_and_unsets_session_env() {
+        let payload = exit_shell_payload(Path::new("/home/joe/ai/aida"), &[]);
+        assert!(payload.starts_with("cd '/home/joe/ai/aida'\n"));
+        assert!(payload.contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR\n"));
+        assert!(payload.contains("unset AIDA_WT_PS1_PREFIX\n"));
+    }
+
+    // trace:TASK-1160 | ai:claude
+    #[test]
+    fn exit_payload_includes_extra_env_names_deduped() {
+        let payload = exit_shell_payload(
+            Path::new("/home/joe/ai/aida"),
+            &[
+                "CARGO_TARGET_DIR".to_string(), // already in the base set
+                "AIDA_AGENT_TYPE".to_string(),
+                "".to_string(), // blank names are dropped
+            ],
+        );
+        assert!(payload.contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_AGENT_TYPE\n"));
+    }
+
+    // trace:TASK-1160 | ai:claude
+    #[test]
+    fn exit_payload_escapes_apostrophes_in_main_root() {
+        let payload = exit_shell_payload(Path::new("/tmp/o'brien/aida"), &[]);
+        assert!(payload.starts_with("cd '/tmp/o'\\''brien/aida'\n"));
+    }
+
+    // trace:TASK-1160 | ai:claude
+    #[test]
+    fn wt_ps1_prefix_shape() {
+        assert_eq!(wt_ps1_prefix("BUG-756"), "(wt:BUG-756) ");
+        assert_eq!(wt_ps1_prefix("  EPIC-54  "), "(wt:EPIC-54) ");
+    }
+
+    /// Drive the emitted shell through a real bash: splice, re-splice (must
+    /// not duplicate), then strip — PS1 must round-trip back to the original
+    /// and compose with a dev-activate style `(aida-release) ` prefix.
+    // trace:TASK-1160 | ai:claude
+    #[test]
+    fn ps1_splice_then_strip_round_trips_in_bash() {
+        let script = format!(
+            "PS1='(aida-release) \\u@\\h$ '\n\
+             _orig=\"$PS1\"\n\
+             {splice}\
+             {splice_again}\
+             echo \"spliced:$PS1\"\n\
+             echo \"marker:${{AIDA_WT_PS1_PREFIX-unset}}\"\n\
+             {strip}\
+             echo \"stripped:$PS1\"\n\
+             echo \"marker2:${{AIDA_WT_PS1_PREFIX-unset}}\"\n\
+             [ \"$PS1\" = \"$_orig\" ] && echo roundtrip:ok\n",
+            splice = ps1_wt_splice_block("TASK-42"),
+            splice_again = ps1_wt_splice_block("TASK-42"),
+            strip = ps1_wt_strip_block(),
+        );
+        let out = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&script)
+            .output()
+            .expect("bash available");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains("spliced:(wt:TASK-42) (aida-release) \\u@\\h$ "),
+            "one (deduped) wt segment composed with the dev prefix; got:\n{stdout}"
+        );
+        assert!(stdout.contains("marker:(wt:TASK-42) "));
+        assert!(stdout.contains("stripped:(aida-release) \\u@\\h$ "));
+        assert!(stdout.contains("marker2:unset"));
+        assert!(
+            stdout.contains("roundtrip:ok"),
+            "PS1 round-trips:\n{stdout}"
         );
     }
 

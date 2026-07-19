@@ -860,14 +860,14 @@ const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # (`aida role enter <role>`); printing `eval "$(...)"` would double-eval and
 # lose the effect. The value lists the auto-evaled verb groups for any future
 # wrapper-aware decisions.
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree'
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit'
 
 aida() {
     # Take the first two positional words verbatim — that's enough to
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
     case "$_aida_cmd" in
-        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end"|"worktree enter")
+        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end"|"worktree enter"|"worktree exit")
             # session start/end split output: stderr for human messages
             # (status, prompts), stdout for the shell-modifying lines
             # (`export AIDA_SESSION_ID=...` / `unset AIDA_SESSION_ID`).

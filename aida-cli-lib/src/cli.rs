@@ -1993,6 +1993,18 @@ pub enum WorktreeCommand {
         branch: Option<String>,
     },
 
+    /// Step back OUT of the current worktree — the symmetric inverse of
+    /// `enter`. Emits shell on stdout for the `aida()` wrapper to auto-eval:
+    /// cd to the main checkout, unset the session env exports `enter` applied
+    /// (AIDA_SESSION_ID, CARGO_TARGET_DIR, ...), and strip the `(wt:...)`
+    /// prompt segment. The session lease and the spec's status are UNTOUCHED —
+    /// the worktree stays live for an idempotent re-enter; `aida session end`
+    /// is the verb that finishes the work. Run it BARE (`aida worktree exit`)
+    /// — the wrapper auto-evals it; double-eval would lose the cd. From a
+    /// non-worktree directory this is a friendly no-op.
+    // trace:TASK-1160 | ai:claude
+    Exit,
+
     /// List AIDA-managed worktrees, each annotated with its `.aida/focus`.
     List {
         /// Machine-readable JSON (`[{path, branch, focus}]`).
