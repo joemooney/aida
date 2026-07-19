@@ -13,12 +13,14 @@ description: |-
   - Badge state comes only from events.jsonl aggregation — no PTY/byte inspection, no polling subprocesses (in-process tail like the liveness probe, cheap TTL).
   - No change to the cockpit layout beyond the badge cell; bare TUI look unchanged when nothing is actionable (quiet-depth test).
   - Legacy (AIDA_TUI_REDESIGN=0) path unchanged.
+
+  Binding acceptance addition (groom 2026-07-18): the badges MUST target the EPIC-54 redesign cockpit (the current default TUI surface) - verify the default entry dispatch before building. Do NOT build against the legacy board.rs surface (the STORY-701 mistake this note exists to prevent).
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:27.417997980Z
-modified_at: 2026-07-15T02:11:45.740468427Z
+modified_at: 2026-07-19T01:27:38.245143581Z
 req_type: Story
 tags:
 - parent:SPIKE-77

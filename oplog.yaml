@@ -34897,5 +34897,25 @@ operations:
   timestamp: 2026-07-19T01:26:53.275193930Z
   kind: !SetStatus
     status: Approved
-clock: 3238
+- id: 019f77fc-6831-7c63-b86c-afee087fab2f
+  target_id: 019f4012-e2fa-7282-a6d7-77abfa5810ae
+  author: aida
+  node_id: '1'
+  lamport: 3239
+  timestamp: 2026-07-19T01:27:38.289190053Z
+  kind: !SetDescription
+    description: |-
+      Badge cockpit rows with unseen actionable events, per spec — the substrate-native version of cmux's notification rings. Mechanism (per SPIKE-77 findings, docs/research/2026-07-07-spike-77-cmux-ux-signals-fleet-watch.md): tail .aida/events.jsonl with the existing offset pattern (event_wait.rs), group actionable events (PuntFiled, SpecShelved, AdvisorEscalated, UnreadMail, CiTerminal, PrMerged) by Event.spec, and render a badge glyph + count beside the existing RowLiveness glyph (redesign/liveness.rs seam).
+
+      Explicitly NOT escape-sequence based: the default cockpit dispatches children with inherited stdio and never sees their bytes (dispatch.rs:81-95); the OSC/bell approach was evaluated and dropped in the spike.
+
+      Acceptance:
+      - A spec row with unseen actionable events shows a badge glyph + count next to its liveness glyph; rows without show nothing new.
+      - Focusing/opening a row clears its badge; the seen-cursor persists across TUI restarts (new runtime file under .aida/, covered by the deny-by-default .gitignore convention — no new tracked path).
+      - Badge state comes only from events.jsonl aggregation — no PTY/byte inspection, no polling subprocesses (in-process tail like the liveness probe, cheap TTL).
+      - No change to the cockpit layout beyond the badge cell; bare TUI look unchanged when nothing is actionable (quiet-depth test).
+      - Legacy (AIDA_TUI_REDESIGN=0) path unchanged.
+
+      Binding acceptance addition (groom 2026-07-18): the badges MUST target the EPIC-54 redesign cockpit (the current default TUI surface) - verify the default entry dispatch before building. Do NOT build against the legacy board.rs surface (the STORY-701 mistake this note exists to prevent).
+clock: 3239
 node_id: '1'
