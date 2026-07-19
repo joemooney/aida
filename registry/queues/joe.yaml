@@ -445,14 +445,12 @@
   added_by: joe
   added_at: 2026-07-19T15:10:10.579766475Z
   for_role: implementer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 019f782e-b86e-7553-9ca9-b1251b48fd56
   position: 351000
   added_by: joe
   added_at: 2026-07-19T15:12:00.409653926Z
   for_role: implementer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 019f7aff-a993-76e0-ac9c-f68fec8bff8a
   position: 352000
@@ -460,11 +458,16 @@
   note: auto-queued by `session end` (019f7aef); covers 1 spec
   added_at: 2026-07-19T15:30:08.942507822Z
   for_role: reviewer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 019f7b00-f9cf-7bf3-a11f-fa8aa4da7045
   position: 353000
   added_by: joe
   added_at: 2026-07-19T15:31:34.517243910Z
   for_role: implementer
-  added_by_machine: imac
+- user_id: joe
+  requirement_id: 019f45a6-4cbf-7441-bbec-349288d9a8af
+  position: 354000
+  added_by: joe
+  note: 'intake pass 2026-07-19: docs-only SPIKE-67 field-observation writeup; operator comment carries the three-rung gate-ladder content'
+  added_at: 2026-07-19T17:16:39.166308794Z
+  for_role: advisor
