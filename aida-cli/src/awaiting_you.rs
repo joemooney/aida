@@ -52,6 +52,28 @@ pub(crate) struct AwaitingReport {
     /// the per-turn notice. Zero when the inbox is caught up.
     // trace:STORY-741 | ai:claude
     pub mail: MailChannel,
+    /// Pending worker directives from the local directive file. The enqueue
+    /// path (e.g. a human-audit request) lands here, and today it only
+    /// surfaces via the worker poll view — folding it in makes the unified
+    /// inbox the one place the advisor has to look. Cheap: a single local
+    /// file read, never a network call, so it rides the per-turn notice.
+    /// Renders as ONE collapsed line (like findings) because the worker
+    /// directives view is the real surface — this is the breadcrumb.
+    // trace:TASK-1146 | ai:claude
+    pub worker_directives: DirectivesChannel,
+}
+
+/// Pending-worker-directives summary for the awaiting-you report: how many
+/// directives sit in the local directive file plus the FIFO head's one-line
+/// summary (what the worker/advisor will pick up next). `pending == 0` →
+/// the channel renders nothing.
+// trace:TASK-1146 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub(crate) struct DirectivesChannel {
+    pub pending: usize,
+    /// One-line summary of the next (FIFO-head) directive, e.g.
+    /// `human-audit /aida-human-audit` or `drain batch:x --zen`.
+    pub next: Option<String>,
 }
 
 /// Unread-mail summary for the awaiting-you report: the full unread count
@@ -96,13 +118,19 @@ pub(crate) struct EscalationItem {
 
 impl AwaitingReport {
     /// Count of *lines* this report will render (PRs + briefs + 1 line
-    /// for findings if any + reviewer items + escalations). Drives the
-    /// `(N)` in the section header and the empty-report short-circuit.
+    /// for findings if any + 1 for unread mail + 1 for pending worker
+    /// directives + reviewer items + escalations). Drives the `(N)` in
+    /// the section header and the empty-report short-circuit.
     pub fn total(&self) -> usize {
         self.mergeable_prs.len()
             + self.pending_briefs.len()
             + (if self.findings_total > 0 { 1 } else { 0 })
             + (if self.mail.unread > 0 { 1 } else { 0 })
+            + (if self.worker_directives.pending > 0 {
+                1
+            } else {
+                0
+            })
             + self.reviewer_queue_items.len()
             + self.escalations.len()
     }
@@ -134,8 +162,9 @@ impl AwaitingReport {
 
         // Order: PRs first (most actionable — the unblocked-merge case),
         // then briefs (handoffs you owe), then findings line (a triage
-        // pointer rather than a per-finding list), then reviewer-queue
-        // items, then escalations.
+        // pointer rather than a per-finding list), then the mail line,
+        // then the worker-directives line (another collapsed breadcrumb),
+        // then reviewer-queue items, then escalations.
         for pr in &self.mergeable_prs {
             if budget == 0 {
                 overflow += 1;
@@ -210,6 +239,30 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        // trace:TASK-1146 | ai:claude
+        if self.worker_directives.pending > 0 {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let next = match self.worker_directives.next.as_deref() {
+                    Some(n) if !n.is_empty() => format!(" (next: {n})"),
+                    _ => String::new(),
+                };
+                writeln!(
+                    w,
+                    "  ⚙️ {} pending worker directive{}{} — `{}`",
+                    self.worker_directives.pending,
+                    if self.worker_directives.pending == 1 {
+                        ""
+                    } else {
+                        "s"
+                    },
+                    next,
+                    "aida worker directives".cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
         for q in &self.reviewer_queue_items {
             if budget == 0 {
                 overflow += 1;
@@ -261,6 +314,10 @@ impl AwaitingReport {
                 "unread": self.mail.unread,
                 "urgent": self.mail.urgent,
             },
+            "worker_directives": {
+                "pending": self.worker_directives.pending,
+                "next": self.worker_directives.next,
+            },
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
                 "title": q.title,
@@ -306,6 +363,14 @@ impl AwaitingReport {
                 "{}{}",
                 pluralize(self.mail.unread, "mail", "mail"),
                 urgent
+            ));
+        }
+        // trace:TASK-1146 | ai:claude
+        if self.worker_directives.pending > 0 {
+            parts.push(pluralize(
+                self.worker_directives.pending,
+                "directive",
+                "directives",
             ));
         }
         if !self.reviewer_queue_items.is_empty() {
@@ -679,6 +744,88 @@ mod tests {
         assert_eq!(v["mail"]["unread"], 4);
         assert_eq!(v["mail"]["urgent"], 2);
         assert_eq!(v["total"], 1);
+    }
+
+    // TASK-1146: pending worker directives are now a channel in the report —
+    // the count folds into the header total as ONE collapsed line (like
+    // findings), names the FIFO-head directive, and points at the worker
+    // directives view. trace:TASK-1146
+    #[test]
+    fn worker_directives_fold_into_report_as_one_line() {
+        let r = AwaitingReport {
+            worker_directives: DirectivesChannel {
+                pending: 3,
+                next: Some("human-audit /aida-human-audit".into()),
+            },
+            ..Default::default()
+        };
+        // A report with ONLY directives is non-empty and counts as one line
+        // regardless of how many directives are queued.
+        assert!(!r.is_empty());
+        assert_eq!(r.total(), 1);
+        let mut buf = Vec::new();
+        let wrote = r.render(false, &mut buf).unwrap();
+        assert!(wrote);
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("3 pending worker directives"),
+            "directives line missing:\n{s}"
+        );
+        assert!(
+            s.contains("(next: human-audit /aida-human-audit)"),
+            "FIFO-head summary missing:\n{s}"
+        );
+        assert!(
+            s.contains("aida worker directives"),
+            "line must point at the worker directives view:\n{s}"
+        );
+    }
+
+    // TASK-1146: the compact per-turn notice line names the directives channel,
+    // and the channel is local-file-backed so it legitimately rides the
+    // network-free `--notice` path.
+    #[test]
+    fn compact_line_includes_worker_directives_channel() {
+        let r = AwaitingReport {
+            worker_directives: DirectivesChannel {
+                pending: 1,
+                next: Some("drain batch:x --zen".into()),
+            },
+            ..Default::default()
+        };
+        let line = r.compact_line().expect("directives alone must fire a line");
+        assert!(
+            line.contains("1 directive"),
+            "directives channel missing: {line}"
+        );
+        assert!(
+            line.contains("aida awaiting"),
+            "line must point at the full view: {line}"
+        );
+    }
+
+    // TASK-1146: the JSON contract gains a stable `worker_directives` object.
+    #[test]
+    fn json_shape_includes_worker_directives_channel() {
+        let r = AwaitingReport {
+            worker_directives: DirectivesChannel {
+                pending: 2,
+                next: Some("human-audit /aida-human-audit".into()),
+            },
+            ..Default::default()
+        };
+        let v = r.to_json();
+        assert_eq!(v["worker_directives"]["pending"], 2);
+        assert_eq!(
+            v["worker_directives"]["next"],
+            "human-audit /aida-human-audit"
+        );
+        assert_eq!(v["total"], 1);
+
+        // Empty channel serializes as pending 0 / next null (stable shape).
+        let v = AwaitingReport::default().to_json();
+        assert_eq!(v["worker_directives"]["pending"], 0);
+        assert!(v["worker_directives"]["next"].is_null());
     }
 
     /// Mirrors `status_cleanup::tests::strip_ansi` so assertions can check

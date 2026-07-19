@@ -189,6 +189,48 @@ fn reviewer_queue_items_only_surface_for_reviewer_role() {
     assert_eq!(report.reviewer_queue_items[0].spec_id, "PR-42");
 }
 
+// TASK-1146: a directive enqueued by the human-audit path (the STORY-768
+// enqueue writer onto the local worker-directive file) folds into the
+// awaiting-you report — so the request surfaces in the unified inbox the
+// advisor polls, not only in the worker directives view. The `no_ci` path
+// (the per-turn notice) picks it up too: the channel is a single local
+// file read, no network. trace:TASK-1146
+#[test]
+fn enqueued_worker_directive_surfaces_in_awaiting_report() {
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+
+    // Fresh project: no directive file → the channel is empty and silent.
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    assert_eq!(report.worker_directives.pending, 0);
+    assert!(report.worker_directives.next.is_none());
+
+    // Enqueue via the exact writer `aida human audit` uses.
+    crate::human_audit::post_directive_line_enqueue(dir.path()).unwrap();
+
+    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    assert_eq!(
+        report.worker_directives.pending, 1,
+        "the enqueued directive must populate the channel"
+    );
+    assert_eq!(
+        report.worker_directives.next.as_deref(),
+        Some(crate::human_audit::directive_line().as_str()),
+        "the FIFO-head summary names the enqueued directive"
+    );
+    assert!(!report.is_empty(), "directives alone make the report fire");
+
+    // The per-turn notice line names the channel (network-free path).
+    let line = report
+        .compact_line()
+        .expect("a report with a pending directive yields a per-turn line");
+    assert!(
+        line.contains("1 directive"),
+        "compact line must name the directives channel: {line}"
+    );
+}
+
 // STORY-769: the `--notice` command ALWAYS leads with a time+timing line,
 // even when nothing awaits (the deliberate silent-when-empty → one-line-
 // every-turn contract change). The awaiting-channels half stays empty; the

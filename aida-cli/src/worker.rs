@@ -73,8 +73,10 @@ pub(crate) struct Directive {
 
 impl Directive {
     /// Human-friendly one-line summary — `drain batch:x --zen` shows args,
-    /// bare verbs show just the verb.
-    fn summary(&self) -> String {
+    /// bare verbs show just the verb. `pub(crate)` so the awaiting-you
+    /// report can name the FIFO-head directive on its collapsed line.
+    // trace:TASK-1146 | ai:claude
+    pub(crate) fn summary(&self) -> String {
         if self.args.is_empty() {
             self.verb.clone()
         } else {

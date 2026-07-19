@@ -7923,7 +7923,8 @@ pub enum Command {
 
     /// The unified coordination inbox — every channel where YOU are the gate,
     /// in ONE place: mergeable PRs, unacked briefs, findings awaiting triage,
-    /// reviewer verdicts, NeedsAttention escalations, AND unread mail. The same
+    /// reviewer verdicts, NeedsAttention escalations, unread mail, AND pending
+    /// worker directives. The same
     /// "Awaiting you" report that leads `aida status`, promoted to a first-class
     /// command so the whole coordination inbox is a can't-miss signal — not just
     /// mail (which had its own per-turn hook while everything else stayed
@@ -7934,6 +7935,7 @@ pub enum Command {
     /// NO network call — PRs (the one gh-backed channel) are omitted from the
     /// line; run the bare command to include them.
     // trace:STORY-741 | ai:claude
+    // trace:TASK-1146 | ai:claude
     Awaiting {
         /// Compact one-line summary spanning every channel, for the per-turn
         /// hook. SILENT when nothing awaits. Cache/local-backed, no network
