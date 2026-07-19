@@ -35494,5 +35494,35 @@ operations:
   timestamp: 2026-07-19T17:17:40.280204242Z
   kind: !SetStatus
     status: Approved
-clock: 3287
+- id: 019f7b66-da1e-79b3-bcb6-98594eade14f
+  target_id: 019f7b66-d4cb-7052-a30b-8fbca9b16240
+  author: aida
+  node_id: '1'
+  lamport: 3288
+  timestamp: 2026-07-19T17:22:45.918605537Z
+  kind: !Create
+    title: 'STORY-772: thin bin + single aida-cli-lib, run() in lib, tests inside lib'
+    description: |
+      ## Context
+      STORY-772 splits aida-cli (87.7K-line main.rs post-STORY-770) into a binary and a library. The load-bearing choices: where run()/dispatch lives, where the 166 relocated test modules live, and how the split sequences. Scoping: docs/plans/2026-07-17-story-772-crate-split-scoping.md.
+
+      ## Options considered
+      - run() in the bin — forces ~660 pub(crate) fns + private helpers public; visibility explosion, leaks internal API. Rejected.
+      - run() in the lib, thin 3-line bin — only one symbol (main_entry) becomes pub. Chosen.
+      - Standalone test crate — needs the whole pub(crate) surface promoted to pub. Rejected.
+      - Tests ride inside aida-cli-lib as #[cfg(test)] #[path] modules — zero visibility churn. Chosen.
+      - One big PR vs 2-PR sequence — 2-PR (PR-1 in-package lib boundary, trivially revertible; PR-2 git-mv carve of the aida-cli-lib package) keeps every step green. Chosen.
+
+      ## Decision
+      Thin 3-line bin calling aida_cli_lib::main_entry(); everything else (run/dispatch, all modules, all 166 test modules, build.rs with its gRPC codegen + version stamps) moves into aida-cli-lib. Features tui/remote/postgres pass through from bin to lib. New crate stays publishable (workspace metadata) and joins the publish.sh stub's dependency-order list (crates.io publishing is still a stub, so this is posture, not a live publish). Executed as the 2-PR sequence, sequential merge-then-continue in one guided session (squash-merge repo makes stacked PRs churn).
+
+      ## Rationale
+      Operator go decision 2026-07-18 via /aida-decide re-scoped the value to TESTABILITY + a clean entry-point boundary + precondition for a future multi-crate lib split — NOT build time (measured ~0-5% clean-build, nothing incremental). The one-pub-symbol topology is the only shape that avoids the visibility explosion. Sequencing + publish posture confirmed by operator in the 2026-07-19 guided session.
+
+      ## Consequences
+      Commits to a single ~274K-line lib crate (the future multi-crate split is separate work, STORY-773, gated by the pub(crate) web). include_str!("../main.rs") in headless_hint_tests retargets to the lib. New crate name aida-cli-lib enters the workspace; first build after the carve invalidates cached aida-cli artifacts fleet-wide once.
+    req_type: Decision
+    status: Approved
+    priority: Medium
+clock: 3288
 node_id: '1'
