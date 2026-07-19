@@ -17,12 +17,12 @@ description: |-
   - No path writes to any remote. Offline remote = warning, not failure.
 
   VERIFY: a throwaway repo with two remotes, push a commit to only one, assert aida remote status marks it DIVERGED and aida doctor surfaces it.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:10:21.512037382Z
-modified_at: 2026-07-19T01:26:14.530952924Z
+modified_at: 2026-07-19T01:26:15.713629749Z
 req_type: Task
 tags:
 - aida:remote:status
