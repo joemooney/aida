@@ -16,6 +16,3 @@ relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-13T02:20:31.342203905Z
-deferred: true
-deferred_at: 2026-07-19T02:22:11.856404033Z
-deferred_until: a real cross-clone lock collision is observed (its own stated condition)

@@ -13,6 +13,3 @@ req_type: Story
 tags:
 - doc-projection
 - living-docs
-deferred: true
-deferred_at: 2026-07-19T01:27:12.536280763Z
-deferred_until: EPIC-24 core capture is proven in use
