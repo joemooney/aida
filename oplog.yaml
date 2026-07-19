@@ -35332,5 +35332,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3278
+- id: 019f7b07-a0de-76f3-a28a-83bc51a49921
+  target_id: 019f7b07-9b98-7462-ae8d-bb0cae29ba8e
+  author: aida
+  node_id: '1'
+  lamport: 3279
+  timestamp: 2026-07-19T15:38:45.342739852Z
+  kind: !Create
+    title: 'guided-implement vendor parity: validate + wire the codex rendering into mode dispatch; fence AGY by dispatch policy'
+    description: 'Operator ask 2026-07-19 (mid STORY-776 guided session): a /aida-guided-implement equivalent for codex and agy. State: BUG-731 already rewrote the codex prompt pack rendering (argument substitution + AskUserQuestion adapted to plain-text numbered forks + pr ship wording), so codex has an UNVALIDATED equivalent today. Scope: (1) run one real guided session under codex on a non-keystone guided-mode spec; fix fidelity gaps found (fork presentation, ADR recording via CLI, stop-at-PR discipline — the codex TASK-1155 run already demonstrated no-merge compliance); (2) when STORY-776''s execution-mode dispatch lands, aida do <spec> with mode=guided honors the session vendor: claude → /aida-guided-implement, codex → the adapted prompt, launched in the spec worktree either way; (3) AGY: NO guided equivalent — fence it per the standing AGY dispatch policy (draft-for-review-only, mechanical/bounded); mode=guided + vendor=agy refuses with the policy reason and suggests claude/codex. Document the vendor matrix in the guided skill''s header. Acceptance: one recorded codex guided run reaching PR with >=1 ADR filed; dispatch honors vendor for guided mode; agy refusal has an explicit policy message; matrix documented.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3279
 node_id: '1'
