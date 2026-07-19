@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# trace:TASK-1121 | ai:claude
 # Render a research/plan markdown doc to a PDF sibling via pandoc + xelatex.
 #
 # Usage:
