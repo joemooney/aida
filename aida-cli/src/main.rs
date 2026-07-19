@@ -25452,6 +25452,14 @@ fn session_start(
 /// session op proceed than to block on a probe failure.
 /// trace:BUG-61 | ai:claude
 fn probe_live_claudes_in_worktree(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
+    // BUG-734: a worktree-less lease has an empty `worktree_path`. An empty
+    // path must never reach the cwd scan below — `Path::starts_with` on an
+    // empty base matches EVERY path, so every live claude on the machine
+    // would count as "inside" the blank worktree and block `session end`.
+    // Nothing on disk ⇒ nothing can leak. trace:BUG-734 | ai:claude
+    if worktree.as_os_str().is_empty() {
+        return Vec::new();
+    }
     let canon = worktree
         .canonicalize()
         .unwrap_or_else(|_| worktree.to_path_buf());
@@ -25468,11 +25476,20 @@ fn probe_live_claudes_in_worktree(worktree: &std::path::Path) -> Vec<process_pro
 /// by the leaked process and any hook it fires would resolve against a
 /// stale inode. trace:BUG-61 | ai:claude
 fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
+    // BUG-734: same empty-path hazard as probe_live_claudes_in_worktree —
+    // `starts_with` on an empty base matches everything. trace:BUG-734 | ai:claude
+    if worktree.as_os_str().is_empty() {
+        return Vec::new();
+    }
     process_probe::probe_live_claude_sessions()
         .into_iter()
         .filter(|s| s.stale_cwd && (s.cwd == worktree || s.cwd.starts_with(worktree)))
         .collect()
 }
+
+#[cfg(test)]
+#[path = "tests/bug_734_empty_worktree_probe_tests.rs"]
+mod bug_734_empty_worktree_probe_tests;
 
 /// TASK-54: return Some((behind, sample)) when `branch` lags `main`
 /// (or origin/main) by 1+ commits. `sample` is a list of one-line
@@ -28303,6 +28320,15 @@ fn session_end(
         }
     }
 
+    // BUG-734: a lease with no worktree (empty `worktree_path` — e.g. a
+    // reviewer lease that never created one) has nothing on disk to tear
+    // down. An empty path must never reach the worktree scans below: the
+    // live-claude probe, the dirty gate, and `git worktree remove` would
+    // all evaluate the caller's cwd (or every path) instead of a real
+    // worktree, blocking the end of a lease that only needs its record
+    // deleted. trace:BUG-734 | ai:claude
+    let has_worktree = !target.worktree_path.as_os_str().is_empty();
+
     // BUG-61: detect live `claude` processes whose cwd is under the
     // worktree we're about to remove. If we don't, `git worktree remove`
     // succeeds (cwd is just a soft handle), the dir is unlinked, and the
@@ -28311,7 +28337,13 @@ fn session_end(
     // paths that no longer exist. Default refuses with a clear message;
     // `--force` SIGTERMs them with a 5s grace, then SIGKILLs.
     // trace:BUG-61 | ai:claude
-    let leaked = probe_live_claudes_in_worktree(&target.worktree_path);
+    // BUG-734: worktree-less lease ⇒ no process-leak check — nothing to
+    // remove, so nothing can leak. trace:BUG-734 | ai:claude
+    let leaked = if has_worktree {
+        probe_live_claudes_in_worktree(&target.worktree_path)
+    } else {
+        Vec::new()
+    };
     if !leaked.is_empty() {
         if !force {
             let mut msg = format!(
@@ -28348,11 +28380,16 @@ fn session_end(
         "  - delete lease at {}",
         lease_path(&project_root, &target.id).display()
     );
-    eprintln!(
-        "  - run `git worktree remove {}` (branch {} kept; merge/discard manually)",
-        target.worktree_path.display(),
-        target.branch
-    );
+    // BUG-734: only promise a worktree removal when there is one.
+    if has_worktree {
+        eprintln!(
+            "  - run `git worktree remove {}` (branch {} kept; merge/discard manually)",
+            target.worktree_path.display(),
+            target.branch
+        );
+    } else {
+        eprintln!("  - no worktree attached — nothing on disk to remove");
+    }
 
     // BUG-706: `--yes` and `--force` both skip the confirmation. On a
     // non-terminal stdin (a headless drain reclaiming a dead lease) there is
@@ -28417,22 +28454,26 @@ fn session_end(
     //   - .aida/ itself is a real dir (with tracked content) — leave it
     //     alone, but strip the runtime symlinks inside it that
     //     session_start created. trace:BUG-52 | ai:claude
-    let store_link = target.worktree_path.join(".aida-store");
-    if store_link.is_symlink() {
-        let _ = std::fs::remove_file(&store_link);
-    }
-    let aida_dir = target.worktree_path.join(".aida");
-    for runtime in &[
-        "sessions",
-        "roles",
-        "cache.db",
-        "cache.db-shm",
-        "cache.db-wal",
-        "pgdata",
-    ] {
-        let p = aida_dir.join(runtime);
-        if p.is_symlink() {
-            let _ = std::fs::remove_file(&p);
+    // BUG-734: no worktree ⇒ no session symlinks to strip (an empty path
+    // would resolve the checks against the caller's cwd). trace:BUG-734 | ai:claude
+    if has_worktree {
+        let store_link = target.worktree_path.join(".aida-store");
+        if store_link.is_symlink() {
+            let _ = std::fs::remove_file(&store_link);
+        }
+        let aida_dir = target.worktree_path.join(".aida");
+        for runtime in &[
+            "sessions",
+            "roles",
+            "cache.db",
+            "cache.db-shm",
+            "cache.db-wal",
+            "pgdata",
+        ] {
+            let p = aida_dir.join(runtime);
+            if p.is_symlink() {
+                let _ = std::fs::remove_file(&p);
+            }
         }
     }
 
@@ -28444,7 +28485,13 @@ fn session_end(
     // stripping the runtime symlinks (which would otherwise show up as
     // untracked) and BEFORE deleting the lease, so a refusal leaves the
     // session intact and recoverable. trace:BUG-67 | ai:claude
-    let dirty_entries = worktree_dirty_entries(&target.worktree_path);
+    // BUG-734: no worktree ⇒ no dirty gate — `git -C ""` would report the
+    // caller's cwd, refusing on unrelated dirt. trace:BUG-734 | ai:claude
+    let dirty_entries = if has_worktree {
+        worktree_dirty_entries(&target.worktree_path)
+    } else {
+        Vec::new()
+    };
     // BUG-652: `--return` resets the worktree (reset --hard + clean -fd), so a
     // dirty pooled tree must NOT be refused here — refusing leaves the tree
     // leased and silently breaks reuse (the next acquire creates a fresh tree).
@@ -28452,8 +28499,9 @@ fn session_end(
     // return path. Non-pool trees / non-return still refuse without --force.
     // TASK-985: a pooled tree returns by DEFAULT now — `--remove` opts out.
     // trace:BUG-652 trace:STORY-714 trace:TASK-985 | ai:claude
-    let returning_pool_tree =
-        !remove && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
+    let returning_pool_tree = !remove
+        && has_worktree
+        && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
     match dirty_gate_outcome(!dirty_entries.is_empty(), force, returning_pool_tree) {
         DirtyGateOutcome::Proceed => {}
         DirtyGateOutcome::Salvage => {
@@ -28608,11 +28656,14 @@ fn session_end(
         .worktree_path
         .canonicalize()
         .unwrap_or_else(|_| target.worktree_path.clone());
-    let cwd_was_inside_worktree = starting_cwd
-        .as_ref()
-        .and_then(|c| c.canonicalize().ok())
-        .map(|c| c.starts_with(&canonical_worktree))
-        .unwrap_or(false);
+    // BUG-734: `starts_with` on an empty canonical path matches every cwd —
+    // a worktree-less lease must never trigger the cd-out. trace:BUG-734 | ai:claude
+    let cwd_was_inside_worktree = has_worktree
+        && starting_cwd
+            .as_ref()
+            .and_then(|c| c.canonicalize().ok())
+            .map(|c| c.starts_with(&canonical_worktree))
+            .unwrap_or(false);
 
     // TASK-68 Layer 1: chdir to the parent project before running git.
     // `git worktree remove` refuses outright when the calling process's
@@ -28633,14 +28684,26 @@ fn session_end(
     // trace:BUG-483 | ai:claude
     let remaining_leases = list_leases(&project_root);
     use std::io::Write;
-    let shared_peer =
-        peer_lease_sharing_worktree(&remaining_leases, &target.id, &target.worktree_path);
+    // BUG-734: two worktree-less leases share the same empty path — don't let
+    // them count as worktree peers. trace:BUG-734 | ai:claude
+    let shared_peer = if has_worktree {
+        peer_lease_sharing_worktree(&remaining_leases, &target.id, &target.worktree_path)
+    } else {
+        None
+    };
     // STORY-714: when `--return` is set and this is a registered warm-pool
     // worktree, hand it back to the pool (reset to a clean detached base, mark
     // idle) instead of deleting it. The directory persists so the next acquire
     // reuses it warm. trace:STORY-714 | ai:claude
     let mut returned_to_pool = false;
-    if let Some(peer) = shared_peer {
+    if !has_worktree {
+        // BUG-734: worktree-less lease — the record is gone; nothing on disk
+        // to remove or return. trace:BUG-734 | ai:claude
+        eprintln!(
+            "{} no worktree attached to this session — lease record removed; nothing on disk to clean up",
+            "→".dimmed()
+        );
+    } else if let Some(peer) = shared_peer {
         // Skip the removal; this lease/registry entry is already gone, so the
         // session has ended — we just leave the shared worktree standing.
         eprintln!(
@@ -28708,11 +28771,15 @@ fn session_end(
             }
         }
     }
-    eprintln!(
-        "  branch {} retained — merge or `git branch -D {}` when ready",
-        target.branch.cyan(),
-        target.branch
-    );
+    // BUG-734: the branch-retained hint only makes sense when a worktree
+    // (with its checked-out branch) was actually removed. trace:BUG-734 | ai:claude
+    if has_worktree {
+        eprintln!(
+            "  branch {} retained — merge or `git branch -D {}` when ready",
+            target.branch.cyan(),
+            target.branch
+        );
+    }
 
     // BUG-614: lossless prune of administrative worktree entries whose
     // directories are already gone. `git worktree prune` ONLY removes the
@@ -28734,8 +28801,10 @@ fn session_end(
     // still live (the peer is using it), so it's neither orphaned nor safe
     // to purge. STORY-714: also skip when we returned the tree to the pool —
     // the directory persists, so its cwd is not orphaned.
+    // BUG-734: no worktree was ever created, so no Claude Code project dir
+    // can have been orphaned by its removal. trace:BUG-734 | ai:claude
     // trace:TASK-70 BUG-483 STORY-714 | ai:claude
-    if shared_peer.is_none() && !returned_to_pool {
+    if has_worktree && shared_peer.is_none() && !returned_to_pool {
         if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
             if cc_dir.is_dir() {
                 if purge_cc {
