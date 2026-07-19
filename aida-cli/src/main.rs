@@ -33254,6 +33254,7 @@ fn pr_ship_handler(
     // BUG-574: skipped entirely when the PR is already merged — the activity
     // log for the merge step was already recorded as Skipped above, and the
     // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
+    let mut merged_this_run = false;
     if !already_merged {
         if branch_in_sibling {
             eprintln!(
@@ -33320,6 +33321,7 @@ fn pr_ship_handler(
                     &ShipStep::Merge { delete_branch },
                     &StepOutcome::Ok,
                 );
+                merged_this_run = true;
             } else {
                 log_ship_activity(
                     &main_worktree,
@@ -33348,6 +33350,7 @@ fn pr_ship_handler(
                 &ShipStep::Merge { delete_branch },
                 &StepOutcome::Ok,
             );
+            merged_this_run = true;
         }
     }
 
@@ -33561,6 +33564,24 @@ fn pr_ship_handler(
                     &StepOutcome::Skipped(format!("no lease for branch {}", branch)),
                 );
             }
+        }
+    }
+
+    // TASK-1145: after an AIDA-managed squash merge lands, opportunistically
+    // prune verified merged agent worktrees. This reuses the destructive
+    // doctor heal gate, so unattended/autonomous contexts get a visible skip
+    // rather than a forced removal. Best-effort: post-merge GC must never turn a
+    // landed PR into a failed ship.
+    // trace:TASK-1145 | ai:codex
+    if merged_this_run {
+        eprintln!("  step 6: pruning verified merged agent worktrees");
+        if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc(
+            /* yes */ true, /* force */ true, /* json */ false,
+        ) {
+            eprintln!(
+                "  {} post-merge worktree gc failed or was partially applied: {e:#}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
         }
     }
 
@@ -48835,6 +48856,9 @@ fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             branch,
         } => handle_worktree_enter(target, path.as_deref(), branch.as_deref()),
         WorktreeCommand::List { json } => handle_worktree_list(*json),
+        WorktreeCommand::Gc { yes, force, json } => {
+            doctor_cmd::run_merged_agent_worktree_gc(*yes, *force, *json)
+        }
         // STORY-714 warm-pool surface.
         WorktreeCommand::Pool(pool) => handle_worktree_pool_command(pool),
     }

@@ -95,6 +95,22 @@ pub(crate) fn handle_doctor_command(
     }
 }
 
+/// Ergonomic `aida worktree gc` front door for the existing squash-aware
+/// merged-agent-worktree healer. Keep this as a thin wrapper so every caller
+/// uses the same scan, destructive-heal gate, and dirty-worktree refusal.
+// trace:TASK-1145 | ai:codex
+pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -> Result<()> {
+    doctor_multi_agent(DoctorRunOptions {
+        heal: true,
+        yes,
+        category: Some("merged-agent-worktrees".to_string()),
+        json,
+        force,
+        all: false,
+        since: None,
+    })
+}
+
 // ----------------------------------------------------------------------------
 // STORY-462 — `aida doctor`: multi-agent state drift diagnostics + healing.
 // ----------------------------------------------------------------------------

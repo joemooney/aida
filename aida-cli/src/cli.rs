@@ -1988,6 +1988,24 @@ pub enum WorktreeCommand {
         json: bool,
     },
 
+    /// Prune verified merged agent worktrees using the same safety checks as
+    /// `aida doctor --heal --category merged-agent-worktrees`.
+    // trace:TASK-1145 | ai:codex
+    Gc {
+        /// Skip confirmation prompts.
+        #[clap(long, short = 'y')]
+        yes: bool,
+
+        /// Permit destructive cleanup: remove verified merged worktrees and
+        /// delete their local branches. Still refused in unattended contexts.
+        #[clap(long)]
+        force: bool,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Manage the warm-pool of recycled worktrees — kept warm (reset-not-delete
     /// on hand-back) so build caches survive across fan-outs. Dissolves the
     /// cargo-cache poison and branch-stacking hazards of destroy-and-recreate.
@@ -11006,6 +11024,21 @@ mod tests {
         match cli.command {
             Command::Do { spec } => assert_eq!(spec, "TASK-1155"),
             other => panic!("expected Do command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1145 | ai:codex
+    #[test]
+    fn worktree_gc_parses_destructive_heal_flags() {
+        let cli = Cli::try_parse_from(["aida", "worktree", "gc", "--yes", "--force", "--json"])
+            .expect("`aida worktree gc` should parse");
+        match cli.command {
+            Command::Worktree(WorktreeCommand::Gc { yes, force, json }) => {
+                assert!(yes);
+                assert!(force);
+                assert!(json);
+            }
+            other => panic!("expected Worktree::Gc command, got {other:?}"),
         }
     }
 
