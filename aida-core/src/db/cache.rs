@@ -72,6 +72,10 @@ pub struct RequirementSummary {
     /// drain|drive|guided|operator|decide); None = ungroomed.
     // trace:STORY-776 | ai:claude
     pub execution_mode: Option<String>,
+    /// The optional first-class numeric weight/score projected from the
+    /// canonical YAML `weight` field; None = unset.
+    // trace:FR-283 | ai:claude
+    pub weight: Option<f64>,
     pub yaml_path: String,
 }
 
@@ -253,6 +257,10 @@ pub enum SortOrder {
     /// Most-connected first by the type-weighted heft score (ties broken by
     /// modified_at DESC).
     HeftDesc,
+    /// Heaviest first by the user-set numeric weight/score (ties broken by
+    /// modified_at DESC; unweighted rows sort last).
+    // trace:FR-283 | ai:claude
+    WeightDesc,
 }
 
 /// Filter passed to cache list queries. All fields are AND'd together;
@@ -306,6 +314,14 @@ pub struct ListFilter {
     /// (an incomplete BlockedBy edge); `Some(false)` restricts to unblocked.
     /// `None` (default) applies no blocked filter. trace:TASK-902 | ai:claude
     pub blocked: Option<bool>,
+    /// Inclusive lower bound on the numeric weight/score. Rows with no weight
+    /// set are excluded when a bound is given.
+    // trace:FR-283 | ai:claude
+    pub min_weight: Option<f64>,
+    /// Inclusive upper bound on the numeric weight/score. Rows with no weight
+    /// set are excluded when a bound is given.
+    // trace:FR-283 | ai:claude
+    pub max_weight: Option<f64>,
     /// Optional cap on returned rows (after ordering).
     pub limit: Option<usize>,
 }
@@ -373,7 +389,11 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // of the canonical YAML `execution_mode` field — the advisor's bless-time dispatch
 // classification) so `aida list --fields ...,mode` reads the cache.
 // trace:STORY-776 | ai:claude
-const SCHEMA_VERSION: &str = "11";
+// FR-283: bumped to "12" when the `weight` column was added (projection of the
+// canonical YAML `weight` field — the optional first-class numeric score) so
+// `aida list --sort weight` / `--min-weight` / `--max-weight` read the cache.
+// trace:FR-283 | ai:claude
+const SCHEMA_VERSION: &str = "12";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -1158,7 +1178,7 @@ impl Cache {
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
                     in_degree, out_degree, heft, yaml_path, assignee, blocked,
-                    has_pending_decision, execution_mode
+                    has_pending_decision, execution_mode, weight
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -1268,6 +1288,17 @@ impl Cache {
                 " AND blocked = 0"
             });
         }
+        // FR-283: numeric weight bounds pushed down to the cache column. A NULL
+        // (unset) weight fails both comparisons, so bounded queries return only
+        // explicitly-weighted rows. trace:FR-283 | ai:claude
+        if let Some(min) = filter.min_weight {
+            sql.push_str(" AND weight >= CAST(? AS REAL)");
+            args.push(min.to_string());
+        }
+        if let Some(max) = filter.max_weight {
+            sql.push_str(" AND weight <= CAST(? AS REAL)");
+            args.push(max.to_string());
+        }
         // trace:TASK-1-021 | ai:claude
         // tags_json is a JSON array text column; bracket each tag with quotes
         // to avoid `foo` matching `foobar` mid-string.
@@ -1294,6 +1325,8 @@ impl Cache {
             SortOrder::ModifiedDesc => sql.push_str(" ORDER BY modified_at DESC"),
             // trace:STORY-632 | ai:claude
             SortOrder::HeftDesc => sql.push_str(" ORDER BY heft DESC, modified_at DESC"),
+            // trace:FR-283 | ai:claude — NULL (unset) weights sort last in DESC.
+            SortOrder::WeightDesc => sql.push_str(" ORDER BY weight DESC, modified_at DESC"),
         }
         if let Some(n) = filter.limit {
             sql.push_str(&format!(" LIMIT {}", n));
@@ -1349,7 +1382,7 @@ impl Cache {
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
                           c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
-                          c.blocked, c.has_pending_decision, c.execution_mode
+                          c.blocked, c.has_pending_decision, c.execution_mode, c.weight
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1583,6 +1616,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "has_pending_decision",
     // trace:STORY-776 | ai:claude
     "execution_mode",
+    // trace:FR-283 | ai:claude
+    "weight",
     "yaml_path",
 ];
 
@@ -1832,8 +1867,8 @@ fn insert_one(
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
-            has_pending_decision, execution_mode
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
+            has_pending_decision, execution_mode, weight
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -1865,6 +1900,8 @@ fn insert_one(
             if has_pending_decision { 1 } else { 0 },
             // trace:STORY-776 | ai:claude — NULL when ungroomed.
             req.execution_mode.map(|m| m.to_string()),
+            // trace:FR-283 | ai:claude — NULL when unset.
+            req.weight.map(|w| w as f64),
         ],
     )?;
 
@@ -1929,6 +1966,8 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         has_pending_decision: row.get::<_, i64>(24)? != 0,
         // trace:STORY-776 | ai:claude — column index 25, nullable TEXT.
         execution_mode: row.get(25)?,
+        // trace:FR-283 | ai:claude — column index 26, nullable REAL.
+        weight: row.get(26)?,
     })
 }
 
@@ -2214,6 +2253,90 @@ mod tests {
                 .map(String::from)
                 .collect::<std::collections::HashSet<_>>(),
         );
+    }
+
+    /// FR-283: the numeric weight/score round-trips through the cache
+    /// projection, `--sort weight` orders heaviest-first with unweighted rows
+    /// last, and the min/max bounds exclude unweighted rows.
+    // trace:FR-283 | ai:claude
+    #[test]
+    fn cache_weight_round_trips_sorts_and_filters() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut heavy = sample_req("FR-1-020", "heavy");
+        heavy.weight = Some(9.5);
+        let mut light = sample_req("FR-1-021", "light");
+        light.weight = Some(0.75);
+        let unweighted = sample_req("FR-1-022", "unweighted");
+
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([heavy.clone(), light.clone(), unweighted]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Round-trip: the projected summary carries the weight (None = unset).
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
+        let weight_of = |spec: &str| {
+            rows.iter()
+                .find(|r| r.spec_id.as_deref() == Some(spec))
+                .unwrap()
+                .weight
+        };
+        assert_eq!(weight_of("FR-1-020"), Some(9.5));
+        assert_eq!(weight_of("FR-1-021"), Some(0.75));
+        assert_eq!(weight_of("FR-1-022"), None);
+
+        // Sort: heaviest first; the unweighted (NULL) row sorts last.
+        let sorted = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                sort: SortOrder::WeightDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        let order: Vec<&str> = sorted.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(order, ["FR-1-020", "FR-1-021", "FR-1-022"]);
+
+        // Bounds: inclusive, and an unset weight fails any bound.
+        let bounded = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                min_weight: Some(0.75),
+                max_weight: Some(5.0),
+                ..Default::default()
+            })
+            .unwrap();
+        let bounded_specs: Vec<&str> = bounded
+            .iter()
+            .filter_map(|r| r.spec_id.as_deref())
+            .collect();
+        assert_eq!(bounded_specs, ["FR-1-021"]);
+
+        // Single-row upsert path carries the weight too.
+        let mut light_edit = light;
+        light_edit.weight = Some(12.0);
+        cache.upsert_requirement(&light_edit).unwrap();
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                min_weight: Some(10.0),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("FR-1-021"));
+        assert_eq!(rows[0].weight, Some(12.0));
     }
 
     /// STORY-632: the static type-weight table matches the operator-agreed

@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- `execution_mode` field so `aida list --fields ...,mode` reads the cache.
     -- NULL = ungroomed.
     execution_mode TEXT,
+    -- FR-283: the optional first-class numeric weight/score, projected from the
+    -- canonical YAML `weight` field so `aida list --sort weight` and the
+    -- `--min-weight` / `--max-weight` filters read the cache. NULL = unset.
+    weight REAL,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 
@@ -68,6 +72,8 @@ CREATE INDEX IF NOT EXISTS idx_cache_deferred ON requirements_cache(deferred);
 CREATE INDEX IF NOT EXISTS idx_cache_deferred_at ON requirements_cache(deferred_at);
 -- STORY-632: index heft so `aida list --sort heft` orders without a table scan.
 CREATE INDEX IF NOT EXISTS idx_cache_heft ON requirements_cache(heft);
+-- FR-283: index weight so `aida list --sort weight` orders without a table scan.
+CREATE INDEX IF NOT EXISTS idx_cache_weight ON requirements_cache(weight);
 -- TASK-902: index blocked so `aida list --blocked` filters without a table scan.
 CREATE INDEX IF NOT EXISTS idx_cache_blocked ON requirements_cache(blocked);
 
