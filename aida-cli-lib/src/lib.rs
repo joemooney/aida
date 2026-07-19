@@ -55240,6 +55240,113 @@ fn parse_pr_number_from_url(url: &str) -> Option<u64> {
         .ok()
 }
 
+// Shared per-requirement mutation for the Done→Completed auto-bump. One
+// body used by BOTH write paths: the targeted per-spec path (git-canonical
+// stores — one `update SPEC-ID` commit per bumped spec, no bulk chore
+// commits) and the legacy `update_atomically` full-store path (YAML/SQLite).
+// Returns true when the requirement actually flipped (caller then persists).
+// Re-checks eligibility against the just-re-read copy so a concurrent edit
+// that moved the spec off an eligible status wins.
+// trace:TASK-1161 | ai:claude
+fn apply_auto_bump_flip(
+    r: &mut aida_core::Requirement,
+    flip: &AutoBumpFlip,
+    now: chrono::DateTime<chrono::Utc>,
+    project_root: &std::path::Path,
+) -> bool {
+    // Re-check against the freshest copy — concurrent edits may have
+    // moved it off an eligible status.
+    if !auto_bump_eligible_status(&r.status) {
+        return false;
+    }
+    // BUG-410: skip a spec already completed by THIS exact commit and since
+    // manually reopened — re-bumping silently overwrites the deliberate
+    // reopen. completion_sha survives a `--force` reopen, so equality here
+    // means "this commit already completed it once"; a DIFFERENT commit
+    // referencing it still bumps.
+    if !flip.sha.is_empty()
+        && r.implementation_info
+            .as_ref()
+            .and_then(|i| i.completion_sha.as_deref())
+            == Some(flip.sha.as_str())
+    {
+        return false;
+    }
+    // BUG-477: record the merge-driven bump in the per-spec history the same
+    // way the manual `aida edit --status` path does.
+    let prior_status = r.status.clone();
+    r.set_status_from_str("Completed");
+    r.record_change(
+        "aida-auto-bump".to_string(),
+        vec![aida_core::Requirement::field_change(
+            "status",
+            format!("{:?}", prior_status),
+            format!("{:?}", r.status),
+        )],
+    );
+    r.modified_at = now;
+    // BUG-405: a Completed spec must not carry a stale FailureReason.
+    r.failure_reason = None;
+    let info = r
+        .implementation_info
+        .get_or_insert_with(aida_core::ImplementationInfo::default);
+    info.completed_at.get_or_insert(now);
+    // BUG-113: a covers-chain flip can carry an empty sha when the covered
+    // spec was completed manually — don't stamp `Some("")`.
+    if info.completion_sha.is_none() && !flip.sha.is_empty() {
+        info.completion_sha = Some(flip.sha.clone());
+    }
+    // STORY-582: capture the durable processing record. Idempotent on the
+    // completing SHA (re-runs of the bump don't stack duplicates).
+    let record = build_processing_record(project_root, &flip.spec_id, &flip.sha);
+    r.add_processing_record(record);
+    true
+}
+
+// Shared per-requirement mutation for the TASK-246/BUG-219 stale-review-story
+// flip (PR merged before the review lifecycle finished). Same dual-path use
+// as `apply_auto_bump_flip`; re-checks the live status so a second pass sees
+// Completed and stays idempotent. trace:TASK-1161 | ai:claude
+fn apply_stale_review_flip(
+    r: &mut aida_core::Requirement,
+    sha: &str,
+    pr_n: u64,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    if !matches!(
+        r.status,
+        RequirementStatus::Approved | RequirementStatus::InProgress
+    ) {
+        return false;
+    }
+    let prior = r.status.clone();
+    r.set_status_from_str("Completed");
+    // BUG-477: record the flip-to-Completed in the per-spec history too.
+    r.record_change(
+        "aida-auto-bump".to_string(),
+        vec![aida_core::Requirement::field_change(
+            "status",
+            format!("{:?}", prior),
+            format!("{:?}", r.status),
+        )],
+    );
+    r.modified_at = now;
+    // BUG-405 contract: a Completed spec must not keep a stale FailureReason.
+    r.failure_reason = None;
+    let info = r
+        .implementation_info
+        .get_or_insert_with(aida_core::ImplementationInfo::default);
+    info.completed_at.get_or_insert(now);
+    if info.completion_sha.is_none() && !sha.is_empty() {
+        info.completion_sha = Some(sha.to_string());
+    }
+    r.add_comment(aida_core::Comment::new(
+        "aida-auto-bump".to_string(),
+        stale_review_audit_comment(&prior, pr_n),
+    ));
+    true
+}
+
 /// trace:STORY-86 | ai:claude
 fn auto_bump_done_to_completed(
     project_root: &std::path::Path,
@@ -55515,133 +55622,74 @@ fn auto_bump_done_to_completed(
         return Ok(Vec::new());
     }
 
-    // ── Step 5: atomic write ──
+    // ── Step 5: write the flips ──
     let now = chrono::Utc::now();
-    let flips_for_write = flips.clone();
-    let stale_for_write = stale_review_flips.clone();
-    storage.update_atomically(|s| {
-        for flip in &flips_for_write {
-            // TASK-1-113: match agreed_id as well as spec_id — the
-            // eligibility scan above resolves via the agreed-aware
-            // `get_requirement_by_spec_id`, so a node-aware spec whose
-            // commit subject carries the agreed_id (e.g. `(BUG-42)` for
-            // canonical `BUG-1-099`) must re-find by the same key here or
-            // the flip is silently dropped. Mirrors the reconcile-status
-            // fix. trace:BUG-405 | ai:claude
-            if let Some(r) = s.requirements.iter_mut().find(|r| {
-                r.spec_id.as_deref() == Some(flip.spec_id.as_str())
-                    || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
-            }) {
-                // Re-check inside the atomic window — concurrent edits
-                // may have moved it off an eligible status.
-                if !auto_bump_eligible_status(&r.status) {
-                    continue;
-                }
-                // BUG-410: skip a spec already completed by THIS exact commit
-                // and since manually reopened — re-bumping silently overwrites
-                // the deliberate reopen. completion_sha survives a `--force`
-                // reopen, so equality here means "this commit already completed
-                // it once"; a DIFFERENT commit referencing it still bumps.
-                if !flip.sha.is_empty()
-                    && r.implementation_info
-                        .as_ref()
-                        .and_then(|i| i.completion_sha.as_deref())
-                        == Some(flip.sha.as_str())
-                {
-                    continue;
-                }
-                // BUG-477: the merge-driven Done→Completed bump is the most
-                // common completion transition; record it in the per-spec
-                // history (the source-of-truth for spec-state time series)
-                // the same way the manual `aida edit --status` path does —
-                // a status field_change (old→new, Debug-formatted enums).
-                // Capture the prior status before the set. trace:BUG-477
-                let prior_status = r.status.clone();
-                r.set_status_from_str("Completed");
-                r.record_change(
-                    "aida-auto-bump".to_string(),
-                    vec![aida_core::Requirement::field_change(
-                        "status",
-                        format!("{:?}", prior_status),
-                        format!("{:?}", r.status),
-                    )],
-                );
-                r.modified_at = now;
-                // BUG-405: a Completed spec must not carry a stale
-                // FailureReason — it drives the "CI is red" finding that
-                // `aida findings list` surfaces. Clearing it on completion
-                // mirrors the manual NeedsAttention→…→Completed edit path,
-                // which already nulls `failure_reason` on leaving
-                // NeedsAttention. trace:BUG-405 | ai:claude
-                r.failure_reason = None;
-                let info = r
-                    .implementation_info
-                    .get_or_insert_with(aida_core::ImplementationInfo::default);
-                info.completed_at.get_or_insert(now);
-                // BUG-113: a covers-chain flip can carry an empty sha when
-                // the covered spec was completed manually (no merge sha) —
-                // don't stamp `Some("")`.
-                if info.completion_sha.is_none() && !flip.sha.is_empty() {
-                    info.completion_sha = Some(flip.sha.clone());
-                }
-                // STORY-582: capture the durable processing record — promote
-                // the brief / review-verdict / punt artifacts into a committed
-                // audit row. Idempotent on the completing SHA (re-runs of the
-                // bump don't stack duplicates). trace:STORY-582 | ai:claude
-                let record = build_processing_record(project_root, &flip.spec_id, &flip.sha);
-                r.add_processing_record(record);
+    if store_path.is_dir() {
+        // Git-canonical store: targeted per-spec writes — read the ONE spec,
+        // apply the flip, commit its one YAML with subject `update SPEC-ID`
+        // (the same BUG-634 targeted path `aida edit` uses via
+        // `GitBackend::update_requirement`). Replaces the old full-store
+        // `update_atomically` save, which produced bulk "chore: update N
+        // requirements" commits and carried the stale-full-save overwrite
+        // risk. `get_requirement_by_spec_id` resolves agreed_id forms too
+        // (the TASK-1-113/BUG-405 concern), and each fresh per-spec read is
+        // the re-check-inside-the-window the atomic closure used to do.
+        // trace:TASK-1161 | ai:claude
+        use aida_core::db::DatabaseBackend;
+        let backend = aida_core::db::GitBackend::new(store_path)?;
+        for flip in &flips {
+            let Some(mut r) = backend.get_requirement_by_spec_id(&flip.spec_id)? else {
+                continue;
+            };
+            if apply_auto_bump_flip(&mut r, flip, now, project_root) {
+                backend.update_requirement(&r)?;
             }
         }
         // TASK-246 / BUG-219: review stories whose PR merged before the
-        // review lifecycle finished. Re-check the status inside the
-        // atomic window — keeps this idempotent (a second `aida pull`
-        // sees Completed and skips) — and key the audit comment off the
-        // live status so the wording matches the state we just flipped.
-        for (spec_id, sha, pr_n, _) in &stale_for_write {
-            if let Some(r) = s
-                .requirements
-                .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
-            {
-                if !matches!(
-                    r.status,
-                    RequirementStatus::Approved | RequirementStatus::InProgress
-                ) {
-                    continue;
-                }
-                let prior = r.status.clone();
-                r.set_status_from_str("Completed");
-                // BUG-477: record the stale-review flip-to-Completed in the
-                // per-spec history too, mirroring the manual edit path's
-                // status field_change shape. trace:BUG-477
-                r.record_change(
-                    "aida-auto-bump".to_string(),
-                    vec![aida_core::Requirement::field_change(
-                        "status",
-                        format!("{:?}", prior),
-                        format!("{:?}", r.status),
-                    )],
-                );
-                r.modified_at = now;
-                // BUG-405 contract (review finding): a Completed spec must not
-                // keep a stale FailureReason (it drives a false "CI red"
-                // finding in `aida findings list`). Clear it on every
-                // flip-to-Completed path, not just the primary one.
-                r.failure_reason = None;
-                let info = r
-                    .implementation_info
-                    .get_or_insert_with(aida_core::ImplementationInfo::default);
-                info.completed_at.get_or_insert(now);
-                if info.completion_sha.is_none() {
-                    info.completion_sha = Some(sha.clone());
-                }
-                r.add_comment(aida_core::Comment::new(
-                    "aida-auto-bump".to_string(),
-                    stale_review_audit_comment(&prior, *pr_n),
-                ));
+        // review lifecycle finished — same targeted write, one commit each.
+        for (spec_id, sha, pr_n, _) in &stale_review_flips {
+            let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
+                continue;
+            };
+            if apply_stale_review_flip(&mut r, sha, *pr_n, now) {
+                backend.update_requirement(&r)?;
             }
         }
-    })?;
+    } else {
+        // Legacy YAML/SQLite store: keep the atomic full-store write.
+        let flips_for_write = flips.clone();
+        let stale_for_write = stale_review_flips.clone();
+        storage.update_atomically(|s| {
+            for flip in &flips_for_write {
+                // TASK-1-113: match agreed_id as well as spec_id — the
+                // eligibility scan above resolves via the agreed-aware
+                // `get_requirement_by_spec_id`, so a node-aware spec whose
+                // commit subject carries the agreed_id (e.g. `(BUG-42)` for
+                // canonical `BUG-1-099`) must re-find by the same key here or
+                // the flip is silently dropped. Mirrors the reconcile-status
+                // fix. trace:BUG-405 | ai:claude
+                if let Some(r) = s.requirements.iter_mut().find(|r| {
+                    r.spec_id.as_deref() == Some(flip.spec_id.as_str())
+                        || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
+                }) {
+                    apply_auto_bump_flip(r, flip, now, project_root);
+                }
+            }
+            // TASK-246 / BUG-219: review stories whose PR merged before the
+            // review lifecycle finished. The helper re-checks the status
+            // inside the atomic window — keeps this idempotent (a second
+            // `aida pull` sees Completed and skips).
+            for (spec_id, sha, pr_n, _) in &stale_for_write {
+                if let Some(r) = s
+                    .requirements
+                    .iter_mut()
+                    .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+                {
+                    apply_stale_review_flip(r, sha, *pr_n, now);
+                }
+            }
+        })?;
+    }
 
     // Filter the report to only specs we actually still flipped after
     // the inside-the-atomic-window re-check. Cheapest correct answer:
@@ -55706,10 +55754,6 @@ fn auto_bump_done_to_completed(
     for flip in &confirmed {
         let _ = extract_plan_followups(storage, project_root, &flip.spec_id, &flip.spec_id, false);
     }
-
-    // Suppress unused-variable warning when the helper is called on a
-    // project that uses a non-distributed store path layout.
-    let _ = store_path;
 
     Ok(confirmed)
 }

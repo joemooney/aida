@@ -651,17 +651,42 @@ impl DatabaseBackend for GitBackend {
         // they produce). trace:BUG-1-040 | ai:claude
         let mut current_specs = std::collections::HashSet::new();
         let mut written_specs: Vec<String> = Vec::new();
+        // Stale-write guard: a full-store save carries whole Requirement
+        // structs loaded at some earlier point. If the on-disk copy has a
+        // strictly NEWER `modified_at` than the incoming copy, a concurrent
+        // targeted write (e.g. `aida edit`) landed in between — overwriting
+        // would silently revert its core-field edits (tags/status/priority/
+        // title). Skip the stale spec and warn instead; the BUG-756 field
+        // preservation above/below only protects fields the caller never
+        // loaded, not fields it loaded an old value of.
+        // trace:TASK-1161 | ai:claude
+        let mut stale_skipped: Vec<String> = Vec::new();
         for req in &store.requirements {
             if let Some(ref spec_id) = req.spec_id {
                 current_specs.insert(spec_id.clone());
                 let req_to_write = match object_store::read_object(&self.objects_root, spec_id) {
-                    Ok(disk) => Self::preserve_full_save_only_fields(req.clone(), &disk),
+                    Ok(disk) => {
+                        if disk.modified_at > req.modified_at {
+                            stale_skipped.push(spec_id.clone());
+                            continue;
+                        }
+                        Self::preserve_full_save_only_fields(req.clone(), &disk)
+                    }
                     Err(_) => req.clone(),
                 };
                 if object_store::write_object_if_changed(&self.objects_root, &req_to_write)? {
                     written_specs.push(spec_id.clone());
                 }
             }
+        }
+        if !stale_skipped.is_empty() {
+            eprintln!(
+                "Warning: skipped {} stale spec(s) during full-store save: {} \
+                 (on-disk copy is newer than the copy being saved — a concurrent \
+                 edit landed after this store was loaded; re-load to pick it up)",
+                stale_skipped.len(),
+                stale_skipped.join(", ")
+            );
         }
 
         // Delete object files that are no longer in the store.
@@ -1295,6 +1320,97 @@ mod tests {
         assert!(root.join("objects/FR/000/FR-001.yaml").exists());
         assert!(root.join("objects/BUG/000/BUG-001.yaml").exists());
         assert!(root.join("metadata.yaml").exists());
+    }
+
+    // Stale-write guard: a full-store save carrying a spec whose on-disk
+    // copy is NEWER (a concurrent targeted edit landed after the store was
+    // loaded) must NOT silently revert the edit's core fields — the stale
+    // spec is skipped (with a warning) while non-stale specs still write.
+    // Regression for the concurrent-edit-then-stale-save sequence.
+    // trace:TASK-1161 | ai:claude
+    #[test]
+    fn stale_full_save_cannot_revert_newer_concurrent_edit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let base = chrono::Utc::now();
+
+        let mut store = RequirementsStore::new();
+        let mut req = Requirement::new("Original title".into(), "desc".into());
+        req.spec_id = Some("TASK-100".into());
+        req.tags.insert("old-tag".into());
+        req.modified_at = base;
+        let mut sibling = Requirement::new("Sibling".into(), "desc".into());
+        sibling.spec_id = Some("TASK-101".into());
+        sibling.modified_at = base;
+        store.requirements.push(req);
+        store.requirements.push(sibling);
+        backend.save(&store).unwrap();
+
+        // Snapshot the store as a stale caller would have loaded it.
+        let mut stale_store = backend.load().unwrap();
+
+        // Concurrent targeted edit lands AFTER that load: newer
+        // modified_at, changed core fields (status + tags + title).
+        let mut fresh = backend
+            .get_requirement_by_spec_id("TASK-100")
+            .unwrap()
+            .unwrap();
+        fresh.set_status_from_str("In Progress");
+        fresh.tags.insert("fresh-tag".into());
+        fresh.title = "Edited title".into();
+        fresh.modified_at = base + chrono::Duration::seconds(10);
+        backend.update_requirement(&fresh).unwrap();
+
+        // Mutate the stale copy of TASK-100 (what a revert would write) and
+        // legitimately edit the sibling (newer than disk → must still write).
+        for r in stale_store.requirements.iter_mut() {
+            match r.spec_id.as_deref() {
+                Some("TASK-100") => {
+                    r.tags.insert("stale-tag".into());
+                    r.title = "Stale overwrite".into();
+                }
+                Some("TASK-101") => {
+                    r.title = "Sibling updated".into();
+                    r.modified_at = base + chrono::Duration::seconds(20);
+                }
+                _ => {}
+            }
+        }
+        backend.save(&stale_store).unwrap();
+
+        // The concurrent edit survives — nothing from the stale copy landed.
+        let after = backend
+            .get_requirement_by_spec_id("TASK-100")
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(after.status, RequirementStatus::InProgress),
+            "stale save must not revert status, got {:?}",
+            after.status
+        );
+        assert_eq!(after.title, "Edited title");
+        assert!(after.tags.contains("fresh-tag"));
+        assert!(
+            !after.tags.contains("stale-tag"),
+            "stale copy's tag edit must not land"
+        );
+        assert_eq!(
+            after.modified_at,
+            base + chrono::Duration::seconds(10),
+            "on-disk modified_at must stay the newer edit's timestamp"
+        );
+
+        // The non-stale sibling still writes through the same save.
+        let sib = backend
+            .get_requirement_by_spec_id("TASK-101")
+            .unwrap()
+            .unwrap();
+        assert_eq!(sib.title, "Sibling updated");
+
+        // The skipped spec must NOT be deleted by the deletion-tracking pass.
+        assert!(root.join("objects/TASK/000/TASK-100.yaml").exists());
     }
 
     fn sample_queue_entry(user_id: &str, position: i64) -> QueueEntry {
