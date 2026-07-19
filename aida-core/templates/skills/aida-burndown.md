@@ -91,6 +91,10 @@ flows through), else `N ≈ 4` — or scale to budget:
 
 > `Agent(subagent_type: "general-purpose", isolation: "worktree")` — each gets
 > ONE ready spec and a self-contained prompt: read it (`aida show <SPEC> -c`),
+> **flip it in flight at pickup** (`aida edit <SPEC> --status in-progress`) so
+> queue/status views agree the spec is being worked — the fanout lease alone
+> doesn't flip it (BUG-754: `queue list` showed the same spec as both a
+> pickable Approved row and in-flight/leased) — then
 > implement to acceptance, add `// trace:<SPEC>` (plain `//`, never `///`),
 > `cargo build` + `cargo test` + `cargo fmt --all -- --check` (check the exit
 > code), commit `[AI:claude] type(scope): … (<SPEC>)` + the co-author trailer,
@@ -319,4 +323,4 @@ parallel. They are **not** competitors: reach for `/aida-burndown` to drain a
 *ready set*; reach for the orchestrator drain when its single-spec lifecycle is
 what you want. Don't run both against the same set.
 
-trace:STORY-527 trace:TASK-792 trace:TASK-992 | ai:claude
+trace:STORY-527 trace:TASK-792 trace:TASK-992 trace:BUG-754 | ai:claude

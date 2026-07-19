@@ -21817,8 +21817,87 @@ fn session_harness_worktree_register(
         "registered harness worktree lease {} scope:{} branch:{}",
         id, lease.scope, lease.branch
     );
+    // BUG-754: a spec-scoped harness lease means a fanned-out implementer is
+    // now working that spec — flip Approved → In Progress at lease-take (the
+    // same coherence bump `aida session start` performs per BUG-379) so
+    // `aida queue list` / `aida list` never show the same spec as both a
+    // pickable Approved row and in-flight/leased.
+    // trace:BUG-754 | ai:claude
+    if bump_spec_in_progress_at_lease_take(&project_root, &lease.scope) {
+        println!(
+            "bumped {} Approved → In Progress (spec-scoped lease taken)",
+            lease.scope
+        );
+    }
     Ok(())
 }
+
+// BUG-754: does this harness-lease scope name a spec (vs the generic
+// `harness-worktree` scope or a non-spec label)? Returns the canonical
+// SPEC-ID when it does. Pure, so the fanout-pickup bump gate is
+// unit-testable without a store fixture.
+// trace:BUG-754 | ai:claude
+fn harness_lease_spec_scope(scope: &str) -> Option<String> {
+    if scope.eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE) {
+        return None;
+    }
+    worktree_lease::spec_id_from_branch(scope)
+}
+
+// BUG-754: at lease-take for a spec-scoped harness lease, bump the spec
+// Approved → In Progress — the same coherence flip `aida session start`
+// performs after saving its lease (BUG-379) — so a harness-fanout
+// implementer's spec never reads as a pickable Approved row while an active
+// lease reports it in flight. Targeted single-spec write (the BUG-634 rule:
+// resolve the one spec via the cache-backed backend and rewrite only its
+// YAML); this runs from the SubagentStart hook's small time budget, so a
+// full-store load/save is not acceptable here. Idempotent: any status other
+// than Approved is left alone — the lifecycle owns those transitions (drain
+// completion still lands Done via `aida queue done`, a shelve still lands
+// NeedsAttention, and `aida doctor` restores In Progress-without-lease back
+// to Approved). Failure is non-fatal: the doctor's spec-status-drift heal
+// ("Approved but lease active → bump to In Progress") is the backstop.
+// trace:BUG-754 | ai:claude
+fn bump_spec_in_progress_at_lease_take(project_root: &std::path::Path, scope: &str) -> bool {
+    let Some(spec_id) = harness_lease_spec_scope(scope) else {
+        return false;
+    };
+    let store_root = project_root.join(".aida-store");
+    if !store_root.is_dir() {
+        // Legacy/centralized store — skip; the doctor heal covers the drift.
+        return false;
+    }
+    let result = (|| -> Result<bool> {
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_root);
+        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path)?;
+        let Some(mut req) = backend.get_requirement_by_spec_id(&spec_id)? else {
+            return Ok(false);
+        };
+        if !matches!(req.status, RequirementStatus::Approved) {
+            return Ok(false);
+        }
+        req.status = RequirementStatus::InProgress;
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+        Ok(true)
+    })();
+    match result {
+        Ok(bumped) => bumped,
+        Err(e) => {
+            eprintln!(
+                "warning: couldn't bump `{}` to In Progress at lease-take: {} — `aida doctor` will heal",
+                scope, e
+            );
+            false
+        }
+    }
+}
+
+// BUG-754: fanout-pickup lease-take status-bump tests.
+// trace:BUG-754 | ai:claude
+#[cfg(test)]
+#[path = "tests/harness_lease_bump_tests.rs"]
+mod harness_lease_bump_tests;
 
 fn session_harness_worktree_release(agent_id: &str) -> Result<()> {
     let project_root = find_main_worktree_root()?;
