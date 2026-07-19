@@ -15,11 +15,12 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:21:52.568667667Z
-modified_at: 2026-06-27T16:40:41.967616127Z
+modified_at: 2026-07-19T06:17:41.539266974Z
 req_type: Task
 tags:
 - advisor-autopilot
 - arbitration
+- batch:strategy-0719
 - role:advisor
 - subsystem
 relationships:
