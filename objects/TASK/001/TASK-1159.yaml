@@ -1,0 +1,23 @@
+id: 019f7812-a0fc-70d2-8c45-45e269083ec8
+spec_id: TASK-1159
+agreed_id: TASK-1159
+title: 'config default [burndown] verbose: stream drain progress by default; --quiet restores the buffered launch'
+description: |-
+  Operator ask 2026-07-18: after discovering aida burndown run --verbose (TASK-804 event streaming), they want it as their default — the quiet buffered launch reads as "is it even working?" for the first several minutes of every drain.
+
+  Add a [burndown] verbose = true|false config key (project .aida/config.toml, user-global ~/.aida/config.toml, project wins) following the configurable-policy convention: tunable knob, shipped default stays false (current behavior — no surprise change for existing scripts parsing the quiet output). Precedence: --verbose flag > --quiet flag (new, the explicit negation) > [burndown] verbose config > built-in false.
+
+  Acceptance:
+  - [burndown] verbose = true makes bare `aida burndown run` stream exactly as --verbose does (same tee to .aida/burndown/<drain-id>.jsonl).
+  - `--quiet` overrides the config back to the buffered launch.
+  - Flag > config > default precedence covered by a unit test on the resolved setting.
+  - The config key gets a row in the config reference docs.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T01:51:54.620531117Z
+modified_at: 2026-07-19T01:51:54.620531117Z
+req_type: Task
+tags:
+- dx aida:burndown papercut from-dogfood
