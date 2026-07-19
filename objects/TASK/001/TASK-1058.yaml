@@ -16,12 +16,12 @@ description: |-
   - Config: [field_study] enabled = false; pre-commit hook marked executable.
 
   Acceptance: all docs land on main, cross-references resolve, roster/landscape claims are dated and consistent.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T16:05:42.960172053Z
-modified_at: 2026-07-19T06:17:29.166637973Z
+modified_at: 2026-07-19T17:33:27.294612802Z
 req_type: Task
 tags:
 - batch:advisor-0719
@@ -44,3 +44,21 @@ comments:
   content: Commit 2229694d1 references this requirement
   created_at: 2026-06-30T16:06:19.651972936Z
   modified_at: 2026-06-30T16:06:19.651972936Z
+history:
+- id: 019f7b70-a378-7d52-9004-b0641f2d868c
+  author: aida-auto-bump
+  timestamp: 2026-07-19T17:33:27.288714084Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019f7b70-a37e-7373-bc21-7a4ec5a9cd5f
+  timestamp: 2026-07-19T17:33:27.294611952Z
+  agent: aida
+  commit_sha: 9a3d537580a73f3dd6eabb46e8eaf6bcacd5b0b3
+  summary: Completed via merge 9a3d5375
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-19T17:33:27.083562334Z
+  completion_sha: 9a3d537580a73f3dd6eabb46e8eaf6bcacd5b0b3
