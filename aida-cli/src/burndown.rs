@@ -3651,3 +3651,385 @@ mod tests {
         assert_eq!(g, vec!["core".to_string(), "docs".to_string()]);
     }
 }
+
+// ── BUG-755: the drain process must not exit with residual work ──
+//
+// Observed 2026-07-18: a `burndown run` headless session implemented wave 1,
+// printed "awaiting CI, each with a background watch. I'll merge them as their
+// checks go terminal." — and ended its final turn. A headless `claude -p`
+// terminates at turn end, so those "background watches" died with the session:
+// three PRs sat open unwatched and four blessed specs were never started.
+//
+// The structural fix lives in the LAUNCHER (`handle_burndown_run`), which is
+// the long-lived process holding the drain lock: after the headless session
+// exits, it probes for residual work — open wave PRs (non-terminal) and
+// blessed specs still unstarted — and, absent a deliberate shelve/cap stop,
+// RELAUNCHES a bounded continuation turn instead of exiting. When it must exit
+// early (shelve stop, or the resume budget is spent), it prints an accurate
+// handoff naming every open PR and unstarted spec — never a claim of live
+// watches. The pure decision/matching/rendering halves are here so they are
+// exhaustively unit-testable. trace:BUG-755 | ai:claude
+
+/// One open PR matched to a spec of the drain's blessed set — a wave PR that
+/// has not merged yet.
+// trace:BUG-755 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResidualPr {
+    pub number: u64,
+    pub spec: String,
+    pub title: String,
+}
+
+/// The residual work a drain left behind when its headless session exited:
+/// wave PRs still open (non-terminal) and blessed specs never started.
+// trace:BUG-755 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ResidualWork {
+    pub unmerged_prs: Vec<ResidualPr>,
+    pub unstarted: Vec<String>,
+}
+
+impl ResidualWork {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.unmerged_prs.is_empty() && self.unstarted.is_empty()
+    }
+}
+
+/// Already-probed store facts about one blessed spec, used to EXCLUDE its open
+/// PR from the residual set when the drain deliberately held/parked it:
+/// `review:draft-only` (held for the operator), NeedsAttention (shelved), or a
+/// terminal status. `status_norm` is alphanumeric-lowercase.
+// trace:BUG-755 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct WaveSpecFacts {
+    pub status_norm: String,
+    pub tags: Vec<String>,
+}
+
+/// Does `haystack` contain `spec` (e.g. `BUG-723`) as a whole token —
+/// case-insensitive, and NOT followed by another digit? The digit guard keeps
+/// `TASK-11` from matching a `task-1117-…` branch.
+// trace:BUG-755 | ai:claude
+pub(crate) fn contains_spec_token(haystack: &str, spec: &str) -> bool {
+    let hay = haystack.to_ascii_lowercase();
+    let needle = spec.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return false;
+    }
+    let mut start = 0;
+    while let Some(pos) = hay[start..].find(&needle) {
+        let at = start + pos;
+        let end = at + needle.len();
+        let next_is_digit = hay[end..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit());
+        if !next_is_digit {
+            return true;
+        }
+        start = end;
+    }
+    false
+}
+
+/// Match the open PRs against the drain's blessed set → the unmerged wave PRs.
+/// `open_prs` is `(number, title, head_branch)`. A PR belongs to the wave when
+/// its head branch or title carries a blessed spec id as a token. A matched PR
+/// is EXCLUDED when the spec's facts say the drain deliberately held or parked
+/// it (`review:draft-only`, NeedsAttention, or a terminal status) — those are
+/// legitimate early exits, not stranded work; missing facts keep the PR
+/// (conservative: stranded-visible beats silently-orphaned). Sorted by PR
+/// number for stable output.
+// trace:BUG-755 | ai:claude
+pub(crate) fn match_wave_prs(
+    blessed: &[String],
+    open_prs: &[(u64, String, String)],
+    facts_by_id: &std::collections::HashMap<String, WaveSpecFacts>,
+) -> Vec<ResidualPr> {
+    let deliberately_held = |spec: &str| -> bool {
+        facts_by_id.get(spec).is_some_and(|f| {
+            f.tags
+                .iter()
+                .any(|t| t.trim().eq_ignore_ascii_case("review:draft-only"))
+                || matches!(
+                    f.status_norm.as_str(),
+                    "needsattention" | "completed" | "rejected"
+                )
+        })
+    };
+    let mut out: Vec<ResidualPr> = Vec::new();
+    for (number, title, head_branch) in open_prs {
+        let matched = blessed.iter().find(|spec| {
+            contains_spec_token(head_branch, spec) || contains_spec_token(title, spec)
+        });
+        if let Some(spec) = matched {
+            if deliberately_held(spec) {
+                continue;
+            }
+            out.push(ResidualPr {
+                number: *number,
+                spec: spec.clone(),
+                title: title.clone(),
+            });
+        }
+    }
+    out.sort_by_key(|pr| pr.number);
+    out
+}
+
+/// The launcher's verdict after one headless drain turn exits.
+// trace:BUG-755 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DrainFollowup {
+    /// No residual work — the drain genuinely finished; exit cleanly.
+    Complete,
+    /// Residual work + a clean exit + resume budget left — the session ended
+    /// its turn early (the "background watch" failure mode); relaunch a
+    /// continuation turn instead of exiting.
+    Resume,
+    /// Residual work, but either the drain deliberately stopped (non-zero =
+    /// the shelve/cap exit-2 convention) or the resume budget is spent — exit,
+    /// after printing an ACCURATE handoff (never a claim of live watches).
+    Handoff,
+}
+
+/// Decide the follow-up. A non-zero drain exit is a deliberate stop (shelved
+/// work / cap) — honored, never relaunched, but still handed off accurately
+/// when residual work remains. A zero exit with residual work is the BUG-755
+/// premature turn end: resume while budget remains.
+// trace:BUG-755 | ai:claude
+pub(crate) fn drain_followup(
+    drain_exit_code: i32,
+    residual_empty: bool,
+    rounds_used: usize,
+    max_rounds: usize,
+) -> DrainFollowup {
+    if residual_empty {
+        return DrainFollowup::Complete;
+    }
+    if drain_exit_code != 0 {
+        return DrainFollowup::Handoff;
+    }
+    if rounds_used < max_rounds {
+        DrainFollowup::Resume
+    } else {
+        DrainFollowup::Handoff
+    }
+}
+
+/// Build the continuation prompt for a resume round: the same skill invocation
+/// (so every gate/guardrail re-applies) plus explicit resume context — the
+/// open wave PRs to integrate in the FOREGROUND and the blessed specs still
+/// unstarted. Pure + unit-testable.
+// trace:BUG-755 | ai:claude
+pub(crate) fn continuation_prompt(base_prompt: &str, residual: &ResidualWork) -> String {
+    let mut s = String::from(base_prompt);
+    s.push_str(
+        "\n\nRESUME CONTEXT — the launcher relaunched this drain because the previous \
+         session ended its turn with unfinished work. Background watches DIE when a \
+         headless session ends: never promise one, and never end your final turn while \
+         a wave PR is non-terminal or blessed specs are unstarted.",
+    );
+    if !residual.unmerged_prs.is_empty() {
+        s.push_str("\n\nOpen wave PRs awaiting integration (you are the integrator):");
+        for pr in &residual.unmerged_prs {
+            s.push_str(&format!("\n- #{} ({}) {}", pr.number, pr.spec, pr.title));
+        }
+        s.push_str(
+            "\nFor each: poll `gh pr checks <n>` in the FOREGROUND until every check is \
+             terminal, then merge green ones (`--squash --delete-branch`) and pull so the \
+             Done→Completed auto-bump fires; hold `review:draft-only` PRs; park a red one \
+             per the skill. Do not fan out a new implementer for a spec that already has \
+             an open PR.",
+        );
+    }
+    if !residual.unstarted.is_empty() {
+        s.push_str(&format!(
+            "\n\nBlessed specs not yet started: {}. After integrating the PRs above, \
+             re-run `aida burndown plan` and continue the wave loop over them until the \
+             ready set is empty.",
+            residual.unstarted.join(", ")
+        ));
+    }
+    s
+}
+
+/// Render the accurate-handoff report printed when the launcher exits with
+/// residual work (deliberate stop or resume budget spent). Names every open PR
+/// and unstarted spec plus the manual pickup verbs — the truthful opposite of
+/// "background watches will merge these".
+// trace:BUG-755 | ai:claude
+pub(crate) fn render_drain_handoff(residual: &ResidualWork) -> String {
+    let mut s = String::new();
+    s.push_str("\nDrain handoff — work left when the drain exited (no watches are running):\n");
+    if !residual.unmerged_prs.is_empty() {
+        s.push_str("  Open wave PRs (unmerged — CI may still be running):\n");
+        for pr in &residual.unmerged_prs {
+            s.push_str(&format!("    #{} ({}) {}\n", pr.number, pr.spec, pr.title));
+        }
+        s.push_str("    → integrate them: `aida integrate`, or merge by hand once CI is green\n");
+    }
+    if !residual.unstarted.is_empty() {
+        s.push_str(&format!(
+            "  Blessed specs never started: {}\n    → re-run `aida burndown run` to drain them\n",
+            residual.unstarted.join(", ")
+        ));
+    }
+    s
+}
+
+#[cfg(test)]
+mod bug_755_residual_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn facts(status: &str, tags: &[&str]) -> WaveSpecFacts {
+        WaveSpecFacts {
+            status_norm: status.to_string(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn spec_token_matches_branch_and_title_case_insensitive() {
+        assert!(contains_spec_token("bug-723-fix-the-thing", "BUG-723"));
+        assert!(contains_spec_token(
+            "[AI:claude] fix(x): thing (BUG-723)",
+            "BUG-723"
+        ));
+        assert!(!contains_spec_token("task-1117-other", "BUG-723"));
+    }
+
+    #[test]
+    fn spec_token_digit_boundary_prevents_prefix_collisions() {
+        // TASK-11 must NOT match a task-1117 branch…
+        assert!(!contains_spec_token("task-1117-something", "TASK-11"));
+        // …but still matches its own branch.
+        assert!(contains_spec_token("task-11-something", "TASK-11"));
+    }
+
+    #[test]
+    fn match_wave_prs_picks_only_blessed_and_sorts_by_number() {
+        let blessed = vec!["BUG-723".to_string(), "TASK-1117".to_string()];
+        let open = vec![
+            (
+                1508,
+                "feat(x): thing (TASK-1117)".to_string(),
+                "task-1117-thing".to_string(),
+            ),
+            (
+                1506,
+                "fix(y): other (BUG-723)".to_string(),
+                "bug-723-other".to_string(),
+            ),
+            (
+                1500,
+                "unrelated PR".to_string(),
+                "story-1-unrelated".to_string(),
+            ),
+        ];
+        let got = match_wave_prs(&blessed, &open, &HashMap::new());
+        let ids: Vec<(u64, &str)> = got.iter().map(|p| (p.number, p.spec.as_str())).collect();
+        assert_eq!(ids, vec![(1506, "BUG-723"), (1508, "TASK-1117")]);
+    }
+
+    #[test]
+    fn match_wave_prs_excludes_deliberately_held_or_parked_specs() {
+        let blessed = vec![
+            "BUG-1".to_string(),
+            "BUG-2".to_string(),
+            "BUG-3".to_string(),
+        ];
+        let open = vec![
+            (1, "a (BUG-1)".to_string(), "bug-1-a".to_string()),
+            (2, "b (BUG-2)".to_string(), "bug-2-b".to_string()),
+            (3, "c (BUG-3)".to_string(), "bug-3-c".to_string()),
+        ];
+        let mut f = HashMap::new();
+        // Held draft for the operator — a legitimate early exit, not stranded.
+        f.insert("BUG-1".to_string(), facts("done", &["review:draft-only"]));
+        // Shelved NeedsAttention — parked by the drain, also not stranded.
+        f.insert("BUG-2".to_string(), facts("needsattention", &[]));
+        // No facts for BUG-3 → conservative: keep it visible.
+        let got = match_wave_prs(&blessed, &open, &f);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].spec, "BUG-3");
+    }
+
+    #[test]
+    fn followup_complete_when_no_residual_regardless_of_code() {
+        assert_eq!(drain_followup(0, true, 0, 3), DrainFollowup::Complete);
+        assert_eq!(drain_followup(2, true, 0, 3), DrainFollowup::Complete);
+    }
+
+    #[test]
+    fn followup_resume_on_clean_exit_with_residual_and_budget() {
+        // The BUG-755 failure mode: session exited 0 while PRs sat open and
+        // blessed specs were unstarted — the launcher must NOT exit.
+        assert_eq!(drain_followup(0, false, 0, 3), DrainFollowup::Resume);
+        assert_eq!(drain_followup(0, false, 2, 3), DrainFollowup::Resume);
+    }
+
+    #[test]
+    fn followup_handoff_when_budget_spent_or_deliberate_stop() {
+        // Resume budget spent → accurate handoff, not an infinite relaunch loop.
+        assert_eq!(drain_followup(0, false, 3, 3), DrainFollowup::Handoff);
+        // Non-zero exit = the shelve/cap stop convention — honored, never
+        // relaunched, but the residual still gets an accurate handoff.
+        assert_eq!(drain_followup(2, false, 0, 3), DrainFollowup::Handoff);
+    }
+
+    #[test]
+    fn two_wave_regression_resume_then_complete() {
+        // Regression shape from the spec: an 8-spec plan whose session exits
+        // after wave 1 with 3 open PRs + 4 unstarted blessed specs. Wave-1 PRs
+        // must merge and wave 2 must start before the launcher may exit.
+        let after_wave_1 = ResidualWork {
+            unmerged_prs: vec![ResidualPr {
+                number: 1506,
+                spec: "BUG-723".to_string(),
+                title: "fix".to_string(),
+            }],
+            unstarted: vec!["TASK-1098".to_string(), "TASK-1146".to_string()],
+        };
+        // Turn 1 ended cleanly but left residual → the launcher relaunches.
+        assert_eq!(
+            drain_followup(0, after_wave_1.is_empty(), 0, 3),
+            DrainFollowup::Resume
+        );
+        // The continuation prompt drives the wave-1 merges AND wave 2.
+        let prompt = continuation_prompt("/aida-burndown --status approved", &after_wave_1);
+        assert!(prompt.contains("#1506"), "prompt: {prompt}");
+        assert!(prompt.contains("BUG-723"), "prompt: {prompt}");
+        assert!(prompt.contains("TASK-1098"), "prompt: {prompt}");
+        assert!(prompt.contains("FOREGROUND"), "prompt: {prompt}");
+        assert!(
+            prompt.starts_with("/aida-burndown --status approved"),
+            "the skill's gates must re-apply on resume"
+        );
+        // After the resume turn merges wave 1 and drains wave 2: no residual →
+        // the launcher may finally exit.
+        assert_eq!(
+            drain_followup(0, ResidualWork::default().is_empty(), 1, 3),
+            DrainFollowup::Complete
+        );
+    }
+
+    #[test]
+    fn handoff_report_names_prs_specs_and_manual_verbs_no_watch_claims() {
+        let residual = ResidualWork {
+            unmerged_prs: vec![ResidualPr {
+                number: 1507,
+                spec: "BUG-734".to_string(),
+                title: "fix(z)".to_string(),
+            }],
+            unstarted: vec!["TASK-937".to_string()],
+        };
+        let out = render_drain_handoff(&residual);
+        assert!(out.contains("#1507"), "out: {out}");
+        assert!(out.contains("BUG-734"), "out: {out}");
+        assert!(out.contains("TASK-937"), "out: {out}");
+        assert!(out.contains("aida integrate"), "out: {out}");
+        assert!(out.contains("no watches are running"), "out: {out}");
+    }
+}

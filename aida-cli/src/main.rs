@@ -44054,48 +44054,171 @@ fn handle_burndown_run(
     );
     println!();
 
-    // Propagate the drain's exit code either way so scripts can branch on
-    // success/parked (the skill exits non-zero when it shelves work, mirroring
-    // the orchestrator drain's exit-2 convention). `claude` is resolved off
-    // PATH (matching every other launch site); a missing binary surfaces as a
-    // guided error, not a raw ENOENT.
-    let status_code = if verbose {
-        // TASK-804: stream-json + tee path. Redirect the drain's JSONL to a
-        // discoverable log and render a live human progress line per event.
-        run_burndown_verbose(&prompt, mode)?
-    } else {
-        // Inherit stdio so the drain streams live (the quiet default: `claude
-        // -p` without stream-json buffers until completion, so the operator
-        // sees the final summary).
-        std::process::Command::new("claude")
-            .arg("-p")
-            .arg(&prompt)
-            .arg("--permission-mode")
-            .arg(mode)
-            // BUG-607: the launcher holds the exclusive drain lock (BUG-538), so
-            // the agent must NOT re-check for a "competing" drain — that check
-            // detects its own launcher and self-deadlocks. This flag tells the
-            // `/aida-burndown` skill to trust the lock and fan out.
-            .env("AIDA_BURNDOWN_LOCK_HELD", "1")
-            .status()
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
-                     Code CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
-                     orchestrator drain) instead."
-                )
-            })?
-    };
+    // BUG-755: the launcher — the long-lived process holding the drain lock —
+    // must not exit while wave PRs are unmerged or blessed specs are unstarted.
+    // A headless `claude -p` terminates at turn end, so any "background merge
+    // watch" the session promises dies with it (observed 2026-07-18: three PRs
+    // stranded "awaiting CI", four blessed specs never started). After each
+    // session exit we probe the residual work; a clean exit that left residual
+    // is a premature turn end → relaunch a bounded continuation turn. A
+    // deliberate stop (the shelve/cap non-zero convention) or a spent resume
+    // budget exits WITH an accurate handoff — never a claim of live watches.
+    // trace:BUG-755 | ai:claude
+    const MAX_RESUME_ROUNDS: usize = 3;
+    let base_prompt = prompt.clone();
+    let mut current_prompt = prompt.clone();
+    let mut rounds_used = 0usize;
+    loop {
+        // Propagate the drain's exit code either way so scripts can branch on
+        // success/parked (the skill exits non-zero when it shelves work,
+        // mirroring the orchestrator drain's exit-2 convention). `claude` is
+        // resolved off PATH (matching every other launch site); a missing
+        // binary surfaces as a guided error, not a raw ENOENT.
+        let status_code = if verbose {
+            // TASK-804: stream-json + tee path. Redirect the drain's JSONL to a
+            // discoverable log and render a live human progress line per event.
+            run_burndown_verbose(&current_prompt, mode)?
+        } else {
+            // Inherit stdio so the drain streams live (the quiet default:
+            // `claude -p` without stream-json buffers until completion, so the
+            // operator sees the final summary).
+            std::process::Command::new("claude")
+                .arg("-p")
+                .arg(&current_prompt)
+                .arg("--permission-mode")
+                .arg(mode)
+                // BUG-607: the launcher holds the exclusive drain lock (BUG-538),
+                // so the agent must NOT re-check for a "competing" drain — that
+                // check detects its own launcher and self-deadlocks. This flag
+                // tells the `/aida-burndown` skill to trust the lock and fan out.
+                .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+                .status()
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
+                         Code CLI on PATH. Install it, or use `aida queue work --auto-complete` \
+                         (the orchestrator drain) instead."
+                    )
+                })?
+        };
 
-    if status_code.success() {
-        Ok(())
-    } else {
         let code = status_code.code().unwrap_or(1);
-        // `std::process::exit` skips destructors — free the drain lock
-        // explicitly so a non-zero (e.g. shelved-work, exit-2) drain still
-        // leaves a clean lock for the next launch. trace:BUG-538 | ai:claude
-        drop(_drain_guard);
-        std::process::exit(code);
+        // A `--max` cap makes "blessed specs remain unstarted" an EXPECTED stop,
+        // so the unstarted probe is skipped; open wave PRs must still drain.
+        let residual =
+            probe_burndown_residual(&project_root, status, tag, batch, &ready, max.is_some());
+        match burndown::drain_followup(code, residual.is_empty(), rounds_used, MAX_RESUME_ROUNDS) {
+            burndown::DrainFollowup::Complete => {
+                if code == 0 {
+                    return Ok(());
+                }
+                // `std::process::exit` skips destructors — free the drain lock
+                // explicitly so a non-zero (e.g. shelved-work, exit-2) drain
+                // still leaves a clean lock for the next launch. trace:BUG-538
+                drop(_drain_guard);
+                std::process::exit(code);
+            }
+            burndown::DrainFollowup::Resume => {
+                rounds_used += 1;
+                println!(
+                    "  {} the drain session ended its turn with unfinished work \
+                     ({} open wave PR(s), {} unstarted blessed spec(s)) — relaunching a \
+                     continuation turn ({rounds_used}/{MAX_RESUME_ROUNDS})",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    residual.unmerged_prs.len(),
+                    residual.unstarted.len(),
+                );
+                current_prompt = burndown::continuation_prompt(&base_prompt, &residual);
+            }
+            burndown::DrainFollowup::Handoff => {
+                print!("{}", burndown::render_drain_handoff(&residual));
+                drop(_drain_guard);
+                // Preserve a deliberate non-zero stop's code; a spent resume
+                // budget surfaces as the shelved-work exit-2 convention so
+                // scripts triage rather than read success.
+                std::process::exit(if code != 0 { code } else { 2 });
+            }
+        }
+    }
+}
+
+/// BUG-755: probe the residual work a drain session left behind when its
+/// headless process exited — the impure half feeding the pure
+/// [`burndown::drain_followup`] decision. Re-syncs the store (so the drain's
+/// Done→Completed merge bumps are visible), re-resolves the blessed ready set
+/// (the unstarted remainder — skipped when `--max` capped the run, where a
+/// remainder is an expected stop), and matches the forge's open PRs against
+/// the drain's scope (initial blessed set ∪ still-ready set). Every leg is
+/// best-effort: a failed probe degrades to "no residual" rather than wedging
+/// the launcher in a relaunch loop on bad data.
+// trace:BUG-755 | ai:claude
+fn probe_burndown_residual(
+    project_root: &std::path::Path,
+    status: &str,
+    tag: Option<&str>,
+    batch: Option<&str>,
+    blessed: &[String],
+    spec_capped: bool,
+) -> burndown::ResidualWork {
+    // Refresh the store view first — the drain's merges push Done→Completed
+    // bumps this clone may not have pulled (same reason as the BUG-530 preflight
+    // sync; never fails the caller).
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
+        let _ = maybe_sync_pull(&store_path);
+    }
+    let unstarted: Vec<String> = if spec_capped {
+        Vec::new()
+    } else {
+        resolve_burndown_sets(status, tag, batch)
+            .map(|(ready, ..)| ready)
+            .unwrap_or_default()
+    };
+    // The drain's scope: what it set out to drain plus what is still blessed
+    // (a blocker clearing mid-drain can add specs).
+    let mut scope: Vec<String> = blessed.to_vec();
+    for id in &unstarted {
+        if !scope.contains(id) {
+            scope.push(id.clone());
+        }
+    }
+    // Per-spec store facts so a deliberately-held (`review:draft-only`) or
+    // shelved (NeedsAttention) spec's open PR is NOT treated as stranded.
+    let mut facts: std::collections::HashMap<String, burndown::WaveSpecFacts> =
+        std::collections::HashMap::new();
+    if let Some(store) = load_store_for_lookup(project_root) {
+        let norm = |s: &str| -> String {
+            s.chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect::<String>()
+                .to_ascii_lowercase()
+        };
+        for req in &store.requirements {
+            let disp = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| req.id.to_string());
+            if scope.contains(&disp) {
+                facts.insert(
+                    disp,
+                    burndown::WaveSpecFacts {
+                        status_norm: norm(&req.status.to_string()),
+                        tags: req.tags.iter().cloned().collect(),
+                    },
+                );
+            }
+        }
+    }
+    // Fresh (uncached) forge snapshot — the memoized `collect_open_prs` would
+    // replay the pre-drain state and mask just-merged PRs.
+    let open: Vec<(u64, String, String)> = collect_open_prs_uncached(project_root)
+        .by_branch
+        .into_values()
+        .map(|pr| (pr.number, pr.title, pr.head_branch))
+        .collect();
+    burndown::ResidualWork {
+        unmerged_prs: burndown::match_wave_prs(&scope, &open, &facts),
+        unstarted,
     }
 }
 
