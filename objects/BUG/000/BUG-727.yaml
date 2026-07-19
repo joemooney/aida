@@ -13,8 +13,9 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T06:40:14.134597707Z
-modified_at: 2026-07-19T06:17:13.986550069Z
+modified_at: 2026-07-19T17:26:14.908845299Z
 req_type: Bug
 tags:
 - aida:pr-ship keystone supervised substrate governance severity:major
 - batch:keystone-0719
+execution_mode: guided
