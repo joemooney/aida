@@ -101,7 +101,7 @@ blocks:
   type_prefix: BUG
   range_start: 617
   range_end: 916
-  next: 757
+  next: 758
   allocated_at: 2026-05-18T05:41:02.603715Z
 - node_id: '6'
   owner: Joe.Mooney@work.example

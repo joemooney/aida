@@ -35524,5 +35524,17 @@ operations:
     req_type: Decision
     status: Approved
     priority: Medium
-clock: 3288
+- id: 019f7b6a-81f9-7631-9370-e0df65eedaed
+  target_id: 019f7b6a-79fa-7443-b44a-94c7e5e638c1
+  author: aida
+  node_id: '1'
+  lamport: 3289
+  timestamp: 2026-07-19T17:26:45.497528449Z
+  kind: !Create
+    title: cache self-heal misses a MISSING requirements_fts table when schema_version reads current — every cache op hard-errors until manual db deletion
+    description: 'Observed twice 2026-07-19 (a subagent during TASK-1058, then the advisor during the mode backfill — after the v10→v11 bump in PR-1521): every cache-touching command including ''aida cache rebuild'' itself failed with ''no such table: requirements_fts''; only deleting .aida/cache.db recovered. Mechanism (cache.rs open path, ~810-862): a partial/torn migration can leave requirements_cache present + schema_version stamped current + requirements_fts ABSENT. On subsequent opens: version_mismatch=false; fts_schema_drifted() presumably compares columns via pragma on the fts table and reports NO drift when the table is entirely missing (nothing to compare); cache_tables_present() evidently passes on requirements_cache alone — so needs_schema_apply stays false and the CREATE-IF-NOT-EXISTS schema never re-applies: a one-way trap, the exact shape BUG-627 fixed for missing COLUMNS. Even the rebuild path errors first (DELETE FROM requirements_fts at cache.rs:951/993 runs before any create). Fix: (1) cache_tables_present / schema-drift detection must require EVERY expected table including the fts virtual table and its triggers — absence of any = drift → drop+reapply; (2) the rebuild path should apply SCHEMA_SQL before its DELETEs so rebuild is always a valid recovery verb; (3) regression: create a cache, drop only requirements_fts, stamp current version, reopen → self-heals; also ''aida cache rebuild'' recovers the same state. Set execution_mode=drive.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3289
 node_id: '1'
