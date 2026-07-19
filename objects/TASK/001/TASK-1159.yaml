@@ -12,12 +12,12 @@ description: |-
   - `--quiet` overrides the config back to the buffered launch.
   - Flag > config > default precedence covered by a unit test on the resolved setting.
   - The config key gets a row in the config reference docs.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T01:51:54.620531117Z
-modified_at: 2026-07-19T01:51:54.620531117Z
+modified_at: 2026-07-19T14:49:10.683398944Z
 req_type: Task
 tags:
 - dx aida:burndown papercut from-dogfood
