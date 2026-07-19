@@ -1283,6 +1283,7 @@ mod tests {
             risk_notes: None,
             test_coverage_notes: None,
             implementation_summary: None,
+            execution_mode: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: Default::default(),

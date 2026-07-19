@@ -152,6 +152,26 @@ One status sits **off** this mainline: **Needs Attention**. An autonomous drain 
 | Release | `make release-minor` | Bumps the version, tags, pushes, publishes binary tarballs |
 | Do all of it at once | `aida queue work SPEC --auto-complete` | Runs the whole lifecycle — implement → CI → review → merge → pull → build — as a single command |
 
+### One verb for daily dispatch: `aida do`
+
+You don't have to remember which of those harnesses fits which spec. At groom
+time the advisor classifies HOW each spec should run — its **execution mode** —
+and `aida do SPEC` reads that classification and routes to the right harness,
+printing what will be asked of you *before* anything starts:
+
+| Mode | `aida do` routes to | What's asked of you |
+|------|--------------------|---------------------|
+| `drain` | Full autonomous lifecycle (implement → CI → review → merge) | Nothing — you see the merged result; failures park for your triage |
+| `drive` | Autonomous through CI, stops at the PR | You review and merge the PR — nothing merges without you |
+| `guided` | Interactive keystone session in a ready worktree | You answer 2–4 recorded design forks up front, then review one PR; never auto-merges |
+| `operator` | Prints the spec's checklist and stops | The work is yours — no agent runs |
+| `decide` | Surfaces the pending decision | Answer it; no harness runs until then |
+
+An ungroomed spec (no mode set) is proposed a mode at the terminal — with the
+reasoning shown — and one confirm records it; headless callers are refused
+until the spec is groomed. `--mode` overrides one-shot: toward *more* human
+involvement freely, toward *less* only with `--force`.
+
 ## Quick start
 
 ### Install

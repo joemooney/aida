@@ -533,6 +533,82 @@ impl fmt::Display for RequirementPriority {
     }
 }
 
+/// HOW a spec runs when dispatched — the advisor's bless-time routing judgment,
+/// persisted as a first-class typed field (ADR-7: an engine parameter, not an
+/// env side-channel). `aida do <spec>` dispatches on it (ADR-13):
+/// - `Drain`: full autonomous lifecycle through merge
+/// - `Drive`: autonomous through CI; a human reviews + merges
+/// - `Guided`: interactive keystone dialog session; never auto-merges
+/// - `Operator`: a human does the work; aida prints the checklist and stops
+/// - `Decide`: a pending decision blocks any harness; route to clarify
+// trace:STORY-776 | ai:claude
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionMode {
+    Drain,
+    Drive,
+    Guided,
+    Operator,
+    Decide,
+}
+
+impl ExecutionMode {
+    /// All modes, in ladder order of increasing human involvement (`Decide`
+    /// sits outside the ladder — it is a block, not a harness — and sorts
+    /// last).
+    pub const ALL: [ExecutionMode; 5] = [
+        ExecutionMode::Drain,
+        ExecutionMode::Drive,
+        ExecutionMode::Guided,
+        ExecutionMode::Operator,
+        ExecutionMode::Decide,
+    ];
+
+    /// Human-involvement rank on the ADR-14 override ladder:
+    /// drain < drive < guided < operator. Overriding toward a HIGHER rank
+    /// (more human involvement) is free; toward a LOWER rank needs `--force`.
+    /// `Decide` returns `None` — it cannot be overridden past.
+    pub fn ladder_rank(self) -> Option<u8> {
+        match self {
+            ExecutionMode::Drain => Some(0),
+            ExecutionMode::Drive => Some(1),
+            ExecutionMode::Guided => Some(2),
+            ExecutionMode::Operator => Some(3),
+            ExecutionMode::Decide => None,
+        }
+    }
+}
+
+impl fmt::Display for ExecutionMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            ExecutionMode::Drain => "drain",
+            ExecutionMode::Drive => "drive",
+            ExecutionMode::Guided => "guided",
+            ExecutionMode::Operator => "operator",
+            ExecutionMode::Decide => "decide",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::str::FromStr for ExecutionMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "drain" => Ok(ExecutionMode::Drain),
+            "drive" => Ok(ExecutionMode::Drive),
+            "guided" => Ok(ExecutionMode::Guided),
+            "operator" => Ok(ExecutionMode::Operator),
+            "decide" => Ok(ExecutionMode::Decide),
+            other => Err(format!(
+                "unknown execution mode `{other}` (expected: drain, drive, guided, operator, decide)"
+            )),
+        }
+    }
+}
+
 /// Represents the type of a requirement
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum RequirementType {
@@ -3868,6 +3944,14 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implementation_summary: Option<String>,
 
+    // trace:STORY-776 | ai:claude
+    /// The advisor's bless-time classification of HOW this spec runs when
+    /// dispatched (`aida do`). `None` = ungroomed. Written through the
+    /// advisor-authority path only (groom, `aida edit --mode`, or the TTY
+    /// micro-groom confirm). Optional, serde-default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_mode: Option<ExecutionMode>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4125,6 +4209,8 @@ impl Requirement {
             risk_notes: None,
             test_coverage_notes: None,
             implementation_summary: None,
+            // trace:STORY-776 | ai:claude
+            execution_mode: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
@@ -7137,6 +7223,50 @@ req_type: Task
             back.implementation_summary.as_deref(),
             Some("narrowed ImplementationInfo")
         );
+    }
+
+    /// STORY-776: `execution_mode` is additive and serde-default. Legacy YAML
+    /// without the key deserializes to `None`; unset does not serialize; once
+    /// set it round-trips as the lowercase token; every variant parses back
+    /// from its display form; the ADR-14 ladder orders drain < drive < guided
+    /// < operator with `decide` un-ranked.
+    // trace:STORY-776 | ai:claude
+    #[test]
+    fn requirement_execution_mode_is_backward_compatible() {
+        let legacy_yaml = "\
+id: 018f0000-0000-7000-8000-000000000000
+title: legacy spec
+description: filed before execution_mode existed
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-01-01T00:00:00Z
+modified_at: 2026-01-01T00:00:00Z
+req_type: Task
+";
+        let back: Requirement = serde_yaml::from_str(legacy_yaml).unwrap();
+        assert!(back.execution_mode.is_none());
+
+        let mut r = Requirement::new("t".into(), "d".into());
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(!yaml.contains("execution_mode"));
+
+        r.execution_mode = Some(ExecutionMode::Guided);
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(yaml.contains("execution_mode: guided"));
+        let back: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back.execution_mode, Some(ExecutionMode::Guided));
+
+        for mode in ExecutionMode::ALL {
+            let parsed: ExecutionMode = mode.to_string().parse().unwrap();
+            assert_eq!(parsed, mode);
+        }
+        assert!("DRIVE".parse::<ExecutionMode>().is_ok());
+        assert!("autopilot".parse::<ExecutionMode>().is_err());
+
+        let ranks: Vec<Option<u8>> = ExecutionMode::ALL.iter().map(|m| m.ladder_rank()).collect();
+        assert_eq!(ranks, vec![Some(0), Some(1), Some(2), Some(3), None]);
     }
 
     /// BUG-251: forward-compat — an unknown `RelationshipType` variant (a newer

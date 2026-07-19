@@ -85,6 +85,7 @@ When adding a new generic discipline memory, tag it `propagation: scaffolding-pa
 ### Daily-use commands
 
 ```bash
+aida do <SPEC> [--mode M] [--force]    # Universal dispatcher (STORY-776): routes on the advisor's groomed execution_mode (drain|drive|guided|operator|decide), printing the human contract first. Ungroomed at a TTY = propose+confirm micro-groom (reasoning line shown); headless = refused. --mode overrides one-shot: tighten free, loosen needs --force; `aida edit <SPEC> --mode M` is the durable advisor write
 aida list                              # Cache-backed (sub-ms vs full-store load); default excludes archived
 aida list --status draft               # Filter by status
 aida list --archived                   # Only archived rows; --all = both (STORY-441)

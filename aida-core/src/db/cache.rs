@@ -68,6 +68,10 @@ pub struct RequirementSummary {
     /// rebuild.
     // trace:TASK-1065 | ai:claude
     pub has_pending_decision: bool,
+    /// The advisor's bless-time execution-mode classification (lowercase token:
+    /// drain|drive|guided|operator|decide); None = ungroomed.
+    // trace:STORY-776 | ai:claude
+    pub execution_mode: Option<String>,
     pub yaml_path: String,
 }
 
@@ -365,7 +369,11 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // per-row projection of `decision_request.is_pending()`) so `aida status --full`'s
 // decision-inbox count reads the cache instead of a full backend.load(). Existing
 // caches rebuild on next read to populate the new column. trace:TASK-1065 | ai:claude
-const SCHEMA_VERSION: &str = "10";
+// STORY-776: bumped to "11" when the `execution_mode` column was added (projection
+// of the canonical YAML `execution_mode` field — the advisor's bless-time dispatch
+// classification) so `aida list --fields ...,mode` reads the cache.
+// trace:STORY-776 | ai:claude
+const SCHEMA_VERSION: &str = "11";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -1125,7 +1133,7 @@ impl Cache {
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
                     in_degree, out_degree, heft, yaml_path, assignee, blocked,
-                    has_pending_decision
+                    has_pending_decision, execution_mode
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -1316,7 +1324,7 @@ impl Cache {
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
                           c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
-                          c.blocked, c.has_pending_decision
+                          c.blocked, c.has_pending_decision, c.execution_mode
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1548,6 +1556,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "blocked",
     // trace:TASK-1065 | ai:claude
     "has_pending_decision",
+    // trace:STORY-776 | ai:claude
+    "execution_mode",
     "yaml_path",
 ];
 
@@ -1753,8 +1763,8 @@ fn insert_one(
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
-            has_pending_decision
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+            has_pending_decision, execution_mode
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -1784,6 +1794,8 @@ fn insert_one(
             req.assignee,
             // trace:TASK-1065 | ai:claude
             if has_pending_decision { 1 } else { 0 },
+            // trace:STORY-776 | ai:claude — NULL when ungroomed.
+            req.execution_mode.map(|m| m.to_string()),
         ],
     )?;
 
@@ -1846,6 +1858,8 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         blocked: row.get::<_, i64>(23)? != 0,
         // trace:TASK-1065 | ai:claude — column index 24, INTEGER 0/1.
         has_pending_decision: row.get::<_, i64>(24)? != 0,
+        // trace:STORY-776 | ai:claude — column index 25, nullable TEXT.
+        execution_mode: row.get(25)?,
     })
 }
 

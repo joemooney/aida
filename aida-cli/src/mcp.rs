@@ -1531,6 +1531,10 @@ impl<'a> McpServer<'a> {
         if let Some(assignee) = req.assignee.as_deref() {
             output.push_str(&format!("**Assignee:** {}\n", assignee));
         }
+        // STORY-776: the advisor's dispatch classification, when groomed.
+        if let Some(mode) = req.execution_mode {
+            output.push_str(&format!("**Execution mode:** {}\n", mode));
+        }
         if !req.tags.is_empty() {
             let tags: Vec<&String> = req.tags.iter().collect();
             output.push_str(&format!(
@@ -1901,6 +1905,41 @@ impl<'a> McpServer<'a> {
                     new_assignee.as_deref().unwrap_or("(none)")
                 ));
                 req.assignee = new_assignee;
+            }
+        }
+
+        // STORY-776: execution_mode — the advisor's routing classification.
+        // Same advisor-authority gate as the CLI `aida edit --mode`: an MCP
+        // seat holds it only when its launching shell is the advisor
+        // (AIDA_SESSION_ROLE=advisor). Non-advisor seats are refused, mirroring
+        // the BUG-449 status-gate principle. trace:STORY-776 | ai:claude
+        if let Some(mode_arg) = args.get("execution_mode").and_then(|v| v.as_str()) {
+            if !crate::has_advisor_authority() {
+                return Err(
+                    "execution_mode is the advisor's routing classification — this MCP seat \
+                     lacks advisor authority. Have the advisor groom it (`aida groom`, or \
+                     `aida edit <id> --mode <m>`), or launch the MCP server from an advisor \
+                     seat (AIDA_SESSION_ROLE=advisor)."
+                        .to_string(),
+                );
+            }
+            if mode_arg.trim().is_empty() {
+                if req.execution_mode.is_some() {
+                    changes.push("execution_mode cleared".to_string());
+                    req.execution_mode = None;
+                }
+            } else {
+                let parsed: aida_core::ExecutionMode = mode_arg.parse()?;
+                if req.execution_mode != Some(parsed) {
+                    changes.push(format!(
+                        "execution_mode: {} → {}",
+                        req.execution_mode
+                            .map(|m| m.to_string())
+                            .unwrap_or_else(|| "(unset)".to_string()),
+                        parsed
+                    ));
+                    req.execution_mode = Some(parsed);
+                }
             }
         }
 
@@ -5654,6 +5693,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 blocked: blocked.contains(&r.id),
                 // trace:TASK-1065 | ai:claude
                 has_pending_decision: r.decision_request.as_ref().is_some_and(|d| d.is_pending()),
+                // trace:STORY-776 | ai:claude
+                execution_mode: r.execution_mode.map(|m| m.to_string()),
                 yaml_path: String::new(),
             }
         })
@@ -6318,6 +6359,12 @@ pub fn tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Team member this spec is assigned to (a username/handle). An empty string clears the assignee. NOTE: this sets the field only; it does NOT add the spec to the assignee's work queue (use queue_add). The CLI `aida assign --to` does both.",
                         "example": "alice"
+                    },
+                    "execution_mode": {
+                        "type": "string",
+                        "description": "The advisor's bless-time classification of HOW this spec runs when dispatched by `aida do` (STORY-776). ADVISOR-AUTHORITY WRITE: refused unless this MCP server was launched from an advisor seat (AIDA_SESSION_ROLE=advisor) — same gate as the CLI `aida edit --mode`. An empty string clears back to ungroomed.",
+                        "enum": ["drain", "drive", "guided", "operator", "decide", ""],
+                        "example": "drive"
                     }
                 },
                 "required": ["id"]

@@ -423,6 +423,7 @@ impl PostgresBackend {
             risk_notes: None,
             test_coverage_notes: None,
             implementation_summary: None,
+            execution_mode: None,
             custom_status,
             custom_priority,
             custom_fields,

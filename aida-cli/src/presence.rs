@@ -377,19 +377,26 @@ where
     if req_type.trim().eq_ignore_ascii_case("epic") {
         return true;
     }
-    tags.into_iter().any(|t| {
-        let lo = t.trim().to_ascii_lowercase();
-        // Exact keystone/architecture/security/supervised markers, plus the
-        // `supervised` / `needs-supervised-build` build-gating convention and
-        // any explicit `blast-radius:high` / `risk:high` tag.
-        lo == "keystone"
-            || lo == "architecture"
-            || lo == "security"
-            || lo == "supervised"
-            || lo == "needs-supervised-build"
-            || lo == "blast-radius:high"
-            || lo == "risk:high"
-    })
+    tags.into_iter().any(|t| is_keystone_marker_tag(t))
+}
+
+/// PURE: is this single tag one of the keystone/architecture/security/
+/// supervised markers? The one source of the marker list — shared by
+/// [`is_keystone_class`] and the STORY-776 mode-proposal heuristic (which
+/// needs the MATCHING tag for its reasoning line, not just the bool).
+// trace:STORY-776 | ai:claude
+pub(crate) fn is_keystone_marker_tag(tag: &str) -> bool {
+    let lo = tag.trim().to_ascii_lowercase();
+    // Exact keystone/architecture/security/supervised markers, plus the
+    // `supervised` / `needs-supervised-build` build-gating convention and
+    // any explicit `blast-radius:high` / `risk:high` tag.
+    lo == "keystone"
+        || lo == "architecture"
+        || lo == "security"
+        || lo == "supervised"
+        || lo == "needs-supervised-build"
+        || lo == "blast-radius:high"
+        || lo == "risk:high"
 }
 
 /// The solo posture's verdict for one punted/escalated design-fork.
