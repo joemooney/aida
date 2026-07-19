@@ -1,6 +1,6 @@
 # AIDA vs hosted SaaS PM (Linear / Jira / GitHub Projects)
 
-*Last updated: 2026-07-09 — pricing and feature comparisons should be re-verified against [docs/competitive-analysis/marketplace-roster.md](../competitive-analysis/marketplace-roster.md) (the current 2026-07-07 roster) before any procurement-facing use.*
+*Last updated: 2026-07-19 — pricing and feature comparisons should be re-verified against [docs/competitive-analysis/marketplace-roster.md](../competitive-analysis/marketplace-roster.md) (the current 2026-07-07 roster) before any procurement-facing use.*
 
 The TL;DR: **AIDA is not trying to replace your project-management suite.** Linear, Jira, and GitHub Projects do things AIDA explicitly doesn't try to do — multi-team coordination, customer-facing roadmaps, SLAs, sprint reporting, OKR alignment. AIDA's pitch is the *intent-graph layer that lives in the repo*. You'll often want both, with each owning a different scope of the same work.
 
@@ -54,7 +54,7 @@ The realistic deployment is **AIDA as the in-repo intent graph; SaaS PM as the h
 | Sprint planning / standups | Linear/Jira/GitHub Projects | Velocity, capacity, board grooming |
 | Engineering decisions (the "why") | AIDA | ADR-style decision records, design rationale, scenario docs |
 | Code-to-spec traceability | AIDA | `// trace:` comments, `aida trace`, merge-gate checks |
-| Agent context | AIDA via MCP | `list_requirements`, `show_requirement`, `aida://requirements/tree` |
+| Agent context | AIDA — token-efficient CLI (primary) or MCP | `aida list/show/search` under `AIDA_AGENT_OUTPUT`; MCP `list_requirements`, `show_requirement`, `aida://requirements/tree` for MCP-native clients *(Refresh 2026-07-19: the CLI is the primary agent surface — the 2026-06-29 SPIKE-73 benchmark priced MCP at ~2× for equal-or-lower success)* |
 | Cross-project portfolio reporting | SaaS PM | Quarterly reviews, leadership dashboards |
 
 Two complementary patterns:

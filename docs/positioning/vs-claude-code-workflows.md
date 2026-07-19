@@ -1,6 +1,6 @@
 # AIDA vs Claude Code Workflows (`/workflows`)
 
-*Last updated: 2026-07-09 — Claude Code's Workflows surface (the JS-orchestration `Workflow` tool, `/workflows` viewer, saved-workflow slash commands, the `agent()/parallel()/pipeline()` hooks, the 1000-agent cap) is young and moving fast. Re-verify against the current Claude Code docs before treating capability claims here as authoritative; if the surface drifts in a way that changes the layer story, update this doc. Companion to [vs-claude-code-subagents.md](vs-claude-code-subagents.md).*
+*Last updated: 2026-07-19 — Claude Code's Workflows surface (the JS-orchestration `Workflow` tool, `/workflows` viewer, saved-workflow slash commands, the `agent()/parallel()/pipeline()` hooks, the 1000-agent cap) is young and moving fast. Re-verify against the current Claude Code docs before treating capability claims here as authoritative; if the surface drifts in a way that changes the layer story, update this doc. Companion to [vs-claude-code-subagents.md](vs-claude-code-subagents.md).*
 
 **TL;DR:** A Claude Code **Workflow** is a *within-task* orchestration mechanism — a JavaScript script that fans out dozens-to-hundreds of subagents, holds the plan *in code* (not in Claude's context), records intermediate results in script variables, and ends with a single answer or artifact. **AIDA** is a *cross-session* substrate + lifecycle — a persistent git-canonical requirement graph with stable IDs, code→spec traces, and an autonomous drain that ships real PRs and tracks spec state over time, across agents and vendors. **Different units of work** (a *task's answer* vs a *spec's lifecycle*). They overlap on the word "orchestration," they **compose** in two directions, and the part that overlaps — the orchestration *mechanism* — is commoditizing in AIDA's favor, not against it.
 
@@ -20,7 +20,7 @@ The worry that prompts this doc: both ship something called an "orchestrator," b
 | **Identity** | None — agents know the prompt, not your requirement graph | Stable **SPEC-IDs** that survive renames, merges, and vendor switches |
 | **Git-aware** | The *script* isn't; spawned subagents can edit/push, but there's no branch/PR/merge/lifecycle model | Branches, PRs, auto-bump-on-merge, worktree-isolated implementers — the whole lifecycle |
 | **Escalation** | None — the script logic decides, or the run pauses for a *permission* prompt (not a judgment call) | implementer → advisor → human ladder; punt handshake; reviewer verdicts |
-| **Vendor** | Claude Code only | Cross-vendor — Claude, Codex, Antigravity all drive one git-canonical substrate |
+| **Vendor** | Claude Code only | Cross-vendor — Claude, Codex, Antigravity all work one git-canonical substrate *(Refresh 2026-07-19: not symmetrically — Claude and Codex run as headless implementers; Antigravity is draft-for-review only, per the SPIKE-76 dispatch policy)* |
 | **Scale** | Dozens-to-100s of agents in one run (1000 cap, ~16 concurrent) | One full lifecycle per spec; parallelism across worktrees via leases |
 | **The shape** | **A scriptable fan-out you invoke** | **A durable substrate + a lifecycle that runs on it** |
 

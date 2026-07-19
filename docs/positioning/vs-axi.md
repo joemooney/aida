@@ -5,7 +5,7 @@
 > agent-native tools. Snapshot: 2026-06-28. Paired note:
 > `docs/competitive-analysis/2026-06-28-axi-ecosystem.md`.
 
-*Last updated: 2026-07-09 (doc reviewed). Landscape snapshot: 2026-06-28.*
+*Last updated: 2026-07-19 (EPIC-56 incorporation status refreshed). Landscape snapshot: 2026-06-28.*
 
 ## TL;DR
 
@@ -134,6 +134,15 @@ top of the AIDA graph**:
 3. **Keep investing in the substrate** — the remaining live recommendation: it's
    the one thing the whole neighbor cluster (AXI + Beads + Gas Town) lacks, and
    the hardest to copy.
+
+*Refresh 2026-07-19: the incorporation (EPIC-56) is now substantially shipped —
+19 of its 21 direct children closed, including the agent-agnostic drain backend (SPIKE-74,
+so the keystone loop is no longer hardcoded to `claude -p`), event-driven
+zero-token supervision (STORY-712), and the worktree warm-pool (STORY-714).
+"Adopt AXI ergonomics" has moved from recommendation to shipped state; the live
+item remains substrate investment. AXI-side movement since the 2026-06-28
+snapshot (stars, adoption, benchmark replication) has not been re-verified
+offline — see `docs/competitive-analysis/2026-07-19-multivendor-coordination-refresh.md`.*
 
 ## Tripwires
 

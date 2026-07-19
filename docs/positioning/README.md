@@ -15,7 +15,7 @@ The docs here are **focused comparisons**: one file per neighbor, each answering
 
 ## The defensible niche statement
 
-AIDA is **the agent-collaboration layer for project intent.** Not a replacement for project management tools, not a replacement for code review tools, not a replacement for documentation generators. The defensible thing AIDA brings is the *stable, queryable graph of what exists, who depends on it, and why* — served to AI through MCP and to humans through a small CLI.
+AIDA is **the agent-collaboration layer for project intent.** Not a replacement for project management tools, not a replacement for code review tools, not a replacement for documentation generators. The defensible thing AIDA brings is the *stable, queryable graph of what exists, who depends on it, and why* — served to agents through a token-efficient CLI (the primary agent surface), to MCP-native clients through typed MCP tools, and to humans through the same small CLI. *(Refresh 2026-07-19: this line previously read "served to AI through MCP" — the 2026-06-29 SPIKE-73 benchmark found MCP ~2× the CLI's cost at equal-or-lower success, so the CLI is primary and MCP is the typed option.)*
 
 > Karpathy-style "structured markdown queryable by Claude" is the floor; Spec Kit's spec-driven workflow is the ceiling. AIDA sits between them as the **durable index** — a small invisible kernel that captures what exists, plus optional layered modules for everything else.
 >
