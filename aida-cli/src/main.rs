@@ -76388,6 +76388,12 @@ fn handle_headless_command(cmd: &HeadlessCommand) -> Result<()> {
 /// dispatches pre-storage like `aida drain status`. Prints "No pending
 /// directives." (exit 0) when the file is empty or absent so a quiet
 /// project never errors. trace:TASK-294 | ai:claude
+///
+/// `aida worker gc` prunes stale drain orders — spec-targeted drain lines
+/// whose target spec is already archived / Completed / Rejected. The worker
+/// dispatch stays pre-storage; the gc arm opens the cache-backed backend
+/// itself to resolve target-spec statuses.
+// trace:BUG-723 | ai:claude
 fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
     match cmd {
         WorkerCommand::Directives { json } => {
@@ -76405,6 +76411,74 @@ fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
             } else {
                 print!("{}", worker::render_human(&directives));
             }
+            Ok(())
+        }
+        // trace:BUG-723 | ai:claude
+        WorkerCommand::Gc { dry_run } => {
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let path = worker::worker_cmd_path(&project_root);
+            let body = std::fs::read_to_string(&path).unwrap_or_default();
+            if worker::parse_directives_from_str(&body).is_empty() {
+                println!("No pending directives.");
+                return Ok(());
+            }
+            let store_path = detect_distributed_store_from(&project_root).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no requirement store found — cannot resolve directive target specs"
+                )
+            })?;
+            let backend = advance_backend(&store_path)?;
+            // Both view axes wide open: an archived (or deferred) target must
+            // still resolve so its directive is classified correctly.
+            let summaries = backend.list_summaries(&aida_core::ListFilter {
+                archive: aida_core::ArchiveFilter::Both,
+                defer: aida_core::DeferFilter::Both,
+                ..Default::default()
+            })?;
+            // Dead = the spec still exists AND is archived or terminal
+            // (Completed / Rejected) — same predicate as the queue's GC. A
+            // directive targeting an unknown spec is LEFT alone (fail-safe:
+            // no store row means no evidence the work shipped).
+            let mut dead_ids = std::collections::HashSet::new();
+            for s in &summaries {
+                if s.archived || is_terminal_status_str(&s.status) {
+                    for id in [s.spec_id.as_deref(), s.agreed_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                    {
+                        dead_ids.insert(id.to_ascii_uppercase());
+                    }
+                }
+            }
+            let is_dead = |spec: &str| dead_ids.contains(&spec.to_ascii_uppercase());
+            let outcome = worker::gc_directives_body(&body, &is_dead);
+            if outcome.pruned.is_empty() {
+                println!("No stale directives to prune.");
+                return Ok(());
+            }
+            println!(
+                "{} stale directive{} (target spec archived / Completed / Rejected):",
+                outcome.pruned.len(),
+                if outcome.pruned.len() == 1 { "" } else { "s" }
+            );
+            for d in &outcome.pruned {
+                println!("  - {}", d.raw);
+            }
+            if *dry_run {
+                println!("Dry run — file unchanged.");
+                return Ok(());
+            }
+            std::fs::write(&path, &outcome.kept_body)?;
+            let remaining = worker::parse_directives_from_str(&outcome.kept_body).len();
+            println!(
+                "Pruned {} directive{}; {} remain{}.",
+                outcome.pruned.len(),
+                if outcome.pruned.len() == 1 { "" } else { "s" },
+                remaining,
+                if remaining == 1 { "s" } else { "" }
+            );
             Ok(())
         }
     }

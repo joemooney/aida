@@ -6234,6 +6234,19 @@ pub enum WorkerCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Garbage-collect stale directives from `.aida/worker.cmd` — prune every
+    /// spec-targeted drain line whose target spec is already archived,
+    /// Completed, or Rejected, so a later worker run cannot fire an unattended
+    /// drain against finished work. Bare drains, batch-scoped drains,
+    /// comments, and control directives (pause / exit) are never touched.
+    /// Sibling of `aida queue gc` (which prunes dead routed queue entries).
+    // trace:BUG-723 | ai:claude
+    Gc {
+        /// Preview what would be pruned without rewriting the file.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 // Headless-log introspection. A `--no-human` drain writes one JSONL file per

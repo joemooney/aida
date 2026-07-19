@@ -138,6 +138,65 @@ pub(crate) fn parse_directives_from_str(body: &str) -> Vec<Directive> {
     out
 }
 
+/// The one SPEC-ID a `drain` directive targets, when its first argument is a
+/// bare spec id (alphabetic prefix, `-`, then digit/hyphen segments — a short
+/// agreed id or a long-form id). Bare drains (queue-head pickup), batch/tag-
+/// scoped drains, flag-first drains, and control verbs (`pause` / `exit`) have
+/// no single target spec — `None`, and the GC sweep leaves them alone.
+// trace:BUG-723 | ai:claude
+pub(crate) fn drain_target_spec(d: &Directive) -> Option<&str> {
+    if !d.verb.eq_ignore_ascii_case("drain") {
+        return None;
+    }
+    let first = d.args.first()?.as_str();
+    let (prefix, rest) = first.split_once('-')?;
+    let prefix_ok = !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic());
+    let rest_ok = !rest.is_empty()
+        && rest.chars().all(|c| c.is_ascii_digit() || c == '-')
+        && rest.chars().any(|c| c.is_ascii_digit());
+    if prefix_ok && rest_ok {
+        Some(first)
+    } else {
+        None
+    }
+}
+
+/// Result of a GC pass over the directive-file body: the body to keep
+/// (comments, blanks, and live directives preserved verbatim, in order) plus
+/// the directives that were pruned, for reporting.
+// trace:BUG-723 | ai:claude
+pub(crate) struct GcOutcome {
+    pub(crate) kept_body: String,
+    pub(crate) pruned: Vec<Directive>,
+}
+
+/// Pure: sweep a directive-file body, dropping every `drain <SPEC-ID> …` line
+/// whose target spec `is_dead_spec` reports as finished (archived / Completed
+/// / Rejected — the caller supplies the store lookup). Everything else —
+/// comments, blank lines, bare/batch drains, `pause`, `exit`, unknown verbs,
+/// and drains targeting unknown specs — is kept verbatim. Sibling of the
+/// queue's dead-entry GC: a stale hand-staged overnight drain plan must not
+/// fire unattended drains against work that already shipped.
+// trace:BUG-723 | ai:claude
+pub(crate) fn gc_directives_body(body: &str, is_dead_spec: &dyn Fn(&str) -> bool) -> GcOutcome {
+    let mut kept_body = String::new();
+    let mut pruned = Vec::new();
+    for line in body.lines() {
+        let parsed = parse_directives_from_str(line);
+        let dead = parsed
+            .first()
+            .and_then(drain_target_spec)
+            .is_some_and(is_dead_spec);
+        if dead {
+            pruned.extend(parsed);
+        } else {
+            kept_body.push_str(line);
+            kept_body.push('\n');
+        }
+    }
+    GcOutcome { kept_body, pruned }
+}
+
 /// Render the human summary for `aida worker directives`. Returns the empty
 /// string when there is nothing pending — the caller prints "No pending
 /// directives." in that case so the empty-state copy is consistent across the
@@ -294,5 +353,66 @@ mod tests {
         let line = status_line(&parsed).unwrap();
         assert!(line.contains("Worker directives: 2 pending"));
         assert!(line.contains("next: drain batch:b --zen"));
+    }
+
+    // AC (BUG-723): only a spec-targeted drain has a GC-relevant target.
+    // Bare drains, batch scopes, flag-first drains, and control verbs
+    // resolve to None so the sweep never touches them.
+    #[test]
+    fn drain_target_spec_only_for_spec_targeted_drains() {
+        let d = |body: &str| parse_directives_from_str(body).remove(0);
+        assert_eq!(
+            drain_target_spec(&d("drain TASK-123 --auto-complete --no-human=both")),
+            Some("TASK-123")
+        );
+        assert_eq!(drain_target_spec(&d("drain FR-1-042")), Some("FR-1-042"));
+        assert_eq!(drain_target_spec(&d("drain")), None);
+        assert_eq!(
+            drain_target_spec(&d("drain batch:autonomy-modes --zen")),
+            None
+        );
+        assert_eq!(drain_target_spec(&d("drain --zen")), None);
+        assert_eq!(drain_target_spec(&d("pause")), None);
+        assert_eq!(drain_target_spec(&d("exit")), None);
+    }
+
+    // AC (BUG-723): the GC sweep prunes drain lines whose target spec is
+    // dead, and keeps everything else verbatim — comments, blanks, bare
+    // drains, control verbs, and drains on live or unknown specs.
+    #[test]
+    fn gc_prunes_dead_spec_drains_and_keeps_the_rest() {
+        let body = "# Overnight cleanup batch\n\
+                    drain TASK-100 --auto-complete --no-human=both\n\
+                    drain TASK-200 --auto-complete --no-human=both\n\
+                    drain batch:cleanup --zen\n\
+                    \n\
+                    drain\n\
+                    exit\n";
+        let is_dead = |spec: &str| spec == "TASK-100";
+        let outcome = gc_directives_body(body, &is_dead);
+        assert_eq!(outcome.pruned.len(), 1);
+        assert_eq!(
+            outcome.pruned[0].raw,
+            "drain TASK-100 --auto-complete --no-human=both"
+        );
+        assert_eq!(
+            outcome.kept_body,
+            "# Overnight cleanup batch\n\
+             drain TASK-200 --auto-complete --no-human=both\n\
+             drain batch:cleanup --zen\n\
+             \n\
+             drain\n\
+             exit\n"
+        );
+    }
+
+    // AC (BUG-723): nothing dead → the body round-trips unchanged, so a
+    // no-op GC never rewrites (or reorders) the user's overnight plan.
+    #[test]
+    fn gc_no_dead_specs_keeps_body_verbatim() {
+        let body = "# plan\ndrain TASK-100\npause\n";
+        let outcome = gc_directives_body(body, &|_| false);
+        assert!(outcome.pruned.is_empty());
+        assert_eq!(outcome.kept_body, body);
     }
 }

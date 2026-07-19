@@ -350,6 +350,24 @@ The same pending-directive summary surfaces in `aida status` and `aida drain
 status` so a glance at either tells you what the worker will do next.
 Silent when the file is empty (quiet projects stay quiet).
 
+### Garbage-collecting stale drain orders
+
+A hand-staged overnight plan that never ran (or only partially ran) leaves
+`drain <SPEC-ID> …` lines behind after the target specs ship — a latent
+landmine: the next `aida-worker` run would fire unattended drains against
+finished work. Sweep them:
+
+```bash
+aida worker gc --dry-run           # preview: which drain lines target an
+                                   # archived / Completed / Rejected spec
+aida worker gc                     # prune them; everything else survives
+```
+
+Only spec-targeted drain lines with a finished target are pruned. Bare
+drains, batch-scoped drains, comments, blank lines, and control directives
+(`pause` / `exit`) are kept verbatim, in order. Sibling of `aida queue gc`
+(which prunes dead routed queue entries).
+
 ### Watchdog — `AIDA_WORKER_SPEC_TIMEOUT`
 
 Each drain is wrapped in `timeout` (default **1800s**; configurable via
