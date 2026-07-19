@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:42:48.132401681Z
-modified_at: 2026-07-19T17:15:20.612517854Z
+modified_at: 2026-07-19T20:27:12.114864522Z
 req_type: Decision
 tags:
 - adr
@@ -35,3 +35,5 @@ relationships:
   target_id: 019f7ae6-532e-7482-8a47-a012ce5df478
   created_at: 2026-07-19T15:43:25.553618682Z
   created_by: joe
+archived: true
+archived_at: 2026-07-19T20:27:12.114864522Z
