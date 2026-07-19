@@ -12,7 +12,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:43:29.399510347Z
-modified_at: 2026-07-19T15:18:12.329617292Z
+modified_at: 2026-07-19T20:15:41.934849972Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md
@@ -20,3 +20,6 @@ relationships:
 - rel_type: Child
   target_id: 019f21bf-59d6-77e1-9d7d-e5519f5b0b59
   created_at: 2026-07-02T16:43:35.108185662Z
+deferred: true
+deferred_at: 2026-07-19T20:15:41.934849972Z
+deferred_until: discipline telemetry shows remaining halt risk (its own stated condition)
