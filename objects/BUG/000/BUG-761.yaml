@@ -1,0 +1,14 @@
+id: 019f7c0f-c2cd-74b3-946b-a86d4feef176
+spec_id: BUG-761
+agreed_id: BUG-761
+title: accepted decision specs are unarchivable without --force — approved IS terminal for the decision class; open lens accumulates ADRs forever
+description: 'Observed 2026-07-19 during an open-list shrink: aida archive refuses approved specs (''archive is for the closed long-tail'') — correct for work specs, wrong for decisions, where approved==accepted is the terminal state per the BUG-751 convention (CLAUDE.md: ''approved = accepted''). Result: every accepted ADR sits in the default open lens forever unless force-archived, defeating the open-list-as-actionable-work invariant. Fix: the archive gate treats an approved DECISION-class spec as archivable without --force (decision statuses: draft=proposed, approved=accepted are both meaningful; accepted is closed). Consider the same for other stateless/knowledge classes (principle, term) whose ''open'' presence is noise. Acceptance: aida archive ADR-N on an approved decision succeeds bare; work-spec refusal unchanged; unit test on the class-aware gate. Mode: drive.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-19T20:27:15.533212887Z
+modified_at: 2026-07-19T20:27:15.533212887Z
+req_type: Bug
+tags:
+- aida:archive adr lifecycle followup:BUG-751 from-dogfood
