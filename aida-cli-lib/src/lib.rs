@@ -66779,8 +66779,13 @@ fn handle_review_spec(
     if !interactive {
         // No human to prompt — surface the recommended next command honestly.
         let recommend = match recommended.as_str() {
+            // No --delete-branch: the implementer's worktree may still hold
+            // the PR branch, so the delete's local-cleanup step would fail;
+            // `;` keeps the auto-bump pull from being dropped by a broken
+            // chain. Worktree cleanup owns branch deletion.
+            // trace:BUG-758 | ai:claude
             "approved" | "approve" | "lgtm" | "pass" => match pr_number {
-                Some(n) => format!("gh pr merge {n} --squash --delete-branch"),
+                Some(n) => format!("gh pr merge {n} --squash; aida pull"),
                 None => format!("open a {change_noun}, then merge"),
             },
             _ => format!("aida queue rework {spec_id}"),
@@ -66811,13 +66816,16 @@ fn handle_review_spec(
         // this verb, performs the merge. trace:STORY-553 | ai:claude
         match pr_number {
             Some(n) => {
+                // No --delete-branch: the implementer's worktree may still
+                // hold the PR branch (local-cleanup refusal); `;` so the
+                // auto-bump pull always runs. trace:BUG-758 | ai:claude
                 println!(
                     "\n  {} run to merge: {}",
                     "→".green(),
-                    format!("gh pr merge {n} --squash --delete-branch").cyan()
+                    format!("gh pr merge {n} --squash; aida pull").cyan()
                 );
                 println!(
-                    "  {} the spec auto-bumps Done → Completed when the merge lands on the default branch.",
+                    "  {} `aida pull` auto-bumps the spec Done → Completed once the merge lands; branch cleanup is deferred to worktree cleanup.",
                     crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
                 );
             }
@@ -74243,11 +74251,13 @@ fn format_queue_work_not_queued_error(
         // point them at the merge path. We can't name the PR number here (no gh
         // lookup in this pure builder), so route via `aida show` which prints the
         // PR linkage, keeping every suggested command honest/runnable.
-        // trace:TASK-240 | ai:claude
+        // No --delete-branch in the merge suggestion — a worktree may still
+        // hold the branch — and `;` so the auto-bump pull cannot be dropped.
+        // trace:TASK-240 trace:BUG-758 | ai:claude
         RequirementStatus::Done => format!(
             "`{display_id}` isn't queued. Status is Done (work finished on a branch).\n  \
              If review found issues and more commits are needed: `aida queue rework {display_id} --work`\n  \
-             If the PR is yours and you want to merge now (CI green): find it with `aida show {display_id}`, then `gh pr merge <PR> --squash --delete-branch`.\n  \
+             If the PR is yours and you want to merge now (CI green): find it with `aida show {display_id}`, then `gh pr merge <PR> --squash; aida pull`.\n  \
              Otherwise nothing to do — auto-bump fires when the PR merges."
         ),
         RequirementStatus::Completed => format!(

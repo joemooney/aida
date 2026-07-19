@@ -3835,12 +3835,17 @@ pub(crate) fn continuation_prompt(base_prompt: &str, residual: &ResidualWork) ->
         for pr in &residual.unmerged_prs {
             s.push_str(&format!("\n- #{} ({}) {}", pr.number, pr.spec, pr.title));
         }
+        // No --delete-branch: the implementer worktrees still hold these PR
+        // branches, so the delete's local-cleanup step fails and an `&&`
+        // chain would drop the auto-bump pull. Worktree pruning owns branch
+        // deletion. trace:BUG-758 | ai:claude
         s.push_str(
             "\nFor each: poll `gh pr checks <n>` in the FOREGROUND until every check is \
-             terminal, then merge green ones (`--squash --delete-branch`) and pull so the \
-             Done→Completed auto-bump fires; hold `review:draft-only` PRs; park a red one \
-             per the skill. Do not fan out a new implementer for a spec that already has \
-             an open PR.",
+             terminal, then merge green ones (`--squash` only — no `--delete-branch`, the \
+             implementer worktree still holds the branch) and run `aida pull` as its own \
+             step so the Done→Completed auto-bump fires even if merge cleanup grumbles; \
+             hold `review:draft-only` PRs; park a red one per the skill. Do not fan out a \
+             new implementer for a spec that already has an open PR.",
         );
     }
     if !residual.unstarted.is_empty() {

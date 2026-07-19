@@ -640,10 +640,15 @@ pub fn recovery_hint(step: &ShipStep, pr_number: Option<u64>) -> String {
             "CI failed or was cancelled. Inspect with `gh pr checks {n}` or \
              `gh run list --branch <branch>`, fix, push, and re-run `aida pr ship`."
         ),
+        // The by-hand retry suggestion carries no --delete-branch: a live
+        // worktree may still hold the branch, and the refused local delete
+        // reads as a merge failure (branch deletion belongs to worktree
+        // cleanup). `;` keeps the auto-bump pull from being dropped.
+        // trace:BUG-758 | ai:claude
         ShipStep::Merge { .. } => format!(
             "Merge step failed (may be transient — the retry wrapper already \
-             tried). Re-run `gh pr merge {n} --squash --delete-branch` once \
-             the cause is resolved."
+             tried). Re-run `gh pr merge {n} --squash; aida pull` once the \
+             cause is resolved."
         ),
         ShipStep::Pull => "`aida pull` failed. Run it from the main worktree directly to \
              see the underlying git/store error; the merge already landed, \

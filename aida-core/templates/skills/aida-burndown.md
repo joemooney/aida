@@ -174,9 +174,12 @@ explicitly listed as a straggler (step 6). The last PR is the one this bug
 strands — give it the same wait every other PR got.
 
 For each returned PR: if all checks pass and it's mergeable + clean, merge it
-(`--squash --delete-branch`) and pull — the spec was marked **Done** by its
-implementer (step 2), so the merge-driven auto-bump promotes it to **Completed**
-on pull. As a fallback (e.g. the implementer skipped `queue done`, or the
+(`--squash` only — NO `--delete-branch`: the implementer's worktree still holds
+the branch, so the local delete is refused, and in an `&&` chain that silently
+drops the pull leg) and then run `aida pull` as its own step — the spec was
+marked **Done** by its implementer (step 2), so the merge-driven auto-bump
+promotes it to **Completed** on pull. Branch deletion happens in the prune step
+below, after the worktree is removed. As a fallback (e.g. the implementer skipped `queue done`, or the
 auto-bump missed), run `aida db reconcile-status --spec <SPEC>` to force the
 Completed bump. **Hold (do not merge) any PR whose spec is
 `review:draft-only`** — leave it a draft for the operator. On a merge conflict,
@@ -202,7 +205,7 @@ For each just-merged Completed spec:
    ```
    git worktree remove --force <that worktree path>
    git branch -d <that branch>            # -d = safe: refuses if not merged
-   git push origin --delete <that branch> # only if --delete-branch above didn't already
+   git push origin --delete <that branch> # remote cleanup (the merge deliberately skipped branch deletion)
    ```
 
 **Prune guards (follow these exactly — they bound the blast radius):**

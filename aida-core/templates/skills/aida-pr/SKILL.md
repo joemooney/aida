@@ -634,7 +634,7 @@ flag — concrete is the point):
   → Next: press Ctrl+D to exit. The --auto-complete orchestrator then runs:
     - Phase 2/6  End session         (aida session end)
     - Phase 3/6  Review              (auto-queued story <STORY-X>)
-    - Phase 4/6  Merge PR-<N>        (gh pr merge <N> --squash --delete-branch)
+    - Phase 4/6  Merge PR-<N>        (gh pr merge <N> --squash; branch cleanup deferred)
     - Phase 5/6  Pull + auto-bump    (<SPEC-IDS> Done → Completed)
     - Phase 6/6  Build verify        (cargo build --release)
   ```

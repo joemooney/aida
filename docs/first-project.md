@@ -330,7 +330,7 @@ $ aida queue work
 Merge it, then pull:
 
 ```
-$ gh pr merge 1 --squash --delete-branch
+$ gh pr merge 1 --squash
 ✓ Squashed and merged pull request #1
 
 $ aida pull
@@ -358,7 +358,7 @@ $ aida queue work STORY-2          # head of the queue is STORY-2 now
 $ aida queue work                  # pick up the reviewer item
 > /aida-review                     # verdict: approve
 
-$ gh pr merge 2 --squash --delete-branch
+$ gh pr merge 2 --squash
 $ aida pull
 ↳ auto-bumps STORY-2 → Completed
 ```

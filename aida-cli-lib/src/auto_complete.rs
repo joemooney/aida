@@ -1231,9 +1231,13 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 Phase::Implementer => format!("aida queue work {spec}"),
                 Phase::Ci => format!("aida session end {session} --wait-ci"),
                 Phase::Reviewer => format!("aida queue work PR-{pr}"),
+                // No branch-cleanup flag here: the drain's spec worktree still
+                // holds the PR branch, so `--delete-branch` would fail its
+                // local-cleanup step. Worktree cleanup owns branch deletion.
+                // trace:BUG-758 | ai:claude
                 Phase::Merge => ctx
                     .forge
-                    .merge_cmd(&pr)
+                    .change_cmd_hint("merge", &format!("{pr} --squash"))
                     .unwrap_or_else(|| format!("merge PR {pr} to your default branch")),
                 Phase::Pull => "aida pull".to_string(),
                 Phase::Build => "cargo build --release".to_string(),
@@ -1591,10 +1595,15 @@ fn render_through_ci_checkpoint(spec: &str, pr_number: Option<u32>) -> String {
     } else {
         "aida queue work PR-N --for reviewer".to_string()
     };
+    // The spec's worktree still holds the PR branch here, so a suggested
+    // `--delete-branch` is guaranteed to fail its local-cleanup step — and an
+    // `&&` chain then silently drops the `aida pull` auto-bump leg. Suggest a
+    // `;` chain with no branch delete; worktree cleanup owns branch deletion.
+    // trace:BUG-758 | ai:claude
     let merge_cmd = if let Some(n) = pr_number {
-        format!("gh pr merge {n} --squash --delete-branch && aida pull")
+        format!("gh pr merge {n} --squash; aida pull")
     } else {
-        "gh pr merge <N> --squash --delete-branch && aida pull".to_string()
+        "gh pr merge <N> --squash; aida pull".to_string()
     };
     format!(
         "{spec} PR checkpoint\n\
@@ -1602,7 +1611,9 @@ fn render_through_ci_checkpoint(spec: &str, pr_number: Option<u32>) -> String {
          CI: green\n\
          Review: routed to reviewer queue\n\
          Next: {review_cmd}\n\
-         After review: {merge_cmd}"
+         After review: {merge_cmd}\n\
+         (';' so the pull auto-bump runs regardless; the worktree still holds \
+         the branch — worktree cleanup deletes it later)"
     )
 }
 
@@ -6166,9 +6177,11 @@ mod tests {
         assert!(!ci_red.contains("gh run"), "{ci_red}");
 
         // Spawn-on-merge workaround also routes through glab.
+        // trace:BUG-758 | ai:claude — no branch-cleanup flag: the drain's
+        // spec worktree still holds the branch.
         let spawn = recovery_hint(Phase::Merge, FailureKind::Spawn, &c);
-        assert!(spawn.contains("glab mr merge 46"), "{spawn}");
-        assert!(spawn.contains("--remove-source-branch"), "{spawn}");
+        assert!(spawn.contains("glab mr merge 46 --squash"), "{spawn}");
+        assert!(!spawn.contains("--remove-source-branch"), "{spawn}");
     }
 
     /// BUG-236 regression guard: by phase 3 the spec is Done (the
@@ -6276,7 +6289,9 @@ mod tests {
             (Phase::Implementer, "aida queue work TASK-247"),
             (Phase::Ci, "aida session end 019e2f423e7c --wait-ci"),
             (Phase::Reviewer, "aida queue work PR-46"),
-            (Phase::Merge, "gh pr merge 46 --squash --delete-branch"),
+            // trace:BUG-758 | ai:claude — the spec worktree holds the branch,
+            // so the manual fallback must not carry --delete-branch.
+            (Phase::Merge, "gh pr merge 46 --squash"),
             (Phase::Pull, "aida pull"),
             (Phase::Build, "cargo build --release"),
         ] {
@@ -6589,8 +6604,11 @@ mod tests {
         assert!(rendered.contains("CI: green"));
         assert!(rendered.contains("Review: routed to reviewer queue"));
         assert!(rendered.contains("Next: aida queue work PR-123 --for reviewer"));
-        assert!(rendered
-            .contains("After review: gh pr merge 123 --squash --delete-branch && aida pull"));
+        // trace:BUG-758 | ai:claude — no --delete-branch (worktree holds the
+        // branch), and ';' not '&&' so the pull leg cannot be dropped.
+        assert!(rendered.contains("After review: gh pr merge 123 --squash; aida pull"));
+        assert!(!rendered.contains("--delete-branch"));
+        assert!(!rendered.contains("&& aida pull"));
     }
 
     #[test]
