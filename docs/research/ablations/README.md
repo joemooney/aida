@@ -19,6 +19,16 @@ The question: *does a programmatic gate beat a stated rule for holding an invari
 
 **Terminus (in I4):** five cells, five ceilings. A clean ablation *cannot reproduce rule-dropping at all* — the one observed drop (the bake-off, below) lives in a real-codebase/long-autonomy regime controlled designs structurally can't reach. The only remaining evidence path is **field telemetry** (`SPIKE-67`), not a sixth ablation. Product consequence (in the audit): AIDA's gates survive — they are mostly authorization/concurrency/integrity (out of scope for the evidence) or run at the real-repo CI boundary; the one live calibration is STORY-499's `--block` flip, which should be data-driven off its report-only record.
 
+### Program 1 continuation — field telemetry (SPIKE-67, post-terminus)
+
+Not ablations: the field-instrumentation path the terminus pivoted to. Same question, different kind of evidence.
+
+| File | Kind | Finding |
+|---|---|---|
+| `2026-06-20-field-instrumentation-spike-67.md` | slice 1 — the sensor (`aida field-study`) | The git log *is* the planted sensor; raw headline (`commit_format` would-block rises with span) recorded with named confounds. |
+| `2026-06-22-field-study-slice2-spike-67.md` | slice 2 — vendor/drain/type controls | The span effect **does not survive the controls** on this repo (squash-suffix artifact + commit-type composition); drained commits adhere *better* than interactive. A valid null, converging with the lab. Named blind spot: headless-vs-supervised is not separable. |
+| `2026-07-19-field-observation-supervised-reviewer-bypass-spike-67.md` | field observation 1 — incident record | First observed real-work rule drop, landing in slice 2's blind spot (a **supervised** drive): implementer self-merged with 0 independent reviews (BUG-716). Three-class cause taxonomy — **delivery-rot / gate-scope / violation-vs-guard** — for coding future harvest observations. n=1, does not overturn the slice-2 null (different rule class). |
+
 ## Program 2 — cross-vendor competition (P2/L5, substrate-shapes-output): COMPLETE
 
 The question: *what does running N vendors on the same work actually buy?*
