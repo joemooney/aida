@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:57:46.027513551Z
-modified_at: 2026-06-16T07:40:41.920715938Z
+modified_at: 2026-07-19T01:43:02.430508346Z
 req_type: Spike
 tags:
 - aida:workspace
@@ -53,4 +53,10 @@ comments:
   content: 'Recommendation delivered: docs/plans/2026-06-16-spike-62-multi-repo-dimension-recommendation.md. FIVE architecture-class decisions need operator sign-off before any Tier-2 PR opens: D1 nested Origin{repo,component} field shape (vs flat repo string); D2 completion_repo sibling to completion_sha (vs reshaping the SHA); D3 repo+component = one hierarchy/two levels (the load-bearing modeling call); D4 Tier-3 stays gated on a real multi-repo project + SPIKE-10 + the queue-contention fix; D5 origin.repo slug = the single join key shared by spec and all linkage. Tier-2 build filed as a gated draft pending D1-D5. — advisor'
   created_at: 2026-06-16T07:40:41.134699590Z
   modified_at: 2026-06-16T07:40:41.134699590Z
+- id: 019f780a-821e-7d71-9dc7-e69ecf3138a5
+  author: joe
+  content: 'D1-D5 accepted as recommended by operator 2026-07-18 (via /aida-decide) — decision of record: ADR-12.'
+  created_at: 2026-07-19T01:43:02.430508346Z
+  modified_at: 2026-07-19T01:43:02.430508346Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 human_only: true
