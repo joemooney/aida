@@ -16,6 +16,3 @@ relationships:
 - rel_type: Child
   target_id: 019efd99-f8b0-7cf3-9407-d184bf0e2d03
   created_at: 2026-06-26T17:40:17.958163300Z
-deferred: true
-deferred_at: 2026-07-19T15:18:07.893089690Z
-deferred_until: a real user or regression appears for the EPIC-51 PTY-inject path (recorded answer 2026-07-14; flag lost twice)
