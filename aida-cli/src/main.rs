@@ -68909,10 +68909,13 @@ fn handle_queue_command(
             // the drain writes — no parallel liveness probe. Resolve the SHARED
             // main-worktree root (the drain writes its lock there), so a sibling
             // worktree reads the orchestrator's lock. trace:TASK-805
-            if let Some(o) = find_main_worktree_root()
+            // BUG-753: probed ONCE here and reused by the path-to-empty footer
+            // below, so the footer's recommendation agrees with the banner.
+            // trace:BUG-753 | ai:claude
+            let drain_overlay = find_main_worktree_root()
                 .ok()
-                .and_then(|r| DrainOverlay::probe(&r))
-            {
+                .and_then(|r| DrainOverlay::probe(&r));
+            if let Some(o) = &drain_overlay {
                 // Display ids of the queued pickable specs (the drain's source
                 // pool — queue membership IS the advisor sign-off).
                 let queued_ids: Vec<String> = entries
@@ -69635,6 +69638,11 @@ fn handle_queue_command(
                         queued_ids.push(display);
                     }
                 };
+                // BUG-753: the pickable entries' display ids, kept separately —
+                // these are the drain's source pool (queue membership IS the
+                // sign-off), so a live drain's schedule is derived from them.
+                // trace:BUG-753 | ai:claude
+                let mut entry_display_ids: Vec<String> = Vec::new();
                 for e in &entries {
                     if let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
                     {
@@ -69643,6 +69651,7 @@ fn handle_queue_command(
                             .clone()
                             .or_else(|| req.spec_id.clone())
                             .unwrap_or_else(|| req.id.to_string());
+                        entry_display_ids.push(display.clone());
                         push_display(display);
                     }
                 }
@@ -69681,7 +69690,25 @@ fn handle_queue_command(
                         })
                         .collect();
 
-                    if let Some(footer) = burndown::render_path_to_empty(&items) {
+                    // BUG-753: hand the footer the live drain's coverage (same
+                    // probe the banner above used) so it stops recommending a
+                    // `burndown run` launch the single-drain lock would refuse
+                    // for specs the running drain already scheduled.
+                    // trace:BUG-753 | ai:claude
+                    let drain_footer =
+                        drain_overlay
+                            .as_ref()
+                            .map(|o| burndown::DrainFooterOverlay {
+                                scheduled: entry_display_ids
+                                    .iter()
+                                    .filter(|id| !o.in_flight.contains(id.as_str()))
+                                    .map(|id| id.to_ascii_uppercase())
+                                    .collect(),
+                                in_flight: o.in_flight.len(),
+                            });
+                    if let Some(footer) =
+                        burndown::render_path_to_empty(&items, drain_footer.as_ref())
+                    {
                         println!();
                         // Static framing colorized; the per-item SPEC-IDs and
                         // command snippets ride through plain.

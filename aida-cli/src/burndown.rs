@@ -1606,22 +1606,46 @@ pub(crate) struct QueuedItem {
     pub bucket: OpenBucket,
 }
 
+// BUG-753: what the LIVE drain already covers, so the footer can stop
+// recommending `aida burndown run` for specs the running drain has scheduled —
+// a launch the single-drain lock would refuse anyway. Built by the caller from
+// the same overlay that renders the "a drain is running" banner; kept as plain
+// data so the footer renderer stays pure + unit-testable.
+// trace:BUG-753 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct DrainFooterOverlay {
+    /// UPPERCASE display SPEC-IDs the live drain has scheduled (claimed from
+    /// the queue but not yet picked up).
+    pub scheduled: std::collections::HashSet<String>,
+    /// Count of specs a live session lease is actively working.
+    pub in_flight: usize,
+}
+
 /// STORY-565: render the "how do I get to zero?" footer for a non-empty queue —
 /// SIGNPOSTING over the SAME classifier `aida queue advance` uses, not new
 /// state. Disambiguates the two meanings of "empty": DRAIN (`aida burndown run`)
 /// does the work, CLEAR (`aida queue clear`) just drops queue membership — and
 /// names the single next action for each non-ready (parked/blocked/held) item.
+/// BUG-753: drain-aware — when a live drain is already working this queue
+/// (`drain` is `Some`), the footer names the drain and offers the watch verb
+/// instead of recommending a launch the single-drain lock would refuse.
 /// Pure (no color, no store) so it's unit-testable without a store; the caller
 /// colorizes. Returns `None` for an empty slice (caller prints the empty-queue
-/// line instead). trace:STORY-565 | ai:claude
-pub(crate) fn render_path_to_empty(items: &[QueuedItem]) -> Option<String> {
+/// line instead).
+// trace:STORY-565 trace:BUG-753 | ai:claude
+pub(crate) fn render_path_to_empty(
+    items: &[QueuedItem],
+    drain: Option<&DrainFooterOverlay>,
+) -> Option<String> {
     if items.is_empty() {
         return None;
     }
-    let ready = items
+    let ready_ids: Vec<&str> = items
         .iter()
         .filter(|i| i.bucket == OpenBucket::Actionable)
-        .count();
+        .map(|i| i.id.as_str())
+        .collect();
+    let ready = ready_ids.len();
 
     // trace:TASK-840 | ai:claude
     let bullet = crate::glyphs::get(
@@ -1630,10 +1654,38 @@ pub(crate) fn render_path_to_empty(items: &[QueuedItem]) -> Option<String> {
     );
     let mut out = String::from("To empty this queue:");
     if ready > 0 {
-        out.push_str(&format!(
-            "\n  {bullet} {ready} ready    → `aida burndown run` (does the work)  ·  \
-             `aida queue clear` (just drops them)"
-        ));
+        match drain {
+            // BUG-753: a drain is live — don't recommend `aida burndown run`
+            // (the single-drain lock would refuse it) and don't count the
+            // drain-scheduled specs as ready-to-drain. Name the drain, offer
+            // the watch verb. trace:BUG-753 | ai:claude
+            Some(d) => {
+                let covered = ready_ids
+                    .iter()
+                    .filter(|id| d.scheduled.contains(&id.to_ascii_uppercase()))
+                    .count();
+                let uncovered = ready - covered;
+                if covered > 0 {
+                    out.push_str(&format!(
+                        "\n  {bullet} a drain is already working this queue — {covered} \
+                         scheduled, {} in flight; watch it: `aida drain status`",
+                        d.in_flight
+                    ));
+                }
+                if uncovered > 0 {
+                    out.push_str(&format!(
+                        "\n  {bullet} {uncovered} ready    → waits for the running drain \
+                         (it holds the drain lock)  ·  `aida queue clear` (just drops them)"
+                    ));
+                }
+            }
+            None => {
+                out.push_str(&format!(
+                    "\n  {bullet} {ready} ready    → `aida burndown run` (does the work)  ·  \
+                     `aida queue clear` (just drops them)"
+                ));
+            }
+        }
     }
     // BUG-621: split the non-Actionable items by whether they ACTUALLY need the
     // operator. Three groups, not one:
@@ -2773,7 +2825,7 @@ mod tests {
     // store. trace:STORY-565 | ai:claude
     #[test]
     fn render_path_to_empty_is_none_for_empty_queue() {
-        assert!(render_path_to_empty(&[]).is_none());
+        assert!(render_path_to_empty(&[], None).is_none());
     }
 
     #[test]
@@ -2782,7 +2834,7 @@ mod tests {
             id: "TASK-101".to_string(),
             bucket: OpenBucket::Actionable,
         }];
-        let f = render_path_to_empty(&items).expect("non-empty");
+        let f = render_path_to_empty(&items, None).expect("non-empty");
         assert!(f.starts_with("To empty this queue:"));
         // Ready count + BOTH the drain (does the work) and clear (drops them)
         // commands on the one line — AC2.
@@ -2814,7 +2866,7 @@ mod tests {
                 bucket: OpenBucket::AwaitingDecision,
             },
         ];
-        let f = render_path_to_empty(&items).expect("non-empty");
+        let f = render_path_to_empty(&items, None).expect("non-empty");
         // One ready item still drives the drain/clear line.
         assert!(f.contains("1 ready"));
         // Each non-ready item gets its OWN line with the operator's id + the
@@ -2847,7 +2899,7 @@ mod tests {
                 id: "TASK-894".to_string(),
                 bucket,
             }];
-            let f = render_path_to_empty(&items).expect("non-empty");
+            let f = render_path_to_empty(&items, None).expect("non-empty");
             // The self-contradiction is gone: no "needs you" on a self-resolving
             // item, and no "needs you: ... nothing to do" pairing anywhere.
             assert!(
@@ -2876,7 +2928,7 @@ mod tests {
             id: "TASK-895".to_string(),
             bucket: OpenBucket::InProgress,
         }];
-        let f = render_path_to_empty(&items).expect("non-empty");
+        let f = render_path_to_empty(&items, None).expect("non-empty");
         assert!(
             !f.contains("needs you"),
             "drift must not say 'needs you': {f}"
@@ -2893,6 +2945,98 @@ mod tests {
             f.contains("stalled") && f.contains("TASK-895"),
             "drift should read as stalled with a nudge: {f}"
         );
+    }
+
+    // BUG-753: with a LIVE drain whose plan covers the queued specs, the footer
+    // names the drain and offers the watch verb — it must NOT recommend
+    // `aida burndown run` (a launch the single-drain lock would refuse) and
+    // must NOT count drain-scheduled specs as ready-to-drain.
+    // trace:BUG-753 | ai:claude
+    #[test]
+    fn render_path_to_empty_live_drain_replaces_launch_with_watch() {
+        let items = vec![
+            QueuedItem {
+                id: "TASK-1".to_string(),
+                bucket: OpenBucket::Actionable,
+            },
+            QueuedItem {
+                id: "BUG-2".to_string(),
+                bucket: OpenBucket::Actionable,
+            },
+        ];
+        let drain = DrainFooterOverlay {
+            scheduled: ["TASK-1".to_string(), "BUG-2".to_string()]
+                .into_iter()
+                .collect(),
+            in_flight: 1,
+        };
+        let f = render_path_to_empty(&items, Some(&drain)).expect("non-empty");
+        // Names the drain + the watch verb.
+        assert!(
+            f.contains("a drain is already working this queue"),
+            "footer must name the live drain: {f}"
+        );
+        assert!(f.contains("2 scheduled"), "scheduled count: {f}");
+        assert!(f.contains("1 in flight"), "in-flight count: {f}");
+        assert!(
+            f.contains("aida drain status"),
+            "footer must offer the watch verb: {f}"
+        );
+        // No launch recommendation, no drain-scheduled specs counted as ready.
+        assert!(
+            !f.contains("aida burndown run"),
+            "must not recommend launching a second drain: {f}"
+        );
+        // ("already" contains "ready" — match the count-line shape instead.)
+        assert!(!f.contains("ready    →"), "no ready-to-drain count: {f}");
+    }
+
+    // BUG-753: ready items OUTSIDE the live drain's plan still must not get the
+    // `burndown run` launch recommendation (the lock is held); they read as
+    // waiting for the running drain, with clear still offered.
+    // trace:BUG-753 | ai:claude
+    #[test]
+    fn render_path_to_empty_live_drain_uncovered_ready_waits() {
+        let items = vec![
+            QueuedItem {
+                id: "TASK-1".to_string(),
+                bucket: OpenBucket::Actionable,
+            },
+            QueuedItem {
+                id: "BUG-2".to_string(),
+                bucket: OpenBucket::Actionable,
+            },
+        ];
+        let drain = DrainFooterOverlay {
+            scheduled: ["TASK-1".to_string()].into_iter().collect(),
+            in_flight: 0,
+        };
+        let f = render_path_to_empty(&items, Some(&drain)).expect("non-empty");
+        assert!(f.contains("1 scheduled"), "covered spec is scheduled: {f}");
+        assert!(
+            f.contains("1 ready") && f.contains("waits for the running drain"),
+            "uncovered ready waits for the drain: {f}"
+        );
+        assert!(f.contains("aida queue clear"), "clear stays offered: {f}");
+        assert!(
+            !f.contains("aida burndown run"),
+            "must not recommend launching a second drain: {f}"
+        );
+    }
+
+    // BUG-753: with NO drain, behavior is unchanged — the launch/clear pair.
+    // trace:BUG-753 | ai:claude
+    #[test]
+    fn render_path_to_empty_no_drain_unchanged() {
+        let items = vec![QueuedItem {
+            id: "TASK-1".to_string(),
+            bucket: OpenBucket::Actionable,
+        }];
+        let f = render_path_to_empty(&items, None).expect("non-empty");
+        assert!(f.contains("1 ready"));
+        assert!(f.contains("aida burndown run"));
+        assert!(f.contains("aida queue clear"));
+        assert!(!f.contains("a drain is already working this queue"));
     }
 
     // TASK-723: multi-reason — derived + finding-link + residual note.
