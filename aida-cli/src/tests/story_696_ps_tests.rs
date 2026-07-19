@@ -93,6 +93,172 @@ fn ps_process_backed_lease_uses_active_pid() {
     assert!(orphans.is_empty());
 }
 
+/// BUG-752: an Agent-tool (harness) subagent lease with the parent claude
+/// harness pid stamped as `active_pid` classifies Live while that pid is
+/// alive — the agent-tool analog of the BUG-741 codex child-pid fix. The
+/// worktree probe can never see these workers (they run inside the parent
+/// claude process, cwd = project root), so the stamped pid is the liveness
+/// signal.
+// trace:BUG-752 | ai:claude
+#[test]
+fn ps_harness_lease_with_stamped_harness_pid_is_live() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path().join(".claude/worktrees/agent-abc123");
+    std::fs::create_dir_all(&wt).unwrap();
+    let mut l = ps_lease("l-harness-pid", "TASK-1117", wt);
+    l.branch = "task-1117-edit-editor".into();
+    l.active_pid = Some(std::process::id());
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &[],
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe {
+            dirty: true,
+            ahead_of_main: 0,
+            last_commit_subject: Some("wip".into()),
+        },
+        |_| None,
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].state,
+        LeaseState::Live,
+        "a harness lease with a live stamped pid must read live, not dormant"
+    );
+    assert_eq!(rows[0].pid, Some(std::process::id()));
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(
+        d.state,
+        dispatch_health_ps::DispatchState::Moving,
+        "alive + dirty is Moving — no salvage hint for a working agent"
+    );
+    assert!(d.hint.is_none());
+}
+
+/// BUG-752: a harness lease with NO pid signal at all (legacy lease from a
+/// pre-fix binary, or no claude ancestor found at register time) has
+/// UNDETERMINABLE liveness — it must classify Unknown, never "dead process,
+/// salvageable", even with a dirty worktree. The salvage-commit hint is
+/// dangerous mid-drain: it would commit half-done work out from under a live
+/// agent and double-dispatch.
+// trace:BUG-752 | ai:claude
+#[test]
+fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path().join(".claude/worktrees/agent-def456");
+    std::fs::create_dir_all(&wt).unwrap();
+    let mut l = ps_lease("l-harness-nopid", "harness-worktree", wt);
+    l.branch = "worktree-agent-def456".into();
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &[],
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe {
+            dirty: true,
+            ahead_of_main: 0,
+            last_commit_subject: Some("wip: half-done".into()),
+        },
+        |_| None,
+    );
+
+    assert_eq!(rows.len(), 1);
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(
+        d.state,
+        dispatch_health_ps::DispatchState::Unknown,
+        "no pid evidence on a harness lease is unknown, not dead"
+    );
+    let hint = d
+        .hint
+        .as_deref()
+        .expect("Unknown carries an explanatory hint");
+    assert!(hint.contains("liveness unknown"), "{hint}");
+    assert!(
+        !hint.contains("add -A") && !hint.contains("salvage-commit"),
+        "the salvage-commit command must never appear for unknown liveness: {hint}"
+    );
+}
+
+/// BUG-752 regression guard: a NORMAL (non-harness) session lease with a dead
+/// process and a dirty worktree still classifies Salvageable — the unknown
+/// carve-out is scoped to harness worktrees only, where the cwd probe is
+/// structurally blind.
+// trace:BUG-752 | ai:claude
+#[test]
+fn ps_non_harness_dead_dirty_lease_still_salvageable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut l = ps_lease("l-dead-dirty", "STORY-9", tmp.path().to_path_buf());
+    l.branch = "story-9-widget".into();
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &[],
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe {
+            dirty: true,
+            ahead_of_main: 0,
+            last_commit_subject: None,
+        },
+        |_| None,
+    );
+
+    assert_eq!(rows.len(), 1);
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(
+        d.state,
+        dispatch_health_ps::DispatchState::Salvageable,
+        "genuinely determined dead + dirty keeps the salvage urgency"
+    );
+}
+
+/// BUG-752: the pure tri-state pid-liveness matrix and the
+/// no-pid-signal-harness predicate.
+// trace:BUG-752 | ai:claude
+#[test]
+fn ps_pid_liveness_tri_state_matrix() {
+    // Live lease → demonstrably alive, regardless of the harness flag.
+    assert_eq!(ps_pid_liveness(LeaseState::Live, false), Some(true));
+    assert_eq!(ps_pid_liveness(LeaseState::Live, true), Some(true));
+    // Non-live harness lease with no pid signal → undeterminable.
+    assert_eq!(ps_pid_liveness(LeaseState::Dormant, true), None);
+    assert_eq!(ps_pid_liveness(LeaseState::Stale, true), None);
+    // Non-live ordinary lease → the probe looked and found nothing: dead.
+    assert_eq!(ps_pid_liveness(LeaseState::Dormant, false), Some(false));
+    assert_eq!(ps_pid_liveness(LeaseState::Stale, false), Some(false));
+}
+
+// trace:BUG-752 | ai:claude
+#[test]
+fn harness_lease_without_pid_signal_predicate() {
+    let harness_wt = std::path::PathBuf::from("/x/.claude/worktrees/agent-abc");
+    let mut l = ps_lease("l-h", "harness-worktree", harness_wt);
+    l.branch = "worktree-agent-abc".into();
+    assert!(harness_lease_without_pid_signal(&l));
+
+    // Any recorded pid signal disqualifies — liveness IS determinable.
+    let mut with_active = l.clone();
+    with_active.active_pid = Some(1234);
+    assert!(!harness_lease_without_pid_signal(&with_active));
+    let mut with_creator = l.clone();
+    with_creator.creator_pid = Some(1234);
+    assert!(!harness_lease_without_pid_signal(&with_creator));
+
+    // A non-harness worktree/branch is never in the carve-out.
+    let mut ordinary = ps_lease(
+        "l-o",
+        "STORY-9",
+        std::path::PathBuf::from("/x/worktrees/story-9"),
+    );
+    ordinary.branch = "story-9-widget".into();
+    assert!(!harness_lease_without_pid_signal(&ordinary));
+}
+
 /// An In-Progress spec with NO spec-scoped lease is orphaned (flag-only):
 /// `ps_orphan_verdict(None) == Some(false)`. A live lease means genuinely
 /// running (not orphaned → None). A dead/dormant lease is orphaned with a

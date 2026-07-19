@@ -21604,7 +21604,12 @@ pub(crate) struct SessionLease {
     /// BUG-741: PID of the currently hosted agent child for process-backed
     /// launches such as headless `codex exec`. Unlike `creator_pid`, this is
     /// the worker process itself: alive => Live, dead => Stale.
+    /// BUG-752: harness-worktree (Agent-tool subagent) leases stamp the
+    /// parent claude harness pid here — the subagent executes inside that
+    /// process, so its lifetime bounds the work and the cwd-based worktree
+    /// probe can never see it.
     // trace:BUG-741 | ai:codex
+    // trace:BUG-752 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     active_pid: Option<u32>,
     /// Parent project's `target/` dir, captured so the session shell can
@@ -21774,7 +21779,18 @@ fn session_harness_worktree_register(
         hostname: hostname(),
         role: spec.agent_type.clone(),
         creator_pid: None,
-        active_pid: None,
+        // BUG-752: an Agent-tool subagent runs INSIDE the parent claude
+        // harness process (cwd = parent project root, never the isolation
+        // worktree), so the cwd-based worktree probe can never see it — a
+        // pid-less harness lease read dormant/"dead process, salvageable"
+        // while the agent was actively working. This register command runs
+        // as a hook child of that same harness process: walk our own
+        // ancestry and stamp the nearest live claude pid as the lease's
+        // liveness signal — the agent-tool analog of BUG-741's headless
+        // codex child-pid stamp. `None` when no claude ancestor is found
+        // (e.g. a detached hook runner); the classifier then treats
+        // liveness as unknown rather than dead. trace:BUG-752 | ai:claude
+        active_pid: process_probe::nearest_claude_ancestor_pid(std::process::id()),
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root
@@ -49972,6 +49988,37 @@ fn ps_orphan_likely_fanout(stale_lease: bool, fanout_active: bool) -> bool {
     !stale_lease && fanout_active
 }
 
+/// BUG-752: does this lease carry NO process-liveness signal at all while
+/// being one of the harness (Agent-tool) isolation worktrees? Such a worker
+/// runs inside the parent claude process (cwd = parent project root), so the
+/// cwd-based worktree probe structurally cannot see it — "no live claude in
+/// the worktree" is NOT evidence of death there. True only for the legacy /
+/// degraded case: a harness-worktree lease minted without an `active_pid`
+/// stamp (pre-fix binary, or no claude ancestor found at register time).
+/// Pure so the predicate is unit-testable on lease fixtures.
+// trace:BUG-752 | ai:claude
+fn harness_lease_without_pid_signal(l: &SessionLease) -> bool {
+    l.active_pid.is_none()
+        && l.creator_pid.is_none()
+        && is_agent_managed_worktree(&l.worktree_path, Some(&l.branch))
+}
+
+/// BUG-752: the tri-state pid-liveness input to the dispatch-health
+/// classifier. `Some(true)` for a Live lease (a real process demonstrably
+/// backs it), `None` — liveness undeterminable — for a harness lease with no
+/// pid signal (see [`harness_lease_without_pid_signal`]), `Some(false)`
+/// otherwise (the probe looked and found nothing alive). Keeping this pure
+/// keeps the "salvage hint only on genuinely determined death" rule
+/// unit-testable without a lease dir or `/proc`.
+// trace:BUG-752 | ai:claude
+fn ps_pid_liveness(state: LeaseState, harness_without_pid_signal: bool) -> Option<bool> {
+    match state {
+        LeaseState::Live => Some(true),
+        _ if harness_without_pid_signal => None,
+        _ => Some(false),
+    }
+}
+
 /// TASK-1143: the `locked-by` cell for one `aida ps` row — the advisor holding
 /// the STORY-711 worktree lock, or an empty string when the worktree carries no
 /// lock. Blank (not `-`) for the unlocked common case so the column stays quiet
@@ -50608,7 +50655,12 @@ fn build_running_work(
                 None
             } else {
                 let probe = dispatch_probe(&l.worktree_path);
-                let pid_alive = matches!(state, LeaseState::Live);
+                // BUG-752: tri-state — a harness (Agent-tool) lease with no
+                // recorded pid has UNDETERMINABLE liveness (the worker runs
+                // inside the parent claude process, invisible to the
+                // cwd-based worktree probe), so it must not be treated as a
+                // dead process and offered the salvage-commit hint.
+                let pid_alive = ps_pid_liveness(state, harness_lease_without_pid_signal(l));
                 let ds = dispatch_health_ps::dispatch_state(
                     pid_alive,
                     probe.dirty,
@@ -50989,6 +51041,13 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         dispatch_health_ps::DispatchState::Stalled => (
                             crate::glyph(crate::glyphs::Glyph::Warning),
                             d.state.label().yellow().bold(),
+                        ),
+                        // BUG-752: undeterminable liveness — informational,
+                        // not an alarm (the agent may well be working).
+                        // trace:BUG-752 | ai:claude
+                        dispatch_health_ps::DispatchState::Unknown => (
+                            crate::glyph(crate::glyphs::Glyph::Neutral),
+                            d.state.label().dimmed(),
                         ),
                         dispatch_health_ps::DispatchState::Moving => unreachable!(
                             "hint is None for Moving — see dispatch_health_ps::next_command_hint"

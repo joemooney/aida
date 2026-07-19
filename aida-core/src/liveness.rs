@@ -254,6 +254,55 @@ pub fn walk_ancestor_pids(start: u32) -> Vec<u32> {
     chain
 }
 
+/// BUG-752: the nearest live Claude Code process in the ancestor chain of
+/// `start` (inclusive), or `None` when no ancestor is a claude process.
+///
+/// Why this exists: an Agent-tool (harness) subagent runs INSIDE the parent
+/// `claude` process, whose cwd is the parent project root — never the
+/// subagent's isolation worktree. So the cwd-based worktree probe
+/// ([`probe_live_claude_sessions`] matched against a lease's worktree path)
+/// can never see it, and a harness-worktree lease with no recorded pid reads
+/// dormant/dead while the agent is actively working — the third liveness
+/// false-negative variant (after BUG-511's review leases and BUG-741's
+/// headless codex children). The SubagentStart hook's register command runs
+/// as a child of that same harness process, so walking its own ancestry finds
+/// the one pid whose lifetime bounds the subagent's: stamp it on the lease
+/// (`active_pid`) and the existing pid-liveness classifiers do the rest.
+// trace:BUG-752 | ai:claude
+pub fn nearest_claude_ancestor_pid(start: u32) -> Option<u32> {
+    let sys = System::new_with_specifics(
+        RefreshKind::new()
+            .with_processes(ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::Always)),
+    );
+    let mut chain: Vec<(u32, &str, &[String])> = Vec::new();
+    let mut cur = sysinfo::Pid::from_u32(start);
+    let mut seen = std::collections::HashSet::new();
+    while seen.insert(cur) {
+        let Some(proc) = sys.process(cur) else { break };
+        chain.push((cur.as_u32(), proc.name(), proc.cmd()));
+        let Some(parent) = proc.parent() else { break };
+        if parent == sysinfo::Pid::from_u32(1) || parent == cur {
+            break;
+        }
+        cur = parent;
+    }
+    nearest_claude_in_chain(chain)
+}
+
+/// BUG-752: the pure core of [`nearest_claude_ancestor_pid`] — given an
+/// already-walked ancestor chain of `(pid, name, cmd)` triples (nearest
+/// first), pick the first claude process. Split out so the selection rule is
+/// unit-testable without a live process tree.
+// trace:BUG-752 | ai:claude
+pub fn nearest_claude_in_chain<'a>(
+    chain: impl IntoIterator<Item = (u32, &'a str, &'a [String])>,
+) -> Option<u32> {
+    chain
+        .into_iter()
+        .find(|(_, name, cmd)| is_claude_process(name, cmd))
+        .map(|(pid, _, _)| pid)
+}
+
 /// Is process `pid` currently alive? A thin wrapper over `sysinfo`'s process
 /// table — `true` iff the kernel still has an entry for `pid`.
 ///
@@ -725,6 +774,46 @@ mod tests {
             "node",
             &["/usr/local/bin/clauded".to_string()]
         ));
+    }
+
+    // BUG-752: the ancestor-chain claude selection — a harness (Agent-tool)
+    // register hook runs as aida ← sh ← claude(harness); the selector must
+    // find the harness pid, skip non-claude ancestors, and yield None when no
+    // claude is anywhere in the chain. trace:BUG-752 | ai:claude
+    #[test]
+    fn nearest_claude_in_chain_picks_first_claude_ancestor() {
+        let empty: Vec<String> = vec![];
+        let chain = [
+            (100_u32, "aida", empty.as_slice()),
+            (90_u32, "sh", empty.as_slice()),
+            (80_u32, "claude", empty.as_slice()),
+            (70_u32, "claude", empty.as_slice()),
+        ];
+        assert_eq!(nearest_claude_in_chain(chain), Some(80));
+    }
+
+    // trace:BUG-752 | ai:claude
+    #[test]
+    fn nearest_claude_in_chain_none_without_claude_ancestor() {
+        let empty: Vec<String> = vec![];
+        let chain = [
+            (100_u32, "aida", empty.as_slice()),
+            (90_u32, "bash", empty.as_slice()),
+            (1_u32, "systemd", empty.as_slice()),
+        ];
+        assert_eq!(nearest_claude_in_chain(chain), None);
+    }
+
+    // trace:BUG-752 | ai:claude
+    #[test]
+    fn nearest_claude_in_chain_matches_via_cmd_fallback() {
+        let empty: Vec<String> = vec![];
+        let cmd = vec!["/usr/local/bin/claude".to_string(), "-p".to_string()];
+        let chain = [
+            (100_u32, "aida", empty.as_slice()),
+            (90_u32, "node", cmd.as_slice()),
+        ];
+        assert_eq!(nearest_claude_in_chain(chain), Some(90));
     }
 
     #[test]
