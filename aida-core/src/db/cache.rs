@@ -829,7 +829,18 @@ impl Cache {
             .as_deref()
             .map(|v| v != SCHEMA_VERSION)
             .unwrap_or(false);
-        let schema_drifted = fts_schema_drifted(&conn) || cache_schema_drifted(&conn);
+        // BUG-757: a torn/partial migration can leave `requirements_cache`
+        // present + `schema_version` stamped current + `requirements_fts`
+        // entirely ABSENT. The column-drift detectors return false for a
+        // missing table (nothing to PRAGMA) and `cache_tables_present` used to
+        // pass on `requirements_cache` alone, so the schema never re-applied —
+        // a one-way trap where every cache op (including `aida cache rebuild`)
+        // hard-errored with `no such table: requirements_fts` until the db was
+        // deleted by hand. A partial table set is structural drift: drop +
+        // reapply + invalidate the head SHA, same as a missing column.
+        // trace:BUG-757 | ai:claude
+        let schema_drifted =
+            fts_schema_drifted(&conn) || cache_schema_drifted(&conn) || cache_tables_partial(&conn);
         // BUG-664: a PURE READER must not take the cache write-lock on open. The
         // old open unconditionally re-applied the schema AND re-stamped the
         // schema-version meta on every open — both write transactions. With
@@ -948,6 +959,13 @@ impl Cache {
     pub fn truncate(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         with_cache_write(&self.path, "truncate cache", || {
+            // BUG-757: re-apply the idempotent (`IF NOT EXISTS`) schema before
+            // the DELETEs so truncate stays a valid recovery verb even when a
+            // torn migration left a table missing — the DELETE would otherwise
+            // error with `no such table: requirements_fts` before anything
+            // could heal.
+            // trace:BUG-757 | ai:claude
+            conn.execute_batch(SCHEMA_SQL)?;
             conn.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
             Ok(())
         })?;
@@ -989,6 +1007,13 @@ impl Cache {
             let conn = self.conn.lock().unwrap();
             with_cache_write(&self.path, "rebuild cache", || {
                 let tx = conn.unchecked_transaction()?;
+                // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
+                // the DELETEs so `aida cache rebuild` is always a valid
+                // recovery verb — a torn migration that left a table missing
+                // used to make even the rebuild error (`no such table:
+                // requirements_fts`) before it could recreate anything.
+                // trace:BUG-757 | ai:claude
+                tx.execute_batch(SCHEMA_SQL)?;
                 tx.execute_batch(
                     "DELETE FROM requirements_cache; DELETE FROM requirements_fts; DELETE FROM hierarchy_edges;",
                 )?;
@@ -1561,19 +1586,63 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "yaml_path",
 ];
 
-/// True when the `requirements_cache` table already exists on disk. A read-only
-/// `sqlite_master` lookup (no write lock). Used by `open()` to skip the schema
-/// apply on a healthy cache so a pure reader never takes the write lock.
-// trace:BUG-664
+/// Every table the current cache schema requires — including the FTS5 virtual
+/// table. `cache_tables_present` / `cache_tables_partial` verify the ACTUAL
+/// on-disk table set against this list (substrate-as-bouncer — don't trust the
+/// version meta): a torn migration can leave `requirements_cache` present +
+/// `schema_version` stamped current + `requirements_fts` absent, a state the
+/// column-drift detectors can't see because there is nothing to PRAGMA.
+/// Adding a table to `cache_schema.sql` means adding it here too.
+// trace:BUG-757 | ai:claude
+const EXPECTED_CACHE_TABLES: &[&str] = &[
+    "requirements_cache",
+    "requirements_fts",
+    "hierarchy_edges",
+    "cache_meta",
+];
+
+/// Count of `EXPECTED_CACHE_TABLES` that exist on disk. Read-only
+/// `sqlite_master` lookups (no write lock). FTS5 virtual tables are listed in
+/// `sqlite_master` with `type = 'table'`, so one query shape covers all.
+// trace:BUG-757 | ai:claude
+fn expected_cache_tables_present_count(conn: &Connection) -> usize {
+    EXPECTED_CACHE_TABLES
+        .iter()
+        .copied()
+        .filter(|name| {
+            conn.query_row(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                params![name],
+                |_| Ok(()),
+            )
+            .optional()
+            .unwrap_or(None)
+            .is_some()
+        })
+        .count()
+}
+
+/// True when EVERY expected cache table already exists on disk. Used by
+/// `open()` to skip the schema apply on a healthy cache so a pure reader never
+/// takes the write lock (BUG-664). Requiring the FULL table set — not just
+/// `requirements_cache` — means a partially-created cache still gets the
+/// idempotent schema apply instead of being mistaken for healthy (BUG-757).
+// trace:BUG-664 trace:BUG-757 | ai:claude
 fn cache_tables_present(conn: &Connection) -> bool {
-    conn.query_row(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'requirements_cache'",
-        [],
-        |_| Ok(()),
-    )
-    .optional()
-    .unwrap_or(None)
-    .is_some()
+    expected_cache_tables_present_count(conn) == EXPECTED_CACHE_TABLES.len()
+}
+
+/// True when SOME expected cache tables exist but not all — the torn-migration
+/// signature (e.g. `requirements_cache` present with the version stamped
+/// current, but `requirements_fts` missing). `open()` treats this as schema
+/// DRIFT: drop + reapply + invalidate the head SHA so the next read rebuilds
+/// from git, instead of the one-way `no such table: requirements_fts` trap.
+/// A completely fresh db (zero tables) is NOT partial — the plain schema apply
+/// creates everything with no drop needed.
+// trace:BUG-757 | ai:claude
+fn cache_tables_partial(conn: &Connection) -> bool {
+    let present = expected_cache_tables_present_count(conn);
+    present > 0 && present < EXPECTED_CACHE_TABLES.len()
 }
 
 /// Returns true when the on-disk `requirements_fts` table exists but is missing
@@ -3231,6 +3300,131 @@ mod tests {
         let current = Connection::open(dir.path().join("current.db")).unwrap();
         current.execute_batch(SCHEMA_SQL).unwrap();
         assert!(!cache_schema_drifted(&current));
+    }
+
+    #[test]
+    fn missing_fts_table_self_heals_on_open() {
+        // BUG-757: a torn/partial migration can leave `requirements_cache`
+        // present, `schema_version` stamped CURRENT, and `requirements_fts`
+        // entirely ABSENT. The column-drift detectors see nothing (no table to
+        // PRAGMA) and the old `cache_tables_present` passed on
+        // `requirements_cache` alone — so the schema never re-applied and
+        // every cache op hard-errored with `no such table: requirements_fts`
+        // until the db was deleted by hand. Open must treat the partial table
+        // set as drift and self-heal.
+        // trace:BUG-757 | ai:claude
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+
+        // Build a CURRENT-schema cache, then drop only the fts table and stamp
+        // the current version + a head SHA — the exact torn state observed.
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute_batch("DROP TABLE requirements_fts;").unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, SCHEMA_VERSION],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "stalehead"],
+            )
+            .unwrap();
+        }
+
+        // Open with the current binary — must self-heal instead of leaving the
+        // trap armed, and clear the stamped head SHA so the next read rebuilds.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "self-heal should invalidate the recorded head SHA so a rebuild fires"
+        );
+
+        // A rebuild + an FTS query must now succeed (both used to error with
+        // `no such table: requirements_fts`).
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("BUG-757", "missing fts table heals"));
+        cache
+            .rebuild_from_store(&store, "newhead")
+            .expect("rebuild against the healed schema must succeed");
+        let hits = cache
+            .search(
+                "BUG-757",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly,
+            )
+            .expect("FTS search must succeed after self-heal");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].spec_id.as_deref(), Some("BUG-757"));
+    }
+
+    #[test]
+    fn cache_tables_present_requires_every_table() {
+        // trace:BUG-757 | ai:claude — the table-set detectors must require the
+        // FULL expected set (incl. the fts virtual table), flag a partial set
+        // as drift, and stay quiet on both a fresh db and a complete one.
+        let dir = tempdir().unwrap();
+
+        // Fresh db: nothing present → not "present", but also NOT partial
+        // (the plain schema apply creates everything; no drop needed).
+        let fresh = Connection::open(dir.path().join("fresh.db")).unwrap();
+        assert!(!cache_tables_present(&fresh));
+        assert!(!cache_tables_partial(&fresh));
+
+        // Complete current schema → present, not partial.
+        let full = Connection::open(dir.path().join("full.db")).unwrap();
+        full.execute_batch(SCHEMA_SQL).unwrap();
+        assert!(cache_tables_present(&full));
+        assert!(!cache_tables_partial(&full));
+
+        // Drop only the fts table → no longer present, and PARTIAL (= drift).
+        full.execute_batch("DROP TABLE requirements_fts;").unwrap();
+        assert!(!cache_tables_present(&full));
+        assert!(cache_tables_partial(&full));
+    }
+
+    #[test]
+    fn rebuild_and_truncate_recover_missing_fts_table() {
+        // trace:BUG-757 | ai:claude — even if the fts table disappears out
+        // from under an already-open cache (a concurrent torn migration), the
+        // rebuild and truncate verbs must recreate it instead of erroring on
+        // their DELETEs — `aida cache rebuild` is always a valid recovery verb.
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        {
+            let conn = cache.conn.lock().unwrap();
+            conn.execute_batch("DROP TABLE requirements_fts;").unwrap();
+        }
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("BUG-757", "rebuild recovers"));
+        cache
+            .rebuild_from_store(&store, "head1")
+            .expect("rebuild must recreate the missing fts table, not error");
+        let hits = cache
+            .search(
+                "BUG-757",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly,
+            )
+            .unwrap();
+        assert_eq!(hits.len(), 1);
+
+        {
+            let conn = cache.conn.lock().unwrap();
+            conn.execute_batch("DROP TABLE requirements_fts;").unwrap();
+        }
+        cache
+            .truncate()
+            .expect("truncate must recreate the missing fts table, not error");
     }
 
     #[test]
