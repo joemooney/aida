@@ -8,9 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T18:06:36.871040383Z
-modified_at: 2026-07-13T07:00:59.967422752Z
+modified_at: 2026-07-19T02:22:09.941488251Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f16e5-8b1a-7d62-9dc9-3f27222d2918
   created_at: 2026-06-30T18:06:45.486139809Z
+deferred: true
+deferred_at: 2026-07-19T02:22:09.941488251Z
+deferred_until: a structural re-fork recurs (its own stated condition)
