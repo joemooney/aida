@@ -3,12 +3,12 @@ spec_id: TASK-1163
 agreed_id: TASK-1163
 title: 'aida-assess skill drift: references missing .claude/skills/aida-intake.md and nonexistent ''backlog groom --pickable --apply --risk'' flags'
 description: 'Hit during the 2026-07-19 intake pass. Two drift points in aida-core/templates/skills/aida-assess.md: (1) the step-list tells the spawned advisor to follow .claude/skills/aida-intake.md, which does not exist (assess/intake were renamed to groom; only aida-assess.md ships); (2) step 5 instructs ''aida backlog groom --pickable --apply --risk $AIDA_INTAKE_RISK'' but the real surface is --specs/--from-stdin/--batch/--dry-run/--note/--user — no --pickable, --apply, or --risk. Fix: update the skill master to reference the real skill file and the real groom flags (explicit --specs from the disposition table). Consider a skill-lint rule for referenced-skill-file existence.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T17:17:26.882458390Z
-modified_at: 2026-07-19T18:38:33.539928823Z
+modified_at: 2026-07-19T18:49:02.744539780Z
 req_type: Task
 tags:
 - aida:assess
@@ -16,8 +16,24 @@ tags:
 - from-dogfood
 - papercut
 - skill-drift
+history:
+- id: 019f7bb5-d812-7e21-9f1b-6cda72600c2f
+  author: aida-auto-bump
+  timestamp: 2026-07-19T18:49:02.738311260Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7bb5-d818-7c61-b5fb-12dd0bce6839
+  timestamp: 2026-07-19T18:49:02.744538569Z
+  agent: aida
+  commit_sha: c0ece8d48b534a683f8732992121c0e240325c46
+  summary: Completed via merge c0ece8d4
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T18:38:33.539928823Z
   implemented_by: joe
+  completed_at: 2026-07-19T18:49:02.534530845Z
+  completion_sha: c0ece8d48b534a683f8732992121c0e240325c46
