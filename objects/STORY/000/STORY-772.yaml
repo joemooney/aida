@@ -6,12 +6,12 @@ description: |-
   Split aida-cli into a thin 3-line binary + an aida-cli-lib library crate (run/dispatch + all handlers + all 164 test modules move into the lib; tests stay INSIDE the lib since a standalone test crate would need ~660 pub(crate) fns promoted to pub). VALUE IS TESTABILITY + a clean entry-point boundary + a precondition for a future multi-crate lib split — NOT build time: scoping (docs/plans/2026-07-17-story-772-crate-split-scoping.md) found a bin+one-lib split delivers only ~0-5% clean-build improvement and nothing for incremental rebuilds (the lib stays one ~274K-line crate; codegen-units+incremental already capture that). 2-PR sequence, green at every step; one gotcha: include_str!("../main.rs") in a test needs retargeting. Only one symbol becomes pub. See the scoping doc for the full topology/sequence/risks.
 
   Re-scoped acceptance (operator go decision, 2026-07-18, via /aida-decide): the split's value is TESTABILITY + a clean entry-point boundary + a precondition for a future multi-crate lib split - NOT build time (scoping doc docs/plans/2026-07-17-story-772-crate-split-scoping.md measured ~0-5% clean-build, nothing incremental; drop any build-time acceptance claim). Execute as the doc's 2-PR sequence (PR-1 in-package lib boundary; PR-2 carve aida-cli-lib), green at every step, tests ride inside the lib. Supervised keyboard work - do not drain headless. STORY-773 (multi-crate lib split, the real build lever) stays parked behind this and the pub(crate) web.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:47.724859121Z
-modified_at: 2026-07-19T17:17:40.234897896Z
+modified_at: 2026-07-19T17:18:04.939904555Z
 req_type: Story
 tags:
 - batch:guided-0719
