@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:05:08.198553641Z
-modified_at: 2026-06-27T16:36:30.186559954Z
+modified_at: 2026-07-19T01:27:06.052061462Z
 req_type: Task
 tags:
 - codex
@@ -23,3 +23,6 @@ tags:
 - parent:EPIC-0419
 - statusline
 - watch
+deferred: true
+deferred_at: 2026-07-19T01:27:06.052061462Z
+deferred_until: Codex ships command-backed status lines
