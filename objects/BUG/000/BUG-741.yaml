@@ -3,12 +3,12 @@ spec_id: BUG-741
 agreed_id: BUG-741
 title: headless codex implementer sessions always read STALE/dead — lease liveness never sees the codex exec child process
 description: 'Two verified false-negatives on 2026-07-18: (1) ~07:40, BUG-730 drive 1m44s in — aida ps reported ''dormant / dead process, uncommitted work in aida-pool-aida-2, salvage-commit then rebrief'' while the codex implementer was actively working (it went on to ship PR-1488); (2) ~11:46, TASK-1156 drive — aida status TASK-1156 reported ''STALE — no live process, In-Progress flag orphaned'' at the same moment codex exec (pids 2297601/2297608) was running cargo test in aida-pool-aida-0 with the drive log updating to the second. Hypothesis: the session lease records no pid (aida ps shows pid ''-'' for these sessions) or records the orchestrator pid rather than the spawned codex exec child, so the liveness probe finds nothing alive. Claude-implementer sessions don''t show this signature. Impact: operators are told to salvage/end sessions that are mid-flight — following the hint would kill live work. Acceptance: a running headless codex implementer reads ● live in aida ps / aida status <spec>, with pid+elapsed populated; a genuinely dead one still reads STALE; regression covers the vendor-codex spawn path recording the child pid on the lease.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:47:13.231442409Z
-modified_at: 2026-07-18T23:57:36.969865583Z
+modified_at: 2026-07-19T00:17:28.303694682Z
 req_type: Bug
 tags:
 - aida:session liveness codex from-dogfood
@@ -19,3 +19,7 @@ comments:
   content: 'Third occurrence, 2026-07-18 12:18: aida queue list printed ''BUG-739 in progress, but no live session lease — stalled; pick it back up or park it'' while an INTERACTIVE codex implementer (codex /aida-pickup BUG-739, pids 2317723/2317949 — not codex exec) was actively working it in the operator''s terminal and had already committed the fix (c0d1527ac) in aida-pool-aida-0. Two implications for the fix: (1) the false-negative is not limited to the headless codex exec spawn path — the interactive vendor-codex launch also records no usable pid on the lease; (2) a third surface repeats the broken diagnosis (aida ps, aida status <spec>, now queue list''s in-flight hint) — fix the shared liveness probe once, and make every surface''s hint flow from it. Danger remains: following queue list''s hint (''aida queue work BUG-739'' re-pickup) would have double-dispatched a spec mid-flight.'
   created_at: 2026-07-18T19:19:07.066118241Z
   modified_at: 2026-07-18T19:19:07.066118241Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-19T00:17:28.303694682Z
+  completion_sha: 858525c0eb13f1c88ed567fd396079f5bcfa1e21
