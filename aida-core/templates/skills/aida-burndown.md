@@ -150,7 +150,14 @@ the tag is the working slice.)
 ### 3. Integrate (you are the integrator — do NOT implement)
 
 **Wait for each fanned-out PR's CI to reach a TERMINAL state before deciding its
-fate — and never exit the drain while any PR is still pending (BUG-541).** A
+fate — and never exit the drain while any PR is still pending (BUG-541).**
+**Background watches do not exist in a headless session (BUG-755): the session
+terminates when your turn ends, so a promised "background watch" dies with it
+and the PR is silently orphaned. Never promise one — poll in the FOREGROUND
+(`gh pr checks <n>`) and never end your turn while a wave PR is non-terminal or
+blessed specs remain unstarted.** (The `aida burndown run` launcher relaunches a
+continuation turn if a session exits with residual work — but that safety net is
+recovery, not license to end the turn early.) A
 PR's CI lags the implementer's push by minutes, so the LAST wave's PRs are
 routinely still running when their implementer returns; treating "checks
 pending" as "skip it" silently orphans the final PR (observed 2×: #852, #864
@@ -231,6 +238,10 @@ spec, then move to the next.
 
 Re-run `aida burndown plan` (the ready set shrinks as specs land + may grow as
 blockers clear), launch the next wave, and repeat until `ready` is empty.
+**Looping is not optional (BUG-755): stopping after wave 1 with blessed specs
+unstarted is an incomplete drain.** Only a shelve/cap stop (`--max` reached, or
+a shelved failure you are exiting non-zero over) may end the run with blessed
+specs remaining — and then the report (step 6) must name them explicitly.
 
 For an **unattended** drain, wait on the wave **event-driven**, not on a blind
 timer. Launch the harness `Monitor` tool over the drain's wake feed:
