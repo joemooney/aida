@@ -471,3 +471,11 @@
   note: 'intake pass 2026-07-19: docs-only SPIKE-67 field-observation writeup; operator comment carries the three-rung gate-ladder content'
   added_at: 2026-07-19T17:16:39.166308794Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 019f7b61-fbe2-7c73-bdd7-3e7ed7701084
+  position: 355000
+  added_by: joe
+  note: autonomous-safe skill/doc fix; filed+queued at intake 2026-07-19
+  added_at: 2026-07-19T17:17:47.577115821Z
+  for_role: implementer
+  for_scope: harness-worktree
