@@ -35560,5 +35560,17 @@ operations:
     req_type: Functional
     status: Draft
     priority: Medium
-clock: 3291
+- id: 019f7b89-2d21-76d2-8607-43da2f1675de
+  target_id: 019f7b89-2646-77d2-9efc-f45466414b19
+  author: aida
+  node_id: '1'
+  lamport: 3292
+  timestamp: 2026-07-19T18:00:15.393128411Z
+  kind: !Create
+    title: skill-suggested merge commands include --delete-branch while the spec worktree provably holds the branch — guaranteed scary refusal + broken && chains (3rd occurrence)
+    description: 'Three times 2026-07-19 alone (PR-1521, PR-1523; plus PR-1489 on 07-18) the operator ran the checkpoint-suggested ''gh pr merge N --squash --delete-branch && aida pull'': the remote merge succeeds, the local branch delete fails (''used by worktree at ...''), and the && chain silently drops the aida pull leg — stranding the auto-bump until someone notices. The suggesting surfaces (guided-implement checkpoint, pr-checkpoint templates, session-end next-steps) KNOW a worktree holds the branch. Fix: every skill/template that prints a merge command must omit --delete-branch when the branch is held by a live worktree (session-end/worktree-gc own branch cleanup), or simply suggest ''aida pr ship N'' which handles it (BUG-732). Grep the templates for ''gh pr merge'' and normalize. Acceptance: no scaffolded skill/checkpoint suggests --delete-branch for a worktree-held branch; suggested chains put aida pull somewhere it cannot be dropped (either via pr ship or with '';'' semantics noted). Mode: drive.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3292
 node_id: '1'
