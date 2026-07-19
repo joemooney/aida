@@ -3,12 +3,12 @@ spec_id: BUG-752
 agreed_id: BUG-752
 title: Agent-tool (claude harness) subagent sessions read 'dead process, salvageable' in aida ps while alive — third liveness false-negative variant
 description: 'Observed 2026-07-18 18:48 during a live burndown: aida ps showed the three harness-spawned implementer agents (.claude/worktrees/agent-*) as ''dormant / dead process, uncommitted work / salvage-commit then rebrief'' with pid ''-'', while all three were actively working (worktrees created progressively 15m/6m/2m earlier, one already on branch task-1117-edit-editor). Same failure family as BUG-741 (fixed today for codex exec children) but a different spawn path: Claude-harness Agent-tool subagents never register a pid on their lease either. The printed salvage hint is dangerous mid-drain (running it would commit half-done work and double-dispatch). Acceptance: harness-agent sessions report live (or at minimum ''unknown — no pid recorded'' WITHOUT the salvage hint) while their worktree is being actively written; the salvage hint only appears when liveness is genuinely determined dead. Extends BUG-741''s shared-probe fix to the agent-tool spawn path.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T01:49:18.519572258Z
-modified_at: 2026-07-19T04:57:55.765773671Z
+modified_at: 2026-07-19T05:06:25.590042797Z
 req_type: Bug
 tags:
 - aida:session liveness from-dogfood
