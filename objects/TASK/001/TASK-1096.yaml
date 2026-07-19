@@ -17,12 +17,12 @@ description: |-
   - WHEN mirror_remotes is absent/empty, behaviour is unchanged (origin only).
 
   NOTE: complements the native git multi-pushurl posture (a follow-up aida remote mirror helper + docs). This is the AIDA-controlled store leg.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:59:58.320745459Z
-modified_at: 2026-07-19T01:26:16.723242900Z
+modified_at: 2026-07-19T01:26:17.912004168Z
 req_type: Task
 tags:
 - aida:store:sync
