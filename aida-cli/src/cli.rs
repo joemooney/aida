@@ -1888,6 +1888,9 @@ pub enum DevCommand {
     /// binary is being used, when was it built, what's the AIDA repo path.
     Status,
 
+    /// Print the compact PS1 staleness marker for the active dev binary.
+    Ps1,
+
     /// Print shell helper functions (aida-on, aida-off) suitable for
     /// pasting into ~/.bashrc or ~/.zshrc. Pass --install to append them
     /// directly.
