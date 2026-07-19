@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:51.972669614Z
-modified_at: 2026-07-19T01:27:04.025652307Z
+modified_at: 2026-07-19T15:18:05.664825629Z
 req_type: Task
 tags:
 - batch:gitlab-canonical
@@ -17,3 +17,6 @@ tags:
 - gitlab
 - needs-human
 - parent:EPIC-44
+deferred: true
+deferred_at: 2026-07-19T15:18:05.664825629Z
+deferred_until: the operator explicitly prioritizes the gitlab cutover (EPIC-44)
