@@ -8,7 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T20:27:15.533212887Z
-modified_at: 2026-07-19T20:27:15.533212887Z
+modified_at: 2026-07-19T20:27:19.915187548Z
 req_type: Bug
 tags:
 - aida:archive adr lifecycle followup:BUG-751 from-dogfood
+execution_mode: drive
