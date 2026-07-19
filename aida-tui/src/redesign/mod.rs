@@ -26,6 +26,8 @@ mod state;
 mod store;
 
 use state::PendingOp;
+// trace:TASK-937 | ai:claude
+use state::{batch_approve, BatchApproveOutcome};
 pub use state::{RedesignState, RunOutcome, Scope, TargetItem, Verb};
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -1240,6 +1242,23 @@ fn apply_outcome(
                 }
             });
         }
+        RunOutcome::BatchApprove { ids } => {
+            // `approve all` confirmed: batch-approve the derived approvable set
+            // — approve + queue every id in ONE call ([`batch_approve`] drives
+            // the whole set; each spec gets the advisor-gated approve transition
+            // then the implementer-queue route). Each per-spec half is a SLOW
+            // orphan-branch store write, so the whole batch runs on a background
+            // thread (BUG-633) and reports on completion.
+            // trace:TASK-937 trace:BUG-633 | ai:claude
+            let label = format!("approving + queueing {} spec(s)…", ids.len());
+            start_pending(pending, st, label, move || {
+                let outcome = batch_approve(&ids, approve_and_queue_spec);
+                VerbResult {
+                    status: batch_approve_status(&outcome),
+                    invalidate: true,
+                }
+            });
+        }
         RunOutcome::Reject { drafts, skipped } => {
             // Directly reject each draft via the advisor-gated transition
             // (`aida edit <id> --status rejected`, run with advisor authority).
@@ -1889,6 +1908,41 @@ fn approve_status(approved: &[String], failed: &[String], skipped: &[String]) ->
     }
     if parts.is_empty() {
         return "approve: nothing to approve (no drafts selected)".to_string();
+    }
+    parts.join(" · ")
+}
+
+/// The per-spec batch-approve operation: approve the spec (the advisor-gated
+/// `aida edit <id> --status approved` transition) THEN route it to the
+/// implementer queue (`aida queue add --for implementer <id>`). `true` only
+/// when BOTH halves succeed — an approved-but-unqueued spec reports as failed
+/// so the operator sees it needs a hand. Composes the existing
+/// [`approve_spec`] + [`queue_for_implementer`] shell-outs; injected into the
+// pure [`batch_approve`] driver by the BatchApprove outcome. trace:TASK-937 | ai:claude
+fn approve_and_queue_spec(id: &str) -> bool {
+    approve_spec(id) && queue_for_implementer(id)
+}
+
+/// The status-line confirmation for an `approve all` batch run: which ids were
+/// approved + queued, and which failed either half. Pure (no IO) so it is unit
+// testable, like its sibling formatters. trace:TASK-937 | ai:claude
+fn batch_approve_status(outcome: &BatchApproveOutcome) -> String {
+    let mut parts = Vec::new();
+    if !outcome.approved.is_empty() {
+        parts.push(format!(
+            "approved + queued {}: {}",
+            outcome.approved.len(),
+            outcome.approved.join(", ")
+        ));
+    }
+    if !outcome.failed.is_empty() {
+        parts.push(format!(
+            "FAILED to approve + queue: {}",
+            outcome.failed.join(", ")
+        ));
+    }
+    if parts.is_empty() {
+        return "approve all: nothing approvable".to_string();
     }
     parts.join(" · ")
 }
@@ -3259,9 +3313,17 @@ fn render_confirm(f: &mut Frame, area: Rect, theme: &Theme, verb: Verb, count: u
     let block = Block::bordered()
         .border_style(Style::default().fg(theme.warn))
         .title(" confirm ");
+    // `approve all` confirms over the derived approvable set, not an empty
+    // selection — its message names the batch action + the set, where the
+    // generic line would read "approve all all N". trace:TASK-937 | ai:claude
+    let headline = if verb == Verb::ApproveAll {
+        format!("Approve + queue all {count} approvable spec(s)?")
+    } else {
+        format!("Nothing selected. {} all {count} item(s)?", verb.label())
+    };
     let lines = vec![
         Line::from(Span::styled(
-            format!("Nothing selected. {} all {count} item(s)?", verb.label()),
+            headline,
             Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
@@ -4109,6 +4171,8 @@ mod render_tests {
                 Verb::Accept,
                 Verb::Defer,
                 Verb::Drive,
+                // trace:TASK-937
+                Verb::ApproveAll,
             ]
         );
         // Draft focus: draft verbs apply; approved/done verbs grey.
@@ -4175,6 +4239,23 @@ mod render_tests {
         // Empty case.
         let empty = approve_status(&[], &[], &[]);
         assert!(empty.contains("nothing to approve"));
+    }
+
+    #[test]
+    fn batch_approve_status_lists_approved_and_failed() {
+        // trace:TASK-937
+        let s = batch_approve_status(&BatchApproveOutcome {
+            approved: vec!["TASK-1".to_string(), "TASK-2".to_string()],
+            failed: vec!["TASK-3".to_string()],
+        });
+        assert!(s.contains("approved + queued 2"));
+        assert!(s.contains("TASK-1"));
+        assert!(s.contains("TASK-2"));
+        assert!(s.contains("FAILED"));
+        assert!(s.contains("TASK-3"));
+        // Empty case.
+        let empty = batch_approve_status(&BatchApproveOutcome::default());
+        assert!(empty.contains("nothing approvable"));
     }
 
     #[test]
