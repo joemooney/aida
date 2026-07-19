@@ -1,0 +1,8 @@
+- user_id: codex-advisor-1
+  requirement_id: 019f7c66-7892-7e91-80be-67e96bfdb4b7
+  position: 1000
+  added_by: codex-advisor-1
+  note: auto-queued by `session end` (019f7c60); covers 5 specs
+  added_at: 2026-07-19T22:02:13.789623429Z
+  for_role: reviewer
+  added_by_machine: imac
