@@ -3,12 +3,12 @@ spec_id: STORY-715
 agreed_id: STORY-715
 title: 'aida statusbar: ambient OSC terminal-title meter (gnhf-style), read-only, not dispatch'
 description: 'The tmux eval verdict: NO to a window-per-lease multiplexer (redundant with EPIC-26/53/54 TUI, and the differentiated fan-out mode runs Agent-tool subagents IN-process with no PTY to pane), YES-narrow to gnhf-style ambient meter. aida statusbar emits the OSC-2 terminal-title escape on an interval from cache-fast sources: aida statusbar -> "aida . q:5 . live:2 . STALE:1 . you:3 (2 approve . 1 mail)" (queue depth + aida ps live/STALE + needs-you = approvals+mail+punts). tmux-INDEPENDENT (OSC title works in any terminal); bonus tmux status-right recipe. Borrow gnhf save/restore-title (ESC[22;0t / ESC[23;0t) so it cleans up on exit; opt-in. READ-ONLY meter, NOT dispatch (that is EPIC-53/54). ~1-2 days. The ambient projection of the cockpit headline onto surfaces visible when NOT in aida tui.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:44:37.596692409Z
-modified_at: 2026-07-19T02:21:50.311929872Z
+modified_at: 2026-07-19T05:02:47.516081006Z
 req_type: Story
 tags:
 - batch:dogfood-0717
