@@ -34929,5 +34929,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3240
+- id: 019f780a-482e-72e0-b5c8-c2297594b88f
+  target_id: 019f780a-41bb-7671-9879-ea23337b0527
+  author: aida
+  node_id: '1'
+  lamport: 3241
+  timestamp: 2026-07-19T01:42:47.598155181Z
+  kind: !Create
+    title: 'SPIKE-62 multi-repo dimension: D1-D5 accepted as recommended (operator sign-off 2026-07-18)'
+    description: 'Operator accepted all five recommendations of docs/plans/2026-06-16-spike-62-multi-repo-dimension-recommendation.md as written: D1 nested Origin field shape (not flat repo string); D2 completion_repo as sibling to completion_sha; D3 repo+component modeled as ONE hierarchy; D4 Tier-3 stays gated on real multi-repo use, Tier-2 schema may proceed on D1-D2; D5 origin.repo slug is the single join key across spec + linkage artifacts. Recorded via /aida-decide. Spec stays draft pending BUG-751 (decision-class lifecycle); this text is the decision of record.'
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3241
 node_id: '1'
