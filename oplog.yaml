@@ -35820,5 +35820,35 @@ operations:
   timestamp: 2026-07-19T21:54:51.518781572Z
   kind: !SetStatus
     status: Approved
-clock: 3321
+- id: 019f7c66-8556-79a3-b8e6-922e71a42ed9
+  target_id: 019f7c66-7892-7e91-80be-67e96bfdb4b7
+  author: aida
+  node_id: '1'
+  lamport: 3322
+  timestamp: 2026-07-19T22:02:01.430739677Z
+  kind: !Create
+    title: 'Review PR-1536: [AI:codex] docs(agents): design subsystem advisor routing (TASK-0434 TASK-0435 TASK-0436 TASK-0437 SPIKE-75)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `019f7c60`) for branch `codex-strategy-spike-75`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1536>
+      - Branch: `codex-strategy-spike-75` → `main`
+
+      ## Covers
+
+      - TASK-0434
+      - TASK-0435
+      - TASK-0436
+      - TASK-0437
+      - SPIKE-75
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1536` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3322
 node_id: '1'
