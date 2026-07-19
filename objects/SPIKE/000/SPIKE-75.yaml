@@ -15,12 +15,12 @@ description: |-
   Spike questions when revisited: does the claude CLI expose the advisor tool? what is the cross-vendor equivalent per adapter? does the per-vendor capability fit cleanly under the (future, wired) adapter contract without leaking into coordination? cost/quality on an AIDA implementer drain (Sonnet executor + Opus advisor vs Opus-solo).
 
   REVISIT TRIGGER: the vendor-execution adapter (EPIC-35 forge / agent-launcher) is actually WIRED AND the advisor tool is GA / exposed on the CLI surface AIDA uses.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:43:31.585327146Z
-modified_at: 2026-07-13T07:00:56.031725313Z
+modified_at: 2026-07-19T01:26:52.117382822Z
 req_type: Spike
 tags:
 - execution
