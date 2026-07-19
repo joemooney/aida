@@ -35457,5 +35457,34 @@ operations:
   timestamp: 2026-07-19T15:43:26.688208377Z
   kind: !SetStatus
     status: Approved
-clock: 3285
+- id: 019f7b0c-62e3-7db3-be65-02088426809d
+  target_id: 019f7ae6-532e-7482-8a47-a012ce5df478
+  author: aida
+  node_id: '1'
+  lamport: 3286
+  timestamp: 2026-07-19T15:43:57.155946655Z
+  kind: !SetDescription
+    description: |-
+      Operator design ask (2026-07-19, verbatim core): "categorize the approach needed ahead of time and then run aida do <spec> and it will call the appropriate skill and that skill will be extremely explicit in terms of what it expects from the human user. Take all the back and forth guesswork out."
+
+      Problem: the routing judgment (drain vs through-ci drive vs guided keystone vs operator-action vs decide-first) is ALREADY made by the advisor at groom time, but persists only as batch tags and report prose — so the human must relearn per spec which verb/skill/harness applies (evidenced 2026-07-18/19: zen vs queue work vs --auto-complete variants; worktree enter alone not doing the work for BUG-756).
+
+      Design (as ratified 2026-07-19 guided session — ADR-13/ADR-14/ADR-15):
+      1. First-class execution_mode field on Requirement (enum: drain | drive | guided | operator | decide — ADR-13), set by the advisor at bless time (groom writes it; aida edit --mode for manual). The zen gate classifier (zen_drive::classify_gate) is the seed heuristic for proposals; keystone/supervised/security tags force guided/operator.
+      2. aida do <spec> becomes the universal dispatcher: reads execution_mode and routes — drain→auto-complete full; drive→through-ci (current behavior); guided→create/enter worktree AND launch the agent session with /aida-guided-implement <spec> pre-filled; operator→print the explicit operator checklist derived from the spec (and do NOT proceed); decide→surface the pending decision_request / route to clarify.
+      3. Ungroomed dispatch (ADR-15, amends the original hard-refuse design): at a TTY, propose a mode seeded from classify_gate + tags WITH a visible reasoning line ("proposing guided: carries keystone tag"), show the mode's human contract, one confirm, persist on accept through the normal advisor-authority path (audit trail shows who classified it and when — same provenance as a full groom pass). Headless/non-TTY hard-refuses with the groom pointer.
+      4. --mode override (ADR-14): asymmetric — overriding toward MORE human involvement (drain<drive<guided<operator) wins one-shot with a banner; toward LESS requires --force; never persisted; decide cannot be overridden past.
+      5. Human-contract banner: every dispatch prints, BEFORE starting, what will be asked of the human and when (e.g. guided: 'you will answer 2-4 recorded forks up front, then review one PR; never auto-merges').
+      6. ADR-7 alignment: mode is a typed engine parameter, not an env side-channel; MCP update_requirement mirrors the field (STORY-82 parity rule); aida list/show render it.
+      7. Migration (secondary call, comment 2026-07-19): one groom pass over the current approved set proposes modes, --apply writes.
+
+      Acceptance:
+      - Advisor-set execution_mode persists on the spec YAML and survives sync (field-level, protected by the BUG-756 guard).
+      - aida do <spec> with each of the 5 modes dispatches to the right harness with zero additional flags.
+      - Ungroomed at a TTY: the proposal prints its reasoning line and the confirmed mode is written through the advisor-authority path (provenance = who + when, same as a full groom pass); the micro-groom is TTY-only. Ungroomed headless: refused with the groom pointer.
+      - --mode tighten wins one-shot with banner; --mode loosen without --force is refused naming the groomed mode.
+      - Each harness prints its human contract before acting.
+      - The groom pass proposes/writes modes for every spec it blesses.
+      - Docs: one table in README/CLAUDE.md replaces the zen/queue-work/burndown decision prose for daily use.
+clock: 3286
 node_id: '1'
