@@ -35548,5 +35548,17 @@ operations:
     req_type: Functional
     status: Draft
     priority: Medium
-clock: 3290
+- id: 019f7b89-1777-7281-951f-ce6a33fe5732
+  target_id: 019f7b89-13cc-7453-ba1d-d322d88992de
+  author: aida
+  node_id: '1'
+  lamport: 3291
+  timestamp: 2026-07-19T18:00:09.847889947Z
+  kind: !Create
+    title: 'Spec-boundary handoff: session reap + chained next-spec launch (no human at every boundary)'
+    description: 'Mirrored from quizdom TASK-3 (VIS-2 dogfood finding, 2026-05-31, EPIC-9 -> STORY-48 handoff). A scoped implementer session, when done with its spec, cannot (1) tear down its own worktree (it is the live cwd — session end correctly refuses) nor (2) pick up the next spec from within (scope binding forbids — scope-bleed failure mode). So every spec boundary needs a human: exit agent -> external ''aida session end <id>'' -> ''aida agent new --spec <next>''. Candidates: (a) ''aida session reap'' supervisor pass removing worktrees whose branch is merged AND whose process exited; (b) chained handoff — on clean completion, reap + auto-launch the next queued spec in a fresh worktree; (c) at minimum ''aida session handoff'' that prints/executes the reap+next-start steps. Related but narrower, already shipped: BUG-694 (mcp-claim GC), TASK-878 (worktree GC).'
+    req_type: Functional
+    status: Draft
+    priority: Medium
+clock: 3291
 node_id: '1'

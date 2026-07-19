@@ -173,7 +173,7 @@ blocks:
   type_prefix: FR
   range_start: 256
   range_end: 355
-  next: 284
+  next: 285
   allocated_at: 2026-05-09T04:40:27.408565Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
