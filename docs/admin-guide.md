@@ -78,6 +78,21 @@ The guard fires at the three **work-start** moments only (never at commit time):
 descendants — the same subtree the focus read-scope (`aida list`, etc.) uses.
 A spec inside the focus subtree, or no focus set, is never guarded.
 
+### Burndown Run Visibility (`[burndown] verbose`)
+
+`aida burndown run --verbose` streams live drain progress and tees the JSONL
+event log to `.aida/burndown/<drain-id>.jsonl`. To make that the default for a
+project or for your user account, set:
+
+```toml
+[burndown]
+verbose = true
+```
+
+The built-in default remains `false` for script compatibility. Resolution is
+`--verbose` > `--quiet` > project `.aida/config.toml` > user
+`~/.aida/config.toml` > built-in `false`.
+
 ### Feature Configuration
 
 Features organize requirements into logical groups. Each feature has:

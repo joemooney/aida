@@ -59,6 +59,31 @@ fn verbose_args_default_mode_is_passed_through_verbatim() {
     assert_eq!(args[mode_pos + 1], "bypassPermissions");
 }
 
+// trace:TASK-1159 | ai:codex
+#[test]
+fn burndown_verbose_resolution_obeys_flag_config_default_precedence() {
+    assert!(resolve_burndown_verbose(
+        true,
+        true,
+        Some(false),
+        Some(false)
+    ));
+    assert!(!resolve_burndown_verbose(
+        false,
+        true,
+        Some(true),
+        Some(true)
+    ));
+    assert!(resolve_burndown_verbose(
+        false,
+        false,
+        Some(true),
+        Some(false)
+    ));
+    assert!(resolve_burndown_verbose(false, false, None, Some(true)));
+    assert!(!resolve_burndown_verbose(false, false, None, None));
+}
+
 // trace:TASK-804 | ai:claude
 #[test]
 fn drain_log_path_is_under_aida_burndown() {

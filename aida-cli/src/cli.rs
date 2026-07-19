@@ -1776,6 +1776,11 @@ pub enum BurndownCommand {
         // trace:TASK-804 | ai:claude
         #[clap(long)]
         verbose: bool,
+        /// Force the legacy buffered launch even when `[burndown] verbose =
+        /// true` is configured. `--verbose` wins if both flags are passed.
+        // trace:TASK-1159 | ai:codex
+        #[clap(long)]
+        quiet: bool,
         // trace:STORY-647 | ai:claude
         /// Bypass the team RBAC guardrail (`[team.permissions] drain_start`).
         /// Starting an autonomous drain is an advisor-gated op by default; the

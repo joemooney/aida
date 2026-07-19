@@ -43885,6 +43885,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             permission_mode,
             dry_run,
             verbose,
+            quiet,
             force,
             vendor,
             panes,
@@ -43897,6 +43898,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             permission_mode.as_deref(),
             *dry_run,
             *verbose,
+            *quiet,
             *force,
             vendor.as_deref(),
             panes.as_deref(),
@@ -43932,6 +43934,45 @@ fn burndown_skill_prompt(
     s
 }
 
+/// TASK-1159: resolve whether `aida burndown run` uses the live stream-json
+/// launch. Precedence is explicit `--verbose`, then explicit `--quiet`, then
+/// `[burndown] verbose` config (project before global), then the built-in quiet
+/// default. Pure + unit-tested so script-facing defaults stay pinned.
+// trace:TASK-1159 | ai:codex
+fn resolve_burndown_verbose(
+    verbose_flag: bool,
+    quiet_flag: bool,
+    project_config: Option<bool>,
+    global_config: Option<bool>,
+) -> bool {
+    if verbose_flag {
+        true
+    } else if quiet_flag {
+        false
+    } else {
+        project_config.or(global_config).unwrap_or(false)
+    }
+}
+
+// trace:TASK-1159 | ai:codex
+fn read_burndown_verbose_from_config_path(path: &std::path::Path) -> Option<bool> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let value = toml::from_str::<toml::Value>(&content).ok()?;
+    value
+        .get("burndown")
+        .and_then(|section| section.get("verbose"))
+        .and_then(|v| v.as_bool())
+}
+
+// trace:TASK-1159 | ai:codex
+fn read_burndown_verbose_config(project_root: &std::path::Path) -> (Option<bool>, Option<bool>) {
+    let project =
+        read_burndown_verbose_from_config_path(&project_root.join(".aida").join("config.toml"));
+    let global = aida_home_dir()
+        .and_then(|home| read_burndown_verbose_from_config_path(&home.join(".aida/config.toml")));
+    (project, global)
+}
+
 #[cfg(test)]
 #[path = "tests/burndown_run_tests.rs"]
 mod burndown_run_tests;
@@ -43956,6 +43997,8 @@ fn handle_burndown_run(
     // teed to `.aida/burndown/<drain-id>.jsonl` + rendered live. Control flow is
     // identical to the quiet launch — visibility only. trace:TASK-804 | ai:claude
     verbose: bool,
+    // TASK-1159: explicit negation for a configured verbose default.
+    quiet: bool,
     // STORY-647: bypass the team RBAC drain-start guardrail.
     force: bool,
     // TASK-1116: per-invocation `--vendor`/`--agent`. burndown's implementer
@@ -44064,10 +44107,15 @@ fn handle_burndown_run(
     // preflight list is what WILL drain. Build the headless invocation.
     let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
     let mode = permission_mode.unwrap_or("bypassPermissions");
+    let (project_verbose, global_verbose) = find_project_root()
+        .ok()
+        .map(|root| read_burndown_verbose_config(&root))
+        .unwrap_or((None, None));
+    let stream_verbose = resolve_burndown_verbose(verbose, quiet, project_verbose, global_verbose);
 
     if dry_run {
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
-        if verbose {
+        if stream_verbose {
             // Mirror the quiet path's `{:?}` quoting of the prompt positional so
             // the previewed command is copy-paste-safe.
             println!(
@@ -44171,7 +44219,7 @@ fn handle_burndown_run(
         // mirroring the orchestrator drain's exit-2 convention). `claude` is
         // resolved off PATH (matching every other launch site); a missing
         // binary surfaces as a guided error, not a raw ENOENT.
-        let status_code = if verbose {
+        let status_code = if stream_verbose {
             // TASK-804: stream-json + tee path. Redirect the drain's JSONL to a
             // discoverable log and render a live human progress line per event.
             run_burndown_verbose(&current_prompt, mode)?

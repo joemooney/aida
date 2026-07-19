@@ -400,6 +400,14 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "egress deny — edit .aida/config.toml deliberately",
         },
     },
+    // --- [burndown]. ---
+    KnobSpec {
+        section: "burndown",
+        key: "verbose",
+        doc: "Default visibility for `aida burndown run`: stream live drain progress unless `--quiet` is passed.",
+        default: "false",
+        edit: EditSafety::Bool { default: false },
+    },
     // --- [mailbox]. ---
     KnobSpec {
         section: "mailbox",
@@ -892,6 +900,33 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     source: autosync_source,
                 },
             ],
+        }
+    });
+
+    // --- Burndown launcher visibility. trace:TASK-1159 ---
+    sections.push({
+        let project = config_lookup(cfg.as_ref(), "burndown", "verbose").and_then(|v| v.as_bool());
+        let global_path = aida_home_dir().map(|h| h.join(".aida/config.toml"));
+        let global_cfg = global_path
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|body| {
+                toml::from_str::<toml::Value>(&body).ok().and_then(|v| {
+                    config_lookup(Some(&v), "burndown", "verbose").and_then(|b| b.as_bool())
+                })
+            });
+        let (effective, source) = match (project, global_cfg) {
+            (Some(v), _) => (v, PolicySource::ProjectConfig),
+            (None, Some(v)) => (v, PolicySource::GlobalConfig),
+            (None, None) => (false, PolicySource::Default),
+        };
+        PolicySection {
+            section: "burndown",
+            header: "[burndown]".to_string(),
+            rows: vec![PolicyRow {
+                key: "verbose",
+                value: effective.to_string(),
+                source,
+            }],
         }
     });
 
