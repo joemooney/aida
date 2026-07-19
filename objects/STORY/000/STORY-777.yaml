@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:30:03.283742379Z
-modified_at: 2026-07-19T19:27:02.088748697Z
+modified_at: 2026-07-19T19:27:15.545758562Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -47,6 +47,12 @@ comments:
   content: 'Auto-completed: PR #1520 merged without a re-review iteration — the review story was left at In Progress.'
   created_at: 2026-07-19T19:27:02.088747764Z
   modified_at: 2026-07-19T19:27:02.088747764Z
+- id: 019f7bd8-d459-7de3-a3da-f4e8d8e24e7d
+  author: joe
+  content: 'Reviewed PR-1520 diff as drain integrator: preserve_full_save_only_fields approach sound, regression test covers the live failure, CI green. Approved + merged. Residuals tracked in TASK-1161.'
+  created_at: 2026-07-19T19:27:15.545758562Z
+  modified_at: 2026-07-19T19:27:15.545758562Z
+  session_id: 467e5027-c3fe-4093-a1b7-aa7d990391bc
 history:
 - id: 019f7bd8-9fc8-7b93-99bd-18267b13766e
   author: aida-auto-bump
