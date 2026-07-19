@@ -8,6 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:05.426029223Z
-modified_at: 2026-07-19T20:32:06.176119762Z
+modified_at: 2026-07-19T20:49:25.238256002Z
 req_type: Functional
+weight: 2.5
 execution_mode: drive
