@@ -35377,5 +35377,33 @@ operations:
     req_type: Decision
     status: Draft
     priority: Medium
-clock: 3280
+- id: 019f7b0b-5bb1-7910-b34a-a7e6a6a559d7
+  target_id: 019f7b0b-5544-7940-9289-fe58f3ea1c83
+  author: aida
+  node_id: '1'
+  lamport: 3281
+  timestamp: 2026-07-19T15:42:49.777162683Z
+  kind: !Create
+    title: 'STORY-776: aida do --mode override is asymmetric — tighten free, loosen gated behind --force'
+    description: |-
+      ## Context
+      The advisor sets execution_mode at bless time. Can `aida do --mode X` override it at invocation? The tension: keyboard agility vs the advisor's guided/operator classification being a safety judgment.
+
+      ## Options considered
+      - Asymmetric: tighten free, loosen behind --force
+      - Override always wins, one-shot, with banner
+      - No --mode flag; changes go through aida edit
+
+      ## Decision
+      Asymmetric override. The mode ladder orders human involvement: drain < drive < guided < operator (decide sits outside the ladder — it is a block, not a harness). Overriding toward MORE human involvement always wins, one-shot, with a banner ("overriding groomed mode drive -> guided (one-shot)"). Overriding toward LESS (e.g. guided -> drain) is refused unless --force is also passed, with the refusal naming the groomed mode and why it is sticky. Overrides are never persisted; `aida edit <spec> --mode` remains the substrate write.
+
+      ## Rationale
+      "Actually I'll drive this one myself" is a legitimate one-command keyboard move and loses nothing. Silently de-supervising a keystone/security spec with a flag would defeat the point of advisor classification — substrate-as-bouncer says that direction needs an explicit two-key turn (--mode + --force).
+
+      ## Consequences
+      Dispatch computes ladder direction before routing. decide cannot be overridden past (the pending decision still blocks; --mode on a decide spec refuses and points at the decision surface). The banner is part of the human-contract output.
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3281
 node_id: '1'
