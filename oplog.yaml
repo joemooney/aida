@@ -35017,5 +35017,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 3248
+- id: 019f7818-202c-7bb3-bccb-017a5ec8faed
+  target_id: 019f7818-1b4f-7a70-91fe-b88a6f194292
+  author: aida
+  node_id: '1'
+  lamport: 3249
+  timestamp: 2026-07-19T01:57:54.860788171Z
+  kind: !Create
+    title: 'queue list footer is drain-blind: recommends ''aida burndown run'' for specs already scheduled in the LIVE drain its own banner reports'
+    description: 'Observed 2026-07-18 18:56: aida queue list printed the drain banner (''a drain is running pid 2586417 — in-flight: TASK-1117; scheduled: BUG-734, TASK-1098, TASK-1146, TASK-1158, TASK-1159, TASK-937'') and then footered ''To empty this queue: 7 ready → aida burndown run (does the work)'' — recommending a launch the single-drain lock would refuse, and counting the 6 drain-scheduled specs as ready-to-drain. When drain.lock is live, the footer should say so instead: e.g. ''a drain is already working this queue — N scheduled, M in flight; watch: aida drain status'', suppressing the burndown suggestion and excluding drain-scheduled entries from the ready count. Acceptance: with a live drain whose plan covers queued specs, the footer names the drain and offers the watch verb, not a launch; with no drain, current behavior unchanged; unit test on the footer render both ways.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3249
 node_id: '1'
