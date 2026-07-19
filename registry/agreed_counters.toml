@@ -1,12 +1,12 @@
+STORY = 82
 EPIC = 18
 FOLDER = 6
-CR = 6
-FR = 281
-STORY = 82
-SPIKE = 5
 BUG = 34
+CR = 6
 DOC = 2
-UR = 2
 SPRINT = 3
 SR = 1
 TASK = 142
+SPIKE = 5
+FR = 281
+UR = 2
