@@ -19,12 +19,12 @@ description: |-
 
   ## Consequences
   Dispatch computes ladder direction before routing. decide cannot be overridden past (the pending decision still blocks; --mode on a decide spec refuses and points at the decision surface). The banner is part of the human-contract output.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:42:48.132401681Z
-modified_at: 2026-07-19T15:42:48.132401681Z
+modified_at: 2026-07-19T15:43:24.787228413Z
 req_type: Decision
 tags:
 - adr
