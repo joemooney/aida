@@ -24,12 +24,12 @@ description: |-
   - Each harness prints its human contract before acting.
   - The groom pass proposes/writes modes for every spec it blesses.
   - Docs: one table in README/CLAUDE.md replaces the zen/queue-work/burndown decision prose for daily use.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:02:22.766794383Z
-modified_at: 2026-07-19T15:43:57.111857960Z
+modified_at: 2026-07-19T15:44:18.810350632Z
 req_type: Story
 tags:
 - keystone dx aida:do architecture batch:guided-0719 from-operator
