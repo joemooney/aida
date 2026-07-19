@@ -254,6 +254,28 @@ The four gaps interact:
 - **Two sessions of context-switch dissonance** — when an advisor session feels diluted by cross-subsystem noise twice in close succession, that's the signal to ship STORY-362 immediately.
 - **First child memory the user wants to promote up** — file STORY-365 if not already implemented.
 
+## 2026-07-19 subsystem design proposal
+
+The first-class subsystem strategy cluster extends Track A from memory focus
+into a project-wide routing and context-loading model. The proposed design is
+captured in `docs/plans/2026-07-19-subsystem-advisor-routing.md` and the
+proposed ADRs under `docs/aida/05-decisions/proposed/`.
+
+The important refinement: subsystem focus is no longer just `subsystem:` memory
+frontmatter. It becomes a deterministic registry-backed membership model used by
+memories, docs, graph context, helper discovery, queue routing, advisor routing,
+and reviewer routing. Universal project context still always loads; subsystem
+focus only adds and prioritizes local context.
+
+The authority model stays conservative. Scoped advisors can answer local,
+reversible, grounded decisions, but cross-subsystem conflicts, public contracts,
+or autonomy/security/keystone machinery escalate to the master advisor or human.
+
+<!-- trace:TASK-0434 | ai:codex -->
+<!-- trace:TASK-0435 | ai:codex -->
+<!-- trace:TASK-0436 | ai:codex -->
+<!-- trace:TASK-0437 | ai:codex -->
+
 ## Related
 
 - **EPIC-1** — agent collaboration; substrate of which is the memory + discipline pack

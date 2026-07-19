@@ -857,7 +857,7 @@ TASK-0431 (product-role evidence), TASK-0432 (mode composition),
 | Type A/B/C calibration | `.claude/skills/aida-advise.md`, STORY-347 |
 | Fork-from-live | `aida-cli/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/spikes/2026-05-20-spike-11-session-forking.md` |
 | File-based comms | `.aida/` (gitignored), TASK-329, `docs/architecture/mcp-coordination-surface.md` |
-| Multi-advisor coordination | `docs/multi-advisor-coordination.md`, SPIKE-10, STORY-362, STORY-364 |
+| Multi-advisor coordination | `docs/multi-advisor-coordination.md`, `docs/plans/2026-07-19-subsystem-advisor-routing.md`, SPIKE-10, STORY-362, STORY-364, TASK-0434, TASK-0435, TASK-0436, TASK-0437 |
 | Reconcile-against-reality | `aida-cli/src/auto_complete.rs`, BUG-241 |
 | Findings surfaces | `aida findings list`, `aida findings calibration`, STORY-278, STORY-285 |
 
@@ -867,6 +867,15 @@ session, worktree, sentinel, batch, autonomy mode — see
 spec-state verbs (Approved / Planned / In Progress / Done / Completed /
 Released) see `docs/lifecycle.md`. For the practical user-facing guide to
 `--auto-complete` and `--no-human`, see `docs/autonomous-drain.md`.
+
+The 2026-07-19 subsystem proposal narrows advisor autopilot under subsystem
+scope: a scoped advisor can auto-resolve only local, reversible, grounded work
+inside its subsystem. Ambiguous multi-subsystem routing, public contracts,
+keystone/security work, and autonomy machinery escalate to the master advisor or
+human gate. This keeps subsystem focus a context reducer rather than a second
+architecture authority.
+
+<!-- trace:TASK-0437 | ai:codex -->
 
 ---
 
