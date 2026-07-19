@@ -3,17 +3,33 @@ spec_id: TASK-1161
 agreed_id: TASK-1161
 title: 'full-store save: modified_at stale-write guard for core fields + convert auto-bump to targeted writes (BUG-756 follow-up)'
 description: 'PR-1520 (BUG-756) makes full-store saves non-destructive for git-canonical-only fields the stale caller never loaded (deferred, decision_request, ...). Two residuals: (1) a stale full-save can still silently REVERT recent core-field edits (tags/status/priority/title) it loaded an old copy of — add a per-spec guard in GitBackend::save comparing incoming vs on-disk modified_at: when disk is newer, skip that spec (or merge field-wise) and warn, never overwrite; (2) the auto-bump path still performs bulk full-store saves (''chore: update 37 requirements'' per pull — commit noise + the residual risk in (1)) — convert it to targeted per-spec writes like BUG-634 did for edit. Acceptance: a full save carrying a spec older than disk cannot change that spec silently (skip+warn covered by test); aida pull auto-bump produces one targeted commit per bumped spec, no bulk chore commits; regression test on concurrent-edit-then-stale-save.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:31:29.359417853Z
-modified_at: 2026-07-19T19:44:48.832911009Z
+modified_at: 2026-07-19T19:55:49.393419985Z
 req_type: Task
 tags:
 - aida:store integrity followup:BUG-756 from-review
+history:
+- id: 019f7bf2-fb0b-7541-b2e6-f133cc2d3415
+  author: aida-auto-bump
+  timestamp: 2026-07-19T19:55:49.387522072Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7bf2-fb11-71b3-9cb2-71ef7a057da3
+  timestamp: 2026-07-19T19:55:49.393419213Z
+  agent: aida
+  commit_sha: f528f1171689d4e78e8165b26e2a17c074f6c0e4
+  summary: Completed via merge f528f117
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T19:44:48.832911009Z
   implemented_by: joe
+  completed_at: 2026-07-19T19:55:49.193155001Z
+  completion_sha: f528f1171689d4e78e8165b26e2a17c074f6c0e4
