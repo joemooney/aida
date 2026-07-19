@@ -35776,5 +35776,17 @@ operations:
   timestamp: 2026-07-19T21:12:55.232958748Z
   kind: !SetStatus
     status: In Progress
-clock: 3316
+- id: 019f7c4b-b9aa-76a2-9c5c-aac206f91c26
+  target_id: 019f7c4b-b506-7e22-8287-5ac99f6d5358
+  author: aida
+  node_id: '1'
+  lamport: 3317
+  timestamp: 2026-07-19T21:32:45.354161764Z
+  kind: !Create
+    title: runtime counter/registry writes leave the orphan-store worktree perpetually dirty — every drain launch warns 'uncommitted changes; skipping pull'
+    description: 'Fourth occurrence 2026-07-19: aida burndown run''s --sync preflight warns ''orphan store has uncommitted changes; skipping pull'' at nearly every launch, because some writer (agreed_counters.toml / registry churn observed each time) modifies the .aida-store worktree WITHOUT committing, unlike every other store write which targeted-commits. The advisor has hand-committed the churn 3x this weekend. Fix: find the non-committing writer (counters/registry update path) and make it commit-through like requirement writes (targeted, small subject), OR have the sync preflight auto-commit known-runtime files (registry/agreed_counters.toml allowlist) before pulling. Acceptance: two consecutive drain launches with normal activity between them produce no uncommitted-store warning; the counter file''s history shows regular targeted commits; test on the counter write path. Mode: drive.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3317
 node_id: '1'
