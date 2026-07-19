@@ -459,13 +459,6 @@
   added_at: 2026-07-19T15:31:34.517243910Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019f45a6-4cbf-7441-bbec-349288d9a8af
-  position: 354000
-  added_by: joe
-  note: 'intake pass 2026-07-19: docs-only SPIKE-67 field-observation writeup; operator comment carries the three-rung gate-ladder content'
-  added_at: 2026-07-19T17:16:39.166308794Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 019f7b6a-79fa-7443-b44a-94c7e5e638c1
   position: 356000
   added_by: joe
