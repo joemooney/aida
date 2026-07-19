@@ -35294,5 +35294,31 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3276
+- id: 019f7aff-acb3-7de2-86cf-5cada2281971
+  target_id: 019f7aff-a993-76e0-ac9c-f68fec8bff8a
+  author: aida
+  node_id: '1'
+  lamport: 3277
+  timestamp: 2026-07-19T15:30:04.083543924Z
+  kind: !Create
+    title: 'Review PR-1520: [AI:codex] fix(store): preserve deferred metadata on full saves (BUG-756)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `019f7aef`) for branch `bug-756`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1520>
+      - Branch: `bug-756` → `main`
+
+      ## Covers
+
+      - BUG-756
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1520` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3277
 node_id: '1'
