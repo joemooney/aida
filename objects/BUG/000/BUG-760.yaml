@@ -8,7 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T20:04:14.918740274Z
-modified_at: 2026-07-19T20:04:14.918740274Z
+modified_at: 2026-07-19T20:04:19.743689194Z
 req_type: Bug
 tags:
 - aida:dev papercut from-dogfood
+execution_mode: drive
