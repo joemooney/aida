@@ -3,12 +3,12 @@ spec_id: STORY-715
 agreed_id: STORY-715
 title: 'aida statusbar: ambient OSC terminal-title meter (gnhf-style), read-only, not dispatch'
 description: 'The tmux eval verdict: NO to a window-per-lease multiplexer (redundant with EPIC-26/53/54 TUI, and the differentiated fan-out mode runs Agent-tool subagents IN-process with no PTY to pane), YES-narrow to gnhf-style ambient meter. aida statusbar emits the OSC-2 terminal-title escape on an interval from cache-fast sources: aida statusbar -> "aida . q:5 . live:2 . STALE:1 . you:3 (2 approve . 1 mail)" (queue depth + aida ps live/STALE + needs-you = approvals+mail+punts). tmux-INDEPENDENT (OSC title works in any terminal); bonus tmux status-right recipe. Borrow gnhf save/restore-title (ESC[22;0t / ESC[23;0t) so it cleans up on exit; opt-in. READ-ONLY meter, NOT dispatch (that is EPIC-53/54). ~1-2 days. The ambient projection of the cockpit headline onto surfaces visible when NOT in aida tui.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:44:37.596692409Z
-modified_at: 2026-07-19T06:48:13.354454225Z
+modified_at: 2026-07-19T14:45:42.028130151Z
 req_type: Story
 tags:
 - batch:dogfood-0717
@@ -17,7 +17,23 @@ relationships:
 - rel_type: Child
   target_id: 019f0241-4f02-7e50-9a74-1e9c032ea80b
   created_at: 2026-06-28T22:44:41.808343903Z
+history:
+- id: 019f7ad7-0e06-75e2-b30a-d1fdd2851a8a
+  author: aida-auto-bump
+  timestamp: 2026-07-19T14:45:42.022373267Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7ad7-0e0c-7f30-b27c-751859fb6001
+  timestamp: 2026-07-19T14:45:42.028128800Z
+  agent: aida
+  commit_sha: 8ade88524aa8036468773e04b0e3175ba8df91b4
+  summary: Completed via merge 8ade8852
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T06:48:13.354454225Z
   implemented_by: joe
+  completed_at: 2026-07-19T14:45:41.817147248Z
+  completion_sha: 8ade88524aa8036468773e04b0e3175ba8df91b4
