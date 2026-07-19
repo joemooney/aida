@@ -3394,6 +3394,8 @@ pub(crate) fn handle_git_backend_command(
             implementation_summary,
             risk_notes,
             test_coverage_notes,
+            // trace:TASK-1117 | ai:claude
+            interactive,
             ..
         } => {
             // trace:TASK-518 | ai:antigravity
@@ -3519,6 +3521,73 @@ pub(crate) fn handle_git_backend_command(
             // Best-effort; no `[team] protected_tags` => no-op (slice-1 behavior).
             // trace:STORY-647 | ai:claude
             enforce_protected_spec_gate(req.tags.iter(), *force)?;
+
+            // TASK-1117: `aida edit <spec>` with NO field flags (or with
+            // `--interactive`) opens the user's editor (AIDA_EDITOR → VISUAL
+            // → EDITOR → platform default) on a git-commit-style markdown
+            // buffer of title + description, and writes the parsed result
+            // back through this same targeted single-spec path. Engages only
+            // at a TTY — a piped/scripted no-flag call keeps the "No changes
+            // specified" hint below. An aborted editor (nonzero exit), an
+            // emptied buffer, or an unchanged buffer leaves the spec
+            // untouched (no spurious commit).
+            // trace:TASK-1117 | ai:claude
+            let no_field_flags = title.is_none()
+                && description.is_none()
+                && status.is_none()
+                && priority.is_none()
+                && r#type.is_none()
+                && owner.is_none()
+                && feature.is_none()
+                && tags.is_none()
+                && add_tag.is_empty()
+                && remove_tag.is_empty()
+                && blocked_by.is_empty()
+                && remove_blocked_by.is_empty()
+                && add_ref.is_empty()
+                && remove_ref.is_empty()
+                && !*human_only
+                && !*no_human_only
+                && implementation_summary.is_none()
+                && risk_notes.is_none()
+                && test_coverage_notes.is_none();
+            let mut editor_title: Option<String> = None;
+            let mut editor_description: Option<String> = None;
+            if (no_field_flags || *interactive)
+                && std::io::IsTerminal::is_terminal(&std::io::stdin())
+                && std::io::IsTerminal::is_terminal(&std::io::stdout())
+            {
+                let display_id = req.spec_id.as_deref().unwrap_or(id);
+                match edit_buffer::edit_spec_in_editor(display_id, &req.title, &req.description)? {
+                    Some((new_title, new_description)) => {
+                        if new_title != req.title {
+                            editor_title = Some(new_title);
+                        }
+                        if new_description != req.description {
+                            editor_description = Some(new_description);
+                        }
+                        if no_field_flags && editor_title.is_none() && editor_description.is_none()
+                        {
+                            println!("No changes — {} left untouched.", display_id);
+                            return Ok(());
+                        }
+                    }
+                    None => {
+                        println!("Empty buffer — {} left untouched.", display_id);
+                        return Ok(());
+                    }
+                }
+            }
+            let title = if editor_title.is_some() {
+                &editor_title
+            } else {
+                title
+            };
+            let description = if editor_description.is_some() {
+                &editor_description
+            } else {
+                description
+            };
 
             let mut changed = false;
             if let Some(t) = title {

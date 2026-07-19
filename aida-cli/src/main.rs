@@ -65,6 +65,8 @@ mod drain_resume;
 mod drain_state;
 mod drive_robustness;
 mod dryrun;
+// trace:TASK-1117 | ai:claude
+mod edit_buffer;
 mod effort_calibration;
 mod event_wait;
 mod events;
