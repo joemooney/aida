@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T17:59:58.320745459Z
-modified_at: 2026-07-02T18:05:58.252826168Z
+modified_at: 2026-07-19T01:26:16.723242900Z
 req_type: Task
 tags:
 - aida:store:sync
@@ -39,3 +39,9 @@ comments:
   content: Commit 7db9157b4 references this requirement
   created_at: 2026-07-02T18:05:58.252826168Z
   modified_at: 2026-07-02T18:05:58.252826168Z
+- id: 019f77fb-2993-7781-a341-d7499d46dbed
+  author: joe
+  content: 'Rejected at groom 2026-07-18: shipped — [store.sync] mirror_remotes exists in config (landed under STORY-760).'
+  created_at: 2026-07-19T01:26:16.723242900Z
+  modified_at: 2026-07-19T01:26:16.723242900Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
