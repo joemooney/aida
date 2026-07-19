@@ -23,6 +23,7 @@
 // trace:STORY-763 | ai:claude
 
 use anyhow::{Context, Result};
+use regex::Regex;
 use std::path::Path;
 
 /// Commands that do not port to Codex custom prompts, with the reason shown
@@ -46,32 +47,6 @@ pub const CODEX_NONPORTABLE_COMMANDS: &[(&str, &str)] = &[
         "aida-advise",
         "orchestrator-internal headless advisor tier — spawned by the drain, not run by hand",
     ),
-];
-
-/// The skills `aida init` scaffolds into `.codex/skills/` (mirrors the
-/// `codex_skill_defs` set in `mod.rs` — keep in sync when that list grows).
-/// Used to rewrite `.claude/skills/<name>.md` references to the Codex-side
-/// copy so a Codex prompt points at its own skill body first.
-const CODEX_SKILL_SET: &[&str] = &[
-    "aida-req",
-    "aida-plan",
-    "aida-implement",
-    "aida-capture",
-    "aida-docs",
-    "aida-docs-review",
-    "aida-release",
-    "aida-evaluate",
-    "aida-commit",
-    "aida-sync",
-    "aida-test",
-    "aida-review",
-    "aida-onboard",
-    "aida-sprint",
-    "aida-search",
-    "aida-standup",
-    "aida-import-plan",
-    "aida-digest",
-    "aida-backlog-groom",
 ];
 
 /// Outcome of a prompts scaffold run — everything the CLI needs to report
@@ -102,12 +77,70 @@ pub fn strip_frontmatter(body: &str) -> &str {
 /// Convert one embedded command template into a Codex custom prompt body.
 pub fn convert_command_to_codex_prompt(body: &str) -> String {
     let mut out = strip_frontmatter(body).trim_start().to_string();
-    for name in CODEX_SKILL_SET {
-        let claude_ref = format!(".claude/skills/{name}.md");
-        let codex_ref = format!(".codex/skills/{name}/SKILL.md");
-        out = out.replace(&claude_ref, &codex_ref);
-    }
+    out = adapt_claude_only_prompt_language(&out);
+    out = ensure_codex_argument_placeholder(&out);
     out
+}
+
+fn adapt_claude_only_prompt_language(body: &str) -> String {
+    // trace:BUG-731 | ai:codex
+    let claude_skill_ref = Regex::new(r"`?\.claude/skills/(aida-[A-Za-z0-9_-]+)(?:/SKILL)?\.md`?")
+        .expect("valid Claude skill ref regex");
+    let mut out = claude_skill_ref
+        .replace_all(body, |caps: &regex::Captures<'_>| {
+            format!("the AIDA skill `{}`", &caps[1])
+        })
+        .into_owned();
+
+    let ask_user_question =
+        Regex::new(r"`?AskUserQuestion`?").expect("valid AskUserQuestion regex");
+    out = ask_user_question
+        .replace_all(
+            &out,
+            "plain-text numbered question with concrete options and a recommendation",
+        )
+        .into_owned();
+    out = out.replace(
+        "via a structured plain-text numbered question",
+        "via a plain-text numbered question",
+    );
+    out = out.replace("ai:claude", "ai:codex");
+
+    let slash_command = Regex::new(r"(^|[^A-Za-z0-9_.-])/aida-([A-Za-z0-9_-]+)")
+        .expect("valid slash command regex");
+    slash_command
+        .replace_all(&out, |caps: &regex::Captures<'_>| {
+            format!("{}aida {}", &caps[1], caps[2].replace('-', " "))
+        })
+        .into_owned()
+}
+
+fn ensure_codex_argument_placeholder(body: &str) -> String {
+    // trace:BUG-731 | ai:codex
+    format!(
+        "Codex prompt arguments: `$ARGUMENTS`\n\n{}",
+        body.trim_start()
+    )
+}
+
+#[cfg(test)]
+fn command_template_advertises_arguments(name: &str, body: &str) -> bool {
+    let command = format!("/{}", name);
+    body.lines().any(|line| {
+        let Some(pos) = line.find(&command) else {
+            return false;
+        };
+        let tail = &line[pos + command.len()..];
+        tail.contains('<')
+            || tail.contains('[')
+            || tail.contains("$ARGUMENTS")
+            || tail.contains("$1")
+    })
+}
+
+#[cfg(test)]
+fn contains_codex_argument_placeholder(body: &str) -> bool {
+    body.contains("$ARGUMENTS") || body.contains("$1")
 }
 
 /// The expected Codex custom-prompt set as `(name, body)` pairs — the same
@@ -202,16 +235,62 @@ mod tests {
     }
 
     #[test]
-    fn convert_rewrites_skill_refs_to_codex_copies() {
+    fn convert_rewrites_claude_skill_refs_to_vendor_neutral_names() {
         let body = "---\ndescription: d\n---\nFollow the workflow in `.claude/skills/aida-commit.md`:\nand `.claude/skills/aida-noncodex.md` stays.";
         let out = convert_command_to_codex_prompt(body);
-        assert!(out.contains(".codex/skills/aida-commit/SKILL.md"), "{out}");
-        // A skill NOT in the codex set keeps its .claude path (still a readable repo file).
-        assert!(out.contains(".claude/skills/aida-noncodex.md"), "{out}");
+        assert!(out.contains("the AIDA skill `aida-commit`"), "{out}");
+        assert!(out.contains("the AIDA skill `aida-noncodex`"), "{out}");
+        assert!(!out.contains(".claude/skills/"), "{out}");
+        assert!(out.contains("Codex prompt arguments: `$ARGUMENTS`"));
         assert!(
             !out.starts_with("---"),
             "frontmatter must be stripped: {out}"
         );
+    }
+
+    #[test]
+    fn convert_adapts_claude_only_prompt_language() {
+        let body =
+            "Ask via `AskUserQuestion`, then run `/aida-pr` and add `// trace:<SPEC> | ai:claude`.";
+        let out = convert_command_to_codex_prompt(body);
+        assert!(!out.contains("AskUserQuestion"), "{out}");
+        assert!(!out.contains("/aida-"), "{out}");
+        assert!(!out.contains("ai:claude"), "{out}");
+        assert!(out.contains("plain-text numbered question"), "{out}");
+        assert!(out.contains("aida pr"), "{out}");
+        assert!(out.contains("ai:codex"), "{out}");
+    }
+
+    #[test]
+    fn codex_prompts_with_advertised_arguments_reference_codex_arguments() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+
+        for (name, rendered) in expected_codex_prompts() {
+            let key = format!("commands/{name}.md");
+            let command = EMBEDDED_TEMPLATES
+                .get(key.as_str())
+                .expect("expected prompt came from an embedded command");
+            if command_template_advertises_arguments(&name, command) {
+                assert!(
+                    contains_codex_argument_placeholder(&rendered),
+                    "{name} advertises arguments but its Codex prompt has no $ARGUMENTS/$1 placeholder"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn expected_codex_prompts_do_not_leak_claude_only_invocations() {
+        for (name, body) in expected_codex_prompts() {
+            assert!(
+                !body.contains("AskUserQuestion"),
+                "{name} leaks the Claude-only AskUserQuestion tool"
+            );
+            assert!(
+                !body.contains("/aida-"),
+                "{name} leaks Claude slash-command syntax"
+            );
+        }
     }
 
     // trace:TASK-1124 — the pure enumeration matches what scaffold_codex_prompts
