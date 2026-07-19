@@ -452,6 +452,54 @@ impl GitBackend {
         }
     }
 
+    /// Full-store saves are the compatibility boundary for older/projection
+    /// callers. Preserve git-canonical fields that a caller may not have
+    /// loaded at all, while leaving targeted `update_requirement` free to make
+    /// intentional clears such as `aida undefer`.
+    // trace:BUG-756 | ai:codex
+    fn preserve_full_save_only_fields(
+        mut incoming: Requirement,
+        disk: &Requirement,
+    ) -> Requirement {
+        if !incoming.deferred && disk.deferred {
+            incoming.deferred = true;
+            incoming.deferred_at = disk.deferred_at;
+            incoming.deferred_until = disk.deferred_until.clone();
+        }
+        if incoming.processing_record.is_empty() && !disk.processing_record.is_empty() {
+            incoming.processing_record = disk.processing_record.clone();
+        }
+        if incoming.external_refs.is_empty() && !disk.external_refs.is_empty() {
+            incoming.external_refs = disk.external_refs.clone();
+        }
+        if incoming.risk_notes.is_none() {
+            incoming.risk_notes = disk.risk_notes.clone();
+        }
+        if incoming.test_coverage_notes.is_none() {
+            incoming.test_coverage_notes = disk.test_coverage_notes.clone();
+        }
+        if incoming.implementation_summary.is_none() {
+            incoming.implementation_summary = disk.implementation_summary.clone();
+        }
+        if incoming.decision_request.is_none() {
+            incoming.decision_request = disk.decision_request.clone();
+        }
+        if incoming.failure_reason.is_none() {
+            incoming.failure_reason = disk.failure_reason.clone();
+        }
+
+        for comment in &mut incoming.comments {
+            if comment.session_id.is_some() {
+                continue;
+            }
+            if let Some(old) = disk.comments.iter().find(|old| old.id == comment.id) {
+                comment.session_id = old.session_id.clone();
+            }
+        }
+
+        incoming
+    }
+
     /// Record the granular field ops for one requirement update and write its
     /// YAML — WITHOUT committing. Returns `Some(spec_id)` when the on-disk YAML
     /// actually changed (so the caller can stage + commit it), `None` when it
@@ -606,7 +654,11 @@ impl DatabaseBackend for GitBackend {
         for req in &store.requirements {
             if let Some(ref spec_id) = req.spec_id {
                 current_specs.insert(spec_id.clone());
-                if object_store::write_object_if_changed(&self.objects_root, req)? {
+                let req_to_write = match object_store::read_object(&self.objects_root, spec_id) {
+                    Ok(disk) => Self::preserve_full_save_only_fields(req.clone(), &disk),
+                    Err(_) => req.clone(),
+                };
+                if object_store::write_object_if_changed(&self.objects_root, &req_to_write)? {
                     written_specs.push(spec_id.clone());
                 }
             }
@@ -1705,6 +1757,72 @@ mod tests {
             count_commits(),
             before + 1,
             "no-op bulk_update must not add an empty commit"
+        );
+    }
+
+    /// BUG-756: a full-store save must not let an older/projection caller erase
+    /// git-canonical fields it never loaded. The live failure was an auto-bump
+    /// `Storage::update_atomically` save that completed one spec and rewrote
+    /// unrelated deferred specs without their `deferred*` fields.
+    #[test]
+    fn full_store_save_preserves_git_canonical_fields_from_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+
+        let mut req = Requirement::new("Deferred work".into(), "wait for trigger".into());
+        req.spec_id = Some("TASK-756".into());
+        req.deferred = true;
+        req.deferred_at = Some(chrono::Utc::now());
+        req.deferred_until = Some("when the regression reproduces".into());
+        req.processing_record
+            .push(crate::models::ProcessingRecord::new(
+                "aida".into(),
+                "completed via merge".into(),
+            ));
+        req.comments.push(
+            crate::models::Comment::new("joe".into(), "keep this session id".into())
+                .with_session_id(Some("session-12345678".into())),
+        );
+        let added = backend.add_requirement(req).unwrap();
+
+        let mut store = backend.load().unwrap();
+        let degraded = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == added.id)
+            .expect("seeded requirement should load");
+        degraded.title = "Deferred work, touched by old writer".into();
+        degraded.deferred = false;
+        degraded.deferred_at = None;
+        degraded.deferred_until = None;
+        degraded.processing_record.clear();
+        degraded.comments[0].session_id = None;
+
+        backend.save(&store).unwrap();
+
+        let reloaded = backend
+            .get_requirement_by_spec_id("TASK-756")
+            .unwrap()
+            .unwrap();
+        assert_eq!(reloaded.title, "Deferred work, touched by old writer");
+        assert!(
+            reloaded.deferred,
+            "full-store save must preserve defer flag"
+        );
+        assert!(
+            reloaded.deferred_at.is_some(),
+            "full-store save must preserve defer timestamp"
+        );
+        assert_eq!(
+            reloaded.deferred_until.as_deref(),
+            Some("when the regression reproduces")
+        );
+        assert_eq!(reloaded.processing_record.len(), 1);
+        assert_eq!(
+            reloaded.comments[0].session_id.as_deref(),
+            Some("session-12345678")
         );
     }
 
