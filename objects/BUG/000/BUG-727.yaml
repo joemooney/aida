@@ -10,12 +10,12 @@ description: |-
   Related: the keyboard-lane / keystone discipline (reliability + autonomy machinery ships supervised); STORY-666 (destructive ops gated by consequence). Acceptance: a spec tagged supervised, dispatched to a pr-ship session, PARKS at 'mergeable, awaiting advisor' instead of auto-merging.
 
   RATIFIED DESIGN (operator, 2026-07-19) - binding acceptance: REUSE execution_mode as the supervision marker; no new flag. The pr ship auto-merge leg (and any automation merge path) loads the spec(s) behind the PR and REFUSES auto-merge unless execution_mode == drain; an interactive human at a TTY may always merge explicitly. A spec with NO mode set is treated as supervised (fail safe). Refusal message: "<SPEC-ID> is marked <mode> - auto-merge refused; merge requires human/advisor review". The session parks the PR mergeable-awaiting-review (the existing Done-awaiting-merge surface). Regression: a mode=guided spec dispatched to a pr-ship cadence ends at an OPEN mergeable PR; mode=drain preserves current auto-merge.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T06:40:14.134597707Z
-modified_at: 2026-07-20T02:54:25.488760062Z
+modified_at: 2026-07-20T03:02:04.440091746Z
 req_type: Bug
 tags:
 - aida:pr-ship keystone supervised substrate governance severity:major
