@@ -35906,5 +35906,17 @@ operations:
   timestamp: 2026-07-20T01:13:07.820460046Z
   kind: !SetStatus
     status: Completed
-clock: 3329
+- id: 019f7d2f-83b3-7b73-8db9-fb259d1ef917
+  target_id: 019f7d2f-78a3-7190-af08-c4410dcb5ac4
+  author: aida
+  node_id: '1'
+  lamport: 3330
+  timestamp: 2026-07-20T01:41:33.747994498Z
+  kind: !Create
+    title: Subsystems are registry config in the git-canonical store, not requirement nodes (ratifies PROPOSAL-first-class-subsystems)
+    description: 'Operator ratified 2026-07-19 (via /aida-decide-style session): subsystems live as .aida-store/registry/subsystems.yaml — name, matching rules, memory focus keys, queue defaults, risk/escalation policy — read by CLI/TUI/queue/MCP/memory loader. NOT requirement nodes: specs remain the work graph; subsystems are classification/routing policy. Delivers TASK-0434. Full text: docs/aida/05-decisions/PROPOSAL-first-class-subsystems.md (promoted from proposed/).'
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3330
 node_id: '1'
