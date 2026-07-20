@@ -36157,5 +36157,17 @@ operations:
   timestamp: 2026-07-20T02:55:12.283664756Z
   kind: !SetStatus
     status: In Progress
-clock: 3354
+- id: 019f7d77-d8a7-7a43-9cc5-873ed6f83f2b
+  target_id: 019f7d77-d532-75e0-8e21-66c191c5001e
+  author: aida
+  node_id: '1'
+  lamport: 3355
+  timestamp: 2026-07-20T03:00:34.087326767Z
+  kind: !Create
+    title: Live gitlab-side verification of aida remote mirror code-leg fan-out (TASK-1097 follow-up)
+    description: 'Operator follow-up to TASK-1097 (code+tests only per the fence-release comment). Verify against the real gitlab mirror: run aida remote mirror gitlab on the dev repo, push a code branch to origin, and confirm the ref lands on the gitlab hub, aida-store is untouched, and a mirror failure only warns. Confirm aida remote status reads clean afterwards.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 3355
 node_id: '1'
