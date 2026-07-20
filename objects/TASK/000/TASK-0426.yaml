@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.704172938Z
-modified_at: 2026-06-30T16:35:28.461347795Z
+modified_at: 2026-07-20T02:29:50.373194315Z
 req_type: Task
 tags:
 - docs-review
@@ -27,3 +27,6 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-06-24T02:53:29.704211421Z
+deferred: true
+deferred_at: 2026-07-20T02:29:50.373194315Z
+deferred_until: stabilization phase ends and repositioning (EPIC-39 family) unparks — external-facing marketing waits per the bugs-before-marketing posture
