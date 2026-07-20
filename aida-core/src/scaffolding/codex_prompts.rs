@@ -143,6 +143,24 @@ fn contains_codex_argument_placeholder(body: &str) -> bool {
     body.contains("$ARGUMENTS") || body.contains("$1")
 }
 
+/// Render one embedded command master as a launch-ready Codex prompt: the
+/// BUG-731 conversion (frontmatter stripped, Claude-only prompt language
+/// adapted) with the invocation arguments substituted for `$ARGUMENTS` — the
+/// same expansion Codex itself performs when the prompt is invoked as
+/// `/<name> <args>` from `~/.codex/prompts/`, but usable as the initial
+/// prompt of a directly-launched session (e.g. the guided-mode dispatch).
+/// `None` when the command has no embedded master or sits in the
+/// non-portable set.
+// trace:TASK-1162 | ai:claude
+pub fn render_codex_command_prompt(name: &str, args: &str) -> Option<String> {
+    if CODEX_NONPORTABLE_COMMANDS.iter().any(|(n, _)| *n == name) {
+        return None;
+    }
+    let key = format!("commands/{name}.md");
+    let body = crate::templates::EMBEDDED_TEMPLATES.get(key.as_str())?;
+    Some(convert_command_to_codex_prompt(body).replace("$ARGUMENTS", args))
+}
+
 /// The expected Codex custom-prompt set as `(name, body)` pairs — the same
 /// portable enumeration `scaffold_codex_prompts` writes, but pure (no I/O).
 /// Lets a drift check (e.g. `aida doctor --category scaffold-drift`, TASK-1124)
@@ -259,6 +277,21 @@ mod tests {
         assert!(out.contains("plain-text numbered question"), "{out}");
         assert!(out.contains("aida pr"), "{out}");
         assert!(out.contains("ai:codex"), "{out}");
+    }
+
+    // trace:TASK-1162 — the guided-mode dispatch launches Codex with this
+    // rendering directly; the arguments must be substituted (no `$ARGUMENTS`
+    // left for Codex's own expansion, which never runs on a direct launch).
+    #[test]
+    fn render_codex_command_prompt_substitutes_arguments() {
+        let out = render_codex_command_prompt("aida-guided-implement", "TASK-9").unwrap();
+        assert!(out.contains("TASK-9"), "{out}");
+        assert!(!out.contains("$ARGUMENTS"), "{out}");
+        assert!(!out.contains("AskUserQuestion"), "{out}");
+        assert!(!out.starts_with("---"), "{out}");
+        // Non-portable and unknown commands render nothing.
+        assert!(render_codex_command_prompt("aida-burndown", "x").is_none());
+        assert!(render_codex_command_prompt("no-such-command", "x").is_none());
     }
 
     #[test]

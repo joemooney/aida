@@ -82848,30 +82848,45 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
             // A ready worktree + the guided session, prompt pre-filled. The
             // worktree primitive takes the implementer lease (Approved → In
             // Progress) exactly like `aida worktree enter <spec>`.
+            //
+            // trace:TASK-1162 | ai:claude — the launch honors the session
+            // vendor: claude expands the guided-implement skill natively,
+            // codex is seeded with the adapted prompt, and agy is refused by
+            // dispatch policy — BEFORE the worktree/lease is touched.
+            let launch =
+                session::guided_session_launch(session::resolve_session_vendor(), &display)?;
             let focus = match classify_worktree_arg(&display) {
                 WorktreeTarget::Spec { focus, .. } => focus,
                 WorktreeTarget::Epic => unreachable!("epics are refused above"),
             };
             let out = ensure_spec_worktree(&display, &focus, None, None, "do-guided")?;
-            let prompt = format!("/aida-guided-implement {display}");
+            // The codex prompt is a whole adapted document — summarize it in
+            // the launch line instead of dumping it.
+            let prompt_note = if launch.prompt.contains('\n') {
+                "(adapted guided prompt)".to_string()
+            } else {
+                format!("{:?}", launch.prompt)
+            };
             eprintln!(
-                "  {} worktree {} · launching guided session — claude {}",
+                "  {} worktree {} · launching guided session — {} {}",
                 crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
                 out.path.display().to_string().cyan(),
-                format!("{prompt:?}").dimmed()
+                launch.program,
+                prompt_note.dimmed()
             );
-            let status = std::process::Command::new("claude")
-                .arg(&prompt)
+            let status = std::process::Command::new(launch.program)
+                .arg(&launch.prompt)
                 .current_dir(&out.path)
                 .env("AIDA_SESSION_ROLE", "implementer")
                 .status()
                 .map_err(|e| {
                     anyhow::anyhow!(
-                        "failed to launch `claude` ({e}) — guided mode drives a Claude Code \
-                         skill and needs the Claude Code CLI on PATH.\n\
+                        "failed to launch `{program}` ({e}) — guided mode drives an \
+                         interactive agent session and needs the `{program}` CLI on PATH.\n\
                          The worktree is ready at {} — open your agent there and run the \
-                         guided-implement skill by hand.",
-                        out.path.display()
+                         guided-implement workflow by hand.",
+                        out.path.display(),
+                        program = launch.program
                     )
                 })?;
             if !status.success() {

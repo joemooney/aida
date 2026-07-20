@@ -1083,6 +1083,73 @@ pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
         .unwrap_or(HeadlessVendor::Claude)
 }
 
+/// TASK-1162: resolve the session vendor for a launch rooted at the current
+/// project — the same precedence stack as a headless drain spawn (flag
+/// override → `AIDA_HEADLESS_VENDOR` → `[orchestrator] headless_vendor` →
+/// `[agents] vendor` → Claude), exposed for callers outside this module
+/// (the guided-mode dispatch).
+// trace:TASK-1162 | ai:claude
+pub(crate) fn resolve_session_vendor() -> HeadlessVendor {
+    resolve_headless_vendor(&headless_worktree_root())
+}
+
+/// TASK-1162: what `aida do <spec>` (mode = guided) launches for a session
+/// vendor — the program to spawn in the spec worktree and the initial prompt
+/// to seed it with.
+// trace:TASK-1162 | ai:claude
+#[derive(Debug)]
+pub(crate) struct GuidedSessionLaunch {
+    /// The PATH binary to spawn (`claude` / `codex`).
+    pub(crate) program: &'static str,
+    /// The initial prompt: Claude gets the bare slash invocation (expanded
+    /// natively from `.claude/skills/`); Codex gets the adapted prompt body.
+    pub(crate) prompt: String,
+}
+
+/// TASK-1162: guided-mode vendor parity. Claude Code expands
+/// `/aida-guided-implement` natively, so the Claude arm keeps the bare slash
+/// invocation. Codex never reads `.claude/`, so its arm renders the
+/// codex-adapted guided prompt (the BUG-731 conversion: plain-text numbered
+/// forks instead of AskUserQuestion, ADRs recorded via the CLI) with the spec
+/// substituted in. AGY has NO guided equivalent by dispatch policy —
+/// draft-for-review-only, mechanical/bounded work — so its arm refuses with
+/// the policy reason instead of launching an interactive keystone dialog.
+/// Pure — unit-tested without spawning.
+// trace:TASK-1162 | ai:claude
+pub(crate) fn guided_session_launch(
+    vendor: HeadlessVendor,
+    spec: &str,
+) -> Result<GuidedSessionLaunch> {
+    match vendor {
+        HeadlessVendor::Claude => Ok(GuidedSessionLaunch {
+            program: "claude",
+            prompt: format!("/aida-guided-implement {spec}"),
+        }),
+        HeadlessVendor::Codex => {
+            let prompt = aida_core::scaffolding::codex_prompts::render_codex_command_prompt(
+                "aida-guided-implement",
+                spec,
+            )
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "the codex-adapted guided prompt is missing from the embedded command set — \
+                     this is a build defect, not a configuration problem"
+                )
+            })?;
+            Ok(GuidedSessionLaunch {
+                program: "codex",
+                prompt,
+            })
+        }
+        HeadlessVendor::Agy => anyhow::bail!(
+            "guided mode does not run on agy: the AGY dispatch policy fences agy to \
+             draft-for-review, mechanical/bounded work, and a guided session is an interactive \
+             keystone decision dialog. Re-run with the session vendor set to claude or codex \
+             (AIDA_HEADLESS_VENDOR=claude|codex, or `[agents] vendor` in agents.toml)."
+        ),
+    }
+}
+
 /// STORY-683: build the argv (after the program name) for a headless launch of
 /// the given vendor. `Claude` reuses the SPIKE-7 mandatory flag set
 /// ([`claude_headless_args_with_posture`]); `Codex` builds the `codex exec`
@@ -3827,6 +3894,43 @@ mod tests {
             !agy.contains(&"exec".to_string()),
             "agy arm must not be a codex exec: {agy:?}"
         );
+    }
+
+    /// TASK-1162: the guided-mode launch honors the session vendor. Claude
+    /// keeps the natively-expanded slash invocation; Codex gets the adapted
+    /// prompt (BUG-731 rendering) with the spec substituted and no
+    /// Claude-only mechanics left in; Agy is refused by dispatch policy with
+    /// a message that names the fence and both usable vendors.
+    // trace:TASK-1162 | ai:claude
+    #[test]
+    fn guided_session_launch_routes_per_vendor() {
+        let claude = guided_session_launch(HeadlessVendor::Claude, "TASK-9").unwrap();
+        assert_eq!(claude.program, "claude");
+        assert_eq!(claude.prompt, "/aida-guided-implement TASK-9");
+
+        let codex = guided_session_launch(HeadlessVendor::Codex, "TASK-9").unwrap();
+        assert_eq!(codex.program, "codex");
+        assert!(codex.prompt.contains("TASK-9"), "{}", codex.prompt);
+        assert!(!codex.prompt.contains("$ARGUMENTS"), "{}", codex.prompt);
+        assert!(
+            !codex.prompt.contains("AskUserQuestion"),
+            "{}",
+            codex.prompt
+        );
+        assert!(!codex.prompt.contains("/aida-"), "{}", codex.prompt);
+        // The fork-presentation adaptation survives into the launched prompt.
+        assert!(
+            codex.prompt.contains("plain-text numbered"),
+            "{}",
+            codex.prompt
+        );
+
+        let err = guided_session_launch(HeadlessVendor::Agy, "TASK-9")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("draft-for-review"), "{err}");
+        assert!(err.contains("claude"), "{err}");
+        assert!(err.contains("codex"), "{err}");
     }
 
     /// TASK-894: the advisor-tier spawn builds the correct command per vendor.
