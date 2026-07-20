@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:45.785458081Z
-modified_at: 2026-07-19T20:15:46.987445417Z
+modified_at: 2026-07-20T04:46:47.371115497Z
 req_type: Spike
 tags:
 - ablation
@@ -22,4 +22,7 @@ relationships:
 - rel_type: Child
   target_id: 019eddc4-96f5-7ad3-bda0-345e1218dd73
   created_at: 2026-06-30T16:36:05.847598576Z
+deferred: true
+deferred_at: 2026-07-20T04:46:47.371115497Z
+deferred_until: the EPIC-50 judge harness is ready to pair (recorded answer 2026-07-14)
 human_only: true
