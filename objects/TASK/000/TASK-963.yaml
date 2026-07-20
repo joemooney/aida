@@ -3,12 +3,12 @@ spec_id: TASK-963
 agreed_id: TASK-963
 title: 'STORY-621 Slice 2: Forge::change_metadata + reviewer-preflight/reconcile metadata-read consolidation'
 description: 'Add Forge::change_metadata (+ change_commit_headlines, change_reviews) to route ~19 gh pr view/list --json metadata-read sites through the trait so the drain reconcile + reviewer pre-flight phases work on GitLab. Three-method design (scalar object + commits + reviews) so callers pay only for what they read; GitLab REST-first per BUG-639. CI rollup excluded (Slice 3 / TASK-962). Sketch for master sign-off: docs/plans/2026-06-27-story-621-slice2-change-metadata-sketch.md. Status draft = trait signature awaiting master-advisor sign-off before implementation (sketch-first boundary). Open questions: list-vs-single, change_status overlap, GitLab reviewDecision-from-approvals mapping, cross-repo derivation.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T19:17:58.317503462Z
-modified_at: 2026-07-20T06:48:26.206810196Z
+modified_at: 2026-07-20T06:58:07.776369653Z
 req_type: Task
 tags:
 - aida:forge
@@ -26,8 +26,24 @@ comments:
   created_at: 2026-07-20T02:45:07.966701008Z
   modified_at: 2026-07-20T02:45:07.966701008Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+history:
+- id: 019f7e51-571a-72e2-b191-11a0faa8266b
+  author: aida-auto-bump
+  timestamp: 2026-07-20T06:58:07.770364914Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7e51-5720-7412-9b5b-5feb3066eb42
+  timestamp: 2026-07-20T06:58:07.776365419Z
+  agent: aida
+  commit_sha: 7d0bf1dd6feccd1509a133c6fd0e3a835b2c7661
+  summary: Completed via merge 7d0bf1dd
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-20T06:48:26.206810196Z
   implemented_by: joe
+  completed_at: 2026-07-20T06:58:07.770266969Z
+  completion_sha: 7d0bf1dd6feccd1509a133c6fd0e3a835b2c7661
