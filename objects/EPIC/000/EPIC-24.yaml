@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-07-20T02:28:23.973109267Z
+modified_at: 2026-07-20T02:28:53.981729593Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -97,4 +97,10 @@ comments:
   content: rollup nudge
   created_at: 2026-07-20T02:28:23.973109267Z
   modified_at: 2026-07-20T02:28:23.973109267Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f7d5a-da5d-7232-b7d6-fbb10f6c510f
+  author: joe
+  content: 'Recovery-closing per rollup audit 2026-07-19: zero non-terminal children (all completed/rejected); the light-surfaces answer (digest + doc skills shipped, book parked as deferred STORY-704/705) is fully delivered. Forced because the rollup derivation missed auto-bump completions — see the rollup-staleness bug filed today.'
+  created_at: 2026-07-20T02:28:53.981729593Z
+  modified_at: 2026-07-20T02:28:53.981729593Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
