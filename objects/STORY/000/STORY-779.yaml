@@ -8,10 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T01:42:07.154131649Z
-modified_at: 2026-07-20T01:42:21.425646497Z
+modified_at: 2026-07-20T04:46:56.178756959Z
 req_type: Story
 tags:
 - subsystems parent:EPIC-0433 from-ratification
 deferred: true
 deferred_at: 2026-07-20T01:42:21.425646497Z
-deferred_until: 'master-advisor context noise becomes measured pain: memory-pack growth, a second active project, or routing mistakes attributable to context overload (operator-ratified trigger 2026-07-19)'
+deferred_until: master-advisor context noise becomes measured pain (operator-ratified trigger 2026-07-19)
