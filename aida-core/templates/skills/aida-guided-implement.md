@@ -12,6 +12,17 @@ allowed-tools:
 
 # AIDA Guided Implement Skill
 
+## Vendor matrix
+
+Guided mode is vendor-aware: `aida do <SPEC>` (mode `guided`) resolves the
+session vendor and launches the matching harness in the spec worktree.
+
+| Vendor | Guided? | How |
+|--------|---------|-----|
+| claude | ✅ native | launches Claude Code seeded with `/aida-guided-implement <SPEC>` — this skill, expanded natively |
+| codex  | ✅ adapted | launches `codex` seeded with the codex-adapted guided prompt: same phases, forks as plain-text numbered questions, ADRs recorded via the `aida` CLI, stop at the PR (no auto-merge) |
+| agy    | 🚫 refused | the AGY dispatch policy fences agy to draft-for-review, mechanical/bounded work — an interactive keystone decision dialog is outside that fence; dispatch refuses and points at claude/codex |
+
 ## Purpose
 
 Keystone work — load-bearing architecture, security, or any spec the
