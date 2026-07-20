@@ -13,12 +13,12 @@ description: |-
   CAVEAT (why not native multi-pushurl now): git remote set-url --add --push origin <mirror> would fan out BOTH code and store; while aida-store is intentionally diverged (BUG-700 scrub pending) the store leg to the mirror is non-ff and breaks aida db sync. The pre-push hook skips aida-store, so it works NOW without waiting for the scrub. After the scrub, native multi-pushurl becomes the simplest clean end-state.
 
   ACCEPTANCE: a code push to origin also lands on each mirror hub; a mirror failure warns without blocking; aida-store is NOT touched by the code hook; setup is one command.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T18:34:41.252951047Z
-modified_at: 2026-07-20T05:47:38.405274372Z
+modified_at: 2026-07-20T06:07:00.378360349Z
 req_type: Task
 tags:
 - aida:remote
@@ -46,3 +46,7 @@ comments:
   modified_at: 2026-07-20T02:45:10.758761389Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-20T06:07:00.378360349Z
+  implemented_by: joe
