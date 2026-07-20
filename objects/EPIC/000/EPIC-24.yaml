@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-07-15T02:03:35.486741618Z
+modified_at: 2026-07-20T02:28:23.973109267Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -92,3 +92,9 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): CLOSE as substantially delivered — the load-bearing primitive (aida doc add/show + docs-tree projection) shipped and is in use. Re-file any still-wanted projection features (auto-tutorial generation, book-chapter composition, diff-driven doc prompts) as fresh standalone stories when they have a champion.'
   created_at: 2026-06-06T13:39:08.680791150Z
   modified_at: 2026-06-06T13:39:08.680791150Z
+- id: 019f7d5a-6525-7721-ae00-0e3ecb9e822d
+  author: joe
+  content: rollup nudge
+  created_at: 2026-07-20T02:28:23.973109267Z
+  modified_at: 2026-07-20T02:28:23.973109267Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
