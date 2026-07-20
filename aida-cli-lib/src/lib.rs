@@ -70418,7 +70418,11 @@ fn handle_queue_command(
                     // probe the banner above used) so it stops recommending a
                     // `burndown run` launch the single-drain lock would refuse
                     // for specs the running drain already scheduled.
-                    // trace:BUG-753 | ai:claude
+                    // BUG-765: pass the in-flight IDS (not just a count) so the
+                    // per-item stalled hint keys on the same drain membership
+                    // the banner renders — a spec the drain is working never
+                    // reads as stalled/pick-it-back-up.
+                    // trace:BUG-753 trace:BUG-765 | ai:claude
                     let drain_footer =
                         drain_overlay
                             .as_ref()
@@ -70428,7 +70432,11 @@ fn handle_queue_command(
                                     .filter(|id| !o.in_flight.contains(id.as_str()))
                                     .map(|id| id.to_ascii_uppercase())
                                     .collect(),
-                                in_flight: o.in_flight.len(),
+                                in_flight: o
+                                    .in_flight
+                                    .iter()
+                                    .map(|id| id.to_ascii_uppercase())
+                                    .collect(),
                             });
                     if let Some(footer) =
                         burndown::render_path_to_empty(&items, drain_footer.as_ref())

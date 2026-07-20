@@ -1617,8 +1617,10 @@ pub(crate) struct DrainFooterOverlay {
     /// UPPERCASE display SPEC-IDs the live drain has scheduled (claimed from
     /// the queue but not yet picked up).
     pub scheduled: std::collections::HashSet<String>,
-    /// Count of specs a live session lease is actively working.
-    pub in_flight: usize,
+    /// UPPERCASE display SPEC-IDs a live session lease is actively working.
+    /// BUG-765: ids (not just a count) so the per-item stalled hint can check
+    /// drain membership with the same data the banner renders from.
+    pub in_flight: std::collections::HashSet<String>,
 }
 
 /// STORY-565: render the "how do I get to zero?" footer for a non-empty queue —
@@ -1669,7 +1671,7 @@ pub(crate) fn render_path_to_empty(
                     out.push_str(&format!(
                         "\n  {bullet} a drain is already working this queue — {covered} \
                          scheduled, {} in flight; watch it: `aida drain status`",
-                        d.in_flight
+                        d.in_flight.len()
                     ));
                 }
                 if uncovered > 0 {
@@ -1711,9 +1713,25 @@ pub(crate) fn render_path_to_empty(
             advance_action_sentence(item.bucket, &item.id)
         ));
     }
+    // BUG-765: the live drain's own specs must never read as stalled — the
+    // banner above just reported them in-flight/scheduled, and following the
+    // pick-it-up hint would double-dispatch a spec mid-flight. Same
+    // drain-lock-derived overlay the banner renders from, so the two surfaces
+    // can't contradict each other.
+    // trace:BUG-765 | ai:claude
+    let drain_covered = |id: &str| {
+        drain.is_some_and(|d| {
+            let upper = id.to_ascii_uppercase();
+            d.in_flight.contains(&upper) || d.scheduled.contains(&upper)
+        })
+    };
     // Group 3: in-progress-without-lease drift — flag, but never as "needs you:
-    // resolves through normal flow". These will NOT self-resolve.
-    for item in items.iter().filter(|i| is_drift(i.bucket)) {
+    // resolves through normal flow". These will NOT self-resolve. Drain-covered
+    // drift is NOT drift (the drain owns it); it joins Group 2 below.
+    for item in items
+        .iter()
+        .filter(|i| is_drift(i.bucket) && !drain_covered(&i.id))
+    {
         out.push_str(&format!(
             "\n  {bullet} {:<10} in progress, but no live session lease — stalled; \
              pick it back up (`aida queue work {}`) or park it",
@@ -1721,9 +1739,11 @@ pub(crate) fn render_path_to_empty(
         ));
     }
     // Group 2: genuinely in flight / self-resolving — no operator action.
+    // Includes drain-covered drift (BUG-765): the drain is working it, so it
+    // clears through normal flow like any other in-flight spec.
     let self_resolving: Vec<&str> = items
         .iter()
-        .filter(|i| self_resolving(i.bucket))
+        .filter(|i| self_resolving(i.bucket) || (is_drift(i.bucket) && drain_covered(&i.id)))
         .map(|i| i.id.as_str())
         .collect();
     if !self_resolving.is_empty() {
@@ -2968,7 +2988,7 @@ mod tests {
             scheduled: ["TASK-1".to_string(), "BUG-2".to_string()]
                 .into_iter()
                 .collect(),
-            in_flight: 1,
+            in_flight: ["TASK-9".to_string()].into_iter().collect(),
         };
         let f = render_path_to_empty(&items, Some(&drain)).expect("non-empty");
         // Names the drain + the watch verb.
@@ -3009,7 +3029,7 @@ mod tests {
         ];
         let drain = DrainFooterOverlay {
             scheduled: ["TASK-1".to_string()].into_iter().collect(),
-            in_flight: 0,
+            in_flight: Default::default(),
         };
         let f = render_path_to_empty(&items, Some(&drain)).expect("non-empty");
         assert!(f.contains("1 scheduled"), "covered spec is scheduled: {f}");
@@ -3021,6 +3041,59 @@ mod tests {
         assert!(
             !f.contains("aida burndown run"),
             "must not recommend launching a second drain: {f}"
+        );
+    }
+
+    // BUG-765: a spec the LIVE drain reports in-flight or scheduled must NOT
+    // get the "stalled — no live session lease" pick-it-up hint the banner just
+    // contradicted — following it would double-dispatch a spec mid-flight. It
+    // reads as in-flight instead. trace:BUG-765 | ai:claude
+    #[test]
+    fn render_path_to_empty_live_drain_suppresses_stalled_hint_for_its_specs() {
+        for covered_via in ["in_flight", "scheduled"] {
+            let items = vec![QueuedItem {
+                id: "TASK-1162".to_string(),
+                bucket: OpenBucket::InProgress,
+            }];
+            let mut drain = DrainFooterOverlay::default();
+            let set = ["TASK-1162".to_string()].into_iter().collect();
+            match covered_via {
+                "in_flight" => drain.in_flight = set,
+                _ => drain.scheduled = set,
+            }
+            let f = render_path_to_empty(&items, Some(&drain)).expect("non-empty");
+            assert!(
+                !f.contains("stalled"),
+                "drain-{covered_via} spec must not read as stalled: {f}"
+            );
+            assert!(
+                !f.contains("aida queue work TASK-1162"),
+                "no pick-it-up hint for a drain-{covered_via} spec: {f}"
+            );
+            assert!(
+                f.contains("nothing for you to do") && f.contains("TASK-1162"),
+                "drain-{covered_via} spec reads as in flight: {f}"
+            );
+        }
+    }
+
+    // BUG-765: a live drain does NOT blanket-suppress the hint — an in-progress
+    // spec OUTSIDE the drain's plan is still genuinely stalled.
+    // trace:BUG-765 | ai:claude
+    #[test]
+    fn render_path_to_empty_live_drain_keeps_stalled_hint_for_uncovered_specs() {
+        let items = vec![QueuedItem {
+            id: "TASK-895".to_string(),
+            bucket: OpenBucket::InProgress,
+        }];
+        let drain = DrainFooterOverlay {
+            scheduled: ["BUG-2".to_string()].into_iter().collect(),
+            in_flight: ["TASK-9".to_string()].into_iter().collect(),
+        };
+        let f = render_path_to_empty(&items, Some(&drain)).expect("non-empty");
+        assert!(
+            f.contains("stalled") && f.contains("TASK-895"),
+            "uncovered drift keeps the stalled nudge: {f}"
         );
     }
 
