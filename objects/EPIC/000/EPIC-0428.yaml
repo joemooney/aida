@@ -17,12 +17,12 @@ description: |-
   - Provide a way to inspect, undo/rework, or challenge autopilot decisions.
   - Keep architecture, security, autonomy machinery, high-risk, irreversible, and cross-cutting lifecycle decisions human-gated by default.
   - Clarify how autopilot composes with intake, solo mode, zen mode, queues, punts, findings, and role routing.
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:18.954962222Z
-modified_at: 2026-07-20T02:28:57.713965379Z
+modified_at: 2026-07-20T02:28:58.927795849Z
 req_type: Epic
 tags:
 - advisor-autopilot
