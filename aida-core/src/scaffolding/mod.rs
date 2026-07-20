@@ -3879,6 +3879,113 @@ mod tests {
         );
     }
 
+    // trace:BUG-766 | ai:claude
+    // Store bulk-write version floor. A stale installed aida binary (whose
+    // `git_ops` predates the guard and therefore commits WITHOUT the
+    // AIDA_STORE_WRITE_GUARD marker) must not be able to land a bulk
+    // objects/ rewrite — the mechanism behind the deferred-shelf wipes.
+    // The guarded binary's own commit path (`git_ops::commit`, which tags
+    // the marker on its git subprocess) must still pass, as must a small
+    // targeted unguarded write (an old binary may read + touch single
+    // specs, just never mass-rewrite).
+    #[test]
+    fn test_pre_commit_store_bulk_write_guard() {
+        use std::process::Command;
+        let temp_dir = TempDir::new().unwrap();
+        // Name the repo dir like the real store worktree so the hook's
+        // store special-case (pwd contains "/.aida-store") engages.
+        let store_root = temp_dir.path().join(".aida-store");
+        std::fs::create_dir_all(&store_root).unwrap();
+
+        let run_git = |args: &[&str]| {
+            let mut cmd = Command::new("git");
+            cmd.args(args);
+            cmd.current_dir(&store_root);
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            cmd.env_remove("AIDA_ALLOW_INTERMEDIATE");
+            let status = cmd.status().unwrap();
+            assert!(status.success(), "git command {:?} failed", args);
+        };
+
+        run_git(&["init"]);
+        run_git(&["config", "user.email", "test@aida.dev"]);
+        run_git(&["config", "user.name", "AIDA Test"]);
+
+        // Install the real scaffolded hook from the embedded template.
+        let hook_body = crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-pre-commit.sh")
+            .copied()
+            .expect("embedded pre-commit template");
+        let hook_path = store_root.join(".git/hooks/pre-commit");
+        std::fs::create_dir_all(hook_path.parent().unwrap()).unwrap();
+        std::fs::write(&hook_path, hook_body).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        // A store-shaped tree: metadata.yaml plus a bulk batch of object
+        // files (above the default floor of 10).
+        std::fs::write(store_root.join("metadata.yaml"), "name: test\n").unwrap();
+        let objects = store_root.join("objects").join("TASK").join("000");
+        std::fs::create_dir_all(&objects).unwrap();
+        for i in 0..12 {
+            std::fs::write(
+                objects.join(format!("TASK-{i}.yaml")),
+                format!("id: TASK-{i}\n"),
+            )
+            .unwrap();
+        }
+        run_git(&["add", "-A"]);
+
+        // Raw `git commit` simulates the stale binary: no marker on the
+        // subprocess env. The bulk write must be REFUSED with a message.
+        let raw_commit = |msg: &str| -> std::process::Output {
+            let mut cmd = Command::new("git");
+            cmd.args(["commit", "-m", msg]);
+            cmd.current_dir(&store_root);
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            cmd.env_remove("AIDA_ALLOW_INTERMEDIATE");
+            cmd.env_remove("AIDA_STORE_WRITE_GUARD");
+            cmd.env_remove("AIDA_STORE_GUARD_FLOOR");
+            cmd.output().unwrap()
+        };
+        let output = raw_commit("chore: update 12 requirements");
+        assert!(
+            !output.status.success(),
+            "unguarded bulk store commit must be refused"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("refusing bulk requirements-store write"),
+            "refusal must explain itself; got: {stderr}"
+        );
+
+        // The guarded binary's commit path tags the marker → allowed.
+        let committed =
+            crate::git_ops::commit(&store_root, "chore: update 12 requirements").unwrap();
+        assert!(committed, "guarded bulk store commit must land");
+
+        // A small targeted write from the stale binary stays allowed.
+        std::fs::write(objects.join("TASK-0.yaml"), "id: TASK-0\nstatus: done\n").unwrap();
+        run_git(&["add", "-A"]);
+        let output = raw_commit("update TASK-0");
+        assert!(
+            output.status.success(),
+            "small unguarded store commit must still pass: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     // trace:BUG-624 | ai:claude
     // The item-5 `///`-trace gate must scope to the STAGED DIFF (added lines),
     // not whole staged files: a commit that merely TOUCHES a file carrying

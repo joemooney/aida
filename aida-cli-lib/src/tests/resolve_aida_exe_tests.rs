@@ -1,4 +1,4 @@
-use super::{pr_ship_post_merge_aida_exe, resolve_aida_exe};
+use super::{pr_ship_post_merge_aida_exe, prepend_dir_to_path, resolve_aida_exe};
 
 #[test]
 fn returns_a_path() {
@@ -40,4 +40,35 @@ fn pr_ship_post_merge_subcommands_do_not_require_path_lookup() {
         "expected pr-ship post-merge subcommands to use an existing executable path, got: {}",
         exe.display()
     );
+}
+
+/// BUG-766: the coordinating build's directory must land FIRST on PATH so
+/// child sessions (claude/codex drives, nested aida) resolve bare `aida`
+/// to this build, never a stale installed binary further down the PATH.
+// trace:BUG-766 | ai:claude
+#[test]
+fn prepend_dir_to_path_puts_coordinating_dir_first() {
+    let dir = std::path::Path::new("/repo/target/debug");
+    let path = std::ffi::OsString::from("/usr/local/bin:/usr/bin");
+    let updated = prepend_dir_to_path(dir, &path);
+    let parts: Vec<_> = std::env::split_paths(&updated).collect();
+    assert_eq!(parts[0], dir);
+    assert_eq!(parts.len(), 3);
+}
+
+/// BUG-766: idempotent — re-running the prepend (a nested aida spawned by
+/// a child session) must not grow PATH; any later duplicate of the dir is
+/// dropped so the coordinating build always wins exactly once.
+// trace:BUG-766 | ai:claude
+#[test]
+fn prepend_dir_to_path_dedupes_existing_entries() {
+    let dir = std::path::Path::new("/repo/target/debug");
+    let path = std::ffi::OsString::from("/repo/target/debug:/usr/bin:/repo/target/debug");
+    let updated = prepend_dir_to_path(dir, &path);
+    let parts: Vec<_> = std::env::split_paths(&updated).collect();
+    assert_eq!(parts[0], dir);
+    assert_eq!(parts.len(), 2, "duplicates must be dropped: {parts:?}");
+    // A stale install dir keeps its (now second-place) slot but can no
+    // longer shadow the coordinating build.
+    assert_eq!(parts[1], std::path::Path::new("/usr/bin"));
 }

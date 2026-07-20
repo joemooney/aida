@@ -23,9 +23,21 @@ pub struct GitResult {
 }
 
 /// Run a git command in the given working directory.
+///
+/// Sets `AIDA_STORE_WRITE_GUARD` on the git subprocess (BUG-766): the
+/// scaffolded pre-commit hook refuses a bulk requirements-store write
+/// unless the committing binary carries this marker. Any build compiled
+/// from this source has the field-preservation save guards, so tagging
+/// every git invocation here is the "built at or after the guard commit"
+/// version floor — a stale installed binary (whose `git_ops` predates
+/// this line) commits WITHOUT the marker and gets refused by the hook.
+/// Scoped to the git subprocess only, never exported process-wide, so a
+/// child session's own stale `aida` can't inherit it.
+// trace:BUG-766 | ai:claude
 fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
     let output = Command::new("git")
         .current_dir(cwd)
+        .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .args(args)
         .output()
         .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
