@@ -50463,6 +50463,10 @@ struct PsRow {
     /// PID of the live claude inside the worktree (or the review-verb creator
     /// pid). `None` when no live process backs the lease.
     pid: Option<u32>,
+    /// BUG-763: start time of that pid, when the probe can say. Lets the
+    /// renderer surface an adopted persistent lease (pid younger than the
+    /// lease) instead of silently mixing lease-age and process-age.
+    pid_started_at: Option<chrono::DateTime<chrono::Utc>>,
     elapsed_secs: u64,
     /// The display id of the spec this lease is scoped to, when the lease scope
     /// resolves to a known spec id (the AIDA-launched happy path). `None` for
@@ -50608,6 +50612,76 @@ fn ps_locked_by_cell(locked_by: Option<&str>) -> String {
         .filter(|s| !s.is_empty())
         .unwrap_or("")
         .to_string()
+}
+
+/// The `started` cell for one `aida ps` row — time-of-day only when the lease
+/// started today (local time), date-qualified ("Jun-26 11:55") for anything
+/// older, so a weeks-old persistent lease can't read as if it started this
+/// morning next to a 500h elapsed. Pure over already-localized values so the
+/// today/not-today split is unit-testable without freezing the clock or the
+/// host timezone.
+// trace:BUG-763 | ai:claude
+fn ps_started_cell(started_local: chrono::NaiveDateTime, today_local: chrono::NaiveDate) -> String {
+    if started_local.date() == today_local {
+        started_local.format("%H:%M").to_string()
+    } else {
+        started_local.format("%b-%d %H:%M").to_string()
+    }
+}
+
+/// Minimum a live pid must postdate its lease before the row is annotated as
+/// adopted. Small enough to catch any real re-adoption, large enough to absorb
+/// ordinary start-up ordering (a lease is written moments around the process
+/// it records, in either order).
+const PS_ADOPTED_SLACK_SECS: i64 = 300;
+
+/// The adopted-lease annotation for one `aida ps` row — `Some` (naming BOTH
+/// ages) when the live pid backing the row started meaningfully later than the
+/// lease itself. That is the persistent harness-worktree pattern: the lease is
+/// born once, then adopted and pid-restamped by every subsequent session, so
+/// the row otherwise mixes provenance silently — pid/liveness from today's
+/// process, started/elapsed from the lease record. Pure so the threshold and
+/// wording are unit-testable.
+// trace:BUG-763 | ai:claude
+fn ps_adopted_note(
+    lease_started: chrono::DateTime<chrono::Utc>,
+    pid_started: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    let pid_started = pid_started?;
+    if pid_started
+        .signed_duration_since(lease_started)
+        .num_seconds()
+        < PS_ADOPTED_SLACK_SECS
+    {
+        return None;
+    }
+    let lease_age = now
+        .signed_duration_since(lease_started)
+        .num_seconds()
+        .max(0) as u64;
+    let pid_age = now.signed_duration_since(pid_started).num_seconds().max(0) as u64;
+    Some(format!(
+        "adopted — lease born {} ago, current pid up {}",
+        humanize_duration_secs(lease_age),
+        humanize_duration_secs(pid_age)
+    ))
+}
+
+/// Best-effort start time of a single live pid, via a pid-scoped sysinfo
+/// refresh (the BUG-613 single-pid discipline — never a full process-table
+/// walk). `None` when the process is gone or the platform can't say.
+// trace:BUG-763 | ai:claude
+fn pid_start_time(pid: u32) -> Option<chrono::DateTime<chrono::Utc>> {
+    use sysinfo::{Pid, ProcessRefreshKind, System};
+    let target = Pid::from_u32(pid);
+    let mut sys = System::new();
+    sys.refresh_pids_specifics(&[target], ProcessRefreshKind::new());
+    let start = sys.process(target)?.start_time();
+    if start == 0 {
+        return None;
+    }
+    chrono::DateTime::<chrono::Utc>::from_timestamp(start as i64, 0)
 }
 
 // Rollup / stateless requirement types never carry a session of their own, so
@@ -51158,6 +51232,9 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     // session lease covering each worktree — the same STORY-711 slice-1 source
     // `aida lock` writes and the commit gate reads. Injected (not called inline)
     // so `build_running_work` stays filesystem-free and unit-testable.
+    // trace:BUG-763 | ai:claude — the real (single-pid /proc-reading) start-time
+    // seam, injected the same way as the git + lock probes so
+    // `build_running_work` stays filesystem-free and unit-testable.
     build_running_work(
         &specs,
         &leases,
@@ -51165,6 +51242,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         now,
         dispatch_health_ps::probe_worktree,
         |wt| worktree_lock::read_authorized_by(project_root, wt),
+        pid_start_time,
     )
 }
 
@@ -51187,7 +51265,12 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
 /// `authorized_by`), or `None`. Injected the same way as `dispatch_probe` so the
 /// lock-owner resolution stays exercisable on pure fixtures; the real caller
 /// wires in `worktree_lock::read_authorized_by`.
-// trace:TASK-1072 trace:STORY-696 trace:TASK-1090 trace:TASK-1143 | ai:claude
+///
+/// BUG-763: `pid_start_probe` is a third injected seam — given a live pid it
+/// returns that process's start time, or `None`. Feeds the adopted-lease
+/// annotation (a persistent lease whose pid is younger than the lease record);
+/// the real caller wires in [`pid_start_time`].
+// trace:TASK-1072 trace:STORY-696 trace:TASK-1090 trace:TASK-1143 trace:BUG-763 | ai:claude
 fn build_running_work(
     specs: &[RunningWorkSpec],
     leases: &[SessionLease],
@@ -51195,6 +51278,7 @@ fn build_running_work(
     now: chrono::DateTime<chrono::Utc>,
     dispatch_probe: impl Fn(&std::path::Path) -> dispatch_health_ps::WorktreeGitProbe,
     lock_probe: impl Fn(&std::path::Path) -> Option<String>,
+    pid_start_probe: impl Fn(u32) -> Option<chrono::DateTime<chrono::Utc>>,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -51263,10 +51347,15 @@ fn build_running_work(
             // advisory lease (review/claim) has an empty path that matches no
             // lease → `None`.
             let locked_by = lock_probe(&l.worktree_path).filter(|s| !s.is_empty());
+            // BUG-763: resolve the backing pid's own start time so an adopted
+            // persistent lease (pid younger than the lease record) can name
+            // both ages instead of mixing provenance silently.
+            let pid_started_at = pid.and_then(&pid_start_probe);
             PsRow {
                 lease: l.clone(),
                 state,
                 pid,
+                pid_started_at,
                 elapsed_secs,
                 spec,
                 dispatch,
@@ -51356,6 +51445,10 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "branch": row.lease.branch,
                     "pid": row.pid,
                     "started_at": row.lease.started_at.to_rfc3339(),
+                    // BUG-763: the backing pid's OWN start time (null when
+                    // unresolvable) — an adopted persistent lease has a pid
+                    // younger than the lease record, and both ages matter.
+                    "pid_started_at": row.pid_started_at.map(|t| t.to_rfc3339()),
                     "elapsed_secs": row.elapsed_secs,
                     "liveness": row.state.label(),
                     "live": matches!(row.state, LeaseState::Live),
@@ -51566,8 +51659,10 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         println!("{}", "(no active sessions)".dimmed());
     } else {
         let all_ids: Vec<&str> = rows.iter().map(|r| r.lease.id.as_str()).collect();
+        // BUG-763: the started column is wide enough for a date-qualified
+        // "Jun-26 11:55" — a non-today start always shows its date.
         let header = format!(
-            "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {:<12} {}",
+            "{:<10} {:<14} {:<10} {:<8} {:<12} {:<11} {:<12} {}",
             "session", "spec", "role", "pid", "started", "elapsed", "locked-by", "live"
         );
         println!("{}", header.dimmed());
@@ -51576,11 +51671,13 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             let prefix_len = unique_prefix_len(&l.id, &all_ids, 8);
             let spec_col = row.spec.clone().unwrap_or_else(|| truncate(&l.scope, 14));
             let pid_col = row.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
-            let started = l
-                .started_at
-                .with_timezone(&chrono::Local)
-                .format("%H:%M")
-                .to_string();
+            // BUG-763: time-of-day for today's leases, "Jun-26 11:55" for
+            // anything older — a June birth must never read as this morning
+            // next to a 500h elapsed.
+            let started = ps_started_cell(
+                l.started_at.with_timezone(&chrono::Local).naive_local(),
+                now.with_timezone(&chrono::Local).date_naive(),
+            );
             let live_label = format!("{} {}", row.state.glyph(), row.state.label());
             let live_col = match row.state {
                 LeaseState::Live => live_label.green(),
@@ -51592,7 +51689,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // colored `live` column without breaking alignment.
             let locked_col = ps_locked_by_cell(row.locked_by.as_deref());
             println!(
-                "{:<10} {:<14} {:<10} {:<8} {:<8} {:<11} {:<12} {}",
+                "{:<10} {:<14} {:<10} {:<8} {:<12} {:<11} {:<12} {}",
                 (&l.id[..prefix_len]).yellow(),
                 truncate(&spec_col, 14),
                 truncate(l.role.as_deref().unwrap_or("-"), 10),
@@ -51605,6 +51702,12 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // A second dimmed line carries the worktree so the wide path
             // doesn't blow out the table's column alignment.
             println!("{}{}", " ".repeat(11), l.worktree_path.display());
+            // BUG-763: an adopted persistent lease — the backing pid started
+            // later than the lease record — names both ages explicitly, so
+            // lease-age vs process-age never mix silently in one row.
+            if let Some(note) = ps_adopted_note(l.started_at, row.pid_started_at, now) {
+                println!("{}{}", " ".repeat(11), note.dimmed());
+            }
             // TASK-1090: a third line names the dispatch-health hint —
             // nothing printed for Moving (it's fine, per the acceptance).
             if let Some(d) = &row.dispatch {

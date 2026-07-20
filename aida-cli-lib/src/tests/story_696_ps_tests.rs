@@ -85,6 +85,7 @@ fn ps_process_backed_lease_uses_active_pid() {
         chrono::Utc::now(),
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -119,6 +120,7 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
             ahead_of_main: 0,
             last_commit_subject: Some("wip".into()),
         },
+        |_| None,
         |_| None,
     );
 
@@ -164,6 +166,7 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
             last_commit_subject: Some("wip: half-done".into()),
         },
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -205,6 +208,7 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
             ahead_of_main: 0,
             last_commit_subject: None,
         },
+        |_| None,
         |_| None,
     );
 
@@ -487,6 +491,7 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
         now,
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
+        |_| None,
     );
 
     // Row: TASK-1's scope resolved to its display id; live pid attached.
@@ -587,6 +592,7 @@ fn build_running_work_surfaces_the_worktree_lock_owner() {
                 None
             }
         },
+        |_| None,
     );
 
     let locked_row = rows
@@ -623,6 +629,8 @@ fn ps_json_shape() {
         "branch": l.branch,
         "pid": Some(4242u32),
         "started_at": l.started_at.to_rfc3339(),
+        // BUG-763: the backing pid's own start time — null when unresolvable.
+        "pid_started_at": Option::<String>::None,
         "elapsed_secs": 90u64,
         "liveness": LeaseState::Live.label(),
         "live": true,
@@ -638,6 +646,7 @@ fn ps_json_shape() {
         "branch",
         "pid",
         "started_at",
+        "pid_started_at",
         "elapsed_secs",
         "liveness",
         "live",
@@ -736,6 +745,124 @@ fn pool_reuse_leaves_other_worktree_leases_alone() {
         vec!["STORY-1".to_string()],
         "only the acquired tree's lease is reset; the sibling survives"
     );
+}
+
+/// BUG-763: the started cell — time-of-day for a lease started today,
+/// date-qualified for anything older, so a June birth can't read as this
+/// morning next to a 500h elapsed. Pure over already-localized values (fixed
+/// dates are fine: no clock or TTL is involved).
+// trace:BUG-763 | ai:claude
+#[test]
+fn ps_started_cell_dates_non_today_rows() {
+    let today = chrono::NaiveDate::from_ymd_opt(2026, 7, 19).unwrap();
+
+    // Started today → time-of-day only, as before.
+    let this_morning = today.and_hms_opt(11, 55, 0).unwrap();
+    assert_eq!(ps_started_cell(this_morning, today), "11:55");
+
+    // A lease older than 24h is never "today" — its date must show.
+    let june = chrono::NaiveDate::from_ymd_opt(2026, 6, 26)
+        .unwrap()
+        .and_hms_opt(11, 55, 0)
+        .unwrap();
+    assert_eq!(ps_started_cell(june, today), "Jun-26 11:55");
+
+    // Even yesterday (possibly <24h ago) is date-qualified — a bare
+    // "23:50" next to today's rows would read as the future.
+    let yesterday = chrono::NaiveDate::from_ymd_opt(2026, 7, 18)
+        .unwrap()
+        .and_hms_opt(23, 50, 0)
+        .unwrap();
+    assert_eq!(ps_started_cell(yesterday, today), "Jul-18 23:50");
+
+    // Year boundary: last year's date still renders month-day (the elapsed
+    // column carries the magnitude).
+    let last_year = chrono::NaiveDate::from_ymd_opt(2025, 12, 31)
+        .unwrap()
+        .and_hms_opt(9, 0, 0)
+        .unwrap();
+    assert_eq!(ps_started_cell(last_year, today), "Dec-31 09:00");
+}
+
+/// BUG-763: the adopted marker — `Some` (both ages named) when the live pid
+/// postdates the lease by more than the slack; `None` for the ordinary
+/// same-session case, a missing pid start time, or start-up jitter within
+/// slack. Times computed relative to now, never hardcoded.
+// trace:BUG-763 | ai:claude
+#[test]
+fn ps_adopted_note_names_both_ages() {
+    let now = chrono::Utc::now();
+    let lease_born = now - chrono::Duration::hours(559);
+    let pid_up = now - chrono::Duration::hours(2);
+
+    let note = ps_adopted_note(lease_born, Some(pid_up), now)
+        .expect("pid postdating the lease by weeks must be marked adopted");
+    assert!(note.contains("adopted"), "{note}");
+    assert!(note.contains("559h"), "lease age must be named: {note}");
+    assert!(note.contains("2h"), "pid age must be named: {note}");
+
+    // Same-session start-up ordering (pid moments after — or before — the
+    // lease) is NOT adoption.
+    let jitter_after = lease_born + chrono::Duration::seconds(30);
+    assert_eq!(ps_adopted_note(lease_born, Some(jitter_after), now), None);
+    let before = lease_born - chrono::Duration::seconds(30);
+    assert_eq!(ps_adopted_note(lease_born, Some(before), now), None);
+
+    // No pid start time resolvable → no marker (never guess).
+    assert_eq!(ps_adopted_note(lease_born, None, now), None);
+}
+
+/// BUG-763: the pid-start seam end-to-end over the pure `build_running_work`
+/// core — a row whose live pid resolves a start time carries it, so the
+/// renderer can compare lease-age vs process-age; a row with no live pid
+/// carries none.
+// trace:BUG-763 | ai:claude
+#[test]
+fn build_running_work_carries_pid_start_time() {
+    let now = chrono::Utc::now();
+    let pid_started = now - chrono::Duration::hours(2);
+
+    // A process-backed lease born long before its current pid (the adopted
+    // persistent-lease shape).
+    let mut adopted = ps_lease("l-adopted", "BUG-763", std::path::PathBuf::from("."));
+    adopted.started_at = now - chrono::Duration::hours(559);
+    adopted.active_pid = Some(std::process::id());
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[adopted],
+        &[],
+        now,
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| Some(pid_started),
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].pid_started_at, Some(pid_started));
+    assert!(
+        ps_adopted_note(rows[0].lease.started_at, rows[0].pid_started_at, now).is_some(),
+        "a 559h-old lease with a 2h-old pid must carry the adopted note"
+    );
+
+    // No live pid → the probe is never consulted, no start time attached.
+    let dead = ps_lease(
+        "l-dead",
+        "STORY-1",
+        std::path::PathBuf::from("/nonexistent/aida-ps-pid-start"),
+    );
+    let (rows, _) = build_running_work(
+        &[],
+        &[dead],
+        &[],
+        now,
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| Some(pid_started),
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].pid, None);
+    assert_eq!(rows[0].pid_started_at, None);
 }
 
 /// TASK-1064: the three-way orphan framing. A flag-only spec (no spec-scoped
