@@ -84,10 +84,18 @@ CREATE INDEX IF NOT EXISTS idx_cache_blocked ON requirements_cache(blocked);
 -- a child carries Parent->parent), so both are normalized to parent->child here
 -- — the same union `aida graph --tree` walks (BUG-448). Rebuildable projection,
 -- NEVER stored in canonical YAML; authoritative after a full cache rebuild.
+-- BUG-764: `author_id` records WHICH requirement's record carries the edge
+-- (either endpoint can, and reciprocal writes mean both may). Single-row
+-- upserts delete/re-derive only the edges the written row AUTHORED, so an
+-- epic-self write (e.g. a comment add) no longer destroys the child-authored
+-- edges its rollup membership depends on. The recursive membership CTEs
+-- keep reading (parent_id, child_id); duplicate rows across authors are
+-- deduped by their UNION semantics.
 CREATE TABLE IF NOT EXISTS hierarchy_edges (
     parent_id TEXT NOT NULL,               -- UUID of the parent (epic/story)
     child_id TEXT NOT NULL,                -- UUID of the child
-    PRIMARY KEY (parent_id, child_id)
+    author_id TEXT NOT NULL DEFAULT '',    -- UUID of the record carrying the edge
+    PRIMARY KEY (parent_id, child_id, author_id)
 );
 CREATE INDEX IF NOT EXISTS idx_edges_parent ON hierarchy_edges(parent_id);
 CREATE INDEX IF NOT EXISTS idx_edges_child ON hierarchy_edges(child_id);
