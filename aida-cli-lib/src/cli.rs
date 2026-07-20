@@ -2448,6 +2448,35 @@ pub enum RemoteCommand {
         no_fetch: bool,
     },
 
+    /// Register an extra hub as a full mirror: add the git remote if missing
+    /// (with --url), list it in `[store.sync] mirror_remotes` so store pushes
+    /// fan out, and install a pre-push hook that mirrors every code ref pushed
+    /// to `origin` out to each mirror hub. Idempotent — safe to re-run. The
+    /// mirror legs are best-effort: an unreachable or diverged mirror warns
+    /// and never blocks the origin push.
+    // trace:TASK-1097 | ai:claude
+    Mirror {
+        /// The git remote name of the mirror hub (e.g. `gitlab`).
+        name: String,
+
+        /// Clone URL to add the remote with when it doesn't exist yet.
+        #[clap(long)]
+        url: Option<String>,
+    },
+
+    /// (plumbing) Fan the refs of an in-flight `git push` out to every mirror
+    /// hub. The pre-push hook shim calls this with the pushed remote's name,
+    /// piping through the ref lines git feeds the hook on stdin. No-op unless
+    /// the push targets `origin`; skips the store branch (the store leg fans
+    /// out separately); always exits 0 so a mirror failure never blocks the
+    /// push.
+    // trace:TASK-1097 | ai:claude
+    #[clap(hide = true)]
+    MirrorPush {
+        /// The remote the triggering push targets (hook argument $1).
+        pushed_remote: String,
+    },
+
     /// Reconcile a diverged spec store across every configured hub: fetch each
     /// hub's store branch, union-merge the diverged tips (spec objects, the
     /// operation log, and the id-block/node registries all merge

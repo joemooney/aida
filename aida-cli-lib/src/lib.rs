@@ -2410,6 +2410,13 @@ fn run() -> Result<()> {
             crate::cli::RemoteCommand::Status { json, no_fetch } => {
                 remote_create::handle_remote_status(&project_root, *json, *no_fetch)
             }
+            // trace:TASK-1097 | ai:claude
+            crate::cli::RemoteCommand::Mirror { name, url } => {
+                remote_create::handle_remote_mirror(&project_root, name, url.as_deref())
+            }
+            crate::cli::RemoteCommand::MirrorPush { pushed_remote } => {
+                remote_create::handle_remote_mirror_push(&project_root, pushed_remote)
+            }
             crate::cli::RemoteCommand::Reconcile { execute, json, yes } => {
                 remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
             }
