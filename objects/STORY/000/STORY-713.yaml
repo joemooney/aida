@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:09:41.078468066Z
-modified_at: 2026-07-20T02:28:19.721363015Z
+modified_at: 2026-07-20T04:46:55.035962919Z
 req_type: Story
 tags:
 - axi
@@ -31,4 +31,4 @@ comments:
   modified_at: 2026-06-29T04:53:15.600601546Z
 deferred: true
 deferred_at: 2026-07-20T02:28:19.721363015Z
-deferred_until: 'coordination chatter measurably burdens the operator: a second advisor exists, or the operator is hand-routing agent traffic again (ratified 2026-07-19)'
+deferred_until: coordination chatter measurably burdens the operator
