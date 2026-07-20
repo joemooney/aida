@@ -5727,6 +5727,9 @@ fn handle_questions_command(
         Some(QuestionsCommand::Clarify { specs, dry_run }) => {
             questions_clarify(backend, store_path, specs, *dry_run)
         }
+        Some(QuestionsCommand::Remedy { spec, dry_run }) => {
+            questions_remedy(backend, spec, *dry_run)
+        }
         Some(QuestionsCommand::Ask {
             spec,
             question,
@@ -6250,6 +6253,102 @@ fn questions_clarify(
         let code = status_code.code().unwrap_or(1);
         std::process::exit(code);
     }
+}
+
+/// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring
+/// pass consumed by the TUI drive auto-remedy loop. Unlike
+/// [`questions_clarify`], this path must not ask the human anything: it either
+/// grounds minimal acceptance criteria from the existing substrate and writes
+/// them, or exits non-zero so the caller can keep the gate held.
+// trace:TASK-1075 | ai:codex
+fn questions_remedy(
+    backend: &aida_core::CachedGitBackend,
+    spec: &str,
+    dry_run: bool,
+) -> Result<()> {
+    let req = backend
+        .get_requirement_by_spec_id(spec)?
+        .ok_or_else(|| anyhow::anyhow!("{spec} not found"))?;
+    if is_clarify_excluded(&req) {
+        anyhow::bail!(
+            "{} is not eligible for automatic acceptance remedy (built/held/non-implementable type)",
+            req.display_id()
+        );
+    }
+
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let vendor = session::resolve_headless_vendor(&project_root);
+    let prompt = questions_remedy_prompt(&req.display_id());
+    let log_path = questions_remedy_log_path(&project_root, &req.display_id());
+
+    println!("remedying {} with headless advisor", req.display_id());
+    println!("  vendor: {}", vendor.as_str());
+    println!("  log: {}", log_path.display());
+
+    if dry_run {
+        println!("\ndry run — not launching. Prompt:\n\n{prompt}");
+        return Ok(());
+    }
+
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+        .with_label(format!("remedy-{}", req.display_id().to_ascii_lowercase()));
+    let session_id = uuid::Uuid::now_v7().to_string();
+    let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
+    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+    let status =
+        session::spawn_vendor_headless(vendor, &prompt, &session_id, &log_path, &tee, false);
+    match previous_role {
+        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
+        None => std::env::remove_var("AIDA_SESSION_ROLE"),
+    }
+    let status = status?;
+    if status.success() {
+        Ok(())
+    } else {
+        let code = status.code().unwrap_or(1);
+        std::process::exit(code);
+    }
+}
+
+// trace:TASK-1075 | ai:codex
+fn questions_remedy_log_path(project_root: &std::path::Path, spec: &str) -> std::path::PathBuf {
+    let safe: String = spec
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    project_root
+        .join(".aida")
+        .join("headless-logs")
+        .join(format!("remedy-{safe}-{ts}.jsonl"))
+}
+
+// trace:TASK-1075 | ai:codex
+fn questions_remedy_prompt(spec: &str) -> String {
+    format!(
+        r#"You are AIDA's bounded headless advisor remedy for {spec}.
+
+Goal: make exactly one under-specified requirement drive-ready by adding a minimal, testable `## Acceptance` section when the current substrate is sufficient.
+
+Rules:
+- Do not ask the human questions and do not use AskUserQuestion.
+- Read the requirement first: `aida show {spec}`.
+- Read nearby context if needed: `aida graph {spec} --tree` and `aida graph {spec} --blocked-by`.
+- If the current description, title, comments, or graph context are enough, replace the spec description with the same prose plus a `## Acceptance` section containing crisp observable bullets.
+- Preserve all existing description content and existing headings. Do not change status, priority, type, relationships, queue state, code, or unrelated specs.
+- Bind the edit with `aida edit {spec} --description "<full updated description>"`. For multi-line text, use a temp file and shell substitution.
+- After editing, run `aida zen {spec} --json`. Exit 0 only if the verdict is `ready`.
+- If grounded acceptance cannot be inferred, or the gate still holds for a reason you cannot fix by acceptance criteria, leave the spec unchanged if possible and exit non-zero.
+
+This is an advisor-authoring remedy, not an implementation pass."#
+    )
 }
 
 /// List the decision inbox. Returns the count of pending requests so the
@@ -10275,7 +10374,9 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
         // trace:STORY-522 | ai:claude
         Command::Questions { cmd } => matches!(
             cmd,
-            Some(QuestionsCommand::Ask { .. }) | Some(QuestionsCommand::Answer { .. })
+            Some(QuestionsCommand::Ask { .. })
+                | Some(QuestionsCommand::Answer { .. })
+                | Some(QuestionsCommand::Remedy { .. })
         ),
         // TASK-779: `aida decide` may route to the answer path, which writes
         // the decision_request + status + queue — treat it as a store writer.

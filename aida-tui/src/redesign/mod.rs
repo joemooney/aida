@@ -449,6 +449,23 @@ struct VerbResult {
     /// Whether to drop the per-scope item cache on completion (a store WRITE
     /// changed the data; reads don't).
     invalidate: bool,
+    /// Optional drive id to re-run immediately after the background verb
+    /// completes. Used by the TASK-1075 auto-remedy loop: the advisor remedy
+    /// writes acceptance criteria, then the cockpit re-probes and launches via
+    /// the existing drive path.
+    // trace:TASK-1075 | ai:codex
+    follow_up_drive: Option<String>,
+}
+
+impl VerbResult {
+    // trace:TASK-1075 | ai:codex
+    fn drive_after(status: impl Into<String>, invalidate: bool, id: impl Into<String>) -> Self {
+        Self {
+            status: status.into(),
+            invalidate,
+            follow_up_drive: Some(id.into()),
+        }
+    }
 }
 
 /// An in-flight background verb: the DISPLAY state ([`PendingOp`], pure) paired
@@ -548,10 +565,21 @@ fn event_loop(
         if let Some(p) = pending.as_mut() {
             match p.rx.try_recv() {
                 Ok(result) => {
+                    let follow_up_drive = result.follow_up_drive.clone();
                     if apply_verb_result(st, &result) {
                         invalidate_scope_cache(cache, loaded);
                     }
                     pending = None;
+                    if let Some(id) = follow_up_drive {
+                        apply_outcome(
+                            terminal,
+                            st,
+                            store,
+                            &mut loaded_spec,
+                            &mut pending,
+                            RunOutcome::DriveAfterRemedy { id },
+                        )?;
+                    }
                 }
                 Err(TryRecvError::Empty) => p.op.tick(),
                 Err(TryRecvError::Disconnected) => {
@@ -1152,6 +1180,7 @@ fn apply_outcome(
                 VerbResult {
                     status: archive_status(&archived, &failed),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1217,6 +1246,7 @@ fn apply_outcome(
                 VerbResult {
                     status: request_approval_status(&routed, &failed, &skipped),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1239,6 +1269,7 @@ fn apply_outcome(
                 VerbResult {
                     status: approve_status(&approved, &failed, &skipped),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1256,6 +1287,7 @@ fn apply_outcome(
                 VerbResult {
                     status: batch_approve_status(&outcome),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1278,6 +1310,7 @@ fn apply_outcome(
                 VerbResult {
                     status: reject_status(&rejected, &failed, &skipped),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1300,6 +1333,7 @@ fn apply_outcome(
                 VerbResult {
                     status: queue_status(&routed, &failed, &skipped),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1323,6 +1357,7 @@ fn apply_outcome(
                 VerbResult {
                     status: accept_status(&accepted, &failed, &skipped),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1355,72 +1390,12 @@ fn apply_outcome(
                 VerbResult {
                     status: defer_status(&deferred, &failed, &trigger),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
-        RunOutcome::Drive { id } => {
-            // Kick off the headline autonomous drive on the focused spec by
-            // launching `aida zen <id>` as a DETACHED background drive. The
-            // cockpit holds the terminal, so it can't host the long-running,
-            // interactive drive inline (the prompt's read+dispose surface rule);
-            // we spawn it detached with its stdio nulled and point the operator
-            // at `aida drain status` to watch it — matching the existing
-            // shell-out pattern rather than inventing a PTY host. Unlike the
-            // queue/approve/defer verbs this does NOT use `start_pending`: that
-            // captures output and blocks on completion, which is exactly wrong
-            // for a drive that runs for minutes. trace:STORY-728 | ai:claude
-            //
-            // STORY-744: the detached drive nulls its stdio, so a zen
-            // suitability-gate HOLD (e.g. under-specified) would die silently and
-            // the TUI would report a false "drive launched". PROBE the gate first
-            // (`aida zen <id> --json`) and only launch when it reports ready; a
-            // hold opens the gate-hold popup (reason + clarify / force remedy)
-            // instead of a launch confirmation. trace:STORY-744 | ai:claude
-            match probe_drive_gate(&id) {
-                Ok(v) if v.verdict == "ready" => {
-                    // TASK-1076: when the DEFAULT drive would route into a scope
-                    // (epic / focus) worktree, DON'T silently launch — surface the
-                    // resolved routing + a --solo toggle first, so an epic-parented
-                    // spec doesn't quietly join the epic worktree. A solo-by-default
-                    // spec (no scope) has nothing to toggle, so it launches straight
-                    // away, preserving the pre-TASK-1076 behavior. trace:TASK-1076
-                    if v.routes_into_scope() {
-                        st.status =
-                            Some(format!("drive: confirm routing for {id} — see the popup"));
-                        st.drive_routing = Some(state::DriveRouting {
-                            id,
-                            scope: v.scope,
-                            solo: false,
-                        });
-                    } else if spawn_drive(&id, false, false) {
-                        st.status = Some(format!(
-                            "drive launched for {id} — watch it with `aida drain status`"
-                        ));
-                    } else {
-                        st.status = Some(format!("drive: FAILED to launch the drive for {id}"));
-                    }
-                }
-                Ok(v) => {
-                    // The gate held the spec — surface the reason + remedies
-                    // instead of a false launch. Under-specified → clarify;
-                    // soft → force.
-                    st.status = Some(format!("drive held for {id} — see the popup"));
-                    st.gate_hold = Some(GateHold {
-                        id,
-                        reason: v.reason,
-                        clarifiable: v.under_specified,
-                        forceable: v.forceable,
-                    });
-                }
-                Err(msg) => {
-                    // Could not evaluate the gate — refuse to report a launch we
-                    // cannot vouch for.
-                    st.status = Some(format!(
-                        "drive: could not evaluate the gate for {id} — {msg}"
-                    ));
-                }
-            }
-        }
+        RunOutcome::Drive { id } => apply_drive_outcome(st, pending, id, true),
+        RunOutcome::DriveAfterRemedy { id } => apply_drive_outcome(st, pending, id, false),
         RunOutcome::OpenReplyInput { to, in_reply_to } => {
             // `reply` needs the operator-typed body before it can send: open
             // the single-line input modal addressed to the sender, threaded
@@ -1443,6 +1418,7 @@ fn apply_outcome(
                 VerbResult {
                     status: reply_status(&to, sent),
                     invalidate: true,
+                    follow_up_drive: None,
                 }
             });
         }
@@ -1450,6 +1426,60 @@ fn apply_outcome(
         RunOutcome::None => {}
     }
     Ok(())
+}
+
+/// Apply a drive outcome by probing the same `aida zen --json` suitability gate
+/// the detached drive uses. `allow_auto_remedy` is true for the operator's
+/// initial gesture and false for the post-remedy recheck, so a failed remedy
+/// reopens the hold instead of looping forever.
+// trace:STORY-728 trace:STORY-744 trace:TASK-1075 | ai:codex
+fn apply_drive_outcome(
+    st: &mut RedesignState,
+    pending: &mut Option<Pending>,
+    id: String,
+    allow_auto_remedy: bool,
+) {
+    match probe_drive_gate(&id) {
+        Ok(v) if v.verdict == "ready" => {
+            // TASK-1076: when the DEFAULT drive would route into a scope (epic /
+            // focus) worktree, surface the resolved routing + a --solo toggle
+            // before launching. A solo-by-default spec launches straight away.
+            if v.routes_into_scope() {
+                st.status = Some(format!("drive: confirm routing for {id} — see the popup"));
+                st.drive_routing = Some(state::DriveRouting {
+                    id,
+                    scope: v.scope,
+                    solo: false,
+                });
+            } else if spawn_drive(&id, false, false) {
+                st.status = Some(format!(
+                    "drive launched for {id} — watch it with `aida drain status`"
+                ));
+            } else {
+                st.status = Some(format!("drive: FAILED to launch the drive for {id}"));
+            }
+        }
+        Ok(v) => {
+            if v.under_specified && allow_auto_remedy {
+                let remedy_id = id.clone();
+                let label = format!("remedying {id} acceptance…");
+                start_pending(pending, st, label, move || run_drive_remedy(&remedy_id));
+            } else {
+                st.status = Some(format!("drive held for {id} — see the popup"));
+                st.gate_hold = Some(GateHold {
+                    id,
+                    reason: v.reason,
+                    clarifiable: v.under_specified,
+                    forceable: v.forceable,
+                });
+            }
+        }
+        Err(msg) => {
+            st.status = Some(format!(
+                "drive: could not evaluate the gate for {id} — {msg}"
+            ));
+        }
+    }
 }
 
 /// Launch the autonomous drive on `id` as a DETACHED background process:
@@ -1492,6 +1522,54 @@ fn spawn_drive(id: &str, force: bool, solo: bool) -> bool {
         cmd.current_dir(cwd);
     }
     cmd.spawn().is_ok()
+}
+
+/// Run the bounded advisor remedy for an under-specified drive hold, then ask
+/// the event loop to re-enter the drive path. The re-entry is unconditional:
+/// success should re-probe ready and launch; failure should re-probe hold and
+/// surface the existing gate popup with the fresh reason.
+// trace:TASK-1075 | ai:codex
+fn run_drive_remedy(id: &str) -> VerbResult {
+    let exe = crate::app::aida_exe();
+    let mut cmd = Command::new(&exe);
+    cmd.args(["questions", "remedy", id]);
+    cmd.env("AIDA_SESSION_ROLE", "advisor");
+    if let Ok(cwd) = std::env::current_dir() {
+        cmd.current_dir(cwd);
+    }
+    let status = cmd.output();
+    let (message, invalidate) = match status {
+        Ok(out) if out.status.success() => (
+            format!("remedy authored acceptance for {id}; re-checking drive gate…"),
+            true,
+        ),
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let detail = first_nonempty_line(&stderr).or_else(|| first_nonempty_line(&stdout));
+            (
+                detail
+                    .map(|d| format!("remedy did not clear {id}: {d}; re-checking gate…"))
+                    .unwrap_or_else(|| {
+                        format!("remedy did not clear {id}; re-checking drive gate…")
+                    }),
+                false,
+            )
+        }
+        Err(e) => (
+            format!("remedy could not run for {id}: {e}; re-checking drive gate…"),
+            false,
+        ),
+    };
+    VerbResult::drive_after(message, invalidate, id)
+}
+
+// trace:TASK-1075 | ai:codex
+fn first_nonempty_line(s: &str) -> Option<String> {
+    s.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| line.chars().take(160).collect())
 }
 
 /// Handle the `c` (clarify) affordance on a drive-gate hold (STORY-744): SUSPEND
@@ -2244,6 +2322,7 @@ fn run_create(title: &str, parent: Option<String>) -> VerbResult {
                 // Invalidate so the next sync_scope_items re-fetches in-process
                 // and the new draft appears if it is in view.
                 invalidate: true,
+                follow_up_drive: None,
             }
         }
         Ok(out) => {
@@ -2251,11 +2330,13 @@ fn run_create(title: &str, parent: Option<String>) -> VerbResult {
             VerbResult {
                 status: format!("new: aida add failed: {}", err.trim()),
                 invalidate: false,
+                follow_up_drive: None,
             }
         }
         Err(e) => VerbResult {
             status: format!("new: could not run aida add: {e}"),
             invalidate: false,
+            follow_up_drive: None,
         },
     }
 }
@@ -3727,6 +3808,7 @@ mod refresh_tests {
             VerbResult {
                 status: "approved 1: TASK-1".to_string(),
                 invalidate: true,
+                follow_up_drive: None,
             }
         });
         assert!(started, "a verb starts when none is pending");
@@ -3744,6 +3826,7 @@ mod refresh_tests {
             VerbResult {
                 status: "approved 1: TASK-1".to_string(),
                 invalidate: true,
+                follow_up_drive: None,
             }
         });
         // A SECOND verb is refused while the first is in flight: returns false,
@@ -3752,6 +3835,7 @@ mod refresh_tests {
             VerbResult {
                 status: "should not run".to_string(),
                 invalidate: false,
+                follow_up_drive: None,
             }
         });
         assert!(!started, "a second verb is rejected while one is pending");
@@ -3773,6 +3857,7 @@ mod refresh_tests {
             &VerbResult {
                 status: "approved 1: TASK-1".to_string(),
                 invalidate: true,
+                follow_up_drive: None,
             },
         );
         assert!(invalidate, "a store write asks for cache invalidation");
@@ -3783,6 +3868,7 @@ mod refresh_tests {
             &VerbResult {
                 status: "new: aida add failed: nope".to_string(),
                 invalidate: false,
+                follow_up_drive: None,
             },
         );
         assert!(!invalidate, "a failed write does not invalidate");
@@ -3800,6 +3886,7 @@ mod refresh_tests {
             VerbResult {
                 status: "approved 1: TASK-1".to_string(),
                 invalidate: true,
+                follow_up_drive: None,
             }
         });
         let p = pending.take().expect("pending installed");

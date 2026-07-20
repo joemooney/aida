@@ -2526,6 +2526,11 @@ pub enum RunOutcome {
     /// operator at `aida drain status`. Single-target (N=1).
     // trace:STORY-728 | ai:claude
     Drive { id: String },
+    /// Re-run `drive` after a TASK-1075 advisor remedy attempt. Same launch
+    /// path as [`Self::Drive`], but the parent must not auto-remedy another
+    /// under-specified hold; a still-held gate should surface the popup.
+    // trace:TASK-1075 | ai:codex
+    DriveAfterRemedy { id: String },
     /// `reply` on the focused unread message: the parent should OPEN the
     /// reply-body input modal addressed to `to` (the sender), threaded onto
     /// `in_reply_to` (the focused message's id). Two-step, mirroring
