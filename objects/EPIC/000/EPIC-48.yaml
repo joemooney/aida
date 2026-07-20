@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:19:35.838635342Z
-modified_at: 2026-06-27T16:40:30.242066531Z
+modified_at: 2026-07-20T02:29:35.274173208Z
 req_type: Epic
 tags:
 - competitive
@@ -79,3 +79,9 @@ comments:
   content: Commit c4c2bfd11 references this requirement
   created_at: 2026-06-19T01:52:34.821932397Z
   modified_at: 2026-06-19T01:52:34.821932397Z
+- id: 019f7d5b-7baa-7c80-bdfc-6c5edd218873
+  author: joe
+  content: 'Recovery-closing per rollup audit 2026-07-19: zero non-terminal children — the fleet-coordination research (incl. the 2026-07-08 paper and the 07-19 multivendor refresh) is delivered. Same rollup-staleness as BUG-764.'
+  created_at: 2026-07-20T02:29:35.274173208Z
+  modified_at: 2026-07-20T02:29:35.274173208Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
