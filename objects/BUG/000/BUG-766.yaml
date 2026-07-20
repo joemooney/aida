@@ -3,13 +3,17 @@ spec_id: BUG-766
 agreed_id: BUG-766
 title: drive/drain child sessions resolve bare 'aida' from raw PATH — the installed months-old binary (0.9.1) ran unguarded bulk saves, the true writer behind ALL five deferred-shelf wipes
 description: 'Root cause closed 2026-07-19 21:50 by forensic walk of TASK-919''s YAML history: every deferred-field loss (07-18 07:51 n=70; 07-19 08:06 n=37; 07-19 10:17 n=19; 07-19 18:35 n=49) is a ''chore: update N requirements'' BULK COMMIT — and the 18:35 one postdates both store guards (#1520 preserve-fields, #1530 modified_at+targeted-bump), proving the writer is not the guarded dev binary. Mechanism: headless implementer/orchestrator child sessions run bare ''aida'' resolved from the raw non-interactive PATH = the INSTALLED ~/.local/bin/aida 0.9.1 (2026-05-25) — no field-preservation guard, legacy full-store-save semantics — the headless sibling of BUG-760''s first-activate bug. Interim mitigation applied: installed binary overwritten with the current guarded build (0.9.1 kept as aida-0.9.1.bak). Real fix: (1) every spawn seam the orchestrator owns (queue work phases, burndown fanout briefs, agent new, session-env.sh) exports an explicit AIDA_BIN / prepends the repo target dir so children ALWAYS run the coordinating binary — never PATH luck; (2) defense in depth: a store-write version floor — the git backend refuses bulk writes from a binary whose embedded SHA predates the guard commit (config-tunable floor), so an ancient binary can read but not mass-write; (3) the session-env.sh generator includes the PATH prepend (TASK-1156''s seam). Acceptance: a drive child''s ''command -v aida'' inside its worktree resolves to the coordinating build; a deliberately-planted stale binary on PATH cannot produce a bulk store commit (refused with message); regression test on the spawn env of each seam. Mode: drive — but ONLY after this run''s queue proves clean; keystone-review the PR.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T04:46:10.712544192Z
-modified_at: 2026-07-20T04:59:53.235259658Z
+modified_at: 2026-07-20T05:14:00.141457477Z
 req_type: Bug
 tags:
 - aida:orchestrator integrity followup:BUG-756 followup:BUG-760 from-dogfood severity:major
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-20T05:14:00.141457477Z
+  implemented_by: joe
