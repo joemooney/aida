@@ -1,5 +1,6 @@
 id: 019f7e6c-1aaf-7302-a29e-b56d2601c2f9
 spec_id: TASK-1-120
+agreed_id: TASK-144
 title: pre-commit ///-provenance gate false-positives on pure code moves
 description: 'The pre-commit doc-comment provenance gate (TASK-135/BUG-624/BUG-629/TASK-903) scans added diff lines only, so a mechanical file-split/move re-adds pre-existing /// trace: debt and the gate refuses the commit (~85 flagged lines during the STORY-771 keystone-handler extraction, all moved verbatim from lib.rs). BUG-624''s own design note says pre-existing debt a commit did not introduce must not block it, but the added-lines heuristic cannot distinguish a move from new writing. Worked around with the documented AIDA_ALLOW_INTERMEDIATE=1 relief valve (PR #1549). Possible fixes: detect moved lines (git diff -M / ignore lines that exist verbatim in the pre-image of a staged removal), or scope the gate to clap-surface files like the cli.rs CI test.'
 status: Draft
