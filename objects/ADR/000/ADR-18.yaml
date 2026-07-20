@@ -3,12 +3,12 @@ spec_id: ADR-18
 agreed_id: ADR-18
 title: Advisor routing by computed subsystem membership with master fallback and full audit trail (ratifies PROPOSAL-subsystem-advisor-routing)
 description: 'Operator ratified 2026-07-19: exactly-one membership match with a registered scoped role routes to advisor:<subsystem>/reviewer:<subsystem>; ambiguous/missing/conflicting routes to the master advisor, always; every routed answer records role, candidates, rule, and fallback reason. Delivers TASK-0435.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T01:41:36.313397253Z
-modified_at: 2026-07-20T01:41:36.313397253Z
+modified_at: 2026-07-20T01:41:51.933050122Z
 req_type: Decision
 tags:
 - adr subsystems from-ratification
