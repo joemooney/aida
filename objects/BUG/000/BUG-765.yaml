@@ -3,17 +3,33 @@ spec_id: BUG-765
 agreed_id: BUG-765
 title: queue list per-item 'stalled — no live session lease' contradicts its own drain banner for burndown-fanout in-flight specs — last surface off the shared liveness probe
 description: 'Observed 2026-07-19 19:35, one aida queue list output simultaneously showed: banner ''a drain is running — in-flight: ...; scheduled: BUG-763, BUG-764, TASK-1162, TASK-975'' + footer ''a drain is already working this queue — 2 scheduled, 1 in flight'' (BUG-753''s fix, correct) AND per-item hints ''TASK-1162 in progress, but no live session lease — stalled; pick it back up'' / same for BUG-763 — while the drain''s implementer was actively editing TASK-1162''s files (verbose stream showed guided-implement template edits + do_dispatch tests at that moment). Following the hint would double-dispatch a spec mid-flight. Family: BUG-741 (codex exec), BUG-752 (harness agents in ps), BUG-753 (footer), BUG-754 (status flip) each fixed one surface; the per-item stalled hint still keys on its own spec-scoped-lease + liveness check. Fix: route the queue-list per-item hint through the same shared liveness/drain-membership logic the banner uses — an in-flight-or-scheduled spec of the live drain NEVER gets a stalled/pick-it-up hint; genuinely leaseless In Progress specs (no drain) keep it. Acceptance: with a live drain listing spec X as in-flight or scheduled, queue list shows X without a stalled hint; without a drain, the orphan hint remains; unit test rendering both. Mode: drive.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T02:35:45.293364628Z
-modified_at: 2026-07-20T05:00:27.684806810Z
+modified_at: 2026-07-20T05:09:52.933883208Z
 req_type: Bug
 tags:
 - aida:queue liveness followup:BUG-741 followup:BUG-753 from-dogfood
+history:
+- id: 019f7dee-3c9f-7872-8c9d-4b9cf2298e45
+  author: aida-auto-bump
+  timestamp: 2026-07-20T05:09:52.927801914Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7dee-3ca5-7663-a41d-aa7fcdb29fc2
+  timestamp: 2026-07-20T05:09:52.933882763Z
+  agent: aida
+  commit_sha: 2a7d2d84fce8528fcc8f9fca5edfc51629a8564d
+  summary: Completed via merge 2a7d2d84
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-20T05:00:27.684806810Z
   implemented_by: joe
+  completed_at: 2026-07-20T05:09:52.927710446Z
+  completion_sha: 2a7d2d84fce8528fcc8f9fca5edfc51629a8564d
