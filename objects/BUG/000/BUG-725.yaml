@@ -12,12 +12,12 @@ description: |-
   Recommend B (reuse the existing conflict-free merge machinery; the queue is conceptually one user's work queue, so per-node split + re-union in A is more moving parts). Either way the acceptance is: two machines, same user, concurrent queue writes -> aida pull auto-merges, never a non-mergeable failure.
 
   RATIFIED (operator, 2026-07-19): Option B - CRDT union-merge for registry/queues/*.yaml exactly as described (entries keyed by requirement_id, dedup on merge, last-writer-wins on position, git merge driver so pull-rebase auto-merges). Option A rejected as more moving parts.
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:16:21.704959337Z
-modified_at: 2026-07-20T03:01:51.161805830Z
+modified_at: 2026-07-20T04:47:17.600701215Z
 req_type: Bug
 tags:
 - aida:store aida:queue distributed reliability severity:major
