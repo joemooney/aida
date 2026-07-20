@@ -6,12 +6,12 @@ description: |-
   Tier-2 build from the SPIKE-62 recommendation (docs/plans/2026-06-16-spike-62-multi-repo-dimension-recommendation.md). GATED: do NOT open a PR until the operator signs off D1-D5 (nested Origin field shape, completion_repo sibling, repo+component hierarchy, Tier-3-stays-gated, origin.repo join key). Scope when unblocked: (Tier 2-a) add Origin{repo, component:Option} + Requirement.origin, serde default/skip, validate repo against WorkspaceManifest, round-trip + old-binary-forward-compat tests; (Tier 2-b) add ImplementationInfo.completion_repo stamped in the auto-bump path, widen in-memory GitLinkage to carry per-repo attribution, qualify shipped_pr/branch rendering in print_git_linkage. Backward-compatible (None=single-repo, no migration/backfill). Benefits from BUG-568 manifest-iterating scanner. Tier 3 (scope/queue/advisor) is a separate future spec, DO-NOT-BUILD-YET per the gate.
 
   Drive authorization (operator, 2026-07-19): design fully decided as ADR-12 (D1 nested Origin field; D2 completion_repo sibling; D3 one hierarchy; D4 Tier-3 stays gated, this story IS the sanctioned Tier-2; D5 origin.repo slug is the join key). Implementation follows the execution_mode precedent (model field + conflict.rs field-merge + cache projection + MCP parity + list/show render in one PR). Acceptance anchors to ADR-12; any deviation from D1-D5 is a punt, not a judgment call.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T07:40:44.779244297Z
-modified_at: 2026-07-20T06:25:05.012694439Z
+modified_at: 2026-07-20T06:51:17.926300780Z
 req_type: Story
 tags:
 - aida:workspace
@@ -22,3 +22,7 @@ tags:
 - parent:SPIKE-62
 - schema
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-20T06:51:17.926300780Z
+  implemented_by: joe
