@@ -36034,5 +36034,17 @@ operations:
   timestamp: 2026-07-20T02:28:58.975129284Z
   kind: !SetStatus
     status: Completed
-clock: 3342
+- id: 019f7d5a-fa6d-7002-9716-2f19db805188
+  target_id: 019f7d5a-f58a-71e2-ad4a-c2f0d6a03602
+  author: aida
+  node_id: '1'
+  lamport: 3343
+  timestamp: 2026-07-20T02:29:02.189802966Z
+  kind: !Create
+    title: epic rollup not re-derived when children complete via pull auto-bump — epics with zero open children stuck In Progress; comment-add doesn't refresh either
+    description: 'Observed 2026-07-19: EPIC-24 and EPIC-0428 each had ZERO non-terminal children (verified via list --parent --all) yet read In Progress; a comment-add nudge did not recompute; operator recovery required edit --status completed --force. Mechanism: the BUG-626 derived-rollup recomputes on direct child edits, but children completed via the aida pull auto-bump path (the common case — every drain-shipped child) do not propagate to the parent epic, and no read-time re-derivation exists. Related: BUG-628 (archived children under-counted). Fix: re-derive parent epic status (a) in the auto-bump path after flipping each child, and/or (b) lazily at epic read time from the live child set — pick one authoritative seam and test both completion routes. Acceptance: an epic whose last child completes via pull auto-bump reads Done/Completed on next show/list without manual force; regression covers auto-bump and direct-edit routes; BUG-628''s archived-child case rechecked. Mode: drive.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3343
 node_id: '1'
