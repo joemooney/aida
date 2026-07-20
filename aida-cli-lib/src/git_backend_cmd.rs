@@ -2912,6 +2912,11 @@ pub(crate) fn handle_git_backend_command(
                         if let Some(m) = req.execution_mode {
                             lines.push(crate::toon::scalar("execution_mode", &m.to_string()));
                         }
+                        // STORY-634: the multi-repo origin dimension, emitted
+                        // only when set. trace:STORY-634 | ai:claude
+                        if let Some(o) = &req.origin {
+                            lines.push(crate::toon::scalar("origin", &o.to_string()));
+                        }
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -3021,6 +3026,12 @@ pub(crate) fn handle_git_backend_command(
                     // trace:FR-283 | ai:claude
                     if let Some(w) = req.weight {
                         println!("{}: {}", "Weight".bold(), crate::format_weight(w as f64));
+                    }
+                    // STORY-634: where this spec's code lives in a multi-repo
+                    // shared-store workspace ("repo" or "repo/component");
+                    // absent = single-repo, prints nothing.
+                    if let Some(o) = &req.origin {
+                        println!("{}: {}", "Origin".bold(), o.to_string().cyan());
                     }
                     // BUG-524: surface when the spec was opened / last touched so
                     // `aida show` reveals its age. Stored UTC, rendered in local
@@ -3452,6 +3463,8 @@ pub(crate) fn handle_git_backend_command(
             test_coverage_notes,
             // trace:STORY-776 | ai:claude
             mode,
+            // trace:STORY-634 | ai:claude
+            origin,
             // trace:FR-283 | ai:claude
             weight,
             // trace:TASK-1117 | ai:claude
@@ -3615,6 +3628,8 @@ pub(crate) fn handle_git_backend_command(
                 && risk_notes.is_none()
                 && test_coverage_notes.is_none()
                 && mode.is_none()
+                // trace:STORY-634 | ai:claude
+                && origin.is_none()
                 // trace:FR-283 | ai:claude
                 && weight.is_none();
             let mut editor_title: Option<String> = None;
@@ -3735,6 +3750,47 @@ pub(crate) fn handle_git_backend_command(
                         m.parse().map_err(|e: String| anyhow::anyhow!(e))?;
                     if req.execution_mode != Some(parsed) {
                         req.execution_mode = Some(parsed);
+                        changed = true;
+                    }
+                }
+            }
+            // STORY-634 (ADR-12): the multi-repo origin dimension. An empty
+            // string clears it (drops out of the YAML); any other value must
+            // parse as "repo" or "repo/component" and the repo slug must name
+            // a repo in the workspace manifest — the canonical join-key
+            // vocabulary linkage resolves against.
+            if let Some(o) = origin {
+                if o.trim().is_empty() {
+                    if req.origin.is_some() {
+                        req.origin = None;
+                        changed = true;
+                    }
+                } else {
+                    let parsed =
+                        aida_core::Origin::parse(o).map_err(|e: String| anyhow::anyhow!(e))?;
+                    let project_root = store_path.parent().ok_or_else(|| {
+                        anyhow::anyhow!("cannot derive project root from store path")
+                    })?;
+                    match aida_core::workspace::WorkspaceManifest::discover(project_root) {
+                        Some((_, manifest)) => {
+                            let slugs = manifest.repo_slugs();
+                            if !slugs.iter().any(|s| s.eq_ignore_ascii_case(&parsed.repo)) {
+                                anyhow::bail!(
+                                    "origin repo `{}` is not in the workspace manifest \
+                                     (known repos: {})",
+                                    parsed.repo,
+                                    slugs.join(", ")
+                                );
+                            }
+                        }
+                        None => anyhow::bail!(
+                            "--origin needs a multi-repo workspace manifest \
+                             (.aida-workspace) to validate the repo slug against; \
+                             single-repo stores leave origin unset"
+                        ),
+                    }
+                    if req.origin.as_ref() != Some(&parsed) {
+                        req.origin = Some(parsed);
                         changed = true;
                     }
                 }

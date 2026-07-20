@@ -150,6 +150,7 @@ fn linkage(
         branch: branch.map(|b| b.to_string()),
         worktree: None,
         shipped_pr,
+        repo: None,
     }
 }
 

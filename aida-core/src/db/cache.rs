@@ -76,6 +76,10 @@ pub struct RequirementSummary {
     /// canonical YAML `weight` field; None = unset.
     // trace:FR-283 | ai:claude
     pub weight: Option<f64>,
+    /// The multi-repo origin dimension ("repo" or "repo/component", ADR-12)
+    /// projected from the canonical YAML `origin` field; None = single-repo.
+    // trace:STORY-634 | ai:claude
+    pub origin: Option<String>,
     pub yaml_path: String,
 }
 
@@ -398,7 +402,11 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // only the edges the written record authored instead of destroying the other
 // endpoint's. Existing caches rebuild on next read to re-materialize authored
 // edges. trace:BUG-764 | ai:claude
-const SCHEMA_VERSION: &str = "13";
+// STORY-634: bumped to "14" when the `origin` column was added (projection of
+// the canonical YAML `origin` field — the multi-repo repo/component dimension,
+// ADR-12) so `aida list --fields ...,origin` reads the cache.
+// trace:STORY-634 | ai:claude
+const SCHEMA_VERSION: &str = "14";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -1255,7 +1263,7 @@ impl Cache {
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
                     in_degree, out_degree, heft, yaml_path, assignee, blocked,
-                    has_pending_decision, execution_mode, weight
+                    has_pending_decision, execution_mode, weight, origin
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -1459,7 +1467,8 @@ impl Cache {
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
                           c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
-                          c.blocked, c.has_pending_decision, c.execution_mode, c.weight
+                          c.blocked, c.has_pending_decision, c.execution_mode, c.weight,
+                          c.origin
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1695,6 +1704,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "execution_mode",
     // trace:FR-283 | ai:claude
     "weight",
+    // trace:STORY-634 | ai:claude
+    "origin",
     "yaml_path",
 ];
 
@@ -1970,8 +1981,8 @@ fn insert_one(
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
-            has_pending_decision, execution_mode, weight
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+            has_pending_decision, execution_mode, weight, origin
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -2005,6 +2016,8 @@ fn insert_one(
             req.execution_mode.map(|m| m.to_string()),
             // trace:FR-283 | ai:claude — NULL when unset.
             req.weight.map(|w| w as f64),
+            // trace:STORY-634 | ai:claude — NULL when single-repo.
+            req.origin.as_ref().map(|o| o.to_string()),
         ],
     )?;
 
@@ -2071,6 +2084,8 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         execution_mode: row.get(25)?,
         // trace:FR-283 | ai:claude — column index 26, nullable REAL.
         weight: row.get(26)?,
+        // trace:STORY-634 | ai:claude — column index 27, nullable TEXT.
+        origin: row.get(27)?,
     })
 }
 
@@ -2360,6 +2375,52 @@ mod tests {
                 .map(String::from)
                 .collect::<std::collections::HashSet<_>>(),
         );
+    }
+
+    /// STORY-634: the multi-repo origin dimension round-trips through the
+    /// cache projection as its "repo" / "repo/component" display form, with
+    /// NULL (None) for single-repo rows.
+    // trace:STORY-634 | ai:claude
+    #[test]
+    fn cache_origin_round_trips() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut repo_only = sample_req("FR-1-030", "repo only");
+        repo_only.origin = Some(crate::Origin {
+            repo: "api".into(),
+            component: None,
+        });
+        let mut with_component = sample_req("FR-1-031", "with component");
+        with_component.origin = Some(crate::Origin {
+            repo: "api".into(),
+            component: Some("orchestrator".into()),
+        });
+        let single_repo = sample_req("FR-1-032", "single repo");
+
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([repo_only, with_component, single_repo]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
+        let origin_of = |spec: &str| {
+            rows.iter()
+                .find(|r| r.spec_id.as_deref() == Some(spec))
+                .unwrap()
+                .origin
+                .clone()
+        };
+        assert_eq!(origin_of("FR-1-030").as_deref(), Some("api"));
+        assert_eq!(origin_of("FR-1-031").as_deref(), Some("api/orchestrator"));
+        assert_eq!(origin_of("FR-1-032"), None);
     }
 
     /// FR-283: the numeric weight/score round-trips through the cache

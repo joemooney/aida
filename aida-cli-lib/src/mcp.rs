@@ -1555,6 +1555,11 @@ impl<'a> McpServer<'a> {
         if let Some(mode) = req.execution_mode {
             output.push_str(&format!("**Execution mode:** {}\n", mode));
         }
+        // STORY-634: the multi-repo origin dimension, when set — mirrors
+        // `aida show`. trace:STORY-634 | ai:claude
+        if let Some(origin) = &req.origin {
+            output.push_str(&format!("**Origin:** {}\n", origin));
+        }
         // FR-283: the numeric weight/score, when set — mirrors `aida show`.
         if let Some(w) = req.weight {
             output.push_str(&format!(
@@ -2005,6 +2010,51 @@ impl<'a> McpServer<'a> {
                         parsed
                     ));
                     req.execution_mode = Some(parsed);
+                }
+            }
+        }
+
+        // STORY-634 (ADR-12): origin — the multi-repo repo/component
+        // dimension. An empty string clears; otherwise "repo" or
+        // "repo/component", with the repo slug validated against the
+        // workspace manifest — same rule as the CLI `aida edit --origin`.
+        if let Some(origin_arg) = args.get("origin").and_then(|v| v.as_str()) {
+            if origin_arg.trim().is_empty() {
+                if req.origin.is_some() {
+                    changes.push("origin cleared".to_string());
+                    req.origin = None;
+                }
+            } else {
+                let parsed = aida_core::Origin::parse(origin_arg)?;
+                match aida_core::workspace::WorkspaceManifest::discover(&self.project_root) {
+                    Some((_, manifest)) => {
+                        let slugs = manifest.repo_slugs();
+                        if !slugs.iter().any(|s| s.eq_ignore_ascii_case(&parsed.repo)) {
+                            return Err(format!(
+                                "origin repo `{}` is not in the workspace manifest \
+                                 (known repos: {})",
+                                parsed.repo,
+                                slugs.join(", ")
+                            ));
+                        }
+                    }
+                    None => {
+                        return Err("origin needs a multi-repo workspace manifest \
+                             (.aida-workspace) to validate the repo slug against; \
+                             single-repo stores leave origin unset"
+                            .to_string());
+                    }
+                }
+                if req.origin.as_ref() != Some(&parsed) {
+                    changes.push(format!(
+                        "origin: {} → {}",
+                        req.origin
+                            .as_ref()
+                            .map(|o| o.to_string())
+                            .unwrap_or_else(|| "(unset)".to_string()),
+                        parsed
+                    ));
+                    req.origin = Some(parsed);
                 }
             }
         }
@@ -5763,6 +5813,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 execution_mode: r.execution_mode.map(|m| m.to_string()),
                 // trace:FR-283 | ai:claude
                 weight: r.weight.map(|w| w as f64),
+                // trace:STORY-634 | ai:claude
+                origin: r.origin.as_ref().map(|o| o.to_string()),
                 yaml_path: String::new(),
             }
         })
@@ -6448,6 +6500,11 @@ pub fn tool_descriptors() -> Value {
                         "description": "The advisor's bless-time classification of HOW this spec runs when dispatched by `aida do` (STORY-776). ADVISOR-AUTHORITY WRITE: refused unless this MCP server was launched from an advisor seat (AIDA_SESSION_ROLE=advisor) — same gate as the CLI `aida edit --mode`. An empty string clears back to ungroomed.",
                         "enum": ["drain", "drive", "guided", "operator", "decide", ""],
                         "example": "drive"
+                    },
+                    "origin": {
+                        "type": "string",
+                        "description": "Where this spec's code lives in a multi-repo shared-store workspace: a repo slug from the workspace manifest, optionally with a component (\"repo\" or \"repo/component\"). Requires a .aida-workspace manifest; the repo slug must name one of its repos. An empty string clears (back to single-repo semantics). Mirrors `aida edit --origin`.",
+                        "example": "api/orchestrator"
                     },
                     "weight": {
                         "type": ["number", "null"],

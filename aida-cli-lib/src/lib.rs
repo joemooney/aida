@@ -912,6 +912,8 @@ const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "blocked",
     // trace:STORY-776 | ai:claude — the advisor's dispatch classification.
     "mode",
+    // trace:STORY-634 | ai:claude — the multi-repo repo/component dimension.
+    "origin",
 ];
 
 /// Resolve the requested `--fields` selection for agent-mode `aida list` into a
@@ -1000,6 +1002,8 @@ fn toon_list_cell(
         "blocked" => blocked.to_string(),
         // trace:STORY-776 | ai:claude — empty cell = ungroomed.
         "mode" => r.execution_mode.clone().unwrap_or_default(),
+        // trace:STORY-634 | ai:claude — empty cell = single-repo.
+        "origin" => r.origin.clone().unwrap_or_default(),
         _ => String::new(),
     }
 }
@@ -3313,6 +3317,9 @@ fn run() -> Result<()> {
             test_coverage_notes: _,
             // STORY-776: execution_mode is git-canonical only, same rule.
             mode: _,
+            // STORY-634: the multi-repo origin dimension is git-canonical
+            // only, same rule.
+            origin: _,
             // FR-283: the numeric weight is git-canonical only, same rule.
             weight: _,
         } => {
@@ -9654,6 +9661,18 @@ fn detect_multi_repo_shared_store(from: &std::path::Path) -> Option<Vec<String>>
         })
         .collect();
     Some(others)
+}
+
+/// Resolve the workspace repo slug for the repo containing `from` — the
+/// canonical `origin.repo` join key (ADR-12) shared by specs and every
+/// linkage artifact. `None` when no `.aida-workspace` manifest is
+/// discoverable, or when `from` sits outside every manifest repo: the
+/// single-repo case, where linkage stays unqualified (legacy bare-SHA
+/// semantics, zero behavior change).
+// trace:STORY-634 | ai:claude
+fn workspace_repo_slug(from: &std::path::Path) -> Option<String> {
+    let (workspace_root, manifest) = aida_core::workspace::WorkspaceManifest::discover(from)?;
+    manifest.repo_slug_containing(&workspace_root, from)
 }
 
 /// BUG-568: emit ONE clear stderr warning that a completion/linkage scan
@@ -41784,6 +41803,11 @@ pub(crate) struct GitLinkage {
     pub(crate) worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
     pub(crate) shipped_pr: Option<u64>,
+    /// Workspace repo slug this linkage was scanned from (ADR-12 D5: the
+    /// `origin.repo` join key qualifying commits/branch/PR). `None` in the
+    /// single-repo case — rendering stays unqualified, unchanged.
+    // trace:STORY-634 | ai:claude
+    pub(crate) repo: Option<String>,
 }
 
 /// TASK-241: collect the git linkage for `ids` — commits referencing the
@@ -42028,6 +42052,8 @@ pub(crate) fn collect_git_linkage_opts(
         branch,
         worktree,
         shipped_pr,
+        // trace:STORY-634 | ai:claude — the scanned repo's workspace slug.
+        repo: workspace_repo_slug(project_root),
     }
 }
 
@@ -42052,6 +42078,8 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
         branch,
         worktree,
         shipped_pr,
+        // trace:STORY-634 | ai:claude
+        repo,
     } = collect_git_linkage(project_root, ids);
 
     if commits.is_empty() && files.is_empty() {
@@ -42119,21 +42147,40 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
         };
 
         if shipped {
-            render(
-                format_change_linkage(forge, &ChangeLinkageState::Shipped { number: shipped_pr }),
-                None,
-            );
+            let mut lines =
+                format_change_linkage(forge, &ChangeLinkageState::Shipped { number: shipped_pr });
+            // STORY-634 (ADR-12 D5): in a multi-repo workspace a bare change
+            // number / "merged to main" is ambiguous — qualify both with the
+            // scanned repo's slug ("api#141"). Single-repo (`repo` = None)
+            // renders exactly as before.
+            if let Some(slug) = repo.as_deref() {
+                for (label, value) in lines.iter_mut() {
+                    if label == "Branch" {
+                        *value = format!("{value} ({slug})");
+                    } else if let Some(num) = shipped_pr {
+                        *value = format!("{slug}#{num}");
+                    }
+                }
+            }
+            render(lines, None);
         } else {
             match branch.as_deref() {
                 Some(b) => {
                     let wt = worktree
                         .map(|p| format!(" (worktree: {})", p))
                         .unwrap_or_default();
+                    // STORY-634: name the repo the branch lives in when the
+                    // store spans a multi-repo workspace; empty otherwise.
+                    let repo_note = repo
+                        .as_deref()
+                        .map(|slug| format!(" · repo: {slug}"))
+                        .unwrap_or_default();
                     println!(
-                        "  {}     {}{} · {}",
+                        "  {}     {}{}{} · {}",
                         "Branch".bold(),
                         b.cyan(),
                         wt,
+                        repo_note,
                         "in flight".yellow()
                     );
                     // STORY-516: forge-routed lookup → STORY-511 forge-aware
@@ -55679,6 +55726,10 @@ fn apply_auto_bump_flip(
     // spec was completed manually — don't stamp `Some("")`.
     if info.completion_sha.is_none() && !flip.sha.is_empty() {
         info.completion_sha = Some(flip.sha.clone());
+        // STORY-634 (ADR-12 D2/D5): qualify the record, not the SHA — stamp
+        // the workspace repo slug the completing commit landed in as a sibling
+        // to completion_sha. None (single-repo, no manifest) stays absent.
+        info.completion_repo = workspace_repo_slug(project_root);
     }
     // STORY-582: capture the durable processing record. Idempotent on the
     // completing SHA (re-runs of the bump don't stack duplicates).
@@ -55696,6 +55747,7 @@ fn apply_stale_review_flip(
     sha: &str,
     pr_n: u64,
     now: chrono::DateTime<chrono::Utc>,
+    project_root: &std::path::Path,
 ) -> bool {
     if !matches!(
         r.status,
@@ -55723,6 +55775,9 @@ fn apply_stale_review_flip(
     info.completed_at.get_or_insert(now);
     if info.completion_sha.is_none() && !sha.is_empty() {
         info.completion_sha = Some(sha.to_string());
+        // STORY-634 (ADR-12 D2/D5): same repo-slug qualifier as the
+        // auto-bump stamp; absent in the single-repo case.
+        info.completion_repo = workspace_repo_slug(project_root);
     }
     r.add_comment(aida_core::Comment::new(
         "aida-auto-bump".to_string(),
@@ -56035,7 +56090,7 @@ fn auto_bump_done_to_completed(
             let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
                 continue;
             };
-            if apply_stale_review_flip(&mut r, sha, *pr_n, now) {
+            if apply_stale_review_flip(&mut r, sha, *pr_n, now, project_root) {
                 backend.update_requirement(&r)?;
             }
         }
@@ -56069,7 +56124,7 @@ fn auto_bump_done_to_completed(
                     .iter_mut()
                     .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
                 {
-                    apply_stale_review_flip(r, sha, *pr_n, now);
+                    apply_stale_review_flip(r, sha, *pr_n, now, project_root);
                 }
             }
         })?;

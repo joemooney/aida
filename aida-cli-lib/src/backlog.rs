@@ -1270,6 +1270,7 @@ mod tests {
             dependencies: Vec::new(),
             tags: t,
             weight: None,
+            origin: None,
             relationships: Vec::new(),
             comments: Vec::new(),
             history: Vec::new(),

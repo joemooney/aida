@@ -7521,6 +7521,14 @@ pub enum Command {
         #[clap(long = "mode", value_name = "MODE")]
         mode: Option<String>,
 
+        // trace:STORY-634 | ai:claude
+        /// Set where this spec's code lives in a multi-repo shared-store
+        /// workspace: a repo slug from the workspace manifest, optionally
+        /// with a component ("repo" or "repo/component"). Pass an empty
+        /// string to clear (back to single-repo semantics).
+        #[clap(long = "origin", value_name = "REPO[/COMPONENT]")]
+        origin: Option<String>,
+
         /// Set the numeric weight/score (any finite number, e.g. 0.75 or 42)
         /// — a continuous ranking signal beyond the high/medium/low priority
         /// enum. Pass an empty string to clear.

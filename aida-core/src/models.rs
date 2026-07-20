@@ -609,6 +609,74 @@ impl std::str::FromStr for ExecutionMode {
     }
 }
 
+/// Where a requirement's code lives in a multi-repo shared-store workspace
+/// (ADR-12): one hierarchical dimension with two levels — a workspace `repo`
+/// contains optional finer-grained `component`s. The `repo` slug is the single
+/// canonical join key shared by the spec and every linkage artifact
+/// (completion record, commit set, branch, PR), so cross-repo provenance is
+/// unambiguous. Absent (`None` on `Requirement.origin`) = single-repo store —
+/// the default; existing stores round-trip unchanged.
+// trace:STORY-634 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+pub struct Origin {
+    /// Canonical repo slug, workspace-local (e.g. "api", "web"). Matches a
+    /// repo entry in the workspace manifest (`.aida-workspace`); validated as
+    /// a lowercase slug so it is stable as a map key and a filter value.
+    pub repo: String,
+    /// Optional finer-grained component within the repo (e.g. "orchestrator").
+    /// Free-form within the repo; `None` = the whole repo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub component: Option<String>,
+}
+
+impl Origin {
+    /// Parse `repo` or `repo/component` into an `Origin`, enforcing the
+    /// lowercase-slug constraint on both parts (ASCII lowercase letters,
+    /// digits, `-`, `_`, `.`; at least one alphanumeric). Membership of the
+    /// repo slug in the workspace manifest is the caller's check — the
+    /// manifest is not visible from the model layer.
+    pub fn parse(s: &str) -> Result<Self, String> {
+        fn check_slug(part: &str, what: &str) -> Result<(), String> {
+            if part.is_empty() {
+                return Err(format!("origin {what} must not be empty"));
+            }
+            if !part
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-_.".contains(c))
+                || !part.chars().any(|c| c.is_ascii_alphanumeric())
+            {
+                return Err(format!(
+                    "origin {what} `{part}` must be a lowercase slug \
+                     (letters, digits, `-`, `_`, `.`)"
+                ));
+            }
+            Ok(())
+        }
+        let s = s.trim();
+        let (repo, component) = match s.split_once('/') {
+            Some((r, c)) => (r.trim(), Some(c.trim())),
+            None => (s, None),
+        };
+        check_slug(repo, "repo")?;
+        if let Some(c) = component {
+            check_slug(c, "component")?;
+        }
+        Ok(Origin {
+            repo: repo.to_string(),
+            component: component.map(str::to_string),
+        })
+    }
+}
+
+impl fmt::Display for Origin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.component {
+            Some(c) => write!(f, "{}/{}", self.repo, c),
+            None => write!(f, "{}", self.repo),
+        }
+    }
+}
+
 /// Represents the type of a requirement
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum RequirementType {
@@ -3223,6 +3291,16 @@ pub struct ImplementationInfo {
     /// trace:STORY-86 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion_sha: Option<String>,
+
+    /// The workspace repo slug the `completion_sha` commit landed in — the
+    /// sibling qualifier that makes a bare SHA resolvable in a multi-repo
+    /// shared-store workspace (ADR-12: qualify the record, not the SHA).
+    /// Stamped alongside `completion_sha` by the auto-bump path when a
+    /// workspace manifest is present. `None` = single-repo / legacy: resolve
+    /// against the sole repo, the current behavior.
+    // trace:STORY-634 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_repo: Option<String>,
 }
 
 impl ImplementationInfo {
@@ -3952,6 +4030,15 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_mode: Option<ExecutionMode>,
 
+    // trace:STORY-634 | ai:claude
+    /// Where this requirement's code lives in a multi-repo shared-store
+    /// workspace (ADR-12): a workspace repo slug plus an optional component
+    /// within it. `None` = single-repo store (the default; existing stores
+    /// round-trip unchanged). The `repo` slug is the canonical join key
+    /// qualifying this spec's linkage artifacts. Optional, serde-default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Origin>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4211,6 +4298,8 @@ impl Requirement {
             implementation_summary: None,
             // trace:STORY-776 | ai:claude
             execution_mode: None,
+            // trace:STORY-634 | ai:claude
+            origin: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
@@ -7267,6 +7356,118 @@ req_type: Task
 
         let ranks: Vec<Option<u8>> = ExecutionMode::ALL.iter().map(|m| m.ladder_rank()).collect();
         assert_eq!(ranks, vec![Some(0), Some(1), Some(2), Some(3), None]);
+    }
+
+    /// STORY-634 (ADR-12 D1/D3): `origin` is additive and serde-default.
+    /// Legacy YAML without the key deserializes to `None`; unset does not
+    /// serialize (existing single-repo stores round-trip byte-unchanged);
+    /// once set it round-trips, with and without the component level.
+    // trace:STORY-634 | ai:claude
+    #[test]
+    fn requirement_origin_is_backward_compatible() {
+        let legacy_yaml = "\
+id: 018f0000-0000-7000-8000-000000000000
+title: legacy spec
+description: filed before origin existed
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-01-01T00:00:00Z
+modified_at: 2026-01-01T00:00:00Z
+req_type: Task
+";
+        let back: Requirement = serde_yaml::from_str(legacy_yaml).unwrap();
+        assert!(back.origin.is_none());
+
+        let mut r = Requirement::new("t".into(), "d".into());
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(!yaml.contains("origin"));
+
+        // Repo-only origin round-trips; the absent component stays absent.
+        r.origin = Some(Origin::parse("api").unwrap());
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(yaml.contains("origin:"));
+        assert!(yaml.contains("repo: api"));
+        assert!(!yaml.contains("component"));
+        let back: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back.origin, r.origin);
+
+        // Repo + component round-trips.
+        r.origin = Some(Origin::parse("api/orchestrator").unwrap());
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(yaml.contains("component: orchestrator"));
+        let back: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back.origin, r.origin);
+        assert_eq!(back.origin.unwrap().to_string(), "api/orchestrator");
+
+        // Forward-compat for old binaries: `Requirement` tolerates unknown
+        // keys (no deny_unknown_fields), which is exactly how a pre-origin
+        // binary reads a store already carrying `origin:` — graceful
+        // degradation, no crash. Prove the mechanism with a key this binary
+        // does not know.
+        let future_yaml = format!("{yaml}some_future_field: whatever\n");
+        let back: Requirement = serde_yaml::from_str(&future_yaml).unwrap();
+        assert_eq!(back.origin.as_ref().map(|o| o.repo.as_str()), Some("api"));
+    }
+
+    /// STORY-634: `Origin::parse` accepts `repo` / `repo/component` lowercase
+    /// slugs and rejects empty or non-slug parts.
+    // trace:STORY-634 | ai:claude
+    #[test]
+    fn origin_parse_validates_slugs() {
+        assert_eq!(
+            Origin::parse("web").unwrap(),
+            Origin {
+                repo: "web".into(),
+                component: None
+            }
+        );
+        assert_eq!(
+            Origin::parse(" api / orchestrator ").unwrap(),
+            Origin {
+                repo: "api".into(),
+                component: Some("orchestrator".into())
+            }
+        );
+        assert_eq!(
+            Origin::parse("my-repo.v2").unwrap().to_string(),
+            "my-repo.v2"
+        );
+        assert!(Origin::parse("").is_err());
+        assert!(Origin::parse("api/").is_err());
+        assert!(Origin::parse("/orchestrator").is_err());
+        assert!(Origin::parse("API").is_err());
+        assert!(Origin::parse("has space").is_err());
+        assert!(Origin::parse("---").is_err());
+    }
+
+    /// STORY-634 (ADR-12 D2/D5): `completion_repo` is an additive sibling to
+    /// `completion_sha`. Legacy YAML without the key deserializes to `None`;
+    /// unset does not serialize; once set it round-trips.
+    // trace:STORY-634 | ai:claude
+    #[test]
+    fn implementation_info_completion_repo_is_backward_compatible() {
+        let legacy_yaml = "\
+implemented: true
+completed_at: 2026-01-01T00:00:00Z
+completion_sha: 0123456789abcdef0123456789abcdef01234567
+";
+        let back: ImplementationInfo = serde_yaml::from_str(legacy_yaml).unwrap();
+        assert!(back.completion_repo.is_none());
+        assert!(back.completion_sha.is_some());
+
+        let mut info = ImplementationInfo::default();
+        let yaml = serde_yaml::to_string(&info).unwrap();
+        assert!(!yaml.contains("completion_repo"));
+
+        info.completion_sha = Some("0123456789abcdef0123456789abcdef01234567".into());
+        info.completion_repo = Some("api".into());
+        let yaml = serde_yaml::to_string(&info).unwrap();
+        assert!(yaml.contains("completion_repo: api"));
+        let back: ImplementationInfo = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back.completion_repo.as_deref(), Some("api"));
+        assert_eq!(back.completion_sha, info.completion_sha);
     }
 
     /// BUG-251: forward-compat — an unknown `RelationshipType` variant (a newer

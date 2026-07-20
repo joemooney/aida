@@ -40,6 +40,19 @@ pub struct WorkspaceRepo {
     pub name: String,
 }
 
+impl WorkspaceRepo {
+    /// The repo's canonical slug — the `origin.repo` join key (ADR-12): the
+    /// display name when set, else the directory path.
+    // trace:STORY-634 | ai:claude
+    pub fn slug(&self) -> &str {
+        if self.name.is_empty() {
+            &self.path
+        } else {
+            &self.name
+        }
+    }
+}
+
 fn default_store_path() -> String {
     "aida-store".into()
 }
@@ -92,6 +105,26 @@ impl WorkspaceManifest {
         crate::write_atomic(&path, content)
             .with_context(|| format!("Failed to write {}", path.display()))?;
         Ok(())
+    }
+
+    /// All repo slugs in manifest order — the valid `origin.repo` vocabulary
+    /// (ADR-12) a spec's origin must resolve against.
+    // trace:STORY-634 | ai:claude
+    pub fn repo_slugs(&self) -> Vec<&str> {
+        self.repos.iter().map(|r| r.slug()).collect()
+    }
+
+    /// Resolve the slug of the workspace repo containing `dir`, if any.
+    /// Canonicalizes both sides so a symlinked/relative path still matches.
+    /// This is the stamp source for repo-qualified linkage (ADR-12 D5): the
+    /// same slug vocabulary as `repo_slugs`.
+    // trace:STORY-634 | ai:claude
+    pub fn repo_slug_containing(&self, workspace_root: &Path, dir: &Path) -> Option<String> {
+        let here = dir.canonicalize().ok()?;
+        self.repos.iter().find_map(|r| {
+            let repo_abs = workspace_root.join(&r.path).canonicalize().ok()?;
+            here.starts_with(&repo_abs).then(|| r.slug().to_string())
+        })
     }
 
     /// Add a repo to the workspace.
@@ -253,6 +286,36 @@ mod tests {
         std::fs::create_dir_all(&sub).unwrap();
         let (root2, _) = WorkspaceManifest::discover(&sub).unwrap();
         assert_eq!(root2, dir.path());
+    }
+
+    /// STORY-634: the repo slug vocabulary (name-else-path) and resolving
+    /// which repo contains a directory — the `origin.repo` join key source.
+    // trace:STORY-634 | ai:claude
+    #[test]
+    fn test_repo_slugs_and_containing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("api/src")).unwrap();
+        std::fs::create_dir_all(dir.path().join("web-dir")).unwrap();
+
+        let mut manifest = WorkspaceManifest {
+            name: "test".into(),
+            ..Default::default()
+        };
+        manifest.add_repo("api", "");
+        manifest.add_repo("web-dir", "web");
+        assert_eq!(manifest.repo_slugs(), vec!["api", "web"]);
+
+        // Inside a repo (nested) resolves to its slug; the workspace root
+        // itself is in no repo.
+        assert_eq!(
+            manifest.repo_slug_containing(dir.path(), &dir.path().join("api/src")),
+            Some("api".to_string())
+        );
+        assert_eq!(
+            manifest.repo_slug_containing(dir.path(), &dir.path().join("web-dir")),
+            Some("web".to_string())
+        );
+        assert_eq!(manifest.repo_slug_containing(dir.path(), dir.path()), None);
     }
 
     #[test]

@@ -338,6 +338,11 @@ pub fn merge_spec_three_way(
         &theirs.execution_mode,
         ours_is_winner,
     );
+    // STORY-634: the multi-repo origin dimension set (or cleared) on only one
+    // side of a divergent sync survives the merge instead of being clobbered
+    // by the object-level winner snapshot — same rule as execution_mode.
+    merged.origin =
+        merge_scalar(&base.origin, &ours.origin, &theirs.origin, ours_is_winner).clone();
 
     // History: union by entry id, deterministic order. base contributes
     // nothing new (append-only ⇒ ours+theirs ⊇ base) but we fold it in too so
@@ -1915,6 +1920,38 @@ mod tests {
                 merged.execution_mode,
                 Some(crate::ExecutionMode::Guided),
                 "advisor-set execution_mode lost in sync merge"
+            );
+            assert_eq!(merged.owner, "bob");
+        }
+    }
+
+    // STORY-634 — the multi-repo origin dimension set on only one side of a
+    // divergent sync survives the merge regardless of which side wins the
+    // object-level tie-break; a later concurrent unrelated edit does not
+    // clobber it back to None. trace:STORY-634 | ai:claude
+    #[test]
+    fn test_merge_origin_survives_one_sided_set() {
+        let mut base = make_req("Base", "Draft");
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let origin = crate::Origin {
+            repo: "api".to_string(),
+            component: Some("orchestrator".to_string()),
+        };
+        let mut a = base.clone();
+        a.origin = Some(origin.clone());
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert_eq!(
+                merged.origin,
+                Some(origin.clone()),
+                "origin lost in sync merge"
             );
             assert_eq!(merged.owner, "bob");
         }
