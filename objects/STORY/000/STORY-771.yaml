@@ -3,12 +3,12 @@ spec_id: STORY-771
 agreed_id: STORY-771
 title: 'SPIKE-78 follow-up: extract the keystone command handlers (pr/mcp/orchestrator/drain/queue/status/solo/zen) out of main.rs'
 description: 'The handler clusters deliberately left inline during the SPIKE-78 safe sweep: pr, mcp, orchestrator, zen, drain, and the queue/status/solo cluster (~visible via grep handle_pr/mcp/queue/etc). High-churn, high-blast-radius surfaces — extract under supervision one cluster per PR, same pure-movement discipline as the safe set (union-of-removals imports, cargo fmt in place, env -u AIDA_SESSION_ROLE test, combined-main green per merge). Removes a few more K of live code from main.rs.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:42.718647193Z
-modified_at: 2026-07-20T07:09:57.235339732Z
+modified_at: 2026-07-20T07:26:56.165939582Z
 req_type: Story
 tags:
 - batch:guided-0719
@@ -35,3 +35,7 @@ comments:
   modified_at: 2026-07-20T02:45:13.148326017Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-20T07:26:56.165939582Z
+  implemented_by: joe
