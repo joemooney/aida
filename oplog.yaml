@@ -35930,5 +35930,17 @@ operations:
     req_type: Decision
     status: Draft
     priority: Medium
-clock: 3331
+- id: 019f7d2f-9f55-7850-95e4-e012667f4a19
+  target_id: 019f7d2f-9c12-7c61-92fe-9b52c0b82634
+  author: aida
+  node_id: '1'
+  lamport: 3332
+  timestamp: 2026-07-20T01:41:40.821068366Z
+  kind: !Create
+    title: Focused context = universal discipline + subsystem overlay; explicit focus beats inference (ratifies PROPOSAL-subsystem-focus-context-loading)
+    description: 'Operator ratified 2026-07-19: context loading always includes universal project orientation and the owning requirement graph; subsystem focus adds/prioritizes but never hides; inference order = explicit session/queue focus > explicit tags > metadata > worktree path. Delivers TASK-0436.'
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3332
 node_id: '1'

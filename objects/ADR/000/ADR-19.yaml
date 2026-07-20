@@ -1,0 +1,14 @@
+id: 019f7d2f-9c12-7c61-92fe-9b52c0b82634
+spec_id: ADR-19
+agreed_id: ADR-19
+title: Focused context = universal discipline + subsystem overlay; explicit focus beats inference (ratifies PROPOSAL-subsystem-focus-context-loading)
+description: 'Operator ratified 2026-07-19: context loading always includes universal project orientation and the owning requirement graph; subsystem focus adds/prioritizes but never hides; inference order = explicit session/queue focus > explicit tags > metadata > worktree path. Delivers TASK-0436.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-20T01:41:39.986528547Z
+modified_at: 2026-07-20T01:41:39.986528547Z
+req_type: Decision
+tags:
+- adr subsystems from-ratification
