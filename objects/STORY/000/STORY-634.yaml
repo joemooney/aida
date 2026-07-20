@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T07:40:44.779244297Z
-modified_at: 2026-07-20T02:54:24.393519103Z
+modified_at: 2026-07-20T02:54:28.742419502Z
 req_type: Story
 tags:
 - aida:workspace
@@ -21,3 +21,4 @@ tags:
 - multi-repo
 - parent:SPIKE-62
 - schema
+execution_mode: drive
