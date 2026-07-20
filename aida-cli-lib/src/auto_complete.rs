@@ -778,6 +778,60 @@ pub(crate) fn gh_verify_backoff_schedule(retries: usize) -> Vec<std::time::Durat
         .collect()
 }
 
+/// TASK-975: what phase 2 does with a red-CI failure — attempt one bounded
+/// in-drain fix cycle, or let the failure fall through to the EPIC-28 shelve.
+// trace:TASK-975 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RedCiAction {
+    /// Spawn one headless fix session (`attempt` is 1-based), push its fix,
+    /// and re-poll CI.
+    AttemptFix { attempt: usize },
+    /// The budget is exhausted, the feature is off (budget 0, the default),
+    /// or the failure is not a red terminal CI run — proceed to shelve.
+    Shelve,
+}
+
+/// TASK-975: pure retry-or-shelve decision for the CI auto-fix loop. Only a
+/// genuinely *red* terminal CI run ([`FailureKind::CiRed`]) is fixable by
+/// editing code — a CI timeout, a spawn error, or an internal fault is not
+/// "failing checks", so those always shelve. `budget` comes from
+/// `[drain] ci_auto_fix` (default 0 = off); `attempts_made` is how many fix
+/// cycles already ran this phase, so the loop is bounded by construction.
+/// Pure so the decision is pinned by unit tests.
+// trace:TASK-975 | ai:claude
+pub(crate) fn red_ci_action(budget: usize, attempts_made: usize, kind: FailureKind) -> RedCiAction {
+    if kind != FailureKind::CiRed || attempts_made >= budget {
+        return RedCiAction::Shelve;
+    }
+    RedCiAction::AttemptFix {
+        attempt: attempts_made + 1,
+    }
+}
+
+/// TASK-975: does a phase-4 merge failure read as a merge *conflict* (the
+/// base moved under the PR so the squash cannot apply), as opposed to any
+/// other merge failure (auth, network, branch protection)? Matched against
+/// the `gh pr merge` error text carried in the failure reason. Conservative:
+/// only a conflict is rebase-recoverable, so anything unrecognized is not.
+// trace:TASK-975 | ai:claude
+pub(crate) fn is_merge_conflict_failure(reason: &str) -> bool {
+    let r = reason.to_ascii_lowercase();
+    r.contains("not mergeable")
+        || r.contains("merge conflict")
+        || r.contains("merge commit cannot be cleanly created")
+        || r.contains("conflicts must be resolved")
+}
+
+/// TASK-975: pure gate for the in-drain merge-conflict rebase — attempt it
+/// only when the feature is opted in (`budget > 0`, the same `[drain]
+/// ci_auto_fix` knob that arms the CI-fix loop), the failure reads as a
+/// conflict, and no rebase was already attempted this phase (one rebase +
+/// one merge retry, then shelve — bounded by construction).
+// trace:TASK-975 | ai:claude
+pub(crate) fn should_attempt_conflict_rebase(budget: usize, attempted: bool, reason: &str) -> bool {
+    budget > 0 && !attempted && is_merge_conflict_failure(reason)
+}
+
 /// The outcome of phase 3 — the reviewer session. The reviewer either
 /// reaches a [`Verdict`] (the normal path — `Approved` continues to merge,
 /// anything else stops the pipeline), or *escalates the merge decision to a
@@ -1145,6 +1199,44 @@ pub(crate) trait PhaseDriver {
         _recovery_hint: &str,
     ) -> anyhow::Result<Option<aida_core::FailureReason>> {
         Ok(None)
+    }
+
+    /// TASK-975: the CI auto-fix budget — how many in-drain fix cycles phase 2
+    /// may attempt on a red CI run before the failure proceeds to the EPIC-28
+    /// shelve. The default `0` keeps the feature OFF: red CI shelves
+    /// immediately, exactly the pre-TASK-975 behaviour. `RealPhaseDriver`
+    /// resolves it from `[drain] ci_auto_fix` in `.aida/config.toml` (env
+    /// override `AIDA_CI_AUTO_FIX`). The same knob arms the phase-4
+    /// merge-conflict rebase.
+    // trace:TASK-975 | ai:claude
+    fn ci_fix_budget(&self) -> usize {
+        0
+    }
+
+    /// TASK-975: attempt ONE in-drain CI fix cycle — spawn a headless fix
+    /// session with the failing-check log + spec context in the still-leased
+    /// implementer worktree, which commits and pushes a fix to the PR branch.
+    /// Returns `true` when a fix was pushed (the orchestrator loops back to
+    /// [`Self::finish_ci`] to re-poll CI on the new head) and `false` when no
+    /// fix could be attempted or nothing was pushed (the original red-CI
+    /// failure proceeds to shelve). The default is `false` so a driver
+    /// without the capability behaves exactly as before.
+    // trace:TASK-975 | ai:claude
+    fn attempt_ci_fix(&mut self, _attempt: usize, _budget: usize, _failure: &PhaseFailure) -> bool {
+        false
+    }
+
+    /// TASK-975: attempt ONE in-drain rebase of the PR branch after a
+    /// merge-conflict phase-4 failure (reusing the same `aida pr rebase <N>
+    /// --no-smoke` subprocess as the STORY-429 phase-3 auto-rebase). Returns
+    /// `true` when the rebase landed cleanly and was pushed — the
+    /// orchestrator retries the merge exactly once — and `false` when the
+    /// rebase itself conflicted or failed (the original failure proceeds to
+    /// shelve). The default is `false` so a driver without the capability
+    /// behaves exactly as before.
+    // trace:TASK-975 | ai:claude
+    fn attempt_merge_conflict_rebase(&mut self, _failure: &PhaseFailure) -> bool {
+        false
     }
 }
 
@@ -2939,9 +3031,40 @@ pub(crate) fn orchestrate_with_resume(
     } else {
         emit_start(Phase::Ci, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
-        if let Err(f) = driver.finish_ci() {
-            durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
-            return resolve_phase_failure(driver, Phase::Ci, spec, json, &start, &f, durations);
+        // TASK-975: bounded CI auto-fix loop. On a red CI run an opted-in
+        // drain (`[drain] ci_auto_fix = N`) spawns up to N headless fix
+        // sessions — each edits in the implementer worktree, pushes, and the
+        // loop re-polls CI — before the failure falls through to the EPIC-28
+        // shelve. Budget 0 (the default) is identical to the old single
+        // attempt; shelve stays the terminal fallback either way.
+        // trace:TASK-975 | ai:claude
+        let mut ci_fix_attempts = 0usize;
+        loop {
+            match driver.finish_ci() {
+                Ok(()) => break,
+                Err(f) => {
+                    let budget = driver.ci_fix_budget();
+                    if let RedCiAction::AttemptFix { attempt } =
+                        red_ci_action(budget, ci_fix_attempts, f.kind)
+                    {
+                        ci_fix_attempts = attempt;
+                        if driver.attempt_ci_fix(attempt, budget, &f) {
+                            // A fix was pushed — re-poll CI on the new head.
+                            continue;
+                        }
+                    }
+                    durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Ci,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+            }
         }
         durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
         emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
@@ -3037,9 +3160,40 @@ pub(crate) fn orchestrate_with_resume(
     } else {
         emit_start(Phase::Merge, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
-        if let Err(f) = driver.merge() {
-            durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
-            return resolve_phase_failure(driver, Phase::Merge, spec, json, &start, &f, durations);
+        // TASK-975: in-drain merge-conflict rebase. When the merge fails
+        // because the base moved under the PR (a conflict), an opted-in drain
+        // (`[drain] ci_auto_fix > 0`) attempts ONE clean rebase (the same
+        // `pr rebase --no-smoke` subprocess as the STORY-429 phase-3
+        // auto-rebase) and retries the merge exactly once before the failure
+        // falls through to shelve. trace:TASK-975 | ai:claude
+        let mut conflict_rebase_attempted = false;
+        loop {
+            match driver.merge() {
+                Ok(()) => break,
+                Err(f) => {
+                    if should_attempt_conflict_rebase(
+                        driver.ci_fix_budget(),
+                        conflict_rebase_attempted,
+                        &f.reason,
+                    ) {
+                        conflict_rebase_attempted = true;
+                        if driver.attempt_merge_conflict_rebase(&f) {
+                            // Rebased clean — retry the merge once.
+                            continue;
+                        }
+                    }
+                    durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Merge,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+            }
         }
         durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
         emit_done(Phase::Merge, spec, json, start.elapsed().as_millis());
@@ -4299,6 +4453,26 @@ mod tests {
         /// `None` (default) ⇒ the spec is drivable.
         // trace:BUG-657 | ai:claude
         terminal: Option<&'static str>,
+        /// TASK-975: what `ci_fix_budget` returns — the `[drain] ci_auto_fix`
+        /// budget. `0` (default) keeps the auto-fix loop off.
+        ci_fix_budget: usize,
+        /// TASK-975: how many times `finish_ci` fails with a red-CI
+        /// `PhaseFailure` before going green (decrements per call).
+        ci_red_failures: usize,
+        /// TASK-975: what `attempt_ci_fix` returns — did the fix session
+        /// push a change?
+        ci_fix_pushes: bool,
+        /// TASK-975: every `(attempt, budget)` pair `attempt_ci_fix` was
+        /// called with, so the tests pin the bounded-loop accounting.
+        ci_fix_calls: Vec<(usize, usize)>,
+        /// TASK-975: how many times `merge` fails with a conflict-shaped
+        /// `PhaseFailure` before succeeding (decrements per call).
+        merge_conflicts: usize,
+        /// TASK-975: what `attempt_merge_conflict_rebase` returns — did the
+        /// in-drain rebase land cleanly?
+        conflict_rebase_ok: bool,
+        /// TASK-975: how many times `attempt_merge_conflict_rebase` was called.
+        conflict_rebase_calls: usize,
     }
 
     impl MockPhaseDriver {
@@ -4322,6 +4496,37 @@ mod tests {
                 mark_escalated_calls: 0,
                 shelve_succeeds: false,
                 terminal: None,
+                ci_fix_budget: 0,
+                ci_red_failures: 0,
+                ci_fix_pushes: false,
+                ci_fix_calls: Vec::new(),
+                merge_conflicts: 0,
+                conflict_rebase_ok: false,
+                conflict_rebase_calls: 0,
+            }
+        }
+
+        /// TASK-975: `finish_ci` reports red CI `reds` times before going
+        /// green; `attempt_ci_fix` runs under `budget` and reports
+        /// pushed=`pushes`.
+        fn red_ci_with_fix(reds: usize, budget: usize, pushes: bool) -> Self {
+            Self {
+                ci_red_failures: reds,
+                ci_fix_budget: budget,
+                ci_fix_pushes: pushes,
+                ..Self::base()
+            }
+        }
+
+        /// TASK-975: `merge` fails with a conflict-shaped error `conflicts`
+        /// times before succeeding; `attempt_merge_conflict_rebase` runs under
+        /// `budget` and reports clean=`rebase_ok`.
+        fn merge_conflict_with_rebase(conflicts: usize, budget: usize, rebase_ok: bool) -> Self {
+            Self {
+                merge_conflicts: conflicts,
+                ci_fix_budget: budget,
+                conflict_rebase_ok: rebase_ok,
+                ..Self::base()
             }
         }
 
@@ -4493,7 +4698,17 @@ mod tests {
             }
         }
         fn finish_ci(&mut self) -> Result<(), PhaseFailure> {
-            self.record(Phase::Ci)
+            self.record(Phase::Ci)?;
+            // TASK-975: simulate a red terminal CI run that a pushed fix
+            // (eventually) turns green.
+            if self.ci_red_failures > 0 {
+                self.ci_red_failures -= 1;
+                return Err(PhaseFailure::of(
+                    FailureKind::CiRed,
+                    "CI is red on PR-46: mock failing check",
+                ));
+            }
+            Ok(())
         }
         fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure> {
             self.record(Phase::Reviewer)?;
@@ -4505,7 +4720,15 @@ mod tests {
             }
         }
         fn merge(&mut self) -> Result<(), PhaseFailure> {
-            self.record(Phase::Merge)
+            self.record(Phase::Merge)?;
+            // TASK-975: simulate a merge conflict a clean rebase resolves.
+            if self.merge_conflicts > 0 {
+                self.merge_conflicts -= 1;
+                return Err(PhaseFailure::new(
+                    "`gh pr merge 46` failed: Pull Request is not mergeable",
+                ));
+            }
+            Ok(())
         }
         fn pull(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Pull)
@@ -4568,6 +4791,23 @@ mod tests {
                 shelved_by: None,
                 shelved_at: chrono::Utc::now(),
             }))
+        }
+        // TASK-975: CI auto-fix + merge-conflict rebase hooks.
+        fn ci_fix_budget(&self) -> usize {
+            self.ci_fix_budget
+        }
+        fn attempt_ci_fix(
+            &mut self,
+            attempt: usize,
+            budget: usize,
+            _failure: &PhaseFailure,
+        ) -> bool {
+            self.ci_fix_calls.push((attempt, budget));
+            self.ci_fix_pushes
+        }
+        fn attempt_merge_conflict_rebase(&mut self, _failure: &PhaseFailure) -> bool {
+            self.conflict_rebase_calls += 1;
+            self.conflict_rebase_ok
         }
     }
 
@@ -4748,6 +4988,248 @@ mod tests {
                 Phase::Build,
             ]
         );
+    }
+
+    // --- TASK-975: CI auto-fix loop + in-drain merge-conflict rebase -------
+
+    /// TASK-975: the pure retry-or-shelve decision. Budget 0 (the default —
+    /// feature off) always shelves; a red CI run under budget yields 1-based
+    /// fix attempts until the budget is exhausted; a non-red failure kind
+    /// (timeout, spawn, internal) shelves even with budget left.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn red_ci_action_retry_shelve_decision() {
+        // Default off: budget 0 shelves immediately.
+        assert_eq!(red_ci_action(0, 0, FailureKind::CiRed), RedCiAction::Shelve);
+        // Under budget: 1-based attempts.
+        assert_eq!(
+            red_ci_action(2, 0, FailureKind::CiRed),
+            RedCiAction::AttemptFix { attempt: 1 }
+        );
+        assert_eq!(
+            red_ci_action(2, 1, FailureKind::CiRed),
+            RedCiAction::AttemptFix { attempt: 2 }
+        );
+        // Budget exhausted: shelve is the terminal fallback.
+        assert_eq!(red_ci_action(2, 2, FailureKind::CiRed), RedCiAction::Shelve);
+        // Only a red terminal run is fixable by editing code.
+        for kind in [
+            FailureKind::CiTimeout,
+            FailureKind::Failed,
+            FailureKind::Spawn,
+            FailureKind::Internal,
+        ] {
+            assert_eq!(
+                red_ci_action(3, 0, kind),
+                RedCiAction::Shelve,
+                "{kind:?} must not enter the fix loop"
+            );
+        }
+    }
+
+    /// TASK-975: the merge-conflict classifier recognizes the `gh pr merge`
+    /// conflict spellings and rejects non-conflict merge failures.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn merge_conflict_failure_classifier() {
+        assert!(is_merge_conflict_failure(
+            "`gh pr merge 46` failed: Pull Request is not mergeable"
+        ));
+        assert!(is_merge_conflict_failure(
+            "`gh pr merge 12` failed: pull request #12 is not mergeable: the merge commit cannot be cleanly created"
+        ));
+        assert!(is_merge_conflict_failure(
+            "merge conflict between task-9 and main"
+        ));
+        // Non-conflict merge failures are not rebase-recoverable.
+        assert!(!is_merge_conflict_failure(
+            "`gh pr merge 46` failed: HTTP 502 bad gateway"
+        ));
+        assert!(!is_merge_conflict_failure(
+            "`gh pr merge 46` failed: base branch policy prohibits the merge"
+        ));
+        assert!(!is_merge_conflict_failure("mock failure at Merge"));
+    }
+
+    /// TASK-975: the conflict-rebase gate — armed only by a non-zero budget,
+    /// a conflict-shaped failure, and no prior attempt this phase.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn conflict_rebase_gate_is_bounded_and_opt_in() {
+        let conflict = "`gh pr merge 46` failed: Pull Request is not mergeable";
+        assert!(should_attempt_conflict_rebase(1, false, conflict));
+        // Off by default (budget 0).
+        assert!(!should_attempt_conflict_rebase(0, false, conflict));
+        // One rebase attempt per phase, then shelve.
+        assert!(!should_attempt_conflict_rebase(1, true, conflict));
+        // Not a conflict → not rebase-recoverable.
+        assert!(!should_attempt_conflict_rebase(
+            1,
+            false,
+            "`gh pr merge 46` failed: HTTP 502"
+        ));
+    }
+
+    /// TASK-975: a red CI run whose in-drain fix goes green ships the full
+    /// pipeline — CI polled twice, exactly one fix attempt, no failure.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_red_ci_fixed_in_drain_ships() {
+        let mut driver = MockPhaseDriver::red_ci_with_fix(1, 2, true);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "{:?}", result.failure);
+        assert_eq!(driver.ci_fix_calls, vec![(1, 2)]);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Ci, // re-poll after the pushed fix
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+    }
+
+    /// TASK-975: budget 0 (the default) is the pre-TASK-975 behaviour — a red
+    /// CI run fails phase 2 with no fix attempt.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_red_ci_budget_zero_fails_without_fix_attempt() {
+        let mut driver = MockPhaseDriver::red_ci_with_fix(1, 0, true);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Ci));
+        assert!(driver.ci_fix_calls.is_empty(), "no fix under budget 0");
+    }
+
+    /// TASK-975: the loop is bounded — CI stays red past the budget, the
+    /// fix attempts stop at the budget, and the failure shelves (the EPIC-28
+    /// terminal fallback).
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_red_ci_budget_exhausted_shelves() {
+        let mut driver = MockPhaseDriver::red_ci_with_fix(5, 2, true);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Ci));
+        assert_eq!(driver.ci_fix_calls, vec![(1, 2), (2, 2)], "bounded at 2");
+        assert!(
+            result.shelved_reason.is_some(),
+            "shelve stays the terminal fallback"
+        );
+        assert_eq!(result.process_exit_code(), DRIVE_EXIT_SHELVED);
+    }
+
+    /// TASK-975: a fix session that pushes nothing does not spin the loop —
+    /// the original red-CI failure proceeds straight to the failure path.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_red_ci_fix_pushes_nothing_fails_without_repoll() {
+        let mut driver = MockPhaseDriver::red_ci_with_fix(1, 3, false);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Ci));
+        assert_eq!(driver.ci_fix_calls, vec![(1, 3)], "one attempt, no re-poll");
+        let ci_polls = driver.calls.iter().filter(|p| **p == Phase::Ci).count();
+        assert_eq!(ci_polls, 1, "no re-poll when nothing was pushed");
+    }
+
+    /// TASK-975: a merge conflict resolved by one in-drain rebase retries the
+    /// merge once and ships.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_merge_conflict_rebased_in_drain_ships() {
+        let mut driver = MockPhaseDriver::merge_conflict_with_rebase(1, 1, true);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "{:?}", result.failure);
+        assert_eq!(driver.conflict_rebase_calls, 1);
+        let merges = driver.calls.iter().filter(|p| **p == Phase::Merge).count();
+        assert_eq!(merges, 2, "one retry after the clean rebase");
+    }
+
+    /// TASK-975: a rebase that itself conflicts leaves the merge failure
+    /// standing — one attempt, then the failure path.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_merge_conflict_rebase_fails_leaves_failure_standing() {
+        let mut driver = MockPhaseDriver::merge_conflict_with_rebase(1, 1, false);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Merge));
+        assert_eq!(driver.conflict_rebase_calls, 1);
+        assert!(result.shelved_reason.is_some());
+    }
+
+    /// TASK-975: with the feature off (budget 0) a merge conflict fails phase
+    /// 4 with no rebase attempt — the pre-TASK-975 behaviour.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_merge_conflict_budget_zero_no_rebase() {
+        let mut driver = MockPhaseDriver::merge_conflict_with_rebase(1, 0, true);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Merge));
+        assert_eq!(driver.conflict_rebase_calls, 0);
+    }
+
+    /// TASK-975: a NON-conflict merge failure never triggers the rebase, even
+    /// with budget armed.
+    // trace:TASK-975 | ai:claude
+    #[test]
+    fn orchestrate_merge_non_conflict_failure_no_rebase() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Merge);
+        driver.ci_fix_budget = 2;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Merge));
+        assert_eq!(driver.conflict_rebase_calls, 0);
     }
 
     /// BUG-657: driving an already-COMPLETED spec is a clean NO-OP — the
