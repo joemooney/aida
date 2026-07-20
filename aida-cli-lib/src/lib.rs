@@ -30327,25 +30327,15 @@ fn pr_is_merged_with_sink(
     pr: u32,
     sink: &mut dyn network_retry::RetrySink,
 ) -> Option<bool> {
-    let gh = resolve_gh_binary()?;
-    let pr_str = pr.to_string();
-    let cfg = network_retry::RetryConfig::load(project_root);
-    let label = format!("gh pr view {pr} --json state");
-    let out = network_retry::run_with_retry(&label, &cfg, sink, || {
-        let mut c = std::process::Command::new(&gh);
-        c.current_dir(project_root)
-            .args(["pr", "view", &pr_str, "--json", "state", "-q", ".state"]);
-        c
-    })
-    .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(
-        String::from_utf8_lossy(&out.stdout)
-            .trim()
-            .eq_ignore_ascii_case("merged"),
-    )
+    // STORY-621 Slice 2: routed through Forge::change_metadata so the
+    // reconcile works on GitLab. GitHubForge keeps the resolve_gh_binary +
+    // BUG-286 retry-with-sink behaviour this site had inline; any provider
+    // error (CLI missing / failed / unreachable) maps to None — "cannot
+    // confirm", never a silent success. trace:TASK-963 | ai:claude
+    crate::forge::forge_for(project_root)
+        .change_metadata(pr as u64, sink)
+        .ok()
+        .map(|m| m.state == crate::forge::ChangeState::Merged)
 }
 
 /// BUG-245: which SPEC-ID does the PR's commits actually credit?
@@ -30375,29 +30365,13 @@ fn pr_credited_spec_id_with_sink(
     dispatched: &str,
     sink: &mut dyn network_retry::RetrySink,
 ) -> Option<String> {
-    let gh = resolve_gh_binary()?;
-    let pr_str = pr.to_string();
-    let cfg = network_retry::RetryConfig::load(project_root);
-    let label = format!("gh pr view {pr} --json commits");
-    let out = network_retry::run_with_retry(&label, &cfg, sink, || {
-        let mut c = std::process::Command::new(&gh);
-        c.current_dir(project_root).args([
-            "pr",
-            "view",
-            &pr_str,
-            "--json",
-            "commits",
-            "-q",
-            ".commits[].messageHeadline",
-        ]);
-        c
-    })
-    .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    pick_credited_spec(stdout.as_ref(), dispatched)
+    // STORY-621 Slice 2: routed through Forge::change_commit_headlines
+    // (GitHubForge issues the same `gh pr view --json commits` argv this site
+    // had inline, retry-wrapped). trace:TASK-963 | ai:claude
+    let headlines = crate::forge::forge_for(project_root)
+        .change_commit_headlines(pr as u64, sink)
+        .ok()?;
+    pick_credited_spec(&headlines.join("\n"), dispatched)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30455,40 +30429,31 @@ fn pr_credit_match_with_sink(
         return PrCreditMatch::Dispatched;
     }
 
-    let gh = match resolve_gh_binary() {
-        Some(gh) => gh,
-        None => return PrCreditMatch::Unknown,
+    // STORY-621 Slice 2: routed through the forge metadata reads (BUG-357
+    // reconcile works on GitLab). Commit headlines settle most cases; the PR
+    // title (Forge::change_metadata) is fetched only when the commits leave
+    // the credit Unknown — same precedence as the single gh call this
+    // replaces, paying for the scalar read only when it is load-bearing.
+    // trace:TASK-963 | ai:claude
+    let forge = crate::forge::forge_for(project_root);
+    let subjects = match forge.change_commit_headlines(pr as u64, sink) {
+        Ok(headlines) => headlines.join("\n"),
+        Err(_) => return PrCreditMatch::Unknown,
     };
-    let pr_str = pr.to_string();
-    let cfg = network_retry::RetryConfig::load(project_root);
-    let label = format!("gh pr view {pr} --json title,commits");
-    let out = match network_retry::run_with_retry(&label, &cfg, sink, || {
-        let mut c = std::process::Command::new(&gh);
-        c.current_dir(project_root).args([
-            "pr",
-            "view",
-            &pr_str,
-            "--json",
-            "title,commits",
-            "-q",
-            r#"[.title, (.commits[].messageHeadline)] | @tsv"#,
-        ]);
-        c
-    }) {
-        Ok(out) if out.status.success() => out,
-        _ => return PrCreditMatch::Unknown,
-    };
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let mut fields = stdout.trim_end().split('\t');
-    let title = fields.next().filter(|s| !s.trim().is_empty());
-    let subjects = fields.collect::<Vec<_>>().join("\n");
     match classify_pr_credit(&subjects, None, dispatched) {
         PrCreditMatch::Dispatched => PrCreditMatch::Dispatched,
         PrCreditMatch::Other(id) => PrCreditMatch::Other(id),
-        PrCreditMatch::Unknown => match classify_pr_credit("", title, dispatched) {
-            PrCreditMatch::Unknown => initial_title_match,
-            title_match => title_match,
-        },
+        PrCreditMatch::Unknown => {
+            let fetched_title = forge
+                .change_metadata(pr as u64, sink)
+                .ok()
+                .map(|m| m.title)
+                .filter(|t| !t.trim().is_empty());
+            match classify_pr_credit("", fetched_title.as_deref(), dispatched) {
+                PrCreditMatch::Unknown => initial_title_match,
+                title_match => title_match,
+            }
+        }
     }
 }
 
@@ -32377,8 +32342,8 @@ fn pr_rebase_handler(
     onto_parent: Option<&str>,
 ) -> Result<()> {
     use pr_rebase::{
-        cross_fork_refusal, default_smoke_check, manual_recipe, parse_pr_info,
-        read_pr_rebase_config, resolve_smoke_check, temp_worktree_path,
+        cross_fork_refusal, default_smoke_check, manual_recipe, read_pr_rebase_config,
+        resolve_smoke_check, temp_worktree_path,
     };
 
     let mode = if check {
@@ -32391,10 +32356,9 @@ fn pr_rebase_handler(
 
     let project_root = find_project_root()?;
 
-    // ---- Step 1: resolve PR metadata via `gh pr view`. ----
-    let info = fetch_pr_info_via_gh(&project_root, n)
-        .and_then(|j| parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
-        .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
+    // ---- Step 1: resolve PR metadata via the forge (STORY-621 Slice 2:
+    // was a raw `gh pr view`). trace:TASK-963 | ai:claude ----
+    let info = fetch_change_info_via_forge(&project_root, n)?;
 
     // ---- Step 2: refuse cross-fork PRs. ----
     if info.is_cross_repository {
@@ -32852,14 +32816,57 @@ fn pr_rebase_handler(
     Ok(())
 }
 
+/// STORY-621 Slice 2: fetch a change's scalar metadata through the forge and
+/// adapt it to the `pr_rebase::PrInfo` shape the rebase + reviewer pre-flight
+/// paths consume. Enforces the same required fields `pr_rebase::parse_pr_info`
+/// does (base/head ref + head SHA are hard errors — the recipes can't proceed
+/// without them) and carries a forge-aware "is the CLI installed?" context so
+/// a GitLab user is never told to install `gh`.
+// trace:TASK-963 | ai:claude
+fn fetch_change_info_via_forge(
+    project_root: &std::path::Path,
+    n: u64,
+) -> Result<pr_rebase::PrInfo> {
+    let noun = crate::forge::resolve_forge_kind(project_root).change_noun();
+    let cli = crate::forge::resolve_forge_kind(project_root).cli_name();
+    let m = crate::forge::forge_for(project_root)
+        .change_metadata(n, &mut network_retry::NoopSink)
+        .with_context(|| {
+            if cli.is_empty() {
+                format!("could not resolve {noun} metadata — this project has no forge (pure-git)")
+            } else {
+                format!(
+                    "could not resolve {noun} metadata — is `{cli}` installed and authenticated?"
+                )
+            }
+        })?;
+    anyhow::ensure!(
+        !m.base_ref.is_empty(),
+        "the forge did not return a base branch for {noun} {n}"
+    );
+    anyhow::ensure!(
+        !m.head_ref.is_empty(),
+        "the forge did not return a head branch for {noun} {n}"
+    );
+    anyhow::ensure!(
+        !m.head_sha.is_empty(),
+        "the forge did not return a head SHA for {noun} {n}"
+    );
+    Ok(pr_rebase::PrInfo {
+        n,
+        base_ref: m.base_ref,
+        head_ref: m.head_ref,
+        head_oid: m.head_sha,
+        is_cross_repository: m.is_cross_repository,
+        head_repo_owner: m.head_repo,
+        is_draft: m.is_draft,
+    })
+}
+
 /// Run `gh pr view <N> --json …` and return the parsed JSON. Pulled
 /// out of `pr_rebase_handler` so the side-effecting call is isolated
 /// (parse rules are pinned by `pr_rebase::parse_pr_info` tests).
 /// trace:TASK-308 | ai:claude
-fn fetch_pr_info_via_gh(project_root: &std::path::Path, n: u64) -> Result<serde_json::Value> {
-    fetch_pr_info_via_gh_bin(project_root, n, std::ffi::OsStr::new("gh"))
-}
-
 fn fetch_pr_info_via_gh_bin(
     project_root: &std::path::Path,
     n: u64,
@@ -34764,21 +34771,33 @@ fn preflight_stale_base_check(
     project_root: &std::path::Path,
     n: u64,
 ) -> Result<pr_rebase::StaleBaseOutcome> {
-    preflight_stale_base_check_with_gh(project_root, n, std::ffi::OsStr::new("gh"))
+    // STORY-621 Slice 2: the metadata read is forge-routed (GitLab-safe); the
+    // git probing below was already forge-agnostic. trace:TASK-963 | ai:claude
+    let info = fetch_change_info_via_forge(project_root, n)?;
+    preflight_stale_base_check_with_info(project_root, n, info)
 }
 
+/// Test seam: same check with the metadata fetched via an injectable `gh`
+/// binary (the task-471 tests fake gh with a script), bypassing the forge
+/// routing the production wrapper uses.
+#[allow(dead_code)] // exercised by the task-471 tests (cfg(test)-only callers)
 fn preflight_stale_base_check_with_gh(
     project_root: &std::path::Path,
     n: u64,
     gh_bin: &std::ffi::OsStr,
 ) -> Result<pr_rebase::StaleBaseOutcome> {
-    use pr_rebase::{
-        classify_stale_base, parse_merge_tree_conflicts, parse_pr_info, ConflictPrediction,
-    };
-
     let info = fetch_pr_info_via_gh_bin(project_root, n, gh_bin)
-        .and_then(|j| parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
+        .and_then(|j| pr_rebase::parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
         .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
+    preflight_stale_base_check_with_info(project_root, n, info)
+}
+
+fn preflight_stale_base_check_with_info(
+    project_root: &std::path::Path,
+    n: u64,
+    info: pr_rebase::PrInfo,
+) -> Result<pr_rebase::StaleBaseOutcome> {
+    use pr_rebase::{classify_stale_base, parse_merge_tree_conflicts, ConflictPrediction};
 
     let origin_base = format!("origin/{}", info.base_ref);
 
@@ -34912,9 +34931,14 @@ fn preflight_intermediate_only_check(
     project_root: &std::path::Path,
     n: u64,
 ) -> Result<pr_rebase::IntermediateOnlyOutcome> {
-    preflight_intermediate_only_check_with_gh(project_root, n, std::ffi::OsStr::new("gh"))
+    // STORY-621 Slice 2: metadata read forge-routed, mirroring
+    // preflight_stale_base_check. trace:TASK-963 | ai:claude
+    let info = fetch_change_info_via_forge(project_root, n)?;
+    preflight_intermediate_only_check_with_info(project_root, n, info)
 }
 
+/// Test seam mirroring [`preflight_stale_base_check_with_gh`].
+#[allow(dead_code)] // exercised by tests; kept symmetric with the stale-base seam
 fn preflight_intermediate_only_check_with_gh(
     project_root: &std::path::Path,
     n: u64,
@@ -34923,7 +34947,14 @@ fn preflight_intermediate_only_check_with_gh(
     let info = fetch_pr_info_via_gh_bin(project_root, n, gh_bin)
         .and_then(|j| pr_rebase::parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
         .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
+    preflight_intermediate_only_check_with_info(project_root, n, info)
+}
 
+fn preflight_intermediate_only_check_with_info(
+    project_root: &std::path::Path,
+    n: u64,
+    info: pr_rebase::PrInfo,
+) -> Result<pr_rebase::IntermediateOnlyOutcome> {
     let origin_base = format!("origin/{}", info.base_ref);
 
     // Refresh origin + fetch the PR head, same as the stale-base probe.
@@ -41177,22 +41208,18 @@ fn detect_pr_review_decision(
     project_root: &std::path::Path,
     pr_number: u64,
 ) -> Option<PrReviewDecision> {
-    let gh_bin = resolve_gh_binary()?;
-    let out = std::process::Command::new(&gh_bin)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "view",
-            &pr_number.to_string(),
-            "--json",
-            "reviewDecision,latestReviews",
-        ])
-        .output()
+    // STORY-621 Slice 2: routed through Forge::change_reviews so the probe
+    // works on GitLab (decision derived from the approvals endpoint). The
+    // decision travels as the forge-neutral enum and is lowered back to gh's
+    // token vocabulary here because this display path still compares strings.
+    // trace:TASK-963 | ai:claude
+    let reviews = crate::forge::forge_for(project_root)
+        .change_reviews(pr_number, &mut network_retry::NoopSink)
         .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    parse_review_decision_json(&String::from_utf8_lossy(&out.stdout))
+    Some(PrReviewDecision {
+        decision: reviews.decision.gh_token().to_string(),
+        approver: reviews.approver,
+    })
 }
 
 /// TASK-250: parse `gh pr list --state merged --json number,mergedAt`

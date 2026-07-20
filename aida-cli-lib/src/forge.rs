@@ -371,6 +371,61 @@ pub struct ChangeStatus {
     pub head_sha: String,
 }
 
+impl ReviewDecision {
+    /// The gh `reviewDecision` vocabulary for this decision — the string the
+    /// pre-migration call sites compared against (`"APPROVED"` / …). Lets a
+    /// caller that still speaks the gh token keep its comparisons while the
+    /// read itself is forge-routed.
+    // trace:TASK-963 | ai:claude
+    pub fn gh_token(self) -> &'static str {
+        match self {
+            ReviewDecision::Approved => "APPROVED",
+            ReviewDecision::ChangesRequested => "CHANGES_REQUESTED",
+            ReviewDecision::ReviewRequired => "REVIEW_REQUIRED",
+            ReviewDecision::None => "",
+        }
+    }
+}
+
+/// STORY-621 Slice 2: the forge-neutral *scalar* metadata of one change — the
+/// fields the drain-reconcile and reviewer pre-flight phases read via
+/// `gh pr view <N> --json …` today, in one object so all scalar readers share
+/// one forge call. Array-shaped reads (commit headlines, reviews) are separate
+/// trait methods so callers pay only for what they read; the CI rollup is
+/// deliberately excluded (Slice 3 / TASK-962 owns CI).
+// trace:TASK-963 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeMetadata {
+    pub state: ChangeState,
+    pub title: String,
+    /// Declared base branch (gh `baseRefName` / GitLab `target_branch`).
+    pub base_ref: String,
+    /// Head branch on the change's repo of origin (gh `headRefName` /
+    /// GitLab `source_branch`).
+    pub head_ref: String,
+    /// Current head SHA (gh `headRefOid` / GitLab `sha`).
+    pub head_sha: String,
+    pub is_draft: bool,
+    /// From a fork (gh `isCrossRepository`; GitLab: `source_project_id` ≠
+    /// `target_project_id`).
+    pub is_cross_repository: bool,
+    /// Forge-native head-repo label when the forge reports one (gh
+    /// `headRepository.nameWithOwner`). `None` on GitLab — the MR object names
+    /// project *ids*, not paths; used only to make cross-fork refusals concrete.
+    pub head_repo: Option<String>,
+}
+
+/// STORY-621 Slice 2: a change's review verdict — gh's `reviewDecision` plus
+/// the approving reviewer's login, forge-neutral. GitLab derives the decision
+/// from the approvals REST endpoint (see `parse_glab_mr_approvals`).
+// trace:TASK-963 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeReviews {
+    pub decision: ReviewDecision,
+    /// Login of the most recent approving reviewer, when resolvable.
+    pub approver: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiState {
     /// No CI configured / no forge — drain treats like `lifecycle:no-ci-wait`.
@@ -518,6 +573,46 @@ pub trait Forge {
 
     /// `gh pr view` status (state + mergeable + review + head sha).
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus>;
+
+    /// STORY-621 Slice 2: the change's scalar metadata (state / title / refs /
+    /// head SHA / draft / cross-repo) in one read — the consolidation point for
+    /// the drain-reconcile and reviewer pre-flight `gh pr view --json` sites.
+    /// Keyed on the forge-native change number (PR number / MR iid) because
+    /// every migrated caller holds only the number.
+    ///
+    /// `sink` receives BUG-286 transient-retry events (GitHub wraps the `gh`
+    /// spawn in `network_retry`, matching the reconcile sites it replaces);
+    /// providers that don't retry ignore it. Pure-git errs — it has no forge
+    /// object to read, and the callers all fail open.
+    // trace:TASK-963 | ai:claude
+    fn change_metadata(
+        &self,
+        id: u64,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeMetadata>;
+
+    /// STORY-621 Slice 2: the headline (first line) of each commit on the
+    /// change, oldest-first — what the BUG-245/BUG-357 credit reconcile parses
+    /// `(SPEC-ID)` trailers out of. Separate from [`Forge::change_metadata`] so
+    /// scalar readers don't pay for the commit array.
+    // trace:TASK-963 | ai:claude
+    fn change_commit_headlines(
+        &self,
+        id: u64,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<Vec<String>>;
+
+    /// STORY-621 Slice 2: the change's review verdict. GitHub reads
+    /// `reviewDecision,latestReviews`; GitLab derives it from the approvals
+    /// endpoint (approved → `Approved`, approvals outstanding →
+    /// `ReviewRequired`; GitLab's approvals API has no changes-requested state,
+    /// so `ChangesRequested` is GitHub-only).
+    // trace:TASK-963 | ai:claude
+    fn change_reviews(
+        &self,
+        id: u64,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeReviews>;
 
     /// `gh run` / `glab ci` / pure-git `CiState::None`.
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus>;
@@ -926,6 +1021,119 @@ impl Forge for GitHubForge {
         })
     }
 
+    // trace:TASK-963 | ai:claude
+    fn change_metadata(
+        &self,
+        id: u64,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeMetadata> {
+        // One superset read for every scalar caller (reconcile's `state`, the
+        // reviewer pre-flight's refs/draft/cross-repo, credit's `title`).
+        // Resolved via `resolve_gh_binary` (BUG-74/79 PATH-walk + test
+        // override) and retry-wrapped (BUG-286) to match the call sites this
+        // consolidates.
+        let gh = crate::resolve_gh_binary().ok_or_else(|| {
+            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+        })?;
+        let id_str = id.to_string();
+        let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
+        let label = format!("gh pr view {id} --json metadata");
+        let project_root = self.project_root.clone();
+        let out = crate::network_retry::run_with_retry(&label, &cfg, sink, || {
+            let mut c = Command::new(&gh);
+            c.current_dir(&project_root).args([
+                "pr",
+                "view",
+                &id_str,
+                "--json",
+                "state,title,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+            ]);
+            c
+        })
+        .context("could not invoke `gh pr view`")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr view failed for #{id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let json: serde_json::Value = serde_json::from_slice(&out.stdout)
+            .with_context(|| format!("`gh pr view {id}` returned non-JSON output"))?;
+        Ok(parse_gh_change_metadata(&json))
+    }
+
+    // trace:TASK-963 | ai:claude
+    fn change_commit_headlines(
+        &self,
+        id: u64,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<Vec<String>> {
+        // Same argv shape as the BUG-245 credit read this replaces.
+        let gh = crate::resolve_gh_binary().ok_or_else(|| {
+            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+        })?;
+        let id_str = id.to_string();
+        let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
+        let label = format!("gh pr view {id} --json commits");
+        let project_root = self.project_root.clone();
+        let out = crate::network_retry::run_with_retry(&label, &cfg, sink, || {
+            let mut c = Command::new(&gh);
+            c.current_dir(&project_root).args([
+                "pr",
+                "view",
+                &id_str,
+                "--json",
+                "commits",
+                "-q",
+                ".commits[].messageHeadline",
+            ]);
+            c
+        })
+        .context("could not invoke `gh pr view`")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr view failed for #{id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| l.to_string())
+            .collect())
+    }
+
+    // trace:TASK-963 | ai:claude
+    fn change_reviews(
+        &self,
+        id: u64,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeReviews> {
+        let gh = crate::resolve_gh_binary().ok_or_else(|| {
+            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+        })?;
+        let id_str = id.to_string();
+        let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
+        let label = format!("gh pr view {id} --json reviewDecision");
+        let project_root = self.project_root.clone();
+        let out = crate::network_retry::run_with_retry(&label, &cfg, sink, || {
+            let mut c = Command::new(&gh);
+            c.current_dir(&project_root).args([
+                "pr",
+                "view",
+                &id_str,
+                "--json",
+                "reviewDecision,latestReviews",
+            ]);
+            c
+        })
+        .context("could not invoke `gh pr view`")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr view failed for #{id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        parse_gh_change_reviews(&String::from_utf8_lossy(&out.stdout))
+            .with_context(|| format!("could not parse gh review JSON for #{id}"))
+    }
+
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
         let r#ref = match target {
             CiTarget::Branch(b) => b,
@@ -1313,6 +1521,64 @@ impl Forge for GitLabForge {
             .with_context(|| format!("could not parse glab MR JSON for !{}", c.id))
     }
 
+    // trace:TASK-963 | ai:claude
+    fn change_metadata(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeMetadata> {
+        // REST-first per BUG-639 — glab 1.36 has no `--output json` on
+        // `mr view`, so the single-MR REST object is the read surface. The
+        // sink is ignored: GitLab reads don't retry today (merge_change
+        // precedent).
+        let path = format!("projects/:id/merge_requests/{id}");
+        let out = self.glab_api_get(&path, &[])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab api merge_requests/{id} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        parse_glab_mr_metadata(&String::from_utf8_lossy(&out.stdout))
+            .with_context(|| format!("could not parse glab MR JSON for !{id}"))
+    }
+
+    // trace:TASK-963 | ai:claude
+    fn change_commit_headlines(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<Vec<String>> {
+        // GitLab commit objects carry the headline as `title`.
+        let path = format!("projects/:id/merge_requests/{id}/commits");
+        let out = self.glab_api_get(&path, &[])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab api merge_requests/{id}/commits failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        parse_glab_mr_commit_headlines(&String::from_utf8_lossy(&out.stdout))
+            .with_context(|| format!("could not parse glab MR commits JSON for !{id}"))
+    }
+
+    // trace:TASK-963 | ai:claude
+    fn change_reviews(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeReviews> {
+        // GitLab has no single `reviewDecision`; the approvals endpoint is the
+        // closest equivalent (approved / approvals outstanding).
+        let path = format!("projects/:id/merge_requests/{id}/approvals");
+        let out = self.glab_api_get(&path, &[])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab api merge_requests/{id}/approvals failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        parse_glab_mr_approvals(&String::from_utf8_lossy(&out.stdout))
+            .with_context(|| format!("could not parse glab MR approvals JSON for !{id}"))
+    }
+
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
         // TASK-962 (Slice 3): `glab ci list -F json` shares the mr-list defect
         // BUG-639 fixed — glab 1.36 has no JSON flag on `ci list`, so this and
@@ -1547,6 +1813,37 @@ impl Forge for PureGitForge {
             review: ReviewDecision::None,
             head_sha,
         })
+    }
+
+    // Pure-git has no forge object keyed on a change number (`id == 0` is the
+    // "the branch IS the change" sentinel, and a number alone names no branch),
+    // so the number-keyed metadata reads err. Every migrated caller fails open
+    // — "cannot read" degrades exactly as the pre-routing `gh` failure did in
+    // a forge-less repo. trace:TASK-963 | ai:claude
+    fn change_metadata(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeMetadata> {
+        anyhow::bail!("pure-git has no change metadata to read (change {id})")
+    }
+
+    // trace:TASK-963 | ai:claude
+    fn change_commit_headlines(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<Vec<String>> {
+        anyhow::bail!("pure-git has no change commits to read (change {id})")
+    }
+
+    // trace:TASK-963 | ai:claude
+    fn change_reviews(
+        &self,
+        id: u64,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<ChangeReviews> {
+        anyhow::bail!("pure-git has no change reviews to read (change {id})")
     }
 
     fn ci_status(&self, _target: CiTarget) -> Result<CiStatus> {
@@ -1815,6 +2112,192 @@ fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
         review: ReviewDecision::None,
         head_sha,
     })
+}
+
+// ─────────────────────── change-metadata parsers (TASK-963) ───────────────────────
+
+/// Map a `gh pr view --json state,title,baseRefName,headRefName,headRefOid,
+/// isCrossRepository,headRepository,isDraft` object to [`ChangeMetadata`].
+/// Lenient — missing fields degrade to empty/false (required-field policy
+/// belongs to the caller; the reviewer pre-flight's `PrInfo` adapter enforces
+/// non-empty refs, matching `pr_rebase::parse_pr_info`). Pure so the field
+/// mapping is unit-testable without spawning `gh`.
+// trace:TASK-963 | ai:claude
+fn parse_gh_change_metadata(json: &serde_json::Value) -> ChangeMetadata {
+    let s = |key: &str| -> String {
+        json.get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let state = match s("state").as_str() {
+        "MERGED" => ChangeState::Merged,
+        "CLOSED" => ChangeState::Closed,
+        _ => ChangeState::Open,
+    };
+    // Same headRepository fallback chain as `pr_rebase::parse_pr_info`:
+    // nameWithOwner, else owner (string or {login}).
+    let head_repo = json
+        .get("headRepository")
+        .and_then(|hr| hr.get("nameWithOwner").or_else(|| hr.get("owner")))
+        .and_then(|v| {
+            if let Some(s) = v.as_str() {
+                Some(s.to_string())
+            } else {
+                v.get("login")
+                    .and_then(|l| l.as_str())
+                    .map(|s| s.to_string())
+            }
+        });
+    ChangeMetadata {
+        state,
+        title: s("title"),
+        base_ref: s("baseRefName"),
+        head_ref: s("headRefName"),
+        head_sha: s("headRefOid"),
+        is_draft: json
+            .get("isDraft")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        is_cross_repository: json
+            .get("isCrossRepository")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        head_repo,
+    }
+}
+
+/// Map a `gh pr view --json reviewDecision,latestReviews` body to
+/// [`ChangeReviews`]. Delegates to the TASK-250 pure parser (single source of
+/// truth for the latest-approver selection) and lifts gh's decision token into
+/// the forge-neutral enum. `None` when the body isn't the expected JSON.
+// trace:TASK-963 | ai:claude
+fn parse_gh_change_reviews(stdout: &str) -> Option<ChangeReviews> {
+    let pd = crate::parse_review_decision_json(stdout)?;
+    let decision = match pd.decision.as_str() {
+        "APPROVED" => ReviewDecision::Approved,
+        "CHANGES_REQUESTED" => ReviewDecision::ChangesRequested,
+        "REVIEW_REQUIRED" => ReviewDecision::ReviewRequired,
+        _ => ReviewDecision::None,
+    };
+    Some(ChangeReviews {
+        decision,
+        approver: pd.approver,
+    })
+}
+
+/// Map a single-MR GitLab REST object to [`ChangeMetadata`]. Field notes:
+/// draft is the modern `draft` bool (legacy `work_in_progress` accepted);
+/// cross-repo is `source_project_id` ≠ `target_project_id` (both must be
+/// present — degrade to false otherwise); GitLab names no head-repo *path* on
+/// the MR object, so `head_repo` is `None`.
+// trace:TASK-963 | ai:claude
+fn parse_glab_mr_metadata(body: &str) -> Result<ChangeMetadata> {
+    let v: serde_json::Value =
+        serde_json::from_str(body.trim()).context("glab MR read did not return valid JSON")?;
+    anyhow::ensure!(v.is_object(), "glab MR JSON was not an object");
+    let s = |key: &str| -> String {
+        v.get(key)
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let state = glab_state_from_str(v.get("state").and_then(|x| x.as_str()).unwrap_or(""));
+    let head_sha = v
+        .get("sha")
+        .and_then(|x| x.as_str())
+        .or_else(|| {
+            v.get("diff_refs")
+                .and_then(|d| d.get("head_sha"))
+                .and_then(|x| x.as_str())
+        })
+        .unwrap_or("")
+        .to_string();
+    let is_draft = v
+        .get("draft")
+        .and_then(|x| x.as_bool())
+        .or_else(|| v.get("work_in_progress").and_then(|x| x.as_bool()))
+        .unwrap_or(false);
+    let is_cross_repository = match (
+        v.get("source_project_id").and_then(|x| x.as_u64()),
+        v.get("target_project_id").and_then(|x| x.as_u64()),
+    ) {
+        (Some(src), Some(dst)) => src != dst,
+        _ => false,
+    };
+    Ok(ChangeMetadata {
+        state,
+        title: s("title"),
+        base_ref: s("target_branch"),
+        head_ref: s("source_branch"),
+        head_sha,
+        is_draft,
+        is_cross_repository,
+        head_repo: None,
+    })
+}
+
+/// Map a `projects/:id/merge_requests/:iid/commits` REST array to the commit
+/// headlines, oldest-last as GitLab returns them (newest first) — callers only
+/// scan for `(SPEC-ID)` trailers, so order is not load-bearing. Each commit
+/// object carries the headline as `title`.
+// trace:TASK-963 | ai:claude
+fn parse_glab_mr_commit_headlines(body: &str) -> Result<Vec<String>> {
+    let v: serde_json::Value = serde_json::from_str(body.trim())
+        .context("glab MR commits read did not return valid JSON")?;
+    let arr = v
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("glab MR commits JSON was not an array"))?;
+    Ok(arr
+        .iter()
+        .filter_map(|c| c.get("title").and_then(|t| t.as_str()))
+        .map(|t| t.to_string())
+        .collect())
+}
+
+/// Map a `projects/:id/merge_requests/:iid/approvals` REST object to
+/// [`ChangeReviews`] — the GitLab reviewDecision-from-approvals rule:
+///   - `approved == true` (or any `approved_by` entry) → `Approved`, approver =
+///     the last approving user's username;
+///   - approvals still outstanding (`approvals_left` > 0, or
+///     `approvals_required` > 0 when `approvals_left` is absent) → `ReviewRequired`;
+///   - otherwise → `None` (no approval rules configured).
+/// GitLab's approvals API has no changes-requested state, so
+/// `ChangesRequested` never arises here.
+// trace:TASK-963 | ai:claude
+fn parse_glab_mr_approvals(body: &str) -> Result<ChangeReviews> {
+    let v: serde_json::Value = serde_json::from_str(body.trim())
+        .context("glab MR approvals read did not return valid JSON")?;
+    anyhow::ensure!(v.is_object(), "glab MR approvals JSON was not an object");
+    let approver = v
+        .get("approved_by")
+        .and_then(|a| a.as_array())
+        .and_then(|entries| {
+            entries
+                .iter()
+                .filter_map(|e| {
+                    e.get("user")
+                        .and_then(|u| u.get("username"))
+                        .and_then(|s| s.as_str())
+                })
+                .next_back()
+                .map(|s| s.to_string())
+        });
+    let approved =
+        v.get("approved").and_then(|x| x.as_bool()).unwrap_or(false) || approver.is_some();
+    let outstanding = v
+        .get("approvals_left")
+        .and_then(|x| x.as_u64())
+        .or_else(|| v.get("approvals_required").and_then(|x| x.as_u64()))
+        .unwrap_or(0);
+    let decision = if approved {
+        ReviewDecision::Approved
+    } else if outstanding > 0 {
+        ReviewDecision::ReviewRequired
+    } else {
+        ReviewDecision::None
+    };
+    Ok(ChangeReviews { decision, approver })
 }
 
 // ─────────────────────────── GitLab CI mapping (STORY-510) ───────────────────────────
@@ -3027,5 +3510,183 @@ mod tests {
             }
             other => panic!("expected Failed, got {other:?}"),
         }
+    }
+
+    // ─────────────── change-metadata parsers (TASK-963) ───────────────
+
+    #[test]
+    fn gh_change_metadata_maps_full_object() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{
+              "state": "MERGED",
+              "title": "[AI:claude] fix(x): y (TASK-1)",
+              "baseRefName": "main",
+              "headRefName": "task-1-fix",
+              "headRefOid": "abc123",
+              "isCrossRepository": true,
+              "headRepository": {"nameWithOwner": "alice/aida"},
+              "isDraft": true
+            }"#,
+        )
+        .unwrap();
+        let m = parse_gh_change_metadata(&json);
+        assert_eq!(m.state, ChangeState::Merged);
+        assert_eq!(m.title, "[AI:claude] fix(x): y (TASK-1)");
+        assert_eq!(m.base_ref, "main");
+        assert_eq!(m.head_ref, "task-1-fix");
+        assert_eq!(m.head_sha, "abc123");
+        assert!(m.is_draft);
+        assert!(m.is_cross_repository);
+        assert_eq!(m.head_repo.as_deref(), Some("alice/aida"));
+    }
+
+    #[test]
+    fn gh_change_metadata_missing_fields_degrade() {
+        let json: serde_json::Value = serde_json::from_str(r#"{"state": "OPEN"}"#).unwrap();
+        let m = parse_gh_change_metadata(&json);
+        assert_eq!(m.state, ChangeState::Open);
+        assert!(m.title.is_empty());
+        assert!(m.base_ref.is_empty());
+        assert!(!m.is_draft);
+        assert!(!m.is_cross_repository);
+        assert_eq!(m.head_repo, None);
+    }
+
+    #[test]
+    fn gh_change_reviews_maps_decision_and_latest_approver() {
+        let out = parse_gh_change_reviews(
+            r#"{
+              "reviewDecision": "APPROVED",
+              "latestReviews": [
+                {"state": "APPROVED", "author": {"login": "alice"}},
+                {"state": "COMMENTED", "author": {"login": "bob"}},
+                {"state": "APPROVED", "author": {"login": "carol"}}
+              ]
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(out.decision, ReviewDecision::Approved);
+        assert_eq!(out.approver.as_deref(), Some("carol"));
+        let none =
+            parse_gh_change_reviews(r#"{"reviewDecision": "", "latestReviews": []}"#).unwrap();
+        assert_eq!(none.decision, ReviewDecision::None);
+        assert_eq!(none.approver, None);
+    }
+
+    #[test]
+    fn review_decision_gh_token_round_trip() {
+        assert_eq!(ReviewDecision::Approved.gh_token(), "APPROVED");
+        assert_eq!(
+            ReviewDecision::ChangesRequested.gh_token(),
+            "CHANGES_REQUESTED"
+        );
+        assert_eq!(ReviewDecision::ReviewRequired.gh_token(), "REVIEW_REQUIRED");
+        assert_eq!(ReviewDecision::None.gh_token(), "");
+    }
+
+    #[test]
+    fn glab_mr_metadata_maps_rest_object() {
+        let m = parse_glab_mr_metadata(
+            r#"{
+              "iid": 7,
+              "state": "opened",
+              "title": "Fix the thing",
+              "target_branch": "main",
+              "source_branch": "fix-thing",
+              "sha": "def456",
+              "draft": true,
+              "source_project_id": 12,
+              "target_project_id": 34
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(m.state, ChangeState::Open);
+        assert_eq!(m.title, "Fix the thing");
+        assert_eq!(m.base_ref, "main");
+        assert_eq!(m.head_ref, "fix-thing");
+        assert_eq!(m.head_sha, "def456");
+        assert!(m.is_draft);
+        assert!(m.is_cross_repository, "differing project ids = cross-repo");
+        assert_eq!(m.head_repo, None);
+    }
+
+    #[test]
+    fn glab_mr_metadata_legacy_wip_and_same_project() {
+        let m = parse_glab_mr_metadata(
+            r#"{
+              "state": "merged",
+              "target_branch": "main",
+              "source_branch": "b",
+              "work_in_progress": true,
+              "source_project_id": 12,
+              "target_project_id": 12,
+              "diff_refs": {"head_sha": "789abc"}
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(m.state, ChangeState::Merged);
+        assert!(m.is_draft, "legacy work_in_progress maps to draft");
+        assert!(!m.is_cross_repository);
+        assert_eq!(m.head_sha, "789abc", "falls back to diff_refs.head_sha");
+    }
+
+    #[test]
+    fn glab_mr_metadata_rejects_garbage() {
+        assert!(parse_glab_mr_metadata("not json").is_err());
+        assert!(parse_glab_mr_metadata("[1, 2]").is_err());
+    }
+
+    #[test]
+    fn glab_mr_commit_headlines_maps_titles() {
+        let titles = parse_glab_mr_commit_headlines(
+            r#"[
+              {"id": "a", "title": "[AI:claude] fix(x): y (BUG-1)"},
+              {"id": "b", "title": "chore: tidy"},
+              {"id": "c"}
+            ]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            titles,
+            vec![
+                "[AI:claude] fix(x): y (BUG-1)".to_string(),
+                "chore: tidy".to_string()
+            ]
+        );
+        assert!(parse_glab_mr_commit_headlines("[]").unwrap().is_empty());
+        assert!(parse_glab_mr_commit_headlines(r#"{"not": "array"}"#).is_err());
+    }
+
+    #[test]
+    fn glab_mr_approvals_derive_review_decision() {
+        // Approved with a named approver.
+        let approved = parse_glab_mr_approvals(
+            r#"{
+              "approved": true,
+              "approvals_required": 1,
+              "approvals_left": 0,
+              "approved_by": [{"user": {"username": "joe"}}]
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(approved.decision, ReviewDecision::Approved);
+        assert_eq!(approved.approver.as_deref(), Some("joe"));
+
+        // Approvals outstanding → ReviewRequired.
+        let required = parse_glab_mr_approvals(
+            r#"{"approved": false, "approvals_required": 2, "approvals_left": 2, "approved_by": []}"#,
+        )
+        .unwrap();
+        assert_eq!(required.decision, ReviewDecision::ReviewRequired);
+        assert_eq!(required.approver, None);
+
+        // No approval rules at all → None.
+        let none = parse_glab_mr_approvals(
+            r#"{"approved": false, "approvals_required": 0, "approvals_left": 0, "approved_by": []}"#,
+        )
+        .unwrap();
+        assert_eq!(none.decision, ReviewDecision::None);
+
+        assert!(parse_glab_mr_approvals("nope").is_err());
     }
 }
