@@ -3,12 +3,12 @@ spec_id: ADR-17
 agreed_id: ADR-17
 title: Subsystems are registry config in the git-canonical store, not requirement nodes (ratifies PROPOSAL-first-class-subsystems)
 description: 'Operator ratified 2026-07-19 (via /aida-decide-style session): subsystems live as .aida-store/registry/subsystems.yaml — name, matching rules, memory focus keys, queue defaults, risk/escalation policy — read by CLI/TUI/queue/MCP/memory loader. NOT requirement nodes: specs remain the work graph; subsystems are classification/routing policy. Delivers TASK-0434. Full text: docs/aida/05-decisions/PROPOSAL-first-class-subsystems.md (promoted from proposed/).'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T01:41:30.915121698Z
-modified_at: 2026-07-20T01:41:30.915121698Z
+modified_at: 2026-07-20T01:41:47.407117695Z
 req_type: Decision
 tags:
 - adr subsystems from-ratification
