@@ -38,6 +38,24 @@ fi
 # 2. Special-case bypass for .aida-store worktree/branch (deliberate gitignored path commits)
 CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
 if [ "$CURRENT_BRANCH" = "aida-store" ] || [[ "$(pwd)" == *"/aida-store"* ]] || [[ "$(pwd)" == *"/.aida-store"* ]]; then
+    # 2a. Store bulk-write version floor (trace:BUG-766). A stale installed
+    # aida binary resolved from the raw PATH once ran unguarded bulk saves
+    # that rewrote the whole object tree and dropped fields (the
+    # deferred-shelf wipes). Guarded builds tag their git subprocesses with
+    # AIDA_STORE_WRITE_GUARD; a commit staging MORE than the floor's worth
+    # of objects/ files WITHOUT that marker can only come from a pre-guard
+    # binary, so refuse it — an ancient binary may still read and make
+    # small targeted writes, but never mass-rewrite the store. Floor is
+    # tunable via AIDA_STORE_GUARD_FLOOR (0 disables the check).
+    __aida_store_floor=${AIDA_STORE_GUARD_FLOOR:-10}
+    if [ -z "$AIDA_STORE_WRITE_GUARD" ] && [ "$__aida_store_floor" -gt 0 ] 2>/dev/null; then
+        __aida_store_staged=$(git diff --cached --name-only -- objects/ 2>/dev/null | wc -l | tr -d '[:space:]')
+        if [ "$__aida_store_staged" -gt "$__aida_store_floor" ] 2>/dev/null; then
+            echo "pre-commit: refusing bulk requirements-store write ($__aida_store_staged object files staged, floor $__aida_store_floor) from an aida binary without the store write guard — likely a stale installed build resolved from PATH." >&2
+            echo "pre-commit: re-run with the current aida build, or set AIDA_STORE_GUARD_FLOOR=0 to bypass deliberately." >&2
+            exit 1
+        fi
+    fi
     aida_precommit_sentinel  # trace:TASK-917
     exit 0
 fi
