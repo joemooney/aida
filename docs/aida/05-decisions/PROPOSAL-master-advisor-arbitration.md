@@ -1,6 +1,6 @@
-# ADR-18 (Proposed) - Master advisor arbitrates cross-subsystem and high-risk work
+# ADR-20 (Accepted) - Master advisor arbitrates cross-subsystem and high-risk work
 
-Status: Proposed
+Status: Accepted 2026-07-19 (operator ratification; store decision ADR-20)
 Specs: TASK-0437
 
 ## Context

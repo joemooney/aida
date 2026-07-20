@@ -1,6 +1,6 @@
-# ADR-15 (Proposed) - First-class subsystems as project registry
+# ADR-17 (Accepted) - First-class subsystems as project registry
 
-Status: Proposed
+Status: Accepted 2026-07-19 (operator ratification; store decision ADR-17)
 Specs: TASK-0434
 
 ## Context

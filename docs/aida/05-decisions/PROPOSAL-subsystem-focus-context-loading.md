@@ -1,6 +1,6 @@
-# ADR-17 (Proposed) - Focused context loads universal plus subsystem context
+# ADR-19 (Accepted) - Focused context loads universal plus subsystem context
 
-Status: Proposed
+Status: Accepted 2026-07-19 (operator ratification; store decision ADR-19)
 Specs: TASK-0436
 
 ## Context

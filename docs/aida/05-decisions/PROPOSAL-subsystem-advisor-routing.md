@@ -1,6 +1,6 @@
-# ADR-16 (Proposed) - Route advisors by subsystem with master fallback
+# ADR-18 (Accepted) - Route advisors by subsystem with master fallback
 
-Status: Proposed
+Status: Accepted 2026-07-19 (operator ratification; store decision ADR-18)
 Specs: TASK-0435
 
 ## Context
