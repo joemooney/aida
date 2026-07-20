@@ -675,6 +675,50 @@ pub fn is_draft_only_tagged(tags: &[String]) -> bool {
         .any(|t| t.trim().eq_ignore_ascii_case(DRAFT_ONLY_TAG))
 }
 
+/// The supervised-merge gate's pure heart. The keystone "Gate + PR, do NOT
+/// merge — advisor reviews first" directive used to live only in spec PROSE,
+/// which the ship cadence never read — it auto-merged keystone work straight
+/// past it. The machine-readable marker is the spec's `execution_mode` (the
+/// advisor's bless-time routing, STORY-776): only `drain` licenses an
+/// unattended merge. Every other mode — and, fail safe, NO mode at all —
+/// holds the merge for an explicit human/advisor.
+// trace:BUG-727 | ai:claude
+pub fn merge_requires_supervision(mode: Option<aida_core::ExecutionMode>) -> bool {
+    mode != Some(aida_core::ExecutionMode::Drain)
+}
+
+/// The mode label used in the supervised-merge refusal message — the mode's
+/// name, or `unset (supervised)` for a spec that never had one (an unset mode
+/// is supervised, fail safe).
+// trace:BUG-727 | ai:claude
+pub fn supervision_mode_label(mode: Option<aida_core::ExecutionMode>) -> String {
+    match mode {
+        Some(m) => m.to_string(),
+        None => "unset (supervised)".to_string(),
+    }
+}
+
+/// The `aida pr ship` supervised-merge decision: which of the specs behind the
+/// commits about to ship hold the auto-merge, as `(spec-id, mode-label)`
+/// pairs. Empty ⇒ the merge may proceed. An interactive human at a TTY IS the
+/// explicit human/advisor merge the marker asks for, so the gate never fires
+/// there — it fires for non-interactive (automation) callers whose specs carry
+/// any `execution_mode` but `drain` (or none at all, the fail-safe).
+// trace:BUG-727 | ai:claude
+pub fn supervised_merge_holds(
+    specs: &[(String, Option<aida_core::ExecutionMode>)],
+    interactive_tty: bool,
+) -> Vec<(String, String)> {
+    if interactive_tty {
+        return Vec::new();
+    }
+    specs
+        .iter()
+        .filter(|(_, mode)| merge_requires_supervision(*mode))
+        .map(|(id, mode)| (id.clone(), supervision_mode_label(*mode)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -693,6 +737,62 @@ mod tests {
             "papercut".to_string()
         ]));
         assert!(!is_draft_only_tagged(&[]));
+    }
+
+    /// BUG-727: only `drain` licenses an unattended merge; every other
+    /// execution mode — and NO mode at all (fail safe) — requires supervision.
+    #[test]
+    fn merge_requires_supervision_truth_table() {
+        use aida_core::ExecutionMode as M;
+        assert!(!merge_requires_supervision(Some(M::Drain)));
+        assert!(merge_requires_supervision(Some(M::Drive)));
+        assert!(merge_requires_supervision(Some(M::Guided)));
+        assert!(merge_requires_supervision(Some(M::Operator)));
+        assert!(merge_requires_supervision(Some(M::Decide)));
+        // Fail safe: a spec with no mode set is treated as supervised.
+        assert!(merge_requires_supervision(None));
+    }
+
+    /// BUG-727: a marked (non-drain) spec shipped by automation holds the
+    /// merge — this is the refusal that parks the PR open for the advisor.
+    #[test]
+    fn supervised_merge_holds_refuses_marked_spec_for_automation() {
+        use aida_core::ExecutionMode as M;
+        let specs = vec![
+            ("TASK-1080".to_string(), Some(M::Drive)),
+            ("BUG-714".to_string(), None),
+        ];
+        let holds = supervised_merge_holds(&specs, false);
+        assert_eq!(
+            holds,
+            vec![
+                ("TASK-1080".to_string(), "drive".to_string()),
+                ("BUG-714".to_string(), "unset (supervised)".to_string()),
+            ]
+        );
+    }
+
+    /// BUG-727 regression guard: a `drain`-mode spec preserves the current
+    /// auto-merge — the normal automation path is unaffected.
+    #[test]
+    fn supervised_merge_holds_drain_mode_spec_still_auto_merges() {
+        use aida_core::ExecutionMode as M;
+        let specs = vec![("TASK-500".to_string(), Some(M::Drain))];
+        assert!(supervised_merge_holds(&specs, false).is_empty());
+        // No specs behind the ship (no store / no trailers) ⇒ nothing to hold.
+        assert!(supervised_merge_holds(&[], false).is_empty());
+    }
+
+    /// BUG-727: an interactive human at a TTY IS the explicit human/advisor
+    /// merge — the gate never fires there, whatever the mode.
+    #[test]
+    fn supervised_merge_holds_interactive_tty_may_always_merge() {
+        use aida_core::ExecutionMode as M;
+        let specs = vec![
+            ("TASK-1080".to_string(), Some(M::Guided)),
+            ("BUG-714".to_string(), None),
+        ];
+        assert!(supervised_merge_holds(&specs, true).is_empty());
     }
 
     #[test]
