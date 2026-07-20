@@ -3,17 +3,33 @@ spec_id: BUG-763
 agreed_id: BUG-763
 title: aida ps 'started' column is date-less — a 23-day-old persistent harness lease reads 'started 11:55 / elapsed 559h', an apparent self-contradiction
 description: 'Observed 2026-07-19 (operator double-take): the persistent harness-worktree lease (born 2026-06-26T18:55Z, adopted and pid-restamped by every Claude Code session since) renders in aida ps as started=11:55 elapsed=559h — the started column prints time-of-day only, so a June birth reads as today and contradicts the elapsed. Fix: (1) started shows the date when not today (''Jun-26 11:55''); (2) for persistent/adopted leases whose pid is younger than the lease, add or annotate a renewed-at (current pid start) so lease-age vs process-age are both visible — the row currently mixes provenance silently (pid/liveness from today''s process, started/elapsed from the lease record). Acceptance: a lease older than 24h shows its date; a lease whose live pid started later than the lease shows both ages or an adopted marker; unit test on the row renderer. Mode: drive.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T02:15:34.860045320Z
-modified_at: 2026-07-20T05:03:06.668581394Z
+modified_at: 2026-07-20T05:12:32.233840194Z
 req_type: Bug
 tags:
 - aida:ps papercut from-dogfood
+history:
+- id: 019f7df0-aae3-7ab1-bbe8-8c09c61c7b12
+  author: aida-auto-bump
+  timestamp: 2026-07-20T05:12:32.227330541Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7df0-aae9-7003-9775-e0c4eedd2429
+  timestamp: 2026-07-20T05:12:32.233838965Z
+  agent: aida
+  commit_sha: cfacd82150f2ef5061ac8603a97c01b708550508
+  summary: Completed via merge cfacd821
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-20T05:03:06.668581394Z
   implemented_by: joe
+  completed_at: 2026-07-20T05:12:32.227247155Z
+  completion_sha: cfacd82150f2ef5061ac8603a97c01b708550508
