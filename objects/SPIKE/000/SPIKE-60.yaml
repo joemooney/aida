@@ -8,11 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T05:56:01.315522672Z
-modified_at: 2026-07-19T20:15:48.120032247Z
+modified_at: 2026-07-20T04:46:48.342019390Z
 req_type: Spike
 tags:
 - advisor
 - autonomy
 - deferred:design
 - parent:STORY-586
+deferred: true
+deferred_at: 2026-07-20T04:46:48.342019390Z
+deferred_until: durable advisor-watch supervisor design revisit
 human_only: true
