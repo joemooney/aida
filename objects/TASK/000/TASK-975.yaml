@@ -3,12 +3,12 @@ spec_id: TASK-975
 agreed_id: TASK-975
 title: CI-failure auto-fix loop before shelve (+ in-drain merge-conflict rebase)
 description: 'no-mistakes FIXES failing checks by re-invoking the agent (up to N) + auto-rebases conflicts before parking; AIDA SHELVES (EPIC-28) and never fixes. Add an opt-in CI-fix phase between CI and shelve (headless claude -p with failing logs + spec context, push, re-poll up to N) and reuse /aida-rebase for conflicts. Gate behind [drain] ci_auto_fix=N. STRATEGIC: changes drain behavior.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:10:08.541343029Z
-modified_at: 2026-07-20T06:13:44.305544931Z
+modified_at: 2026-07-20T06:23:09.301365126Z
 req_type: Task
 tags:
 - axi
@@ -22,8 +22,24 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-06-28T22:10:12.375568758Z
+history:
+- id: 019f7e31-51ef-7cb3-a006-5288a691662e
+  author: aida-auto-bump
+  timestamp: 2026-07-20T06:23:09.295171873Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7e31-51f5-7050-b61b-00e4d1dcceb8
+  timestamp: 2026-07-20T06:23:09.301364543Z
+  agent: aida
+  commit_sha: b58352686e7e2f45e50352e2056bb2cd5ac8cd29
+  summary: Completed via merge b5835268
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-20T06:13:44.305544931Z
   implemented_by: joe
+  completed_at: 2026-07-20T06:23:09.295085645Z
+  completion_sha: b58352686e7e2f45e50352e2056bb2cd5ac8cd29
