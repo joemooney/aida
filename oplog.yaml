@@ -36054,5 +36054,17 @@ operations:
   timestamp: 2026-07-20T02:29:36.392824475Z
   kind: !SetStatus
     status: Completed
-clock: 3344
+- id: 019f7d61-25bc-7eb1-887b-1b9a0f0547db
+  target_id: 019f7d61-210d-7852-b151-f4af14bccc88
+  author: aida
+  node_id: '1'
+  lamport: 3345
+  timestamp: 2026-07-20T02:35:46.492223668Z
+  kind: !Create
+    title: queue list per-item 'stalled — no live session lease' contradicts its own drain banner for burndown-fanout in-flight specs — last surface off the shared liveness probe
+    description: 'Observed 2026-07-19 19:35, one aida queue list output simultaneously showed: banner ''a drain is running — in-flight: ...; scheduled: BUG-763, BUG-764, TASK-1162, TASK-975'' + footer ''a drain is already working this queue — 2 scheduled, 1 in flight'' (BUG-753''s fix, correct) AND per-item hints ''TASK-1162 in progress, but no live session lease — stalled; pick it back up'' / same for BUG-763 — while the drain''s implementer was actively editing TASK-1162''s files (verbose stream showed guided-implement template edits + do_dispatch tests at that moment). Following the hint would double-dispatch a spec mid-flight. Family: BUG-741 (codex exec), BUG-752 (harness agents in ps), BUG-753 (footer), BUG-754 (status flip) each fixed one surface; the per-item stalled hint still keys on its own spec-scoped-lease + liveness check. Fix: route the queue-list per-item hint through the same shared liveness/drain-membership logic the banner uses — an in-flight-or-scheduled spec of the live drain NEVER gets a stalled/pick-it-up hint; genuinely leaseless In Progress specs (no drain) keep it. Acceptance: with a live drain listing spec X as in-flight or scheduled, queue list shows X without a stalled hint; without a drain, the orphan hint remains; unit test rendering both. Mode: drive.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3345
 node_id: '1'
