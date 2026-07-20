@@ -134,6 +134,8 @@ fn headless_env_launches_route_through_shared_argv_builders() {
     assert_env_setter_has_builder_context("session.rs", include_str!("../session.rs"));
     // STORY-772: the CLI body lives in lib.rs; main.rs is a 3-line stub.
     assert_env_setter_has_builder_context("lib.rs", include_str!("../lib.rs"));
+    // STORY-771: the queue-work launch machinery lives in queue_cmd.rs.
+    assert_env_setter_has_builder_context("queue_cmd.rs", include_str!("../queue_cmd.rs"));
 }
 
 /// BUG-342 regression for the actual bypass: `QueueWorkLaunch::Resume`
@@ -143,7 +145,14 @@ fn headless_env_launches_route_through_shared_argv_builders() {
 // trace:BUG-342 | ai:codex
 #[test]
 fn no_human_resume_paths_use_headless_resume_launcher() {
-    let src = include_str!("../lib.rs").replace("\r\n", "\n");
+    // STORY-771: the implementer + standalone-reviewer resume paths moved to
+    // queue_cmd.rs; the advisor resume stays in lib.rs. Scan both.
+    let src = format!(
+        "{}{}",
+        include_str!("../lib.rs"),
+        include_str!("../queue_cmd.rs")
+    )
+    .replace("\r\n", "\n");
     let count = src
         .matches("session::spawn_claude_headless_resume(")
         .count();
