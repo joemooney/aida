@@ -1,0 +1,14 @@
+id: 019f7d30-0632-7350-af89-a0c191977eab
+spec_id: STORY-779
+agreed_id: STORY-779
+title: Build the subsystem registry + routing (steps 2-7 of the ratified design) — DEFERRED behind the noise trigger
+description: 'The ratified subsystem-advisors design (see the four from-ratification ADRs + docs/plans/2026-07-19-subsystem-advisor-routing.md) green-lights building ONLY when the trigger fires. Steps: registry parsing+validation, fixtures, subsystem list/show/explain read surfaces, context focus wiring, routing dry-run, live scoped queues — sequenced read-only-first, each behind review. Mode when it returns: drive for steps 2-4, guided for 5-7.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-20T01:42:07.154131649Z
+modified_at: 2026-07-20T01:42:07.154131649Z
+req_type: Story
+tags:
+- subsystems parent:EPIC-0433 from-ratification
