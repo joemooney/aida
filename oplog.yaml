@@ -35998,5 +35998,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3338
+- id: 019f7d4e-adfd-72f1-80a0-e5a7f790a6e3
+  target_id: 019f7d4e-a8cc-7c31-ada6-8587cac95bd2
+  author: aida
+  node_id: '1'
+  lamport: 3339
+  timestamp: 2026-07-20T02:15:36.189664157Z
+  kind: !Create
+    title: aida ps 'started' column is date-less — a 23-day-old persistent harness lease reads 'started 11:55 / elapsed 559h', an apparent self-contradiction
+    description: 'Observed 2026-07-19 (operator double-take): the persistent harness-worktree lease (born 2026-06-26T18:55Z, adopted and pid-restamped by every Claude Code session since) renders in aida ps as started=11:55 elapsed=559h — the started column prints time-of-day only, so a June birth reads as today and contradicts the elapsed. Fix: (1) started shows the date when not today (''Jun-26 11:55''); (2) for persistent/adopted leases whose pid is younger than the lease, add or annotate a renewed-at (current pid start) so lease-age vs process-age are both visible — the row currently mixes provenance silently (pid/liveness from today''s process, started/elapsed from the lease record). Acceptance: a lease older than 24h shows its date; a lease whose live pid started later than the lease shows both ages or an adopted marker; unit test on the row renderer. Mode: drive.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3339
 node_id: '1'
