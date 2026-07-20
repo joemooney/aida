@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T02:20:29.388195286Z
-modified_at: 2026-07-19T20:15:43.009828360Z
+modified_at: 2026-07-20T04:46:44.284935406Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-12-story-711-advisor-lock.md
@@ -16,3 +16,6 @@ relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-13T02:20:31.342203905Z
+deferred: true
+deferred_at: 2026-07-20T04:46:44.284935406Z
+deferred_until: a real cross-clone lock collision is observed (its own stated condition)
