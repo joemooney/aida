@@ -84510,6 +84510,12 @@ struct DrainTuning {
     /// BUG-420: hard wall-clock ceiling per headless phase, a backstop in case
     /// progress-detection misses. Default 45m; `0` disables.
     ceiling: std::time::Duration,
+    /// TASK-975: CI auto-fix budget — how many in-drain headless fix cycles
+    /// phase 2 may attempt on a red CI run before the failure proceeds to
+    /// shelve. Also arms the phase-4 merge-conflict rebase when > 0.
+    /// Default 0 (off — red CI shelves immediately, the pre-TASK-975
+    /// behaviour).
+    ci_auto_fix: usize,
 }
 
 impl DrainTuning {
@@ -84532,10 +84538,15 @@ impl DrainTuning {
         let ceiling_min = env_u64("AIDA_PHASE_CEILING_MINUTES")
             .or(cfg.phase_ceiling_minutes)
             .unwrap_or(45);
+        // trace:TASK-975 | ai:claude
+        let ci_auto_fix = env_usize("AIDA_CI_AUTO_FIX")
+            .or(cfg.ci_auto_fix)
+            .unwrap_or(0);
         Self {
             gh_verify_retries,
             no_progress: std::time::Duration::from_secs(no_progress_min.saturating_mul(60)),
             ceiling: std::time::Duration::from_secs(ceiling_min.saturating_mul(60)),
+            ci_auto_fix,
         }
     }
 }
@@ -84886,6 +84897,10 @@ struct DrainConfigToml {
     gh_verify_retries: Option<usize>,
     no_progress_minutes: Option<u64>,
     phase_ceiling_minutes: Option<u64>,
+    /// TASK-975: `[drain] ci_auto_fix = N` — how many in-drain CI-fix cycles
+    /// phase 2 may attempt on a red CI run before shelving. Also arms the
+    /// phase-4 merge-conflict rebase when > 0. Absent/0 = off.
+    ci_auto_fix: Option<usize>,
 }
 
 /// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
@@ -84918,6 +84933,8 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
                 "gh_verify_retries" => out.gh_verify_retries = val.parse().ok(),
                 "no_progress_minutes" => out.no_progress_minutes = val.parse().ok(),
                 "phase_ceiling_minutes" => out.phase_ceiling_minutes = val.parse().ok(),
+                // trace:TASK-975 | ai:claude
+                "ci_auto_fix" => out.ci_auto_fix = val.parse().ok(),
                 _ => {}
             }
         }
@@ -87522,6 +87539,305 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             recovery_hint,
         )
     }
+
+    /// TASK-975: the `[drain] ci_auto_fix` budget (env override
+    /// `AIDA_CI_AUTO_FIX`), resolved once into `drain_tuning`. `0` (the
+    /// default) keeps the CI-fix loop and the merge-conflict rebase off.
+    // trace:TASK-975 | ai:claude
+    fn ci_fix_budget(&self) -> usize {
+        self.drain_tuning.ci_auto_fix
+    }
+
+    /// TASK-975: one in-drain CI-fix cycle — spawn a headless fix session
+    /// (vendor-routed, same adapter as the other drain phases) in the
+    /// still-leased phase-1 worktree with the failing-check log + spec
+    /// context; the session commits and pushes the fix to the PR branch.
+    /// Returns `true` only when origin's branch head actually advanced (the
+    /// ground truth that a re-poll is meaningful).
+    // trace:TASK-975 | ai:claude
+    fn attempt_ci_fix(
+        &mut self,
+        attempt: usize,
+        budget: usize,
+        failure: &auto_complete::PhaseFailure,
+    ) -> bool {
+        let Some(branch) = self.branch.clone() else {
+            return false;
+        };
+        // The fix session needs a checkout of the PR branch. Phase 1's
+        // worktree is still leased (the session only ends once CI clears), so
+        // host the fix there. A resumed drain that skipped phase 1 has no
+        // worktree — fall through to shelve rather than improvising one.
+        let Some(worktree) = self.implementer_worktree.clone() else {
+            eprintln!(
+                "  {} no implementer worktree in this run (resumed drain?) — \
+                 cannot host a CI-fix session; leaving the red-CI failure standing",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
+            );
+            return false;
+        };
+        eprintln!("  🔧 CI is red on `{branch}` — attempting in-drain fix {attempt}/{budget}…");
+        let run_id = self
+            .ci_run_id
+            .clone()
+            .or_else(|| latest_run_id_for_branch(&branch));
+        let log_excerpt = run_id
+            .as_deref()
+            .and_then(|id| failing_ci_log_excerpt(&self.project_root, id))
+            .unwrap_or_default();
+        let head_before = remote_head_sha(&self.project_root, &branch);
+        let prompt = build_ci_fix_prompt(&self.spec, &branch, &failure.reason, &log_excerpt);
+
+        let vendor = session::resolve_headless_vendor(&self.project_root);
+        let fix_uuid = uuid::Uuid::now_v7().to_string();
+        let log_path = self
+            .project_root
+            .join(".aida")
+            .join("headless-logs")
+            .join(format!(
+                "ci-fix-{}-a{}-{}.jsonl",
+                self.spec,
+                attempt,
+                &fix_uuid[..fix_uuid.len().min(8)]
+            ));
+        if let Some(dir) = log_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let log = match std::fs::File::create(&log_path) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!(
+                    "  {} could not create the CI-fix headless log ({e}) — \
+                     leaving the red-CI failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                return false;
+            }
+        };
+        let tee_opts =
+            crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("ci-fix");
+        let tee = crate::headless_tee::start_tee(&log_path, &tee_opts);
+        // BUG-342 posture: the argv comes from the shared vendor-neutral
+        // builder (mirrors the advisor tier's spawn), never a hand-rolled
+        // `claude -p`.
+        let program = session::resolve_agent_program(vendor.program());
+        let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false);
+        let status = std::process::Command::new(&program)
+            .current_dir(&worktree)
+            .args(fix_args)
+            .env("AIDA_HEADLESS", "1")
+            .stdout(std::process::Stdio::from(log))
+            .status();
+        tee.stop();
+        match status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                eprintln!(
+                    "  {} the CI-fix session exited {} — see {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    s.code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "with a signal".to_string()),
+                    log_path.display()
+                );
+                return false;
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} could not launch the CI-fix session ({e}) — \
+                     leaving the red-CI failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                return false;
+            }
+        }
+        // Ground truth: only a pushed change makes the re-poll meaningful. A
+        // session that exited clean but pushed nothing (it judged the failure
+        // unfixable) proceeds to shelve.
+        let head_after = remote_head_sha(&self.project_root, &branch);
+        let pushed = match (&head_before, &head_after) {
+            (_, None) => false,
+            (before, Some(after)) => before.as_deref() != Some(after.as_str()),
+        };
+        if pushed {
+            eprintln!(
+                "  {} fix pushed to `{}` — re-polling CI…",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                branch
+            );
+            // The next CI probe belongs to the fresh push; drop the stale
+            // run id so a later failure captures the new run.
+            self.ci_run_id = None;
+            true
+        } else {
+            eprintln!(
+                "  {} the CI-fix session pushed no change — leaving the \
+                 red-CI failure standing (see {})",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                log_path.display()
+            );
+            false
+        }
+    }
+
+    /// TASK-975: one in-drain rebase after a merge-conflict phase-4 failure —
+    /// the same `pr rebase <N> --no-smoke` subprocess as the STORY-429
+    /// phase-3 stale-base auto-rebase. `true` = rebased clean and pushed; the
+    /// orchestrator retries the merge once.
+    // trace:TASK-975 | ai:claude
+    fn attempt_merge_conflict_rebase(&mut self, _failure: &auto_complete::PhaseFailure) -> bool {
+        let Some(pr) = self.pr_number else {
+            return false;
+        };
+        eprintln!(
+            "  {} merge hit a conflict on PR-{pr} — attempting one in-drain rebase…",
+            "↻".cyan()
+        );
+        let record = |events: &mut Vec<auto_complete_telemetry::AutoRebaseEvent>,
+                      outcome: String| {
+            events.push(auto_complete_telemetry::AutoRebaseEvent {
+                phase: auto_complete::Phase::Merge.index() as u8,
+                pr_number: pr as u64,
+                outcome,
+            });
+        };
+        let status = std::process::Command::new(self.aida_exe())
+            .current_dir(&self.project_root)
+            .args(build_phase3_auto_rebase_args(pr as u64))
+            .status();
+        match status {
+            Ok(s) if s.success() => {
+                record(&mut self.auto_rebase_events, "clean".to_string());
+                eprintln!(
+                    "  {} PR-{pr} rebased cleanly — retrying the merge",
+                    crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+                );
+                true
+            }
+            Ok(_) => {
+                record(&mut self.auto_rebase_events, "conflict".to_string());
+                eprintln!(
+                    "  {} the rebase itself conflicted — leaving the merge \
+                     failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                false
+            }
+            Err(e) => {
+                record(&mut self.auto_rebase_events, format!("failed:{e}"));
+                eprintln!(
+                    "  {} could not run the rebase ({e}) — leaving the merge \
+                     failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                false
+            }
+        }
+    }
+}
+
+/// TASK-975: how much of the failing-check log tail rides in the CI-fix
+/// prompt. The failure detail lives at the end of a CI log; the cap keeps the
+/// prompt bounded on a pathologically chatty run.
+// trace:TASK-975 | ai:claude
+const CI_FIX_LOG_TAIL_BYTES: usize = 16_000;
+
+/// TASK-975: fetch the failing-step logs for a CI run (`gh run view <id>
+/// --log-failed`), tail-bounded. `None` when `gh` is missing, the run cannot
+/// be read, or the log is empty — the prompt then tells the fix session to
+/// fetch the checks itself.
+// trace:TASK-975 | ai:claude
+fn failing_ci_log_excerpt(project_root: &std::path::Path, run_id: &str) -> Option<String> {
+    let gh = resolve_gh_binary()?;
+    let out = std::process::Command::new(gh)
+        .current_dir(project_root)
+        .args(["run", "view", run_id, "--log-failed"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(tail_bounded(trimmed, CI_FIX_LOG_TAIL_BYTES))
+}
+
+/// TASK-975: keep the LAST `max_bytes` of `text` (on a char boundary) with a
+/// truncation marker — a CI log's failure detail is at its tail.
+// trace:TASK-975 | ai:claude
+fn tail_bounded(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    let mut start = text.len() - max_bytes;
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    format!("…(log truncated)…\n{}", &text[start..])
+}
+
+/// TASK-975: the prompt handed to the headless CI-fix session. Pure so the
+/// contract lines (smallest fix, push to the existing branch, never a new PR,
+/// exit without pushing when unfixable) are pinned by a unit test.
+// trace:TASK-975 | ai:claude
+fn build_ci_fix_prompt(
+    spec: &str,
+    branch: &str,
+    failure_reason: &str,
+    log_excerpt: &str,
+) -> String {
+    let log_block = if log_excerpt.is_empty() {
+        "No failing-check log could be fetched — run `gh pr checks` / \
+         `gh run view --log-failed` yourself to see the failure."
+            .to_string()
+    } else {
+        format!("Failing-check log (tail):\n```\n{log_excerpt}\n```")
+    };
+    format!(
+        "You are a CI-fix session inside an autonomous drain. The PR branch \
+         `{branch}` implementing {spec} has failing CI checks.\n\
+         \n\
+         Reported failure: {failure_reason}\n\
+         \n\
+         {log_block}\n\
+         \n\
+         Your job, in this worktree (the branch is already checked out):\n\
+         1. Read the spec for context: `aida show {spec} --full`.\n\
+         2. Diagnose the failing checks from the log above and make the \
+         smallest correct fix. Do not rewrite unrelated code.\n\
+         3. Run the relevant local checks (build / fmt / clippy / tests) \
+         until they pass.\n\
+         4. Commit with a message crediting {spec} and push to the existing \
+         branch: `git push origin {branch}`.\n\
+         \n\
+         Hard rules: do NOT open a new PR, do NOT merge, do NOT force-push, \
+         do NOT switch branches. If the failure is not fixable from this \
+         worktree (broken infrastructure, a flaky external service), exit \
+         WITHOUT committing or pushing anything."
+    )
+}
+
+/// TASK-975: the current head SHA of `branch` on origin, or `None` when the
+/// remote cannot be read. Ground truth for "did the fix session push?".
+// trace:TASK-975 | ai:claude
+fn remote_head_sha(project_root: &std::path::Path, branch: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-remote", "origin", &format!("refs/heads/{branch}")])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .next()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
 }
 
 /// TASK-84: pure resolver for `aida queue work` permission-mode.

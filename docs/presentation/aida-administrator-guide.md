@@ -121,7 +121,7 @@ The **queue** is keyed off the **shell's user id**, not the node id. Resolution 
 | `[archive]` | `auto_after_days` — opt-in auto-archive sweep on pull |
 | `[ultraplan]` | `mode` (never / on-demand / suggested), `suggest_threshold` (`spec-thinness` default, or legacy `acceptance-bullets>N`) — whether pickup nudges `aida ultraplan` for under-specified specs (design-less, not just long) |
 | `[telemetry]` | `enabled` — local usage log on/off |
-| `[drain]` | `gh_verify_retries`, `no_progress_minutes`, `phase_ceiling_minutes` |
+| `[drain]` | `gh_verify_retries`, `no_progress_minutes`, `phase_ceiling_minutes`, `ci_auto_fix` (N in-drain fix cycles on red CI before shelve; also arms the merge-conflict rebase; default 0 = off) |
 | `[store.sync]` | `auto_push`: manual / session-end / per-write |
 | `[contained]` | `os_wrap` (bubblewrap OS sandbox), `read_allowlist`, `managed_domains_only` — see the OS-sandbox slide |
 

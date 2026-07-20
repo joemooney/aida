@@ -11,13 +11,15 @@ fn read_drain_config_parses_drain_section() {
     std::fs::write(
         tmp.path().join(".aida/config.toml"),
         "[node]\nid = \"x\"\n\n[drain]\ngh_verify_retries = 2  # transient blips\n\
-             no_progress_minutes = 3\nphase_ceiling_minutes = 20\n",
+             no_progress_minutes = 3\nphase_ceiling_minutes = 20\nci_auto_fix = 2\n",
     )
     .unwrap();
     let cfg = read_drain_config(tmp.path());
     assert_eq!(cfg.gh_verify_retries, Some(2));
     assert_eq!(cfg.no_progress_minutes, Some(3));
     assert_eq!(cfg.phase_ceiling_minutes, Some(20));
+    // trace:TASK-975 | ai:claude
+    assert_eq!(cfg.ci_auto_fix, Some(2));
 }
 
 #[test]
@@ -29,6 +31,47 @@ fn read_drain_config_absent_section_is_all_none() {
     assert_eq!(cfg.gh_verify_retries, None);
     assert_eq!(cfg.no_progress_minutes, None);
     assert_eq!(cfg.phase_ceiling_minutes, None);
+    // trace:TASK-975 | ai:claude — default OFF: red CI shelves immediately.
+    assert_eq!(cfg.ci_auto_fix, None);
+}
+
+/// TASK-975: the CI-fix prompt's contract lines — spec context, the failing
+/// log, push-to-the-existing-branch, and the no-new-PR / exit-without-push
+/// rules — are pinned so a reword can't silently drop a guard.
+// trace:TASK-975 | ai:claude
+#[test]
+fn ci_fix_prompt_carries_context_and_guardrails() {
+    let prompt = build_ci_fix_prompt(
+        "TASK-9",
+        "task-9-fix",
+        "CI is red on PR-46: clippy failed",
+        "error: unused variable `x`",
+    );
+    assert!(prompt.contains("aida show TASK-9 --full"));
+    assert!(prompt.contains("CI is red on PR-46: clippy failed"));
+    assert!(prompt.contains("error: unused variable `x`"));
+    assert!(prompt.contains("git push origin task-9-fix"));
+    assert!(prompt.contains("do NOT open a new PR"));
+    assert!(prompt.contains("WITHOUT committing or pushing"));
+
+    // No log fetched → the prompt says to fetch the checks itself.
+    let no_log = build_ci_fix_prompt("TASK-9", "task-9-fix", "CI is red", "");
+    assert!(no_log.contains("No failing-check log could be fetched"));
+}
+
+/// TASK-975: the log tail stays bounded and keeps the END of the log (where
+/// the failure detail lives), marked as truncated.
+// trace:TASK-975 | ai:claude
+#[test]
+fn ci_fix_log_tail_is_bounded_and_keeps_the_end() {
+    let short = "a short log";
+    assert_eq!(tail_bounded(short, 100), short);
+
+    let long = format!("{}THE-ACTUAL-ERROR", "x".repeat(50_000));
+    let tail = tail_bounded(&long, 1_000);
+    assert!(tail.len() < 1_100);
+    assert!(tail.ends_with("THE-ACTUAL-ERROR"));
+    assert!(tail.starts_with("…(log truncated)…"));
 }
 
 #[test]
