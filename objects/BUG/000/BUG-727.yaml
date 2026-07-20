@@ -8,12 +8,14 @@ description: |-
   This is a substrate-as-bouncer gap: a keystone/supervised spec must be UNMERGEABLE-by-automation, not merely asked-nicely. Fix: a first-class marker (e.g. a `supervised` / `no-auto-merge` tag, or a spec field) that `aida pr ship` (and any auto-merge path) CHECKS and REFUSES to auto-merge on — holding the PR for explicit human/advisor merge instead, with a clear message ('SPEC-ID is marked supervised; auto-merge refused — merge requires advisor review'). The advisor's post-merge review is the fallback, not the design.
 
   Related: the keyboard-lane / keystone discipline (reliability + autonomy machinery ships supervised); STORY-666 (destructive ops gated by consequence). Acceptance: a spec tagged supervised, dispatched to a pr-ship session, PARKS at 'mergeable, awaiting advisor' instead of auto-merging.
+
+  RATIFIED DESIGN (operator, 2026-07-19) - binding acceptance: REUSE execution_mode as the supervision marker; no new flag. The pr ship auto-merge leg (and any automation merge path) loads the spec(s) behind the PR and REFUSES auto-merge unless execution_mode == drain; an interactive human at a TTY may always merge explicitly. A spec with NO mode set is treated as supervised (fail safe). Refusal message: "<SPEC-ID> is marked <mode> - auto-merge refused; merge requires human/advisor review". The session parks the PR mergeable-awaiting-review (the existing Done-awaiting-merge surface). Regression: a mode=guided spec dispatched to a pr-ship cadence ends at an OPEN mergeable PR; mode=drain preserves current auto-merge.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T06:40:14.134597707Z
-modified_at: 2026-07-19T17:26:14.908845299Z
+modified_at: 2026-07-20T02:54:20.543002956Z
 req_type: Bug
 tags:
 - aida:pr-ship keystone supervised substrate governance severity:major

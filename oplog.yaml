@@ -36098,5 +36098,20 @@ operations:
   timestamp: 2026-07-20T02:52:04.907252092Z
   kind: !SetStatus
     status: In Progress
-clock: 3349
+- id: 019f7d72-25af-7550-b305-bde8a6607fbd
+  target_id: 019f69a7-8536-7831-b7af-aa1da50f03fc
+  author: aida
+  node_id: '1'
+  lamport: 3350
+  timestamp: 2026-07-20T02:54:20.591033210Z
+  kind: !SetDescription
+    description: |-
+      2026-07-15: TASK-1080 and BUG-714 both carried the implementation directive 'Gate + PR, do NOT merge (keystone, advisor-review at PR)'. Both were launched as `aida agent new` sessions whose standard `aida pr ship` cadence gated on CI green and then AUTO-MERGED the PR — bypassing the pre-merge advisor review the directive asked for. Both turned out sound (post-merge advisor review found no remediation), but the directive was a RULE IN SPEC TEXT that the ship path never consulted.
+
+      This is a substrate-as-bouncer gap: a keystone/supervised spec must be UNMERGEABLE-by-automation, not merely asked-nicely. Fix: a first-class marker (e.g. a `supervised` / `no-auto-merge` tag, or a spec field) that `aida pr ship` (and any auto-merge path) CHECKS and REFUSES to auto-merge on — holding the PR for explicit human/advisor merge instead, with a clear message ('SPEC-ID is marked supervised; auto-merge refused — merge requires advisor review'). The advisor's post-merge review is the fallback, not the design.
+
+      Related: the keyboard-lane / keystone discipline (reliability + autonomy machinery ships supervised); STORY-666 (destructive ops gated by consequence). Acceptance: a spec tagged supervised, dispatched to a pr-ship session, PARKS at 'mergeable, awaiting advisor' instead of auto-merging.
+
+      RATIFIED DESIGN (operator, 2026-07-19) - binding acceptance: REUSE execution_mode as the supervision marker; no new flag. The pr ship auto-merge leg (and any automation merge path) loads the spec(s) behind the PR and REFUSES auto-merge unless execution_mode == drain; an interactive human at a TTY may always merge explicitly. A spec with NO mode set is treated as supervised (fail safe). Refusal message: "<SPEC-ID> is marked <mode> - auto-merge refused; merge requires human/advisor review". The session parks the PR mergeable-awaiting-review (the existing Done-awaiting-merge surface). Regression: a mode=guided spec dispatched to a pr-ship cadence ends at an OPEN mergeable PR; mode=drain preserves current auto-merge.
+clock: 3350
 node_id: '1'
