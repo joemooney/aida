@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-08T04:53:27.417997980Z
-modified_at: 2026-07-19T20:15:45.330022536Z
+modified_at: 2026-07-20T04:46:46.372496057Z
 req_type: Story
 tags:
 - parent:SPIKE-77
@@ -29,3 +29,6 @@ relationships:
 - rel_type: Child
   target_id: 019f4006-20c5-7531-95cb-3183dcd2a29f
   created_at: 2026-07-08T04:53:32.158936543Z
+deferred: true
+deferred_at: 2026-07-20T04:46:46.372496057Z
+deferred_until: STORY-766 /aida-fleet-watch is validated in real use (recorded answer 2026-07-14)
