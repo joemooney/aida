@@ -27,7 +27,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:02:27.493253004Z
-modified_at: 2026-07-19T20:15:35.201836740Z
+modified_at: 2026-07-20T04:46:37.164161634Z
 req_type: Spike
 tags:
 - conflict-merge
@@ -46,3 +46,6 @@ comments:
   content: 'OBE — resolved by BUG-602 (#1075, merged): ''fix(conflict): 3-way set merge for tags/relationships/dependencies — stop tombstone resurrection.'' The exploratory concern (tag G-Set loses concurrent removals on union merge) was promoted to a real bug and fixed — and notably via the *cheaper* path this spike listed as an alternative (a 3-way set merge against the merge-base to tell ''added on one side'' from ''removed on the other''), NOT the heavier OR-Set. Recommend closing this spike as resolved. Verified against origin/main 2026-06-20.'
   created_at: 2026-06-20T18:01:34.898448968Z
   modified_at: 2026-06-20T18:01:34.898448968Z
+deferred: true
+deferred_at: 2026-07-20T04:46:37.164161634Z
+deferred_until: a real concurrent tag-removal loss is observed
