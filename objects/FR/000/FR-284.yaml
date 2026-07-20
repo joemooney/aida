@@ -8,5 +8,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:08.908232587Z
-modified_at: 2026-07-19T20:26:31.078364873Z
+modified_at: 2026-07-20T04:46:52.740995263Z
 req_type: Functional
+deferred: true
+deferred_at: 2026-07-20T04:46:52.740995263Z
+deferred_until: a real multi-spec interactive session still hits boundary friction after worktree exit + aida do
