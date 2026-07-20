@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:43:31.585327146Z
-modified_at: 2026-07-20T01:14:24.796755718Z
+modified_at: 2026-07-20T01:14:25.686391760Z
 req_type: Spike
 tags:
 - batch:advisor-0719
@@ -37,6 +37,13 @@ relationships:
   target_id: 019f7c66-7892-7e91-80be-67e96bfdb4b7
   created_at: 2026-07-19T22:02:12.854742746Z
   created_by: joe
+comments:
+- id: 019f7d16-ac16-7513-92b3-42ad01a485dc
+  author: joe
+  content: 'Disposition of record (advisor, 2026-07-19): codex evaluation verdict accepted — BUILD LATER. Claude Code now exposes the advisor tool (/advisor, advisorModel, --advisor; API-side still experimental, Anthropic-only). Adopt as an opt-in Claude-adapter EXECUTION capability only after the vendor adapter grows a per-vendor execution-features policy seam; never in the coordination layer. Full eval: docs/plans/2026-07-19-spike-75-anthropic-advisor-tool.md (PR-1536).'
+  created_at: 2026-07-20T01:14:25.686391760Z
+  modified_at: 2026-07-20T01:14:25.686391760Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 history:
 - id: 019f7d15-712c-73f1-9c75-78605153c0d0
   author: aida-auto-bump
