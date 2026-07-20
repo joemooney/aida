@@ -36285,5 +36285,13 @@ operations:
   timestamp: 2026-07-20T04:47:18.661407699Z
   kind: !SetStatus
     status: Approved
-clock: 3369
+- id: 019f7dd9-9673-7d60-8b64-51eb71b96ad2
+  target_id: 019f6e6e-2f7e-71e3-ac41-710f63d3cf5d
+  author: aida
+  node_id: '1'
+  lamport: 3370
+  timestamp: 2026-07-20T04:47:19.668002804Z
+  kind: !RemoveTag
+    tag: supervised
+clock: 3370
 node_id: '1'
