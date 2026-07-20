@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:42.718647193Z
-modified_at: 2026-07-19T17:26:07.484271673Z
+modified_at: 2026-07-20T02:45:13.148326017Z
 req_type: Story
 tags:
 - batch:guided-0719
@@ -29,3 +29,9 @@ comments:
   content: Commit 9b82b56d7 references this requirement
   created_at: 2026-07-17T06:04:06.975168729Z
   modified_at: 2026-07-17T06:04:06.975168729Z
+- id: 019f7d69-cb3c-7301-af2d-f576c262a9b6
+  author: joe
+  content: 'Fence release (operator authorization 2026-07-19): guided→drive. Mechanical extraction with full suite + CI as the net, per the 772-PR-2 precedent.'
+  created_at: 2026-07-20T02:45:13.148326017Z
+  modified_at: 2026-07-20T02:45:13.148326017Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
