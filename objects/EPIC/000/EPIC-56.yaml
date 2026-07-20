@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-28T22:06:35.111359647Z
-modified_at: 2026-07-15T02:05:48.347170697Z
+modified_at: 2026-07-20T15:34:45.833858168Z
 req_type: Epic
 tags:
 - axi
@@ -117,3 +117,6 @@ relationships:
 - rel_type: Parent
   target_id: 019f213a-20c5-7dd2-bbca-b6c8d99ba161
   created_at: 2026-07-02T05:08:09.721742436Z
+deferred: true
+deferred_at: 2026-07-20T15:34:45.833858168Z
+deferred_until: STORY-713 returns (coordination chatter measurably burdens the operator) — all other children shipped 2026-07-20
