@@ -692,6 +692,314 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
     Ok(())
 }
 
+// ───────────────────────── code-leg mirror fan-out ────────────────────────
+//
+// `aida remote mirror <name>` + the pre-push hook it installs. The store leg
+// already fans out via `[store.sync] mirror_remotes`; the CODE leg is pushed
+// by plain git, so a raw `git push origin main` reaches only one hub. The
+// hook is a thin POSIX shim calling `aida remote mirror-push` so the fan-out
+// logic stays in tested Rust. Native multi-pushurl (`git remote set-url
+// --add --push`) is deliberately NOT used: it would fan out the store branch
+// too, and while the store is intentionally diverged across hubs that leg is
+// non-fast-forward and would break `aida db sync`. The hook skips the store
+// branch instead.
+// trace:TASK-1097 | ai:claude
+
+/// Marker line the installer looks for to recognize (and refresh) its own
+/// pre-push hook without clobbering a user's custom one.
+const MIRROR_HOOK_MARKER: &str = "aida remote mirror-push";
+
+/// The pre-push hook shim `aida remote mirror` installs. POSIX sh — git runs
+/// hooks under /bin/sh. Pipes the ref lines git feeds the hook straight
+/// through to the plumbing subcommand and always exits 0, so mirroring can
+/// never block the origin push (even when `aida` is not on PATH).
+pub fn mirror_pre_push_hook_script() -> String {
+    "#!/bin/sh\n\
+     # Mirror fan-out pre-push hook — installed by `aida remote mirror`.\n\
+     # Fans each code ref pushed to origin out to every configured mirror hub\n\
+     # ([store.sync] mirror_remotes in .aida/config.toml). Best-effort: a\n\
+     # mirror failure warns and never blocks the push. Safe to delete;\n\
+     # reinstall with `aida remote mirror <name>`.\n\
+     unset GIT_DIR GIT_WORK_TREE\n\
+     if command -v aida >/dev/null 2>&1; then\n\
+     \u{20} aida remote mirror-push \"$1\" || true\n\
+     fi\n\
+     exit 0\n"
+        .to_string()
+}
+
+/// Parse the ref lines git feeds a pre-push hook on stdin
+/// (`<local ref> <local sha> <remote ref> <remote sha>` per line) into the
+/// refspecs to mirror. Skips the store branch (its fan-out is the store
+/// leg's job and is intentionally non-fast-forward across hubs) and ref
+/// deletions (a mirror hub keeping a branch is drift to reconcile, not
+/// something to propagate silently). Pushes by SHA so each mirror gets
+/// exactly what origin got, even if the local branch moves meanwhile. Pure.
+pub fn mirror_push_refspecs(ref_lines: &str) -> Vec<String> {
+    ref_lines
+        .lines()
+        .filter_map(|line| {
+            let mut it = line.split_whitespace();
+            let _local_ref = it.next()?;
+            let local_sha = it.next()?;
+            let remote_ref = it.next()?;
+            if remote_ref == format!("refs/heads/{STORE_BRANCH}") {
+                return None;
+            }
+            // A deletion pushes the all-zeros sha.
+            if local_sha.chars().all(|c| c == '0') {
+                return None;
+            }
+            Some(format!("{local_sha}:{remote_ref}"))
+        })
+        .collect()
+}
+
+/// `aida remote mirror-push <pushed-remote>` — the hook's plumbing target.
+/// Reads the pre-push ref lines from stdin and fans them out.
+pub fn handle_remote_mirror_push(project_root: &Path, pushed_remote: &str) -> Result<()> {
+    let mut ref_lines = String::new();
+    use std::io::Read;
+    std::io::stdin().lock().read_to_string(&mut ref_lines).ok();
+    run_mirror_push(project_root, pushed_remote, &ref_lines)
+}
+
+/// Fan the pushed refs out to every configured mirror hub. Best-effort per
+/// hub: an unreachable or diverged mirror WARNS and is skipped — this
+/// function never errors, so the triggering origin push is never blocked.
+pub fn run_mirror_push(project_root: &Path, pushed_remote: &str, ref_lines: &str) -> Result<()> {
+    // Only a push to origin fans out — a push to a mirror (including the
+    // hook's own nested pushes) is a no-op, which also breaks recursion.
+    if pushed_remote != "origin" {
+        return Ok(());
+    }
+    let refspecs = mirror_push_refspecs(ref_lines);
+    if refspecs.is_empty() {
+        return Ok(());
+    }
+    let cfg = crate::read_store_sync_config(project_root).unwrap_or_default();
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    for mirror in &cfg.mirror_remotes {
+        if mirror == "origin" {
+            continue;
+        }
+        if !aida_core::git_ops::has_remote(project_root, mirror) {
+            eprintln!("  {warn} mirror remote `{mirror}` not configured — skipping");
+            continue;
+        }
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["push", "--quiet", mirror])
+            .args(&refspecs)
+            .output();
+        match out {
+            Ok(o) if o.status.success() => {
+                println!("  mirrored {} ref(s) → {mirror}", refspecs.len());
+            }
+            Ok(o) => {
+                // Surface git's diagnostic line (a rejected ref, an
+                // unreachable repo), not its trailing advice prose.
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                let detail = stderr
+                    .lines()
+                    .find(|l| {
+                        let l = l.trim_start();
+                        l.starts_with("fatal:") || l.starts_with("error:") || l.starts_with('!')
+                    })
+                    .or_else(|| stderr.lines().rfind(|l| !l.trim().is_empty()))
+                    .unwrap_or("")
+                    .trim();
+                eprintln!(
+                    "  {warn} mirror `{mirror}` push failed — skipped ({detail}); check drift with `aida remote status`"
+                );
+            }
+            Err(e) => {
+                eprintln!("  {warn} mirror `{mirror}` push failed: {e} — skipped");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Add `name` to `[store.sync] mirror_remotes` in the project's
+/// `.aida/config.toml`, preserving every other key, section, and comment.
+/// Tolerates (and upgrades) the bare-string shorthand. Returns true when the
+/// entry was newly added, false when it was already listed.
+fn add_mirror_remote_to_config(project_root: &Path, name: &str) -> Result<bool> {
+    use toml_edit::{DocumentMut, Item, Table, Value};
+    let path = crate::config_path_for_project(project_root);
+    let body = match std::fs::read_to_string(&path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e).with_context(|| format!("failed to read {}", path.display())),
+    };
+    let mut doc: DocumentMut = body
+        .parse()
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    if !doc.contains_key("store") {
+        let mut t = Table::new();
+        t.set_implicit(true);
+        doc.insert("store", Item::Table(t));
+    }
+    let store = doc["store"]
+        .as_table_mut()
+        .ok_or_else(|| anyhow::anyhow!("[store] is not a table in {}", path.display()))?;
+    if !store.contains_key("sync") {
+        store.insert("sync", Item::Table(Table::new()));
+    }
+    let sync = store["sync"]
+        .as_table_mut()
+        .ok_or_else(|| anyhow::anyhow!("[store.sync] is not a table in {}", path.display()))?;
+
+    let mut arr = toml_edit::Array::new();
+    match sync.get("mirror_remotes") {
+        Some(Item::Value(Value::Array(existing))) => {
+            for v in existing {
+                if v.as_str() == Some(name) {
+                    return Ok(false);
+                }
+                arr.push_formatted(v.clone());
+            }
+        }
+        // Bare-string shorthand: upgrade to an array, keeping the entry.
+        Some(Item::Value(Value::String(s))) => {
+            if s.value() == name {
+                return Ok(false);
+            }
+            arr.push(s.value().as_str());
+        }
+        _ => {}
+    }
+    arr.push(name);
+    sync.insert("mirror_remotes", Item::Value(Value::Array(arr)));
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    aida_core::write_atomic(&path, doc.to_string())
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(true)
+}
+
+/// Resolve the repo's hooks directory (`git rev-parse --git-path hooks`, so
+/// linked worktrees and `core.hooksPath` are honored) and install the mirror
+/// pre-push shim there. Idempotent: refreshes its own hook in place, never
+/// clobbers a custom pre-push hook (prints the one line to add instead).
+fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
+    let check = crate::glyph(crate::glyphs::Glyph::Check);
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    let rel = git_out(project_root, &["rev-parse", "--git-path", "hooks"])
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| ".git/hooks".to_string());
+    let hooks_dir = {
+        let p = Path::new(&rel);
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            project_root.join(p)
+        }
+    };
+    std::fs::create_dir_all(&hooks_dir)
+        .with_context(|| format!("failed to create {}", hooks_dir.display()))?;
+    let target = hooks_dir.join("pre-push");
+    let script = mirror_pre_push_hook_script();
+
+    if target.exists() {
+        let existing = std::fs::read_to_string(&target).unwrap_or_default();
+        if existing.contains(MIRROR_HOOK_MARKER) {
+            if existing != script {
+                std::fs::write(&target, &script)
+                    .with_context(|| format!("failed to refresh {}", target.display()))?;
+            }
+            println!("{check} pre-push mirror hook already installed");
+            return Ok(());
+        }
+        eprintln!(
+            "{warn} a custom pre-push hook already exists at {} — not overwriting.",
+            target.display()
+        );
+        eprintln!("  To enable mirror fan-out, add this line to it:");
+        eprintln!("    aida remote mirror-push \"$1\" || true");
+        return Ok(());
+    }
+
+    std::fs::write(&target, &script)
+        .with_context(|| format!("failed to write {}", target.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&target)?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&target, perms)?;
+    }
+    println!(
+        "{check} installed pre-push mirror hook at {}",
+        target.display()
+    );
+    Ok(())
+}
+
+/// `aida remote mirror <name> [--url URL]` — one-command mirror setup: wire
+/// the git remote, list it for store-leg fan-out, install the code-leg
+/// pre-push hook. Idempotent — safe to re-run.
+pub fn handle_remote_mirror(project_root: &Path, name: &str, url: Option<&str>) -> Result<()> {
+    if name == "origin" {
+        anyhow::bail!(
+            "`origin` is the primary hub — name the extra hub to mirror to (e.g. `aida remote mirror gitlab --url <clone-url>`)"
+        );
+    }
+    let check = crate::glyph(crate::glyphs::Glyph::Check);
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+
+    // 1. The git remote itself.
+    if aida_core::git_ops::has_remote(project_root, name) {
+        if let Some(u) = url {
+            let existing = git_out(project_root, &["remote", "get-url", name])
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            if !existing.is_empty() && existing != u {
+                eprintln!(
+                    "{warn} remote `{name}` already points at {existing} — keeping it (re-point with `git remote set-url {name} <url>`)"
+                );
+            }
+        }
+        println!("{check} remote `{name}` already configured");
+    } else {
+        let Some(u) = url else {
+            anyhow::bail!("remote `{name}` does not exist — pass --url <clone-url> to add it");
+        };
+        let add = Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["remote", "add", name, u])
+            .status()
+            .context("invoking git remote add")?;
+        if !add.success() {
+            anyhow::bail!("`git remote add {name} {u}` failed");
+        }
+        println!("{check} added remote `{name}` → {u}");
+    }
+
+    // 2. Store-leg fan-out config.
+    if add_mirror_remote_to_config(project_root, name)? {
+        println!(
+            "{check} listed `{name}` in [store.sync] mirror_remotes — store pushes now fan out"
+        );
+    } else {
+        println!("{check} `{name}` already listed in [store.sync] mirror_remotes");
+    }
+
+    // 3. Code-leg pre-push hook.
+    install_mirror_pre_push_hook(project_root)?;
+
+    println!();
+    println!("Every `git push origin …` now mirrors the pushed code refs to `{name}`");
+    println!("(best-effort — a mirror failure warns without blocking the push).");
+    println!("Check hub drift anytime with: aida remote status");
+    Ok(())
+}
+
 // ───────────────────────── multi-hub store reconcile ─────────────────────
 
 /// The orphan store branch every hub must agree on.
@@ -1329,5 +1637,259 @@ host = \"should.not.count\"
     fn emails_in_empty_text_is_empty() {
         assert!(emails_in("").is_empty());
         assert!(emails_in("registry:\n  blocks: []\n").is_empty());
+    }
+
+    // ───────────────────── code-leg mirror fan-out (TASK-1097) ─────────────
+
+    const SHA_A: &str = "1111111111111111111111111111111111111111";
+    const ZEROS: &str = "0000000000000000000000000000000000000000";
+
+    /// Run git in `repo`, panicking (with stderr) on failure. Test helper.
+    fn git(repo: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// Init a git repo with one commit on `main`, returning its HEAD sha.
+    fn init_repo_with_commit(root: &Path) -> String {
+        git(root, &["init", "-q", "-b", "main"]);
+        std::fs::write(root.join("file.txt"), "hello\n").unwrap();
+        git(root, &["add", "file.txt"]);
+        git(
+            root,
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-q",
+                "-m",
+                "init",
+            ],
+        );
+        git_out(root, &["rev-parse", "HEAD"])
+            .unwrap()
+            .trim()
+            .to_string()
+    }
+
+    #[test]
+    fn mirror_refspecs_skip_store_branch_and_deletions() {
+        let lines = format!(
+            "refs/heads/main {SHA_A} refs/heads/main {ZEROS}\n\
+             refs/heads/aida-store {SHA_A} refs/heads/aida-store {ZEROS}\n\
+             (delete) {ZEROS} refs/heads/old-branch {SHA_A}\n\
+             refs/tags/v1 {SHA_A} refs/tags/v1 {ZEROS}\n"
+        );
+        assert_eq!(
+            mirror_push_refspecs(&lines),
+            vec![
+                format!("{SHA_A}:refs/heads/main"),
+                format!("{SHA_A}:refs/tags/v1"),
+            ]
+        );
+        assert!(mirror_push_refspecs("").is_empty());
+        assert!(mirror_push_refspecs("garbage line\n").is_empty());
+    }
+
+    #[test]
+    fn mirror_hook_script_is_a_posix_best_effort_shim() {
+        let s = mirror_pre_push_hook_script();
+        assert!(s.starts_with("#!/bin/sh\n"), "hook must run under /bin/sh");
+        assert!(
+            s.contains(MIRROR_HOOK_MARKER),
+            "installer must recognize its own hook"
+        );
+        assert!(
+            s.contains("|| true"),
+            "a mirror failure must never fail the hook"
+        );
+        assert!(
+            s.trim_end().ends_with("exit 0"),
+            "hook must never block the push"
+        );
+    }
+
+    #[test]
+    fn add_mirror_remote_to_config_is_idempotent_and_preserves_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg_dir = tmp.path().join(".aida");
+        std::fs::create_dir_all(&cfg_dir).unwrap();
+        let cfg = cfg_dir.join("config.toml");
+        std::fs::write(&cfg, "# keep me\n[node]\nid = \"1\"\n").unwrap();
+
+        assert!(add_mirror_remote_to_config(tmp.path(), "gitlab").unwrap());
+        assert!(!add_mirror_remote_to_config(tmp.path(), "gitlab").unwrap());
+        assert!(add_mirror_remote_to_config(tmp.path(), "backup").unwrap());
+
+        let body = std::fs::read_to_string(&cfg).unwrap();
+        assert!(body.contains("# keep me"), "comments preserved: {body}");
+        assert!(
+            body.contains("id = \"1\""),
+            "unrelated keys preserved: {body}"
+        );
+        let parsed = crate::read_store_sync_config(tmp.path()).unwrap();
+        assert_eq!(
+            parsed.mirror_remotes,
+            vec!["gitlab".to_string(), "backup".to_string()]
+        );
+    }
+
+    #[test]
+    fn add_mirror_remote_upgrades_bare_string_shorthand() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg_dir = tmp.path().join(".aida");
+        std::fs::create_dir_all(&cfg_dir).unwrap();
+        std::fs::write(
+            cfg_dir.join("config.toml"),
+            "[store.sync]\nmirror_remotes = \"gitlab\"\n",
+        )
+        .unwrap();
+        assert!(!add_mirror_remote_to_config(tmp.path(), "gitlab").unwrap());
+        assert!(add_mirror_remote_to_config(tmp.path(), "backup").unwrap());
+        let parsed = crate::read_store_sync_config(tmp.path()).unwrap();
+        assert_eq!(
+            parsed.mirror_remotes,
+            vec!["gitlab".to_string(), "backup".to_string()]
+        );
+    }
+
+    #[test]
+    fn run_mirror_push_is_a_noop_for_non_origin_pushes() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Not even a git repo — must still be Ok and touch nothing.
+        run_mirror_push(
+            tmp.path(),
+            "gitlab",
+            "refs/heads/main x refs/heads/main y\n",
+        )
+        .unwrap();
+    }
+
+    // A code push to origin lands on the mirror hub; a dead mirror WARNS
+    // without erroring; the store branch is not touched. Local file remotes
+    // only — no network.
+    #[test]
+    fn run_mirror_push_fans_out_and_survives_dead_mirror() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let sha = init_repo_with_commit(&project);
+
+        let mirror = tmp.path().join("mirror.git");
+        git(tmp.path(), &["init", "-q", "--bare", "mirror.git"]);
+        git(
+            &project,
+            &["remote", "add", "mirror", mirror.to_str().unwrap()],
+        );
+        let dead = tmp.path().join("does-not-exist.git");
+        git(&project, &["remote", "add", "dead", dead.to_str().unwrap()]);
+
+        let cfg_dir = project.join(".aida");
+        std::fs::create_dir_all(&cfg_dir).unwrap();
+        std::fs::write(
+            cfg_dir.join("config.toml"),
+            "[store.sync]\nmirror_remotes = [\"dead\", \"mirror\", \"unconfigured\"]\n",
+        )
+        .unwrap();
+
+        let lines = format!(
+            "refs/heads/main {sha} refs/heads/main {ZEROS}\n\
+             refs/heads/aida-store {sha} refs/heads/aida-store {ZEROS}\n"
+        );
+        // Best-effort: the dead + unconfigured mirrors must not error out.
+        run_mirror_push(&project, "origin", &lines).unwrap();
+
+        let mirrored =
+            git_out(&mirror, &["rev-parse", "refs/heads/main"]).map(|s| s.trim().to_string());
+        assert_eq!(
+            mirrored.as_deref(),
+            Some(sha.as_str()),
+            "main must land on the mirror"
+        );
+        assert!(
+            git_out(&mirror, &["rev-parse", "--verify", "refs/heads/aida-store"]).is_none(),
+            "the store branch must NOT be mirrored by the code hook"
+        );
+    }
+
+    // One-command setup is idempotent: remote wired, config listed, hook
+    // installed — and a second run changes nothing.
+    #[test]
+    fn handle_remote_mirror_is_idempotent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+
+        handle_remote_mirror(&project, "mirror", Some(&url)).unwrap();
+        handle_remote_mirror(&project, "mirror", Some(&url)).unwrap();
+        // Re-run without --url: the remote already exists.
+        handle_remote_mirror(&project, "mirror", None).unwrap();
+
+        assert!(aida_core::git_ops::has_remote(&project, "mirror"));
+        let cfg = crate::read_store_sync_config(&project).unwrap();
+        assert_eq!(cfg.mirror_remotes, vec!["mirror".to_string()]);
+        let hook = project.join(".git").join("hooks").join("pre-push");
+        let body = std::fs::read_to_string(&hook).unwrap();
+        assert!(body.contains(MIRROR_HOOK_MARKER));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&hook).unwrap().permissions().mode();
+            assert_ne!(mode & 0o111, 0, "hook must be executable");
+        }
+    }
+
+    // A custom pre-push hook is never clobbered; setup still succeeds.
+    #[test]
+    fn handle_remote_mirror_preserves_custom_pre_push_hook() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+        let hook = project.join(".git").join("hooks").join("pre-push");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(&hook, "#!/bin/sh\necho custom\n").unwrap();
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+
+        handle_remote_mirror(&project, "mirror", Some(&url)).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&hook).unwrap(),
+            "#!/bin/sh\necho custom\n",
+            "a custom pre-push hook must not be overwritten"
+        );
+    }
+
+    // Guard rails: mirroring origin to itself is refused; a missing remote
+    // without --url is an actionable error.
+    #[test]
+    fn handle_remote_mirror_rejects_origin_and_requires_url_for_new_remote() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+
+        assert!(handle_remote_mirror(&project, "origin", None).is_err());
+        let err = handle_remote_mirror(&project, "mirror", None).unwrap_err();
+        assert!(
+            err.to_string().contains("--url"),
+            "error must point at --url: {err}"
+        );
     }
 }
