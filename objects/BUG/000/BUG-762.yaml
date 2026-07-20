@@ -3,17 +3,33 @@ spec_id: BUG-762
 agreed_id: BUG-762
 title: runtime counter/registry writes leave the orphan-store worktree perpetually dirty — every drain launch warns 'uncommitted changes; skipping pull'
 description: 'Fourth occurrence 2026-07-19: aida burndown run''s --sync preflight warns ''orphan store has uncommitted changes; skipping pull'' at nearly every launch, because some writer (agreed_counters.toml / registry churn observed each time) modifies the .aida-store worktree WITHOUT committing, unlike every other store write which targeted-commits. The advisor has hand-committed the churn 3x this weekend. Fix: find the non-committing writer (counters/registry update path) and make it commit-through like requirement writes (targeted, small subject), OR have the sync preflight auto-commit known-runtime files (registry/agreed_counters.toml allowlist) before pulling. Acceptance: two consecutive drain launches with normal activity between them produce no uncommitted-store warning; the counter file''s history shows regular targeted commits; test on the counter write path. Mode: drive.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T21:32:44.166881968Z
-modified_at: 2026-07-19T21:46:52.544899755Z
+modified_at: 2026-07-20T01:13:04.426177620Z
 req_type: Bug
 tags:
 - aida:store papercut from-dogfood
+history:
+- id: 019f7d15-6ea4-7f81-8e37-4940ca8b5a88
+  author: aida-auto-bump
+  timestamp: 2026-07-20T01:13:04.420126616Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7d15-6eaa-7603-a968-798aaf42695b
+  timestamp: 2026-07-20T01:13:04.426176811Z
+  agent: aida
+  commit_sha: 5d91248b2364fe5aa7764c1b71d23ed78b9a3d08
+  summary: Completed via merge 5d91248b
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T21:46:52.544899755Z
   implemented_by: joe
+  completed_at: 2026-07-20T01:13:04.420050578Z
+  completion_sha: 5d91248b2364fe5aa7764c1b71d23ed78b9a3d08
