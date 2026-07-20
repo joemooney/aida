@@ -5546,6 +5546,24 @@ pub enum QuestionsCommand {
         dry_run: bool,
     },
 
+    /// Run by: TUI / advisor automation, when: a drive hold is only missing
+    /// acceptance criteria and should be remedied without a manual clarify hop.
+    ///
+    /// Launch a bounded headless advisor pass that reads the named spec and its
+    /// graph context, authors a minimal grounded `## Acceptance` section when
+    /// possible, and exits non-zero when the missing criteria cannot be safely
+    /// inferred from the substrate.
+    // trace:TASK-1075 | ai:codex
+    Remedy {
+        /// The under-specified spec to remedy.
+        spec: String,
+
+        /// Show the resolved headless prompt and log path, then exit without
+        /// launching.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Run by: the human, when: draining pending decisions (no LLM session — a
     /// plain operator data op).
     ///

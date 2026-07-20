@@ -606,3 +606,22 @@ fn sweep_synthesizes_disposition_for_tag_parked_spec() {
     assert_eq!(dr.recommended, None, "a disposition needs an explicit call");
     assert_eq!(dr.choices[0].resolution, "disposition:approve-to-ready");
 }
+
+#[test]
+fn remedy_prompt_is_headless_and_bounded() {
+    let prompt = questions_remedy_prompt("TASK-1075");
+    assert!(prompt.contains("Do not ask the human questions"));
+    assert!(prompt.contains("Do not change status"));
+    assert!(prompt.contains("Exit 0 only if the verdict is `ready`"));
+    assert!(prompt.contains("aida zen TASK-1075 --json"));
+}
+
+#[test]
+fn remedy_log_path_is_under_headless_logs_with_safe_spec_slug() {
+    let root = std::path::Path::new("/tmp/aida-project");
+    let path = questions_remedy_log_path(root, "Task 10/75");
+    let s = path.to_string_lossy();
+    assert!(s.contains("/tmp/aida-project/.aida/headless-logs/remedy-"));
+    assert!(s.contains("task-10-75"));
+    assert!(s.ends_with(".jsonl"));
+}
