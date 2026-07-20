@@ -3,12 +3,12 @@ spec_id: TASK-1162
 agreed_id: TASK-1162
 title: 'guided-implement vendor parity: validate + wire the codex rendering into mode dispatch; fence AGY by dispatch policy'
 description: 'Operator ask 2026-07-19 (mid STORY-776 guided session): a /aida-guided-implement equivalent for codex and agy. State: BUG-731 already rewrote the codex prompt pack rendering (argument substitution + AskUserQuestion adapted to plain-text numbered forks + pr ship wording), so codex has an UNVALIDATED equivalent today. Scope: (1) run one real guided session under codex on a non-keystone guided-mode spec; fix fidelity gaps found (fork presentation, ADR recording via CLI, stop-at-PR discipline — the codex TASK-1155 run already demonstrated no-merge compliance); (2) when STORY-776''s execution-mode dispatch lands, aida do <spec> with mode=guided honors the session vendor: claude → /aida-guided-implement, codex → the adapted prompt, launched in the spec worktree either way; (3) AGY: NO guided equivalent — fence it per the standing AGY dispatch policy (draft-for-review-only, mechanical/bounded); mode=guided + vendor=agy refuses with the policy reason and suggests claude/codex. Document the vendor matrix in the guided skill''s header. Acceptance: one recorded codex guided run reaching PR with >=1 ADR filed; dispatch honors vendor for guided mode; agy refusal has an explicit policy message; matrix documented.'
-status: InProgress
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T15:38:43.992213121Z
-modified_at: 2026-07-20T02:26:12.415542536Z
+modified_at: 2026-07-20T04:47:08.568320687Z
 req_type: Task
 tags:
 - cross-vendor codex agy followup:STORY-776 from-operator
