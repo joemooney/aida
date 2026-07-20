@@ -10,6 +10,3 @@ feature: Uncategorized
 created_at: 2026-07-19T18:00:08.908232587Z
 modified_at: 2026-07-19T20:26:31.078364873Z
 req_type: Functional
-deferred: true
-deferred_at: 2026-07-19T20:26:31.078364873Z
-deferred_until: a real multi-spec interactive session still hits the boundary friction after worktree exit (TASK-1160) + aida do

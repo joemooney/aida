@@ -35,13 +35,11 @@ comments:
   content: 'REQUEST_CHANGES on PR-1520 (recorded as PR comment https://github.com/joemooney/aida/pull/1520#issuecomment-5016925321 — GitHub blocks a request-changes review from the author''s own account). The deferred-field preservation is sound and well-tested, but including failure_reason in preserve_full_save_only_fields regresses BUG-405: auto_bump_done_to_completed and handle_db_reconcile_status both clear failure_reason inside storage.update_atomically (full GitBackend::save), and the new helper resurrects the stale disk value on flip-to-Completed. Secondary: CachedGitBackend::save rebuilds the cache from the degraded incoming store, so preserved deferred flags stay invisible to cache-backed views until an unrelated rebuild. Fix: drop failure_reason from the preserve list (+ regression test) and rebuild the cache from the actually-written state. STORY-777 left In Progress.'
   created_at: 2026-07-19T18:39:32.010754885Z
   modified_at: 2026-07-19T18:39:32.010754885Z
-  session_id: 170773fa-14d4-44b3-a59c-69fc4d7eed77
 - id: 019f7bad-c570-7f83-8701-81249588fc9f
   author: joe
   content: 'Burndown drain: review delivered REQUEST_CHANGES on PR-1520 (verdict posted as PR comment - GitHub blocks request-changes from same account). Two blocking findings: (1) preserve_full_save_only_fields includes failure_reason, resurrecting intentionally-cleared stale FailureReasons on auto-bump/reconcile flip-to-Completed full-saves (regresses BUG-405); (2) CachedGitBackend::save rebuilds cache from the degraded incoming store, so preserved deferred flags stay invisible to cache-backed views. PR-1520 held unmerged; TASK-1161 (builds on PR-1520) parked from this drain pending the rework.'
   created_at: 2026-07-19T18:40:13.680239850Z
   modified_at: 2026-07-19T18:40:13.680239850Z
-  session_id: 170773fa-14d4-44b3-a59c-69fc4d7eed77
 - id: 019f7bd8-9fc8-7b93-99bd-18364db152c1
   author: aida-auto-bump
   content: 'Auto-completed: PR #1520 merged without a re-review iteration — the review story was left at In Progress.'
@@ -52,7 +50,6 @@ comments:
   content: 'Reviewed PR-1520 diff as drain integrator: preserve_full_save_only_fields approach sound, regression test covers the live failure, CI green. Approved + merged. Residuals tracked in TASK-1161.'
   created_at: 2026-07-19T19:27:15.545758562Z
   modified_at: 2026-07-19T19:27:15.545758562Z
-  session_id: 467e5027-c3fe-4093-a1b7-aa7d990391bc
 history:
 - id: 019f7bd8-9fc8-7b93-99bd-18267b13766e
   author: aida-auto-bump

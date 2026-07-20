@@ -18,4 +18,3 @@ req_type: Bug
 tags:
 - aida:pr-ship keystone supervised substrate governance severity:major
 - batch:keystone-0719
-execution_mode: guided

@@ -15,7 +15,4 @@ tags:
 - autonomy
 - deferred:design
 - parent:STORY-586
-deferred: true
-deferred_at: 2026-07-19T20:15:48.120032247Z
-deferred_until: durable advisor-watch supervisor design revisit (formalizing the legacy deferred:design tag)
 human_only: true

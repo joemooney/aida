@@ -45,6 +45,3 @@ relationships:
   target_id: 019f1bfd-4781-7e13-8088-61225ada2b57
   created_at: 2026-07-01T04:50:03.695276888Z
   created_by: joe
-deferred: true
-deferred_at: 2026-07-19T20:26:25.882129488Z
-deferred_until: 'operator revisits model-per-purpose (recorded answer 2026-07-14: defer entirely)'

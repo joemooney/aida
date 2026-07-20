@@ -20,13 +20,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019f7d15-6eaa-7603-a968-798aaf42695b
-  timestamp: 2026-07-20T01:13:04.426176811Z
-  agent: aida
-  commit_sha: 5d91248b2364fe5aa7764c1b71d23ed78b9a3d08
-  summary: Completed via merge 5d91248b
-execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T21:46:52.544899755Z

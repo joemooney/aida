@@ -44,7 +44,6 @@ comments:
   content: Commit f24a81752 references this requirement
   created_at: 2026-07-19T18:39:05.938220478Z
   modified_at: 2026-07-19T18:39:05.938220478Z
-  session_id: 170773fa-14d4-44b3-a59c-69fc4d7eed77
 history:
 - id: 019f7bb6-2dd2-7c31-905b-0d5f5e76fe7b
   author: aida-auto-bump
@@ -53,12 +52,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019f7bb6-2dd9-7bf2-ab77-f2fb630b8f06
-  timestamp: 2026-07-19T18:49:24.697014328Z
-  agent: aida
-  commit_sha: 841ad175d1876b8a075db131f608b17ad06ad983
-  summary: Completed via merge 841ad175
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T18:39:25.854978176Z

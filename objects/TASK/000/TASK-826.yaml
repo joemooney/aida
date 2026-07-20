@@ -17,6 +17,3 @@ tags:
 - gitlab
 - needs-human
 - parent:EPIC-44
-deferred: true
-deferred_at: 2026-07-19T20:15:33.524221692Z
-deferred_until: operator explicitly prioritizes the gitlab cutover (EPIC-44)

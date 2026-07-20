@@ -29,6 +29,3 @@ relationships:
 - rel_type: Child
   target_id: 019f4006-20c5-7531-95cb-3183dcd2a29f
   created_at: 2026-07-08T04:53:32.158936543Z
-deferred: true
-deferred_at: 2026-07-19T20:15:45.330022536Z
-deferred_until: STORY-766 /aida-fleet-watch is validated in real use (recorded answer 2026-07-14)

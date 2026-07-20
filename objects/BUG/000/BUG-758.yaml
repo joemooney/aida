@@ -18,7 +18,6 @@ comments:
   content: Commit 378818ea9 references this requirement
   created_at: 2026-07-19T19:16:10.947986377Z
   modified_at: 2026-07-19T19:16:10.947986377Z
-  session_id: 170773fa-14d4-44b3-a59c-69fc4d7eed77
 history:
 - id: 019f7bd7-7d17-7083-80ba-3169dcdc9aff
   author: aida-auto-bump
@@ -27,13 +26,6 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
-processing_record:
-- id: 019f7bd7-7d1d-75b0-82c1-547f28767f72
-  timestamp: 2026-07-19T19:25:47.677196349Z
-  agent: aida
-  commit_sha: 0067535e3a1e1ab98e48ab2e05c49a9397ae0b25
-  summary: Completed via merge 0067535e
-execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-19T19:16:37.716470497Z

@@ -18,4 +18,3 @@ tags:
 - multi-repo
 - parent:SPIKE-62
 - schema
-execution_mode: guided
