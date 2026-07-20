@@ -36113,5 +36113,22 @@ operations:
       Related: the keyboard-lane / keystone discipline (reliability + autonomy machinery ships supervised); STORY-666 (destructive ops gated by consequence). Acceptance: a spec tagged supervised, dispatched to a pr-ship session, PARKS at 'mergeable, awaiting advisor' instead of auto-merging.
 
       RATIFIED DESIGN (operator, 2026-07-19) - binding acceptance: REUSE execution_mode as the supervision marker; no new flag. The pr ship auto-merge leg (and any automation merge path) loads the spec(s) behind the PR and REFUSES auto-merge unless execution_mode == drain; an interactive human at a TTY may always merge explicitly. A spec with NO mode set is treated as supervised (fail safe). Refusal message: "<SPEC-ID> is marked <mode> - auto-merge refused; merge requires human/advisor review". The session parks the PR mergeable-awaiting-review (the existing Done-awaiting-merge surface). Regression: a mode=guided spec dispatched to a pr-ship cadence ends at an OPEN mergeable PR; mode=drain preserves current auto-merge.
-clock: 3350
+- id: 019f7d72-2af1-7a83-b854-2c76606bea8d
+  target_id: 019f5ed7-14c8-7e22-a92c-636ed0acedf6
+  author: aida
+  node_id: '1'
+  lamport: 3351
+  timestamp: 2026-07-20T02:54:21.937649834Z
+  kind: !SetDescription
+    description: |-
+      2026-07-13: aida pull failed with 'conflict in non-mergeable path registry/queues/joe.yaml' because the same user (joe) worked from two nodes (imac + spock/work) concurrently. The queue registry is one file per QUEUE-USER-ID (registry/queues/<user>.yaml), so concurrent queue writes from different machines for the same user collide, and because the file is declared non-mergeable the store pull-rebase aborts to manual resolution. This is a recurring hazard whenever the operator drives from more than one machine.
+
+      Two candidate fixes:
+      A) Per-node queue files — registry/queues/<user>@<node>.yaml (or a per-node subdir), unioned + deduped on read. Clean isolation, no cross-node collision; needs a read-path union + a layout migration.
+      B) Make the queue registry CRDT-mergeable like the oplog — conflict.rs already unions the append-only oplog on merge; give registry/queues/*.yaml the same union-merge (entries keyed by requirement_id, dedup on merge, last-writer-wins on position) + a git merge driver so a pull-rebase auto-merges instead of failing. Smaller change, reuses existing CRDT machinery, no layout migration.
+
+      Recommend B (reuse the existing conflict-free merge machinery; the queue is conceptually one user's work queue, so per-node split + re-union in A is more moving parts). Either way the acceptance is: two machines, same user, concurrent queue writes -> aida pull auto-merges, never a non-mergeable failure.
+
+      RATIFIED (operator, 2026-07-19): Option B - CRDT union-merge for registry/queues/*.yaml exactly as described (entries keyed by requirement_id, dedup on merge, last-writer-wins on position, git merge driver so pull-rebase auto-merges). Option A rejected as more moving parts.
+clock: 3351
 node_id: '1'

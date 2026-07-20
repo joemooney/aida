@@ -10,12 +10,14 @@ description: |-
   B) Make the queue registry CRDT-mergeable like the oplog — conflict.rs already unions the append-only oplog on merge; give registry/queues/*.yaml the same union-merge (entries keyed by requirement_id, dedup on merge, last-writer-wins on position) + a git merge driver so a pull-rebase auto-merges instead of failing. Smaller change, reuses existing CRDT machinery, no layout migration.
 
   Recommend B (reuse the existing conflict-free merge machinery; the queue is conceptually one user's work queue, so per-node split + re-union in A is more moving parts). Either way the acceptance is: two machines, same user, concurrent queue writes -> aida pull auto-merges, never a non-mergeable failure.
+
+  RATIFIED (operator, 2026-07-19): Option B - CRDT union-merge for registry/queues/*.yaml exactly as described (entries keyed by requirement_id, dedup on merge, last-writer-wins on position, git merge driver so pull-rebase auto-merges). Option A rejected as more moving parts.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:16:21.704959337Z
-modified_at: 2026-07-19T17:26:13.695718191Z
+modified_at: 2026-07-20T02:54:21.888721263Z
 req_type: Bug
 tags:
 - aida:store aida:queue distributed reliability severity:major
