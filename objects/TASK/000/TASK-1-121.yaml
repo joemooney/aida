@@ -1,0 +1,14 @@
+id: 019f7e75-bd1a-71f3-9ddd-0832dc66bfe1
+spec_id: TASK-1-121
+title: handle_status_spec doc comment describes 'aida focus', but the function renders 'aida status <spec>'
+description: 'Spotted during the STORY-771 mechanical move (moved verbatim, deliberately not fixed there): handle_status_spec in aida-cli-lib/src/status_cmd.rs carries a doc comment describing ''aida focus [<spec>] [--clear] [--show]'' which mismatches the function, which renders ''aida status <spec>''. One-line doc fix. Source: STORY-771 implementer observation during burndown drain 2026-07-19/20.'
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-07-20T07:37:53.178538666Z
+modified_at: 2026-07-20T07:37:53.178538666Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
