@@ -3,17 +3,33 @@ spec_id: BUG-764
 agreed_id: BUG-764
 title: epic rollup not re-derived when children complete via pull auto-bump — epics with zero open children stuck In Progress; comment-add doesn't refresh either
 description: 'Observed 2026-07-19: EPIC-24 and EPIC-0428 each had ZERO non-terminal children (verified via list --parent --all) yet read In Progress; a comment-add nudge did not recompute; operator recovery required edit --status completed --force. Mechanism: the BUG-626 derived-rollup recomputes on direct child edits, but children completed via the aida pull auto-bump path (the common case — every drain-shipped child) do not propagate to the parent epic, and no read-time re-derivation exists. Related: BUG-628 (archived children under-counted). Fix: re-derive parent epic status (a) in the auto-bump path after flipping each child, and/or (b) lazily at epic read time from the live child set — pick one authoritative seam and test both completion routes. Acceptance: an epic whose last child completes via pull auto-bump reads Done/Completed on next show/list without manual force; regression covers auto-bump and direct-edit routes; BUG-628''s archived-child case rechecked. Mode: drive.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T02:29:00.938954936Z
-modified_at: 2026-07-20T05:25:35.367709229Z
+modified_at: 2026-07-20T05:43:35.196379634Z
 req_type: Bug
 tags:
 - aida:lifecycle rollup followup:BUG-628 from-dogfood
+history:
+- id: 019f7e0d-1816-7371-a17b-aa5c3921c0b8
+  author: aida-auto-bump
+  timestamp: 2026-07-20T05:43:35.190349160Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7e0d-181c-7193-9449-164298b33be5
+  timestamp: 2026-07-20T05:43:35.196379145Z
+  agent: aida
+  commit_sha: 0d4c87a239fd4d560dad60ecc1fee309b7319e6c
+  summary: Completed via merge 0d4c87a2
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-20T05:25:35.367709229Z
   implemented_by: joe
+  completed_at: 2026-07-20T05:43:35.190264666Z
+  completion_sha: 0d4c87a239fd4d560dad60ecc1fee309b7319e6c
