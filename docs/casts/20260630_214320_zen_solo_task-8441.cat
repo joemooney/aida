@@ -1,0 +1,9 @@
+{"version": 2, "width": 215, "height": 45, "timestamp": 1782881000, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}, "title": "aida zen TASK-841 --solo"}
+[1.427447, "o", "  \u001b[36m▸\u001b[0m zen-driving TASK-841 — aida \u001b[2mqueue work TASK-841 --auto-complete --no-human both\u001b[0m\r\n"]
+[1.454201, "o", "\u001b[33m⚠\u001b[0m TASK-841 is not under your current focus (EPIC-54). Did you mean 'aida focus TASK-836' first? (--force to silence)\r\n"]
+[1.461525, "o", "\r\n"]
+[1.461712, "o", "\u001b[1;33m⚠\u001b[0m  --no-human=both runs the implementer AND reviewer phases headless.\r\n   No human is at the keyboard during phase 1 (implementer).\r\n   On a design-fork it cannot safely resolve, the implementer punts the spec\r\n   to Needs Attention instead of guessing — review punts later with `aida findings list`.\r\n   \u001b[2mSet AIDA_NO_HUMAN_ACKNOWLEDGED=1 to skip this prompt on an unattended run,\u001b[0m\r\n   \u001b[2mor `aida no-human acknowledge` once to persist it across runs (per machine; --project to scope to this repo). trace:TASK-394\u001b[0m\r\n\r\n"]
+[1.46174, "o", "   Continue? [y/N] "]
+[4.11619, "o", "y"]
+[4.348871, "o", "\r\n"]
+[6.876568, "o", "\u001b[1;31mError:\u001b[0m \u001b[31ma drain is already running (pid 3816194, started 2026-07-01T04:19:26.109696660+00:00, cmd `queue work --auto-complete STORY-744`, host imac).\u001b[0m\r\n\u001b[2m  Wait for it to finish, or — if you're certain it's dead — remove /home/joe/ai/aida/.aida/drain.lock or set AIDA_DRAIN_FORCE=1 to override.\u001b[0m\r\n"]

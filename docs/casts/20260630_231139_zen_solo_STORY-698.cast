@@ -1,0 +1,4 @@
+{"version": 2, "width": 215, "height": 45, "timestamp": 1782886300, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}, "title": "aida zen STORY-698 --solo"}
+[1.079535, "o", "  \u001b[36m▸\u001b[0m zen-driving STORY-698 — aida \u001b[2mqueue work STORY-698 --auto-complete --no-human both\u001b[0m\r\n"]
+[1.103531, "o", "\r\n"]
+[1.103691, "o", "\u001b[1;33m⚠\u001b[0m  --no-human=both runs the implementer AND reviewer phases headless.\r\n   No human is at the keyboard during phase 1 (implementer).\r\n   On a design-fork it cannot safely resolve, the implementer punts the spec\r\n   to Needs Attention instead of guessing — review punts later with `aida findings list`.\r\n   \u001b[2mSet AIDA_NO_HUMAN_ACKNOWLEDGED=1 to skip this prompt on an unattended run,\u001b[0m\r\n   \u001b[2mor `aida no-human acknowledge` once to persist it across runs (per machine; --project to scope to this repo). trace:TASK-394\u001b[0m\r\n\r\n   Continue? [y/N] "]
