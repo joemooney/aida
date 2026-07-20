@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T01:41:43.944722754Z
-modified_at: 2026-07-20T01:42:05.280120901Z
+modified_at: 2026-07-20T01:42:06.241630034Z
 req_type: Decision
 tags:
 - adr subsystems from-ratification
