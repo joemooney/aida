@@ -3,12 +3,12 @@ spec_id: STORY-771
 agreed_id: STORY-771
 title: 'SPIKE-78 follow-up: extract the keystone command handlers (pr/mcp/orchestrator/drain/queue/status/solo/zen) out of main.rs'
 description: 'The handler clusters deliberately left inline during the SPIKE-78 safe sweep: pr, mcp, orchestrator, zen, drain, and the queue/status/solo cluster (~visible via grep handle_pr/mcp/queue/etc). High-churn, high-blast-radius surfaces — extract under supervision one cluster per PR, same pure-movement discipline as the safe set (union-of-removals imports, cargo fmt in place, env -u AIDA_SESSION_ROLE test, combined-main green per merge). Removes a few more K of live code from main.rs.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:42.718647193Z
-modified_at: 2026-07-20T07:26:56.165939582Z
+modified_at: 2026-07-20T07:36:30.620845628Z
 req_type: Story
 tags:
 - batch:guided-0719
@@ -34,8 +34,24 @@ comments:
   created_at: 2026-07-20T02:45:13.148326017Z
   modified_at: 2026-07-20T02:45:13.148326017Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+history:
+- id: 019f7e74-7a96-7eb1-b188-4c03a0e91b97
+  author: aida-auto-bump
+  timestamp: 2026-07-20T07:36:30.614854767Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f7e74-7a9c-7e82-a2ac-4a5bd0c425e5
+  timestamp: 2026-07-20T07:36:30.620845105Z
+  agent: aida
+  commit_sha: aa97f61d22ebdd0cb96a7e5dd3ef8bce780e1eb5
+  summary: Completed via merge aa97f61d
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-20T07:26:56.165939582Z
   implemented_by: joe
+  completed_at: 2026-07-20T07:36:30.614750171Z
+  completion_sha: aa97f61d22ebdd0cb96a7e5dd3ef8bce780e1eb5
