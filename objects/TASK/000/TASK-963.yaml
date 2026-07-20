@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-27T19:17:58.317503462Z
-modified_at: 2026-07-19T17:26:15.867688855Z
+modified_at: 2026-07-20T02:45:07.966701008Z
 req_type: Task
 tags:
 - aida:forge
@@ -19,3 +19,10 @@ relationships:
 - rel_type: Child
   target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
   created_at: 2026-06-27T19:18:02.263353645Z
+comments:
+- id: 019f7d69-b6fe-7f40-8902-b97f175f0ba1
+  author: joe
+  content: 'Fence release (operator authorization 2026-07-19): promoted operator→drive. Through-ci stops at the PR; the product-seat merge-gate is preserved — operator reviews and merges.'
+  created_at: 2026-07-20T02:45:07.966701008Z
+  modified_at: 2026-07-20T02:45:07.966701008Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
