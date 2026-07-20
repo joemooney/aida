@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: agents
 created_at: 2026-06-24T03:17:18.954962222Z
-modified_at: 2026-07-20T02:28:25.344668808Z
+modified_at: 2026-07-20T02:28:57.713965379Z
 req_type: Epic
 tags:
 - advisor-autopilot
@@ -84,4 +84,10 @@ comments:
   content: rollup nudge
   created_at: 2026-07-20T02:28:25.344668808Z
   modified_at: 2026-07-20T02:28:25.344668808Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f7d5a-e8f1-77e3-a0e0-b6e93c8f8d01
+  author: joe
+  content: 'Recovery-closing per rollup audit 2026-07-19: zero non-terminal children; the ratified scope (auditability + reversal surface only, TASK-1147/1020 shipped) is delivered.'
+  created_at: 2026-07-20T02:28:57.713965379Z
+  modified_at: 2026-07-20T02:28:57.713965379Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
