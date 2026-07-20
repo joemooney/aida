@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:43:31.585327146Z
-modified_at: 2026-07-20T01:14:09.445159660Z
+modified_at: 2026-07-20T01:14:24.796755718Z
 req_type: Spike
 tags:
 - batch:advisor-0719
@@ -51,8 +51,6 @@ processing_record:
   agent: aida
   commit_sha: f2d23bc89aa1196318e6d09b2ef0e474dae31d34
   summary: Completed via merge f2d23bc8
-deferred: true
-deferred_at: 2026-07-20T01:14:09.445159660Z
 implementation_info:
   implemented: false
   completed_at: 2026-07-20T01:13:04.420050578Z
