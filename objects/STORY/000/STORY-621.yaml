@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T20:01:42.458630605Z
-modified_at: 2026-07-13T05:33:18.470662124Z
+modified_at: 2026-07-20T02:28:21.699440786Z
 req_type: Story
 tags:
 - parent:EPIC-35
@@ -47,3 +47,6 @@ comments:
   content: 'Pulled from the autonomous queue: this is the ~113-site gh→forge migration (EPIC-35), a supervised keyboard-lane effort, not a bounded drain item. Keep for a focused supervised session.'
   created_at: 2026-07-13T05:33:18.470662124Z
   modified_at: 2026-07-13T05:33:18.470662124Z
+deferred: true
+deferred_at: 2026-07-20T02:28:21.699440786Z
+deferred_until: operator explicitly prioritizes the gitlab cutover (shared trigger with TASK-826, ratified 2026-07-19)
