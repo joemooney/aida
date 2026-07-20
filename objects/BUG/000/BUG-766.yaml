@@ -8,7 +8,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T04:46:10.712544192Z
-modified_at: 2026-07-20T04:46:10.712544192Z
+modified_at: 2026-07-20T04:46:16.374943053Z
 req_type: Bug
 tags:
 - aida:orchestrator integrity followup:BUG-756 followup:BUG-760 from-dogfood severity:major
+execution_mode: drive
