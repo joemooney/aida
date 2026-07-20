@@ -35942,5 +35942,17 @@ operations:
     req_type: Decision
     status: Draft
     priority: Medium
-clock: 3332
+- id: 019f7d2f-aeaf-7f00-9dc0-cdbec649e1c0
+  target_id: 019f7d2f-ab88-7902-91b9-28bc9af29d91
+  author: aida
+  node_id: '1'
+  lamport: 3333
+  timestamp: 2026-07-20T01:41:44.751121848Z
+  kind: !Create
+    title: Scoped advisors decide only local/reversible/grounded; cross-subsystem, keystone, security, contracts default to master-or-human (ratifies PROPOSAL-master-advisor-arbitration)
+    description: 'Operator ratified 2026-07-19: subsystem advisor authority narrows with scope — in-fence, grounded, reversible only; conflicts, keystone/security, public contracts, file formats, orchestrator semantics, lifecycle vocabulary stay with the master advisor or human gate unless explicitly delegated. Delivers TASK-0437.'
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3333
 node_id: '1'
