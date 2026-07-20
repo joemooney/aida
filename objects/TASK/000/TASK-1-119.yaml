@@ -1,5 +1,6 @@
 id: 019f7e0d-bbc9-7d63-8cd7-73583033bd2e
 spec_id: TASK-1-119
+agreed_id: TASK-143
 title: TASK-373 appears to duplicate the Rejected TASK-379 (cross-project digest aggregation)
 description: 'During BUG-764 implementation the implementer observed EPIC-24 still derives In Progress after the rollup fix because TASK-373 (Approved, ''Cross-project (multi-repo) digest aggregation'') is a genuinely open transitive grandchild — and it appears to be a duplicate of the Rejected TASK-379. If confirmed, rejecting or merging TASK-373 unsticks EPIC-24''s rollup. Source: BUG-764 implementer observation during burndown drain 2026-07-19.'
 status: Rejected
