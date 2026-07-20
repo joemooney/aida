@@ -624,6 +624,131 @@ fn merge_dependencies_three_way(base: &[Uuid], ours: &[Uuid], theirs: &[Uuid]) -
     out
 }
 
+/// Three-way merge of one per-user queue registry file
+/// (`registry/queues/<user>.yaml`) during a store-leg rebase or union merge.
+///
+/// BUG-725: the queue registry is one file per queue-user, so the SAME user
+/// working from two machines produces concurrent commits to the SAME file and
+/// the store pull-rebase used to abort with "conflict in non-mergeable path".
+/// The file is structurally reconcilable exactly like the spec arrays:
+/// entries are keyed by `requirement_id` (the substrate's own `queue_add`
+/// upserts on that key), so the merge is an id-keyed union.
+///
+/// This is a PURE function so it is unit-testable in isolation; the git
+/// plumbing (reading the three stages, writing the result) lives in
+/// `git_ops::resolve_queue_conflict`.
+///
+/// Policy, per key (`requirement_id`), mirroring `merge_scalar` / the BUG-602
+/// removal-wins set merges:
+/// - **Added by either side** (absent from `base`) → survives. Two machines
+///   queueing different specs both keep their entries.
+/// - **Removed by either side** (present in `base`, absent on that side) →
+///   stays removed. `aida queue done` / `remove` on one machine is never
+///   resurrected by the other machine's mere retention.
+/// - **Present on both sides, identical** → kept as-is.
+/// - **Present on both sides, divergent** (e.g. both machines repositioned
+///   it): if only ONE side changed it relative to `base`, that side's entry
+///   wins; if BOTH changed it, last-writer-wins by `added_at` (a re-add
+///   stamps a fresh `added_at`, so the newer add carries its position). An
+///   exact-`added_at` tie resolves by the greater stable YAML serialization —
+///   a pure data-function both clones compute identically, so the merge is
+///   order-independent (never "ours"), per the BUG-578 precedent.
+///
+/// Output is sorted by `(position, added_at, requirement_id)` so both clones
+/// serialize byte-identical results. Entries are never invented and a
+/// surviving entry is always one side's verbatim entry — the merge cannot
+/// corrupt or drop concurrently-queued work.
+// trace:BUG-725 | ai:claude
+pub fn merge_queue_three_way(
+    base: &[crate::models::QueueEntry],
+    ours: &[crate::models::QueueEntry],
+    theirs: &[crate::models::QueueEntry],
+) -> Vec<crate::models::QueueEntry> {
+    use crate::models::QueueEntry;
+    use std::collections::HashMap;
+
+    // First occurrence per key within a side wins (files are position-sorted,
+    // and queue_add's upsert keeps at most one entry per requirement anyway).
+    let index = |src: &[QueueEntry]| -> HashMap<Uuid, QueueEntry> {
+        let mut m: HashMap<Uuid, QueueEntry> = HashMap::new();
+        for e in src {
+            m.entry(e.requirement_id).or_insert_with(|| e.clone());
+        }
+        m
+    };
+    let base_by_id = index(base);
+    let ours_by_id = index(ours);
+    let theirs_by_id = index(theirs);
+
+    let mut out: Vec<QueueEntry> = Vec::new();
+    let mut emitted: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+    for entry in ours.iter().chain(theirs.iter()) {
+        let id = entry.requirement_id;
+        if !emitted.insert(id) {
+            continue;
+        }
+        let in_base = base_by_id.contains_key(&id);
+        let o = ours_by_id.get(&id);
+        let t = theirs_by_id.get(&id);
+        // Removal-wins: base had it and a side dropped it → stays dropped.
+        if in_base && (o.is_none() || t.is_none()) {
+            continue;
+        }
+        let merged = match (o, t) {
+            (Some(o), Some(t)) => {
+                if o == t {
+                    o.clone()
+                } else {
+                    match base_by_id.get(&id) {
+                        // Only one side changed it vs base → that side wins.
+                        Some(b) if o == b => t.clone(),
+                        Some(b) if t == b => o.clone(),
+                        // Both changed it (or no base): deterministic LWW.
+                        _ => queue_entry_lww(o, t).clone(),
+                    }
+                }
+            }
+            // Present on one side only and not removed → a fresh add.
+            (Some(one), None) | (None, Some(one)) => one.clone(),
+            (None, None) => continue, // unreachable: entry came from one side
+        };
+        out.push(merged);
+    }
+    out.sort_by(|a, b| {
+        a.position
+            .cmp(&b.position)
+            .then(a.added_at.cmp(&b.added_at))
+            .then(a.requirement_id.cmp(&b.requirement_id))
+    });
+    out
+}
+
+/// Deterministic last-writer-wins between two divergent queue entries for the
+/// same requirement: later `added_at` wins; an exact tie resolves by the
+/// greater stable YAML serialization (a pure data-function, so both clones
+/// converge no matter which side they call "ours").
+// trace:BUG-725 | ai:claude
+fn queue_entry_lww<'a>(
+    a: &'a crate::models::QueueEntry,
+    b: &'a crate::models::QueueEntry,
+) -> &'a crate::models::QueueEntry {
+    match a.added_at.cmp(&b.added_at) {
+        std::cmp::Ordering::Greater => a,
+        std::cmp::Ordering::Less => b,
+        std::cmp::Ordering::Equal => {
+            let (ya, yb) = (
+                serde_yaml::to_string(a).unwrap_or_else(|_| format!("{a:?}")),
+                serde_yaml::to_string(b).unwrap_or_else(|_| format!("{b:?}")),
+            );
+            if ya >= yb {
+                a
+            } else {
+                b
+            }
+        }
+    }
+}
+
 /// Detect conflicts between a local store and a set of remote requirements.
 /// Returns all detected conflicts.
 pub fn detect_store_conflicts(
@@ -1832,5 +1957,106 @@ mod tests {
         assert_eq!(out, format!("{expected}..."));
         // Sanity: the emoji survived intact (no mid-char slice).
         assert!(out.contains('😀'));
+    }
+
+    // ---- BUG-725: per-user queue registry three-way merge ----
+
+    fn qe(id: Uuid, position: i64, added_secs: i64) -> crate::models::QueueEntry {
+        crate::models::QueueEntry {
+            user_id: "joe".to_string(),
+            requirement_id: id,
+            position,
+            added_by: "joe".to_string(),
+            note: None,
+            added_at: DateTime::from_timestamp(1_750_000_000 + added_secs, 0).unwrap(),
+            for_role: Some("implementer".to_string()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        }
+    }
+
+    fn ids(entries: &[crate::models::QueueEntry]) -> Vec<Uuid> {
+        entries.iter().map(|e| e.requirement_id).collect()
+    }
+
+    // The BUG-725 headline case: the same user queues DIFFERENT specs from two
+    // machines concurrently. Both adds must survive the merge.
+    #[test]
+    fn queue_merge_concurrent_adds_from_two_machines_both_survive() {
+        let (a, b, c) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let base = vec![qe(a, 1000, 0)];
+        let ours = vec![qe(a, 1000, 0), qe(b, 2000, 10)]; // machine 1 queued b
+        let theirs = vec![qe(a, 1000, 0), qe(c, 2000, 20)]; // machine 2 queued c
+        let merged = merge_queue_three_way(&base, &ours, &theirs);
+        let mut got = ids(&merged);
+        got.sort();
+        let mut want = vec![a, b, c];
+        want.sort();
+        assert_eq!(got, want, "concurrent adds must both survive");
+    }
+
+    // `aida queue done`/`remove` on one machine must NOT be resurrected by the
+    // other machine's mere retention of the entry.
+    #[test]
+    fn queue_merge_removal_wins_over_retention() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let base = vec![qe(a, 1000, 0), qe(b, 2000, 5)];
+        let ours = vec![qe(b, 2000, 5)]; // machine 1 completed a → removed
+        let theirs = vec![qe(a, 1000, 0), qe(b, 2000, 5)]; // machine 2 untouched
+        let merged = merge_queue_three_way(&base, &ours, &theirs);
+        assert_eq!(ids(&merged), vec![b], "removal must win over retention");
+    }
+
+    // A reposition on ONE side wins over the other side's unchanged copy
+    // (per-key 3-way, mirroring merge_scalar).
+    #[test]
+    fn queue_merge_single_side_reposition_wins() {
+        let a = Uuid::new_v4();
+        let base = vec![qe(a, 5000, 0)];
+        let ours = vec![qe(a, 5000, 0)]; // unchanged
+        let mut moved = qe(a, 1000, 0);
+        moved.note = Some("bumped to top".to_string());
+        let theirs = vec![moved.clone()]; // machine 2 repositioned
+        let merged = merge_queue_three_way(&base, &ours, &theirs);
+        assert_eq!(merged, vec![moved], "the changed side's entry must win");
+    }
+
+    // Both sides re-added/moved the SAME spec: later added_at wins, and the
+    // result is identical with ours/theirs swapped (order-independence).
+    #[test]
+    fn queue_merge_both_changed_lww_and_order_independent() {
+        let a = Uuid::new_v4();
+        let base = vec![qe(a, 5000, 0)];
+        let ours = vec![qe(a, 1000, 50)];
+        let theirs = vec![qe(a, 9000, 100)]; // later add → wins
+        let one = merge_queue_three_way(&base, &ours, &theirs);
+        let two = merge_queue_three_way(&base, &theirs, &ours);
+        assert_eq!(one, vec![qe(a, 9000, 100)], "later added_at must win");
+        assert_eq!(one, two, "merge must be order-independent across clones");
+    }
+
+    // Exact added_at tie with divergent content: both clones must converge on
+    // the SAME winner no matter which side they call ours (BUG-578 precedent).
+    #[test]
+    fn queue_merge_exact_tie_is_deterministic() {
+        let a = Uuid::new_v4();
+        let ours = vec![qe(a, 1000, 0)];
+        let theirs = vec![qe(a, 2000, 0)]; // same added_at, different position
+        let one = merge_queue_three_way(&[], &ours, &theirs);
+        let two = merge_queue_three_way(&[], &theirs, &ours);
+        assert_eq!(one, two, "tie-break must be a pure data-function");
+        assert_eq!(one.len(), 1);
+    }
+
+    // add/add with no base (both machines created the file concurrently):
+    // everything unions, dedup by requirement_id, sorted by position.
+    #[test]
+    fn queue_merge_no_base_unions_and_sorts() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let ours = vec![qe(a, 2000, 0)];
+        let theirs = vec![qe(b, 1000, 5), qe(a, 2000, 0)];
+        let merged = merge_queue_three_way(&[], &ours, &theirs);
+        assert_eq!(merged, vec![qe(b, 1000, 5), qe(a, 2000, 0)]);
     }
 }

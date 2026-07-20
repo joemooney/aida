@@ -161,11 +161,13 @@ pub enum StorePullOutcome {
 /// `objects/TYPE/000/SPEC.yaml` whenever two clones edited the SAME spec —
 /// even though the spec is structurally union-mergeable (`history:` is
 /// append-only by entry id; scalars resolve via LWW). This wrapper attempts
-/// the rebase and, if it conflicts AND every unmerged path is a spec object
-/// under `objects/**/*.yaml`, runs the pure `conflict::merge_spec_three_way`
-/// resolver per spec, stages the result, and continues the rebase.
+/// the rebase and, if it conflicts AND every unmerged path has a known union
+/// rule — a spec object under `objects/**/*.yaml`, the oplog, or a per-user
+/// queue registry under `registry/queues/*.yaml` (BUG-725) — runs the
+/// matching pure resolver per file, stages the result, and continues the
+/// rebase.
 ///
-/// SAFETY: if ANY conflicting path is not a spec object, or any structured
+/// SAFETY: if ANY conflicting path has no union rule, or any structured
 /// parse/merge fails, the rebase is aborted and the function returns an Err —
 /// the caller falls back to the manual-conflict path. We never force-resolve
 /// unknown files and never corrupt the store. trace:STORY-641 | ai:claude
@@ -206,13 +208,15 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
             continue;
         }
 
-        // Every conflicted path must be a structurally-mergeable, append-only
-        // artifact: a spec object (history union + scalar LWW) or the oplog
-        // (operations union by id + lamport reconcile). Anything else
-        // (registries, agreed_counters, blocks) → bail to the manual path; we
-        // never force-resolve files without a known union rule.
+        // Every conflicted path must be a structurally-mergeable artifact: a
+        // spec object (history union + scalar LWW), the oplog (operations
+        // union by id + lamport reconcile), or a per-user queue registry
+        // (entry union by requirement_id — BUG-725, the same-user-two-machines
+        // collision). Anything else (agreed_counters, blocks, nodes) → bail to
+        // the manual path; we never force-resolve files without a known union
+        // rule.
         for path in &conflicted {
-            if !is_spec_object_path(path) && !is_oplog_path(path) {
+            if !is_spec_object_path(path) && !is_oplog_path(path) && !is_queue_registry_path(path) {
                 let _ = git(repo, &["rebase", "--abort"]);
                 anyhow::bail!(
                     "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
@@ -223,6 +227,8 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
         for path in &conflicted {
             let resolved = if is_oplog_path(path) {
                 resolve_oplog_conflict(repo, path)
+            } else if is_queue_registry_path(path) {
+                resolve_queue_conflict(repo, path)
             } else {
                 resolve_spec_conflict(repo, path)
             };
@@ -303,6 +309,21 @@ fn is_oplog_path(path: &str) -> bool {
     p == "oplog.yaml" || p.ends_with("/oplog.yaml")
 }
 
+/// True when `path` is a per-user queue registry file
+/// (`registry/queues/<user>.yaml`).
+// trace:BUG-725 | ai:claude
+fn is_queue_registry_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    let rest = if let Some(r) = p.strip_prefix("registry/queues/") {
+        r
+    } else if let Some(idx) = p.find("/registry/queues/") {
+        &p[idx + "/registry/queues/".len()..]
+    } else {
+        return false;
+    };
+    rest.ends_with(".yaml") && !rest.contains('/')
+}
+
 /// Resolve a conflicted `oplog.yaml` by unioning the operation logs. The
 /// `OpLog` is append-only and id-keyed, so `OpLog::merge` (dedupe by op id +
 /// lamport reconcile + deterministic sort) is the exact union we want. A
@@ -349,6 +370,51 @@ fn resolve_oplog_conflict(repo: &Path, path: &str) -> Result<String> {
     Ok(format!(
         "auto-merged oplog: {} operations after union",
         merged.operations.len()
+    ))
+}
+
+/// Resolve a conflicted per-user queue registry (`registry/queues/<user>.yaml`)
+/// via the pure three-way entry union. Reads the base/ours/theirs blobs from
+/// the index stages and writes the merged YAML back to the working tree.
+///
+/// A missing stage parses as an EMPTY queue: the file may not exist in the
+/// merge base (both machines created it concurrently — add/add), or one side
+/// may have deleted it (`queue clear`, or the last entry removed). The 3-way
+/// union then does the right thing per entry — base-relative removals stay
+/// removed, fresh adds survive.
+// trace:BUG-725 | ai:claude
+#[cfg(feature = "native")]
+fn resolve_queue_conflict(repo: &Path, path: &str) -> Result<String> {
+    use crate::conflict::merge_queue_three_way;
+    use crate::models::QueueEntry;
+
+    let parse = |label: &str, yaml: Option<String>| -> Result<Vec<QueueEntry>> {
+        match yaml {
+            Some(y) if y.trim().is_empty() => Ok(Vec::new()),
+            Some(y) => {
+                serde_yaml::from_str(&y).with_context(|| format!("parse {label} stage of {path}"))
+            }
+            None => Ok(Vec::new()),
+        }
+    };
+    let base = parse("base", git_show_stage(repo, 1, path)?)?;
+    let ours = parse("ours", git_show_stage(repo, 2, path)?)?;
+    let theirs = parse("theirs", git_show_stage(repo, 3, path)?)?;
+
+    let merged = merge_queue_three_way(&base, &ours, &theirs);
+
+    let yaml = serde_yaml::to_string(&merged)
+        .with_context(|| format!("serialize merged queue registry for {path}"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, yaml.as_bytes()).with_context(|| format!("write merged {path}"))?;
+
+    let n = merged.len();
+    Ok(format!(
+        "auto-merged queue registry {path}: {n} entr{} after union",
+        if n == 1 { "y" } else { "ies" }
     ))
 }
 
@@ -464,6 +530,8 @@ fn merge_in_progress(repo: &Path) -> bool {
 /// files the rebase path deliberately bails on:
 /// - `objects/**/*.yaml` → [`crate::conflict::merge_spec_three_way`]
 /// - `oplog.yaml` → operation-log union by op id
+/// - `registry/queues/*.yaml` → [`crate::conflict::merge_queue_three_way`]
+///   (3-way entry union by requirement_id — BUG-725)
 /// - `registry/blocks.yaml` → [`crate::node::union_block_registries`]
 ///   (disjoint-range union, max-`next`; range collisions abort)
 /// - `registry/nodes.toml` → [`crate::node::union_node_registries`]
@@ -490,6 +558,7 @@ pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StoreP
     for path in &conflicted {
         if !is_spec_object_path(path)
             && !is_oplog_path(path)
+            && !is_queue_registry_path(path)
             && !is_registry_blocks_path(path)
             && !is_registry_nodes_path(path)
         {
@@ -504,6 +573,8 @@ pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StoreP
     for path in &conflicted {
         let resolved = if is_oplog_path(path) {
             resolve_oplog_conflict(repo, path)
+        } else if is_queue_registry_path(path) {
+            resolve_queue_conflict(repo, path)
         } else if is_registry_blocks_path(path) {
             resolve_blocks_conflict(repo, path)
         } else if is_registry_nodes_path(path) {
@@ -4635,5 +4706,118 @@ mod tests {
             !merge_in_progress(&repo),
             "no merge may be left in progress"
         );
+    }
+
+    // ---- BUG-725: same-user two-machine queue registry collision ----
+
+    #[test]
+    fn queue_registry_path_predicate_matches_per_user_files_only() {
+        assert!(is_queue_registry_path("registry/queues/joe.yaml"));
+        assert!(is_queue_registry_path("store/registry/queues/joe.yaml"));
+        assert!(is_queue_registry_path("registry\\queues\\joe.yaml"));
+        assert!(!is_queue_registry_path("registry/queues/nested/joe.yaml"));
+        assert!(!is_queue_registry_path("registry/blocks.yaml"));
+        assert!(!is_queue_registry_path("registry/nodes.toml"));
+        assert!(!is_queue_registry_path("objects/bug/000/BUG-1.yaml"));
+        assert!(!is_queue_registry_path("registry/queues/joe.yaml.bak"));
+    }
+
+    fn queue_entry_for_test(position: i64, added_secs: i64) -> crate::models::QueueEntry {
+        crate::models::QueueEntry {
+            user_id: "joe".to_string(),
+            requirement_id: uuid::Uuid::new_v4(),
+            position,
+            added_by: "joe".to_string(),
+            note: None,
+            added_at: chrono::DateTime::from_timestamp(1_750_000_000 + added_secs, 0).unwrap(),
+            for_role: Some("implementer".to_string()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        }
+    }
+
+    fn write_queue_file(repo: &Path, entries: &[crate::models::QueueEntry]) {
+        std::fs::create_dir_all(repo.join("registry/queues")).unwrap();
+        std::fs::write(
+            repo.join("registry/queues/joe.yaml"),
+            serde_yaml::to_string(&entries).unwrap(),
+        )
+        .unwrap();
+    }
+
+    /// The BUG-725 acceptance: two machines, same user, concurrent queue
+    /// writes → `aida pull` (the store pull-rebase leg) auto-merges instead
+    /// of failing with "conflict in non-mergeable path
+    /// `registry/queues/joe.yaml`". Both machines' queued entries survive.
+    // trace:BUG-725 | ai:claude
+    #[test]
+    fn pull_rebase_auto_merges_same_user_queue_registry_from_two_machines() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // The shared hub the two machines sync through.
+        let hub = dir.path().join("hub.git");
+        std::fs::create_dir_all(&hub).unwrap();
+        git(&hub, &["init", "--bare"]).unwrap();
+        git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]).unwrap();
+
+        // Machine 1: seed the store with one queued entry and publish.
+        let m1 = dir.path().join("machine1");
+        init(&m1).unwrap();
+        configure_user(&m1, "Joe", "joe@example.com").unwrap();
+        git(&m1, &["checkout", "-b", "aida-store"]).unwrap();
+        let seed = queue_entry_for_test(1000, 0);
+        write_queue_file(&m1, std::slice::from_ref(&seed));
+        add(&m1, &["registry/queues/joe.yaml"]).unwrap();
+        commit(&m1, "seed queue").unwrap();
+        git(&m1, &["remote", "add", "origin", hub.to_str().unwrap()]).unwrap();
+        assert!(push(&m1, "origin", "aida-store").unwrap());
+
+        // Machine 2: a second clone of the same store, same user.
+        git(dir.path(), &["clone", hub.to_str().unwrap(), "machine2"]).unwrap();
+        let m2 = dir.path().join("machine2");
+        configure_user(&m2, "Joe", "joe@example.com").unwrap();
+
+        // Machine 1 queues one spec and pushes...
+        let queued_on_m1 = queue_entry_for_test(2000, 10);
+        write_queue_file(&m1, &[seed.clone(), queued_on_m1.clone()]);
+        add(&m1, &["registry/queues/joe.yaml"]).unwrap();
+        commit(&m1, "queue from machine 1").unwrap();
+        assert!(push(&m1, "origin", "aida-store").unwrap());
+
+        // ...while machine 2 concurrently queues a DIFFERENT spec.
+        let queued_on_m2 = queue_entry_for_test(2000, 20);
+        write_queue_file(&m2, &[seed.clone(), queued_on_m2.clone()]);
+        add(&m2, &["registry/queues/joe.yaml"]).unwrap();
+        commit(&m2, "queue from machine 2").unwrap();
+
+        // Machine 2 pulls: the textual conflict on joe.yaml must auto-merge.
+        let outcome = pull_rebase_auto_merge(&m2, "origin", "aida-store")
+            .expect("same-user two-machine queue writes must auto-merge, not fail");
+        match outcome {
+            StorePullOutcome::AutoMerged { notes } => {
+                assert!(
+                    notes.iter().any(|n| n.contains("queue registry")),
+                    "expected a queue-registry auto-merge note, got: {notes:?}"
+                );
+            }
+            StorePullOutcome::Clean => panic!("expected a conflict to be auto-merged"),
+        }
+        assert!(!rebase_in_progress(&m2), "rebase must have completed");
+
+        // Every entry survived: the seed plus BOTH machines' concurrent adds.
+        let merged: Vec<crate::models::QueueEntry> = serde_yaml::from_str(
+            &std::fs::read_to_string(m2.join("registry/queues/joe.yaml")).unwrap(),
+        )
+        .unwrap();
+        let mut got: Vec<uuid::Uuid> = merged.iter().map(|e| e.requirement_id).collect();
+        got.sort();
+        let mut want = vec![
+            seed.requirement_id,
+            queued_on_m1.requirement_id,
+            queued_on_m2.requirement_id,
+        ];
+        want.sort();
+        assert_eq!(got, want, "no queue entry may be dropped by the merge");
     }
 }

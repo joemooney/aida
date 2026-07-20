@@ -8237,7 +8237,9 @@ req_type: Task
 /// Represents an entry in a user's personal work queue
 // trace:STORY-0366 | ai:claude
 // trace:TASK-714
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+// PartialEq: the queue-registry three-way merge (BUG-725) needs to tell
+// which side changed an entry relative to the merge base.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct QueueEntry {
     /// The user whose queue this entry belongs to
     pub user_id: String,
