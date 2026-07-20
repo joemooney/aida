@@ -393,7 +393,12 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // canonical YAML `weight` field — the optional first-class numeric score) so
 // `aida list --sort weight` / `--min-weight` / `--max-weight` read the cache.
 // trace:FR-283 | ai:claude
-const SCHEMA_VERSION: &str = "12";
+// BUG-764: bumped to "13" when `hierarchy_edges` gained the `author_id` column
+// (PK widened to parent+child+author) so single-row upserts can delete/re-derive
+// only the edges the written record authored instead of destroying the other
+// endpoint's. Existing caches rebuild on next read to re-materialize authored
+// edges. trace:BUG-764 | ai:claude
+const SCHEMA_VERSION: &str = "13";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -879,8 +884,11 @@ impl Cache {
             // tracking continues to work after the rebuild stamps it.
             with_cache_write(&path, "drop cache tables for schema migration", || {
                 conn.execute_batch(
+                    // BUG-764: hierarchy_edges must drop too — `CREATE TABLE IF
+                    // NOT EXISTS` can't add the author_id column to a v12 table.
                     "DROP TABLE IF EXISTS requirements_cache;
-                     DROP TABLE IF EXISTS requirements_fts;",
+                     DROP TABLE IF EXISTS requirements_fts;
+                     DROP TABLE IF EXISTS hierarchy_edges;",
                 )
                 .context("Failed to drop cache tables for schema migration")
             })?;
@@ -1021,8 +1029,34 @@ impl Cache {
         // `graph_walk::subtree_ids` walks — so the `descendant_ids` CTE and
         // `aida graph --tree` agree on membership. Computed once over the whole
         // store (both endpoints' types available) rather than per-req, so the
-        // orientation is authoritative after a rebuild. trace:TASK-1074 | ai:claude
-        let hierarchy_edges = crate::graph_walk::oriented_hierarchy_edges(store);
+        // orientation is authoritative after a rebuild.
+        // BUG-764: each edge is recorded with the AUTHORING requirement's id
+        // (the record whose relationship produced it), so the per-row upsert
+        // can later re-derive exactly its own edges. The membership set stays
+        // identical to `graph_walk::oriented_hierarchy_edges` — same rank rule,
+        // same union of both endpoints; a reciprocal pair simply lands as one
+        // row per author. trace:TASK-1074 trace:BUG-764 | ai:claude
+        let rank_of: std::collections::HashMap<Uuid, u8> = store
+            .requirements
+            .iter()
+            .map(|r| (r.id, r.req_type.hierarchy_rank()))
+            .collect();
+        let mut hierarchy_edges: Vec<(Uuid, Uuid, Uuid)> = Vec::new();
+        for req in &store.requirements {
+            let src_rank = req.req_type.hierarchy_rank();
+            for rel in &req.relationships {
+                let tgt_rank = rank_of.get(&rel.target_id).copied().unwrap_or(2);
+                if let Some((parent, child)) = crate::graph_walk::orient_hierarchy_edge(
+                    req.id,
+                    src_rank,
+                    &rel.rel_type,
+                    rel.target_id,
+                    tgt_rank,
+                ) {
+                    hierarchy_edges.push((parent, child, req.id));
+                }
+            }
+        }
         let count = {
             let conn = self.conn.lock().unwrap();
             with_cache_write(&self.path, "rebuild cache", || {
@@ -1044,10 +1078,11 @@ impl Cache {
                     insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
                     count += 1;
                 }
-                for (parent, child) in &hierarchy_edges {
+                for (parent, child, author) in &hierarchy_edges {
                     tx.execute(
-                        "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id) VALUES (?1, ?2)",
-                        params![parent.to_string(), child.to_string()],
+                        "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id, author_id)
+                         VALUES (?1, ?2, ?3)",
+                        params![parent.to_string(), child.to_string(), author.to_string()],
                     )?;
                 }
                 tx.commit()?;
@@ -1105,50 +1140,53 @@ impl Cache {
             // any BlockedBy target that isn't Completed (or is unresolvable in the
             // cache) leaves the row blocked. trace:TASK-902 | ai:claude
             let blocked = blocked_from_cache(&conn, req);
-            // BUG-626: if the upserted row is an EPIC, its status is the derived
-            // rollup of its children. The epic's own outbound Parent/Child edges
-            // name its children, so we can roll up from the children's CACHED
-            // statuses without a whole-store load. A non-epic projects its stored
-            // status (None). Propagating a child's status flip UP to its parent
-            // epic is handled by the backend wrapper (it has the inner store to
-            // re-read the epic's siblings); here we only freshen the epic's own
-            // row when the epic itself is the thing being written.
-            // trace:BUG-626 | ai:claude
-            let epic_override = epic_status_override_from_cache(&conn, req);
             delete_one_uncommitted(&conn, &req.id)?;
-            insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
             // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
             // the inbound-degree axis, an edge recorded on the OTHER endpoint
             // (a child carrying `Parent -> this`) is only re-derived on a full
             // rebuild — same rebuildable-projection contract. delete_one_uncommitted
-            // already cleared this row's outbound edges before the re-insert.
-            // trace:TASK-955 | ai:claude
+            // already cleared this row's outbound edges above. Written BEFORE the
+            // epic override is derived so the rollup walks this row's CURRENT
+            // edges, not the pre-write set. trace:TASK-955 trace:BUG-764
             insert_edges(&conn, req)?;
+            // BUG-626: if the upserted row is an EPIC, its status is the derived
+            // rollup of its children — resolved through the materialized
+            // hierarchy edges (BUG-764), so child-authored edges count too. A
+            // non-epic projects its stored status (None). Propagating a child's
+            // status flip UP to its parent epic is handled by the backend
+            // wrapper; here we only freshen the epic's own row when the epic
+            // itself is the thing being written. trace:BUG-626 | ai:claude
+            let epic_override = epic_status_override_from_cache(&conn, req);
+            insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
             Ok(())
         })?;
         Ok(())
     }
 
-    /// Recompute and re-stamp a single EPIC's derived status column from the
-    /// statuses in `rollup` (the epic's children, as the caller resolved them —
-    /// typically by loading the epic + its children from the inner git store).
-    /// Updates ONLY the `status` column of the epic's existing cache row; a
-    /// no-op if the epic has no cache row yet. This is the child-status-flip
-    /// propagation the single-row upsert can't do on its own (it has no view of
-    /// the epic's other children).
-    // trace:BUG-626 | ai:claude
-    pub fn recompute_epic_status(
-        &self,
-        epic_id: &Uuid,
-        rollup: &crate::graph_walk::StatusRollup,
-    ) -> Result<()> {
-        let Some(derived) = crate::rollup::derive_epic_status_from_rollup(rollup) else {
+    /// Recompute and re-stamp a single EPIC's derived status column from its
+    /// descendants' cached statuses, resolved through the materialized
+    /// `hierarchy_edges` table (transitive, both-endpoint edges — the same
+    /// membership the full rebuild derives from). Updates ONLY the `status`
+    /// column of the epic's existing cache row; a no-op if the epic has no
+    /// cache row yet. This is the child-status-flip propagation the single-row
+    /// upsert can't do on its own (it has no view of the epic's other
+    /// children).
+    ///
+    /// BUG-764: replaces the caller-supplied direct-children rollup, which was
+    /// resolved from the epic's OWN outbound edges — empty in the common
+    /// child-authored-edge shape, so a child completing (e.g. via the `aida
+    /// pull` auto-bump) re-derived the epic from zero children instead of the
+    /// real subtree.
+    // trace:BUG-626 trace:BUG-764 | ai:claude
+    pub fn recompute_epic_status_from_hierarchy(&self, epic_id: &Uuid) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let rollup = epic_rollup_from_hierarchy(&conn, epic_id);
+        let Some(derived) = crate::rollup::derive_epic_status_from_rollup(&rollup) else {
             // Only-rejected (or otherwise indeterminate) children: keep the
             // stored status already in the row.
             return Ok(());
         };
         let status_str = format!("{derived:?}");
-        let conn = self.conn.lock().unwrap();
         with_cache_write(&self.path, "recompute epic status", || {
             conn.execute(
                 "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
@@ -1159,11 +1197,50 @@ impl Cache {
         Ok(())
     }
 
+    /// The ancestor EPICs of `id` (any depth), resolved by walking the
+    /// materialized `hierarchy_edges` table UPWARD from `id` and keeping the
+    /// ancestors whose cached `req_type` is Epic. `id` itself is excluded.
+    /// Backs the write-path epic-rollup refresh: a status flip on a child (or
+    /// grandchild) names exactly the epics whose derived status may have
+    /// shifted, whichever endpoint recorded the hierarchy edge.
+    // trace:BUG-764 | ai:claude
+    pub fn ancestor_epic_ids(&self, id: &Uuid) -> Result<Vec<Uuid>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "WITH RECURSIVE ancestors(id) AS (
+                 SELECT ?1
+                 UNION
+                 SELECT e.parent_id
+                   FROM hierarchy_edges e
+                   JOIN ancestors a ON e.child_id = a.id
+             )
+             SELECT rc.id
+               FROM requirements_cache rc
+               JOIN ancestors a ON rc.id = a.id
+              WHERE rc.id <> ?1 AND rc.req_type = 'Epic'",
+        )?;
+        let rows = stmt
+            .query_map(params![id.to_string()], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|s| Uuid::parse_str(&s).ok())
+            .collect())
+    }
+
     /// Single-row delete called after a write-through git delete succeeds.
     pub fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         with_cache_write(&self.path, "delete cached requirement", || {
-            delete_one_uncommitted(&conn, id)
+            delete_one_uncommitted(&conn, id)?;
+            // BUG-764: the row is GONE, so every hierarchy edge touching it is
+            // dead whichever endpoint authored it — purge beyond the
+            // author-scoped delete above.
+            conn.execute(
+                "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
+                params![id.to_string()],
+            )?;
+            Ok(())
         })
     }
 
@@ -1764,39 +1841,65 @@ fn blocked_from_cache(conn: &Connection, req: &Requirement) -> bool {
         })
 }
 
-/// When `req` is an EPIC, derive its rollup status from its children's CACHED
-/// statuses (the epic's own outbound `Parent`/`Child` edges name the children —
-/// same union the tree walk uses). Returns the cache `status` string form, or
-/// `None` for a non-epic / an epic whose rollup is indeterminate (only-rejected
-/// children → keep stored status). Used by the single-row upsert so an epic's
-/// own row stays fresh when the epic itself is written. A child resolvable in
-/// the cache contributes its status; an unresolvable child edge contributes
-/// nothing (skipped), matching `graph_walk::status_rollup`.
-// trace:BUG-626 | ai:claude
+/// When `req` is an EPIC, derive its rollup status from its descendants' CACHED
+/// statuses. Returns the cache `status` string form, or `None` for a non-epic /
+/// an epic whose rollup is indeterminate (only-rejected children → keep stored
+/// status). Used by the single-row upsert so an epic's own row stays fresh when
+/// the epic itself is written (e.g. a comment add).
+///
+/// BUG-764: the membership walks the materialized `hierarchy_edges` table (the
+/// same both-endpoint oriented edges `descendant_ids` / the full rebuild use)
+/// instead of the epic's OWN outbound `Parent`/`Child` edges. In the common
+/// data shape the hierarchy edge lives on the CHILD (`Child -> epic`) and the
+/// epic's record carries none — the old own-edges walk then tallied zero
+/// children and re-derived the epic to Draft, so a comment add on a stuck epic
+/// could never refresh it to the real rollup.
+// trace:BUG-626 trace:BUG-764 | ai:claude
 fn epic_status_override_from_cache(conn: &Connection, req: &Requirement) -> Option<String> {
     if req.req_type != crate::models::RequirementType::Epic {
         return None;
     }
-    let mut rollup = crate::graph_walk::StatusRollup::default();
-    for rel in &req.relationships {
-        if !matches!(
-            rel.rel_type,
-            RelationshipType::Parent | RelationshipType::Child
-        ) {
-            continue;
-        }
-        let child_status: Option<String> = conn
-            .query_row(
-                "SELECT status FROM requirements_cache WHERE id = ?1",
-                params![rel.target_id.to_string()],
-                |row| row.get::<_, String>(0),
-            )
-            .ok();
-        if let Some(status) = child_status {
-            tally_status_str(&mut rollup, &status);
-        }
-    }
+    let rollup = epic_rollup_from_hierarchy(conn, &req.id);
     crate::rollup::derive_epic_status_from_rollup(&rollup).map(|s| format!("{s:?}"))
+}
+
+/// Tally the cached statuses of `epic_id`'s TRANSITIVE descendants — the same
+/// subtree membership the full rebuild's `compute_epic_statuses` derives from
+/// (`descendant_ids`' recursive walk over the materialized both-endpoint
+/// `hierarchy_edges`), so the write-path refresh and the rebuild agree. The
+/// root itself is excluded; archived descendants still count (BUG-628: archived
+/// is a view flag, not a status). A descendant with an edge but no cache row
+/// contributes nothing, matching `graph_walk::status_rollup`'s dangling-edge
+/// tolerance.
+// trace:BUG-764 | ai:claude
+fn epic_rollup_from_hierarchy(
+    conn: &Connection,
+    epic_id: &Uuid,
+) -> crate::graph_walk::StatusRollup {
+    let mut rollup = crate::graph_walk::StatusRollup::default();
+    let Ok(mut stmt) = conn.prepare(
+        "WITH RECURSIVE subtree(id) AS (
+             SELECT ?1
+             UNION
+             SELECT e.child_id
+               FROM hierarchy_edges e
+               JOIN subtree s ON e.parent_id = s.id
+         )
+         SELECT rc.status
+           FROM requirements_cache rc
+           JOIN subtree s ON rc.id = s.id
+          WHERE rc.id <> ?1",
+    ) else {
+        return rollup;
+    };
+    let Ok(rows) = stmt.query_map(params![epic_id.to_string()], |row| row.get::<_, String>(0))
+    else {
+        return rollup;
+    };
+    for status in rows.flatten() {
+        tally_status_str(&mut rollup, &status);
+    }
+    rollup
 }
 
 /// Fold a cache `status` string (the `format!("{:?}", status)` form, or a
@@ -1981,14 +2084,17 @@ fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
         "DELETE FROM requirements_fts WHERE id = ?1",
         params![id_str],
     )?;
-    // TASK-955: clear the OUTBOUND hierarchy edges this row contributed (the
-    // ones where it is the parent, plus the parent->this rows it authored as a
-    // child via a `Parent` edge). insert_edges re-derives them from the fresh
-    // record. Edges authored by OTHER specs that target this id survive — they
-    // belong to that endpoint's row and are refreshed when it is rewritten / on
-    // the next full rebuild. trace:TASK-955 | ai:claude
+    // TASK-955: clear the hierarchy edges this row AUTHORED — insert_edges
+    // re-derives them from the fresh record. Edges authored by OTHER specs
+    // survive even when they touch this id: they belong to that endpoint's
+    // record and are refreshed when it is rewritten / on the next full rebuild.
+    // BUG-764: the old predicate (`parent_id = ?1 OR child_id = ?1`) deleted
+    // the OTHER endpoint's edges too, so an epic-self write (e.g. a comment
+    // add) destroyed the child-authored edges its rollup membership depends on
+    // until the next full rebuild. The author_id column makes the delete
+    // precise. trace:TASK-955 trace:BUG-764 | ai:claude
     conn.execute(
-        "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
+        "DELETE FROM hierarchy_edges WHERE author_id = ?1",
         params![id_str],
     )?;
     Ok(())
@@ -2036,8 +2142,9 @@ fn insert_edges(conn: &Connection, req: &Requirement) -> Result<()> {
             tgt_rank,
         ) {
             conn.execute(
-                "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id) VALUES (?1, ?2)",
-                params![parent.to_string(), child.to_string()],
+                "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id, author_id)
+                 VALUES (?1, ?2, ?3)",
+                params![parent.to_string(), child.to_string(), req.id.to_string()],
             )?;
         }
     }
@@ -4104,6 +4211,87 @@ mod tests {
         assert_eq!(cached_status(&cache, child_id), "InProgress");
         cache.upsert_requirement(&epic).unwrap();
         assert_eq!(cached_status(&cache, epic_id), "InProgress");
+    }
+
+    // BUG-764: an epic-self upsert (the `aida comment add <epic>` write shape)
+    // must re-derive the rollup even when every hierarchy edge is recorded on
+    // the CHILDREN (`aida add --parent` writes the edge on the child; the
+    // epic's record carries none). The old own-edges walk tallied zero children
+    // and re-derived the epic from an empty rollup, so a comment-add nudge
+    // could never refresh a stuck epic. trace:BUG-764 | ai:claude
+    #[test]
+    fn epic_self_upsert_derives_from_child_authored_edges() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // Epic with NO outbound hierarchy edges; the children point up at it.
+        let mut epic = sample_req("EPIC-7", "epic with child-authored edges");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::InProgress;
+        let mut open_child = sample_req("STORY-7", "open child");
+        open_child.status = RequirementStatus::Approved;
+        open_child
+            .relationships
+            .push(rel(RelationshipType::Parent, epic.id));
+        let mut rejected = sample_req("STORY-8", "rejected sibling");
+        rejected.status = RequirementStatus::Rejected;
+        rejected
+            .relationships
+            .push(rel(RelationshipType::Parent, epic.id));
+
+        let (epic_id, child_id) = (epic.id, open_child.id);
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .extend([epic.clone(), open_child.clone(), rejected]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+        assert_eq!(cached_status(&cache, epic_id), "Draft");
+
+        // The open child completes AND is archived (BUG-628 recheck: archived
+        // is a view flag, not a status — it still counts toward the rollup);
+        // its own row reflects it.
+        let mut open_child = open_child;
+        open_child.status = RequirementStatus::Completed;
+        open_child.archived = true;
+        cache.upsert_requirement(&open_child).unwrap();
+        assert_eq!(cached_status(&cache, child_id), "Completed");
+
+        // An epic-self write (comment add) re-derives from the live child set:
+        // zero open children (completed + rejected) → Completed.
+        cache.upsert_requirement(&epic).unwrap();
+        assert_eq!(cached_status(&cache, epic_id), "Completed");
+    }
+
+    // BUG-764: the stuck terminal mix at rebuild level — an epic whose children
+    // are all resolved (Completed + Rejected, zero open) must project
+    // Completed, not the InProgress it could never leave.
+    #[test]
+    fn cache_rollup_completes_epic_with_completed_plus_rejected_children() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut epic = sample_req("EPIC-8", "terminal-mix epic");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::InProgress;
+        let mut c1 = sample_req("STORY-10", "completed child");
+        c1.status = RequirementStatus::Completed;
+        c1.relationships
+            .push(rel(RelationshipType::Parent, epic.id));
+        let mut c2 = sample_req("STORY-11", "rejected child");
+        c2.status = RequirementStatus::Rejected;
+        c2.relationships
+            .push(rel(RelationshipType::Parent, epic.id));
+
+        let epic_id = epic.id;
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, c1, c2]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        assert_eq!(
+            cached_status(&cache, epic_id),
+            "Completed",
+            "zero open children must not read In Progress"
+        );
     }
 
     // BUG-701: the cache-backed spec_id collision scan that replaces the O(n)

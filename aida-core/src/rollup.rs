@@ -27,9 +27,14 @@ use uuid::Uuid;
 /// 1. **No children** (`total == 0`) -> `Draft` — nothing has started; the epic
 ///    still needs decomposition. (`aida why` already says "decompose — an epic
 ///    with no children yet"; this makes the status agree.)
-/// 2. **All children Completed** -> `Completed`.
-/// 3. **All children Done or Completed** (some on a branch, not all merged) ->
-///    `Done`.
+/// 2. **All non-Rejected children Completed** -> `Completed`. A Rejected child
+///    is RESOLVED, not open — it can never transition again, so it must not
+///    hold the epic in a perpetual "in progress" it can't leave (the BUG-764
+///    stuck state: an epic whose last open child completed via the `aida pull`
+///    auto-bump but that also carried a rejected child read In Progress
+///    forever).
+/// 3. **All non-Rejected children Done or Completed** (some on a branch, not
+///    all merged) -> `Done`.
 /// 4. **At least one child In Progress, OR a mix of done-and-not-done work** ->
 ///    `InProgress` — the epic is actively moving.
 /// 5. **At least one child shelved (NeedsAttention) and none In Progress** ->
@@ -49,14 +54,21 @@ pub fn derive_epic_status_from_rollup(r: &StatusRollup) -> Option<RequirementSta
         return Some(RequirementStatus::Draft);
     }
 
-    // (2) Every child Completed.
-    if r.completed == r.total {
+    // Rejected children are resolved (terminal), not open: exclude them from
+    // the finished-vs-open denominator so an epic with zero OPEN children can
+    // reach Completed/Done. Before this, a completed+rejected mix fell through
+    // to the `any_finished` arm and derived InProgress forever — no child
+    // transition could ever move it again. trace:BUG-764 | ai:claude
+    let unrejected = r.total - r.rejected;
+
+    // (2) Every non-rejected child Completed.
+    if unrejected > 0 && r.completed == unrejected {
         return Some(RequirementStatus::Completed);
     }
 
-    // (3) Every child Done or Completed — work finished on branches, not all
-    // merged yet.
-    if r.done + r.completed == r.total {
+    // (3) Every non-rejected child Done or Completed — work finished on
+    // branches, not all merged yet.
+    if unrejected > 0 && r.done + r.completed == unrejected {
         return Some(RequirementStatus::Done);
     }
 
@@ -242,15 +254,48 @@ mod tests {
         assert_eq!(derive_epic_status(&store, Uuid::new_v4()), None);
     }
 
+    // BUG-764: rejected children are RESOLVED, not open — they must not hold
+    // the epic at InProgress forever once every open child has finished. This
+    // was the stuck state: an epic whose last open child completed (e.g. via
+    // the `aida pull` auto-bump) but that also carried a rejected child derived
+    // InProgress with no child transition left that could ever move it.
     #[test]
     fn rejected_plus_completed_rolls_up_completed() {
-        // Rejected children are "resolved"; a fully-completed-or-rejected epic
-        // counts as Completed once at least one child completed.
-        // total=3, completed=2, rejected=1 => not all completed, not all
-        // done+completed (rejected excluded), but some finished => InProgress?
-        // No: done+completed = 2 != total(3). any_finished is true => InProgress.
+        // total=3, completed=2, rejected=1 — zero open children => Completed.
         assert_eq!(
             derive_epic_status_from_rollup(&rollup(3, 2, 0, 0, 0, 0, 1)),
+            Some(RequirementStatus::Completed)
+        );
+    }
+
+    // BUG-764: same shape with a Done (finished-on-branch, unmerged) child —
+    // zero open children => Done, not InProgress.
+    #[test]
+    fn rejected_plus_done_rolls_up_done() {
+        // total=3, completed=1, done=1, rejected=1.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup(3, 1, 1, 0, 0, 0, 1)),
+            Some(RequirementStatus::Done)
+        );
+    }
+
+    // BUG-764 guard: excluding rejected children from the denominator must NOT
+    // close an epic that still has genuinely open work.
+    #[test]
+    fn rejected_child_does_not_mask_open_work() {
+        // completed + rejected + one still-queued child => InProgress (moving).
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup(3, 1, 0, 0, 1, 0, 1)),
+            Some(RequirementStatus::InProgress)
+        );
+        // rejected + queued only (nothing finished, nothing moving) => Draft.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup(2, 0, 0, 0, 1, 0, 1)),
+            Some(RequirementStatus::Draft)
+        );
+        // rejected + in-progress => InProgress.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup(2, 0, 0, 1, 0, 0, 1)),
             Some(RequirementStatus::InProgress)
         );
     }

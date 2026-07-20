@@ -393,84 +393,32 @@ impl CachedGitBackend {
     }
 
     /// An EPIC's status is a read-only rollup of its children, so a child's
-    /// status flip (or a newly-added/removed child) must refresh the PARENT
-    /// epic's cached status. The single-row cache upsert can't do this on its
-    /// own — it has no view of the epic's other children. Here we have the inner
-    /// git store, so for each epic the written `req` is a child of (its
-    /// reciprocal `Parent`/`Child` edges name the parent), we re-read the epic +
-    /// its children from git, roll their statuses up, and re-stamp the epic's
-    /// cache row. This keeps `aida list --status in-progress` truthful for epics
-    /// without waiting for a full rebuild. Best-effort: a failed lookup leaves
-    /// the epic to be corrected on the next full rebuild (the
+    /// status flip (or a newly-added/removed child) must refresh the ancestor
+    /// epics' cached status. The single-row cache upsert can't do this on its
+    /// own — it has no view of the epic's other children. Best-effort: a failed
+    /// lookup leaves the epic to be corrected on the next full rebuild (the
     /// rebuildable-projection contract).
     ///
-    /// Scope note: this rolls up the epic's DIRECT children only (cheap, no
-    /// whole-store load on every write), whereas the full rebuild
-    /// (`compute_epic_statuses` → `derive_epic_status` → transitive
-    /// `child_status_rollup`) is the AUTHORITATIVE transitive value. The two
-    /// agree for the overwhelmingly common case; an epic whose only finished
-    /// work lives in a grandchild is reconciled on the next rebuild — same
-    /// approximation contract as the cache's `in_degree` / `blocked` axes.
-    // trace:BUG-626 | ai:claude
+    /// BUG-764: both legs of this used to read only ONE endpoint's edges — the
+    /// ancestor scan read the written child's edges, but the child-set rollup
+    /// read the epic's OWN outbound edges, which are empty in the common
+    /// child-authored-edge shape (`aida add --parent` records the edge on the
+    /// child). A child completing via the `aida pull` auto-bump (raw
+    /// `GitBackend` writes, replayed through the incremental cache catch-up)
+    /// then re-derived its epic from zero children, and the epic's cached
+    /// status stuck. Now both legs walk the cache's materialized
+    /// `hierarchy_edges` (both-endpoint, oriented — the same substrate the full
+    /// rebuild and `descendant_ids` use): resolve every ancestor EPIC of the
+    /// written row, then re-derive each from its transitive descendant set. As
+    /// a bonus the rollup is now transitive, so a grandchild flip refreshes the
+    /// top epic too, matching the rebuild's authoritative value.
+    // trace:BUG-626 trace:BUG-764 | ai:claude
     fn refresh_parent_epic_status(&self, req: &Requirement) {
-        use crate::graph_walk::status_rollup;
-        use crate::models::{RelationshipType, RequirementType};
-
-        // A child stores the reciprocal edge to its parent (`Child --> parent`),
-        // and some stores also carry `Parent --> parent`; union both so the
-        // parent resolves whichever orientation was written. The epic itself, if
-        // it is the thing written, is freshened by the cache upsert directly.
-        let mut parent_ids: Vec<Uuid> = req
-            .relationships
-            .iter()
-            .filter(|rel| {
-                matches!(
-                    rel.rel_type,
-                    RelationshipType::Parent | RelationshipType::Child
-                )
-            })
-            .map(|rel| rel.target_id)
-            .collect();
-        parent_ids.sort();
-        parent_ids.dedup();
-
-        for parent_id in parent_ids {
-            // Load the candidate parent; skip anything that isn't an epic.
-            // BUG-634: targeted uuid→object resolve, not a full scan per edge.
-            let Ok(Some(epic)) = self.get_requirement_targeted(&parent_id) else {
-                continue;
-            };
-            if epic.req_type != RequirementType::Epic {
-                continue;
-            }
-            // Resolve the epic's children from its OWN outbound Parent/Child
-            // edges, load each, and roll the statuses up over a tiny store
-            // (the epic + its children) — the same `status_rollup` the cache
-            // rebuild path uses, so the two agree.
-            let mut subset: Vec<Requirement> = vec![epic.clone()];
-            let mut child_ids: Vec<Uuid> = Vec::new();
-            for rel in &epic.relationships {
-                if matches!(
-                    rel.rel_type,
-                    RelationshipType::Parent | RelationshipType::Child
-                ) {
-                    child_ids.push(rel.target_id);
-                }
-            }
-            child_ids.sort();
-            child_ids.dedup();
-            for cid in &child_ids {
-                // BUG-634: targeted resolve per child, not a full scan each.
-                if let Ok(Some(child)) = self.get_requirement_targeted(cid) {
-                    subset.push(child);
-                }
-            }
-            let store = RequirementsStore {
-                requirements: subset,
-                ..Default::default()
-            };
-            let rollup = status_rollup(&store, &child_ids);
-            let _ = self.cache.recompute_epic_status(&parent_id, &rollup);
+        let Ok(ancestor_epics) = self.cache.ancestor_epic_ids(&req.id) else {
+            return;
+        };
+        for epic_id in ancestor_epics {
+            let _ = self.cache.recompute_epic_status_from_hierarchy(&epic_id);
         }
     }
 
@@ -823,6 +771,125 @@ mod tests {
         // cleared the recorded SHA when it saw the pre-write HEAD had drifted.)
         let all = backend.list_summaries(&ListFilter::default()).unwrap();
         assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
+    }
+
+    // ---------------------------------------------------------------- BUG-764
+    // Epic rollup re-derivation when a child completes OUTSIDE the cached
+    // backend — the `aida pull` auto-bump route writes flips through a raw
+    // `GitBackend`, so the epic's cached status is only corrected when the next
+    // read's incremental catch-up replays the changed child rows. The data uses
+    // the CHILD-AUTHORED edge shape (the child records `Parent -> epic`; the
+    // epic's record carries no hierarchy edge), which the old own-edges rollup
+    // resolved to zero children. The epic also carries a Rejected sibling — the
+    // observed stuck mix that used to derive InProgress forever.
+
+    /// Cached status string for one row, from the cache's list projection.
+    fn cached_status(b: &CachedGitBackend, id: Uuid) -> String {
+        b.list_summaries(&ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            ..Default::default()
+        })
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .map(|r| r.status)
+        .unwrap()
+    }
+
+    /// Build a real git store holding an epic with two child-authored-edge
+    /// children: one open (Approved), one Rejected. Returns the backend plus
+    /// the (epic, open child) ids.
+    fn epic_with_open_and_rejected_child(
+        store_root: &Path,
+        cache_path: &Path,
+    ) -> (CachedGitBackend, Uuid, Uuid) {
+        use crate::models::{Relationship, RelationshipType, RequirementStatus, RequirementType};
+
+        std::fs::create_dir_all(store_root).unwrap();
+        crate::git_ops::init(store_root).unwrap();
+        crate::git_ops::configure_user(store_root, "Test", "test@example.com").unwrap();
+        let backend = CachedGitBackend::open(store_root, cache_path).unwrap();
+
+        let mut epic = sample_req("EPIC-1", "epic");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::InProgress;
+        let epic_id = epic.id;
+        backend.add_requirement(epic).unwrap();
+
+        let child_edge = || Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: epic_id,
+            created_at: None,
+            created_by: None,
+        };
+        let mut open_child = sample_req("STORY-1", "open child");
+        open_child.status = RequirementStatus::Approved;
+        open_child.relationships.push(child_edge());
+        let child_id = open_child.id;
+        backend.add_requirement(open_child).unwrap();
+
+        let mut rejected = sample_req("STORY-2", "rejected sibling");
+        rejected.status = RequirementStatus::Rejected;
+        rejected.relationships.push(child_edge());
+        backend.add_requirement(rejected).unwrap();
+
+        // One open child + one rejected sibling → derived Draft (queued).
+        assert_eq!(cached_status(&backend, epic_id), "Draft");
+        (backend, epic_id, child_id)
+    }
+
+    // The auto-bump route: the last open child completes via a raw `GitBackend`
+    // write (what `auto_bump_done_to_completed` does during `aida pull`); the
+    // cached backend's next read must re-derive the epic to Completed — no
+    // manual `edit --status --force` recovery. trace:BUG-764 | ai:claude
+    #[test]
+    fn epic_rollup_refreshes_after_external_auto_bump_completion() {
+        use crate::models::RequirementStatus;
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        let (backend, epic_id, child_id) =
+            epic_with_open_and_rejected_child(&store_root, &cache_path);
+
+        // External raw GitBackend flip — the auto-bump write shape.
+        {
+            let external = GitBackend::new(&store_root).unwrap();
+            let mut child = external.get_requirement(&child_id).unwrap().unwrap();
+            child.status = RequirementStatus::Completed;
+            external.update_requirement(&child).unwrap();
+        }
+
+        // Next cache-backed read replays the flip and re-derives the epic:
+        // zero open children (completed + rejected) → Completed.
+        assert_eq!(cached_status(&backend, child_id), "Completed");
+        assert_eq!(
+            cached_status(&backend, epic_id),
+            "Completed",
+            "epic with zero open children must not stay stuck"
+        );
+    }
+
+    // The direct-edit route: the same flip written THROUGH the cached backend
+    // must refresh the epic's row synchronously. With the child-authored edge
+    // shape the old own-edges rollup saw zero children and re-derived the epic
+    // to Draft. trace:BUG-764 | ai:claude
+    #[test]
+    fn epic_rollup_refreshes_after_direct_child_edit() {
+        use crate::models::RequirementStatus;
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        let (backend, epic_id, child_id) =
+            epic_with_open_and_rejected_child(&store_root, &cache_path);
+
+        let mut child = backend.get_requirement(&child_id).unwrap().unwrap();
+        child.status = RequirementStatus::Completed;
+        backend.update_requirement(&child).unwrap();
+
+        assert_eq!(cached_status(&backend, epic_id), "Completed");
     }
 
     // ---------------------------------------------------------------- BUG-636
