@@ -32911,12 +32911,14 @@ fn fetch_pr_info_via_gh_bin(
 /// double-implementing them.
 ///
 /// trace:TASK-458 | ai:claude
-/// STORY-529: the spec-IDs referenced by the commits about to ship whose spec
-/// carries the `review:draft-only` tag. Reuses the trailer-gate machinery
-/// (range → commits → store) so the ship-time draft gate sees the same specs
-/// the trailer guard validates. Empty when no store/commits or nothing is
-/// tagged. trace:STORY-529 | ai:claude
-fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<String> {
+/// STORY-529/BUG-727: the ship-time spec-gate lookup — the spec-IDs
+/// referenced by the commits about to ship, joined against the store as
+/// `(id, tags, execution_mode)`. Reuses the trailer-gate machinery (range →
+/// commits → store) so the ship gates see the same specs the trailer guard
+/// validates. Empty when no store/commits resolve or nothing matches.
+// trace:STORY-529 trace:BUG-727 | ai:claude
+type ShipGateSpecRecord = (String, Vec<String>, Option<aida_core::ExecutionMode>);
+fn ship_gate_spec_records(project_root: &std::path::Path) -> Vec<ShipGateSpecRecord> {
     let range = resolve_gate_range(project_root, None);
     let Ok(commits) = read_commits_in_range(project_root, &range) else {
         return Vec::new();
@@ -32945,12 +32947,38 @@ fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<String> {
         });
         if let Some(req) = found {
             let tags: Vec<String> = req.tags.iter().cloned().collect();
-            if pr_ship::is_draft_only_tagged(&tags) {
-                out.push(id);
-            }
+            out.push((id, tags, req.execution_mode));
         }
     }
     out
+}
+
+/// The spec-IDs referenced by the commits about to ship whose spec carries
+/// the `review:draft-only` tag — the ship-time draft gate's input.
+// trace:STORY-529 | ai:claude
+fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<String> {
+    ship_gate_spec_records(project_root)
+        .into_iter()
+        .filter(|(_, tags, _)| pr_ship::is_draft_only_tagged(tags))
+        .map(|(id, _, _)| id)
+        .collect()
+}
+
+/// The specs behind the commits about to ship whose `execution_mode` holds
+/// the auto-merge, as `(spec-id, mode-label)` pairs — the supervised-merge
+/// gate's input. Empty when the merge may proceed (all specs are `drain`, or
+/// the caller is an interactive human at a TTY).
+// trace:BUG-727 | ai:claude
+fn supervised_specs_for_ship(
+    project_root: &std::path::Path,
+    interactive_tty: bool,
+) -> Vec<(String, String)> {
+    let specs: Vec<(String, Option<aida_core::ExecutionMode>)> =
+        ship_gate_spec_records(project_root)
+            .into_iter()
+            .map(|(id, _, mode)| (id, mode))
+            .collect();
+    pr_ship::supervised_merge_holds(&specs, interactive_tty)
 }
 
 /// STORY-720: options for the shared human-implementer finish ceremony.
@@ -33540,6 +33568,55 @@ fn pr_ship_handler(
             &pr_ship::StepOutcome::Skipped(format!(
                 "{} tagged review:draft-only — held for human review",
                 draft_only.join(", ")
+            )),
+        );
+        return Ok(());
+    }
+
+    // ---- BUG-727: supervised-merge gate (substrate-as-bouncer). The keystone
+    // "Gate + PR, do NOT merge — advisor reviews first" directive used to live
+    // only in spec PROSE, which this ship path never read — it auto-merged
+    // keystone work straight past it. The machine-readable marker is the
+    // spec's `execution_mode`: only `drain` licenses an unattended merge; any
+    // other mode — or none at all (fail safe) — parks the PR OPEN and
+    // mergeable, awaiting an explicit human/advisor merge. A human at an
+    // interactive TTY IS that explicit merge, so the gate fires only for
+    // non-interactive (automation) callers. Skipped when the PR is already
+    // merged — there is nothing left to refuse, only the idempotent post-merge
+    // sync below. trace:BUG-727 | ai:claude
+    let interactive_tty = std::io::IsTerminal::is_terminal(&std::io::stdin())
+        && std::io::IsTerminal::is_terminal(&std::io::stdout());
+    let supervised = if already_merged {
+        Vec::new()
+    } else {
+        supervised_specs_for_ship(&project_root, interactive_tty)
+    };
+    if !supervised.is_empty() {
+        for (id, label) in &supervised {
+            eprintln!(
+                "{} {id} is marked {label} — auto-merge refused; merge requires \
+                 human/advisor review",
+                "⏸".yellow().bold(),
+            );
+        }
+        eprintln!(
+            "{} PR-{} left OPEN — mergeable, awaiting human/advisor review. Once \
+             reviewed, merge it explicitly: `gh pr merge {} --squash; aida pull`.",
+            "⏸".yellow().bold(),
+            pr_number,
+            pr_number,
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Skipped(format!(
+                "{} — execution mode holds the merge for human/advisor review",
+                supervised
+                    .iter()
+                    .map(|(id, label)| format!("{id} marked {label}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )),
         );
         return Ok(());
@@ -86846,6 +86923,38 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             ),
         );
         Ok(())
+    }
+
+    // The substrate supervised-merge gate: load the dispatched spec's
+    // `execution_mode` from the store — any mode but `drain`, or no mode at
+    // all (fail safe), holds the phase-4 merge for a human/advisor. The
+    // keystone "do not merge, advisor-review" directive used to live only in
+    // spec prose, which no merge path ever read. A spec the store cannot
+    // resolve behaves as before (no hold) — the same tolerance as the
+    // STORY-529 draft gate, so a missing store never wedges a drain.
+    // trace:BUG-727 | ai:claude
+    fn merge_supervision_hold(&mut self) -> Option<String> {
+        let store = load_store_for_lookup(&self.project_root)?;
+        let want = self.spec.to_ascii_uppercase();
+        let req = store.requirements.iter().find(|r| {
+            r.spec_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+                || r.agreed_id
+                    .as_deref()
+                    .map(|s| s.eq_ignore_ascii_case(&want))
+                    .unwrap_or(false)
+        })?;
+        if pr_ship::merge_requires_supervision(req.execution_mode) {
+            Some(format!(
+                "{} is marked {} — auto-merge refused; merge requires human/advisor review",
+                self.spec,
+                pr_ship::supervision_mode_label(req.execution_mode)
+            ))
+        } else {
+            None
+        }
     }
 
     fn pull(&mut self) -> Result<(), auto_complete::PhaseFailure> {

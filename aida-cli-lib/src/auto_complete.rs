@@ -865,6 +865,11 @@ pub(crate) enum EscalationKind {
     MergeDecision,
     /// The headless advisor escalated a punted design-fork (phase 1 tier).
     DesignFork,
+    /// The spec's `execution_mode` holds the merge for a human/advisor — the
+    /// substrate marker refused the phase-4 auto-merge (only `drain` licenses
+    /// an unattended merge; no mode at all is supervised, fail safe).
+    // trace:BUG-727 | ai:claude
+    SupervisedMerge,
 }
 
 /// Set on an [`OrchestrationResult`] when the run ended in an escalation — a
@@ -1086,6 +1091,17 @@ pub(crate) trait PhaseDriver {
     fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure>;
     /// Phase 4 — merge the PR.
     fn merge(&mut self) -> Result<(), PhaseFailure>;
+    /// The supervised-merge hold — `Some(reason)` when the spec's
+    /// `execution_mode` refuses an unattended phase-4 merge (only `drain`
+    /// licenses one; no mode at all is supervised, fail safe). The
+    /// orchestrator consults this right before phase 4 and, on a hold, stops
+    /// cleanly via [`finish_escalated`] — exit `0`, no merge, the PR left
+    /// mergeable for the human/advisor. Default `None` (no hold) keeps
+    /// drivers without store access unchanged.
+    // trace:BUG-727 | ai:claude
+    fn merge_supervision_hold(&mut self) -> Option<String> {
+        None
+    }
     /// Phase 5 — `aida pull` (auto-bumps Done → Completed).
     fn pull(&mut self) -> Result<(), PhaseFailure>;
     /// Phase 6 — `cargo build --release`.
@@ -1887,6 +1903,8 @@ fn finish_escalated(
     let phase = match kind {
         EscalationKind::MergeDecision => Phase::Reviewer,
         EscalationKind::DesignFork => Phase::Implementer,
+        // trace:BUG-727 | ai:claude
+        EscalationKind::SupervisedMerge => Phase::Merge,
     };
     if json {
         println!(
@@ -1915,6 +1933,10 @@ fn finish_escalated(
         let what = match kind {
             EscalationKind::MergeDecision => "the reviewer escalated the merge decision to a human",
             EscalationKind::DesignFork => "the advisor escalated a design-fork to a human",
+            // trace:BUG-727 | ai:claude
+            EscalationKind::SupervisedMerge => {
+                "the spec's execution mode holds the merge for a human/advisor"
+            }
         };
         eprintln!();
         eprintln!("{} {}: {}", "⏸".yellow().bold(), what, reason);
@@ -3158,6 +3180,22 @@ pub(crate) fn orchestrate_with_resume(
             );
         }
     } else {
+        // BUG-727: the substrate supervised-merge gate. Ask the driver whether
+        // the spec's `execution_mode` holds the merge (anything but `drain` —
+        // or no mode at all — does). A hold is an honest clean stop, not a
+        // failure: the same terminal path as the reviewer's own merge
+        // escalation — exit `0`, no merge, the PR left mergeable for the
+        // human/advisor, a batch drain advances. trace:BUG-727 | ai:claude
+        if let Some(reason) = driver.merge_supervision_hold() {
+            return finish_escalated(
+                spec,
+                json,
+                &start,
+                durations,
+                EscalationKind::SupervisedMerge,
+                &reason,
+            );
+        }
         emit_start(Phase::Merge, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
         // TASK-975: in-drain merge-conflict rebase. When the merge fails
@@ -4473,6 +4511,11 @@ mod tests {
         conflict_rebase_ok: bool,
         /// TASK-975: how many times `attempt_merge_conflict_rebase` was called.
         conflict_rebase_calls: usize,
+        /// BUG-727: when `Some`, `merge_supervision_hold` reports the spec's
+        /// execution mode as holding the merge — the substrate supervised-merge
+        /// gate fires before phase 4. `None` (default) keeps every
+        /// pre-BUG-727 flow unchanged.
+        merge_hold: Option<String>,
     }
 
     impl MockPhaseDriver {
@@ -4503,6 +4546,16 @@ mod tests {
                 merge_conflicts: 0,
                 conflict_rebase_ok: false,
                 conflict_rebase_calls: 0,
+                merge_hold: None,
+            }
+        }
+
+        /// BUG-727: mark the spec's execution mode as holding the merge —
+        /// `merge_supervision_hold` returns `Some(reason)`.
+        fn merge_supervised(reason: &str) -> Self {
+            Self {
+                merge_hold: Some(reason.to_string()),
+                ..Self::base()
             }
         }
 
@@ -4729,6 +4782,10 @@ mod tests {
                 ));
             }
             Ok(())
+        }
+        // trace:BUG-727 | ai:claude
+        fn merge_supervision_hold(&mut self) -> Option<String> {
+            self.merge_hold.clone()
         }
         fn pull(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Pull)
@@ -6410,6 +6467,64 @@ mod tests {
         assert_eq!(result.exit_code, 3);
         assert_eq!(result.failed_phase, Some(Phase::Reviewer));
         assert!(result.escalation.is_none());
+    }
+
+    // --- BUG-727: the substrate supervised-merge gate ---------------------
+
+    /// A spec whose execution mode holds the merge (anything but `drain`, or
+    /// no mode at all) must NOT be auto-merged: the run stops cleanly right
+    /// before phase 4 — exit `0`, no merge / pull / build — and the result
+    /// carries the SupervisedMerge escalation, so the PR is left mergeable
+    /// for the human/advisor instead of merged past the marker.
+    #[test]
+    fn orchestrate_supervised_spec_holds_merge() {
+        let mut driver = MockPhaseDriver::merge_supervised(
+            "TASK-1080 is marked drive — auto-merge refused; merge requires \
+             human/advisor review",
+        );
+        let result = orchestrate(
+            &mut driver,
+            "TASK-1080",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0, "a supervised hold is a clean exit");
+        assert_eq!(result.failed_phase, None);
+        assert!(result.failure.is_none());
+        let escalation = result.escalation.expect("escalation recorded");
+        assert_eq!(escalation.kind, EscalationKind::SupervisedMerge);
+        assert!(
+            escalation.reason.contains("auto-merge refused"),
+            "{}",
+            escalation.reason
+        );
+        // The pipeline stopped before phase 4 — merge / pull / build never ran.
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]
+        );
+    }
+
+    /// Regression guard — a spec with no supervision hold (execution mode
+    /// `drain`) preserves the current auto-merge: all six phases run.
+    #[test]
+    fn orchestrate_unsupervised_spec_still_auto_merges() {
+        let mut driver = MockPhaseDriver::base();
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.escalation.is_none());
+        assert!(
+            driver.calls.contains(&Phase::Merge),
+            "the drain-mode merge must be unaffected: {:?}",
+            driver.calls
+        );
     }
 
     // --- BUG-241: reconcile against reality before declaring a failure ----
