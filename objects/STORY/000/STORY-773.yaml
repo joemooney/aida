@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T21:44:02.918279256Z
-modified_at: 2026-07-19T20:26:24.844830880Z
+modified_at: 2026-07-20T04:46:49.384484398Z
 req_type: Story
 tags:
 - build-time
@@ -23,3 +23,6 @@ relationships:
   target_id: 019f6e6e-430c-7e61-983d-3d7a78c44c79
   created_at: 2026-07-17T21:44:19.377359681Z
   created_by: joe
+deferred: true
+deferred_at: 2026-07-20T04:46:49.384484398Z
+deferred_until: the pub(crate) web is untangled enough to carve the lib, or clean-build pain returns
