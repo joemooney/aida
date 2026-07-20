@@ -35918,5 +35918,17 @@ operations:
     req_type: Decision
     status: Draft
     priority: Medium
-clock: 3330
+- id: 019f7d2f-90eb-7162-a39f-8cced96fd3ed
+  target_id: 019f7d2f-8db9-75c3-b2e3-fc8596eca902
+  author: aida
+  node_id: '1'
+  lamport: 3331
+  timestamp: 2026-07-20T01:41:37.131772277Z
+  kind: !Create
+    title: Advisor routing by computed subsystem membership with master fallback and full audit trail (ratifies PROPOSAL-subsystem-advisor-routing)
+    description: 'Operator ratified 2026-07-19: exactly-one membership match with a registered scoped role routes to advisor:<subsystem>/reviewer:<subsystem>; ambiguous/missing/conflicting routes to the master advisor, always; every routed answer records role, candidates, rule, and fallback reason. Delivers TASK-0435.'
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3331
 node_id: '1'
