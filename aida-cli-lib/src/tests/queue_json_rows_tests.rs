@@ -35,6 +35,7 @@ fn summary(
         has_pending_decision: false,
         execution_mode: None,
         weight: None,
+        origin: None,
         yaml_path: String::new(),
     }
 }

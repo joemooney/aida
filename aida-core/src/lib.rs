@@ -247,6 +247,8 @@ pub use models::{
     LinkOrigin,
     MetaSubtype,
     NumberingStrategy,
+    // Multi-repo origin dimension (ADR-12)
+    Origin,
     // Durable processing-record audit trail (STORY-582)
     ProcessingRecord,
     PuntCategory,

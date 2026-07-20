@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     -- canonical YAML `weight` field so `aida list --sort weight` and the
     -- `--min-weight` / `--max-weight` filters read the cache. NULL = unset.
     weight REAL,
+    -- STORY-634: the multi-repo origin dimension ("repo" or "repo/component",
+    -- ADR-12), projected from the canonical YAML `origin` field so
+    -- `aida list --fields ...,origin` reads the cache. NULL = single-repo.
+    origin TEXT,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 

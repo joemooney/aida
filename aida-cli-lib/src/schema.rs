@@ -680,6 +680,17 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
             "Narrative 'what shipped and why it was done this way' a commit prefix / diff \
              does not capture. Optional; set via `aida edit --implementation-summary`.",
     },
+    // trace:STORY-634 | ai:claude
+    FieldDoc {
+        name: "origin",
+        example: "api/orchestrator",
+        provenance: Provenance::User,
+        description:
+            "Where the spec's code lives in a multi-repo shared-store workspace: a workspace \
+             repo slug plus an optional component within it (one hierarchy, ADR-12). The repo \
+             slug is the canonical join key qualifying the spec's git linkage. None = \
+             single-repo store. Set via `aida edit --origin repo[/component]`.",
+    },
     // trace:STORY-776 | ai:claude
     FieldDoc {
         name: "execution_mode",
