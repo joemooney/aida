@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-17T04:55:42.718647193Z
-modified_at: 2026-07-20T02:45:13.148326017Z
+modified_at: 2026-07-20T02:45:22.393269192Z
 req_type: Story
 tags:
 - batch:guided-0719
@@ -35,3 +35,4 @@ comments:
   created_at: 2026-07-20T02:45:13.148326017Z
   modified_at: 2026-07-20T02:45:13.148326017Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+execution_mode: drive
