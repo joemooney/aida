@@ -8,10 +8,26 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:14:42.536952431Z
-modified_at: 2026-07-21T09:06:35.561729771Z
+modified_at: 2026-07-21T16:36:20.327596755Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-12T19:14:51.358097280Z
+comments:
+- id: 019f8589-10e7-7173-9441-2eab423ec38a
+  author: joe
+  content: |-
+    PARKED by the autonomous burn-down (2026-07-21) — not blocked, deliberately routed to supervised work. Companion to TASK-1136 (same file, same seam).
+
+    State verified against main at b5586e28:
+    - The trait hook EXISTS: auto_complete.rs SingleBranchDriver::checkpoint_between_members(prev, next) is called between members, a false return yields SingleBranchOutcome::Paused with prior commits intact and exit 0, and it is unit-tested (single_branch_checkpoint_stop_parks_with_prior_commits).
+    - What remains is the ~40 LOC real implementation: RealSingleBranchDriver does NOT override checkpoint_between_members, so it takes the default (always true, never pauses). The --zen operator pause and the --no-human=both auto-continue are therefore not wired.
+
+    Why parked rather than fanned out: same reasoning as TASK-1136 — this is the autonomy-machinery keystone, which ships supervised, and both tasks edit the same struct so they cannot run in parallel.
+
+    Recommended next step: work TASK-1136 + TASK-1137 together, supervised, at the keyboard.
+  created_at: 2026-07-21T16:36:20.327596755Z
+  modified_at: 2026-07-21T16:36:20.327596755Z
+  session_id: 019f7b628fbb
 execution_mode: drive
