@@ -1,0 +1,32 @@
+id: 019f856f-8153-7061-bebb-4c681dd637a8
+spec_id: BUG-777
+agreed_id: BUG-777
+title: Orphaned leases block queue work with no self-service recovery path
+description: |-
+  REPRO (aida 0.14.0, project /home/joe/ai/port_manager):
+  Repeatedly across one working session, 'aida queue work <ID>' failed because a lease from an already-exited session still owned the scope:
+
+    Error: scope TASK-5 is owned by lease 019f8357 (implementer, worktree: /home/joe/ai/aida-pool-port_manager-0) - to take over: --steal ends that session and removes its worktree (work there is lost unless committed), or --resume re-attaches to it in place (keeps the worktree), or aida session end 019f8357 manually.
+
+  The suggested options are all unattractive or broken in this state:
+  - '--resume' fails with 'no recorded claude session for scope TASK-5 to resume - drop --resume (or pass --fresh) to cold-launch', because the session is genuinely gone.
+  - '--steal' threatens to remove the worktree and lose work, which a user cannot evaluate without separately running git status in that worktree.
+  - 'aida session end <id>' works but silently no-ops without --yes in a non-interactive shell (see the related report on session end), and files a junk story on remote-less repos.
+
+  This happened 4+ times in one session (leases 019f7e33, 019f82bf, 019f82c6, 019f8357). Every occurrence required a human or a second agent to diagnose and hand-clear the lease before work could resume.
+
+  SUGGESTED FIX:
+  1. Detect that the owning session's process is gone and treat the lease as stale - either auto-reap it, or offer a '--take-over' that is explicitly safe when the worktree has no uncommitted changes.
+  2. Have the error report whether the worktree is clean, so 'work there is lost unless committed' is an evaluable statement rather than a warning the user cannot act on.
+  3. Make '--force-claim' (which exists and is suggested by a DIFFERENT error path for the InProgress-without-lease case) also cover the stale-lease case, so there is one recovery verb instead of three.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T16:08:25.171027028Z
+modified_at: 2026-07-21T16:08:25.171027028Z
+req_type: Bug
+tags:
+- lease
+- session
+- workflow
