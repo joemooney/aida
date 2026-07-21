@@ -112,6 +112,11 @@ pub(crate) struct DrainSummary {
     pub(crate) diff: DrainDiffStats,
     /// Wall time the drain ran, whole seconds.
     pub(crate) elapsed_secs: u64,
+    /// TASK-997: how many drain events the cheap classifier absorbed silently
+    /// versus surfaced as a wake over this drain's window — the empirical
+    /// evidence for the event-driven-supervision lever, tallied against the
+    /// same `is_actionable` predicate `aida watch` classifies with.
+    pub(crate) events: crate::events::EventTally,
 }
 
 impl DrainSummary {
@@ -164,6 +169,7 @@ impl DrainSummary {
                 "s"
             }
         ));
+        out.push_str(&self.render_events_line());
         let triage = t.findings_to_triage();
         if triage > 0 {
             out.push_str(&format!(
@@ -173,6 +179,39 @@ impl DrainSummary {
             out.push_str("  findings to triage: 0\n");
         }
         out
+    }
+
+    /// TASK-997: the one-line events accounting inside the exit summary —
+    /// how much of the drain's state-change churn the cheap classifier absorbed
+    /// (costing the supervising LLM nothing) versus surfaced as a wake:
+    ///
+    /// ```text
+    ///   events: 412 seen · 397 benign-absorbed (96%) · 15 actionable
+    /// ```
+    ///
+    /// Kept honest at both ends: a window with no readable stream says so
+    /// rather than printing a fabricated `0 seen · 0% absorbed`, and a window
+    /// the stream was rotated inside is labelled `partial window` so the ratio
+    /// is never read as covering the whole drain.
+    // trace:TASK-997 | ai:claude
+    fn render_events_line(&self) -> String {
+        let e = &self.events;
+        let seen = e.seen();
+        if seen == 0 {
+            return "  events: none recorded for this drain\n".to_string();
+        }
+        format!(
+            "  events: {} seen · {} benign-absorbed ({}%) · {} actionable{}\n",
+            group_thousands(seen as u64),
+            group_thousands(e.benign_absorbed as u64),
+            e.absorbed_pct(),
+            group_thousands(e.actionable as u64),
+            if e.partial_window {
+                " (partial window — the event stream rotated mid-drain)"
+            } else {
+                ""
+            },
+        )
     }
 
     /// The structured `drain_summary` JSONL record appended to
@@ -205,6 +244,13 @@ impl DrainSummary {
             "deletions": self.diff.deletions,
             "findings_to_triage": self.tallies.findings_to_triage(),
             "elapsed_secs": self.elapsed_secs,
+            // TASK-997: the event-classifier accounting, so `aida usage` can
+            // chart the absorbed ratio across drains rather than re-deriving it.
+            "events_seen": self.events.seen(),
+            "events_benign_absorbed": self.events.benign_absorbed,
+            "events_actionable": self.events.actionable,
+            "events_absorbed_pct": self.events.absorbed_pct(),
+            "events_window_partial": self.events.partial_window,
             "binary_sha": binary_sha,
             "role": role,
         })
@@ -307,6 +353,7 @@ mod tests {
             cumulative_tokens: 900_000,
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
         };
         assert_eq!(s.tokens_per_spec(), 300_000);
     }
@@ -321,6 +368,7 @@ mod tests {
             cumulative_tokens: 0,
             diff: DrainDiffStats::default(),
             elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
         };
         assert_eq!(s.tokens_per_spec(), 0);
     }
@@ -345,6 +393,7 @@ mod tests {
                 deletions: 820,
             },
             elapsed_secs: 90,
+            events: crate::events::EventTally::default(),
         };
         let out = s.render();
         assert!(out.contains("drain summary"));
@@ -380,6 +429,7 @@ mod tests {
                 deletions: 0,
             },
             elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
         };
         let out = s.render();
         // Singular: "1 iteration" (no plural s), followed by the elapsed field.
@@ -418,6 +468,7 @@ mod tests {
                 deletions: 40,
             },
             elapsed_secs: 600,
+            events: crate::events::EventTally::default(),
         };
         let v = s.to_usage_value("2026-06-28T00:00:00Z", Some("abc1234"), Some("advisor"));
         assert_eq!(v["event"], "drain_summary");
@@ -449,10 +500,114 @@ mod tests {
             cumulative_tokens: 0,
             diff: DrainDiffStats::default(),
             elapsed_secs: 1,
+            events: crate::events::EventTally::default(),
         };
         let v = s.to_usage_value("2026-06-28T00:00:00Z", None, None);
         assert!(v["binary_sha"].is_null());
         assert!(v["role"].is_null());
+    }
+
+    /// TASK-997: the exit summary must REPORT the classifier split, not assert
+    /// the lever — `N seen · M benign-absorbed (P%) · K actionable`.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn render_reports_benign_absorbed_vs_actionable_events() {
+        let s = DrainSummary {
+            kind: "batch".into(),
+            label: "batch:foo".into(),
+            outcome: "drained".into(),
+            tallies: tallies(4, 0, 0),
+            cumulative_tokens: 0,
+            diff: DrainDiffStats::default(),
+            elapsed_secs: 0,
+            events: crate::events::EventTally {
+                benign_absorbed: 397,
+                actionable: 15,
+                partial_window: false,
+            },
+        };
+        let out = s.render();
+        assert!(out.contains("events: 412 seen"), "got: {out}");
+        assert!(out.contains("397 benign-absorbed (96%)"), "got: {out}");
+        assert!(out.contains("15 actionable"), "got: {out}");
+        // A whole window claims nothing about being partial.
+        assert!(!out.contains("partial window"), "got: {out}");
+    }
+
+    /// A window the stream rotated inside is labelled partial rather than
+    /// silently reporting a ratio over the surviving fragment.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn render_flags_a_partial_events_window() {
+        let s = DrainSummary {
+            kind: "next-n".into(),
+            label: "next 2".into(),
+            outcome: "drained".into(),
+            tallies: tallies(2, 0, 0),
+            cumulative_tokens: 0,
+            diff: DrainDiffStats::default(),
+            elapsed_secs: 0,
+            events: crate::events::EventTally {
+                benign_absorbed: 8,
+                actionable: 2,
+                partial_window: true,
+            },
+        };
+        let out = s.render();
+        assert!(
+            out.contains("10 seen · 8 benign-absorbed (80%)"),
+            "got: {out}"
+        );
+        assert!(out.contains("partial window"), "got: {out}");
+    }
+
+    /// An empty window says so instead of printing a fabricated `0 seen · 0%`.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn render_says_none_recorded_when_no_events_seen() {
+        let s = DrainSummary {
+            kind: "next-n".into(),
+            label: "next 1".into(),
+            outcome: "drained".into(),
+            tallies: tallies(1, 0, 0),
+            cumulative_tokens: 0,
+            diff: DrainDiffStats::default(),
+            elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
+        };
+        let out = s.render();
+        assert!(
+            out.contains("events: none recorded for this drain"),
+            "got: {out}"
+        );
+        assert!(!out.contains("benign-absorbed"), "got: {out}");
+    }
+
+    /// The machine record carries the same split so `aida usage` can chart the
+    /// absorbed ratio across drains without re-deriving it.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn to_usage_value_carries_the_event_classifier_split() {
+        let s = DrainSummary {
+            kind: "batch".into(),
+            label: "batch:foo".into(),
+            outcome: "drained".into(),
+            tallies: tallies(1, 0, 0),
+            cumulative_tokens: 0,
+            diff: DrainDiffStats::default(),
+            elapsed_secs: 0,
+            events: crate::events::EventTally {
+                benign_absorbed: 30,
+                actionable: 10,
+                partial_window: true,
+            },
+        };
+        let v = s.to_usage_value("2026-07-20T00:00:00Z", None, None);
+        assert_eq!(v["events_seen"], 40);
+        assert_eq!(v["events_benign_absorbed"], 30);
+        assert_eq!(v["events_actionable"], 10);
+        assert_eq!(v["events_absorbed_pct"], 75);
+        assert_eq!(v["events_window_partial"], true);
     }
 
     #[test]
