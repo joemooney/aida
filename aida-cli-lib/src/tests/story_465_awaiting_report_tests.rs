@@ -88,6 +88,51 @@ fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
     );
 }
 
+// BUG-767: the awaiting mail count is scoped to the OPERATOR's own inbox.
+// Mail addressed to the SHARED session-role inbox (agent-to-agent traffic) is
+// reported on its own labelled channel — so an operator whose personal inbox is
+// empty reads 0, not the role backlog's size.
+#[test]
+fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+
+    for i in 0..3 {
+        let msg = aida_core::mailbox::Message {
+            id: format!("m-role-{i}"),
+            thread_id: "t1".to_string(),
+            from: "claude-product-1".to_string(),
+            to: aida_core::mailbox::Recipient::Agent("advisor".to_string()),
+            timestamp: 1_000 + i,
+            in_reply_to: None,
+            body: "handoff".to_string(),
+            urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
+            retracted: false,
+            deleted: false,
+        };
+        crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
+    }
+
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_USER", "operator-under-test"),
+        ("AIDA_SESSION_ROLE", "advisor"),
+        ("AIDA_AGENT_TYPE", ""),
+    ]);
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+
+    assert_eq!(
+        report.mail.unread, 0,
+        "the operator's own inbox is empty — role mail must not be counted as theirs"
+    );
+    assert_eq!(
+        report.mail.shared_unread, 3,
+        "role mail is kept, on its own labelled channel"
+    );
+    assert_eq!(report.mail.shared_scope.as_deref(), Some("advisor"));
+}
+
 // A spec parked in NeedsAttention surfaces as an escalation line —
 // the implementer→advisor→human cascade landing in front of the
 // operator without them having to grep `aida list --status`.

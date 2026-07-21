@@ -44,13 +44,14 @@ pub(crate) struct AwaitingReport {
     /// Specs parked in `NeedsAttention` — the implementer-→-advisor-→-
     /// human escalation cascade landed here.
     pub escalations: Vec<EscalationItem>,
-    /// Unread inter-agent mail for the resolved identities (shell user +
-    /// session role + agent type). Folded in from the mailbox core so the
-    /// coordination inbox is ONE surface, not split between mail (per-turn
-    /// hook) and everything-else (`aida status`). Cheap: derived from the
-    /// local + canonical mailbox files, never a network call, so it can ride
-    /// the per-turn notice. Zero when the inbox is caught up.
+    /// Unread inter-agent mail for the OPERATOR's own handle, plus a separate
+    /// count for the shared role / agent-type inboxes (BUG-767). Folded in from
+    /// the mailbox core so the coordination inbox is ONE surface, not split
+    /// between mail (per-turn hook) and everything-else (`aida status`). Cheap:
+    /// derived from the local + canonical mailbox files, never a network call,
+    /// so it can ride the per-turn notice. Zero when the inbox is caught up.
     // trace:STORY-741 | ai:claude
+    // trace:BUG-767 | ai:claude
     pub mail: MailChannel,
     /// Pending worker directives from the local directive file. The enqueue
     /// path (e.g. a human-audit request) lands here, and today it only
@@ -79,11 +80,72 @@ pub(crate) struct DirectivesChannel {
 /// Unread-mail summary for the awaiting-you report: the full unread count
 /// plus how many of those are flagged urgent. Both zero → the inbox is
 /// caught up and the mail channel renders nothing.
+///
+/// BUG-767: `unread`/`urgent` are the OPERATOR's OWN inbox (the handle this
+/// session sends and receives as) — deterministic and monotone under deletion:
+/// clearing your inbox drives it to 0, never to some wider number. Mail sitting
+/// in the SHARED inboxes this session also reads (its session role, its agent
+/// type — where agent-to-agent traffic lands) is counted separately in
+/// `shared_unread` and rendered on its own labelled line, so the fleet-wide
+/// view is kept but can never leak into the operator-gated number.
 // trace:STORY-741 | ai:claude
 #[derive(Debug, Default, Clone)]
 pub(crate) struct MailChannel {
     pub unread: usize,
     pub urgent: usize,
+    /// Unread mail in the shared role / agent-type inboxes this session also
+    /// reads, EXCLUDING anything already counted in `unread` (a broadcast is
+    /// in both, and must count once, in the operator's own number).
+    // trace:BUG-767 | ai:claude
+    pub shared_unread: usize,
+    /// Which shared inboxes `shared_unread` spans, e.g. `advisor + claude` —
+    /// the label that keeps this surface distinct from the operator's own.
+    // trace:BUG-767 | ai:claude
+    pub shared_scope: Option<String>,
+}
+
+/// BUG-767: split unread mail into the operator's OWN inbox and the SHARED
+/// (session-role / agent-type) inboxes the same session reads.
+///
+/// The `awaiting` contract is "channels where the OPERATOR is the gate", so the
+/// headline number must be a function of the operator handle's inbox alone:
+/// empty inbox → 0, always. Before this split the count spanned the whole
+/// ambient identity set, so an operator whose own inbox was empty still saw the
+/// role inbox's agent-to-agent backlog reported as *their* unread mail — and
+/// because that set is env-derived (`AIDA_SESSION_ROLE` / `AIDA_AGENT_TYPE`),
+/// the number could GROW as you cleaned your inbox.
+///
+/// PURE: takes the already-read messages + watermarks, so the counting scope is
+/// unit-testable without touching the filesystem or env.
+// trace:BUG-767 | ai:claude
+pub(crate) fn split_mail_scopes(
+    operator: &str,
+    shared: &[String],
+    messages: &[aida_core::mailbox::Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+) -> MailChannel {
+    use aida_core::mailbox::unread_for_identities;
+    let own = unread_for_identities([operator], messages, watermarks);
+    let own_ids: std::collections::HashSet<&str> = own.iter().map(|m| m.id.as_str()).collect();
+    let shared_ids: Vec<&str> = shared
+        .iter()
+        .map(String::as_str)
+        .filter(|s| !s.trim().is_empty() && s.trim() != operator.trim())
+        .collect();
+    let shared_unread = unread_for_identities(shared_ids.iter().copied(), messages, watermarks)
+        .into_iter()
+        .filter(|m| !own_ids.contains(m.id.as_str()))
+        .count();
+    MailChannel {
+        unread: own.len(),
+        urgent: own.iter().filter(|m| m.urgent).count(),
+        shared_unread,
+        shared_scope: if shared_unread > 0 {
+            Some(shared_ids.join(" + "))
+        } else {
+            None
+        },
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +188,8 @@ impl AwaitingReport {
             + self.pending_briefs.len()
             + (if self.findings_total > 0 { 1 } else { 0 })
             + (if self.mail.unread > 0 { 1 } else { 0 })
+            // trace:BUG-767 | ai:claude — the shared-inbox line is its own row.
+            + (if self.mail.shared_unread > 0 { 1 } else { 0 })
             + (if self.worker_directives.pending > 0 {
                 1
             } else {
@@ -239,6 +303,27 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        // BUG-767: the SHARED role / agent-type inboxes get their own labelled
+        // line — kept visible (an advisor still sees its role hand-offs) but
+        // never folded into the operator's own unread number.
+        // trace:BUG-767 | ai:claude
+        if self.mail.shared_unread > 0 {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let scope = self.mail.shared_scope.as_deref().unwrap_or("shared");
+                let first = scope.split(" + ").next().unwrap_or(scope);
+                writeln!(
+                    w,
+                    "  {} {} unread mail in the shared {} inbox — `{}`",
+                    crate::glyph(crate::glyphs::Glyph::IncomingMail),
+                    self.mail.shared_unread,
+                    scope,
+                    format!("aida mailbox inbox {first}").cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
         // trace:TASK-1146 | ai:claude
         if self.worker_directives.pending > 0 {
             if budget == 0 {
@@ -313,6 +398,10 @@ impl AwaitingReport {
             "mail": {
                 "unread": self.mail.unread,
                 "urgent": self.mail.urgent,
+                // trace:BUG-767 | ai:claude — shared role/agent-type inboxes,
+                // reported alongside (never inside) the operator's own count.
+                "shared_unread": self.mail.shared_unread,
+                "shared_scope": self.mail.shared_scope,
             },
             "worker_directives": {
                 "pending": self.worker_directives.pending,
@@ -364,6 +453,10 @@ impl AwaitingReport {
                 pluralize(self.mail.unread, "mail", "mail"),
                 urgent
             ));
+        }
+        // trace:BUG-767 | ai:claude
+        if self.mail.shared_unread > 0 {
+            parts.push(format!("{} shared mail", self.mail.shared_unread));
         }
         // trace:TASK-1146 | ai:claude
         if self.worker_directives.pending > 0 {
@@ -464,6 +557,121 @@ mod tests {
             mergeable: mergeable.map(String::from),
             review_decision: verdict.map(String::from),
         }
+    }
+
+    // ── BUG-767: the mail counting SCOPE ────────────────────────────────────
+    // trace:BUG-767 | ai:claude
+
+    fn mail(
+        id: &str,
+        from: &str,
+        to: aida_core::mailbox::Recipient,
+        ts: i64,
+    ) -> aida_core::mailbox::Message {
+        aida_core::mailbox::Message {
+            id: id.to_string(),
+            thread_id: "t".to_string(),
+            from: from.to_string(),
+            to,
+            timestamp: ts,
+            in_reply_to: None,
+            body: "b".to_string(),
+            urgent: false,
+            intent: aida_core::mailbox::Intent::default(),
+            retracted: false,
+            deleted: false,
+        }
+    }
+
+    fn to(agent: &str) -> aida_core::mailbox::Recipient {
+        aida_core::mailbox::Recipient::Agent(agent.to_string())
+    }
+
+    /// The regression: three messages in the operator's own inbox, a big
+    /// backlog in the shared role inbox. Deleting the operator's three drives
+    /// the operator-gated count to 0 — it must NEVER shift to the role
+    /// backlog's size (the observed 3 → 18 jump).
+    #[test]
+    fn operator_mail_count_goes_to_zero_when_own_inbox_is_emptied() {
+        let wm = std::collections::HashMap::new();
+        let mut msgs: Vec<_> = (0..3)
+            .map(|i| mail(&format!("own-{i}"), "codex", to("joe"), 100 + i))
+            .collect();
+        // The shared `advisor` inbox carries a fat agent-to-agent backlog.
+        msgs.extend((0..18).map(|i| mail(&format!("role-{i}"), "codex", to("advisor"), 200 + i)));
+
+        let shared = vec!["advisor".to_string()];
+        let before = split_mail_scopes("joe", &shared, &msgs, &wm);
+        assert_eq!(before.unread, 3, "operator's own three must be the count");
+        assert_eq!(before.shared_unread, 18, "role backlog is counted apart");
+
+        // Delete the operator's three (the mailbox delete marker).
+        for m in msgs.iter_mut().filter(|m| m.id.starts_with("own-")) {
+            m.deleted = true;
+        }
+        let after = split_mail_scopes("joe", &shared, &msgs, &wm);
+        assert_eq!(
+            after.unread, 0,
+            "emptying your own inbox must read 0, never the shared backlog"
+        );
+        assert_eq!(after.shared_unread, 18, "the shared surface is unchanged");
+        assert_eq!(after.shared_scope.as_deref(), Some("advisor"));
+    }
+
+    /// A broadcast lands in every inbox; it must count ONCE, in the operator's
+    /// own number, and never be double-counted as shared mail.
+    #[test]
+    fn broadcast_counts_once_in_the_operator_scope() {
+        let wm = std::collections::HashMap::new();
+        let msgs = vec![mail(
+            "bcast",
+            "codex",
+            aida_core::mailbox::Recipient::Broadcast,
+            10,
+        )];
+        let c = split_mail_scopes("joe", &["advisor".to_string()], &msgs, &wm);
+        assert_eq!(c.unread, 1);
+        assert_eq!(c.shared_unread, 0, "already counted as the operator's own");
+    }
+
+    /// No session role / agent type → nothing shared, and the operator's own
+    /// inbox is the whole story.
+    #[test]
+    fn no_shared_identities_means_no_shared_channel() {
+        let wm = std::collections::HashMap::new();
+        let msgs = vec![mail("m1", "codex", to("advisor"), 10)];
+        let c = split_mail_scopes("joe", &[], &msgs, &wm);
+        assert_eq!(c.unread, 0);
+        assert_eq!(c.shared_unread, 0);
+        assert!(c.shared_scope.is_none());
+    }
+
+    /// The shared line is its own row in the report — the fleet-wide capability
+    /// is kept and labelled, just not folded into `mail.unread`.
+    #[test]
+    fn shared_mail_renders_on_its_own_labelled_line() {
+        let r = AwaitingReport {
+            mail: MailChannel {
+                unread: 0,
+                urgent: 0,
+                shared_unread: 18,
+                shared_scope: Some("advisor".to_string()),
+            },
+            ..Default::default()
+        };
+        assert!(!r.is_empty());
+        assert_eq!(r.total(), 1);
+        let mut buf = Vec::new();
+        assert!(r.render(false, &mut buf).unwrap());
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("18 unread mail in the shared advisor inbox"),
+            "shared mail must be labelled distinctly:\n{s}"
+        );
+        let line = r
+            .compact_line()
+            .expect("shared mail yields a per-turn line");
+        assert!(line.contains("18 shared mail"), "compact line: {line}");
     }
 
     #[test]
@@ -616,6 +824,7 @@ mod tests {
             mail: MailChannel {
                 unread: 3,
                 urgent: 1,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -642,6 +851,7 @@ mod tests {
             mail: MailChannel {
                 unread: 42,
                 urgent: 0,
+                ..Default::default()
             },
             findings_total: 5,
             ..Default::default()
@@ -685,6 +895,7 @@ mod tests {
             mail: MailChannel {
                 unread: 3,
                 urgent: 1,
+                ..Default::default()
             },
             escalations: vec![EscalationItem {
                 spec_id: "SPIKE-9".into(),
@@ -721,6 +932,7 @@ mod tests {
             mail: MailChannel {
                 unread: 1,
                 urgent: 0,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -737,6 +949,7 @@ mod tests {
             mail: MailChannel {
                 unread: 4,
                 urgent: 2,
+                ..Default::default()
             },
             ..Default::default()
         };
