@@ -454,3 +454,10 @@
   added_at: 2026-07-21T01:47:24.530916455Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019f8254-617e-7db1-908e-4b53854c9b9f
+  position: 346000
+  added_by: joe
+  note: Promoted from finding TASK-1-124 via `aida findings promote`
+  added_at: 2026-07-21T02:27:05.230017918Z
+  for_role: implementer
