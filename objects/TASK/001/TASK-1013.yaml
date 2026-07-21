@@ -3,12 +3,12 @@ spec_id: TASK-1013
 agreed_id: TASK-1013
 title: TASK-0431 — product-sourced decisions must be filterable (`--from-product`); the evidence field records the product handoff (this plan reserves the filter, TASK-0431 fills the source)
 description: ''
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:08.070727403Z
-modified_at: 2026-07-21T06:45:43.980620348Z
+modified_at: 2026-07-21T06:48:33.294739929Z
 req_type: Task
 tags:
 - serialize:autopilot-audit
