@@ -503,6 +503,227 @@ pub(crate) fn effective_envelope(
 }
 
 // ---------------------------------------------------------------------------
+// TASK-1019 — product-role recommendations as EVIDENCE feeding gate 3, never as
+// authority (the TASK-0431 producer half; the reader half is TASK-1013).
+//
+// The product seat is non-privileged BY CONSTRUCTION: the TASK-647 advisor gate
+// downgrades a product `--status approved` to Draft and refuses its queue
+// writes. So a product recommendation can only ever reach autopilot as durable,
+// inert metadata on a draft — `from-product:<who>` provenance, a
+// `recommend:<disposition>` opinion, a `risk:<level>` flag, and `cites:<ref>`
+// substrate citations backing its rationale.
+//
+// This section is the rule by which the envelope CONSUMES that metadata. The
+// safety property is an ASYMMETRY, and it is structural rather than conventional:
+//
+//   - Product input feeds gate 3 ONLY, and only by supplying substrate the
+//     cold-boot advisor independently VERIFIED is recorded. A product *claim* of
+//     grounding is not self-certifying: an unverified citation changes nothing.
+//   - Gate 1 (fence) and gate 2 (authority) never see product input at all —
+//     [`decision_with_product_evidence`] copies `spec_id` and `action` verbatim,
+//     so `recommend:approve` is context for a reader, not a lever on the gates.
+//   - Gate 4 (risk) is RAISE-ONLY: a product `risk:high` tightens the ceiling
+//     check, a product `risk:low` is discarded. Product input is monotonic
+//     toward caution.
+//
+// Design: `docs/plans/2026-06-29-epic-0428-product-role-integration.md`.
+// trace:TASK-1019 trace:TASK-0431 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// Durable provenance tag on a product-filed draft: `from-product:<who>`. Its
+/// presence is what makes a set of tags PRODUCT input at all — an anonymous
+/// `recommend:` with no provenance is not attributable and is ignored.
+pub(crate) const FROM_PRODUCT_TAG_PREFIX: &str = "from-product:";
+
+/// The product seat's recommended disposition: `recommend:<action-class>`.
+/// Deliberately NOT a gate input — see [`decision_with_product_evidence`].
+pub(crate) const RECOMMEND_TAG_PREFIX: &str = "recommend:";
+
+/// The product seat's risk read: `risk:<low|medium|high|unknown>`. Composes
+/// raise-only with the advisor's own read.
+pub(crate) const PRODUCT_RISK_TAG_PREFIX: &str = "risk:";
+
+/// The durable tag form of a rationale's substrate citation: `cites:<ref>` — a
+/// memory name, doc path, or prior spec/decision id the product seat says backs
+/// its recommendation. A citation is a POINTER, never a proof; it only moves
+/// gate 3 once the advisor has verified the ref genuinely exists.
+pub(crate) const PRODUCT_CITES_TAG_PREFIX: &str = "cites:";
+
+/// The structured recommendation a product seat left on a draft, parsed from its
+/// durable tags. Inert on its own: nothing here changes a spec's state, and only
+/// [`apply_product_evidence`] gives any of it a bounded effect.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ProductInput {
+    /// The named seat from `from-product:<who>` (empty when the marker is bare).
+    pub(crate) who: String,
+    /// The recommended disposition, when it parses to a known action class.
+    /// Recorded for the audit trail and the human report; NOT a gate input.
+    pub(crate) recommend: Option<ActionClass>,
+    /// The product seat's risk read, composed raise-only with the advisor's.
+    pub(crate) risk: Option<RiskLevel>,
+    /// Substrate refs cited as backing the recommendation, in tag order.
+    pub(crate) cites: Vec<String>,
+}
+
+/// The `<value>` half of one `<prefix><value>` tag, case-insensitively matched
+/// and whitespace-trimmed, or `None` when the tag is not that marker.
+fn tag_value<'a>(tag: &'a str, prefix: &str) -> Option<&'a str> {
+    let tag = tag.trim();
+    let head = tag.get(..prefix.len())?;
+    head.eq_ignore_ascii_case(prefix)
+        .then(|| tag[prefix.len()..].trim())
+}
+
+/// PURE: parse a spec's tags into a [`ProductInput`].
+///
+/// `None` unless a `from-product:` provenance tag is present — an unattributed
+/// `recommend:` is not product input and must not be consumed as any, which is
+/// also the anti-laundering property: consumed product evidence always names
+/// (or at minimum marks) the seat it came from.
+// trace:TASK-1019 | ai:claude
+pub(crate) fn parse_product_input(tags: &[String]) -> Option<ProductInput> {
+    let who = tags
+        .iter()
+        .find_map(|t| tag_value(t, FROM_PRODUCT_TAG_PREFIX))?
+        .to_string();
+    Some(ProductInput {
+        who,
+        recommend: tags
+            .iter()
+            .find_map(|t| tag_value(t, RECOMMEND_TAG_PREFIX))
+            .and_then(ActionClass::parse),
+        risk: tags
+            .iter()
+            .find_map(|t| tag_value(t, PRODUCT_RISK_TAG_PREFIX))
+            .and_then(|v| RiskLevel::parse(v).ok()),
+        cites: tags
+            .iter()
+            .filter_map(|t| tag_value(t, PRODUCT_CITES_TAG_PREFIX))
+            .filter(|c| !c.is_empty())
+            .map(|c| c.to_string())
+            .collect(),
+    })
+}
+
+/// True when at least one of the product seat's citations is in `recorded` —
+/// the set of refs the cold-boot advisor INDEPENDENTLY VERIFIED exists in
+/// substrate. Case-insensitive so a hand-written citation is not lost on
+/// capitalization.
+///
+/// This is the whole trust boundary of the feature: the product seat supplies
+/// the pointer, the advisor supplies the verification. A rationale that merely
+/// *asserts* a preference exists is unverified and moves nothing.
+// trace:TASK-1019 | ai:claude
+pub(crate) fn product_citation_verified(input: &ProductInput, recorded: &HashSet<String>) -> bool {
+    let recorded: Vec<String> = recorded.iter().map(|r| r.trim().to_lowercase()).collect();
+    input
+        .cites
+        .iter()
+        .any(|c| recorded.iter().any(|r| *r == c.trim().to_lowercase()))
+}
+
+/// PURE: compose product evidence into the two gate inputs it is allowed to
+/// touch, with the raise-only asymmetry.
+///
+/// - **Grounding** rises only from a NON-resolvable classification
+///   (unrecorded-B / Type-C) to `RecordedB`, and only on a VERIFIED citation.
+///   It never reaches `TypeA` — a recorded PRINCIPLE is not a product seat's to
+///   assert — and an already-resolvable grounding passes through untouched
+///   (product input is not authority over the advisor's own classification in
+///   either direction).
+/// - **Risk** takes the stricter of the two reads. A product `risk:high` raises;
+///   a product `risk:low` under an advisor `medium` is discarded.
+///
+/// Everything else about the decision is out of reach. Gate 3 is the only gate
+/// this can move, and only in the one direction the substrate itself justifies.
+// trace:TASK-1019 | ai:claude
+pub(crate) fn apply_product_evidence(
+    grounding: Grounding,
+    risk: RiskLevel,
+    input: &ProductInput,
+    recorded: &HashSet<String>,
+) -> (Grounding, RiskLevel) {
+    let grounded = if !is_resolvable(grounding) && product_citation_verified(input, recorded) {
+        Grounding::RecordedB
+    } else {
+        grounding
+    };
+    // Raise-only: keep the advisor's read unless the product's is STRICTER.
+    // `within_ceiling` is the crate's risk ordering (Unknown ranks above Medium),
+    // so "product risk is admitted under the advisor's ceiling" == "not stricter".
+    let risked = match input.risk {
+        Some(p) if !p.within_ceiling(risk) => p,
+        _ => risk,
+    };
+    (grounded, risked)
+}
+
+/// The `product:<who>` evidence marker for the durable audit record — the
+/// spelling the TASK-1013 `--from-product` filter reads
+/// ([`crate::autopilot_audit::PRODUCT_EVIDENCE_PREFIX`]). Emitting it is what
+/// makes "did this action consume product input?" answerable after the fact.
+// trace:TASK-1019 trace:TASK-1013 | ai:claude
+pub(crate) fn product_evidence_marker(input: &ProductInput) -> String {
+    format!(
+        "{}{}",
+        crate::autopilot_audit::PRODUCT_EVIDENCE_PREFIX,
+        input.who.trim()
+    )
+}
+
+/// PURE: the decision as it enters [`evaluate`] once product evidence is
+/// consumed.
+///
+/// `spec_id` and `action` are copied VERBATIM — that is the structural
+/// non-authority guarantee, not a convention: gates 1 and 2 are computed from
+/// fields this function cannot reach, so a `recommend:approve` can never widen
+/// the fence, raise a `propose` authority, or change what is being proposed.
+/// Only `grounding` and `risk` move, under [`apply_product_evidence`]'s
+/// raise-only rule, and the `product:<who>` marker is appended so the audit
+/// records the consumption.
+// trace:TASK-1019 | ai:claude
+pub(crate) fn decision_with_product_evidence(
+    d: &Decision,
+    input: &ProductInput,
+    recorded: &HashSet<String>,
+) -> Decision {
+    let (grounding, risk) = apply_product_evidence(d.grounding, d.risk, input, recorded);
+    let mut evidence = d.evidence.clone();
+    let marker = product_evidence_marker(input);
+    if !evidence.iter().any(|e| e.trim() == marker) {
+        evidence.push(marker);
+    }
+    Decision {
+        // Untouchable by product input — gate 1 and gate 2 inputs.
+        spec_id: d.spec_id.clone(),
+        action: d.action,
+        grounding,
+        risk,
+        reason: d.reason.clone(),
+        evidence,
+    }
+}
+
+/// The four-gate [`evaluate`], run over a decision that consumed a product
+/// recommendation. Thin by design: all the bounding lives in
+/// [`decision_with_product_evidence`], so the gates themselves stay the single
+/// implementation and cannot drift into a product-specific relaxation.
+// trace:TASK-1019 | ai:claude
+pub(crate) fn evaluate_with_product_evidence(
+    env: &AutopilotEnvelope,
+    fenced_ids: &HashSet<String>,
+    d: &Decision,
+    input: &ProductInput,
+    recorded: &HashSet<String>,
+) -> Outcome {
+    evaluate(
+        env,
+        fenced_ids,
+        &decision_with_product_evidence(d, input, recorded),
+    )
+}
+
+// ---------------------------------------------------------------------------
 // TASK-1147 — the auditability + reversal SURFACE (read-only half of EPIC-0428).
 //
 // This is deliberately the SAFE substrate: it INSPECTS what the envelope WOULD
@@ -1324,6 +1545,391 @@ mod tests {
         assert!(matches!(
             fenced.as_slice(),
             [(_, crate::intake::FenceReason::Keystone(_))]
+        ));
+    }
+
+    // ---- TASK-1019: product evidence feeds gate 3, never authority ----------
+    //
+    // The NEGATIVE tests are the point of this block. A product recommendation
+    // is the one input that arrives from a seat with no privileges at all, so
+    // every way it could become authority is asserted CLOSED here.
+
+    fn tags_of<const N: usize>(tags: [&str; N]) -> Vec<String> {
+        tags.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn recorded_of<const N: usize>(refs: [&str; N]) -> HashSet<String> {
+        refs.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// A product seat that recommends approving, cites `PRIN-3`, and calls it
+    /// low risk — the maximally-pushy input.
+    fn pushy_product() -> ProductInput {
+        parse_product_input(&tags_of([
+            "from-product:pat",
+            "recommend:approve",
+            "risk:low",
+            "cites:PRIN-3",
+        ]))
+        .expect("provenance present")
+    }
+
+    /// Every (grounding, risk) pair, for the cross-product invariants.
+    const ALL_GROUNDINGS: [Grounding; 4] = [
+        Grounding::TypeA,
+        Grounding::RecordedB,
+        Grounding::UnrecordedB,
+        Grounding::TypeC,
+    ];
+    const ALL_RISKS: [RiskLevel; 4] = [
+        RiskLevel::Low,
+        RiskLevel::Medium,
+        RiskLevel::Unknown,
+        RiskLevel::High,
+    ];
+
+    #[test]
+    fn parse_product_input_reads_the_four_tag_forms() {
+        let input = parse_product_input(&tags_of([
+            "batch:demo",
+            "From-Product: Pat ",
+            "recommend:queue",
+            "risk:high",
+            "cites:PRIN-3",
+            "cites:docs/lifecycle.md",
+        ]))
+        .expect("provenance present");
+        assert_eq!(input.who, "Pat");
+        assert_eq!(input.recommend, Some(ActionClass::Queue));
+        assert_eq!(input.risk, Some(RiskLevel::High));
+        assert_eq!(input.cites, vec!["PRIN-3", "docs/lifecycle.md"]);
+    }
+
+    #[test]
+    fn unattributed_recommendation_is_not_product_input() {
+        // No `from-product:` provenance -> not attributable, not consumed. The
+        // anti-laundering property: consumed product evidence always carries the
+        // marker that makes it visible to the audit filter.
+        assert_eq!(
+            parse_product_input(&tags_of(["recommend:approve", "cites:PRIN-3"])),
+            None
+        );
+    }
+
+    #[test]
+    fn product_evidence_raises_grounding_only_when_the_citation_is_verified() {
+        // The trust boundary: the product seat supplies the POINTER, the
+        // cold-boot advisor supplies the VERIFICATION.
+        let input = pushy_product();
+
+        let (verified, _) = apply_product_evidence(
+            Grounding::TypeC,
+            RiskLevel::Low,
+            &input,
+            &recorded_of(["PRIN-3"]),
+        );
+        assert_eq!(verified, Grounding::RecordedB);
+
+        // A citation the advisor could NOT find in substrate moves nothing —
+        // a product claim of grounding is not self-certifying.
+        let (unverified, _) = apply_product_evidence(
+            Grounding::TypeC,
+            RiskLevel::Low,
+            &input,
+            &recorded_of(["PRIN-9"]),
+        );
+        assert_eq!(unverified, Grounding::TypeC);
+    }
+
+    #[test]
+    fn product_evidence_never_reaches_type_a_and_never_demotes() {
+        // `TypeA` is a recorded PRINCIPLE — not a product seat's to assert. And
+        // an already-resolvable grounding passes through untouched: product
+        // input is not authority over the advisor's classification in EITHER
+        // direction.
+        let recorded = recorded_of(["PRIN-3"]);
+        let input = pushy_product();
+        for g in [Grounding::UnrecordedB, Grounding::TypeC] {
+            let (out, _) = apply_product_evidence(g, RiskLevel::Low, &input, &recorded);
+            assert_eq!(out, Grounding::RecordedB, "{g:?} may only reach recorded-B");
+        }
+        for g in [Grounding::TypeA, Grounding::RecordedB] {
+            let (out, _) = apply_product_evidence(g, RiskLevel::Low, &input, &recorded);
+            assert_eq!(out, g, "{g:?} must pass through untouched");
+        }
+    }
+
+    #[test]
+    fn product_risk_flag_raises_only_and_never_lowers() {
+        // Monotonic toward caution: a product `risk:high` tightens the gate-4
+        // check; a product `risk:low` under a stricter advisor read is discarded.
+        let recorded = recorded_of(["PRIN-3"]);
+        let low = pushy_product();
+        let high = parse_product_input(&tags_of(["from-product:pat", "risk:high"])).unwrap();
+        for advisor_read in ALL_RISKS {
+            let (_, lowered) =
+                apply_product_evidence(Grounding::TypeA, advisor_read, &low, &recorded);
+            assert_eq!(
+                lowered, advisor_read,
+                "product risk:low must not lower {advisor_read:?}"
+            );
+
+            let (_, raised) =
+                apply_product_evidence(Grounding::TypeA, advisor_read, &high, &recorded);
+            assert!(
+                !raised.within_ceiling(advisor_read) || raised == advisor_read,
+                "product risk:high must be at least as strict as {advisor_read:?}"
+            );
+        }
+        // Concretely: low advisor read + product high == high.
+        let (_, raised) =
+            apply_product_evidence(Grounding::TypeA, RiskLevel::Low, &high, &recorded);
+        assert_eq!(raised, RiskLevel::High);
+    }
+
+    #[test]
+    fn product_recommendation_never_changes_the_proposed_action_or_spec() {
+        // The structural non-authority guarantee: gate 1 and gate 2 read fields
+        // this path copies verbatim, so `recommend:approve` cannot become an
+        // approve, and cannot re-target another spec.
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeA, RiskLevel::Low);
+        let adjusted =
+            decision_with_product_evidence(&d, &pushy_product(), &recorded_of(["PRIN-3"]));
+        assert_eq!(adjusted.spec_id, "TASK-1");
+        assert_eq!(adjusted.action, ActionClass::Tag);
+    }
+
+    #[test]
+    fn product_recommend_approve_does_not_relax_propose_authority() {
+        // Gate 2 dominates: the conservative default holds `approve`, and a
+        // product recommendation — verified citation and all — cannot widen it.
+        let env = AutopilotEnvelope::default();
+        let fence = fence_of(["TASK-1"]);
+        let d = decision(
+            "TASK-1",
+            ActionClass::Approve,
+            Grounding::TypeA,
+            RiskLevel::Low,
+        );
+        assert_eq!(
+            evaluate_with_product_evidence(
+                &env,
+                &fence,
+                &d,
+                &pushy_product(),
+                &recorded_of(["PRIN-3"])
+            ),
+            Outcome::Hold
+        );
+    }
+
+    #[test]
+    fn product_recommend_on_a_never_action_still_escalates() {
+        // Gate 2's hard exclusion is likewise untouchable.
+        let env = AutopilotEnvelope::default()
+            .with_overrides([(ActionClass::Tag, Authority::Never)].into_iter().collect());
+        let fence = fence_of(["TASK-1"]);
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeA, RiskLevel::Low);
+        assert_eq!(
+            evaluate_with_product_evidence(
+                &env,
+                &fence,
+                &d,
+                &pushy_product(),
+                &recorded_of(["PRIN-3"])
+            ),
+            Outcome::Escalate(EscalateReason::NeverAuthority)
+        );
+    }
+
+    #[test]
+    fn product_recommend_on_a_fenced_spec_is_still_dropped() {
+        // Gate 1 dominates: an out-of-fence spec (keystone, deferred, whatever
+        // the fence excluded) stays dropped. Product input has no special lane.
+        let env = AutopilotEnvelope::default();
+        let d = decision(
+            "TASK-KEY",
+            ActionClass::Tag,
+            Grounding::TypeA,
+            RiskLevel::Low,
+        );
+        assert_eq!(
+            evaluate_with_product_evidence(
+                &env,
+                &fence_of(["TASK-OTHER"]),
+                &d,
+                &pushy_product(),
+                &recorded_of(["PRIN-3"])
+            ),
+            Outcome::Hold
+        );
+    }
+
+    #[test]
+    fn product_risk_low_cannot_beat_the_gate_4_ceiling() {
+        // Gate 4: a product `risk:low` on a high-risk decision does not buy an
+        // execution.
+        let env = AutopilotEnvelope::default();
+        let fence = fence_of(["TASK-1"]);
+        let d = decision(
+            "TASK-1",
+            ActionClass::Tag,
+            Grounding::TypeA,
+            RiskLevel::High,
+        );
+        assert_eq!(
+            evaluate_with_product_evidence(
+                &env,
+                &fence,
+                &d,
+                &pushy_product(),
+                &recorded_of(["PRIN-3"])
+            ),
+            Outcome::Escalate(EscalateReason::RiskCeiling)
+        );
+    }
+
+    #[test]
+    fn unverified_product_evidence_changes_no_verdict_anywhere() {
+        // The strongest negative: with nothing verified, the product-aware path
+        // is INDISTINGUISHABLE from the plain gates over the whole
+        // (action × grounding × risk) cross-product — no escalation flips into
+        // an execution, no hold flips into anything.
+        let env = AutopilotEnvelope::default();
+        let fence = fence_of(["TASK-1"]);
+        let input = pushy_product();
+        let nothing_recorded: HashSet<String> = HashSet::new();
+        for action in ALL_ACTIONS {
+            for g in ALL_GROUNDINGS {
+                for risk in ALL_RISKS {
+                    let d = decision("TASK-1", action, g, risk);
+                    assert_eq!(
+                        evaluate_with_product_evidence(&env, &fence, &d, &input, &nothing_recorded),
+                        evaluate(&env, &fence, &d),
+                        "{action:?}/{g:?}/{risk:?} must be unaffected by unverified product input"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn verified_product_evidence_only_ever_moves_a_grounding_gap() {
+        // The bounded positive: even with a VERIFIED citation, the only verdict
+        // product evidence can change is a gate-3 escalation. Every other cell
+        // of the cross-product is byte-identical — so product input can never
+        // rescue a fenced spec, a propose/never authority, or a risk ceiling.
+        let env = AutopilotEnvelope::default();
+        let fence = fence_of(["TASK-1"]);
+        let input = pushy_product();
+        let recorded = recorded_of(["PRIN-3"]);
+        for action in ALL_ACTIONS {
+            for g in ALL_GROUNDINGS {
+                for risk in ALL_RISKS {
+                    let d = decision("TASK-1", action, g, risk);
+                    let base = evaluate(&env, &fence, &d);
+                    let with = evaluate_with_product_evidence(&env, &fence, &d, &input, &recorded);
+                    if base == Outcome::Escalate(EscalateReason::GroundingGap) {
+                        continue;
+                    }
+                    assert_eq!(
+                        with, base,
+                        "{action:?}/{g:?}/{risk:?}: product evidence moved a non-gate-3 verdict"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn product_evidence_cannot_relax_gate_3_under_headless() {
+        // Headless forces `grounding_required` on and demotes every `propose` to
+        // `never`; product input composes with that rather than around it. An
+        // unverified recommendation still escalates on the grounding gap, and a
+        // `recommend:approve` still hits the demoted authority first.
+        let env = effective_envelope(AutopilotEnvelope::default(), true, SoloPosture::Inactive);
+        let fence = fence_of(["TASK-1"]);
+        let input = pushy_product();
+
+        let tag = decision("TASK-1", ActionClass::Tag, Grounding::TypeC, RiskLevel::Low);
+        assert_eq!(
+            evaluate_with_product_evidence(&env, &fence, &tag, &input, &HashSet::new()),
+            Outcome::Escalate(EscalateReason::GroundingGap)
+        );
+
+        let approve = decision(
+            "TASK-1",
+            ActionClass::Approve,
+            Grounding::TypeA,
+            RiskLevel::Low,
+        );
+        assert_eq!(
+            evaluate_with_product_evidence(
+                &env,
+                &fence,
+                &approve,
+                &input,
+                &recorded_of(["PRIN-3"])
+            ),
+            Outcome::Escalate(EscalateReason::NeverAuthority)
+        );
+    }
+
+    #[test]
+    fn solo_park_for_human_outranks_a_verified_product_recommendation() {
+        // The keystone posture is absolute: every action demotes to `never`, so
+        // a perfectly-grounded product recommendation still parks for the human.
+        let env = effective_envelope(
+            AutopilotEnvelope::default(),
+            false,
+            SoloPosture::ParkForHuman,
+        );
+        let fence = fence_of(["TASK-1"]);
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeA, RiskLevel::Low);
+        assert_eq!(
+            evaluate_with_product_evidence(
+                &env,
+                &fence,
+                &d,
+                &pushy_product(),
+                &recorded_of(["PRIN-3"])
+            ),
+            Outcome::Escalate(EscalateReason::NeverAuthority)
+        );
+    }
+
+    #[test]
+    fn consumed_product_evidence_is_marked_for_the_from_product_filter() {
+        // Provenance is first-class: the consumed decision carries the
+        // `product:<who>` marker the audit filter reads, so "is a product seat
+        // steering the queue?" stays answerable. Idempotent — a second pass
+        // does not duplicate the marker.
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeC, RiskLevel::Low);
+        let once = decision_with_product_evidence(&d, &pushy_product(), &HashSet::new());
+        assert!(once.evidence.contains(&"product:pat".to_string()));
+        assert!(crate::autopilot_audit::evidence_has_product_handoff(
+            &once.evidence
+        ));
+        assert_eq!(
+            crate::autopilot_audit::product_provenance(&once.evidence).as_deref(),
+            Some("pat")
+        );
+
+        let twice = decision_with_product_evidence(&once, &pushy_product(), &HashSet::new());
+        assert_eq!(twice.evidence, once.evidence);
+    }
+
+    #[test]
+    fn an_unnamed_product_seat_is_still_marked() {
+        // A bare `from-product:` marker means the handoff happened without the
+        // seat naming itself — it must still be visible to the audit rather
+        // than silently laundered into an unattributed decision.
+        let input = parse_product_input(&tags_of(["from-product:"])).expect("bare marker parses");
+        assert_eq!(input.who, "");
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeA, RiskLevel::Low);
+        let marked = decision_with_product_evidence(&d, &input, &HashSet::new());
+        assert!(crate::autopilot_audit::evidence_has_product_handoff(
+            &marked.evidence
         ));
     }
 }

@@ -2,23 +2,38 @@
 
 Date: 2026-06-29
 Specs: TASK-0431 (parent EPIC-0428) — depends on TASK-0429 (envelope), composes with TASK-0430 (audit)
-Status: Draft — **design only, needs master-advisor sign-off before any code**. READ side reserved by TASK-1013.
+Status: Partially built — the EVIDENCE CONTRACT (read side TASK-1013, consumption side TASK-1019) has landed; the product SEAT is still design-only.
 Complexity: ~80 prod LOC + ~80 test LOC when built, 0 commits now, risk low-medium (the hard bound already exists; this is mostly convention + handoff)
 
-<!-- Do NOT implement the PRODUCER. The substrate-as-bouncer for "product can't
-     approve" ALREADY EXISTS (the TASK-647 advisor gate). This plan defines the
-     handoff.
+<!-- The substrate-as-bouncer for "product can't approve" ALREADY EXISTS (the
+     TASK-647 advisor gate). This plan defines the handoff around it.
 
-     TASK-1013 landed only the READ half, in `aida-cli-lib/src/autopilot_audit.rs`:
+     TASK-1013 landed the READ half, in `aida-cli-lib/src/autopilot_audit.rs`:
      the `product:<who>` evidence-marker convention, the pure predicates over it
      (`evidence_has_product_handoff` / `product_provenance` / `is_from_product`),
      the `ExecutionRecord.from_product` flag DERIVED from the evidence at mint,
      and the `aida autopilot executions --from-product` filter. The provenance
      question ("is a product seat steering the queue?") is therefore answerable
      the moment the first product-sourced record appears — no migration, no
-     reindex. Still unbuilt here: the `product` starter role, the
-     `from-product:` / `recommend:` TAG parsers on the draft, and
-     `apply_product_evidence` (the raise-only grounding/risk rule). -->
+     reindex.
+
+     TASK-1019 landed the CONSUMPTION half, in `aida-cli-lib/src/autopilot.rs`:
+     the `from-product:` / `recommend:` / `risk:` / `cites:` tag parsers
+     (`parse_product_input`), the raise-only grounding/risk rule
+     (`apply_product_evidence`), and the gate-3-only wiring
+     (`decision_with_product_evidence` / `evaluate_with_product_evidence`) that
+     copies `spec_id` + `action` VERBATIM so gates 1, 2 and 4 are structurally
+     out of product input's reach, and emits the `product:<who>` marker TASK-1013
+     reads. The non-authority invariant is asserted over the full
+     (action × grounding × risk) cross-product in both directions: unverified
+     product input changes NO verdict anywhere, and verified product input can
+     move ONLY a gate-3 escalation.
+
+     Still unbuilt here: the `product` starter role entry, the
+     `docs/aida/discipline/product-role.md` seat documentation, the skill-side
+     handoff discipline, and the wiring of `parse_product_input` into the live
+     groom pass (which awaits a `groom --autopilot` execution path — deliberately
+     deferred keystone autonomy). -->
 
 ## Approach
 
