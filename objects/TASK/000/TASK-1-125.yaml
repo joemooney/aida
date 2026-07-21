@@ -1,5 +1,6 @@
 id: 019f8398-42f7-7de1-976e-7cd12da3015b
 spec_id: TASK-1-125
+agreed_id: TASK-149
 title: 'burndown plan: serialize-held specs are mislabeled as awaiting_signoff'
 description: |-
   `aida burndown plan` folds serialize-group-held specs into `awaiting_signoff`, which reads as "the advisor has not blessed this yet" — but the spec IS queued and blessed; it is merely deferred to a later wave by STORY-614's collapse_serialize_groups.
