@@ -2083,6 +2083,38 @@ pub enum WorktreePoolCommand {
         path: Option<String>,
     },
 
+    /// Register EXISTING worktrees into the warm-pool — the migration path for
+    /// sibling worktrees created before the pool existed. DRY-RUN BY DEFAULT:
+    /// pass `--no-dry-run` to write the registry. Never touches a worktree
+    /// (no reset, no checkout, no removal) and is safe to re-run. A tree that
+    /// still carries uncommitted or unmerged work needs `--include-unlanded`
+    /// and is registered as a RESERVATION, so it is never handed out until you
+    /// release it with `pool return`.
+    // trace:TASK-1009 | ai:claude
+    Adopt {
+        /// Worktree path(s) to adopt. Omit with `--all` to consider every
+        /// worktree registered against this repository.
+        paths: Vec<String>,
+
+        /// Consider every worktree of this repo (the main checkout and any
+        /// worktree nested inside it are never adopted).
+        #[clap(long)]
+        all: bool,
+
+        /// Actually write the registry (the default is a preview).
+        #[clap(long)]
+        no_dry_run: bool,
+
+        /// Also adopt trees with uncommitted changes or unmerged commits,
+        /// registering each as a reservation rather than an idle tree.
+        #[clap(long)]
+        include_unlanded: bool,
+
+        /// Emit JSON instead of the human report.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Tear down pool worktrees. DRY-RUN BY DEFAULT — pass `--no-dry-run` to
     /// actually remove. Each tree is classified by risk; only `disposable`
     /// trees are removed unless you opt into a riskier class with one

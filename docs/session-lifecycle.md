@@ -196,6 +196,8 @@ The historical model treats a per-spec worktree as disposable: create a sibling 
 aida worktree pool acquire [--json] [--lease-holder NAME]   # reuse an idle warm tree (reset) or create one
 aida worktree pool return [PATH]                            # reset + mark idle; DIRECTORY PERSISTS (cache kept)
 aida worktree pool status [--json]                          # available / in-use / leased / dirty / here + HEAD
+aida worktree pool adopt [--all | PATH...] [--no-dry-run]   # register EXISTING worktrees; dry-run by default
+        [--include-unlanded] [--json]
 aida worktree pool destroy [--all | PATH...] [--no-dry-run] # ONLY path that deletes; dry-run by default
         [--include-unlanded] [--include-in-use] [--include-leased]
 aida session start --owns <scope>                           # acquires from the pool BY DEFAULT (--no-pool opts out)
@@ -216,6 +218,22 @@ State lives under `.aida/worktree-pool/` (per-clone runtime state, already cover
 **Reservation vs liveness.** A pool entry carries both a PID-liveness owner (`owner_pid`, self-heals to idle when the owner process dies) and a durable lease (`leased` / `lease_holder`, survives with zero live processes). A headless drain that parks `NeedsAttention` keeps its tree reserved via `--lease-holder`; a crashed implementer's tree self-heals back to idle on the next `heal_state` pass.
 
 **Tiered destroy.** `destroy` classifies each tree (`disposable` / `dirty` / `unmerged` / `in-use` / `leased` / `unverified`) and removes only `disposable` trees unless you opt into a riskier class with one `--include-*` flag. Dirty/unmerged trees are patch-salvaged (`salvage_worktree_patch`) before removal. `--include-leased` is honored only when the exact path is named, never in a bulk `--all` sweep.
+
+**Adopting pre-pool worktrees (TASK-1009).** The pool only manages worktrees it created, so every sibling worktree that predates it — the `../aida-<slug>` trees the old destroy-and-recreate model minted, plus anything made by hand — is invisible to `pool status`, never reused, and never swept. `aida worktree pool adopt` is the migration: it **registers** those trees into `pool.json` and does nothing else.
+
+```bash
+aida worktree pool adopt --all                              # preview what would be adopted
+aida worktree pool adopt --all --no-dry-run                 # register the clean, landed ones
+aida worktree pool adopt ../aida-epic54 --include-unlanded --no-dry-run
+```
+
+Three properties make it safe to run against a live workspace:
+
+- **It never touches a worktree** — no reset, no checkout, no removal, no hooks. Only `pool.json` changes, so a mis-adoption is undone by dropping the entry.
+- **Preview by default**, like its sibling `destroy`; `--no-dry-run` applies.
+- **Unlanded work is adopted RESERVED, never idle.** A tree with uncommitted changes or unmerged commits is registered with a durable lease carrying **no timestamp**, so `acquire` skips it *and* the lease-TTL backstop can never judge it stale and reclaim it. It shows as `leased` in `pool status` until you release it deliberately with `pool return <path>` (which salvages the dirty diff first) or `pool destroy --include-unlanded`. Without `--include-unlanded` such a tree is simply skipped, naming the flag.
+
+Ambiguous cases are **refused, not guessed**: the main checkout, any worktree nested inside it (e.g. the `.aida-store` worktree), a path that isn't a registered worktree of this repo, a missing directory, and a tree a **live session lease** is holding are each skipped with a reason. Adoption also stops at `[worktree_pool] max_trees` rather than silently growing the pool past the cap, and re-running is a no-op (already-pooled trees report `already-pooled`).
 
 **Hook safety.** `post_create` / `pre_destroy` hook commands are sourced **only from the machine-global `~/.aida/config.toml`**, never a checked-in repo-level `.aida/config.toml` — cloning a repo must not be able to run arbitrary shell on your machine.
 

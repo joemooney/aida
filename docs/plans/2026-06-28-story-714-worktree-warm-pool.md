@@ -200,7 +200,7 @@ test "$P2" = "$P1"                                          # same warm tree reu
 ## Followups
 
 - TTL auto-expiry on `leased_at` (reservation-leak mitigation, risk 4).
-- `aida worktree pool adopt` for migrating pre-pool sibling worktrees (risk 1).
+- ~~`aida worktree pool adopt` for migrating pre-pool sibling worktrees (risk 1).~~ **Done (TASK-1009)** — dry-run-by-default, registry-only adopt (`aida-core/src/worktree_pool_adopt.rs`); unlanded trees adopt as unstamped permanent reservations behind `--include-unlanded`, and the main checkout / nested worktrees / non-worktrees / live-lease trees are refused rather than guessed. Documented in the warm-pool section of `session-lifecycle.md`.
 - ~~`post_create` hook recipe to pre-warm `cargo build` on a freshly-created pool tree (turn cold-create into warm-on-first-use).~~ **Done (TASK-1010)** — opt-in `[worktree_pool] prewarm_build = true` (global config only) appends a backgrounded `cargo build` to `post_create`; documented in the warm-pool section of `session-lifecycle.md`.
 - Cross-platform file-lock parity (treehouse has `lock_unix.go` / `lock_windows.go`); AIDA must match for the nightly cross-platform matrix.
 - Telemetry: pool hit-rate (reuse vs create) to prove the warm-cache payoff empirically (substrate learning loop).
