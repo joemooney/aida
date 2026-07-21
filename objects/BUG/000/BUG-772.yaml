@@ -8,7 +8,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T06:01:49.539694060Z
-modified_at: 2026-07-21T06:01:49.539694060Z
+modified_at: 2026-07-21T06:01:54.482973257Z
 req_type: Bug
 tags:
 - aida:queue liveness followup:BUG-765 followup:BUG-753 from-dogfood
+execution_mode: drive
