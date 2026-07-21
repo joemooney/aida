@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T03:58:29.064280635Z
-modified_at: 2026-07-21T04:00:45.495292256Z
+modified_at: 2026-07-21T04:01:19.035736157Z
 req_type: Bug
 tags:
 - aida:cache integrity status-drift from-dogfood
@@ -24,5 +24,11 @@ comments:
   content: 'FINAL diagnosis (superseding both earlier comments — I asserted twice before verifying, wrong both times): git is Rejected EVERYWHERE — HEAD:objects/EPIC/000/EPIC-7.yaml = Rejected, worktree file = Rejected, worktree clean, and the clobber 90d6b6f90 never touched its status (no ±status in that commit). The add --parent gate (git backend) reads Rejected correctly. But requirements_cache.status = Draft even immediately after ''aida cache rebuild'' reports ''2948 projected from git store''. So the CACHE PROJECTION reads a Rejected YAML and writes Draft for this record, and rebuild does not correct it — a deterministic projection bug isolated to (at least) EPIC-7, NOT staleness, NOT the clobber, NOT worktree divergence. Repro: git -C .aida-store show HEAD:objects/EPIC/000/EPIC-7.yaml | grep status → Rejected; sqlite3 .aida/cache.db ''select status from requirements_cache where spec_id="EPIC-7"'' → Draft. Next step for the implementer: instrument the projection for this uuid (3999e6a2) during rebuild — suspect a status-enum parse fallback-to-Draft for some field ordering/format in this specific record. AUDIT RIDER: sweep the cache for other spec_id where cache.status != git HEAD status — there may be more mis-projected records this one exposed.'
   created_at: 2026-07-21T04:00:45.495292256Z
   modified_at: 2026-07-21T04:00:45.495292256Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f82d5-d2bb-7420-9597-d1367b1cf414
+  author: joe
+  content: 'ROOT CAUSE CONFIRMED + consolidates with BUG-768. Blast-radius probe: divergence is EPICS ONLY (derived-rollup status) — EPIC-7 cache=Draft/git=Rejected, EPIC-24 cache=in-progress/git=Completed, EPIC-56 cache=in-progress/git=Approved; every non-epic (STORY-772/BUG-756/TASK-919) matches. Mechanism: the BUG-626 rollup (''no children → Draft'', ''children states → derived'') runs at CACHE-PROJECTION time and OVERRIDES the committed manual status. EPIC-7 is manually Rejected with 0 children, so each projection re-derives it to Draft. Same family as BUG-768 (force-closed epics regress on re-derivation). Unified fix: a manually-set terminal/explicit epic status (Rejected, or --force Completed) is AUTHORITATIVE and must not be re-derived away; the rollup applies only to epics whose status was itself derived (not operator-forced) — needs a ''status_is_derived'' vs ''status_is_manual'' bit, or: never let derivation move an epic OUT of a terminal state. Merge BUG-768 into this or fix together. Downgrade priority note: no data was lost (git is correct); this is a READ/projection lie, dangerous because it makes rejected/completed epics look like open work in list/show.'
+  created_at: 2026-07-21T04:01:19.035736157Z
+  modified_at: 2026-07-21T04:01:19.035736157Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
