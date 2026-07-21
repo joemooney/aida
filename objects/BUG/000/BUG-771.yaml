@@ -8,7 +8,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T03:58:29.064280635Z
-modified_at: 2026-07-21T03:58:29.064280635Z
+modified_at: 2026-07-21T03:58:33.100566840Z
 req_type: Bug
 tags:
 - aida:cache integrity status-drift from-dogfood
+execution_mode: drive
