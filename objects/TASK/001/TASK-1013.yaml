@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:08.070727403Z
-modified_at: 2026-07-21T06:48:33.294739929Z
+modified_at: 2026-07-21T07:12:21.964038Z
 req_type: Task
 tags:
 - serialize:autopilot-audit
@@ -17,4 +17,11 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a2-20e2-7090-a019-58f0f267ee52
   created_at: 2026-06-30T02:27:13.553687992Z
+comments:
+- id: 019f8384-bbcc-7f63-a131-217b2201f047
+  author: joe
+  content: Commit c0d6d2985 references this requirement
+  created_at: 2026-07-21T07:12:21.964038Z
+  modified_at: 2026-07-21T07:12:21.964038Z
+  session_id: b2fbf49b-dbba-4dea-8daa-00aa86595b2d
 execution_mode: drive
