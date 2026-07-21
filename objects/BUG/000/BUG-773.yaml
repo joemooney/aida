@@ -3,12 +3,12 @@ spec_id: BUG-773
 agreed_id: BUG-773
 title: queue add succeeds ('✓ Added') but queue list count doesn't reflect it — write/read inconsistency stalls a drain (specs read as awaiting_signoff despite being queued)
 description: '2026-07-21 ~02:10, recovering the drain-machinery chain: ''aida queue add TASK-1135 --for implementer --user joe'' returns ''✓ Added TASK-1135 ... to queue [for:implementer]'' repeatedly, but ''aida queue list --user joe'' count stays at 4 and does NOT include TASK-1135; ''aida burndown plan'' classifies it as pickable-awaiting-signoff (i.e. UNqueued) so a fresh drain blesses 0 and exits. So queue ADD reports success while queue LIST/plan don''t see the entry — a write/read inconsistency (likely the queue projection is cache-backed and stale vs the store write, same family as BUG-771 status-drift; OR the add and list resolve different queue keys/files). Impact: a drain can''t be fed — re-queued specs silently don''t drain, and the operator/advisor can''t tell (add says success). Repro: aida queue add <id> --for implementer; aida queue list | grep <id> → absent; aida burndown plan → id under awaiting_signoff. Fix: make queue add''s write and queue list/plan''s read hit the same source (or invalidate/rebuild the queue projection on add); an add that ''succeeds'' must appear in the very next list. Diagnostic: compare the store queue registry (registry/queues/*.yaml) against the cache after an add. Blocks completing the drain-machinery chain (TASK-1135-1139) + TASK-1016 — left for fresh eyes. Mode drive. Priority high (silent queue data inconsistency).'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T09:07:37.092894598Z
-modified_at: 2026-07-21T16:08:05.179967745Z
+modified_at: 2026-07-21T16:18:03.111185182Z
 req_type: Bug
 tags:
 - aida:queue integrity cache-drift from-dogfood
@@ -23,4 +23,22 @@ comments:
   content: 'Amended trace-only update: PR-1577 now points at c5b561c88 (same fix, with `trace:BUG-773 | ai:codex` in the touched helper).'
   created_at: 2026-07-21T16:08:05.179963052Z
   modified_at: 2026-07-21T16:08:05.179963052Z
+history:
+- id: 019f8578-52e0-7741-8a54-1ea236038556
+  author: aida-auto-bump
+  timestamp: 2026-07-21T16:18:03.104694409Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019f8578-52e7-7711-a3c6-0bbc1b08ba75
+  timestamp: 2026-07-21T16:18:03.111184035Z
+  agent: aida
+  commit_sha: b5586e28ca39316ccb3a16d6b98e0c40c8d5f7b5
+  summary: Completed via merge b5586e28
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-07-21T16:18:03.104582633Z
+  completion_sha: b5586e28ca39316ccb3a16d6b98e0c40c8d5f7b5
