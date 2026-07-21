@@ -1095,6 +1095,30 @@ pub fn has_worktree(repo_root: &Path, worktree_dir: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Parse `git worktree list --porcelain` stdout into the registered worktree
+/// paths (the main checkout is the first record). Pure so the porcelain
+/// handling is testable without git.
+// trace:TASK-1009 | ai:claude
+pub fn parse_worktree_list_porcelain(porcelain: &str) -> Vec<PathBuf> {
+    porcelain
+        .lines()
+        .filter_map(|l| l.strip_prefix("worktree "))
+        .map(|p| PathBuf::from(p.trim()))
+        .collect()
+}
+
+/// Every worktree registered against `repo_root`, main checkout included, in
+/// git's own order. Empty when the porcelain can't be read (never fatal —
+/// callers treat "no worktrees discovered" as nothing to do).
+// trace:TASK-1009 | ai:claude
+pub fn list_worktree_paths(repo_root: &Path) -> Vec<PathBuf> {
+    git(repo_root, &["worktree", "list", "--porcelain"])
+        .ok()
+        .filter(|r| r.success)
+        .map(|r| parse_worktree_list_porcelain(&r.stdout))
+        .unwrap_or_default()
+}
+
 // ── Worktree warm-pool primitives (STORY-714) ───────────────────────────────
 //
 // The warm-pool keeps a set of long-lived sibling worktrees and recycles them

@@ -46517,6 +46517,20 @@ fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
             );
             Ok(())
         }
+        WorktreePoolCommand::Adopt {
+            paths,
+            all,
+            no_dry_run,
+            include_unlanded,
+            json,
+        } => worktree_pool_adopt(
+            &project_root,
+            paths,
+            *all,
+            !*no_dry_run,
+            *include_unlanded,
+            *json,
+        ),
         WorktreePoolCommand::Destroy {
             paths,
             all,
@@ -46645,6 +46659,109 @@ fn print_worktree_pool_hit_rate(pool: &aida_core::worktree_pool::Pool) {
         }
         None => println!("{}", "  hit-rate n/a  (no acquires observed yet)".dimmed()),
     }
+}
+
+/// `aida worktree pool adopt` — register pre-pool sibling worktrees into the
+/// warm-pool registry. Preview by default; the only side effect when applied is
+/// new entries in the registry (no worktree is ever reset, checked out, or
+/// removed). Exits non-zero only on a hard error — an all-skipped pass is a
+/// legitimate "nothing to migrate" outcome.
+// trace:TASK-1009 | ai:claude
+fn worktree_pool_adopt(
+    project_root: &std::path::Path,
+    paths: &[String],
+    all: bool,
+    dry_run: bool,
+    include_unlanded: bool,
+    json: bool,
+) -> Result<()> {
+    use aida_core::worktree_pool_adopt::{self as wa, AdoptAction, AdoptOptions, AdoptSelector};
+
+    let selector = if all {
+        AdoptSelector::All
+    } else if !paths.is_empty() {
+        AdoptSelector::Paths(paths.iter().map(std::path::PathBuf::from).collect())
+    } else {
+        anyhow::bail!(
+            "specify worktree path(s) to adopt, or pass --all to consider every worktree of this repository"
+        );
+    };
+
+    let opts = AdoptOptions {
+        dry_run,
+        include_unlanded,
+        max_trees: worktree_pool_config_max_trees(project_root),
+        ..Default::default()
+    };
+    // A worktree a live session is working in is never adopted — the pool must
+    // not start accounting for a tree somebody is inside.
+    let live = wa::live_lease_worktrees(project_root);
+    let report = wa::adopt(project_root, &selector, &opts, &live)?;
+
+    if json {
+        let arr: Vec<_> = report
+            .targets
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "path": t.path,
+                    "name": t.name,
+                    "class": t.class.label(),
+                    "action": match t.action {
+                        AdoptAction::WouldAdopt => "would-adopt",
+                        AdoptAction::Adopted => "adopted",
+                        AdoptAction::Skipped => "skipped",
+                    },
+                    "reserved": t.reserved,
+                    "reason": t.reason,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "dry_run": report.dry_run,
+                "adopted": report.adopted_count(),
+                "would_adopt": report.would_adopt_count(),
+                "skipped": report.skipped_count(),
+                "targets": arr,
+            }))?
+        );
+        return Ok(());
+    }
+
+    if report.targets.is_empty() {
+        println!("no candidate worktrees to adopt");
+        return Ok(());
+    }
+
+    if report.dry_run {
+        println!(
+            "{} dry-run — registry unchanged (pass --no-dry-run to apply)",
+            "→".dimmed()
+        );
+    }
+    for t in &report.targets {
+        let mark = match t.action {
+            AdoptAction::WouldAdopt => "would adopt".yellow(),
+            AdoptAction::Adopted => "adopted".green(),
+            AdoptAction::Skipped => "skipped".dimmed(),
+        };
+        println!("  {}  {}  {}", mark, t.path.display(), t.reason.dimmed());
+    }
+    if !report.dry_run {
+        println!(
+            "{} {} worktree(s) adopted into the warm-pool",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            report.adopted_count()
+        );
+        if report.targets.iter().any(|t| t.reserved) {
+            println!(
+                "  reserved trees keep their unlanded work and are never handed out — release one with `aida worktree pool return <path>`"
+            );
+        }
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

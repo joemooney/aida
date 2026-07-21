@@ -139,6 +139,8 @@ pub mod workspace;
 // Worktree warm-pool (STORY-714): registry + tiered destroy + lifecycle hooks.
 pub mod worktree_hooks;
 pub mod worktree_pool;
+// Migration of pre-pool sibling worktrees into the registry (TASK-1009).
+pub mod worktree_pool_adopt;
 pub mod worktree_pool_destroy;
 pub mod yaml_helpers;
 
