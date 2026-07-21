@@ -34,11 +34,11 @@ description: |
   Deliberately NOT folded into BUG-770: that fix was a bounded seam + guard, this
   is a signature ripple across the session-end CLI path. Residual risk in the
   meantime is covered by the AIDA_EVENTS_DISABLE kill switch BUG-770 added.
-status: InProgress
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T03:22:57.024938227Z
-modified_at: 2026-07-21T04:49:03.366899583Z
+modified_at: 2026-07-21T06:12:08.966932807Z
 req_type: Task
 execution_mode: drive
