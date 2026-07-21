@@ -27576,11 +27576,20 @@ pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
 /// the branch's workflow-run CI is terminal (streaming when interactive),
 /// returning CiProbe. GitHubForge delegates to `watch_ci_for_context`.
 /// `no_human_active` is the headless flag (inverted to `interactive`).
-/// trace:STORY-516 | ai:claude
-pub(crate) fn watch_ci_for_context_via_forge(branch: &str, no_human_active: bool) -> CiProbe {
-    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+///
+/// TASK-1165: takes the caller's `project_root` instead of re-deriving one from
+/// the process cwd. Both callers already hold it, and the old
+/// `unwrap_or(PathBuf::from("."))` fallback could hand the forge — and through
+/// it the `CiTerminal` emit — a root of `.`, dropping a stray
+/// `./.aida/events.jsonl` outside any project.
+// trace:STORY-516 trace:TASK-1165 | ai:claude
+pub(crate) fn watch_ci_for_context_via_forge(
+    project_root: &std::path::Path,
+    branch: &str,
+    no_human_active: bool,
+) -> CiProbe {
     ci_probe_from_ci_probe_result(
-        crate::forge::forge_for(&project_root).stream_ci_for_branch(branch, !no_human_active),
+        crate::forge::forge_for(project_root).stream_ci_for_branch(branch, !no_human_active),
     )
 }
 
@@ -27721,15 +27730,26 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
 /// caller proceeds rather than hanging. Ctrl+C interrupts cleanly.
 /// Windows: `AIDA_WORKER_CI_IDLE` (default 600s) / `AIDA_WORKER_CI_ABSOLUTE`
 /// (default 5400s).
-// trace:TASK-111 trace:TASK-968 | ai:claude
-fn wait_for_ci_terminal(branch: &str) -> CiProbe {
+///
+/// TASK-1165: `project_root` is INJECTED by the caller rather than resolved
+/// here from the process cwd — the same rule BUG-770 established for the
+/// escalation epilogue. Every caller already holds the root it is driving
+/// (`session_end`'s `project_root`, `RealPhaseDriver`'s `self.project_root`,
+/// `GitHubForge`'s `self.project_root`), so nothing has to guess. `None` skips
+/// the terminal `CiTerminal` emit entirely instead of falling back to `.` and
+/// dropping a stray `./.aida/events.jsonl` outside any project; the git probes
+/// below still degrade to the cwd, which is what they always did.
+// trace:TASK-111 trace:TASK-968 trace:TASK-1165 | ai:claude
+fn wait_for_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> CiProbe {
     use crate::ci_idle_timeout::{ci_progress_fingerprint, ci_wait_verdict, CiWaitVerdict};
     const POLL_INTERVAL_SECS: u64 = 30;
     let idle_window = crate::ci_idle_timeout::ci_idle_window_secs();
     let absolute_ceiling = crate::ci_idle_timeout::ci_absolute_ceiling_secs();
 
-    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let default_ref = detect_default_branch_ref(&project_root);
+    // The git probes are read-only and harmless against the cwd; only the emit
+    // is root-sensitive, so only the emit is gated on `Some`.
+    let git_root = project_root.unwrap_or_else(|| std::path::Path::new("."));
+    let default_ref = detect_default_branch_ref(git_root);
 
     let started = std::time::Instant::now();
     let mut last_progress = started;
@@ -27744,7 +27764,7 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
         // transitions/appears OR the PR head / base tip advances (a rebase).
         let base_tip = default_ref
             .as_deref()
-            .and_then(|r| git_rev_parse_quiet(&project_root, r));
+            .and_then(|r| git_rev_parse_quiet(git_root, r));
         let rollup = ci_rollup_json_for_branch(branch);
         let fingerprint = ci_progress_fingerprint(&rollup, base_tip.as_deref());
         let progressed = match &last_fingerprint {
@@ -27788,16 +27808,31 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
             // STORY-712: emit the actionable CiTerminal wake before returning.
             // Best-effort, no control-flow change. trace:TASK-988 | ai:claude
             _ => {
-                let green = matches!(probe, CiProbe::Green { .. });
-                let (spec, run_uuid) = drain_state::current_context(&project_root);
-                events::emit(
-                    &project_root,
-                    &events::Event::new(spec, run_uuid, events::EventKind::CiTerminal { green }),
-                );
+                emit_ci_terminal(project_root, matches!(probe, CiProbe::Green { .. }));
                 return probe;
             }
         }
     }
+}
+
+/// STORY-712: emit the actionable `CiTerminal` wake once a CI watch reaches a
+/// terminal verdict. Best-effort, no control-flow effect.
+///
+/// TASK-1165: the root is INJECTED (see [`wait_for_ci_terminal`]). `None` — a
+/// caller with no resolvable project — skips the emit rather than writing a
+/// stray `./.aida/events.jsonl` into whatever directory the process happened to
+/// be standing in. Split out of the poll loop so both arms of that decision are
+/// unit-testable without a 30s `gh` poll.
+// trace:TASK-1165 | ai:claude
+fn emit_ci_terminal(project_root: Option<&std::path::Path>, green: bool) {
+    let Some(root) = project_root else {
+        return;
+    };
+    let (spec, run_uuid) = drain_state::current_context(root);
+    events::emit(
+        root,
+        &events::Event::new(spec, run_uuid, events::EventKind::CiTerminal { green }),
+    );
 }
 
 /// TASK-968: fetch the raw `statusCheckRollup` (+ `headRefOid`) JSON for the
@@ -27862,15 +27897,22 @@ fn should_stream_ci_watch(stdout_is_tty: bool, no_human_active: bool) -> bool {
     stdout_is_tty && !no_human_active
 }
 
-pub(crate) fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiProbe {
+/// TASK-1165: `project_root` is threaded straight through to the emit site in
+/// [`wait_for_ci_terminal`] — this layer only picks stream-vs-poll.
+// trace:TASK-1165 | ai:claude
+pub(crate) fn watch_ci_for_context(
+    project_root: Option<&std::path::Path>,
+    branch: &str,
+    no_human_active: bool,
+) -> CiProbe {
     if should_stream_ci_watch(std::io::stdout().is_terminal(), no_human_active) {
-        watch_ci_terminal(branch)
+        watch_ci_terminal(project_root, branch)
     } else {
         eprintln!(
             "  {} stdout is non-interactive or headless mode is active — using quiet CI polling.",
             crate::glyph(crate::glyphs::Glyph::Info).cyan()
         );
-        wait_for_ci_terminal(branch)
+        wait_for_ci_terminal(project_root, branch)
     }
 }
 
@@ -27883,14 +27925,19 @@ fn first_run_id_from_gh_json(json: &str) -> Option<String> {
     id.as_u64().map(|n| n.to_string())
 }
 
+#[cfg(test)]
+#[path = "tests/task1165_events_root_tests.rs"]
+mod task1165_events_root_tests;
+
 /// TASK-233: `--watch-ci` — stream live CI progress via `gh run watch`
 /// rather than silently polling, then re-probe for the terminal state so
 /// the end-session decision tree (green proceeds / red prompts) runs
 /// exactly as it does for `--wait-ci`. Falls back to the silent poll
 /// loop when `gh` is missing or no run id resolves. trace:TASK-233
-fn watch_ci_terminal(branch: &str) -> CiProbe {
+// trace:TASK-1165 | ai:claude
+fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> CiProbe {
     let Some(gh) = resolve_gh_binary() else {
-        return wait_for_ci_terminal(branch);
+        return wait_for_ci_terminal(project_root, branch);
     };
     // Resolve the latest workflow run id for this branch.
     let run_id = std::process::Command::new(&gh)
@@ -27911,7 +27958,7 @@ fn watch_ci_terminal(branch: &str) -> CiProbe {
     let Some(run_id) = run_id else {
         // No resolvable run — degrade to the silent poll loop rather
         // than failing the session-end.
-        return wait_for_ci_terminal(branch);
+        return wait_for_ci_terminal(project_root, branch);
     };
     eprintln!(
         "  {} streaming `gh run watch {}`",
@@ -28729,13 +28776,16 @@ fn session_end(
                         "{} CI in progress — watching until terminal state (Ctrl+C to stop watching)",
                         "→".cyan()
                     );
-                    watch_ci_for_context_via_forge(&target.branch, false) // STORY-516
+                    // TASK-1165: hand the already-resolved session root down so
+                    // the CiTerminal emit can't re-derive one from the cwd.
+                    watch_ci_for_context_via_forge(&project_root, &target.branch, false)
+                // STORY-516
                 } else {
                     eprintln!(
                         "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
                         "→".cyan()
                     );
-                    wait_for_ci_terminal(&target.branch)
+                    wait_for_ci_terminal(Some(&project_root), &target.branch)
                 };
                 match decide_ci_action(&final_probe, false, yes) {
                     CiAction::Proceed => {}
@@ -67145,7 +67195,14 @@ fn drain_diff_numstat(root: &std::path::Path, base_sha: &str) -> String {
 /// appended to `~/.aida/usage.jsonl` (gated on telemetry) so `aida usage` can
 /// chart cost-per-drain. Works for every exit family — drained, cap-hit (the
 /// `cap_stop` label overrides the outcome), shelved, or failed.
-// trace:TASK-967 | ai:claude
+///
+/// TASK-1165: the project root is the caller-supplied `drain_root` — every
+/// caller already resolves it as `find_main_worktree_root().ok()` for the token
+/// / diff inputs, so the terminal `QueueDrained` emit (and the `.aida/last-drain.json`
+/// write beside it) reuses that one injected value rather than re-deriving a
+/// second root from the process cwd at the emit site. `None` skips those
+/// side-effects entirely, which is the fail-safe BUG-770 established.
+// trace:TASK-967 trace:TASK-1165 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn finalize_drain_summary(
     kind: &str,
@@ -67207,8 +67264,10 @@ fn finalize_drain_summary(
         eprint!("\n{}", summary.render());
     }
     // Persist to ~/.aida/usage.jsonl so `aida usage` can chart cost-per-drain.
-    let project_root = find_main_worktree_root().ok();
-    if usage::is_enabled(project_root.as_deref()) {
+    // TASK-1165: the caller's injected root, not a cwd-derived one.
+    // trace:TASK-1165 | ai:claude
+    let project_root = drain_root;
+    if usage::is_enabled(project_root) {
         usage::append_value(&record);
     }
     // STORY-730: persist the compact outcome to `.aida/last-drain.json` so the
@@ -67216,13 +67275,13 @@ fn finalize_drain_summary(
     // otherwise this tally dies on the ephemeral stderr render above. Sibling of
     // the live drain-state file (kept distinct so the "presence ⇒ live-or-crashed"
     // invariant of `drain-state.json` is unaffected). Best-effort. trace:STORY-730
-    if let Some(root) = project_root.as_deref() {
+    if let Some(root) = project_root {
         let _ = last_drain::LastDrainOutcome::from_summary(&summary, &ts).write(root);
     }
     // STORY-712: emit the terminal QueueDrained wake — the "agent is done" an
     // overnight loop waits on. Drain-level, so no spec. Best-effort, not
     // telemetry-gated (supervision substrate). trace:TASK-988 | ai:claude
-    if let Some(root) = project_root.as_deref() {
+    if let Some(root) = project_root {
         let (_, run_uuid) = drain_state::current_context(root);
         events::emit(
             root,
@@ -71438,10 +71497,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                 branch
             );
+            // TASK-1165: the driver already knows the project it is driving —
+            // hand it down rather than letting the CiTerminal emit re-derive
+            // one from the process cwd. trace:TASK-1165 | ai:claude
             probe = if self.json {
-                wait_for_ci_terminal(&branch)
+                wait_for_ci_terminal(Some(&self.project_root), &branch)
             } else {
-                watch_ci_for_context_via_forge(&branch, self.no_human.is_some())
+                watch_ci_for_context_via_forge(&self.project_root, &branch, self.no_human.is_some())
                 // STORY-516
             };
         }
