@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T01:47:16.696013673Z
-modified_at: 2026-07-21T03:12:40.003293038Z
+modified_at: 2026-07-21T04:01:19.787587848Z
 req_type: Bug
 tags:
 - aida:lifecycle rollup followup:BUG-764 from-dogfood
+comments:
+- id: 019f82d5-d5ab-7f80-bec7-55883acd5c34
+  author: joe
+  content: 'SEE BUG-771: same root cause (rollup re-derivation overriding manual epic status), found via the EPIC-7 cache=Draft/git=Rejected divergence. Fix together — a manual terminal epic status must be authoritative against the childless/children-derived rollup.'
+  created_at: 2026-07-21T04:01:19.787587848Z
+  modified_at: 2026-07-21T04:01:19.787587848Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 history:
 - id: 019f82a9-483d-7b20-9a68-f0ba9bb86260
   author: aida-auto-bump
