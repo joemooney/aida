@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:37.514912096Z
-modified_at: 2026-07-21T04:56:13.928972425Z
+modified_at: 2026-07-21T05:25:01.277866803Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,4 +16,16 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a2-20e2-7090-a019-58f0f267ee52
   created_at: 2026-06-30T02:27:42.613821494Z
+comments:
+- id: 019f8322-74dd-7ad1-bebd-4ae128ada9ba
+  author: joe
+  content: |-
+    Burn-down integrator park: this spec's own precondition is unmet. It asks to flip the solo-loop
+    default groom step to autopilot "once the envelope is proven in supervised use", and
+    aida-cli-lib/src/autopilot.rs:16 states the groom autopilot wiring is DELIBERATELY not yet wired
+    (policy-envelope heart only, side-effect-free). Flipping a DEFAULT in the autonomy machinery is also
+    keyboard-not-drain work per the burndown guardrail. Held for supervised sign-off rather than drained.
+  created_at: 2026-07-21T05:25:01.277866803Z
+  modified_at: 2026-07-21T05:25:01.277866803Z
+  session_id: 3656084c-e702-4335-8721-954ca99bc265
 execution_mode: drive
