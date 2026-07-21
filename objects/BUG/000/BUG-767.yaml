@@ -8,7 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T01:28:08.405060977Z
-modified_at: 2026-07-21T01:28:08.405060977Z
+modified_at: 2026-07-21T01:28:19.555903258Z
 req_type: Bug
 tags:
 - aida:awaiting mailbox papercut from-dogfood
+execution_mode: drive
