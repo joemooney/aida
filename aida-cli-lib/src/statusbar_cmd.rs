@@ -352,6 +352,7 @@ mod tests {
             mail: MailChannel {
                 unread: 3,
                 urgent: 1,
+                ..Default::default()
             },
             worker_directives: DirectivesChannel {
                 pending: 1,

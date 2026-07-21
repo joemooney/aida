@@ -56112,27 +56112,32 @@ fn collect_awaiting_report(
     // Unread mail — folded into the awaiting-you report so the coordination
     // inbox is ONE surface (STORY-741). Reads only the local + canonical
     // mailbox files (never a network call), so this stays cheap enough to ride
-    // the per-turn `aida awaiting --notice` path. Scoped to the same identity
-    // set the mailbox notice / statusline use (shell user + session role +
-    // agent type). Every read degrades to empty on error, never bubbling up.
+    // the per-turn `aida awaiting --notice` path. Every read degrades to empty
+    // on error, never bubbling up.
+    //
+    // BUG-767: the headline number is the OPERATOR's OWN inbox — the handle
+    // this session is (`AIDA_USER`/`USER`), and nothing else. The rest of the
+    // ambient identity set (`inbox_identities()` also unions the session ROLE
+    // and the AGENT TYPE) are SHARED inboxes carrying agent-to-agent traffic;
+    // counting them as "your unread mail" made the `awaiting` number a function
+    // of env vars rather than of your inbox, so an operator who emptied their
+    // own inbox saw the count jump to the shared backlog instead of 0. They are
+    // still surfaced — as a separate, labelled `shared_unread` line — so the
+    // fleet-wide view survives without leaking into the operator-gated count.
     // trace:STORY-741 | ai:claude
+    // trace:BUG-767 | ai:claude
     let mail = {
         let store_root = project_root.join(".aida-store");
         let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
         let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
         let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
         let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
-        let identities = inbox_identities();
-        let summary = aida_core::mailbox::build_notice(
-            identities.iter().map(String::as_str),
-            &merged,
-            &watermarks,
-            aida_core::mailbox::NOTICE_DEFAULT_CAP,
-        );
-        awaiting_you::MailChannel {
-            unread: summary.total,
-            urgent: summary.urgent,
-        }
+        let operator = current_user_id(None);
+        let shared: Vec<String> = inbox_identities()
+            .into_iter()
+            .filter(|i| i != &operator)
+            .collect();
+        awaiting_you::split_mail_scopes(&operator, &shared, &merged, &watermarks)
     };
 
     // Pending worker directives — the enqueue channel (`aida human audit`,
@@ -56262,6 +56267,14 @@ fn handle_awaiting_command(
         println!("findings: {}", report.findings_total);
         println!("mail_unread: {}", report.mail.unread);
         println!("mail_urgent: {}", report.mail.urgent);
+        // BUG-767: shared role/agent-type inboxes on their own labelled keys —
+        // `mail_unread` stays the operator's own, deterministic count.
+        // trace:BUG-767 | ai:claude
+        println!("mail_shared_unread: {}", report.mail.shared_unread);
+        println!(
+            "mail_shared_scope: {}",
+            report.mail.shared_scope.as_deref().unwrap_or("-")
+        );
         // trace:TASK-1146 | ai:claude
         println!("directives_pending: {}", report.worker_directives.pending);
         println!(

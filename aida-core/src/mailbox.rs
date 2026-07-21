@@ -539,28 +539,29 @@ fn subject_line(m: &Message, max: usize) -> String {
     }
 }
 
-/// Build the unread notice for the union of `identities` (e.g. the shell user
-/// id plus the session role). Messages are deduped by id across identities (a
-/// broadcast is in every identity's inbox but counts once), and each identity's
-/// own watermark gates its unread set — a message is unread if it is past the
-/// watermark of *any* identity that can see it. Ordered oldest-first; `shown`
-/// keeps the newest `cap`. trace:STORY-585 | ai:claude
-pub fn build_notice<'a, I>(
+/// The unread messages visible to the union of `identities`, deduped by id and
+/// ordered oldest-first. A message is unread iff its timestamp is past the
+/// watermark of *every* identity that can see it (equivalently, past the max),
+/// so reading it as ANY of those identities clears it.
+///
+/// Split out of [`build_notice`] so a caller can count a NARROW scope (e.g. the
+/// operator's own handle) and a WIDER one (the shared role / agent-type
+/// inboxes the same session also reads) from the same rule and subtract the
+/// overlap, instead of re-implementing the watermark fold.
+// trace:BUG-767 | ai:claude
+pub fn unread_for_identities<'a, 'm, I>(
     identities: I,
-    messages: &[Message],
+    messages: &'m [Message],
     watermarks: &std::collections::HashMap<String, i64>,
-    cap: usize,
-) -> NoticeSummary
+) -> Vec<&'m Message>
 where
     I: IntoIterator<Item = &'a str>,
 {
     use std::collections::HashMap;
     // For each message any identity can see, track the message and the HIGHEST
-    // watermark among its viewing identities. A message is unread iff its
-    // timestamp is past *every* viewer's watermark — equivalently, past the max
-    // — so reading it as ANY identity (which advances that identity's
-    // watermark) clears it. Order-independent. A direct message has one viewer
-    // (its recipient); a broadcast is viewed by every identity.
+    // watermark among its viewing identities. Order-independent. A direct
+    // message has one viewer (its recipient); a broadcast is viewed by every
+    // identity.
     let mut by_id: HashMap<&str, (&Message, i64)> = HashMap::new();
     let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for id in identities {
@@ -582,6 +583,25 @@ where
         .map(|(m, _)| m)
         .collect();
     unread.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+    unread
+}
+
+/// Build the unread notice for the union of `identities` (e.g. the shell user
+/// id plus the session role). Messages are deduped by id across identities (a
+/// broadcast is in every identity's inbox but counts once), and each identity's
+/// own watermark gates its unread set — a message is unread if it is past the
+/// watermark of *any* identity that can see it. Ordered oldest-first; `shown`
+/// keeps the newest `cap`. trace:STORY-585 | ai:claude
+pub fn build_notice<'a, I>(
+    identities: I,
+    messages: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+    cap: usize,
+) -> NoticeSummary
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let unread = unread_for_identities(identities, messages, watermarks);
 
     let total = unread.len();
     let urgent = unread.iter().filter(|m| m.urgent).count();
