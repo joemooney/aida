@@ -3,12 +3,12 @@ spec_id: BUG-769
 agreed_id: BUG-769
 title: aida ps 'elapsed' column still shows lease-age (583h) for an adopted lease whose process has been up 3m — headline number contradicts the annotation BUG-763 added
 description: 'Residual after BUG-763 (#1539): that fix date-qualified the ''started'' column and added the explanatory line ''adopted — lease born 583h ago, current pid up 3m 15s'', but LEFT the ''elapsed'' column itself computing lease-age (now - lease.started_at = 583h). So the eye-catching headline number still reads 583h for a process alive 3 minutes — the annotation explains it in fine print but the column contradicts it. Fix: for an adopted lease (live pid younger than the lease), the ''elapsed'' column shows PROCESS uptime (the actionable ''how long has this actual worker been going'' number); lease-age stays in the annotation where BUG-763 put it. For a non-adopted lease (pid == lease birth) elapsed is unchanged. Optionally rename intent: elapsed = work-session age, not lease age. Acceptance: an adopted-lease row shows elapsed == process uptime (~3m in the example), not 583h; the annotation still carries lease-age; non-adopted rows unchanged; unit test on the column value for both. Mode: drive.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T02:32:51.478325672Z
-modified_at: 2026-07-21T02:33:01.726800183Z
+modified_at: 2026-07-21T03:13:37.620544423Z
 req_type: Bug
 tags:
 - aida:ps papercut followup:BUG-763 from-dogfood
