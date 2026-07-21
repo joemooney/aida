@@ -1,0 +1,516 @@
+//! `aida tail <session|spec|drain>` — stream a live session's log, resolved by
+//! an id the operator already has instead of a file path they shouldn't have to
+//! know.
+//!
+//! `aida ps` answers *what is running*; `aida drain status` answers *is a drain
+//! up*. Neither answers *show me what THIS one is doing right now* without the
+//! operator first working out which file under `.aida/` the session writes to
+//! (`.aida/burndown/<drain-id>.jsonl` for a verbose drain,
+//! `.aida/headless-logs/<branch>-<session-uuid>.jsonl` for a headless
+//! implementer/reviewer/advisor tier) and tailing it by hand.
+//!
+//! This module is the resolver in front of the existing renderer: it maps a
+//! selector to exactly one log file and hands it to
+//! [`crate::headless_tail::stream_path`], so the rendering, the `--since`
+//! filter, the follow loop, and the SIGINT trap are shared code rather than a
+//! second implementation.
+//!
+//! Resolution order for a selector:
+//!   1. `drain` / `burndown` — the newest drain log.
+//!   2. A session id from `aida ps` (exact, or an unambiguous prefix).
+//!   3. A drain id (the log's filename stem, or a substring of it).
+//!   4. A spec id — the newest log belonging to that spec.
+//!
+//! Nothing running with no log is NOT an error: an interactive session writes
+//! no JSONL, so we say so and exit clean.
+//!
+//! trace:TASK-1167
+
+use anyhow::{bail, Result};
+use colored::Colorize;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use crate::headless_tail::{self, FormatOpts, LogEntry, StreamOpts};
+
+/// Caller-supplied options, mirroring the clap flags one-for-one.
+// trace:TASK-1167 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub struct TailOptions {
+    /// Session id, spec id, drain id, `drain`, or `None` for the newest log.
+    pub target: Option<String>,
+    /// List the tailable logs and exit.
+    pub list: bool,
+    /// Pass the raw stream-json through instead of rendering phase lines.
+    pub json: bool,
+    /// Replay at most the last N rendered lines before going live.
+    pub lines: Option<usize>,
+    /// Drop events older than this.
+    pub since: Option<Duration>,
+    /// Print what is already there and exit instead of following.
+    pub no_follow: bool,
+    /// Interleave tool invocations with assistant text.
+    pub with_tools: bool,
+    /// Colorize (auto-disabled off a TTY / under `NO_COLOR`).
+    pub color: bool,
+}
+
+/// One running session, projected from the session lease to what the resolver
+/// needs. Mirrors the `aida ps` row so the id the operator copies from that
+/// table is the id this command accepts.
+// trace:TASK-1167 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRef {
+    /// The 12-char lease id — the SESSION column of `aida ps`.
+    pub id: String,
+    /// The lease scope: a spec id for spec-scoped work, else a scope slug.
+    pub scope: String,
+    /// The worktree branch, which is also the headless log's filename prefix.
+    pub branch: String,
+    /// The seat this session holds, when it declared one.
+    pub role: Option<String>,
+}
+
+/// One drain log under `.aida/burndown/`.
+// trace:TASK-1167 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DrainLog {
+    /// The filename stem — the drain id minted at launch.
+    pub id: String,
+    pub path: PathBuf,
+    pub mtime: SystemTime,
+}
+
+/// Everything the resolver reads, gathered once so the resolution itself is a
+/// pure function over in-memory data (and therefore unit-testable with no
+/// filesystem, no cwd, no git).
+// trace:TASK-1167 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub struct TailIndex {
+    /// Drain logs, newest first.
+    pub drains: Vec<DrainLog>,
+    /// Headless session logs, newest first.
+    pub headless: Vec<LogEntry>,
+    /// Live + recorded session leases.
+    pub sessions: Vec<SessionRef>,
+}
+
+/// What a selector resolved to.
+// trace:TASK-1167 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Resolution {
+    /// A log file to stream, with a human label for the `==>` header.
+    Found { path: PathBuf, label: String },
+    /// The selector named something real that simply has no log — an
+    /// interactive session, or a drain that never ran verbose. Reported
+    /// cleanly, not as an error.
+    NoLog { what: String, hint: String },
+    /// The selector matched nothing.
+    NotFound { message: String },
+}
+
+/// Minimum prefix length before a session id is matched by prefix, so a stray
+/// one-character argument can't silently select a session.
+const MIN_SESSION_PREFIX: usize = 4;
+
+/// Resolve a selector against the gathered index. Pure.
+// trace:TASK-1167 | ai:claude
+pub fn resolve(index: &TailIndex, selector: Option<&str>) -> Resolution {
+    let Some(sel) = selector.map(str::trim).filter(|s| !s.is_empty()) else {
+        return resolve_newest(index);
+    };
+
+    if sel.eq_ignore_ascii_case("drain") || sel.eq_ignore_ascii_case("burndown") {
+        return match index.drains.first() {
+            Some(d) => Resolution::Found {
+                path: d.path.clone(),
+                label: format!("drain {}", d.id),
+            },
+            None => Resolution::NoLog {
+                what: "the drain".to_string(),
+                hint: "no drain has written a log in this project yet — a drain only streams to one when it runs with verbose output.".to_string(),
+            },
+        };
+    }
+
+    // A session id from `aida ps`.
+    match match_sessions(index, sel) {
+        SessionMatch::One(s) => return resolve_session(index, s),
+        SessionMatch::Ambiguous(ids) => {
+            return Resolution::NotFound {
+                message: format!(
+                    "`{}` matches {} sessions ({}) — pass more of the id.",
+                    sel,
+                    ids.len(),
+                    ids.join(", ")
+                ),
+            }
+        }
+        SessionMatch::None => {}
+    }
+
+    // A drain id (its log's filename stem, or enough of it to be unique). The
+    // substring form needs a few characters so a stub argument can't sweep in
+    // the newest drain by accident.
+    let drain_hits: Vec<&DrainLog> = index
+        .drains
+        .iter()
+        .filter(|d| {
+            d.id.eq_ignore_ascii_case(sel)
+                || (sel.len() >= MIN_SESSION_PREFIX && d.id.contains(sel))
+        })
+        .collect();
+    if let Some(d) = drain_hits.first() {
+        return Resolution::Found {
+            path: d.path.clone(),
+            label: format!("drain {}", d.id),
+        };
+    }
+
+    // A spec id — the newest log that belongs to it.
+    let sel_upper = sel.to_uppercase();
+    if let Some(entry) = index.headless.iter().find(|e| entry_matches_spec(e, sel)) {
+        return Resolution::Found {
+            path: entry.path.clone(),
+            label: log_label(entry),
+        };
+    }
+    if let Some(s) = index
+        .sessions
+        .iter()
+        .find(|s| s.scope.to_uppercase() == sel_upper)
+    {
+        return no_log_for_session(s);
+    }
+
+    Resolution::NotFound {
+        message: format!(
+            "nothing to tail for `{}` — `aida ps` lists the running sessions, and `aida tail --list` lists every log this project has.",
+            sel
+        ),
+    }
+}
+
+/// No selector: the most recently written log of any kind.
+fn resolve_newest(index: &TailIndex) -> Resolution {
+    let newest_drain = index.drains.first();
+    let newest_headless = index.headless.first();
+    let drain_time = newest_drain.map(|d| d.mtime).unwrap_or(UNIX_EPOCH);
+    let headless_time = newest_headless.map(|e| e.mtime).unwrap_or(UNIX_EPOCH);
+    match (newest_drain, newest_headless) {
+        (Some(d), Some(e)) => {
+            if drain_time >= headless_time {
+                Resolution::Found {
+                    path: d.path.clone(),
+                    label: format!("drain {}", d.id),
+                }
+            } else {
+                Resolution::Found {
+                    path: e.path.clone(),
+                    label: log_label(e),
+                }
+            }
+        }
+        (Some(d), None) => Resolution::Found {
+            path: d.path.clone(),
+            label: format!("drain {}", d.id),
+        },
+        (None, Some(e)) => Resolution::Found {
+            path: e.path.clone(),
+            label: log_label(e),
+        },
+        (None, None) => Resolution::NoLog {
+            what: "this project".to_string(),
+            hint: "no session has written a log here yet — headless work streams to one, an interactive session does not.".to_string(),
+        },
+    }
+}
+
+enum SessionMatch<'a> {
+    None,
+    One(&'a SessionRef),
+    Ambiguous(Vec<String>),
+}
+
+fn match_sessions<'a>(index: &'a TailIndex, sel: &str) -> SessionMatch<'a> {
+    if let Some(s) = index
+        .sessions
+        .iter()
+        .find(|s| s.id.eq_ignore_ascii_case(sel))
+    {
+        return SessionMatch::One(s);
+    }
+    if sel.len() < MIN_SESSION_PREFIX {
+        return SessionMatch::None;
+    }
+    let lower = sel.to_lowercase();
+    let hits: Vec<&SessionRef> = index
+        .sessions
+        .iter()
+        .filter(|s| s.id.to_lowercase().starts_with(&lower))
+        .collect();
+    match hits.len() {
+        0 => SessionMatch::None,
+        1 => SessionMatch::One(hits[0]),
+        _ => SessionMatch::Ambiguous(hits.iter().map(|s| s.id.clone()).collect()),
+    }
+}
+
+/// The log a session writes to: its branch names the file, and the scope is the
+/// fallback when the branch doesn't (an adopted or renamed worktree).
+fn resolve_session(index: &TailIndex, session: &SessionRef) -> Resolution {
+    if let Some(entry) = session_log(index, session) {
+        return Resolution::Found {
+            path: entry.path.clone(),
+            label: format!("{} · {}", session.id, log_label(entry)),
+        };
+    }
+    no_log_for_session(session)
+}
+
+/// The newest headless log belonging to `session`, if any.
+// trace:TASK-1167 | ai:claude
+pub fn session_log<'a>(index: &'a TailIndex, session: &SessionRef) -> Option<&'a LogEntry> {
+    if !session.branch.is_empty() {
+        let prefix = format!("{}-", session.branch.to_lowercase());
+        if let Some(e) = index
+            .headless
+            .iter()
+            .find(|e| e.filename.to_lowercase().starts_with(&prefix))
+        {
+            return Some(e);
+        }
+    }
+    if !session.scope.is_empty() {
+        if let Some(e) = index
+            .headless
+            .iter()
+            .find(|e| entry_matches_spec(e, &session.scope))
+        {
+            return Some(e);
+        }
+    }
+    None
+}
+
+fn no_log_for_session(session: &SessionRef) -> Resolution {
+    let seat = session
+        .role
+        .as_deref()
+        .filter(|r| !r.is_empty())
+        .map(|r| format!(", {r}"))
+        .unwrap_or_default();
+    Resolution::NoLog {
+        what: format!("{} ({}{})", session.id, session.scope, seat),
+        hint: "that session is running without a log — an interactive session streams to its terminal, not to a file. `aida ps` shows its worktree and pid.".to_string(),
+    }
+}
+
+/// Does this log belong to `spec`? Matches the spec parsed out of the filename,
+/// or — only for something actually shaped like a spec id — the id appearing
+/// anywhere in the filename (which covers both the `task-1167-<uuid>` branch
+/// form and the `advise-TASK-1167-<id>` form). The shape guard matters: a bare
+/// substring test would let a one-character argument match every log.
+fn entry_matches_spec(entry: &LogEntry, spec: &str) -> bool {
+    if entry
+        .spec
+        .as_deref()
+        .is_some_and(|s| s.eq_ignore_ascii_case(spec))
+    {
+        return true;
+    }
+    looks_like_spec_id(spec) && entry.filename.to_uppercase().contains(&spec.to_uppercase())
+}
+
+/// `TASK-1167`, `BUG-89`, `FR-1-042` — a letter-prefixed, hyphenated id with a
+/// digit after the first hyphen.
+fn looks_like_spec_id(s: &str) -> bool {
+    let Some((head, tail)) = s.split_once('-') else {
+        return false;
+    };
+    !head.is_empty()
+        && head.chars().all(|c| c.is_ascii_alphabetic())
+        && tail.chars().next().is_some_and(|c| c.is_ascii_digit())
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+fn log_label(entry: &LogEntry) -> String {
+    match (entry.spec.as_deref(), entry.kind.as_str()) {
+        (Some(spec), "task") => spec.to_string(),
+        (Some(spec), kind) => format!("{spec} ({kind})"),
+        (None, _) => entry.filename.clone(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Gathering
+// ---------------------------------------------------------------------------
+
+/// Read the drain logs, the headless logs, and the session leases.
+// trace:TASK-1167 | ai:claude
+pub fn build_index(project_root: &Path, sessions: Vec<SessionRef>) -> TailIndex {
+    TailIndex {
+        drains: discover_drain_logs(&project_root.join(".aida").join("burndown")),
+        headless: headless_tail::discover_logs(&project_root.join(".aida").join("headless-logs"))
+            .unwrap_or_default(),
+        sessions,
+    }
+}
+
+/// Every `*.jsonl` under `.aida/burndown/`, newest first.
+// trace:TASK-1167 | ai:claude
+pub fn discover_drain_logs(dir: &Path) -> Vec<DrainLog> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<DrainLog> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        let id = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
+        out.push(DrainLog {
+            id,
+            path,
+            mtime: meta.modified().unwrap_or(UNIX_EPOCH),
+        });
+    }
+    out.sort_by(|a, b| b.mtime.cmp(&a.mtime));
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Command
+// ---------------------------------------------------------------------------
+
+/// Top-level entry point.
+// trace:TASK-1167 | ai:claude
+pub fn handle_tail(
+    project_root: &Path,
+    sessions: Vec<SessionRef>,
+    opts: &TailOptions,
+) -> Result<()> {
+    let index = build_index(project_root, sessions);
+
+    if opts.list {
+        return print_list(&index, opts.color);
+    }
+
+    match resolve(&index, opts.target.as_deref()) {
+        Resolution::Found { path, label } => {
+            let since_cutoff = opts.since.and_then(|d| {
+                chrono::DateTime::<chrono::Utc>::from(SystemTime::now()).checked_sub_signed(
+                    chrono::Duration::from_std(d).unwrap_or_else(|_| chrono::Duration::zero()),
+                )
+            });
+            let format_opts = FormatOpts {
+                with_tools: opts.with_tools,
+                tools_only: false,
+                include_user: false,
+                color: opts.color,
+                since: since_cutoff,
+            };
+            let stream_opts = StreamOpts {
+                follow: !opts.no_follow,
+                backlog_lines: opts.lines,
+                raw: opts.json,
+            };
+            eprintln!(
+                "{} {} {}",
+                "==>".dimmed(),
+                label,
+                path.display().to_string().dimmed()
+            );
+            headless_tail::stream_path(&path, &format_opts, &stream_opts)
+        }
+        Resolution::NoLog { what, hint } => {
+            println!("No live log for {what}.");
+            println!("{hint}");
+            Ok(())
+        }
+        Resolution::NotFound { message } => bail!(message),
+    }
+}
+
+fn print_list(index: &TailIndex, color: bool) -> Result<()> {
+    if index.drains.is_empty() && index.headless.is_empty() && index.sessions.is_empty() {
+        println!("Nothing to tail — no drain logs, no session logs, no running sessions.");
+        return Ok(());
+    }
+
+    let head = |s: &str| {
+        if color {
+            println!("{}", s.bold());
+        } else {
+            println!("{s}");
+        }
+    };
+
+    if !index.drains.is_empty() {
+        head("Drains");
+        for d in index.drains.iter().take(5) {
+            let when: chrono::DateTime<chrono::Local> = d.mtime.into();
+            println!("  {}  {}", d.id, when.format("%Y-%m-%d %H:%M:%S"));
+        }
+        println!("  (tail the newest with `aida tail drain`)");
+        println!();
+    }
+
+    if !index.sessions.is_empty() {
+        // Only sessions that actually resolve to a log earn a row; the rest
+        // (interactive seats, harness worktrees, ended sessions) collapse to a
+        // one-line count so the table stays scannable. Newest log first.
+        let mut with_log: Vec<(&SessionRef, &LogEntry)> = index
+            .sessions
+            .iter()
+            .filter_map(|s| session_log(index, s).map(|e| (s, e)))
+            .collect();
+        with_log.sort_by(|a, b| b.1.mtime.cmp(&a.1.mtime));
+        let without = index.sessions.len() - with_log.len();
+
+        head("Sessions");
+        let id_width = with_log.iter().map(|(s, _)| s.id.len()).max().unwrap_or(4);
+        for (s, entry) in &with_log {
+            println!(
+                "  {:<id_width$}  {:<16}  {}",
+                s.id,
+                if s.scope.is_empty() { "-" } else { &s.scope },
+                entry.filename
+            );
+        }
+        if without > 0 {
+            println!(
+                "  ({without} more session{} writing no log — interactive seats stream to their terminal)",
+                if without == 1 { "" } else { "s" }
+            );
+        }
+        println!();
+    }
+
+    if !index.headless.is_empty() {
+        head("Recent session logs");
+        for e in index.headless.iter().take(10) {
+            let when: chrono::DateTime<chrono::Local> = e.mtime.into();
+            println!(
+                "  {:<16} {:<8} {}",
+                e.spec.as_deref().unwrap_or("-"),
+                e.kind,
+                when.format("%Y-%m-%d %H:%M:%S")
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "tests/tail_cmd_tests.rs"]
+mod tail_cmd_tests;

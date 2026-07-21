@@ -216,8 +216,10 @@ mod status_cleanup;
 mod status_display;
 // trace:STORY-715 | ai:claude
 mod statusbar_cmd;
+// trace:TASK-1167
 mod statusline_cmd;
 mod store_cmd;
+mod tail_cmd;
 // trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
 mod team;
 mod team_cmd;
@@ -2246,6 +2248,52 @@ fn run() -> Result<()> {
         return handle_ps(*json, *all);
     }
 
+    // `aida tail` is `aida ps`'s streaming companion: it resolves a session /
+    // spec / drain id to the ONE log file that work streams into and tails it.
+    // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
+    // no store, no network — so dispatch early like `aida ps`.
+    // trace:TASK-1167 | ai:claude
+    if let Command::Tail {
+        target,
+        list,
+        json,
+        lines,
+        since,
+        no_follow,
+        with_tools,
+    } = &cli.command
+    {
+        let project_root = find_main_worktree_root()
+            .or_else(|_| find_project_root())
+            .or_else(|_| std::env::current_dir())
+            .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let since_duration = match since {
+            Some(s) => Some(headless_tail::parse_since(s)?),
+            None => None,
+        };
+        let sessions: Vec<tail_cmd::SessionRef> = list_leases(&project_root)
+            .into_iter()
+            .map(|l| tail_cmd::SessionRef {
+                id: l.id,
+                scope: l.scope,
+                branch: l.branch,
+                role: l.role,
+            })
+            .collect();
+        let opts = tail_cmd::TailOptions {
+            target: target.clone(),
+            list: *list,
+            json: *json,
+            lines: *lines,
+            since: since_duration,
+            no_follow: *no_follow,
+            with_tools: *with_tools,
+            color: std::io::IsTerminal::is_terminal(&std::io::stdout())
+                && std::env::var_os("NO_COLOR").is_none(),
+        };
+        return tail_cmd::handle_tail(&project_root, sessions, &opts);
+    }
+
     // `aida statusbar` — the ambient, read-only terminal-title meter. Like
     // `aida ps` / `aida integrate` it self-resolves everything it needs
     // (queue YAML, session leases, cache-backed awaiting channels) and
@@ -3609,6 +3657,8 @@ fn run() -> Result<()> {
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusbar { .. } => unreachable!("statusbar is dispatched before storage init"),
+        // trace:TASK-1167
+        Command::Tail { .. } => unreachable!("tail is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Away | Command::Home | Command::Presence { .. } | Command::Solo { .. } => {

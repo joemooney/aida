@@ -8219,6 +8219,49 @@ pub enum Command {
         all: bool,
     },
 
+    /// Stream a running session's log — found by id, not by file path.
+    ///
+    /// `aida ps` says WHAT is running; this says what THAT ONE is doing right
+    /// now. Give it any id you already have and it works out which file under
+    /// `.aida/` that work streams into:
+    ///
+    ///   aida tail               # the most recently active log
+    ///   aida tail drain         # the running autonomous drain
+    ///   aida tail <session-id>  # a session id from `aida ps`
+    ///   aida tail <SPEC-ID>     # the newest log for that spec
+    ///   aida tail --list        # every log this project has, and who owns it
+    ///
+    /// Follows by default, like `tail -f`, and renders the readable phase
+    /// lines; `--json` passes the raw stream-json events through instead. A
+    /// session with no log (an interactive one streams to its terminal, not to
+    /// a file) is reported plainly, not as an error.
+    // trace:TASK-1167 | ai:claude
+    #[clap(verbatim_doc_comment)]
+    Tail {
+        /// A session id from `aida ps`, a spec id, a drain id, or `drain` for
+        /// the running drain. Omit it for the most recently active log.
+        target: Option<String>,
+        /// List every tailable log — drains, running sessions and the log each
+        /// resolves to, and the recent session logs — then exit.
+        #[clap(long, conflicts_with_all = ["target", "lines", "since", "no_follow", "json"])]
+        list: bool,
+        /// Pass the raw stream-json events through instead of rendering them.
+        #[clap(long)]
+        json: bool,
+        /// Start from at most the last N lines of what is already in the log.
+        #[clap(long, short = 'n', value_name = "N")]
+        lines: Option<usize>,
+        /// Skip anything older than this (`30s`, `10m`, `2h`, `1d`).
+        #[clap(long, value_name = "DURATION")]
+        since: Option<String>,
+        /// Print what is already there and exit instead of following.
+        #[clap(long)]
+        no_follow: bool,
+        /// Interleave tool invocations with the assistant text.
+        #[clap(long)]
+        with_tools: bool,
+    },
+
     /// The integrator seat at a glance — a read-only throughput view (writes
     /// nothing, no drain).
     ///

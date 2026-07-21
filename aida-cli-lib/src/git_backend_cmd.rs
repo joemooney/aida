@@ -463,6 +463,8 @@ pub(crate) fn handle_git_backend_command(
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
+        // trace:TASK-1167
+        Command::Tail { .. } => unreachable!("tail is dispatched before storage init"),
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         // trace:TASK-1034
         Command::Integrate { .. } => {
