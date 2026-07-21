@@ -1,0 +1,43 @@
+id: 019f82b2-b280-7720-9531-7b9bd0fecd56
+spec_id: TASK-1165
+agreed_id: TASK-1165
+title: Thread the project root into the two remaining cwd-resolving events::emit sites
+description: |
+  Follow-up from the BUG-770 audit of every crate::events::emit call site.
+
+  Fixed by BUG-770: auto_complete.rs::finish_escalated now takes an injected
+  root (PhaseDriver::events_root), so the test drivers can no longer append to
+  the developer's real .aida/events.jsonl.
+
+  Already correct (root is a parameter or a struct field, nothing cwd-derived):
+  - drain_state.rs set_run / set_phase / set_member_outcome (project_root param)
+  - punt.rs append_to_ledger / append_failure_to_ledger (project_root param)
+  - compete_cmd.rs CompeteOutcome (project_root local, resolved at command entry)
+  - lib.rs RealPhaseDriver PrMerged (self.project_root)
+
+  Still resolving the root from the process cwd AT the emit site — same latent
+  shape as BUG-770, but not a pollution vector today because neither function is
+  reachable from an in-process test (both poll real CI / a real drain through gh
+  subprocesses):
+
+  1. lib.rs wait_for_ci_terminal — find_project_root() falling back to
+     PathBuf::from("."), then emits CiTerminal. Note the "." fallback would emit
+     into the CWD, creating a stray ./.aida/events.jsonl outside any project.
+  2. lib.rs finalize_drain_summary — find_main_worktree_root().ok(), then emits
+     QueueDrained.
+
+  Scope: thread a project root through watch_ci_for_context / watch_ci_terminal /
+  wait_for_ci_terminal (session-end + phase-2 driver callers) and through
+  finalize_drain_summary's callers, so no emit site derives its own root. Drop the
+  PathBuf::from(".") fallback in favour of skipping the emit.
+
+  Deliberately NOT folded into BUG-770: that fix was a bounded seam + guard, this
+  is a signature ripple across the session-end CLI path. Residual risk in the
+  meantime is covered by the AIDA_EVENTS_DISABLE kill switch BUG-770 added.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T03:22:57.024938227Z
+modified_at: 2026-07-21T03:22:57.024938227Z
+req_type: Task
