@@ -3,12 +3,12 @@ spec_id: TASK-1009
 agreed_id: TASK-1009
 title: '`aida worktree pool adopt` for migrating pre-pool sibling worktrees (risk 1)'
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:24:55.236288636Z
-modified_at: 2026-07-21T07:14:25.209947428Z
+modified_at: 2026-07-21T07:26:40.532634717Z
 req_type: Task
 tags:
 - zen-ready
@@ -23,8 +23,24 @@ comments:
   created_at: 2026-07-21T07:13:48.750378786Z
   modified_at: 2026-07-21T07:13:48.750378786Z
   session_id: b2fbf49b-dbba-4dea-8daa-00aa86595b2d
+history:
+- id: 019f8391-d58e-7e71-b490-acdc255d8cf8
+  author: aida-auto-bump
+  timestamp: 2026-07-21T07:26:40.526468850Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8391-d594-70c2-8442-5ce23b3f0c10
+  timestamp: 2026-07-21T07:26:40.532633642Z
+  agent: aida
+  commit_sha: ff62fd1cf5105abefaab3843ffc2e4841c1f9e93
+  summary: Completed via merge ff62fd1c
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T07:14:25.209947428Z
   implemented_by: joe
+  completed_at: 2026-07-21T07:26:40.526375266Z
+  completion_sha: ff62fd1cf5105abefaab3843ffc2e4841c1f9e93
