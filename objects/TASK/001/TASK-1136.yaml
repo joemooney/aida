@@ -8,10 +8,30 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:14:30.766943885Z
-modified_at: 2026-07-21T09:06:34.670928408Z
+modified_at: 2026-07-21T16:36:10.855099073Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-12T19:14:39.459426544Z
+comments:
+- id: 019f8588-ebe7-7f52-855a-2873893365a6
+  author: joe
+  content: |-
+    PARKED by the autonomous burn-down (2026-07-21) — not blocked, deliberately routed to supervised work.
+
+    State verified against main at b5586e28:
+    - The pure sequencing engine is DONE: auto_complete.rs drain_batch_single_branch already tracks cluster_members, calls run_cluster_finish(members) once after every member commits, and is unit-tested (single_branch_opens_one_cluster_pr_linking_all_members, single_branch_cluster_merge_bumps_all_members_completed).
+    - What remains is the REAL driver: lib.rs RealSingleBranchDriver::run_cluster_finish currently only prints the plan line and returns OrchestrationResult::ok() — it does not open the PR or drive the Done to Completed bump. run_member_through_ci is likewise plan-mode (prints, returns ok, spawns nothing).
+
+    Why parked rather than fanned out:
+    1. This turns the single-branch drain from an operator-visible plan into live unattended execution of the drain machinery itself. The burn-down skill guardrail is explicit: changes to the autonomy machinery ship supervised, not through the drain.
+    2. The existing code says the same thing in its own doc comment on RealSingleBranchDriver: the autonomous per-member spawn on the shared branch is the reliability-critical keystone path, driven through the explicit plan rather than blind unattended spawning.
+    3. A fix that rides through a broken drain gets caught in the breakage.
+    4. TASK-1136 and TASK-1137 both edit RealSingleBranchDriver in the same file, so they cannot be fanned out in parallel regardless.
+
+    Recommended next step: work TASK-1136 + TASK-1137 together, supervised, at the keyboard (aida queue work --zen, or tag them a shared batch and drain --sequential under supervision).
+  created_at: 2026-07-21T16:36:10.855099073Z
+  modified_at: 2026-07-21T16:36:10.855099073Z
+  session_id: 019f7b628fbb
 execution_mode: drive
