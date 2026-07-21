@@ -1,0 +1,21 @@
+id: 019f8398-42f7-7de1-976e-7cd12da3015b
+spec_id: TASK-1-125
+title: 'burndown plan: serialize-held specs are mislabeled as awaiting_signoff'
+description: |-
+  `aida burndown plan` folds serialize-group-held specs into `awaiting_signoff`, which reads as "the advisor has not blessed this yet" — but the spec IS queued and blessed; it is merely deferred to a later wave by STORY-614's collapse_serialize_groups.
+
+  Observed during an autonomous burndown: TASK-1022 was queued for implementer (confirmed via `aida queue list`) and `aida why TASK-1022` reported "actionable - ready", yet `aida burndown plan --json` listed it under `awaiting_signoff`. The drain runner's contract says "awaiting_signoff is pickable-but-unqueued - report it but never act on it", so a correct runner holds the spec and an operator reading the report concludes sign-off is missing. Both readings are wrong; nothing is awaiting a human.
+
+  Root cause is by-design, not a defect: split_by_signoff partitions on queue membership, and collapse_serialize_groups returns held members that the caller folds into the same awaiting bucket. Two distinct states share one label.
+
+  Suggested fix: give the serialize-held members their own key in the JSON (e.g. `serialize_held`, with the claiming spec named) so the runner and the operator can tell "blocked on advisor sign-off" apart from "queued, blessed, drains next wave". The burndown skill's step-1 wording would follow.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-07-21T07:33:41.751538871Z
+modified_at: 2026-07-21T07:33:41.751538871Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
