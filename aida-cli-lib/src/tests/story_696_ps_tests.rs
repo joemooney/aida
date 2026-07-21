@@ -1015,3 +1015,87 @@ fn live_fanout_harness_lease_detects_generic_harness_only() {
         "a dead harness lease is not an active fan-out"
     );
 }
+
+/// TASK-1168: the `aida ps` spec + role columns auto-size to their widest cell
+/// instead of pre-truncating to a fixed ~13 visible chars. The regression this
+/// pins: `harness-worktree` (16) and `general-purpose` (15) are SHORT, bounded
+/// identifiers — they must render whole, not as `harness-workt…` /
+/// `general-p…`.
+// trace:TASK-1168 | ai:claude
+#[test]
+fn ps_columns_auto_size_short_identifiers_untruncated() {
+    // The old fixed role width (10) ellipsized every one of these.
+    let roles = vec![
+        "implementer".to_string(),
+        "general-purpose".to_string(),
+        "harness-worktree".to_string(),
+    ];
+    let role_w = ps_column_width(&roles, PS_ROLE_MIN_WIDTH, PS_ROLE_MAX_WIDTH);
+    assert_eq!(role_w, "harness-worktree".len());
+    for role in &roles {
+        let (cell, rest) = ps_wrap_cell(role, role_w);
+        assert_eq!(&cell, role, "role must render whole, not ellipsized");
+        assert!(rest.is_none(), "a closed-set role never needs a wrap line");
+        assert!(!cell.contains('…'), "no ellipsis on a bounded identifier");
+    }
+
+    // Spec cells: ordinary SPEC-IDs keep the historical floor width, and a
+    // `harness-worktree` scope in the spec column renders whole too.
+    let specs = vec!["TASK-1168".to_string(), "harness-worktree".to_string()];
+    let spec_w = ps_column_width(&specs, PS_SPEC_MIN_WIDTH, PS_SPEC_MAX_WIDTH);
+    assert_eq!(spec_w, "harness-worktree".len());
+    let (cell, rest) = ps_wrap_cell("harness-worktree", spec_w);
+    assert_eq!(cell, "harness-worktree");
+    assert!(rest.is_none());
+
+    // A table of only short ids never narrows below the historical width, so
+    // the common case looks exactly as before.
+    let short = vec!["BUG-7".to_string()];
+    assert_eq!(
+        ps_column_width(&short, PS_SPEC_MIN_WIDTH, PS_SPEC_MAX_WIDTH),
+        PS_SPEC_MIN_WIDTH
+    );
+    // …and an empty table falls back to the floor rather than collapsing.
+    let none: Vec<String> = Vec::new();
+    assert_eq!(
+        ps_column_width(&none, PS_ROLE_MIN_WIDTH, PS_ROLE_MAX_WIDTH),
+        PS_ROLE_MIN_WIDTH
+    );
+}
+
+/// TASK-1168: a pathologically long scope is bounded by the column ceiling and
+/// WRAPS onto a continuation line — every character survives, and the break
+/// prefers a separator so a hyphenated identifier doesn't split mid-word.
+// trace:TASK-1168 | ai:claude
+#[test]
+fn ps_over_wide_cell_wraps_instead_of_ellipsizing() {
+    let long = "harness-worktree-fanout-subagent-0042";
+    let cells = vec![long.to_string()];
+    // The ceiling bounds the column so one row can't blow out the table.
+    let w = ps_column_width(&cells, PS_SPEC_MIN_WIDTH, PS_SPEC_MAX_WIDTH);
+    assert_eq!(w, PS_SPEC_MAX_WIDTH);
+
+    let (head, rest) = ps_wrap_cell(long, w);
+    let rest = rest.expect("an over-wide cell wraps onto a continuation line");
+    assert!(!head.contains('…'), "wrap, not ellipsis");
+    assert_eq!(format!("{head}{rest}"), long, "no characters are lost");
+    assert!(head.chars().count() <= w, "the head fits the column");
+    // Broke after a separator, not mid-word.
+    assert!(
+        head.ends_with('-'),
+        "expected a segment-boundary break: {head}"
+    );
+
+    // No separator inside the column → hard split, still lossless.
+    let unbroken = "aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let (head, rest) = ps_wrap_cell(unbroken, 10);
+    let rest = rest.expect("still wraps");
+    assert_eq!(head.chars().count(), 10);
+    assert_eq!(format!("{head}{rest}"), unbroken);
+
+    // Multi-byte content wraps on CHAR boundaries (never panics mid-codepoint).
+    let wide = "スペック-アイディー-とても長い";
+    let (head, rest) = ps_wrap_cell(wide, 6);
+    let rest = rest.expect("wraps");
+    assert_eq!(format!("{head}{rest}"), wide);
+}

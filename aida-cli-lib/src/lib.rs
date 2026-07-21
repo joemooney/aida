@@ -47379,6 +47379,63 @@ fn ps_locked_by_cell(locked_by: Option<&str>) -> String {
         .to_string()
 }
 
+/// Floor / ceiling for the auto-sized `spec` column of the `aida ps` table. The
+/// floor is the historical fixed width (so a table of ordinary SPEC-IDs looks
+/// exactly as before); the ceiling bounds a pathological scope value so one long
+/// row can't blow the table past a normal terminal width.
+// trace:TASK-1168 | ai:claude
+const PS_SPEC_MIN_WIDTH: usize = 14;
+const PS_SPEC_MAX_WIDTH: usize = 20;
+
+/// Floor / ceiling for the auto-sized `role` column. The ceiling is sized so the
+/// whole closed set of role names — `implementer`, `advisor`, `reviewer`,
+/// `general-purpose`, `harness-worktree` (16 chars, the longest) — renders whole.
+// trace:TASK-1168 | ai:claude
+const PS_ROLE_MIN_WIDTH: usize = 10;
+const PS_ROLE_MAX_WIDTH: usize = 16;
+
+/// Auto-size one `aida ps` column to its widest cell, clamped to `[min, max]`.
+/// The previous fixed widths pre-truncated the `role` and `spec` cells to ~13
+/// visible chars, so bounded closed-set identifiers (`harness-worktree`,
+/// `general-purpose`) rendered ellipsized even though nothing else needed the
+/// space. Sizing to content within a bound renders them whole while still
+/// capping a pathological scope. Pure so the width math is unit-testable.
+// trace:TASK-1168 | ai:claude
+fn ps_column_width<S: AsRef<str>>(cells: &[S], min: usize, max: usize) -> usize {
+    let widest = cells
+        .iter()
+        .map(|c| c.as_ref().chars().count())
+        .max()
+        .unwrap_or(0);
+    widest.clamp(min, max.max(min))
+}
+
+/// Split an over-wide `aida ps` cell into `(cell, continuation)` — a WRAP, not an
+/// ellipsis: every character survives, the remainder moves to an indented
+/// continuation line alongside the existing per-row worktree / adopted-lease
+/// lines. Prefers breaking after a separator (`-`, `_`, `/`, `.`, space) inside
+/// the column so a hyphenated identifier wraps at a segment boundary rather than
+/// mid-word; falls back to a hard split when the first `width` chars hold no
+/// separator. Pure so the wrap points are unit-testable.
+// trace:TASK-1168 | ai:claude
+fn ps_wrap_cell(value: &str, width: usize) -> (String, Option<String>) {
+    let chars: Vec<char> = value.chars().collect();
+    if width == 0 || chars.len() <= width {
+        return (value.to_string(), None);
+    }
+    // Break AFTER the last separator that still fits in the column, so the
+    // delimiter stays with the head and the tail starts on a segment.
+    let split = chars[..width]
+        .iter()
+        .rposition(|c| matches!(c, '-' | '_' | '/' | '.' | ' '))
+        .map(|i| i + 1)
+        .filter(|i| *i > 0 && *i < chars.len())
+        .unwrap_or(width);
+    let head: String = chars[..split].iter().collect();
+    let tail: String = chars[split..].iter().collect();
+    (head, Some(tail))
+}
+
 /// The `started` cell for one `aida ps` row — time-of-day only when the lease
 /// started today (local time), date-qualified ("Jun-26 11:55") for anything
 /// older, so a weeks-old persistent lease can't read as if it started this
@@ -48472,17 +48529,43 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         println!("{}", "(no active sessions)".dimmed());
     } else {
         let all_ids: Vec<&str> = rows.iter().map(|r| r.lease.id.as_str()).collect();
+        // TASK-1168: size the spec + role columns to their widest cell (bounded)
+        // instead of pre-truncating every cell to a fixed ~13 visible chars —
+        // `harness-worktree` / `general-purpose` are short, bounded identifiers
+        // and must render whole. trace:TASK-1168 | ai:claude
+        let spec_cells: Vec<String> = shown
+            .iter()
+            .map(|r| r.spec.clone().unwrap_or_else(|| r.lease.scope.clone()))
+            .collect();
+        let role_cells: Vec<String> = shown
+            .iter()
+            .map(|r| r.lease.role.clone().unwrap_or_else(|| "-".to_string()))
+            .collect();
+        let spec_w = ps_column_width(&spec_cells, PS_SPEC_MIN_WIDTH, PS_SPEC_MAX_WIDTH);
+        let role_w = ps_column_width(&role_cells, PS_ROLE_MIN_WIDTH, PS_ROLE_MAX_WIDTH);
+        // Column start offsets, so an overflow wrap continues under its column.
+        let spec_offset = 11;
+        let role_offset = spec_offset + spec_w + 1;
         // BUG-763: the started column is wide enough for a date-qualified
         // "Jun-26 11:55" — a non-today start always shows its date.
         let header = format!(
-            "{:<10} {:<14} {:<10} {:<8} {:<12} {:<11} {:<12} {}",
-            "session", "spec", "role", "pid", "started", "elapsed", "locked-by", "live"
+            "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {}",
+            "session",
+            "spec",
+            "role",
+            "pid",
+            "started",
+            "elapsed",
+            "locked-by",
+            "live",
+            specw = spec_w,
+            rolew = role_w,
         );
         println!("{}", header.dimmed());
         for row in &shown {
             let l = &row.lease;
             let prefix_len = unique_prefix_len(&l.id, &all_ids, 8);
-            let spec_col = row.spec.clone().unwrap_or_else(|| truncate(&l.scope, 14));
+            let spec_col = row.spec.clone().unwrap_or_else(|| l.scope.clone());
             let pid_col = row.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
             // BUG-763: time-of-day for today's leases, "Jun-26 11:55" for
             // anything older — a June birth must never read as this morning
@@ -48501,17 +48584,29 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // text (paddable), so it slots into the fixed-width table before the
             // colored `live` column without breaking alignment.
             let locked_col = ps_locked_by_cell(row.locked_by.as_deref());
+            // TASK-1168: an over-wide cell WRAPS onto an indented continuation
+            // line (nothing is lost) instead of being ellipsized mid-word.
+            let (spec_head, spec_rest) = ps_wrap_cell(&spec_col, spec_w);
+            let (role_head, role_rest) = ps_wrap_cell(l.role.as_deref().unwrap_or("-"), role_w);
             println!(
-                "{:<10} {:<14} {:<10} {:<8} {:<12} {:<11} {:<12} {}",
+                "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {}",
                 (&l.id[..prefix_len]).yellow(),
-                truncate(&spec_col, 14),
-                truncate(l.role.as_deref().unwrap_or("-"), 10),
+                spec_head,
+                role_head,
                 pid_col,
                 started,
                 humanize_duration_secs(row.elapsed_secs),
                 truncate(&locked_col, 12),
                 live_col,
+                specw = spec_w,
+                rolew = role_w,
             );
+            if let Some(rest) = spec_rest {
+                println!("{}{}", " ".repeat(spec_offset), rest.dimmed());
+            }
+            if let Some(rest) = role_rest {
+                println!("{}{}", " ".repeat(role_offset), rest.dimmed());
+            }
             // A second dimmed line carries the worktree so the wide path
             // doesn't blow out the table's column alignment.
             println!("{}{}", " ".repeat(11), l.worktree_path.display());
