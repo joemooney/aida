@@ -111,6 +111,22 @@ pub enum EventKind {
     /// The supervisor's mailbox has unread mail — preserves the one
     /// event-driven trigger that exists today (TASK-776). **Actionable.**
     UnreadMail,
+    /// A `aida zen <spec> --compete` bake-off reached a verdict: the winning
+    /// candidate merged, the loser discarded. This row IS the outcome record
+    /// the spec ratified (winner vendor + per-candidate scores + spec-kind) —
+    /// the labeled dispatch-policy data point for "which vendor wins which
+    /// kind of spec". **Actionable.**
+    // trace:STORY-722 | ai:claude
+    CompeteOutcome {
+        /// Vendor whose candidate won and was merged (e.g. `claude`).
+        winner: String,
+        /// Per-candidate scores — every candidate that produced a branch,
+        /// including the eliminated one.
+        scores: Vec<CompeteCandidateScore>,
+        /// The spec's requirement type (e.g. `Story`) — the spec-kind axis
+        /// for dispatch-policy learning.
+        spec_kind: String,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -145,9 +161,27 @@ impl EventKind {
             | EventKind::PrMerged { .. }
             | EventKind::QueueDrained { .. }
             | EventKind::UnreadMail
+            | EventKind::CompeteOutcome { .. }
             | EventKind::Unknown => true,
         }
     }
+}
+
+/// One candidate's line in a [`EventKind::CompeteOutcome`] record: which
+/// vendor produced it, whether its CI gate passed (a failing candidate is
+/// eliminated, no debate), and the blind reviewer's rubric total when the
+/// reviewer scored it.
+// trace:STORY-722 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompeteCandidateScore {
+    /// Vendor that produced the candidate (e.g. `claude`, `codex`).
+    pub vendor: String,
+    /// Whether the candidate's CI gate passed.
+    pub ci_passed: bool,
+    /// Blind-reviewer rubric total (out of 20). `None` for a CI-eliminated
+    /// candidate, or on a walkover (a single passer wins without review).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rubric_total: Option<u32>,
 }
 
 /// One append-only line in `.aida/events.jsonl` — a single drain state change.
@@ -320,6 +354,35 @@ mod tests {
         }
         .is_actionable());
         assert!(EventKind::UnreadMail.is_actionable());
+    }
+
+    // trace:STORY-722 | ai:claude
+    #[test]
+    fn compete_outcome_is_actionable_and_roundtrips() {
+        let kind = EventKind::CompeteOutcome {
+            winner: "claude".into(),
+            scores: vec![
+                CompeteCandidateScore {
+                    vendor: "claude".into(),
+                    ci_passed: true,
+                    rubric_total: Some(17),
+                },
+                CompeteCandidateScore {
+                    vendor: "codex".into(),
+                    ci_passed: false,
+                    rubric_total: None,
+                },
+            ],
+            spec_kind: "Story".into(),
+        };
+        assert!(kind.is_actionable());
+        let json = serde_json::to_string(&kind).unwrap();
+        // Internally tagged on `event`, like every other kind.
+        assert!(json.contains("\"event\":\"CompeteOutcome\""));
+        // A CI-eliminated candidate's absent rubric total is omitted, not null.
+        assert!(!json.contains("rubric_total\":null"));
+        let back: EventKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, kind);
     }
 
     #[test]
