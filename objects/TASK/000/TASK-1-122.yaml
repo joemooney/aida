@@ -10,18 +10,34 @@ description: |-
   Expected: follow mode should seek to end-of-file like tail -f and emit only NEW events; --once is the documented drain-the-backlog mode. Actual: follow mode emitted the whole file (362 lines), including 162 duplicate STORY-306 advisor-escalated events, burning a supervisor wake + tokens on noise and risking the monitor being auto-stopped for volume.
 
   Secondary observation, same feed: STORY-306/BUG-241 advisor-escalated events are massively duplicated in the log (162 occurrences of STORY-306 in a 362-line file) - the escalation writer may loop-append per poll rather than dedupe per escalation.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-21T01:22:12.738533633Z
-modified_at: 2026-07-21T02:56:07.140780202Z
+modified_at: 2026-07-21T03:10:53.715347610Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
 - severity:minor
+history:
+- id: 019f82a7-a90c-7181-af36-b0e4f9903a70
+  author: aida-auto-bump
+  timestamp: 2026-07-21T03:10:53.708955089Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f82a7-a913-7da2-9bf2-6548848cbb8b
+  timestamp: 2026-07-21T03:10:53.715346968Z
+  agent: aida
+  commit_sha: f50239b31c88eea0ee2370ea7409eb64d3324564
+  summary: Completed via merge f50239b3
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T02:56:07.140780202Z
   implemented_by: joe
+  completed_at: 2026-07-21T03:10:53.058319367Z
+  completion_sha: f50239b31c88eea0ee2370ea7409eb64d3324564
