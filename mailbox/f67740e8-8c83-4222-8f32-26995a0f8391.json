@@ -1,0 +1,15 @@
+{
+  "id": "f67740e8-8c83-4222-8f32-26995a0f8391",
+  "thread_id": "f67740e8-8c83-4222-8f32-26995a0f8391",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1784624380121,
+  "body": "Burn-down complete (--status approved).\n\nCompleted: TASK-149 — burndown plan now distinguishes serialize-held specs from awaiting_signoff — https://github.com/joemooney/aida/pull/1576 (squash-merged, auto-bumped to Completed)\n\nCaveats / verifications worth noting:\n- PR CI was green (Build ubuntu-latest, 9m21s) and the post-merge integrated-main verify was a `cargo build -p aida-cli` compile check only, not a full test run.\n- `aida pull`'s code leg failed once with \"Cannot rebase onto multiple branches\" (git `pull.rebase true` interacting with the --ff-only leg) while main was cleanly behind-1, not diverged. Recovered with `git merge --ff-only origin/main` + re-pull; the auto-bump then fired. Possibly worth filing — the --ff-only path should not consult pull.rebase.\n- The new `serialize_held` JSON key was not exercised end-to-end post-merge: the wave-2 ready set was empty and no serialize groups were live, so the key did not appear in output. Covered by the PR's unit test, not by a live run.\n\nHeld / awaiting sign-off: VIS-1, TASK-1169, TASK-1131 (pickable but unqueued — advisor has not blessed them; no action taken)\n\nLeft for manual merge: none\n\nParked (with reason):\n- TASK-735, TASK-751 — tagged deferred:on-demand\n- TASK-749 — tagged deferred:future-rbac\n- TASK-892 — tagged deferred:until-projects-toml-consumed\n- TASK-1136, TASK-1137, TASK-1138, TASK-1139 — blocked by an unsatisfied dependency (BlockedBy)\n- EPIC-44 — epic, needs decomposing into bounded specs\n- STORY-687, STORY-688 — tagged deferred:cockpit-phase2\n\nWorktrees not pruned: 3 pre-existing LOCKED worktrees from a prior session, all at d9f9eceb8, not produced by this drain — .claude/worktrees/agent-{a942df7439695a8aa,ab76dad2f2712ef43,ada058a96e1aba25f}. Left alone deliberately (locked = possibly live). This drain's own worktree + branch were pruned cleanly.\n\nAlso pre-existing in the main worktree, untouched: deleted .claude/scheduled_tasks.lock and untracked burndown_20260718_211601.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
