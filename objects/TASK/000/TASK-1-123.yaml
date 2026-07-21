@@ -1,5 +1,6 @@
 id: 019f8254-45a5-7ff1-9d61-addd9961e934
 spec_id: TASK-1-123
+agreed_id: TASK-148
 title: 'drain_lock lifetime test flaky: sibling test leaks AIDA_DRAIN_BORROW/FORCE process-wide'
 description: |-
   drain_lock lifetime test flaky: sibling test leaks AIDA_DRAIN_BORROW/FORCE process-wide

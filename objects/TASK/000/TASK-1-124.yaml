@@ -1,5 +1,6 @@
 id: 019f8254-617e-7db1-908e-4b53854c9b9f
 spec_id: TASK-1-124
+agreed_id: TASK-147
 title: Inline fallback pre-commit hook body in hooks.rs has drifted from master template
 description: |-
   Inline fallback pre-commit hook body in hooks.rs has drifted from master template
