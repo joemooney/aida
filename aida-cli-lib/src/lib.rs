@@ -2268,6 +2268,7 @@ fn run() -> Result<()> {
     if let Command::Watch {
         emit_wakes: _,
         all,
+        verbose,
         once,
         backlog,
     } = &cli.command
@@ -2278,6 +2279,8 @@ fn run() -> Result<()> {
             &project_root,
             &watch::WatchOpts {
                 all: *all,
+                // trace:TASK-994 | ai:claude
+                verbose: *verbose,
                 once: *once,
                 backlog: *backlog,
             },
