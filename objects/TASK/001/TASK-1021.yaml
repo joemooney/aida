@@ -3,12 +3,12 @@ spec_id: TASK-1021
 agreed_id: TASK-1021
 title: 'Followup TASK (file at sign-off): wire `[autopilot]` into `docs/environment-variables.md` and the scaffolded `.aida/config.toml` comment block'
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:28:26.011372428Z
-modified_at: 2026-07-21T05:43:38.874909580Z
+modified_at: 2026-07-21T05:53:30.488837147Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,8 +16,24 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a2-20e2-7090-a019-58f0f267ee52
   created_at: 2026-06-30T02:28:31.018623388Z
+history:
+- id: 019f833c-896f-70c2-9dc4-1ba2cd33a026
+  author: aida-auto-bump
+  timestamp: 2026-07-21T05:53:30.479774582Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f833c-8978-7363-9d6e-68bb1b0c0be6
+  timestamp: 2026-07-21T05:53:30.488836159Z
+  agent: aida
+  commit_sha: c084e57d7e1805ccbc5adf932ea86450d980fda6
+  summary: Completed via merge c084e57d
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T05:43:38.874909580Z
   implemented_by: joe
+  completed_at: 2026-07-21T05:53:29.900208531Z
+  completion_sha: c084e57d7e1805ccbc5adf932ea86450d980fda6
