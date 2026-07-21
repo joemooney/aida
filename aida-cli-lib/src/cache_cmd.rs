@@ -69,6 +69,101 @@ pub(crate) fn handle_cache_command(
                 println!("Status:           {}", "FRESH".green());
             }
         }
+        CacheCommand::Verify { fix, json } => {
+            return handle_cache_verify(backend, *fix, *json);
+        }
     }
     Ok(())
+}
+
+/// Cross-check the cache's projected status for every spec against the status
+/// the git store projects for it, and report (or repair) the drift.
+///
+/// The HEAD-SHA check `cache status` prints catches a cache that is BEHIND the
+/// store. It cannot catch a row that disagrees while the two HEADs match — a
+/// silent projection lie, which is exactly how a Rejected epic rendered as
+/// Draft in `list`/`show` long enough for an advisor to start decomposing
+/// closed work. Status drift is the dangerous class (closed work looks open,
+/// open work looks closed), so it gets an explicit sweep.
+///
+/// The store is loaded through `backend.inner()` — the RAW git backend — on
+/// purpose: the cached backend's `load()` freshens the cache first, which would
+/// repair the very drift being audited before it could be observed.
+///
+/// Exit contract: non-zero (via an error) when drift remains, so the sweep is
+/// usable as a gate. `--fix` rebuilds and re-checks first.
+// trace:BUG-771 | ai:claude
+fn handle_cache_verify(backend: &aida_core::CachedGitBackend, fix: bool, json: bool) -> Result<()> {
+    use aida_core::db::status_divergences;
+    use aida_core::DatabaseBackend;
+
+    let store = backend.inner().load()?;
+    let mut divergences = status_divergences(backend.cache(), &store)?;
+    let mut rebuilt = false;
+
+    if fix && !divergences.is_empty() {
+        backend.rebuild_cache()?;
+        rebuilt = true;
+        // Re-derive from a freshly-read store so the re-check compares against
+        // the same canonical bytes the rebuild projected from.
+        let store = backend.inner().load()?;
+        divergences = status_divergences(backend.cache(), &store)?;
+    }
+
+    if json {
+        let rows: Vec<serde_json::Value> = divergences
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "spec_id": d.spec_id,
+                    "uuid": d.id.to_string(),
+                    "is_epic": d.is_epic,
+                    "cached": d.cached,
+                    "expected": d.expected,
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "checked": store.requirements.len(),
+                "rebuilt": rebuilt,
+                "diverged": rows.len(),
+                "divergences": rows,
+            }))?
+        );
+    } else if divergences.is_empty() {
+        let suffix = if rebuilt { " after rebuild" } else { "" };
+        println!(
+            "{}: every cached status agrees with the store{}.",
+            "OK".green(),
+            suffix
+        );
+    } else {
+        println!(
+            "{}: {} spec(s) whose cached status disagrees with the store.",
+            "DRIFT".red(),
+            divergences.len()
+        );
+        for d in &divergences {
+            println!(
+                "  {:<14} cache={} store={}",
+                d.spec_id,
+                d.cached.yellow(),
+                d.expected.green()
+            );
+        }
+        if !fix {
+            println!("\nRepair: `aida cache verify --fix` (rebuilds, then re-checks).");
+        }
+    }
+
+    if divergences.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "{} cached status(es) disagree with the git store",
+            divergences.len()
+        )
+    }
 }
