@@ -502,6 +502,16 @@ pub(crate) fn effective_envelope(
     env
 }
 
+/// Is this process running with nobody in the loop (`AIDA_HEADLESS=1`)?
+///
+/// The one reader of the flag for the autopilot surfaces, so the envelope
+/// tightening and the audit trail's supervision context can never disagree
+/// about whether a run was attended.
+// trace:TASK-1022 | ai:claude
+pub(crate) fn current_headless() -> bool {
+    std::env::var("AIDA_HEADLESS").as_deref() == Ok("1")
+}
+
 // ---------------------------------------------------------------------------
 // TASK-1019 — product-role recommendations as EVIDENCE feeding gate 3, never as
 // authority (the TASK-0431 producer half; the reader half is TASK-1013).
@@ -1931,5 +1941,168 @@ mod tests {
         assert!(crate::autopilot_audit::evidence_has_product_handoff(
             &marked.evidence
         ));
+    }
+
+    // ---- TASK-1022: a product seat under `--no-human` / solo -----------------
+    //
+    // The composition question: does a product seat change anything when nobody
+    // is in the loop? The answer this block PROVES is no — the product-evidence
+    // rule (TASK-1019) and the context tightening (TASK-1020) compose without a
+    // seam, so an unattended run grants a product recommendation strictly LESS
+    // than an attended one, never more. A product-sourced recommendation during
+    // a `--no-human` drain cannot escalate its own privileges.
+    //
+    // The visibility half — recording that composition in the audit `mode` —
+    // lives in `autopilot_audit.rs`.
+
+    /// The envelope a headless (`--no-human`) drain actually runs under.
+    fn headless_env() -> AutopilotEnvelope {
+        effective_envelope(AutopilotEnvelope::default(), true, SoloPosture::Inactive)
+    }
+
+    #[test]
+    fn under_headless_verified_product_evidence_still_only_moves_a_grounding_gap() {
+        // The TASK-1019 bound, re-proven under the tightened envelope: even with
+        // a citation the advisor verified, the ONLY verdict product evidence can
+        // change is a gate-3 escalation. Every other cell of
+        // (action × grounding × risk) is identical to the plain gates, so
+        // product input can no more rescue a fenced spec, a demoted authority or
+        // a risk ceiling headless than it can attended.
+        let env = headless_env();
+        let fence = fence_of(["TASK-1"]);
+        let input = pushy_product();
+        let recorded = recorded_of(["PRIN-3"]);
+        for action in ALL_ACTIONS {
+            for g in ALL_GROUNDINGS {
+                for risk in ALL_RISKS {
+                    let d = decision("TASK-1", action, g, risk);
+                    let base = evaluate(&env, &fence, &d);
+                    if base == Outcome::Escalate(EscalateReason::GroundingGap) {
+                        continue;
+                    }
+                    assert_eq!(
+                        evaluate_with_product_evidence(&env, &fence, &d, &input, &recorded),
+                        base,
+                        "{action:?}/{g:?}/{risk:?}: product evidence moved a non-gate-3 verdict \
+                         under headless"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn headless_never_unlocks_an_execution_product_evidence_could_not_get_attended() {
+        // The no-new-authority invariant stated as a SUBSET property: anything a
+        // product-sourced decision may auto-execute with nobody in the loop, it
+        // could already have auto-executed with a human present. Removing the
+        // human is never what buys the execution.
+        let attended = AutopilotEnvelope::default();
+        let unattended = headless_env();
+        let fence = fence_of(["TASK-1"]);
+        let input = pushy_product();
+        for recorded in [recorded_of(["PRIN-3"]), HashSet::new()] {
+            for action in ALL_ACTIONS {
+                for g in ALL_GROUNDINGS {
+                    for risk in ALL_RISKS {
+                        let d = decision("TASK-1", action, g, risk);
+                        if evaluate_with_product_evidence(
+                            &unattended,
+                            &fence,
+                            &d,
+                            &input,
+                            &recorded,
+                        ) == Outcome::Execute
+                        {
+                            assert_eq!(
+                                evaluate_with_product_evidence(
+                                    &attended, &fence, &d, &input, &recorded
+                                ),
+                                Outcome::Execute,
+                                "{action:?}/{g:?}/{risk:?}: headless unlocked an execution the \
+                                 attended envelope refused"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_product_seat_cannot_restore_a_gate_3_relaxation_headless_took_away() {
+        // A project that turned gate 3 off in config gets it forced back on the
+        // moment the run goes unattended — and the product seat, whose ONLY
+        // reach is gate 3, cannot undo that. An unverified citation leaves the
+        // gap open; the seat's own claim of grounding is not self-certifying.
+        let relaxed = AutopilotEnvelope {
+            grounding_required: false,
+            ..AutopilotEnvelope::default()
+        };
+        let fence = fence_of(["TASK-1"]);
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeC, RiskLevel::Low);
+        let input = pushy_product();
+
+        // Attended, with gate 3 relaxed: the ungrounded tag executes.
+        let attended = effective_envelope(relaxed.clone(), false, SoloPosture::Inactive);
+        assert_eq!(evaluate(&attended, &fence, &d), Outcome::Execute);
+
+        // Unattended: gate 3 is forced back on, and product input cannot reopen
+        // it without substrate the advisor independently verified.
+        let unattended = effective_envelope(relaxed, true, SoloPosture::Inactive);
+        assert_eq!(
+            evaluate_with_product_evidence(&unattended, &fence, &d, &input, &HashSet::new()),
+            Outcome::Escalate(EscalateReason::GroundingGap)
+        );
+    }
+
+    #[test]
+    fn product_evidence_never_executes_under_the_solo_keystone_posture() {
+        // Solo's keystone partition is absolute and product input does not dent
+        // it: across the whole cross-product, with a verified citation and
+        // headless on top, nothing auto-executes. The human still decides.
+        let fence = fence_of(["TASK-1"]);
+        let input = pushy_product();
+        let recorded = recorded_of(["PRIN-3"]);
+        for headless in [false, true] {
+            let env = effective_envelope(
+                AutopilotEnvelope::default(),
+                headless,
+                SoloPosture::ParkForHuman,
+            );
+            for action in ALL_ACTIONS {
+                for g in ALL_GROUNDINGS {
+                    for risk in ALL_RISKS {
+                        let d = decision("TASK-1", action, g, risk);
+                        assert_ne!(
+                            evaluate_with_product_evidence(&env, &fence, &d, &input, &recorded),
+                            Outcome::Execute,
+                            "{action:?}/{g:?}/{risk:?}: product evidence executed under the solo \
+                             keystone posture (headless={headless})"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_unattended_product_decision_is_recorded_as_such() {
+        // The seam between the two halves: a decision that consumed product
+        // input carries the marker the audit reads, so once the mint path adds
+        // the headless layer the composition is nameable —
+        // `headless+product+autopilot`. Asserted here so a change to the marker
+        // spelling breaks the producer's test, not just the reader's.
+        let d = decision("TASK-1", ActionClass::Tag, Grounding::TypeA, RiskLevel::Low);
+        let consumed = decision_with_product_evidence(&d, &pushy_product(), &HashSet::new());
+        assert_eq!(
+            crate::autopilot_audit::composition_mode(
+                "groom",
+                false,
+                true,
+                crate::autopilot_audit::evidence_has_product_handoff(&consumed.evidence),
+            ),
+            "headless+product+autopilot"
+        );
     }
 }
