@@ -3,12 +3,12 @@ spec_id: TASK-997
 agreed_id: TASK-997
 title: 'Calibration: count benign-absorbed vs actionable events per drain in the exit summary to prove the lever empirically'
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:30:23.649314885Z
-modified_at: 2026-07-21T05:12:11.312679541Z
+modified_at: 2026-07-21T05:22:07.570042874Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,8 +16,24 @@ relationships:
 - rel_type: Child
   target_id: 019f1047-d9a5-7673-a495-8cbe9eaa20b5
   created_at: 2026-06-29T17:30:31.199648338Z
+history:
+- id: 019f831f-ce4b-7cf0-9dab-f004d82555c4
+  author: aida-auto-bump
+  timestamp: 2026-07-21T05:22:07.563614086Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f831f-ce52-7190-87b0-a4dcd2d86ded
+  timestamp: 2026-07-21T05:22:07.570041801Z
+  agent: aida
+  commit_sha: f3a528f9c3908b715f94eedde31010d79e24287f
+  summary: Completed via merge f3a528f9
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T05:12:11.312679541Z
   implemented_by: joe
+  completed_at: 2026-07-21T05:22:07.563531266Z
+  completion_sha: f3a528f9c3908b715f94eedde31010d79e24287f
