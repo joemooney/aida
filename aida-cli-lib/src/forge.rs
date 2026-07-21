@@ -1219,8 +1219,13 @@ impl Forge for GitHubForge {
         // STORY-516: delegate to the proven watch_ci_for_context (gh run list +
         // gh run watch streaming, with the quiet-poll fallback + run-id
         // resolution + re-probe). `interactive` maps to "not headless" — the
-        // helper takes `no_human_active`, so invert. trace:STORY-516 | ai:claude
+        // helper takes `no_human_active`, so invert.
+        //
+        // TASK-1165: this forge already carries the project root, so pass it
+        // down — the terminal `CiTerminal` emit must never re-derive a root
+        // from the process cwd. trace:STORY-516 trace:TASK-1165 | ai:claude
         Ok(ci_probe_result_from_ci_probe(crate::watch_ci_for_context(
+            Some(&self.project_root),
             branch,
             !interactive,
         )))
