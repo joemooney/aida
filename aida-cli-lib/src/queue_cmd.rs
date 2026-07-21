@@ -2416,6 +2416,25 @@ pub(crate) fn handle_queue_command(
                     display_id
                 );
             }
+            if let Some(reason) = queue_add_hidden_view_reason(req) {
+                let display_id = req
+                    .agreed_id
+                    .as_deref()
+                    .or(req.spec_id.as_deref())
+                    .unwrap_or("?");
+                anyhow::bail!(
+                    "{} is {} — parked specs do not appear in the default queue. \
+                     Clear that state first (`aida {} {}`), then queue it.",
+                    display_id,
+                    reason,
+                    if reason == "deferred" {
+                        "undefer"
+                    } else {
+                        "unarchive"
+                    },
+                    display_id
+                );
+            }
 
             let position = if *top {
                 let entries = storage.queue_list(&user_id, true)?;
