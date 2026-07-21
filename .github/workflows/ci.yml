@@ -113,6 +113,12 @@ jobs:
       - name: Run advisor-code-gate substrate test
         run: bash tests/test_advisor_code_gate.sh
 
+      # TASK-144: pre-commit ///-provenance gate must excuse PURE MOVES
+      # (line deleted elsewhere in the same staged diff) while still refusing
+      # genuinely new /// trace debt.
+      - name: Run pre-commit provenance move-detection test
+        run: bash tests/test_precommit_provenance_move.sh
+
       # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
       # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
       - name: Run distributed / sibling-store integration tests
