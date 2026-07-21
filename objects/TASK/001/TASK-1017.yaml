@@ -3,12 +3,12 @@ spec_id: TASK-1017
 agreed_id: TASK-1017
 title: 'Followup: the §8 autonomy-doc edit is a *living-doc* update — leave dated SPIKE/snapshot artifacts frozen (`feedback_dated_artifacts_immutable`)'
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:46.858306535Z
-modified_at: 2026-07-21T05:41:55.056821091Z
+modified_at: 2026-07-21T05:53:29.906618183Z
 req_type: Task
 tags:
 - zen-ready
@@ -23,8 +23,24 @@ comments:
   created_at: 2026-07-21T05:41:08.977945776Z
   modified_at: 2026-07-21T05:41:08.977945776Z
   session_id: 3656084c-e702-4335-8721-954ca99bc265
+history:
+- id: 019f833c-872c-7e50-a9c6-cc938950c733
+  author: aida-auto-bump
+  timestamp: 2026-07-21T05:53:29.900298065Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f833c-8732-7633-b29c-03192032a00f
+  timestamp: 2026-07-21T05:53:29.906617621Z
+  agent: aida
+  commit_sha: bd6a114e6b51c891e894026a7046246680988ef2
+  summary: Completed via merge bd6a114e
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T05:41:55.056821091Z
   implemented_by: joe
+  completed_at: 2026-07-21T05:53:29.900208531Z
+  completion_sha: bd6a114e6b51c891e894026a7046246680988ef2
