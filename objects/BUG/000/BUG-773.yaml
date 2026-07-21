@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T09:07:37.092894598Z
-modified_at: 2026-07-21T16:06:43.122722019Z
+modified_at: 2026-07-21T16:08:05.179967745Z
 req_type: Bug
 tags:
 - aida:queue integrity cache-drift from-dogfood
@@ -18,4 +18,9 @@ comments:
   content: 'Codex root cause/fix: the repro target TASK-1135 is deferred, but `queue add` allowed parked specs while the default queue projection/enrichment excludes deferred/archived requirements. That created a real registry row that `queue list --json` and burndown views immediately dropped. Commit 1f579d908 adds a `queue add` guard that refuses deferred/archived specs with an undefer/unarchive hint, so the CLI no longer prints success for work that cannot appear in the next default queue read.'
   created_at: 2026-07-21T16:06:43.122706713Z
   modified_at: 2026-07-21T16:06:43.122706713Z
+- id: 019f856f-333b-7f80-acac-a8862b62776a
+  author: mcp
+  content: 'Amended trace-only update: PR-1577 now points at c5b561c88 (same fix, with `trace:BUG-773 | ai:codex` in the touched helper).'
+  created_at: 2026-07-21T16:08:05.179963052Z
+  modified_at: 2026-07-21T16:08:05.179963052Z
 execution_mode: drive
