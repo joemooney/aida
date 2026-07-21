@@ -66873,6 +66873,16 @@ fn finalize_drain_summary(
         }
         _ => drain_summary::DrainDiffStats::default(),
     };
+    // TASK-997: tally what the cheap event classifier absorbed vs surfaced over
+    // this drain's window, so the exit summary PROVES the event-driven
+    // supervision lever with real numbers instead of asserting it. Read off the
+    // same `.aida/events.jsonl` the drain emitted into, classified with the same
+    // `is_actionable` predicate `aida watch` wakes on. Best-effort — an
+    // unreadable stream yields an all-zero tally that renders as "none
+    // recorded", never a failed exit. trace:TASK-997 | ai:claude
+    let events_tally = drain_root
+        .map(|root| events::tally_window(root, started))
+        .unwrap_or_default();
     let summary = drain_summary::DrainSummary {
         kind: kind.to_string(),
         label,
@@ -66881,6 +66891,7 @@ fn finalize_drain_summary(
         cumulative_tokens,
         diff,
         elapsed_secs: elapsed.as_secs(),
+        events: events_tally,
     };
     let ts = chrono::Utc::now().to_rfc3339();
     let sha = build_sha_short();

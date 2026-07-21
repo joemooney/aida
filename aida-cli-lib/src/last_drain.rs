@@ -387,6 +387,7 @@ mod tests {
             cumulative_tokens: 0,
             diff: crate::drain_summary::DrainDiffStats::default(),
             elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
         };
         let o = LastDrainOutcome::from_summary(&summary, "2026-06-30T00:00:00+00:00");
         assert_eq!(o.shipped, 4);

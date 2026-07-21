@@ -329,6 +329,111 @@ fn is_truthy(value: &str) -> bool {
     )
 }
 
+/// How many events in a window the cheap classifier **absorbed** (benign, cost
+/// the supervising LLM nothing) versus **surfaced** (actionable, woke it).
+///
+/// This is the empirical proof of the STORY-712 lever: the ratio says how much
+/// of the drain's state-change churn never reached a token-spending consumer.
+/// The split is computed against [`EventKind::is_actionable`] — the *same*
+/// predicate `aida watch` classifies each line with — so the numbers mean
+/// exactly what the wake behavior does, not an approximation of it.
+// trace:TASK-997 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EventTally {
+    /// Events absorbed silently by the classifier — zero supervision tokens.
+    pub benign_absorbed: usize,
+    /// Events the classifier surfaced as a wake.
+    pub actionable: usize,
+    /// The window could only be derived in part: the live stream was rotated
+    /// (TASK-993) after the window opened, so events from before the rotation
+    /// are in the archive and are NOT counted here. Reported rather than
+    /// silently swallowed so the ratio is never over-claimed.
+    pub partial_window: bool,
+}
+
+impl EventTally {
+    /// Total events classified in the window.
+    pub fn seen(&self) -> usize {
+        self.benign_absorbed + self.actionable
+    }
+
+    /// Percentage of the window the classifier absorbed, rounded to the nearest
+    /// whole percent. `0` when nothing was seen (no division by zero).
+    pub fn absorbed_pct(&self) -> u32 {
+        let seen = self.seen();
+        if seen == 0 {
+            return 0;
+        }
+        ((self.benign_absorbed as f64 / seen as f64) * 100.0).round() as u32
+    }
+}
+
+/// Classify every event line in `body` that is stamped at or after `since`,
+/// tallying benign-absorbed versus actionable.
+///
+/// Pure, so the tally logic is unit-testable without touching a real stream.
+/// Tolerant in exactly the way the streaming classifier is: a blank or
+/// malformed line is skipped rather than counted or errored on, and an
+/// unrecognized `event` tag deserializes to [`EventKind::Unknown`] — which is
+/// actionable, so a newer binary's verb is counted as a wake, never as absorbed
+/// churn.
+// trace:TASK-997 | ai:claude
+pub fn classify_since(body: &str, since: DateTime<Utc>) -> EventTally {
+    let mut tally = EventTally::default();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Ok(ev) = serde_json::from_str::<Event>(trimmed) else {
+            continue;
+        };
+        if ev.ts < since {
+            continue;
+        }
+        if ev.kind.is_actionable() {
+            tally.actionable += 1;
+        } else {
+            tally.benign_absorbed += 1;
+        }
+    }
+    tally
+}
+
+/// Read `.aida/events.jsonl` and tally the classifier's benign-absorbed versus
+/// actionable split over the window starting at `since` — the drain's own
+/// window when called at drain exit.
+///
+/// Best-effort like the rest of this module: a missing or unreadable stream
+/// yields an all-zero tally (the drain simply emitted nothing we can read),
+/// never an error on the exit path. `partial_window` is set when the archive
+/// (`events.jsonl.1`) was written after the window opened, i.e. a rotation
+/// happened mid-window and the pre-rotation lines are no longer in the live
+/// stream.
+///
+/// Caveat worth knowing when reading the number: the stream is per-project, so
+/// the window covers every event the project emitted in that span. AIDA holds a
+/// single-drain lock per repo, so in practice that is this drain's own churn.
+// trace:TASK-997 | ai:claude
+pub fn tally_window(project_root: &Path, since: std::time::SystemTime) -> EventTally {
+    let since_utc: DateTime<Utc> = since.into();
+    let body = std::fs::read_to_string(events_path(project_root)).unwrap_or_default();
+    let mut tally = classify_since(&body, since_utc);
+    tally.partial_window = rotated_since(project_root, since);
+    tally
+}
+
+/// Whether the single-generation archive was written at or after `since` — the
+/// signal that [`rotate_if_oversized`] fired inside the window, so the live
+/// stream no longer holds all of it.
+// trace:TASK-997 | ai:claude
+fn rotated_since(project_root: &Path, since: std::time::SystemTime) -> bool {
+    std::fs::metadata(events_archive_path(project_root))
+        .and_then(|m| m.modified())
+        .map(|modified| modified >= since)
+        .unwrap_or(false)
+}
+
 /// Append one event to `.aida/events.jsonl`, creating the file (and `.aida/`)
 /// if needed. One JSON object per line.
 ///
@@ -628,6 +733,155 @@ mod tests {
         drop(guard);
         let body = std::fs::read_to_string(events_path(dir.path())).unwrap();
         assert_eq!(body.lines().count(), 1, "only the enabled emit landed");
+    }
+
+    /// TASK-997: the tally splits a window against the SAME `is_actionable`
+    /// predicate the streaming classifier wakes on — benign churn counted as
+    /// absorbed, decision points as actionable — and ignores anything stamped
+    /// before the window opened.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn classify_since_splits_benign_from_actionable_within_the_window() {
+        let window_open = Utc::now();
+        let before = window_open - chrono::Duration::seconds(60);
+        let after = window_open + chrono::Duration::seconds(1);
+
+        let mut lines: Vec<String> = Vec::new();
+        let mut push = |ts: DateTime<Utc>, kind: EventKind| {
+            let ev = Event {
+                ts,
+                spec: Some("STORY-1".into()),
+                run_uuid: "run-1".into(),
+                kind,
+            };
+            lines.push(serde_json::to_string(&ev).unwrap());
+        };
+        // A previous drain's churn — outside the window, must not be counted.
+        push(before, EventKind::RunStarted);
+        push(before, EventKind::PrMerged { pr: 1 });
+        // This window: benign churn…
+        push(after, EventKind::RunStarted);
+        for idx in 1..=3 {
+            push(
+                after,
+                EventKind::PhaseEntered {
+                    idx,
+                    slug: "implementer".into(),
+                },
+            );
+        }
+        // …and the actionable decision points.
+        push(after, EventKind::CiTerminal { green: true });
+        push(
+            after,
+            EventKind::PuntFiled {
+                spec: "STORY-1".into(),
+            },
+        );
+
+        let body = format!("{}\n\n  \n{{not json\n", lines.join("\n"));
+        let tally = classify_since(&body, window_open);
+
+        assert_eq!(tally.benign_absorbed, 4, "run-started + 3 phase-entered");
+        assert_eq!(tally.actionable, 2, "ci-terminal + punt-filed");
+        assert_eq!(tally.seen(), 6);
+        assert_eq!(tally.absorbed_pct(), 67, "4/6 rounds to 67%");
+        // Pure classification says nothing about rotation.
+        assert!(!tally.partial_window);
+    }
+
+    /// An empty window is all-zero (and divides by zero nowhere), and an
+    /// unrecognized verb from a newer binary counts as ACTIONABLE — never as
+    /// absorbed churn, so the lever can't be flattered by a forward-compat gap.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn classify_since_is_zero_on_empty_and_wake_safe_on_unknown() {
+        let now = Utc::now();
+        let empty = classify_since("", now);
+        assert_eq!(empty.seen(), 0);
+        assert_eq!(empty.absorbed_pct(), 0);
+
+        let unknown = format!(
+            r#"{{"ts":"{}","kind":{{"event":"some-future-verb"}}}}"#,
+            now.to_rfc3339()
+        );
+        let tally = classify_since(&unknown, now);
+        assert_eq!(tally.actionable, 1, "unknown verbs are wake-safe");
+        assert_eq!(tally.benign_absorbed, 0);
+    }
+
+    /// The file-backed wrapper reads the live stream, honors the window, and
+    /// flags a mid-window rotation as a PARTIAL window rather than reporting a
+    /// ratio over the surviving fragment as if it covered the whole drain.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn tally_window_reads_the_stream_and_flags_rotation_as_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // Backdated a few seconds: a real drain's window opens well before its
+        // first event, and the slack keeps the assertion off filesystem mtime
+        // granularity (a coarse-mtime tmpdir can floor a just-written file's
+        // timestamp below an instant taken microseconds earlier).
+        let opened = std::time::SystemTime::now() - std::time::Duration::from_secs(5);
+
+        // Written directly rather than via `emit` so the process-wide
+        // AIDA_EVENTS_DISABLE kill switch (exercised by a sibling test) can
+        // never race this fixture.
+        let stream = [
+            Event::new(Some("STORY-1".into()), "run-1", EventKind::RunStarted),
+            Event::new(
+                Some("STORY-1".into()),
+                "run-1",
+                EventKind::PhaseEntered {
+                    idx: 1,
+                    slug: "implementer".into(),
+                },
+            ),
+            Event::new(
+                Some("STORY-1".into()),
+                "run-1",
+                EventKind::PrMerged { pr: 9 },
+            ),
+        ];
+        let path = events_path(root);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let body: String = stream
+            .iter()
+            .map(|e| serde_json::to_string(e).unwrap() + "\n")
+            .collect();
+        std::fs::write(&path, body).unwrap();
+
+        let tally = tally_window(root, opened);
+        assert_eq!(tally.seen(), 3);
+        assert_eq!(tally.actionable, 1, "pr-merged is the only wake");
+        assert_eq!(tally.benign_absorbed, 2);
+        assert!(
+            !tally.partial_window,
+            "no archive was written — the window is whole"
+        );
+
+        // Force a rotation inside the window: the archive now postdates the
+        // window opening, so the tally must own up to being partial.
+        std::fs::write(events_archive_path(root), "{}\n").unwrap();
+        let rotated = tally_window(root, opened);
+        assert!(rotated.partial_window, "a mid-window rotation is partial");
+
+        // An archive predating the window is a PRIOR drain's rotation — it says
+        // nothing about this window, so the tally stays whole.
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+        assert!(
+            !tally_window(root, later).partial_window,
+            "an archive from before the window opened is not this drain's rotation"
+        );
+    }
+
+    /// A missing stream is an all-zero tally, never an error on the exit path.
+    // trace:TASK-997 | ai:claude
+    #[test]
+    fn tally_window_is_zero_when_stream_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let tally = tally_window(dir.path(), std::time::SystemTime::now());
+        assert_eq!(tally, EventTally::default());
     }
 
     #[test]

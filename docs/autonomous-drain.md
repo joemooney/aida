@@ -232,8 +232,20 @@ failed:
   batch:autonomy-modes (drained-with-shelved) · 4 shipped · 1 shelved · 0 skipped · 5 iterations
   tokens: 1,234,567 cumulative · ~246,913/spec
   diff: +4,210 -820 across 37 files
+  events: 412 seen · 397 benign-absorbed (96%) · 15 actionable
   findings to triage: 1 — `aida findings list`
 ```
+
+The **events** line is the empirical read-out of the event-driven supervision
+lever (STORY-712): how many state-change events the drain emitted to
+`.aida/events.jsonl` during its window, how many of those the cheap classifier
+**absorbed silently** (costing a supervising LLM nothing), and how many it
+would have **surfaced as a wake**. The split is computed against the same
+`is_actionable` predicate `aida watch` classifies each line with, so the ratio
+means exactly what the wake behaviour does. Two honesty guards: a drain with no
+readable stream prints `events: none recorded for this drain` rather than a
+fabricated `0%`, and a window the stream rotated inside is labelled
+`partial window` so the ratio is never read as covering the whole drain.
 
 The token figures are the **cumulative reported tokens** across the drain's
 headless phases (input + output + cache), summed from each phase's
