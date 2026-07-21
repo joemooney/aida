@@ -6,9 +6,9 @@
     "kind": "broadcast"
   },
   "timestamp": 1781317207722,
-  "body": "P1 visibility probe",
+  "body": "",
   "urgent": false,
   "intent": "fyi",
   "retracted": false,
-  "deleted": false
+  "deleted": true
 }
