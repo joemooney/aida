@@ -8,18 +8,34 @@ description: |-
   Reported by the TASK-144 implementer agent (delegated observation, not independently reproduced): drain_lock::tests::lock_with_specs_is_probe_visible_for_the_guards_whole_lifetime (aida-cli-lib/src/drain_lock.rs:907) intermittently fails under parallel test execution because the sibling test at line 794 sets AIDA_DRAIN_BORROW=1/AIDA_DRAIN_FORCE=1 process-wide via EnvVarsGuard, making the second acquire return a borrowed:true guard instead of refusing. Passes with --test-threads=1 and on full-suite rerun.
 
   Fix shape: serialize the two tests (shared mutex / serial_test) or refactor the borrow/force inputs to be injectable rather than read from process env in tests.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-21T01:39:48.773003935Z
-modified_at: 2026-07-21T02:56:07.476010681Z
+modified_at: 2026-07-21T03:10:54.369827657Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
 - severity:minor
+history:
+- id: 019f82a7-ab9b-7301-bfba-4ae740d02a93
+  author: aida-auto-bump
+  timestamp: 2026-07-21T03:10:54.363746383Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f82a7-aba1-7db0-91a4-c974dcf8c7f9
+  timestamp: 2026-07-21T03:10:54.369826765Z
+  agent: aida
+  commit_sha: 545d0a860e80f140b7efe92605dcdc1a47daa805
+  summary: Completed via merge 545d0a86
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T02:56:07.476010681Z
   implemented_by: joe
+  completed_at: 2026-07-21T03:10:53.058319367Z
+  completion_sha: 545d0a860e80f140b7efe92605dcdc1a47daa805
