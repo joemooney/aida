@@ -3,12 +3,12 @@ spec_id: TASK-1022
 agreed_id: TASK-1022
 title: TASK-0432 — does a product seat change anything under `--no-human`/solo? (No new authority, but the audit `mode` should note product-sourced decisions taken during a headless drain.)
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:28:35.309144492Z
-modified_at: 2026-07-21T08:23:04.865599012Z
+modified_at: 2026-07-21T08:33:04.785315431Z
 req_type: Task
 tags:
 - serialize:autopilot-audit-mode
@@ -17,8 +17,24 @@ relationships:
 - rel_type: Child
   target_id: 019ef7a2-20e2-7090-a019-58f0f267ee52
   created_at: 2026-06-30T02:28:40.363147099Z
+history:
+- id: 019f83ce-a10b-7d91-8ed8-476c189e8739
+  author: aida-auto-bump
+  timestamp: 2026-07-21T08:33:04.779005467Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f83ce-a111-7e61-8b42-60c9b906f8b2
+  timestamp: 2026-07-21T08:33:04.785314909Z
+  agent: aida
+  commit_sha: 74ef6a25419c95ccd659e8b1e933ff2972f28cae
+  summary: Completed via merge 74ef6a25
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T08:23:04.865599012Z
   implemented_by: joe
+  completed_at: 2026-07-21T08:33:04.778928624Z
+  completion_sha: 74ef6a25419c95ccd659e8b1e933ff2972f28cae
