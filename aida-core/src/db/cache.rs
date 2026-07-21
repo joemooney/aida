@@ -1185,16 +1185,35 @@ impl Cache {
     /// child-authored-edge shape, so a child completing (e.g. via the `aida
     /// pull` auto-bump) re-derived the epic from zero children instead of the
     /// real subtree.
-    // trace:BUG-626 trace:BUG-764 | ai:claude
-    pub fn recompute_epic_status_from_hierarchy(&self, epic_id: &Uuid) -> Result<()> {
+    ///
+    /// BUG-768: `stored_status` is the epic's status AS RECORDED IN THE STORE,
+    /// supplied by the caller because this row's cached `status` column is
+    /// itself a derived override and so can't be read back as the human's
+    /// intent. A terminal stored status (a `--force` close) is honored: the
+    /// derivation is skipped and the row keeps the force-closed value instead
+    /// of being reopened to `InProgress` on the next child write / pull.
+    // trace:BUG-626 trace:BUG-764 trace:BUG-768 | ai:claude
+    pub fn recompute_epic_status_from_hierarchy(
+        &self,
+        epic_id: &Uuid,
+        stored_status: &crate::models::RequirementStatus,
+    ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let rollup = epic_rollup_from_hierarchy(&conn, epic_id);
-        let Some(derived) = crate::rollup::derive_epic_status_from_rollup(&rollup) else {
-            // Only-rejected (or otherwise indeterminate) children: keep the
-            // stored status already in the row.
-            return Ok(());
+        let status_str = if crate::rollup::is_terminal_epic_status(stored_status) {
+            // BUG-768: a force-closed epic is stamped BACK to its stored
+            // terminal status — the row may still carry a stale derived
+            // override from before the close, so skipping the write would
+            // leave the reopened value in place.
+            format!("{stored_status:?}")
+        } else {
+            let rollup = epic_rollup_from_hierarchy(&conn, epic_id);
+            let Some(derived) = crate::rollup::derive_epic_status_from_rollup(&rollup) else {
+                // Only-rejected (or otherwise indeterminate) children: keep the
+                // stored status already in the row.
+                return Ok(());
+            };
+            format!("{derived:?}")
         };
-        let status_str = format!("{derived:?}");
         with_cache_write(&self.path, "recompute epic status", || {
             conn.execute(
                 "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
@@ -1865,13 +1884,19 @@ fn blocked_from_cache(conn: &Connection, req: &Requirement) -> bool {
 /// epic's record carries none — the old own-edges walk then tallied zero
 /// children and re-derived the epic to Draft, so a comment add on a stuck epic
 /// could never refresh it to the real rollup.
-// trace:BUG-626 trace:BUG-764 | ai:claude
+///
+/// BUG-768: `req.status` is the epic's STORED status (this is the record being
+/// written), so a human `--force` close is honored — a terminal stored status
+/// yields `None` and `insert_one` projects it verbatim instead of reopening the
+/// epic to the rollup's `InProgress`.
+// trace:BUG-626 trace:BUG-764 trace:BUG-768 | ai:claude
 fn epic_status_override_from_cache(conn: &Connection, req: &Requirement) -> Option<String> {
     if req.req_type != crate::models::RequirementType::Epic {
         return None;
     }
     let rollup = epic_rollup_from_hierarchy(conn, &req.id);
-    crate::rollup::derive_epic_status_from_rollup(&rollup).map(|s| format!("{s:?}"))
+    crate::rollup::derive_epic_status_from_rollup_with_stored(&req.status, &rollup)
+        .map(|s| format!("{s:?}"))
 }
 
 /// Tally the cached statuses of `epic_id`'s TRANSITIVE descendants — the same
