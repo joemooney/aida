@@ -247,6 +247,25 @@ readable stream prints `events: none recorded for this drain` rather than a
 fabricated `0%`, and a window the stream rotated inside is labelled
 `partial window` so the ratio is never read as covering the whole drain.
 
+**Watching a live drain by hand.** `aida watch` is silent by design — it prints
+only the wake lines a machine consumer needs. When you want to *see the drain
+think*, run `aida watch --verbose`: it implies `--all` (every event, not just
+the actionable ones) and stamps each line with the event's local wall-clock
+time, the run correlation id, and the event's raw payload — the fields the
+one-line hint elides (a shelve's phase and failure kind, a bake-off's
+per-candidate scores, a PR number):
+
+```
+17:04:31.128 [9f21c0aa]      phase-entered STORY-1 — phase 2 (ci)  {"event":"PhaseEntered","idx":2,"slug":"ci"}
+17:07:58.902 [9f21c0aa] WAKE spec-shelved STORY-1 — shelved at ci (ci-red)  {"event":"SpecShelved","phase":"ci","kind":"ci-red"}
+```
+
+The `WAKE` marker keeps its place between the prefix and the hint, so
+`aida watch --verbose | grep WAKE` still selects exactly the actionable lines,
+and the header goes to stderr — piping the feed stays clean. Pair it with
+`--backlog` (replay the history first) or `--once` (classify what is already
+there and exit) when you are debugging a drain after the fact.
+
 The token figures are the **cumulative reported tokens** across the drain's
 headless phases (input + output + cache), summed from each phase's
 `stream-json` log under `.aida/headless-logs/` — the same accounting the

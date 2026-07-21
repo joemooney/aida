@@ -8226,6 +8226,14 @@ pub enum Command {
         #[clap(long)]
         all: bool,
 
+        /// Live-debugging feed: implies --all, and stamps every line with the
+        /// event's local wall-clock time plus the run correlation id, then
+        /// appends the event's raw payload. For a human watching a drain — the
+        /// default (wake-lines-only) feed is what a machine consumer wants.
+        // trace:TASK-994 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
+
         /// Drain the current backlog, classify it, and exit instead of
         /// following the stream (cron / test mode).
         #[clap(long)]
