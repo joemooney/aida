@@ -866,6 +866,97 @@ fn build_running_work_carries_pid_start_time() {
     assert_eq!(rows[0].pid_started_at, None);
 }
 
+/// BUG-769: the elapsed column value. An ADOPTED lease (live pid younger than
+/// the lease record) reports the PROCESS's uptime — the 583h-lease/3m-process
+/// row must read 3m, not 583h, so the headline number stops contradicting the
+/// BUG-763 annotation under it. Every non-adopted shape (pid born with the
+/// lease, start-up jitter either way, no resolvable pid start) still reports
+/// lease age. Times are relative to now, never hardcoded.
+// trace:BUG-769 | ai:claude
+#[test]
+fn ps_elapsed_secs_reports_process_uptime_for_adopted_lease() {
+    let now = chrono::Utc::now();
+    let lease_born = now - chrono::Duration::hours(583);
+    let lease_age = 583 * 3600;
+
+    // Adopted: the pid is 3m old, the lease 583h → the column shows 3m.
+    let pid_up = now - chrono::Duration::minutes(3);
+    let elapsed = ps_elapsed_secs(lease_born, Some(pid_up), now);
+    assert_eq!(
+        elapsed, 180,
+        "an adopted row's elapsed must be the process uptime, not the {lease_age}s lease age"
+    );
+    assert_eq!(humanize_duration_secs(elapsed), "3m 0s");
+
+    // ...and the lease age is still on screen, in the annotation.
+    let note = ps_adopted_note(lease_born, Some(pid_up), now).expect("adopted note present");
+    assert!(note.contains("583h"), "lease age must survive in {note}");
+
+    // Non-adopted, same session: pid born with the lease → lease age, unchanged.
+    let same_session = lease_born + chrono::Duration::seconds(2);
+    assert_eq!(
+        ps_elapsed_secs(lease_born, Some(same_session), now),
+        lease_age,
+        "a pid born with its lease must not change the elapsed column"
+    );
+
+    // Start-up jitter inside the slack (either direction) is not adoption.
+    let jitter = lease_born + chrono::Duration::seconds(PS_ADOPTED_SLACK_SECS - 1);
+    assert_eq!(ps_elapsed_secs(lease_born, Some(jitter), now), lease_age);
+    let before = lease_born - chrono::Duration::minutes(10);
+    assert_eq!(ps_elapsed_secs(lease_born, Some(before), now), lease_age);
+
+    // No resolvable pid start time → lease age (never guess).
+    assert_eq!(ps_elapsed_secs(lease_born, None, now), lease_age);
+}
+
+/// BUG-769 end-to-end over the pure `build_running_work` core: the adopted row
+/// carries process uptime in `elapsed_secs` (the value both the table column
+/// and `--json` print), while a same-session row is untouched.
+// trace:BUG-769 | ai:claude
+#[test]
+fn build_running_work_elapsed_is_process_uptime_when_adopted() {
+    let now = chrono::Utc::now();
+    let lease_born = now - chrono::Duration::hours(583);
+
+    // Adopted: a 583h-old persistent lease re-stamped with a 3m-old pid.
+    let mut adopted = ps_lease("l-adopted", "BUG-769", std::path::PathBuf::from("."));
+    adopted.started_at = lease_born;
+    adopted.active_pid = Some(std::process::id());
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[adopted.clone()],
+        &[],
+        now,
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| Some(now - chrono::Duration::minutes(3)),
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].elapsed_secs, 180,
+        "adopted row must report the pid's 3m uptime, not the 583h lease age"
+    );
+
+    // Non-adopted: the SAME lease whose pid started with it → lease age.
+    let (rows, _) = build_running_work(
+        &[],
+        &[adopted],
+        &[],
+        now,
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| Some(lease_born),
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].elapsed_secs,
+        583 * 3600,
+        "a non-adopted row's elapsed column is unchanged (lease age)"
+    );
+}
+
 /// TASK-1064: the three-way orphan framing. A flag-only spec (no spec-scoped
 /// lease) while a fan-out is live → "likely worked by a fan-out". A crashed
 /// (stale) spec-scoped lease is a genuine orphan regardless of any fan-out.
