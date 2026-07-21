@@ -18,6 +18,14 @@
 //! This is a purely **additive, read-only** command — a new reader of slice-1's
 //! events; it changes no control flow in the drain.
 //!
+//! # Where follow mode starts
+//!
+//! Follow mode seeks to **end-of-file** on start, exactly like `tail -f`: a
+//! supervisor arming this command wakes only on events appended *after* it
+//! armed. `--once` is the drain-the-backlog mode (classify what is there and
+//! exit); `--backlog` is the explicit opt-in to replay history *and then*
+//! follow. trace:TASK-146 | ai:claude
+//!
 //! # Liveness
 //!
 //! A crashed drain would otherwise leave a `Monitor` blocked forever on a stream
@@ -52,6 +60,11 @@ pub struct WatchOpts {
     /// Drain the current backlog, classify it, and exit (cron / test mode).
     /// Without it, the command follows the stream like `tail -f`.
     pub once: bool,
+    /// Follow mode only: replay the whole historical backlog before following
+    /// instead of starting at end-of-file. Off by default — a fresh follower
+    /// wants only what happens from now on.
+    // trace:TASK-146 | ai:claude
+    pub backlog: bool,
 }
 
 /// Top-level entry point — invoked from the early command dispatch in `main.rs`
@@ -62,10 +75,19 @@ pub fn handle_watch(project_root: &Path, opts: &WatchOpts) -> Result<()> {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    // Drain whatever is already in the backlog first — this is the whole job in
-    // `--once` mode, and the catch-up pass before following otherwise.
+    // `--once` drains the current backlog and exits — that is the documented
+    // catch-up mode. Follow mode instead starts at end-of-file like `tail -f`
+    // so a fresh supervisor wakes only on events appended *after* it armed;
+    // replaying a months-old backlog burned a wake plus tokens on stale noise
+    // (and risked the Monitor being auto-stopped for volume). `--backlog`
+    // opts back into the historical replay-then-follow behavior.
+    // trace:TASK-146 | ai:claude
     let mut pos: u64 = 0;
-    drain_new_lines(&path, &mut pos, opts.all, &mut out)?;
+    if opts.once || opts.backlog {
+        drain_new_lines(&path, &mut pos, opts.all, &mut out)?;
+    } else {
+        pos = end_of_file(&path);
+    }
     if opts.once {
         out.flush()?;
         return Ok(());
@@ -83,6 +105,17 @@ pub fn handle_watch(project_root: &Path, opts: &WatchOpts) -> Result<()> {
         drain_new_lines(&path, &mut pos, opts.all, &mut out)?;
         std::thread::sleep(FOLLOW_POLL);
     }
+}
+
+/// The byte offset of the current end of the events file — the follow-mode
+/// start position, so only lines appended after start are ever emitted. A
+/// missing (or unreadable) file is offset `0`: the drain simply has not emitted
+/// yet, and everything it writes from now on is new. `.aida/events.jsonl` is
+/// append-only, so a plain length read is a sound seek point; a truncation is
+/// still caught by the shrink check in [`drain_new_lines`].
+// trace:TASK-146 | ai:claude
+fn end_of_file(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }
 
 /// Read every *complete* line appended since byte offset `pos`, classify it, and
@@ -362,6 +395,87 @@ mod tests {
         ));
         assert!(stale_wake_line(&active).is_none());
         assert!(stale_wake_line(&DrainStatus::None).is_none());
+    }
+
+    /// The TASK-146 regression: follow mode must start at end-of-file, so a
+    /// pre-populated backlog (however old, however actionable) emits nothing —
+    /// only a line appended *after* the follower armed wakes it.
+    // trace:TASK-146 | ai:claude
+    #[test]
+    fn follow_starts_at_eof_and_emits_only_new_events() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        // A historical backlog full of actionable verbs — exactly the flood the
+        // supervisor used to receive on arming the Monitor.
+        fixture(
+            &path,
+            &[
+                Event::new(
+                    Some("STORY-306".into()),
+                    "",
+                    EventKind::AdvisorEscalated {
+                        reason: "old escalation".into(),
+                    },
+                ),
+                Event::new(Some("BUG-241".into()), "", EventKind::PrMerged { pr: 7 }),
+            ],
+        );
+
+        // Arming the follower: `pos` starts at EOF, not 0.
+        let mut pos = end_of_file(&path);
+        assert!(pos > 0, "the fixture backlog is non-empty");
+
+        let mut out: Vec<u8> = Vec::new();
+        drain_new_lines(&path, &mut pos, false, &mut out).unwrap();
+        assert!(
+            out.is_empty(),
+            "no historical backlog replay in follow mode: {:?}",
+            String::from_utf8_lossy(&out)
+        );
+
+        // A newly-appended actionable event does wake.
+        {
+            use std::io::Write as _;
+            let mut f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&path)
+                .unwrap();
+            let ev = Event::new(
+                Some("STORY-999".into()),
+                "",
+                EventKind::PuntFiled {
+                    spec: "STORY-999".into(),
+                },
+            );
+            writeln!(f, "{}", serde_json::to_string(&ev).unwrap()).unwrap();
+        }
+        let mut out2: Vec<u8> = Vec::new();
+        drain_new_lines(&path, &mut pos, false, &mut out2).unwrap();
+        let s = String::from_utf8(out2).unwrap();
+        assert_eq!(s.lines().count(), 1, "exactly the new event wakes: {s:?}");
+        assert!(s.contains("punt-filed STORY-999"), "{s:?}");
+        assert!(!s.contains("STORY-306"), "no stale replay: {s:?}");
+
+        // `--once` / `--backlog` keep the drain-the-backlog behavior.
+        let mut pos_backlog = 0u64;
+        let mut out3: Vec<u8> = Vec::new();
+        drain_new_lines(&path, &mut pos_backlog, false, &mut out3).unwrap();
+        let s3 = String::from_utf8(out3).unwrap();
+        assert_eq!(
+            s3.lines().count(),
+            3,
+            "backlog mode still classifies the whole file: {s3:?}"
+        );
+    }
+
+    /// A follower armed before the drain ever emitted starts at offset 0 and
+    /// still sees the first event — an absent file is not a missed wake.
+    // trace:TASK-146 | ai:claude
+    #[test]
+    fn follow_start_offset_is_zero_when_file_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl"); // never created
+        assert_eq!(end_of_file(&path), 0);
     }
 
     #[test]
