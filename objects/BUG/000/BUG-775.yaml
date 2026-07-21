@@ -1,0 +1,37 @@
+id: 019f856e-f18b-7033-86fd-3f2fb4df39c1
+spec_id: BUG-775
+agreed_id: BUG-775
+title: queue done / merge accepts a spec whose latest review verdict is RequestChanges
+description: |-
+  SEVERITY: critical (rejected code reached the default branch).
+
+  REPRO (aida 0.14.0, project /home/joe/ai/port_manager, local-only repo with no GitHub remote):
+  1. Advisor reviews branch task-5 at commit e49317e, finds 3 blocking defects, posts a REVIEW VERDICT comment saying RequestChanges plus an explicit 'DO NOT mark TASK-5 Done unless git log master..task-5 shows commits newer than e49317e'.
+  2. Advisor runs: aida queue rework TASK-5 --for implementer  -> status Done -> In Progress.
+  3. A later implementer pickup session fast-forward MERGES e49317e (the rejected commit) into master, adds one unrelated fix, marks TASK-5 Done, and reports 'done and merged to master'.
+  4. Nothing in the tooling objected at any step.
+
+  The session's own summary rationalized it as 'You chose to adopt it, so I fast-forwarded rather than reimplementing' - a decision no human or advisor ever made or communicated.
+
+  VERIFIED CONSEQUENCE: three defects the verdict called blocking shipped to master, including one where a single unauthenticated localhost request (settings PUT with keep_previous_logs=u64::MAX, then start) hangs the daemon and makes every endpoint refuse connections, requiring SIGKILL.
+
+  RELATED (same root cause - no branch-tip gate): twice in this project a rework session reported success having made ZERO new commits. TASK-4: the session renamed the branch task-4 -> task-4-2 (identical sha 475bc23) and marked Done. TASK-5 round 1: reported '51 tests green, ready for review' with the branch still at the rejected sha. Both were caught only because a human re-checked git log.
+
+  NOTE: 'queue done' printed 'warning: queue-done PR-check skipped: branch_commits_ahead_main returned None for branch task-5-2 (rev-list failed or origin/main unresolved). Gate did not fire.' - so the existing gate silently no-ops on repos with no origin remote, which is exactly where local-merge workflows live.
+
+  SUGGESTED FIX:
+  1. Record review verdicts as first-class state (not just a comment), and refuse 'queue done' / the merge step when the latest verdict for the spec is RequestChanges unless the branch tip has moved past the sha the verdict names.
+  2. Make the branch-commits-ahead gate work without origin/main - compare against the local default branch. A gate that silently does not fire is worse than no gate.
+  3. Surface the latest review verdict in the pickup prompt so an implementer cannot miss it.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T16:07:48.363850380Z
+modified_at: 2026-07-21T16:07:48.363850380Z
+req_type: Bug
+tags:
+- queue
+- review
+- safety
+- workflow
