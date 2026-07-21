@@ -1,0 +1,32 @@
+id: 019f856e-77be-7001-b016-0f11c4da739e
+spec_id: BUG-774
+agreed_id: BUG-774
+title: queue add --for <role> is invisible to other users in that role
+description: |-
+  REPRO (aida 0.14.0, sha d9f9eceb8+dirty, project /home/joe/ai/port_manager, solo clone, no git remote):
+  1. Agent session running as user 'claude-advisor-1' (role advisor) runs: aida queue add TASK-4 --for implementer
+     -> prints: OK Added TASK-4 to queue [for:implementer]
+     -> writes registry/queues/claude-advisor-1.yaml
+  2. Human user 'joe' in a terminal, after eval $(aida role enter implementer), runs: aida queue list
+     -> prints: 'Your queue (no items routed to role implementer; pass --all to see your full queue)'
+  3. joe runs: aida queue work TASK-4
+     -> Error: 'TASK-4 isn't queued, but status is In Progress. The lease may have been lost.'
+
+  CAUSE: queue entries are stored per-user (registry/queues/<user_id>.yaml). 'queue list' and 'queue work' resolve against the CALLING user's own file, so a --for <role> routing written by user A is never seen by user B holding that role. Confirmed by reading the store: claude-advisor-1.yaml held the TASK-4/TASK-12 entries with for_role: implementer while joe.yaml held an unrelated entry.
+
+  IMPACT: the advisor-routes-work-to-doer-roles model documented in the advisor role description does not work across users. Any agent-driven advisor seat cannot hand work to a human implementer (or vice versa). Workaround found in practice: the human must re-run 'aida queue add' themselves in their own terminal.
+
+  SECONDARY: the 'queue work' error message is actively misleading. It blames a lost lease when the real cause is that the item is in another user's queue file. It should distinguish 'not in YOUR queue but queued by <user>' from 'genuinely unqueued'.
+
+  SUGGESTED FIX: make --for <role> write to a role-scoped queue that any holder of that role reads, or have queue list/work fall back to scanning all queue files for entries whose for_role matches the caller's active role.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T16:07:17.182780649Z
+modified_at: 2026-07-21T16:07:17.182780649Z
+req_type: Bug
+tags:
+- multi-user
+- queue
+- routing
